@@ -25,22 +25,23 @@ graph TD
 ```
 
 ### Priority Legend
-- 🔴 Essential - Must have for a working engine
+🔴 Essential—Must have for a working engine
 
-- 🟡 Important - Should have for a full-featured engine
+🟡 Important—Should have for a full-featured engine
 
-- 🟢 Optional - Nice to have, can be added later
+🟢 Optional—Nice to have, can be added later
 
 ## Milestones
 
-### 1. [x] Project Setup and Build System 📗
+### 1. Project Setup and Build System 📗
 - [x] Set up basic directory structure
 - [x] Create initial CMake configuration
 - [x] Add core external dependencies
 - [x] Create basic abstraction headers
+- [ ] Build app and run tests on GitHub CI
 - **Learning**: CMake in Practice (book), [CMake Tutorial](https://cmake.org/cmake/help/latest/guide/tutorial/index.html)
 
-### 2. [ ] Window Creation and Basic Vulkan Setup 📙
+### 2. Window Creation and Basic Vulkan Setup 📙
 - [x] Initialize SDL window
 - [x] Create Vulkan instance
 - [x] Set up validation layers
@@ -49,7 +50,6 @@ graph TD
 - [x] Basic render pass setup
 - [ ] Implement proper error recovery
 - [ ] Add device lost handling
-- [ ] Improve swapchain recreation robustness
 - [ ] Add validation layer message filtering
 - [ ] Add debug utils extension support
 - [ ] Implement device feature queries
@@ -58,7 +58,7 @@ graph TD
   - "Game Engine Architecture" Ch. 15 (Graphics Engine Low-Level)
   - "Real-Time Rendering" Ch. 1 (Graphics Pipeline Overview)
 
-### 3. [ ] Core Graphics Pipeline Implementation 📘
+### 3. Core Graphics Pipeline Implementation 📘
 - [ ] Graphics pipeline setup
 - [ ] Shader management system
   - [ ] SPIR-V compilation
@@ -79,7 +79,7 @@ graph TD
   - "Game Engine Architecture" Ch. 15.4 (Graphics Resource Management)
   - "Foundations of Game Engine Development, Vol. 2" Ch. 1-2 (Rendering Pipeline, Shader Programs)
 
-### 4. [ ] Advanced Rendering Features 📕
+### 4. Advanced Rendering Features 📕
 - [ ] Depth buffer implementation
 - [ ] Multisampling (MSAA) support
 - [ ] Texture loading and management
@@ -99,7 +99,7 @@ graph TD
   - "Physically Based Rendering" Ch. 7 (Sampling and Reconstruction)
   - "Foundations of Game Engine Development, Vol. 2" Ch. 4 (Advanced Rendering)
 
-### 5. [ ] Memory and Resource Management 📗
+### 5. Memory and Resource Management 📗
 - [ ] Vulkan Memory Allocator (VMA) integration
 - [ ] Staging buffer system
 - [ ] Resource pooling
@@ -115,7 +115,7 @@ graph TD
   - "Foundations of Game Engine Development, Vol. 1" Ch. 2 (Memory Management)
   - [Vulkan Memory Management](https://gpuopen.com/learn/vulkan-memory-management/)
 
-### 6. [ ] Performance and Debug Tools 📙
+### 6. Performance and Debug Tools 📙
 - [ ] Debug markers and labels
 - [ ] Performance markers
 - [ ] GPU timestamp queries
@@ -131,7 +131,7 @@ graph TD
   - "Game Engine Architecture" Ch. 5.4 (Debug Systems)
   - "Real-Time Rendering" Ch. 23 (Graphics Pipeline Performance)
 
-### 7. [ ] Scene Management and Rendering 📘
+### 7. Scene Management and Rendering 📘
 - [ ] Scene graph implementation
 - [ ] Frustum culling
 - [ ] LOD system
@@ -147,7 +147,7 @@ graph TD
   - "Game Engine Architecture" Ch. 14 (Scene Graph/Culling Optimizations)
   - "Foundations of Game Engine Development, Vol. 2" Ch. 3 (Scene Management)
 
-### 8. [ ] Multi-threading Support 📕
+### 8. Multi-threading Support 📕
 - [ ] Command buffer multi-threading
 - [ ] Resource loading thread
 - [ ] Async compute
@@ -161,7 +161,7 @@ graph TD
   - "Game Engine Architecture" Ch. 7 (Multi-threading)
   - "Foundations of Game Engine Development, Vol. 1" Ch. 4 (Parallel Algorithms)
 
-### 9. [ ] Advanced Scene Management 📘
+### 9. Advanced Scene Management 📘
 - [ ] Spatial partitioning system
   - [ ] Octree/quadtree implementation
   - [ ] Dynamic scene subdivision
@@ -185,7 +185,7 @@ graph TD
   - "Game Engine Architecture" Ch. 14.7 (Scene Graph Design and Implementation)
   - "Foundations of Game Engine Development, Vol. 2" Ch. 3 (Scene Graph Systems)
 
-### 10. [ ] Advanced Graphics Features 📕
+### 10. Advanced Graphics Features 📕
 - [ ] Advanced lighting system
   - [ ] Dynamic time of day
   - [ ] Global illumination
@@ -217,7 +217,7 @@ graph TD
   - "Physically Based Rendering" Ch. 8 (Reflection Models), Ch. 11 (Volume Rendering)
   - "Foundations of Game Engine Development, Vol. 2" Ch. 5 (Lighting and Materials)
 
-### 11. [ ] Animation and Characters 📗
+### 11. Animation and Characters 📗
 - [ ] Animation system
   - [ ] Skeletal animation
   - [ ] Animation blending
@@ -239,7 +239,7 @@ graph TD
   - "Game Engine Architecture" Ch. 11 (Animation Systems)
   - "Real-Time Rendering" Ch. 4 (Animation and Skinning)
 
-### 12. [ ] Game Systems Integration 📙
+### 12. Game Systems Integration 📙
 - [ ] Quest system
   - [ ] Quest state management
   - [ ] Trigger system
@@ -263,7 +263,7 @@ graph TD
 - **Learning**: 
   - "Game Engine Architecture" Ch. 6 (Game Loop/Update), Ch. 13 (Runtime Gameplay Systems)
 
-### 13. [ ] Performance Optimization for Open Worlds 📕
+### 13. Performance Optimization for Open Worlds 📕
 - [ ] Memory management
   - [ ] Custom allocators for game systems
   - [ ] Memory defragmentation
@@ -289,7 +289,7 @@ graph TD
   - "Game Engine Architecture" Ch. 7 (High-Level Engine Systems)
   - "Foundations of Game Engine Development, Vol. 1" Ch. 5 (Performance and Optimization)
 
-### 14. [ ] Tools and Pipeline 📘
+### 14. Tools and Pipeline 📘
 - [ ] Asset pipeline
   - [ ] Asset preprocessing
   - [ ] Asset versioning
