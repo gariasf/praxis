@@ -6,7 +6,6 @@
 #include <SDL3/SDL_vulkan.h>
 #include <algorithm>
 #include <set>
-#include <string>
 
 namespace praxis::graphics {
 
@@ -21,19 +20,17 @@ debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     praxis::utils::Logger::debug("Vulkan validation layer: {}", pCallbackData->pMessage);
   }
 
-  // Wether we should block Vulkan operations or not
+  // Weather we should block Vulkan operations or not
   return VK_FALSE;
 }
 
 Renderer::Renderer()
     : m_window(nullptr), m_instance(VK_NULL_HANDLE), m_physicalDevice(VK_NULL_HANDLE),
       m_device(VK_NULL_HANDLE), m_graphicsQueue(VK_NULL_HANDLE), m_presentQueue(VK_NULL_HANDLE),
-      m_surface(VK_NULL_HANDLE), m_swapchain(VK_NULL_HANDLE),
-      m_swapchainImageFormat(VK_FORMAT_UNDEFINED), m_renderPass(VK_NULL_HANDLE),
+      m_surface(VK_NULL_HANDLE), m_swapchain(VK_NULL_HANDLE), m_swapchainImageFormat(VK_FORMAT_UNDEFINED),
+      m_swapchainExtent({0, 0}), m_renderPass(VK_NULL_HANDLE),
       m_commandPool(VK_NULL_HANDLE), m_currentFrame(0), m_framebufferResized(false),
       m_debugMessenger(VK_NULL_HANDLE) {
-
-  m_swapchainExtent = {0, 0};
 }
 
 Renderer::~Renderer() { cleanup(); }
@@ -48,7 +45,7 @@ bool Renderer::initialize(SDL_Window* window) {
     return false;
   }
 
-// Set up debug messenger if validation layers are enabled
+// Set up the debug messenger if validation layers are enabled
 #ifdef _DEBUG
   VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
   createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -148,7 +145,7 @@ bool Renderer::beginFrame() {
     return false;
   }
 
-  // Reset fence only if we are submitting work
+  // Reset the fence only if we are submitting work
   vkResetFences(m_device, 1, &m_inFlightFences[m_currentFrame]);
 
   // Reset the command buffer to begin recording commands
@@ -240,7 +237,7 @@ void Renderer::endFrame() {
   m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-void Renderer::cleanup() {
+void Renderer::cleanup() const {
   // Wait for the device to finish operations before cleanup
   if (m_device != VK_NULL_HANDLE) {
     vkDeviceWaitIdle(m_device);
@@ -266,7 +263,7 @@ void Renderer::cleanup() {
     vkDestroyCommandPool(m_device, m_commandPool, nullptr);
   }
 
-  // Clean up device
+  // Clean up the device
   if (m_device != VK_NULL_HANDLE) {
     vkDestroyDevice(m_device, nullptr);
   }
@@ -283,12 +280,12 @@ void Renderer::cleanup() {
   }
 #endif
 
-  // Clean up surface
+  // Clean up the surface
   if (m_surface != VK_NULL_HANDLE) {
     vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
   }
 
-  // Clean up instance
+  // Clean up the instance
   if (m_instance != VK_NULL_HANDLE) {
     vkDestroyInstance(m_instance, nullptr);
   }
@@ -388,7 +385,7 @@ bool Renderer::createSurface() {
 }
 
 bool Renderer::pickPhysicalDevice() {
-  // Placeholder implementation - in a real engine, this would have a more sophisticated device
+  // TODO: Placeholder implementation - in a real engine, this would have a more sophisticated device
   // selection algorithm
 
   uint32_t deviceCount = 0;
@@ -437,7 +434,7 @@ bool Renderer::pickPhysicalDevice() {
 }
 
 bool Renderer::createLogicalDevice() {
-  // TODO: More simplified version - would be extended in a full engine implementation
+  // TODO: Simplified version - will be extended in a full engine implementation
 
   // Find queue families
   uint32_t queueFamilyCount = 0;
@@ -473,7 +470,7 @@ bool Renderer::createLogicalDevice() {
     return false;
   }
 
-  // Create logical device with both queue families
+  // Create a logical device with both queue families
   std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
   std::set<uint32_t> uniqueQueueFamilies = {graphicsFamily, presentFamily};
 
@@ -736,7 +733,7 @@ bool Renderer::createSyncObjects() {
   VkFenceCreateInfo fenceInfo = {};
   fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
   fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT; // Create in signaled state so we don't wait
-                                                  // indefinitely on first frame
+                                                  // indefinitely on the first frame
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
     if (vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]) !=
@@ -755,7 +752,7 @@ bool Renderer::createSyncObjects() {
 }
 
 void Renderer::recreateSwapchain() {
-  // Wait for device to finish
+  // Wait for the device to finish
   vkDeviceWaitIdle(m_device);
 
   // Clean up old swapchain resources
@@ -770,9 +767,9 @@ void Renderer::recreateSwapchain() {
   utils::Logger::info("Swapchain recreated");
 }
 
-void Renderer::cleanupSwapchain() {
+void Renderer::cleanupSwapchain() const {
   // Clean up framebuffers
-  for (auto framebuffer : m_swapchainFramebuffers) {
+  for (const auto framebuffer : m_swapchainFramebuffers) {
     vkDestroyFramebuffer(m_device, framebuffer, nullptr);
   }
 
@@ -826,10 +823,14 @@ bool Renderer::checkValidationLayerSupport() {
 std::vector<const char*> Renderer::getRequiredExtensions() {
   // Get SDL required extensions
   uint32_t extensionCount = 0;
-  SDL_Vulkan_GetInstanceExtensions(&extensionCount);
+  const char* const* extensionNames = SDL_Vulkan_GetInstanceExtensions(&extensionCount);
 
-  std::vector<const char*> extensions(extensionCount);
-  SDL_Vulkan_GetInstanceExtensions(&extensionCount);
+  if (!extensionNames) {
+    utils::Logger::error("Failed to get Vulkan extensions: {}", SDL_GetError());
+    return {};
+  }
+
+  std::vector<const char*> extensions(extensionNames, extensionNames + extensionCount);
 
 // Add debug extension in debug builds
 #ifdef _DEBUG

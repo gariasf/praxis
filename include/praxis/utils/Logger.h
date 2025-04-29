@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <spdlog/spdlog.h>
 
 namespace spdlog
 {
@@ -37,7 +38,7 @@ namespace praxis::utils
          * @param args Format arguments
          */
         template <typename... Args>
-        static void trace(const std::string &fmt, Args &&...args);
+        static void trace(spdlog::format_string_t<Args...> fmt, Args&&... args);
 
         /**
          * @brief Log a debug message
@@ -45,7 +46,7 @@ namespace praxis::utils
          * @param args Format arguments
          */
         template <typename... Args>
-        static void debug(const std::string &fmt, Args &&...args);
+        static void debug(spdlog::format_string_t<Args...> fmt, Args&&... args);
 
         /**
          * @brief Log an info message
@@ -53,7 +54,7 @@ namespace praxis::utils
          * @param args Format arguments
          */
         template <typename... Args>
-        static void info(const std::string &fmt, Args &&...args);
+        static void info(spdlog::format_string_t<Args...> fmt, Args&&... args);
 
         /**
          * @brief Log a warning message
@@ -61,7 +62,7 @@ namespace praxis::utils
          * @param args Format arguments
          */
         template <typename... Args>
-        static void warn(const std::string &fmt, Args &&...args);
+        static void warn(spdlog::format_string_t<Args...> fmt, Args&&... args);
 
         /**
          * @brief Log an error message
@@ -69,7 +70,7 @@ namespace praxis::utils
          * @param args Format arguments
          */
         template <typename... Args>
-        static void error(const std::string &fmt, Args &&...args);
+        static void error(spdlog::format_string_t<Args...> fmt, Args&&... args);
 
         /**
          * @brief Log a critical error message
@@ -77,7 +78,7 @@ namespace praxis::utils
          * @param args Format arguments
          */
         template <typename... Args>
-        static void critical(const std::string &fmt, Args &&...args);
+        static void critical(spdlog::format_string_t<Args...> fmt, Args&&... args);
 
     private:
         static std::shared_ptr<spdlog::logger> s_logger;

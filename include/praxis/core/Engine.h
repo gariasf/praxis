@@ -73,12 +73,12 @@ namespace core {
      * @brief Updates all engine systems
      * @param deltaTime Time elapsed since last update in seconds
      */
-    void update(float deltaTime);
+    static void update(float deltaTime);
 
     /**
      * @brief Renders the current frame
      */
-    void render();
+    void render() const;
 
     /**
      * @brief Calculates the delta time between frames

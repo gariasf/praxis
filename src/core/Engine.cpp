@@ -10,7 +10,7 @@
 /**
  * TODO: possible improvements:
  * - Use `std::chrono` for time measurement instead of SDL_GetTicks
- * - Hide SDL specific code begind a platform abstraction layer eventually
+ * - Hide SDL specific code behind a platform abstraction layer eventually
  * - Inject logger (DI) instead of accessing Logger as a static singleton everywhere 
  * - How to control or make sure that `m_window` is properly freed in case of exceptions before we
  *   shutdown?
@@ -47,7 +47,7 @@ bool Engine::initialize(const std::string& appName, int width, int height) {
     return false;
   }
 
-  // Create window
+  // Create a window
   m_window =
       SDL_CreateWindow(m_appName.c_str(), width, height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 
@@ -143,7 +143,7 @@ void Engine::update(float deltaTime) {
   // TODO: Implement engine systems update
 }
 
-void Engine::render() {
+void Engine::render() const {
   if (!m_renderer) {
     return;
   }
@@ -160,8 +160,8 @@ void Engine::render() {
 }
 
 float Engine::calculateDeltaTime() {
-  uint64_t currentTime = SDL_GetTicks();
-  float deltaTime = (currentTime - m_lastFrameTime) / 1000.0f; // Convert to seconds
+  const uint64_t currentTime = SDL_GetTicks();
+  const float deltaTime = (currentTime - m_lastFrameTime) / 1000.0f; // Convert to seconds
   m_lastFrameTime = currentTime;
 
   return deltaTime;

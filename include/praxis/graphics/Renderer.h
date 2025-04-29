@@ -1,7 +1,5 @@
 #pragma once
 
-#include <memory>
-#include <string>
 #include <vector>
 #include <vulkan/vulkan.h>
 
@@ -46,7 +44,7 @@ public:
   /**
    * @brief Clean up all Vulkan resources
    */
-  void cleanup();
+  void cleanup() const;
 
   /**
    * @brief Check if swapchain needs recreation and recreate it if necessary
@@ -68,7 +66,7 @@ private:
   bool createInstance();
 
   /**
-   * @brief Create surface for the window
+   * @brief Create a surface for the window
    * @return True if creation succeeded
    */
   bool createSurface();
@@ -110,7 +108,7 @@ private:
   bool createFramebuffers();
 
   /**
-   * @brief Create command pool
+   * @brief Create the command pool
    * @return True if creation succeeded
    */
   bool createCommandPool();
@@ -135,19 +133,19 @@ private:
   /**
    * @brief Clean up swapchain and related resources
    */
-  void cleanupSwapchain();
+  void cleanupSwapchain() const;
 
   /**
    * @brief Check if validation layers are supported
    * @return True if validation layers are supported
    */
-  bool checkValidationLayerSupport();
+  static bool checkValidationLayerSupport();
 
   /**
    * @brief Get required instance extensions
    * @return Vector of required extension names
    */
-  std::vector<const char*> getRequiredExtensions();
+  static std::vector<const char*> getRequiredExtensions();
 
 private:
   SDL_Window* m_window;
