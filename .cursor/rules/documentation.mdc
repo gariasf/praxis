@@ -1,0 +1,12 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+- Use Doxygen-style documentation for all public APIs, non-obvious code, and new features.
+- Require architectural documentation for new modules and major infrastructure changes.
+- Document all new features and infrastructure changes in code and in docs/.
+- Avoid obvious or redundant comments; focus on useful docs for IntelliSense and maintainers.
+- Keep documentation up to date with code changes.
+- Provide module-level and file-level overviews where appropriate.
+

@@ -14,8 +14,10 @@ option(PRAXIS_USE_VULKAN_VALIDATION "Enable Vulkan validation layers" ON)
 
 # Global compiler options
 if(MSVC)
+  # MSVC
   add_compile_options(/W4 /MP)
 else()
+  # GCC / CLANG
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
@@ -34,7 +36,7 @@ include(FetchContent)
 FetchContent_Declare(
   SDL
   GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-  GIT_TAG release-3.2.0
+  GIT_TAG release-3.2.10
 )
 FetchContent_MakeAvailable(SDL)
 
@@ -42,7 +44,7 @@ FetchContent_MakeAvailable(SDL)
 FetchContent_Declare(
   glm
   GIT_REPOSITORY https://github.com/g-truc/glm.git
-  GIT_TAG 0.9.9.8
+  GIT_TAG 1.0.1
 )
 FetchContent_MakeAvailable(glm)
 
@@ -50,7 +52,7 @@ FetchContent_MakeAvailable(glm)
 FetchContent_Declare(
   spdlog
   GIT_REPOSITORY https://github.com/gabime/spdlog.git
-  GIT_TAG v1.12.0
+  GIT_TAG v1.15.2
 )
 FetchContent_MakeAvailable(spdlog)
 
@@ -58,7 +60,7 @@ FetchContent_MakeAvailable(spdlog)
 FetchContent_Declare(
   fmt
   GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-  GIT_TAG 10.1.1
+  GIT_TAG 11.1.4
 )
 FetchContent_MakeAvailable(fmt)
 
@@ -66,7 +68,7 @@ FetchContent_MakeAvailable(fmt)
 FetchContent_Declare(
   entt
   GIT_REPOSITORY https://github.com/skypjack/entt.git
-  GIT_TAG v3.12.2
+  GIT_TAG v3.15.0
 )
 FetchContent_MakeAvailable(entt)
 

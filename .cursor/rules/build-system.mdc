@@ -1,0 +1,16 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+- Use CMake (3.20+) as the build system; prefer Ninja as the generator.
+- Support multi-platform builds (Windows, Linux, macOS).
+- Use CMake FetchContent or Git submodules for dependencies.
+- Organize build targets modularly to allow selective inclusion of features.
+- Provide separate build configs: Debug, Release, RelWithDebInfo.
+- Integrate unit tests with CTest.
+- Enable Clang-Tidy and Clang-Format for all code.
+- Check for null dereferences and memory leaks in CI/builds.
+- Enforce code style and analysis rules from the coding style rule.
+- No proprietary or costly tools; only open, proven libraries.
+

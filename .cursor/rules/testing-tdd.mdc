@@ -1,0 +1,14 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+- Follow strict test-driven development (TDD): write tests before implementation.
+- Use Catch2 for all unit and integration tests.
+- Target at least 80% test coverage for all modules.
+- All new features and bug fixes must include corresponding tests.
+- Place tests in the tests/ directory, mirroring the engine's module structure.
+- Integrate tests with CTest and the build system.
+- No code is considered complete until tests pass and coverage targets are met.
+- Avoid obvious/unnecessary comments in tests, but provide Doxygen docs for test fixtures and non-obvious logic.
+
