@@ -1,40 +1,75 @@
-#include <catch2/catch_test_macros.hpp>
+#define CATCH_CONFIG_MAIN
+#include "catch2/catch_test_macros.hpp"
 
 #include "praxis/core/Engine.h"
+#include "praxis/graphics/Renderer.h"
 #include "praxis/utils/Logger.h"
 
-TEST_CASE("Logger initialization", "[utils]") {
-    REQUIRE(praxis::utils::Logger::initialize("TestLogger"));
+#include <SDL3/SDL.h>
+
+class MockSDLWindow {
+public:
+    static SDL_Window* Create() {
+        // Create a hidden window for testing
+        return SDL_CreateWindow("Test Window", 100, 100, 
+            SDL_WINDOW_VULKAN | SDL_WINDOW_HIDDEN);
+    }
+};
+
+TEST_CASE("Engine initialization and basic operations", "[engine]") {
+    praxis::utils::Logger::initialize("TestApp", "");
     
-    // Log some test messages at different levels
-    praxis::utils::Logger::trace("This is a trace message");
-    praxis::utils::Logger::debug("This is a debug message");
-    praxis::utils::Logger::info("This is an info message");
-    praxis::utils::Logger::warn("This is a warning message");
-    praxis::utils::Logger::error("This is an error message");
+    SECTION("Engine can be constructed and destructed") {
+        praxis::core::Engine engine;
+        REQUIRE_NOTHROW([&]() { engine.shutdown(); }());
+    }
+    
+    SECTION("Engine initialization with valid parameters succeeds") {
+        praxis::core::Engine engine;
+        bool result = engine.initialize("Test Engine", 800, 600);
+        REQUIRE(result);
+        REQUIRE(engine.getWindow() != nullptr);
+        engine.shutdown();
+    }
+    
+    SECTION("Engine can be started and stopped") {
+        praxis::core::Engine engine;
+        REQUIRE(engine.initialize("Test Engine", 800, 600));
+        
+        // Create a thread to stop the engine after a short time
+        std::thread stopThread([&engine]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            engine.stop();
+        });
+        
+        // Run should exit after stop is called
+        int result = engine.run();
+        REQUIRE(result == 0);
+        
+        stopThread.join();
+        engine.shutdown();
+    }
+    
+    SECTION("Engine fails gracefully with invalid dimensions") {
+        praxis::core::Engine engine;
+        bool result = engine.initialize("Test Engine", -1, -1);
+        // Should still succeed as SDL will adjust to valid dimensions
+        REQUIRE(result);
+        engine.shutdown();
+    }
+    
+    SECTION("Double initialization is handled correctly") {
+        praxis::core::Engine engine;
+        REQUIRE(engine.initialize("First Init", 800, 600));
+        REQUIRE(engine.initialize("Second Init", 1024, 768));
+        engine.shutdown();
+    }
+    
+    SECTION("Engine cannot run if not initialized") {
+        praxis::core::Engine engine;
+        int result = engine.run();
+        REQUIRE(result == -1);
+    }
     
     praxis::utils::Logger::shutdown();
 }
-
-TEST_CASE("Engine lifecycle", "[core]") {
-    praxis::core::Engine engine;
-    
-    // Initialize with a test name
-    bool result = engine.initialize("TestEngine", 800, 600);
-    
-    // On automated test environments, initialization might fail if no graphics device
-    // is available, so we don't strictly REQUIRE it to succeed
-    if (result) {
-        REQUIRE(engine.getWindow() != nullptr);
-        
-        // Call stop immediately since we're just testing initialization
-        engine.stop();
-        
-        // We don't test run() since it contains the main loop
-        // which would block the test indefinitely
-        
-        // The engine will be cleaned up automatically when it goes out of scope
-    } else {
-        WARN("Engine initialization failed. This may be normal in a headless test environment.");
-    }
-} 

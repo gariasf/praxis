@@ -170,7 +170,7 @@ bool Renderer::beginFrame() {
   renderPassInfo.renderArea.offset = {0, 0};
   renderPassInfo.renderArea.extent = m_swapchainExtent;
 
-  VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+  VkClearValue clearColor = {{{255.0f, 255.0f, 255.0f, 1.0f}}};
   renderPassInfo.clearValueCount = 1;
   renderPassInfo.pClearValues = &clearColor;
 
@@ -238,6 +238,9 @@ void Renderer::endFrame() {
 }
 
 void Renderer::cleanup() const {
+  if (m_device == nullptr) {
+    return;
+  }
   // Wait for the device to finish operations before cleanup
   if (m_device != VK_NULL_HANDLE) {
     vkDeviceWaitIdle(m_device);
@@ -258,7 +261,7 @@ void Renderer::cleanup() const {
     }
   }
 
-  // Clean up command pool
+  // Clean up the command pool
   if (m_commandPool != VK_NULL_HANDLE) {
     vkDestroyCommandPool(m_device, m_commandPool, nullptr);
   }
@@ -768,9 +771,16 @@ void Renderer::recreateSwapchain() {
 }
 
 void Renderer::cleanupSwapchain() const {
+  // Make sure the device is valid before cleaning up
+  if (m_device == VK_NULL_HANDLE) {
+    return;
+  }
+
   // Clean up framebuffers
   for (const auto framebuffer : m_swapchainFramebuffers) {
-    vkDestroyFramebuffer(m_device, framebuffer, nullptr);
+    if (framebuffer != VK_NULL_HANDLE) {
+      vkDestroyFramebuffer(m_device, framebuffer, nullptr);
+    }
   }
 
   // Clean up render pass
@@ -780,7 +790,9 @@ void Renderer::cleanupSwapchain() const {
 
   // Clean up image views
   for (auto imageView : m_swapchainImageViews) {
-    vkDestroyImageView(m_device, imageView, nullptr);
+    if (imageView != VK_NULL_HANDLE) {
+      vkDestroyImageView(m_device, imageView, nullptr);
+    }
   }
 
   // Clean up swapchain

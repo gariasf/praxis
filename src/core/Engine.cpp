@@ -102,7 +102,7 @@ void Engine::shutdown() {
   utils::Logger::info("Shutting down engine");
 
   if (m_renderer) {
-    m_renderer->cleanup();
+    // Renderer destructor will clean up its resources
     m_renderer.reset();
   }
 
