@@ -5,6 +5,14 @@
 > [!NOTE]
 > Praxis is a learning and self-development project. Engineering and topic study is assisted by AI.
 
+
+## Project goals
+- Learn about Game Engine Foundations, 3D space, and low-level programming
+- Create a game engine using modern C++ practices
+- Provide a comprehensive Vulkan-based rendering pipeline
+- Establish a flexible architecture that can be extended for various game genres
+- Eventually support open-world RPG-style games with complex scenes and interactions
+
 ## Project rules
 - Use free/open, battle-proven libraries only
 - Avoid proprietary or costly tools
@@ -12,25 +20,6 @@
 - Simple over complex
 - No unnecessary abstractions
 
-## Project Overview
-
-Praxis is a modern 3D game engine built using C++23 and Vulkan designed to serve as a foundation for game development with a focus on performance, flexibility, and ease of use. The engine aims to provide a robust framework to create high-quality 3D experiences without the licensing constraints of commercial engines.
-
-### Goals
-- Learn about Game Engine Foundations, 3D space and low level programming
-- Create a cross-platform game engine using modern C++ practices
-- Provide a comprehensive Vulkan-based rendering pipeline
-- Establish a flexible architecture that can be extended for various game genres
-- Develop a modular system that allows developers to use only what they need
-- Eventually support open-world RPG-style games with complex scenes and interactions
-
-### Success Criteria
-- Engine can render complex 3D scenes with modern lighting techniques
-- Physics simulation supports realistic interactions
-- Input handling works across multiple device types
-- Asset pipeline supports industry-standard formats
-- Performance is competitive with commercial engines for similar workloads
-- Eventually can run open-world RPGs with complexity similar to games like Skyrim
 
 ## Technical Scope
 
@@ -95,7 +84,7 @@ See [Architecture Docs](https://github.com/gariasf/praxis/blob/main/docs/ARCHITE
   - E.g., `namespace praxis::graphics`
 
 ## Commit message convention
-Messages should be done the following format
+Messages should be written in the following format
 ```
 scope: brief description
 
@@ -114,16 +103,6 @@ Examples:
 - `build: update CMake configuration for Windows`
 
 Additional information can be included after the first line.
-
-
-## Progress Monitoring and Review
-
-### Progress Metrics
-- Feature completion rate against roadmap
-- Code quality (measured by static analysis tools)
-- Performance benchmarks compared to initial baseline
-- Documentation coverage
-- Unit test coverage
 
 ### Learning Resources Collection
 - [Vulkan Tutorial](https://vulkan-tutorial.com/)
