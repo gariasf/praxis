@@ -30,16 +30,6 @@ Praxis is a modern 3D game engine built using C++23 and Vulkan designed to serve
 - Performance is competitive with commercial engines for similar workloads
 - Eventually can run open-world RPGs with complexity similar to games like Skyrim
 
-## Development Roadmap
-
-The detailed development roadmap is maintained in [ROADMAP.md](ROADMAP.md). The roadmap outlines:
-- Major milestones and their dependencies
-- Priority levels for different features
-- Progress metrics and success criteria
-- Learning resources for each development phase
-
-The roadmap is designed to support incremental learning and development, with each section building upon previous work. It's structured to be manageable over a couple of years of part-time development.
-
 ## Technical Scope
 
 ### Language and Toolchain
