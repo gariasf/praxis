@@ -1,8 +1,5 @@
 # Praxis Game Engine Architecture
 
-## Overview
-Praxis is a modular, cross-platform 3D game engine built in C++20, designed for performance, extensibility, and clarity. The engine is organized into logical modules, each with a clear responsibility, and follows modern C++ and software engineering best practices.
-
 ## Directory Structure
 ```
 praxis/
