@@ -1,4 +1,6 @@
 # Praxis Game Engine
+# Praxis Engine
+
 
 > [!NOTE]
 > Praxis is a learning and self-development project. Engineering and topic study is assisted by AI.
@@ -91,6 +93,28 @@ See [Architecture Docs](https://github.com/gariasf/praxis/blob/main/docs/ARCHITE
   - E.g., `MAX_LIGHTS`, `enum class RenderMode { FORWARD, DEFERRED }`
 - **Namespaces**: Lower case
   - E.g., `namespace praxis::graphics`
+
+## Commit message convention
+Messages should be done the following format
+```
+scope: brief description
+
+[Optional detailed description]
+
+[Optional related issues]
+```
+
+Where:
+- `scope` is one of: core, graphics, utils, tests, docs, build, etc.
+- `description` is a short, imperative description of the change
+
+Examples:
+- `core: improve engine timing features`
+- `graphics: fix shadow mapping artifacts`
+- `build: update CMake configuration for Windows`
+
+Additional information can be included after the first line.
+
 
 ## Progress Monitoring and Review
 
