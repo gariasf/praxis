@@ -51,3 +51,13 @@ jobs:
         with:
           name: build-artifacts
           path: build
+
+      - name: Run Tests
+        run: |
+          cd build
+          # Configure environment variables needed for headless testing
+          export CI=true
+          export XDG_RUNTIME_DIR=/tmp
+          # Run SDL without actual GPU rendering
+          export SDL_VIDEODRIVER=dummy
+          ctest -C Release --output-on-failure --verbose
