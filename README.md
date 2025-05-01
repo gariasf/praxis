@@ -1,6 +1,4 @@
-# Praxis Game Engine
 # Praxis Engine
-
 
 > [!NOTE]
 > Praxis is a learning and self-development project. Engineering and topic study is assisted by AI.
