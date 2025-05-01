@@ -40,13 +40,6 @@ bool Renderer::initialize(SDL_Window* window) {
 
   utils::Logger::info("Initializing Vulkan renderer");
 
-  // If window is null (headless environment), return early with success
-  if (!m_window) {
-    utils::Logger::warn("Null window provided, assuming headless environment");
-    // Mark as initialized for testing purposes
-    return true;
-  }
-
   if (!createInstance()) {
     utils::Logger::error("Failed to create Vulkan instance");
     return false;

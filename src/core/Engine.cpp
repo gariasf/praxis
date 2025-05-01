@@ -47,21 +47,12 @@ bool Engine::initialize(const std::string& appName, int width, int height) {
     return false;
   }
 
-  // Check if we're running in a CI or headless environment
   const char* ci_env = std::getenv("CI");
   bool is_ci = (ci_env != nullptr && std::string(ci_env) == "true");
-  bool headless = is_ci || (std::getenv("DISPLAY") == nullptr && std::getenv("WAYLAND_DISPLAY") ==
-                            nullptr);
-
-  // Set XDG_RUNTIME_DIR for CI environment if not set
-  if (is_ci && std::getenv("XDG_RUNTIME_DIR") == nullptr) {
-    utils::Logger::info("Setting XDG_RUNTIME_DIR for CI environment");
-    setenv("XDG_RUNTIME_DIR", "/tmp", 1);
-  }
 
   // Create a window with appropriate flags
   Uint32 window_flags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE;
-  if (headless) {
+  if (is_ci) {
     window_flags |= SDL_WINDOW_HIDDEN;
     utils::Logger::info("Running in headless mode");
   }
@@ -70,13 +61,6 @@ bool Engine::initialize(const std::string& appName, int width, int height) {
 
   if (!m_window) {
     utils::Logger::error("Window creation failed: {}", SDL_GetError());
-
-    // In headless environments, continue without a window for testing
-    if (headless) {
-      utils::Logger::warn("Running without window in headless environment");
-      m_initialized = true;
-      return true;
-    }
     return false;
   }
 
@@ -84,13 +68,6 @@ bool Engine::initialize(const std::string& appName, int width, int height) {
   m_renderer = std::make_unique<graphics::Renderer>();
   if (!m_renderer->initialize(m_window)) {
     utils::Logger::error("Renderer initialization failed");
-
-    // In headless environments, continue without a renderer for testing
-    if (headless) {
-      utils::Logger::warn("Running without renderer in headless environment");
-      m_initialized = true;
-      return true;
-    }
     return false;
   }
 
