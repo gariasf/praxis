@@ -26,7 +26,6 @@ jobs:
         with:
           path: |
             /var/cache/apt/archives/*.deb
-            /var/cache/apt/archives/partial/*.deb
           key: ${{ runner.os }}-apt-${{ hashFiles('**/build.yml') }}
 
 
