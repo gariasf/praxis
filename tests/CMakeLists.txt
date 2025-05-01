@@ -35,10 +35,3 @@ target_link_libraries(graphics_tests
 # Register tests with CTest
 add_test(NAME CoreTests COMMAND core_tests)
 add_test(NAME GraphicsTests COMMAND graphics_tests)
-
-# Create a custom target to run all tests
-add_custom_target(run_tests ALL
-    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS core_tests graphics_tests
-    COMMENT "Running tests..."
-) 

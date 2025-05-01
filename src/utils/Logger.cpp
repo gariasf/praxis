@@ -11,6 +11,15 @@ std::shared_ptr<spdlog::logger> Logger::s_logger;
 
 bool Logger::initialize(const std::string& name, const std::string& logFilePath) {
   try {
+    // Check if logger with this name already exists
+    auto existing_logger = spdlog::get(name);
+    if (existing_logger) {
+      s_logger = existing_logger;
+      spdlog::set_default_logger(s_logger);
+      info("Logger reused because it already exists, name: {}", name);
+      return true;
+    }
+
     // Create sinks
     std::vector<spdlog::sink_ptr> sinks;
 

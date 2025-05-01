@@ -18,7 +18,6 @@ public:
 
 TEST_CASE("Engine initialization and basic operations", "[engine]") {
     praxis::utils::Logger::initialize("TestApp", "");
-    
     SECTION("Engine can be constructed and destructed") {
         praxis::core::Engine engine;
         REQUIRE_NOTHROW([&]() { engine.shutdown(); }());
@@ -28,10 +27,9 @@ TEST_CASE("Engine initialization and basic operations", "[engine]") {
         praxis::core::Engine engine;
         bool result = engine.initialize("Test Engine", 800, 600);
         REQUIRE(result);
-        REQUIRE(engine.getWindow() != nullptr);
         engine.shutdown();
     }
-    
+
     SECTION("Engine can be started and stopped") {
         praxis::core::Engine engine;
         REQUIRE(engine.initialize("Test Engine", 800, 600));

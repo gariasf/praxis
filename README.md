@@ -86,7 +86,7 @@ See [Architecture Docs](https://github.com/gariasf/praxis/blob/main/docs/ARCHITE
 ## Commit message convention
 Messages should be written in the following format
 ```
-scope: brief description
+scope: [PRAX-xxx] brief description
 
 [Optional detailed description]
 
@@ -94,7 +94,8 @@ scope: brief description
 ```
 
 Where:
-- `scope` is one of: core, graphics, utils, tests, docs, build, etc.
+
+- `scope` is one of: core, graphics, utils, tests, docs, build, ci.
 - `description` is a short, imperative description of the change
 
 Examples:

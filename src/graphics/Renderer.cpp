@@ -45,7 +45,7 @@ bool Renderer::initialize(SDL_Window* window) {
     return false;
   }
 
-// Set up the debug messenger if validation layers are enabled
+  // Set up the debug messenger if validation layers are enabled
 #ifdef _DEBUG
   VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
   createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -331,6 +331,10 @@ bool Renderer::createInstance() {
   auto extensions = getRequiredExtensions();
   createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
   createInfo.ppEnabledExtensionNames = extensions.data();
+
+#ifdef __APPLE__
+createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
 
 // Validation layers in debug mode
 #ifdef _DEBUG
@@ -847,6 +851,10 @@ std::vector<const char*> Renderer::getRequiredExtensions() {
 // Add debug extension in debug builds
 #ifdef _DEBUG
   extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+#endif
+
+#ifdef __APPLE__
+  extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
 #endif
 
   return extensions;

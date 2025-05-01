@@ -47,9 +47,9 @@ bool Engine::initialize(const std::string& appName, int width, int height) {
     return false;
   }
 
-  // Create a window
-  m_window =
-      SDL_CreateWindow(m_appName.c_str(), width, height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+  // Create a window with appropriate flags
+  m_window = SDL_CreateWindow(m_appName.c_str(), width, height,
+                              SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 
   if (!m_window) {
     utils::Logger::error("Window creation failed: {}", SDL_GetError());

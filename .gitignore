@@ -19,6 +19,7 @@ install_manifest.txt
 compile_commands.json
 CTestTestfile.cmake
 _deps/
+.cmake
 
 # Visual Studio files
 .vs/
@@ -73,4 +74,6 @@ desktop.ini
 *.manifest
 *.dep
 *.swp
-*~ 
+*~
+
+DartConfiguration.tcl
