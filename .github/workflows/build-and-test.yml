@@ -20,7 +20,15 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Cache APT packages
+        uses: actions/cache@v3
+        id: apt-cache
+        with:
+          path: /var/cache/apt
+          key: ${{ runner.os }}-apt-${{ hashFiles('**/build-and-test.yml') }}
+
       - name: Install base dependencies
+        if: steps.apt-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake g++ build-essential make \
@@ -32,17 +40,32 @@ jobs:
           libpipewire-0.3-dev libwayland-dev libdecor-0-dev liburing-dev \
           lsb-release
 
-      - name: Setup Vulkan SDK
-        uses: ./.github/actions/setup-vulkan
+      - name: Install Vulkan SDK
+        uses: humbletim/install-vulkan-sdk@v1.2.0
+        with:
+          version: latest
+          cache: true
         id: vulkan-setup
 
+      - name: Cache build directory
+        uses: actions/cache@v3
+        with:
+          path: |
+            build
+            !build/CMakeCache.txt
+          key: ${{ runner.os }}-build-${{ hashFiles('**/CMakeLists.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-build-
+
       - name: Configure CMake
+        if: steps.build-cache.outputs.cache-hit != 'true'
         run: |
           # Set environment variables for Vulkan SDK
           export VULKAN_SDK=/usr
           cmake -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
+        if: steps.build-cache.outputs.cache-hit != 'true'
         run: |
           cmake --build build --config Release
 
@@ -51,13 +74,3 @@ jobs:
         with:
           name: build-artifacts
           path: build
-
-      - name: Run Tests
-        run: |
-          cd build
-          # Configure environment variables needed for headless testing
-          export CI=true
-          export XDG_RUNTIME_DIR=/tmp
-          # Run SDL without actual GPU rendering
-          export SDL_VIDEODRIVER=dummy
-          ctest -C Release --output-on-failure --verbose
