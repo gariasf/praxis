@@ -332,6 +332,11 @@ bool Renderer::createInstance() {
   createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
   createInfo.ppEnabledExtensionNames = extensions.data();
 
+#ifdef __APPLE__
+  createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
+
+
 // Validation layers in debug mode
 #ifdef _DEBUG
   const std::vector<const char*> validationLayers = {"VK_LAYER_KHRONOS_validation"};
@@ -848,6 +853,11 @@ std::vector<const char*> Renderer::getRequiredExtensions() {
 #ifdef _DEBUG
   extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 #endif
+
+#ifdef __APPLE__
+  extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+#endif
+
 
   return extensions;
 }
