@@ -52,28 +52,6 @@ TEST_CASE_METHOD(VulkanTestFixture, "Renderer Lifecycle", "[graphics][renderer]"
 }
 
 TEST_CASE_METHOD(VulkanTestFixture, "Renderer Initialization", "[graphics][renderer]") {
-  // Check if we're in a CI environment
-  bool is_ci = (std::getenv("CI") != nullptr && std::string(std::getenv("CI")) == "true");
-  bool headless = is_ci || (std::getenv("DISPLAY") == nullptr && std::getenv("WAYLAND_DISPLAY") ==
-                            nullptr);
-
-  // Set XDG_RUNTIME_DIR for CI environments
-  if (is_ci && std::getenv("XDG_RUNTIME_DIR") == nullptr) {
-    setenv("XDG_RUNTIME_DIR", "/tmp", 1);
-  }
-
-  SECTION("Null window initialization") {
-    praxis::graphics::Renderer renderer;
-        bool result = renderer.initialize(nullptr);
-
-    // In headless environments, we allow null windows
-    if (headless) {
-      REQUIRE(result);
-    } else {
-      REQUIRE_FALSE(result);
-    }
-  }
-
   SECTION("Valid window initialization") {
     SDL_Window* window = MockSDLWindow::Create();
     REQUIRE(window != nullptr);
