@@ -32,9 +32,9 @@ runs:
       run: |
         echo "Vulkan SDK installation info:"
         if command -v vulkaninfo &> /dev/null; then
-          VULKAN_VERSION=$(vulkaninfo --summary 2>/dev/null | grep "Vulkan Instance Version" | awk '{print $4}')
-          echo "version=${VULKAN_VERSION}" >> $GITHUB_OUTPUT
-          echo "Vulkan Instance Version: ${VULKAN_VERSION}"
+          VULKAN_VERSION=$(vulkaninfo --summary 2>/dev/null | grep "Vulkan Instance Version" | awk '{print $4}' || true)
+          echo "version=$VULKAN_VERSION" | tee -a "$GITHUB_OUTPUT" > /dev/null
+          echo "Vulkan Instance Version: $VULKAN_VERSION"
         else
           echo "vulkaninfo not found, but SDK should be installed"
           echo "version=unknown" >> $GITHUB_OUTPUT
