@@ -21,7 +21,7 @@ jobs:
           submodules: recursive
 
       - name: Cache APT packages
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: apt-cache
         with:
           path: /var/cache/apt
@@ -48,7 +48,7 @@ jobs:
         id: vulkan-setup
 
       - name: Cache build directory
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             build
@@ -60,17 +60,15 @@ jobs:
       - name: Configure CMake
         if: steps.build-cache.outputs.cache-hit != 'true'
         run: |
-          # Set environment variables for Vulkan SDK
-          export VULKAN_SDK=/usr
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          export VULKAN_SDK=${{ steps.vulkan-setup.outputs.VULKAN_SDK }}
+          echo "Using Vulkan SDK: $VULKAN_SDK"
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DVulkan_INCLUDE_DIR="$VULKAN_SDK/include" \
+            -DVulkan_LIBRARY="$VULKAN_SDK/lib/libvulkan.so"
+      
 
       - name: Build
         if: steps.build-cache.outputs.cache-hit != 'true'
         run: |
           cmake --build build --config Release
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts
-          path: build
