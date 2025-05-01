@@ -108,17 +108,19 @@ TEST_CASE_METHOD(VulkanTestFixture, "Renderer Initialization", "[graphics][rende
 
     // Second initialization behavior is platform-dependent
     bool result2 = renderer.initialize(window2);
-    
+
     // On macOS with MoltenVK, reinitializing with a different window may fail
     // due to Vulkan-Metal interop limitations
     if (isMacOSPlatform()) {
       // On macOS, we'll just check that the code doesn't crash, but don't require success
-      WARN("On macOS, reinitializing renderer with different window may fail due to MoltenVK limitations");
+      WARN(
+          "On macOS, reinitializing renderer with different window may fail due to MoltenVK limitations")
+      ;
     } else {
       // On other platforms, we expect successful reinitialization
       REQUIRE(result2);
     }
-    
+
     SDL_DestroyWindow(window1);
     SDL_DestroyWindow(window2);
   }
