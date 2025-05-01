@@ -60,7 +60,6 @@ jobs:
       - name: Configure CMake
         if: steps.build-cache.outputs.cache-hit != 'true'
         run: |
-          export VULKAN_SDK=${{ steps.vulkan-setup.outputs.VULKAN_SDK }}
           echo "Using Vulkan SDK: $VULKAN_SDK"
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
