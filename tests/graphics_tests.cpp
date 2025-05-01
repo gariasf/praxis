@@ -22,7 +22,14 @@ public:
 
 // Helper to check if Vulkan is available on the current system
 bool isVulkanSupported() {
+  const char* ci_env = std::getenv("CI");
+
+  if (bool is_ci = (ci_env != nullptr && std::string(ci_env) == "true")) {
+    return false;
+  }
+
   return SDL_Vulkan_GetInstanceExtensions(nullptr) != nullptr;
+
 }
 }
 

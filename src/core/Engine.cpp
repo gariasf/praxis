@@ -47,17 +47,8 @@ bool Engine::initialize(const std::string& appName, int width, int height) {
     return false;
   }
 
-  const char* ci_env = std::getenv("CI");
-  bool is_ci = (ci_env != nullptr && std::string(ci_env) == "true");
-
   // Create a window with appropriate flags
-  Uint32 window_flags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE;
-  if (is_ci) {
-    window_flags |= SDL_WINDOW_HIDDEN;
-    utils::Logger::info("Running in headless mode");
-  }
-
-  m_window = SDL_CreateWindow(m_appName.c_str(), width, height, window_flags);
+  m_window = SDL_CreateWindow(m_appName.c_str(), width, height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 
   if (!m_window) {
     utils::Logger::error("Window creation failed: {}", SDL_GetError());
