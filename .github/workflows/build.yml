@@ -24,8 +24,11 @@ jobs:
         uses: actions/cache@v4
         id: apt-cache
         with:
-          path: /var/cache/apt
+          path: |
+            /var/cache/apt/archives/*.deb
+            /var/cache/apt/archives/partial/*.deb
           key: ${{ runner.os }}-apt-${{ hashFiles('**/build.yml') }}
+
 
       - name: Install base dependencies
         if: steps.apt-cache.outputs.cache-hit != 'true'
