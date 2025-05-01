@@ -41,7 +41,7 @@ jobs:
           lsb-release
 
       - name: Install Vulkan SDK
-        uses: humbletim/install-vulkan-sdk@v1.2.0
+        uses: humbletim/install-vulkan-sdk@v1.2
         with:
           version: latest
           cache: true
