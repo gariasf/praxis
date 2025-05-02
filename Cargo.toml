@@ -33,6 +33,7 @@ missing_docs = "warn"
 
 [dependencies]
 praxis_core = { path = "crates/praxis_core", version = "0.1.0" }
+praxis_utils = { path = "crates/praxis_utils", version = "0.1.0" }
 
 
 [[example]]
