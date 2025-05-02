@@ -15,3 +15,12 @@ members = [
     "praxis_window"
 ]
 
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"
+
+[workspace.lints.rust]
+unsafe_code = "warn"
+missing_docs = "warn"
+
