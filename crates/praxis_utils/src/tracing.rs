@@ -3,12 +3,12 @@
 //! This module provides logging and tracing capabilities using the `tracing` crate.
 
 // Re-export the tracing macros so other crates can use them directly
-pub use tracing::{debug, error, info, trace, warn, instrument, span, Level};
+pub use tracing::{Level, debug, error, info, instrument, span, trace, warn};
 
 use color_eyre::Result;
 use tracing_subscriber::{
-    fmt::{self, format::FmtSpan},
     EnvFilter,
+    fmt::{self, format::FmtSpan},
     prelude::*,
 };
 
@@ -43,14 +43,13 @@ pub fn initialize() -> Result<()> {
 
     // Create a subscriber that formats events as strings
     let fmt_layer = fmt::layer()
-        .with_target(true)       // Include the target in the output
-        .with_thread_ids(true)   // Include thread IDs
+        .with_target(true) // Include the target in the output
+        .with_thread_ids(true) // Include thread IDs
         .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE) // Log span creation/closing
-        .pretty();               // Use pretty printer for human readability
+        .pretty(); // Use pretty printer for human readability
 
     // Filter based on environment variable or defaults to INFO level
-    let filter_layer = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new("info"))?;
+    let filter_layer = EnvFilter::try_from_default_env().or_else(|_| EnvFilter::try_new("info"))?;
 
     // Register the subscriber with the tracing system
     tracing_subscriber::registry()

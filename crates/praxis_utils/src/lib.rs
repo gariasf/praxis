@@ -33,10 +33,10 @@ pub fn initialize() -> Result<()> {
 }
 
 // Re-export common utility items for convenience
-pub use color_eyre::{Result, Report, eyre::eyre};
+pub use color_eyre::{Report, Result, eyre::eyre};
 
 // Re-export tracing macros for direct use from other crates
-pub use tracing::{debug, error, info, trace, warn, instrument};
+pub use tracing::{debug, error, info, instrument, trace, warn};
 
 #[cfg(test)]
 mod tests {
