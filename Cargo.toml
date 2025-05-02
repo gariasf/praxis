@@ -1,18 +1,25 @@
+[package]
+name = "praxis"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+authors = ["Guillem Arias <hello@gariasf.com>"]
+
 [workspace]
 resolver = "2"
 members = [
-    "praxis",
-    "praxis_assets",
-    "praxis_audio",
-    "praxis_ecs",
-    "praxis_graphics",
-    "praxis_gui",
-    "praxis_input",
-    "praxis_math",
-    "praxis_physics",
-    "praxis_scene",
-    "praxis_utils",
-    "praxis_window"
+    "crates/praxis_core",
+    "crates/praxis_assets",
+    "crates/praxis_audio",
+    "crates/praxis_ecs",
+    "crates/praxis_graphics",
+    "crates/praxis_gui",
+    "crates/praxis_input",
+    "crates/praxis_math",
+    "crates/praxis_physics",
+    "crates/praxis_scene",
+    "crates/praxis_utils",
+    "crates/praxis_window"
 ]
 
 [workspace.lints.clippy]
@@ -24,3 +31,11 @@ nursery = "warn"
 unsafe_code = "warn"
 missing_docs = "warn"
 
+[dependencies]
+praxis_core = { path = "crates/praxis_core", version = "0.1.0" }
+
+
+[[example]]
+name = "hello_praxis"
+path = "examples/hello_praxis.rs"
+doc-scrape-examples = true

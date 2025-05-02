@@ -5,6 +5,9 @@ version = 4
 [[package]]
 name = "praxis"
 version = "0.1.0"
+dependencies = [
+ "praxis_core",
+]
 
 [[package]]
 name = "praxis_assets"
@@ -12,6 +15,10 @@ version = "0.1.0"
 
 [[package]]
 name = "praxis_audio"
+version = "0.1.0"
+
+[[package]]
+name = "praxis_core"
 version = "0.1.0"
 
 [[package]]
