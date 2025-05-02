@@ -3,14 +3,15 @@ description:
 globs: 
 alwaysApply: true
 ---
-- Use CMake (3.20+) as the build system; prefer Ninja as the generator.
-- Support multi-platform builds (Windows, Linux, macOS).
-- Use CMake FetchContent or Git submodules for dependencies.
-- Organize build targets modularly to allow selective inclusion of features.
-- Provide separate build configs: Debug, Release, RelWithDebInfo.
-- Integrate unit tests with CTest.
-- Enable Clang-Tidy and Clang-Format for all code.
-- Check for null dereferences and memory leaks in CI/builds.
-- Enforce code style and analysis rules from the coding style rule.
-- No proprietary or costly tools; only open, proven libraries.
+# Build System Rules (Rust)
+
+- **Platform Support:** Support multi-platform builds (Windows, Linux, macOS) via Cargo.
+- **Modularity:** Organize the project as a Cargo workspace with modular crates. Use Cargo features for optional functionality where appropriate.
+- **Tooling:** Use the standard Rust toolchain (`cargo`).
+- **Code Analysis & Style:**
+  - Enforce code quality and catch common errors using `clippy` (`cargo clippy -- -D warnings` in CI).
+  - Enforce code formatting using `rustfmt` (`cargo fmt --check` in CI).
+  - Rely on Rust's compile-time checks (ownership, borrowing, type system) for memory safety and preventing null dereferences.
+- **Dependencies:** Use only free, open-source, and well-maintained crates managed via `Cargo.toml`.
+- **Pragmatism:** Keep the build process simple and standard, leveraging Cargo's defaults where possible.
 

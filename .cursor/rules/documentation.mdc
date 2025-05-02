@@ -3,10 +3,11 @@ description:
 globs: 
 alwaysApply: true
 ---
-- Use Doxygen-style documentation for all public APIs, non-obvious code, and new features.
-- Require architectural documentation for new modules and major infrastructure changes.
-- Document all new features and infrastructure changes in code and in docs/.
-- Avoid obvious or redundant comments; focus on useful docs for IntelliSense and maintainers.
-- Keep documentation up to date with code changes.
-- Provide module-level and file-level overviews where appropriate.
+# Documentation Rules (Rust)
+
+- **Architectural Docs:** Require documentation in `docs/` (like `ARCHITECTURE.md`) for new modules/crates and major infrastructure changes.
+- **API Documentation:** Document all public items (modules, types, functions, traits, etc.) using `rustdoc` comments (`///` for items, `//!` for modules/crates).
+- **Clarity:** Avoid obvious or redundant comments. Focus on *why* code exists, its purpose, usage examples (doctests), invariants, potential errors, and panic conditions.
+- **Maintenance:** Keep documentation (both in code and in `docs/`) up-to-date with code changes.
+- **Overviews:** Provide module-level (`//!` in `mod.rs` or module file) and crate-level (`//!` in `lib.rs`) documentation summaries.
 

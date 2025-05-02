@@ -1,0 +1,104 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Praxis Rust Style & Programming Guidelines
+
+## General Principles
+- **Language:** Use the latest stable Rust version.
+- **Tooling:** Rely on the standard Rust toolchain: `cargo` for building, testing, and dependency management; `rustfmt` for code formatting; `clippy` for linting; and `rustdoc` for documentation.
+- **Safety:** Embrace Rust's safety features. Avoid `unsafe` code unless absolutely necessary (e.g., FFI, specific performance optimizations) and clearly document the invariants required for its safe use.
+- **Immutability:** Prefer immutable data and bindings (`let`) over mutable ones (`let mut`). Use mutability only when necessary.
+- **Readability:** Write clear, concise, and idiomatic Rust code. Prioritize readability over premature optimization.
+- **Dependencies:** Use crates judiciously. Prefer standard library solutions when adequate. Keep dependencies updated using `cargo update`.
+
+## Formatting & Layout (rustfmt)
+- **Enforcement:** Code formatting is strictly enforced by `rustfmt`. Run `cargo fmt` regularly and before committing.
+- **Configuration:** Use the default `rustfmt` configuration unless there's a strong, project-wide reason to customize it (via `rustfmt.toml`).
+- **Key Defaults:**
+  - Indentation: 4 spaces.
+  - Max line length: 100 characters.
+  - Brace style: Always on a new line for items, same line for expressions (like `if`, `match`).
+  - Imports: Automatically sorted and grouped by `rustfmt`.
+
+## Naming Conventions (Rust API Guidelines)
+- **Crates, Modules, Functions, Methods, Variables, Fields**: `snake_case` (e.g., `praxis_core`, `fn calculate_velocity`, `let player_health`).
+- **Types (Structs, Enums, Traits), Lifetimes, Type Parameters**: `PascalCase` (e.g., `struct RenderContext`, `enum AppState`, `trait Drawable`, `'a`, `T`).
+- **Constants, Statics**: `SCREAMING_SNAKE_CASE` (e.g., `const MAX_PLAYERS: usize = 4;`, `static DEFAULT_CONFIG: &str = "...";`).
+- **Acronyms:** Treat acronyms like regular words in names (`PascalCase` -> `Uuid`, `HttpServer`; `snake_case` -> `serve_http`, `parse_uuid`).
+
+## Documentation (rustdoc)
+- **Enforcement:** Document all public items (`pub` structs, enums, functions, traits, modules, types) using `rustdoc` comments.
+- **Doc Comments:**
+  - Use `///` for items (functions, structs, etc.).
+  - Use `//!` for documenting the containing module or crate (usually at the top of `lib.rs` or `mod.rs`).
+- **Content:** Explain *what* the item does, its *purpose*, any *panic conditions*, *error conditions* (`Result`), and *safety invariants* if `unsafe` is involved. Include small examples using doctests where helpful.
+- **Generation:** Use `cargo doc --open` to build and view documentation.
+- **README:** Keep the main `README.md` updated with project goals, usage, and architecture overview.
+- **Architectural Docs:** Maintain higher-level design documents in `docs/`.
+
+## Error Handling
+- **Recoverable Errors:** Use `Result<T, E>` for operations that can fail in expected ways (e.g., I/O, parsing). Define custom error types (using `thiserror` or manually) or use existing ones.
+- **Unrecoverable Errors:** Use `panic!` for programming errors (bugs) that should not occur in correct code (e.g., broken invariants, impossible states). Avoid panicking in library code where the caller might want to handle the failure.
+- **Error Propagation:** Use the `?` operator to propagate errors cleanly.
+- **Error Handling Crates:** Consider `thiserror` for defining custom error types and `color-eyre` or `anyhow` for application-level error reporting and context.
+- **Avoid `.unwrap()` / `.expect()`:** Do not use `unwrap()` or `expect()` on `Option` or `Result` in library or production code. Handle potential `None` or `Err` variants explicitly (e.g., with `match`, `if let`, `?`, `unwrap_or`, `unwrap_or_else`). `.expect()` is acceptable in tests or examples where failure indicates a bug in the test/example itself.
+
+## Linting (Clippy)
+- **Enforcement:** Use `clippy` to catch common mistakes and improve code quality. Run `cargo clippy` regularly.
+- **CI:** Configure CI to run `cargo clippy -- -D warnings` to treat all warnings as errors and fail the build.
+- **Configuration:** Clippy can be configured via `clippy.toml` if needed, but default lints are generally recommended.
+
+## Modules & Crates
+- **Organization:** Structure code into logical modules (`mod`) within crates, and organize crates within a Cargo workspace for larger projects.
+- **Visibility:** Use visibility modifiers (`pub`, `pub(crate)`, `pub(super)`) intentionally. Keep implementation details private.
+- **`lib.rs` / `main.rs`:** The entry point for a library crate is `src/lib.rs`. The entry point for a binary crate is `src/main.rs`.
+- **Module Files:** Use `my_module.rs` and `my_module/mod.rs` (old style, less common now) or `my_module/sub_module.rs` conventions.
+
+## Types & Traits
+- **Strong Typing:** Leverage Rust's strong type system. Use structs and enums to model data accurately.
+- **Newtype Pattern:** Use the newtype pattern (e.g., `struct UserId(u64);`) to create distinct types from primitives for better type safety.
+- **Traits:** Use traits for defining shared behavior (interfaces). Prefer static dispatch (generics, `impl Trait`) over dynamic dispatch (`dyn Trait`) unless runtime polymorphism is required.
+- **Composition:** Favor composition over inheritance (Rust doesn't have implementation inheritance).
+
+## Testing
+- **Framework:** Use the built-in test framework (`#[test]`).
+- **Location:**
+  - **Unit Tests:** Place inside the module they are testing, within a `#[cfg(test)] mod tests { ... }` block.
+  - **Integration Tests:** Place in the `tests/` directory at the crate root.
+- **Assertions:** Use `assert!`, `assert_eq!`, `assert_ne!`. Use `#[should_panic]` to test panicking conditions.
+- **Coverage:** Aim for high test coverage. Use tools like `cargo-tarpaulin` to measure.
+- **TDD:** Consider a Test-Driven Development approach where applicable: write tests before implementation.
+
+## Concurrency
+- **Primitives:** Use standard library concurrency primitives (`std::thread`, `std::sync::{Mutex, RwLock, Arc, mpsc}`).
+- **Async:** Use `async`/`.await` for non-blocking I/O operations, typically with runtimes like `tokio` or `async-std`.
+- **Parallelism:** Use crates like `rayon` for data parallelism (CPU-bound tasks).
+- **Safety:** Rely on Rust's ownership and borrowing rules, along with `Send` and `Sync` traits, to prevent data races at compile time.
+
+## Macros
+- **Use:** Use macros (`macro_rules!` or procedural macros) for code generation or reducing boilerplate, but use them judiciously as they can sometimes make code harder to understand.
+- **Clarity:** Ensure macros are well-documented and their usage is clear.
+
+## Project-Specific Rules & Architecture
+This section summarizes key architectural decisions and project rules, complementing the general Rust guidelines.
+
+- **Development Philosophy:**
+  - **Pragmatism & Iteration:** Focus on building a usable engine for game creation. Develop features iteratively based on practical game development needs, aiming for usability within 1-2 years.
+  - **Simplicity:** Prefer simple and clear designs over complex abstractions.
+- **Core Dependencies (Key Choices):**
+  - **Graphics:** Vulkan via `vulkano` (high-level, safe wrapper) and `vulkano-shaders`.
+  - **Windowing/Input:** `winit`.
+  - **ECS:** `bevy_ecs`.
+  - **Math:** `glam`.
+  - **Physics:** `rapier`.
+  - **GUI:** `imgui-rs`.
+  - **Logging:** `tracing` framework.
+  - **Error Reporting:** `color-eyre` (or similar).
+- **Workspace Structure:** Organized as a Cargo workspace with distinct crates for modules (e.g., `praxis_core`, `praxis_graphics`, etc.). See `docs/ARCHITECTURE.md`.
+- **Target Platform:** Primarily Windows, Linux, macOS.
+- **Testing:** Strict TDD is encouraged. Aim for high test coverage (>80%). Use built-in testing, `criterion` for benchmarks.
+- **Build/CI:** Use `cargo`. CI should enforce `cargo test`, `cargo fmt --check`, and `cargo clippy -- -D warnings`.
+
+

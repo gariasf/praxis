@@ -1,85 +1,72 @@
 # Praxis Engine
 
 > [!NOTE]
-> Praxis is a learning and self-development project. Engineering and topic study is assisted by AI.
-
+> Praxis is a learning and self-development project focused on building a game engine in Rust. Engineering and topic study is assisted by AI.
 
 ## Project goals
-- Learn about Game Engine Foundations, 3D space, and low-level programming
-- Create a game engine using modern C++ practices
-- Provide a comprehensive Vulkan-based rendering pipeline
-- Establish a flexible architecture that can be extended for various game genres
-- Eventually support open-world RPG-style games with complex scenes and interactions
+- Learn about Game Engine Foundations, 3D space, and systems programming using Rust.
+- Create a game engine using idiomatic Rust practices.
+- Provide a comprehensive Vulkan-based rendering pipeline.
+- Establish a flexible architecture using Rust's crate ecosystem.
+- **Build a practical engine capable of supporting game development within a 1-2 year timeframe.**
+- **Develop features iteratively, driven by the requirements of actual game projects built with Praxis.**
+- Eventually support complex game worlds and interactions.
 
 ## Project rules
-- Use free/open, battle-proven libraries only
-- Avoid proprietary or costly tools
-- Target Vulkan exclusively; retro-compatibility with old graphics APIs only if strictly necessary
-- Simple over complex
-- No unnecessary abstractions
-
+- Use free/open, battle-proven libraries (crates) only.
+- Avoid proprietary or costly tools.
+- Target Vulkan exclusively for the primary graphics backend.
+- Prioritize simplicity and clarity in design.
+- **Focus on pragmatic solutions and iterative feature development.**
+- Minimize unnecessary abstractions.
 
 ## Technical Scope
 
 ### Language and Toolchain
-- C++23 standard (or later)
-- Recommended compilers:
-  - MSVC (Visual Studio 2022) for Windows
-  - GCC 10+ or Clang 12+ for Linux
-  - Clang for macOS
-- Build system: CMake 3.20+
+- **Rust**: Latest stable version.
+- **Build System & Package Manager**: Cargo.
+- **Formatting**: `rustfmt`.
+- **Linting**: `clippy`.
+- **Recommended IDE**: VS Code with rust-analyzer, or CLion with the Rust plugin.
 
-### SDL 3.2.x
-- Window creation and management
-- Input handling (keyboard, mouse, gamepad)
-- Audio system foundation
-- Cross-platform support
+### Core Technologies
+- **Windowing & Input**: `winit` crate.
+- **Graphics API**: Vulkan, primarily via the `vulkano` crate for a higher-level, safe interface. Memory management assisted by `vulkano`'s utilities (or potentially `gpu-allocator` if needed for specific advanced cases).
+- **ECS**: `bevy_ecs` for entity-component-system architecture.
+- **Math**: `glam` for SIMD-accelerated vector/matrix math.
 
-### Vulkan
-- Instance and device initialization
-- Swapchain management
-- Command buffers and synchronization
-- Pipeline creation
-- Shader compilation and management
-- Render pass organization
+## Key Crates (Dependencies)
 
-## Libraries
+This list represents the planned core dependencies. See `docs/ARCHITECTURE.md` for more details.
 
-- **SDL 3.2.xx**: Core windowing, input, and platform abstraction library
-- **Vulkan SDK 1.4+**: Graphics API providing modern GPU acceleration
-- **GLM**: Mathematics library specifically designed for graphics programming
-- **stb_image**: Lightweight image loading for textures without complex dependencies
-- **Dear ImGui**: Immediate-mode GUI for debugging and tools
-- **spdlog**: Fast, thread-safe logging library for diagnostics
-- **EnTT**: Fast, modern entity-component-system for game object management
-- **nlohmann/json**: JSON parser for configuration and data storage
-- **assimp**: Open asset import library for loading 3D models and scenes
-- **PhysX**: Open-source physics engine (now Apache 2.0 licensed)
-- **OpenAL-Soft**: Open-source audio library for 3D sound
-- **{fmt}**: Modern formatting library for strings
-- **backward-cpp**: Stack trace library for error handling
-- **Catch2**: Unit testing framework
+- **`winit`**: Windowing, input events, platform abstraction.
+- **`vulkano`**: Higher-level, safe Vulkan wrapper.
+- **`vulkano-shaders`**: Procedural macro for compiling GLSL shaders for `vulkano`.
+- **`glam`**: SIMD-accelerated math library for games and graphics.
+- **`image`**: Image loading and manipulation.
+- **`imgui-rs`** (with backends): Immediate-mode GUI for debugging and tools.
+- **`tracing`**: Application-level logging and diagnostics framework.
+- **`bevy_ecs`**: High-performance Entity Component System.
+- **`serde`** (with formats like `serde_json`): Data serialization/deserialization.
+- **`russimp` / `gltf`**: Loading 3D models and scenes.
+- **`rapier`**: 2D/3D physics engine written in Rust.
+- **`rodio` / `kira`**: Audio playback and management.
+- **`color-eyre`**: Ergonomic error reporting and handling.
+- **`criterion`**: Statistics-driven benchmarking framework.
 
-## Coding Guidelines and architecture
+## Coding Guidelines and Architecture
 
-See [Architecture Docs](https://github.com/gariasf/praxis/blob/main/docs/ARCHITECTURE.md)
+See [Architecture Docs](docs/ARCHITECTURE.md) for the detailed Rust-based architecture.
 
 ### Naming Conventions
+Follow standard Rust API Guidelines:
+- **Crates, Modules, Functions, Variables, Fields**: `snake_case`.
+- **Types (Structs, Enums, Traits), Lifetimes, Type Parameters**: `PascalCase`.
+- **Constants, Statics**: `SCREAMING_SNAKE_CASE`.
 
-- **Files**: Snake case for implementation files, pascal case for headers
-  - E.g., `vulkan_renderer.cpp`, `VulkanRenderer.h`
-- **Classes**: Pascal case
-  - E.g., `class RenderPipeline`
-- **Methods/Functions**: Camel case
-  - E.g., `void initializeRenderer()`
-- **Variables**: Camel case
-  - E.g., `float deltaTime`
-- **Member Variables**: Camel case with 'm_' prefix
-  - E.g., `m_currentScene`
-- **Constants/Enums**: All caps with underscores
-  - E.g., `MAX_LIGHTS`, `enum class RenderMode { FORWARD, DEFERRED }`
-- **Namespaces**: Lower case
-  - E.g., `namespace praxis::graphics`
+### Formatting and Linting
+- **Formatting**: Enforced by `rustfmt` (use `cargo fmt`).
+- **Linting**: Enforced by `clippy` (use `cargo clippy -- -D warnings`).
 
 ## Commit message convention
 Messages should be written in the following format
@@ -92,25 +79,27 @@ scope: [PRAX-xxx] brief description
 ```
 
 Where:
-
-- `scope` is one of: core, graphics, utils, tests, docs, build, ci.
+- `scope` is one of: core, graphics, ecs, scene, assets, audio, physics, gui, input, window, utils, tests, docs, build, ci, cargo.
 - `description` is a short, imperative description of the change
 
 Examples:
-- `core: improve engine timing features`
-- `graphics: fix shadow mapping artifacts`
-- `build: update CMake configuration for Windows`
+- `core: implement main engine loop`
+- `graphics: setup vulkan swapchain`
+- `cargo: add rapier physics dependency`
 
 Additional information can be included after the first line.
 
-### Learning Resources Collection
-- [Vulkan Tutorial](https://vulkan-tutorial.com/)
-- [Sascha Willems Vulkan Samples](https://github.com/SaschaWillems/Vulkan)
-- [Vulkan Cookbook](https://www.packtpub.com/product/vulkan-cookbook/9781786468154)
-- [VulkanGuide.dev](https://vkguide.dev/)
-- "Game Engine Architecture" by Jason Gregory
-- "Real-Time Rendering" by Tomas Akenine-Möller
-- "3D Game Engine Design" by David H. Eberly
-- [Khronos Vulkan Samples](https://github.com/KhronosGroup/Vulkan-Samples)
-- [LearnOpenGL](https://learnopengl.com/) (for general graphics concepts)
-- [Physically Based Rendering](https://www.pbr-book.org/) 
+### Learning Resources Collection (Rust Focus)
+- [The Rust Programming Language Book ("The Book")](https://doc.rust-lang.org/book/)
+- [Rust by Example](https://doc.rust-lang.org/rust-by-example/)
+- [Are We Game Yet?](https://arewegameyet.rs/) (Overview of Rust game development ecosystem)
+- [Rust Graphics Programming Discord](https://discord.gg/GnPv6ZUTgt)
+- [Learn WGPU](https://sotrh.github.io/learn-wgpu/) (While we use Vulkan directly, this is a good resource for modern graphics concepts in Rust)
+- [Vulkan Tutorial](https://vulkan-tutorial.com/) (Still relevant for Vulkan concepts)
+- [ash Crate Documentation](https://docs.rs/ash/)
+- [vulkano Crate Documentation](https://docs.rs/vulkano/)
+- [bevy_ecs Documentation](https://docs.rs/bevy_ecs/)
+- [glam Crate Documentation](https://docs.rs/glam/)
+- Game Engine Architecture" by Jason Gregory (General concepts still apply)
+- "Real-Time Rendering" by Tomas Akenine-Möller (General concepts still apply)
+- [Physically Based Rendering Book](https://www.pbr-book.org/) (Graphics theory)
