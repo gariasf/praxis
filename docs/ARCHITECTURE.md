@@ -55,11 +55,7 @@ praxis/
   - Backend tied to the chosen windowing library (`winit`).
 - **`praxis_graphics`:**
   - Rendering abstraction layer. Defines traits for renderers, resources (textures, meshes, shaders), pipelines.
-  - **`praxis_graphics_vulkan`** (sub-crate or feature): Vulkan backend implementation.
-    - Uses `vulkano` for a higher-level, safe interface to Vulkan, aligning with the pragmatic goal of faster, safer development.
-    - Uses `vulkano-shaders` macro for shader compilation.
-    - Manages Vulkan instance, device, swapchain, command buffers, synchronization via `vulkano` abstractions.
-    - Memory management handled primarily by `vulkano`.
+  - **`praxis_graphics_backend`** (sub-crate or feature): Graphics backend implementation using `wgpu`.
 - **`praxis_math`:**
   - Provides core mathematical types and operations for graphics and physics.
   - Likely re-exports types from `glam` (Vector, Matrix, Quaternion).
