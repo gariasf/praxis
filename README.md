@@ -24,7 +24,7 @@
 
 ### Core Technologies
 - **Windowing & Input**: `winit` crate.
-- **Graphics API**: Vulkan, primarily via the `vulkano` crate for a higher-level, safe interface. Memory management assisted by `vulkano`'s utilities (or potentially `gpu-allocator` if needed for specific advanced cases).
+- **Graphics API**: Vulkan, primarily via the `wgpu` crate for a higher-level, safe interface.
 - **ECS**: `bevy_ecs` for entity-component-system architecture.
 - **Math**: `glam` for SIMD-accelerated vector/matrix math.
 
