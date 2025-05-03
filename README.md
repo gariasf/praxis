@@ -8,8 +8,8 @@
 - Create a game engine using idiomatic Rust practices.
 - Provide a comprehensive Vulkan-based rendering pipeline.
 - Establish a flexible architecture using Rust's crate ecosystem.
-- **Build a practical engine capable of supporting game development within a 1-2 year timeframe.**
-- **Develop features iteratively, driven by the requirements of actual game projects built with Praxis.**
+- Build a practical engine capable of supporting game development within a 1-2 year timeframe.
+- Develop features iteratively, driven by the requirements of actual game projects built with Praxis.
 - Eventually support complex game worlds and interactions.
 
 ## Project rules
@@ -17,17 +17,10 @@
 - Avoid proprietary or costly tools.
 - Target Vulkan exclusively for the primary graphics backend.
 - Prioritize simplicity and clarity in design.
-- **Focus on pragmatic solutions and iterative feature development.**
+- Focus on pragmatic solutions and iterative feature development.
 - Minimize unnecessary abstractions.
 
 ## Technical Scope
-
-### Language and Toolchain
-- **Rust**: Latest stable version.
-- **Build System & Package Manager**: Cargo.
-- **Formatting**: `rustfmt`.
-- **Linting**: `clippy`.
-- **Recommended IDE**: VS Code with rust-analyzer, or CLion with the Rust plugin.
 
 ### Core Technologies
 - **Windowing & Input**: `winit` crate.
@@ -67,27 +60,6 @@ Follow standard Rust API Guidelines:
 ### Formatting and Linting
 - **Formatting**: Enforced by `rustfmt` (use `cargo fmt`).
 - **Linting**: Enforced by `clippy` (use `cargo clippy -- -D warnings`).
-
-## Commit message convention
-Messages should be written in the following format
-```
-scope: [PRAX-xxx] brief description
-
-[Optional detailed description]
-
-[Optional related issues]
-```
-
-Where:
-- `scope` is one of: core, graphics, ecs, scene, assets, audio, physics, gui, input, window, utils, tests, docs, build, ci, cargo.
-- `description` is a short, imperative description of the change
-
-Examples:
-- `core: implement main engine loop`
-- `graphics: setup vulkan swapchain`
-- `cargo: add rapier physics dependency`
-
-Additional information can be included after the first line.
 
 ### Learning Resources Collection (Rust Focus)
 - [The Rust Programming Language Book ("The Book")](https://doc.rust-lang.org/book/)
