@@ -55,7 +55,7 @@ praxis/
   - Backend tied to the chosen windowing library (`winit`).
 - **`praxis_graphics`:**
   - Rendering abstraction layer. Defines traits for renderers, resources (textures, meshes, shaders), pipelines.
-  - **`praxis_graphics_backend`** (sub-crate or feature): Graphics backend implementation using `wgpu`.
+  - Proposed dependency: `wgpu`. `wgpu` provides an abstraction over native graphics APIs (Vulkan, Metal, DirectX, OpenGL) allowing for cross-platform rendering.
 - **`praxis_math`:**
   - Provides core mathematical types and operations for graphics and physics.
   - Likely re-exports types from `glam` (Vector, Matrix, Quaternion).
