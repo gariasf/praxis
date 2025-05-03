@@ -17,14 +17,14 @@ pub mod tracing;
 ///
 /// ```
 /// fn main() -> color_eyre::Result<()> {
-///     praxis_utils::initialize()?;
+///     praxis_utils::init()?;
 ///     // Rest of your application
 ///     Ok(())
 /// }
 /// ```
-pub fn initialize() -> Result<()> {
+pub fn init() -> Result<()> {
     // Initialize the tracing system
-    tracing::initialize()?;
+    tracing::init()?;
 
     // Log that initialization is complete
     tracing::info!("Praxis utilities initialized.");
@@ -43,9 +43,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_initialize() {
-        // This is a simple test that ensures initialize() doesn't panic
-        let result = initialize();
+    fn test_init() {
+        // This is a simple test that ensures init() doesn't panic
+        let result = init();
         assert!(result.is_ok());
     }
 }

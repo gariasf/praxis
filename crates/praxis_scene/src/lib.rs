@@ -3,6 +3,6 @@
 //! This crate provides functionality for managing game scenes.
 
 /// Initializes the scene system.
-pub fn initialize() {
+pub fn init() {
     println!("Scene system initialized");
 }

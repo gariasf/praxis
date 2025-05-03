@@ -3,6 +3,6 @@
 //! This crate provides mathematical utilities used throughout the engine.
 
 /// Initializes the math library.
-pub fn initialize() {
+pub fn init() {
     println!("Math library initialized");
 }

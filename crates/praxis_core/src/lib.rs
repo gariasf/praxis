@@ -3,7 +3,7 @@
 //! This crate provides the core functionality and coordinates all the subsystems.
 use praxis_utils::Result;
 
-pub fn initialize() -> Result<()> {
-    praxis_utils::initialize()?;
+pub fn init() -> Result<()> {
+    praxis_utils::init()?;
     Ok(())
 }

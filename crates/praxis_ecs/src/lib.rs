@@ -3,6 +3,6 @@
 //! This crate provides the ECS architecture that powers the Praxis engine.
 
 /// Initializes the ECS.
-pub fn initialize() {
+pub fn init() {
     println!("ECS initialized");
 }

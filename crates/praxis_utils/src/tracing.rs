@@ -22,7 +22,7 @@ use tracing_subscriber::{
 /// ```
 /// // In your main.rs or lib.rs
 /// fn main() -> color_eyre::Result<()> {
-///     praxis_utils::tracing::initialize()?;
+///     praxis_utils::tracing::init()?;
 ///     // ... rest of your application
 ///     Ok(())
 /// }
@@ -37,7 +37,7 @@ use tracing_subscriber::{
 /// RUST_LOG=debug  # Set global level to debug
 /// RUST_LOG=praxis_graphics=trace,praxis_core=debug  # Different levels per module
 /// ```
-pub fn initialize() -> Result<()> {
+pub fn init() -> Result<()> {
     // Setup color-eyre for error reporting
     color_eyre::install()?;
 
