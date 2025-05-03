@@ -27,7 +27,7 @@ pub fn initialize() -> Result<()> {
     tracing::initialize()?;
 
     // Log that initialization is complete
-    tracing::info!("Praxis utilities initialized");
+    tracing::info!("Praxis utilities initialized.");
 
     Ok(())
 }

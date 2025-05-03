@@ -1,0 +1,58 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Praxis Crate Structure & Purpose (from docs/ARCHITECTURE.md)
+
+This document outlines the structure of the Praxis engine's Cargo workspace and the intended purpose of each crate, based on the official architecture documentation.
+
+## Workspace Crates
+
+The engine is organized into the following modular crates within the `crates/` directory:
+
+- **`praxis`:** (Note: Seems like this was intended but might be `praxis_core` in practice based on directory listing?)
+  - Engine lifecycle management (startup, shutdown, main loop).
+  - Configuration loading and management.
+  - Time management (delta time, timers).
+  - Core traits and types used across the engine.
+- **`praxis_window`:**
+  - Window creation and management.
+  - Event loop integration.
+  - Potential backend: `winit`.
+- **`praxis_input`:**
+  - Handling keyboard, mouse, gamepad input.
+  - Mapping raw input to game actions.
+  - Backend tied to the chosen windowing library (`winit`).
+- **`praxis_graphics`:**
+  - Rendering abstraction layer. Defines traits for renderers, resources (textures, meshes, shaders), pipelines.
+  - **`praxis_graphics_vulkan`** (sub-crate or feature): Vulkan backend implementation using `vulkano` and `vulkano-shaders`.
+- **`praxis_math`:**
+  - Provides core mathematical types and operations (likely re-exports `glam`).
+  - May include engine-specific math utilities.
+- **`praxis_ecs`:**
+  - Entity-Component-System implementation (proposed: `bevy_ecs`).
+  - Manages entities, components, and systems.
+- **`praxis_scene`:**
+  - Scene representation and management.
+  - Scene graph for spatial organization.
+  - Camera management.
+  - Integrates with `praxis_ecs`.
+- **`praxis_assets`:**
+  - Asset loading, management, and caching (textures, models, config).
+  - Supports various formats (`image`, `russimp`/`gltf`, `serde`).
+  - Asynchronous loading capabilities.
+- **`praxis_audio`:**
+  - Audio playback and spatialization (proposed: `rodio` or `kira`).
+- **`praxis_physics`:**
+  - Physics simulation (collision detection, rigid body dynamics) (proposed: `rapier`).
+- **`praxis_gui`:**
+  - Debugging and editor tools GUI (proposed: `imgui-rs`).
+- **`praxis_utils`:**
+  - Common utilities shared across crates.
+  - Logging (`tracing`), Error handling (`color-eyre`), Filesystem utilities.
+
+## Philosophy
+
+
+This modular structure follows the principle of separation of concerns, allowing different parts of the engine to be developed, tested, and potentially reused independently. The naming convention (`praxis_*`) clearly identifies engine-specific crates.
