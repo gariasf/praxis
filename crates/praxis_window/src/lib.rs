@@ -34,7 +34,7 @@ impl ApplicationHandler for WindowApp {
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
         // Ensure the event belongs to our window
-        if self.window.as_ref().map_or(false, |w| w.id() == id) {
+        if self.window.as_ref().is_some_and(|w| w.id() == id) {
             match event {
                 WindowEvent::CloseRequested => {
                     info!("Window close requested. Exiting.");
