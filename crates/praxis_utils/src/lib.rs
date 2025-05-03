@@ -2,14 +2,14 @@
 //!
 //! This crate provides common utilities used throughout the engine,
 //! including tracing and logging capabilities.
-//! 
+//!
 //! pub use tracing::{Level, debug, error, info, instrument, span, trace, warn};
 
 use tracing_subscriber::{
+    EnvFilter,
     fmt::{self, format::FmtSpan},
-    prelude::*, EnvFilter,
+    prelude::*,
 };
-
 
 // Re-export common utility items for convenience
 pub use color_eyre::{Report, Result, eyre::eyre};
@@ -41,7 +41,6 @@ pub fn init() -> Result<()> {
 
     Ok(())
 }
-
 
 /// Initializes the tracing system.
 ///
@@ -79,7 +78,8 @@ pub fn init_tracing() -> Result<()> {
         .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE) // Log span creation/closing
         .pretty(); // Use pretty printer for human readability
 
-    let filter_layer = EnvFilter::try_from_default_env().or_else(|_| EnvFilter::try_new("debug"))?;
+    let filter_layer =
+        EnvFilter::try_from_default_env().or_else(|_| EnvFilter::try_new("debug"))?;
 
     // Register the subscriber with the tracing system
     tracing_subscriber::registry()
@@ -89,7 +89,6 @@ pub fn init_tracing() -> Result<()> {
 
     Ok(())
 }
-
 
 #[cfg(test)]
 mod tests {

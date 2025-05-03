@@ -2,7 +2,7 @@
 //!
 //! This crate provides functionality for rendering and managing graphics.
 
-use praxis_utils::{error, Result, info};
+use praxis_utils::{Result, error, info};
 use wgpu::Instance;
 
 const GPU_NOT_FOUND_ERROR_MESSAGE: &str =
@@ -28,11 +28,11 @@ async fn init_renderer() -> Result<()> {
             force_fallback_adapter: false,
         })
         .await
-        .expect( GPU_NOT_FOUND_ERROR_MESSAGE);
+        .expect(GPU_NOT_FOUND_ERROR_MESSAGE);
 
-    let adapter_info = adapter.get_info();
+    let _adapter_info = adapter.get_info();
 
-    let (device, queue) = adapter
+    let (_device, _queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: Some("Praxis Render Device"),
             required_features: wgpu::Features::empty(),
