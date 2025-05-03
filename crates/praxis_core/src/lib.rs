@@ -5,5 +5,6 @@ use praxis_utils::Result;
 
 pub fn init() -> Result<()> {
     praxis_utils::init()?;
+    praxis_graphics::init();
     Ok(())
 }

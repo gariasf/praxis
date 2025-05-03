@@ -9,7 +9,7 @@ use winit::{
     window::{Window, WindowAttributes, WindowId},
 };
 
-use praxis_utils::{Result, error, eyre, info};
+use praxis_utils::{Result, error, eyre};
 
 #[derive(Default)]
 struct WindowApp {
@@ -23,7 +23,6 @@ impl ApplicationHandler for WindowApp {
         match event_loop.create_window(attributes) {
             Ok(window) => {
                 self.window = Some(window);
-                info!("Window created.");
             }
             Err(err) => {
                 error!("Failed to create window: {}", err);
@@ -37,7 +36,6 @@ impl ApplicationHandler for WindowApp {
         if self.window.as_ref().is_some_and(|w| w.id() == id) {
             match event {
                 WindowEvent::CloseRequested => {
-                    info!("Window close requested. Exiting.");
                     event_loop.exit();
                 }
                 // Handle other window events if needed
@@ -57,22 +55,17 @@ impl ApplicationHandler for WindowApp {
 }
 
 pub fn open_window() -> Result<()> {
-    info!("Initializing event loop...");
     let event_loop =
         EventLoop::new().map_err(|err| eyre!("Failed to create event loop: {}", err))?;
-    info!("Event loop created.");
 
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    info!("Launching application...");
     let mut app = WindowApp::default();
-    info!("Application launched.");
 
     // Run the application and handle any errors
     event_loop
         .run_app(&mut app)
         .map_err(|err| eyre!("Event loop error: {}", err))?;
 
-    info!("Event loop finished.");
     Ok(())
 }

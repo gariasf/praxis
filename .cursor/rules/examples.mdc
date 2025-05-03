@@ -1,7 +1,7 @@
 ---
-description: when creating, running or editing examples. When we're working on a new feature, or important change, we also usually create a new example.
+description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 # Praxis Engine Examples (`examples/`)
 
