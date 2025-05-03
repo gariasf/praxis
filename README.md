@@ -33,8 +33,7 @@
 This list represents the planned core dependencies. See `docs/ARCHITECTURE.md` for more details.
 
 - **`winit`**: Windowing, input events, platform abstraction.
-- **`vulkano`**: Higher-level, safe Vulkan wrapper.
-- **`vulkano-shaders`**: Procedural macro for compiling GLSL shaders for `vulkano`.
+- **`wgpu`**: Higher-level, safe Vulkan wrapper.
 - **`glam`**: SIMD-accelerated math library for games and graphics.
 - **`image`**: Image loading and manipulation.
 - **`imgui-rs`** (with backends): Immediate-mode GUI for debugging and tools.
@@ -65,11 +64,9 @@ Follow standard Rust API Guidelines:
 - [The Rust Programming Language Book ("The Book")](https://doc.rust-lang.org/book/)
 - [Rust by Example](https://doc.rust-lang.org/rust-by-example/)
 - [Are We Game Yet?](https://arewegameyet.rs/) (Overview of Rust game development ecosystem)
-- [Rust Graphics Programming Discord](https://discord.gg/GnPv6ZUTgt)
 - [Learn WGPU](https://sotrh.github.io/learn-wgpu/) (While we use Vulkan directly, this is a good resource for modern graphics concepts in Rust)
 - [Vulkan Tutorial](https://vulkan-tutorial.com/) (Still relevant for Vulkan concepts)
 - [ash Crate Documentation](https://docs.rs/ash/)
-- [vulkano Crate Documentation](https://docs.rs/vulkano/)
 - [bevy_ecs Documentation](https://docs.rs/bevy_ecs/)
 - [glam Crate Documentation](https://docs.rs/glam/)
 - Game Engine Architecture" by Jason Gregory (General concepts still apply)
