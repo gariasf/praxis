@@ -16,10 +16,9 @@ use praxis_utils::Result;
 use praxis_utils::info;
 
 struct State {
-    surface: wgpu::Surface<'static>,
-    surface_format: wgpu::TextureFormat,
     size: winit::dpi::PhysicalSize<u32>,
     render_context: RenderContext,
+    window: Arc<Window>,
 }
 
 #[derive(Default)]
@@ -29,6 +28,10 @@ struct App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.state.is_some() {
+            return;
+        }
+
         let window = Arc::new(
             event_loop
                 .create_window(
@@ -43,7 +46,7 @@ impl ApplicationHandler for App {
         self.state = Some(state);
         info!("Window and graphics state initialized.");
 
-        window.request_redraw();
+        self.state.as_ref().unwrap().window.request_redraw();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -55,11 +58,13 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                let _ = state.render_context.render(&state.surface);
+                let _ = state.render_context.render();
             }
             WindowEvent::Resized(size) => {
-                info!("Window resized to: {:?}", size);
-                state.resize(size);
+                if size.width > 0 && size.height > 0 {
+                    info!("Window resized to: {:?}", size);
+                    state.resize(size);
+                 }
             }
             _ => (),
         }
@@ -73,29 +78,19 @@ impl ApplicationHandler for App {
     // fn exiting(&mut self, event_loop: &ActiveEventLoop) {}
     // fn memory_warning(&mut self, event_loop: &ActiveEventLoop) {}
 }
+
 impl State {
-    async fn new(window: Arc<Window>) -> State {
+    async fn new(window: Arc<Window>) -> Self {
         info!("Initializing graphics render context...");
-        let render_context = RenderContext::new().await.unwrap();
+        let render_context = RenderContext::new(window.clone()).await;
 
         info!("Getting initial window size...");
         let size = window.inner_size();
 
-        info!("Creating surface...");
-        let surface = render_context
-            .instance
-            .create_surface(window.clone())
-            .unwrap();
-        info!("Querying surface capabilities...");
-        let cap = surface.get_capabilities(&render_context.adapter);
-        let surface_format = cap.formats[0];
-        info!("Selected surface format: {:?}", surface_format);
-
         let state = State {
             size,
-            surface,
             render_context,
-            surface_format,
+            window,
         };
 
         info!("Configuring surface for the first time...");
@@ -107,9 +102,9 @@ impl State {
     fn configure_surface(&self) {
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: self.surface_format,
+            format: self.render_context.surface_format,
             // Request compatibility with the sRGB-format texture view we're going to create later.
-            view_formats: vec![self.surface_format.add_srgb_suffix()],
+            view_formats: vec![self.render_context.surface_format],
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             width: self.size.width,
             height: self.size.height,
@@ -117,16 +112,21 @@ impl State {
             present_mode: wgpu::PresentMode::AutoVsync,
         };
         info!("Applying surface configuration: {:?}", surface_config);
-        self.surface
+        self.render_context
+            .surface
             .configure(&self.render_context.device, &surface_config);
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        info!("Updating state with new size: {:?}", new_size);
-        self.size = new_size;
+        if new_size.width > 0 && new_size.height > 0 {
+            info!("Updating state with new size: {:?}", new_size);
+            self.size = new_size;
 
-        info!("Reconfiguring surface due to resize...");
-        self.configure_surface();
+            info!("Reconfiguring surface due to resize...");
+            self.configure_surface();
+         } else {
+             info!("Ignoring resize to zero dimensions: {:?}", new_size);
+         }
     }
 }
 

@@ -4,46 +4,56 @@
 
 use praxis_utils::{Result, info};
 use wgpu::{Adapter, Device, Instance, Queue, Surface};
-
-pub async fn init() -> Result<RenderContext> {
-    info!("Initializing renderer...");
-    RenderContext::new().await
-}
-
+use winit::window::Window;
+use std::sync::Arc;
 pub struct RenderContext {
     pub instance: Instance,
     pub adapter: Adapter,
     pub device: Device,
     pub queue: Queue,
+    pub surface: Surface<'static>,
+    pub surface_format: wgpu::TextureFormat,
 }
 
 impl RenderContext {
-    pub async fn new() -> Result<Self> {
-        info!("Creating wgpu instance...");
+    pub async fn new(window: Arc<Window>) -> Self {
         let instance = wgpu::Instance::default();
+
+        info!("Creating surface...");
+        let surface = instance
+            .create_surface(window)
+            .unwrap();
+
+        
         info!("Requesting adapter...");
+
         let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions::default())
-            .await?;
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: Some(&surface),
+                ..Default::default()
+            })
+            .await.unwrap();
         info!("Found adapter: {:?}", adapter.get_info());
 
-        info!("Requesting device and queue...");
-        let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor::default())
-            .await?;
-        info!("Device and queue obtained.");
+        let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor::default()).await.unwrap();
 
-        Ok(Self {
-            instance,
-            adapter,
-            device,
-            queue,
-        })
+        info!("Found device {:?}", device);
+        info!("Found queue {:?}", queue);
+
+        info!("Querying surface capabilities...");
+        let capabilities = surface.get_capabilities(&adapter);
+        let surface_format = capabilities.formats[0];
+
+        info!("Selected surface format: {:?}", surface_format);
+
+        Self { instance, adapter, device, queue, surface, surface_format }
     }
 
-    pub fn render(&mut self, surface: &Surface<'static>) -> Result<()> {
+
+    pub fn render(&mut self) -> Result<()> {
         // Get the current swap chain texture to render to
-        let frame = surface.get_current_texture()?;
+        let frame = self.surface.get_current_texture()?;
         let view = frame.texture.create_view(&Default::default());
 
         let mut encoder = self
