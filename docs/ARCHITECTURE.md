@@ -8,7 +8,6 @@
 - **Performance:** Optimize critical paths, leveraging Rust's performance characteristics and libraries like `glam` (SIMD).
 - **Tooling:** Utilize the standard Rust toolchain: `cargo`, `rustfmt`, `clippy`, `rustdoc`.
 - **Error Handling:** Employ `Result<T, E>` for recoverable errors, potentially using crates like `thiserror` and `color-eyre` for better ergonomics and reporting. Panics should be reserved for unrecoverable states (bugs).
-- **Cross-Platform:** Target Windows, Linux, and macOS as primary platforms.
 
 ## Project Structure (Cargo Workspace)
 The engine will be structured as a Cargo workspace, located at the root of the repository.
