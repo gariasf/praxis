@@ -14,17 +14,20 @@ use winit::{
 
 use praxis_utils::{Result, info, debug};
 
+/// Represents the application's state, including graphics context and window size.
 struct State {
     size: winit::dpi::PhysicalSize<u32>,
     render_context: RenderContext,
     window: Arc<Window>,
 }
 
+/// The main application structure that handles the event loop and owns the state.
 #[derive(Default)]
 struct App {
     state: Option<State>,
 }
 
+/// Implementation of the `winit` Application Handler trait for the main application loop.
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.state.is_some() {
@@ -81,6 +84,13 @@ impl ApplicationHandler for App {
 }
 
 impl State {
+    /// Creates a new `State` instance.
+    ///
+    /// Initializes the `RenderContext` for the given window, stores the initial size,
+    /// and configures the rendering surface.
+    ///
+    /// # Arguments
+    /// * `window` - An `Arc<Window>` for which to create the state.
     async fn new(window: Arc<Window>) -> Self {
         info!("Initializing graphics render context...");
         let render_context = RenderContext::new(window.clone()).await;
@@ -100,6 +110,9 @@ impl State {
         state
     }
 
+    /// Configures the underlying `wgpu::Surface` based on the current window size
+    /// and the selected surface format stored in the `RenderContext`.
+    /// Called initially and after a resize.
     fn configure_surface(&self) {
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -118,17 +131,35 @@ impl State {
             .configure(&self.render_context.device, &surface_config);
     }
 
+    /// Handles window resize events.
+    ///
+    /// Updates the stored window size and reconfigures the rendering surface.
+    ///
+    /// # Arguments
+    /// * `new_size` - The new physical size of the window.
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
             info!("Reconfiguring surface due to resize: {:?}", new_size);
             self.size = new_size;
             self.configure_surface();
     }
 
+    /// Determines if a resize operation should actually occur.
+    ///
+    /// Checks if the new size has non-zero dimensions and is different from the current size.
+    ///
+    /// # Arguments
+    /// * `new_size` - The potential new physical size.
     fn should_resize(&self, new_size: winit::dpi::PhysicalSize<u32>) -> bool {
         new_size.width > 0 && new_size.height > 0 && (new_size.width != self.size.width || new_size.height != self.size.height)
     }
 }
 
+/// Runs the main application event loop.
+///
+/// Initializes the winit event loop and runs the `App` state machine.
+///
+/// # Returns
+/// Returns `Ok(())` if the application exits cleanly, or an error if loop creation fails.
 pub fn run() -> Result<()> {
     info!("Creating event loop...");
     let event_loop = EventLoop::new().unwrap();

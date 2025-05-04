@@ -6,6 +6,11 @@ use praxis_utils::{Result, info};
 use wgpu::{Adapter, Device, Instance, Queue, Surface};
 use winit::window::Window;
 use std::sync::Arc;
+
+/// Core graphics context containing the wgpu state.
+///
+/// This struct holds the main graphics backend components like the instance, adapter,
+/// device, queue, and the surface linked to a window.
 pub struct RenderContext {
     pub instance: Instance,
     pub adapter: Adapter,
@@ -16,6 +21,19 @@ pub struct RenderContext {
 }
 
 impl RenderContext {
+    /// Creates a new `RenderContext` for a given window.
+    ///
+    /// Initializes graphics backend, creates a surface for the window, selects a compatible
+    /// adapter and device, and determines a suitable surface format.
+    ///
+    /// # Arguments
+    ///
+    /// * `window` - An `Arc<Window>` representing the window to render onto.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a compatible adapter or device cannot be found, or if surface
+    /// creation fails.
     pub async fn new(window: Arc<Window>) -> Self {
         let instance = wgpu::Instance::default();
 
@@ -51,6 +69,12 @@ impl RenderContext {
     }
 
 
+    /// Renders a single frame to the configured surface.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` on success, or a `SurfaceError` if acquiring or presenting
+    /// the frame fails (e.g., surface lost, outdated, or timeout).
     pub fn render(&mut self) -> Result<()> {
         // Get the current swap chain texture to render to
         let frame = self.surface.get_current_texture()?;
