@@ -22,19 +22,19 @@ struct State {
     render_context: RenderContext,
 }
 
-
 #[derive(Default)]
 struct App {
     state: Option<State>,
 }
 
-
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = Arc::new(
             event_loop
-                .create_window(Window::default_attributes()
-                    .with_fullscreen(Some(Fullscreen::Borderless(None))))
+                .create_window(
+                    Window::default_attributes()
+                        .with_fullscreen(Some(Fullscreen::Borderless(None))),
+                )
                 .unwrap(),
         );
         info!("Window created successfully.");
@@ -82,7 +82,10 @@ impl State {
         let size = window.inner_size();
 
         info!("Creating surface...");
-        let surface = render_context.instance.create_surface(window.clone()).unwrap();
+        let surface = render_context
+            .instance
+            .create_surface(window.clone())
+            .unwrap();
         info!("Querying surface capabilities...");
         let cap = surface.get_capabilities(&render_context.adapter);
         let surface_format = cap.formats[0];
@@ -114,7 +117,8 @@ impl State {
             present_mode: wgpu::PresentMode::AutoVsync,
         };
         info!("Applying surface configuration: {:?}", surface_config);
-        self.surface.configure(&self.render_context.device, &surface_config);
+        self.surface
+            .configure(&self.render_context.device, &surface_config);
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {

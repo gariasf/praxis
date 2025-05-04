@@ -45,12 +45,11 @@ impl RenderContext {
         let frame = surface.get_current_texture()?;
         let view = frame.texture.create_view(&Default::default());
 
-        let mut encoder =
-            self
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Render Encoder"),
-                });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
 
         let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Main Render Pass"),
