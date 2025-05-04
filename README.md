@@ -6,7 +6,7 @@
 ## Project goals
 - Learn about Game Engine Foundations, 3D space, and systems programming using Rust.
 - Create a game engine using idiomatic Rust practices.
-- Provide a comprehensive Vulkan-based rendering pipeline.
+- Provide a comprehensive rendering pipeline.
 - Establish a flexible architecture using Rust's crate ecosystem.
 - Build a practical engine capable of supporting game development within a 1-2 year timeframe.
 - Develop features iteratively, driven by the requirements of actual game projects built with Praxis.
@@ -62,7 +62,7 @@ Follow standard Rust API Guidelines:
 - [The Rust Programming Language Book ("The Book")](https://doc.rust-lang.org/book/)
 - [Rust by Example](https://doc.rust-lang.org/rust-by-example/)
 - [Are We Game Yet?](https://arewegameyet.rs/) (Overview of Rust game development ecosystem)
-- [Learn WGPU](https://sotrh.github.io/learn-wgpu/) (While we use Vulkan directly, this is a good resource for modern graphics concepts in Rust)
+- [Learn WGPU](https://sotrh.github.io/learn-wgpu/)
 - [Vulkan Tutorial](https://vulkan-tutorial.com/) (Still relevant for Vulkan concepts)
 - [ash Crate Documentation](https://docs.rs/ash/)
 - [bevy_ecs Documentation](https://docs.rs/bevy_ecs/)

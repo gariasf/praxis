@@ -54,7 +54,7 @@ praxis/
   - Backend tied to the chosen windowing library (`winit`).
 - **`praxis_graphics`:**
   - Rendering abstraction layer. Defines traits for renderers, resources (textures, meshes, shaders), pipelines.
-  - Proposed dependency: `wgpu`. `wgpu` provides an abstraction over native graphics APIs (Vulkan, Metal, DirectX, OpenGL) allowing for cross-platform rendering.
+  - `wgpu` provides an abstraction over native graphics APIs (Vulkan, Metal, DirectX, OpenGL) allowing for cross-platform rendering.
 - **`praxis_math`:**
   - Provides core mathematical types and operations for graphics and physics.
   - Likely re-exports types from `glam` (Vector, Matrix, Quaternion).
@@ -95,7 +95,7 @@ praxis/
 - **Dependency Management:** `Cargo.toml` for each crate and the workspace root.
 - **Key Proposed Dependencies:**
   - Windowing/Input: `winit`
-  - Graphics (Vulkan): `vulkano`, `vulkano-shaders`
+  - Graphics: `wgpu`
   - Math: `glam`
   - ECS: `bevy_ecs`
   - Assets: `image`, `russimp`/`gltf`, `serde`
