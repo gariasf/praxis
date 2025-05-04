@@ -15,7 +15,6 @@
 ## Project rules
 - Use free/open, battle-proven libraries (crates) only.
 - Avoid proprietary or costly tools.
-- Target Vulkan exclusively for the primary graphics backend.
 - Prioritize simplicity and clarity in design.
 - Focus on pragmatic solutions and iterative feature development.
 - Minimize unnecessary abstractions.
@@ -24,7 +23,6 @@
 
 ### Core Technologies
 - **Windowing & Input**: `winit` crate.
-- **Graphics API**: Vulkan, primarily via the `wgpu` crate for a higher-level, safe interface.
 - **ECS**: `bevy_ecs` for entity-component-system architecture.
 - **Math**: `glam` for SIMD-accelerated vector/matrix math.
 
@@ -33,7 +31,7 @@
 This list represents the planned core dependencies. See `docs/ARCHITECTURE.md` for more details.
 
 - **`winit`**: Windowing, input events, platform abstraction.
-- **`wgpu`**: Higher-level, safe Vulkan wrapper.
+- **`wgpu`**: Higher-level, safe wrapper to handle GPU backends.
 - **`glam`**: SIMD-accelerated math library for games and graphics.
 - **`image`**: Image loading and manipulation.
 - **`imgui-rs`** (with backends): Immediate-mode GUI for debugging and tools.
