@@ -42,6 +42,7 @@ impl RenderContext {
     }
 
     pub fn render(&mut self, surface: &Surface<'static>) -> Result<()> {
+        // Get the current swap chain texture to render to
         let frame = surface.get_current_texture()?;
         let view = frame.texture.create_view(&Default::default());
 
