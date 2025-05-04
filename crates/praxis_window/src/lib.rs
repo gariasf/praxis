@@ -12,8 +12,7 @@ use winit::{
     window::{Fullscreen, Window, WindowId},
 };
 
-use praxis_utils::Result;
-use praxis_utils::info;
+use praxis_utils::{Result, info, debug};
 
 struct State {
     size: winit::dpi::PhysicalSize<u32>,
@@ -61,9 +60,11 @@ impl ApplicationHandler for App {
                 let _ = state.render_context.render();
             }
             WindowEvent::Resized(size) => {
-                if size.width > 0 && size.height > 0 {
+                if state.should_resize(size) {
                     info!("Window resized to: {:?}", size);
                     state.resize(size);
+                 } else {
+                    debug!("Ignoring resize to zero dimensions or same size: {:?}", size);
                  }
             }
             _ => (),
@@ -118,15 +119,13 @@ impl State {
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        if new_size.width > 0 && new_size.height > 0 {
-            info!("Updating state with new size: {:?}", new_size);
+            info!("Reconfiguring surface due to resize: {:?}", new_size);
             self.size = new_size;
-
-            info!("Reconfiguring surface due to resize...");
             self.configure_surface();
-         } else {
-             info!("Ignoring resize to zero dimensions: {:?}", new_size);
-         }
+    }
+
+    fn should_resize(&self, new_size: winit::dpi::PhysicalSize<u32>) -> bool {
+        new_size.width > 0 && new_size.height > 0 && (new_size.width != self.size.width || new_size.height != self.size.height)
     }
 }
 
