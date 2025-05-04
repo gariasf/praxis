@@ -3,9 +3,9 @@
 //! This crate provides functionality for rendering and managing graphics.
 
 use praxis_utils::{Result, info};
+use std::sync::Arc;
 use wgpu::{Adapter, Device, Instance, Queue, Surface};
 use winit::window::Window;
-use std::sync::Arc;
 
 /// Core graphics context containing the wgpu state.
 ///
@@ -38,11 +38,8 @@ impl RenderContext {
         let instance = wgpu::Instance::default();
 
         info!("Creating surface...");
-        let surface = instance
-            .create_surface(window)
-            .unwrap();
+        let surface = instance.create_surface(window).unwrap();
 
-        
         info!("Requesting adapter...");
 
         let adapter = instance
@@ -51,10 +48,14 @@ impl RenderContext {
                 compatible_surface: Some(&surface),
                 ..Default::default()
             })
-            .await.unwrap();
+            .await
+            .unwrap();
         info!("Found adapter: {:?}", adapter.get_info());
 
-        let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor::default()).await.unwrap();
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor::default())
+            .await
+            .unwrap();
 
         info!("Found device {:?}", device);
         info!("Found queue {:?}", queue);
@@ -65,9 +66,15 @@ impl RenderContext {
 
         info!("Selected surface format: {:?}", surface_format);
 
-        Self { instance, adapter, device, queue, surface, surface_format }
+        Self {
+            instance,
+            adapter,
+            device,
+            queue,
+            surface,
+            surface_format,
+        }
     }
-
 
     /// Renders a single frame to the configured surface.
     ///

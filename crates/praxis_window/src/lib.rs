@@ -12,7 +12,7 @@ use winit::{
     window::{Fullscreen, Window, WindowId},
 };
 
-use praxis_utils::{Result, info, debug};
+use praxis_utils::{Result, debug, info};
 
 /// Represents the application's state, including graphics context and window size.
 struct State {
@@ -66,9 +66,12 @@ impl ApplicationHandler for App {
                 if state.should_resize(size) {
                     info!("Window resized to: {:?}", size);
                     state.resize(size);
-                 } else {
-                    debug!("Ignoring resize to zero dimensions or same size: {:?}", size);
-                 }
+                } else {
+                    debug!(
+                        "Ignoring resize to zero dimensions or same size: {:?}",
+                        size
+                    );
+                }
             }
             _ => (),
         }
@@ -138,9 +141,9 @@ impl State {
     /// # Arguments
     /// * `new_size` - The new physical size of the window.
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-            info!("Reconfiguring surface due to resize: {:?}", new_size);
-            self.size = new_size;
-            self.configure_surface();
+        info!("Reconfiguring surface due to resize: {:?}", new_size);
+        self.size = new_size;
+        self.configure_surface();
     }
 
     /// Determines if a resize operation should actually occur.
@@ -150,7 +153,9 @@ impl State {
     /// # Arguments
     /// * `new_size` - The potential new physical size.
     fn should_resize(&self, new_size: winit::dpi::PhysicalSize<u32>) -> bool {
-        new_size.width > 0 && new_size.height > 0 && (new_size.width != self.size.width || new_size.height != self.size.height)
+        new_size.width > 0
+            && new_size.height > 0
+            && (new_size.width != self.size.width || new_size.height != self.size.height)
     }
 }
 
