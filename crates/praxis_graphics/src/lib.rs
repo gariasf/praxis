@@ -2,46 +2,81 @@
 //!
 //! This crate provides functionality for rendering and managing graphics.
 
-use praxis_utils::{Result, error, info};
-use wgpu::Instance;
+use praxis_utils::{Result, info};
+use wgpu::{Adapter, Device, Instance, Queue, Surface};
 
-const GPU_NOT_FOUND_ERROR_MESSAGE: &str =
-    "Unable to find a GPU! Make sure you have installed required drivers!";
-
-/// Initializes the graphics system.
-pub fn init() {
+pub async fn init() -> Result<RenderContext> {
     info!("Initializing renderer...");
-    // Since wgpu functions are async, we need an async runtime.
-    // `pollster::block_on` runs an async future to completion on the current thread.
-    if let Err(e) = pollster::block_on(init_renderer()) {
-        error!("Failed to initialize renderer: {:?}", e);
-    }
+    RenderContext::new().await
 }
 
-async fn init_renderer() -> Result<()> {
-    let instance = Instance::default();
+pub struct RenderContext {
+    pub instance: Instance,
+    pub adapter: Adapter,
+    pub device: Device,
+    pub queue: Queue,
+}
 
-    let adapter = instance
-        .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
+impl RenderContext {
+    pub async fn new() -> Result<Self> {
+        info!("Creating wgpu instance...");
+        let instance = wgpu::Instance::default();
+        info!("Requesting adapter...");
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions::default())
+            .await?;
+        info!("Found adapter: {:?}", adapter.get_info());
+
+        info!("Requesting device and queue...");
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor::default())
+            .await?;
+        info!("Device and queue obtained.");
+
+        Ok(Self {
+            instance,
+            adapter,
+            device,
+            queue,
         })
-        .await
-        .expect(GPU_NOT_FOUND_ERROR_MESSAGE);
+    }
 
-    let _adapter_info = adapter.get_info();
+    pub fn render(&mut self, surface: &Surface<'static>) -> Result<()> {
+        let frame = surface.get_current_texture()?;
+        let view = frame.texture.create_view(&Default::default());
 
-    let (_device, _queue) = adapter
-        .request_device(&wgpu::DeviceDescriptor {
-            label: Some("Praxis Render Device"),
-            required_features: wgpu::Features::empty(),
-            required_limits: wgpu::Limits::default(),
-            memory_hints: wgpu::MemoryHints::default(),
-            trace: wgpu::Trace::Off,
-        })
-        .await
-        .expect("Failed to request device");
+        let mut encoder =
+            self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Render Encoder"),
+                });
 
-    Ok(())
+        let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Main Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.1,
+                        g: 0.2,
+                        b: 0.3,
+                        a: 1.0,
+                    }),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
+
+        drop(render_pass);
+
+        self.queue.submit([encoder.finish()]);
+        frame.present();
+
+        Ok(())
+    }
 }

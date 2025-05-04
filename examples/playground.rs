@@ -1,7 +1,5 @@
-use praxis_core::init;
-use praxis_window::open_window;
+use praxis_core::run;
 
 fn main() {
-    let _ = init();
-    let _ = open_window();
+    let _ = run();
 }

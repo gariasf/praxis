@@ -78,8 +78,11 @@ pub fn init_tracing() -> Result<()> {
         .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE) // Log span creation/closing
         .pretty(); // Use pretty printer for human readability
 
-    let filter_layer =
-        EnvFilter::try_from_default_env().or_else(|_| EnvFilter::try_new("debug"))?;
+    let filter_layer = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new("debug"))?
+        .add_directive("winit=info".parse().unwrap())
+        .add_directive("wgpu_hal=info".parse().unwrap())
+        .add_directive("naga=info".parse().unwrap());
 
     // Register the subscriber with the tracing system
     tracing_subscriber::registry()
