@@ -1,7 +1,7 @@
 # Praxis Engine
 
 > [!NOTE]
-> Praxis is a learning and self-development project focused on building a game engine in Rust. Engineering and topic study is assisted by AI.
+> Praxis is a learning and self-development project focused on building a game engine in Rust. 
 
 ## Project goals
 - Learn about Game Engine Foundations, 3D space, and systems programming using Rust.
