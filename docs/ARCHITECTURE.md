@@ -17,7 +17,7 @@ The engine will be structured as a Cargo workspace, located at the root of the r
 praxis/
 ├── Cargo.toml          # Workspace definition
 ├── crates/             # Engine modules (crates)
-│   ├── praxis/
+│   ├── praxis_core/
 │   ├── praxis_window/
 │   ├── praxis_input/
 │   ├── praxis_graphics/
