@@ -3,6 +3,6 @@
 //! This crate provides functionality for playing and managing audio.
 
 /// Initializes the audio system.
-pub fn initialize() {
+pub fn init() {
     println!("Audio system initialized");
 }

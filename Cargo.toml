@@ -35,13 +35,9 @@ missing_docs = "warn"
 praxis_core = { path = "crates/praxis_core", version = "0.1.0" }
 praxis_utils = { path = "crates/praxis_utils", version = "0.1.0" }
 praxis_window = { path = "crates/praxis_window", version = "0.1.0" }
+praxis_graphics = { path = "crates/praxis_graphics", version = "0.1.0" }
 
 [[example]]
-name = "hello_praxis"
-path = "examples/hello_praxis.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "basic_window"
-path = "examples/basic_window.rs"
+name = "playground"
+path = "examples/playground.rs"
 
