@@ -1,15 +1,9 @@
 # Praxis Engine
 
-> [!NOTE]
-> Praxis is a learning and self-development project focused on building a game engine in Rust. 
-
 ## Project goals
 - Learn about Game Engine Foundations, 3D space, and systems programming using Rust.
 - Create a game engine using idiomatic Rust practices.
-- Provide a comprehensive rendering pipeline.
-- Establish a flexible architecture using Rust's crate ecosystem.
 - Build a practical engine capable of supporting game development within a 1-2 year timeframe.
-- Develop features iteratively, driven by the requirements of actual game projects built with Praxis.
 - Eventually support complex game worlds and interactions.
 
 ## Project rules
@@ -25,24 +19,6 @@
 - **Windowing & Input**: `winit` crate.
 - **ECS**: `bevy_ecs` for entity-component-system architecture.
 - **Math**: `glam` for SIMD-accelerated vector/matrix math.
-
-## Key Crates (Dependencies)
-
-This list represents the planned core dependencies. See `docs/ARCHITECTURE.md` for more details.
-
-- **`winit`**: Windowing, input events, platform abstraction.
-- **`wgpu`**: Higher-level, safe wrapper to handle GPU backends.
-- **`glam`**: SIMD-accelerated math library for games and graphics.
-- **`image`**: Image loading and manipulation.
-- **`imgui-rs`** (with backends): Immediate-mode GUI for debugging and tools.
-- **`tracing`**: Application-level logging and diagnostics framework.
-- **`bevy_ecs`**: High-performance Entity Component System.
-- **`serde`** (with formats like `serde_json`): Data serialization/deserialization.
-- **`russimp` / `gltf`**: Loading 3D models and scenes.
-- **`rapier`**: 2D/3D physics engine written in Rust.
-- **`rodio` / `kira`**: Audio playback and management.
-- **`color-eyre`**: Ergonomic error reporting and handling.
-- **`criterion`**: Statistics-driven benchmarking framework.
 
 ## Coding Guidelines and Architecture
 
