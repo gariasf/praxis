@@ -13,26 +13,9 @@
 - Focus on pragmatic solutions and iterative feature development.
 - Minimize unnecessary abstractions.
 
-## Technical Scope
-
-### Core Technologies
-- **Windowing & Input**: `winit` crate.
-- **ECS**: `bevy_ecs` for entity-component-system architecture.
-- **Math**: `glam` for SIMD-accelerated vector/matrix math.
-
-## Coding Guidelines and Architecture
+## Architecture
 
 See [Architecture Docs](docs/ARCHITECTURE.md) for the detailed Rust-based architecture.
-
-### Naming Conventions
-Follow standard Rust API Guidelines:
-- **Crates, Modules, Functions, Variables, Fields**: `snake_case`.
-- **Types (Structs, Enums, Traits), Lifetimes, Type Parameters**: `PascalCase`.
-- **Constants, Statics**: `SCREAMING_SNAKE_CASE`.
-
-### Formatting and Linting
-- **Formatting**: Enforced by `rustfmt` (use `cargo fmt`).
-- **Linting**: Enforced by `clippy` (use `cargo clippy -- -D warnings`).
 
 ### Learning Resources Collection (Rust Focus)
 - [The Rust Programming Language Book ("The Book")](https://doc.rust-lang.org/book/)
