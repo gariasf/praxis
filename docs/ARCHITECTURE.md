@@ -92,7 +92,7 @@ praxis/
   - Depends on: `praxis_core`, `praxis_ecs`, `praxis_math`.
 - **`praxis_gui`:**
   - Debugging and editor tools GUI.
-  - Dependency: `imgui-rs` with appropriate backend (`imgui-winit-support`, `imgui-wgpu` or similar for `wgpu`).
+  - Dependency: `egui`.
   - Depends on: `praxis_core`, `praxis_graphics`, `praxis_window`.
 - **`praxis_scripting`:**
   - Manages Lua VMs and provides bindings for scripting game logic.
@@ -122,7 +122,7 @@ praxis/
     - Data: `serde`
   - Audio: `rodio` or `kira`
   - Physics: `rapier`
-  - GUI: `imgui-rs` + backends
+  - GUI: `egui`
   - Scripting: `mlua`
   - Logging: `tracing`, `tracing-subscriber`
   - Error Reporting: `color-eyre`
