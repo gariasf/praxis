@@ -35,7 +35,11 @@ impl RenderContext {
     /// Panics if a compatible adapter or device cannot be found, or if surface
     /// creation fails.
     pub async fn new(window: Arc<Window>) -> Self {
-        let instance = wgpu::Instance::default();
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::from_comma_list("vulkan, metal"),
+            flags: wgpu::InstanceFlags::empty(),
+            backend_options: wgpu::BackendOptions::default(),
+        });
 
         info!("Creating surface...");
         let surface = instance.create_surface(window).unwrap();

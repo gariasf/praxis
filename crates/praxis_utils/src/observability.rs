@@ -41,7 +41,7 @@ pub fn init_tracing() -> Result<()> {
     let filter_layer = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("debug"))?
         .add_directive("winit=info".parse().unwrap())
-        .add_directive("wgpu_hal=info".parse().unwrap())
+        .add_directive("wgpu_hal=warn".parse().unwrap())
         .add_directive("naga=info".parse().unwrap());
 
     tracing_subscriber::registry()

@@ -38,7 +38,9 @@ impl ApplicationHandler for App {
             event_loop
                 .create_window(
                     Window::default_attributes()
-                        .with_fullscreen(Some(Fullscreen::Borderless(None))),
+                        .with_fullscreen(Some(Fullscreen::Borderless(None)))
+                        .with_title("In Praxis")
+                        .with_resizable(false),
                 )
                 .unwrap(),
         );
