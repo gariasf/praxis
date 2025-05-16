@@ -7,8 +7,9 @@ use std::sync::Arc;
 use praxis_graphics::RenderContext;
 use winit::{
     application::ApplicationHandler,
-    event::WindowEvent,
+    event::{ElementState, KeyEvent, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    keyboard::{Key, NamedKey},
     window::{Fullscreen, Window, WindowId},
 };
 
@@ -73,6 +74,18 @@ impl ApplicationHandler for App {
                         size
                     );
                 }
+            }
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        logical_key: Key::Named(NamedKey::Escape),
+                        state: ElementState::Pressed,
+                        ..
+                    },
+                ..
+            } => {
+                info!("Escape key pressed.");
+                event_loop.exit();
             }
             _ => (),
         }
