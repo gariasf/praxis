@@ -48,7 +48,7 @@ impl ApplicationHandler for App {
 
         let state = pollster::block_on(State::new(window.clone()));
         self.state = Some(state);
-        info!("Window and graphics state initialized.");
+        info!("Window initialized.");
 
         self.state.as_ref().unwrap().window.request_redraw();
     }
@@ -57,7 +57,6 @@ impl ApplicationHandler for App {
         let state = self.state.as_mut().unwrap();
         match event {
             WindowEvent::CloseRequested => {
-                println!("The close button was pressed; stopping");
                 info!("Close requested, exiting event loop...");
                 event_loop.exit();
             }
@@ -110,30 +109,11 @@ impl State {
         };
 
         info!("Configuring surface for the first time...");
-        state.configure_surface();
+        state
+            .render_context
+            .configure_surface(size.width, size.height);
 
         state
-    }
-
-    /// Configures the underlying `wgpu::Surface` based on the current window size
-    /// and the selected surface format stored in the `RenderContext`.
-    /// Called initially and after a resize.
-    fn configure_surface(&self) {
-        let surface_config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: self.render_context.surface_format,
-            // Request compatibility with the sRGB-format texture view we're going to create later.
-            view_formats: vec![self.render_context.surface_format],
-            alpha_mode: wgpu::CompositeAlphaMode::Auto,
-            width: self.size.width,
-            height: self.size.height,
-            desired_maximum_frame_latency: 2,
-            present_mode: wgpu::PresentMode::AutoVsync,
-        };
-        info!("Applying surface configuration: {:?}", surface_config);
-        self.render_context
-            .surface
-            .configure(&self.render_context.device, &surface_config);
     }
 
     /// Handles window resize events.
@@ -145,7 +125,8 @@ impl State {
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         info!("Reconfiguring surface due to resize: {:?}", new_size);
         self.size = new_size;
-        self.configure_surface();
+        self.render_context
+            .configure_surface(new_size.width, new_size.height);
     }
 
     /// Determines if a resize operation should actually occur.

@@ -31,7 +31,6 @@ pub use tracing::{debug, error, info, instrument, trace, warn};
 /// ```
 pub fn init() -> Result<()> {
     info!("Initializing Praxis utilities...");
-    // Initialize the tracing system
     observability::init_tracing()?;
 
     Ok(())

@@ -80,6 +80,21 @@ impl RenderContext {
         }
     }
 
+    pub fn configure_surface(&self, width: u32, height: u32) {
+        let surface_config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: self.surface_format,
+            view_formats: vec![self.surface_format],
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            width,
+            height,
+            desired_maximum_frame_latency: 2,
+            present_mode: wgpu::PresentMode::AutoVsync,
+        };
+        info!("Applying surface configuration: {:?}", surface_config);
+        self.surface.configure(&self.device, &surface_config);
+    }
+
     /// Renders a single frame to the configured surface.
     ///
     /// # Returns
