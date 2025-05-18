@@ -28,78 +28,6 @@ struct App {
     state: Option<State>,
 }
 
-/// Implementation of the `winit` Application Handler trait for the main application loop.
-impl ApplicationHandler for App {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.state.is_some() {
-            return;
-        }
-
-        let window = Arc::new(
-            event_loop
-                .create_window(
-                    Window::default_attributes()
-                        .with_fullscreen(Some(Fullscreen::Borderless(None)))
-                        .with_title("In Praxis")
-                        .with_resizable(false),
-                )
-                .unwrap(),
-        );
-        info!("Window created successfully.");
-
-        let state = pollster::block_on(State::new(window.clone()));
-        self.state = Some(state);
-        info!("Window initialized.");
-
-        self.state.as_ref().unwrap().window.request_redraw();
-    }
-
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        let state = self.state.as_mut().unwrap();
-        match event {
-            WindowEvent::CloseRequested => {
-                info!("Close requested, exiting event loop...");
-                event_loop.exit();
-            }
-            WindowEvent::RedrawRequested => {
-                let _ = state.render_context.render();
-            }
-            WindowEvent::Resized(size) => {
-                if state.should_resize(size) {
-                    info!("Window resized to: {:?}", size);
-                    state.resize(size);
-                } else {
-                    debug!(
-                        "Ignoring resize to zero dimensions or same size: {:?}",
-                        size
-                    );
-                }
-            }
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        logical_key: Key::Named(NamedKey::Escape),
-                        state: ElementState::Pressed,
-                        ..
-                    },
-                ..
-            } => {
-                info!("Escape key pressed.");
-                event_loop.exit();
-            }
-            _ => (),
-        }
-    }
-
-    // Add other ApplicationHandler methods if needed, default is fine for now
-    // fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {}
-    // fn device_event(&mut self, event_loop: &ActiveEventLoop, device_id: DeviceId, event: DeviceEvent) {}
-    // fn user_event(&mut self, event_loop: &ActiveEventLoop, event: T) {}
-    // fn suspended(&mut self, event_loop: &ActiveEventLoop) {}
-    // fn exiting(&mut self, event_loop: &ActiveEventLoop) {}
-    // fn memory_warning(&mut self, event_loop: &ActiveEventLoop) {}
-}
-
 impl State {
     /// Creates a new `State` instance.
     ///
@@ -153,6 +81,80 @@ impl State {
             && new_size.height > 0
             && (new_size.width != self.size.width || new_size.height != self.size.height)
     }
+}
+
+/// Implementation of the `winit` Application Handler trait for the main application loop.
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.state.is_some() {
+            return;
+        }
+
+        let window = Arc::new(
+            event_loop
+                .create_window(
+                    Window::default_attributes()
+                        .with_fullscreen(Some(Fullscreen::Borderless(None)))
+                        .with_title("In Praxis")
+                        .with_resizable(false),
+                )
+                .unwrap(),
+        );
+        info!("Window created successfully.");
+
+        let state = pollster::block_on(State::new(window.clone()));
+        self.state = Some(state);
+        info!("Window initialized.");
+
+        if let Some(state) = &self.state {
+            state.window.request_redraw();
+        }
+    }
+
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        let state = self.state.as_mut().unwrap();
+        match event {
+            WindowEvent::CloseRequested => {
+                info!("Close requested, exiting event loop...");
+                event_loop.exit();
+            }
+            WindowEvent::RedrawRequested => {
+                let _ = state.render_context.render();
+            }
+            WindowEvent::Resized(size) => {
+                if state.should_resize(size) {
+                    info!("Window resized to: {:?}", size);
+                    state.resize(size);
+                } else {
+                    debug!(
+                        "Ignoring resize to zero dimensions or same size: {:?}",
+                        size
+                    );
+                }
+            }
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        logical_key: Key::Named(NamedKey::Escape),
+                        state: ElementState::Pressed,
+                        ..
+                    },
+                ..
+            } => {
+                info!("Escape key pressed.");
+                event_loop.exit();
+            }
+            _ => (),
+        }
+    }
+
+    // Add other ApplicationHandler methods if needed, default is fine for now
+    // fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {}
+    // fn device_event(&mut self, event_loop: &ActiveEventLoop, device_id: DeviceId, event: DeviceEvent) {}
+    // fn user_event(&mut self, event_loop: &ActiveEventLoop, event: T) {}
+    // fn suspended(&mut self, event_loop: &ActiveEventLoop) {}
+    // fn exiting(&mut self, event_loop: &ActiveEventLoop) {}
+    // fn memory_warning(&mut self, event_loop: &ActiveEventLoop) {}
 }
 
 /// Runs the main application event loop.
