@@ -2,7 +2,7 @@
 //!
 //! This crate provides functionality for rendering and managing graphics.
 
-use praxis_utils::{Result, info};
+use praxis_utils::{Result, eyre, info};
 use std::sync::Arc;
 use wgpu::{Adapter, Device, Instance, Queue, Surface};
 use winit::window::Window;
@@ -34,7 +34,7 @@ impl RenderContext {
     ///
     /// Panics if a compatible adapter or device cannot be found, or if surface
     /// creation fails.
-    pub async fn new(window: Arc<Window>) -> Self {
+    pub async fn new(window: Arc<Window>) -> Result<Self> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::from_comma_list("vulkan, metal"),
             flags: wgpu::InstanceFlags::empty(),
@@ -42,7 +42,9 @@ impl RenderContext {
         });
 
         info!("Creating surface...");
-        let surface = instance.create_surface(window).unwrap();
+        let surface = instance
+            .create_surface(window)
+            .map_err(|e| eyre::eyre!("Failed to create surface: {}", e))?;
 
         info!("Requesting adapter...");
 
@@ -53,13 +55,14 @@ impl RenderContext {
                 ..Default::default()
             })
             .await
-            .unwrap();
+            .map_err(|e| eyre::eyre!("Failed to find a compatible graphics adapter: {}", e))?;
+
         info!("Found adapter: {:?}", adapter.get_info());
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor::default())
             .await
-            .unwrap();
+            .map_err(|e| eyre::eyre!("Failed to create device: {}", e))?;
 
         info!("Found device {:?}", device);
         info!("Found queue {:?}", queue);
@@ -70,14 +73,14 @@ impl RenderContext {
 
         info!("Selected surface format: {:?}", surface_format);
 
-        Self {
+        Ok(Self {
             instance,
             adapter,
             device,
             queue,
             surface,
             surface_format,
-        }
+        })
     }
 
     pub fn configure_surface(&self, width: u32, height: u32) {

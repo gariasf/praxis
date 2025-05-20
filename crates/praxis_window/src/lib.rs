@@ -13,7 +13,7 @@ use winit::{
     window::{Fullscreen, Window, WindowId},
 };
 
-use praxis_utils::{Result, debug, info};
+use praxis_utils::{Result, debug, eyre, info};
 
 /// Represents the application's state, including graphics context and window size.
 struct State {
@@ -36,9 +36,9 @@ impl State {
     ///
     /// # Arguments
     /// * `window` - An `Arc<Window>` for which to create the state.
-    async fn new(window: Arc<Window>) -> Self {
+    async fn new(window: Arc<Window>) -> Result<Self> {
         info!("Initializing graphics render context...");
-        let render_context = RenderContext::new(window.clone()).await;
+        let render_context = RenderContext::new(window.clone()).await?;
 
         info!("Getting initial window size...");
         let size = window.inner_size();
@@ -54,7 +54,7 @@ impl State {
             .render_context
             .configure_surface(size.width, size.height);
 
-        state
+        Ok(state)
     }
 
     /// Handles window resize events.
@@ -90,29 +90,47 @@ impl ApplicationHandler for App {
             return;
         }
 
-        let window = Arc::new(
-            event_loop
-                .create_window(
-                    Window::default_attributes()
-                        .with_fullscreen(Some(Fullscreen::Borderless(None)))
-                        .with_title("In Praxis")
-                        .with_resizable(false),
-                )
-                .unwrap(),
-        );
-        info!("Window created successfully.");
+        let window = match event_loop.create_window(
+            Window::default_attributes()
+                .with_fullscreen(Some(Fullscreen::Borderless(None)))
+                .with_title("In Praxis")
+                .with_resizable(false),
+        ) {
+            Ok(window) => {
+                info!("Window created successfully.");
+                Arc::new(window)
+            }
+            Err(e) => {
+                info!("Failed to create window: {}", e);
+                event_loop.exit();
+                return;
+            }
+        };
 
-        let state = pollster::block_on(State::new(window.clone()));
+        let state = match pollster::block_on(State::new(window.clone())) {
+            Ok(state) => {
+                state.window.request_redraw();
+                state
+            }
+            Err(e) => {
+                error!("Failed to initialize state: {}", e);
+                event_loop.exit();
+                return;
+            }
+        };
+
         self.state = Some(state);
-        info!("Window initialized.");
-
-        if let Some(state) = &self.state {
-            state.window.request_redraw();
-        }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        let state = self.state.as_mut().unwrap();
+        let state = match self.state.as_mut() {
+            Some(state) => state,
+            None => {
+                debug!("Window event received before state initialization");
+                return;
+            }
+        };
+
         match event {
             WindowEvent::CloseRequested => {
                 info!("Close requested, exiting event loop...");
@@ -165,13 +183,16 @@ impl ApplicationHandler for App {
 /// Returns `Ok(())` if the application exits cleanly, or an error if loop creation fails.
 pub fn run() -> Result<()> {
     info!("Creating event loop...");
-    let event_loop = EventLoop::new().unwrap();
+    let event_loop =
+        EventLoop::new().map_err(|e| eyre::eyre!("Failed to create event loop: {}", e))?;
 
     event_loop.set_control_flow(ControlFlow::Poll);
 
     info!("Running application...");
     let mut app = App::default();
-    event_loop.run_app(&mut app).unwrap();
+    event_loop
+        .run_app(&mut app)
+        .map_err(|e| eyre::eyre!("Event loop error: {}", e))?;
 
     Ok(())
 }
