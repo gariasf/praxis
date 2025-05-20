@@ -13,7 +13,7 @@ use winit::{
     window::{Fullscreen, Window, WindowId},
 };
 
-use praxis_utils::{Result, debug, eyre, info};
+use praxis_utils::{Result, debug, error, eyre, info};
 
 /// Represents the application's state, including graphics context and window size.
 struct State {
