@@ -182,6 +182,8 @@ impl ApplicationHandler for App {
 /// # Returns
 /// Returns `Ok(())` if the application exits cleanly, or an error if loop creation fails.
 pub fn run() -> Result<()> {
+    let mut app = App::default();
+
     info!("Creating event loop...");
     let event_loop =
         EventLoop::new().map_err(|e| eyre::eyre!("Failed to create event loop: {}", e))?;
@@ -189,7 +191,6 @@ pub fn run() -> Result<()> {
     event_loop.set_control_flow(ControlFlow::Poll);
 
     info!("Running application...");
-    let mut app = App::default();
     event_loop
         .run_app(&mut app)
         .map_err(|e| eyre::eyre!("Event loop error: {}", e))?;

@@ -4,7 +4,7 @@
 
 use praxis_utils::{Result, eyre, info};
 use std::sync::Arc;
-use wgpu::{Adapter, Device, Instance, Queue, Surface};
+use wgpu::{Device, Queue, Surface};
 use winit::window::Window;
 
 /// Core graphics context containing the wgpu state.
@@ -12,8 +12,6 @@ use winit::window::Window;
 /// This struct holds the main graphics backend components like the instance, adapter,
 /// device, queue, and the surface linked to a window.
 pub struct RenderContext {
-    pub instance: Instance,
-    pub adapter: Adapter,
     pub device: Device,
     pub queue: Queue,
     pub surface: Surface<'static>,
@@ -36,7 +34,7 @@ impl RenderContext {
     /// creation fails.
     pub async fn new(window: Arc<Window>) -> Result<Self> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::from_comma_list("vulkan, metal"),
+            backends: wgpu::Backends::from_comma_list("vulkan, metal, dx12"),
             flags: wgpu::InstanceFlags::empty(),
             backend_options: wgpu::BackendOptions::default(),
         });
@@ -74,8 +72,6 @@ impl RenderContext {
         info!("Selected surface format: {:?}", surface_format);
 
         Ok(Self {
-            instance,
-            adapter,
             device,
             queue,
             surface,
