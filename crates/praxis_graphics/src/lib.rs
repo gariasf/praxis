@@ -34,7 +34,7 @@ impl RenderContext {
     /// creation fails.
     pub async fn new(window: Arc<Window>) -> Result<Self> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::from_comma_list("vulkan, metal, dx12"),
+            backends: wgpu::Backends::from_comma_list("vulkan, metal"),
             flags: wgpu::InstanceFlags::empty(),
             backend_options: wgpu::BackendOptions::default(),
         });
