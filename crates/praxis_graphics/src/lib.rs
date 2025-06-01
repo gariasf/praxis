@@ -221,11 +221,8 @@ impl RenderContext {
 
         // Acquire next image
         let (image_index, suboptimal, acquire_future) =
-            match vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None)
-                .map_err(|e| eyre::eyre!("Failed to acquire next image: {}", e))?
-            {
-                (index, suboptimal, future) => (index as usize, suboptimal, future),
-            };
+            vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None)
+                .map_err(|e| eyre::eyre!("Failed to acquire next image: {}", e))?;
 
         if suboptimal {
             self.recreate_swapchain = true;
@@ -244,7 +241,9 @@ impl RenderContext {
             .begin_render_pass(
                 RenderPassBeginInfo {
                     clear_values: vec![Some([0.1, 0.2, 0.3, 1.0].into())],
-                    ..RenderPassBeginInfo::framebuffer(self.framebuffers[image_index].clone())
+                    ..RenderPassBeginInfo::framebuffer(
+                        self.framebuffers[image_index as usize].clone(),
+                    )
                 },
                 SubpassBeginInfo {
                     contents: vulkano::command_buffer::SubpassContents::Inline,
@@ -273,19 +272,14 @@ impl RenderContext {
         let future = execution
             .then_swapchain_present(
                 self.present_queue.clone(),
-                SwapchainPresentInfo::swapchain_image_index(
-                    self.swapchain.clone(),
-                    image_index as u32,
-                ),
+                SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index),
             )
             .then_signal_fence_and_flush();
 
-        match future.map_err(|e| eyre::eyre!("Failed to present frame: {}", e))? {
-            future => {
-                self.previous_frame_end = Some(future.boxed());
-            }
+        let future = future.map_err(|e| eyre::eyre!("Failed to present frame: {}", e))?;
+        {
+            self.previous_frame_end = Some(future.boxed());
         }
-
         Ok(())
     }
 
