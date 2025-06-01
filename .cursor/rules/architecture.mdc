@@ -1,6 +1,6 @@
 ---
-description: 
-globs: 
+description:
+globs:
 alwaysApply: true
 ---
 # Praxis Engine - Rust Architecture
@@ -63,7 +63,7 @@ praxis/
   - Depends on: `praxis_window`, `praxis_core`.
 - **`praxis_graphics`:**
   - Rendering abstraction layer. Defines traits for renderers, resources (textures, meshes, shaders), pipelines.
-  - Backend: `wgpu` (abstraction over Vulkan, Metal, DirectX, OpenGL).
+  - Backend: `vulkano` (abstraction over Vulkan).
   - Depends on: `praxis_core`, `praxis_window`, `praxis_math`.
 - **`praxis_math`:**
   - Provides core mathematical types and operations for graphics and physics.
@@ -118,7 +118,7 @@ praxis/
 - **Dependency Management:** `Cargo.toml` for each crate and the workspace root.
 - **Key Dependencies:**
   - Windowing/Input: `winit`
-  - Graphics: `wgpu`
+  - Graphics: `vulkano`
   - Math: `glam`
   - ECS: `bevy_ecs`
   - Assets:

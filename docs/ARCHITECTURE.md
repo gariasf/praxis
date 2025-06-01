@@ -1,6 +1,7 @@
 # Praxis Engine - Rust Architecture
 
 ## Core Principles
+
 - **Language:** Rust (latest stable version).
 - **Safety & Concurrency:** Leverage Rust's ownership, borrowing, and type system for memory safety and concurrency.
 - **Modularity:** Design the engine as a collection of loosely coupled crates within a Cargo workspace.
@@ -10,6 +11,7 @@
 - **Error Handling:** Employ `Result<T, E>` for recoverable errors, potentially using crates like `thiserror` and `color-eyre` for better ergonomics and reporting. Panics should be reserved for unrecoverable states (bugs).
 
 ## Project Structure (Cargo Workspace)
+
 The engine will be structured as a Cargo workspace, located at the root of the repository.
 
 ```
@@ -57,7 +59,7 @@ praxis/
   - Depends on: `praxis_window`, `praxis_core`.
 - **`praxis_graphics`:**
   - Rendering abstraction layer. Defines traits for renderers, resources (textures, meshes, shaders), pipelines.
-  - Backend: `wgpu` (abstraction over Vulkan, Metal, DirectX, OpenGL).
+  - Backend: `vulkano` (abstraction over Vulkan).
   - Depends on: `praxis_core`, `praxis_window`, `praxis_math`.
 - **`praxis_math`:**
   - Provides core mathematical types and operations for graphics and physics.
@@ -109,11 +111,12 @@ praxis/
   - Depends on: `praxis_core` (for common error types, if any).
 
 ## Build System & Dependencies
+
 - **Build System:** `cargo`.
 - **Dependency Management:** `Cargo.toml` for each crate and the workspace root.
 - **Key Dependencies:**
   - Windowing/Input: `winit`
-  - Graphics: `wgpu`
+  - Graphics: `vulkano`
   - Math: `glam`
   - ECS: `bevy_ecs`
   - Assets:
@@ -129,6 +132,7 @@ praxis/
 - **Dependency Versions:** Use latest stable versions where compatible and reasonable. Pin versions in `Cargo.lock` for reproducible builds.
 
 ## Testing
+
 - **Unit Tests:** Written within each crate's source files (`#[cfg(test)] mod tests { ... }`).
 - **Integration Tests:** Located in the workspace `tests/` directory.
 - **Benchmarking:** Located in the workspace `benches/` directory, using `criterion`.
@@ -136,11 +140,13 @@ praxis/
 - **CI:** Enforce tests (`cargo test --workspace`), formatting (`cargo fmt --check`), and lints (`cargo clippy --workspace -- -D warnings`).
 
 ## Documentation
+
 - **API Documentation:** Use `rustdoc` comments (`///` and `//!`) for all public items (structs, enums, functions, traits, modules). Generate documentation using `cargo doc`.
 - **Architectural Documentation:** Maintain high-level design documents in `docs/`, including this file.
 - **Examples:** Provide clear, concise examples in the `examples/` directory demonstrating engine features.
 
 ## Coding Style & Idioms
+
 - Follow standard Rust API guidelines and idioms.
 - Enforce formatting using `rustfmt` (default settings are generally preferred).
 - Enforce code quality and catch common mistakes using `clippy`.
