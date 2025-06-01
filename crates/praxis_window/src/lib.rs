@@ -3,14 +3,16 @@
 //! This crate provides functionality for creating and managing windows.
 
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use praxis_graphics::RenderContext;
 use winit::{
     application::ApplicationHandler,
+    dpi::PhysicalSize,
     event::{ElementState, KeyEvent, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::{Key, NamedKey},
-    window::{Fullscreen, Window, WindowId},
+    window::{Window, WindowId},
 };
 
 use praxis_utils::{Result, debug, error, eyre, info};
@@ -20,12 +22,14 @@ struct State {
     size: winit::dpi::PhysicalSize<u32>,
     render_context: RenderContext,
     window: Arc<Window>,
+    pending_resize: Option<(winit::dpi::PhysicalSize<u32>, Instant)>,
 }
 
 /// The main application structure that handles the event loop and owns the state.
 #[derive(Default)]
 struct App {
     state: Option<State>,
+    initialization_complete: bool,
 }
 
 impl State {
@@ -37,22 +41,19 @@ impl State {
     /// # Arguments
     /// * `window` - An `Arc<Window>` for which to create the state.
     async fn new(window: Arc<Window>) -> Result<Self> {
-        info!("Initializing graphics render context...");
         let render_context = RenderContext::new(window.clone()).await?;
 
-        info!("Getting initial window size...");
         let size = window.inner_size();
 
         let state = State {
             size,
             render_context,
             window,
+            pending_resize: None,
         };
 
-        info!("Configuring surface for the first time...");
-        state
-            .render_context
-            .configure_surface(size.width, size.height);
+        // Don't configure surface immediately - let the debouncing handle it
+        // The first RedrawRequested will trigger the debounced resize processing
 
         Ok(state)
     }
@@ -92,16 +93,16 @@ impl ApplicationHandler for App {
 
         let window = match event_loop.create_window(
             Window::default_attributes()
-                .with_fullscreen(Some(Fullscreen::Borderless(None)))
+                .with_inner_size(PhysicalSize::new(1920, 1080))
                 .with_title("In Praxis")
-                .with_resizable(false),
+                .with_resizable(true),
         ) {
             Ok(window) => {
                 info!("Window created successfully.");
                 Arc::new(window)
             }
             Err(e) => {
-                info!("Failed to create window: {}", e);
+                error!("Failed to create window: {}", e);
                 event_loop.exit();
                 return;
             }
@@ -137,18 +138,43 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                let _ = state.render_context.render();
+                if let Some((pending_size, resize_time)) = state.pending_resize {
+                    const DEBOUNCE_DURATION: Duration = Duration::from_millis(16); // ~1 frame at 60fps
+
+                    if resize_time.elapsed() >= DEBOUNCE_DURATION {
+                        if state.should_resize(pending_size) {
+                            info!("Processing debounced resize to: {:?}", pending_size);
+                            state.resize(pending_size);
+                        } else {
+                            debug!(
+                                "Ignoring resize to zero dimensions or same size: {:?}",
+                                pending_size
+                            );
+                        }
+                        state.pending_resize = None;
+                    } else {
+                        // If we're still debouncing, request another redraw and skip rendering
+                        state.window.request_redraw();
+                        return;
+                    }
+                }
+
+                // Only render if we're not in the middle of processing a resize
+                match state.render_context.render() {
+                    Ok(()) => {}
+                    Err(e) => {
+                        error!("Render failed: {}", e);
+                    }
+                }
+
+                if !self.initialization_complete {
+                    self.initialization_complete = true;
+                }
             }
             WindowEvent::Resized(size) => {
-                if state.should_resize(size) {
-                    info!("Window resized to: {:?}", size);
-                    state.resize(size);
-                } else {
-                    debug!(
-                        "Ignoring resize to zero dimensions or same size: {:?}",
-                        size
-                    );
-                }
+                info!("Received resize event: {:?}", size);
+                state.pending_resize = Some((size, Instant::now()));
+                state.window.request_redraw();
             }
             WindowEvent::KeyboardInput {
                 event:
@@ -159,20 +185,12 @@ impl ApplicationHandler for App {
                     },
                 ..
             } => {
-                info!("Escape key pressed.");
+                debug!("Escape key pressed.");
                 event_loop.exit();
             }
             _ => (),
         }
     }
-
-    // Add other ApplicationHandler methods if needed, default is fine for now
-    // fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {}
-    // fn device_event(&mut self, event_loop: &ActiveEventLoop, device_id: DeviceId, event: DeviceEvent) {}
-    // fn user_event(&mut self, event_loop: &ActiveEventLoop, event: T) {}
-    // fn suspended(&mut self, event_loop: &ActiveEventLoop) {}
-    // fn exiting(&mut self, event_loop: &ActiveEventLoop) {}
-    // fn memory_warning(&mut self, event_loop: &ActiveEventLoop) {}
 }
 
 /// Runs the main application event loop.

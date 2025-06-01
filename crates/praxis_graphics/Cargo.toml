@@ -5,8 +5,8 @@ edition = "2024"
 license = "GPL-3.0-or-later"
 
 [dependencies]
-wgpu = { version = "25.0.0", default-features = false, features = ["vulkan", "metal"] }
+vulkano = "0.34.0"
 pollster = "0.4.0"
 raw-window-handle = "0.6.2"
-winit = "0.30.10"
+winit = { version = "0.30.10", features = ["rwh_05"] }
 praxis_utils = { path = "../praxis_utils", version = "0.1.0" }

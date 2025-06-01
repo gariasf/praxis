@@ -5,8 +5,7 @@ edition = "2024"
 license = "GPL-3.0-or-later"
 
 [dependencies]
-winit = "0.30"
+winit = { version = "0.30.10", features = ["rwh_05"] }
 pollster = "0.4"
-wgpu = "25.0.0"
 praxis_utils = { path = "../praxis_utils" }
 praxis_graphics = { path = "../praxis_graphics" }
