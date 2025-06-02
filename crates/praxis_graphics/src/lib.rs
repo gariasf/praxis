@@ -2,7 +2,7 @@
 //!
 //! This crate provides functionality for rendering and managing graphics using Vulkan via vulkano.
 
-use praxis_utils::{Result, eyre, info};
+use praxis_utils::{Result, debug, eyre, info};
 
 use std::sync::Arc;
 use vulkano::{
@@ -29,11 +29,10 @@ use winit::window::Window;
 /// queues, surface, swapchain, and other Vulkan objects needed for rendering.
 pub struct RenderContext {
     pub instance: Arc<Instance>,
-    pub physical_device: Arc<PhysicalDevice>,
     pub device: Arc<Device>,
     pub graphics_queue: Arc<Queue>,
+    pub present_queue: Arc<Queue>,
 
-    present_queue: Arc<Queue>,
     surface: Arc<Surface>,
     swapchain: Arc<Swapchain>,
     swapchain_images: Vec<Arc<Image>>,
@@ -136,13 +135,13 @@ impl RenderContext {
             graphics_queue.clone()
         };
 
-        info!("Created logical device and queues");
+        debug!("Created logical device and queues");
 
         // Create swapchain
         let (swapchain, swapchain_images) =
             Self::create_swapchain(&device, &physical_device, &surface, &window)?;
 
-        info!("Created swapchain with {} images", swapchain_images.len());
+        debug!("Created swapchain with {} images", swapchain_images.len());
 
         // Create image views
         let swapchain_image_views = swapchain_images
@@ -166,17 +165,16 @@ impl RenderContext {
         // Initialize synchronization
         let previous_frame_end = Some(sync::now(device.clone()).boxed());
 
-        info!("Graphics context initialization complete");
+        debug!("Graphics context initialization complete");
 
         Ok(Self {
             // Public
             instance,
-            physical_device,
             device,
             graphics_queue,
+            present_queue,
 
             // Private
-            present_queue,
             surface,
             swapchain,
             swapchain_images,
@@ -437,21 +435,6 @@ impl RenderContext {
 
         info!("Recreated swapchain and framebuffers");
         Ok(())
-    }
-
-    /// Returns a reference to the command buffer allocator.
-    pub fn command_buffer_allocator(&self) -> &Arc<StandardCommandBufferAllocator> {
-        &self.command_buffer_allocator
-    }
-
-    /// Returns a reference to the main render pass.
-    pub fn render_pass(&self) -> &Arc<RenderPass> {
-        &self.render_pass
-    }
-
-    /// Returns a reference to the present queue.
-    pub fn present_queue(&self) -> &Arc<Queue> {
-        &self.present_queue
     }
 
     /// Returns the current swapchain image format.
