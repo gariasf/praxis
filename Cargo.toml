@@ -19,7 +19,7 @@ members = [
     "crates/praxis_physics",
     "crates/praxis_scene",
     "crates/praxis_utils",
-    "crates/praxis_window"
+    "crates/praxis_window",
 ]
 
 [workspace.lints.clippy]
@@ -40,4 +40,3 @@ praxis_graphics = { path = "crates/praxis_graphics", version = "0.1.0" }
 [[example]]
 name = "playground"
 path = "examples/playground.rs"
-
