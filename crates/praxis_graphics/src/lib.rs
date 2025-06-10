@@ -29,14 +29,11 @@
 
 mod device;
 mod pipeline;
+mod primitives;
 mod shaders;
 mod vertex;
 
-use crate::{
-    device::VulkanDevice,
-    pipeline::create_simple_pipeline,
-    vertex::{VertexData, primitives},
-};
+use crate::{device::VulkanDevice, pipeline::create_simple_pipeline, vertex::VertexData};
 use praxis_utils::{Result, eyre, info};
 
 use std::sync::Arc;

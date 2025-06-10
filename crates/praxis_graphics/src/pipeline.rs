@@ -81,11 +81,6 @@ pub struct PipelineConfig {
     /// - `CounterClockwise`: CCW is front (Vulkan default)
     /// - `Clockwise`: CW is front
     pub front_face: FrontFace,
-
-    /// Enable depth testing and writing.
-    ///
-    /// Currently not implemented as we're doing 2D rendering.
-    pub depth_test: bool,
 }
 
 impl Default for PipelineConfig {
@@ -94,7 +89,6 @@ impl Default for PipelineConfig {
             primitive_topology: PrimitiveTopology::TriangleList,
             cull_mode: CullMode::None, // Disable culling for now (good for debugging)
             front_face: FrontFace::CounterClockwise,
-            depth_test: false,
         }
     }
 }

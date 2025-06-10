@@ -92,91 +92,6 @@ impl VertexData {
     pub fn new(position: [f32; 2], color: [f32; 3]) -> Self {
         Self { position, color }
     }
-
-    /// Creates a vertex with a position and white color.
-    ///
-    /// Convenience method for when you don't need colored vertices.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// let vertex = VertexData::with_position([0.5, 0.5]);
-    /// assert_eq!(vertex.color, [1.0, 1.0, 1.0]);
-    /// ```
-    pub fn with_position(position: [f32; 2]) -> Self {
-        Self {
-            position,
-            color: [1.0, 1.0, 1.0],
-        }
-    }
-
-    /// Creates a vertex at the origin with the specified color.
-    ///
-    /// Convenience method for when position will be set later or
-    /// transformed by a matrix.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// let vertex = VertexData::with_color([1.0, 0.0, 0.0]); // Red vertex at origin
-    /// assert_eq!(vertex.position, [0.0, 0.0]);
-    /// ```
-    pub fn with_color(color: [f32; 3]) -> Self {
-        Self {
-            position: [0.0, 0.0],
-            color,
-        }
-    }
-}
-
-/// Common vertex layouts for basic shapes.
-///
-/// These are provided as examples and for testing. Real applications
-/// would typically load vertex data from files or generate it procedurally.
-pub mod primitives {
-    use super::VertexData;
-
-    /// Creates vertices for a triangle with one vertex of each primary color.
-    ///
-    /// The triangle is centered at the origin with vertices at:
-    /// ```text
-    ///        (0, 0.5) Blue
-    ///           /\
-    ///          /  \
-    ///         /    \
-    ///        /      \
-    ///       /________\
-    /// (-0.5, -0.5)  (0.5, -0.5)
-    ///     Red          Green
-    /// ```
-    pub fn colored_triangle() -> [VertexData; 3] {
-        [
-            VertexData::new([-0.5, -0.5], [1.0, 0.0, 0.0]), // Bottom-left (red)
-            VertexData::new([0.5, -0.5], [0.0, 1.0, 0.0]),  // Bottom-right (green)
-            VertexData::new([0.0, 0.5], [0.0, 0.0, 1.0]),   // Top (blue)
-        ]
-    }
-
-    /// Creates vertices for a unit square centered at the origin.
-    ///
-    /// The square extends from -0.5 to 0.5 in both dimensions:
-    /// ```text
-    /// (-0.5, 0.5) ┌─────┐ (0.5, 0.5)
-    ///             │     │
-    ///             │  ·  │ (0, 0)
-    ///             │     │
-    /// (-0.5,-0.5) └─────┘ (0.5,-0.5)
-    /// ```
-    ///
-    /// All vertices are white by default.
-    pub fn unit_square() -> [VertexData; 4] {
-        [
-            VertexData::with_position([-0.5, -0.5]), // Bottom-left
-            VertexData::with_position([0.5, -0.5]),  // Bottom-right
-            VertexData::with_position([0.5, 0.5]),   // Top-right
-            VertexData::with_position([-0.5, 0.5]),  // Top-left
-        ]
-    }
 }
 
 #[cfg(test)]
@@ -188,20 +103,6 @@ mod tests {
         let vertex = VertexData::new([0.5, -0.5], [1.0, 0.0, 0.5]);
         assert_eq!(vertex.position, [0.5, -0.5]);
         assert_eq!(vertex.color, [1.0, 0.0, 0.5]);
-    }
-
-    #[test]
-    fn test_vertex_with_position() {
-        let vertex = VertexData::with_position([0.25, 0.75]);
-        assert_eq!(vertex.position, [0.25, 0.75]);
-        assert_eq!(vertex.color, [1.0, 1.0, 1.0]); // Should be white
-    }
-
-    #[test]
-    fn test_vertex_with_color() {
-        let vertex = VertexData::with_color([0.5, 0.5, 0.5]);
-        assert_eq!(vertex.position, [0.0, 0.0]); // Should be at origin
-        assert_eq!(vertex.color, [0.5, 0.5, 0.5]);
     }
 
     #[test]
