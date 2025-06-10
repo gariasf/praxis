@@ -82,6 +82,11 @@ impl State {
             .configure_surface(new_size.width, new_size.height);
     }
 
+    /// Checks if a size has valid (non-zero) dimensions.
+    fn has_valid_size(size: &winit::dpi::PhysicalSize<u32>) -> bool {
+        size.width > 0 && size.height > 0
+    }
+
     /// Determines if a resize operation should actually occur.
     ///
     /// Checks if the new size has non-zero dimensions and is different from the current size.
@@ -89,9 +94,15 @@ impl State {
     /// # Arguments
     /// * `new_size` - The potential new physical size.
     fn should_resize(&self, new_size: winit::dpi::PhysicalSize<u32>) -> bool {
-        new_size.width > 0
-            && new_size.height > 0
+        Self::has_valid_size(&new_size)
             && (new_size.width != self.size.width || new_size.height != self.size.height)
+    }
+
+    /// Determines if rendering should occur.
+    ///
+    /// Returns false when the window is minimized or has zero size.
+    fn should_render(&self) -> bool {
+        Self::has_valid_size(&self.size)
     }
 }
 
@@ -183,20 +194,25 @@ impl ApplicationHandler for App {
                 }
 
                 // Only render if we're not in the middle of processing a resize
-                trace!(
-                    "Starting frame render (delta: {:.2}ms)",
-                    delta.as_secs_f64() * 1000.0
-                );
-                match state.render_context.render() {
-                    Ok(()) => {
-                        trace!(
-                            "Frame rendered (current FPS: {:.1})",
-                            state.frame_timer.fps()
-                        );
+                // and the window has a valid size (not minimized)
+                if state.should_render() {
+                    trace!(
+                        "Starting frame render (delta: {:.2}ms)",
+                        delta.as_secs_f64() * 1000.0
+                    );
+                    match state.render_context.render() {
+                        Ok(()) => {
+                            trace!(
+                                "Frame rendered (current FPS: {:.1})",
+                                state.frame_timer.fps()
+                            );
+                        }
+                        Err(e) => {
+                            error!("Render failed: {}", e);
+                        }
                     }
-                    Err(e) => {
-                        error!("Render failed: {}", e);
-                    }
+                } else {
+                    trace!("Skipping render - window minimized or zero size");
                 }
 
                 if !self.initialization_complete {

@@ -409,11 +409,31 @@ impl RenderContext {
                 self.present_queue.clone(),
                 SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index),
             )
-            .then_signal_fence_and_flush()
-            .map_err(|e| {
+            .then_signal_fence_and_flush();
+
+        let future = match future {
+            Ok(future) => future,
+            Err(vulkano::Validated::Error(e)) => {
+                // Handle swapchain-related errors gracefully (e.g., window minimized)
+                use vulkano::VulkanError;
+                match e {
+                    VulkanError::OutOfDate => {
+                        debug!("Swapchain out of date, will recreate on next frame");
+                        self.recreate_swapchain = true;
+                        self.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+                        return Ok(());
+                    }
+                    _ => {
+                        error!("Failed to present frame: {}", e);
+                        return Err(eyre::eyre!("Failed to flush future: {}", e));
+                    }
+                }
+            }
+            Err(e) => {
                 error!("Failed to present frame: {}", e);
-                eyre::eyre!("Failed to flush future: {}", e)
-            })?;
+                return Err(eyre::eyre!("Failed to flush future: {}", e));
+            }
+        };
 
         self.previous_frame_end = Some(future.boxed());
 
