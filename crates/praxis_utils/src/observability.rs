@@ -39,7 +39,7 @@ pub fn init_tracing() -> Result<()> {
         .pretty();
 
     let filter_layer = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new("trace"))?
+        .or_else(|_| EnvFilter::try_new("debug"))?
         .add_directive("winit=info".parse().unwrap())
         .add_directive("vulkano=info".parse().unwrap());
 

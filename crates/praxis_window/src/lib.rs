@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use praxis_graphics::RenderContext;
+use praxis_utils::timing::FrameTimer;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
@@ -23,6 +24,7 @@ struct State {
     render_context: RenderContext,
     window: Arc<Window>,
     pending_resize: Option<(winit::dpi::PhysicalSize<u32>, Instant)>,
+    frame_timer: FrameTimer,
 }
 
 /// The main application structure that handles the event loop and owns the state.
@@ -54,6 +56,7 @@ impl State {
             render_context,
             window,
             pending_resize: None,
+            frame_timer: FrameTimer::new_with_global(),
         };
 
         // Don't configure surface immediately - let the debouncing handle it
@@ -152,6 +155,8 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
+                let delta = state.frame_timer.tick();
+
                 if let Some((pending_size, resize_time)) = state.pending_resize {
                     const DEBOUNCE_DURATION: Duration = Duration::from_millis(16); // ~1 frame at 60fps
 
@@ -178,11 +183,16 @@ impl ApplicationHandler for App {
                 }
 
                 // Only render if we're not in the middle of processing a resize
-                trace!("Starting frame render");
-                let render_start = std::time::Instant::now();
+                trace!(
+                    "Starting frame render (delta: {:.2}ms)",
+                    delta.as_secs_f64() * 1000.0
+                );
                 match state.render_context.render() {
                     Ok(()) => {
-                        trace!("Frame rendered in {:?}", render_start.elapsed());
+                        trace!(
+                            "Frame rendered (current FPS: {:.1})",
+                            state.frame_timer.fps()
+                        );
                     }
                     Err(e) => {
                         error!("Render failed: {}", e);

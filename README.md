@@ -17,7 +17,7 @@
 
 ## Architecture
 
-See [Architecture Docs](docs/ARCHITECTURE.md) for the detailed Rust-based architecture.
+See [Architecture Docs](docs/architecture.md) for the detailed Rust-based architecture.
 
 ### Learning Resources Collection (Rust Focus)
 

@@ -34,7 +34,7 @@ mod shaders;
 mod vertex;
 
 use crate::{device::VulkanDevice, pipeline::create_simple_pipeline, vertex::VertexData};
-use praxis_utils::{Result, debug, error, eyre, info, trace, warn};
+use praxis_utils::{Result, debug, error, eyre, info, timing::FrameTimer, trace, warn};
 
 use std::sync::Arc;
 use vulkano::{
@@ -113,9 +113,7 @@ pub struct RenderContext {
     previous_frame_end: Option<Box<dyn GpuFuture>>,
 
     // Performance tracking
-    frame_count: u64,
-    fps_timer: std::time::Instant,
-    last_fps_report: std::time::Instant,
+    frame_timer: FrameTimer,
 }
 
 impl RenderContext {
@@ -240,7 +238,6 @@ impl RenderContext {
             init_start.elapsed()
         );
 
-        let now = std::time::Instant::now();
         Ok(Self {
             // Public fields
             instance,
@@ -263,9 +260,7 @@ impl RenderContext {
             previous_frame_end,
 
             // Performance tracking
-            frame_count: 0,
-            fps_timer: now,
-            last_fps_report: now,
+            frame_timer: FrameTimer::new(),
         })
     }
 
@@ -309,6 +304,8 @@ impl RenderContext {
     /// - Command buffer recording fails
     /// - GPU submission fails
     pub fn render(&mut self) -> Result<()> {
+        self.frame_timer.tick();
+
         let mut previous_frame_end = self
             .previous_frame_end
             .take()
@@ -324,9 +321,6 @@ impl RenderContext {
             self.recreate_swapchain = false;
             // Create new frame end after recreating swapchain
             previous_frame_end = sync::now(self.device.clone()).boxed();
-            // Reset frame timer after swapchain recreation
-            self.frame_count = 0;
-            self.fps_timer = std::time::Instant::now();
             info!(
                 "Swapchain recreation completed in {:?}",
                 start_time.elapsed()
@@ -423,23 +417,7 @@ impl RenderContext {
 
         self.previous_frame_end = Some(future.boxed());
 
-        // Update frame counter and check if we should report FPS
-        self.frame_count += 1;
-        let now = std::time::Instant::now();
-        let time_since_report = now.duration_since(self.last_fps_report);
-
-        // Report FPS every 2 seconds
-        if time_since_report.as_secs() >= 2 {
-            let elapsed = now.duration_since(self.fps_timer).as_secs_f64();
-            let fps = self.frame_count as f64 / elapsed;
-            info!(
-                "Performance: {:.1} FPS (frames: {}, time: {:.1}s)",
-                fps, self.frame_count, elapsed
-            );
-            self.last_fps_report = now;
-        }
-
-        trace!("Frame {} rendering complete", self.frame_count);
+        trace!("Frame rendering complete");
 
         Ok(())
     }

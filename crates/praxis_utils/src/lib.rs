@@ -5,6 +5,7 @@
 //!
 
 mod observability;
+pub mod timing;
 
 // Re-export common utility items for convenience
 pub use color_eyre::{
