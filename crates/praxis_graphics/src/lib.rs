@@ -34,7 +34,7 @@ mod shaders;
 mod vertex;
 
 use crate::{device::VulkanDevice, pipeline::create_simple_pipeline, vertex::VertexData};
-use praxis_utils::{Result, eyre, info};
+use praxis_utils::{Result, debug, error, eyre, info, trace, warn};
 
 use std::sync::Arc;
 use vulkano::{
@@ -111,6 +111,11 @@ pub struct RenderContext {
     viewport: Viewport,
     recreate_swapchain: bool,
     previous_frame_end: Option<Box<dyn GpuFuture>>,
+
+    // Performance tracking
+    frame_count: u64,
+    fps_timer: std::time::Instant,
+    last_fps_report: std::time::Instant,
 }
 
 impl RenderContext {
@@ -143,8 +148,12 @@ impl RenderContext {
     /// ```
     pub async fn new(window: Arc<Window>) -> Result<Self> {
         info!("Initializing graphics context...");
+        let init_start = std::time::Instant::now();
 
+        debug!("Creating Vulkan device and surface");
+        let device_start = std::time::Instant::now();
         let (vulkan_device, surface) = VulkanDevice::new(&window)?;
+        debug!("Vulkan device created in {:?}", device_start.elapsed());
 
         let instance = vulkan_device.instance.clone();
         let device = vulkan_device.device.clone();
@@ -152,30 +161,40 @@ impl RenderContext {
         let graphics_queue = vulkan_device.graphics_queue.clone();
         let present_queue = vulkan_device.present_queue.clone();
 
+        debug!("Creating swapchain");
+        let swapchain_start = std::time::Instant::now();
         let (swapchain, swapchain_images) =
             Self::create_swapchain(&device, &physical_device, &surface, &window)?;
 
         info!(
-            "Created swapchain with {} images at {}x{}",
+            "Created swapchain with {} images at {}x{} in {:?}",
             swapchain_images.len(),
             swapchain.image_extent()[0],
-            swapchain.image_extent()[1]
+            swapchain.image_extent()[1],
+            swapchain_start.elapsed()
         );
 
+        trace!("Creating {} swapchain image views", swapchain_images.len());
         let swapchain_image_views = swapchain_images
             .iter()
             .map(|image| ImageView::new_default(image.clone()))
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| eyre::eyre!("Failed to create image views: {}", e))?;
+        trace!("Created swapchain image views");
 
+        debug!("Creating render pass");
         let render_pass = Self::create_render_pass(&device, swapchain.image_format())?;
 
+        debug!("Creating {} framebuffers", swapchain_image_views.len());
         let framebuffers = Self::create_framebuffers(&swapchain_image_views, &render_pass)?;
 
+        trace!("Creating command buffer allocator");
         let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
             device.clone(),
             Default::default(),
         ));
+
+        trace!("Creating memory allocator");
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
 
         let graphics_pipeline =
@@ -184,6 +203,7 @@ impl RenderContext {
         // Create vertex buffer with a colored triangle
         // This uses the primitive helper for a standard test triangle
         let vertices = primitives::colored_triangle();
+        trace!("Creating vertex buffer with {} vertices", vertices.len());
 
         let vertex_buffer = Buffer::from_iter(
             memory_allocator.clone(),
@@ -192,7 +212,6 @@ impl RenderContext {
                 ..Default::default()
             },
             AllocationCreateInfo {
-                // Prefer device (GPU-local) memory and allow CPU to write to it sequentially
                 memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
@@ -200,6 +219,7 @@ impl RenderContext {
             vertices,
         )
         .map_err(|e| eyre::eyre!("Failed to create vertex buffer: {}", e))?;
+        debug!("Created vertex buffer");
 
         // Create viewport to normalize coordinates from vertex shader output to
         // framebuffer coordinates
@@ -215,8 +235,12 @@ impl RenderContext {
         // Initialize frame synchronization
         let previous_frame_end = Some(sync::now(device.clone()).boxed());
 
-        info!("Graphics context initialization complete");
+        info!(
+            "Graphics context initialization complete in {:?}",
+            init_start.elapsed()
+        );
 
+        let now = std::time::Instant::now();
         Ok(Self {
             // Public fields
             instance,
@@ -224,7 +248,7 @@ impl RenderContext {
             graphics_queue,
             present_queue,
 
-            // Private fields
+            // Internal state
             surface,
             swapchain,
             swapchain_images,
@@ -237,6 +261,11 @@ impl RenderContext {
             viewport,
             recreate_swapchain: false,
             previous_frame_end,
+
+            // Performance tracking
+            frame_count: 0,
+            fps_timer: now,
+            last_fps_report: now,
         })
     }
 
@@ -250,7 +279,8 @@ impl RenderContext {
     ///
     /// * `_width` - New width (currently unused, size is queried from window)
     /// * `_height` - New height (currently unused, size is queried from window)
-    pub fn configure_surface(&mut self, _width: u32, _height: u32) {
+    pub fn configure_surface(&mut self, width: u32, height: u32) {
+        debug!("Surface configuration requested: {}x{}", width, height);
         self.recreate_swapchain = true;
     }
 
@@ -285,6 +315,8 @@ impl RenderContext {
             .unwrap_or_else(|| sync::now(self.device.clone()).boxed());
 
         if self.recreate_swapchain {
+            debug!("Recreating swapchain due to pending resize");
+            let start_time = std::time::Instant::now();
             previous_frame_end
                 .flush()
                 .expect("Failed to flush previous frame end");
@@ -292,18 +324,34 @@ impl RenderContext {
             self.recreate_swapchain = false;
             // Create new frame end after recreating swapchain
             previous_frame_end = sync::now(self.device.clone()).boxed();
+            // Reset frame timer after swapchain recreation
+            self.frame_count = 0;
+            self.fps_timer = std::time::Instant::now();
+            info!(
+                "Swapchain recreation completed in {:?}",
+                start_time.elapsed()
+            );
         }
 
         previous_frame_end.cleanup_finished();
 
+        trace!("Acquiring next swapchain image");
+        let acquire_start = std::time::Instant::now();
         let (image_index, suboptimal, acquire_future) =
             vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None)
                 .map_err(|e| eyre::eyre!("Failed to acquire next image: {}", e))?;
+        trace!(
+            "Image {} acquired in {:?}",
+            image_index,
+            acquire_start.elapsed()
+        );
 
         if suboptimal {
+            warn!("Swapchain is suboptimal, will recreate on next frame");
             self.recreate_swapchain = true;
         }
 
+        trace!("Building command buffer for frame");
         let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
             &self.command_buffer_allocator,
             self.graphics_queue.queue_family_index(),
@@ -355,10 +403,12 @@ impl RenderContext {
             .build()
             .map_err(|e| eyre::eyre!("Failed to build command buffer: {}", e))?;
 
+        trace!("Submitting command buffer to graphics queue");
+
         let execution = previous_frame_end
             .join(acquire_future)
             .then_execute(self.graphics_queue.clone(), command_buffer)
-            .map_err(|e| eyre::eyre!("Failed to execute command buffer: {}", e))?;
+            .map_err(|e| eyre::eyre!("Failed to submit command buffer: {}", e))?;
 
         let future = execution
             .then_swapchain_present(
@@ -366,9 +416,30 @@ impl RenderContext {
                 SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index),
             )
             .then_signal_fence_and_flush()
-            .map_err(|e| eyre::eyre!("Failed to present frame: {}", e))?;
+            .map_err(|e| {
+                error!("Failed to present frame: {}", e);
+                eyre::eyre!("Failed to flush future: {}", e)
+            })?;
 
         self.previous_frame_end = Some(future.boxed());
+
+        // Update frame counter and check if we should report FPS
+        self.frame_count += 1;
+        let now = std::time::Instant::now();
+        let time_since_report = now.duration_since(self.last_fps_report);
+
+        // Report FPS every 2 seconds
+        if time_since_report.as_secs() >= 2 {
+            let elapsed = now.duration_since(self.fps_timer).as_secs_f64();
+            let fps = self.frame_count as f64 / elapsed;
+            info!(
+                "Performance: {:.1} FPS (frames: {}, time: {:.1}s)",
+                fps, self.frame_count, elapsed
+            );
+            self.last_fps_report = now;
+        }
+
+        trace!("Frame {} rendering complete", self.frame_count);
 
         Ok(())
     }
@@ -402,6 +473,17 @@ impl RenderContext {
 
         let window_size = window.inner_size();
 
+        let image_count = surface_capabilities.min_image_count.max(2).min(
+            surface_capabilities
+                .max_image_count
+                .unwrap_or(u32::MAX)
+                .min(surface_capabilities.min_image_count + 1),
+        );
+
+        trace!(
+            "Creating swapchain: {}x{} with {} images, format: {:?}",
+            window_size.width, window_size.height, image_count, image_format
+        );
         let (swapchain, images) = Swapchain::new(
             device.clone(),
             surface.clone(),
@@ -510,6 +592,8 @@ impl RenderContext {
     /// - Swapchain recreation fails
     /// - Resource allocation fails
     fn recreate_swapchain_and_framebuffers(&mut self) -> Result<()> {
+        let recreate_start = std::time::Instant::now();
+
         let surface_object = self
             .surface
             .object()
@@ -544,9 +628,12 @@ impl RenderContext {
         self.framebuffers = new_framebuffers;
 
         info!(
-            "Recreated swapchain and framebuffers for size {}x{}",
-            window_size.width, window_size.height
+            "Recreated swapchain and framebuffers for size {}x{} in {:?}",
+            window_size.width,
+            window_size.height,
+            recreate_start.elapsed()
         );
+
         Ok(())
     }
 }

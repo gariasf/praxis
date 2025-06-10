@@ -15,7 +15,7 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use praxis_utils::{Result, debug, error, eyre, info};
+use praxis_utils::{Result, debug, error, eyre, info, trace, warn};
 
 /// Represents the application's state, including graphics context and window size.
 struct State {
@@ -41,9 +41,13 @@ impl State {
     /// # Arguments
     /// * `window` - An `Arc<Window>` for which to create the state.
     async fn new(window: Arc<Window>) -> Result<Self> {
+        debug!("Creating application state");
+        let state_start = std::time::Instant::now();
+
         let render_context = RenderContext::new(window.clone()).await?;
 
         let size = window.inner_size();
+        trace!("Window inner size: {}x{}", size.width, size.height);
 
         let state = State {
             size,
@@ -55,6 +59,7 @@ impl State {
         // Don't configure surface immediately - let the debouncing handle it
         // The first RedrawRequested will trigger the debounced resize processing
 
+        debug!("Application state created in {:?}", state_start.elapsed());
         Ok(state)
     }
 
@@ -65,7 +70,10 @@ impl State {
     /// # Arguments
     /// * `new_size` - The new physical size of the window.
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        info!("Reconfiguring surface due to resize: {:?}", new_size);
+        debug!(
+            "Reconfiguring surface due to resize: {}x{}",
+            new_size.width, new_size.height
+        );
         self.size = new_size;
         self.render_context
             .configure_surface(new_size.width, new_size.height);
@@ -87,7 +95,9 @@ impl State {
 /// Implementation of the `winit` Application Handler trait for the main application loop.
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        trace!("Application resumed");
         if self.state.is_some() {
+            trace!("State already initialized, skipping");
             return;
         }
 
@@ -98,7 +108,7 @@ impl ApplicationHandler for App {
                 .with_resizable(true),
         ) {
             Ok(window) => {
-                info!("Created window");
+                info!("Created window: 1920x1080");
                 Arc::new(window)
             }
             Err(e) => {
@@ -110,6 +120,7 @@ impl ApplicationHandler for App {
 
         let state = match pollster::block_on(State::new(window.clone())) {
             Ok(state) => {
+                trace!("Requesting initial redraw");
                 state.window.request_redraw();
                 state
             }
@@ -127,7 +138,10 @@ impl ApplicationHandler for App {
         let state = match self.state.as_mut() {
             Some(state) => state,
             None => {
-                debug!("Window event received before state initialization");
+                warn!(
+                    "Window event {:?} received before state initialization",
+                    event
+                );
                 return;
             }
         };
@@ -143,25 +157,33 @@ impl ApplicationHandler for App {
 
                     if resize_time.elapsed() >= DEBOUNCE_DURATION {
                         if state.should_resize(pending_size) {
-                            info!("Processing debounced resize to: {:?}", pending_size);
+                            debug!(
+                                "Processing debounced resize to: {}x{}",
+                                pending_size.width, pending_size.height
+                            );
                             state.resize(pending_size);
                         } else {
-                            debug!(
-                                "Ignoring resize to zero dimensions or same size: {:?}",
-                                pending_size
+                            trace!(
+                                "Ignoring resize to zero dimensions or same size: {}x{}",
+                                pending_size.width, pending_size.height
                             );
                         }
                         state.pending_resize = None;
                     } else {
                         // If we're still debouncing, request another redraw and skip rendering
+                        trace!("Still debouncing resize, requesting another redraw");
                         state.window.request_redraw();
                         return;
                     }
                 }
 
                 // Only render if we're not in the middle of processing a resize
+                trace!("Starting frame render");
+                let render_start = std::time::Instant::now();
                 match state.render_context.render() {
-                    Ok(()) => {}
+                    Ok(()) => {
+                        trace!("Frame rendered in {:?}", render_start.elapsed());
+                    }
                     Err(e) => {
                         error!("Render failed: {}", e);
                     }
@@ -169,10 +191,11 @@ impl ApplicationHandler for App {
 
                 if !self.initialization_complete {
                     self.initialization_complete = true;
+                    info!("Window initialization complete, rendering started");
                 }
             }
             WindowEvent::Resized(size) => {
-                info!("Received resize event: {:?}", size);
+                debug!("Received resize event: {}x{}", size.width, size.height);
                 state.pending_resize = Some((size, Instant::now()));
                 state.window.request_redraw();
             }
@@ -185,7 +208,7 @@ impl ApplicationHandler for App {
                     },
                 ..
             } => {
-                debug!("Escape key pressed.");
+                info!("Escape key pressed, exiting application");
                 event_loop.exit();
             }
             _ => (),
@@ -200,17 +223,26 @@ impl ApplicationHandler for App {
 /// # Returns
 /// Returns `Ok(())` if the application exits cleanly, or an error if loop creation fails.
 pub fn run() -> Result<()> {
+    info!("Starting Praxis application");
+    let app_start = std::time::Instant::now();
+
     let mut app = App::default();
 
-    info!("Creating event loop...");
+    debug!("Creating event loop...");
     let event_loop =
         EventLoop::new().map_err(|e| eyre::eyre!("Failed to create event loop: {}", e))?;
 
     event_loop.set_control_flow(ControlFlow::Poll);
+    trace!("Event loop control flow set to Poll mode");
 
+    info!(
+        "Starting event loop (initialized in {:?})",
+        app_start.elapsed()
+    );
     event_loop
         .run_app(&mut app)
         .map_err(|e| eyre::eyre!("Event loop error: {}", e))?;
 
+    info!("Application shutdown complete");
     Ok(())
 }

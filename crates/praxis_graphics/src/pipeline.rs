@@ -36,7 +36,7 @@
 
 use crate::shaders;
 use crate::vertex::VertexData;
-use praxis_utils::{Result, debug, eyre};
+use praxis_utils::{Result, debug, error, eyre, info, trace};
 use std::sync::Arc;
 use vulkano::{
     device::Device,
@@ -127,7 +127,11 @@ pub fn create_graphics_pipeline(
     extent: [u32; 2],
     config: PipelineConfig,
 ) -> Result<Arc<GraphicsPipeline>> {
-    debug!("Creating graphics pipeline...");
+    info!(
+        "Creating graphics pipeline with config: topology={:?}, cull_mode={:?}, front_face={:?}",
+        config.primitive_topology, config.cull_mode, config.front_face
+    );
+    let pipeline_start = std::time::Instant::now();
 
     let (vs_entry, fs_entry) = load_shaders(device)?;
 
@@ -142,17 +146,22 @@ pub fn create_graphics_pipeline(
         .definition(&vs_entry.info().input_interface)
         .map_err(|e| eyre::eyre!("Failed to create vertex input state: {}", e))?;
 
-    debug!("Configured vertex input for VertexData format");
+    trace!("Configured vertex input for VertexData format");
 
     // This defines the interface between shaders and the application
+    debug!("Creating pipeline layout from shader stages");
     let layout = create_pipeline_layout(device, &stages)?;
 
     // Get the first subpass of our render pass
     // A subpass is a rendering phase within a render pass
-    let subpass = Subpass::from(render_pass.clone(), 0)
-        .ok_or_else(|| eyre::eyre!("Failed to get subpass from render pass"))?;
+    trace!("Getting subpass from render pass");
+    let subpass = Subpass::from(render_pass.clone(), 0).ok_or_else(|| {
+        error!("Failed to get subpass from render pass");
+        eyre::eyre!("Failed to get subpass from render pass")
+    })?;
 
     // This defines the area of the framebuffer that we render to
+    trace!("Creating viewport with extent: {}x{}", extent[0], extent[1]);
     let viewport = Viewport {
         offset: [0.0, 0.0],
         extent: [extent[0] as f32, extent[1] as f32],
@@ -202,14 +211,21 @@ pub fn create_graphics_pipeline(
         ..GraphicsPipelineCreateInfo::layout(layout)
     };
 
+    debug!("Creating graphics pipeline with assembled configuration");
     let pipeline = GraphicsPipeline::new(
         device.clone(),
         None, // No pipeline cache
         create_info,
     )
-    .map_err(|e| eyre::eyre!("Failed to create graphics pipeline: {}", e))?;
+    .map_err(|e| {
+        error!("Failed to create graphics pipeline: {}", e);
+        eyre::eyre!("Failed to create graphics pipeline: {}", e)
+    })?;
 
-    debug!("Successfully created graphics pipeline");
+    info!(
+        "Successfully created graphics pipeline in {:?}",
+        pipeline_start.elapsed()
+    );
 
     Ok(pipeline)
 }
@@ -227,24 +243,33 @@ fn load_shaders(
     device: &Arc<Device>,
 ) -> Result<(vulkano::shader::EntryPoint, vulkano::shader::EntryPoint)> {
     debug!("Loading shaders...");
+    let shader_start = std::time::Instant::now();
 
-    let vs_module = shaders::vs::load(device.clone())
-        .map_err(|e| eyre::eyre!("Failed to load vertex shader: {}", e))?;
+    trace!("Loading vertex shader module");
+    let vs_module = shaders::vs::load(device.clone()).map_err(|e| {
+        error!("Failed to load vertex shader: {}", e);
+        eyre::eyre!("Failed to load vertex shader: {}", e)
+    })?;
 
-    let vs_entry = vs_module
-        .entry_point("main")
-        .ok_or_else(|| eyre::eyre!("Failed to find 'main' entry point in vertex shader"))?;
+    let vs_entry = vs_module.entry_point("main").ok_or_else(|| {
+        error!("Failed to find 'main' entry point in vertex shader");
+        eyre::eyre!("Failed to find 'main' entry point in vertex shader")
+    })?;
 
-    debug!("Loaded vertex shader");
+    trace!("Loaded vertex shader module");
 
-    let fs_module = shaders::fs::load(device.clone())
-        .map_err(|e| eyre::eyre!("Failed to load fragment shader: {}", e))?;
+    trace!("Loading fragment shader module");
+    let fs_module = shaders::fs::load(device.clone()).map_err(|e| {
+        error!("Failed to load fragment shader: {}", e);
+        eyre::eyre!("Failed to load fragment shader: {}", e)
+    })?;
 
-    let fs_entry = fs_module
-        .entry_point("main")
-        .ok_or_else(|| eyre::eyre!("Failed to find 'main' entry point in fragment shader"))?;
+    let fs_entry = fs_module.entry_point("main").ok_or_else(|| {
+        error!("Failed to find 'main' entry point in fragment shader");
+        eyre::eyre!("Failed to find 'main' entry point in fragment shader")
+    })?;
 
-    debug!("Loaded fragment shader");
+    debug!("Loaded shaders in {:?}", shader_start.elapsed());
 
     Ok((vs_entry, fs_entry))
 }
@@ -263,18 +288,26 @@ fn create_pipeline_layout(
     device: &Arc<Device>,
     stages: &[PipelineShaderStageCreateInfo],
 ) -> Result<Arc<PipelineLayout>> {
-    debug!("Creating pipeline layout...");
+    trace!(
+        "Creating pipeline layout from {} shader stages",
+        stages.len()
+    );
 
     // Automatically derive the layout from shader stages
     // This inspects the shaders to determine what resources they expect
     let layout_create_info = PipelineDescriptorSetLayoutCreateInfo::from_stages(stages)
         .into_pipeline_layout_create_info(device.clone())
-        .map_err(|e| eyre::eyre!("Failed to create pipeline layout info: {}", e))?;
+        .map_err(|e| {
+            error!("Failed to create pipeline layout info: {}", e);
+            eyre::eyre!("Failed to create pipeline layout info: {}", e)
+        })?;
 
-    let layout = PipelineLayout::new(device.clone(), layout_create_info)
-        .map_err(|e| eyre::eyre!("Failed to create pipeline layout: {}", e))?;
+    let layout = PipelineLayout::new(device.clone(), layout_create_info).map_err(|e| {
+        error!("Failed to create pipeline layout: {}", e);
+        eyre::eyre!("Failed to create pipeline layout: {}", e)
+    })?;
 
-    debug!("Created pipeline layout");
+    trace!("Created pipeline layout successfully");
 
     Ok(layout)
 }
@@ -287,5 +320,6 @@ pub fn create_simple_pipeline(
     render_pass: &Arc<RenderPass>,
     extent: [u32; 2],
 ) -> Result<Arc<GraphicsPipeline>> {
+    debug!("Creating simple pipeline with default configuration");
     create_graphics_pipeline(device, render_pass, extent, PipelineConfig::default())
 }

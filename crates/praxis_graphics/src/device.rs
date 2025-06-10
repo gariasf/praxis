@@ -4,7 +4,7 @@
 //! and queue creation. It provides a simplified interface for setting up the
 //! Vulkan backend while handling the complexity of device enumeration and selection.
 
-use praxis_utils::{Result, debug, eyre, info};
+use praxis_utils::{Result, debug, error, eyre, info, trace};
 use std::sync::Arc;
 use vulkano::{
     VulkanLibrary,
@@ -80,12 +80,14 @@ impl VulkanDevice {
     /// - Device creation fails
     pub fn new(window: &Arc<Window>) -> Result<(Self, Arc<Surface>)> {
         info!("Initializing Vulkan device...");
+        let device_init_start = std::time::Instant::now();
 
+        trace!("Loading Vulkan library");
         let library = VulkanLibrary::new()
             .map_err(|e| eyre::eyre!("Failed to load Vulkan library: {}", e))?;
 
         let required_extensions = Surface::required_extensions(window);
-        debug!("Required instance extensions: {:?}", required_extensions);
+        trace!("Required instance extensions: {:?}", required_extensions);
 
         let instance = Instance::new(
             library,
@@ -96,20 +98,27 @@ impl VulkanDevice {
         )
         .map_err(|e| eyre::eyre!("Failed to create Vulkan instance: {}", e))?;
 
-        info!("Created Vulkan instance");
+        debug!("Created Vulkan instance");
 
+        trace!("Creating window surface");
         let surface = Surface::from_window(instance.clone(), window.clone())
             .map_err(|e| eyre::eyre!("Failed to create window surface: {}", e))?;
 
-        info!("Created window surface");
+        debug!("Created window surface");
 
         let device_extensions = DeviceExtensions {
             khr_swapchain: true,
             ..DeviceExtensions::empty()
         };
 
+        debug!("Selecting physical device");
+        let selection_start = std::time::Instant::now();
         let (physical_device, graphics_queue_family, present_queue_family) =
             Self::select_physical_device(&instance, &surface, &device_extensions)?;
+        debug!(
+            "Physical device selected in {:?}",
+            selection_start.elapsed()
+        );
 
         let (device, graphics_queue, present_queue) = Self::create_logical_device(
             physical_device.clone(),
@@ -117,6 +126,11 @@ impl VulkanDevice {
             present_queue_family,
             device_extensions,
         )?;
+
+        info!(
+            "Vulkan device initialization complete in {:?}",
+            device_init_start.elapsed()
+        );
 
         Ok((
             Self {
@@ -149,19 +163,20 @@ impl VulkanDevice {
         surface: &Arc<Surface>,
         device_extensions: &DeviceExtensions,
     ) -> Result<(Arc<PhysicalDevice>, u32, u32)> {
-        info!("Enumerating physical devices...");
+        debug!("Enumerating physical devices...");
 
         let devices = instance
             .enumerate_physical_devices()
             .map_err(|e| eyre::eyre!("Failed to enumerate physical devices: {}", e))?;
 
-        debug!("Found {} physical device(s)", devices.len());
+        info!("Found {} physical device(s)", devices.len());
 
+        trace!("Evaluating devices for suitability");
         let suitable_device = devices
             .filter(|device| {
                 let supported = device.supported_extensions().contains(device_extensions);
                 if !supported {
-                    debug!(
+                    trace!(
                         "Device '{}' doesn't support required extensions",
                         device.properties().device_name
                     );
@@ -170,10 +185,12 @@ impl VulkanDevice {
             })
             .filter(|device| {
                 let device_type = device.properties().device_type;
-                debug!(
-                    "Device '{}' type: {:?}",
+                trace!(
+                    "Device '{}' type: {:?}, vendor: 0x{:04x}, device: 0x{:04x}",
                     device.properties().device_name,
-                    device_type
+                    device_type,
+                    device.properties().vendor_id,
+                    device.properties().device_id
                 );
                 device_type == PhysicalDeviceType::DiscreteGpu
             })
@@ -181,7 +198,10 @@ impl VulkanDevice {
                 Self::find_queue_families(&device, surface).map(|(gfx, pres)| (device, gfx, pres))
             })
             .next()
-            .ok_or_else(|| eyre::eyre!("No suitable GPU found"))?;
+            .ok_or_else(|| {
+                error!("No suitable GPU found. Ensure a compatible Vulkan device is available.");
+                eyre::eyre!("No suitable GPU found")
+            })?;
 
         let (device, graphics_family, present_family) = suitable_device;
 
@@ -234,13 +254,18 @@ impl VulkanDevice {
 
         match (graphics_family, present_family) {
             (Some(gfx), Some(pres)) => {
-                debug!(
-                    "Found queue families - Graphics: {}, Present: {}",
-                    gfx, pres
+                trace!(
+                    "Found queue families - Graphics: {}, Present: {}{}",
+                    gfx,
+                    pres,
+                    if gfx == pres { " (same family)" } else { "" }
                 );
                 Some((gfx, pres))
             }
-            _ => None,
+            _ => {
+                trace!("Device doesn't support required queue families");
+                None
+            }
         }
     }
 
@@ -275,10 +300,16 @@ impl VulkanDevice {
         }
 
         debug!(
-            "Creating logical device with {} queue familie(s)",
-            queue_create_infos.len()
+            "Creating logical device with {} queue familie(s){}",
+            queue_create_infos.len(),
+            if queue_create_infos.len() == 1 {
+                " (unified graphics/present)"
+            } else {
+                ""
+            }
         );
 
+        let device_create_start = std::time::Instant::now();
         let (device, mut queues) = Device::new(
             physical_device,
             DeviceCreateInfo {
@@ -296,7 +327,10 @@ impl VulkanDevice {
             graphics_queue.clone()
         };
 
-        debug!("Created logical device and queues");
+        debug!(
+            "Created logical device and queues in {:?}",
+            device_create_start.elapsed()
+        );
 
         Ok((device, graphics_queue, present_queue))
     }

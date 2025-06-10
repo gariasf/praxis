@@ -12,7 +12,7 @@ fn test_tracing_initialization() {
     // Note: Tracing can only be initialized once globally, so we just test
     // that calling init doesn't panic and handles the case gracefully
     let result = std::panic::catch_unwind(|| {
-        init();
+        init().expect("Tracing initialization should not panic");
     });
     assert!(result.is_ok(), "Tracing initialization should not panic");
 }
