@@ -282,21 +282,20 @@ impl RenderContext {
     /// - Command buffer recording fails
     /// - GPU submission fails
     pub fn render(&mut self) -> Result<()> {
+        let mut previous_frame_end = self
+            .previous_frame_end
+            .take()
+            .unwrap_or_else(|| sync::now(self.device.clone()).boxed());
+
         if self.recreate_swapchain {
-            if let Some(previous_frame_end) = self.previous_frame_end.take() {
-                previous_frame_end
-                    .flush()
-                    .expect("Failed to flush previous frame end");
-            }
+            previous_frame_end
+                .flush()
+                .expect("Failed to flush previous frame end");
             self.recreate_swapchain_and_framebuffers()?;
             self.recreate_swapchain = false;
-            self.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+            // Create new frame end after recreating swapchain
+            previous_frame_end = sync::now(self.device.clone()).boxed();
         }
-
-        let mut previous_frame_end = match self.previous_frame_end.take() {
-            Some(future) => future,
-            None => sync::now(self.device.clone()).boxed(),
-        };
 
         previous_frame_end.cleanup_finished();
 
