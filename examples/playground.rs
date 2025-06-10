@@ -1,5 +1,5 @@
 use praxis_core::run;
 
 fn main() {
-    let _ = run();
+    run().expect("Failed to run the application");
 }

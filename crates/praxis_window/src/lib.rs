@@ -98,7 +98,7 @@ impl ApplicationHandler for App {
                 .with_resizable(true),
         ) {
             Ok(window) => {
-                info!("Window created successfully.");
+                info!("Created window");
                 Arc::new(window)
             }
             Err(e) => {
@@ -208,7 +208,6 @@ pub fn run() -> Result<()> {
 
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    info!("Running application...");
     event_loop
         .run_app(&mut app)
         .map_err(|e| eyre::eyre!("Event loop error: {}", e))?;

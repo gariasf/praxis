@@ -1,22 +1,56 @@
 //! Graphics system for the Praxis engine.
 //!
 //! This crate provides functionality for rendering and managing graphics using Vulkan via vulkano.
+//!
+//! # Architecture
+//!
+//! The graphics system is organized into several modules:
+//! - `device`: Vulkan instance and device management
+//! - `vertex`: Vertex data structures and primitives
+//! - `pipeline`: Graphics pipeline creation and configuration
+//! - `shaders`: GLSL shader compilation to SPIR-V
+//!
+//! # Rendering Flow
+//!
+//! ```text
+//! Application
+//!     │
+//!     ▼
+//! RenderContext::new()     ← Initialize Vulkan
+//!     │
+//!     ▼
+//! RenderContext::render()  ← Called each frame
+//!     │
+//!     ├─► Acquire swapchain image
+//!     ├─► Record command buffer
+//!     ├─► Submit to GPU
+//!     └─► Present to screen
+//! ```
 
-use praxis_utils::{Result, debug, eyre, info};
+mod device;
+mod pipeline;
+mod shaders;
+mod vertex;
+
+use crate::{
+    device::VulkanDevice,
+    pipeline::create_simple_pipeline,
+    vertex::{VertexData, primitives},
+};
+use praxis_utils::{Result, eyre, info};
 
 use std::sync::Arc;
 use vulkano::{
-    VulkanLibrary,
+    buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
         AutoCommandBufferBuilder, CommandBufferUsage, RenderPassBeginInfo, SubpassBeginInfo,
         SubpassEndInfo, allocator::StandardCommandBufferAllocator,
     },
-    device::{
-        Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags,
-        physical::{PhysicalDevice, PhysicalDeviceType},
-    },
+    device::{Device, Queue, physical::PhysicalDevice},
     image::{Image, ImageUsage, view::ImageView},
-    instance::{Instance, InstanceCreateInfo},
+    instance::Instance,
+    memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
+    pipeline::{GraphicsPipeline, graphics::viewport::Viewport},
     render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass},
     swapchain::{Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo},
     sync::{self, GpuFuture},
@@ -25,14 +59,49 @@ use winit::window::Window;
 
 /// Core graphics context containing the Vulkan state.
 ///
-/// This struct holds the main graphics backend components including the instance, device,
-/// queues, surface, swapchain, and other Vulkan objects needed for rendering.
+/// This struct manages the entire graphics rendering pipeline, from initialization
+/// to frame presentation. It encapsulates all Vulkan objects and provides a
+/// simplified interface for rendering.
+///
+/// # Responsibilities
+///
+/// - Vulkan device and queue management
+/// - Swapchain creation and recreation
+/// - Command buffer recording and submission
+/// - Frame synchronization
+/// - Resource lifetime management
+///
+/// # Frame Lifecycle
+///
+/// Each frame follows this sequence:
+/// 1. Acquire next swapchain image
+/// 2. Record rendering commands
+/// 3. Submit commands to GPU
+/// 4. Present the rendered image
+///
+/// # Example
+///
+/// ```rust,no_run
+/// let window = Arc::new(window);
+/// let mut ctx = RenderContext::new(window).await?;
+///
+/// // Main render loop
+/// loop {
+///     ctx.render()?;
+/// }
+/// ```
 pub struct RenderContext {
+    // Public fields for external access
+    /// The Vulkan instance - connection to the Vulkan API
     pub instance: Arc<Instance>,
+    /// The logical device - interface to the GPU
     pub device: Arc<Device>,
+    /// Queue for submitting graphics commands
     pub graphics_queue: Arc<Queue>,
+    /// Queue for presenting images (may be same as graphics_queue)
     pub present_queue: Arc<Queue>,
 
+    // Private implementation details
     surface: Arc<Surface>,
     swapchain: Arc<Swapchain>,
     swapchain_images: Vec<Arc<Image>>,
@@ -40,6 +109,9 @@ pub struct RenderContext {
     render_pass: Arc<RenderPass>,
     framebuffers: Vec<Arc<Framebuffer>>,
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+    graphics_pipeline: Arc<GraphicsPipeline>,
+    vertex_buffer: Subbuffer<[VertexData]>,
+    viewport: Viewport,
     recreate_swapchain: bool,
     previous_frame_end: Option<Box<dyn GpuFuture>>,
 }
@@ -47,134 +119,115 @@ pub struct RenderContext {
 impl RenderContext {
     /// Creates a new `RenderContext` for a given window.
     ///
-    /// Initializes the Vulkan instance, selects a suitable physical device,
-    /// creates a logical device with required queues, sets up the surface and swapchain,
-    /// and prepares the render pass and framebuffers.
+    /// This function performs the complete Vulkan initialization sequence:
+    ///
+    /// 1. **Device Setup**: Creates Vulkan instance, selects GPU, creates logical device
+    /// 2. **Swapchain Setup**: Creates swapchain for presenting images to the window
+    /// 3. **Pipeline Setup**: Compiles shaders and creates the graphics pipeline
+    /// 4. **Resource Setup**: Allocates vertex buffers and other resources
     ///
     /// # Arguments
     ///
-    /// * `window` - An `Arc<Window>` representing the window to render onto.
+    /// * `window` - The window to render into. Must remain valid for the lifetime of the context.
     ///
-    /// # Returns
+    /// # Errors
     ///
-    /// Returns a `Result<Self>` containing the initialized context or an error.
+    /// Returns an error if:
+    /// - Vulkan is not available on the system
+    /// - No suitable GPU is found
+    /// - Required extensions are not supported
+    /// - Resource allocation fails
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// let window = Arc::new(window);
+    /// let context = RenderContext::new(window).await?;
+    /// ```
     pub async fn new(window: Arc<Window>) -> Result<Self> {
-        info!("Initializing Vulkan graphics context...");
+        info!("Initializing graphics context...");
 
-        // Create Vulkan instance
-        let library = VulkanLibrary::new()
-            .map_err(|e| eyre::eyre!("Failed to load Vulkan library: {}", e))?;
+        let (vulkan_device, surface) = VulkanDevice::new(&window)?;
 
-        let required_extensions = Surface::required_extensions(&window);
+        let instance = vulkan_device.instance.clone();
+        let device = vulkan_device.device.clone();
+        let physical_device = vulkan_device.physical_device.clone();
+        let graphics_queue = vulkan_device.graphics_queue.clone();
+        let present_queue = vulkan_device.present_queue.clone();
 
-        let instance = Instance::new(
-            library,
-            InstanceCreateInfo {
-                enabled_extensions: required_extensions,
-                ..Default::default()
-            },
-        )
-        .map_err(|e| eyre::eyre!("Failed to create Vulkan instance: {}", e))?;
-
-        info!("Created Vulkan instance");
-
-        // Create surface
-        let surface = Surface::from_window(instance.clone(), window.clone())
-            .map_err(|e| eyre::eyre!("Failed to create window surface: {}", e))?;
-
-        info!("Created window surface");
-
-        // Select physical device
-        let device_extensions = DeviceExtensions {
-            khr_swapchain: true,
-            ..DeviceExtensions::empty()
-        };
-
-        let (physical_device, queue_family_graphics, queue_family_present) =
-            Self::select_physical_device(&instance, &surface, &device_extensions)?;
-
-        info!(
-            "Selected physical device: {} ({})",
-            physical_device.properties().device_name,
-            match physical_device.properties().device_type {
-                PhysicalDeviceType::DiscreteGpu => "Discrete GPU",
-                PhysicalDeviceType::IntegratedGpu => "Integrated GPU",
-                PhysicalDeviceType::VirtualGpu => "Virtual GPU",
-                PhysicalDeviceType::Cpu => "CPU",
-                _ => "Other",
-            }
-        );
-
-        // Create logical device and queues
-        let mut queue_create_infos = vec![QueueCreateInfo {
-            queue_family_index: queue_family_graphics,
-            ..Default::default()
-        }];
-
-        if queue_family_present != queue_family_graphics {
-            queue_create_infos.push(QueueCreateInfo {
-                queue_family_index: queue_family_present,
-                ..Default::default()
-            });
-        }
-
-        let (device, mut queues) = Device::new(
-            physical_device.clone(),
-            DeviceCreateInfo {
-                queue_create_infos,
-                enabled_extensions: device_extensions,
-                ..Default::default()
-            },
-        )
-        .map_err(|e| eyre::eyre!("Failed to create logical device: {}", e))?;
-
-        let graphics_queue = queues.next().unwrap();
-        let present_queue = if queue_family_present != queue_family_graphics {
-            queues.next().unwrap()
-        } else {
-            graphics_queue.clone()
-        };
-
-        debug!("Created logical device and queues");
-
-        // Create swapchain
         let (swapchain, swapchain_images) =
             Self::create_swapchain(&device, &physical_device, &surface, &window)?;
 
-        debug!("Created swapchain with {} images", swapchain_images.len());
+        info!(
+            "Created swapchain with {} images at {}x{}",
+            swapchain_images.len(),
+            swapchain.image_extent()[0],
+            swapchain.image_extent()[1]
+        );
 
-        // Create image views
         let swapchain_image_views = swapchain_images
             .iter()
             .map(|image| ImageView::new_default(image.clone()))
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| eyre::eyre!("Failed to create image views: {}", e))?;
 
-        // Create render pass
         let render_pass = Self::create_render_pass(&device, swapchain.image_format())?;
 
-        // Create framebuffers
         let framebuffers = Self::create_framebuffers(&swapchain_image_views, &render_pass)?;
 
-        // Create command buffer allocator
         let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
             device.clone(),
             Default::default(),
         ));
+        let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
 
-        // Initialize synchronization
+        let graphics_pipeline =
+            create_simple_pipeline(&device, &render_pass, swapchain.image_extent())?;
+
+        // Create vertex buffer with a colored triangle
+        // This uses the primitive helper for a standard test triangle
+        let vertices = primitives::colored_triangle();
+
+        let vertex_buffer = Buffer::from_iter(
+            memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::VERTEX_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                // Prefer device (GPU-local) memory and allow CPU to write to it sequentially
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            vertices,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create vertex buffer: {}", e))?;
+
+        // Create viewport to normalize coordinates from vertex shader output to
+        // framebuffer coordinates
+        let viewport = Viewport {
+            offset: [0.0, 0.0],
+            extent: [
+                swapchain.image_extent()[0] as f32,
+                swapchain.image_extent()[1] as f32,
+            ],
+            depth_range: 0.0..=1.0,
+        };
+
+        // Initialize frame synchronization
         let previous_frame_end = Some(sync::now(device.clone()).boxed());
 
-        debug!("Graphics context initialization complete");
+        info!("Graphics context initialization complete");
 
         Ok(Self {
-            // Public
+            // Public fields
             instance,
             device,
             graphics_queue,
             present_queue,
 
-            // Private
+            // Private fields
             surface,
             swapchain,
             swapchain_images,
@@ -182,28 +235,58 @@ impl RenderContext {
             render_pass,
             framebuffers,
             command_buffer_allocator,
+            graphics_pipeline,
+            vertex_buffer,
+            viewport,
             recreate_swapchain: false,
             previous_frame_end,
         })
     }
 
-    /// Configures the surface for the given dimensions.
+    /// Marks the swapchain for recreation on the next frame.
     ///
-    /// For vulkano, this marks that the swapchain needs recreation.
+    /// This should be called when the window is resized. The actual recreation
+    /// happens during the next `render()` call to avoid recreation during
+    /// rapid resize events.
+    ///
+    /// # Arguments
+    ///
+    /// * `_width` - New width (currently unused, size is queried from window)
+    /// * `_height` - New height (currently unused, size is queried from window)
     pub fn configure_surface(&mut self, _width: u32, _height: u32) {
         self.recreate_swapchain = true;
     }
 
-    /// Renders a single frame to the configured surface.
+    /// Renders a single frame to the window.
     ///
-    /// # Returns
+    /// This function performs a complete render pass:
     ///
-    /// Returns `Ok(())` on success, or an error if rendering fails.
+    /// 1. **Swapchain Management**: Recreates swapchain if needed (e.g., after resize)
+    /// 2. **Image Acquisition**: Gets the next available swapchain image
+    /// 3. **Command Recording**: Records GPU commands to draw the triangle
+    /// 4. **Submission**: Submits commands to the GPU for execution
+    /// 5. **Presentation**: Presents the rendered image to the window
+    ///
+    /// # Frame Synchronization
+    ///
+    /// The function uses Vulkan semaphores and fences to ensure:
+    /// - We don't render to an image that's being presented
+    /// - We don't present an image that's being rendered to
+    /// - CPU doesn't get too far ahead of GPU
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Swapchain recreation fails
+    /// - No swapchain image is available
+    /// - Command buffer recording fails
+    /// - GPU submission fails
     pub fn render(&mut self) -> Result<()> {
         if self.recreate_swapchain {
-            // Flush any pending operations before recreating
             if let Some(previous_frame_end) = self.previous_frame_end.take() {
-                let _ = previous_frame_end.flush();
+                previous_frame_end
+                    .flush()
+                    .expect("Failed to flush previous frame end");
             }
             self.recreate_swapchain_and_framebuffers()?;
             self.recreate_swapchain = false;
@@ -217,7 +300,6 @@ impl RenderContext {
 
         previous_frame_end.cleanup_finished();
 
-        // Acquire next image
         let (image_index, suboptimal, acquire_future) =
             vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None)
                 .map_err(|e| eyre::eyre!("Failed to acquire next image: {}", e))?;
@@ -226,7 +308,6 @@ impl RenderContext {
             self.recreate_swapchain = true;
         }
 
-        // Create command buffer
         let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
             &self.command_buffer_allocator,
             self.graphics_queue.queue_family_index(),
@@ -234,10 +315,10 @@ impl RenderContext {
         )
         .map_err(|e| eyre::eyre!("Failed to create command buffer: {}", e))?;
 
-        // Begin render pass
         command_buffer_builder
             .begin_render_pass(
                 RenderPassBeginInfo {
+                    // Clear color: dark blue background (R=0.1, G=0.2, B=0.3, A=1.0)
                     clear_values: vec![Some([0.1, 0.2, 0.3, 1.0].into())],
                     ..RenderPassBeginInfo::framebuffer(
                         self.framebuffers[image_index as usize].clone(),
@@ -250,79 +331,64 @@ impl RenderContext {
             )
             .map_err(|e| eyre::eyre!("Failed to begin render pass: {}", e))?;
 
-        // End render pass
+        command_buffer_builder
+            .bind_pipeline_graphics(self.graphics_pipeline.clone())
+            .map_err(|e| eyre::eyre!("Failed to bind graphics pipeline: {}", e))?
+            .bind_vertex_buffers(0, self.vertex_buffer.clone())
+            .map_err(|e| eyre::eyre!("Failed to bind vertex buffer: {}", e))?;
+
+        command_buffer_builder
+            .set_viewport(0, [self.viewport.clone()].into_iter().collect())
+            .map_err(|e| eyre::eyre!("Failed to set viewport: {}", e))?;
+
+        // Draw the triangle (3 vertices, 1 instance)
+        command_buffer_builder
+            .draw(
+                3, // vertex_count - we have 3 vertices in our triangle
+                1, // instance_count - draw one instance
+                0, // first_vertex - start at vertex 0
+                0, // first_instance - start at instance 0
+            )
+            .map_err(|e| eyre::eyre!("Failed to draw: {}", e))?;
+
         command_buffer_builder
             .end_render_pass(SubpassEndInfo::default())
             .map_err(|e| eyre::eyre!("Failed to end render pass: {}", e))?;
 
-        // Build command buffer
         let command_buffer = command_buffer_builder
             .build()
             .map_err(|e| eyre::eyre!("Failed to build command buffer: {}", e))?;
 
-        // Execute command buffer
         let execution = previous_frame_end
             .join(acquire_future)
             .then_execute(self.graphics_queue.clone(), command_buffer)
             .map_err(|e| eyre::eyre!("Failed to execute command buffer: {}", e))?;
 
-        // Present
         let future = execution
             .then_swapchain_present(
                 self.present_queue.clone(),
                 SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index),
             )
-            .then_signal_fence_and_flush();
+            .then_signal_fence_and_flush()
+            .map_err(|e| eyre::eyre!("Failed to present frame: {}", e))?;
 
-        let future = future.map_err(|e| eyre::eyre!("Failed to present frame: {}", e))?;
-        {
-            self.previous_frame_end = Some(future.boxed());
-        }
+        self.previous_frame_end = Some(future.boxed());
+
         Ok(())
     }
 
-    fn select_physical_device(
-        instance: &Arc<Instance>,
-        surface: &Arc<Surface>,
-        device_extensions: &DeviceExtensions,
-    ) -> Result<(Arc<PhysicalDevice>, u32, u32)> {
-        let suitable_device = instance
-            .enumerate_physical_devices()
-            .map_err(|e| eyre::eyre!("Failed to enumerate physical devices: {}", e))?
-            .filter(|device| device.supported_extensions().contains(device_extensions))
-            .filter(|device| device.properties().device_type == PhysicalDeviceType::DiscreteGpu)
-            .filter_map(|device| {
-                // Find graphics queue family
-                let graphics_queue_family = device
-                    .queue_family_properties()
-                    .iter()
-                    .enumerate()
-                    .find(|(_, properties)| properties.queue_flags.intersects(QueueFlags::GRAPHICS))
-                    .map(|(index, _)| index as u32);
-
-                // Find present queue family
-                let present_queue_family = device
-                    .queue_family_properties()
-                    .iter()
-                    .enumerate()
-                    .find(|(index, _)| {
-                        device
-                            .surface_support(*index as u32, surface)
-                            .unwrap_or(false)
-                    })
-                    .map(|(index, _)| index as u32);
-
-                match (graphics_queue_family, present_queue_family) {
-                    (Some(graphics), Some(present)) => Some((device, graphics, present)),
-                    _ => None,
-                }
-            })
-            .next()
-            .ok_or_else(|| eyre::eyre!("No suitable discrete GPU found"))?;
-
-        Ok(suitable_device)
-    }
-
+    /// Creates a swapchain for presenting rendered images to the window.
+    ///
+    /// The swapchain is a queue of images that can be presented to the window.
+    /// While one image is being displayed, we can render to another.
+    ///
+    /// # Configuration
+    ///
+    /// The swapchain is configured with:
+    /// - At least 2 images (double buffering)
+    /// - Window's current dimensions
+    /// - Optimal image format for the surface
+    /// - Optimal presentation mode (VSync, immediate, etc.)
     fn create_swapchain(
         device: &Arc<Device>,
         physical_device: &Arc<PhysicalDevice>,
@@ -361,6 +427,17 @@ impl RenderContext {
         Ok((swapchain, images))
     }
 
+    /// Creates a render pass that defines the rendering operations.
+    ///
+    /// A render pass describes:
+    /// - What attachments (images) are used
+    /// - How they're initialized (cleared, preserved, etc.)
+    /// - How they're used in subpasses
+    /// - Dependencies between subpasses
+    ///
+    /// Our simple render pass has:
+    /// - One color attachment (the swapchain image)
+    /// - One subpass that clears and then renders to it
     fn create_render_pass(
         device: &Arc<Device>,
         format: vulkano::format::Format,
@@ -383,6 +460,10 @@ impl RenderContext {
         .map_err(|e| eyre::eyre!("Failed to create render pass: {}", e))
     }
 
+    /// Creates framebuffers for each swapchain image.
+    ///
+    /// A framebuffer binds specific images to the attachments defined in a render pass.
+    /// We need one framebuffer per swapchain image.
     fn create_framebuffers(
         image_views: &[Arc<ImageView>],
         render_pass: &Arc<RenderPass>,
@@ -402,6 +483,36 @@ impl RenderContext {
             .collect()
     }
 
+    /// Recreates the swapchain and associated resources when the window is resized.
+    ///
+    /// This function handles the complex process of recreating the swapchain when
+    /// the window size changes. It must:
+    ///
+    /// 1. Get the new window dimensions
+    /// 2. Create a new swapchain with the updated size
+    /// 3. Create new image views for each swapchain image
+    /// 4. Create new framebuffers to match
+    /// 5. Update the viewport to the new dimensions
+    ///
+    /// # Why Recreation is Necessary
+    ///
+    /// The swapchain images have a fixed size. When the window resizes, we need
+    /// new images that match the new window dimensions. This requires recreating
+    /// the entire swapchain and all resources that depend on it.
+    ///
+    /// # Performance Considerations
+    ///
+    /// Swapchain recreation is expensive, which is why we:
+    /// - Debounce resize events in the window module
+    /// - Only recreate when actually needed (via the `recreate_swapchain` flag)
+    /// - Reuse existing resources where possible (shaders, pipelines, vertex buffers)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Window handle is invalid
+    /// - Swapchain recreation fails
+    /// - Resource allocation fails
     fn recreate_swapchain_and_framebuffers(&mut self) -> Result<()> {
         let surface_object = self
             .surface
@@ -428,22 +539,18 @@ impl RenderContext {
 
         let new_framebuffers = Self::create_framebuffers(&new_image_views, &self.render_pass)?;
 
+        // Update viewport
+        self.viewport.extent = [window_size.width as f32, window_size.height as f32];
+
         self.swapchain = new_swapchain;
         self.swapchain_images = new_images;
         self.swapchain_image_views = new_image_views;
         self.framebuffers = new_framebuffers;
 
-        info!("Recreated swapchain and framebuffers");
+        info!(
+            "Recreated swapchain and framebuffers for size {}x{}",
+            window_size.width, window_size.height
+        );
         Ok(())
-    }
-
-    /// Returns the current swapchain image format.
-    pub fn swapchain_format(&self) -> vulkano::format::Format {
-        self.swapchain.image_format()
-    }
-
-    /// Returns the current swapchain extent (dimensions).
-    pub fn swapchain_extent(&self) -> [u32; 2] {
-        self.swapchain.image_extent()
     }
 }
