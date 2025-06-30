@@ -22,12 +22,10 @@ See [Architecture Docs](docs/architecture.md) for the detailed Rust-based archit
 ### Learning Resources Collection (Rust Focus)
 
 - [The Rust Programming Language Book ("The Book")](https://doc.rust-lang.org/book/)
-- [Rust by Example](https://doc.rust-lang.org/rust-by-example/)
-- [Are We Game Yet?](https://arewegameyet.rs/) (Overview of Rust game development ecosystem)
-- [Vulkan Tutorial](https://vulkan-tutorial.com/) (Still relevant for Vulkan concepts)
-- [ash Crate Documentation](https://docs.rs/ash/)
-- [bevy_ecs Documentation](https://docs.rs/bevy_ecs/)
-- [glam Crate Documentation](https://docs.rs/glam/)
-- Game Engine Architecture" by Jason Gregory (General concepts still apply)
-- "Real-Time Rendering" by Tomas Akenine-Möller (General concepts still apply)
-- [Physically Based Rendering Book](https://www.pbr-book.org/) (Graphics theory)
+- [VkGuide](https://vkguide.dev/docs/introduction/vulkan_overview/) 
+- [The Book of Shaders](https://thebookofshaders.com/) by Patricio Gonzalez Vivo & Jen Lowe 
+- [Vulkan Tutorial](https://vulkan-tutorial.com/) 
+- [Game Engine Architecture](https://www.gameenginebook.com/) by Jason Gregory 
+- [Real-Time Rendering](https://www.realtimerendering.com/) by Tomas Akenine-Möller 
+- [Physically Based Rendering Book](https://www.pbr-book.org/) by Matt Pharr, Wenzel Jakob, and Greg Humphreys
+- [Foundations of Game Engine Development](https://foundationsofgameenginedev.com/) series by Eric Lengyel
