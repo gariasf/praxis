@@ -35,7 +35,7 @@
 //! ```
 
 use crate::shaders;
-use crate::vertex::VertexData;
+use crate::vertex::Vertex2D;
 use praxis_utils::{Result, debug, error, eyre, info, trace};
 use std::sync::Arc;
 use vulkano::{
@@ -142,11 +142,11 @@ pub fn create_graphics_pipeline(
     ];
 
     // This tells Vulkan how to interpret our vertex buffer data
-    let vertex_input_state = VertexData::per_vertex()
+    let vertex_input_state = Vertex2D::per_vertex()
         .definition(&vs_entry.info().input_interface)
         .map_err(|e| eyre::eyre!("Failed to create vertex input state: {}", e))?;
 
-    trace!("Configured vertex input for VertexData format");
+    trace!("Configured vertex input for Vertex2D format");
 
     // This defines the interface between shaders and the application
     debug!("Creating pipeline layout from shader stages");

@@ -53,7 +53,7 @@ use vulkano::pipeline::graphics::vertex_input::Vertex;
 /// ```
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, bytemuck::Pod, bytemuck::Zeroable, Vertex)]
-pub struct VertexData {
+pub struct Vertex2D {
     /// Position in 2D normalized device coordinates.
     ///
     /// Range: [-1.0, 1.0] for both x and y components.
@@ -75,7 +75,7 @@ pub struct VertexData {
     pub color: [f32; 3],
 }
 
-impl VertexData {
+impl Vertex2D {
     /// Creates a new vertex with the given position and color.
     ///
     /// # Arguments
@@ -100,7 +100,7 @@ mod tests {
 
     #[test]
     fn test_vertex_creation() {
-        let vertex = VertexData::new([0.5, -0.5], [1.0, 0.0, 0.5]);
+        let vertex = Vertex2D::new([0.5, -0.5], [1.0, 0.0, 0.5]);
         assert_eq!(vertex.position, [0.5, -0.5]);
         assert_eq!(vertex.color, [1.0, 0.0, 0.5]);
     }
@@ -108,6 +108,6 @@ mod tests {
     #[test]
     fn test_vertex_size() {
         // Ensure our vertex struct has the expected size
-        assert_eq!(std::mem::size_of::<VertexData>(), 20); // 2*4 + 3*4 = 20 bytes
+        assert_eq!(std::mem::size_of::<Vertex2D>(), 20); // 2*4 + 3*4 = 20 bytes
     }
 }

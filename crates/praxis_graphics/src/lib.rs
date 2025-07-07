@@ -33,7 +33,7 @@ mod primitives;
 mod shaders;
 mod vertex;
 
-use crate::{device::VulkanDevice, pipeline::create_simple_pipeline, vertex::VertexData};
+use crate::{device::VulkanDevice, pipeline::create_simple_pipeline, vertex::Vertex2D};
 use praxis_utils::{Result, debug, error, eyre, info, timing::FrameTimer, trace, warn};
 
 use std::sync::Arc;
@@ -107,7 +107,7 @@ pub struct RenderContext {
     framebuffers: Vec<Arc<Framebuffer>>,
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
     graphics_pipeline: Arc<GraphicsPipeline>,
-    vertex_buffer: Subbuffer<[VertexData]>,
+    vertex_buffer: Subbuffer<[Vertex2D]>,
     viewport: Viewport,
     recreate_swapchain: bool,
     previous_frame_end: Option<Box<dyn GpuFuture>>,

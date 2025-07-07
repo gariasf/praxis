@@ -37,8 +37,6 @@ impl Default for GlobalTiming {
 
 /// Gets the current frame's delta time in seconds.
 ///
-/// This is the most common way to access frame timing from game code.
-///
 /// # Example
 ///
 /// ```rust
