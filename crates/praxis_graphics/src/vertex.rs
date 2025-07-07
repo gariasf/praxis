@@ -93,6 +93,33 @@ impl Vertex2D {
         Self { position, color }
     }
 }
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, bytemuck::Pod, bytemuck::Zeroable, Vertex)]
+pub struct Vertex3D {
+    #[format(R32G32B32_SFLOAT)]
+    pub position: [f32; 3],
+    #[format(R32G32B32_SFLOAT)]
+    pub color: [f32; 3],
+}
+
+impl Vertex3D {
+    /// Creates a new vertex with the given position and color.
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - 3D position in world space
+    /// * `color` - RGB color values in range [0.0, 1.0]
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// // Create a white vertex at the origin
+    /// let vertex = Vertex3D::new([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
+    /// ```
+    pub fn new(position: [f32; 3], color: [f32; 3]) -> Self {
+        Self { position, color }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -109,5 +136,18 @@ mod tests {
     fn test_vertex_size() {
         // Ensure our vertex struct has the expected size
         assert_eq!(std::mem::size_of::<Vertex2D>(), 20); // 2*4 + 3*4 = 20 bytes
+    }
+
+    #[test]
+    fn test_vertex3d_creation() {
+        let vertex = Vertex3D::new([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
+        assert_eq!(vertex.position, [0.0, 0.0, 0.0]);
+        assert_eq!(vertex.color, [1.0, 1.0, 1.0]);
+    }
+
+    #[test]
+    fn test_vertex3d_size() {
+        // Ensure our vertex struct has the expected size
+        assert_eq!(std::mem::size_of::<Vertex3D>(), 24); // 3*4 + 3*4 = 24 bytes
     }
 }
