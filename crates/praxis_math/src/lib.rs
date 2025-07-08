@@ -6,3 +6,6 @@
 pub fn init() {
     println!("Math library initialized");
 }
+
+// Re-export glam so other crates can use it via `praxis_math`.
+pub use glam::*;

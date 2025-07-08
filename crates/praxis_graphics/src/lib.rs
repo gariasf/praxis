@@ -33,10 +33,17 @@ mod primitives;
 mod shaders;
 mod vertex;
 
-use crate::{device::VulkanDevice, pipeline::create_simple_pipeline, vertex::Vertex2D};
+use crate::{device::VulkanDevice, pipeline::create_simple_pipeline_3d, vertex::Vertex3D};
+use praxis_math::Mat4;
 use praxis_utils::{Result, debug, error, eyre, info, timing::FrameTimer, trace, warn};
+use vulkano::command_buffer::allocator::CommandBufferAllocator;
+use vulkano::descriptor_set::DescriptorSet;
+use vulkano::descriptor_set::allocator::DescriptorSetAllocator;
 
 use std::sync::Arc;
+use vulkano::descriptor_set::{WriteDescriptorSet, allocator::StandardDescriptorSetAllocator};
+use vulkano::pipeline::Pipeline;
+use vulkano::pipeline::PipelineBindPoint;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
@@ -53,6 +60,44 @@ use vulkano::{
     sync::{self, GpuFuture},
 };
 use winit::window::Window;
+
+/// Uniforms passed to the vertex shader (std140 layout).
+///
+/// We store matrices as column-major `[[f32; 4]; 4]` arrays because `glam::Mat4` does
+/// not implement `bytemuck::Pod`/`Zeroable`.  The GLSL std140 layout expects 16-byte
+/// alignment per column, which this representation satisfies.
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct Uniforms {
+    model: [[f32; 4]; 4],
+    view: [[f32; 4]; 4],
+    proj: [[f32; 4]; 4],
+}
+
+/// Per-frame data supplied by the game/engine layer.
+///
+/// For now we pass a single `view`/`proj` camera pair and an array of model
+/// matrices.  Each matrix corresponds to **one draw of the currently hard-wired
+/// mesh/pipeline** (the coloured cube).  A small host-visible uniform buffer
+/// and descriptor set is built for every matrix each frame; this is the
+/// simplest hazard-free way to keep CPU and GPU in sync.
+///
+/// This is intentionally *not* the most efficient solution – once we add an
+/// ECS or a dedicated renderer module we will migrate to one of:
+/// 1. A dynamic-offset ring buffer for all per-object data (DYNAMIC UBO).
+/// 2. Push-constants for the model matrix when it fits into ≤128 B.
+///
+/// Keeping the struct tiny and self-contained means higher-level code can be
+/// refactored later without touching `RenderContext` internals.
+///
+pub struct RenderCommands<'a> {
+    /// Camera view matrix (world → view).
+    pub view: Mat4,
+    /// Camera projection matrix (view → clip).
+    pub proj: Mat4,
+    /// List of model matrices for each object to draw this frame.
+    pub models: &'a [Mat4],
+}
 
 /// Core graphics context containing the Vulkan state.
 ///
@@ -105,14 +150,18 @@ pub struct RenderContext {
     swapchain_image_views: Vec<Arc<ImageView>>,
     render_pass: Arc<RenderPass>,
     framebuffers: Vec<Arc<Framebuffer>>,
-    command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
     graphics_pipeline: Arc<GraphicsPipeline>,
-    vertex_buffer: Subbuffer<[Vertex2D]>,
+    vertex_buffer: Subbuffer<[Vertex3D]>,
+    index_buffer: Subbuffer<[u16]>,
+    index_count: u32,
+    memory_allocator: Arc<StandardMemoryAllocator>,
+    descriptor_set_layout: Arc<vulkano::descriptor_set::layout::DescriptorSetLayout>,
+    descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,
     viewport: Viewport,
     recreate_swapchain: bool,
     previous_frame_end: Option<Box<dyn GpuFuture>>,
 
-    // Performance tracking
     frame_timer: FrameTimer,
 }
 
@@ -196,11 +245,9 @@ impl RenderContext {
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
 
         let graphics_pipeline =
-            create_simple_pipeline(&device, &render_pass, swapchain.image_extent())?;
+            create_simple_pipeline_3d(&device, &render_pass, swapchain.image_extent())?;
 
-        // Create vertex buffer with a colored triangle
-        // This uses the primitive helper for a standard test triangle
-        let vertices = primitives::colored_triangle();
+        let (vertices, indices) = primitives::colored_cube();
         trace!("Creating vertex buffer with {} vertices", vertices.len());
 
         let vertex_buffer = Buffer::from_iter(
@@ -214,10 +261,36 @@ impl RenderContext {
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
-            vertices,
+            vertices.clone(),
         )
         .map_err(|e| eyre::eyre!("Failed to create vertex buffer: {}", e))?;
         debug!("Created vertex buffer");
+
+        trace!("Creating index buffer with {} indices", indices.len());
+        let index_buffer = Buffer::from_iter(
+            memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::INDEX_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            indices.clone(),
+        )
+        .map_err(|e| eyre::eyre!("Failed to create index buffer: {}", e))?;
+        trace!("Created index buffer");
+
+        trace!("Creating uniform buffer");
+
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            device.clone(),
+            Default::default(),
+        ));
+
+        let descriptor_set_layout = graphics_pipeline.layout().set_layouts()[0].clone();
 
         // Create viewport to normalize coordinates from vertex shader output to
         // framebuffer coordinates
@@ -255,6 +328,11 @@ impl RenderContext {
             command_buffer_allocator,
             graphics_pipeline,
             vertex_buffer,
+            index_buffer,
+            index_count: indices.len() as u32,
+            memory_allocator,
+            descriptor_set_layout,
+            descriptor_set_allocator,
             viewport,
             recreate_swapchain: false,
             previous_frame_end,
@@ -303,13 +381,32 @@ impl RenderContext {
     /// - No swapchain image is available
     /// - Command buffer recording fails
     /// - GPU submission fails
-    pub fn render(&mut self) -> Result<()> {
-        self.frame_timer.tick();
+    pub fn render(&mut self, cmds: &RenderCommands) -> Result<()> {
+        let _ = self.frame_timer.tick();
 
         let mut previous_frame_end = self
             .previous_frame_end
             .take()
             .unwrap_or_else(|| sync::now(self.device.clone()).boxed());
+
+        // Early-out when the window is minimised (0×0) to avoid futile
+        // swapchain recreation loops. We can safely skip the entire frame –
+        // the previous future is kept so GPU work still finishes.
+        // TODO(performance): Refactor or find a better way to handle this.
+        if let Some(obj) = self.surface.object() {
+            if let Some(window) = obj.downcast_ref::<Window>() {
+                let size = window.inner_size();
+                if size.width == 0 || size.height == 0 {
+                    // Clean up finished GPU work and reset to a fresh no-op future. This
+                    // prevents an ever-growing chain of joined futures when the window is
+                    // minimized for an extended period of time (which previously caused a
+                    // deep recursive drop and stack overflow upon restore).
+                    previous_frame_end.cleanup_finished();
+                    self.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+                    return Ok(());
+                }
+            }
+        }
 
         if self.recreate_swapchain {
             debug!("Recreating swapchain due to pending resize");
@@ -329,6 +426,47 @@ impl RenderContext {
 
         previous_frame_end.cleanup_finished();
 
+        // ------------------------------------------------------------------
+        // Build per-object descriptor sets (TEMPORARY DEMO PATH)
+        // ------------------------------------------------------------------
+        // A real engine would batch these with dynamic offsets or push
+        // constants.  For now we allocate one tiny UBO + descriptor set for
+        // every model matrix each frame.  It's simple, avoids any
+        // CPU-GPU hazards and is fast enough for a handful of objects.
+        let mut per_object_sets = Vec::with_capacity(cmds.models.len());
+        for model in cmds.models.iter() {
+            let uniforms = Uniforms {
+                model: model.to_cols_array_2d(),
+                view: cmds.view.to_cols_array_2d(),
+                proj: cmds.proj.to_cols_array_2d(),
+            };
+
+            let buffer = Buffer::from_data(
+                self.memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::UNIFORM_BUFFER,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                uniforms,
+            )
+            .map_err(|e| eyre::eyre!("Failed to create uniform buffer: {}", e))?;
+
+            let set = DescriptorSet::new(
+                self.descriptor_set_allocator.clone(),
+                self.descriptor_set_layout.clone(),
+                [WriteDescriptorSet::buffer(0, buffer.clone())],
+                [],
+            )
+            .map_err(|e| eyre::eyre!("Failed to create descriptor set: {}", e))?;
+
+            per_object_sets.push(set);
+        }
+
         trace!("Acquiring next swapchain image");
         let acquire_start = std::time::Instant::now();
         let (image_index, suboptimal, acquire_future) =
@@ -347,7 +485,7 @@ impl RenderContext {
 
         trace!("Building command buffer for frame");
         let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
-            &self.command_buffer_allocator,
+            self.command_buffer_allocator.clone(),
             self.graphics_queue.queue_family_index(),
             CommandBufferUsage::OneTimeSubmit,
         )
@@ -373,21 +511,29 @@ impl RenderContext {
             .bind_pipeline_graphics(self.graphics_pipeline.clone())
             .map_err(|e| eyre::eyre!("Failed to bind graphics pipeline: {}", e))?
             .bind_vertex_buffers(0, self.vertex_buffer.clone())
-            .map_err(|e| eyre::eyre!("Failed to bind vertex buffer: {}", e))?;
+            .map_err(|e| eyre::eyre!("Failed to bind vertex buffer: {}", e))?
+            .bind_index_buffer(self.index_buffer.clone())
+            .map_err(|e| eyre::eyre!("Failed to bind index buffer: {}", e))?;
 
         command_buffer_builder
             .set_viewport(0, [self.viewport.clone()].into_iter().collect())
             .map_err(|e| eyre::eyre!("Failed to set viewport: {}", e))?;
 
-        // Draw the triangle (3 vertices, 1 instance)
-        command_buffer_builder
-            .draw(
-                3, // vertex_count - we have 3 vertices in our triangle
-                1, // instance_count - draw one instance
-                0, // first_vertex - start at vertex 0
-                0, // first_instance - start at instance 0
-            )
-            .map_err(|e| eyre::eyre!("Failed to draw: {}", e))?;
+        // Draw each object with its own descriptor set
+        for set in per_object_sets.iter() {
+            unsafe {
+                command_buffer_builder
+                    .bind_descriptor_sets(
+                        PipelineBindPoint::Graphics,
+                        self.graphics_pipeline.layout().clone(),
+                        0,
+                        set.clone(),
+                    )
+                    .map_err(|e| eyre::eyre!("Failed to bind per-object descriptor set: {}", e))?
+                    .draw_indexed(self.index_count, 1, 0, 0, 0)
+                    .map_err(|e| eyre::eyre!("Failed to draw indexed: {}", e))?;
+            }
+        }
 
         command_buffer_builder
             .end_render_pass(SubpassEndInfo::default())

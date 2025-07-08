@@ -25,6 +25,8 @@ struct State {
     window: Arc<Window>,
     pending_resize: Option<(winit::dpi::PhysicalSize<u32>, Instant)>,
     frame_timer: FrameTimer,
+    // Temporary until we have a data driven ECS or scene graph
+    rotation_angle: f32,
 }
 
 /// The main application structure that handles the event loop and owns the state.
@@ -57,6 +59,7 @@ impl State {
             window,
             pending_resize: None,
             frame_timer: FrameTimer::new_with_global(),
+            rotation_angle: 0.0,
         };
 
         // Don't configure surface immediately - let the debouncing handle it
@@ -200,7 +203,30 @@ impl ApplicationHandler for App {
                         "Starting frame render (delta: {:.2}ms)",
                         delta.as_secs_f64() * 1000.0
                     );
-                    match state.render_context.render() {
+                    // --- Build per-frame render commands ---
+                    use praxis_graphics::RenderCommands;
+                    use praxis_math::{Mat4, Vec3};
+
+                    // TEMP: drive a single cube rotation here.  Once an ECS
+                    // or scene graph exists this code disappears – the render
+                    // system will iterate over Transform components instead.
+                    // ------------------------------------------------------------------
+                    // Update rotation angle
+                    state.rotation_angle += delta.as_secs_f32() * 0.5;
+
+                    let model = Mat4::from_rotation_y(state.rotation_angle);
+
+                    let aspect = state.size.width as f32 / state.size.height as f32;
+                    let proj = Mat4::perspective_rh_gl(45f32.to_radians(), aspect, 0.1, 100.0);
+                    let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, -2.0), Vec3::ZERO, Vec3::Y);
+
+                    let cmds = RenderCommands {
+                        view,
+                        proj,
+                        models: &[model],
+                    };
+
+                    match state.render_context.render(&cmds) {
                         Ok(()) => {
                             trace!(
                                 "Frame rendered (current FPS: {:.1})",
@@ -211,6 +237,8 @@ impl ApplicationHandler for App {
                             error!("Render failed: {}", e);
                         }
                     }
+
+                    state.window.request_redraw();
                 } else {
                     trace!("Skipping render - window minimized or zero size");
                 }
@@ -221,8 +249,13 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::Resized(size) => {
-                debug!("Received resize event: {}x{}", size.width, size.height);
-                state.pending_resize = Some((size, Instant::now()));
+                state.size = size;
+
+                if state.should_resize(size) {
+                    debug!("Received resize event: {}x{}", size.width, size.height);
+                    state.pending_resize = Some((size, Instant::now()));
+                }
+
                 state.window.request_redraw();
             }
             WindowEvent::KeyboardInput {

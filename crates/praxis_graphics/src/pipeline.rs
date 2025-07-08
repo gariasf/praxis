@@ -35,7 +35,7 @@
 //! ```
 
 use crate::shaders;
-use crate::vertex::Vertex2D;
+use crate::vertex::Vertex3D;
 use praxis_utils::{Result, debug, error, eyre, info, trace};
 use std::sync::Arc;
 use vulkano::{
@@ -87,7 +87,7 @@ impl Default for PipelineConfig {
     fn default() -> Self {
         Self {
             primitive_topology: PrimitiveTopology::TriangleList,
-            cull_mode: CullMode::None, // Disable culling for now (good for debugging)
+            cull_mode: CullMode::Back,
             front_face: FrontFace::CounterClockwise,
         }
     }
@@ -121,12 +121,15 @@ impl Default for PipelineConfig {
 /// - Shader loading fails
 /// - Pipeline creation fails
 /// - Invalid configuration is provided
-pub fn create_graphics_pipeline(
+pub fn create_graphics_pipeline<V>(
     device: &Arc<Device>,
     render_pass: &Arc<RenderPass>,
     extent: [u32; 2],
     config: PipelineConfig,
-) -> Result<Arc<GraphicsPipeline>> {
+) -> Result<Arc<GraphicsPipeline>>
+where
+    V: Vertex,
+{
     info!(
         "Creating graphics pipeline with config: topology={:?}, cull_mode={:?}, front_face={:?}",
         config.primitive_topology, config.cull_mode, config.front_face
@@ -142,11 +145,9 @@ pub fn create_graphics_pipeline(
     ];
 
     // This tells Vulkan how to interpret our vertex buffer data
-    let vertex_input_state = Vertex2D::per_vertex()
-        .definition(&vs_entry.info().input_interface)
+    let vertex_input_state = V::per_vertex()
+        .definition(&vs_entry)
         .map_err(|e| eyre::eyre!("Failed to create vertex input state: {}", e))?;
-
-    trace!("Configured vertex input for Vertex2D format");
 
     // This defines the interface between shaders and the application
     debug!("Creating pipeline layout from shader stages");
@@ -312,14 +313,12 @@ fn create_pipeline_layout(
     Ok(layout)
 }
 
-/// Creates a simple graphics pipeline with default configuration.
-///
-/// This is a convenience function that uses sensible defaults for basic rendering.
-pub fn create_simple_pipeline(
+/// Creates a simple graphics pipeline for 3-D geometry using `Vertex3D`.
+pub fn create_simple_pipeline_3d(
     device: &Arc<Device>,
     render_pass: &Arc<RenderPass>,
     extent: [u32; 2],
 ) -> Result<Arc<GraphicsPipeline>> {
-    debug!("Creating simple pipeline with default configuration");
-    create_graphics_pipeline(device, render_pass, extent, PipelineConfig::default())
+    debug!("Creating simple 3D pipeline with default configuration");
+    create_graphics_pipeline::<Vertex3D>(device, render_pass, extent, PipelineConfig::default())
 }

@@ -86,19 +86,33 @@ impl VulkanDevice {
         let library = VulkanLibrary::new()
             .map_err(|e| eyre::eyre!("Failed to load Vulkan library: {}", e))?;
 
-        let required_extensions = Surface::required_extensions(window);
+        let required_extensions = Surface::required_extensions(window).unwrap();
         trace!("Required instance extensions: {:?}", required_extensions);
+
+        let enable_validation_layers = cfg!(debug_assertions);
 
         let instance = Instance::new(
             library,
             InstanceCreateInfo {
                 enabled_extensions: required_extensions,
+                enabled_layers: if enable_validation_layers {
+                    vec![String::from("VK_LAYER_KHRONOS_validation")]
+                } else {
+                    vec![]
+                },
                 ..Default::default()
             },
         )
         .map_err(|e| eyre::eyre!("Failed to create Vulkan instance: {}", e))?;
 
-        debug!("Created Vulkan instance");
+        trace!("Created Vulkan instance");
+
+        let layers = instance.enabled_layers();
+        if layers.is_empty() {
+            info!("Vulkan validation layers: disabled");
+        } else {
+            info!("Vulkan validation layers enabled: {:?}", layers);
+        }
 
         trace!("Creating window surface");
         let surface = Surface::from_window(instance.clone(), window.clone())
