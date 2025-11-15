@@ -5,3 +5,6 @@ edition = "2024"
 license = "GPL-3.0-or-later"
 
 [dependencies]
+bevy_ecs = "0.14"
+praxis_utils = { path = "../praxis_utils", version = "0.1.0" }
+praxis_math = { path = "../praxis_math", version = "0.1.0" }

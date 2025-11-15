@@ -36,7 +36,19 @@ praxis_core = { path = "crates/praxis_core", version = "0.1.0" }
 praxis_utils = { path = "crates/praxis_utils", version = "0.1.0" }
 praxis_window = { path = "crates/praxis_window", version = "0.1.0" }
 praxis_graphics = { path = "crates/praxis_graphics", version = "0.1.0" }
+praxis_ecs = { path = "crates/praxis_ecs", version = "0.1.0" }
+praxis_math = { path = "crates/praxis_math", version = "0.1.0" }
+winit = { version = "0.30.11", features = ["rwh_05"] }
+pollster = "0.4"
 
 [[example]]
 name = "playground"
 path = "examples/playground.rs"
+
+[[example]]
+name = "ecs_demo"
+path = "examples/ecs_demo.rs"
+
+[[example]]
+name = "ecs_integration"
+path = "examples/ecs_integration.rs"

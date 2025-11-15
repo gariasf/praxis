@@ -8,3 +8,4 @@ license = "GPL-3.0-or-later"
 praxis_utils = { path = "../praxis_utils", version = "0.1.0" }
 praxis_graphics = { path = "../praxis_graphics", version = "0.1.0" }
 praxis_window = { path = "../praxis_window", version = "0.1.0" }
+praxis_ecs = { path = "../praxis_ecs", version = "0.1.0" }
