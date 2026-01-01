@@ -172,6 +172,50 @@ world.spawn((
 ));
 ```
 
+### Mesh and MeshHandle
+
+Components for rendering 3D geometry.
+
+**MeshHandle**: References a mesh asset by ID (preferred for shared meshes).
+
+```rust
+use praxis_ecs::{MeshHandle, Transform};
+
+world.spawn((
+    Transform::from_xyz(0.0, 0.0, 0.0),
+    MeshHandle::new("cube"),
+));
+```
+
+**Mesh**: Stores mesh data directly on the entity (for procedural/dynamic meshes).
+
+```rust
+use praxis_ecs::Mesh;
+
+let vertices = vec![
+    [0.0, 1.0, 0.0],
+    [-1.0, -1.0, 0.0],
+    [1.0, -1.0, 0.0],
+];
+let indices = vec![0, 1, 2];
+
+world.spawn((
+    Transform::default(),
+    Mesh::new(vertices, indices),
+));
+```
+
+The `Mesh` component supports optional attributes:
+
+```rust
+let mut mesh = Mesh::new(vertices, indices);
+mesh.set_colors(colors);  // Optional vertex colors
+mesh.set_normals(normals); // Optional vertex normals
+mesh.set_uvs(uvs);        // Optional texture coordinates
+```
+
+See the [Mesh System Documentation](../../docs/mesh_system.md) for complete details on using meshes.
+
 ## Examples
 
 See `examples/transform_propagation_demo.rs` for a comprehensive demonstration of the transform propagation system.

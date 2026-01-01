@@ -57,6 +57,34 @@ To run:
 cargo run --example transform_propagation_demo
 ```
 
+### Mesh Demo
+
+A documentation example showing the mesh system architecture including:
+- Mesh and MeshHandle components in the ECS
+- MeshData and MeshAssetManager in the graphics system
+- Per-mesh vertex/index buffer management
+- Available primitive mesh functions
+
+To run:
+
+```bash
+cargo run --example mesh_demo
+```
+
+### Multi-Mesh Demo
+
+A fully functional example that renders multiple different mesh types in a single scene:
+- Loading meshes into the mesh asset manager
+- Rendering cubes, pyramids, and quads with different transforms
+- Using DrawCommands to specify mesh and transform per object
+- Multiple rotating objects demonstrating the mesh system
+
+To run:
+
+```bash
+cargo run --example multi_mesh_demo
+```
+
 ## Building Examples
 
 To build all examples:

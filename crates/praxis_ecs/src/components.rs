@@ -404,6 +404,159 @@ pub struct NoSave;
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub struct EngineManaged;
 
+/// Handle to a mesh asset stored in the graphics system.
+///
+/// This component references a mesh by its unique identifier. The actual
+/// mesh data (vertices, indices) is managed by the graphics system.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, MeshHandle, Transform};
+///
+/// let mut world = World::new();
+///
+/// // Spawn an entity with a mesh
+/// world.spawn((
+///     Transform::from_xyz(0.0, 0.0, 0.0),
+///     MeshHandle::new("cube"),
+/// ));
+/// ```
+#[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MeshHandle {
+    /// Unique identifier for the mesh.
+    pub id: String,
+}
+
+impl MeshHandle {
+    /// Creates a new mesh handle with the given identifier.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self { id: id.into() }
+    }
+
+    /// Gets the mesh identifier.
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+}
+
+impl From<&str> for MeshHandle {
+    fn from(id: &str) -> Self {
+        Self::new(id)
+    }
+}
+
+impl From<String> for MeshHandle {
+    fn from(id: String) -> Self {
+        Self { id }
+    }
+}
+
+/// Mesh component containing vertex and index data.
+///
+/// This component stores the actual geometry data for rendering.
+/// It's typically used with procedurally generated meshes or when
+/// the mesh data needs to be stored directly on the entity.
+///
+/// For asset-based meshes, use `MeshHandle` instead to reference
+/// shared mesh data managed by the graphics system.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, Mesh, Transform};
+///
+/// let mut world = World::new();
+///
+/// // Create a simple triangle mesh
+/// let vertices = vec![
+///     [0.0, 1.0, 0.0],   // Top
+///     [-1.0, -1.0, 0.0], // Bottom-left
+///     [1.0, -1.0, 0.0],  // Bottom-right
+/// ];
+/// let indices = vec![0, 1, 2];
+///
+/// world.spawn((
+///     Transform::default(),
+///     Mesh::new(vertices, indices),
+/// ));
+/// ```
+#[derive(Component, Debug, Clone)]
+pub struct Mesh {
+    /// Vertex positions in local space.
+    pub vertices: Vec<[f32; 3]>,
+    
+    /// Indices defining triangles (triplets of vertex indices).
+    pub indices: Vec<u16>,
+    
+    /// Optional vertex colors (RGB).
+    pub colors: Option<Vec<[f32; 3]>>,
+    
+    /// Optional vertex normals.
+    pub normals: Option<Vec<[f32; 3]>>,
+    
+    /// Optional texture coordinates (UV).
+    pub uvs: Option<Vec<[f32; 2]>>,
+}
+
+impl Mesh {
+    /// Creates a new mesh with positions and indices.
+    pub fn new(vertices: Vec<[f32; 3]>, indices: Vec<u16>) -> Self {
+        Self {
+            vertices,
+            indices,
+            colors: None,
+            normals: None,
+            uvs: None,
+        }
+    }
+
+    /// Creates a new mesh with positions, colors, and indices.
+    pub fn with_colors(
+        vertices: Vec<[f32; 3]>,
+        colors: Vec<[f32; 3]>,
+        indices: Vec<u16>,
+    ) -> Self {
+        Self {
+            vertices,
+            indices,
+            colors: Some(colors),
+            normals: None,
+            uvs: None,
+        }
+    }
+
+    /// Sets the vertex colors.
+    pub fn set_colors(&mut self, colors: Vec<[f32; 3]>) {
+        self.colors = Some(colors);
+    }
+
+    /// Sets the vertex normals.
+    pub fn set_normals(&mut self, normals: Vec<[f32; 3]>) {
+        self.normals = Some(normals);
+    }
+
+    /// Sets the texture coordinates.
+    pub fn set_uvs(&mut self, uvs: Vec<[f32; 2]>) {
+        self.uvs = Some(uvs);
+    }
+
+    /// Returns the number of vertices in the mesh.
+    pub fn vertex_count(&self) -> usize {
+        self.vertices.len()
+    }
+
+    /// Returns the number of indices in the mesh.
+    pub fn index_count(&self) -> usize {
+        self.indices.len()
+    }
+
+    /// Returns the number of triangles in the mesh.
+    pub fn triangle_count(&self) -> usize {
+        self.indices.len() / 3
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -479,5 +632,86 @@ mod tests {
         assert_eq!(children.len(), 1);
 
         assert!(!children.remove(entity1)); // Already removed
+    }
+
+    #[test]
+    fn test_mesh_handle_creation() {
+        let handle = MeshHandle::new("cube");
+        assert_eq!(handle.id(), "cube");
+        
+        let handle2: MeshHandle = "pyramid".into();
+        assert_eq!(handle2.id(), "pyramid");
+        
+        let handle3: MeshHandle = "sphere".to_string().into();
+        assert_eq!(handle3.id(), "sphere");
+    }
+
+    #[test]
+    fn test_mesh_handle_equality() {
+        let handle1 = MeshHandle::new("cube");
+        let handle2 = MeshHandle::new("cube");
+        let handle3 = MeshHandle::new("sphere");
+        
+        assert_eq!(handle1, handle2);
+        assert_ne!(handle1, handle3);
+    }
+
+    #[test]
+    fn test_mesh_creation() {
+        let vertices = vec![
+            [0.0, 1.0, 0.0],
+            [-1.0, -1.0, 0.0],
+            [1.0, -1.0, 0.0],
+        ];
+        let indices = vec![0, 1, 2];
+        
+        let mesh = Mesh::new(vertices.clone(), indices.clone());
+        
+        assert_eq!(mesh.vertex_count(), 3);
+        assert_eq!(mesh.index_count(), 3);
+        assert_eq!(mesh.triangle_count(), 1);
+        assert!(mesh.colors.is_none());
+        assert!(mesh.normals.is_none());
+        assert!(mesh.uvs.is_none());
+    }
+
+    #[test]
+    fn test_mesh_with_colors() {
+        let vertices = vec![
+            [0.0, 1.0, 0.0],
+            [-1.0, -1.0, 0.0],
+            [1.0, -1.0, 0.0],
+        ];
+        let colors = vec![
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ];
+        let indices = vec![0, 1, 2];
+        
+        let mesh = Mesh::with_colors(vertices, colors, indices);
+        
+        assert_eq!(mesh.vertex_count(), 3);
+        assert!(mesh.colors.is_some());
+        assert_eq!(mesh.colors.as_ref().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn test_mesh_attribute_setters() {
+        let vertices = vec![[0.0, 0.0, 0.0]];
+        let indices = vec![0];
+        let mut mesh = Mesh::new(vertices, indices);
+        
+        // Test color setter
+        mesh.set_colors(vec![[1.0, 0.0, 0.0]]);
+        assert!(mesh.colors.is_some());
+        
+        // Test normal setter
+        mesh.set_normals(vec![[0.0, 1.0, 0.0]]);
+        assert!(mesh.normals.is_some());
+        
+        // Test UV setter
+        mesh.set_uvs(vec![[0.5, 0.5]]);
+        assert!(mesh.uvs.is_some());
     }
 }

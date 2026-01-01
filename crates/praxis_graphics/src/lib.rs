@@ -9,6 +9,50 @@
 //! - `vertex`: Vertex data structures and primitives
 //! - `pipeline`: Graphics pipeline creation and configuration
 //! - `shaders`: GLSL shader compilation to SPIR-V
+//! - `mesh`: Mesh data structures and asset management
+//! - `primitives`: Built-in primitive mesh generators
+//!
+//! # Mesh System
+//!
+//! The mesh system provides complete support for loading and rendering 3D geometry:
+//!
+//! - **`MeshData`**: CPU-side mesh definition with vertices, indices, and attributes
+//! - **`GpuMesh`**: GPU-side mesh containing Vulkan buffers
+//! - **`MeshAssetManager`**: Central manager for loaded meshes
+//! - **Primitive Generators**: Built-in functions for common shapes
+//!
+//! ## Usage Example
+//!
+//! ```rust,no_run
+//! use praxis_graphics::{RenderContext, colored_cube_mesh, DrawCommand, MeshRenderCommands};
+//! use praxis_math::{Mat4, Vec3};
+//!
+//! // Load meshes during initialization
+//! # async fn example(mut render_context: RenderContext) -> praxis_utils::Result<()> {
+//! render_context
+//!     .mesh_manager_mut()
+//!     .load_mesh("cube", colored_cube_mesh())?;
+//!
+//! // Render in the frame loop
+//! let draw_commands = vec![
+//!     DrawCommand {
+//!         mesh_id: "cube".to_string(),
+//!         model: Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0)),
+//!     },
+//! ];
+//!
+//! let cmds = MeshRenderCommands {
+//!     view: Mat4::IDENTITY,
+//!     proj: Mat4::IDENTITY,
+//!     draw_commands: &draw_commands,
+//! };
+//!
+//! render_context.render_meshes(&cmds)?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! See the [mesh system documentation](../../docs/mesh_system.md) for complete details.
 //!
 //! # Rendering Flow
 //!
@@ -32,6 +76,7 @@ mod pipeline;
 mod primitives;
 mod shaders;
 mod vertex;
+pub mod mesh;
 
 use crate::{device::VulkanDevice, pipeline::create_simple_pipeline_3d, vertex::Vertex3D};
 use praxis_math::Mat4;
@@ -99,6 +144,30 @@ pub struct RenderCommands<'a> {
     pub models: &'a [Mat4],
 }
 
+/// A single draw command with mesh and transform.
+///
+/// This represents one object to be rendered with a specific mesh and transform.
+#[derive(Debug, Clone)]
+pub struct DrawCommand {
+    /// Identifier of the mesh to draw.
+    pub mesh_id: String,
+    /// Model matrix for this object.
+    pub model: Mat4,
+}
+
+/// Extended render commands that support multiple meshes.
+///
+/// This version allows each draw command to specify which mesh to use,
+/// enabling rendering of different geometry types in a single frame.
+pub struct MeshRenderCommands<'a> {
+    /// Camera view matrix (world → view).
+    pub view: Mat4,
+    /// Camera projection matrix (view → clip).
+    pub proj: Mat4,
+    /// List of draw commands with mesh references.
+    pub draw_commands: &'a [DrawCommand],
+}
+
 /// Core graphics context containing the Vulkan state.
 ///
 /// This struct manages the entire graphics rendering pipeline, from initialization
@@ -163,6 +232,9 @@ pub struct RenderContext {
     previous_frame_end: Option<Box<dyn GpuFuture>>,
 
     frame_timer: FrameTimer,
+    
+    /// Mesh asset manager for loading and managing meshes.
+    mesh_manager: mesh::MeshAssetManager,
 }
 
 impl RenderContext {
@@ -306,6 +378,9 @@ impl RenderContext {
         // Initialize frame synchronization
         let previous_frame_end = Some(sync::now(device.clone()).boxed());
 
+        // Initialize mesh manager
+        let mesh_manager = mesh::MeshAssetManager::new(memory_allocator.clone());
+
         info!(
             "Graphics context initialization complete in {:?}",
             init_start.elapsed()
@@ -339,7 +414,24 @@ impl RenderContext {
 
             // Performance tracking
             frame_timer: FrameTimer::new(),
+            
+            // Mesh management
+            mesh_manager,
         })
+    }
+
+    /// Gets a reference to the mesh asset manager.
+    ///
+    /// Use this to load, access, or manage mesh assets.
+    pub fn mesh_manager(&self) -> &mesh::MeshAssetManager {
+        &self.mesh_manager
+    }
+
+    /// Gets a mutable reference to the mesh asset manager.
+    ///
+    /// Use this to load or modify mesh assets.
+    pub fn mesh_manager_mut(&mut self) -> &mut mesh::MeshAssetManager {
+        &mut self.mesh_manager
     }
 
     /// Marks the swapchain for recreation on the next frame.
@@ -588,6 +680,221 @@ impl RenderContext {
         Ok(())
     }
 
+    /// Renders a frame with support for multiple mesh types.
+    ///
+    /// This is an extended version of `render()` that allows rendering different
+    /// mesh types in the same frame. Each draw command specifies which mesh to use.
+    ///
+    /// # Arguments
+    ///
+    /// * `cmds` - Render commands containing camera matrices and draw commands
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Swapchain recreation fails
+    /// - A referenced mesh doesn't exist
+    /// - Command buffer recording fails
+    /// - GPU submission fails
+    pub fn render_meshes(&mut self, cmds: &MeshRenderCommands) -> Result<()> {
+        let _ = self.frame_timer.tick();
+
+        let mut previous_frame_end = self
+            .previous_frame_end
+            .take()
+            .unwrap_or_else(|| sync::now(self.device.clone()).boxed());
+
+        // Handle minimized window
+        if let Some(obj) = self.surface.object() {
+            if let Some(window) = obj.downcast_ref::<Window>() {
+                let size = window.inner_size();
+                if size.width == 0 || size.height == 0 {
+                    previous_frame_end.cleanup_finished();
+                    self.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+                    return Ok(());
+                }
+            }
+        }
+
+        if self.recreate_swapchain {
+            debug!("Recreating swapchain due to pending resize");
+            let start_time = std::time::Instant::now();
+            previous_frame_end
+                .flush()
+                .expect("Failed to flush previous frame end");
+            self.recreate_swapchain_and_framebuffers()?;
+            self.recreate_swapchain = false;
+            previous_frame_end = sync::now(self.device.clone()).boxed();
+            info!(
+                "Swapchain recreation completed in {:?}",
+                start_time.elapsed()
+            );
+        }
+
+        previous_frame_end.cleanup_finished();
+
+        // Build per-object descriptor sets and collect mesh references
+        let mut draw_list: Vec<(Arc<DescriptorSet>, &mesh::GpuMesh)> = Vec::new();
+        
+        for draw_cmd in cmds.draw_commands.iter() {
+            let mesh = self
+                .mesh_manager
+                .get_mesh(&draw_cmd.mesh_id)
+                .ok_or_else(|| eyre::eyre!("Mesh '{}' not found", draw_cmd.mesh_id))?;
+
+            let uniforms = Uniforms {
+                model: draw_cmd.model.to_cols_array_2d(),
+                view: cmds.view.to_cols_array_2d(),
+                proj: cmds.proj.to_cols_array_2d(),
+            };
+
+            let buffer = Buffer::from_data(
+                self.memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::UNIFORM_BUFFER,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                uniforms,
+            )
+            .map_err(|e| eyre::eyre!("Failed to create uniform buffer: {}", e))?;
+
+            let set = DescriptorSet::new(
+                self.descriptor_set_allocator.clone(),
+                self.descriptor_set_layout.clone(),
+                [WriteDescriptorSet::buffer(0, buffer.clone())],
+                [],
+            )
+            .map_err(|e| eyre::eyre!("Failed to create descriptor set: {}", e))?;
+
+            draw_list.push((set, mesh));
+        }
+
+        trace!("Acquiring next swapchain image");
+        let acquire_start = std::time::Instant::now();
+        let (image_index, suboptimal, acquire_future) =
+            vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None)
+                .map_err(|e| eyre::eyre!("Failed to acquire next image: {}", e))?;
+        trace!(
+            "Image {} acquired in {:?}",
+            image_index,
+            acquire_start.elapsed()
+        );
+
+        if suboptimal {
+            warn!("Swapchain is suboptimal, will recreate on next frame");
+            self.recreate_swapchain = true;
+        }
+
+        trace!("Building command buffer for frame");
+        let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
+            self.command_buffer_allocator.clone(),
+            self.graphics_queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create command buffer: {}", e))?;
+
+        command_buffer_builder
+            .begin_render_pass(
+                RenderPassBeginInfo {
+                    clear_values: vec![Some([0.1, 0.2, 0.3, 1.0].into())],
+                    ..RenderPassBeginInfo::framebuffer(
+                        self.framebuffers[image_index as usize].clone(),
+                    )
+                },
+                SubpassBeginInfo {
+                    contents: vulkano::command_buffer::SubpassContents::Inline,
+                    ..Default::default()
+                },
+            )
+            .map_err(|e| eyre::eyre!("Failed to begin render pass: {}", e))?;
+
+        command_buffer_builder
+            .bind_pipeline_graphics(self.graphics_pipeline.clone())
+            .map_err(|e| eyre::eyre!("Failed to bind graphics pipeline: {}", e))?;
+
+        command_buffer_builder
+            .set_viewport(0, [self.viewport.clone()].into_iter().collect())
+            .map_err(|e| eyre::eyre!("Failed to set viewport: {}", e))?;
+
+        // Draw each object with its specific mesh and descriptor set
+        for (descriptor_set, mesh) in draw_list.iter() {
+            command_buffer_builder
+                .bind_vertex_buffers(0, mesh.vertex_buffer.clone())
+                .map_err(|e| eyre::eyre!("Failed to bind vertex buffer: {}", e))?
+                .bind_index_buffer(mesh.index_buffer.clone())
+                .map_err(|e| eyre::eyre!("Failed to bind index buffer: {}", e))?;
+
+            unsafe {
+                command_buffer_builder
+                    .bind_descriptor_sets(
+                        PipelineBindPoint::Graphics,
+                        self.graphics_pipeline.layout().clone(),
+                        0,
+                        descriptor_set.clone(),
+                    )
+                    .map_err(|e| eyre::eyre!("Failed to bind descriptor set: {}", e))?
+                    .draw_indexed(mesh.index_count, 1, 0, 0, 0)
+                    .map_err(|e| eyre::eyre!("Failed to draw indexed: {}", e))?;
+            }
+        }
+
+        command_buffer_builder
+            .end_render_pass(SubpassEndInfo::default())
+            .map_err(|e| eyre::eyre!("Failed to end render pass: {}", e))?;
+
+        let command_buffer = command_buffer_builder
+            .build()
+            .map_err(|e| eyre::eyre!("Failed to build command buffer: {}", e))?;
+
+        trace!("Submitting command buffer to graphics queue");
+
+        let execution = previous_frame_end
+            .join(acquire_future)
+            .then_execute(self.graphics_queue.clone(), command_buffer)
+            .map_err(|e| eyre::eyre!("Failed to submit command buffer: {}", e))?;
+
+        let future = execution
+            .then_swapchain_present(
+                self.present_queue.clone(),
+                SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index),
+            )
+            .then_signal_fence_and_flush();
+
+        let future = match future {
+            Ok(future) => future,
+            Err(vulkano::Validated::Error(e)) => {
+                use vulkano::VulkanError;
+                match e {
+                    VulkanError::OutOfDate => {
+                        debug!("Swapchain out of date, will recreate on next frame");
+                        self.recreate_swapchain = true;
+                        self.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+                        return Ok(());
+                    }
+                    _ => {
+                        error!("Failed to present frame: {}", e);
+                        return Err(eyre::eyre!("Failed to flush future: {}", e));
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Failed to present frame: {}", e);
+                return Err(eyre::eyre!("Failed to flush future: {}", e));
+            }
+        };
+
+        self.previous_frame_end = Some(future.boxed());
+
+        trace!("Frame rendering complete");
+
+        Ok(())
+    }
+
     /// Creates a swapchain for presenting rendered images to the window.
     ///
     /// The swapchain is a queue of images that can be presented to the window.
@@ -781,3 +1088,7 @@ impl RenderContext {
         Ok(())
     }
 }
+
+// Public re-exports
+pub use mesh::{GpuMesh, MeshData};
+pub use primitives::{colored_cube_mesh, pyramid_mesh, quad_mesh, solid_cube_mesh};

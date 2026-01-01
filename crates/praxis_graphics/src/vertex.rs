@@ -89,6 +89,7 @@ impl Vertex2D {
     /// // Create a white vertex at the origin
     /// let vertex = VertexData::new([0.0, 0.0], [1.0, 1.0, 1.0]);
     /// ```
+    #[allow(dead_code)]
     pub fn new(position: [f32; 2], color: [f32; 3]) -> Self {
         Self { position, color }
     }

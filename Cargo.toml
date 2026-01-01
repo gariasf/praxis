@@ -56,3 +56,11 @@ path = "examples/ecs_integration.rs"
 [[example]]
 name = "transform_propagation_demo"
 path = "examples/transform_propagation_demo.rs"
+
+[[example]]
+name = "mesh_demo"
+path = "examples/mesh_demo.rs"
+
+[[example]]
+name = "multi_mesh_demo"
+path = "examples/multi_mesh_demo.rs"

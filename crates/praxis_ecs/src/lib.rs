@@ -71,6 +71,52 @@
 //! // Child's global position will be (15, 0, 0)
 //! ```
 //!
+//! # Mesh Components
+//!
+//! The ECS provides two mesh-related components for rendering 3D geometry:
+//!
+//! - **`Mesh`**: Stores mesh data directly on the entity. Useful for procedural
+//!   or dynamic meshes that are unique to an entity.
+//!
+//! - **`MeshHandle`**: References a mesh by ID from the graphics system's asset
+//!   manager. This is the preferred approach for shared static meshes.
+//!
+//! ## Mesh Example
+//!
+//! ```rust,no_run
+//! use praxis_ecs::{World, Mesh, Transform};
+//!
+//! let mut world = World::new();
+//!
+//! let vertices = vec![
+//!     [0.0, 1.0, 0.0],
+//!     [-1.0, -1.0, 0.0],
+//!     [1.0, -1.0, 0.0],
+//! ];
+//! let indices = vec![0, 1, 2];
+//!
+//! world.spawn((
+//!     Transform::default(),
+//!     Mesh::new(vertices, indices),
+//! ));
+//! ```
+//!
+//! ## MeshHandle Example
+//!
+//! ```rust,no_run
+//! use praxis_ecs::{World, MeshHandle, Transform};
+//!
+//! let mut world = World::new();
+//!
+//! // Reference a mesh loaded in the graphics system
+//! world.spawn((
+//!     Transform::from_xyz(0.0, 0.0, 0.0),
+//!     MeshHandle::new("cube"),
+//! ));
+//! ```
+//!
+//! See the [mesh system documentation](../../docs/mesh_system.md) for complete details.
+//!
 //! # Basic Example
 //!
 //! ```rust,no_run
