@@ -384,6 +384,7 @@ impl World {
     }
 
     /// Returns the number of entities currently in the world.
+    #[allow(clippy::unnecessary_cast)]
     pub fn entity_count(&self) -> u32 {
         self.inner.entities().len() as u32
     }

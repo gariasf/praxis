@@ -52,3 +52,7 @@ path = "examples/ecs_demo.rs"
 [[example]]
 name = "ecs_integration"
 path = "examples/ecs_integration.rs"
+
+[[example]]
+name = "transform_propagation_demo"
+path = "examples/transform_propagation_demo.rs"

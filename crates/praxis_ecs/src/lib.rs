@@ -10,7 +10,68 @@
 //! - **Components**: Data attached to entities (position, velocity, etc.)
 //! - **Systems**: Logic that operates on entities with specific components
 //!
-//! # Example
+//! # Transform Propagation System
+//!
+//! The transform propagation system automatically updates `GlobalTransform` components
+//! based on local `Transform` and the parent-child hierarchy defined by `Parent` and
+//! `Children` components.
+//!
+//! ## Key Systems
+//!
+//! - **`sync_parent_child_relationships`**: Maintains the bidirectional parent-child
+//!   relationship by updating `Children` components when `Parent` components are added
+//!   or changed.
+//!
+//! - **`cleanup_removed_parents`**: Removes orphaned children from `Children` components
+//!   when `Parent` components are removed.
+//!
+//! - **`propagate_transforms`**: Updates `GlobalTransform` for root entities (without parents)
+//!   when their `Transform` changes, and recursively propagates to all descendants.
+//!
+//! - **`propagate_transforms_for_reparented`**: Immediately updates `GlobalTransform` for
+//!   entities whose `Parent` was added or changed.
+//!
+//! - **`propagate_transforms_for_changed_children`**: Updates `GlobalTransform` for entities
+//!   with parents when their local `Transform` changes.
+//!
+//! ## Usage Example
+//!
+//! ```rust,no_run
+//! use praxis_ecs::{World, Schedule, IntoSystemConfigs};
+//! use praxis_ecs::{Transform, GlobalTransform, Parent, Children};
+//! use praxis_ecs::systems::*;
+//!
+//! let mut world = World::new();
+//! let mut schedule = Schedule::default();
+//!
+//! // Add transform propagation systems in the correct order
+//! schedule.add_systems((
+//!     sync_parent_child_relationships,
+//!     cleanup_removed_parents,
+//!     propagate_transforms,
+//!     propagate_transforms_for_reparented,
+//!     propagate_transforms_for_changed_children,
+//! ).chain());
+//!
+//! // Create a parent-child hierarchy
+//! let parent = world.spawn((
+//!     Transform::from_xyz(10.0, 0.0, 0.0),
+//!     GlobalTransform::default(),
+//! ));
+//!
+//! let child = world.spawn((
+//!     Transform::from_xyz(5.0, 0.0, 0.0),
+//!     GlobalTransform::default(),
+//!     Parent(parent),
+//! ));
+//!
+//! // Run the schedule to propagate transforms
+//! world.inner_mut().run_schedule(&mut schedule);
+//!
+//! // Child's global position will be (15, 0, 0)
+//! ```
+//!
+//! # Basic Example
 //!
 //! ```rust,no_run
 //! use praxis_ecs::{World, Component};
