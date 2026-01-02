@@ -35,23 +35,36 @@ layout(location = 0) out vec4 f_color;
 
 layout(set = 0, binding = 1) uniform sampler2D albedo_texture;
 
+// Directional light structure matching DirectionalLightData on CPU
+struct DirectionalLight {
+    vec4 direction;  // xyz = direction, w = padding
+    vec4 color;      // rgb = color, a = padding
+    float intensity;
+    float _padding[3];
+};
+
+// Point light structure matching PointLightData on CPU
+struct PointLight {
+    vec4 position;   // xyz = position, w = padding
+    vec4 color;      // rgb = color, a = padding
+    float intensity;
+    float range;
+    float _padding[2];
+};
+
+// Lighting uniform buffer (set 0, binding 2)
+// This contains all lighting data passed from the CPU
+layout(set = 0, binding = 2, std140) uniform LightingData {
+    DirectionalLight directional_lights[8];
+    PointLight point_lights[16];
+    vec4 ambient_color;
+    uint directional_light_count;
+    uint point_light_count;
+} lighting;
+
 // Lighting constants
-// TODO: These should be passed via uniform buffers from the ECS DirectionalLight
-// and PointLight components. For now, they are hardcoded for demonstration.
-const vec3 AMBIENT_LIGHT = vec3(0.1, 0.1, 0.1);
 const float SHININESS = 32.0;
 const vec3 CAMERA_POS = vec3(0.0, 5.0, 10.0); // Temporary fixed camera position
-
-// Directional light (simulating sun)
-const vec3 DIR_LIGHT_DIRECTION = normalize(vec3(0.5, -1.0, 0.3));
-const vec3 DIR_LIGHT_COLOR = vec3(1.0, 0.95, 0.8);
-const float DIR_LIGHT_INTENSITY = 1.0;
-
-// Point light
-const vec3 POINT_LIGHT_POS = vec3(0.0, 5.0, 0.0);
-const vec3 POINT_LIGHT_COLOR = vec3(1.0, 0.9, 0.7);
-const float POINT_LIGHT_INTENSITY = 10.0;
-const float POINT_LIGHT_RANGE = 20.0;
 
 // Calculate diffuse lighting using Lambert's cosine law
 float calculate_diffuse(vec3 normal, vec3 light_dir) {
@@ -86,11 +99,12 @@ void main() {
     vec3 view_dir = normalize(CAMERA_POS - v_world_pos);
     
     // Initialize lighting accumulator with ambient light
-    vec3 lighting = AMBIENT_LIGHT;
+    vec3 lighting_result = lighting.ambient_color.rgb;
     
-    // === Directional Light ===
-    {
-        vec3 light_dir = -DIR_LIGHT_DIRECTION; // Light direction points toward source
+    // === Directional Lights ===
+    for (uint i = 0; i < lighting.directional_light_count; i++) {
+        DirectionalLight light = lighting.directional_lights[i];
+        vec3 light_dir = -light.direction.xyz; // Light direction points toward source
         
         // Diffuse component
         float diffuse = calculate_diffuse(normal, light_dir);
@@ -99,18 +113,19 @@ void main() {
         float specular = calculate_specular(normal, light_dir, view_dir);
         
         // Combine diffuse and specular with light properties
-        vec3 dir_light_contrib = DIR_LIGHT_COLOR * DIR_LIGHT_INTENSITY * (diffuse + specular * 0.5);
-        lighting += dir_light_contrib;
+        vec3 dir_light_contrib = light.color.rgb * light.intensity * (diffuse + specular * 0.5);
+        lighting_result += dir_light_contrib;
     }
     
-    // === Point Light ===
-    {
-        vec3 light_vec = POINT_LIGHT_POS - v_world_pos;
+    // === Point Lights ===
+    for (uint i = 0; i < lighting.point_light_count; i++) {
+        PointLight light = lighting.point_lights[i];
+        vec3 light_vec = light.position.xyz - v_world_pos;
         float distance = length(light_vec);
         vec3 light_dir = light_vec / distance; // Normalize
         
         // Calculate attenuation
-        float attenuation = calculate_attenuation(distance, POINT_LIGHT_RANGE);
+        float attenuation = calculate_attenuation(distance, light.range);
         
         // Diffuse component
         float diffuse = calculate_diffuse(normal, light_dir);
@@ -119,13 +134,13 @@ void main() {
         float specular = calculate_specular(normal, light_dir, view_dir);
         
         // Combine with attenuation and light properties
-        vec3 point_light_contrib = POINT_LIGHT_COLOR * POINT_LIGHT_INTENSITY * 
+        vec3 point_light_contrib = light.color.rgb * light.intensity * 
                                    (diffuse + specular * 0.3) * attenuation;
-        lighting += point_light_contrib;
+        lighting_result += point_light_contrib;
     }
     
     // Apply lighting to albedo
-    vec3 final_color = lighting * albedo;
+    vec3 final_color = lighting_result * albedo;
     
     // Output final color with alpha from texture
     f_color = vec4(final_color, tex_color.a);

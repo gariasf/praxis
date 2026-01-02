@@ -13,6 +13,7 @@
 //! - `primitives`: Built-in primitive mesh generators
 //! - `texture`: Texture loading and management
 //! - `material`: Material system with texture support
+//! - `lighting`: Lighting uniforms and buffer management
 //!
 //! # Mesh System
 //!
@@ -74,6 +75,19 @@
 //! 3. **Descriptor Sets**: Texture sampler bound at set 0, binding 1
 //! 4. **Mesh Data**: `MeshData` supports UV coordinates via `with_uvs()` and `with_colors_and_uvs()`
 //! 5. **Primitives**: Textured primitives like `textured_cube_mesh()` and `textured_quad_mesh()`
+//!
+//! # Lighting System
+//!
+//! The lighting system provides dynamic lighting support with directional and point lights:
+//!
+//! - **`LightingUniforms`**: CPU-side lighting data structure with std140 layout
+//! - **`LightingUniformBuffer`**: GPU buffer management for lighting data
+//! - **`DirectionalLightData`**: Sun-like lights with direction but no position
+//! - **`PointLightData`**: Omnidirectional lights with position and attenuation
+//!
+//! The lighting data is bound at descriptor set 0, binding 2 and automatically
+//! included in all descriptor sets. The fragment shader uses this data to compute
+//! Blinn-Phong lighting for each pixel.
 //!
 //! ## Usage Example
 //!
@@ -157,6 +171,7 @@
 //! ```
 
 mod device;
+pub mod lighting;
 pub mod material;
 pub mod mesh;
 mod pipeline;
@@ -356,6 +371,9 @@ pub struct RenderContext {
 
     /// Texture asset manager for loading and managing textures.
     texture_manager: texture::TextureManager,
+
+    /// Lighting uniform buffer for passing lighting data to shaders.
+    lighting_buffer: lighting::LightingUniformBuffer,
 }
 
 impl RenderContext {
@@ -515,6 +533,10 @@ impl RenderContext {
             .create_default_white_texture()
             .map_err(|e| eyre::eyre!("Failed to create default white texture: {}", e))?;
 
+        // Create lighting uniform buffer
+        debug!("Creating lighting uniform buffer");
+        let lighting_buffer = lighting::LightingUniformBuffer::new(memory_allocator.clone())?;
+
         info!(
             "Graphics context initialization complete in {:?}",
             init_start.elapsed()
@@ -554,6 +576,9 @@ impl RenderContext {
 
             // Texture management
             texture_manager,
+
+            // Lighting management
+            lighting_buffer,
         })
     }
 
@@ -583,6 +608,20 @@ impl RenderContext {
     /// Use this to load or modify texture assets.
     pub fn texture_manager_mut(&mut self) -> &mut texture::TextureManager {
         &mut self.texture_manager
+    }
+
+    /// Gets a reference to the lighting uniform buffer.
+    ///
+    /// Use this to access lighting data.
+    pub fn lighting_buffer(&self) -> &lighting::LightingUniformBuffer {
+        &self.lighting_buffer
+    }
+
+    /// Gets a mutable reference to the lighting uniform buffer.
+    ///
+    /// Use this to update lighting data for the next frame.
+    pub fn lighting_buffer_mut(&mut self) -> &mut lighting::LightingUniformBuffer {
+        &mut self.lighting_buffer
     }
 
     /// Marks the swapchain for recreation on the next frame.
@@ -718,6 +757,7 @@ impl RenderContext {
                         default_texture.view.clone(),
                         default_texture.sampler.clone(),
                     ),
+                    WriteDescriptorSet::buffer(2, self.lighting_buffer.buffer().clone()),
                 ],
                 [],
             )
@@ -940,6 +980,7 @@ impl RenderContext {
                         default_texture.view.clone(),
                         default_texture.sampler.clone(),
                     ),
+                    WriteDescriptorSet::buffer(2, self.lighting_buffer.buffer().clone()),
                 ],
                 [],
             )
@@ -1172,6 +1213,7 @@ impl RenderContext {
                         texture.view.clone(),
                         texture.sampler.clone(),
                     ),
+                    WriteDescriptorSet::buffer(2, self.lighting_buffer.buffer().clone()),
                 ],
                 [],
             )
@@ -1499,6 +1541,10 @@ impl RenderContext {
 }
 
 // Public re-exports
+pub use lighting::{
+    DirectionalLightData, LightingUniformBuffer, LightingUniforms, PointLightData,
+    MAX_DIRECTIONAL_LIGHTS, MAX_POINT_LIGHTS,
+};
 pub use material::{Material, MaterialProperties};
 pub use mesh::{GpuMesh, MeshData};
 pub use primitives::{
