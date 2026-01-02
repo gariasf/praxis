@@ -258,6 +258,13 @@ impl MeshAssetManager {
         debug!("Clearing {} loaded meshes", self.meshes.len());
         self.meshes.clear();
     }
+
+    /// Gets a reference to the memory allocator.
+    ///
+    /// This can be used to create custom GPU meshes outside of the asset manager.
+    pub fn allocator(&self) -> &Arc<dyn MemoryAllocator> {
+        &self.allocator
+    }
 }
 
 #[cfg(test)]

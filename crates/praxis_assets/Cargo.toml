@@ -5,3 +5,6 @@ edition = "2024"
 license = "GPL-3.0-or-later"
 
 [dependencies]
+tobj = "4.0"
+praxis_utils = { path = "../praxis_utils", version = "0.1.0" }
+praxis_graphics = { path = "../praxis_graphics", version = "0.1.0" }

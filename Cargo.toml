@@ -39,6 +39,7 @@ praxis_graphics = { path = "crates/praxis_graphics", version = "0.1.0" }
 praxis_ecs = { path = "crates/praxis_ecs", version = "0.1.0" }
 praxis_input = { path = "crates/praxis_input", version = "0.1.0" }
 praxis_math = { path = "crates/praxis_math", version = "0.1.0" }
+praxis_assets = { path = "crates/praxis_assets", version = "0.1.0" }
 winit = { version = "0.30.11", features = ["rwh_05"] }
 pollster = "0.4"
 
@@ -81,3 +82,7 @@ path = "examples/camera_demo.rs"
 [[example]]
 name = "fps_camera_controller"
 path = "examples/fps_camera_controller.rs"
+
+[[example]]
+name = "obj_loader_demo"
+path = "examples/obj_loader_demo.rs"
