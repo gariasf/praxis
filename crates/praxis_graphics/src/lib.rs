@@ -365,6 +365,18 @@ pub struct RenderContext {
 
     /// Lighting uniform buffer for passing lighting data to shaders.
     lighting_buffer: lighting::LightingUniformBuffer,
+
+    /// Dynamic uniform buffer for per-object model matrices.
+    #[allow(dead_code)]
+    dynamic_uniform_buffer: uniform_buffer::DynamicUniformBuffer,
+
+    /// Descriptor set layout for per-frame view/projection data.
+    #[allow(dead_code)]
+    view_proj_descriptor_set_layout: Arc<vulkano::descriptor_set::layout::DescriptorSetLayout>,
+
+    /// Buffer for per-frame view/projection uniforms.
+    #[allow(dead_code)]
+    view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
 }
 
 impl RenderContext {
@@ -495,6 +507,42 @@ impl RenderContext {
         debug!("Creating lighting uniform buffer");
         let lighting_buffer = lighting::LightingUniformBuffer::new(memory_allocator.clone())?;
 
+        // Create dynamic uniform buffer with 3 frames in flight and 1024 max objects
+        debug!("Creating dynamic uniform buffer");
+        let dynamic_uniform_buffer = uniform_buffer::DynamicUniformBuffer::new(
+            &device,
+            memory_allocator.clone(),
+            3,
+            1024,
+        )?;
+
+        // Create view/projection descriptor set layout (same as descriptor_set_layout for now)
+        let view_proj_descriptor_set_layout = descriptor_set_layout.clone();
+
+        // Create initial view/projection buffer with identity matrices
+        debug!("Creating view/projection buffer");
+        let initial_view_proj = uniform_buffer::ViewProjectionUniforms {
+            view: Mat4::IDENTITY.to_cols_array_2d(),
+            proj: Mat4::IDENTITY.to_cols_array_2d(),
+            camera_position: [0.0, 0.0, 0.0],
+            _padding: 0.0,
+        };
+
+        let view_proj_buffer = Buffer::from_data(
+            memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            initial_view_proj,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create view/projection buffer: {}", e))?;
+
         info!(
             "Graphics context initialization complete in {:?}",
             init_start.elapsed()
@@ -538,6 +586,13 @@ impl RenderContext {
 
             // Lighting management
             lighting_buffer,
+
+            // Dynamic uniform buffer
+            dynamic_uniform_buffer,
+
+            // View/projection data
+            view_proj_descriptor_set_layout,
+            view_proj_buffer,
         })
     }
 
