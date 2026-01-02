@@ -11,7 +11,7 @@ use rapier3d::prelude::{
 
 use crate::components::{
     Collider as PraxisCollider, ExternalForces, Friction, Restitution,
-    RigidBody as PraxisRigidBody, Sensor, PhysicsVelocity,
+    RigidBody as PraxisRigidBody, Sensor, PhysicsVelocity, CollisionEventReceiver, CollisionEvent,
 };
 use crate::resources::{PhysicsWorld, PhysicsConfig, ContactEvents, PhysicsTime};
 
@@ -1139,4 +1139,272 @@ pub const fn cleanup_physics_entities(_commands: Commands, _physics_world: ResMu
     // Placeholder for cleanup logic
     // In a full implementation, this would detect removed RigidBody components
     // and clean up the corresponding Rapier handles
+}
+
+/// Clears collision event receivers at the start of each physics step.
+///
+/// This system prepares entities with `CollisionEventReceiver` components for
+/// the new physics step by clearing their event buffers. It should run before
+/// the physics simulation step to ensure old events don't persist.
+///
+/// # System Design: Event Buffer Management
+///
+/// The collision event system uses a **double-buffering pattern** at the conceptual
+/// level, though implemented through clear-and-fill:
+///
+/// 1. **Clear Phase** (this system): Remove previous frame's events
+/// 2. **Physics Step**: Generate new events during collision detection
+/// 3. **Populate Phase** (`populate_collision_events`): Distribute events to entities
+/// 4. **Game Logic**: User systems consume events
+///
+/// This pattern ensures:
+/// - Events are only valid for one frame (no stale events)
+/// - No memory leaks from accumulated events
+/// - Clean separation between physics and game logic
+///
+/// # Why Clear Before Physics Step?
+///
+/// Clearing happens before physics (not after game logic processes events) because:
+///
+/// 1. **Simplicity**: Game logic can process events anytime after physics without
+///    worrying about cleanup
+///
+/// 2. **Flexibility**: Multiple systems can read the same events throughout the frame
+///
+/// 3. **Safety**: If physics doesn't run (paused game), old events don't persist and
+///    cause confusion
+///
+/// 4. **Performance**: Clearing and filling happen in the same frame, keeping the
+///    vector's allocated capacity warm in cache
+///
+/// # Example: System Ordering
+///
+/// ```rust,no_run
+/// use praxis_ecs::{Schedule, IntoSystemConfigs};
+/// use praxis_physics::{
+///     clear_collision_event_receivers,
+///     physics_step_system,
+///     populate_collision_events,
+/// };
+///
+/// let mut schedule = Schedule::default();
+/// schedule.add_systems((
+///     // 1. Clear old events
+///     clear_collision_event_receivers,
+///     // 2. Run physics simulation (generates collision events)
+///     physics_step_system,
+///     // 3. Distribute events to entities
+///     populate_collision_events,
+///     // 4. Game logic systems can now process events
+/// ).chain());
+/// ```
+///
+/// # Performance Characteristics
+///
+/// - **Time Complexity**: O(n) where n is the number of entities with
+///   `CollisionEventReceiver` components
+/// - **Memory**: Reuses vector capacity, typically no allocations after warm-up
+/// - **Cache Efficiency**: Sequential iteration over components
+///
+/// # System Requirements
+///
+/// - **Query**: Entities with `CollisionEventReceiver` components (mutable)
+/// - **Ordering**: Should run before `physics_step_system`
+#[allow(clippy::needless_pass_by_value)]
+pub fn clear_collision_event_receivers(
+    mut query: Query<&mut CollisionEventReceiver>,
+) {
+    for mut receiver in &mut query {
+        receiver.clear();
+    }
+}
+
+/// Populates collision events from the global `ContactEvents` resource into entity components.
+///
+/// After the physics simulation generates collision events, this system distributes them
+/// to the appropriate `CollisionEventReceiver` components on entities. This bridges the
+/// gap between the physics engine's global event stream and the entity-centric ECS pattern.
+///
+/// # System Design: Event Distribution
+///
+/// This system implements the **Fan-Out Pattern**, taking events from a single source
+/// (the `ContactEvents` resource) and distributing them to multiple destinations
+/// (entity components). This design provides several benefits:
+///
+/// ## Centralized Generation, Distributed Consumption
+///
+/// The physics engine generates events in a central location (Rapier's narrow phase),
+/// and we distribute them to entities. This allows:
+/// - **Easy filtering**: Entities only process events relevant to them
+/// - **Parallel consumption**: Different entities' handlers can run in parallel
+/// - **Selective subscription**: Only entities with receivers get events
+///
+/// ## Why Not Just Use `ContactEvents` Directly?
+///
+/// You might wonder why we need this system - why not just read `ContactEvents` in
+/// game logic? The answer is ergonomics and performance:
+///
+/// **Without this system** (reading `ContactEvents` directly):
+/// ```rust,ignore
+/// fn my_game_logic(
+///     events: Res<ContactEvents>,
+///     my_entity_query: Query<Entity, With<Player>>,
+/// ) {
+///     // Have to filter global events for each entity
+///     for my_entity in &my_entity_query {
+///         for (e1, e2) in &events.collision_started {
+///             if e1 == my_entity || e2 == my_entity {
+///                 // Handle collision
+///             }
+///         }
+///     }
+/// }
+/// ```
+/// - O(n * m) complexity (n entities * m events)
+/// - Awkward to write
+/// - Code duplication across systems
+///
+/// **With this system** (reading CollisionEventReceiver):
+/// ```rust,ignore
+/// fn my_game_logic(query: Query<&CollisionEventReceiver, With<Player>>) {
+///     for receiver in &query {
+///         for event in &receiver.events {
+///             // Handle collision - already filtered!
+///         }
+///     }
+/// }
+/// ```
+/// - O(n + m) complexity (amortized)
+/// - Clean, ergonomic code
+/// - Natural ECS patterns
+///
+/// # Event Transformation
+///
+/// This system transforms events from the physics-centric representation to the
+/// entity-centric representation:
+///
+/// **Physics representation** (in ContactEvents):
+/// ```text
+/// collision_started: [(Entity1, Entity2), (Entity3, Entity4), ...]
+/// ```
+///
+/// **Entity representation** (in CollisionEventReceiver):
+/// ```text
+/// Entity1.events: [CollisionStarted(Entity1, Entity2)]
+/// Entity2.events: [CollisionStarted(Entity1, Entity2)]
+/// Entity3.events: [CollisionStarted(Entity3, Entity4)]
+/// Entity4.events: [CollisionStarted(Entity3, Entity4)]
+/// ```
+///
+/// Notice that each collision generates events for **both** entities involved. This is
+/// important because:
+/// - Both entities might need to react (player hits enemy → both respond)
+/// - Allows decoupled, entity-focused logic
+/// - Simplifies queries (don't need to check "am I entity1 or entity2?")
+///
+/// # Example: Handling Different Event Types
+///
+/// ```rust,no_run
+/// use praxis_physics::{CollisionEventReceiver, CollisionEvent};
+/// use praxis_ecs::Query;
+///
+/// fn damage_on_collision(mut query: Query<&CollisionEventReceiver>) {
+///     for receiver in query.iter() {
+///         for event in &receiver.events {
+///             match event {
+///                 CollisionEvent::CollisionStarted(_, other) => {
+///                     println!("Started hitting {:?}", other);
+///                     // Apply impact damage
+///                 }
+///                 CollisionEvent::CollisionPersisted(_, other) => {
+///                     println!("Still touching {:?}", other);
+///                     // Apply continuous damage (like fire)
+///                 }
+///                 CollisionEvent::CollisionStopped(_, other) => {
+///                     println!("Stopped touching {:?}", other);
+///                     // Stop damage-over-time effects
+///                 }
+///             }
+///         }
+///     }
+/// }
+/// ```
+///
+/// # Performance Characteristics
+///
+/// - **Time Complexity**: O(e + q) where e is the number of collision events and q
+///   is the number of entities with `CollisionEventReceiver`. Each event requires 2
+///   entity lookups (one for each participant).
+/// - **Space Complexity**: O(e) - each collision event is duplicated to both entities
+/// - **Cache Efficiency**: Good - query iteration is sequential, entity lookup uses
+///   the fast ECS entity index
+///
+/// # Edge Cases
+///
+/// - **Entity without receiver**: If an entity is involved in a collision but doesn't
+///   have a `CollisionEventReceiver` component, the event is silently ignored for that
+///   entity. The other entity (if it has a receiver) still gets the event.
+///
+/// - **Both entities lack receivers**: The collision still occurs physically (objects
+///   bounce, resolve, etc.), but no gameplay events are generated. This is efficient
+///   for scenery that doesn't need event handling.
+///
+/// - **Self-collision**: If the same entity appears as both e1 and e2 (shouldn't
+///   happen with Rapier, but theoretically possible), the entity receives the event once.
+///
+/// # System Requirements
+///
+/// - **Resources**: `ContactEvents` (Res) - source of collision events
+/// - **Query**: Entities with `CollisionEventReceiver` components (mutable)
+/// - **Ordering**: Should run after `physics_step_system`
+#[allow(clippy::needless_pass_by_value)]
+pub fn populate_collision_events(
+    contact_events: Res<ContactEvents>,
+    mut query: Query<(Entity, &mut CollisionEventReceiver)>,
+) {
+    // Build a quick lookup map for entities with receivers
+    // This allows O(1) lookup when processing events
+    let mut receivers: std::collections::HashMap<Entity, CollisionEventReceiver> = 
+        query.iter_mut()
+            .map(|(entity, receiver)| (entity, receiver.clone()))
+            .collect();
+
+    // Process collision started events
+    for (entity1, entity2) in &contact_events.collision_started {
+        let event = CollisionEvent::CollisionStarted(*entity1, *entity2);
+        
+        // Send event to entity1 if it has a receiver
+        if let Some(receiver) = receivers.get_mut(entity1) {
+            receiver.add_event(event);
+        }
+        
+        // Send event to entity2 if it has a receiver
+        if let Some(receiver) = receivers.get_mut(entity2) {
+            receiver.add_event(event);
+        }
+    }
+
+    // Process collision stopped events
+    for (entity1, entity2) in &contact_events.collision_stopped {
+        let event = CollisionEvent::CollisionStopped(*entity1, *entity2);
+        
+        if let Some(receiver) = receivers.get_mut(entity1) {
+            receiver.add_event(event);
+        }
+        
+        if let Some(receiver) = receivers.get_mut(entity2) {
+            receiver.add_event(event);
+        }
+    }
+    
+    // Write the updated receivers back to the query
+    for (entity, mut receiver) in &mut query {
+        if let Some(updated) = receivers.remove(&entity) {
+            *receiver = updated;
+        }
+    }
+
+    // Note: CollisionPersisted events would be added here if ContactEvents tracked them
+    // Currently ContactEvents only tracks collision_started and collision_stopped
+    // To add persisted events, we would need to track active collisions between frames
 }

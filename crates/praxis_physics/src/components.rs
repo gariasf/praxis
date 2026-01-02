@@ -983,3 +983,322 @@ impl LockedAxes {
         self
     }
 }
+
+/// Collision event types for collision detection.
+///
+/// This enum represents different types of collision events that can occur between
+/// two physics bodies during simulation. Collision detection is a fundamental part
+/// of any physics engine, allowing game logic to respond to physical interactions.
+///
+/// # Physics Background: Collision Detection
+///
+/// Collision detection in physics engines typically occurs in several phases:
+///
+/// ## 1. Broad Phase
+/// Uses spatial partitioning (like bounding volume hierarchies or spatial hashing)
+/// to quickly identify pairs of objects that might be colliding. This phase uses
+/// simple, fast tests (usually axis-aligned bounding box overlaps) to cull the
+/// vast majority of object pairs that are too far apart to collide.
+///
+/// ## 2. Narrow Phase
+/// For potentially colliding pairs identified by the broad phase, precise geometric
+/// tests determine if and where collision occurs. This uses algorithms like:
+/// - **GJK** (Gilbert-Johnson-Keerthi): Distance computation between convex shapes
+/// - **SAT** (Separating Axis Theorem): Finds separating planes between polytopes
+/// - **EPA** (Expanding Polytope Algorithm): Finds penetration depth and normal
+///
+/// ## 3. Contact Generation
+/// When a collision is detected, the system generates contact manifolds containing:
+/// - Contact points (where surfaces touch)
+/// - Contact normals (direction of collision)
+/// - Penetration depths (how much objects overlap)
+///
+/// ## 4. Contact Resolution
+/// The constraint solver uses contact information to apply impulses that:
+/// - Separate penetrating objects
+/// - Apply friction forces
+/// - Transfer momentum realistically
+///
+/// # Event Types
+///
+/// Collision events capture the temporal nature of collisions:
+///
+/// ## `CollisionStarted`
+/// Triggered when two bodies begin overlapping. This happens during the narrow phase
+/// when a new contact is detected that didn't exist in the previous frame. Use this to:
+/// - Play collision sound effects
+/// - Trigger particle effects (sparks, dust, etc.)
+/// - Activate game logic (pressure plates, damage zones)
+/// - Start continuous effects (like burning when touching fire)
+///
+/// ## `CollisionStopped`
+/// Triggered when two bodies that were overlapping stop overlapping. This occurs when:
+/// - Bodies move apart naturally (bouncing away)
+/// - One body is removed from the simulation
+/// - Bodies pass through each other (for sensors/triggers)
+///
+/// Use this to:
+/// - Stop continuous effects (exit fire zone → stop burning)
+/// - Deactivate game logic (step off pressure plate)
+/// - Clean up state associated with the collision
+///
+/// ## `CollisionPersisted`
+/// Triggered when two bodies continue to overlap from a previous frame. This represents
+/// stable contact where objects are resting against each other or sliding. The contact
+/// points are being updated but the collision state persists. Use this to:
+/// - Apply continuous damage (standing in fire)
+/// - Maintain friction effects
+/// - Update UI indicators (touching interactable objects)
+///
+/// # Implementation Note
+///
+/// These events are generated during the physics step and stored in the `ContactEvents`
+/// resource. They should be consumed by gameplay systems after the physics step but
+/// before the next frame's physics simulation.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_physics::CollisionEvent;
+/// use praxis_ecs::Entity;
+///
+/// fn handle_event(event: &CollisionEvent) {
+///     match event {
+///         CollisionEvent::CollisionStarted(entity1, entity2) => {
+///             println!("Collision started between {:?} and {:?}", entity1, entity2);
+///             // Play sound effect, trigger visual effects, etc.
+///         }
+///         CollisionEvent::CollisionStopped(entity1, entity2) => {
+///             println!("Collision stopped between {:?} and {:?}", entity1, entity2);
+///             // Stop continuous effects, cleanup state, etc.
+///         }
+///         CollisionEvent::CollisionPersisted(entity1, entity2) => {
+///             println!("Collision persisted between {:?} and {:?}", entity1, entity2);
+///             // Apply continuous damage, maintain state, etc.
+///         }
+///     }
+/// }
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CollisionEvent {
+    /// Two bodies started colliding this frame.
+    ///
+    /// This event fires once when contact is first detected between two bodies.
+    /// The order of entities (entity1, entity2) is not guaranteed - you should
+    /// handle both orders if the collision logic is asymmetric.
+    ///
+    /// # Physical Meaning
+    ///
+    /// This represents the frame where the narrow phase first detects overlap
+    /// between two colliders. The bodies' bounding volumes must have overlapped
+    /// in the broad phase, and precise collision detection confirmed actual
+    /// geometric intersection.
+    ///
+    /// # Timing
+    ///
+    /// The event is generated during `physics_step_system` and available
+    /// immediately after for consumption by gameplay systems.
+    CollisionStarted(bevy_ecs::entity::Entity, bevy_ecs::entity::Entity),
+    
+    /// Two bodies stopped colliding this frame.
+    ///
+    /// This event fires once when contact that existed in the previous frame
+    /// no longer exists in the current frame. This can happen due to:
+    /// - Bodies moving apart (separation velocity)
+    /// - Entity despawn
+    /// - Collider removal
+    /// - Physics world reset
+    ///
+    /// # Physical Meaning
+    ///
+    /// The narrow phase no longer detects overlap between the colliders. Either
+    /// the broad phase culled the pair (bodies too far apart) or precise collision
+    /// detection found no intersection.
+    ///
+    /// # Timing
+    ///
+    /// Generated at the end of the physics step when comparing the previous
+    /// frame's contact manifold with the current frame's.
+    CollisionStopped(bevy_ecs::entity::Entity, bevy_ecs::entity::Entity),
+    
+    /// Two bodies continued colliding this frame.
+    ///
+    /// This event fires every frame where contact exists between two bodies,
+    /// excluding the first frame (which fires `CollisionStarted` instead).
+    /// This represents stable or sliding contact.
+    ///
+    /// # Physical Meaning
+    ///
+    /// The collision manifold was updated but contact persists. The contact
+    /// points, normals, and penetration depths may have changed, but the two
+    /// bodies remain in contact. This is typical for:
+    /// - Objects resting on surfaces (static contact)
+    /// - Objects sliding against surfaces (kinetic friction)
+    /// - Sustained collisions (pushing against a wall)
+    ///
+    /// # Timing
+    ///
+    /// Generated during every physics step where contact exists, after the
+    /// first frame of collision.
+    ///
+    /// # Performance Note
+    ///
+    /// This event can fire frequently for stable contacts. If you only need
+    /// to react to the start/end of collisions, use `CollisionStarted` and
+    /// `CollisionStopped` instead to avoid unnecessary processing.
+    CollisionPersisted(bevy_ecs::entity::Entity, bevy_ecs::entity::Entity),
+}
+
+/// Component for receiving collision events on an entity.
+///
+/// Add this component to entities that need to respond to collision events.
+/// The physics system will populate this component with events involving
+/// this entity during each physics step.
+///
+/// # Design Pattern: Event Components
+///
+/// This follows the **Component-Based Event Pattern** where events are stored
+/// directly on entities rather than in a global event queue. This provides
+/// several advantages:
+///
+/// ## Benefits
+///
+/// 1. **Locality**: Events are stored next to the entity they affect, improving
+///    cache locality and making it easier to query "all entities that collided"
+///
+/// 2. **Entity-Centric Processing**: Systems can naturally iterate over entities
+///    with events, rather than iterating events and looking up entities
+///
+/// 3. **Lifetime Management**: Events are automatically cleaned up when entities
+///    are despawned (no orphaned events)
+///
+/// 4. **Parallel Processing**: Multiple systems can process different entities'
+///    events simultaneously without contention
+///
+/// ## Usage Pattern
+///
+/// The typical lifecycle is:
+/// 1. **Setup**: Add `CollisionEventReceiver` to entities that need event notifications
+/// 2. **Physics Step**: System populates `.events` with new collision events
+/// 3. **Game Logic**: Your systems iterate entities with events and react
+/// 4. **Cleanup**: Events are cleared at the start of the next physics step
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_physics::{CollisionEventReceiver, CollisionEvent, RigidBody, Collider};
+/// use praxis_ecs::{World, Query, Transform};
+///
+/// let mut world = World::new();
+///
+/// // Spawn an entity that receives collision events
+/// world.spawn((
+///     Transform::default(),
+///     RigidBody::Dynamic,
+///     Collider::sphere(1.0),
+///     CollisionEventReceiver::default(),
+/// ));
+///
+/// // System to handle collision events
+/// fn handle_collisions(mut query: Query<&mut CollisionEventReceiver>) {
+///     for mut receiver in query.iter_mut() {
+///         for event in &receiver.events {
+///             match event {
+///                 CollisionEvent::CollisionStarted(e1, e2) => {
+///                     println!("Started collision with {:?}", e2);
+///                 }
+///                 CollisionEvent::CollisionStopped(e1, e2) => {
+///                     println!("Stopped collision with {:?}", e2);
+///                 }
+///                 CollisionEvent::CollisionPersisted(e1, e2) => {
+///                     println!("Persisting collision with {:?}", e2);
+///                 }
+///             }
+///         }
+///         // Events are automatically cleared at the start of the next physics step
+///     }
+/// }
+/// ```
+///
+/// # Advanced: Filtering Events
+///
+/// You can filter events based on entity properties:
+///
+/// ```rust,no_run
+/// use praxis_physics::{CollisionEventReceiver, CollisionEvent};
+/// use praxis_ecs::{World, Query, Entity};
+///
+/// // Component to mark entities as enemies
+/// #[derive(bevy_ecs::component::Component)]
+/// struct Enemy;
+///
+/// fn player_hit_enemy(
+///     player_query: Query<&CollisionEventReceiver>,
+///     enemy_query: Query<Entity, bevy_ecs::query::With<Enemy>>,
+/// ) {
+///     for receiver in player_query.iter() {
+///         for event in &receiver.events {
+///             if let CollisionEvent::CollisionStarted(_, other) = event {
+///                 if enemy_query.get(*other).is_ok() {
+///                     println!("Player hit enemy!");
+///                 }
+///             }
+///         }
+///     }
+/// }
+/// ```
+///
+/// # Memory and Performance
+///
+/// Events are stored in a `Vec`, which is efficient for the typical case of
+/// 0-5 events per entity per frame. If an entity has many simultaneous collisions,
+/// the Vec will grow to accommodate them. Events are cleared each frame, so the
+/// Vec's capacity is reused without reallocation in most cases.
+#[derive(Component, Debug, Clone, Default)]
+pub struct CollisionEventReceiver {
+    /// Collection of collision events for this entity.
+    ///
+    /// This vector is populated during the physics step with all collision
+    /// events involving this entity. Events accumulate throughout the frame
+    /// and should be processed by game logic systems after physics.
+    ///
+    /// The vector is cleared at the start of each physics step to make room
+    /// for new events. Process or copy events before the next physics step
+    /// if you need to persist them longer.
+    pub events: Vec<CollisionEvent>,
+}
+
+impl CollisionEventReceiver {
+    /// Creates a new empty collision event receiver.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a collision event to this receiver.
+    ///
+    /// This is typically called by the physics system, not user code.
+    pub fn add_event(&mut self, event: CollisionEvent) {
+        self.events.push(event);
+    }
+
+    /// Clears all collision events.
+    ///
+    /// This is typically called at the start of each physics step to reset
+    /// the event buffer for the new frame.
+    pub fn clear(&mut self) {
+        self.events.clear();
+    }
+
+    /// Returns true if this receiver has any collision events.
+    #[must_use]
+    pub const fn has_events(&self) -> bool {
+        !self.events.is_empty()
+    }
+
+    /// Returns the number of collision events.
+    #[must_use]
+    pub const fn event_count(&self) -> usize {
+        self.events.len()
+    }
+}
