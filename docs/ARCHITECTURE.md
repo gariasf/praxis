@@ -26,8 +26,6 @@ praxis/
 │   ├── praxis_scene/
 │   ├── praxis_assets/
 │   ├── praxis_math/
-│   ├── praxis_audio/
-│   ├── praxis_physics/
 │   ├── praxis_gui/
 │   ├── praxis_scripting/
 │   └── praxis_utils/
@@ -84,14 +82,6 @@ praxis/
     - Configuration/Data: `serde` (with `serde_json`, `serde_yaml`, etc.).
   - Asynchronous loading capabilities.
   - Depends on: `praxis_core`, `praxis_utils`.
-- **`praxis_audio`:**
-  - Audio playback and spatialization.
-  - Proposed dependency: `rodio` (pure Rust) or `kira`.
-  - Depends on: `praxis_core`, `praxis_assets`.
-- **`praxis_physics`:**
-  - Physics simulation (collision detection, rigid body dynamics).
-  - Dependency: `rapier` (pure Rust 2D/3D physics engine).
-  - Depends on: `praxis_core`, `praxis_ecs`, `praxis_math`.
 - **`praxis_gui`:**
   - Debugging and editor tools GUI.
   - Dependency: `egui`.
@@ -123,8 +113,6 @@ praxis/
     - Textures: `image`
     - Models: `russimp` or `gltf`
     - Data: `serde`
-  - Audio: `rodio` or `kira`
-  - Physics: `rapier`
   - GUI: `egui`
   - Scripting: `mlua`
   - Logging: `tracing`, `tracing-subscriber`

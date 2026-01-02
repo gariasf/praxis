@@ -56,7 +56,7 @@ cargo doc --workspace --no-deps
 
 ### Workspace Structure
 
-Praxis uses a Cargo workspace with 12 crates organized by subsystem. The root `praxis` crate coordinates all subsystems:
+Praxis uses a Cargo workspace with 10 crates organized by subsystem. The root `praxis` crate coordinates all subsystems:
 
 - **praxis_core**: Engine lifecycle, main loop coordination, initialization sequence
 - **praxis_window**: Window management via `winit`, event loop handling
@@ -66,8 +66,6 @@ Praxis uses a Cargo workspace with 12 crates organized by subsystem. The root `p
 - **praxis_scene**: Scene graph and spatial organization
 - **praxis_assets**: Asset loading/management for textures, models, config files
 - **praxis_input**: Keyboard/mouse/gamepad handling
-- **praxis_audio**: Audio playback (via `rodio` or `kira`)
-- **praxis_physics**: Physics simulation via `rapier`
 - **praxis_gui**: Debug/editor GUI via `egui`
 - **praxis_utils**: Shared utilities, logging (`tracing`), error handling
 
