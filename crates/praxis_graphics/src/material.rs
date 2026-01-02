@@ -100,7 +100,7 @@ use std::collections::HashMap;
 /// These properties can be uploaded to the GPU as uniform data to control
 /// material appearance beyond textures.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct MaterialProperties {
     /// Base color tint (RGBA). Multiplied with the albedo texture.
     pub base_color: [f32; 4],

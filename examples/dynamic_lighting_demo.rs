@@ -565,6 +565,7 @@ impl App {
                 mesh_id: mesh_handle.id.clone(),
                 model: transform.compute_matrix(),
                 texture_name: Some(texture_handle.id.clone()),
+                material_properties: None,
             });
         }
 

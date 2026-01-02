@@ -153,16 +153,19 @@ impl State for ObjLoaderDemo {
                 mesh_id: "obj_cube_1".to_string(),
                 model: Mat4::from_rotation_y(self.rotation_angle)
                     * Mat4::from_translation(Vec3::new(-2.5, 0.0, 0.0)),
+                material_properties: None,
             },
             DrawCommand {
                 mesh_id: "obj_cube_2".to_string(),
                 model: Mat4::from_rotation_x(self.rotation_angle * 1.5)
                     * Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0)),
+                material_properties: None,
             },
             DrawCommand {
                 mesh_id: "obj_cube_3".to_string(),
                 model: Mat4::from_rotation_z(self.rotation_angle * 0.7)
                     * Mat4::from_translation(Vec3::new(2.5, 0.0, 0.0)),
+                material_properties: None,
             },
         ];
 
