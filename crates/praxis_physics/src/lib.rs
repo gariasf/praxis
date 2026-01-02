@@ -14,21 +14,22 @@
 //!
 //! ```rust,no_run
 //! use praxis_physics::{
-//!     PhysicsWorld, PhysicsConfig,
+//!     PhysicsWorld, PhysicsConfig, PhysicsTime,
 //!     RigidBody, Collider, PhysicsVelocity,
-//!     step_physics_simulation, sync_transforms_from_physics, sync_transforms_to_physics,
+//!     physics_step_system, sync_physics_transforms_system,
 //! };
 //! use praxis_ecs::{World, Schedule, IntoSystemConfigs, Transform};
 //!
 //! let mut world = World::new();
 //! world.insert_resource(PhysicsWorld::new());
 //! world.insert_resource(PhysicsConfig::default());
+//! world.insert_resource(PhysicsTime::new());
 //!
 //! let mut schedule = Schedule::default();
 //! schedule.add_systems((
-//!     sync_transforms_to_physics,
-//!     step_physics_simulation,
-//!     sync_transforms_from_physics,
+//!     sync_physics_transforms_system,
+//!     physics_step_system,
+//!     sync_physics_transforms_system,
 //! ).chain());
 //!
 //! // Create a static ground plane
@@ -66,10 +67,15 @@
 //!
 //! # Systems
 //!
-//! The physics simulation requires three systems to be scheduled in order:
+//! The physics simulation requires two core systems to be scheduled in order:
 //!
+//! 1. **`sync_physics_transforms_system`**: Bidirectionally syncs Transform components
+//!    with Rapier rigid body positions (should be called before and after physics step)
+//! 2. **`physics_step_system`**: Advances the physics simulation using fixed timestep integration
+//!
+//! Alternative: Use the separate legacy systems:
 //! 1. **`sync_transforms_to_physics`**: Updates physics bodies from ECS transforms
-//! 2. **`step_physics_simulation`**: Advances the physics simulation
+//! 2. **`step_physics_simulation`**: Advances the physics simulation (no fixed timestep)
 //! 3. **`sync_transforms_from_physics`**: Updates ECS transforms from physics bodies
 //!
 //! # Transform Synchronization
