@@ -1095,7 +1095,7 @@ mod tests {
             scale: Vec3::new(2.0, 2.0, 2.0),
         };
 
-        let matrix = transform.compute_matrix();
+        let _matrix = transform.compute_matrix();
 
         // Test that a point transforms correctly
         let point = Vec3::new(1.0, 0.0, 0.0);
