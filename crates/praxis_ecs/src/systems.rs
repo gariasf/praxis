@@ -13,8 +13,9 @@ use bevy_ecs::{
 };
 
 use crate::{
-    Camera, CameraMatrices, Children, GlobalTransform, OrthographicProjection, Parent,
-    PerspectiveProjection, Query, Transform,
+    Camera, CameraMatrices, Children, DirectionalLight, DirectionalLightInfo, GlobalTransform,
+    LightingData, OrthographicProjection, Parent, PerspectiveProjection, PointLight,
+    PointLightInfo, Query, Transform,
 };
 use praxis_math::Vec3;
 use praxis_utils::trace;
@@ -723,6 +724,162 @@ fn debug_children_recursive(
     }
 }
 
+/// System that gathers lighting data from DirectionalLight and PointLight components.
+///
+/// This system queries all entities with light components and collects their data
+/// into the `LightingData` resource, which can then be consumed by the render system.
+///
+/// # ECS Query Pattern
+///
+/// The system uses two separate queries:
+///
+/// 1. **Directional Light Query**: `Query<(&DirectionalLight, Option<&Transform>)>`
+///    - Queries all entities that have a `DirectionalLight` component
+///    - Optionally includes their `Transform` for direction transformation
+///    - Note: Directional lights without transforms use their default direction
+///
+/// 2. **Point Light Query**: `Query<(&PointLight, Option<&GlobalTransform>, Option<&Transform>)>`
+///    - Queries all entities that have a `PointLight` component
+///    - Prefers `GlobalTransform` for world-space position (if entity has a parent)
+///    - Falls back to `Transform` for local position (if entity has no parent)
+///    - Note: Point lights without transforms default to world origin (0, 0, 0)
+///
+/// # Resource Access
+///
+/// The system accesses the `LightingData` resource with mutable access (`ResMut<LightingData>`).
+/// This allows the system to:
+/// - Clear the previous frame's lighting data
+/// - Populate new lighting data from the current frame's light components
+///
+/// The resource is automatically injected by the ECS scheduler. If the resource doesn't exist,
+/// the system will panic at runtime. Always ensure `LightingData` is inserted into the world
+/// before running this system:
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, LightingData};
+/// let mut world = World::new();
+/// world.insert_resource(LightingData::default());
+/// ```
+///
+/// # Transform Handling
+///
+/// ## Directional Lights
+/// - Direction is taken from the `DirectionalLight` component (already normalized)
+/// - If the entity has a `Transform`, the direction is transformed by the rotation component
+/// - This allows directional lights to be rotated like other entities
+///
+/// ## Point Lights
+/// - Position is extracted from the entity's transform
+/// - `GlobalTransform` is preferred (provides world-space position for entities with parents)
+/// - Falls back to `Transform` if no `GlobalTransform` exists (for root entities)
+/// - If neither exists, position defaults to world origin (0, 0, 0)
+///
+/// # Performance Notes
+///
+/// - The system clears and rebuilds the entire lighting data each frame
+/// - For scenes with many lights, consider implementing change detection
+/// - The queries only iterate over entities with light components, not all entities
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, Schedule, LightingData};
+/// use praxis_ecs::systems::gather_lighting_system;
+///
+/// let mut world = World::new();
+/// let mut schedule = Schedule::default();
+///
+/// // Initialize the lighting data resource
+/// world.insert_resource(LightingData::default());
+///
+/// // Add the system to the schedule
+/// schedule.add_systems(gather_lighting_system);
+///
+/// // Run the schedule each frame
+/// world.inner_mut().run_schedule(&mut schedule);
+/// ```
+pub fn gather_lighting_system(
+    // Mutable access to the LightingData resource
+    // This resource stores the collected lighting information for the render system
+    mut lighting_data: crate::ResMut<LightingData>,
+    // Query all entities with DirectionalLight components
+    // Optional Transform allows us to rotate the light direction if the entity is transformed
+    directional_lights: Query<(&DirectionalLight, Option<&Transform>)>,
+    // Query all entities with PointLight components
+    // GlobalTransform is preferred for world-space position (handles parent hierarchy)
+    // Transform is fallback for entities without parents
+    point_lights: Query<(&PointLight, Option<&GlobalTransform>, Option<&Transform>)>,
+) {
+    // Clear the previous frame's lighting data
+    // This ensures we start fresh each frame and don't accumulate stale light data
+    lighting_data.clear();
+
+    // Iterate through all directional light entities
+    // The query returns a tuple of (&DirectionalLight, Option<&Transform>) for each matching entity
+    for (dir_light, maybe_transform) in directional_lights.iter() {
+        // Determine the world-space direction of the light
+        // If the entity has a Transform, rotate the light's direction by the transform's rotation
+        // This allows directional lights to be oriented by rotating their entities
+        let world_direction = if let Some(transform) = maybe_transform {
+            // Transform the light direction by the entity's rotation
+            // This applies the same rotation that would affect any child objects
+            transform.rotation * dir_light.direction
+        } else {
+            // No transform, use the light's direction as-is
+            dir_light.direction
+        };
+
+        // Create a DirectionalLightInfo struct with the collected data
+        // This is the format expected by the render system
+        let light_info = DirectionalLightInfo {
+            direction: world_direction.normalize(), // Ensure direction is normalized
+            color: dir_light.color,
+            intensity: dir_light.intensity,
+        };
+
+        // Add the light info to the resource's collection
+        // The render system will iterate through this vector later
+        lighting_data.directional_lights.push(light_info);
+    }
+
+    // Iterate through all point light entities
+    // The query returns (&PointLight, Option<&GlobalTransform>, Option<&Transform>)
+    for (point_light, maybe_global_transform, maybe_transform) in point_lights.iter() {
+        // Determine the world-space position of the light
+        // Priority order:
+        // 1. GlobalTransform (if entity is in a hierarchy)
+        // 2. Transform (if entity is a root)
+        // 3. World origin (if neither exists)
+        let world_position = if let Some(global_transform) = maybe_global_transform {
+            // Use GlobalTransform for accurate world-space position
+            // This is important for lights that are children of other entities
+            global_transform.translation()
+        } else if let Some(transform) = maybe_transform {
+            // Use Transform's translation for root entities
+            // Since there's no parent, local position = world position
+            transform.translation
+        } else {
+            // No transform information available, default to world origin
+            // This is a fallback case that shouldn't happen in normal usage
+            Vec3::ZERO
+        };
+
+        // Create a PointLightInfo struct with the collected data
+        let light_info = PointLightInfo {
+            position: world_position,
+            color: point_light.color,
+            intensity: point_light.intensity,
+            range: point_light.range,
+        };
+
+        // Add the light info to the resource's collection
+        lighting_data.point_lights.push(light_info);
+    }
+
+    // Note: The ambient_color in LightingData is not modified by this system
+    // It can be set manually or left at its default value (0.1, 0.1, 0.1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1317,5 +1474,229 @@ mod tests {
         assert_eq!(bundle.projection.right, 10.0);
         assert_eq!(bundle.projection.bottom, -5.0);
         assert_eq!(bundle.projection.top, 5.0);
+    }
+
+    #[test]
+    fn test_gather_lighting_system_empty() {
+        let mut world = World::new();
+
+        // Initialize the lighting data resource
+        world.insert_resource(LightingData::default());
+
+        // Run the gather system with no lights
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems(gather_lighting_system);
+        world.inner_mut().run_schedule(&mut schedule);
+
+        // Verify no lights were collected
+        let lighting_data = world.inner().resource::<LightingData>();
+        assert_eq!(lighting_data.directional_light_count(), 0);
+        assert_eq!(lighting_data.point_light_count(), 0);
+    }
+
+    #[test]
+    fn test_gather_lighting_system_directional_lights() {
+        use crate::{DirectionalLight, LightingData};
+
+        let mut world = World::new();
+        world.insert_resource(LightingData::default());
+
+        // Spawn a directional light without transform
+        world.spawn(DirectionalLight::new(
+            Vec3::new(0.0, -1.0, 0.0),
+            Vec3::new(1.0, 1.0, 1.0),
+            1.0,
+        ));
+
+        // Spawn a directional light with transform
+        world.spawn((
+            DirectionalLight::new(
+                Vec3::new(1.0, 0.0, 0.0), // Points right
+                Vec3::new(1.0, 0.5, 0.0), // Orange
+                0.8,
+            ),
+            Transform::from_rotation(Quat::from_rotation_y(std::f32::consts::FRAC_PI_2)), // Rotate 90 degrees
+        ));
+
+        // Run the gather system
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems(gather_lighting_system);
+        world.inner_mut().run_schedule(&mut schedule);
+
+        // Verify lights were collected
+        let lighting_data = world.inner().resource::<LightingData>();
+        assert_eq!(lighting_data.directional_light_count(), 2);
+
+        // Check first light (no transform)
+        let light1 = &lighting_data.directional_lights[0];
+        assert!((light1.direction.y - -1.0).abs() < 0.001);
+        assert_eq!(light1.color, Vec3::new(1.0, 1.0, 1.0));
+        assert_eq!(light1.intensity, 1.0);
+
+        // Check second light (with rotation)
+        let light2 = &lighting_data.directional_lights[1];
+        // After 90 degree Y rotation, (1,0,0) becomes (0,0,-1)
+        assert!(light2.direction.z.abs() > 0.99); // Should point mostly in Z direction
+        assert_eq!(light2.color, Vec3::new(1.0, 0.5, 0.0));
+        assert_eq!(light2.intensity, 0.8);
+    }
+
+    #[test]
+    fn test_gather_lighting_system_point_lights() {
+        use crate::{LightingData, PointLight};
+
+        let mut world = World::new();
+        world.insert_resource(LightingData::default());
+
+        // Spawn a point light without transform (defaults to origin)
+        world.spawn(PointLight::new(Vec3::new(1.0, 0.0, 0.0), 5.0, 10.0));
+
+        // Spawn a point light with transform
+        world.spawn((
+            Transform::from_xyz(10.0, 20.0, 30.0),
+            PointLight::new(Vec3::new(0.0, 1.0, 0.0), 8.0, 15.0),
+        ));
+
+        // Run the gather system
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems(gather_lighting_system);
+        world.inner_mut().run_schedule(&mut schedule);
+
+        // Verify lights were collected
+        let lighting_data = world.inner().resource::<LightingData>();
+        assert_eq!(lighting_data.point_light_count(), 2);
+
+        // Check first light (no transform, defaults to origin)
+        let light1 = &lighting_data.point_lights[0];
+        assert_eq!(light1.position, Vec3::ZERO);
+        assert_eq!(light1.color, Vec3::new(1.0, 0.0, 0.0));
+        assert_eq!(light1.intensity, 5.0);
+        assert_eq!(light1.range, 10.0);
+
+        // Check second light (with transform)
+        let light2 = &lighting_data.point_lights[1];
+        assert_eq!(light2.position, Vec3::new(10.0, 20.0, 30.0));
+        assert_eq!(light2.color, Vec3::new(0.0, 1.0, 0.0));
+        assert_eq!(light2.intensity, 8.0);
+        assert_eq!(light2.range, 15.0);
+    }
+
+    #[test]
+    fn test_gather_lighting_system_with_global_transform() {
+        use crate::{LightingData, PointLight};
+
+        let mut world = World::new();
+        world.insert_resource(LightingData::default());
+
+        // Create a parent at (10, 0, 0)
+        let parent = world.spawn((
+            Transform::from_xyz(10.0, 0.0, 0.0),
+            GlobalTransform::default(),
+        ));
+
+        // Create a point light as a child at local position (5, 0, 0)
+        let light = world.spawn((
+            Transform::from_xyz(5.0, 0.0, 0.0),
+            GlobalTransform::default(),
+            Parent(parent),
+            PointLight::new(Vec3::new(1.0, 1.0, 1.0), 10.0, 20.0),
+        ));
+
+        // Set up parent-child relationship
+        world
+            .insert_component(parent, Children::with_children(vec![light]))
+            .unwrap();
+
+        // First propagate transforms to compute GlobalTransform
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems((propagate_transforms, gather_lighting_system).chain());
+        world.inner_mut().run_schedule(&mut schedule);
+
+        // Verify the point light uses GlobalTransform (world position)
+        let lighting_data = world.inner().resource::<LightingData>();
+        assert_eq!(lighting_data.point_light_count(), 1);
+
+        let collected_light = &lighting_data.point_lights[0];
+        // Should be at world position (15, 0, 0) = parent (10,0,0) + local (5,0,0)
+        assert!((collected_light.position.x - 15.0).abs() < 0.001);
+        assert!(collected_light.position.y.abs() < 0.001);
+        assert!(collected_light.position.z.abs() < 0.001);
+    }
+
+    #[test]
+    fn test_gather_lighting_system_mixed_lights() {
+        use crate::{DirectionalLight, LightingData, PointLight};
+
+        let mut world = World::new();
+        world.insert_resource(LightingData::default());
+
+        // Spawn multiple lights of different types
+        world.spawn(DirectionalLight::new(
+            Vec3::new(0.0, -1.0, 0.0),
+            Vec3::new(1.0, 1.0, 1.0),
+            1.0,
+        ));
+
+        world.spawn((
+            Transform::from_xyz(5.0, 5.0, 5.0),
+            PointLight::new(Vec3::new(1.0, 0.0, 0.0), 10.0, 20.0),
+        ));
+
+        world.spawn(DirectionalLight::new(
+            Vec3::new(1.0, 0.0, 0.0),
+            Vec3::new(0.8, 0.8, 1.0),
+            0.5,
+        ));
+
+        world.spawn((
+            Transform::from_xyz(-5.0, 3.0, 0.0),
+            PointLight::new(Vec3::new(0.0, 1.0, 0.0), 5.0, 10.0),
+        ));
+
+        // Run the gather system
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems(gather_lighting_system);
+        world.inner_mut().run_schedule(&mut schedule);
+
+        // Verify all lights were collected
+        let lighting_data = world.inner().resource::<LightingData>();
+        assert_eq!(lighting_data.directional_light_count(), 2);
+        assert_eq!(lighting_data.point_light_count(), 2);
+    }
+
+    #[test]
+    fn test_gather_lighting_system_clears_previous_data() {
+        use crate::{DirectionalLight, LightingData};
+
+        let mut world = World::new();
+        world.insert_resource(LightingData::default());
+
+        // Spawn a light
+        let light_entity = world.spawn(DirectionalLight::new(
+            Vec3::new(0.0, -1.0, 0.0),
+            Vec3::new(1.0, 1.0, 1.0),
+            1.0,
+        ));
+
+        // Run the gather system
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems(gather_lighting_system);
+        world.inner_mut().run_schedule(&mut schedule);
+
+        // Verify one light was collected
+        {
+            let lighting_data = world.inner().resource::<LightingData>();
+            assert_eq!(lighting_data.directional_light_count(), 1);
+        }
+
+        // Remove the light
+        world.inner_mut().despawn(light_entity);
+
+        // Run the gather system again
+        world.inner_mut().run_schedule(&mut schedule);
+
+        // Verify the old light data was cleared
+        let lighting_data = world.inner().resource::<LightingData>();
+        assert_eq!(lighting_data.directional_light_count(), 0);
     }
 }

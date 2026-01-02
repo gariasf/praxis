@@ -172,6 +172,73 @@
 //! }
 //! ```
 //!
+//! # Lighting System
+//!
+//! The ECS provides a lighting system that collects light data from DirectionalLight and
+//! PointLight components and stores them in a LightingData resource for rendering.
+//!
+//! ## Components
+//!
+//! - **`DirectionalLight`**: Sun-like lights with parallel rays (direction, color, intensity)
+//! - **`PointLight`**: Omnidirectional lights with position-based attenuation (color, intensity, range)
+//!
+//! ## Resource
+//!
+//! - **`LightingData`**: Contains collected lighting information from all light entities
+//!   - `directional_lights`: Vec of DirectionalLightInfo with world-space directions
+//!   - `point_lights`: Vec of PointLightInfo with world-space positions
+//!   - `ambient_color`: Global ambient lighting color
+//!
+//! ## System
+//!
+//! - **`gather_lighting_system`**: Queries all light components and populates LightingData
+//!
+//! ## Usage Example
+//!
+//! ```rust,no_run
+//! use praxis_ecs::{World, Schedule, LightingData};
+//! use praxis_ecs::{DirectionalLight, PointLight, Transform};
+//! use praxis_ecs::systems::gather_lighting_system;
+//! use praxis_math::Vec3;
+//!
+//! let mut world = World::new();
+//! let mut schedule = Schedule::default();
+//!
+//! // Initialize the lighting data resource
+//! world.insert_resource(LightingData::default());
+//!
+//! // Add the lighting system to your schedule
+//! schedule.add_systems(gather_lighting_system);
+//!
+//! // Spawn a directional light (sun)
+//! world.spawn(DirectionalLight::new(
+//!     Vec3::new(0.5, -1.0, 0.3).normalize(),
+//!     Vec3::new(1.0, 0.95, 0.8),
+//!     1.0,
+//! ));
+//!
+//! // Spawn a point light with transform
+//! world.spawn((
+//!     Transform::from_xyz(0.0, 5.0, 0.0),
+//!     PointLight::new(Vec3::new(1.0, 0.8, 0.6), 10.0, 20.0),
+//! ));
+//!
+//! // Run the schedule to gather lighting data
+//! world.inner_mut().run_schedule(&mut schedule);
+//! ```
+//!
+//! The gathered lighting data can then be accessed in render systems:
+//!
+//! ```rust,no_run
+//! use praxis_ecs::{Res, LightingData};
+//!
+//! fn render_system(lighting_data: Res<LightingData>) {
+//!     // Use lighting_data.directional_lights
+//!     // Use lighting_data.point_lights
+//!     // Use lighting_data.ambient_color
+//! }
+//! ```
+//!
 //! # Basic Example
 //!
 //! ```rust,no_run

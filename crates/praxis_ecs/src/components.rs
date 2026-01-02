@@ -39,6 +39,7 @@
 //! ```
 
 use bevy_ecs::component::Component;
+use bevy_ecs::system::Resource;
 use praxis_math::{Mat4, Quat, Vec3};
 
 /// A name component for debugging and identification.
@@ -1062,6 +1063,130 @@ impl Default for PointLight {
     fn default() -> Self {
         Self::white()
     }
+}
+
+/// Lighting data collected from light components in the scene.
+///
+/// This resource stores lighting information gathered from DirectionalLight and PointLight
+/// components by the `gather_lighting_system`. It provides an intermediate representation
+/// that can be consumed by the render system to update lighting uniforms.
+///
+/// The data includes both the light properties (color, intensity, etc.) and their
+/// world-space transforms, which are computed by combining the light entities' Transform
+/// or GlobalTransform components.
+///
+/// # Usage
+///
+/// 1. Add this resource to your ECS world:
+///    ```rust,no_run
+///    use praxis_ecs::{World, LightingData};
+///    let mut world = World::new();
+///    world.insert_resource(LightingData::default());
+///    ```
+///
+/// 2. Run `gather_lighting_system` each frame to update the resource:
+///    ```rust,no_run
+///    use praxis_ecs::{Schedule, IntoSystemConfigs};
+///    use praxis_ecs::systems::gather_lighting_system;
+///    
+///    let mut schedule = Schedule::default();
+///    schedule.add_systems(gather_lighting_system);
+///    ```
+///
+/// 3. Access the resource in your render system:
+///    ```rust,no_run
+///    use praxis_ecs::{Res, LightingData};
+///    
+///    fn render_system(lighting_data: Res<LightingData>) {
+///        for light in &lighting_data.directional_lights {
+///            // Use light.direction, light.color, light.intensity
+///        }
+///        for light in &lighting_data.point_lights {
+///            // Use light.position, light.color, light.intensity, light.range
+///        }
+///    }
+///    ```
+#[derive(Resource, Debug, Clone, Default)]
+pub struct LightingData {
+    /// Collected directional light data with world-space directions.
+    ///
+    /// Each entry contains the light's direction (from the DirectionalLight component,
+    /// potentially transformed by rotation if the entity has a Transform), color, and intensity.
+    pub directional_lights: Vec<DirectionalLightInfo>,
+
+    /// Collected point light data with world-space positions.
+    ///
+    /// Each entry contains the light's position (from the entity's Transform or GlobalTransform),
+    /// color, intensity, and range.
+    pub point_lights: Vec<PointLightInfo>,
+
+    /// Global ambient light color.
+    ///
+    /// This is a constant base illumination applied to all objects to prevent them from
+    /// being completely black in shadow. Default is a soft gray (0.1, 0.1, 0.1).
+    pub ambient_color: Vec3,
+}
+
+impl LightingData {
+    /// Creates a new empty lighting data collection with default ambient lighting.
+    pub fn new() -> Self {
+        Self {
+            directional_lights: Vec::new(),
+            point_lights: Vec::new(),
+            ambient_color: Vec3::new(0.1, 0.1, 0.1),
+        }
+    }
+
+    /// Clears all collected lighting data.
+    ///
+    /// This should be called at the beginning of each frame before gathering new lights.
+    pub fn clear(&mut self) {
+        self.directional_lights.clear();
+        self.point_lights.clear();
+    }
+
+    /// Returns the number of directional lights.
+    pub fn directional_light_count(&self) -> usize {
+        self.directional_lights.len()
+    }
+
+    /// Returns the number of point lights.
+    pub fn point_light_count(&self) -> usize {
+        self.point_lights.len()
+    }
+}
+
+/// Information about a directional light collected from the ECS.
+///
+/// Contains the light properties along with its world-space direction.
+#[derive(Debug, Clone, Copy)]
+pub struct DirectionalLightInfo {
+    /// Direction the light is shining in world space (normalized).
+    pub direction: Vec3,
+
+    /// RGB color of the light.
+    pub color: Vec3,
+
+    /// Intensity multiplier for the light.
+    pub intensity: f32,
+}
+
+/// Information about a point light collected from the ECS.
+///
+/// Contains the light properties along with its world-space position.
+#[derive(Debug, Clone, Copy)]
+pub struct PointLightInfo {
+    /// World-space position of the light.
+    pub position: Vec3,
+
+    /// RGB color of the light.
+    pub color: Vec3,
+
+    /// Intensity of the light at the source.
+    pub intensity: f32,
+
+    /// Maximum range of the light in world units.
+    pub range: f32,
 }
 
 #[cfg(test)]
