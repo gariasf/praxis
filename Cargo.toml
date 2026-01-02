@@ -37,6 +37,7 @@ praxis_utils = { path = "crates/praxis_utils", version = "0.1.0" }
 praxis_window = { path = "crates/praxis_window", version = "0.1.0" }
 praxis_graphics = { path = "crates/praxis_graphics", version = "0.1.0" }
 praxis_ecs = { path = "crates/praxis_ecs", version = "0.1.0" }
+praxis_input = { path = "crates/praxis_input", version = "0.1.0" }
 praxis_math = { path = "crates/praxis_math", version = "0.1.0" }
 winit = { version = "0.30.11", features = ["rwh_05"] }
 pollster = "0.4"
@@ -64,3 +65,11 @@ path = "examples/mesh_demo.rs"
 [[example]]
 name = "multi_mesh_demo"
 path = "examples/multi_mesh_demo.rs"
+
+[[example]]
+name = "input_demo"
+path = "examples/input_demo.rs"
+
+[[example]]
+name = "input_integration"
+path = "examples/input_integration.rs"
