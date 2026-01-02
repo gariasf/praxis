@@ -70,13 +70,16 @@ pub trait AssetLoader<T> {
 /// - Vertex normals (optional)
 /// - Texture coordinates (optional)
 /// - Triangulated faces
+/// - Multiple models/objects per file (merged into single mesh)
 ///
 /// # Limitations
 ///
 /// - Only triangulated meshes are supported (faces with 3 vertices)
 /// - Materials are not loaded (MTL files are ignored)
-/// - Groups and objects are merged into a single mesh
+/// - All models in a file are merged into a single mesh
+/// - All models must have consistent attributes (all with or without normals/UVs)
 /// - Vertex colors are not supported in OBJ format
+/// - Maximum 65536 vertices in merged mesh (u16 index limit)
 ///
 /// # Example
 ///
@@ -159,85 +162,91 @@ impl AssetLoader<MeshData> for MeshLoader {
             ));
         }
 
-        // For now, we only load the first model
-        // TODO: Support multiple models/meshes per file
         if models.len() > 1 {
-            debug!(
-                "OBJ file '{}' contains {} models, only loading the first",
+            info!(
+                "OBJ file '{}' contains {} models, merging into single mesh",
                 path.display(),
                 models.len()
             );
         }
 
-        let model = &models[0];
-        let mesh = &model.mesh;
+        let mut positions: Vec<[f32; 3]> = Vec::new();
+        let mut indices: Vec<u16> = Vec::new();
+        let mut normals: Vec<[f32; 3]> = Vec::new();
+        let mut uvs: Vec<[f32; 2]> = Vec::new();
+        let mut has_normals = false;
+        let mut has_uvs = false;
 
-        debug!(
-            "Loaded model '{}' with {} vertices, {} indices",
-            model.name,
-            mesh.positions.len() / 3,
-            mesh.indices.len()
-        );
+        for model in &models {
+            let mesh = &model.mesh;
+            let vertex_offset = positions.len() as u32;
 
-        // Convert positions from flat array to Vec<[f32; 3]>
-        let positions: Vec<[f32; 3]> = mesh
-            .positions
-            .chunks_exact(3)
-            .map(|chunk| [chunk[0], chunk[1], chunk[2]])
-            .collect();
+            debug!(
+                "Processing model '{}' with {} vertices, {} indices",
+                model.name,
+                mesh.positions.len() / 3,
+                mesh.indices.len()
+            );
 
-        // Convert indices to u16
-        // Note: This assumes the mesh has fewer than 65536 vertices
-        let indices: Vec<u16> = mesh
-            .indices
-            .iter()
-            .map(|&i| {
-                if i > u16::MAX as u32 {
-                    Err(eyre::eyre!(
-                        "Mesh has too many vertices for u16 indices (vertex index: {})",
-                        i
-                    ))
-                } else {
-                    Ok(i as u16)
+            positions.extend(
+                mesh.positions
+                    .chunks_exact(3)
+                    .map(|chunk| [chunk[0], chunk[1], chunk[2]]),
+            );
+
+            for &i in &mesh.indices {
+                let adjusted_index = i + vertex_offset;
+                if adjusted_index > u16::MAX as u32 {
+                    return Err(eyre::eyre!(
+                        "Merged mesh has too many vertices for u16 indices (vertex index: {})",
+                        adjusted_index
+                    ));
                 }
-            })
-            .collect::<Result<Vec<_>>>()?;
+                indices.push(adjusted_index as u16);
+            }
 
-        // Convert normals if present
-        let normals = if !mesh.normals.is_empty() {
-            let normals: Vec<[f32; 3]> = mesh
-                .normals
-                .chunks_exact(3)
-                .map(|chunk| [chunk[0], chunk[1], chunk[2]])
-                .collect();
-            Some(normals)
-        } else {
-            None
-        };
+            if !mesh.normals.is_empty() {
+                has_normals = true;
+                normals.extend(
+                    mesh.normals
+                        .chunks_exact(3)
+                        .map(|chunk| [chunk[0], chunk[1], chunk[2]]),
+                );
+            } else if has_normals {
+                return Err(eyre::eyre!(
+                    "Model '{}' is missing normals while previous models had them. All models must have consistent attributes.",
+                    model.name
+                ));
+            }
 
-        // Convert texture coordinates if present
-        let uvs = if !mesh.texcoords.is_empty() {
-            let uvs: Vec<[f32; 2]> = mesh
-                .texcoords
-                .chunks_exact(2)
-                .map(|chunk| [chunk[0], chunk[1]])
-                .collect();
-            Some(uvs)
-        } else {
-            None
-        };
+            if !mesh.texcoords.is_empty() {
+                has_uvs = true;
+                uvs.extend(
+                    mesh.texcoords
+                        .chunks_exact(2)
+                        .map(|chunk| [chunk[0], chunk[1]]),
+                );
+            } else if has_uvs {
+                return Err(eyre::eyre!(
+                    "Model '{}' is missing texture coordinates while previous models had them. All models must have consistent attributes.",
+                    model.name
+                ));
+            }
+        }
 
         info!(
-            "Successfully loaded mesh '{}' from {}",
-            model.name,
-            path.display()
+            "Successfully loaded {} model(s) from {} ({} total vertices, {} total indices)",
+            models.len(),
+            path.display(),
+            positions.len(),
+            indices.len()
         );
 
         Ok(MeshData {
             positions,
-            colors: None, // OBJ doesn't support per-vertex colors
-            normals,
-            uvs,
+            colors: None,
+            normals: if has_normals { Some(normals) } else { None },
+            uvs: if has_uvs { Some(uvs) } else { None },
             indices,
         })
     }

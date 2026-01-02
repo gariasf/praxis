@@ -600,6 +600,21 @@ impl RenderContext {
         self.recreate_swapchain = true;
     }
 
+    /// Checks if the window is currently minimized (0×0 size).
+    ///
+    /// # Returns
+    ///
+    /// `true` if the window is minimized, `false` otherwise
+    fn is_window_minimized(&self) -> bool {
+        if let Some(obj) = self.surface.object() {
+            if let Some(window) = obj.downcast_ref::<Window>() {
+                let size = window.inner_size();
+                return size.width == 0 || size.height == 0;
+            }
+        }
+        false
+    }
+
     /// Renders a single frame to the window.
     ///
     /// This function performs a complete render pass:
@@ -632,23 +647,10 @@ impl RenderContext {
             .take()
             .unwrap_or_else(|| sync::now(self.device.clone()).boxed());
 
-        // Early-out when the window is minimised (0×0) to avoid futile
-        // swapchain recreation loops. We can safely skip the entire frame –
-        // the previous future is kept so GPU work still finishes.
-        // TODO(performance): Refactor or find a better way to handle this.
-        if let Some(obj) = self.surface.object() {
-            if let Some(window) = obj.downcast_ref::<Window>() {
-                let size = window.inner_size();
-                if size.width == 0 || size.height == 0 {
-                    // Clean up finished GPU work and reset to a fresh no-op future. This
-                    // prevents an ever-growing chain of joined futures when the window is
-                    // minimized for an extended period of time (which previously caused a
-                    // deep recursive drop and stack overflow upon restore).
-                    previous_frame_end.cleanup_finished();
-                    self.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
-                    return Ok(());
-                }
-            }
+        if self.is_window_minimized() {
+            previous_frame_end.cleanup_finished();
+            self.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+            return Ok(());
         }
 
         if self.recreate_swapchain {
@@ -869,16 +871,10 @@ impl RenderContext {
             .take()
             .unwrap_or_else(|| sync::now(self.device.clone()).boxed());
 
-        // Handle minimized window
-        if let Some(obj) = self.surface.object() {
-            if let Some(window) = obj.downcast_ref::<Window>() {
-                let size = window.inner_size();
-                if size.width == 0 || size.height == 0 {
-                    previous_frame_end.cleanup_finished();
-                    self.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
-                    return Ok(());
-                }
-            }
+        if self.is_window_minimized() {
+            previous_frame_end.cleanup_finished();
+            self.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+            return Ok(());
         }
 
         if self.recreate_swapchain {
@@ -1098,16 +1094,10 @@ impl RenderContext {
             .take()
             .unwrap_or_else(|| sync::now(self.device.clone()).boxed());
 
-        // Handle minimized window
-        if let Some(obj) = self.surface.object() {
-            if let Some(window) = obj.downcast_ref::<Window>() {
-                let size = window.inner_size();
-                if size.width == 0 || size.height == 0 {
-                    previous_frame_end.cleanup_finished();
-                    self.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
-                    return Ok(());
-                }
-            }
+        if self.is_window_minimized() {
+            previous_frame_end.cleanup_finished();
+            self.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+            return Ok(());
         }
 
         if self.recreate_swapchain {
