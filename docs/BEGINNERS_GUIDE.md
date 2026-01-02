@@ -1493,6 +1493,583 @@ struct MyComponent { ... }  // Done!
 
 ---
 
+## Lighting System Architecture
+
+The lighting system in Praxis provides dynamic lighting support with both directional and point lights. Understanding how lighting data flows from ECS components to GPU shaders is essential for creating visually compelling scenes.
+
+### Overview
+
+The lighting system consists of three main layers:
+
+1. **ECS Layer**: Light components (`DirectionalLight`, `PointLight`) attached to entities
+2. **Collection Layer**: `gather_lighting_system` that queries lights and populates `LightingData` resource
+3. **GPU Layer**: `LightingUniforms` structure uploaded to GPU for shader consumption
+
+### High-Level Data Flow
+
+```text
+Lighting System Data Flow
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────────────┐
+│                      ECS World                               │
+│                                                              │
+│  Entity 0: DirectionalLight, Transform                       │
+│  Entity 1: PointLight, Transform                             │
+│  Entity 2: PointLight, Transform, GlobalTransform           │
+│  Entity 3: Mesh, Transform                                   │
+│  ...                                                         │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+                           │ Queries entities with light components
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│          gather_lighting_system                              │
+│                                                              │
+│  Query<(&DirectionalLight, Option<&Transform>)>             │
+│  Query<(&PointLight, Option<&GlobalTransform>,              │
+│         Option<&Transform>)>                                 │
+│                                                              │
+│  For each DirectionalLight:                                  │
+│    - Extract direction, color, intensity                     │
+│    - Apply Transform rotation if present                     │
+│    - Add to DirectionalLightInfo collection                  │
+│                                                              │
+│  For each PointLight:                                        │
+│    - Extract color, intensity, range                         │
+│    - Get position from GlobalTransform or Transform          │
+│    - Add to PointLightInfo collection                        │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+                           │ Populates resource
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│               LightingData Resource                          │
+│                                                              │
+│  Vec<DirectionalLightInfo>:                                  │
+│    [                                                         │
+│      { direction: Vec3, color: Vec3, intensity: f32 },       │
+│      { direction: Vec3, color: Vec3, intensity: f32 },       │
+│      ...                                                     │
+│    ]                                                         │
+│                                                              │
+│  Vec<PointLightInfo>:                                        │
+│    [                                                         │
+│      { position: Vec3, color: Vec3, intensity: f32,          │
+│        range: f32 },                                         │
+│      { position: Vec3, color: Vec3, intensity: f32,          │
+│        range: f32 },                                         │
+│      ...                                                     │
+│    ]                                                         │
+│                                                              │
+│  ambient_color: Vec3                                         │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+                           │ Converted by render system
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│            LightingUniforms (std140 layout)                  │
+│                                                              │
+│  directional_lights: [DirectionalLightData; 8]               │
+│    [                                                         │
+│      { direction: [f32; 4], color: [f32; 4],                │
+│        intensity: f32, _padding: [f32; 3] },                 │
+│      ...                                                     │
+│    ]                                                         │
+│                                                              │
+│  point_lights: [PointLightData; 16]                          │
+│    [                                                         │
+│      { position: [f32; 4], color: [f32; 4],                 │
+│        intensity: f32, range: f32, _padding: [f32; 2] },     │
+│      ...                                                     │
+│    ]                                                         │
+│                                                              │
+│  ambient_color: [f32; 4]                                     │
+│  directional_light_count: u32                                │
+│  point_light_count: u32                                      │
+│  _padding: [u32; 2]                                          │
+│                                                              │
+│  Total size: 1184 bytes                                      │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+                           │ Uploaded to GPU
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│           LightingUniformBuffer (GPU Memory)                 │
+│                                                              │
+│  Host-visible, coherent buffer                               │
+│  Bound to descriptor set 0, binding 2                        │
+│  Updated every frame with current lighting state             │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+                           │ Accessed by shaders
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Fragment Shader (GLSL)                          │
+│                                                              │
+│  layout(set=0, binding=2) uniform LightingData {             │
+│      DirectionalLight directional_lights[8];                 │
+│      PointLight point_lights[16];                            │
+│      vec4 ambient_color;                                     │
+│      uint directional_light_count;                           │
+│      uint point_light_count;                                 │
+│  } lighting;                                                 │
+│                                                              │
+│  // Compute lighting for each pixel:                         │
+│  vec3 final_color = ambient_color.rgb * base_color;          │
+│                                                              │
+│  // Add directional lights                                   │
+│  for (uint i = 0; i < lighting.directional_light_count; i++){│
+│      final_color += compute_directional_light(              │
+│          lighting.directional_lights[i], ...);               │
+│  }                                                           │
+│                                                              │
+│  // Add point lights                                         │
+│  for (uint i = 0; i < lighting.point_light_count; i++) {    │
+│      final_color += compute_point_light(                    │
+│          lighting.point_lights[i], ...);                     │
+│  }                                                           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Component Definitions
+
+#### DirectionalLight Component
+
+Represents a light source at infinite distance (like the sun):
+
+```rust
+#[derive(Component)]
+pub struct DirectionalLight {
+    /// Direction the light is shining (normalized)
+    pub direction: Vec3,
+    
+    /// RGB color of the light
+    pub color: Vec3,
+    
+    /// Intensity multiplier
+    pub intensity: f32,
+}
+```
+
+**Key characteristics**:
+- Position doesn't matter, only direction
+- Affects all objects equally
+- No attenuation with distance
+- Useful for: sun, moon, ambient sky light
+
+**Example usage**:
+```rust
+// Create a sun-like light
+world.spawn(DirectionalLight::new(
+    Vec3::new(0.3, -0.8, 0.5).normalize(),  // Direction
+    Vec3::new(1.0, 0.95, 0.85),              // Warm white
+    1.0,                                      // Full intensity
+));
+
+// Can be rotated with a Transform
+world.spawn((
+    DirectionalLight::new(/* ... */),
+    Transform::from_rotation(Quat::from_rotation_y(angle)),
+));
+```
+
+#### PointLight Component
+
+Represents an omnidirectional light source with distance attenuation:
+
+```rust
+#[derive(Component)]
+pub struct PointLight {
+    /// RGB color of the light
+    pub color: Vec3,
+    
+    /// Intensity at the source
+    pub intensity: f32,
+    
+    /// Maximum range (beyond this, no effect)
+    pub range: f32,
+}
+```
+
+**Key characteristics**:
+- Position matters (from Transform component)
+- Radiates in all directions
+- Attenuation based on distance
+- Useful for: light bulbs, torches, explosions
+
+**Example usage**:
+```rust
+// Create a point light at a specific location
+world.spawn((
+    Transform::from_xyz(0.0, 5.0, 0.0),     // Position
+    PointLight::new(
+        Vec3::new(1.0, 0.8, 0.6),            // Warm color
+        25.0,                                 // High intensity
+        15.0,                                 // 15-unit range
+    ),
+));
+
+// Can be moved/animated by updating Transform
+```
+
+### The gather_lighting_system
+
+This system bridges the ECS and rendering layers:
+
+```text
+gather_lighting_system Flow
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────────────┐
+│  fn gather_lighting_system(                                  │
+│      mut lighting_data: ResMut<LightingData>,                │
+│      directional_lights: Query<(                             │
+│          &DirectionalLight,                                  │
+│          Option<&Transform>                                  │
+│      )>,                                                     │
+│      point_lights: Query<(                                   │
+│          &PointLight,                                        │
+│          Option<&GlobalTransform>,                           │
+│          Option<&Transform>                                  │
+│      )>,                                                     │
+│  )                                                           │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────┐
+        │  1. Clear previous frame's data  │
+        │     lighting_data.clear()        │
+        └──────────────┬───────────────────┘
+                       │
+                       ▼
+        ┌────────────────────────────────────────────┐
+        │  2. Process Directional Lights             │
+        │                                            │
+        │  for (light, maybe_transform) in query {   │
+        │      // Get direction (apply rotation)     │
+        │      let world_dir = if let Some(t) = ... {│
+        │          t.rotation * light.direction      │
+        │      } else {                               │
+        │          light.direction                   │
+        │      };                                     │
+        │                                            │
+        │      // Add to collection                  │
+        │      lighting_data.directional_lights.push(│
+        │          DirectionalLightInfo {             │
+        │              direction: world_dir,          │
+        │              color: light.color,            │
+        │              intensity: light.intensity,    │
+        │          }                                  │
+        │      );                                     │
+        │  }                                          │
+        └──────────────┬─────────────────────────────┘
+                       │
+                       ▼
+        ┌────────────────────────────────────────────┐
+        │  3. Process Point Lights                   │
+        │                                            │
+        │  for (light, global_t, local_t) in query { │
+        │      // Get position (prefer global)       │
+        │      let world_pos = if let Some(g) = ... {│
+        │          g.translation()                   │
+        │      } else if let Some(t) = local_t {     │
+        │          t.translation                     │
+        │      } else {                               │
+        │          Vec3::ZERO                         │
+        │      };                                     │
+        │                                            │
+        │      // Add to collection                  │
+        │      lighting_data.point_lights.push(      │
+        │          PointLightInfo {                   │
+        │              position: world_pos,           │
+        │              color: light.color,            │
+        │              intensity: light.intensity,    │
+        │              range: light.range,            │
+        │          }                                  │
+        │      );                                     │
+        │  }                                          │
+        └────────────────────────────────────────────┘
+```
+
+### Transform Handling
+
+The system correctly handles hierarchical transforms:
+
+```text
+Transform Hierarchy for Point Lights
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Example: Light attached to a moving character's hand
+
+┌──────────────────────────────────────┐
+│  Character Entity                    │
+│  Transform: position (10, 0, 5)      │
+│  GlobalTransform: computed           │
+└──────────┬───────────────────────────┘
+           │ Parent
+           │
+           ▼
+┌──────────────────────────────────────┐
+│  Hand Entity                         │
+│  Transform: local offset (0.5, 1, 0) │  ← Local to character
+│  GlobalTransform: (10.5, 1, 5)       │  ← World space
+│  Parent: Character                   │
+└──────────┬───────────────────────────┘
+           │ Parent
+           │
+           ▼
+┌──────────────────────────────────────┐
+│  Torch Entity                        │
+│  Transform: local offset (0, 0, 0.3) │  ← Local to hand
+│  GlobalTransform: (10.5, 1, 5.3)     │  ← World space
+│  PointLight: red, intensity 20       │
+│  Parent: Hand                        │
+└──────────────────────────────────────┘
+
+The gather_lighting_system uses GlobalTransform (10.5, 1, 5.3)
+so the light position is correct in world space!
+
+When character moves:
+  Character moves → GlobalTransform updates propagate
+  → Hand GlobalTransform updates
+  → Torch GlobalTransform updates
+  → Next frame, light position reflects new location
+```
+
+### GPU Memory Layout (std140)
+
+The `LightingUniforms` struct uses std140 layout for GPU compatibility:
+
+```text
+std140 Memory Layout
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DirectionalLightData (48 bytes each):
+┌──────────────────────────────────────────────────────┐
+│  Offset 0:  direction [f32; 4]   (16 bytes)          │
+│            └─ xyz: actual direction, w: padding      │
+│  Offset 16: color [f32; 4]       (16 bytes)          │
+│            └─ rgb: color, a: padding                 │
+│  Offset 32: intensity f32        (4 bytes)           │
+│  Offset 36: _padding [f32; 3]    (12 bytes)          │
+│            └─ Align to 48 bytes total                │
+└──────────────────────────────────────────────────────┘
+
+PointLightData (48 bytes each):
+┌──────────────────────────────────────────────────────┐
+│  Offset 0:  position [f32; 4]    (16 bytes)          │
+│  Offset 16: color [f32; 4]       (16 bytes)          │
+│  Offset 32: intensity f32        (4 bytes)           │
+│  Offset 36: range f32            (4 bytes)           │
+│  Offset 40: _padding [f32; 2]    (8 bytes)           │
+└──────────────────────────────────────────────────────┘
+
+Complete LightingUniforms (1184 bytes):
+┌──────────────────────────────────────────────────────┐
+│  Offset 0:    directional_lights [...; 8]            │
+│               8 × 48 = 384 bytes                     │
+│  Offset 384:  point_lights [...; 16]                 │
+│               16 × 48 = 768 bytes                    │
+│  Offset 1152: ambient_color [f32; 4]   (16 bytes)   │
+│  Offset 1168: directional_light_count  (4 bytes)    │
+│  Offset 1172: point_light_count        (4 bytes)    │
+│  Offset 1176: _padding [u32; 2]        (8 bytes)    │
+│  Total: 1184 bytes                                   │
+└──────────────────────────────────────────────────────┘
+
+Why padding?
+  - vec3 in std140 takes 16 bytes (same as vec4)
+  - Array elements must be aligned to 16 bytes
+  - Struct size must be multiple of largest alignment
+  - GPU hardware requires this for optimal access
+```
+
+### Shader Integration
+
+The fragment shader uses the lighting data to compute final pixel colors:
+
+```glsl
+// Descriptor binding in fragment shader
+layout(set = 0, binding = 2, std140) uniform LightingData {
+    DirectionalLight directional_lights[8];
+    PointLight point_lights[16];
+    vec4 ambient_color;
+    uint directional_light_count;
+    uint point_light_count;
+} lighting;
+
+// Blinn-Phong lighting computation
+vec3 compute_lighting(vec3 base_color, vec3 world_pos, vec3 normal) {
+    // Start with ambient
+    vec3 result = lighting.ambient_color.rgb * base_color;
+    
+    // Add directional lights
+    for (uint i = 0; i < lighting.directional_light_count; i++) {
+        DirectionalLight light = lighting.directional_lights[i];
+        
+        // Lambert diffuse
+        float diff = max(dot(normal, -light.direction.xyz), 0.0);
+        result += light.color.rgb * light.intensity * diff * base_color;
+    }
+    
+    // Add point lights
+    for (uint i = 0; i < lighting.point_light_count; i++) {
+        PointLight light = lighting.point_lights[i];
+        
+        // Calculate distance and attenuation
+        vec3 light_dir = light.position.xyz - world_pos;
+        float distance = length(light_dir);
+        
+        if (distance < light.range) {
+            light_dir = normalize(light_dir);
+            
+            // Distance attenuation
+            float attenuation = 1.0 - (distance / light.range);
+            attenuation = attenuation * attenuation; // Quadratic falloff
+            
+            // Lambert diffuse
+            float diff = max(dot(normal, light_dir), 0.0);
+            
+            result += light.color.rgb * light.intensity * 
+                      diff * attenuation * base_color;
+        }
+    }
+    
+    return result;
+}
+```
+
+### Performance Considerations
+
+#### Array Size Limits
+
+```text
+Light Count Trade-offs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Current limits:
+  MAX_DIRECTIONAL_LIGHTS = 8   (384 bytes)
+  MAX_POINT_LIGHTS = 16         (768 bytes)
+  Total buffer size = 1184 bytes
+
+Why these limits?
+  ✓ Fits comfortably in minimum UBO size (16KB)
+  ✓ Reasonable for most scenes
+  ✓ Balance between flexibility and performance
+  
+Typical usage:
+  Outdoor scene:  1-2 directional + 0-4 point lights
+  Indoor scene:   0-1 directional + 4-12 point lights
+  Complex scene:  2-3 directional + 8-16 point lights
+
+Performance impact:
+  - Shader loops through active lights only (using counts)
+  - Unused array slots have zero cost
+  - Increasing limits requires shader recompilation
+```
+
+#### Per-Frame Update Cost
+
+```text
+Update Performance
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Each frame:
+  1. gather_lighting_system runs (CPU)
+     - Query DirectionalLight entities:    ~10-100 ns per light
+     - Query PointLight entities:          ~10-100 ns per light
+     - Vec allocations (clear + push):     ~1-2 μs total
+     
+  2. Convert to GPU format (CPU)
+     - Copy to LightingUniforms:           ~100-500 ns
+     - No allocations (reuse buffer)
+     
+  3. Upload to GPU
+     - Write to mapped buffer:             ~100-500 ns
+     - No actual GPU transfer (host-visible)
+     
+  Total CPU cost: ~5-10 μs per frame (negligible)
+  
+  GPU cost: Lighting computation in fragment shader
+    - Per pixel, per light
+    - Dominant cost is fragment shader execution
+```
+
+### Common Patterns
+
+#### Dynamic Day-Night Cycle
+
+```rust
+fn day_night_system(
+    time: Res<GameTime>,
+    mut sun_light: Query<&mut DirectionalLight, With<Sun>>,
+) {
+    for mut light in sun_light.iter_mut() {
+        // Rotate sun direction based on time
+        let angle = time.elapsed_seconds() * 0.1;
+        let rotation = Quat::from_rotation_x(angle);
+        light.direction = rotation * Vec3::NEG_Y;
+        
+        // Adjust color and intensity based on time of day
+        let t = (angle.sin() + 1.0) * 0.5; // 0 to 1
+        light.color = Vec3::lerp(
+            Vec3::new(0.3, 0.4, 0.6),  // Night (blue)
+            Vec3::new(1.0, 0.95, 0.8), // Day (warm)
+            t
+        );
+        light.intensity = t; // Dim at night
+    }
+}
+```
+
+#### Flickering Torch
+
+```rust
+fn torch_flicker_system(
+    time: Res<GameTime>,
+    mut torches: Query<&mut PointLight, With<Torch>>,
+) {
+    for mut light in torches.iter_mut() {
+        // Random flicker effect
+        let flicker = (time.elapsed_seconds() * 10.0).sin() * 0.1 + 1.0;
+        light.intensity = 20.0 * flicker;
+    }
+}
+```
+
+#### Following Light (Flashlight)
+
+```rust
+fn flashlight_system(
+    player: Query<&Transform, With<Player>>,
+    mut flashlight: Query<&mut Transform, (With<PointLight>, With<Flashlight>)>,
+) {
+    if let Ok(player_transform) = player.get_single() {
+        for mut light_transform in flashlight.iter_mut() {
+            // Position light at player position
+            light_transform.translation = player_transform.translation;
+            light_transform.translation.y += 1.5; // Eye height
+        }
+    }
+}
+```
+
+### Debugging Tips
+
+1. **Visualize light positions**: Spawn debug spheres at point light locations
+2. **Check light counts**: Log `LightingData` to verify lights are collected
+3. **Verify transforms**: Ensure GlobalTransform is updated before gathering
+4. **Shader debugging**: Use simple colors to isolate lighting issues
+5. **Performance profiling**: Monitor fragment shader cost with many lights
+
+---
+
 ## Further Reading
 
 - **Vulkan Tutorial**: https://vulkan-tutorial.com/

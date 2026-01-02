@@ -401,3 +401,391 @@ impl LightingUniformBuffer {
         &self.buffer
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_directional_light_data_default() {
+        let light = DirectionalLightData::default();
+        
+        assert_eq!(light.direction, [0.0, -1.0, 0.0, 0.0]);
+        assert_eq!(light.color, [1.0, 1.0, 1.0, 0.0]);
+        assert_eq!(light.intensity, 0.0);
+        assert_eq!(light._padding, [0.0; 3]);
+    }
+
+    #[test]
+    fn test_directional_light_data_creation() {
+        let light = DirectionalLightData {
+            direction: [0.5, -0.8, 0.3, 0.0],
+            color: [1.0, 0.9, 0.8, 0.0],
+            intensity: 1.5,
+            _padding: [0.0; 3],
+        };
+
+        assert_eq!(light.direction[0], 0.5);
+        assert_eq!(light.direction[1], -0.8);
+        assert_eq!(light.direction[2], 0.3);
+        assert_eq!(light.color, [1.0, 0.9, 0.8, 0.0]);
+        assert_eq!(light.intensity, 1.5);
+    }
+
+    #[test]
+    fn test_point_light_data_default() {
+        let light = PointLightData::default();
+        
+        assert_eq!(light.position, [0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(light.color, [1.0, 1.0, 1.0, 0.0]);
+        assert_eq!(light.intensity, 0.0);
+        assert_eq!(light.range, 10.0);
+        assert_eq!(light._padding, [0.0; 2]);
+    }
+
+    #[test]
+    fn test_point_light_data_creation() {
+        let light = PointLightData {
+            position: [5.0, 10.0, 3.0, 0.0],
+            color: [0.8, 0.3, 0.2, 0.0],
+            intensity: 25.0,
+            range: 50.0,
+            _padding: [0.0; 2],
+        };
+
+        assert_eq!(light.position, [5.0, 10.0, 3.0, 0.0]);
+        assert_eq!(light.color, [0.8, 0.3, 0.2, 0.0]);
+        assert_eq!(light.intensity, 25.0);
+        assert_eq!(light.range, 50.0);
+    }
+
+    #[test]
+    fn test_lighting_uniforms_default() {
+        let lighting = LightingUniforms::default();
+        
+        assert_eq!(lighting.directional_light_count, 0);
+        assert_eq!(lighting.point_light_count, 0);
+        assert_eq!(lighting.ambient_color, [0.1, 0.1, 0.1, 0.0]);
+        assert_eq!(lighting._padding, [0; 2]);
+    }
+
+    #[test]
+    fn test_lighting_uniforms_single_directional_light() {
+        let mut lighting = LightingUniforms::default();
+        
+        lighting.directional_lights[0] = DirectionalLightData {
+            direction: [0.0, -1.0, 0.0, 0.0],
+            color: [1.0, 1.0, 1.0, 0.0],
+            intensity: 1.0,
+            _padding: [0.0; 3],
+        };
+        lighting.directional_light_count = 1;
+
+        assert_eq!(lighting.directional_light_count, 1);
+        assert_eq!(lighting.directional_lights[0].intensity, 1.0);
+    }
+
+    #[test]
+    fn test_lighting_uniforms_single_point_light() {
+        let mut lighting = LightingUniforms::default();
+        
+        lighting.point_lights[0] = PointLightData {
+            position: [0.0, 5.0, 0.0, 0.0],
+            color: [1.0, 0.5, 0.0, 0.0],
+            intensity: 10.0,
+            range: 20.0,
+            _padding: [0.0; 2],
+        };
+        lighting.point_light_count = 1;
+
+        assert_eq!(lighting.point_light_count, 1);
+        assert_eq!(lighting.point_lights[0].intensity, 10.0);
+        assert_eq!(lighting.point_lights[0].range, 20.0);
+    }
+
+    #[test]
+    fn test_lighting_uniforms_multiple_lights() {
+        let mut lighting = LightingUniforms::default();
+        
+        // Add multiple directional lights
+        for i in 0..3 {
+            lighting.directional_lights[i] = DirectionalLightData {
+                direction: [i as f32, -1.0, 0.0, 0.0],
+                color: [1.0, 1.0, 1.0, 0.0],
+                intensity: (i + 1) as f32 * 0.5,
+                _padding: [0.0; 3],
+            };
+        }
+        lighting.directional_light_count = 3;
+
+        // Add multiple point lights
+        for i in 0..5 {
+            lighting.point_lights[i] = PointLightData {
+                position: [i as f32 * 2.0, 5.0, 0.0, 0.0],
+                color: [1.0, 0.5, 0.0, 0.0],
+                intensity: (i + 1) as f32 * 5.0,
+                range: 10.0 + i as f32 * 2.0,
+                _padding: [0.0; 2],
+            };
+        }
+        lighting.point_light_count = 5;
+
+        assert_eq!(lighting.directional_light_count, 3);
+        assert_eq!(lighting.point_light_count, 5);
+        
+        // Verify the lights were set correctly
+        assert_eq!(lighting.directional_lights[0].intensity, 0.5);
+        assert_eq!(lighting.directional_lights[1].intensity, 1.0);
+        assert_eq!(lighting.directional_lights[2].intensity, 1.5);
+        
+        assert_eq!(lighting.point_lights[0].intensity, 5.0);
+        assert_eq!(lighting.point_lights[4].intensity, 25.0);
+    }
+
+    #[test]
+    fn test_lighting_uniforms_max_directional_lights() {
+        let mut lighting = LightingUniforms::default();
+        
+        // Fill all directional light slots
+        for i in 0..MAX_DIRECTIONAL_LIGHTS {
+            lighting.directional_lights[i] = DirectionalLightData {
+                direction: [0.0, -1.0, 0.0, 0.0],
+                color: [1.0, 1.0, 1.0, 0.0],
+                intensity: i as f32,
+                _padding: [0.0; 3],
+            };
+        }
+        lighting.directional_light_count = MAX_DIRECTIONAL_LIGHTS as u32;
+
+        assert_eq!(lighting.directional_light_count, MAX_DIRECTIONAL_LIGHTS as u32);
+        assert_eq!(lighting.directional_lights[0].intensity, 0.0);
+        assert_eq!(lighting.directional_lights[MAX_DIRECTIONAL_LIGHTS - 1].intensity, (MAX_DIRECTIONAL_LIGHTS - 1) as f32);
+    }
+
+    #[test]
+    fn test_lighting_uniforms_max_point_lights() {
+        let mut lighting = LightingUniforms::default();
+        
+        // Fill all point light slots
+        for i in 0..MAX_POINT_LIGHTS {
+            lighting.point_lights[i] = PointLightData {
+                position: [i as f32, 0.0, 0.0, 0.0],
+                color: [1.0, 1.0, 1.0, 0.0],
+                intensity: i as f32 * 2.0,
+                range: 10.0,
+                _padding: [0.0; 2],
+            };
+        }
+        lighting.point_light_count = MAX_POINT_LIGHTS as u32;
+
+        assert_eq!(lighting.point_light_count, MAX_POINT_LIGHTS as u32);
+        assert_eq!(lighting.point_lights[0].intensity, 0.0);
+        assert_eq!(lighting.point_lights[MAX_POINT_LIGHTS - 1].intensity, (MAX_POINT_LIGHTS - 1) as f32 * 2.0);
+    }
+
+    #[test]
+    fn test_lighting_uniforms_custom_ambient() {
+        let mut lighting = LightingUniforms::default();
+        lighting.ambient_color = [0.2, 0.3, 0.4, 0.0];
+
+        assert_eq!(lighting.ambient_color, [0.2, 0.3, 0.4, 0.0]);
+    }
+
+    #[test]
+    fn test_directional_light_data_size() {
+        // Verify struct size matches std140 requirements (48 bytes = 3 * 16)
+        assert_eq!(std::mem::size_of::<DirectionalLightData>(), 48);
+    }
+
+    #[test]
+    fn test_point_light_data_size() {
+        // Verify struct size matches std140 requirements (48 bytes = 3 * 16)
+        assert_eq!(std::mem::size_of::<PointLightData>(), 48);
+    }
+
+    #[test]
+    fn test_lighting_uniforms_size() {
+        // Verify total struct size
+        // 8 directional lights * 48 bytes = 384
+        // 16 point lights * 48 bytes = 768
+        // ambient_color (vec4) = 16
+        // 2 u32 counts = 8
+        // 2 u32 padding = 8
+        // Total = 1184 bytes
+        assert_eq!(std::mem::size_of::<LightingUniforms>(), 1184);
+    }
+
+    #[test]
+    fn test_directional_light_data_alignment() {
+        // Verify 16-byte alignment for std140
+        assert_eq!(std::mem::align_of::<DirectionalLightData>(), 16);
+    }
+
+    #[test]
+    fn test_point_light_data_alignment() {
+        // Verify 16-byte alignment for std140
+        assert_eq!(std::mem::align_of::<PointLightData>(), 16);
+    }
+
+    #[test]
+    fn test_lighting_uniforms_alignment() {
+        // Verify 16-byte alignment for std140
+        assert_eq!(std::mem::align_of::<LightingUniforms>(), 16);
+    }
+
+    #[test]
+    fn test_lighting_uniforms_zero_initialization() {
+        let lighting = LightingUniforms::default();
+        
+        // Verify all unused lights are zero-initialized (intensity = 0)
+        for i in 0..MAX_DIRECTIONAL_LIGHTS {
+            assert_eq!(lighting.directional_lights[i].intensity, 0.0);
+        }
+        
+        for i in 0..MAX_POINT_LIGHTS {
+            assert_eq!(lighting.point_lights[i].intensity, 0.0);
+        }
+    }
+
+    #[test]
+    fn test_bytemuck_pod_trait() {
+        // Verify that our types implement Pod (Plain Old Data)
+        // This is required for safe GPU memory transfers
+        use bytemuck::{Pod, Zeroable};
+        
+        fn assert_pod<T: Pod + Zeroable>() {}
+        
+        assert_pod::<DirectionalLightData>();
+        assert_pod::<PointLightData>();
+        assert_pod::<LightingUniforms>();
+    }
+
+    #[test]
+    fn test_lighting_uniforms_modification() {
+        let mut lighting = LightingUniforms::default();
+        
+        // Initial state
+        assert_eq!(lighting.directional_light_count, 0);
+        
+        // Modify
+        lighting.directional_lights[0].intensity = 1.0;
+        lighting.directional_light_count = 1;
+        
+        // Verify modification
+        assert_eq!(lighting.directional_light_count, 1);
+        assert_eq!(lighting.directional_lights[0].intensity, 1.0);
+        
+        // Modify again
+        lighting.directional_lights[1].intensity = 2.0;
+        lighting.directional_light_count = 2;
+        
+        // Verify both lights
+        assert_eq!(lighting.directional_light_count, 2);
+        assert_eq!(lighting.directional_lights[0].intensity, 1.0);
+        assert_eq!(lighting.directional_lights[1].intensity, 2.0);
+    }
+
+    #[test]
+    fn test_lighting_scenario_outdoor_scene() {
+        let mut lighting = LightingUniforms::default();
+        
+        // Outdoor scene: Sun + sky light
+        lighting.directional_lights[0] = DirectionalLightData {
+            direction: [0.3, -0.8, 0.5, 0.0],
+            color: [1.0, 0.95, 0.85, 0.0], // Warm sunlight
+            intensity: 1.0,
+            _padding: [0.0; 3],
+        };
+        
+        lighting.directional_lights[1] = DirectionalLightData {
+            direction: [0.0, 0.5, 0.0, 0.0],
+            color: [0.4, 0.5, 0.7, 0.0], // Cool sky light
+            intensity: 0.3,
+            _padding: [0.0; 3],
+        };
+        
+        lighting.directional_light_count = 2;
+        lighting.ambient_color = [0.15, 0.15, 0.2, 0.0]; // Slight blue ambient
+        
+        assert_eq!(lighting.directional_light_count, 2);
+        assert_eq!(lighting.directional_lights[0].intensity, 1.0);
+        assert_eq!(lighting.directional_lights[1].intensity, 0.3);
+    }
+
+    #[test]
+    fn test_lighting_scenario_indoor_scene() {
+        let mut lighting = LightingUniforms::default();
+        
+        // Indoor scene: Multiple point lights
+        let positions = [
+            [5.0, 3.0, 5.0, 0.0],
+            [-5.0, 3.0, 5.0, 0.0],
+            [5.0, 3.0, -5.0, 0.0],
+            [-5.0, 3.0, -5.0, 0.0],
+        ];
+        
+        for (i, &pos) in positions.iter().enumerate() {
+            lighting.point_lights[i] = PointLightData {
+                position: pos,
+                color: [1.0, 0.9, 0.7, 0.0], // Warm interior light
+                intensity: 15.0,
+                range: 10.0,
+                _padding: [0.0; 2],
+            };
+        }
+        
+        lighting.point_light_count = 4;
+        lighting.ambient_color = [0.05, 0.05, 0.05, 0.0]; // Dark ambient
+        
+        assert_eq!(lighting.point_light_count, 4);
+        for i in 0..4 {
+            assert_eq!(lighting.point_lights[i].intensity, 15.0);
+            assert_eq!(lighting.point_lights[i].range, 10.0);
+        }
+    }
+
+    #[test]
+    fn test_lighting_scenario_mixed() {
+        let mut lighting = LightingUniforms::default();
+        
+        // Mixed lighting: Directional + Point lights
+        lighting.directional_lights[0] = DirectionalLightData {
+            direction: [0.0, -1.0, 0.0, 0.0],
+            color: [0.8, 0.8, 1.0, 0.0],
+            intensity: 0.5,
+            _padding: [0.0; 3],
+        };
+        lighting.directional_light_count = 1;
+        
+        lighting.point_lights[0] = PointLightData {
+            position: [0.0, 5.0, 0.0, 0.0],
+            color: [1.0, 0.3, 0.1, 0.0], // Orange/fire
+            intensity: 20.0,
+            range: 15.0,
+            _padding: [0.0; 2],
+        };
+        
+        lighting.point_lights[1] = PointLightData {
+            position: [10.0, 2.0, 0.0, 0.0],
+            color: [0.1, 0.3, 1.0, 0.0], // Blue
+            intensity: 15.0,
+            range: 12.0,
+            _padding: [0.0; 2],
+        };
+        lighting.point_light_count = 2;
+        
+        assert_eq!(lighting.directional_light_count, 1);
+        assert_eq!(lighting.point_light_count, 2);
+    }
+
+    #[test]
+    fn test_constants_are_reasonable() {
+        // Verify that our array size constants are reasonable
+        assert!(MAX_DIRECTIONAL_LIGHTS >= 4, "Should support at least 4 directional lights");
+        assert!(MAX_POINT_LIGHTS >= 8, "Should support at least 8 point lights");
+        
+        // Verify buffer size is under typical limits
+        let buffer_size = std::mem::size_of::<LightingUniforms>();
+        assert!(buffer_size < 16384, "Buffer should be under 16KB (typical UBO limit)");
+    }
+}
