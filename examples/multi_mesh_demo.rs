@@ -7,7 +7,7 @@
 //! - Positioning meshes with transform matrices
 
 use praxis_graphics::{
-    colored_cube_mesh, pyramid_mesh, quad_mesh, solid_cube_mesh, DrawCommand, MeshRenderCommands,
+    colored_cube_mesh, pyramid_mesh, quad_mesh, solid_cube_mesh, DrawCommand, RenderCommands,
     RenderContext,
 };
 use praxis_math::{Mat4, Vec3};
@@ -281,14 +281,14 @@ impl ApplicationHandler for App {
                         material_properties: None,
                     });
 
-                    let cmds = MeshRenderCommands {
+                    let cmds = RenderCommands {
                         view,
                         proj,
                         draw_commands: &draw_commands,
-                        lighting: None, // Use default lighting
+                        lighting: None,
                     };
 
-                    match state.render_context.render_meshes(&cmds) {
+                    match state.render_context.render(&cmds) {
                         Ok(()) => {
                             trace!(
                                 "Frame rendered (current FPS: {:.1})",

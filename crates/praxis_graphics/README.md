@@ -54,30 +54,35 @@ let pyramid = pyramid_mesh([0.8, 0.6, 0.2], [1.0, 0.0, 0.0]);
 
 ### Rendering with Multiple Meshes
 
-Use `DrawCommand` and `MeshRenderCommands` to render different mesh types:
+Use `DrawCommand` and `RenderCommands` to render different mesh types:
 
 ```rust
-use praxis_graphics::{DrawCommand, MeshRenderCommands};
+use praxis_graphics::{DrawCommand, RenderCommands};
 use praxis_math::{Mat4, Vec3};
 
 let draw_commands = vec![
     DrawCommand {
         mesh_id: "cube".to_string(),
         model: Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0)),
+        texture_name: None,
+        material_properties: None,
     },
     DrawCommand {
         mesh_id: "pyramid".to_string(),
         model: Mat4::from_translation(Vec3::new(2.0, 0.0, 0.0)),
+        texture_name: None,
+        material_properties: None,
     },
 ];
 
-let cmds = MeshRenderCommands {
+let cmds = RenderCommands {
     view,
     proj,
     draw_commands: &draw_commands,
+    lighting: None,
 };
 
-render_context.render_meshes(&cmds)?;
+render_context.render(&cmds)?;
 ```
 
 ## Dynamic Uniform Buffers

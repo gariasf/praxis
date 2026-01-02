@@ -31,8 +31,8 @@ use praxis_ecs::{
     DirectionalLight, LightingData, PerspectiveCameraBundle, PointLight, Transform, World,
 };
 use praxis_graphics::{
-    textured_cube_mesh, textured_quad_mesh, DrawCommandWithTexture, RenderContext,
-    TexturedRenderCommands,
+    textured_cube_mesh, textured_quad_mesh, DrawCommand, RenderContext,
+    RenderCommands,
 };
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::{Quat, Vec3};
@@ -561,7 +561,7 @@ impl App {
         )>();
 
         for (transform, mesh_handle, texture_handle) in query.iter(world.inner()) {
-            draw_commands.push(DrawCommandWithTexture {
+            draw_commands.push(DrawCommand {
                 mesh_id: mesh_handle.id.clone(),
                 model: transform.compute_matrix(),
                 texture_name: Some(texture_handle.id.clone()),
@@ -569,21 +569,14 @@ impl App {
             });
         }
 
-        // Step 5: Submit rendering commands with lighting data
-        // The lighting data flows from ECS -> LightingData resource -> GPU uniforms
-        let cmds = TexturedRenderCommands {
+        let cmds = RenderCommands {
             view: matrices_copy.view,
             proj: matrices_copy.projection,
             draw_commands: &draw_commands,
-            lighting: Some(lighting_data), // Pass the lighting data to the renderer
+            lighting: Some(lighting_data),
         };
 
-        // Step 6: Execute the render, which will:
-        // - Convert LightingData to LightingUniforms
-        // - Upload uniforms to GPU buffer
-        // - Bind lighting buffer to descriptor set
-        // - Fragment shader uses lighting data to compute final colors
-        render_context.render_textured(&cmds)?;
+        render_context.render(&cmds)?;
 
         Ok(())
     }

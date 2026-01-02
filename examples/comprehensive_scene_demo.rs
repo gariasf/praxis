@@ -22,7 +22,7 @@
 
 use praxis_assets::load_obj_mesh;
 use praxis_ecs::{PerspectiveCameraBundle, Transform, World};
-use praxis_graphics::{DrawCommandWithTexture, RenderContext, TexturedRenderCommands};
+use praxis_graphics::{DrawCommand, RenderContext, RenderCommands};
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::{Quat, Vec3};
 use praxis_utils::{info, Result};
@@ -347,7 +347,7 @@ impl App {
         )>();
 
         for (transform, mesh_handle, texture_handle) in query.iter(world.inner()) {
-            draw_commands.push(DrawCommandWithTexture {
+            draw_commands.push(DrawCommand {
                 mesh_id: mesh_handle.id.clone(),
                 model: transform.compute_matrix(),
                 texture_name: Some(texture_handle.id.clone()),
@@ -355,14 +355,14 @@ impl App {
             });
         }
 
-        let cmds = TexturedRenderCommands {
+        let cmds = RenderCommands {
             view: matrices_copy.view,
             proj: matrices_copy.projection,
             draw_commands: &draw_commands,
-            lighting: None, // Use default lighting
+            lighting: None,
         };
 
-        render_context.render_textured(&cmds)?;
+        render_context.render(&cmds)?;
 
         Ok(())
     }

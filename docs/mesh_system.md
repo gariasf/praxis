@@ -98,27 +98,32 @@ let pyramid = pyramid_mesh([0.8, 0.6, 0.2], [1.0, 0.0, 0.0]);
 The modern rendering approach uses `DrawCommand` to specify both the mesh and transform:
 
 ```rust
-use praxis_graphics::{DrawCommand, MeshRenderCommands};
+use praxis_graphics::{DrawCommand, RenderCommands};
 use praxis_math::{Mat4, Vec3};
 
 let draw_commands = vec![
     DrawCommand {
         mesh_id: "cube".to_string(),
         model: Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0)),
+        texture_name: None,
+        material_properties: None,
     },
     DrawCommand {
         mesh_id: "pyramid".to_string(),
         model: Mat4::from_translation(Vec3::new(2.0, 0.0, 0.0)),
+        texture_name: None,
+        material_properties: None,
     },
 ];
 
-let cmds = MeshRenderCommands {
+let cmds = RenderCommands {
     view,
     proj,
     draw_commands: &draw_commands,
+    lighting: None,
 };
 
-render_context.render_meshes(&cmds)?;
+render_context.render(&cmds)?;
 ```
 
 ### Complete Rendering Flow
@@ -143,19 +148,22 @@ for (transform, mesh_handle) in world.query::<(&Transform, &MeshHandle)>().iter(
     draw_commands.push(DrawCommand {
         mesh_id: mesh_handle.id.clone(),
         model: transform.compute_matrix(),
+        texture_name: None,
+        material_properties: None,
     });
 }
 ```
 
 4. **Render** (per frame):
 ```rust
-let cmds = MeshRenderCommands {
+let cmds = RenderCommands {
     view,
     proj,
     draw_commands: &draw_commands,
+    lighting: None,
 };
 
-render_context.render_meshes(&cmds)?;
+render_context.render(&cmds)?;
 ```
 
 ## GPU Buffer Management
@@ -243,7 +251,7 @@ cargo run --example multi_mesh_demo
    GpuMesh { vertex_buffer, index_buffer }
 
 4. Rendering
-   Query(Transform, MeshHandle) -> DrawCommand -> render_meshes()
+   Query(Transform, MeshHandle) -> DrawCommand -> render()
 ```
 
 ### Memory Management
@@ -262,7 +270,7 @@ cargo run --example multi_mesh_demo
 2. **Frame Loop**
    - Query entities: `Query<(&Transform, &MeshHandle)>`
    - Build DrawCommands with mesh_id and model matrix
-   - Call `render_context.render_meshes(&cmds)`
+   - Call `render_context.render(&cmds)`
 
 3. **GPU Execution**
    - For each DrawCommand:

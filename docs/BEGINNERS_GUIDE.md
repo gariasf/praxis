@@ -325,7 +325,7 @@ Descriptor Set Architecture
 In the current implementation, Praxis creates one descriptor set per object per frame:
 
 ```rust
-// From RenderContext::render_meshes()
+// From RenderContext::render()
 for draw_cmd in cmds.draw_commands.iter() {
     // 1. Create uniform buffer with model/view/proj matrices
     let uniforms = Uniforms {
@@ -561,11 +561,12 @@ ECS to GPU Data Flow
               ▼
 4. Submit to Renderer
    ┌──────────────────────────────────┐
-   │ render_context.render_meshes(    │
-   │     &MeshRenderCommands {        │
+   │ render_context.render(           │
+   │     &RenderCommands {            │
    │         view: camera_view,       │
    │         proj: camera_proj,       │
    │         draw_commands: &draw_cmds│
+   │         lighting: None,          │
    │     }                            │
    │ )                                │
    └──────────┬───────────────────────┘
@@ -1316,10 +1317,11 @@ pub struct RenderContext {
 However, when passing data to render functions, we use references with lifetimes:
 
 ```rust
-pub struct MeshRenderCommands<'a> {
+pub struct RenderCommands<'a> {
     pub view: Mat4,  // Copied
     pub proj: Mat4,  // Copied
     pub draw_commands: &'a [DrawCommand],  // Borrowed with lifetime 'a
+    pub lighting: Option<&'a LightingUniforms>,
 }
 ```
 
@@ -1333,13 +1335,14 @@ fn render_frame() {
     let draw_commands = vec![...];  // ◄─── Created here
                                     //      Lifetime begins
     
-    let cmds = MeshRenderCommands {
+    let cmds = RenderCommands {
         view: camera_view,
         proj: camera_proj,
         draw_commands: &draw_commands,  // ◄─── Borrowed here
+        lighting: None,
     };                                  //      Lifetime 'a
     
-    render_context.render_meshes(&cmds)?;  // ◄─── Used here
+    render_context.render(&cmds)?;  // ◄─── Used here
                                             //      Lifetime 'a still valid
     
 }  // ◄─── draw_commands dropped here

@@ -11,7 +11,7 @@
 //! ```
 
 use praxis_assets::{load_obj_mesh, AssetLoader, MeshLoader};
-use praxis_graphics::{colored_cube_mesh, DrawCommand, MeshRenderCommands};
+use praxis_graphics::{colored_cube_mesh, DrawCommand, RenderCommands};
 use praxis_input::InputState;
 use praxis_math::{Mat4, Vec3};
 use praxis_utils::Result;
@@ -169,14 +169,14 @@ impl State for ObjLoaderDemo {
             },
         ];
 
-        let cmds = MeshRenderCommands {
+        let cmds = RenderCommands {
             view,
             proj,
             draw_commands: &draw_commands,
-            lighting: None, // Use default lighting
+            lighting: None,
         };
 
-        render_context.render_meshes(&cmds)?;
+        render_context.render(&cmds)?;
 
         Ok(())
     }

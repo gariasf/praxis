@@ -65,8 +65,8 @@
 
 use praxis_ecs::{PerspectiveCameraBundle, Transform, World};
 use praxis_graphics::{
-    sphere_mesh, textured_cube_mesh, DrawCommandWithMaterial, MaterialProperties,
-    MaterialRenderCommands, RenderContext,
+    sphere_mesh, textured_cube_mesh, DrawCommand, MaterialProperties,
+    RenderCommands, RenderContext,
 };
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::{Quat, Vec3};
@@ -603,24 +603,22 @@ impl App {
         )>();
 
         for (transform, mesh_handle, texture_handle, material_props) in query.iter(world.inner()) {
-            draw_commands.push(DrawCommandWithMaterial {
+            draw_commands.push(DrawCommand {
                 mesh_id: mesh_handle.id.clone(),
                 model: transform.compute_matrix(),
                 texture_name: Some(texture_handle.id.clone()),
-                material_properties: material_props.0,
+                material_properties: Some(material_props.0),
             });
         }
 
-        // Use material-based rendering for optimal performance
-        // This path sorts by material and batches draw calls efficiently
-        let cmds = MaterialRenderCommands {
+        let cmds = RenderCommands {
             view: matrices_copy.view,
             proj: matrices_copy.projection,
             draw_commands: &draw_commands,
-            lighting: None, // Use default lighting
+            lighting: None,
         };
 
-        render_context.render_with_materials(&cmds)?;
+        render_context.render(&cmds)?;
 
         Ok(())
     }

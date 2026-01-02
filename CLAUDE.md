@@ -119,15 +119,20 @@ The texture system provides support for loading and managing textures:
 
 The graphics pipeline supports texture sampling through UV coordinates in the vertex format.
 
-#### Rendering Methods
+#### Rendering Method
 
-`RenderContext` provides three rendering methods:
+`RenderContext` provides a single unified rendering method:
 
-1. **`render()`**: Basic rendering with model matrices (legacy)
-2. **`render_meshes()`**: Multi-mesh rendering with `DrawCommand`
-3. **`render_textured()`**: Textured rendering with `DrawCommandWithTexture`
+- **`render()`**: Unified rendering supporting multiple meshes, optional textures, and optional materials per object
 
-Examples demonstrate usage of all three methods.
+The method automatically handles:
+- Multiple mesh types per frame
+- Optional custom textures (defaults to white if not specified)
+- Optional PBR material properties (defaults to standard if not specified)
+- Automatic material batching and sorting for optimal performance
+- Dynamic lighting updates
+
+Examples demonstrate various usage patterns.
 
 ### ECS Integration
 

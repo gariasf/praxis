@@ -36,6 +36,7 @@ pub fn colored_triangle() -> [Vertex2D; 3] {
 /// `indices` defines 12 triangles (36 indices) that reference those vertices.
 ///
 /// Note: This version does not include per-face normals. For proper lighting, use `colored_cube_mesh()`.
+#[allow(dead_code)]
 pub fn colored_cube() -> (Vec<Vertex3D>, Vec<u16>) {
     // 8 unique cube vertices (normals default to up)
     let vertices = vec![

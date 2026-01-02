@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use praxis_ecs::{
     Active, Entity, GlobalTransform, Name, Transform, TransformBundle, Visibility, World,
 };
-use praxis_graphics::{RenderCommands, RenderContext};
+use praxis_graphics::{DrawCommand, RenderCommands, RenderContext};
 use praxis_math::{Mat4, Quat, Vec3};
 use praxis_utils::timing::FrameTimer;
 use praxis_utils::{debug, error, info, trace, warn, Result};
@@ -46,8 +46,14 @@ impl AppState {
         debug!("Creating application state with ECS integration");
 
         // Create graphics context
-        let render_context = RenderContext::new(window.clone()).await?;
+        let mut render_context = RenderContext::new(window.clone()).await?;
         let size = window.inner_size();
+
+        // Load the cube mesh
+        render_context
+            .mesh_manager_mut()
+            .load_mesh("cube", praxis_graphics::colored_cube_mesh())?;
+        info!("Loaded cube mesh");
 
         // Create ECS world
         let mut world = World::new();
@@ -162,14 +168,19 @@ impl AppState {
     }
 
     /// Collects visible entities and their transforms for rendering
-    fn collect_render_data(&mut self) -> Vec<Mat4> {
+    fn collect_render_data(&mut self) -> Vec<DrawCommand> {
         let inner_world = self.world.inner_mut();
         let mut visible_query = inner_world.query::<(&GlobalTransform, &Visibility, &Active)>();
 
         visible_query
             .iter(inner_world)
             .filter(|(_, visibility, _)| visibility.is_visible())
-            .map(|(global_transform, _, _)| global_transform.matrix)
+            .map(|(global_transform, _, _)| DrawCommand {
+                mesh_id: "cube".to_string(),
+                model: global_transform.matrix,
+                texture_name: None,
+                material_properties: None,
+            })
             .collect()
     }
 
@@ -280,7 +291,7 @@ impl ApplicationHandler for App {
                     state.update_entities(delta_secs);
 
                     // Collect render data from visible entities
-                    let model_matrices = state.collect_render_data();
+                    let draw_commands = state.collect_render_data();
 
                     // Set up camera
                     let aspect = state.size.width as f32 / state.size.height as f32;
@@ -302,14 +313,15 @@ impl ApplicationHandler for App {
                     let cmds = RenderCommands {
                         view,
                         proj,
-                        models: &model_matrices,
+                        draw_commands: &draw_commands,
+                        lighting: None,
                     };
 
                     match state.render_context.render(&cmds) {
                         Ok(()) => {
                             trace!(
                                 "Frame rendered - {} entities, FPS: {:.1}",
-                                model_matrices.len(),
+                                draw_commands.len(),
                                 state.frame_timer.fps()
                             );
                         }
