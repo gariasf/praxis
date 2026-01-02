@@ -3,6 +3,40 @@
 //! This module provides frequently-used components that are common across
 //! most game projects. These components are designed to work together
 //! to form the building blocks of game entities.
+//!
+//! # Lighting Components
+//!
+//! The ECS provides two types of light components for scene lighting:
+//!
+//! - **`DirectionalLight`**: Simulates distant light sources like the sun,
+//!   where all light rays are parallel. The light's direction is specified
+//!   but position is irrelevant.
+//!
+//! - **`PointLight`**: Simulates omnidirectional light sources like light bulbs,
+//!   emitting light in all directions from a point. Uses the entity's Transform
+//!   position and has distance-based attenuation.
+//!
+//! ## Example
+//!
+//! ```rust,no_run
+//! use praxis_ecs::{World, DirectionalLight, PointLight, Transform};
+//! use praxis_math::Vec3;
+//!
+//! let mut world = World::new();
+//!
+//! // Add a directional light (sun)
+//! world.spawn(DirectionalLight::new(
+//!     Vec3::new(0.5, -1.0, 0.3).normalize(),
+//!     Vec3::new(1.0, 0.95, 0.8),
+//!     1.0,
+//! ));
+//!
+//! // Add a point light
+//! world.spawn((
+//!     Transform::from_xyz(0.0, 5.0, 0.0),
+//!     PointLight::new(Vec3::new(1.0, 0.8, 0.6), 10.0, 20.0),
+//! ));
+//! ```
 
 use bevy_ecs::component::Component;
 use praxis_math::{Mat4, Quat, Vec3};
@@ -895,6 +929,141 @@ impl Default for CameraMatrices {
     }
 }
 
+/// Directional light component representing a light source at infinite distance.
+///
+/// Directional lights simulate distant light sources like the sun, where all
+/// light rays are parallel. The position of the entity is ignored; only the
+/// direction matters.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, DirectionalLight, Transform};
+/// use praxis_math::{Vec3, Quat};
+///
+/// let mut world = World::new();
+///
+/// // Create a directional light pointing down and forward (like afternoon sun)
+/// let direction = Vec3::new(0.5, -1.0, 0.5).normalize();
+/// world.spawn((
+///     DirectionalLight {
+///         direction,
+///         color: Vec3::new(1.0, 0.95, 0.8),
+///         intensity: 1.0,
+///     },
+/// ));
+/// ```
+#[derive(Component, Debug, Clone, Copy)]
+pub struct DirectionalLight {
+    /// Direction the light is shining (should be normalized).
+    pub direction: Vec3,
+
+    /// RGB color of the light.
+    pub color: Vec3,
+
+    /// Intensity multiplier for the light.
+    pub intensity: f32,
+}
+
+impl DirectionalLight {
+    /// Creates a new directional light.
+    ///
+    /// # Arguments
+    ///
+    /// * `direction` - Direction the light is shining (will be normalized)
+    /// * `color` - RGB color of the light
+    /// * `intensity` - Intensity multiplier
+    pub fn new(direction: Vec3, color: Vec3, intensity: f32) -> Self {
+        Self {
+            direction: direction.normalize(),
+            color,
+            intensity,
+        }
+    }
+
+    /// Creates a default white directional light pointing down.
+    pub fn white() -> Self {
+        Self {
+            direction: Vec3::new(0.0, -1.0, 0.0),
+            color: Vec3::ONE,
+            intensity: 1.0,
+        }
+    }
+}
+
+impl Default for DirectionalLight {
+    fn default() -> Self {
+        Self::white()
+    }
+}
+
+/// Point light component representing an omnidirectional light source.
+///
+/// Point lights emit light in all directions from a single point in space,
+/// like a light bulb. The light intensity falls off with distance.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, PointLight, Transform};
+/// use praxis_math::Vec3;
+///
+/// let mut world = World::new();
+///
+/// // Create a warm point light at position (0, 5, 0)
+/// world.spawn((
+///     Transform::from_xyz(0.0, 5.0, 0.0),
+///     PointLight {
+///         color: Vec3::new(1.0, 0.8, 0.6),
+///         intensity: 10.0,
+///         range: 20.0,
+///     },
+/// ));
+/// ```
+#[derive(Component, Debug, Clone, Copy)]
+pub struct PointLight {
+    /// RGB color of the light.
+    pub color: Vec3,
+
+    /// Intensity of the light at the source.
+    pub intensity: f32,
+
+    /// Maximum range of the light. Beyond this distance, light contribution is zero.
+    pub range: f32,
+}
+
+impl PointLight {
+    /// Creates a new point light.
+    ///
+    /// # Arguments
+    ///
+    /// * `color` - RGB color of the light
+    /// * `intensity` - Intensity of the light
+    /// * `range` - Maximum effective range
+    pub fn new(color: Vec3, intensity: f32, range: f32) -> Self {
+        Self {
+            color,
+            intensity,
+            range,
+        }
+    }
+
+    /// Creates a default white point light.
+    pub fn white() -> Self {
+        Self {
+            color: Vec3::ONE,
+            intensity: 1.0,
+            range: 10.0,
+        }
+    }
+}
+
+impl Default for PointLight {
+    fn default() -> Self {
+        Self::white()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1147,5 +1316,44 @@ mod tests {
         assert_eq!(matrices.view, view);
         assert_eq!(matrices.projection, projection);
         assert_eq!(matrices.view_projection, projection * view);
+    }
+
+    #[test]
+    fn test_directional_light_creation() {
+        let light = DirectionalLight::new(
+            Vec3::new(0.5, -1.0, 0.5),
+            Vec3::new(1.0, 0.95, 0.8),
+            1.0,
+        );
+
+        // Direction should be normalized
+        assert!((light.direction.length() - 1.0).abs() < 0.001);
+        assert_eq!(light.color, Vec3::new(1.0, 0.95, 0.8));
+        assert_eq!(light.intensity, 1.0);
+    }
+
+    #[test]
+    fn test_directional_light_default() {
+        let light = DirectionalLight::default();
+        assert_eq!(light.direction, Vec3::new(0.0, -1.0, 0.0));
+        assert_eq!(light.color, Vec3::ONE);
+        assert_eq!(light.intensity, 1.0);
+    }
+
+    #[test]
+    fn test_point_light_creation() {
+        let light = PointLight::new(Vec3::new(1.0, 0.8, 0.6), 10.0, 20.0);
+
+        assert_eq!(light.color, Vec3::new(1.0, 0.8, 0.6));
+        assert_eq!(light.intensity, 10.0);
+        assert_eq!(light.range, 20.0);
+    }
+
+    #[test]
+    fn test_point_light_default() {
+        let light = PointLight::default();
+        assert_eq!(light.color, Vec3::ONE);
+        assert_eq!(light.intensity, 1.0);
+        assert_eq!(light.range, 10.0);
     }
 }

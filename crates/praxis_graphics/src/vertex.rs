@@ -94,10 +94,11 @@ impl Vertex2D {
         Self { position, color }
     }
 }
-/// Vertex data for 3D rendering with texture support.
+/// Vertex data for 3D rendering with texture support and lighting.
 ///
 /// Each vertex contains:
 /// - A 3D position in model/world space
+/// - A normal vector for lighting calculations
 /// - An RGB color value
 /// - UV texture coordinates
 ///
@@ -106,20 +107,21 @@ impl Vertex2D {
 /// The struct is marked with `#[repr(C)]` to ensure predictable memory layout:
 ///
 /// ```text
-/// Vertex3D (32 bytes total):
-/// ┌──────────────────┬──────────────────┬──────────────┐
-/// │ position (12b)   │ color (12b)      │ uv (8b)      │
-/// ├──────┬──────┬────┼──────┬──────┬────┼──────┬───────┤
-/// │ x:f32│ y:f32│z:f32│ r:f32│ g:f32│b:f32│ u:f32│ v:f32│
-/// └──────┴──────┴────┴──────┴──────┴────┴──────┴───────┘
+/// Vertex3D (44 bytes total):
+/// ┌──────────────────┬──────────────────┬──────────────────┬──────────────┐
+/// │ position (12b)   │ normal (12b)     │ color (12b)      │ uv (8b)      │
+/// ├──────┬──────┬────┼──────┬──────┬────┼──────┬──────┬────┼──────┬───────┤
+/// │ x:f32│ y:f32│z:f32│ x:f32│ y:f32│z:f32│ r:f32│ g:f32│b:f32│ u:f32│ v:f32│
+/// └──────┴──────┴────┴──────┴──────┴────┴──────┴──────┴────┴──────┴───────┘
 /// ```
 ///
 /// # Shader Binding
 ///
 /// This vertex format maps to the following shader inputs:
 /// - `location = 0`: position (vec3)
-/// - `location = 1`: color (vec3)
-/// - `location = 2`: uv (vec2)
+/// - `location = 1`: normal (vec3)
+/// - `location = 2`: color (vec3)
+/// - `location = 3`: uv (vec2)
 ///
 /// # Texture Coordinates
 ///
@@ -140,9 +142,10 @@ impl Vertex2D {
 /// ```rust
 /// use praxis_graphics::vertex::Vertex3D;
 ///
-/// // Create a textured vertex at origin with white color
-/// let vertex = Vertex3D::with_uv(
+/// // Create a textured vertex with lighting at origin
+/// let vertex = Vertex3D::with_all(
 ///     [0.0, 0.0, 0.0],    // position
+///     [0.0, 1.0, 0.0],    // normal (pointing up)
 ///     [1.0, 1.0, 1.0],    // color (white)
 ///     [0.5, 0.5]          // UV (center of texture)
 /// );
@@ -153,6 +156,10 @@ pub struct Vertex3D {
     /// 3D position in model/world space.
     #[format(R32G32B32_SFLOAT)]
     pub position: [f32; 3],
+    
+    /// Normal vector for lighting calculations (should be normalized).
+    #[format(R32G32B32_SFLOAT)]
+    pub normal: [f32; 3],
     
     /// RGB color values [0.0, 1.0].
     ///
@@ -186,6 +193,7 @@ impl Vertex3D {
     pub fn new(position: [f32; 3], color: [f32; 3]) -> Self {
         Self {
             position,
+            normal: [0.0, 1.0, 0.0],
             color,
             uv: [0.0, 0.0],
         }
@@ -201,6 +209,24 @@ impl Vertex3D {
     pub fn with_uv(position: [f32; 3], color: [f32; 3], uv: [f32; 2]) -> Self {
         Self {
             position,
+            normal: [0.0, 1.0, 0.0],
+            color,
+            uv,
+        }
+    }
+
+    /// Creates a new vertex with all attributes.
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - 3D position in world space
+    /// * `normal` - Normal vector (should be normalized)
+    /// * `color` - RGB color values in range [0.0, 1.0]
+    /// * `uv` - Texture coordinates in range [0.0, 1.0]
+    pub fn with_all(position: [f32; 3], normal: [f32; 3], color: [f32; 3], uv: [f32; 2]) -> Self {
+        Self {
+            position,
+            normal,
             color,
             uv,
         }
@@ -234,6 +260,6 @@ mod tests {
     #[test]
     fn test_vertex3d_size() {
         // Ensure our vertex struct has the expected size
-        assert_eq!(std::mem::size_of::<Vertex3D>(), 32); // 3*4 + 3*4 + 2*4 = 32 bytes
+        assert_eq!(std::mem::size_of::<Vertex3D>(), 44); // 3*4 + 3*4 + 3*4 + 2*4 = 44 bytes
     }
 }
