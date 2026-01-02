@@ -4,30 +4,6 @@ This directory contains examples demonstrating how to use the Praxis game engine
 
 ## Available Examples
 
-### Playground
-
-A basic example that demonstrates the Praxis engine initialization and window creation.
-
-To run:
-
-```bash
-cargo run --example playground
-```
-
-### ECS Demo
-
-Demonstrates the core ECS functionality including:
-- Creating a world and spawning entities
-- Using built-in components (Transform, Name, etc.)
-- Setting up parent-child relationships
-- Querying entities and their components
-
-To run:
-
-```bash
-cargo run --example ecs_demo
-```
-
 ### ECS Integration
 
 Shows how the ECS integrates with the rest of the Praxis engine systems.
@@ -57,20 +33,6 @@ To run:
 cargo run --example transform_propagation_demo
 ```
 
-### Mesh Demo
-
-A documentation example showing the mesh system architecture including:
-- Mesh and MeshHandle components in the ECS
-- MeshData and MeshAssetManager in the graphics system
-- Per-mesh vertex/index buffer management
-- Available primitive mesh functions
-
-To run:
-
-```bash
-cargo run --example mesh_demo
-```
-
 ### Multi-Mesh Demo
 
 A fully functional example that renders multiple different mesh types in a single scene:
@@ -85,20 +47,6 @@ To run:
 cargo run --example multi_mesh_demo
 ```
 
-### Input Demo
-
-Demonstrates the input system capabilities including:
-- Keyboard input handling
-- Mouse input (buttons, movement, scroll)
-- Action mapping system
-- Real-time input state tracking
-
-To run:
-
-```bash
-cargo run --example input_demo
-```
-
 ### Input Integration
 
 Shows how to integrate the input system with winit event loops and ECS.
@@ -107,20 +55,6 @@ To run:
 
 ```bash
 cargo run --example input_integration
-```
-
-### Camera Demo
-
-Demonstrates the camera system in the ECS:
-- Creating perspective and orthographic cameras
-- Camera activation/deactivation
-- Camera priorities
-- Automatic view and projection matrix computation
-
-To run:
-
-```bash
-cargo run --example camera_demo
 ```
 
 ### FPS Camera Controller
@@ -152,6 +86,22 @@ To run:
 cargo run --example obj_loader_demo
 ```
 
+### Scene Demo
+
+Demonstrates the scene management system including:
+- Loading scenes from RON files
+- Spawning scene entities into the world
+- Scene graph traversal
+- Finding entities by name
+- Unloading scenes
+- Creating and saving scenes programmatically
+
+To run:
+
+```bash
+cargo run --example scene_demo
+```
+
 ### Comprehensive Scene Demo
 
 **★ Complete asset pipeline demonstration ★**
@@ -175,6 +125,16 @@ To run:
 
 ```bash
 cargo run --example comprehensive_scene_demo
+```
+
+### GUI Demo
+
+A basic example demonstrating GUI functionality.
+
+To run:
+
+```bash
+cargo run --example gui_demo
 ```
 
 ## Building Examples
