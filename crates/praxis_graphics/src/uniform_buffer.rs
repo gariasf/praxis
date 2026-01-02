@@ -105,8 +105,6 @@ pub struct DynamicUniformBuffer {
     max_objects_per_frame: usize,
     /// Current frame index (cycles 0..frames_in_flight).
     current_frame: usize,
-    /// Minimum uniform buffer offset alignment required by the device.
-    min_alignment: usize,
     /// Aligned size of each object's uniform data.
     aligned_object_size: usize,
     /// Size of each frame's region in the buffer.
@@ -141,7 +139,8 @@ impl DynamicUniformBuffer {
         let min_alignment = device
             .physical_device()
             .properties()
-            .min_uniform_buffer_offset_alignment as usize;
+            .min_uniform_buffer_offset_alignment
+            .as_devicesize() as usize;
 
         debug!("Minimum uniform buffer offset alignment: {} bytes", min_alignment);
 
@@ -186,7 +185,6 @@ impl DynamicUniformBuffer {
             frames_in_flight,
             max_objects_per_frame,
             current_frame: 0,
-            min_alignment,
             aligned_object_size,
             frame_stride,
         })

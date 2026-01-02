@@ -145,6 +145,7 @@ mod pipeline;
 mod primitives;
 mod shaders;
 pub mod texture;
+pub mod uniform_buffer;
 mod vertex;
 
 use crate::{device::VulkanDevice, pipeline::create_simple_pipeline_3d};
@@ -1233,4 +1234,5 @@ pub use primitives::{
     textured_quad_mesh,
 };
 pub use texture::{Texture, TextureManager};
+pub use uniform_buffer::{DynamicUniformBuffer, ModelUniforms, ViewProjectionUniforms};
 pub use vertex::Vertex2D;
