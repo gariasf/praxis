@@ -1,0 +1,105 @@
+(
+    name: "Example Scene",
+    entities: [
+        (
+            name: Some("MainCamera"),
+            transform: Some((
+                translation: (0.0, 5.0, 10.0),
+                rotation: (0.0, 0.0, 0.0, 1.0),
+                scale: (1.0, 1.0, 1.0),
+            )),
+            camera: Some((
+                camera_type: Perspective,
+                fov: Some(1.22173),
+                aspect_ratio: Some(1.77778),
+                near: 0.1,
+                far: 1000.0,
+                is_active: true,
+                priority: 0,
+            )),
+            children: [],
+        ),
+        (
+            name: Some("Sun"),
+            directional_light: Some((
+                direction: (0.5, -1.0, 0.3),
+                color: (1.0, 0.95, 0.8),
+                intensity: 1.0,
+            )),
+            children: [],
+        ),
+        (
+            name: Some("Player"),
+            transform: Some((
+                translation: (0.0, 1.0, 0.0),
+                rotation: (0.0, 0.0, 0.0, 1.0),
+                scale: (1.0, 1.0, 1.0),
+            )),
+            mesh: Some("cube"),
+            visible: Some(true),
+            active: Some(true),
+            children: [
+                (
+                    name: Some("PlayerLight"),
+                    transform: Some((
+                        translation: (0.0, 0.5, 0.0),
+                        rotation: (0.0, 0.0, 0.0, 1.0),
+                        scale: (1.0, 1.0, 1.0),
+                    )),
+                    point_light: Some((
+                        color: (1.0, 0.8, 0.6),
+                        intensity: 5.0,
+                        range: 10.0,
+                    )),
+                    children: [],
+                ),
+            ],
+        ),
+        (
+            name: Some("Environment"),
+            transform: Some((
+                translation: (0.0, 0.0, 0.0),
+                rotation: (0.0, 0.0, 0.0, 1.0),
+                scale: (1.0, 1.0, 1.0),
+            )),
+            children: [
+                (
+                    name: Some("Ground"),
+                    transform: Some((
+                        translation: (0.0, 0.0, 0.0),
+                        rotation: (0.0, 0.0, 0.0, 1.0),
+                        scale: (10.0, 0.1, 10.0),
+                    )),
+                    mesh: Some("cube"),
+                    children: [],
+                ),
+                (
+                    name: Some("Wall1"),
+                    transform: Some((
+                        translation: (5.0, 1.0, 0.0),
+                        rotation: (0.0, 0.0, 0.0, 1.0),
+                        scale: (0.1, 2.0, 10.0),
+                    )),
+                    mesh: Some("cube"),
+                    children: [],
+                ),
+                (
+                    name: Some("Wall2"),
+                    transform: Some((
+                        translation: (-5.0, 1.0, 0.0),
+                        rotation: (0.0, 0.0, 0.0, 1.0),
+                        scale: (0.1, 2.0, 10.0),
+                    )),
+                    mesh: Some("cube"),
+                    children: [],
+                ),
+            ],
+        ),
+    ],
+    metadata: (
+        description: Some("An example scene demonstrating the Praxis scene system"),
+        author: Some("Praxis Engine"),
+        version: Some("1.0.0"),
+        tags: ["example", "demo"],
+    ),
+)

@@ -7,6 +7,7 @@ use bevy_ecs::{
     bundle::Bundle,
     component::Component,
     entity::Entity,
+    query::QueryState,
     schedule::{Schedule, ScheduleLabel},
     system::Resource,
     world::World as BevyWorld,
@@ -403,6 +404,103 @@ impl World {
         for entity in entities {
             let _ = self.despawn(entity);
         }
+    }
+
+    /// Spawns an empty entity and returns an EntityWorldMut for building it.
+    ///
+    /// This is useful for adding components one at a time.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use praxis_ecs::{World, Component};
+    ///
+    /// #[derive(Component)]
+    /// struct Health(f32);
+    ///
+    /// let mut world = World::new();
+    /// let entity = world.spawn_empty()
+    ///     .insert(Health(100.0))
+    ///     .id();
+    /// ```
+    pub fn spawn_empty(&mut self) -> bevy_ecs::world::EntityWorldMut {
+        self.stats.entities_spawned += 1;
+        self.stats.active_entities += 1;
+        self.inner.spawn_empty()
+    }
+
+    /// Gets a component from an entity.
+    ///
+    /// # Arguments
+    ///
+    /// * `entity` - The entity to get the component from
+    ///
+    /// # Returns
+    ///
+    /// Some(&component) if the entity has the component, None otherwise.
+    pub fn get<C: Component>(&self, entity: Entity) -> Option<&C> {
+        self.inner.get_entity(entity)?.get::<C>()
+    }
+
+    /// Gets an `EntityWorldMut` for the given entity.
+    ///
+    /// This provides mutable access to an entity's components.
+    pub fn entity_mut(&mut self, entity: Entity) -> bevy_ecs::world::EntityWorldMut {
+        self.inner.entity_mut(entity)
+    }
+
+    /// Creates a query for components.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use praxis_ecs::{World, Component};
+    ///
+    /// #[derive(Component)]
+    /// struct Position { x: f32, y: f32 }
+    ///
+    /// let mut world = World::new();
+    /// let mut query = world.query::<&Position>();
+    ///
+    /// for position in query.iter(&world) {
+    ///     println!("Entity at ({}, {})", position.x, position.y);
+    /// }
+    /// ```
+    pub fn query<D: bevy_ecs::query::QueryData>(
+        &mut self,
+    ) -> QueryState<D, ()> {
+        self.inner.query::<D>()
+    }
+
+    /// Creates a filtered query for components.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use praxis_ecs::{World, Component, With};
+    ///
+    /// #[derive(Component)]
+    /// struct Enemy;
+    ///
+    /// #[derive(Component)]
+    /// struct Position { x: f32, y: f32 }
+    ///
+    /// let mut world = World::new();
+    /// let mut query = world.query_filtered::<&Position, With<Enemy>>();
+    ///
+    /// for position in query.iter(&world) {
+    ///     println!("Enemy at ({}, {})", position.x, position.y);
+    /// }
+    /// ```
+    pub fn query_filtered<D: bevy_ecs::query::QueryData, F: bevy_ecs::query::QueryFilter>(
+        &mut self,
+    ) -> QueryState<D, F> {
+        self.inner.query_filtered::<D, F>()
+    }
+
+    /// Iterates over all entities in the world.
+    pub fn iter_entities(&self) -> impl Iterator<Item = bevy_ecs::world::EntityRef> {
+        self.inner.iter_entities()
     }
 }
 

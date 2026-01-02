@@ -1,0 +1,35 @@
+(
+    name: "Simple Scene",
+    entities: [
+        (
+            name: Some("Camera"),
+            transform: Some((
+                translation: (0.0, 3.0, 5.0),
+                rotation: (0.0, 0.0, 0.0, 1.0),
+                scale: (1.0, 1.0, 1.0),
+            )),
+            camera: Some((
+                camera_type: Perspective,
+                fov: Some(1.0472),
+                aspect_ratio: Some(1.77778),
+                near: 0.1,
+                far: 100.0,
+            )),
+            children: [],
+        ),
+        (
+            name: Some("Cube"),
+            transform: Some((
+                translation: (0.0, 0.0, 0.0),
+                rotation: (0.0, 0.0, 0.0, 1.0),
+                scale: (1.0, 1.0, 1.0),
+            )),
+            mesh: Some("cube"),
+            children: [],
+        ),
+    ],
+    metadata: (
+        description: Some("A minimal scene with a camera and a cube"),
+        tags: ["simple", "test"],
+    ),
+)

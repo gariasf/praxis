@@ -175,6 +175,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "base64"
+version = "0.21.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
+
+[[package]]
 name = "bevy_ecs"
 version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -421,6 +427,9 @@ name = "bitflags"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c8214115b7bf84099f1309324e63141d4c5d7cc26862f97a0a857dbefe165bd"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "block2"
@@ -1668,6 +1677,7 @@ dependencies = [
  "praxis_graphics",
  "praxis_input",
  "praxis_math",
+ "praxis_scene",
  "praxis_utils",
  "praxis_window",
  "winit",
@@ -1749,6 +1759,14 @@ version = "0.1.0"
 [[package]]
 name = "praxis_scene"
 version = "0.1.0"
+dependencies = [
+ "bevy_ecs 0.14.2",
+ "praxis_ecs",
+ "praxis_math",
+ "praxis_utils",
+ "ron",
+ "serde",
+]
 
 [[package]]
 name = "praxis_utils"
@@ -1906,6 +1924,18 @@ name = "regex-syntax"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
+
+[[package]]
+name = "ron"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b91f7eff05f748767f183df4320a63d6936e9c6107d97c9e6bdd9784f4289c94"
+dependencies = [
+ "base64",
+ "bitflags 2.9.0",
+ "serde",
+ "serde_derive",
+]
 
 [[package]]
 name = "roxmltree"
