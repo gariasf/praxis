@@ -182,13 +182,16 @@ use winit::window::Window;
 /// alignment per column, which this representation satisfies.
 ///
 /// This struct contains the transformation matrices needed by the vertex shader
-/// to transform vertices from model space to clip space.
+/// to transform vertices from model space to clip space, as well as the camera
+/// position in world space.
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniforms {
     model: [[f32; 4]; 4],
     view: [[f32; 4]; 4],
     proj: [[f32; 4]; 4],
+    camera_position: [f32; 3],
+    _padding: f32,
 }
 
 /// A single draw command with mesh, transform, and optional texture/material.
@@ -795,10 +798,20 @@ impl RenderContext {
                 default_texture
             };
 
+            // Extract camera position from view matrix inverse
+            let view_inverse = cmds.view.inverse();
+            let camera_position = [
+                view_inverse.col(3).x,
+                view_inverse.col(3).y,
+                view_inverse.col(3).z,
+            ];
+
             let uniforms = Uniforms {
                 model: draw_cmd.model.to_cols_array_2d(),
                 view: cmds.view.to_cols_array_2d(),
                 proj: cmds.proj.to_cols_array_2d(),
+                camera_position,
+                _padding: 0.0,
             };
 
             let uniform_buffer = Buffer::from_data(
