@@ -5,6 +5,7 @@ This directory contains asset files used by the Praxis engine examples and tests
 ## Directory Structure
 
 - `models/` - 3D model files (OBJ, etc.)
+- `textures/` - Texture image files (PNG, JPEG, etc.) - currently empty as the comprehensive_scene_demo generates textures procedurally
 
 ## Models
 

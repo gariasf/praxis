@@ -85,6 +85,98 @@ To run:
 cargo run --example multi_mesh_demo
 ```
 
+### Input Demo
+
+Demonstrates the input system capabilities including:
+- Keyboard input handling
+- Mouse input (buttons, movement, scroll)
+- Action mapping system
+- Real-time input state tracking
+
+To run:
+
+```bash
+cargo run --example input_demo
+```
+
+### Input Integration
+
+Shows how to integrate the input system with winit event loops and ECS.
+
+To run:
+
+```bash
+cargo run --example input_integration
+```
+
+### Camera Demo
+
+Demonstrates the camera system in the ECS:
+- Creating perspective and orthographic cameras
+- Camera activation/deactivation
+- Camera priorities
+- Automatic view and projection matrix computation
+
+To run:
+
+```bash
+cargo run --example camera_demo
+```
+
+### FPS Camera Controller
+
+A fully functional FPS-style camera controller showing:
+- WASD movement with camera
+- Mouse look with sensitivity control
+- Sprint mode
+- Mouse cursor locking
+- Integration of input and camera systems
+
+To run:
+
+```bash
+cargo run --example fps_camera_controller
+```
+
+### OBJ Loader Demo
+
+Demonstrates loading OBJ mesh files using the asset system:
+- Using the AssetLoader trait
+- Loading OBJ files from disk
+- Uploading meshes to GPU
+- Rendering loaded meshes
+
+To run:
+
+```bash
+cargo run --example obj_loader_demo
+```
+
+### Comprehensive Scene Demo
+
+**★ Complete asset pipeline demonstration ★**
+
+This is the most comprehensive example showing the complete asset loading pipeline from disk to screen:
+- Loading OBJ mesh files from disk using praxis_assets
+- Procedural texture generation with various patterns (checker, brick, metal, wood)
+- ECS-based scene management with multiple objects
+- FPS camera controller with full navigation
+- Multiple textured objects in the scene
+- Integration of all major systems (ECS, graphics, input, camera, assets)
+
+Controls:
+- WASD - Move camera horizontally
+- Space/Left Ctrl - Move camera vertically
+- Left Shift - Sprint mode
+- Mouse - Look around (when cursor is locked)
+- ESC - Toggle cursor lock / Exit
+
+To run:
+
+```bash
+cargo run --example comprehensive_scene_demo
+```
+
 ## Building Examples
 
 To build all examples:

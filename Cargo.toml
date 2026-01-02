@@ -86,3 +86,7 @@ path = "examples/fps_camera_controller.rs"
 [[example]]
 name = "obj_loader_demo"
 path = "examples/obj_loader_demo.rs"
+
+[[example]]
+name = "comprehensive_scene_demo"
+path = "examples/comprehensive_scene_demo.rs"

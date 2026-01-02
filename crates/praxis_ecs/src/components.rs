@@ -452,6 +452,54 @@ impl From<String> for MeshHandle {
     }
 }
 
+/// Handle to a texture asset stored in the graphics system.
+///
+/// This component references a texture by its unique identifier. The actual
+/// texture data is managed by the graphics system.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, TextureHandle, Transform};
+///
+/// let mut world = World::new();
+///
+/// // Spawn an entity with a texture
+/// world.spawn((
+///     Transform::from_xyz(0.0, 0.0, 0.0),
+///     TextureHandle::new("brick"),
+/// ));
+/// ```
+#[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TextureHandle {
+    /// Unique identifier for the texture.
+    pub id: String,
+}
+
+impl TextureHandle {
+    /// Creates a new texture handle with the given identifier.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self { id: id.into() }
+    }
+
+    /// Gets the texture identifier.
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+}
+
+impl From<&str> for TextureHandle {
+    fn from(id: &str) -> Self {
+        Self::new(id)
+    }
+}
+
+impl From<String> for TextureHandle {
+    fn from(id: String) -> Self {
+        Self { id }
+    }
+}
+
 /// Mesh component containing vertex and index data.
 ///
 /// This component stores the actual geometry data for rendering.

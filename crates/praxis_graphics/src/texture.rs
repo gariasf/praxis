@@ -309,6 +309,47 @@ impl TextureManager {
         Ok(())
     }
 
+    /// Loads a texture from raw RGBA8 bytes and caches it.
+    ///
+    /// This is useful for procedurally generated textures or textures loaded
+    /// from non-file sources.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Unique identifier for the texture
+    /// * `data` - RGBA8 pixel data (4 bytes per pixel, row-major)
+    /// * `width` - Width of the texture in pixels
+    /// * `height` - Height of the texture in pixels
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if texture creation fails.
+    pub fn load_texture_from_bytes(
+        &mut self,
+        name: impl Into<String>,
+        data: &[u8],
+        width: u32,
+        height: u32,
+    ) -> Result<()> {
+        let name = name.into();
+
+        debug!("Creating texture '{}' from bytes ({}x{})", name, width, height);
+
+        let texture = Texture::from_rgba8(
+            self.allocator.clone(),
+            self.command_buffer_allocator.clone(),
+            self.queue.clone(),
+            width,
+            height,
+            data.to_vec(),
+        )?;
+
+        self.textures.insert(name.clone(), texture);
+        info!("Texture '{}' created and cached", name);
+
+        Ok(())
+    }
+
     /// Adds a pre-created texture to the cache.
     ///
     /// # Arguments
