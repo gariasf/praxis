@@ -43,14 +43,6 @@ winit = { version = "0.30.11", features = ["rwh_05"] }
 pollster = "0.4"
 
 [[example]]
-name = "playground"
-path = "examples/playground.rs"
-
-[[example]]
-name = "ecs_demo"
-path = "examples/ecs_demo.rs"
-
-[[example]]
 name = "ecs_integration"
 path = "examples/ecs_integration.rs"
 
@@ -59,24 +51,12 @@ name = "transform_propagation_demo"
 path = "examples/transform_propagation_demo.rs"
 
 [[example]]
-name = "mesh_demo"
-path = "examples/mesh_demo.rs"
-
-[[example]]
 name = "multi_mesh_demo"
 path = "examples/multi_mesh_demo.rs"
 
 [[example]]
-name = "input_demo"
-path = "examples/input_demo.rs"
-
-[[example]]
 name = "input_integration"
 path = "examples/input_integration.rs"
-
-[[example]]
-name = "camera_demo"
-path = "examples/camera_demo.rs"
 
 [[example]]
 name = "fps_camera_controller"
