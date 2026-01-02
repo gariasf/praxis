@@ -27,7 +27,7 @@
 //! ```
 
 use praxis_ecs::{PerspectiveCameraBundle, Transform, World, IntoSystemConfigs};
-use praxis_graphics::{DrawCommand, MeshRenderCommands, RenderContext};
+use praxis_graphics::{DrawCommand, RenderCommands, RenderContext};
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::{Quat, Vec3, Mat4};
 use praxis_physics::{
@@ -546,18 +546,20 @@ impl App {
         // STEP 4: SUBMIT DRAW COMMANDS TO RENDERER
         // ====================================================================
         
-        // MeshRenderCommands packages all data needed for one frame:
+        // RenderCommands packages all data needed for one frame:
         // - View matrix: Where the camera is
         // - Projection matrix: How to project 3D to 2D
         // - Draw commands: What objects to render and where
-        let commands = MeshRenderCommands {
+        // - Lighting: Optional lighting data (None uses previous lighting)
+        let commands = RenderCommands {
             view: view_matrix,
             proj: proj_matrix,
             draw_commands: &draw_commands,
+            lighting: None,
         };
 
         // Render all objects in one batch
-        render_context.render_meshes(&commands)?;
+        render_context.render(&commands)?;
 
         Ok(())
     }
