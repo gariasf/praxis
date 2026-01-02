@@ -63,11 +63,22 @@
 //! - **`Texture`**: GPU-side texture with image view and sampler
 //! - **`TextureManager`**: Central manager for cached textures
 //! - **Format Support**: PNG and JPEG via the `image` crate
+//! - **Texture Sampling**: Full support in shaders via UV coordinates
+//!
+//! ## Texture Sampling Architecture
+//!
+//! The graphics pipeline supports texture sampling through:
+//!
+//! 1. **Vertex Format**: `Vertex3D` includes UV coordinates (binding location 2)
+//! 2. **Shaders**: Vertex shader passes UVs to fragment shader, which samples textures
+//! 3. **Descriptor Sets**: Texture sampler bound at set 0, binding 1
+//! 4. **Mesh Data**: `MeshData` supports UV coordinates via `with_uvs()` and `with_colors_and_uvs()`
+//! 5. **Primitives**: Textured primitives like `textured_cube_mesh()` and `textured_quad_mesh()`
 //!
 //! ## Usage Example
 //!
 //! ```rust,no_run
-//! use praxis_graphics::{RenderContext, DrawCommandWithTexture, TexturedRenderCommands};
+//! use praxis_graphics::{RenderContext, DrawCommandWithTexture, TexturedRenderCommands, textured_cube_mesh};
 //! use praxis_math::{Mat4, Vec3};
 //!
 //! # async fn example(mut render_context: RenderContext) -> praxis_utils::Result<()> {
@@ -76,10 +87,15 @@
 //!     .texture_manager_mut()
 //!     .load_texture("wall", "assets/textures/wall.png")?;
 //!
+//! // Load a textured mesh
+//! render_context
+//!     .mesh_manager_mut()
+//!     .load_mesh("textured_cube", textured_cube_mesh([1.0, 1.0, 1.0]))?;
+//!
 //! // Render with textures
 //! let draw_commands = vec![
 //!     DrawCommandWithTexture {
-//!         mesh_id: "cube".to_string(),
+//!         mesh_id: "textured_cube".to_string(),
 //!         model: Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0)),
 //!         texture_name: Some("wall".to_string()),
 //!     },
@@ -93,6 +109,33 @@
 //!
 //! render_context.render_textured(&cmds)?;
 //! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Creating Custom Textured Meshes
+//!
+//! ```rust,no_run
+//! use praxis_graphics::MeshData;
+//!
+//! # fn example() {
+//! // Create a textured quad
+//! let positions = vec![
+//!     [-0.5, 0.0, -0.5],
+//!     [0.5, 0.0, -0.5],
+//!     [0.5, 0.0, 0.5],
+//!     [-0.5, 0.0, 0.5],
+//! ];
+//!
+//! let uvs = vec![
+//!     [0.0, 1.0],
+//!     [1.0, 1.0],
+//!     [1.0, 0.0],
+//!     [0.0, 0.0],
+//! ];
+//!
+//! let indices = vec![0, 1, 2, 2, 3, 0];
+//!
+//! let mesh = MeshData::with_uvs(positions, uvs, indices);
 //! # }
 //! ```
 //!
@@ -155,6 +198,9 @@ use winit::window::Window;
 /// We store matrices as column-major `[[f32; 4]; 4]` arrays because `glam::Mat4` does
 /// not implement `bytemuck::Pod`/`Zeroable`.  The GLSL std140 layout expects 16-byte
 /// alignment per column, which this representation satisfies.
+///
+/// This struct contains the transformation matrices needed by the vertex shader
+/// to transform vertices from model space to clip space.
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniforms {
@@ -1460,7 +1506,11 @@ impl RenderContext {
 }
 
 // Public re-exports
-pub use material::Material;
+pub use material::{Material, MaterialProperties};
 pub use mesh::{GpuMesh, MeshData};
-pub use primitives::{colored_cube_mesh, pyramid_mesh, quad_mesh, solid_cube_mesh};
+pub use primitives::{
+    colored_cube_mesh, pyramid_mesh, quad_mesh, solid_cube_mesh, textured_cube_mesh,
+    textured_quad_mesh,
+};
 pub use texture::{Texture, TextureManager};
+pub use vertex::Vertex2D;

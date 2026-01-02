@@ -139,6 +139,35 @@ impl MeshData {
         }
     }
 
+    /// Creates a mesh data with positions, UVs, and indices.
+    ///
+    /// Colors will default to white [1.0, 1.0, 1.0].
+    pub fn with_uvs(positions: Vec<[f32; 3]>, uvs: Vec<[f32; 2]>, indices: Vec<u16>) -> Self {
+        Self {
+            positions,
+            colors: None,
+            normals: None,
+            uvs: Some(uvs),
+            indices,
+        }
+    }
+
+    /// Creates a mesh data with positions, colors, UVs, and indices.
+    pub fn with_colors_and_uvs(
+        positions: Vec<[f32; 3]>,
+        colors: Vec<[f32; 3]>,
+        uvs: Vec<[f32; 2]>,
+        indices: Vec<u16>,
+    ) -> Self {
+        Self {
+            positions,
+            colors: Some(colors),
+            normals: None,
+            uvs: Some(uvs),
+            indices,
+        }
+    }
+
     /// Converts this mesh data to a vector of `Vertex3D` for GPU upload.
     ///
     /// If colors are not provided, vertices will use white (1.0, 1.0, 1.0).

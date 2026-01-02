@@ -1,7 +1,7 @@
 //! Vertex data structures and utilities for the graphics system.
 //!
-//! This module defines the vertex format used by the graphics pipeline to render geometry.
-//! Currently supports 2D positions with RGB colors for basic rendering.
+//! This module defines the vertex formats used by the graphics pipeline to render geometry.
+//! Supports both 2D vertices (position + color) and 3D vertices (position + color + UV coordinates).
 
 use vulkano::pipeline::graphics::vertex_input::Vertex;
 
@@ -94,13 +94,77 @@ impl Vertex2D {
         Self { position, color }
     }
 }
+/// Vertex data for 3D rendering with texture support.
+///
+/// Each vertex contains:
+/// - A 3D position in model/world space
+/// - An RGB color value
+/// - UV texture coordinates
+///
+/// # Memory Layout
+///
+/// The struct is marked with `#[repr(C)]` to ensure predictable memory layout:
+///
+/// ```text
+/// Vertex3D (32 bytes total):
+/// ┌──────────────────┬──────────────────┬──────────────┐
+/// │ position (12b)   │ color (12b)      │ uv (8b)      │
+/// ├──────┬──────┬────┼──────┬──────┬────┼──────┬───────┤
+/// │ x:f32│ y:f32│z:f32│ r:f32│ g:f32│b:f32│ u:f32│ v:f32│
+/// └──────┴──────┴────┴──────┴──────┴────┴──────┴───────┘
+/// ```
+///
+/// # Shader Binding
+///
+/// This vertex format maps to the following shader inputs:
+/// - `location = 0`: position (vec3)
+/// - `location = 1`: color (vec3)
+/// - `location = 2`: uv (vec2)
+///
+/// # Texture Coordinates
+///
+/// UV coordinates follow standard OpenGL/Vulkan conventions:
+/// ```text
+///   v
+///   ^
+/// 1 │ (0,1)────(1,1)
+///   │   │        │
+///   │   │        │
+/// 0 │ (0,0)────(1,0)
+///   └──────────────> u
+///     0            1
+/// ```
+///
+/// # Example
+///
+/// ```rust
+/// use praxis_graphics::vertex::Vertex3D;
+///
+/// // Create a textured vertex at origin with white color
+/// let vertex = Vertex3D::with_uv(
+///     [0.0, 0.0, 0.0],    // position
+///     [1.0, 1.0, 1.0],    // color (white)
+///     [0.5, 0.5]          // UV (center of texture)
+/// );
+/// ```
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, bytemuck::Pod, bytemuck::Zeroable, Vertex)]
 pub struct Vertex3D {
+    /// 3D position in model/world space.
     #[format(R32G32B32_SFLOAT)]
     pub position: [f32; 3],
+    
+    /// RGB color values [0.0, 1.0].
+    ///
+    /// This color is multiplied with the texture sample in the fragment shader.
     #[format(R32G32B32_SFLOAT)]
     pub color: [f32; 3],
+    
+    /// UV texture coordinates [0.0, 1.0].
+    ///
+    /// These coordinates determine which part of the texture is sampled
+    /// for this vertex. Values outside [0,1] will wrap or clamp depending
+    /// on the sampler configuration.
     #[format(R32G32_SFLOAT)]
     pub uv: [f32; 2],
 }
