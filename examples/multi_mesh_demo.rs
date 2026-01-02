@@ -279,6 +279,7 @@ impl ApplicationHandler for App {
                         view,
                         proj,
                         draw_commands: &draw_commands,
+                        lighting: None, // Use default lighting
                     };
 
                     match state.render_context.render_meshes(&cmds) {

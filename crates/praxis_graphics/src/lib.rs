@@ -48,6 +48,7 @@
 //!     view: Mat4::IDENTITY,
 //!     proj: Mat4::IDENTITY,
 //!     draw_commands: &draw_commands,
+//!     lighting: None,
 //! };
 //!
 //! render_context.render_meshes(&cmds)?;
@@ -119,6 +120,7 @@
 //!     view: Mat4::IDENTITY,
 //!     proj: Mat4::IDENTITY,
 //!     draw_commands: &draw_commands,
+//!     lighting: None,
 //! };
 //!
 //! render_context.render_textured(&cmds)?;
@@ -271,6 +273,9 @@ pub struct MeshRenderCommands<'a> {
     pub proj: Mat4,
     /// List of draw commands with mesh references.
     pub draw_commands: &'a [DrawCommand],
+    /// Optional lighting data to upload this frame.
+    /// If None, uses the previously uploaded lighting data.
+    pub lighting: Option<&'a lighting::LightingUniforms>,
 }
 
 /// A draw command with mesh, transform, and optional texture.
@@ -299,6 +304,9 @@ pub struct TexturedRenderCommands<'a> {
     pub proj: Mat4,
     /// List of draw commands with mesh and texture references.
     pub draw_commands: &'a [DrawCommandWithTexture],
+    /// Optional lighting data to upload this frame.
+    /// If None, uses the previously uploaded lighting data.
+    pub lighting: Option<&'a lighting::LightingUniforms>,
 }
 
 /// Core graphics context containing the Vulkan state.
@@ -747,6 +755,12 @@ impl RenderContext {
             )
             .map_err(|e| eyre::eyre!("Failed to create uniform buffer: {}", e))?;
 
+            // Create descriptor set for this object
+            // This binds three resources that the shaders need:
+            //   Binding 0: Uniforms (model/view/projection matrices)
+            //   Binding 1: Texture sampler (default white texture)
+            //   Binding 2: Lighting data (directional/point lights, ambient)
+            // The lighting buffer is shared across all objects in the frame
             let set = DescriptorSet::new(
                 self.descriptor_set_allocator.clone(),
                 self.descriptor_set_layout.clone(),
@@ -757,6 +771,9 @@ impl RenderContext {
                         default_texture.view.clone(),
                         default_texture.sampler.clone(),
                     ),
+                    // Lighting buffer at binding 2 - shared across all draw calls
+                    // Contains directional lights, point lights, and ambient color
+                    // Uses default lighting (never updated in this legacy render path)
                     WriteDescriptorSet::buffer(2, self.lighting_buffer.buffer().clone()),
                 ],
                 [],
@@ -892,15 +909,30 @@ impl RenderContext {
     /// This is an extended version of `render()` that allows rendering different
     /// mesh types in the same frame. Each draw command specifies which mesh to use.
     ///
+    /// # Lighting Data Upload
+    ///
+    /// If `cmds.lighting` is `Some`, the lighting data is uploaded to the GPU
+    /// before rendering. This allows dynamic lighting updates each frame. The upload
+    /// process:
+    ///
+    /// 1. CPU writes new `LightingUniforms` struct to host-visible buffer
+    /// 2. Buffer is automatically made visible to GPU (memory barrier)
+    /// 3. Descriptor set at binding 2 references the updated buffer
+    /// 4. Fragment shader reads updated lighting data during rendering
+    ///
+    /// If `cmds.lighting` is `None`, the previously uploaded lighting data is used,
+    /// which is more efficient when lighting doesn't change between frames.
+    ///
     /// # Arguments
     ///
-    /// * `cmds` - Render commands containing camera matrices and draw commands
+    /// * `cmds` - Render commands containing camera matrices, draw commands, and optional lighting
     ///
     /// # Errors
     ///
     /// Returns an error if:
     /// - Swapchain recreation fails
     /// - A referenced mesh doesn't exist
+    /// - Lighting buffer update fails
     /// - Command buffer recording fails
     /// - GPU submission fails
     pub fn render_meshes(&mut self, cmds: &MeshRenderCommands) -> Result<()> {
@@ -933,6 +965,24 @@ impl RenderContext {
         }
 
         previous_frame_end.cleanup_finished();
+
+        // ===================================================================
+        // Upload lighting data to GPU if provided
+        // ===================================================================
+        // This updates the uniform buffer at set 0, binding 2 with new lighting
+        // data. The buffer is host-visible, so the write is immediate. The GPU
+        // will see the updated data when the descriptor set is bound during
+        // command buffer execution.
+        //
+        // Data flow:
+        //   1. CPU: Write LightingUniforms to buffer (below)
+        //   2. CPU: Create descriptor sets referencing the buffer
+        //   3. GPU: Bind descriptor sets during rendering
+        //   4. GPU: Fragment shader reads lighting data from buffer
+        if let Some(lighting) = cmds.lighting {
+            trace!("Uploading lighting data to GPU");
+            self.lighting_buffer.update(lighting)?;
+        }
 
         // Build per-object descriptor sets and collect mesh references
         let mut draw_list: Vec<(Arc<DescriptorSet>, &mesh::GpuMesh)> = Vec::new();
@@ -970,6 +1020,12 @@ impl RenderContext {
             )
             .map_err(|e| eyre::eyre!("Failed to create uniform buffer: {}", e))?;
 
+            // Create descriptor set for this object
+            // This binds three resources that the shaders need:
+            //   Binding 0: Uniforms (model/view/projection matrices)
+            //   Binding 1: Texture sampler (albedo texture)
+            //   Binding 2: Lighting data (directional/point lights, ambient)
+            // The lighting buffer is shared across all objects in the frame
             let set = DescriptorSet::new(
                 self.descriptor_set_allocator.clone(),
                 self.descriptor_set_layout.clone(),
@@ -980,6 +1036,9 @@ impl RenderContext {
                         default_texture.view.clone(),
                         default_texture.sampler.clone(),
                     ),
+                    // Lighting buffer at binding 2 - shared across all draw calls
+                    // Contains directional lights, point lights, and ambient color
+                    // Updated once per frame if cmds.lighting is Some
                     WriteDescriptorSet::buffer(2, self.lighting_buffer.buffer().clone()),
                 ],
                 [],
@@ -1116,15 +1175,30 @@ impl RenderContext {
     /// command to specify a custom texture. If no texture is specified, the
     /// default white texture is used.
     ///
+    /// # Lighting Data Upload
+    ///
+    /// If `cmds.lighting` is `Some`, the lighting data is uploaded to the GPU
+    /// before rendering. This allows dynamic lighting updates each frame. The upload
+    /// process:
+    ///
+    /// 1. CPU writes new `LightingUniforms` struct to host-visible buffer
+    /// 2. Buffer is automatically made visible to GPU (memory barrier)
+    /// 3. Descriptor set at binding 2 references the updated buffer
+    /// 4. Fragment shader reads updated lighting data during rendering
+    ///
+    /// If `cmds.lighting` is `None`, the previously uploaded lighting data is used,
+    /// which is more efficient when lighting doesn't change between frames.
+    ///
     /// # Arguments
     ///
-    /// * `cmds` - Render commands containing camera matrices and draw commands with textures
+    /// * `cmds` - Render commands containing camera matrices, draw commands with textures, and optional lighting
     ///
     /// # Errors
     ///
     /// Returns an error if:
     /// - Swapchain recreation fails
     /// - A referenced mesh or texture doesn't exist
+    /// - Lighting buffer update fails
     /// - Command buffer recording fails
     /// - GPU submission fails
     pub fn render_textured(&mut self, cmds: &TexturedRenderCommands) -> Result<()> {
@@ -1157,6 +1231,24 @@ impl RenderContext {
         }
 
         previous_frame_end.cleanup_finished();
+
+        // ===================================================================
+        // Upload lighting data to GPU if provided
+        // ===================================================================
+        // This updates the uniform buffer at set 0, binding 2 with new lighting
+        // data. The buffer is host-visible, so the write is immediate. The GPU
+        // will see the updated data when the descriptor set is bound during
+        // command buffer execution.
+        //
+        // Data flow:
+        //   1. CPU: Write LightingUniforms to buffer (below)
+        //   2. CPU: Create descriptor sets referencing the buffer
+        //   3. GPU: Bind descriptor sets during rendering
+        //   4. GPU: Fragment shader reads lighting data from buffer
+        if let Some(lighting) = cmds.lighting {
+            trace!("Uploading lighting data to GPU");
+            self.lighting_buffer.update(lighting)?;
+        }
 
         // Build per-object descriptor sets with custom textures
         let mut draw_list: Vec<(Arc<DescriptorSet>, &mesh::GpuMesh)> = Vec::new();
@@ -1203,6 +1295,12 @@ impl RenderContext {
             )
             .map_err(|e| eyre::eyre!("Failed to create uniform buffer: {}", e))?;
 
+            // Create descriptor set for this object
+            // This binds three resources that the shaders need:
+            //   Binding 0: Uniforms (model/view/projection matrices)
+            //   Binding 1: Texture sampler (custom or default texture)
+            //   Binding 2: Lighting data (directional/point lights, ambient)
+            // The lighting buffer is shared across all objects in the frame
             let set = DescriptorSet::new(
                 self.descriptor_set_allocator.clone(),
                 self.descriptor_set_layout.clone(),
@@ -1213,6 +1311,9 @@ impl RenderContext {
                         texture.view.clone(),
                         texture.sampler.clone(),
                     ),
+                    // Lighting buffer at binding 2 - shared across all draw calls
+                    // Contains directional lights, point lights, and ambient color
+                    // Updated once per frame if cmds.lighting is Some
                     WriteDescriptorSet::buffer(2, self.lighting_buffer.buffer().clone()),
                 ],
                 [],

@@ -170,6 +170,7 @@ impl State for ObjLoaderDemo {
             view,
             proj,
             draw_commands: &draw_commands,
+            lighting: None, // Use default lighting
         };
 
         render_context.render_meshes(&cmds)?;

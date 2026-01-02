@@ -358,6 +358,7 @@ impl App {
             view: matrices_copy.view,
             proj: matrices_copy.projection,
             draw_commands: &draw_commands,
+            lighting: None, // Use default lighting
         };
 
         render_context.render_textured(&cmds)?;
