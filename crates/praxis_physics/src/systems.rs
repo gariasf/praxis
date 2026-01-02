@@ -11,9 +11,9 @@ use rapier3d::prelude::{
 
 use crate::components::{
     Collider as PraxisCollider, ExternalForces, Friction, Restitution,
-    RigidBody as PraxisRigidBody, Sensor, Velocity,
+    RigidBody as PraxisRigidBody, Sensor, PhysicsVelocity,
 };
-use crate::resources::*;
+use crate::resources::{PhysicsWorld, PhysicsConfig, ContactEvents};
 
 /// Synchronizes ECS transforms to Rapier rigid bodies.
 ///
@@ -30,6 +30,7 @@ use crate::resources::*;
 /// let mut schedule = Schedule::default();
 /// schedule.add_systems(sync_transforms_to_physics);
 /// ```
+#[allow(clippy::needless_pass_by_value)]
 pub fn sync_transforms_to_physics(
     mut physics_world: ResMut<PhysicsWorld>,
     query: Query<(Entity, &Transform, &PraxisRigidBody), With<PraxisRigidBody>>,
@@ -107,6 +108,7 @@ pub fn sync_transforms_to_physics(
 ///     sync_transforms_from_physics,
 /// ).chain());
 /// ```
+#[allow(clippy::needless_pass_by_value)]
 pub fn step_physics_simulation(
     mut physics_world: ResMut<PhysicsWorld>,
     config: Res<PhysicsConfig>,
@@ -177,11 +179,12 @@ pub fn step_physics_simulation(
 ///     sync_transforms_from_physics,
 /// ).chain());
 /// ```
+#[allow(clippy::needless_pass_by_value)]
 pub fn sync_transforms_from_physics(
     physics_world: Res<PhysicsWorld>,
     mut query: Query<(Entity, &mut Transform, &PraxisRigidBody), With<PraxisRigidBody>>,
 ) {
-    for (entity, mut transform, rigid_body) in query.iter_mut() {
+    for (entity, mut transform, rigid_body) in &mut query {
         // Only update transforms for dynamic bodies
         if !rigid_body.is_dynamic() {
             continue;
@@ -225,11 +228,12 @@ pub fn sync_transforms_from_physics(
 /// let mut schedule = Schedule::default();
 /// schedule.add_systems(apply_external_forces);
 /// ```
+#[allow(clippy::needless_pass_by_value)]
 pub fn apply_external_forces(
     mut physics_world: ResMut<PhysicsWorld>,
     mut query: Query<(Entity, &mut ExternalForces), With<PraxisRigidBody>>,
 ) {
-    for (entity, mut forces) in query.iter_mut() {
+    for (entity, mut forces) in &mut query {
         if let Some(body_handle) = physics_world.get_body_handle(entity) {
             if let Some(body) = physics_world.rigid_body_set.get_mut(body_handle) {
                 // Apply force
@@ -269,21 +273,19 @@ pub fn apply_external_forces(
 /// let mut schedule = Schedule::default();
 /// schedule.add_systems(sync_colliders);
 /// ```
+#[allow(clippy::needless_pass_by_value)]
 pub fn sync_colliders(
     mut physics_world: ResMut<PhysicsWorld>,
     query: Query<(Entity, &PraxisCollider, Option<&Sensor>), With<PraxisRigidBody>>,
 ) {
-    for (entity, collider, sensor) in query.iter() {
+    for (entity, collider, sensor) in &query {
         // Skip if collider already exists
         if physics_world.get_collider_handle(entity).is_some() {
             continue;
         }
 
         // Get rigid body handle
-        let body_handle = match physics_world.get_body_handle(entity) {
-            Some(handle) => handle,
-            None => continue,
-        };
+        let Some(body_handle) = physics_world.get_body_handle(entity) else { continue };
 
         // Create Rapier collider shape
         let shape: SharedShape = match collider {
@@ -349,14 +351,15 @@ pub fn sync_colliders(
 /// let mut schedule = Schedule::default();
 /// schedule.add_systems(sync_physics_properties);
 /// ```
+#[allow(clippy::needless_pass_by_value)]
 pub fn sync_physics_properties(
     mut physics_world: ResMut<PhysicsWorld>,
-    velocity_query: Query<(Entity, &Velocity), With<PraxisRigidBody>>,
+    velocity_query: Query<(Entity, &PhysicsVelocity), With<PraxisRigidBody>>,
     friction_query: Query<(Entity, &Friction), With<PraxisCollider>>,
     restitution_query: Query<(Entity, &Restitution), With<PraxisCollider>>,
 ) {
     // Sync velocities
-    for (entity, velocity) in velocity_query.iter() {
+    for (entity, velocity) in &velocity_query {
         if let Some(body_handle) = physics_world.get_body_handle(entity) {
             if let Some(body) = physics_world.rigid_body_set.get_mut(body_handle) {
                 body.set_linvel(
@@ -372,7 +375,7 @@ pub fn sync_physics_properties(
     }
 
     // Sync friction
-    for (entity, friction) in friction_query.iter() {
+    for (entity, friction) in &friction_query {
         if let Some(collider_handle) = physics_world.get_collider_handle(entity) {
             if let Some(collider) = physics_world.collider_set.get_mut(collider_handle) {
                 collider.set_friction(friction.coefficient);
@@ -381,7 +384,7 @@ pub fn sync_physics_properties(
     }
 
     // Sync restitution
-    for (entity, restitution) in restitution_query.iter() {
+    for (entity, restitution) in &restitution_query {
         if let Some(collider_handle) = physics_world.get_collider_handle(entity) {
             if let Some(collider) = physics_world.collider_set.get_mut(collider_handle) {
                 collider.set_restitution(restitution.coefficient);
@@ -396,8 +399,8 @@ pub fn sync_physics_properties(
 /// with physics components are despawned.
 ///
 /// Note: This is a placeholder. Proper cleanup requires tracking entity
-/// despawn events, which may need integration with bevy_ecs removal detection.
-pub fn cleanup_physics_entities(_commands: Commands, _physics_world: ResMut<PhysicsWorld>) {
+/// despawn events, which may need integration with `bevy_ecs` removal detection.
+pub const fn cleanup_physics_entities(_commands: Commands, _physics_world: ResMut<PhysicsWorld>) {
     // Placeholder for cleanup logic
     // In a full implementation, this would detect removed RigidBody components
     // and clean up the corresponding Rapier handles
