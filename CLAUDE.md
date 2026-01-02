@@ -26,6 +26,7 @@ cargo run --example obj_loader_demo
 cargo run --example comprehensive_scene_demo
 cargo run --example scene_demo
 cargo run --example gui_demo
+cargo run --example physics_demo
 
 # Check code without building
 cargo check --all
@@ -62,7 +63,7 @@ cargo doc --workspace --no-deps
 
 ### Workspace Structure
 
-Praxis uses a Cargo workspace with 10 crates organized by subsystem. The root `praxis` crate coordinates all subsystems:
+Praxis uses a Cargo workspace with 11 crates organized by subsystem. The root `praxis` crate coordinates all subsystems:
 
 - **praxis_core**: Engine lifecycle, main loop coordination, initialization sequence
 - **praxis_window**: Window management via `winit`, event loop handling
@@ -73,6 +74,7 @@ Praxis uses a Cargo workspace with 10 crates organized by subsystem. The root `p
 - **praxis_assets**: Asset loading/management (OBJ models, textures, config files)
 - **praxis_input**: Keyboard/mouse/gamepad handling
 - **praxis_gui**: Debug/editor GUI via `egui`
+- **praxis_physics**: Physics simulation using `Rapier3D`, collision detection, spatial queries
 - **praxis_utils**: Shared utilities, logging (`tracing`), error handling, frame timing
 
 ### Initialization Flow
@@ -82,7 +84,8 @@ The engine follows a specific initialization sequence in `praxis_core::run()`:
 1. `praxis_utils::init()` - Sets up logging and error reporting
 2. `praxis_ecs::init()` - Initializes ECS system
 3. `praxis_input::init()` - Initializes input system
-4. `praxis_window::run()` - Creates event loop and window, then:
+4. `praxis_physics::init()` - Initializes physics system
+5. `praxis_window::run()` - Creates event loop and window, then:
    - Window creation (default 1920x1080)
    - `State::new()` creates `RenderContext` asynchronously
    - Event loop starts with `ControlFlow::Poll`
@@ -166,6 +169,82 @@ The input system provides keyboard, mouse, and gamepad support:
 
 See `praxis_input` and `examples/input_integration.rs` for usage.
 
+### Physics System
+
+The physics system provides realistic physics simulation using Rapier3D:
+
+- **PhysicsWorld**: ECS resource managing the Rapier physics pipeline
+- **RigidBody**: Component defining physics behavior (Dynamic, Static, Kinematic)
+- **Collider**: Component defining collision geometry (boxes, spheres, capsules, etc.)
+- **PhysicsVelocity**: Linear and angular velocity tracking
+- **ExternalForces**: Force and torque accumulation for dynamic bodies
+- **Collision Events**: Event system for detecting and responding to collisions
+- **Spatial Queries**: Raycasting, shape casting, and point intersection tests
+
+The physics system uses fixed timestep integration (60 Hz by default) for deterministic,
+stable simulation. Transform synchronization happens bidirectionally with the ECS.
+
+#### Physics Systems
+
+The physics simulation requires these systems to be scheduled in order:
+
+1. **`clear_collision_event_receivers`**: Clears event buffers before physics step
+2. **`sync_physics_transforms_system`**: Syncs ECS transforms to Rapier (runs before physics)
+3. **`physics_step_system`**: Advances the simulation using fixed timestep
+4. **`sync_physics_transforms_system`**: Syncs Rapier results back to ECS (runs after physics)
+5. **`populate_collision_events`**: Distributes collision events to entity components
+
+Alternative legacy systems:
+- **`sync_transforms_to_physics`**: One-way sync (ECS → Rapier)
+- **`step_physics_simulation`**: Simple physics step without fixed timestep
+- **`sync_transforms_from_physics`**: One-way sync (Rapier → ECS)
+
+Optional systems:
+- **`apply_external_forces`**: Applies accumulated forces/torques to bodies
+- **`sync_colliders`**: Creates/updates Rapier colliders from components
+- **`sync_physics_properties`**: Updates velocities, friction, restitution
+
+#### Key Physics Concepts
+
+**Fixed Timestep Integration**: Physics runs at a constant rate (default 60 Hz) independent
+of frame rate. This ensures deterministic, stable simulation. The `PhysicsTime` accumulator
+tracks time between frames and steps the simulation multiple times if needed to catch up.
+
+**Rigid Body Types**:
+- **Dynamic**: Affected by forces, gravity, and collisions. Used for moving objects like
+  balls, boxes, and physics-driven entities.
+- **Static**: Never moves, has infinite mass. Used for terrain, walls, and fixed level geometry.
+- **Kinematic**: Moved by code/animation, not physics. Affects dynamic bodies but isn't
+  affected by them. Used for moving platforms, doors, and player-controlled objects.
+
+**Transform Synchronization**: The system maintains bidirectional sync between ECS `Transform`
+components and Rapier rigid body positions. Before physics: kinematic bodies push their
+Transform to Rapier. After physics: dynamic bodies pull their position from Rapier.
+
+**Collision Detection**: Rapier performs collision detection in multiple phases:
+- **Broad Phase**: Spatial partitioning (AABB tree) to quickly find potentially colliding pairs
+- **Narrow Phase**: Precise geometric tests (GJK, SAT) to determine actual collisions
+- **Contact Generation**: Creates contact manifolds with points, normals, and penetration
+- **Constraint Solver**: Applies impulses to resolve collisions and enforce joint constraints
+
+**Collision Events**: The system provides three event types:
+- `CollisionStarted`: Two bodies begin colliding (first contact)
+- `CollisionStopped`: Two bodies stop colliding (contact lost)
+- `CollisionPersisted`: Two bodies continue colliding (ongoing contact)
+
+Events are stored in `CollisionEventReceiver` components on entities, allowing entity-centric
+event handling. The `ContactEvents` resource collects global collision events from Rapier.
+
+**Spatial Queries**: The `PhysicsWorld` provides efficient spatial queries:
+- **Raycast**: Cast an infinitely thin ray to find the first hit
+- **Raycast All**: Cast a ray and return all hits along the path
+- **Shape Cast**: Sweep a 3D shape to detect collisions (useful for character controllers)
+- **Point Inside**: Check if a point is inside any collider
+
+These queries use spatial acceleration structures (BVH) for O(log n) performance.
+
+See `praxis_physics` documentation and `examples/physics_demo.rs` for detailed usage patterns.
+
 ### Asset Loading
 
 The asset system supports loading various file formats:
@@ -221,6 +300,17 @@ All checks must pass before merging.
 - `transform_propagation_system` maintains global transforms
 - Query patterns access transform data in systems
 
+### Physics System (praxis_physics)
+- Built on Rapier3D physics engine
+- ECS-first design with components, resources, and systems
+- Fixed timestep integration for deterministic simulation (60 Hz default)
+- Bidirectional transform synchronization with ECS
+- Collision event system with entity-centric event distribution
+- Spatial queries (raycasting, shape casting, point tests)
+- Components: RigidBody, Collider, PhysicsVelocity, ExternalForces, etc.
+- Resources: PhysicsWorld, PhysicsConfig, PhysicsTime, ContactEvents
+- System ordering critical: clear events → sync → step → sync → populate events
+
 ## Dependencies
 
 Key external crates:
@@ -233,6 +323,7 @@ Key external crates:
 - **Input**: `gilrs` (gamepad support)
 - **Image Loading**: `image` (PNG/JPEG)
 - **GUI**: `egui`, `egui-winit`, `egui_vulkano`
+- **Physics**: `rapier3d` (rigid body dynamics, collision detection)
 
 ## Project Philosophy
 
