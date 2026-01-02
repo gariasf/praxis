@@ -101,6 +101,8 @@ pub struct Vertex3D {
     pub position: [f32; 3],
     #[format(R32G32B32_SFLOAT)]
     pub color: [f32; 3],
+    #[format(R32G32_SFLOAT)]
+    pub uv: [f32; 2],
 }
 
 impl Vertex3D {
@@ -118,7 +120,26 @@ impl Vertex3D {
     /// let vertex = Vertex3D::new([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
     /// ```
     pub fn new(position: [f32; 3], color: [f32; 3]) -> Self {
-        Self { position, color }
+        Self {
+            position,
+            color,
+            uv: [0.0, 0.0],
+        }
+    }
+
+    /// Creates a new vertex with position, color, and texture coordinates.
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - 3D position in world space
+    /// * `color` - RGB color values in range [0.0, 1.0]
+    /// * `uv` - Texture coordinates in range [0.0, 1.0]
+    pub fn with_uv(position: [f32; 3], color: [f32; 3], uv: [f32; 2]) -> Self {
+        Self {
+            position,
+            color,
+            uv,
+        }
     }
 }
 
@@ -149,6 +170,6 @@ mod tests {
     #[test]
     fn test_vertex3d_size() {
         // Ensure our vertex struct has the expected size
-        assert_eq!(std::mem::size_of::<Vertex3D>(), 24); // 3*4 + 3*4 = 24 bytes
+        assert_eq!(std::mem::size_of::<Vertex3D>(), 32); // 3*4 + 3*4 + 2*4 = 32 bytes
     }
 }

@@ -142,8 +142,10 @@ impl MeshData {
     /// Converts this mesh data to a vector of `Vertex3D` for GPU upload.
     ///
     /// If colors are not provided, vertices will use white (1.0, 1.0, 1.0).
+    /// If UVs are not provided, vertices will use (0.0, 0.0).
     pub fn to_vertices(&self) -> Vec<Vertex3D> {
         let default_color = [1.0, 1.0, 1.0];
+        let default_uv = [0.0, 0.0];
 
         self.positions
             .iter()
@@ -156,7 +158,14 @@ impl MeshData {
                     .copied()
                     .unwrap_or(default_color);
 
-                Vertex3D { position, color }
+                let uv = self
+                    .uvs
+                    .as_ref()
+                    .and_then(|uvs| uvs.get(i))
+                    .copied()
+                    .unwrap_or(default_uv);
+
+                Vertex3D { position, color, uv }
             })
             .collect()
     }

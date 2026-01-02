@@ -11,6 +11,8 @@
 //! - `shaders`: GLSL shader compilation to SPIR-V
 //! - `mesh`: Mesh data structures and asset management
 //! - `primitives`: Built-in primitive mesh generators
+//! - `texture`: Texture loading and management
+//! - `material`: Material system with texture support
 //!
 //! # Mesh System
 //!
@@ -54,6 +56,46 @@
 //!
 //! See the [mesh system documentation](../../docs/mesh_system.md) for complete details.
 //!
+//! # Texture System
+//!
+//! The texture system provides support for loading and managing textures:
+//!
+//! - **`Texture`**: GPU-side texture with image view and sampler
+//! - **`TextureManager`**: Central manager for cached textures
+//! - **Format Support**: PNG and JPEG via the `image` crate
+//!
+//! ## Usage Example
+//!
+//! ```rust,no_run
+//! use praxis_graphics::{RenderContext, DrawCommandWithTexture, TexturedRenderCommands};
+//! use praxis_math::{Mat4, Vec3};
+//!
+//! # async fn example(mut render_context: RenderContext) -> praxis_utils::Result<()> {
+//! // Load textures during initialization
+//! render_context
+//!     .texture_manager_mut()
+//!     .load_texture("wall", "assets/textures/wall.png")?;
+//!
+//! // Render with textures
+//! let draw_commands = vec![
+//!     DrawCommandWithTexture {
+//!         mesh_id: "cube".to_string(),
+//!         model: Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0)),
+//!         texture_name: Some("wall".to_string()),
+//!     },
+//! ];
+//!
+//! let cmds = TexturedRenderCommands {
+//!     view: Mat4::IDENTITY,
+//!     proj: Mat4::IDENTITY,
+//!     draw_commands: &draw_commands,
+//! };
+//!
+//! render_context.render_textured(&cmds)?;
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! # Rendering Flow
 //!
 //! ```text
@@ -72,10 +114,12 @@
 //! ```
 
 mod device;
+pub mod material;
 pub mod mesh;
 mod pipeline;
 mod primitives;
 mod shaders;
+pub mod texture;
 mod vertex;
 
 use crate::{device::VulkanDevice, pipeline::create_simple_pipeline_3d, vertex::Vertex3D};
@@ -168,6 +212,34 @@ pub struct MeshRenderCommands<'a> {
     pub draw_commands: &'a [DrawCommand],
 }
 
+/// A draw command with mesh, transform, and optional texture.
+///
+/// This represents one object to be rendered with a specific mesh, transform,
+/// and an optional texture override. If no texture is specified, the default
+/// white texture is used.
+#[derive(Debug, Clone)]
+pub struct DrawCommandWithTexture {
+    /// Identifier of the mesh to draw.
+    pub mesh_id: String,
+    /// Model matrix for this object.
+    pub model: Mat4,
+    /// Optional texture name to use instead of the default.
+    pub texture_name: Option<String>,
+}
+
+/// Render commands with texture support.
+///
+/// This version allows each draw command to specify a custom texture,
+/// enabling textured rendering of objects.
+pub struct TexturedRenderCommands<'a> {
+    /// Camera view matrix (world → view).
+    pub view: Mat4,
+    /// Camera projection matrix (view → clip).
+    pub proj: Mat4,
+    /// List of draw commands with mesh and texture references.
+    pub draw_commands: &'a [DrawCommandWithTexture],
+}
+
 /// Core graphics context containing the Vulkan state.
 ///
 /// This struct manages the entire graphics rendering pipeline, from initialization
@@ -235,6 +307,9 @@ pub struct RenderContext {
 
     /// Mesh asset manager for loading and managing meshes.
     mesh_manager: mesh::MeshAssetManager,
+
+    /// Texture asset manager for loading and managing textures.
+    texture_manager: texture::TextureManager,
 }
 
 impl RenderContext {
@@ -381,6 +456,19 @@ impl RenderContext {
         // Initialize mesh manager
         let mesh_manager = mesh::MeshAssetManager::new(memory_allocator.clone());
 
+        // Initialize texture manager
+        let mut texture_manager = texture::TextureManager::new(
+            memory_allocator.clone(),
+            command_buffer_allocator.clone(),
+            graphics_queue.clone(),
+        );
+
+        // Create default white texture
+        debug!("Creating default white texture");
+        texture_manager
+            .create_default_white_texture()
+            .map_err(|e| eyre::eyre!("Failed to create default white texture: {}", e))?;
+
         info!(
             "Graphics context initialization complete in {:?}",
             init_start.elapsed()
@@ -417,6 +505,9 @@ impl RenderContext {
 
             // Mesh management
             mesh_manager,
+
+            // Texture management
+            texture_manager,
         })
     }
 
@@ -432,6 +523,20 @@ impl RenderContext {
     /// Use this to load or modify mesh assets.
     pub fn mesh_manager_mut(&mut self) -> &mut mesh::MeshAssetManager {
         &mut self.mesh_manager
+    }
+
+    /// Gets a reference to the texture asset manager.
+    ///
+    /// Use this to access or query texture assets.
+    pub fn texture_manager(&self) -> &texture::TextureManager {
+        &self.texture_manager
+    }
+
+    /// Gets a mutable reference to the texture asset manager.
+    ///
+    /// Use this to load or modify texture assets.
+    pub fn texture_manager_mut(&mut self) -> &mut texture::TextureManager {
+        &mut self.texture_manager
     }
 
     /// Marks the swapchain for recreation on the next frame.
@@ -525,6 +630,13 @@ impl RenderContext {
         // constants.  For now we allocate one tiny UBO + descriptor set for
         // every model matrix each frame.  It's simple, avoids any
         // CPU-GPU hazards and is fast enough for a handful of objects.
+        
+        // Get default white texture for rendering
+        let default_texture = self
+            .texture_manager
+            .get_texture("_default_white")
+            .ok_or_else(|| eyre::eyre!("Default white texture not found. Initialize it first."))?;
+
         let mut per_object_sets = Vec::with_capacity(cmds.models.len());
         for model in cmds.models.iter() {
             let uniforms = Uniforms {
@@ -551,7 +663,14 @@ impl RenderContext {
             let set = DescriptorSet::new(
                 self.descriptor_set_allocator.clone(),
                 self.descriptor_set_layout.clone(),
-                [WriteDescriptorSet::buffer(0, buffer.clone())],
+                [
+                    WriteDescriptorSet::buffer(0, buffer.clone()),
+                    WriteDescriptorSet::image_view_sampler(
+                        1,
+                        default_texture.view.clone(),
+                        default_texture.sampler.clone(),
+                    ),
+                ],
                 [],
             )
             .map_err(|e| eyre::eyre!("Failed to create descriptor set: {}", e))?;
@@ -736,6 +855,12 @@ impl RenderContext {
         // Build per-object descriptor sets and collect mesh references
         let mut draw_list: Vec<(Arc<DescriptorSet>, &mesh::GpuMesh)> = Vec::new();
 
+        // Get default white texture for rendering
+        let default_texture = self
+            .texture_manager
+            .get_texture("_default_white")
+            .ok_or_else(|| eyre::eyre!("Default white texture not found. Initialize it first."))?;
+
         for draw_cmd in cmds.draw_commands.iter() {
             let mesh = self
                 .mesh_manager
@@ -766,7 +891,14 @@ impl RenderContext {
             let set = DescriptorSet::new(
                 self.descriptor_set_allocator.clone(),
                 self.descriptor_set_layout.clone(),
-                [WriteDescriptorSet::buffer(0, buffer.clone())],
+                [
+                    WriteDescriptorSet::buffer(0, buffer.clone()),
+                    WriteDescriptorSet::image_view_sampler(
+                        1,
+                        default_texture.view.clone(),
+                        default_texture.sampler.clone(),
+                    ),
+                ],
                 [],
             )
             .map_err(|e| eyre::eyre!("Failed to create descriptor set: {}", e))?;
@@ -822,6 +954,244 @@ impl RenderContext {
             .map_err(|e| eyre::eyre!("Failed to set viewport: {}", e))?;
 
         // Draw each object with its specific mesh and descriptor set
+        for (descriptor_set, mesh) in draw_list.iter() {
+            command_buffer_builder
+                .bind_vertex_buffers(0, mesh.vertex_buffer.clone())
+                .map_err(|e| eyre::eyre!("Failed to bind vertex buffer: {}", e))?
+                .bind_index_buffer(mesh.index_buffer.clone())
+                .map_err(|e| eyre::eyre!("Failed to bind index buffer: {}", e))?;
+
+            unsafe {
+                command_buffer_builder
+                    .bind_descriptor_sets(
+                        PipelineBindPoint::Graphics,
+                        self.graphics_pipeline.layout().clone(),
+                        0,
+                        descriptor_set.clone(),
+                    )
+                    .map_err(|e| eyre::eyre!("Failed to bind descriptor set: {}", e))?
+                    .draw_indexed(mesh.index_count, 1, 0, 0, 0)
+                    .map_err(|e| eyre::eyre!("Failed to draw indexed: {}", e))?;
+            }
+        }
+
+        command_buffer_builder
+            .end_render_pass(SubpassEndInfo::default())
+            .map_err(|e| eyre::eyre!("Failed to end render pass: {}", e))?;
+
+        let command_buffer = command_buffer_builder
+            .build()
+            .map_err(|e| eyre::eyre!("Failed to build command buffer: {}", e))?;
+
+        trace!("Submitting command buffer to graphics queue");
+
+        let execution = previous_frame_end
+            .join(acquire_future)
+            .then_execute(self.graphics_queue.clone(), command_buffer)
+            .map_err(|e| eyre::eyre!("Failed to submit command buffer: {}", e))?;
+
+        let future = execution
+            .then_swapchain_present(
+                self.present_queue.clone(),
+                SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index),
+            )
+            .then_signal_fence_and_flush();
+
+        let future = match future {
+            Ok(future) => future,
+            Err(vulkano::Validated::Error(e)) => {
+                use vulkano::VulkanError;
+                match e {
+                    VulkanError::OutOfDate => {
+                        debug!("Swapchain out of date, will recreate on next frame");
+                        self.recreate_swapchain = true;
+                        self.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+                        return Ok(());
+                    }
+                    _ => {
+                        error!("Failed to present frame: {}", e);
+                        return Err(eyre::eyre!("Failed to flush future: {}", e));
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Failed to present frame: {}", e);
+                return Err(eyre::eyre!("Failed to flush future: {}", e));
+            }
+        };
+
+        self.previous_frame_end = Some(future.boxed());
+
+        trace!("Frame rendering complete");
+
+        Ok(())
+    }
+
+    /// Renders a frame with support for custom textures per object.
+    ///
+    /// This is an extended version of `render_meshes()` that allows each draw
+    /// command to specify a custom texture. If no texture is specified, the
+    /// default white texture is used.
+    ///
+    /// # Arguments
+    ///
+    /// * `cmds` - Render commands containing camera matrices and draw commands with textures
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Swapchain recreation fails
+    /// - A referenced mesh or texture doesn't exist
+    /// - Command buffer recording fails
+    /// - GPU submission fails
+    pub fn render_textured(&mut self, cmds: &TexturedRenderCommands) -> Result<()> {
+        let _ = self.frame_timer.tick();
+
+        let mut previous_frame_end = self
+            .previous_frame_end
+            .take()
+            .unwrap_or_else(|| sync::now(self.device.clone()).boxed());
+
+        // Handle minimized window
+        if let Some(obj) = self.surface.object() {
+            if let Some(window) = obj.downcast_ref::<Window>() {
+                let size = window.inner_size();
+                if size.width == 0 || size.height == 0 {
+                    previous_frame_end.cleanup_finished();
+                    self.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+                    return Ok(());
+                }
+            }
+        }
+
+        if self.recreate_swapchain {
+            debug!("Recreating swapchain due to pending resize");
+            let start_time = std::time::Instant::now();
+            previous_frame_end
+                .flush()
+                .expect("Failed to flush previous frame end");
+            self.recreate_swapchain_and_framebuffers()?;
+            self.recreate_swapchain = false;
+            previous_frame_end = sync::now(self.device.clone()).boxed();
+            info!(
+                "Swapchain recreation completed in {:?}",
+                start_time.elapsed()
+            );
+        }
+
+        previous_frame_end.cleanup_finished();
+
+        // Build per-object descriptor sets with custom textures
+        let mut draw_list: Vec<(Arc<DescriptorSet>, &mesh::GpuMesh)> = Vec::new();
+
+        // Get default white texture for objects without a texture
+        let default_texture = self
+            .texture_manager
+            .get_texture("_default_white")
+            .ok_or_else(|| eyre::eyre!("Default white texture not found"))?;
+
+        for draw_cmd in cmds.draw_commands.iter() {
+            let mesh = self
+                .mesh_manager
+                .get_mesh(&draw_cmd.mesh_id)
+                .ok_or_else(|| eyre::eyre!("Mesh '{}' not found", draw_cmd.mesh_id))?;
+
+            // Get the texture to use (custom or default)
+            let texture = if let Some(ref tex_name) = draw_cmd.texture_name {
+                self.texture_manager
+                    .get_texture(tex_name)
+                    .ok_or_else(|| eyre::eyre!("Texture '{}' not found", tex_name))?
+            } else {
+                default_texture
+            };
+
+            let uniforms = Uniforms {
+                model: draw_cmd.model.to_cols_array_2d(),
+                view: cmds.view.to_cols_array_2d(),
+                proj: cmds.proj.to_cols_array_2d(),
+            };
+
+            let buffer = Buffer::from_data(
+                self.memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::UNIFORM_BUFFER,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                uniforms,
+            )
+            .map_err(|e| eyre::eyre!("Failed to create uniform buffer: {}", e))?;
+
+            let set = DescriptorSet::new(
+                self.descriptor_set_allocator.clone(),
+                self.descriptor_set_layout.clone(),
+                [
+                    WriteDescriptorSet::buffer(0, buffer.clone()),
+                    WriteDescriptorSet::image_view_sampler(
+                        1,
+                        texture.view.clone(),
+                        texture.sampler.clone(),
+                    ),
+                ],
+                [],
+            )
+            .map_err(|e| eyre::eyre!("Failed to create descriptor set: {}", e))?;
+
+            draw_list.push((set, mesh));
+        }
+
+        trace!("Acquiring next swapchain image");
+        let acquire_start = std::time::Instant::now();
+        let (image_index, suboptimal, acquire_future) =
+            vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None)
+                .map_err(|e| eyre::eyre!("Failed to acquire next image: {}", e))?;
+        trace!(
+            "Image {} acquired in {:?}",
+            image_index,
+            acquire_start.elapsed()
+        );
+
+        if suboptimal {
+            warn!("Swapchain is suboptimal, will recreate on next frame");
+            self.recreate_swapchain = true;
+        }
+
+        trace!("Building command buffer for frame");
+        let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
+            self.command_buffer_allocator.clone(),
+            self.graphics_queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create command buffer: {}", e))?;
+
+        command_buffer_builder
+            .begin_render_pass(
+                RenderPassBeginInfo {
+                    clear_values: vec![Some([0.1, 0.2, 0.3, 1.0].into())],
+                    ..RenderPassBeginInfo::framebuffer(
+                        self.framebuffers[image_index as usize].clone(),
+                    )
+                },
+                SubpassBeginInfo {
+                    contents: vulkano::command_buffer::SubpassContents::Inline,
+                    ..Default::default()
+                },
+            )
+            .map_err(|e| eyre::eyre!("Failed to begin render pass: {}", e))?;
+
+        command_buffer_builder
+            .bind_pipeline_graphics(self.graphics_pipeline.clone())
+            .map_err(|e| eyre::eyre!("Failed to bind graphics pipeline: {}", e))?;
+
+        command_buffer_builder
+            .set_viewport(0, [self.viewport.clone()].into_iter().collect())
+            .map_err(|e| eyre::eyre!("Failed to set viewport: {}", e))?;
+
+        // Draw each object with its specific mesh, texture, and descriptor set
         for (descriptor_set, mesh) in draw_list.iter() {
             command_buffer_builder
                 .bind_vertex_buffers(0, mesh.vertex_buffer.clone())
@@ -1090,5 +1460,7 @@ impl RenderContext {
 }
 
 // Public re-exports
+pub use material::Material;
 pub use mesh::{GpuMesh, MeshData};
 pub use primitives::{colored_cube_mesh, pyramid_mesh, quad_mesh, solid_cube_mesh};
+pub use texture::{Texture, TextureManager};
