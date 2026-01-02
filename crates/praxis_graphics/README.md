@@ -8,6 +8,7 @@ Graphics system for the Praxis game engine, providing Vulkan-based rendering via
 - **Mesh Asset Management**: Load, store, and render multiple mesh types
 - **Primitive Mesh Generation**: Built-in cube, pyramid, and quad meshes
 - **Per-Mesh Buffers**: Dedicated vertex and index buffers for each mesh
+- **Dynamic Uniform Buffers**: Efficient per-object uniform data with ring buffer
 - **Transform System**: Model-view-projection matrix pipeline
 
 ## Mesh System
@@ -79,6 +80,80 @@ let cmds = MeshRenderCommands {
 render_context.render_meshes(&cmds)?;
 ```
 
+## Dynamic Uniform Buffers
+
+The graphics system uses dynamic uniform buffers with a ring buffer architecture for efficient per-object rendering.
+
+### Architecture
+
+Instead of creating a new uniform buffer and descriptor set for each object every frame, the system uses a single large buffer with dynamic offsets:
+
+```
+┌─────────────────────────────────────────┐
+│         Dynamic Uniform Buffer          │
+├─────────────────────────────────────────┤
+│ Frame 0 │ Frame 1 │ Frame 2 │ Frame 0..│
+│  Obj 0  │  Obj 0  │  Obj 0  │  Obj 0   │
+│  Obj 1  │  Obj 1  │  Obj 1  │  Obj 1   │
+│  Obj 2  │  Obj 2  │  Obj 2  │  Obj 2   │
+│   ...   │   ...   │   ...   │   ...    │
+└─────────────────────────────────────────┘
+```
+
+### Benefits
+
+- **Single descriptor set** bound once per frame
+- **Per-object data** accessed via dynamic offsets
+- **Persistent mapped buffer** for efficient CPU writes
+- **Ring buffer** prevents CPU-GPU stalls
+- **Automatic alignment** handling for device requirements
+
+### Configuration
+
+Key constants (configurable in `RenderContext::new()`):
+
+```rust
+const FRAMES_IN_FLIGHT: usize = 3;        // Ring buffer size
+const MAX_OBJECTS_PER_FRAME: usize = 1024; // Max drawable objects
+```
+
+Adjust based on your needs:
+- More frames in flight = smoother pacing but more memory
+- More max objects = can draw more but uses more memory
+
+### Render Flow
+
+1. Advance ring buffer to next frame
+2. Update view/projection buffer once per frame
+3. Write all model matrices to ring buffer
+4. For each object:
+   - Calculate dynamic offset
+   - Bind descriptor set with offset
+   - Draw
+
+### Performance Characteristics
+
+**Memory Usage:**
+```
+FRAMES_IN_FLIGHT × MAX_OBJECTS × aligned_sizeof(ModelUniforms) + sizeof(ViewProjection)
+```
+
+With default settings (3 frames, 1024 max objects): ~3 MB properly aligned
+
+**CPU Overhead:**
+- Old approach: N_objects × (buffer_allocation + descriptor_set_allocation)
+- New approach: 1 × view_proj_write + 1 × bulk_model_write + N_objects × offset_calculation
+
+The new approach eliminates allocation overhead entirely.
+
+### Device Compatibility
+
+The implementation automatically queries and uses the device's `minUniformBufferOffsetAlignment` limit, ensuring compatibility across different GPUs. Typical values:
+- NVIDIA: 256 bytes
+- AMD: 256 bytes
+- Intel: 256 bytes
+- Mobile: 16-64 bytes
+
 ## Vertex Format
 
 The current vertex format (`Vertex3D`) supports:
@@ -97,6 +172,7 @@ The graphics system is organized into modules:
 - **`shaders`**: GLSL shader compilation
 - **`mesh`**: Mesh data structures and asset management
 - **`primitives`**: Built-in primitive mesh generators
+- **`uniform_buffer`**: Dynamic uniform buffer management
 
 ## See Also
 

@@ -216,6 +216,131 @@ mesh.set_uvs(uvs);        // Optional texture coordinates
 
 See the [Mesh System Documentation](../../docs/mesh_system.md) for complete details on using meshes.
 
+## Transform Propagation Implementation Details
+
+### System Design
+
+The transform propagation system consists of five interconnected systems that maintain world-space transforms automatically:
+
+1. **`sync_parent_child_relationships`**
+   - Triggers on `Added<Parent>` and `Changed<Parent>`
+   - Automatically adds entities to parent's `Children` component
+   - Creates `Children` component if it doesn't exist
+   - Maintains bidirectional relationships
+
+2. **`cleanup_removed_parents`**
+   - Runs every frame to ensure consistency
+   - Removes orphaned children from `Children` components when `Parent` is removed
+   - Cleans up empty `Children` components
+
+3. **`propagate_transforms`**
+   - Updates root entities (without parents) when `Transform` changes
+   - Uses change detection: `Changed<Transform>` and `Added<Transform>`
+   - Recursively propagates to all descendants
+   - Efficient iterative implementation to avoid stack overflow
+
+4. **`propagate_transforms_for_reparented`**
+   - Handles entities whose `Parent` was added or changed
+   - Triggers on `Added<Parent>` and `Changed<Parent>`
+   - Immediately updates entity and all descendants based on new parent
+   - Critical for proper reparenting behavior
+
+5. **`propagate_transforms_for_changed_children`**
+   - Updates entities with parents when local `Transform` changes
+   - Triggers on `Changed<Transform>` for entities with `Parent`
+   - Propagates changes to all descendants
+   - Ensures child transform changes ripple through hierarchy
+
+### Change Detection
+
+The system uses Bevy ECS's change detection to minimize unnecessary computation:
+- Only processes entities whose transforms or relationships changed
+- Uses `Added<T>` and `Changed<T>` queries
+- Propagation only occurs through affected subtrees
+
+### Recursive Propagation Algorithm
+
+Uses an iterative work queue to avoid stack overflow with deep hierarchies:
+
+```rust
+fn propagate_recursive(
+    entity: Entity,
+    parent_global: &GlobalTransform,
+    world: &mut World,
+) {
+    let mut work_queue = vec![(entity, parent_global.clone())];
+    
+    while let Some((current_entity, current_parent_global)) = work_queue.pop() {
+        // Update current entity's GlobalTransform
+        // Add children to work queue with updated parent transform
+    }
+}
+```
+
+### Performance Characteristics
+
+- **O(1)** when nothing changes (thanks to change detection)
+- **O(n)** where n is changed entities and their descendants
+- Sibling branches are independent and don't affect each other
+- Deep hierarchies handled efficiently with iterative approach
+
+### Common Patterns
+
+**Creating hierarchies:**
+```rust
+let parent = world.spawn(TransformBundle::from_xyz(10.0, 0.0, 0.0));
+let child = world.spawn((
+    TransformBundle::from_xyz(5.0, 0.0, 0.0),
+    Parent(parent),
+));
+```
+
+**Reparenting entities:**
+```rust
+if let Some(mut parent_component) = world.get_mut::<Parent>(child) {
+    *parent_component = Parent(new_parent);
+}
+```
+
+**Removing from hierarchy:**
+```rust
+world.entity_mut(child).remove::<Parent>();
+```
+
+### Integration with Rendering
+
+The rendering system uses `GlobalTransform` to position entities in world space:
+
+```rust
+for (global_transform, mesh_handle) in query.iter() {
+    let model_matrix = global_transform.compute_matrix();
+    // Use model_matrix for rendering
+}
+```
+
+### Debugging Tips
+
+1. **Use Name component**: Add descriptive names to entities for easier debugging
+2. **Check parent validity**: Ensure parent entities exist before adding `Parent` component
+3. **Avoid circular references**: Don't create circular parent-child relationships
+4. **Keep hierarchies shallow**: Performance is best with <10-15 levels
+
+### Testing
+
+The system includes comprehensive tests covering:
+- Basic parent-child propagation
+- Deep hierarchies (3+ levels)
+- Multiple children per parent
+- Entity reparenting
+- Complex transforms (rotation, scale)
+- Parent removal and cleanup
+- Full system chain integration
+
+Run tests with:
+```bash
+cargo test -p praxis_ecs
+```
+
 ## Examples
 
 See `examples/transform_propagation_demo.rs` for a comprehensive demonstration of the transform propagation system.
