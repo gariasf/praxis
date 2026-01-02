@@ -2485,6 +2485,391 @@ fn flashlight_system(
 
 ---
 
+## Physics System
+
+The physics system integrates Rapier3D physics engine with Praxis's ECS architecture, providing rigid body dynamics, collision detection, and realistic physical simulation. Understanding how physics data flows from components to the simulation is essential for creating interactive, physically-behaved objects.
+
+### Overview
+
+The physics system consists of three main layers:
+
+1. **ECS Layer**: Physics components (`RigidBody`, `Collider`, `PhysicsVelocity`) attached to entities
+2. **Simulation Layer**: Rapier3D physics engine that computes positions, velocities, and collisions
+3. **Synchronization Layer**: Systems that keep ECS transforms in sync with physics bodies
+
+### High-Level Data Flow
+
+```text
+Physics System Data Flow
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────────────┐
+│                      ECS World                               │
+│                                                              │
+│  Entity 0: Transform, RigidBody::Dynamic, Collider::Sphere   │
+│  Entity 1: Transform, RigidBody::Static, Collider::Cuboid   │
+│  Entity 2: Transform, RigidBody::Kinematic, Collider::Box   │
+│  ...                                                         │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+                           │ 1. Sync ECS → Physics
+                           │    (sync_physics_transforms_system)
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│               Rapier Physics World                           │
+│                                                              │
+│  RigidBodySet:                                               │
+│    Body 0: position, velocity, mass, forces                  │
+│    Body 1: position, velocity, mass, forces                  │
+│    ...                                                       │
+│                                                              │
+│  ColliderSet:                                                │
+│    Collider 0: shape (sphere), attached to Body 0           │
+│    Collider 1: shape (cuboid), attached to Body 1           │
+│    ...                                                       │
+│                                                              │
+│  Physics Pipeline:                                           │
+│    - Broad phase (spatial partitioning)                      │
+│    - Narrow phase (precise collision detection)              │
+│    - Island manager (grouping connected bodies)              │
+│    - Constraint solver (resolve collisions & joints)         │
+│    - Integration (update positions from velocities)          │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+                           │ 2. Run physics simulation
+                           │    (physics_step_system)
+                           │
+                           ▼
+                     Fixed Timestep
+                     Loop (60Hz)
+                           │
+                           │ 3. Sync Physics → ECS
+                           │    (sync_physics_transforms_system)
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Updated ECS Transforms                          │
+│                                                              │
+│  Dynamic bodies: Updated positions from physics              │
+│  Static bodies: Unchanged (never move)                       │
+│  Kinematic bodies: Unchanged (controlled by ECS)             │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+                           │ 4. Rendering & Game Logic
+                           │
+                           ▼
+                    Render Frame
+```
+
+### Component Definitions
+
+#### RigidBody Component
+
+Defines how an entity participates in physics simulation:
+
+```rust
+#[derive(Component)]
+pub enum RigidBody {
+    /// Fully simulated body affected by forces
+    Dynamic,
+    
+    /// Immovable body (infinite mass)
+    Static,
+    
+    /// Moved by code/animation, not forces
+    Kinematic,
+}
+```
+
+**Physical meaning**:
+- **Dynamic**: Newton's laws apply. F = ma. Subject to gravity, forces, and collisions.
+- **Static**: Infinite mass. Unmovable. Used for terrain, walls, buildings.
+- **Kinematic**: Velocity set directly. Moves other objects but isn't moved by them. Used for platforms, doors, player controllers.
+
+```text
+Rigid Body Types Comparison
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────┬──────────┬──────────┬──────────┬────────────┐
+│   Property  │ Dynamic  │  Static  │Kinematic │   Usage    │
+├─────────────┼──────────┼──────────┼──────────┼────────────┤
+│ Gravity     │   Yes    │    No    │    No    │            │
+│ Forces      │   Yes    │    No    │    No    │            │
+│ Collisions  │   Yes    │   Yes    │   Yes    │            │
+│ Moved by    │ Physics  │  Never   │   Code   │            │
+│ Affects     │   All    │ Dynamic  │ Dynamic  │            │
+│             │          │Kinematic │          │            │
+│ Performance │ Medium   │   Fast   │  Medium  │            │
+│ Use Case    │ Props    │ Terrain  │ Platforms│            │
+│             │ Actors   │  Walls   │  Doors   │            │
+│             │ Physics  │ Buildings│ Character│            │
+│             │ Objects  │          │  Control │            │
+└─────────────┴──────────┴──────────┴──────────┴────────────┘
+```
+
+#### Collider Component
+
+Defines collision geometry for an entity:
+
+```rust
+#[derive(Component)]
+pub enum Collider {
+    Cuboid { hx: f32, hy: f32, hz: f32 },
+    Sphere { radius: f32 },
+    CapsuleY { half_height: f32, radius: f32 },
+    CylinderY { half_height: f32, radius: f32 },
+    // ... other shapes
+}
+```
+
+**Shape characteristics**:
+
+```text
+Collision Shape Trade-offs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌────────────┬────────────┬───────────┬──────────────────────┐
+│   Shape    │Performance │ Accuracy  │    Best For          │
+├────────────┼────────────┼───────────┼──────────────────────┤
+│  Sphere    │  Fastest   │   Good    │ Balls, planets,      │
+│            │            │           │ projectiles          │
+│            │            │           │                      │
+│  Cuboid    │  Fast      │   Good    │ Boxes, buildings,    │
+│            │            │           │ platforms, walls     │
+│            │            │           │                      │
+│  Capsule   │  Fast      │   Great   │ Characters, pills,   │
+│            │            │           │ standing objects     │
+│            │            │           │                      │
+│  Cylinder  │  Medium    │   Good    │ Wheels, barrels,     │
+│            │            │           │ cylindrical objects  │
+│            │            │           │                      │
+│  Compound  │  Slow      │  Perfect  │ Complex shapes,      │
+│            │            │           │ vehicles             │
+└────────────┴────────────┴───────────┴──────────────────────┘
+
+Dimensions: Half-Extents
+━━━━━━━━━━━━━━━━━━━━━━━━
+All dimensions are half-extents (distance from center):
+
+Collider::cuboid(1.0, 2.0, 3.0)
+  → Total size: 2.0 wide × 4.0 tall × 6.0 deep
+
+Collider::sphere(0.5)
+  → Total diameter: 1.0
+
+Why half-extents? Makes math simpler and symmetric:
+  - Center at origin
+  - Bounds: [-hx to +hx, -hy to +hy, -hz to +hz]
+  - Distance calculations use radius directly
+```
+
+#### PhysicsVelocity Component
+
+Stores linear and angular velocity of a body:
+
+```rust
+#[derive(Component)]
+pub struct PhysicsVelocity {
+    /// Linear velocity (units/second)
+    pub linear: Vec3,
+    
+    /// Angular velocity (radians/second)
+    pub angular: Vec3,
+}
+```
+
+**Physical meaning**:
+
+```text
+Velocity Interpretation
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Linear Velocity:
+  Rate of change of position
+  
+  Vec3::new(5.0, 0.0, 0.0) = Moving 5 units/sec in +X direction
+  Vec3::new(0.0, -9.8, 0.0) = Falling at 9.8 units/sec
+  Vec3::ZERO = Not moving
+  
+  Speed = velocity.length()
+  Direction = velocity.normalize()
+
+Angular Velocity:
+  Rate of change of orientation (axis-angle representation)
+  
+  Vec3::new(0.0, 3.14, 0.0) = Rotating around Y-axis at π rad/sec
+                               (180° per second)
+  Vec3::new(1.0, 0.0, 0.0) = Rotating around X-axis at 1 rad/sec
+                              (~57° per second)
+  
+  Rotation speed = angular.length()
+  Rotation axis = angular.normalize()
+```
+
+### Fixed Timestep Simulation
+
+Physics simulation uses **fixed timestep integration** for deterministic behavior:
+
+```text
+Fixed Timestep Accumulator Pattern
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Problem: Frame rate varies (30fps, 60fps, 144fps, etc.)
+         Physics needs constant dt for stability
+
+Solution: Accumulate frame time, run physics at fixed rate
+
+┌─────────────────────────────────────────────────────────────┐
+│                 PhysicsTime Accumulator                      │
+│                                                              │
+│  accumulator += frame_delta_time                             │
+│                                                              │
+│  while accumulator >= fixed_timestep:                        │
+│      run_one_physics_step()                                  │
+│      accumulator -= fixed_timestep                           │
+└─────────────────────────────────────────────────────────────┘
+
+Timeline Example (60Hz physics, 1/60 = 0.0167s per step):
+
+Frame 1: dt=16.7ms
+  accumulator = 16.7ms
+  Run 1 step (16.7ms)
+  accumulator = 0ms
+
+Frame 2: dt=16.7ms
+  accumulator = 16.7ms
+  Run 1 step (16.7ms)
+  accumulator = 0ms
+
+Frame 3: dt=33.4ms (slow frame!)
+  accumulator = 33.4ms
+  Run 2 steps (33.4ms)
+  accumulator = 0ms
+
+Frame 4: dt=8.3ms (fast frame)
+  accumulator = 8.3ms
+  Run 0 steps (not enough time)
+  accumulator = 8.3ms (carry over)
+
+Frame 5: dt=8.4ms
+  accumulator = 16.7ms (8.3 + 8.4)
+  Run 1 step (16.7ms)
+  accumulator = 0ms
+```
+
+**Benefits**:
+- **Determinism**: Same inputs → Same results
+- **Stability**: Solver convergence guaranteed
+- **Frame-rate independence**: Looks same at any FPS
+
+**Trade-offs**:
+- Slow frames may run multiple steps (performance spike)
+- "Spiral of death" if physics can't keep up with real-time
+
+### Transform Synchronization
+
+The physics system maintains bidirectional synchronization:
+
+```text
+Bidirectional Transform Sync
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────────────┐
+│                    Frame Timeline                            │
+│                                                              │
+│  1. User Input / Animation                                   │
+│     └─► Modify ECS Transform components                      │
+│                                                              │
+│  2. PRE-PHYSICS SYNC (ECS → Physics)                         │
+│     └─► sync_physics_transforms_system                       │
+│         • Kinematic bodies: Copy Transform to Rapier         │
+│         • Dynamic bodies: Copy if just spawned               │
+│         • Static bodies: Copy if just spawned                │
+│                                                              │
+│  3. PHYSICS STEP                                             │
+│     └─► physics_step_system                                  │
+│         • Integrate forces (F = ma)                          │
+│         • Detect collisions                                  │
+│         • Resolve constraints                                │
+│         • Update positions & velocities                      │
+│                                                              │
+│  4. POST-PHYSICS SYNC (Physics → ECS)                        │
+│     └─► sync_physics_transforms_system                       │
+│         • Dynamic bodies: Copy position from Rapier          │
+│         • Kinematic bodies: Skip (controlled by ECS)         │
+│         • Static bodies: Skip (never move)                   │
+│                                                              │
+│  5. Transform Propagation (if hierarchical)                  │
+│     └─► Update GlobalTransform from hierarchy                │
+│                                                              │
+│  6. Rendering                                                │
+│     └─► Draw objects at updated positions                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Physics Pipeline Systems
+
+The complete physics update requires these systems in order:
+
+```rust
+let mut schedule = Schedule::default();
+schedule.add_systems((
+    // 1. Clear previous frame's collision events
+    clear_collision_event_receivers,
+    
+    // 2. Sync ECS changes to physics (kinematic movement, teleports)
+    sync_physics_transforms_system,
+    
+    // 3. Run physics simulation (may run 0, 1, or multiple steps)
+    physics_step_system,
+    
+    // 4. Sync physics results back to ECS (dynamic body movement)
+    sync_physics_transforms_system,
+    
+    // 5. Distribute collision events to entities
+    populate_collision_events,
+).chain());
+```
+
+### Example Usage
+
+```rust
+// Static ground (never moves)
+world.spawn((
+    Transform::from_xyz(0.0, -1.0, 0.0),
+    RigidBody::Static,
+    Collider::cuboid(50.0, 0.5, 50.0),  // 100×1×100 platform
+    Friction::new(0.5),
+    Restitution::new(0.0),  // No bounce
+));
+
+// Dynamic falling cube (affected by gravity)
+world.spawn((
+    Transform::from_xyz(0.0, 10.0, 0.0),
+    RigidBody::Dynamic,
+    Collider::cuboid(1.0, 1.0, 1.0),  // 2×2×2 cube
+    PhysicsVelocity::default(),
+    Mass::new(1.0),
+    Friction::new(0.6),
+    Restitution::new(0.2),  // Slight bounce
+));
+
+// Bouncy sphere (high restitution)
+world.spawn((
+    Transform::from_xyz(0.0, 15.0, 0.0),
+    RigidBody::Dynamic,
+    Collider::sphere(0.5),  // Radius 0.5
+    PhysicsVelocity::linear(Vec3::new(1.0, 0.0, 0.0)),  // Initial velocity
+    Restitution::new(0.8),  // Very bouncy
+    Friction::new(0.1),     // Low friction
+));
+```
+
+For more details, see `examples/physics_demo.rs` which demonstrates falling cubes, bouncing spheres, and collision detection.
+
+---
+
 ## Further Reading
 
 - **Vulkan Tutorial**: https://vulkan-tutorial.com/

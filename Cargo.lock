@@ -2447,6 +2447,7 @@ dependencies = [
  "praxis_graphics",
  "praxis_input",
  "praxis_math",
+ "praxis_physics",
  "praxis_scene",
  "praxis_utils",
  "praxis_window",

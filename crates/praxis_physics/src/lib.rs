@@ -186,6 +186,9 @@ mod components;
 mod resources;
 mod systems;
 
+#[cfg(test)]
+mod tests;
+
 pub use components::*;
 pub use resources::*;
 pub use systems::*;
