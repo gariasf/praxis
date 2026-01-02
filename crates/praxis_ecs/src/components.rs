@@ -557,6 +557,300 @@ impl Mesh {
     }
 }
 
+/// Camera component marking an entity as a camera.
+///
+/// This component, combined with a projection component, enables an entity to act as a camera
+/// for rendering. The camera uses its Transform to compute the view matrix.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, Camera, PerspectiveProjection, Transform};
+///
+/// let mut world = World::new();
+///
+/// // Create a perspective camera
+/// world.spawn((
+///     Transform::from_xyz(0.0, 5.0, 10.0),
+///     Camera::default(),
+///     PerspectiveProjection::default(),
+/// ));
+/// ```
+#[derive(Component, Debug, Clone, Copy)]
+pub struct Camera {
+    /// Whether this camera is currently active.
+    pub is_active: bool,
+    
+    /// The rendering priority order. Higher priority cameras render last.
+    pub priority: i32,
+}
+
+impl Camera {
+    /// Creates a new active camera with default priority.
+    pub fn new() -> Self {
+        Self {
+            is_active: true,
+            priority: 0,
+        }
+    }
+    
+    /// Creates a new camera with the specified priority.
+    pub fn with_priority(priority: i32) -> Self {
+        Self {
+            is_active: true,
+            priority,
+        }
+    }
+    
+    /// Returns true if the camera is active.
+    pub fn is_active(&self) -> bool {
+        self.is_active
+    }
+    
+    /// Activates the camera.
+    pub fn activate(&mut self) {
+        self.is_active = true;
+    }
+    
+    /// Deactivates the camera.
+    pub fn deactivate(&mut self) {
+        self.is_active = false;
+    }
+}
+
+impl Default for Camera {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Perspective projection component for cameras.
+///
+/// Defines a perspective projection with field of view, aspect ratio, and near/far planes.
+/// This is the most common projection type for 3D games.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, Camera, PerspectiveProjection, Transform};
+///
+/// let mut world = World::new();
+///
+/// world.spawn((
+///     Transform::from_xyz(0.0, 5.0, 10.0),
+///     Camera::default(),
+///     PerspectiveProjection {
+///         fov: 60.0_f32.to_radians(),
+///         aspect_ratio: 16.0 / 9.0,
+///         near: 0.1,
+///         far: 1000.0,
+///     },
+/// ));
+/// ```
+#[derive(Component, Debug, Clone, Copy)]
+pub struct PerspectiveProjection {
+    /// Vertical field of view in radians.
+    pub fov: f32,
+    
+    /// Aspect ratio (width / height).
+    pub aspect_ratio: f32,
+    
+    /// Near clipping plane distance.
+    pub near: f32,
+    
+    /// Far clipping plane distance.
+    pub far: f32,
+}
+
+impl PerspectiveProjection {
+    /// Creates a new perspective projection.
+    pub fn new(fov: f32, aspect_ratio: f32, near: f32, far: f32) -> Self {
+        Self {
+            fov,
+            aspect_ratio,
+            near,
+            far,
+        }
+    }
+    
+    /// Computes the projection matrix.
+    pub fn compute_matrix(&self) -> Mat4 {
+        Mat4::perspective_rh(self.fov, self.aspect_ratio, self.near, self.far)
+    }
+    
+    /// Updates the aspect ratio (e.g., when window is resized).
+    pub fn set_aspect_ratio(&mut self, aspect_ratio: f32) {
+        self.aspect_ratio = aspect_ratio;
+    }
+}
+
+impl Default for PerspectiveProjection {
+    fn default() -> Self {
+        Self {
+            fov: 70.0_f32.to_radians(),
+            aspect_ratio: 16.0 / 9.0,
+            near: 0.1,
+            far: 1000.0,
+        }
+    }
+}
+
+/// Orthographic projection component for cameras.
+///
+/// Defines an orthographic projection with a defined volume. Objects maintain their size
+/// regardless of distance from the camera. Common for 2D games, UI, and certain 3D scenarios
+/// like strategy games.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, Camera, OrthographicProjection, Transform};
+///
+/// let mut world = World::new();
+///
+/// world.spawn((
+///     Transform::from_xyz(0.0, 10.0, 0.0),
+///     Camera::default(),
+///     OrthographicProjection::new(-10.0, 10.0, -10.0, 10.0, 0.1, 100.0),
+/// ));
+/// ```
+#[derive(Component, Debug, Clone, Copy)]
+pub struct OrthographicProjection {
+    /// Left edge of the view volume.
+    pub left: f32,
+    
+    /// Right edge of the view volume.
+    pub right: f32,
+    
+    /// Bottom edge of the view volume.
+    pub bottom: f32,
+    
+    /// Top edge of the view volume.
+    pub top: f32,
+    
+    /// Near clipping plane distance.
+    pub near: f32,
+    
+    /// Far clipping plane distance.
+    pub far: f32,
+}
+
+impl OrthographicProjection {
+    /// Creates a new orthographic projection.
+    pub fn new(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
+        Self {
+            left,
+            right,
+            bottom,
+            top,
+            near,
+            far,
+        }
+    }
+    
+    /// Creates an orthographic projection centered at origin with given dimensions.
+    pub fn from_size(width: f32, height: f32, near: f32, far: f32) -> Self {
+        Self {
+            left: -width / 2.0,
+            right: width / 2.0,
+            bottom: -height / 2.0,
+            top: height / 2.0,
+            near,
+            far,
+        }
+    }
+    
+    /// Computes the projection matrix.
+    pub fn compute_matrix(&self) -> Mat4 {
+        Mat4::orthographic_rh(
+            self.left,
+            self.right,
+            self.bottom,
+            self.top,
+            self.near,
+            self.far,
+        )
+    }
+    
+    /// Updates the projection bounds (e.g., when window is resized).
+    pub fn set_bounds(&mut self, left: f32, right: f32, bottom: f32, top: f32) {
+        self.left = left;
+        self.right = right;
+        self.bottom = bottom;
+        self.top = top;
+    }
+}
+
+impl Default for OrthographicProjection {
+    fn default() -> Self {
+        Self {
+            left: -10.0,
+            right: 10.0,
+            bottom: -10.0,
+            top: 10.0,
+            near: 0.1,
+            far: 1000.0,
+        }
+    }
+}
+
+/// Component storing computed camera matrices.
+///
+/// This component is automatically updated by the camera system based on the Transform
+/// and projection components. It stores the view matrix, projection matrix, and their
+/// combined view-projection matrix for efficient rendering.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, Query, CameraMatrices};
+///
+/// fn rendering_system(cameras: Query<&CameraMatrices>) {
+///     for matrices in cameras.iter() {
+///         // Use matrices.view_projection for rendering
+///     }
+/// }
+/// ```
+#[derive(Component, Debug, Clone, Copy)]
+pub struct CameraMatrices {
+    /// The view matrix (transforms from world space to view space).
+    pub view: Mat4,
+    
+    /// The projection matrix (transforms from view space to clip space).
+    pub projection: Mat4,
+    
+    /// The combined view-projection matrix.
+    pub view_projection: Mat4,
+}
+
+impl CameraMatrices {
+    /// Creates camera matrices from view and projection matrices.
+    pub fn new(view: Mat4, projection: Mat4) -> Self {
+        Self {
+            view,
+            projection,
+            view_projection: projection * view,
+        }
+    }
+    
+    /// Updates the matrices.
+    pub fn update(&mut self, view: Mat4, projection: Mat4) {
+        self.view = view;
+        self.projection = projection;
+        self.view_projection = projection * view;
+    }
+}
+
+impl Default for CameraMatrices {
+    fn default() -> Self {
+        Self {
+            view: Mat4::IDENTITY,
+            projection: Mat4::IDENTITY,
+            view_projection: Mat4::IDENTITY,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -713,5 +1007,136 @@ mod tests {
         // Test UV setter
         mesh.set_uvs(vec![[0.5, 0.5]]);
         assert!(mesh.uvs.is_some());
+    }
+    
+    #[test]
+    fn test_camera_creation() {
+        let camera = Camera::new();
+        assert!(camera.is_active());
+        assert_eq!(camera.priority, 0);
+        
+        let camera2 = Camera::with_priority(5);
+        assert!(camera2.is_active());
+        assert_eq!(camera2.priority, 5);
+    }
+    
+    #[test]
+    fn test_camera_activation() {
+        let mut camera = Camera::new();
+        assert!(camera.is_active());
+        
+        camera.deactivate();
+        assert!(!camera.is_active());
+        
+        camera.activate();
+        assert!(camera.is_active());
+    }
+    
+    #[test]
+    fn test_perspective_projection() {
+        let proj = PerspectiveProjection::new(
+            60.0_f32.to_radians(),
+            16.0 / 9.0,
+            0.1,
+            1000.0,
+        );
+        
+        assert_eq!(proj.fov, 60.0_f32.to_radians());
+        assert_eq!(proj.aspect_ratio, 16.0 / 9.0);
+        assert_eq!(proj.near, 0.1);
+        assert_eq!(proj.far, 1000.0);
+        
+        let matrix = proj.compute_matrix();
+        assert_ne!(matrix, Mat4::IDENTITY);
+    }
+    
+    #[test]
+    fn test_perspective_projection_aspect_ratio() {
+        let mut proj = PerspectiveProjection::default();
+        assert_eq!(proj.aspect_ratio, 16.0 / 9.0);
+        
+        proj.set_aspect_ratio(4.0 / 3.0);
+        assert_eq!(proj.aspect_ratio, 4.0 / 3.0);
+    }
+    
+    #[test]
+    fn test_orthographic_projection() {
+        let proj = OrthographicProjection::new(-10.0, 10.0, -5.0, 5.0, 0.1, 100.0);
+        
+        assert_eq!(proj.left, -10.0);
+        assert_eq!(proj.right, 10.0);
+        assert_eq!(proj.bottom, -5.0);
+        assert_eq!(proj.top, 5.0);
+        assert_eq!(proj.near, 0.1);
+        assert_eq!(proj.far, 100.0);
+        
+        let matrix = proj.compute_matrix();
+        assert_ne!(matrix, Mat4::IDENTITY);
+    }
+    
+    #[test]
+    fn test_orthographic_projection_from_size() {
+        let proj = OrthographicProjection::from_size(20.0, 10.0, 0.1, 100.0);
+        
+        assert_eq!(proj.left, -10.0);
+        assert_eq!(proj.right, 10.0);
+        assert_eq!(proj.bottom, -5.0);
+        assert_eq!(proj.top, 5.0);
+    }
+    
+    #[test]
+    fn test_orthographic_projection_set_bounds() {
+        let mut proj = OrthographicProjection::default();
+        
+        proj.set_bounds(-20.0, 20.0, -15.0, 15.0);
+        
+        assert_eq!(proj.left, -20.0);
+        assert_eq!(proj.right, 20.0);
+        assert_eq!(proj.bottom, -15.0);
+        assert_eq!(proj.top, 15.0);
+    }
+    
+    #[test]
+    fn test_camera_matrices() {
+        let view = Mat4::look_at_rh(
+            Vec3::new(0.0, 0.0, 5.0),
+            Vec3::ZERO,
+            Vec3::Y,
+        );
+        let projection = Mat4::perspective_rh(
+            70.0_f32.to_radians(),
+            16.0 / 9.0,
+            0.1,
+            1000.0,
+        );
+        
+        let matrices = CameraMatrices::new(view, projection);
+        
+        assert_eq!(matrices.view, view);
+        assert_eq!(matrices.projection, projection);
+        assert_eq!(matrices.view_projection, projection * view);
+    }
+    
+    #[test]
+    fn test_camera_matrices_update() {
+        let mut matrices = CameraMatrices::default();
+        
+        let view = Mat4::look_at_rh(
+            Vec3::new(0.0, 5.0, 10.0),
+            Vec3::ZERO,
+            Vec3::Y,
+        );
+        let projection = Mat4::perspective_rh(
+            60.0_f32.to_radians(),
+            16.0 / 9.0,
+            0.1,
+            1000.0,
+        );
+        
+        matrices.update(view, projection);
+        
+        assert_eq!(matrices.view, view);
+        assert_eq!(matrices.projection, projection);
+        assert_eq!(matrices.view_projection, projection * view);
     }
 }

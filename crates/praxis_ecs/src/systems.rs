@@ -12,7 +12,11 @@ use bevy_ecs::{
     system::Commands,
 };
 
-use crate::{Children, GlobalTransform, Parent, Query, Transform};
+use crate::{
+    Camera, CameraMatrices, Children, GlobalTransform, OrthographicProjection, Parent,
+    PerspectiveProjection, Query, Transform,
+};
+use praxis_math::Vec3;
 use praxis_utils::trace;
 
 /// System sets for organizing systems into logical groups.
@@ -357,6 +361,114 @@ pub fn propagate_transforms_for_changed_children(
     }
 }
 
+/// Updates camera matrices for cameras with perspective projection.
+///
+/// This system computes the view and projection matrices for all active cameras
+/// with a perspective projection. The view matrix is computed from the camera's
+/// Transform (or GlobalTransform if it has a parent), and the projection matrix
+/// is computed from the PerspectiveProjection component.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, Schedule};
+/// use praxis_ecs::systems::update_perspective_cameras;
+///
+/// let mut world = World::new();
+/// let mut schedule = Schedule::default();
+///
+/// schedule.add_systems(update_perspective_cameras);
+/// ```
+#[allow(clippy::type_complexity)]
+pub fn update_perspective_cameras(
+    mut cameras: Query<
+        (
+            &Camera,
+            &Transform,
+            &PerspectiveProjection,
+            &mut CameraMatrices,
+            Option<&GlobalTransform>,
+        ),
+        Or<(
+            Changed<Transform>,
+            Changed<PerspectiveProjection>,
+            Added<Camera>,
+            Added<PerspectiveProjection>,
+            Added<CameraMatrices>,
+        )>,
+    >,
+) {
+    for (camera, transform, projection, mut matrices, global_transform) in cameras.iter_mut() {
+        if !camera.is_active {
+            continue;
+        }
+
+        let view_matrix = if let Some(global) = global_transform {
+            global.matrix.inverse()
+        } else {
+            transform.compute_inverse_matrix()
+        };
+
+        let projection_matrix = projection.compute_matrix();
+
+        matrices.update(view_matrix, projection_matrix);
+    }
+}
+
+/// Updates camera matrices for cameras with orthographic projection.
+///
+/// This system computes the view and projection matrices for all active cameras
+/// with an orthographic projection. The view matrix is computed from the camera's
+/// Transform (or GlobalTransform if it has a parent), and the projection matrix
+/// is computed from the OrthographicProjection component.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, Schedule};
+/// use praxis_ecs::systems::update_orthographic_cameras;
+///
+/// let mut world = World::new();
+/// let mut schedule = Schedule::default();
+///
+/// schedule.add_systems(update_orthographic_cameras);
+/// ```
+#[allow(clippy::type_complexity)]
+pub fn update_orthographic_cameras(
+    mut cameras: Query<
+        (
+            &Camera,
+            &Transform,
+            &OrthographicProjection,
+            &mut CameraMatrices,
+            Option<&GlobalTransform>,
+        ),
+        Or<(
+            Changed<Transform>,
+            Changed<OrthographicProjection>,
+            Added<Camera>,
+            Added<OrthographicProjection>,
+            Added<CameraMatrices>,
+        )>,
+    >,
+) {
+    for (camera, transform, projection, mut matrices, global_transform) in cameras.iter_mut() {
+        if !camera.is_active {
+            continue;
+        }
+
+        let view_matrix = if let Some(global) = global_transform {
+            global.matrix.inverse()
+        } else {
+            transform.compute_inverse_matrix()
+        };
+
+        let projection_matrix = projection.compute_matrix();
+
+        matrices.update(view_matrix, projection_matrix);
+    }
+}
+
 /// System that cleans up children when entities are removed.
 ///
 /// This system should run when entities are about to be despawned to ensure
@@ -423,6 +535,154 @@ impl TransformBundle {
     /// Creates a new transform bundle at the given position.
     pub fn from_xyz(x: f32, y: f32, z: f32) -> Self {
         Self::from_transform(Transform::from_xyz(x, y, z))
+    }
+}
+
+/// Bundle for spawning cameras with perspective projection.
+///
+/// This bundle includes everything needed for a perspective camera entity.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, PerspectiveCameraBundle};
+/// use praxis_math::Vec3;
+///
+/// let mut world = World::new();
+///
+/// world.spawn(PerspectiveCameraBundle::new(
+///     Vec3::new(0.0, 5.0, 10.0),
+///     70.0_f32.to_radians(),
+///     16.0 / 9.0,
+/// ));
+/// ```
+#[derive(Bundle)]
+pub struct PerspectiveCameraBundle {
+    /// The camera component.
+    pub camera: Camera,
+    
+    /// The local transform of the camera.
+    pub transform: Transform,
+    
+    /// The global transform of the camera.
+    pub global_transform: GlobalTransform,
+    
+    /// The perspective projection settings.
+    pub projection: PerspectiveProjection,
+    
+    /// The computed camera matrices.
+    pub matrices: CameraMatrices,
+}
+
+impl PerspectiveCameraBundle {
+    /// Creates a new perspective camera bundle.
+    pub fn new(position: Vec3, fov: f32, aspect_ratio: f32) -> Self {
+        let transform = Transform::from_translation(position);
+        Self {
+            camera: Camera::default(),
+            transform,
+            global_transform: GlobalTransform::from(transform),
+            projection: PerspectiveProjection::new(fov, aspect_ratio, 0.1, 1000.0),
+            matrices: CameraMatrices::default(),
+        }
+    }
+    
+    /// Creates a new perspective camera bundle with custom near and far planes.
+    pub fn with_near_far(position: Vec3, fov: f32, aspect_ratio: f32, near: f32, far: f32) -> Self {
+        let transform = Transform::from_translation(position);
+        Self {
+            camera: Camera::default(),
+            transform,
+            global_transform: GlobalTransform::from(transform),
+            projection: PerspectiveProjection::new(fov, aspect_ratio, near, far),
+            matrices: CameraMatrices::default(),
+        }
+    }
+}
+
+impl Default for PerspectiveCameraBundle {
+    fn default() -> Self {
+        Self::new(Vec3::new(0.0, 0.0, 10.0), 70.0_f32.to_radians(), 16.0 / 9.0)
+    }
+}
+
+/// Bundle for spawning cameras with orthographic projection.
+///
+/// This bundle includes everything needed for an orthographic camera entity.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, OrthographicCameraBundle};
+/// use praxis_math::Vec3;
+///
+/// let mut world = World::new();
+///
+/// world.spawn(OrthographicCameraBundle::new(
+///     Vec3::new(0.0, 10.0, 0.0),
+///     20.0,
+///     10.0,
+/// ));
+/// ```
+#[derive(Bundle)]
+pub struct OrthographicCameraBundle {
+    /// The camera component.
+    pub camera: Camera,
+    
+    /// The local transform of the camera.
+    pub transform: Transform,
+    
+    /// The global transform of the camera.
+    pub global_transform: GlobalTransform,
+    
+    /// The orthographic projection settings.
+    pub projection: OrthographicProjection,
+    
+    /// The computed camera matrices.
+    pub matrices: CameraMatrices,
+}
+
+impl OrthographicCameraBundle {
+    /// Creates a new orthographic camera bundle.
+    pub fn new(position: Vec3, width: f32, height: f32) -> Self {
+        let transform = Transform::from_translation(position);
+        Self {
+            camera: Camera::default(),
+            transform,
+            global_transform: GlobalTransform::from(transform),
+            projection: OrthographicProjection::from_size(width, height, 0.1, 1000.0),
+            matrices: CameraMatrices::default(),
+        }
+    }
+    
+    /// Creates a new orthographic camera bundle with custom near and far planes.
+    pub fn with_near_far(position: Vec3, width: f32, height: f32, near: f32, far: f32) -> Self {
+        let transform = Transform::from_translation(position);
+        Self {
+            camera: Camera::default(),
+            transform,
+            global_transform: GlobalTransform::from(transform),
+            projection: OrthographicProjection::from_size(width, height, near, far),
+            matrices: CameraMatrices::default(),
+        }
+    }
+    
+    /// Creates an orthographic camera with custom bounds.
+    pub fn with_bounds(position: Vec3, left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
+        let transform = Transform::from_translation(position);
+        Self {
+            camera: Camera::default(),
+            transform,
+            global_transform: GlobalTransform::from(transform),
+            projection: OrthographicProjection::new(left, right, bottom, top, near, far),
+            matrices: CameraMatrices::default(),
+        }
+    }
+}
+
+impl Default for OrthographicCameraBundle {
+    fn default() -> Self {
+        Self::new(Vec3::new(0.0, 10.0, 0.0), 20.0, 10.0)
     }
 }
 
@@ -930,5 +1190,142 @@ mod tests {
             .translation();
         assert!((pos3.x - 5.0).abs() < 0.001);
         assert!((pos3.y - 0.0).abs() < 0.001);
+    }
+    
+    #[test]
+    fn test_update_perspective_cameras() {
+        use crate::{Camera, CameraMatrices, PerspectiveProjection};
+        
+        let mut world = World::new();
+        
+        let camera = world.spawn((
+            Camera::default(),
+            Transform::from_xyz(0.0, 0.0, 10.0),
+            PerspectiveProjection::default(),
+            CameraMatrices::default(),
+        ));
+        
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems(update_perspective_cameras);
+        world.inner_mut().run_schedule(&mut schedule);
+        
+        let matrices = world.inner().get::<CameraMatrices>(camera).unwrap();
+        assert_ne!(matrices.view, Mat4::IDENTITY);
+        assert_ne!(matrices.projection, Mat4::IDENTITY);
+        assert_ne!(matrices.view_projection, Mat4::IDENTITY);
+    }
+    
+    #[test]
+    fn test_update_orthographic_cameras() {
+        use crate::{Camera, CameraMatrices, OrthographicProjection};
+        
+        let mut world = World::new();
+        
+        let camera = world.spawn((
+            Camera::default(),
+            Transform::from_xyz(0.0, 10.0, 0.0),
+            OrthographicProjection::default(),
+            CameraMatrices::default(),
+        ));
+        
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems(update_orthographic_cameras);
+        world.inner_mut().run_schedule(&mut schedule);
+        
+        let matrices = world.inner().get::<CameraMatrices>(camera).unwrap();
+        assert_ne!(matrices.view, Mat4::IDENTITY);
+        assert_ne!(matrices.projection, Mat4::IDENTITY);
+        assert_ne!(matrices.view_projection, Mat4::IDENTITY);
+    }
+    
+    #[test]
+    fn test_inactive_camera_not_updated() {
+        use crate::{Camera, CameraMatrices, PerspectiveProjection};
+        
+        let mut world = World::new();
+        
+        let mut inactive_camera = Camera::default();
+        inactive_camera.deactivate();
+        
+        let camera = world.spawn((
+            inactive_camera,
+            Transform::from_xyz(0.0, 0.0, 10.0),
+            PerspectiveProjection::default(),
+            CameraMatrices::default(),
+        ));
+        
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems(update_perspective_cameras);
+        world.inner_mut().run_schedule(&mut schedule);
+        
+        let matrices = world.inner().get::<CameraMatrices>(camera).unwrap();
+        assert_eq!(matrices.view, Mat4::IDENTITY);
+        assert_eq!(matrices.projection, Mat4::IDENTITY);
+    }
+    
+    #[test]
+    fn test_camera_with_parent_transform() {
+        use crate::{Camera, CameraMatrices, PerspectiveProjection};
+        
+        let mut world = World::new();
+        
+        let parent = world.spawn((
+            Transform::from_xyz(5.0, 0.0, 0.0),
+            GlobalTransform::default(),
+        ));
+        
+        let camera = world.spawn((
+            Camera::default(),
+            Transform::from_xyz(0.0, 0.0, 5.0),
+            GlobalTransform::default(),
+            PerspectiveProjection::default(),
+            CameraMatrices::default(),
+            Parent(parent),
+        ));
+        
+        world
+            .insert_component(parent, Children::with_children(vec![camera]))
+            .unwrap();
+        
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems((
+            propagate_transforms,
+            update_perspective_cameras,
+        ).chain());
+        world.inner_mut().run_schedule(&mut schedule);
+        
+        let matrices = world.inner().get::<CameraMatrices>(camera).unwrap();
+        assert_ne!(matrices.view, Mat4::IDENTITY);
+        assert_ne!(matrices.projection, Mat4::IDENTITY);
+    }
+    
+    #[test]
+    fn test_perspective_camera_bundle() {
+        let bundle = PerspectiveCameraBundle::new(
+            Vec3::new(0.0, 5.0, 10.0),
+            60.0_f32.to_radians(),
+            16.0 / 9.0,
+        );
+        
+        assert!(bundle.camera.is_active());
+        assert_eq!(bundle.transform.translation, Vec3::new(0.0, 5.0, 10.0));
+        assert_eq!(bundle.projection.fov, 60.0_f32.to_radians());
+        assert_eq!(bundle.projection.aspect_ratio, 16.0 / 9.0);
+    }
+    
+    #[test]
+    fn test_orthographic_camera_bundle() {
+        let bundle = OrthographicCameraBundle::new(
+            Vec3::new(0.0, 10.0, 0.0),
+            20.0,
+            10.0,
+        );
+        
+        assert!(bundle.camera.is_active());
+        assert_eq!(bundle.transform.translation, Vec3::new(0.0, 10.0, 0.0));
+        assert_eq!(bundle.projection.left, -10.0);
+        assert_eq!(bundle.projection.right, 10.0);
+        assert_eq!(bundle.projection.bottom, -5.0);
+        assert_eq!(bundle.projection.top, 5.0);
     }
 }
