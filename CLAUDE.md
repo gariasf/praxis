@@ -16,10 +16,16 @@ cargo build
 # Build in release mode
 cargo build --release
 
-# Run an example
-cargo run --example playground
-cargo run --example ecs_demo
+# Run examples
 cargo run --example ecs_integration
+cargo run --example transform_propagation_demo
+cargo run --example multi_mesh_demo
+cargo run --example input_integration
+cargo run --example fps_camera_controller
+cargo run --example obj_loader_demo
+cargo run --example comprehensive_scene_demo
+cargo run --example scene_demo
+cargo run --example gui_demo
 
 # Check code without building
 cargo check --all
@@ -60,14 +66,14 @@ Praxis uses a Cargo workspace with 10 crates organized by subsystem. The root `p
 
 - **praxis_core**: Engine lifecycle, main loop coordination, initialization sequence
 - **praxis_window**: Window management via `winit`, event loop handling
-- **praxis_graphics**: Vulkan rendering via `vulkano`, shader compilation, render context
+- **praxis_graphics**: Vulkan rendering via `vulkano`, shader compilation, render context, mesh/texture management
 - **praxis_ecs**: Entity-Component-System using `bevy_ecs`
 - **praxis_math**: Math utilities, re-exports `glam` types (Vec3, Mat4, etc.)
-- **praxis_scene**: Scene graph and spatial organization
-- **praxis_assets**: Asset loading/management for textures, models, config files
+- **praxis_scene**: Scene graph and spatial organization with transform hierarchy
+- **praxis_assets**: Asset loading/management (OBJ models, textures, config files)
 - **praxis_input**: Keyboard/mouse/gamepad handling
 - **praxis_gui**: Debug/editor GUI via `egui`
-- **praxis_utils**: Shared utilities, logging (`tracing`), error handling
+- **praxis_utils**: Shared utilities, logging (`tracing`), error handling, frame timing
 
 ### Initialization Flow
 
@@ -75,7 +81,8 @@ The engine follows a specific initialization sequence in `praxis_core::run()`:
 
 1. `praxis_utils::init()` - Sets up logging and error reporting
 2. `praxis_ecs::init()` - Initializes ECS system
-3. `praxis_window::run()` - Creates event loop and window, then:
+3. `praxis_input::init()` - Initializes input system
+4. `praxis_window::run()` - Creates event loop and window, then:
    - Window creation (default 1920x1080)
    - `State::new()` creates `RenderContext` asynchronously
    - Event loop starts with `ControlFlow::Poll`
@@ -90,7 +97,37 @@ Graphics rendering uses Vulkano for Vulkan abstraction:
 - **Resize handling**: Debounced (16ms) to avoid excessive reconfigurations
 - **Frame timing**: Uses `FrameTimer` from `praxis_utils` for delta time and FPS tracking
 
-Current rendering (temporary): Single rotating cube driven by `State::rotation_angle`. This will be replaced with a data-driven ECS/scene graph system that iterates over Transform components.
+#### Mesh System
+
+The mesh system provides complete support for loading and rendering 3D geometry:
+
+- **MeshData**: CPU-side mesh definition with vertices, indices, and attributes
+- **GpuMesh**: GPU-side mesh containing Vulkan buffers
+- **MeshAssetManager**: Central manager for loaded meshes
+- **Primitive Generators**: Built-in functions for common shapes (cubes, pyramids, quads)
+
+Meshes support both colored vertices and UV-mapped textures. See `praxis_graphics::mesh` for details.
+
+#### Texture System
+
+The texture system provides support for loading and managing textures:
+
+- **Texture**: GPU-side texture with image view and sampler
+- **TextureManager**: Central manager for cached textures
+- **Format Support**: PNG and JPEG via the `image` crate
+- **Default White Texture**: Automatically created fallback texture
+
+The graphics pipeline supports texture sampling through UV coordinates in the vertex format.
+
+#### Rendering Methods
+
+`RenderContext` provides three rendering methods:
+
+1. **`render()`**: Basic rendering with model matrices (legacy)
+2. **`render_meshes()`**: Multi-mesh rendering with `DrawCommand`
+3. **`render_textured()`**: Textured rendering with `DrawCommandWithTexture`
+
+Examples demonstrate usage of all three methods.
 
 ### ECS Integration
 
@@ -100,7 +137,37 @@ Built on `bevy_ecs`, providing:
 - Systems that operate on queries
 - Re-exported types: `Component`, `Entity`, `Query`, `Commands`, `Res/ResMut`, `Resource`, etc.
 
-See `praxis_ecs` documentation and `examples/ecs_demo.rs` for usage patterns.
+See `praxis_ecs` documentation and `examples/ecs_integration.rs` for usage patterns.
+
+### Scene Graph
+
+The scene system provides hierarchical transform management:
+
+- **Transform**: Local position, rotation, scale
+- **GlobalTransform**: Computed world-space transform
+- **Parent/Children**: Hierarchy relationships
+- **Transform Propagation**: Automatic system that updates global transforms
+
+See `praxis_scene` and `examples/transform_propagation_demo.rs` for details.
+
+### Input System
+
+The input system provides keyboard, mouse, and gamepad support:
+
+- **InputState**: Global resource tracking all input state
+- **Keyboard**: Key press/release tracking
+- **Mouse**: Position, delta, and button state
+- **Gamepad**: Button and axis support via `gilrs`
+
+See `praxis_input` and `examples/input_integration.rs` for usage.
+
+### Asset Loading
+
+The asset system supports loading various file formats:
+
+- **OBJ Models**: Via custom parser in `praxis_assets`
+- **Textures**: PNG/JPEG via `image` crate
+- **Future**: Plans for GLTF, materials, and other formats
 
 ## Code Quality Standards
 
@@ -135,12 +202,19 @@ All checks must pass before merging.
 - Surface reconfiguration needed on window resize
 - RenderContext manages Vulkan device, queues, swapchain
 - All rendering operations return `Result<()>` for error handling
+- Mesh and texture managers handle asset lifecycle
 
 ### Window/Event Handling (praxis_window)
 - Uses winit 0.30.11 with `ApplicationHandler` trait
 - Escape key exits application
 - Resize events are debounced to avoid performance issues
 - State machine: `None` -> `resumed()` -> `Some(State)`
+
+### Scene Management (praxis_scene)
+- Transform components provide position, rotation, scale
+- Parent/Children components create hierarchies
+- `transform_propagation_system` maintains global transforms
+- Query patterns access transform data in systems
 
 ## Dependencies
 
@@ -151,6 +225,9 @@ Key external crates:
 - **ECS**: `bevy_ecs`
 - **Logging**: `tracing`, `tracing-subscriber`
 - **Error Handling**: `color-eyre` (via praxis_utils)
+- **Input**: `gilrs` (gamepad support)
+- **Image Loading**: `image` (PNG/JPEG)
+- **GUI**: `egui`, `egui-winit`, `egui_vulkano`
 
 ## Project Philosophy
 
