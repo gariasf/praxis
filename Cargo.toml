@@ -15,6 +15,7 @@ members = [
     "crates/praxis_gui",
     "crates/praxis_input",
     "crates/praxis_math",
+    "crates/praxis_physics",
     "crates/praxis_scene",
     "crates/praxis_utils",
     "crates/praxis_window",
