@@ -58,18 +58,20 @@
 //
 // ## 2. Uniform Buffer (per-object data)
 //    - Source: `Uniforms` struct in Rust (lib.rs)
-//    - Contains: model, view, projection matrices
+//    - Contains: model, view, projection matrices, and camera position
 //    - Descriptor: Set 0, Binding 0
 //    - Upload: Every frame, per object drawn
 //    - Frequency: Updated each frame for dynamic objects, less often for static
 //    - Access: Same data for all vertices of an object
-//    - Memory: Host-visible buffer, ~192 bytes (3 matrices * 64 bytes)
+//    - Memory: Host-visible buffer, 208 bytes (3 matrices + camera position + padding)
 //
 //    Memory layout (Uniforms):
 //      Offset 0:   mat4 model (64 bytes) - model-to-world transform
 //      Offset 64:  mat4 view  (64 bytes) - world-to-view transform  
 //      Offset 128: mat4 proj  (64 bytes) - view-to-clip transform
-//      Total: 192 bytes
+//      Offset 192: vec3 camera_position (12 bytes) - camera position in world space
+//      Offset 204: float _padding (4 bytes) - std140 alignment padding
+//      Total: 208 bytes
 //
 // ## 3. Output to Fragment Shader (interpolated per-fragment)
 //    - World position: For lighting distance calculations
@@ -139,12 +141,15 @@ layout(location = 3) out vec2 v_uv;         // Fragment UV coordinates (interpol
 // The std140 layout ensures consistent memory layout between CPU and GPU:
 // - mat4 is 64 bytes (16 floats * 4 bytes)
 // - Each column is 16-byte aligned (vec4)
-// - Total buffer size: 192 bytes
+// - vec3 + float padding is 16 bytes
+// - Total buffer size: 208 bytes (3 * 64 + 16)
 
 layout(set = 0, binding = 0, std140) uniform Uniforms {
     mat4 model;  // Model matrix: transforms model space → world space
     mat4 view;   // View matrix: transforms world space → view/camera space  
     mat4 proj;   // Projection matrix: transforms view space → clip space
+    vec3 camera_position;  // Camera position in world space
+    float _padding;  // Padding for std140 alignment
 } ubo;  // UBO = Uniform Buffer Object
 
 // ============================================================================
