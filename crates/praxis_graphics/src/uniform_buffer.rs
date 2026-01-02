@@ -44,6 +44,40 @@ pub struct ViewProjectionUniforms {
     pub view: [[f32; 4]; 4],
     /// Camera projection matrix (view → clip).
     pub proj: [[f32; 4]; 4],
+    /// Camera position in world space.
+    pub camera_position: [f32; 3],
+    /// Padding for alignment (total size: 140 bytes).
+    pub _padding: f32,
+}
+
+impl ViewProjectionUniforms {
+    /// Creates new view-projection uniforms with camera position extracted from view matrix.
+    ///
+    /// # Arguments
+    ///
+    /// * `view` - Camera view matrix (world → view)
+    /// * `proj` - Camera projection matrix (view → clip)
+    ///
+    /// # Returns
+    ///
+    /// A new `ViewProjectionUniforms` with camera position extracted from the inverse view matrix.
+    pub fn new(view: Mat4, proj: Mat4) -> Self {
+        // Extract camera position from inverse of view matrix
+        // The camera position is the translation component of the inverse view matrix
+        let view_inverse = view.inverse();
+        let camera_position = [
+            view_inverse.w_axis.x,
+            view_inverse.w_axis.y,
+            view_inverse.w_axis.z,
+        ];
+
+        Self {
+            view: view.to_cols_array_2d(),
+            proj: proj.to_cols_array_2d(),
+            camera_position,
+            _padding: 0.0,
+        }
+    }
 }
 
 /// Per-object uniform data containing the model matrix.
