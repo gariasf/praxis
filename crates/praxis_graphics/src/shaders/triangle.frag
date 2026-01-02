@@ -118,6 +118,15 @@ layout(location = 0) out vec4 f_color;     // Final pixel color (RGBA)
 // Uniform Bindings
 // ============================================================================
 
+// Transform and camera uniform buffer at binding 0
+// Contains model/view/projection matrices and camera position
+layout(set = 0, binding = 0, std140) uniform Uniforms {
+    mat4 model;
+    mat4 view;
+    mat4 proj;
+    vec3 camera_position;
+} uniforms;
+
 // Texture sampler at binding 1
 // Samples the albedo (base color) texture at the given UV coordinates
 layout(set = 0, binding = 1) uniform sampler2D albedo_texture;
@@ -315,10 +324,6 @@ layout(set = 0, binding = 2, std140) uniform LightingData {
 // Lighting Constants
 // ============================================================================
 
-// Camera position in world space (temporary fixed position)
-// TODO: Pass this via uniform buffer for dynamic camera
-const vec3 CAMERA_POS = vec3(0.0, 5.0, 10.0);
-
 // Minimum and maximum shininess values for roughness mapping
 // Roughness 1.0 (rough) → shininess 2.0 (very wide highlights)
 // Roughness 0.0 (smooth) → shininess 256.0 (very tight highlights)
@@ -440,7 +445,7 @@ void main() {
     
     // Calculate view direction (from fragment toward camera)
     // Used for specular calculations (highlights depend on view angle)
-    vec3 view_dir = normalize(CAMERA_POS - v_world_pos);
+    vec3 view_dir = normalize(uniforms.camera_position - v_world_pos);
     
     // Convert roughness [0,1] to shininess [MAX, MIN]
     // Roughness 0.0 (smooth) → high shininess (tight highlights)
