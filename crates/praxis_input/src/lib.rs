@@ -74,7 +74,7 @@ pub use action::{Action, ActionId};
 pub use input_map::{InputBinding, InputMap};
 pub use input_state::{InputState, MouseButton};
 
-use praxis_utils::{Result, info};
+use praxis_utils::{info, Result};
 
 /// Initializes the input system.
 ///

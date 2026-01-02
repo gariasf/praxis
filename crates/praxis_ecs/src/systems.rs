@@ -91,7 +91,8 @@ fn add_child_to_parent(
         if !children.0.contains(&child_entity) {
             trace!(
                 "Adding child entity {:?} to parent {:?}",
-                child_entity, parent_entity
+                child_entity,
+                parent_entity
             );
             children.push(child_entity);
         }

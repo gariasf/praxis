@@ -7,11 +7,11 @@
 //! - Positioning meshes with transform matrices
 
 use praxis_graphics::{
-    DrawCommand, MeshRenderCommands, RenderContext, colored_cube_mesh, pyramid_mesh, quad_mesh,
-    solid_cube_mesh,
+    colored_cube_mesh, pyramid_mesh, quad_mesh, solid_cube_mesh, DrawCommand, MeshRenderCommands,
+    RenderContext,
 };
 use praxis_math::{Mat4, Vec3};
-use praxis_utils::{Result, debug, error, info, timing::FrameTimer, trace, warn};
+use praxis_utils::{debug, error, info, timing::FrameTimer, trace, warn, Result};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use winit::{
@@ -198,7 +198,8 @@ impl ApplicationHandler for App {
                         } else {
                             trace!(
                                 "Ignoring resize to zero dimensions or same size: {}x{}",
-                                pending_size.width, pending_size.height
+                                pending_size.width,
+                                pending_size.height
                             );
                         }
                         state.pending_resize = None;

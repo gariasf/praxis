@@ -36,22 +36,22 @@
 
 use crate::shaders;
 use crate::vertex::Vertex3D;
-use praxis_utils::{Result, debug, error, eyre, info, trace};
+use praxis_utils::{debug, error, eyre, info, trace, Result};
 use std::sync::Arc;
 use vulkano::{
     device::Device,
     pipeline::{
-        DynamicState, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
         graphics::{
-            GraphicsPipelineCreateInfo,
             color_blend::{ColorBlendAttachmentState, ColorBlendState},
             input_assembly::{InputAssemblyState, PrimitiveTopology},
             multisample::MultisampleState,
             rasterization::{CullMode, FrontFace, RasterizationState},
             vertex_input::{Vertex, VertexDefinition},
             viewport::{Viewport, ViewportState},
+            GraphicsPipelineCreateInfo,
         },
         layout::PipelineDescriptorSetLayoutCreateInfo,
+        DynamicState, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
     },
     render_pass::{RenderPass, Subpass},
 };

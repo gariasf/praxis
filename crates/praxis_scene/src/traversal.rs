@@ -87,7 +87,7 @@ impl Iterator for SceneGraphIterator<'_> {
 /// ```
 pub fn get_root_entities(world: &World) -> Vec<Entity> {
     let mut all_entities_with_transform = Vec::new();
-    
+
     for entity in world.iter_entities() {
         if world.get::<praxis_ecs::Transform>(entity.id()).is_some() {
             all_entities_with_transform.push(entity.id());
@@ -256,11 +256,7 @@ pub fn get_entity_depth(world: &World, entity: Entity) -> usize {
 /// let entities = find_entities_by_name(&world, "Player", None);
 /// println!("Found {} entities named 'Player'", entities.len());
 /// ```
-pub fn find_entities_by_name(
-    world: &World,
-    name: &str,
-    root: Option<Entity>,
-) -> Vec<Entity> {
+pub fn find_entities_by_name(world: &World, name: &str, root: Option<Entity>) -> Vec<Entity> {
     let mut results = Vec::new();
 
     let entities_to_check: Vec<Entity> = if let Some(root_entity) = root {
@@ -295,11 +291,7 @@ pub fn find_entities_by_name(
 ///     println!("Found player entity: {:?}", player);
 /// }
 /// ```
-pub fn find_entity_by_name(
-    world: &World,
-    name: &str,
-    root: Option<Entity>,
-) -> Option<Entity> {
+pub fn find_entity_by_name(world: &World, name: &str, root: Option<Entity>) -> Option<Entity> {
     find_entities_by_name(world, name, root).into_iter().next()
 }
 
@@ -326,7 +318,9 @@ mod tests {
             Parent(root),
         ));
 
-        world.entity_mut(root).insert(Children(vec![child1, child2]));
+        world
+            .entity_mut(root)
+            .insert(Children(vec![child1, child2]));
 
         let visited: Vec<Entity> =
             SceneGraphIterator::new(&world, root, TraversalOrder::DepthFirst).collect();

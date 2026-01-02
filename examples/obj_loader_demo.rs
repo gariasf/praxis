@@ -10,8 +10,8 @@
 //! cargo run --example obj_loader_demo
 //! ```
 
-use praxis_assets::{AssetLoader, MeshLoader, load_obj_mesh};
-use praxis_graphics::{DrawCommand, MeshRenderCommands, colored_cube_mesh};
+use praxis_assets::{load_obj_mesh, AssetLoader, MeshLoader};
+use praxis_graphics::{colored_cube_mesh, DrawCommand, MeshRenderCommands};
 use praxis_input::InputState;
 use praxis_math::{Mat4, Vec3};
 use praxis_utils::Result;
@@ -37,10 +37,14 @@ impl State for ObjLoaderDemo {
         println!("=== OBJ Loader Demo ===");
         println!("This example demonstrates loading OBJ mesh files using praxis_assets");
         println!();
-        
+
         // Method 1: Using the high-level convenience function
         println!("Method 1: Using load_obj_mesh convenience function");
-        match load_obj_mesh(render_context.mesh_manager_mut(), "obj_cube_1", "assets/models/cube.obj") {
+        match load_obj_mesh(
+            render_context.mesh_manager_mut(),
+            "obj_cube_1",
+            "assets/models/cube.obj",
+        ) {
             Ok(_) => println!("  ✓ Successfully loaded cube.obj as 'obj_cube_1'"),
             Err(e) => {
                 println!("  ✗ Failed to load cube.obj: {}", e);
@@ -50,20 +54,26 @@ impl State for ObjLoaderDemo {
                     .load_mesh("obj_cube_1", colored_cube_mesh())?;
             }
         }
-        
+
         // Method 2: Using AssetLoader trait directly
         println!("Method 2: Using AssetLoader trait directly");
         let loader = MeshLoader::new();
         println!("  Created MeshLoader");
-        println!("  Supported extensions: {:?}", loader.supported_extensions());
-        
+        println!(
+            "  Supported extensions: {:?}",
+            loader.supported_extensions()
+        );
+
         match loader.load("assets/models/cube.obj") {
             Ok(mesh_data) => {
-                println!("  ✓ Loaded mesh data: {} vertices, {} indices", 
-                    mesh_data.positions.len(), 
+                println!(
+                    "  ✓ Loaded mesh data: {} vertices, {} indices",
+                    mesh_data.positions.len(),
                     mesh_data.indices.len()
                 );
-                render_context.mesh_manager_mut().load_mesh("obj_cube_2", mesh_data)?;
+                render_context
+                    .mesh_manager_mut()
+                    .load_mesh("obj_cube_2", mesh_data)?;
             }
             Err(e) => {
                 println!("  ✗ Failed to load: {}", e);
@@ -73,7 +83,7 @@ impl State for ObjLoaderDemo {
                     .load_mesh("obj_cube_2", colored_cube_mesh())?;
             }
         }
-        
+
         // Method 3: Loading mesh data without immediate GPU upload
         println!("Method 3: Loading mesh data for processing");
         match praxis_assets::load_obj("assets/models/cube.obj") {
@@ -84,9 +94,11 @@ impl State for ObjLoaderDemo {
                 println!("    Has normals: {}", mesh_data.normals.is_some());
                 println!("    Has UVs: {}", mesh_data.uvs.is_some());
                 println!("    Has colors: {}", mesh_data.colors.is_some());
-                
+
                 // Upload to GPU after inspection
-                render_context.mesh_manager_mut().load_mesh("obj_cube_3", mesh_data)?;
+                render_context
+                    .mesh_manager_mut()
+                    .load_mesh("obj_cube_3", mesh_data)?;
             }
             Err(e) => {
                 println!("  ✗ Failed to load: {}", e);
@@ -96,14 +108,17 @@ impl State for ObjLoaderDemo {
                     .load_mesh("obj_cube_3", colored_cube_mesh())?;
             }
         }
-        
+
         println!();
-        println!("Total meshes loaded: {}", render_context.mesh_manager().mesh_count());
+        println!(
+            "Total meshes loaded: {}",
+            render_context.mesh_manager().mesh_count()
+        );
         println!();
         println!("Controls:");
         println!("  ESC - Exit");
         println!("  UP/DOWN - Adjust rotation speed");
-        
+
         Ok(())
     }
 
@@ -186,7 +201,7 @@ impl State for ObjLoaderDemo {
 
 fn main() -> Result<()> {
     praxis_utils::init()?;
-    
+
     let config = WindowConfig {
         title: "Praxis - OBJ Loader Demo".to_string(),
         width: 1920,

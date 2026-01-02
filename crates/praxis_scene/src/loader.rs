@@ -25,7 +25,8 @@ pub struct SceneLoader {
 
 impl SceneLoader {
     /// Creates a new scene loader.
-    #[must_use] pub const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self { base_path: None }
     }
 
@@ -83,9 +84,8 @@ impl SceneLoader {
     ///
     /// Returns an error if the RON cannot be parsed.
     pub fn load_from_string(&self, ron_string: &str) -> Result<SceneDefinition> {
-        let scene: SceneDefinition = ron::from_str(ron_string).map_err(|e| {
-            praxis_utils::eyre::eyre!("Failed to parse scene RON: {}", e)
-        })?;
+        let scene: SceneDefinition = ron::from_str(ron_string)
+            .map_err(|e| praxis_utils::eyre::eyre!("Failed to parse scene RON: {}", e))?;
 
         debug!("Parsed scene definition: {}", scene.name);
 
@@ -115,7 +115,11 @@ impl SceneLoader {
         let ron_string = self.save_to_string(scene)?;
 
         std::fs::write(&full_path, ron_string).map_err(|e| {
-            praxis_utils::eyre::eyre!("Failed to write scene file '{}': {}", full_path.display(), e)
+            praxis_utils::eyre::eyre!(
+                "Failed to write scene file '{}': {}",
+                full_path.display(),
+                e
+            )
         })?;
 
         info!("Saved scene '{}' to {}", scene.name, full_path.display());
@@ -139,9 +143,8 @@ impl SceneLoader {
             .enumerate_arrays(false)
             .indentor("    ".to_string());
 
-        let ron_string = ron::ser::to_string_pretty(scene, pretty_config).map_err(|e| {
-            praxis_utils::eyre::eyre!("Failed to serialize scene: {}", e)
-        })?;
+        let ron_string = ron::ser::to_string_pretty(scene, pretty_config)
+            .map_err(|e| praxis_utils::eyre::eyre!("Failed to serialize scene: {}", e))?;
 
         Ok(ron_string)
     }
@@ -152,7 +155,8 @@ impl SceneLoader {
     }
 
     /// Gets the base path if set.
-    #[must_use] pub fn base_path(&self) -> Option<&str> {
+    #[must_use]
+    pub fn base_path(&self) -> Option<&str> {
         self.base_path.as_deref()
     }
 }
@@ -225,9 +229,6 @@ mod tests {
 
         assert_eq!(loaded_scene.name, scene.name);
         assert_eq!(loaded_scene.entity_count(), scene.entity_count());
-        assert_eq!(
-            loaded_scene.entities[0].name,
-            scene.entities[0].name
-        );
+        assert_eq!(loaded_scene.entities[0].name, scene.entities[0].name);
     }
 }

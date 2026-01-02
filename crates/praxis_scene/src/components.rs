@@ -23,12 +23,14 @@ pub struct Scene(pub SceneHandle);
 
 impl Scene {
     /// Creates a new Scene component with the given handle.
-    #[must_use] pub const fn new(handle: SceneHandle) -> Self {
+    #[must_use]
+    pub const fn new(handle: SceneHandle) -> Self {
         Self(handle)
     }
 
     /// Gets the scene handle.
-    #[must_use] pub const fn handle(&self) -> &SceneHandle {
+    #[must_use]
+    pub const fn handle(&self) -> &SceneHandle {
         &self.0
     }
 }
@@ -70,7 +72,8 @@ impl SceneHandle {
     }
 
     /// Gets the scene identifier.
-    #[must_use] pub fn id(&self) -> &str {
+    #[must_use]
+    pub fn id(&self) -> &str {
         &self.id
     }
 }

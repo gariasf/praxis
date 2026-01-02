@@ -35,7 +35,8 @@ impl SceneDefinition {
     }
 
     /// Gets the number of root entities in the scene.
-    #[must_use] pub const fn entity_count(&self) -> usize {
+    #[must_use]
+    pub const fn entity_count(&self) -> usize {
         self.entities.len()
     }
 
@@ -115,7 +116,8 @@ pub struct EntityDefinition {
 
 impl EntityDefinition {
     /// Creates a new empty entity definition.
-    #[must_use] pub const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             name: None,
             transform: None,
@@ -138,7 +140,8 @@ impl EntityDefinition {
     }
 
     /// Sets the transform of the entity.
-    #[must_use] pub const fn with_transform(mut self, transform: TransformDef) -> Self {
+    #[must_use]
+    pub const fn with_transform(mut self, transform: TransformDef) -> Self {
         self.transform = Some(transform);
         self
     }
@@ -151,13 +154,15 @@ impl EntityDefinition {
     }
 
     /// Adds a child entity.
-    #[must_use] pub fn with_child(mut self, child: Self) -> Self {
+    #[must_use]
+    pub fn with_child(mut self, child: Self) -> Self {
         self.children.push(child);
         self
     }
 
     /// Gets the total number of entities including this one and all descendants.
-    #[must_use] pub fn total_count(&self) -> usize {
+    #[must_use]
+    pub fn total_count(&self) -> usize {
         1 + self.children.iter().map(Self::total_count).sum::<usize>()
     }
 }
@@ -183,7 +188,8 @@ pub struct TransformDef {
 
 impl TransformDef {
     /// Creates a new transform definition with identity values.
-    #[must_use] pub const fn identity() -> Self {
+    #[must_use]
+    pub const fn identity() -> Self {
         Self {
             translation: (0.0, 0.0, 0.0),
             rotation: (0.0, 0.0, 0.0, 1.0),
@@ -192,7 +198,8 @@ impl TransformDef {
     }
 
     /// Creates a transform definition from translation.
-    #[must_use] pub const fn from_translation(x: f32, y: f32, z: f32) -> Self {
+    #[must_use]
+    pub const fn from_translation(x: f32, y: f32, z: f32) -> Self {
         Self {
             translation: (x, y, z),
             rotation: (0.0, 0.0, 0.0, 1.0),
@@ -201,7 +208,8 @@ impl TransformDef {
     }
 
     /// Converts to ECS Transform component types.
-    #[must_use] pub const fn to_components(&self) -> (Vec3, Quat, Vec3) {
+    #[must_use]
+    pub const fn to_components(&self) -> (Vec3, Quat, Vec3) {
         let translation = Vec3::new(self.translation.0, self.translation.1, self.translation.2);
         let rotation = Quat::from_xyzw(
             self.rotation.0,
@@ -271,7 +279,8 @@ const fn default_camera_active() -> bool {
 
 impl CameraDef {
     /// Creates a perspective camera definition.
-    #[must_use] pub const fn perspective(fov: f32, aspect_ratio: f32, near: f32, far: f32) -> Self {
+    #[must_use]
+    pub const fn perspective(fov: f32, aspect_ratio: f32, near: f32, far: f32) -> Self {
         Self {
             camera_type: CameraType::Perspective,
             fov: Some(fov),
@@ -288,7 +297,8 @@ impl CameraDef {
     }
 
     /// Creates an orthographic camera definition.
-    #[must_use] pub const fn orthographic(
+    #[must_use]
+    pub const fn orthographic(
         left: f32,
         right: f32,
         bottom: f32,
@@ -336,7 +346,8 @@ pub struct DirectionalLightDef {
 
 impl DirectionalLightDef {
     /// Creates a new directional light definition.
-    #[must_use] pub const fn new(direction: (f32, f32, f32), color: (f32, f32, f32), intensity: f32) -> Self {
+    #[must_use]
+    pub const fn new(direction: (f32, f32, f32), color: (f32, f32, f32), intensity: f32) -> Self {
         Self {
             direction,
             color,
@@ -345,7 +356,8 @@ impl DirectionalLightDef {
     }
 
     /// Converts to ECS component types.
-    #[must_use] pub const fn to_components(&self) -> (Vec3, Vec3, f32) {
+    #[must_use]
+    pub const fn to_components(&self) -> (Vec3, Vec3, f32) {
         let direction = Vec3::new(self.direction.0, self.direction.1, self.direction.2);
         let color = Vec3::new(self.color.0, self.color.1, self.color.2);
         (direction, color, self.intensity)
@@ -377,7 +389,8 @@ pub struct PointLightDef {
 
 impl PointLightDef {
     /// Creates a new point light definition.
-    #[must_use] pub const fn new(color: (f32, f32, f32), intensity: f32, range: f32) -> Self {
+    #[must_use]
+    pub const fn new(color: (f32, f32, f32), intensity: f32, range: f32) -> Self {
         Self {
             color,
             intensity,
@@ -386,7 +399,8 @@ impl PointLightDef {
     }
 
     /// Converts to ECS component types.
-    #[must_use] pub const fn to_components(&self) -> (Vec3, f32, f32) {
+    #[must_use]
+    pub const fn to_components(&self) -> (Vec3, f32, f32) {
         let color = Vec3::new(self.color.0, self.color.1, self.color.2);
         (color, self.intensity, self.range)
     }

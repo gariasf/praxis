@@ -1320,11 +1320,8 @@ mod tests {
 
     #[test]
     fn test_directional_light_creation() {
-        let light = DirectionalLight::new(
-            Vec3::new(0.5, -1.0, 0.5),
-            Vec3::new(1.0, 0.95, 0.8),
-            1.0,
-        );
+        let light =
+            DirectionalLight::new(Vec3::new(0.5, -1.0, 0.5), Vec3::new(1.0, 0.95, 0.8), 1.0);
 
         // Direction should be normalized
         assert!((light.direction.length() - 1.0).abs() < 0.001);

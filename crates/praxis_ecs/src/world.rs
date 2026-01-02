@@ -12,7 +12,7 @@ use bevy_ecs::{
     system::Resource,
     world::World as BevyWorld,
 };
-use praxis_utils::{Result, debug, error, eyre, info, trace};
+use praxis_utils::{debug, error, eyre, info, trace, Result};
 
 /// The main ECS world container.
 ///
@@ -466,9 +466,7 @@ impl World {
     ///     println!("Entity at ({}, {})", position.x, position.y);
     /// }
     /// ```
-    pub fn query<D: bevy_ecs::query::QueryData>(
-        &mut self,
-    ) -> QueryState<D, ()> {
+    pub fn query<D: bevy_ecs::query::QueryData>(&mut self) -> QueryState<D, ()> {
         self.inner.query::<D>()
     }
 

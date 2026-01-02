@@ -372,7 +372,7 @@ pub use bevy_ecs::{
 // Import Query from prelude
 pub use bevy_ecs::prelude::Query;
 
-use praxis_utils::{Result, debug, info};
+use praxis_utils::{debug, info, Result};
 
 /// Initializes the ECS system.
 ///

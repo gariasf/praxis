@@ -167,26 +167,26 @@ mod vertex;
 
 use crate::{device::VulkanDevice, pipeline::create_simple_pipeline_3d, vertex::Vertex3D};
 use praxis_math::Mat4;
-use praxis_utils::{Result, debug, error, eyre, info, timing::FrameTimer, trace, warn};
+use praxis_utils::{debug, error, eyre, info, timing::FrameTimer, trace, warn, Result};
 use vulkano::command_buffer::allocator::CommandBufferAllocator;
-use vulkano::descriptor_set::DescriptorSet;
 use vulkano::descriptor_set::allocator::DescriptorSetAllocator;
+use vulkano::descriptor_set::DescriptorSet;
 
 use std::sync::Arc;
-use vulkano::descriptor_set::{WriteDescriptorSet, allocator::StandardDescriptorSetAllocator};
+use vulkano::descriptor_set::{allocator::StandardDescriptorSetAllocator, WriteDescriptorSet};
 use vulkano::pipeline::Pipeline;
 use vulkano::pipeline::PipelineBindPoint;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
-        AutoCommandBufferBuilder, CommandBufferUsage, RenderPassBeginInfo, SubpassBeginInfo,
-        SubpassEndInfo, allocator::StandardCommandBufferAllocator,
+        allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage,
+        RenderPassBeginInfo, SubpassBeginInfo, SubpassEndInfo,
     },
-    device::{Device, Queue, physical::PhysicalDevice},
-    image::{Image, ImageUsage, view::ImageView},
+    device::{physical::PhysicalDevice, Device, Queue},
+    image::{view::ImageView, Image, ImageUsage},
     instance::Instance,
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
-    pipeline::{GraphicsPipeline, graphics::viewport::Viewport},
+    pipeline::{graphics::viewport::Viewport, GraphicsPipeline},
     render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass},
     swapchain::{Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo},
     sync::{self, GpuFuture},
@@ -676,7 +676,7 @@ impl RenderContext {
         // constants.  For now we allocate one tiny UBO + descriptor set for
         // every model matrix each frame.  It's simple, avoids any
         // CPU-GPU hazards and is fast enough for a handful of objects.
-        
+
         // Get default white texture for rendering
         let default_texture = self
             .texture_manager
@@ -1349,7 +1349,10 @@ impl RenderContext {
 
         trace!(
             "Creating swapchain: {}x{} with {} images, format: {:?}",
-            window_size.width, window_size.height, image_count, image_format
+            window_size.width,
+            window_size.height,
+            image_count,
+            image_format
         );
         let (swapchain, images) = Swapchain::new(
             device.clone(),

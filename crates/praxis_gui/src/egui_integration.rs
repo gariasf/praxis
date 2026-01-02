@@ -51,9 +51,7 @@ impl EguiIntegration {
 
     /// Handles window events for egui.
     pub fn handle_event(&mut self, window: &winit::window::Window, event: &WindowEvent) -> bool {
-        self.egui_winit
-            .on_window_event(window, event)
-            .consumed
+        self.egui_winit.on_window_event(window, event).consumed
     }
 
     /// Begins a new egui frame.
@@ -68,7 +66,7 @@ impl EguiIntegration {
         window: &winit::window::Window,
     ) -> (egui::FullOutput, Vec<egui::ClippedPrimitive>) {
         let full_output = self.egui_ctx.end_pass();
-        
+
         self.egui_winit
             .handle_platform_output(window, full_output.platform_output.clone());
 

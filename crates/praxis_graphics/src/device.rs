@@ -4,16 +4,16 @@
 //! and queue creation. It provides a simplified interface for setting up the
 //! Vulkan backend while handling the complexity of device enumeration and selection.
 
-use praxis_utils::{Result, debug, error, eyre, info, trace};
+use praxis_utils::{debug, error, eyre, info, trace, Result};
 use std::sync::Arc;
 use vulkano::{
-    VulkanLibrary,
     device::{
-        Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags,
         physical::{PhysicalDevice, PhysicalDeviceType},
+        Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags,
     },
     instance::{Instance, InstanceCreateInfo},
     swapchain::Surface,
+    VulkanLibrary,
 };
 use winit::window::Window;
 

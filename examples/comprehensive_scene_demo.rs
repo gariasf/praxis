@@ -21,13 +21,11 @@
 //! ```
 
 use praxis_assets::load_obj_mesh;
-use praxis_ecs::{
-    PerspectiveCameraBundle, Transform, World,
-};
+use praxis_ecs::{PerspectiveCameraBundle, Transform, World};
 use praxis_graphics::{DrawCommandWithTexture, RenderContext, TexturedRenderCommands};
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::{Quat, Vec3};
-use praxis_utils::{Result, info};
+use praxis_utils::{info, Result};
 use std::sync::Arc;
 use std::time::Instant;
 use winit::application::ApplicationHandler;
@@ -97,7 +95,7 @@ impl Default for App {
         input_map.bind_key(&Action::new("up"), KeyCode::Space);
         input_map.bind_key(&Action::new("down"), KeyCode::ControlLeft);
         input_map.bind_key(&Action::new("sprint"), KeyCode::ShiftLeft);
-        
+
         Self {
             window: None,
             world: None,
@@ -112,13 +110,15 @@ impl Default for App {
 }
 
 impl App {
-    async fn setup_scene(window: Arc<Window>) -> Result<(World, RenderContext, praxis_ecs::Entity)> {
+    async fn setup_scene(
+        window: Arc<Window>,
+    ) -> Result<(World, RenderContext, praxis_ecs::Entity)> {
         info!("Setting up comprehensive scene demo");
 
         let mut render_context = RenderContext::new(window.clone()).await?;
 
         info!("Loading assets...");
-        
+
         Self::load_assets(&mut render_context)?;
 
         let mut world = World::new();
@@ -137,7 +137,7 @@ impl App {
 
     fn load_assets(render_context: &mut RenderContext) -> Result<()> {
         info!("Loading meshes from disk...");
-        
+
         match load_obj_mesh(
             render_context.mesh_manager_mut(),
             "cube_obj",
@@ -152,16 +152,18 @@ impl App {
             }
         }
 
-        render_context
-            .mesh_manager_mut()
-            .load_mesh("floor_quad", praxis_graphics::textured_quad_mesh(10.0, [1.0, 1.0, 1.0]))?;
-        
-        render_context
-            .mesh_manager_mut()
-            .load_mesh("textured_cube", praxis_graphics::textured_cube_mesh([1.0, 1.0, 1.0]))?;
+        render_context.mesh_manager_mut().load_mesh(
+            "floor_quad",
+            praxis_graphics::textured_quad_mesh(10.0, [1.0, 1.0, 1.0]),
+        )?;
+
+        render_context.mesh_manager_mut().load_mesh(
+            "textured_cube",
+            praxis_graphics::textured_cube_mesh([1.0, 1.0, 1.0]),
+        )?;
 
         info!("Creating procedural textures...");
-        
+
         Self::create_procedural_texture(
             render_context.texture_manager_mut(),
             "checker",
@@ -189,10 +191,10 @@ impl App {
                 let row = y / brick_height;
                 let offset = if row % 2 == 0 { 0 } else { brick_width / 2 };
                 let col = (x + offset) / brick_width;
-                
+
                 let is_mortar_h = y % brick_height < 2;
                 let is_mortar_v = (x + offset) % brick_width < 2;
-                
+
                 if is_mortar_h || is_mortar_v {
                     [180, 180, 180, 255]
                 } else {
@@ -330,8 +332,11 @@ impl App {
 
         // Get camera matrices
         let camera_entity = self.camera_controller.camera_entity.unwrap();
-        let matrices_copy = *world.inner().get::<praxis_ecs::CameraMatrices>(camera_entity).unwrap();
-        
+        let matrices_copy = *world
+            .inner()
+            .get::<praxis_ecs::CameraMatrices>(camera_entity)
+            .unwrap();
+
         let mut draw_commands = Vec::new();
 
         // Query all renderable entities
@@ -392,7 +397,7 @@ impl ApplicationHandler for App {
                     return;
                 }
             };
-        
+
         self.camera_controller.camera_entity = Some(camera_entity);
 
         println!("\n=== Praxis Comprehensive Scene Demo ===");
@@ -456,7 +461,7 @@ impl ApplicationHandler for App {
 
                 {
                     self.input_state.update();
-                    
+
                     if let Some(camera_entity) = self.camera_controller.camera_entity {
                         Self::update_camera(
                             camera_entity,
@@ -471,15 +476,20 @@ impl ApplicationHandler for App {
                     if let Some(camera_entity) = self.camera_controller.camera_entity {
                         let inner = world.inner_mut();
                         if let Some(transform) = inner.get::<Transform>(camera_entity) {
-                            if let Some(projection) = inner.get::<praxis_ecs::PerspectiveProjection>(camera_entity) {
+                            if let Some(projection) =
+                                inner.get::<praxis_ecs::PerspectiveProjection>(camera_entity)
+                            {
                                 let view = praxis_math::Mat4::look_at_rh(
                                     transform.translation,
-                                    transform.translation + (transform.rotation * praxis_math::Vec3::NEG_Z),
+                                    transform.translation
+                                        + (transform.rotation * praxis_math::Vec3::NEG_Z),
                                     praxis_math::Vec3::Y,
                                 );
                                 let proj_matrix = projection.compute_matrix();
-                                
-                                if let Some(mut matrices) = inner.get_mut::<praxis_ecs::CameraMatrices>(camera_entity) {
+
+                                if let Some(mut matrices) =
+                                    inner.get_mut::<praxis_ecs::CameraMatrices>(camera_entity)
+                                {
                                     matrices.update(view, proj_matrix);
                                 }
                             }
@@ -513,7 +523,10 @@ impl ApplicationHandler for App {
                 }
             }
             _ => {
-                praxis_input::winit_integration::process_window_event(&mut self.input_state, &event);
+                praxis_input::winit_integration::process_window_event(
+                    &mut self.input_state,
+                    &event,
+                );
             }
         }
 
@@ -533,7 +546,8 @@ impl ApplicationHandler for App {
         }
 
         if let DeviceEvent::MouseMotion { delta } = event {
-            self.camera_controller.update_rotation(delta.0 as f32, delta.1 as f32);
+            self.camera_controller
+                .update_rotation(delta.0 as f32, delta.1 as f32);
         }
     }
 }

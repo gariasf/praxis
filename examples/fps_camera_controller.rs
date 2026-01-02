@@ -10,8 +10,8 @@
 
 use bevy_ecs::system::Resource;
 use praxis_ecs::{
-    Camera, CameraMatrices, PerspectiveCameraBundle, PerspectiveProjection, Query, Schedule,
-    Transform, World, camera,
+    camera, Camera, CameraMatrices, PerspectiveCameraBundle, PerspectiveProjection, Query,
+    Schedule, Transform, World,
 };
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::{Quat, Vec3};

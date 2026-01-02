@@ -7,11 +7,11 @@
 //! - Finding entities by name
 //! - Unloading scenes
 
-use praxis_ecs::{Query, World, Name, Transform};
+use praxis_ecs::{Name, Query, Transform, World};
 use praxis_scene::{
-    SceneLoader, SceneManager, SceneDefinition, EntityDefinition, TransformDef,
-    CameraDef, CameraType, DirectionalLightDef, PointLightDef,
-    find_entity_by_name, get_all_children, get_entity_depth, SceneGraphIterator, TraversalOrder,
+    find_entity_by_name, get_all_children, get_entity_depth, CameraDef, CameraType,
+    DirectionalLightDef, EntityDefinition, PointLightDef, SceneDefinition, SceneGraphIterator,
+    SceneLoader, SceneManager, TransformDef, TraversalOrder,
 };
 
 fn main() -> praxis_utils::Result<()> {
@@ -53,7 +53,7 @@ fn main() -> praxis_utils::Result<()> {
         println!("Found 'SimplePlayer' entity: {:?}", player);
         let depth = get_entity_depth(&world, player);
         println!("Entity depth: {}", depth);
-        
+
         let children = get_all_children(&world, player);
         println!("Number of descendants: {}", children.len());
     }
@@ -64,17 +64,17 @@ fn main() -> praxis_utils::Result<()> {
     if let Some(entities) = scene_manager.get_scene_entities(&handle1) {
         if let Some(&root) = entities.first() {
             println!("Traversing from root entity: {:?}", root);
-            for (i, entity) in SceneGraphIterator::new(&world, root, TraversalOrder::DepthFirst)
-                .enumerate()
+            for (i, entity) in
+                SceneGraphIterator::new(&world, root, TraversalOrder::DepthFirst).enumerate()
             {
                 let depth = get_entity_depth(&world, entity);
                 let indent = "  ".repeat(depth);
-                
+
                 let name = world
                     .get::<Name>(entity)
                     .map(|n| n.as_str())
                     .unwrap_or("<unnamed>");
-                    
+
                 println!("{}{}: {:?} - {}", indent, i, entity, name);
             }
         }
@@ -84,21 +84,24 @@ fn main() -> praxis_utils::Result<()> {
     // Demo 5: Load scene from RON file
     println!("--- Demo 5: Loading Scene from RON File ---");
     let loader = SceneLoader::new();
-    
+
     match loader.load_from_file("assets/scenes/example_scene.ron") {
         Ok(scene_def) => {
             println!("Loaded scene: {}", scene_def.name);
             println!("Root entities: {}", scene_def.entity_count());
             println!("Total entities: {}", scene_def.total_entity_count());
-            
+
             if let Some(ref description) = scene_def.metadata.description {
                 println!("Description: {}", description);
             }
-            
+
             let handle2 = scene_manager.spawn_scene(&mut world, scene_def)?;
             println!("Spawned scene with handle: {}", handle2.id());
-            println!("Total loaded scenes: {}\n", scene_manager.loaded_scene_count());
-            
+            println!(
+                "Total loaded scenes: {}\n",
+                scene_manager.loaded_scene_count()
+            );
+
             // Query all entities
             println!("All entities in world:");
             let mut query = world.query::<&Name>();
@@ -116,8 +119,11 @@ fn main() -> praxis_utils::Result<()> {
     // Demo 6: Create and save a scene
     println!("--- Demo 6: Creating and Saving Scene ---");
     let scene_to_save = create_complex_scene();
-    println!("Created scene with {} entities", scene_to_save.total_entity_count());
-    
+    println!(
+        "Created scene with {} entities",
+        scene_to_save.total_entity_count()
+    );
+
     let ron_string = loader.save_to_string(&scene_to_save)?;
     println!("Scene serialized to RON ({} bytes)", ron_string.len());
     println!("First 200 characters:");
@@ -125,9 +131,15 @@ fn main() -> praxis_utils::Result<()> {
 
     // Demo 7: Unload scenes
     println!("--- Demo 7: Unloading Scenes ---");
-    println!("Loaded scenes before unload: {}", scene_manager.loaded_scene_count());
+    println!(
+        "Loaded scenes before unload: {}",
+        scene_manager.loaded_scene_count()
+    );
     scene_manager.unload_all(&mut world);
-    println!("Loaded scenes after unload: {}", scene_manager.loaded_scene_count());
+    println!(
+        "Loaded scenes after unload: {}",
+        scene_manager.loaded_scene_count()
+    );
 
     println!("\n=== Demo Complete ===");
     Ok(())
@@ -135,7 +147,7 @@ fn main() -> praxis_utils::Result<()> {
 
 fn create_simple_scene() -> SceneDefinition {
     let mut scene = SceneDefinition::new("Simple Scene");
-    
+
     // Add a parent entity
     let parent = EntityDefinition::new()
         .with_name("SimplePlayer")
@@ -145,11 +157,11 @@ fn create_simple_scene() -> SceneDefinition {
             EntityDefinition::new()
                 .with_name("SimpleWeapon")
                 .with_transform(TransformDef::from_translation(1.0, 0.0, 0.0))
-                .with_mesh("sword")
+                .with_mesh("sword"),
         );
-    
+
     scene.add_entity(parent);
-    
+
     // Add a camera
     let mut camera_entity = EntityDefinition::new();
     camera_entity.name = Some("SimpleCamera".to_string());
@@ -158,21 +170,21 @@ fn create_simple_scene() -> SceneDefinition {
         70.0_f32.to_radians(),
         16.0 / 9.0,
         0.1,
-        1000.0
+        1000.0,
     ));
     scene.add_entity(camera_entity);
-    
+
     scene
 }
 
 fn create_complex_scene() -> SceneDefinition {
     let mut scene = SceneDefinition::new("Complex Demo Scene");
-    
+
     scene.metadata.description = Some("A complex scene with multiple entity types".to_string());
     scene.metadata.author = Some("Scene Demo".to_string());
     scene.metadata.version = Some("1.0.0".to_string());
     scene.metadata.tags = vec!["demo".to_string(), "complex".to_string()];
-    
+
     // Camera
     let mut camera = EntityDefinition::new();
     camera.name = Some("MainCamera".to_string());
@@ -181,20 +193,20 @@ fn create_complex_scene() -> SceneDefinition {
         70.0_f32.to_radians(),
         16.0 / 9.0,
         0.1,
-        1000.0
+        1000.0,
     ));
     scene.add_entity(camera);
-    
+
     // Directional light (Sun)
     let mut sun = EntityDefinition::new();
     sun.name = Some("Sun".to_string());
     sun.directional_light = Some(DirectionalLightDef::new(
         (0.5, -1.0, 0.3),
         (1.0, 0.95, 0.8),
-        1.0
+        1.0,
     ));
     scene.add_entity(sun);
-    
+
     // Player with child point light
     let player = EntityDefinition::new()
         .with_name("Player")
@@ -203,19 +215,15 @@ fn create_complex_scene() -> SceneDefinition {
         .with_child(
             EntityDefinition::new()
                 .with_name("PlayerLight")
-                .with_transform(TransformDef::from_translation(0.0, 0.5, 0.0))
+                .with_transform(TransformDef::from_translation(0.0, 0.5, 0.0)),
         );
-    
+
     let mut player_final = player;
     if let Some(light_child) = player_final.children.first_mut() {
-        light_child.point_light = Some(PointLightDef::new(
-            (1.0, 0.8, 0.6),
-            5.0,
-            10.0
-        ));
+        light_child.point_light = Some(PointLightDef::new((1.0, 0.8, 0.6), 5.0, 10.0));
     }
     scene.add_entity(player_final);
-    
+
     // Environment
     let ground = EntityDefinition::new()
         .with_name("Ground")
@@ -226,6 +234,6 @@ fn create_complex_scene() -> SceneDefinition {
         })
         .with_mesh("cube");
     scene.add_entity(ground);
-    
+
     scene
 }

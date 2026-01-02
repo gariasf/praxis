@@ -5,7 +5,7 @@
 //! different file formats.
 
 use praxis_graphics::MeshData;
-use praxis_utils::{Result, eyre, info, debug};
+use praxis_utils::{debug, eyre, info, Result};
 use std::path::Path;
 
 /// Generic trait for loading assets from files.
@@ -153,7 +153,10 @@ impl AssetLoader<MeshData> for MeshLoader {
         .map_err(|e| eyre::eyre!("Failed to load OBJ file '{}': {}", path.display(), e))?;
 
         if models.is_empty() {
-            return Err(eyre::eyre!("OBJ file '{}' contains no models", path.display()));
+            return Err(eyre::eyre!(
+                "OBJ file '{}' contains no models",
+                path.display()
+            ));
         }
 
         // For now, we only load the first model

@@ -12,7 +12,7 @@ use praxis_ecs::{
 use praxis_graphics::{RenderCommands, RenderContext};
 use praxis_math::{Mat4, Quat, Vec3};
 use praxis_utils::timing::FrameTimer;
-use praxis_utils::{Result, debug, error, info, trace, warn};
+use praxis_utils::{debug, error, info, trace, warn, Result};
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,

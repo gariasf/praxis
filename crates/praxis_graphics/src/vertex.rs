@@ -156,17 +156,17 @@ pub struct Vertex3D {
     /// 3D position in model/world space.
     #[format(R32G32B32_SFLOAT)]
     pub position: [f32; 3],
-    
+
     /// Normal vector for lighting calculations (should be normalized).
     #[format(R32G32B32_SFLOAT)]
     pub normal: [f32; 3],
-    
+
     /// RGB color values [0.0, 1.0].
     ///
     /// This color is multiplied with the texture sample in the fragment shader.
     #[format(R32G32B32_SFLOAT)]
     pub color: [f32; 3],
-    
+
     /// UV texture coordinates [0.0, 1.0].
     ///
     /// These coordinates determine which part of the texture is sampled

@@ -15,16 +15,16 @@ use crate::texture::Texture;
 pub struct MaterialProperties {
     /// Base color tint (RGBA). Multiplied with the albedo texture.
     pub base_color: [f32; 4],
-    
+
     /// Metallic factor [0.0, 1.0]. Controls how metallic the surface appears.
     pub metallic: f32,
-    
+
     /// Roughness factor [0.0, 1.0]. Controls surface roughness (0 = smooth, 1 = rough).
     pub roughness: f32,
-    
+
     /// Emissive strength. Controls how much the material glows.
     pub emissive_strength: f32,
-    
+
     /// Padding for alignment.
     _padding: f32,
 }

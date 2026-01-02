@@ -46,7 +46,8 @@ pub struct SceneManager {
 
 impl SceneManager {
     /// Creates a new scene manager.
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             scenes: HashMap::new(),
         }
@@ -269,17 +270,20 @@ impl SceneManager {
     }
 
     /// Checks if a scene is currently loaded.
-    #[must_use] pub fn is_scene_loaded(&self, handle: &SceneHandle) -> bool {
+    #[must_use]
+    pub fn is_scene_loaded(&self, handle: &SceneHandle) -> bool {
         self.scenes.contains_key(handle)
     }
 
     /// Gets the number of currently loaded scenes.
-    #[must_use] pub fn loaded_scene_count(&self) -> usize {
+    #[must_use]
+    pub fn loaded_scene_count(&self) -> usize {
         self.scenes.len()
     }
 
     /// Gets the root entities for a loaded scene.
-    #[must_use] pub fn get_scene_entities(&self, handle: &SceneHandle) -> Option<&[Entity]> {
+    #[must_use]
+    pub fn get_scene_entities(&self, handle: &SceneHandle) -> Option<&[Entity]> {
         self.scenes.get(handle).map(std::vec::Vec::as_slice)
     }
 

@@ -130,15 +130,15 @@ impl TransformGizmos {
                 ui.label("Gizmo List:");
 
                 let mut to_remove = Vec::new();
-                
+
                 for (idx, gizmo) in self.gizmos.iter_mut().enumerate() {
                     ui.horizontal(|ui| {
                         ui.label(format!("Entity {:?}", gizmo.entity));
-                        
+
                         if ui.small_button("Remove").clicked() {
                             to_remove.push(idx);
                         }
-                        
+
                         let mode_str = match gizmo.mode {
                             GizmoMode::Translate => "T",
                             GizmoMode::Rotate => "R",

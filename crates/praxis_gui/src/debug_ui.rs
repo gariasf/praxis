@@ -109,12 +109,7 @@ impl DebugUi {
                     let secs = total_time().as_secs();
                     let mins = secs / 60;
                     let hours = mins / 60;
-                    ui.label(format!(
-                        "{:02}:{:02}:{:02}",
-                        hours,
-                        mins % 60,
-                        secs % 60
-                    ));
+                    ui.label(format!("{:02}:{:02}:{:02}", hours, mins % 60, secs % 60));
                 });
             });
     }

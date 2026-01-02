@@ -4,20 +4,22 @@
 //! (PNG, JPEG) and managing them on the GPU. Textures are wrapped in Vulkan image
 //! objects with associated samplers for texture filtering.
 
-use praxis_utils::{Result, debug, eyre, info, trace};
+use praxis_utils::{debug, eyre, info, trace, Result};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage},
     command_buffer::{
-        AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo,
-        allocator::CommandBufferAllocator,
+        allocator::CommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage,
+        CopyBufferToImageInfo,
     },
     device::Queue,
     format::Format,
     image::{
-        Image, ImageCreateInfo, ImageType, ImageUsage, sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo}, view::ImageView,
+        sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo},
+        view::ImageView,
+        Image, ImageCreateInfo, ImageType, ImageUsage,
     },
     memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
     sync::{self, GpuFuture},
@@ -124,10 +126,7 @@ impl Texture {
         .map_err(|e| eyre::eyre!("Failed to create command buffer: {}", e))?;
 
         builder
-            .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(
-                buffer,
-                image.clone(),
-            ))
+            .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(buffer, image.clone()))
             .map_err(|e| eyre::eyre!("Failed to copy buffer to image: {}", e))?;
 
         let command_buffer = builder
@@ -215,7 +214,14 @@ impl Texture {
             height
         );
 
-        Self::from_rgba8(allocator, command_buffer_allocator, queue, width, height, data)
+        Self::from_rgba8(
+            allocator,
+            command_buffer_allocator,
+            queue,
+            width,
+            height,
+            data,
+        )
     }
 
     /// Creates a 1x1 white texture.
@@ -333,7 +339,10 @@ impl TextureManager {
     ) -> Result<()> {
         let name = name.into();
 
-        debug!("Creating texture '{}' from bytes ({}x{})", name, width, height);
+        debug!(
+            "Creating texture '{}' from bytes ({}x{})",
+            name, width, height
+        );
 
         let texture = Texture::from_rgba8(
             self.allocator.clone(),

@@ -5,7 +5,7 @@
 //! external sources.
 
 use crate::vertex::Vertex3D;
-use praxis_utils::{Result, debug, eyre, trace};
+use praxis_utils::{debug, eyre, trace, Result};
 use std::collections::HashMap;
 use std::sync::Arc;
 use vulkano::{
@@ -203,7 +203,12 @@ impl MeshData {
                     .copied()
                     .unwrap_or(default_uv);
 
-                Vertex3D { position, normal, color, uv }
+                Vertex3D {
+                    position,
+                    normal,
+                    color,
+                    uv,
+                }
             })
             .collect()
     }

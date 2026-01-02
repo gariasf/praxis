@@ -16,7 +16,7 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use praxis_utils::{Result, debug, error, eyre, info, trace, warn};
+use praxis_utils::{debug, error, eyre, info, trace, warn, Result};
 
 /// Represents the application's state, including graphics context and window size.
 struct State {
@@ -184,7 +184,8 @@ impl ApplicationHandler for App {
                         } else {
                             trace!(
                                 "Ignoring resize to zero dimensions or same size: {}x{}",
-                                pending_size.width, pending_size.height
+                                pending_size.width,
+                                pending_size.height
                             );
                         }
                         state.pending_resize = None;

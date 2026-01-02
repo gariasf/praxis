@@ -147,11 +147,12 @@ impl EntityInspector {
                     });
 
                     ui.label("Rotation (Euler):");
-                    let (mut x, mut y, mut z) = transform.rotation.to_euler(praxis_math::EulerRot::XYZ);
+                    let (mut x, mut y, mut z) =
+                        transform.rotation.to_euler(praxis_math::EulerRot::XYZ);
                     x = x.to_degrees();
                     y = y.to_degrees();
                     z = z.to_degrees();
-                    
+
                     let mut changed = false;
                     ui.horizontal(|ui| {
                         ui.label("X:");

@@ -9,8 +9,8 @@ pub mod timing;
 
 // Re-export common utility items for convenience
 pub use color_eyre::{
-    Report, Result,
     eyre::{self, Error},
+    Report, Result,
 };
 
 // Re-export tracing macros for direct use from other crates
