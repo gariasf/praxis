@@ -71,15 +71,19 @@
 //! // Child's global position will be (15, 0, 0)
 //! ```
 //!
-//! # Mesh Components
+//! # Mesh and Material Components
 //!
-//! The ECS provides two mesh-related components for rendering 3D geometry:
+//! The ECS provides components for rendering 3D geometry with materials:
 //!
 //! - **`Mesh`**: Stores mesh data directly on the entity. Useful for procedural
 //!   or dynamic meshes that are unique to an entity.
 //!
 //! - **`MeshHandle`**: References a mesh by ID from the graphics system's asset
 //!   manager. This is the preferred approach for shared static meshes.
+//!
+//! - **`MaterialHandle`**: References a material by ID from the graphics system's
+//!   material manager. Materials define surface appearance including textures and
+//!   physical properties.
 //!
 //! ## Mesh Example
 //!
@@ -112,6 +116,21 @@
 //! world.spawn((
 //!     Transform::from_xyz(0.0, 0.0, 0.0),
 //!     MeshHandle::new("cube"),
+//! ));
+//! ```
+//!
+//! ## MaterialHandle Example
+//!
+//! ```rust,no_run
+//! use praxis_ecs::{World, MeshHandle, MaterialHandle, Transform};
+//!
+//! let mut world = World::new();
+//!
+//! // Spawn an entity with both mesh and material
+//! world.spawn((
+//!     Transform::from_xyz(0.0, 0.0, 0.0),
+//!     MeshHandle::new("cube"),
+//!     MaterialHandle::new("brick"),
 //! ));
 //! ```
 //!

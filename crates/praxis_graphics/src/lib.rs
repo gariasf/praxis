@@ -12,7 +12,7 @@
 //! - `mesh`: Mesh data structures and asset management
 //! - `primitives`: Built-in primitive mesh generators
 //! - `texture`: Texture loading and management
-//! - `material`: Material system with texture support
+//! - `material`: Material system with texture support and descriptor set management
 //! - `lighting`: Lighting uniforms and buffer management
 //!
 //! # Mesh System
@@ -66,6 +66,26 @@
 //! - **`TextureManager`**: Central manager for cached textures
 //! - **Format Support**: PNG and JPEG via the `image` crate
 //! - **Texture Sampling**: Full support in shaders via UV coordinates
+//!
+//! # Material System
+//!
+//! The material system defines surface appearance with efficient descriptor set management:
+//!
+//! - **`Material`**: Surface properties with texture bindings and descriptor sets
+//! - **`MaterialManager`**: Central manager for cached materials with shared descriptor set allocator
+//! - **`MaterialProperties`**: PBR-style properties (metallic, roughness, emissive)
+//! - **Descriptor Set Management**: Per-material descriptor sets for efficient rendering
+//!
+//! ## Key Benefits
+//!
+//! Materials manage their own descriptor sets, providing major performance benefits:
+//!
+//! - **Reduced Allocations**: 100 objects sharing 1 material = 1 descriptor set (not 100)
+//! - **Fewer GPU Binds**: Bind once per material, not once per object
+//! - **Memory Efficient**: Descriptor sets are pooled and reused automatically
+//!
+//! See the `material` module documentation for detailed explanations of descriptor set
+//! lifecycle and efficiency gains.
 //!
 //! ## Texture Sampling Architecture
 //!
@@ -380,6 +400,9 @@ pub struct RenderContext {
     /// Texture asset manager for loading and managing textures.
     texture_manager: texture::TextureManager,
 
+    /// Material asset manager for loading and managing materials.
+    material_manager: material::MaterialManager,
+
     /// Lighting uniform buffer for passing lighting data to shaders.
     lighting_buffer: lighting::LightingUniformBuffer,
 }
@@ -541,6 +564,10 @@ impl RenderContext {
             .create_default_white_texture()
             .map_err(|e| eyre::eyre!("Failed to create default white texture: {}", e))?;
 
+        // Initialize material manager
+        debug!("Creating material manager");
+        let material_manager = material::MaterialManager::new();
+
         // Create lighting uniform buffer
         debug!("Creating lighting uniform buffer");
         let lighting_buffer = lighting::LightingUniformBuffer::new(memory_allocator.clone())?;
@@ -585,6 +612,9 @@ impl RenderContext {
             // Texture management
             texture_manager,
 
+            // Material management
+            material_manager,
+
             // Lighting management
             lighting_buffer,
         })
@@ -616,6 +646,20 @@ impl RenderContext {
     /// Use this to load or modify texture assets.
     pub fn texture_manager_mut(&mut self) -> &mut texture::TextureManager {
         &mut self.texture_manager
+    }
+
+    /// Gets a reference to the material asset manager.
+    ///
+    /// Use this to access or query material assets.
+    pub fn material_manager(&self) -> &material::MaterialManager {
+        &self.material_manager
+    }
+
+    /// Gets a mutable reference to the material asset manager.
+    ///
+    /// Use this to load or modify material assets.
+    pub fn material_manager_mut(&mut self) -> &mut material::MaterialManager {
+        &mut self.material_manager
     }
 
     /// Gets a reference to the lighting uniform buffer.
@@ -1646,7 +1690,7 @@ pub use lighting::{
     DirectionalLightData, LightingUniformBuffer, LightingUniforms, PointLightData,
     MAX_DIRECTIONAL_LIGHTS, MAX_POINT_LIGHTS,
 };
-pub use material::{Material, MaterialProperties};
+pub use material::{Material, MaterialManager, MaterialProperties};
 pub use mesh::{GpuMesh, MeshData};
 pub use primitives::{
     colored_cube_mesh, pyramid_mesh, quad_mesh, solid_cube_mesh, textured_cube_mesh,

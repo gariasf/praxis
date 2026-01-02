@@ -535,6 +535,58 @@ impl From<String> for TextureHandle {
     }
 }
 
+/// Handle to a material asset stored in the graphics system.
+///
+/// This component references a material by its unique identifier. The actual
+/// material data (textures, properties, descriptor sets) is managed by the graphics system.
+///
+/// Materials define the visual appearance of surfaces, including textures, colors,
+/// and physical properties like metallic and roughness values.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, MaterialHandle, MeshHandle, Transform};
+///
+/// let mut world = World::new();
+///
+/// // Spawn an entity with a mesh and material
+/// world.spawn((
+///     Transform::from_xyz(0.0, 0.0, 0.0),
+///     MeshHandle::new("cube"),
+///     MaterialHandle::new("brick"),
+/// ));
+/// ```
+#[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MaterialHandle {
+    /// Unique identifier for the material.
+    pub id: String,
+}
+
+impl MaterialHandle {
+    /// Creates a new material handle with the given identifier.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self { id: id.into() }
+    }
+
+    /// Gets the material identifier.
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+}
+
+impl From<&str> for MaterialHandle {
+    fn from(id: &str) -> Self {
+        Self::new(id)
+    }
+}
+
+impl From<String> for MaterialHandle {
+    fn from(id: String) -> Self {
+        Self { id }
+    }
+}
+
 /// Mesh component containing vertex and index data.
 ///
 /// This component stores the actual geometry data for rendering.
@@ -1477,5 +1529,27 @@ mod tests {
         assert_eq!(light.color, Vec3::ONE);
         assert_eq!(light.intensity, 1.0);
         assert_eq!(light.range, 10.0);
+    }
+
+    #[test]
+    fn test_material_handle_creation() {
+        let handle = MaterialHandle::new("brick");
+        assert_eq!(handle.id(), "brick");
+
+        let handle2: MaterialHandle = "metal".into();
+        assert_eq!(handle2.id(), "metal");
+
+        let handle3: MaterialHandle = "wood".to_string().into();
+        assert_eq!(handle3.id(), "wood");
+    }
+
+    #[test]
+    fn test_material_handle_equality() {
+        let handle1 = MaterialHandle::new("brick");
+        let handle2 = MaterialHandle::new("brick");
+        let handle3 = MaterialHandle::new("metal");
+
+        assert_eq!(handle1, handle2);
+        assert_ne!(handle1, handle3);
     }
 }
