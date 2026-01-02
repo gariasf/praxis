@@ -56,24 +56,32 @@
 //      Location 3: vec2 uv       (8 bytes)  - texture coordinates
 //      Total: 44 bytes per vertex (may be padded to 48 for alignment)
 //
-// ## 2. Uniform Buffer (per-object data)
-//    - Source: `Uniforms` struct in Rust (lib.rs)
-//    - Contains: model, view, projection matrices, and camera position
-//    - Descriptor: Set 0, Binding 0
-//    - Upload: Every frame, per object drawn
-//    - Frequency: Updated each frame for dynamic objects, less often for static
-//    - Access: Same data for all vertices of an object
-//    - Memory: Host-visible buffer, 208 bytes (3 matrices + camera position + padding)
+// ## 2. Per-Frame Uniform Buffer (set 0, binding 0)
+//    - Source: `ViewProjectionUniforms` struct in Rust (uniform_buffer.rs)
+//    - Contains: view, projection matrices, and camera position
+//    - Frequency: Updated once per frame (shared across all objects)
+//    - Access: Same data for all vertices and objects in a frame
+//    - Memory: Host-visible buffer, 140 bytes
 //
-//    Memory layout (Uniforms):
-//      Offset 0:   mat4 model (64 bytes) - model-to-world transform
-//      Offset 64:  mat4 view  (64 bytes) - world-to-view transform  
-//      Offset 128: mat4 proj  (64 bytes) - view-to-clip transform
-//      Offset 192: vec3 camera_position (12 bytes) - camera position in world space
-//      Offset 204: float _padding (4 bytes) - std140 alignment padding
-//      Total: 208 bytes
+//    Memory layout (ViewProjectionUniforms):
+//      Offset 0:   mat4 view (64 bytes) - world-to-view transform
+//      Offset 64:  mat4 proj (64 bytes) - view-to-clip transform
+//      Offset 128: vec3 camera_position (12 bytes) - camera position in world space
+//      Offset 140: float _padding (4 bytes) - std140 alignment padding
+//      Total: 144 bytes
 //
-// ## 3. Output to Fragment Shader (interpolated per-fragment)
+// ## 3. Per-Object Uniform Buffer (set 0, binding 1)
+//    - Source: `ModelUniforms` struct in Rust (uniform_buffer.rs)
+//    - Contains: model matrix
+//    - Frequency: Updated per object per frame
+//    - Access: Same data for all vertices of a single object
+//    - Memory: Host-visible buffer, 64 bytes per object
+//
+//    Memory layout (ModelUniforms):
+//      Offset 0: mat4 model (64 bytes) - model-to-world transform
+//      Total: 64 bytes
+//
+// ## 4. Output to Fragment Shader (interpolated per-fragment)
 //    - World position: For lighting distance calculations
 //    - World normal: For lighting angle calculations
 //    - Vertex color: For color tinting
@@ -97,6 +105,9 @@
 // For non-uniform scaling (different scale on x,y,z), normals should use:
 //   transpose(inverse(mat3(model))) * normal
 // But for uniform scaling or rotation-only, mat3(model) is sufficient.
+//
+// The fragment shader will re-normalize this vector since interpolation
+// can change its length.
 //
 // # Coordinate Handedness
 //
@@ -127,30 +138,51 @@ layout(location = 2) out vec3 v_color;      // Fragment color (interpolated)
 layout(location = 3) out vec2 v_uv;         // Fragment UV coordinates (interpolated)
 
 // ============================================================================
-// Uniform Buffer (Transformation Matrices)
+// Per-Frame Uniform Buffer (View and Projection)
 // ============================================================================
-// This uniform buffer contains the matrices needed for coordinate transformations
+// This uniform buffer contains the camera matrices and position that are
+// constant for all objects in a single frame.
 //
 // Data Flow:
-//   1. CPU: Application computes matrices based on object position and camera
-//   2. CPU: Matrices packed into `Uniforms` struct (lib.rs)
-//   3. CPU: Written to host-visible uniform buffer
-//   4. GPU: Bound to descriptor set at binding 0
+//   1. CPU: Application computes view and projection matrices based on camera
+//   2. CPU: Matrices packed into `ViewProjectionUniforms` struct (uniform_buffer.rs)
+//   3. CPU: Written to host-visible uniform buffer once per frame
+//   4. GPU: Bound to descriptor set at set 0, binding 0
 //   5. GPU: Read by vertex shader for each vertex
 //
 // The std140 layout ensures consistent memory layout between CPU and GPU:
 // - mat4 is 64 bytes (16 floats * 4 bytes)
 // - Each column is 16-byte aligned (vec4)
 // - vec3 + float padding is 16 bytes
-// - Total buffer size: 208 bytes (3 * 64 + 16)
+// - Total buffer size: 144 bytes (2 * 64 + 16)
 
-layout(set = 0, binding = 0, std140) uniform Uniforms {
-    mat4 model;  // Model matrix: transforms model space → world space
-    mat4 view;   // View matrix: transforms world space → view/camera space  
+layout(set = 0, binding = 0, std140) uniform ViewProjection {
+    mat4 view;   // View matrix: transforms world space → view/camera space
     mat4 proj;   // Projection matrix: transforms view space → clip space
     vec3 camera_position;  // Camera position in world space
     float _padding;  // Padding for std140 alignment
-} ubo;  // UBO = Uniform Buffer Object
+} view_proj;
+
+// ============================================================================
+// Per-Object Uniform Buffer (Model Matrix)
+// ============================================================================
+// This uniform buffer contains the model matrix that is unique per object.
+//
+// Data Flow:
+//   1. CPU: Application computes model matrix based on object position/rotation/scale
+//   2. CPU: Matrix packed into `ModelUniforms` struct (uniform_buffer.rs)
+//   3. CPU: Written to host-visible uniform buffer per object
+//   4. GPU: Bound to descriptor set at set 0, binding 1
+//   5. GPU: Read by vertex shader for each vertex of that object
+//
+// The std140 layout ensures consistent memory layout between CPU and GPU:
+// - mat4 is 64 bytes (16 floats * 4 bytes)
+// - Each column is 16-byte aligned (vec4)
+// - Total buffer size: 64 bytes
+
+layout(set = 0, binding = 1, std140) uniform Model {
+    mat4 model;  // Model matrix: transforms model space → world space
+} model_ubo;
 
 // ============================================================================
 // Main Vertex Shader
@@ -169,7 +201,7 @@ void main() {
     // - w=0.0 would indicate a DIRECTION (not affected by translation)
     //
     // Matrix-vector multiplication: [4x4] * [4x1] = [4x1]
-    vec4 world_pos = ubo.model * vec4(position, 1.0);
+    vec4 world_pos = model_ubo.model * vec4(position, 1.0);
     
     // ========================================================================
     // Step 2: Transform position to clip space
@@ -186,7 +218,7 @@ void main() {
     //   - Clipping (discarding vertices outside view frustum)
     //   - Perspective division (dividing x,y,z by w)
     //   - Viewport transformation (NDC to screen coordinates)
-    gl_Position = ubo.proj * ubo.view * world_pos;
+    gl_Position = view_proj.proj * view_proj.view * world_pos;
     
     // ========================================================================
     // Step 3: Transform normal to world space
@@ -198,18 +230,18 @@ void main() {
     //   - Normals are directions (vectors), not positions
     //   - Directions aren't affected by translation (only by rotation/scale)
     //   - The 4th row/column of the matrix contains translation
-    //   - mat3(ubo.model) extracts just the rotation/scale portion
+    //   - mat3(model_ubo.model) extracts just the rotation/scale portion
     //
     // For non-uniform scaling (different scale on x,y,z axes), we should use:
-    //   v_normal = mat3(transpose(inverse(ubo.model))) * normal;
+    //   v_normal = mat3(transpose(inverse(model_ubo.model))) * normal;
     // This is the "normal matrix" that handles non-uniform scaling correctly.
     //
-    // However, for uniform scaling and rotations, mat3(ubo.model) works fine
+    // However, for uniform scaling and rotations, mat3(model_ubo.model) works fine
     // and is more efficient (no inverse/transpose calculation needed).
     //
     // The fragment shader will re-normalize this vector since interpolation
     // can change its length.
-    v_normal = mat3(ubo.model) * normal;
+    v_normal = mat3(model_ubo.model) * normal;
     
     // ========================================================================
     // Step 4: Pass world position to fragment shader

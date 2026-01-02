@@ -33,21 +33,28 @@
 // The rendering pipeline passes data from CPU (Rust) to GPU (GLSL) through
 // several mechanisms:
 //
-// ## 1. Uniform Buffers (Set 0, Binding 0)
-//    - Source: `Uniforms` struct in Rust (lib.rs)
-//    - Contains: model, view, projection matrices
-//    - Updated: Per-object, every frame
-//    - Purpose: Transform vertices from model space to clip space
-//    - Memory: Host-visible buffer, ~192 bytes per object
+// ## 1. View-Projection Uniform Buffer (Set 0, Binding 0)
+//    - Source: `ViewProjectionUniforms` struct in Rust (uniform_buffer.rs)
+//    - Contains: view, projection matrices, and camera position
+//    - Updated: Once per frame (shared across all objects)
+//    - Purpose: Camera matrices and position for lighting calculations
+//    - Memory: Host-visible buffer, 144 bytes
 //
-// ## 2. Texture Sampler (Set 0, Binding 1)
+// ## 2. Model Uniform Buffer (Set 0, Binding 1)
+//    - Source: `ModelUniforms` struct in Rust (uniform_buffer.rs)
+//    - Contains: model matrix
+//    - Updated: Per-object, every frame
+//    - Purpose: Transform vertices from model space to world space
+//    - Memory: Host-visible buffer, 64 bytes per object
+//
+// ## 3. Texture Sampler (Set 0, Binding 2)
 //    - Source: `TextureManager` in Rust
 //    - Contains: Texture image and sampler configuration
 //    - Updated: On texture load/change
 //    - Purpose: Sample albedo (base) color at each fragment
 //    - Memory: Device-local image, size varies by texture
 //
-// ## 3. Lighting Uniform Buffer (Set 0, Binding 2)
+// ## 4. Lighting Uniform Buffer (Set 0, Binding 3)
 //    - Source: `LightingUniforms` struct in Rust (lighting.rs)
 //    - Contains: Arrays of directional/point lights, counts, ambient color
 //    - Updated: Every frame when lighting changes
@@ -55,7 +62,7 @@
 //    - Memory: Host-visible buffer, 1184 bytes (fixed size)
 //    - Layout: std140 (specific alignment rules for compatibility)
 //
-// ## 4. Vertex Attributes (from vertex shader)
+// ## 5. Vertex Attributes (from vertex shader)
 //    - v_world_pos: Fragment position in world space
 //    - v_normal: Interpolated surface normal in world space
 //    - v_color: Interpolated vertex color
@@ -118,18 +125,24 @@ layout(location = 0) out vec4 f_color;     // Final pixel color (RGBA)
 // Uniform Bindings
 // ============================================================================
 
-// Transform and camera uniform buffer at binding 0
-// Contains model/view/projection matrices and camera position
-layout(set = 0, binding = 0, std140) uniform Uniforms {
-    mat4 model;
+// View and projection uniform buffer at binding 0
+// Contains view/projection matrices and camera position (shared per frame)
+layout(set = 0, binding = 0, std140) uniform ViewProjection {
     mat4 view;
     mat4 proj;
     vec3 camera_position;
-} uniforms;
+    float _padding;
+} view_proj;
 
-// Texture sampler at binding 1
+// Model matrix uniform buffer at binding 1
+// Contains model matrix (unique per object)
+layout(set = 0, binding = 1, std140) uniform Model {
+    mat4 model;
+} model_ubo;
+
+// Texture sampler at binding 2
 // Samples the albedo (base color) texture at the given UV coordinates
-layout(set = 0, binding = 1) uniform sampler2D albedo_texture;
+layout(set = 0, binding = 2) uniform sampler2D albedo_texture;
 
 // ============================================================================
 // Material Properties Uniform Buffer
@@ -293,7 +306,7 @@ struct PointLight {
     float _padding[2];  // Padding to align struct to 16-byte boundary
 };
 
-// Lighting uniform buffer at binding 2 (1184 bytes total)
+// Lighting uniform buffer at binding 3 (1184 bytes total)
 //
 // This buffer is uploaded from the CPU every frame with updated lighting data.
 // The buffer is host-visible (CPU-writable) and device-visible (GPU-readable).
@@ -312,7 +325,7 @@ struct PointLight {
 //   Offset 1172: uint point_light_count (4 bytes)
 //   Offset 1176: uint[2] _padding (8 bytes)
 //
-layout(set = 0, binding = 2, std140) uniform LightingData {
+layout(set = 0, binding = 3, std140) uniform LightingData {
     DirectionalLight directional_lights[8];   // Array of directional lights
     PointLight point_lights[16];               // Array of point lights
     vec4 ambient_color;                        // Global ambient light (rgb) + padding
@@ -445,7 +458,7 @@ void main() {
     
     // Calculate view direction (from fragment toward camera)
     // Used for specular calculations (highlights depend on view angle)
-    vec3 view_dir = normalize(uniforms.camera_position - v_world_pos);
+    vec3 view_dir = normalize(view_proj.camera_position - v_world_pos);
     
     // Convert roughness [0,1] to shininess [MAX, MIN]
     // Roughness 0.0 (smooth) → high shininess (tight highlights)

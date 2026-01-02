@@ -176,25 +176,6 @@ use vulkano::{
 };
 use winit::window::Window;
 
-/// Uniforms passed to the vertex shader (std140 layout).
-///
-/// We store matrices as column-major `[[f32; 4]; 4]` arrays because `glam::Mat4` does
-/// not implement `bytemuck::Pod`/`Zeroable`.  The GLSL std140 layout expects 16-byte
-/// alignment per column, which this representation satisfies.
-///
-/// This struct contains the transformation matrices needed by the vertex shader
-/// to transform vertices from model space to clip space, as well as the camera
-/// position in world space.
-#[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-struct Uniforms {
-    model: [[f32; 4]; 4],
-    view: [[f32; 4]; 4],
-    proj: [[f32; 4]; 4],
-    camera_position: [f32; 3],
-    _padding: f32,
-}
-
 /// A single draw command with mesh, transform, and optional texture/material.
 ///
 /// This is the unified draw command structure that supports all rendering features:
@@ -807,15 +788,15 @@ impl RenderContext {
                 view_inverse.col(3).z,
             ];
 
-            let uniforms = Uniforms {
-                model: draw_cmd.model.to_cols_array_2d(),
+            // Create per-frame view-projection uniform buffer
+            let view_proj_uniforms = uniform_buffer::ViewProjectionUniforms {
                 view: cmds.view.to_cols_array_2d(),
                 proj: cmds.proj.to_cols_array_2d(),
                 camera_position,
                 _padding: 0.0,
             };
 
-            let uniform_buffer = Buffer::from_data(
+            let view_proj_buffer = Buffer::from_data(
                 self.memory_allocator.clone(),
                 BufferCreateInfo {
                     usage: BufferUsage::UNIFORM_BUFFER,
@@ -826,21 +807,42 @@ impl RenderContext {
                         | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                     ..Default::default()
                 },
-                uniforms,
+                view_proj_uniforms,
             )
-            .map_err(|e| eyre::eyre!("Failed to create uniform buffer: {}", e))?;
+            .map_err(|e| eyre::eyre!("Failed to create view-projection uniform buffer: {}", e))?;
+
+            // Create per-object model uniform buffer
+            let model_uniforms = uniform_buffer::ModelUniforms {
+                model: draw_cmd.model.to_cols_array_2d(),
+            };
+
+            let model_buffer = Buffer::from_data(
+                self.memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::UNIFORM_BUFFER,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                model_uniforms,
+            )
+            .map_err(|e| eyre::eyre!("Failed to create model uniform buffer: {}", e))?;
 
             let transform_set = DescriptorSet::new(
                 self.descriptor_set_allocator.clone(),
                 self.descriptor_set_layout.clone(),
                 [
-                    WriteDescriptorSet::buffer(0, uniform_buffer.clone()),
+                    WriteDescriptorSet::buffer(0, view_proj_buffer.clone()),
+                    WriteDescriptorSet::buffer(1, model_buffer.clone()),
                     WriteDescriptorSet::image_view_sampler(
-                        1,
+                        2,
                         texture.view.clone(),
                         texture.sampler.clone(),
                     ),
-                    WriteDescriptorSet::buffer(2, self.lighting_buffer.buffer().clone()),
+                    WriteDescriptorSet::buffer(3, self.lighting_buffer.buffer().clone()),
                 ],
                 [],
             )
