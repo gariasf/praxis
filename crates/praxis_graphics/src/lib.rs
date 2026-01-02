@@ -329,6 +329,38 @@ pub struct TexturedRenderCommands<'a> {
     pub lighting: Option<&'a lighting::LightingUniforms>,
 }
 
+/// A draw command with mesh, transform, texture, and material properties.
+///
+/// This represents one object to be rendered with full material support,
+/// including PBR-style properties (metallic, roughness, emissive).
+#[derive(Debug, Clone)]
+pub struct DrawCommandWithMaterial {
+    /// Identifier of the mesh to draw.
+    pub mesh_id: String,
+    /// Model matrix for this object.
+    pub model: Mat4,
+    /// Optional texture name to use instead of the default.
+    pub texture_name: Option<String>,
+    /// Material properties (metallic, roughness, emissive, etc.).
+    pub material_properties: material::MaterialProperties,
+}
+
+/// Render commands with full material support.
+///
+/// This version allows each draw command to specify custom material properties,
+/// enabling PBR-style rendering with metallic, roughness, and emissive properties.
+pub struct MaterialRenderCommands<'a> {
+    /// Camera view matrix (world → view).
+    pub view: Mat4,
+    /// Camera projection matrix (view → clip).
+    pub proj: Mat4,
+    /// List of draw commands with mesh, texture, and material references.
+    pub draw_commands: &'a [DrawCommandWithMaterial],
+    /// Optional lighting data to upload this frame.
+    /// If None, uses the previously uploaded lighting data.
+    pub lighting: Option<&'a lighting::LightingUniforms>,
+}
+
 /// Core graphics context containing the Vulkan state.
 ///
 /// This struct manages the entire graphics rendering pipeline, from initialization
@@ -387,6 +419,7 @@ pub struct RenderContext {
     index_count: u32,
     memory_allocator: Arc<StandardMemoryAllocator>,
     descriptor_set_layout: Arc<vulkano::descriptor_set::layout::DescriptorSetLayout>,
+    material_descriptor_set_layout: Arc<vulkano::descriptor_set::layout::DescriptorSetLayout>,
     descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,
     viewport: Viewport,
     recreate_swapchain: bool,
@@ -533,6 +566,7 @@ impl RenderContext {
         ));
 
         let descriptor_set_layout = graphics_pipeline.layout().set_layouts()[0].clone();
+        let material_descriptor_set_layout = graphics_pipeline.layout().set_layouts()[1].clone();
 
         // Create viewport to normalize coordinates from vertex shader output to
         // framebuffer coordinates
@@ -598,6 +632,7 @@ impl RenderContext {
             index_count: indices.len() as u32,
             memory_allocator,
             descriptor_set_layout,
+            material_descriptor_set_layout,
             descriptor_set_allocator,
             viewport,
             recreate_swapchain: false,
@@ -776,6 +811,35 @@ impl RenderContext {
             .get_texture("_default_white")
             .ok_or_else(|| eyre::eyre!("Default white texture not found. Initialize it first."))?;
 
+        // Create default material properties for legacy render path
+        let default_material_props = material::MaterialProperties::default();
+        
+        // Create material properties buffer (shared for all objects in legacy path)
+        let material_buffer = Buffer::from_data(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            default_material_props,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create material properties buffer: {}", e))?;
+
+        // Create material descriptor set (set 1, binding 0)
+        // This is shared across all objects in the legacy render path
+        let material_descriptor_set = DescriptorSet::new(
+            self.descriptor_set_allocator.clone(),
+            self.material_descriptor_set_layout.clone(),
+            [WriteDescriptorSet::buffer(0, material_buffer.clone())],
+            [],
+        )
+        .map_err(|e| eyre::eyre!("Failed to create material descriptor set: {}", e))?;
+
         let mut per_object_sets = Vec::with_capacity(cmds.models.len());
         for model in cmds.models.iter() {
             let uniforms = Uniforms {
@@ -799,7 +863,7 @@ impl RenderContext {
             )
             .map_err(|e| eyre::eyre!("Failed to create uniform buffer: {}", e))?;
 
-            // Create descriptor set for this object
+            // Create descriptor set for this object (set 0)
             // This binds three resources that the shaders need:
             //   Binding 0: Uniforms (model/view/projection matrices)
             //   Binding 1: Texture sampler (default white texture)
@@ -883,6 +947,7 @@ impl RenderContext {
         for set in per_object_sets.iter() {
             unsafe {
                 command_buffer_builder
+                    // Bind set 0: transforms, texture, lighting
                     .bind_descriptor_sets(
                         PipelineBindPoint::Graphics,
                         self.graphics_pipeline.layout().clone(),
@@ -890,6 +955,14 @@ impl RenderContext {
                         set.clone(),
                     )
                     .map_err(|e| eyre::eyre!("Failed to bind per-object descriptor set: {}", e))?
+                    // Bind set 1: material properties
+                    .bind_descriptor_sets(
+                        PipelineBindPoint::Graphics,
+                        self.graphics_pipeline.layout().clone(),
+                        1,
+                        material_descriptor_set.clone(),
+                    )
+                    .map_err(|e| eyre::eyre!("Failed to bind material descriptor set: {}", e))?
                     .draw_indexed(self.index_count, 1, 0, 0, 0)
                     .map_err(|e| eyre::eyre!("Failed to draw indexed: {}", e))?;
             }
@@ -1037,6 +1110,34 @@ impl RenderContext {
             .get_texture("_default_white")
             .ok_or_else(|| eyre::eyre!("Default white texture not found. Initialize it first."))?;
 
+        // Create default material properties for render_meshes path
+        let default_material_props = material::MaterialProperties::default();
+        
+        // Create material properties buffer (shared for all objects)
+        let material_buffer = Buffer::from_data(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            default_material_props,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create material properties buffer: {}", e))?;
+
+        // Create material descriptor set (set 1, binding 0)
+        let material_descriptor_set = DescriptorSet::new(
+            self.descriptor_set_allocator.clone(),
+            self.material_descriptor_set_layout.clone(),
+            [WriteDescriptorSet::buffer(0, material_buffer.clone())],
+            [],
+        )
+        .map_err(|e| eyre::eyre!("Failed to create material descriptor set: {}", e))?;
+
         for draw_cmd in cmds.draw_commands.iter() {
             let mesh = self
                 .mesh_manager
@@ -1149,6 +1250,7 @@ impl RenderContext {
 
             unsafe {
                 command_buffer_builder
+                    // Bind set 0: transforms, texture, lighting
                     .bind_descriptor_sets(
                         PipelineBindPoint::Graphics,
                         self.graphics_pipeline.layout().clone(),
@@ -1156,6 +1258,14 @@ impl RenderContext {
                         descriptor_set.clone(),
                     )
                     .map_err(|e| eyre::eyre!("Failed to bind descriptor set: {}", e))?
+                    // Bind set 1: material properties
+                    .bind_descriptor_sets(
+                        PipelineBindPoint::Graphics,
+                        self.graphics_pipeline.layout().clone(),
+                        1,
+                        material_descriptor_set.clone(),
+                    )
+                    .map_err(|e| eyre::eyre!("Failed to bind material descriptor set: {}", e))?
                     .draw_indexed(mesh.index_count, 1, 0, 0, 0)
                     .map_err(|e| eyre::eyre!("Failed to draw indexed: {}", e))?;
             }
@@ -1303,6 +1413,34 @@ impl RenderContext {
             .get_texture("_default_white")
             .ok_or_else(|| eyre::eyre!("Default white texture not found"))?;
 
+        // Create default material properties for render_textured path
+        let default_material_props = material::MaterialProperties::default();
+        
+        // Create material properties buffer (shared for all objects)
+        let material_buffer = Buffer::from_data(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            default_material_props,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create material properties buffer: {}", e))?;
+
+        // Create material descriptor set (set 1, binding 0)
+        let material_descriptor_set = DescriptorSet::new(
+            self.descriptor_set_allocator.clone(),
+            self.material_descriptor_set_layout.clone(),
+            [WriteDescriptorSet::buffer(0, material_buffer.clone())],
+            [],
+        )
+        .map_err(|e| eyre::eyre!("Failed to create material descriptor set: {}", e))?;
+
         for draw_cmd in cmds.draw_commands.iter() {
             let mesh = self
                 .mesh_manager
@@ -1424,6 +1562,7 @@ impl RenderContext {
 
             unsafe {
                 command_buffer_builder
+                    // Bind set 0: transforms, texture, lighting
                     .bind_descriptor_sets(
                         PipelineBindPoint::Graphics,
                         self.graphics_pipeline.layout().clone(),
@@ -1431,6 +1570,303 @@ impl RenderContext {
                         descriptor_set.clone(),
                     )
                     .map_err(|e| eyre::eyre!("Failed to bind descriptor set: {}", e))?
+                    // Bind set 1: material properties
+                    .bind_descriptor_sets(
+                        PipelineBindPoint::Graphics,
+                        self.graphics_pipeline.layout().clone(),
+                        1,
+                        material_descriptor_set.clone(),
+                    )
+                    .map_err(|e| eyre::eyre!("Failed to bind material descriptor set: {}", e))?
+                    .draw_indexed(mesh.index_count, 1, 0, 0, 0)
+                    .map_err(|e| eyre::eyre!("Failed to draw indexed: {}", e))?;
+            }
+        }
+
+        command_buffer_builder
+            .end_render_pass(SubpassEndInfo::default())
+            .map_err(|e| eyre::eyre!("Failed to end render pass: {}", e))?;
+
+        let command_buffer = command_buffer_builder
+            .build()
+            .map_err(|e| eyre::eyre!("Failed to build command buffer: {}", e))?;
+
+        trace!("Submitting command buffer to graphics queue");
+
+        let execution = previous_frame_end
+            .join(acquire_future)
+            .then_execute(self.graphics_queue.clone(), command_buffer)
+            .map_err(|e| eyre::eyre!("Failed to submit command buffer: {}", e))?;
+
+        let future = execution
+            .then_swapchain_present(
+                self.present_queue.clone(),
+                SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index),
+            )
+            .then_signal_fence_and_flush();
+
+        let future = match future {
+            Ok(future) => future,
+            Err(vulkano::Validated::Error(e)) => {
+                use vulkano::VulkanError;
+                match e {
+                    VulkanError::OutOfDate => {
+                        debug!("Swapchain out of date, will recreate on next frame");
+                        self.recreate_swapchain = true;
+                        self.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+                        return Ok(());
+                    }
+                    _ => {
+                        error!("Failed to present frame: {}", e);
+                        return Err(eyre::eyre!("Failed to flush future: {}", e));
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Failed to present frame: {}", e);
+                return Err(eyre::eyre!("Failed to flush future: {}", e));
+            }
+        };
+
+        self.previous_frame_end = Some(future.boxed());
+
+        trace!("Frame rendering complete");
+
+        Ok(())
+    }
+
+    /// Renders a frame with full material property support.
+    ///
+    /// This is the most feature-complete rendering path that supports per-draw-call
+    /// material properties including metallic, roughness, and emissive. Each draw
+    /// command can specify custom material properties that are uploaded to the GPU.
+    ///
+    /// # Material Properties Upload
+    ///
+    /// For each draw command, a MaterialProperties uniform buffer is created and bound:
+    /// 
+    /// 1. CPU: Create MaterialProperties struct with metallic, roughness, emissive
+    /// 2. CPU: Write properties to host-visible buffer
+    /// 3. GPU: Buffer bound to descriptor set 1, binding 0
+    /// 4. GPU: Fragment shader reads properties to control lighting behavior
+    ///
+    /// This allows different objects to have different material responses:
+    /// - Shiny metal vs rough stone (roughness)
+    /// - Metal vs plastic (metallic)
+    /// - Glowing signs vs normal objects (emissive)
+    ///
+    /// # Arguments
+    ///
+    /// * `cmds` - Render commands containing camera matrices, draw commands with materials
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Swapchain recreation fails
+    /// - A referenced mesh or texture doesn't exist
+    /// - Material buffer upload fails
+    /// - Command buffer recording fails
+    pub fn render_with_materials(&mut self, cmds: &MaterialRenderCommands) -> Result<()> {
+        let _ = self.frame_timer.tick();
+
+        let mut previous_frame_end = self
+            .previous_frame_end
+            .take()
+            .unwrap_or_else(|| sync::now(self.device.clone()).boxed());
+
+        if self.is_window_minimized() {
+            previous_frame_end.cleanup_finished();
+            self.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+            return Ok(());
+        }
+
+        if self.recreate_swapchain {
+            debug!("Recreating swapchain due to pending resize");
+            let start_time = std::time::Instant::now();
+            previous_frame_end
+                .flush()
+                .expect("Failed to flush previous frame end");
+            self.recreate_swapchain_and_framebuffers()?;
+            self.recreate_swapchain = false;
+            previous_frame_end = sync::now(self.device.clone()).boxed();
+            info!(
+                "Swapchain recreation completed in {:?}",
+                start_time.elapsed()
+            );
+        }
+
+        previous_frame_end.cleanup_finished();
+
+        // Upload lighting data to GPU if provided
+        if let Some(lighting) = cmds.lighting {
+            trace!("Uploading lighting data to GPU");
+            self.lighting_buffer.update(lighting)?;
+        }
+
+        // Build per-object descriptor sets with custom materials
+        let mut draw_list: Vec<(Arc<DescriptorSet>, Arc<DescriptorSet>, &mesh::GpuMesh)> =
+            Vec::new();
+
+        // Get default white texture for objects without a texture
+        let default_texture = self
+            .texture_manager
+            .get_texture("_default_white")
+            .ok_or_else(|| eyre::eyre!("Default white texture not found"))?;
+
+        for draw_cmd in cmds.draw_commands.iter() {
+            let mesh = self
+                .mesh_manager
+                .get_mesh(&draw_cmd.mesh_id)
+                .ok_or_else(|| eyre::eyre!("Mesh '{}' not found", draw_cmd.mesh_id))?;
+
+            // Get the texture to use (custom or default)
+            let texture = if let Some(ref tex_name) = draw_cmd.texture_name {
+                self.texture_manager
+                    .get_texture(tex_name)
+                    .ok_or_else(|| eyre::eyre!("Texture '{}' not found", tex_name))?
+            } else {
+                default_texture
+            };
+
+            let uniforms = Uniforms {
+                model: draw_cmd.model.to_cols_array_2d(),
+                view: cmds.view.to_cols_array_2d(),
+                proj: cmds.proj.to_cols_array_2d(),
+            };
+
+            let uniform_buffer = Buffer::from_data(
+                self.memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::UNIFORM_BUFFER,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                uniforms,
+            )
+            .map_err(|e| eyre::eyre!("Failed to create uniform buffer: {}", e))?;
+
+            // Create material properties buffer for this draw call
+            let material_buffer = Buffer::from_data(
+                self.memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::UNIFORM_BUFFER,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                draw_cmd.material_properties,
+            )
+            .map_err(|e| eyre::eyre!("Failed to create material properties buffer: {}", e))?;
+
+            // Create descriptor set for transforms, texture, and lighting (set 0)
+            let transform_set = DescriptorSet::new(
+                self.descriptor_set_allocator.clone(),
+                self.descriptor_set_layout.clone(),
+                [
+                    WriteDescriptorSet::buffer(0, uniform_buffer.clone()),
+                    WriteDescriptorSet::image_view_sampler(
+                        1,
+                        texture.view.clone(),
+                        texture.sampler.clone(),
+                    ),
+                    WriteDescriptorSet::buffer(2, self.lighting_buffer.buffer().clone()),
+                ],
+                [],
+            )
+            .map_err(|e| eyre::eyre!("Failed to create transform descriptor set: {}", e))?;
+
+            // Create descriptor set for material properties (set 1)
+            let material_set = DescriptorSet::new(
+                self.descriptor_set_allocator.clone(),
+                self.material_descriptor_set_layout.clone(),
+                [WriteDescriptorSet::buffer(0, material_buffer.clone())],
+                [],
+            )
+            .map_err(|e| eyre::eyre!("Failed to create material descriptor set: {}", e))?;
+
+            draw_list.push((transform_set, material_set, mesh));
+        }
+
+        trace!("Acquiring next swapchain image");
+        let acquire_start = std::time::Instant::now();
+        let (image_index, suboptimal, acquire_future) =
+            vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None)
+                .map_err(|e| eyre::eyre!("Failed to acquire next image: {}", e))?;
+        trace!(
+            "Image {} acquired in {:?}",
+            image_index,
+            acquire_start.elapsed()
+        );
+
+        if suboptimal {
+            warn!("Swapchain is suboptimal, will recreate on next frame");
+            self.recreate_swapchain = true;
+        }
+
+        trace!("Building command buffer for frame");
+        let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
+            self.command_buffer_allocator.clone(),
+            self.graphics_queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create command buffer: {}", e))?;
+
+        command_buffer_builder
+            .begin_render_pass(
+                RenderPassBeginInfo {
+                    clear_values: vec![Some([0.1, 0.2, 0.3, 1.0].into())],
+                    ..RenderPassBeginInfo::framebuffer(
+                        self.framebuffers[image_index as usize].clone(),
+                    )
+                },
+                SubpassBeginInfo {
+                    contents: vulkano::command_buffer::SubpassContents::Inline,
+                    ..Default::default()
+                },
+            )
+            .map_err(|e| eyre::eyre!("Failed to begin render pass: {}", e))?;
+
+        command_buffer_builder
+            .bind_pipeline_graphics(self.graphics_pipeline.clone())
+            .map_err(|e| eyre::eyre!("Failed to bind graphics pipeline: {}", e))?;
+
+        command_buffer_builder
+            .set_viewport(0, [self.viewport.clone()].into_iter().collect())
+            .map_err(|e| eyre::eyre!("Failed to set viewport: {}", e))?;
+
+        // Draw each object with its specific mesh, texture, material, and descriptor sets
+        for (transform_set, material_set, mesh) in draw_list.iter() {
+            command_buffer_builder
+                .bind_vertex_buffers(0, mesh.vertex_buffer.clone())
+                .map_err(|e| eyre::eyre!("Failed to bind vertex buffer: {}", e))?
+                .bind_index_buffer(mesh.index_buffer.clone())
+                .map_err(|e| eyre::eyre!("Failed to bind index buffer: {}", e))?;
+
+            unsafe {
+                command_buffer_builder
+                    // Bind set 0: transforms, texture, lighting
+                    .bind_descriptor_sets(
+                        PipelineBindPoint::Graphics,
+                        self.graphics_pipeline.layout().clone(),
+                        0,
+                        transform_set.clone(),
+                    )
+                    .map_err(|e| eyre::eyre!("Failed to bind transform descriptor set: {}", e))?
+                    // Bind set 1: material properties (per draw call)
+                    .bind_descriptor_sets(
+                        PipelineBindPoint::Graphics,
+                        self.graphics_pipeline.layout().clone(),
+                        1,
+                        material_set.clone(),
+                    )
+                    .map_err(|e| eyre::eyre!("Failed to bind material descriptor set: {}", e))?
                     .draw_indexed(mesh.index_count, 1, 0, 0, 0)
                     .map_err(|e| eyre::eyre!("Failed to draw indexed: {}", e))?;
             }
