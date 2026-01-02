@@ -8,3 +8,4 @@ license = "GPL-3.0-or-later"
 bevy_ecs = "0.14"
 praxis_utils = { path = "../praxis_utils", version = "0.1.0" }
 praxis_math = { path = "../praxis_math", version = "0.1.0" }
+praxis_graphics = { path = "../praxis_graphics", version = "0.1.0" }

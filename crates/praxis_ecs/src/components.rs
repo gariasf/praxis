@@ -587,6 +587,73 @@ impl From<String> for MaterialHandle {
     }
 }
 
+/// Material properties component for PBR-style rendering.
+///
+/// This component wraps `MaterialProperties` from the graphics system and allows
+/// attaching material properties directly to entities. This is useful for objects
+/// that need custom material properties without creating a named material asset.
+///
+/// # PBR Properties
+///
+/// - **Base Color**: RGBA tint multiplied with texture color
+/// - **Metallic**: How metal-like the surface is (0.0 = dielectric, 1.0 = metal)
+/// - **Roughness**: Surface smoothness (0.0 = mirror, 1.0 = matte)
+/// - **Emissive Strength**: Self-illumination intensity
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, MaterialPropertiesComponent, MeshHandle, Transform};
+///
+/// let mut world = World::new();
+///
+/// // Spawn a shiny metallic cube
+/// world.spawn((
+///     Transform::from_xyz(0.0, 0.0, 0.0),
+///     MeshHandle::new("cube"),
+///     MaterialPropertiesComponent::default()
+///         .with_metallic(0.9)
+///         .with_roughness(0.1),
+/// ));
+/// ```
+///
+/// Note: This type is a newtype wrapper to avoid circular dependencies between
+/// praxis_ecs and praxis_graphics. The actual MaterialProperties type is defined
+/// in praxis_graphics and must be imported for the builder methods to work.
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct MaterialPropertiesComponent(pub praxis_graphics::MaterialProperties);
+
+impl MaterialPropertiesComponent {
+    /// Creates material properties with defaults.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the base color tint.
+    pub fn with_base_color(mut self, color: [f32; 4]) -> Self {
+        self.0 = self.0.with_base_color(color);
+        self
+    }
+
+    /// Sets the metallic factor [0.0, 1.0].
+    pub fn with_metallic(mut self, metallic: f32) -> Self {
+        self.0 = self.0.with_metallic(metallic);
+        self
+    }
+
+    /// Sets the roughness factor [0.0, 1.0].
+    pub fn with_roughness(mut self, roughness: f32) -> Self {
+        self.0 = self.0.with_roughness(roughness);
+        self
+    }
+
+    /// Sets the emissive strength.
+    pub fn with_emissive_strength(mut self, strength: f32) -> Self {
+        self.0 = self.0.with_emissive_strength(strength);
+        self
+    }
+}
+
 /// Mesh component containing vertex and index data.
 ///
 /// This component stores the actual geometry data for rendering.

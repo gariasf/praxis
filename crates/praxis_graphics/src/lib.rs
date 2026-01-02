@@ -2423,7 +2423,7 @@ pub use lighting::{
 pub use material::{Material, MaterialManager, MaterialProperties};
 pub use mesh::{GpuMesh, MeshData};
 pub use primitives::{
-    colored_cube_mesh, pyramid_mesh, quad_mesh, solid_cube_mesh, textured_cube_mesh,
+    colored_cube_mesh, pyramid_mesh, quad_mesh, solid_cube_mesh, sphere_mesh, textured_cube_mesh,
     textured_quad_mesh,
 };
 pub use texture::{Texture, TextureManager};

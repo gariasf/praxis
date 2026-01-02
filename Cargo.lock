@@ -2314,6 +2314,7 @@ name = "praxis_ecs"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
+ "praxis_graphics",
  "praxis_math",
  "praxis_utils",
 ]
