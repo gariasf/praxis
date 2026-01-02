@@ -10,3 +10,5 @@ pollster = "0.4"
 praxis_utils = { path = "../praxis_utils", version = "0.1.0" }
 praxis_graphics = { path = "../praxis_graphics", version = "0.1.0" }
 praxis_math = { path = "../praxis_math", version = "0.1.0" }
+praxis_ecs = { path = "../praxis_ecs", version = "0.1.0" }
+praxis_gui = { path = "../praxis_gui", version = "0.1.0" }

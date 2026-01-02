@@ -95,3 +95,7 @@ path = "examples/comprehensive_scene_demo.rs"
 [[example]]
 name = "scene_demo"
 path = "examples/scene_demo.rs"
+
+[[example]]
+name = "gui_demo"
+path = "examples/gui_demo.rs"
