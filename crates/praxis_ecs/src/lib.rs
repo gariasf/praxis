@@ -204,7 +204,7 @@ pub use world::*;
 pub mod camera {
     use super::*;
     use bevy_ecs::query::{QueryData, QueryFilter};
-    
+
     /// Query for all active perspective cameras.
     ///
     /// Returns cameras with Camera, Transform, PerspectiveProjection, and CameraMatrices
@@ -229,7 +229,7 @@ pub mod camera {
         pub projection: &'static PerspectiveProjection,
         pub matrices: &'static CameraMatrices,
     }
-    
+
     /// Query for all active orthographic cameras.
     ///
     /// Returns cameras with Camera, Transform, OrthographicProjection, and CameraMatrices
@@ -254,7 +254,7 @@ pub mod camera {
         pub projection: &'static OrthographicProjection,
         pub matrices: &'static CameraMatrices,
     }
-    
+
     /// Query filter for active cameras only.
     ///
     /// # Example
@@ -272,7 +272,7 @@ pub mod camera {
     pub struct ActiveCameraFilter {
         camera: With<Camera>,
     }
-    
+
     /// Gets the primary camera (highest priority active camera).
     ///
     /// Returns the entity and components of the camera with the highest priority.
@@ -301,7 +301,7 @@ pub mod camera {
             .max_by_key(|item| item.camera.priority)
             .map(|item| (item.entity, item.camera, item.matrices))
     }
-    
+
     /// Gets the primary orthographic camera (highest priority active camera).
     ///
     /// Returns the entity and components of the camera with the highest priority.
@@ -315,7 +315,7 @@ pub mod camera {
             .max_by_key(|item| item.camera.priority)
             .map(|item| (item.entity, item.camera, item.matrices))
     }
-    
+
     /// Gets all active cameras sorted by priority (lowest to highest).
     ///
     /// # Example
@@ -338,11 +338,11 @@ pub mod camera {
             .filter(|item| item.camera.is_active)
             .map(|item| (item.entity, item.camera, item.matrices))
             .collect();
-        
+
         result.sort_by_key(|(_, camera, _)| camera.priority);
         result
     }
-    
+
     /// Gets all active orthographic cameras sorted by priority (lowest to highest).
     pub fn sorted_orthographic_cameras<'a>(
         cameras: &'a Query<ActiveOrthographicCameras>,
@@ -352,7 +352,7 @@ pub mod camera {
             .filter(|item| item.camera.is_active)
             .map(|item| (item.entity, item.camera, item.matrices))
             .collect();
-        
+
         result.sort_by_key(|(_, camera, _)| camera.priority);
         result
     }

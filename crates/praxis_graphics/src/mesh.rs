@@ -21,13 +21,13 @@ use vulkano::{
 pub struct GpuMesh {
     /// Vertex buffer containing mesh vertices.
     pub vertex_buffer: Subbuffer<[Vertex3D]>,
-    
+
     /// Index buffer containing triangle indices.
     pub index_buffer: Subbuffer<[u16]>,
-    
+
     /// Number of indices to draw.
     pub index_count: u32,
-    
+
     /// Number of vertices in the mesh.
     pub vertex_count: u32,
 }
@@ -49,8 +49,12 @@ impl GpuMesh {
         vertices: Vec<Vertex3D>,
         indices: Vec<u16>,
     ) -> Result<Self> {
-        trace!("Creating GPU mesh with {} vertices, {} indices", vertices.len(), indices.len());
-        
+        trace!(
+            "Creating GPU mesh with {} vertices, {} indices",
+            vertices.len(),
+            indices.len()
+        );
+
         let vertex_buffer = Buffer::from_iter(
             allocator.clone(),
             BufferCreateInfo {
@@ -98,16 +102,16 @@ impl GpuMesh {
 pub struct MeshData {
     /// Vertex positions in local space.
     pub positions: Vec<[f32; 3]>,
-    
+
     /// Vertex colors (RGB). If None, uses white.
     pub colors: Option<Vec<[f32; 3]>>,
-    
+
     /// Vertex normals. If None, normals are not used.
     pub normals: Option<Vec<[f32; 3]>>,
-    
+
     /// Texture coordinates (UV). If None, UVs are not used.
     pub uvs: Option<Vec<[f32; 2]>>,
-    
+
     /// Triangle indices.
     pub indices: Vec<u16>,
 }
@@ -125,11 +129,7 @@ impl MeshData {
     }
 
     /// Creates a mesh data with positions, colors, and indices.
-    pub fn with_colors(
-        positions: Vec<[f32; 3]>,
-        colors: Vec<[f32; 3]>,
-        indices: Vec<u16>,
-    ) -> Self {
+    pub fn with_colors(positions: Vec<[f32; 3]>, colors: Vec<[f32; 3]>, indices: Vec<u16>) -> Self {
         Self {
             positions,
             colors: Some(colors),
@@ -144,17 +144,18 @@ impl MeshData {
     /// If colors are not provided, vertices will use white (1.0, 1.0, 1.0).
     pub fn to_vertices(&self) -> Vec<Vertex3D> {
         let default_color = [1.0, 1.0, 1.0];
-        
+
         self.positions
             .iter()
             .enumerate()
             .map(|(i, &position)| {
-                let color = self.colors
+                let color = self
+                    .colors
                     .as_ref()
                     .and_then(|colors| colors.get(i))
                     .copied()
                     .unwrap_or(default_color);
-                
+
                 Vertex3D { position, color }
             })
             .collect()
@@ -182,7 +183,7 @@ impl MeshData {
 pub struct MeshAssetManager {
     /// Map of mesh ID to GPU mesh data.
     meshes: HashMap<String, GpuMesh>,
-    
+
     /// Memory allocator for creating GPU buffers.
     allocator: Arc<dyn MemoryAllocator>,
 }
@@ -214,12 +215,16 @@ impl MeshAssetManager {
     /// Returns an error if GPU buffer creation fails.
     pub fn load_mesh(&mut self, id: impl Into<String>, mesh_data: MeshData) -> Result<()> {
         let id = id.into();
-        debug!("Loading mesh '{}' ({} vertices, {} indices)", 
-               id, mesh_data.positions.len(), mesh_data.indices.len());
-        
+        debug!(
+            "Loading mesh '{}' ({} vertices, {} indices)",
+            id,
+            mesh_data.positions.len(),
+            mesh_data.indices.len()
+        );
+
         let gpu_mesh = mesh_data.upload(self.allocator.clone())?;
         self.meshes.insert(id.clone(), gpu_mesh);
-        
+
         trace!("Mesh '{}' loaded successfully", id);
         Ok(())
     }
@@ -261,13 +266,9 @@ mod tests {
 
     #[test]
     fn test_mesh_data_creation() {
-        let positions = vec![
-            [0.0, 1.0, 0.0],
-            [-1.0, -1.0, 0.0],
-            [1.0, -1.0, 0.0],
-        ];
+        let positions = vec![[0.0, 1.0, 0.0], [-1.0, -1.0, 0.0], [1.0, -1.0, 0.0]];
         let indices = vec![0, 1, 2];
-        
+
         let mesh = MeshData::new(positions.clone(), indices.clone());
         assert_eq!(mesh.positions.len(), 3);
         assert_eq!(mesh.indices.len(), 3);
@@ -276,19 +277,13 @@ mod tests {
 
     #[test]
     fn test_mesh_data_to_vertices() {
-        let positions = vec![
-            [0.0, 1.0, 0.0],
-            [-1.0, -1.0, 0.0],
-        ];
-        let colors = vec![
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-        ];
+        let positions = vec![[0.0, 1.0, 0.0], [-1.0, -1.0, 0.0]];
+        let colors = vec![[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
         let indices = vec![0, 1];
-        
+
         let mesh = MeshData::with_colors(positions, colors, indices);
         let vertices = mesh.to_vertices();
-        
+
         assert_eq!(vertices.len(), 2);
         assert_eq!(vertices[0].position, [0.0, 1.0, 0.0]);
         assert_eq!(vertices[0].color, [1.0, 0.0, 0.0]);
@@ -300,10 +295,10 @@ mod tests {
     fn test_mesh_data_to_vertices_default_color() {
         let positions = vec![[0.0, 1.0, 0.0]];
         let indices = vec![0];
-        
+
         let mesh = MeshData::new(positions, indices);
         let vertices = mesh.to_vertices();
-        
+
         assert_eq!(vertices.len(), 1);
         assert_eq!(vertices[0].color, [1.0, 1.0, 1.0]); // Default white
     }

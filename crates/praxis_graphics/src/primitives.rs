@@ -2,7 +2,10 @@
 ///
 /// These are provided as examples and for testing. Real applications
 /// would typically load vertex data from files or generate it procedurally.
-use crate::{mesh::MeshData, vertex::{Vertex2D, Vertex3D}};
+use crate::{
+    mesh::MeshData,
+    vertex::{Vertex2D, Vertex3D},
+};
 
 /// Creates vertices for a triangle with one vertex of each primary color.
 ///
@@ -65,10 +68,10 @@ pub fn colored_cube() -> (Vec<Vertex3D>, Vec<u16>) {
 /// Returns a `MeshData` structure ready to be uploaded to the GPU.
 pub fn colored_cube_mesh() -> MeshData {
     let (vertices, indices) = colored_cube();
-    
+
     let positions: Vec<[f32; 3]> = vertices.iter().map(|v| v.position).collect();
     let colors: Vec<[f32; 3]> = vertices.iter().map(|v| v.color).collect();
-    
+
     MeshData::with_colors(positions, colors, indices)
 }
 
@@ -93,21 +96,16 @@ pub fn solid_cube_mesh(color: [f32; 3]) -> MeshData {
 
     let indices: Vec<u16> = vec![
         // Back face
-        0, 1, 2, 2, 3, 0,
-        // Front face
-        4, 6, 5, 4, 7, 6,
-        // Bottom face
-        4, 5, 1, 4, 1, 0,
-        // Top face
-        3, 2, 6, 3, 6, 7,
-        // Left face
-        4, 0, 3, 4, 3, 7,
-        // Right face
+        0, 1, 2, 2, 3, 0, // Front face
+        4, 6, 5, 4, 7, 6, // Bottom face
+        4, 5, 1, 4, 1, 0, // Top face
+        3, 2, 6, 3, 6, 7, // Left face
+        4, 0, 3, 4, 3, 7, // Right face
         1, 5, 6, 1, 6, 2,
     ];
 
     let colors = vec![color; 8];
-    
+
     MeshData::with_colors(positions, colors, indices)
 }
 
@@ -119,7 +117,7 @@ pub fn solid_cube_mesh(color: [f32; 3]) -> MeshData {
 /// * `color` - RGB color for all vertices
 pub fn quad_mesh(size: f32, color: [f32; 3]) -> MeshData {
     let half_size = size / 2.0;
-    
+
     let positions = vec![
         [-half_size, 0.0, -half_size], // Bottom-left
         [half_size, 0.0, -half_size],  // Bottom-right
@@ -133,7 +131,7 @@ pub fn quad_mesh(size: f32, color: [f32; 3]) -> MeshData {
     ];
 
     let colors = vec![color; 4];
-    
+
     MeshData::with_colors(positions, colors, indices)
 }
 
@@ -154,24 +152,13 @@ pub fn pyramid_mesh(base_color: [f32; 3], tip_color: [f32; 3]) -> MeshData {
         [0.0, 1.0, 0.0],
     ];
 
-    let colors = vec![
-        base_color,
-        base_color,
-        base_color,
-        base_color,
-        tip_color,
-    ];
+    let colors = vec![base_color, base_color, base_color, base_color, tip_color];
 
     let indices = vec![
         // Base
-        0, 2, 1,
-        0, 3, 2,
-        // Sides
-        0, 1, 4,
-        1, 2, 4,
-        2, 3, 4,
-        3, 0, 4,
+        0, 2, 1, 0, 3, 2, // Sides
+        0, 1, 4, 1, 2, 4, 2, 3, 4, 3, 0, 4,
     ];
-    
+
     MeshData::with_colors(positions, colors, indices)
 }

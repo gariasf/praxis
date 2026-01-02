@@ -7,11 +7,11 @@
 //! - Positioning meshes with transform matrices
 
 use praxis_graphics::{
-    colored_cube_mesh, pyramid_mesh, quad_mesh, solid_cube_mesh, DrawCommand, MeshRenderCommands,
-    RenderContext,
+    DrawCommand, MeshRenderCommands, RenderContext, colored_cube_mesh, pyramid_mesh, quad_mesh,
+    solid_cube_mesh,
 };
 use praxis_math::{Mat4, Vec3};
-use praxis_utils::{debug, error, info, trace, warn, Result, timing::FrameTimer};
+use praxis_utils::{Result, debug, error, info, timing::FrameTimer, trace, warn};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use winit::{
@@ -50,27 +50,27 @@ impl State {
 
         // Load various mesh types into the mesh manager
         info!("Loading meshes into asset manager");
-        
+
         render_context
             .mesh_manager_mut()
             .load_mesh("colored_cube", colored_cube_mesh())?;
-        
+
         render_context
             .mesh_manager_mut()
             .load_mesh("red_cube", solid_cube_mesh([1.0, 0.0, 0.0]))?;
-        
+
         render_context
             .mesh_manager_mut()
             .load_mesh("green_cube", solid_cube_mesh([0.0, 1.0, 0.0]))?;
-        
+
         render_context
             .mesh_manager_mut()
             .load_mesh("blue_cube", solid_cube_mesh([0.0, 0.0, 1.0]))?;
-        
+
         render_context
             .mesh_manager_mut()
             .load_mesh("pyramid", pyramid_mesh([0.8, 0.6, 0.2], [1.0, 0.0, 0.0]))?;
-        
+
         render_context
             .mesh_manager_mut()
             .load_mesh("ground", quad_mesh(10.0, [0.3, 0.3, 0.3]))?;
@@ -332,15 +332,15 @@ impl ApplicationHandler for App {
 /// Runs the multi-mesh demo application.
 pub fn run() -> Result<()> {
     praxis_utils::init()?;
-    
+
     info!("Starting Multi-Mesh Demo");
     let app_start = std::time::Instant::now();
 
     let mut app = App::default();
 
     debug!("Creating event loop...");
-    let event_loop =
-        EventLoop::new().map_err(|e| praxis_utils::eyre::eyre!("Failed to create event loop: {}", e))?;
+    let event_loop = EventLoop::new()
+        .map_err(|e| praxis_utils::eyre::eyre!("Failed to create event loop: {}", e))?;
 
     event_loop.set_control_flow(ControlFlow::Poll);
     trace!("Event loop control flow set to Poll mode");

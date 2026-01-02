@@ -91,8 +91,7 @@ fn add_child_to_parent(
         if !children.0.contains(&child_entity) {
             trace!(
                 "Adding child entity {:?} to parent {:?}",
-                child_entity,
-                parent_entity
+                child_entity, parent_entity
             );
             children.push(child_entity);
         }
@@ -200,11 +199,7 @@ pub fn propagate_transforms(
 
         // Propagate to all descendants
         if let Some(children) = children {
-            propagate_recursive(
-                &children.0,
-                &global_transform.matrix,
-                &mut child_query,
-            );
+            propagate_recursive(&children.0, &global_transform.matrix, &mut child_query);
         }
     }
 
@@ -221,11 +216,7 @@ pub fn propagate_transforms(
 
         // Check if any children were added to this root
         if let Some(children) = children {
-            propagate_to_added_children(
-                &children.0,
-                &global_transform.matrix,
-                &mut child_query,
-            );
+            propagate_to_added_children(&children.0, &global_transform.matrix, &mut child_query);
         }
     }
 }
@@ -307,11 +298,7 @@ pub fn propagate_transforms_for_reparented(
 
             // Propagate to descendants
             if let Some(children) = maybe_children {
-                propagate_recursive(
-                    &children.0,
-                    &global_transform.matrix,
-                    &mut child_query,
-                );
+                propagate_recursive(&children.0, &global_transform.matrix, &mut child_query);
             }
         }
     }
@@ -351,11 +338,7 @@ pub fn propagate_transforms_for_changed_children(
 
             // Propagate to descendants
             if let Some(children) = maybe_children {
-                propagate_recursive(
-                    &children.0,
-                    &global_transform.matrix,
-                    &mut child_query,
-                );
+                propagate_recursive(&children.0, &global_transform.matrix, &mut child_query);
             }
         }
     }
@@ -494,8 +477,6 @@ pub fn cleanup_despawned_children(
     }
 }
 
-
-
 /// Bundle for spawning entities with transform hierarchy support.
 ///
 /// This bundle includes everything needed for an entity to participate
@@ -560,16 +541,16 @@ impl TransformBundle {
 pub struct PerspectiveCameraBundle {
     /// The camera component.
     pub camera: Camera,
-    
+
     /// The local transform of the camera.
     pub transform: Transform,
-    
+
     /// The global transform of the camera.
     pub global_transform: GlobalTransform,
-    
+
     /// The perspective projection settings.
     pub projection: PerspectiveProjection,
-    
+
     /// The computed camera matrices.
     pub matrices: CameraMatrices,
 }
@@ -586,7 +567,7 @@ impl PerspectiveCameraBundle {
             matrices: CameraMatrices::default(),
         }
     }
-    
+
     /// Creates a new perspective camera bundle with custom near and far planes.
     pub fn with_near_far(position: Vec3, fov: f32, aspect_ratio: f32, near: f32, far: f32) -> Self {
         let transform = Transform::from_translation(position);
@@ -628,16 +609,16 @@ impl Default for PerspectiveCameraBundle {
 pub struct OrthographicCameraBundle {
     /// The camera component.
     pub camera: Camera,
-    
+
     /// The local transform of the camera.
     pub transform: Transform,
-    
+
     /// The global transform of the camera.
     pub global_transform: GlobalTransform,
-    
+
     /// The orthographic projection settings.
     pub projection: OrthographicProjection,
-    
+
     /// The computed camera matrices.
     pub matrices: CameraMatrices,
 }
@@ -654,7 +635,7 @@ impl OrthographicCameraBundle {
             matrices: CameraMatrices::default(),
         }
     }
-    
+
     /// Creates a new orthographic camera bundle with custom near and far planes.
     pub fn with_near_far(position: Vec3, width: f32, height: f32, near: f32, far: f32) -> Self {
         let transform = Transform::from_translation(position);
@@ -666,9 +647,17 @@ impl OrthographicCameraBundle {
             matrices: CameraMatrices::default(),
         }
     }
-    
+
     /// Creates an orthographic camera with custom bounds.
-    pub fn with_bounds(position: Vec3, left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
+    pub fn with_bounds(
+        position: Vec3,
+        left: f32,
+        right: f32,
+        bottom: f32,
+        top: f32,
+        near: f32,
+        far: f32,
+    ) -> Self {
         let transform = Transform::from_translation(position);
         Self {
             camera: Camera::default(),
@@ -921,10 +910,13 @@ mod tests {
 
         // Initial propagation
         let mut schedule = bevy_ecs::schedule::Schedule::default();
-        schedule.add_systems((
-            propagate_transforms,
-            propagate_transforms_for_changed_children,
-        ).chain());
+        schedule.add_systems(
+            (
+                propagate_transforms,
+                propagate_transforms_for_changed_children,
+            )
+                .chain(),
+        );
         world.inner_mut().run_schedule(&mut schedule);
 
         // Modify child's transform
@@ -949,10 +941,7 @@ mod tests {
     fn test_cleanup_removed_parents() {
         let mut world = World::new();
 
-        let parent = world.spawn((
-            Transform::default(),
-            GlobalTransform::default(),
-        ));
+        let parent = world.spawn((Transform::default(), GlobalTransform::default()));
 
         let child = world.spawn((
             Transform::default(),
@@ -1090,13 +1079,16 @@ mod tests {
 
         // Test all systems together
         let mut schedule = bevy_ecs::schedule::Schedule::default();
-        schedule.add_systems((
-            sync_parent_child_relationships,
-            cleanup_removed_parents,
-            propagate_transforms,
-            propagate_transforms_for_reparented,
-            propagate_transforms_for_changed_children,
-        ).chain());
+        schedule.add_systems(
+            (
+                sync_parent_child_relationships,
+                cleanup_removed_parents,
+                propagate_transforms,
+                propagate_transforms_for_reparented,
+                propagate_transforms_for_changed_children,
+            )
+                .chain(),
+        );
 
         // Create a simple hierarchy
         let parent = world.spawn((
@@ -1128,13 +1120,16 @@ mod tests {
     fn test_full_system_chain_with_reparenting() {
         let mut world = World::new();
         let mut schedule = bevy_ecs::schedule::Schedule::default();
-        schedule.add_systems((
-            sync_parent_child_relationships,
-            cleanup_removed_parents,
-            propagate_transforms,
-            propagate_transforms_for_reparented,
-            propagate_transforms_for_changed_children,
-        ).chain());
+        schedule.add_systems(
+            (
+                sync_parent_child_relationships,
+                cleanup_removed_parents,
+                propagate_transforms,
+                propagate_transforms_for_reparented,
+                propagate_transforms_for_changed_children,
+            )
+                .chain(),
+        );
 
         let parent1 = world.spawn((
             Transform::from_xyz(10.0, 0.0, 0.0),
@@ -1191,89 +1186,89 @@ mod tests {
         assert!((pos3.x - 5.0).abs() < 0.001);
         assert!((pos3.y - 0.0).abs() < 0.001);
     }
-    
+
     #[test]
     fn test_update_perspective_cameras() {
         use crate::{Camera, CameraMatrices, PerspectiveProjection};
-        
+
         let mut world = World::new();
-        
+
         let camera = world.spawn((
             Camera::default(),
             Transform::from_xyz(0.0, 0.0, 10.0),
             PerspectiveProjection::default(),
             CameraMatrices::default(),
         ));
-        
+
         let mut schedule = bevy_ecs::schedule::Schedule::default();
         schedule.add_systems(update_perspective_cameras);
         world.inner_mut().run_schedule(&mut schedule);
-        
+
         let matrices = world.inner().get::<CameraMatrices>(camera).unwrap();
         assert_ne!(matrices.view, Mat4::IDENTITY);
         assert_ne!(matrices.projection, Mat4::IDENTITY);
         assert_ne!(matrices.view_projection, Mat4::IDENTITY);
     }
-    
+
     #[test]
     fn test_update_orthographic_cameras() {
         use crate::{Camera, CameraMatrices, OrthographicProjection};
-        
+
         let mut world = World::new();
-        
+
         let camera = world.spawn((
             Camera::default(),
             Transform::from_xyz(0.0, 10.0, 0.0),
             OrthographicProjection::default(),
             CameraMatrices::default(),
         ));
-        
+
         let mut schedule = bevy_ecs::schedule::Schedule::default();
         schedule.add_systems(update_orthographic_cameras);
         world.inner_mut().run_schedule(&mut schedule);
-        
+
         let matrices = world.inner().get::<CameraMatrices>(camera).unwrap();
         assert_ne!(matrices.view, Mat4::IDENTITY);
         assert_ne!(matrices.projection, Mat4::IDENTITY);
         assert_ne!(matrices.view_projection, Mat4::IDENTITY);
     }
-    
+
     #[test]
     fn test_inactive_camera_not_updated() {
         use crate::{Camera, CameraMatrices, PerspectiveProjection};
-        
+
         let mut world = World::new();
-        
+
         let mut inactive_camera = Camera::default();
         inactive_camera.deactivate();
-        
+
         let camera = world.spawn((
             inactive_camera,
             Transform::from_xyz(0.0, 0.0, 10.0),
             PerspectiveProjection::default(),
             CameraMatrices::default(),
         ));
-        
+
         let mut schedule = bevy_ecs::schedule::Schedule::default();
         schedule.add_systems(update_perspective_cameras);
         world.inner_mut().run_schedule(&mut schedule);
-        
+
         let matrices = world.inner().get::<CameraMatrices>(camera).unwrap();
         assert_eq!(matrices.view, Mat4::IDENTITY);
         assert_eq!(matrices.projection, Mat4::IDENTITY);
     }
-    
+
     #[test]
     fn test_camera_with_parent_transform() {
         use crate::{Camera, CameraMatrices, PerspectiveProjection};
-        
+
         let mut world = World::new();
-        
+
         let parent = world.spawn((
             Transform::from_xyz(5.0, 0.0, 0.0),
             GlobalTransform::default(),
         ));
-        
+
         let camera = world.spawn((
             Camera::default(),
             Transform::from_xyz(0.0, 0.0, 5.0),
@@ -1282,23 +1277,20 @@ mod tests {
             CameraMatrices::default(),
             Parent(parent),
         ));
-        
+
         world
             .insert_component(parent, Children::with_children(vec![camera]))
             .unwrap();
-        
+
         let mut schedule = bevy_ecs::schedule::Schedule::default();
-        schedule.add_systems((
-            propagate_transforms,
-            update_perspective_cameras,
-        ).chain());
+        schedule.add_systems((propagate_transforms, update_perspective_cameras).chain());
         world.inner_mut().run_schedule(&mut schedule);
-        
+
         let matrices = world.inner().get::<CameraMatrices>(camera).unwrap();
         assert_ne!(matrices.view, Mat4::IDENTITY);
         assert_ne!(matrices.projection, Mat4::IDENTITY);
     }
-    
+
     #[test]
     fn test_perspective_camera_bundle() {
         let bundle = PerspectiveCameraBundle::new(
@@ -1306,21 +1298,17 @@ mod tests {
             60.0_f32.to_radians(),
             16.0 / 9.0,
         );
-        
+
         assert!(bundle.camera.is_active());
         assert_eq!(bundle.transform.translation, Vec3::new(0.0, 5.0, 10.0));
         assert_eq!(bundle.projection.fov, 60.0_f32.to_radians());
         assert_eq!(bundle.projection.aspect_ratio, 16.0 / 9.0);
     }
-    
+
     #[test]
     fn test_orthographic_camera_bundle() {
-        let bundle = OrthographicCameraBundle::new(
-            Vec3::new(0.0, 10.0, 0.0),
-            20.0,
-            10.0,
-        );
-        
+        let bundle = OrthographicCameraBundle::new(Vec3::new(0.0, 10.0, 0.0), 20.0, 10.0);
+
         assert!(bundle.camera.is_active());
         assert_eq!(bundle.transform.translation, Vec3::new(0.0, 10.0, 0.0));
         assert_eq!(bundle.projection.left, -10.0);

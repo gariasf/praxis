@@ -66,14 +66,14 @@ pub struct InputState {
     just_pressed_keys: HashSet<KeyCode>,
     /// Keys released this frame.
     just_released_keys: HashSet<KeyCode>,
-    
+
     /// Mouse buttons currently pressed.
     pressed_mouse_buttons: HashSet<MouseButton>,
     /// Mouse buttons pressed this frame.
     just_pressed_mouse_buttons: HashSet<MouseButton>,
     /// Mouse buttons released this frame.
     just_released_mouse_buttons: HashSet<MouseButton>,
-    
+
     /// Current mouse position in pixels (relative to window).
     mouse_position: (f64, f64),
     /// Mouse position delta since last frame.
@@ -168,10 +168,7 @@ impl InputState {
     pub fn handle_cursor_moved(&mut self, position: (f64, f64)) {
         let old_position = self.mouse_position;
         self.mouse_position = position;
-        self.mouse_delta = (
-            position.0 - old_position.0,
-            position.1 - old_position.1,
-        );
+        self.mouse_delta = (position.0 - old_position.0, position.1 - old_position.1);
     }
 
     /// Updates the mouse scroll wheel delta.
@@ -390,4 +387,3 @@ mod tests {
         assert_eq!(input.mouse_position(), (0.0, 0.0));
     }
 }
-

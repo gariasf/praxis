@@ -4,13 +4,13 @@
 //! showing how GlobalTransform is automatically computed from local Transform
 //! and parent-child hierarchies.
 
-use praxis_ecs::{
-    Children, GlobalTransform, Name, Parent, Schedule, Transform, TransformBundle, World,
-    IntoSystemConfigs,
-};
 use praxis_ecs::systems::{
     cleanup_removed_parents, propagate_transforms, propagate_transforms_for_changed_children,
     propagate_transforms_for_reparented, sync_parent_child_relationships,
+};
+use praxis_ecs::{
+    Children, GlobalTransform, IntoSystemConfigs, Name, Parent, Schedule, Transform,
+    TransformBundle, World,
 };
 use praxis_math::{Quat, Vec3};
 
@@ -24,13 +24,16 @@ fn main() -> praxis_utils::Result<()> {
 
     // Create a schedule with all transform propagation systems
     let mut schedule = Schedule::default();
-    schedule.add_systems((
-        sync_parent_child_relationships,
-        cleanup_removed_parents,
-        propagate_transforms,
-        propagate_transforms_for_reparented,
-        propagate_transforms_for_changed_children,
-    ).chain());
+    schedule.add_systems(
+        (
+            sync_parent_child_relationships,
+            cleanup_removed_parents,
+            propagate_transforms,
+            propagate_transforms_for_reparented,
+            propagate_transforms_for_changed_children,
+        )
+            .chain(),
+    );
 
     println!("Creating a hierarchical scene:\n");
     println!("  Root (0, 0, 0)");
@@ -41,10 +44,7 @@ fn main() -> praxis_utils::Result<()> {
     println!("        └─ Hand (0, 3, 0)\n");
 
     // Create root entity
-    let root = world.spawn((
-        Name::from("Root"),
-        TransformBundle::from_xyz(0.0, 0.0, 0.0),
-    ));
+    let root = world.spawn((Name::from("Root"), TransformBundle::from_xyz(0.0, 0.0, 0.0)));
 
     // Create platform (child of root)
     let platform = world.spawn((
@@ -210,7 +210,11 @@ fn print_hierarchy(world: &World) {
 }
 
 /// Recursively print children with indentation
-fn print_children(world: &bevy_ecs::world::World, children: &[bevy_ecs::entity::Entity], depth: usize) {
+fn print_children(
+    world: &bevy_ecs::world::World,
+    children: &[bevy_ecs::entity::Entity],
+    depth: usize,
+) {
     let indent = "  ".repeat(depth);
 
     for &child in children {

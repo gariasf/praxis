@@ -8,8 +8,8 @@
 //! - Camera query helpers
 
 use praxis_ecs::{
-    camera, Camera, CameraMatrices, OrthographicCameraBundle, OrthographicProjection,
-    PerspectiveCameraBundle, PerspectiveProjection, Query, Schedule, Transform, World,
+    Camera, CameraMatrices, OrthographicCameraBundle, OrthographicProjection,
+    PerspectiveCameraBundle, PerspectiveProjection, Query, Schedule, Transform, World, camera,
 };
 use praxis_math::Vec3;
 
@@ -25,20 +25,13 @@ fn main() {
         70.0_f32.to_radians(),
         16.0 / 9.0,
     ));
-    println!(
-        "Created perspective camera 1 at position (0, 5, 10) with priority 0"
-    );
+    println!("Created perspective camera 1 at position (0, 5, 10) with priority 0");
 
-    let mut high_priority_bundle = PerspectiveCameraBundle::new(
-        Vec3::new(5.0, 5.0, 5.0),
-        60.0_f32.to_radians(),
-        16.0 / 9.0,
-    );
+    let mut high_priority_bundle =
+        PerspectiveCameraBundle::new(Vec3::new(5.0, 5.0, 5.0), 60.0_f32.to_radians(), 16.0 / 9.0);
     high_priority_bundle.camera.priority = 10;
     let perspective_cam2 = world.spawn(high_priority_bundle);
-    println!(
-        "Created perspective camera 2 at position (5, 5, 5) with priority 10"
-    );
+    println!("Created perspective camera 2 at position (5, 5, 5) with priority 10");
 
     let ortho_cam = world.spawn(OrthographicCameraBundle::new(
         Vec3::new(0.0, 10.0, 0.0),

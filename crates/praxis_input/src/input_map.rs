@@ -130,12 +130,12 @@ impl InputMap {
     /// * `binding` - The input binding to add.
     pub fn bind(&mut self, action: &Action, binding: InputBinding) {
         let action_id = action.id().clone();
-        
+
         self.action_bindings
             .entry(action_id.clone())
             .or_default()
             .insert(binding.clone());
-        
+
         self.binding_actions
             .entry(binding)
             .or_default()
@@ -170,14 +170,14 @@ impl InputMap {
     /// * `binding` - The input binding to remove.
     pub fn unbind(&mut self, action: &Action, binding: &InputBinding) {
         let action_id = action.id();
-        
+
         if let Some(bindings) = self.action_bindings.get_mut(action_id) {
             bindings.remove(binding);
             if bindings.is_empty() {
                 self.action_bindings.remove(action_id);
             }
         }
-        
+
         if let Some(actions) = self.binding_actions.get_mut(binding) {
             actions.remove(action_id);
             if actions.is_empty() {
@@ -193,7 +193,7 @@ impl InputMap {
     /// * `action` - The action to clear bindings for.
     pub fn unbind_all(&mut self, action: &Action) {
         let action_id = action.id();
-        
+
         if let Some(bindings) = self.action_bindings.remove(action_id) {
             for binding in bindings {
                 if let Some(actions) = self.binding_actions.get_mut(&binding) {
@@ -219,9 +219,9 @@ impl InputMap {
         self.action_bindings
             .get(action.id())
             .is_some_and(|bindings| {
-                bindings.iter().any(|binding| {
-                    Self::is_binding_pressed(binding, input_state)
-                })
+                bindings
+                    .iter()
+                    .any(|binding| Self::is_binding_pressed(binding, input_state))
             })
     }
 
@@ -238,9 +238,9 @@ impl InputMap {
         self.action_bindings
             .get(action.id())
             .is_some_and(|bindings| {
-                bindings.iter().any(|binding| {
-                    Self::is_binding_just_pressed(binding, input_state)
-                })
+                bindings
+                    .iter()
+                    .any(|binding| Self::is_binding_just_pressed(binding, input_state))
             })
     }
 
@@ -257,9 +257,9 @@ impl InputMap {
         self.action_bindings
             .get(action.id())
             .is_some_and(|bindings| {
-                bindings.iter().any(|binding| {
-                    Self::is_binding_just_released(binding, input_state)
-                })
+                bindings
+                    .iter()
+                    .any(|binding| Self::is_binding_just_released(binding, input_state))
             })
     }
 
@@ -314,9 +314,7 @@ impl InputMap {
     fn is_binding_just_released(binding: &InputBinding, input_state: &InputState) -> bool {
         match binding {
             InputBinding::Key(key) => input_state.is_key_just_released(*key),
-            InputBinding::MouseButton(button) => {
-                input_state.is_mouse_button_just_released(*button)
-            }
+            InputBinding::MouseButton(button) => input_state.is_mouse_button_just_released(*button),
         }
     }
 }
@@ -355,10 +353,10 @@ mod tests {
     fn test_unbind() {
         let mut input_map = InputMap::new();
         let jump = Action::new("jump");
-        
+
         input_map.bind_key(&jump, KeyCode::Space);
         assert!(input_map.get_bindings(&jump).is_some());
-        
+
         input_map.unbind_key(&jump, KeyCode::Space);
         assert!(input_map.get_bindings(&jump).is_none());
     }

@@ -73,3 +73,11 @@ path = "examples/input_demo.rs"
 [[example]]
 name = "input_integration"
 path = "examples/input_integration.rs"
+
+[[example]]
+name = "camera_demo"
+path = "examples/camera_demo.rs"
+
+[[example]]
+name = "fps_camera_controller"
+path = "examples/fps_camera_controller.rs"

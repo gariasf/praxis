@@ -72,11 +72,11 @@
 //! ```
 
 mod device;
+pub mod mesh;
 mod pipeline;
 mod primitives;
 mod shaders;
 mod vertex;
-pub mod mesh;
 
 use crate::{device::VulkanDevice, pipeline::create_simple_pipeline_3d, vertex::Vertex3D};
 use praxis_math::Mat4;
@@ -232,7 +232,7 @@ pub struct RenderContext {
     previous_frame_end: Option<Box<dyn GpuFuture>>,
 
     frame_timer: FrameTimer,
-    
+
     /// Mesh asset manager for loading and managing meshes.
     mesh_manager: mesh::MeshAssetManager,
 }
@@ -414,7 +414,7 @@ impl RenderContext {
 
             // Performance tracking
             frame_timer: FrameTimer::new(),
-            
+
             // Mesh management
             mesh_manager,
         })
@@ -735,7 +735,7 @@ impl RenderContext {
 
         // Build per-object descriptor sets and collect mesh references
         let mut draw_list: Vec<(Arc<DescriptorSet>, &mesh::GpuMesh)> = Vec::new();
-        
+
         for draw_cmd in cmds.draw_commands.iter() {
             let mesh = self
                 .mesh_manager

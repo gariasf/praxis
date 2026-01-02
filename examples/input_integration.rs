@@ -78,7 +78,7 @@ impl App {
 
         let mouse_pos = input_state.mouse_position();
         let mouse_delta = input_state.mouse_delta();
-        
+
         if mouse_delta.0.abs() > 0.1 || mouse_delta.1.abs() > 0.1 {
             println!(
                 "Mouse at ({:.1}, {:.1}), delta: ({:.1}, {:.1})",
