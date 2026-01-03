@@ -97,3 +97,19 @@ pub mod post_process_tone_map_fs {
         path: "src/shaders/post_process_tone_map.frag"
     }
 }
+
+/// Compiled vertex shader for skybox rendering.
+pub mod skybox_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/shaders/skybox.vert"
+    }
+}
+
+/// Compiled fragment shader for skybox rendering.
+pub mod skybox_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/skybox.frag"
+    }
+}

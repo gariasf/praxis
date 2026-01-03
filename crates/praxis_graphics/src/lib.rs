@@ -75,8 +75,10 @@
 //!
 //! - **`Texture`**: GPU-side texture with image view and sampler
 //! - **`TextureManager`**: Central manager for cached textures
+//! - **`Cubemap`**: GPU-side cubemap texture for skyboxes and environment mapping
 //! - **Format Support**: PNG and JPEG via the `image` crate
 //! - **Texture Sampling**: Full support in shaders via UV coordinates
+//! - **Cubemap Loading**: Support for 6-face cubemaps and equirectangular conversion
 //!
 //! # Material System
 //!
@@ -182,6 +184,20 @@
 //! See the `post_process` module documentation and `POST_PROCESSING.md` for detailed
 //! information on implementing custom effects.
 //!
+//! # Skybox System
+//!
+//! The skybox system provides realistic background rendering using cubemaps:
+//!
+//! - **`SkyboxRenderer`**: Specialized renderer for skybox cubes with reversed depth
+//! - **`Cubemap`**: Support for 6-face cubemaps and equirectangular conversion
+//! - **Reversed Depth**: Skybox always renders behind all geometry
+//! - **Camera-Centered**: Skybox follows camera rotation but not translation
+//!
+//! Skyboxes create the illusion of a distant environment (sky, space, etc.) by
+//! rendering a large cube textured with a cubemap around the scene. The renderer
+//! uses reversed depth testing to ensure the skybox always appears at infinite
+//! distance, behind all other geometry.
+//!
 //! # Rendering Flow
 //!
 //! ```text
@@ -208,6 +224,7 @@ pub mod post_process;
 mod primitives;
 mod shaders;
 pub mod shadow;
+pub mod skybox;
 pub mod texture;
 pub mod uniform_buffer;
 mod vertex;
@@ -1365,6 +1382,7 @@ pub use primitives::{
     textured_quad_mesh,
 };
 pub use shadow::{ShadowConfig, ShadowMapManager, ShadowUniforms, MAX_SHADOW_CASCADES};
-pub use texture::{Texture, TextureManager};
+pub use skybox::SkyboxRenderer;
+pub use texture::{Cubemap, CubemapFace, Texture, TextureManager};
 pub use uniform_buffer::{DynamicUniformBuffer, ModelUniforms, ViewProjectionUniforms};
 pub use vertex::Vertex3D;

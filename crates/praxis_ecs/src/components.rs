@@ -1850,4 +1850,61 @@ mod tests {
         assert_eq!(light.intensity, 1.0);
         assert_eq!(light.range, 10.0);
     }
+
+    #[test]
+    fn test_skybox_component() {
+        let skybox = Skybox::new("sky_cubemap");
+        assert_eq!(skybox.cubemap_id(), "sky_cubemap");
+
+        let skybox2: Skybox = "night_sky".into();
+        assert_eq!(skybox2.cubemap_id(), "night_sky");
+    }
+}
+
+/// Skybox component for rendering a background skybox.
+///
+/// A skybox is a large cube textured with a cubemap that surrounds the entire scene,
+/// creating the illusion of a distant environment (sky, space, etc.). It's rendered
+/// with reversed depth to ensure it always appears behind all other geometry.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, Skybox};
+///
+/// let mut world = World::new();
+///
+/// // Spawn a skybox entity
+/// world.spawn(Skybox::new("day_sky"));
+/// ```
+#[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Skybox {
+    /// Unique identifier for the cubemap texture.
+    pub cubemap_id: String,
+}
+
+impl Skybox {
+    /// Creates a new skybox with the given cubemap identifier.
+    pub fn new(cubemap_id: impl Into<String>) -> Self {
+        Self {
+            cubemap_id: cubemap_id.into(),
+        }
+    }
+
+    /// Gets the cubemap identifier.
+    pub fn cubemap_id(&self) -> &str {
+        &self.cubemap_id
+    }
+}
+
+impl From<&str> for Skybox {
+    fn from(cubemap_id: &str) -> Self {
+        Self::new(cubemap_id)
+    }
+}
+
+impl From<String> for Skybox {
+    fn from(cubemap_id: String) -> Self {
+        Self { cubemap_id }
+    }
 }

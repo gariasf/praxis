@@ -137,6 +137,30 @@ To run:
 cargo run --example gui_demo
 ```
 
+### Skybox Demo
+
+Demonstrates skybox rendering with cubemap textures. Shows how to:
+- Load a cubemap texture (from 6 faces or equirectangular image)
+- Create a skybox renderer with reversed depth
+- Render a skybox that always appears at infinite distance
+- First-person camera controls for viewing the skybox
+
+The skybox uses specialized rendering techniques:
+- Reversed depth testing to ensure it renders behind all geometry
+- Camera-centered transform (no translation, only rotation)
+- Cubemap texture sampling for seamless panoramic views
+
+To run:
+
+```bash
+cargo run --example skybox_demo
+```
+
+Controls:
+- WASD - Move camera
+- Mouse - Look around
+- ESC - Exit
+
 ## Building Examples
 
 To build all examples:

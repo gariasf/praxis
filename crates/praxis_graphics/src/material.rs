@@ -443,7 +443,7 @@ mod tests {
 
     #[test]
     fn test_material_manager_contains() {
-        let mut manager = MaterialManager::new();
+        let manager = MaterialManager::new();
         assert!(!manager.contains_material("test"));
     }
 

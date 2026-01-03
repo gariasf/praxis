@@ -282,7 +282,12 @@ mod components;
 pub mod systems;
 mod world;
 
-pub use components::*;
+pub use components::{
+    Active, Camera, CameraMatrices, Children, DirectionalLight, DirectionalLightInfo,
+    EngineManaged, GlobalTransform, LightingData, MaterialHandle, MaterialPropertiesComponent,
+    Mesh, MeshHandle, Name, NoSave, OrthographicProjection, Parent, PerspectiveProjection,
+    PointLight, PointLightInfo, Skybox, TextureHandle, Transform, Visibility,
+};
 pub use systems::*;
 pub use world::*;
 
