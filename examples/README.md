@@ -161,6 +161,37 @@ Controls:
 - Mouse - Look around
 - ESC - Exit
 
+### Skeletal Animation Demo
+
+Comprehensive demonstration of the skeletal animation system showing:
+- Creating skeletons with hierarchical bone structures
+- Defining animation clips with keyframe data
+- Translation, rotation, and scale interpolation (linear and spherical)
+- Animation playback control (play, pause, resume, stop)
+- Animation looping and speed control
+- Multiple simultaneous animations with blending
+- Bone hierarchy evaluation and transform propagation
+
+This example is particularly useful for understanding:
+- How to set up a skeleton with parent-child bone relationships
+- How to create animation clips with keyframes for different bone properties
+- How to control animation playback programmatically
+- How animation blending works for smooth transitions
+
+To run:
+
+```bash
+cargo run --example skeletal_animation_demo
+```
+
+Features demonstrated:
+- 3-bone skeleton hierarchy (Root → Spine → Head)
+- Walk animation with translation and rotation keyframes
+- Idle animation with subtle bobbing motion
+- Animation control (play, pause, resume, stop)
+- Playback speed modification
+- Animation blending with weights
+
 ## Building Examples
 
 To build all examples:

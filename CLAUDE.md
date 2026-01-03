@@ -29,6 +29,7 @@ cargo run --example gui_demo
 cargo run --example physics_demo
 cargo run --example shadow_demo
 cargo run --example audio_demo
+cargo run --example skeletal_animation_demo
 
 # Check code without building
 cargo check --all
@@ -160,6 +161,106 @@ The scene system provides hierarchical transform management:
 - **Transform Propagation**: Automatic system that updates global transforms
 
 See `praxis_scene` and `examples/transform_propagation_demo.rs` for details.
+
+### Skeletal Animation System
+
+The skeletal animation system provides keyframe-based animation for bone hierarchies:
+
+- **Skeleton**: Defines bone hierarchy and bind poses for skeletal animation
+- **Bone**: Individual bone with parent relationship and bind pose transform
+- **AnimationClip**: Stores keyframe animation data for multiple bones
+- **AnimationPlayer**: Controls animation playback, looping, speed, and blending
+- **AnimatedPose**: Computed bone transforms after animation evaluation
+- **BoneTrack**: Keyframe tracks for translation, rotation, and scale channels
+
+#### Animation Components
+
+**Skeleton**: Component containing bone hierarchy and inverse bind matrices
+- `new(bones: Vec<Bone>)`: Creates skeleton from bone list
+- `bone_count()`: Returns number of bones
+- `find_bone(name: &str)`: Finds bone index by name
+- `inverse_bind_matrices()`: Gets matrices for skinning
+
+**AnimationClip**: Keyframe animation data for bone transforms
+- `new(name: String, duration: f32)`: Creates clip with duration
+- `add_bone_track(bone_index: usize)`: Adds track for a bone
+- `add_translation_keyframe(bone_index, time, translation)`: Adds translation key
+- `add_rotation_keyframe(bone_index, time, rotation)`: Adds rotation key
+- `add_scale_keyframe(bone_index, time, scale)`: Adds scale key
+
+**AnimationPlayer**: Controls animation playback
+- `new()`: Creates empty player
+- `add_clip(name, clip)`: Adds clip to library
+- `play(name)`: Starts playing animation
+- `pause(name)` / `resume(name)` / `stop(name)`: Playback control
+- `set_looping(name, looping)`: Controls looping behavior
+- `set_speed(name, speed)`: Sets playback speed multiplier
+- `set_weight(name, weight)`: Sets blend weight (0.0-1.0)
+- `update(delta_time)`: Advances animation time
+- `evaluate(skeleton)`: Produces AnimatedPose from current state
+
+**AnimatedPose**: Final computed bone transforms
+- `new(bone_count)`: Creates pose for skeleton
+- `local_transforms()`: Gets local bone transforms
+- `world_transforms()`: Gets world bone transforms
+- `skinning_matrices()`: Gets final matrices for GPU skinning
+
+#### Keyframe Interpolation
+
+The system supports automatic interpolation between keyframes:
+- **Translation**: Linear interpolation (lerp) between Vec3 keyframes
+- **Rotation**: Spherical linear interpolation (slerp) between Quat keyframes
+- **Scale**: Linear interpolation between Vec3 keyframes
+
+Keyframes are automatically sorted by time when added to tracks.
+
+#### Animation Blending
+
+Multiple animations can play simultaneously with weights:
+```rust
+player.play("Walk");
+player.set_weight("Walk", 0.7);
+player.play("Run");
+player.set_weight("Run", 0.3);
+```
+
+Transforms are blended using weighted lerp/slerp based on animation weights.
+
+#### Usage Example
+
+```rust
+use praxis_scene::{Skeleton, AnimationClip, AnimationPlayer, AnimatedPose, Bone};
+use praxis_math::{Vec3, Quat};
+
+// Create skeleton
+let skeleton = Skeleton::new(vec![
+    Bone::with_bind_pose("Root".to_string(), None, Vec3::ZERO, Quat::IDENTITY, Vec3::ONE),
+    Bone::with_bind_pose("Arm".to_string(), Some(0), Vec3::new(1.0, 0.0, 0.0), Quat::IDENTITY, Vec3::ONE),
+]);
+
+// Create animation
+let mut clip = AnimationClip::new("Wave".to_string(), 1.0);
+clip.add_rotation_keyframe(1, 0.0, Quat::IDENTITY);
+clip.add_rotation_keyframe(1, 0.5, Quat::from_rotation_z(PI / 2.0));
+clip.add_rotation_keyframe(1, 1.0, Quat::IDENTITY);
+
+// Setup player
+let mut player = AnimationPlayer::new();
+player.add_clip("Wave".to_string(), clip);
+player.play("Wave");
+
+// Spawn entity
+let pose = AnimatedPose::new(skeleton.bone_count());
+world.spawn((skeleton, player, pose));
+
+// Update in game loop
+fn animation_system(mut query: Query<(&Skeleton, &mut AnimationPlayer, &mut AnimatedPose)>) {
+    let delta_time = 0.016; // From timing system
+    praxis_scene::update_animations(delta_time, &mut query);
+}
+```
+
+See `praxis_scene::animation` and `examples/skeletal_animation_demo.rs` for complete usage.
 
 ### Input System
 
