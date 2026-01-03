@@ -33,3 +33,35 @@ pub mod shadow_fs {
         path: "src/shaders/shadow.frag"
     }
 }
+
+/// Compiled vertex shader for post-processing full-screen quad.
+pub mod post_process_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/shaders/post_process.vert"
+    }
+}
+
+/// Compiled fragment shader for post-processing copy/passthrough.
+pub mod post_process_copy_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/post_process_copy.frag"
+    }
+}
+
+/// Compiled fragment shader for post-processing grayscale effect.
+pub mod post_process_grayscale_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/post_process_grayscale.frag"
+    }
+}
+
+/// Compiled fragment shader for post-processing blur effect.
+pub mod post_process_blur_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/post_process_blur.frag"
+    }
+}

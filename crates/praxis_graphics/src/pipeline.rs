@@ -497,3 +497,79 @@ pub fn create_shadow_pipeline(
 
     Ok(pipeline)
 }
+
+/// Creates a graphics pipeline for post-processing effects.
+///
+/// This pipeline is optimized for full-screen quad rendering:
+/// - No depth testing (post-processing is 2D)
+/// - No face culling (always render both sides)
+/// - Simple vertex format (position + UV)
+/// - Dynamic viewport
+///
+/// # Arguments
+///
+/// * `device` - The Vulkan device
+/// * `render_pass` - The render pass this pipeline will be used with
+/// * `vs_entry` - Vertex shader entry point
+/// * `fs_entry` - Fragment shader entry point
+///
+/// # Errors
+///
+/// Returns an error if pipeline creation fails.
+#[allow(dead_code)]
+pub fn create_post_process_pipeline(
+    device: &Arc<Device>,
+    render_pass: &Arc<RenderPass>,
+    vs_entry: vulkano::shader::EntryPoint,
+    fs_entry: vulkano::shader::EntryPoint,
+) -> Result<Arc<GraphicsPipeline>> {
+    info!("Creating post-processing pipeline");
+
+    let stages = [
+        PipelineShaderStageCreateInfo::new(vs_entry.clone()),
+        PipelineShaderStageCreateInfo::new(fs_entry),
+    ];
+
+    // Vertex input for QuadVertex (position + UV)
+    let vertex_input_state = crate::post_process::QuadVertex::per_vertex()
+        .definition(&vs_entry)
+        .map_err(|e| eyre::eyre!("Failed to create vertex input state: {}", e))?;
+
+    // Create pipeline layout
+    let layout = create_pipeline_layout(device, &stages)?;
+
+    // Get subpass
+    let subpass = Subpass::from(render_pass.clone(), 0)
+        .ok_or_else(|| eyre::eyre!("Failed to get subpass from render pass"))?;
+
+    let create_info = GraphicsPipelineCreateInfo {
+        stages: stages.into_iter().collect(),
+        vertex_input_state: Some(vertex_input_state),
+        input_assembly_state: Some(InputAssemblyState {
+            topology: PrimitiveTopology::TriangleList,
+            ..Default::default()
+        }),
+        viewport_state: Some(ViewportState::default()),
+        rasterization_state: Some(RasterizationState {
+            cull_mode: CullMode::None, // No culling for full-screen quad
+            ..Default::default()
+        }),
+        multisample_state: Some(MultisampleState::default()),
+        // No depth testing for post-processing
+        depth_stencil_state: None,
+        color_blend_state: Some(ColorBlendState::with_attachment_states(
+            subpass.num_color_attachments(),
+            ColorBlendAttachmentState::default(),
+        )),
+        dynamic_state: [DynamicState::Viewport].into_iter().collect(),
+        subpass: Some(subpass.into()),
+        ..GraphicsPipelineCreateInfo::layout(layout)
+    };
+
+    let pipeline = GraphicsPipeline::new(device.clone(), None, create_info)
+        .map_err(|e| eyre::eyre!("Failed to create post-processing pipeline: {}", e))?;
+
+    info!("Post-processing pipeline created successfully");
+
+    Ok(pipeline)
+}

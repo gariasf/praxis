@@ -14,6 +14,7 @@
 //! - `texture`: Texture loading and management
 //! - `material`: Material system with texture support and descriptor set management
 //! - `lighting`: Lighting uniforms and buffer management
+//! - `post_process`: Post-processing framework for screen-space effects
 //!
 //! # Unified Rendering API
 //!
@@ -147,6 +148,25 @@
 //! at bindings 5-8 (one per cascade). The fragment shader performs cascade selection
 //! and PCF filtering to produce smooth, realistic shadows.
 //!
+//! # Post-Processing System
+//!
+//! The post-processing system provides a flexible framework for screen-space effects:
+//!
+//! - **`PostProcessPass`**: Trait for custom post-processing effects
+//! - **`RenderTarget`**: Offscreen framebuffers for render-to-texture
+//! - **`RenderTargetPool`**: Efficient render target reuse
+//! - **`FullScreenQuad`**: Geometry for full-screen effects
+//! - **`PostProcessChain`**: Chains multiple effects together
+//!
+//! Post-processing effects are applied after 3D scene rendering and operate on
+//! 2D screen-space images. Common effects include:
+//! - Color grading (grayscale, sepia, etc.)
+//! - Image filtering (blur, sharpen, edge detection)
+//! - Screen-space effects (bloom, depth of field, motion blur)
+//!
+//! See the `post_process` module documentation and `POST_PROCESSING.md` for detailed
+//! information on implementing custom effects.
+//!
 //! # Rendering Flow
 //!
 //! ```text
@@ -169,6 +189,7 @@ pub mod lighting;
 pub mod material;
 pub mod mesh;
 mod pipeline;
+pub mod post_process;
 mod primitives;
 mod shaders;
 pub mod shadow;
@@ -685,6 +706,22 @@ impl RenderContext {
     pub fn configure_surface(&mut self, width: u32, height: u32) {
         debug!("Surface configuration requested: {}x{}", width, height);
         self.recreate_swapchain = true;
+    }
+
+    /// Creates a render pass suitable for post-processing.
+    ///
+    /// This is a simple render pass with a single color attachment,
+    /// suitable for rendering post-processing effects to offscreen targets.
+    ///
+    /// # Returns
+    ///
+    /// A render pass configured for post-processing operations.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if render pass creation fails.
+    pub fn create_post_process_render_pass(&self) -> Result<Arc<RenderPass>> {
+        Self::create_render_pass(&self.device, vulkano::format::Format::R8G8B8A8_UNORM)
     }
 
     /// Checks if the window is currently minimized (0×0 size).
@@ -1303,6 +1340,10 @@ pub use lighting::{
 };
 pub use material::{Material, MaterialManager, MaterialProperties};
 pub use mesh::{GpuMesh, MeshData};
+pub use post_process::{
+    CopyPass, FullScreenQuad, GrayscalePass, PostProcessChain, PostProcessContext,
+    PostProcessPass, QuadVertex, RenderTarget, RenderTargetPool,
+};
 pub use primitives::{
     colored_cube_mesh, pyramid_mesh, quad_mesh, solid_cube_mesh, sphere_mesh, textured_cube_mesh,
     textured_quad_mesh,
