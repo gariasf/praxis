@@ -7,6 +7,7 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::system::Resource;
 use praxis_math::Vec3;
 use rapier3d::prelude::*;
+use rapier3d::parry::query::ShapeCastOptions;
 use std::collections::HashMap;
 
 /// Physics world resource managing the Rapier physics pipeline.
@@ -651,13 +652,6 @@ impl PhysicsWorld {
     /// }
     /// ```
     ///
-    /// # Implementation Note
-    ///
-    /// Due to complexity in Rapier's shape casting API and varying versions, this is
-    /// currently a placeholder that returns `None`. A full implementation would use
-    /// Rapier's `QueryPipeline::cast_shape` method with proper shape and transform
-    /// conversion.
-    ///
     /// # Performance Considerations
     ///
     /// Shape casting is significantly more expensive than raycasting:
@@ -682,18 +676,42 @@ impl PhysicsWorld {
     ///    cause thin objects to be missed. Consider using CCD on the rigid body itself.
     pub fn shape_cast(
         &self,
-        _shape_pos: Vec3,
-        _shape_rot: praxis_math::Quat,
-        _direction: Vec3,
-        _shape: &dyn Shape,
-        _max_distance: f32,
+        shape_pos: Vec3,
+        shape_rot: praxis_math::Quat,
+        direction: Vec3,
+        shape: &dyn Shape,
+        max_distance: f32,
     ) -> Option<(Entity, f32)> {
-        // TODO: Implement shape casting
-        // This is currently a placeholder. The implementation requires:
-        // 1. Converting Praxis types (Vec3, Quat) to Rapier types
-        // 2. Calling QueryPipeline::cast_shape with proper parameters
-        // 3. Converting Rapier results back to Praxis Entity
-        None
+        let shape_isometry = Isometry::new(
+            vector![shape_pos.x, shape_pos.y, shape_pos.z],
+            vector![shape_rot.x, shape_rot.y, shape_rot.z] * shape_rot.w,
+        );
+
+        let shape_velocity = vector![direction.x, direction.y, direction.z];
+
+        let filter = QueryFilter::default();
+
+        self.query_pipeline
+            .cast_shape(
+                &self.rigid_body_set,
+                &self.collider_set,
+                &shape_isometry,
+                &shape_velocity,
+                shape,
+                ShapeCastOptions {
+                    max_time_of_impact: max_distance,
+                    target_distance: 0.0,
+                    stop_at_penetration: true,
+                    compute_impact_geometry_on_penetration: false,
+                },
+                filter,
+            )
+            .and_then(|(handle, hit)| {
+                let collider = self.collider_set.get(handle)?;
+                let body_handle = collider.parent()?;
+                let entity = self.body_to_entity.get(&body_handle)?;
+                Some((*entity, hit.time_of_impact))
+            })
     }
 
     /// Checks if a point is inside any collider.
