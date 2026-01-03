@@ -63,12 +63,16 @@
 //! cargo run --example material_demo
 //! ```
 
+#[path = "common.rs"]
+mod common;
+
+use common::CameraController;
 use praxis_ecs::{PerspectiveCameraBundle, Transform, World};
 use praxis_graphics::{
     sphere_mesh, textured_cube_mesh, DrawCommand, MaterialProperties, RenderCommands, RenderContext,
 };
 use praxis_input::{Action, InputMap, InputState};
-use praxis_math::{Quat, Vec3};
+use praxis_math::Vec3;
 use praxis_utils::{info, Result};
 use std::sync::Arc;
 use std::time::Instant;
@@ -81,43 +85,6 @@ use winit::window::{CursorGrabMode, Window, WindowId};
 
 const WINDOW_WIDTH: u32 = 1920;
 const WINDOW_HEIGHT: u32 = 1080;
-
-/// Camera controller for FPS-style navigation
-struct CameraController {
-    move_speed: f32,
-    sprint_multiplier: f32,
-    mouse_sensitivity: f32,
-    pitch: f32,
-    yaw: f32,
-    max_pitch: f32,
-    camera_entity: Option<praxis_ecs::Entity>,
-}
-
-impl Default for CameraController {
-    fn default() -> Self {
-        Self {
-            move_speed: 5.0,
-            sprint_multiplier: 2.0,
-            mouse_sensitivity: 0.002,
-            pitch: 0.0,
-            yaw: std::f32::consts::PI,
-            max_pitch: std::f32::consts::FRAC_PI_2 - 0.01,
-            camera_entity: None,
-        }
-    }
-}
-
-impl CameraController {
-    fn update_rotation(&mut self, delta_x: f32, delta_y: f32) {
-        self.yaw -= delta_x * self.mouse_sensitivity;
-        self.pitch -= delta_y * self.mouse_sensitivity;
-        self.pitch = self.pitch.clamp(-self.max_pitch, self.max_pitch);
-    }
-
-    fn get_rotation(&self) -> Quat {
-        Quat::from_rotation_y(self.yaw) * Quat::from_rotation_x(self.pitch)
-    }
-}
 
 struct App {
     window: Option<Arc<Window>>,
