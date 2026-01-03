@@ -12,6 +12,12 @@ This guide provides comprehensive explanations of the core concepts and architec
 6. [Dynamic Uniform Buffer Ring System](#dynamic-uniform-buffer-ring-system)
 7. [Transform Hierarchy Propagation](#transform-hierarchy-propagation)
 8. [Rust-Specific Patterns](#rust-specific-patterns)
+9. [Lighting System Architecture](#lighting-system-architecture)
+10. [Material System](#material-system)
+11. [Physics System](#physics-system)
+12. [Shadow Mapping System](#shadow-mapping-system)
+13. [Normal Mapping](#normal-mapping)
+14. [Post-Processing Pipeline](#post-processing-pipeline)
 
 ---
 
@@ -2852,6 +2858,764 @@ world.spawn((
 ```
 
 For more details, see `examples/physics_demo.rs` which demonstrates falling cubes, bouncing spheres, and collision detection.
+
+---
+
+## Shadow Mapping System
+
+Shadow mapping is one of the most important techniques for adding realism to 3D scenes. Understanding how shadows work helps you optimize performance and achieve the visual quality you need.
+
+### What is Shadow Mapping?
+
+Shadow mapping is a two-pass rendering technique that determines which parts of the scene are in shadow:
+
+```text
+Shadow Mapping Overview
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Pass 1: Shadow Pass (Render from Light's Perspective)
+┌─────────────────────────────────────────────────────────────┐
+│                    Light's View                              │
+│                                                              │
+│            ☀️ Light                                         │
+│             │                                                │
+│             │ Looking down                                   │
+│             ▼                                                │
+│        ┌────────┐                                            │
+│        │ Object │                                            │
+│        └────────┘                                            │
+│                                                              │
+│  Render scene to depth texture (shadow map):                │
+│  - Each pixel stores distance from light                    │
+│  - Only depth values matter (no colors)                     │
+│  - This creates the "shadow map"                            │
+└─────────────────────────────────────────────────────────────┘
+
+Pass 2: Main Pass (Render from Camera's Perspective)
+┌─────────────────────────────────────────────────────────────┐
+│                  Camera's View                               │
+│                                                              │
+│  For each pixel:                                             │
+│    1. Calculate distance from light                          │
+│    2. Look up stored distance in shadow map                  │
+│    3. Compare:                                               │
+│       - If current distance > stored distance:               │
+│         → Something else is closer to light                  │
+│         → This pixel is IN SHADOW                            │
+│       - If current distance ≈ stored distance:               │
+│         → This pixel is DIRECTLY LIT                         │
+│    4. Darken shadowed pixels                                 │
+└─────────────────────────────────────────────────────────────┘
+
+Visual Example:
+                        ☀️ Light
+                         │
+                         ▼
+                    ┌────────┐
+                    │ Object │
+                    └────────┘
+                         │
+                         │ Shadow
+                         ▼
+        ═══════════════════════ Ground
+
+Shadow map stores: [distance to object, distance to ground, ...]
+Main pass compares: "Is this ground pixel farther than object?"
+                    → Yes → Pixel is in shadow!
+```
+
+### Cascaded Shadow Maps (CSM)
+
+A single shadow map covering the entire scene would have poor resolution. CSM solves this by using multiple shadow maps at different distances:
+
+```text
+Cascaded Shadow Maps
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Camera View Frustum (side view):
+                                    Far distance
+                                    (500m)
+                                    ▲
+                                   /│\
+                                  / │ \
+                                 /  │  \
+                                /   │   \
+              Mid distance     /    │    \
+              (100m)          /     │     \
+              ▲              /      │      \
+             /│\            /       │       \
+            / │ \          /        │        \
+           /  │  \        /         │         \
+Near      /   │   \      /          │          \
+distance /    │    \    /           │           \
+(20m)   /     │     \  /            │            \
+▲      /      │      \/             │             \
+│     /       │      /\             │              \
+│    /        │     /  \            │               \
+│   /         │    /    \           │                \
+│  /          │   /      \          │                 \
+│ /           │  /        \         │                  \
+│/            │ /          \        │                   \
+📷──────────────────────────────────────────────────────▶
+Camera        │              │               │
+
+Cascade 0     Cascade 1      Cascade 2       Cascade 3
+(0-20m)       (20-100m)      (100-500m)      (500m+)
+High res      Medium res     Lower res       Lowest res
+2048×2048     2048×2048      2048×2048       2048×2048
+
+Same texture size, but covering different world space:
+- Cascade 0: 1 pixel = ~0.01m (very detailed)
+- Cascade 1: 1 pixel = ~0.05m (good detail)
+- Cascade 2: 1 pixel = ~0.20m (moderate detail)
+- Cascade 3: 1 pixel = ~1.0m (basic detail)
+
+Result: Shadows look great near camera, acceptable far away!
+```
+
+### Shadow Map Resolution Trade-offs
+
+```text
+Resolution Impact
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+512×512 per cascade:
+  Memory: 1 MB per cascade (3 cascades = 3 MB)
+  Quality: Blocky shadows, visible aliasing
+  Performance: Excellent (fast rendering, low memory)
+  Use case: Mobile, low-end hardware
+
+1024×1024 per cascade (default):
+  Memory: 4 MB per cascade (3 cascades = 12 MB)
+  Quality: Good shadows, minimal aliasing
+  Performance: Good balance
+  Use case: Desktop, general purpose
+
+2048×2048 per cascade:
+  Memory: 16 MB per cascade (3 cascades = 48 MB)
+  Quality: Excellent shadows, smooth edges
+  Performance: More expensive (4× render time vs 1024)
+  Use case: High-end graphics, screenshots
+
+4096×4096 per cascade:
+  Memory: 64 MB per cascade (3 cascades = 192 MB)
+  Quality: Ultra high quality
+  Performance: Heavy (16× render time vs 1024)
+  Use case: Cinematics, offline rendering
+```
+
+### PCF (Percentage Closer Filtering)
+
+PCF softens shadow edges by sampling the shadow map multiple times:
+
+```text
+PCF Filtering
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Without PCF (1 sample):
+  Shadow Map (zoomed in):
+  ┌─┬─┬─┬─┬─┐
+  │█│█│░│░│░│  █ = in shadow (depth fail)
+  │█│█│░│░│░│  ░ = lit (depth pass)
+  │█│█│░│░│░│
+  │█│█│░│░│░│
+  └─┴─┴─┴─┴─┘
+  
+  Result: Hard, pixelated edge
+  ████░░░░
+  ████░░░░  ← Jagged!
+  ████░░░░
+
+With PCF (9 samples = 3×3 grid):
+  For each pixel, sample 9 nearby points:
+  ┌───┬───┬───┐
+  │ 1 │ 2 │ 3 │  Average results:
+  │───┼───┼───│  4 shadowed + 5 lit = 0.44
+  │ 4 │ X │ 5 │  
+  │───┼───┼───│  Result: Smooth gradient
+  │ 6 │ 7 │ 8 │  ████▓▓▒▒░░
+  └───┴───┴───┘  ████▓▓▒▒░░  ← Smooth!
+      └─ 9       ████▓▓▒▒░░
+
+PCF Sample Count Trade-off:
+  1 sample:  Hard shadows, best performance
+  4 samples: Slight softening, ~2× cost
+  9 samples: Smooth shadows, ~4× cost
+  16 samples: Very smooth, ~8× cost
+```
+
+### Common Shadow Artifacts
+
+#### Shadow Acne
+
+```text
+Shadow Acne Problem
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+What it looks like:
+  Surface shows striped/dotted shadow pattern on itself
+  ▓▒░▓▒░▓▒░  ← Self-shadowing artifacts
+  ░▓▒░▓▒░▓
+  ▓▒░▓▒░▓▒
+
+Why it happens:
+  Light → Surface
+          │
+    Shadow map stores depth with limited precision
+          │
+    When comparing, rounding errors make surface
+    think it's behind itself!
+
+Solution: Shadow Bias
+  Add small offset to depth comparison
+  
+  bias = 0.001  ← Too small: still get acne
+  bias = 0.005  ← Good balance (default)
+  bias = 0.050  ← Too large: "Peter Panning" (see below)
+```
+
+#### Peter Panning
+
+```text
+Peter Panning Problem
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+What it looks like:
+     ┌────┐
+     │ OBJ│
+     └────┘
+        ↕️ Gap!
+    ▓▓▓▓▓▓▓▓  ← Shadow floats above ground
+  ════════════ Ground
+
+Why it happens:
+  Shadow bias too large pushes shadow away from object
+
+Solution:
+  Reduce bias value
+  Use slope-scale bias (automatically adjusts based on surface angle)
+```
+
+### Shadow System Usage
+
+```rust
+use praxis_graphics::shadow::{ShadowMapManager, ShadowConfig};
+
+// Create shadow manager with custom config
+let config = ShadowConfig {
+    shadow_map_size: 1024,
+    cascade_count: 3,
+    cascade_distances: [20.0, 100.0, 500.0, 1000.0],
+    pcf_samples: 9,  // 3×3 filter for smooth shadows
+    bias: 0.005,
+};
+
+let shadow_manager = ShadowMapManager::new(
+    memory_allocator.clone(),
+    config,
+)?;
+
+// Each frame: update with light direction
+let light_dir = Vec3::new(0.3, -0.8, 0.5).normalize();
+shadow_manager.update(light_dir, camera_view, camera_proj)?;
+
+// Shadows are automatically used in rendering!
+```
+
+For more details, see [Shadow System Documentation](shadow_system.md).
+
+---
+
+## Normal Mapping
+
+Normal mapping is a technique that adds surface detail without adding geometry. It works by perturbing the surface normal at each pixel to simulate bumps and crevices.
+
+### What are Normals?
+
+A normal is a vector perpendicular to a surface. It tells the lighting system which direction the surface is facing:
+
+```text
+Surface Normals
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Flat Surface:
+         ▲ Normal
+         │ (perpendicular to surface)
+         │
+    ─────┴───── Surface
+
+All points have same normal → Looks flat
+
+
+Curved Surface:
+    ▲     ▲     ▲
+     \    |    /   Each point has different normal
+      \   |   /    → Looks curved
+       \  |  /
+        ╲│╱
+      ══════════
+
+Normals determine how light reflects off surface!
+```
+
+### Normal Maps Explained
+
+A normal map is a special texture where RGB values encode normal vectors:
+
+```text
+Normal Map Encoding
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Color Channels → Normal Vector:
+  R (Red):   X component of normal (-1 to +1)
+  G (Green): Y component of normal (-1 to +1)
+  B (Blue):  Z component of normal (-1 to +1)
+
+Typical normal map appearance:
+  Mostly blue-purple colors
+  Blue means "pointing toward camera" (Z = +1)
+  
+  Example pixel colors:
+  RGB(128, 128, 255) → Normal (0, 0, 1)    [straight up]
+  RGB(255, 128, 128) → Normal (1, 0, 0)    [pointing right]
+  RGB(128, 255, 128) → Normal (0, 1, 0)    [pointing up]
+  RGB(200, 128, 180) → Normal (0.4, 0, -0.2) [slight bump]
+```
+
+### Tangent Space
+
+Normal maps are stored in "tangent space" - a coordinate system local to each triangle:
+
+```text
+Tangent Space Coordinate System
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+World Space vs Tangent Space:
+
+World Space (global):
+         Y (up)
+         │
+         │
+         └──── X
+        /
+       Z
+
+Triangle in World Space:
+         Normal ▲
+                │
+        ╱───────┤  ← Triangle
+       ╱        │
+      ╱         │
+
+Tangent Space (local to triangle):
+         N (Normal)
+         │      B (Bitangent)
+         │     ╱
+         │    ╱
+         │   ╱
+         │  ╱
+         │ ╱
+         └──────── T (Tangent)
+
+The tangent and bitangent align with the texture's U and V directions!
+
+This means:
+- Normal map can be reused on any surface
+- (0, 0, 1) in tangent space always means "flat surface"
+- Bumps rotate correctly with the surface
+```
+
+### How Normal Mapping Works
+
+```text
+Normal Mapping Pipeline
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Step 1: Vertex Shader
+  Input per vertex:
+  - Position
+  - Normal (geometric)
+  - Tangent (from mesh)
+  - UV coordinates
+  
+  Output per vertex:
+  - Normal, Tangent, Bitangent (interpolated)
+  - UV coordinates
+
+Step 2: Fragment Shader
+  For each pixel:
+  
+  1. Sample normal map at UV coordinate
+     normal_map_color = texture(normal_map, uv)
+     
+  2. Convert color [0,1] to normal [-1,1]
+     tangent_normal = normal_map_color * 2.0 - 1.0
+     
+  3. Build TBN matrix (Tangent, Bitangent, Normal)
+     TBN = mat3(T, B, N)
+     
+  4. Transform from tangent space to world space
+     world_normal = TBN * tangent_normal
+     
+  5. Use world_normal for lighting calculations
+     Instead of flat geometric normal!
+
+Result:
+  Without normal map:
+    ──────────  ← Looks flat, single normal
+  
+  With normal map:
+    ╱╲╱╲╱╲╱╲  ← Looks bumpy, varied normals
+                   (but still same geometry!)
+```
+
+### Normal Map Benefits
+
+```text
+Geometry vs Normal Maps
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Brick Wall Example:
+
+High-Poly Geometry (1 million triangles):
+  Pros: Perfect accuracy
+  Cons: 
+    - 1,000,000 vertices to process
+    - Massive memory usage
+    - Slow rendering
+    - Impractical for games
+
+Low-Poly + Normal Map (1000 triangles):
+  Pros:
+    - 1,000 vertices to process (1000× faster!)
+    - Small memory footprint
+    - Fast rendering
+    - Looks almost as good
+  Cons:
+    - Silhouette is still flat
+    - Can't cast detailed shadows
+
+Best Practice:
+  Use normal maps for:
+  - Small surface details (scratches, bumps, tiles)
+  - Repeated patterns
+  - Close-up detail
+  
+  Use geometry for:
+  - Silhouettes
+  - Large features
+  - Anything that needs to cast shadows
+```
+
+### Using Normal Maps in Praxis
+
+```rust
+// Normal maps are loaded like regular textures
+render_context
+    .texture_manager_mut()
+    .load_texture(
+        "brick_normals",
+        "assets/textures/brick_normal.png"
+    )?;
+
+// The graphics system automatically uses them if:
+// 1. Material has normal_map_texture set
+// 2. Mesh has tangent vectors
+// 3. Shader supports normal mapping
+
+let material = MaterialProperties {
+    base_color_texture: Some("brick_color".to_string()),
+    normal_map_texture: Some("brick_normals".to_string()),
+    metallic: 0.0,
+    roughness: 0.8,
+};
+```
+
+---
+
+## Post-Processing Pipeline
+
+Post-processing applies effects to the final rendered image before display. It's the last stage of rendering and can dramatically change the look of your game.
+
+### Post-Processing Flow
+
+```text
+Complete Rendering Pipeline with Post-Processing
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────────────┐
+│  Step 1: 3D Scene Rendering                                  │
+│  ────────────────────────────────────────────────────────    │
+│  Render scene to offscreen texture (not screen!)             │
+│                                                              │
+│  Input: 3D geometry, textures, lights                        │
+│  Output: Color texture (scene_color)                         │
+│                                                              │
+│  ┌──────────────────────────────────────────┐               │
+│  │  ┌─────┐  ┌─────┐  ┌─────┐               │               │
+│  │  │ Obj │  │ Obj │  │Light│               │               │
+│  │  └─────┘  └─────┘  └─────┘               │               │
+│  │         Rendered Scene                   │               │
+│  └──────────────────────────────────────────┘               │
+│              │                                               │
+│              │ Stored in offscreen texture                   │
+│              ▼                                               │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│  Step 2: Post-Processing Chain                               │
+│  ────────────────────────────────────────────────────────    │
+│  Apply effects in sequence, ping-ponging between textures    │
+│                                                              │
+│  Pass 1: Bloom Extraction                                    │
+│  ┌──────────┐                                                │
+│  │scene_────│ → Extract Bright → ┌──────────┐               │
+│  │ color    │    Pixels           │ bright   │               │
+│  └──────────┘                     └──────────┘               │
+│                                         │                    │
+│  Pass 2: Blur Horizontal                │                    │
+│  ┌──────────┐                           │                    │
+│  │ bright   │ ◄──────────────────────────┘                   │
+│  └──────────┘ → Blur H → ┌──────────┐                        │
+│                           │blur_h    │                        │
+│                           └──────────┘                        │
+│                                │                             │
+│  Pass 3: Blur Vertical         │                             │
+│  ┌──────────┐                  │                             │
+│  │ blur_h   │ ◄─────────────────┘                            │
+│  └──────────┘ → Blur V → ┌──────────┐                        │
+│                           │blur_final│                        │
+│                           └──────────┘                        │
+│                                │                             │
+│  Pass 4: Combine               │                             │
+│  ┌──────────┐                  │                             │
+│  │scene_────│ ◄─────────┐      │                             │
+│  │ color    │            │      │                             │
+│  └──────────┘            │      │                             │
+│  ┌──────────┐            │      │                             │
+│  │blur_final│ ◄──────────┴──────┘                            │
+│  └──────────┘                                                 │
+│       │                                                       │
+│       │ Combine                                               │
+│       ▼                                                       │
+│  ┌──────────┐                                                 │
+│  │  final   │                                                 │
+│  │  output  │                                                 │
+│  └──────────┘                                                 │
+└──────────────┬──────────────────────────────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Step 3: Present to Screen                                   │
+│  ────────────────────────────────────────────────────────    │
+│  Copy final texture to swapchain image (visible on screen)   │
+│                                                              │
+│  🖥️ Display                                                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Why Offscreen Rendering?
+
+```text
+Screen vs Offscreen Rendering
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Direct to Screen (No Post-Processing):
+  3D Scene → Swapchain → Display
+  
+  ✓ Simple
+  ✓ Fast
+  ✗ Can't apply effects
+  ✗ Can't read back results
+  ✗ Limited to screen resolution
+
+To Offscreen Texture (With Post-Processing):
+  3D Scene → Texture A → Process → Texture B → Swapchain → Display
+  
+  ✓ Can apply effects
+  ✓ Can read/write multiple times
+  ✓ Can render at different resolution
+  ✓ Can save frames to disk
+  ✗ Extra memory for textures
+  ✗ Slightly more complex
+
+Memory Cost Example (1080p):
+  Color texture: 1920 × 1080 × 4 bytes = 8.3 MB
+  Depth texture: 1920 × 1080 × 4 bytes = 8.3 MB
+  Intermediate: 1920 × 1080 × 4 bytes = 8.3 MB
+  Total: ~25 MB (minimal on modern GPUs)
+```
+
+### Ping-Pong Rendering
+
+Many post-processing effects require multiple passes. Ping-pong rendering efficiently handles this:
+
+```text
+Ping-Pong Pattern
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Two Render Targets: A and B
+
+Frame Start:
+  Input: Scene in Texture A
+  
+Pass 1: Blur Horizontal
+  Read from: Texture A
+  Write to:  Texture B
+  
+Pass 2: Blur Vertical
+  Read from: Texture B  ← Now B has the latest image
+  Write to:  Texture A  ← Reuse A (not needed anymore)
+  
+Pass 3: Sharpen
+  Read from: Texture A  ← Now A has the latest image
+  Write to:  Texture B  ← Reuse B
+  
+Final Pass: Copy to Screen
+  Read from: Texture B
+  Write to:  Swapchain
+  
+Memory: Only 2 textures needed regardless of pass count!
+        Without ping-pong: would need N textures for N passes
+```
+
+### Common Post-Processing Effects
+
+```text
+Post-Processing Effect Gallery
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Bloom (Glow Effect):
+  Original:    ████▓▓▒▒░░      💡
+  With Bloom:  ▓▓▓▓▓▓▓▒▒░  ← Light bleeds
+  
+  Steps:
+    1. Extract bright pixels (threshold)
+    2. Blur heavily (spread light)
+    3. Add back to original
+  
+  Cost: ~1-2ms @ 1080p (3-5 passes)
+
+Color Grading:
+  Original:  Regular colors
+  Graded:    Adjusted mood (warm, cool, vintage, etc.)
+  
+  Implementation: LUT (Look-Up Table) texture
+  Cost: ~0.1ms @ 1080p (single texture lookup)
+
+Depth of Field:
+  Original:  Everything sharp
+  DOF:       Focus on subject, blur background
+  
+  Requires: Depth buffer from rendering
+  Cost: ~2-4ms @ 1080p (distance-based blur)
+
+Motion Blur:
+  Original:  Crisp movement
+  Motion:    Trails behind moving objects
+  
+  Requires: Velocity buffer (previous frame positions)
+  Cost: ~1-2ms @ 1080p
+
+Screen Space Ambient Occlusion (SSAO):
+  Original:  Flat ambient lighting
+  SSAO:      Darkened corners and crevices
+  
+  Requires: Depth buffer + normals
+  Cost: ~2-3ms @ 1080p (multiple depth samples)
+
+Tone Mapping:
+  Original:  HDR values (can be > 1.0)
+  Mapped:    Compressed to screen range [0, 1]
+  
+  Purpose: Convert high dynamic range to displayable
+  Cost: ~0.1ms @ 1080p (per-pixel formula)
+```
+
+### Post-Processing Best Practices
+
+```text
+Optimization Guidelines
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Order Matters
+   Fast to Slow:
+     ✓ Cheap effects first (color grading)
+     ✓ Expensive effects last (heavy blur)
+   
+   Reason: If early effect makes pixel transparent,
+           later effects don't need to process it
+
+2. Resolution Scaling
+   High-frequency detail (SSAO):  Full resolution
+   Low-frequency effects (bloom): Half resolution
+   
+   Example:
+     Scene render: 1920×1080
+     Bloom extract: 960×540  (¼ pixels = 4× faster!)
+     Bloom blur: 960×540
+     Final combine: 1920×1080
+
+3. Render Target Pooling
+   Reuse textures between frames:
+   
+   Frame N:   Create texture A  (1.5ms)
+              Create texture B  (1.5ms)
+              Total: 3ms
+   
+   Frame N+1: Reuse texture A   (0.01ms)
+              Reuse texture B   (0.01ms)
+              Total: 0.02ms  (150× faster!)
+
+4. Batch Effects
+   Bad:  Submit each pass separately
+         (CPU overhead per submission)
+   
+   Good: Record all passes in one command buffer
+         (Single submission)
+
+5. Test on Target Hardware
+   Desktop GPU:  Can handle 10+ effects
+   Mobile GPU:   May struggle with 3+ effects
+   
+   Always profile!
+```
+
+### Using Post-Processing in Praxis
+
+```rust
+use praxis_graphics::post_processing::{
+    PostProcessChain, RenderTargetPool, GrayscalePass
+};
+
+// Setup (once)
+let mut pool = RenderTargetPool::new(memory_allocator.clone(), render_pass.clone());
+let mut chain = PostProcessChain::new(queue.clone());
+
+// Add effects
+chain.add_pass(Box::new(GrayscalePass::new(
+    device.clone(),
+    render_pass.clone(),
+)?));
+
+// Each frame
+let input = pool.acquire([width, height])?;
+let output = pool.acquire([width, height])?;
+
+// Render scene to input texture
+// ... (your 3D rendering code)
+
+// Apply post-processing
+chain.process(&input, &output, &mut pool)?;
+
+// Present output to screen
+// ...
+
+pool.release(input);
+pool.release(output);
+```
+
+For detailed information, see [Post-Processing System Documentation](post_processing_system.md).
 
 ---
 
