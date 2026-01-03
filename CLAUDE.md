@@ -34,6 +34,7 @@ cargo run --example animation_blending_demo
 cargo run --example gltf_animation_loader_demo
 cargo run --example deferred_demo
 cargo run --example hdr_demo
+cargo run --example environment_probe_demo
 
 # Check code without building
 cargo check --all

@@ -94,6 +94,10 @@ path = "examples/audio_demo.rs"
 name = "audio_simple"
 path = "examples/audio_simple.rs"
 
+[[example]]
+name = "environment_probe_demo"
+path = "examples/environment_probe_demo.rs"
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 vulkano = "0.35.1"

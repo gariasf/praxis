@@ -212,6 +212,53 @@
 //!
 //! See the `ssao` module documentation for usage details.
 //!
+//! # Environment Probe System
+//!
+//! The environment probe system provides image-based lighting (IBL) for realistic
+//! reflections and ambient lighting:
+//!
+//! - **`EnvironmentProbe`**: Probe component capturing environment as cubemap
+//! - **`EnvironmentProbeManager`**: Central manager for probe capture and IBL precomputation
+//! - **`EnvironmentProbeCapture`**: Helper for rendering scene to cubemap faces
+//! - **Diffuse Irradiance**: Precomputed ambient lighting from environment
+//! - **Specular Reflection**: Prefiltered reflections with multiple roughness levels
+//! - **Real-time Updates**: Dynamic probe updates for changing scenes
+//!
+//! Environment probes capture the surrounding environment as a cubemap and precompute
+//! lighting data for realistic image-based lighting. They enable:
+//! - Accurate reflections on metallic and glossy surfaces
+//! - Ambient lighting that matches the scene environment
+//! - Indirect lighting approximation without expensive path tracing
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use praxis_graphics::{EnvironmentProbeConfig, EnvironmentProbeManager, environment_probe::ProbeUpdateMode};
+//! use praxis_math::Vec3;
+//!
+//! # async fn example() -> praxis_utils::Result<()> {
+//! // Create probe configuration
+//! let config = EnvironmentProbeConfig {
+//!     position: Vec3::new(0.0, 2.0, 0.0),
+//!     resolution: 256,
+//!     near_clip: 0.1,
+//!     far_clip: 100.0,
+//!     update_mode: ProbeUpdateMode::Once,
+//! };
+//!
+//! // Add probe to manager
+//! // let mut probe_manager = EnvironmentProbeManager::new(device, allocator, queue)?;
+//! // probe_manager.add_probe("main_probe".to_string(), config)?;
+//!
+//! // Get IBL data for rendering
+//! // let ibl_data = probe_manager.get_nearest_probe(camera_position);
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! See the `environment_probe` module documentation and `environment_probe_demo.rs`
+//! for complete usage examples.
+//!
 //! # Skybox System
 //!
 //! The skybox system provides realistic background rendering using cubemaps:

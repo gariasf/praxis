@@ -1859,6 +1859,83 @@ mod tests {
         let skybox2: Skybox = "night_sky".into();
         assert_eq!(skybox2.cubemap_id(), "night_sky");
     }
+
+    #[test]
+    fn test_environment_probe_creation() {
+        let probe = EnvironmentProbe::new("test_probe");
+        assert_eq!(probe.id(), "test_probe");
+        assert_eq!(probe.resolution, 256);
+        assert_eq!(probe.near_clip, 0.1);
+        assert_eq!(probe.far_clip, 100.0);
+        assert!(probe.is_enabled());
+        assert_eq!(probe.influence_radius, 50.0);
+        assert_eq!(probe.intensity, 1.0);
+    }
+
+    #[test]
+    fn test_environment_probe_builder() {
+        let probe = EnvironmentProbe::new("custom_probe")
+            .with_resolution(512)
+            .with_near_clip(0.5)
+            .with_far_clip(200.0)
+            .with_influence_radius(100.0)
+            .with_intensity(1.5)
+            .with_update_every_n_frames(30);
+
+        assert_eq!(probe.resolution, 512);
+        assert_eq!(probe.near_clip, 0.5);
+        assert_eq!(probe.far_clip, 200.0);
+        assert_eq!(probe.influence_radius, 100.0);
+        assert_eq!(probe.intensity, 1.5);
+        assert_eq!(
+            probe.update_mode,
+            EnvironmentProbeUpdateMode::EveryNFrames(30)
+        );
+    }
+
+    #[test]
+    fn test_environment_probe_enable_disable() {
+        let mut probe = EnvironmentProbe::new("toggle_probe");
+        assert!(probe.is_enabled());
+
+        probe.disable();
+        assert!(!probe.is_enabled());
+
+        probe.enable();
+        assert!(probe.is_enabled());
+    }
+
+    #[test]
+    fn test_environment_probe_update_modes() {
+        let probe_once = EnvironmentProbe::new("once").with_update_once();
+        assert_eq!(probe_once.update_mode, EnvironmentProbeUpdateMode::Once);
+
+        let probe_every_n = EnvironmentProbe::new("every_n").with_update_every_n_frames(60);
+        assert_eq!(
+            probe_every_n.update_mode,
+            EnvironmentProbeUpdateMode::EveryNFrames(60)
+        );
+
+        let probe_manual = EnvironmentProbe::new("manual").with_update_manual();
+        assert_eq!(
+            probe_manual.update_mode,
+            EnvironmentProbeUpdateMode::Manual
+        );
+
+        let probe_continuous = EnvironmentProbe::new("continuous").with_update_continuous();
+        assert_eq!(
+            probe_continuous.update_mode,
+            EnvironmentProbeUpdateMode::Continuous
+        );
+    }
+
+    #[test]
+    fn test_environment_probe_default() {
+        let probe = EnvironmentProbe::default();
+        assert_eq!(probe.id(), "probe");
+        assert_eq!(probe.resolution, 256);
+        assert!(probe.is_enabled());
+    }
 }
 
 /// Skybox component for rendering a background skybox.
@@ -1907,4 +1984,172 @@ impl From<String> for Skybox {
     fn from(cubemap_id: String) -> Self {
         Self { cubemap_id }
     }
+}
+
+/// Environment probe component for image-based lighting.
+///
+/// Environment probes capture the surrounding environment as a cubemap and provide
+/// lighting data for realistic reflections and ambient lighting. They are essential
+/// for physically-based rendering with metallic and glossy surfaces.
+///
+/// # Features
+///
+/// - **Cubemap Capture**: Captures environment from 6 camera angles
+/// - **Diffuse Irradiance**: Precomputed ambient lighting
+/// - **Specular Reflection**: Prefiltered reflections for varying roughness
+/// - **Real-time Updates**: Can update dynamically for moving objects
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, EnvironmentProbe, Transform};
+/// use praxis_math::Vec3;
+///
+/// let mut world = World::new();
+///
+/// // Spawn an environment probe at the scene center
+/// world.spawn((
+///     Transform::from_xyz(0.0, 2.0, 0.0),
+///     EnvironmentProbe::new("main_probe")
+///         .with_resolution(512)
+///         .with_update_every_n_frames(60),
+/// ));
+/// ```
+#[derive(Component, Debug, Clone)]
+pub struct EnvironmentProbe {
+    /// Unique identifier for this probe.
+    pub id: String,
+
+    /// Resolution of each cubemap face (e.g., 256, 512, 1024).
+    pub resolution: u32,
+
+    /// Near clipping plane for capture.
+    pub near_clip: f32,
+
+    /// Far clipping plane for capture.
+    pub far_clip: f32,
+
+    /// Update mode for this probe.
+    pub update_mode: EnvironmentProbeUpdateMode,
+
+    /// Whether this probe is currently enabled.
+    pub enabled: bool,
+
+    /// Influence radius - objects within this distance use this probe.
+    pub influence_radius: f32,
+
+    /// Intensity multiplier for this probe's contribution.
+    pub intensity: f32,
+}
+
+impl EnvironmentProbe {
+    /// Creates a new environment probe with the given identifier.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            resolution: 256,
+            near_clip: 0.1,
+            far_clip: 100.0,
+            update_mode: EnvironmentProbeUpdateMode::Once,
+            enabled: true,
+            influence_radius: 50.0,
+            intensity: 1.0,
+        }
+    }
+
+    /// Sets the cubemap resolution per face.
+    pub fn with_resolution(mut self, resolution: u32) -> Self {
+        self.resolution = resolution;
+        self
+    }
+
+    /// Sets the near clipping plane.
+    pub fn with_near_clip(mut self, near_clip: f32) -> Self {
+        self.near_clip = near_clip;
+        self
+    }
+
+    /// Sets the far clipping plane.
+    pub fn with_far_clip(mut self, far_clip: f32) -> Self {
+        self.far_clip = far_clip;
+        self
+    }
+
+    /// Sets the probe to update once when created.
+    pub fn with_update_once(mut self) -> Self {
+        self.update_mode = EnvironmentProbeUpdateMode::Once;
+        self
+    }
+
+    /// Sets the probe to update every N frames.
+    pub fn with_update_every_n_frames(mut self, n: u32) -> Self {
+        self.update_mode = EnvironmentProbeUpdateMode::EveryNFrames(n);
+        self
+    }
+
+    /// Sets the probe to update only when manually requested.
+    pub fn with_update_manual(mut self) -> Self {
+        self.update_mode = EnvironmentProbeUpdateMode::Manual;
+        self
+    }
+
+    /// Sets the probe to update continuously every frame.
+    pub fn with_update_continuous(mut self) -> Self {
+        self.update_mode = EnvironmentProbeUpdateMode::Continuous;
+        self
+    }
+
+    /// Sets the influence radius.
+    pub fn with_influence_radius(mut self, radius: f32) -> Self {
+        self.influence_radius = radius;
+        self
+    }
+
+    /// Sets the intensity multiplier.
+    pub fn with_intensity(mut self, intensity: f32) -> Self {
+        self.intensity = intensity;
+        self
+    }
+
+    /// Gets the probe identifier.
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    /// Checks if the probe is enabled.
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// Enables the probe.
+    pub fn enable(&mut self) {
+        self.enabled = true;
+    }
+
+    /// Disables the probe.
+    pub fn disable(&mut self) {
+        self.enabled = false;
+    }
+}
+
+impl Default for EnvironmentProbe {
+    fn default() -> Self {
+        Self::new("probe")
+    }
+}
+
+/// Update mode for environment probes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnvironmentProbeUpdateMode {
+    /// Capture once when created, never update.
+    Once,
+
+    /// Update every N frames.
+    EveryNFrames(u32),
+
+    /// Update manually when requested.
+    Manual,
+
+    /// Update continuously every frame (expensive).
+    Continuous,
 }

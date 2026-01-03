@@ -284,9 +284,10 @@ mod world;
 
 pub use components::{
     Active, Camera, CameraMatrices, Children, DirectionalLight, DirectionalLightInfo,
-    EngineManaged, GlobalTransform, LightingData, MaterialHandle, MaterialPropertiesComponent,
-    Mesh, MeshHandle, Name, NoSave, OrthographicProjection, Parent, PerspectiveProjection,
-    PointLight, PointLightInfo, Skybox, TextureHandle, Transform, Visibility,
+    EngineManaged, EnvironmentProbe, EnvironmentProbeUpdateMode, GlobalTransform, LightingData,
+    MaterialHandle, MaterialPropertiesComponent, Mesh, MeshHandle, Name, NoSave,
+    OrthographicProjection, Parent, PerspectiveProjection, PointLight, PointLightInfo, Skybox,
+    TextureHandle, Transform, Visibility,
 };
 pub use systems::*;
 pub use world::*;
