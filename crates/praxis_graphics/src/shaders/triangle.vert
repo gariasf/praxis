@@ -164,21 +164,28 @@ layout(set = 0, binding = 0, std140) uniform ViewProjection {
 } view_proj;
 
 // ============================================================================
-// Per-Object Uniform Buffer (Model Matrix)
+// Per-Object Uniform Buffer (Model Matrix) - DYNAMIC
 // ============================================================================
 // This uniform buffer contains the model matrix that is unique per object.
+// Uses dynamic offsets to allow multiple objects to share a single large buffer.
 //
 // Data Flow:
 //   1. CPU: Application computes model matrix based on object position/rotation/scale
-//   2. CPU: Matrix packed into `ModelUniforms` struct (uniform_buffer.rs)
-//   3. CPU: Written to host-visible uniform buffer per object
-//   4. GPU: Bound to descriptor set at set 0, binding 1
+//   2. CPU: Matrices packed into `ModelUniforms` struct (uniform_buffer.rs)
+//   3. CPU: Written to host-visible dynamic uniform buffer (all objects in one buffer)
+//   4. GPU: Bound to descriptor set at set 0, binding 1 with dynamic offset per object
 //   5. GPU: Read by vertex shader for each vertex of that object
+//
+// Dynamic offsets allow efficient batching:
+// - Instead of creating a separate buffer per object, we have one large buffer
+// - Each object's data is at a different offset in the buffer
+// - When rendering, we specify which offset to use via vkCmdBindDescriptorSets
+// - This reduces descriptor set allocations and GPU binds
 //
 // The std140 layout ensures consistent memory layout between CPU and GPU:
 // - mat4 is 64 bytes (16 floats * 4 bytes)
 // - Each column is 16-byte aligned (vec4)
-// - Total buffer size: 64 bytes
+// - Total per-object size: 64 bytes (but must respect minUniformBufferOffsetAlignment)
 
 layout(set = 0, binding = 1, std140) uniform Model {
     mat4 model;  // Model matrix: transforms model space → world space

@@ -40,12 +40,13 @@
 //    - Purpose: Camera matrices and position for lighting calculations
 //    - Memory: Host-visible buffer, 144 bytes
 //
-// ## 2. Model Uniform Buffer (Set 0, Binding 1)
+// ## 2. Model Uniform Buffer (Set 0, Binding 1) - DYNAMIC
 //    - Source: `ModelUniforms` struct in Rust (uniform_buffer.rs)
 //    - Contains: model matrix
 //    - Updated: Per-object, every frame
 //    - Purpose: Transform vertices from model space to world space
-//    - Memory: Host-visible buffer, 64 bytes per object
+//    - Memory: Host-visible dynamic buffer, 64 bytes per object (aligned to device limits)
+//    - Type: UniformBufferDynamic (supports dynamic offsets for efficient batching)
 //
 // ## 3. Texture Sampler (Set 0, Binding 2)
 //    - Source: `TextureManager` in Rust
@@ -134,8 +135,9 @@ layout(set = 0, binding = 0, std140) uniform ViewProjection {
     float _padding;
 } view_proj;
 
-// Model matrix uniform buffer at binding 1
+// Model matrix uniform buffer at binding 1 (DYNAMIC)
 // Contains model matrix (unique per object)
+// Uses dynamic offsets to allow multiple objects to share a single buffer
 layout(set = 0, binding = 1, std140) uniform Model {
     mat4 model;
 } model_ubo;

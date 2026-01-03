@@ -103,7 +103,12 @@
 //!
 //! 1. **Vertex Format**: `Vertex3D` includes UV coordinates (binding location 2)
 //! 2. **Shaders**: Vertex shader passes UVs to fragment shader, which samples textures
-//! 3. **Descriptor Sets**: Texture sampler bound at set 0, binding 1
+//! 3. **Descriptor Sets**: 
+//!    - Set 0, Binding 0: View/Projection uniform buffer
+//!    - Set 0, Binding 1: Model matrix (UniformBufferDynamic with dynamic offsets)
+//!    - Set 0, Binding 2: Texture sampler
+//!    - Set 0, Binding 3: Lighting uniform buffer
+//!    - Set 1, Binding 0: Material properties uniform buffer
 //! 4. **Mesh Data**: `MeshData` supports UV coordinates via `with_uvs()` and `with_colors_and_uvs()`
 //! 5. **Primitives**: Textured primitives like `textured_cube_mesh()` and `textured_quad_mesh()`
 //!

@@ -280,11 +280,9 @@ fn load_shaders(
 /// The pipeline layout describes the interface between the pipeline and
 /// descriptor sets (textures, buffers, etc.) that shaders can access.
 ///
-/// Currently, our shaders don't use any descriptor sets, so this creates
-/// an empty layout. In the future, this would define:
-/// - Uniform buffer layouts (for matrices, etc.)
-/// - Texture and sampler bindings
-/// - Storage buffer bindings
+/// This function automatically derives the layout from shader reflection,
+/// then modifies binding 1 in set 0 to use `DescriptorType::UniformBufferDynamic`
+/// for the model matrix, enabling dynamic offsets for efficient batching.
 fn create_pipeline_layout(
     device: &Arc<Device>,
     stages: &[PipelineShaderStageCreateInfo],
@@ -296,19 +294,35 @@ fn create_pipeline_layout(
 
     // Automatically derive the layout from shader stages
     // This inspects the shaders to determine what resources they expect
-    let layout_create_info = PipelineDescriptorSetLayoutCreateInfo::from_stages(stages)
+    let mut descriptor_set_layout_create_infos = PipelineDescriptorSetLayoutCreateInfo::from_stages(stages);
+
+    // Modify set 0, binding 1 to use UniformBufferDynamic instead of UniformBuffer
+    // This allows us to use dynamic offsets for the model matrix, enabling
+    // efficient batching of draw calls with different model matrices
+    if let Some(set_0) = descriptor_set_layout_create_infos.set_layouts.get_mut(0) {
+        if let Some(binding) = set_0.bindings.get_mut(&1) {
+            trace!("Modifying binding 1 to use UniformBufferDynamic");
+            binding.descriptor_type = vulkano::descriptor_set::layout::DescriptorType::UniformBufferDynamic;
+        } else {
+            error!("Binding 1 not found in set 0");
+        }
+    } else {
+        error!("Set 0 not found in descriptor set layout create infos");
+    }
+
+    let layout_create_infos = descriptor_set_layout_create_infos
         .into_pipeline_layout_create_info(device.clone())
         .map_err(|e| {
             error!("Failed to create pipeline layout info: {}", e);
             eyre::eyre!("Failed to create pipeline layout info: {}", e)
         })?;
 
-    let layout = PipelineLayout::new(device.clone(), layout_create_info).map_err(|e| {
+    let layout = PipelineLayout::new(device.clone(), layout_create_infos).map_err(|e| {
         error!("Failed to create pipeline layout: {}", e);
         eyre::eyre!("Failed to create pipeline layout: {}", e)
     })?;
 
-    trace!("Created pipeline layout successfully");
+    trace!("Created pipeline layout successfully with dynamic uniform buffer at binding 1");
 
     Ok(layout)
 }
