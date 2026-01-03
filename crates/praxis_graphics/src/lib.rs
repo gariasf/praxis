@@ -369,9 +369,6 @@ pub struct RenderContext {
     /// Dynamic uniform buffer for per-object model matrices.
     dynamic_uniform_buffer: uniform_buffer::DynamicUniformBuffer,
 
-    /// Descriptor set layout for per-frame view/projection data.
-    view_proj_descriptor_set_layout: Arc<vulkano::descriptor_set::layout::DescriptorSetLayout>,
-
     /// Buffer for per-frame view/projection uniforms.
     view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
 }
@@ -513,9 +510,6 @@ impl RenderContext {
             1024,
         )?;
 
-        // Create view/projection descriptor set layout (same as descriptor_set_layout for now)
-        let view_proj_descriptor_set_layout = descriptor_set_layout.clone();
-
         // Create initial view/projection buffer with identity matrices
         debug!("Creating view/projection buffer");
         let initial_view_proj = uniform_buffer::ViewProjectionUniforms {
@@ -588,7 +582,6 @@ impl RenderContext {
             dynamic_uniform_buffer,
 
             // View/projection data
-            view_proj_descriptor_set_layout,
             view_proj_buffer,
         })
     }
@@ -770,9 +763,20 @@ impl RenderContext {
 
         previous_frame_end.cleanup_finished();
 
+        self.dynamic_uniform_buffer.next_frame();
+
         if let Some(lighting) = cmds.lighting {
             trace!("Uploading lighting data to GPU");
             self.lighting_buffer.update(lighting)?;
+        }
+
+        let view_proj_uniforms = uniform_buffer::ViewProjectionUniforms::new(cmds.view, cmds.proj);
+        
+        {
+            let mut write_lock = self.view_proj_buffer.write().map_err(|e| {
+                eyre::eyre!("Failed to lock view/projection buffer for writing: {}", e)
+            })?;
+            *write_lock = view_proj_uniforms;
         }
 
         let mut indexed_commands: Vec<(usize, &DrawCommand)> = 
@@ -795,19 +799,26 @@ impl RenderContext {
             }
         });
 
+        let model_matrices: Vec<Mat4> = indexed_commands
+            .iter()
+            .map(|(_, draw_cmd)| draw_cmd.model)
+            .collect();
+
+        self.dynamic_uniform_buffer.write_models(&model_matrices)?;
+
         let default_texture = self
             .texture_manager
             .get_texture("_default_white")
             .ok_or_else(|| eyre::eyre!("Default white texture not found"))?;
 
-        let mut draw_list: Vec<(Arc<DescriptorSet>, Arc<DescriptorSet>, &mesh::GpuMesh)> =
+        let mut draw_list: Vec<(Arc<DescriptorSet>, Arc<DescriptorSet>, &mesh::GpuMesh, usize)> =
             Vec::with_capacity(indexed_commands.len());
 
         let mut current_texture_name: Option<String> = None;
         let mut current_material_props: Option<material::MaterialProperties> = None;
         let mut current_material_set: Option<Arc<DescriptorSet>> = None;
 
-        for (_original_index, draw_cmd) in indexed_commands.iter() {
+        for (object_index, (_original_index, draw_cmd)) in indexed_commands.iter().enumerate() {
             let mesh = self
                 .mesh_manager
                 .get_mesh(&draw_cmd.mesh_id)
@@ -832,63 +843,12 @@ impl RenderContext {
                 default_texture
             };
 
-            // Extract camera position from view matrix inverse
-            let view_inverse = cmds.view.inverse();
-            let camera_position = [
-                view_inverse.col(3).x,
-                view_inverse.col(3).y,
-                view_inverse.col(3).z,
-            ];
-
-            // Create per-frame view-projection uniform buffer
-            let view_proj_uniforms = uniform_buffer::ViewProjectionUniforms {
-                view: cmds.view.to_cols_array_2d(),
-                proj: cmds.proj.to_cols_array_2d(),
-                camera_position,
-                _padding: 0.0,
-            };
-
-            let view_proj_buffer = Buffer::from_data(
-                self.memory_allocator.clone(),
-                BufferCreateInfo {
-                    usage: BufferUsage::UNIFORM_BUFFER,
-                    ..Default::default()
-                },
-                AllocationCreateInfo {
-                    memory_type_filter: MemoryTypeFilter::PREFER_HOST
-                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                    ..Default::default()
-                },
-                view_proj_uniforms,
-            )
-            .map_err(|e| eyre::eyre!("Failed to create view-projection uniform buffer: {}", e))?;
-
-            // Create per-object model uniform buffer
-            let model_uniforms = uniform_buffer::ModelUniforms {
-                model: draw_cmd.model.to_cols_array_2d(),
-            };
-
-            let model_buffer = Buffer::from_data(
-                self.memory_allocator.clone(),
-                BufferCreateInfo {
-                    usage: BufferUsage::UNIFORM_BUFFER,
-                    ..Default::default()
-                },
-                AllocationCreateInfo {
-                    memory_type_filter: MemoryTypeFilter::PREFER_HOST
-                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                    ..Default::default()
-                },
-                model_uniforms,
-            )
-            .map_err(|e| eyre::eyre!("Failed to create model uniform buffer: {}", e))?;
-
             let transform_set = DescriptorSet::new(
                 self.descriptor_set_allocator.clone(),
                 self.descriptor_set_layout.clone(),
                 [
-                    WriteDescriptorSet::buffer(0, view_proj_buffer.clone()),
-                    WriteDescriptorSet::buffer(1, model_buffer.clone()),
+                    WriteDescriptorSet::buffer(0, self.view_proj_buffer.clone()),
+                    WriteDescriptorSet::buffer(1, self.dynamic_uniform_buffer.buffer().clone()),
                     WriteDescriptorSet::image_view_sampler(
                         2,
                         texture.view.clone(),
@@ -936,7 +896,7 @@ impl RenderContext {
                     .clone()
             };
 
-            draw_list.push((transform_set, material_set, mesh));
+            draw_list.push((transform_set, material_set, mesh, object_index));
         }
 
         trace!("Acquiring next swapchain image");
@@ -988,22 +948,28 @@ impl RenderContext {
 
         let mut last_material_set: Option<Arc<DescriptorSet>> = None;
 
-        for (transform_set, material_set, mesh) in draw_list.iter() {
+        for (transform_set, material_set, mesh, object_index) in draw_list.iter() {
             command_buffer_builder
                 .bind_vertex_buffers(0, mesh.vertex_buffer.clone())
                 .map_err(|e| eyre::eyre!("Failed to bind vertex buffer: {}", e))?
                 .bind_index_buffer(mesh.index_buffer.clone())
                 .map_err(|e| eyre::eyre!("Failed to bind index buffer: {}", e))?;
 
+            let dynamic_offset = self.dynamic_uniform_buffer.get_dynamic_offset(*object_index);
+                
             unsafe {
+                let set_with_offsets = vulkano::descriptor_set::DescriptorSetWithOffsets::new(
+                    transform_set.clone(),
+                    [dynamic_offset],
+                );
+                
                 command_buffer_builder
-                    .bind_descriptor_sets(
+                    .bind_descriptor_sets_unchecked(
                         PipelineBindPoint::Graphics,
                         self.graphics_pipeline.layout().clone(),
                         0,
-                        transform_set.clone(),
-                    )
-                    .map_err(|e| eyre::eyre!("Failed to bind transform descriptor set: {}", e))?;
+                        set_with_offsets,
+                    );
 
                 let material_changed = last_material_set.as_ref()
                     .is_none_or(|last| !Arc::ptr_eq(last, material_set));
