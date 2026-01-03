@@ -83,3 +83,23 @@ path = "examples/gui_demo.rs"
 [[example]]
 name = "physics_demo"
 path = "examples/physics_demo.rs"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+vulkano = "0.35.1"
+
+[[bench]]
+name = "mesh_upload"
+harness = false
+
+[[bench]]
+name = "render_loop"
+harness = false
+
+[[bench]]
+name = "physics_step"
+harness = false
+
+[[bench]]
+name = "transform_propagation"
+harness = false

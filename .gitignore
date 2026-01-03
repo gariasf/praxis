@@ -92,3 +92,6 @@ LITERATURE.md
 
 # egui
 .egui_memory.ron
+
+# Criterion benchmark results
+target/criterion/
