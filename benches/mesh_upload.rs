@@ -67,7 +67,11 @@ fn create_mesh_data(vertex_count: usize) -> MeshData {
 
     for i in 0..vertex_count {
         let t = i as f32 / vertex_count as f32;
-        positions.push([t * 10.0, (t * std::f32::consts::TAU).sin(), (t * std::f32::consts::TAU).cos()]);
+        positions.push([
+            t * 10.0,
+            (t * std::f32::consts::TAU).sin(),
+            (t * std::f32::consts::TAU).cos(),
+        ]);
         colors.push([t, 1.0 - t, 0.5]);
         normals.push([0.0, 1.0, 0.0]);
         uvs.push([t, t]);
@@ -103,7 +107,9 @@ fn bench_mesh_upload(c: &mut Criterion) {
             &mesh_data,
             |b, mesh_data| {
                 b.iter(|| {
-                    let _gpu_mesh = mesh_data.upload(allocator.clone()).expect("Failed to upload mesh");
+                    let _gpu_mesh = mesh_data
+                        .upload(allocator.clone())
+                        .expect("Failed to upload mesh");
                     black_box(_gpu_mesh);
                 });
             },
@@ -127,7 +133,9 @@ fn bench_mesh_upload_with_textures(c: &mut Criterion) {
             &mesh_data,
             |b, mesh_data| {
                 b.iter(|| {
-                    let _gpu_mesh = mesh_data.upload(allocator.clone()).expect("Failed to upload mesh");
+                    let _gpu_mesh = mesh_data
+                        .upload(allocator.clone())
+                        .expect("Failed to upload mesh");
                     black_box(_gpu_mesh);
                 });
             },
@@ -145,7 +153,9 @@ fn bench_primitive_generation_and_upload(c: &mut Criterion) {
             let positions = vec![[0.0, 1.0, 0.0], [-1.0, -1.0, 0.0], [1.0, -1.0, 0.0]];
             let indices = vec![0, 1, 2];
             let mesh_data = MeshData::new(positions, indices);
-            let _gpu_mesh = mesh_data.upload(allocator.clone()).expect("Failed to upload mesh");
+            let _gpu_mesh = mesh_data
+                .upload(allocator.clone())
+                .expect("Failed to upload mesh");
             black_box(_gpu_mesh);
         });
     });
@@ -160,7 +170,9 @@ fn bench_primitive_generation_and_upload(c: &mut Criterion) {
             ];
             let indices = vec![0, 1, 2, 0, 2, 3];
             let mesh_data = MeshData::new(positions, indices);
-            let _gpu_mesh = mesh_data.upload(allocator.clone()).expect("Failed to upload mesh");
+            let _gpu_mesh = mesh_data
+                .upload(allocator.clone())
+                .expect("Failed to upload mesh");
             black_box(_gpu_mesh);
         });
     });

@@ -10,6 +10,7 @@ resolver = "2"
 members = [
     "crates/praxis_core",
     "crates/praxis_assets",
+    "crates/praxis_audio",
     "crates/praxis_ecs",
     "crates/praxis_graphics",
     "crates/praxis_gui",
@@ -41,6 +42,7 @@ praxis_math = { path = "crates/praxis_math", version = "0.1.0" }
 praxis_assets = { path = "crates/praxis_assets", version = "0.1.0" }
 praxis_scene = { path = "crates/praxis_scene", version = "0.1.0" }
 praxis_physics = { path = "crates/praxis_physics", version = "0.1.0" }
+praxis_audio = { path = "crates/praxis_audio", version = "0.1.0" }
 winit = { version = "0.30.11", features = ["rwh_05"] }
 pollster = "0.4"
 
@@ -83,6 +85,14 @@ path = "examples/gui_demo.rs"
 [[example]]
 name = "physics_demo"
 path = "examples/physics_demo.rs"
+
+[[example]]
+name = "audio_demo"
+path = "examples/audio_demo.rs"
+
+[[example]]
+name = "audio_simple"
+path = "examples/audio_simple.rs"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

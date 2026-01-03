@@ -8,8 +8,13 @@ use crate::shaders;
 use praxis_utils::{debug, eyre, info, trace, Result};
 use std::sync::Arc;
 use vulkano::{
-    command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassEndInfo},
-    descriptor_set::{allocator::StandardDescriptorSetAllocator, DescriptorSet, WriteDescriptorSet},
+    command_buffer::{
+        AutoCommandBufferBuilder, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo,
+        SubpassEndInfo,
+    },
+    descriptor_set::{
+        allocator::StandardDescriptorSetAllocator, DescriptorSet, WriteDescriptorSet,
+    },
     device::Device,
     memory::allocator::StandardMemoryAllocator,
     pipeline::{
@@ -148,8 +153,10 @@ impl CopyPass {
         let quad = FullScreenQuad::new(memory_allocator)?;
 
         // Create descriptor set allocator
-        let descriptor_set_allocator =
-            Arc::new(StandardDescriptorSetAllocator::new(device, Default::default()));
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            device,
+            Default::default(),
+        ));
 
         debug!("Copy pass created successfully");
 
@@ -341,8 +348,10 @@ impl GrayscalePass {
         let quad = FullScreenQuad::new(memory_allocator)?;
 
         // Create descriptor set allocator
-        let descriptor_set_allocator =
-            Arc::new(StandardDescriptorSetAllocator::new(device, Default::default()));
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            device,
+            Default::default(),
+        ));
 
         debug!("Grayscale pass created successfully");
 

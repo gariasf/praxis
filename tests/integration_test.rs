@@ -149,10 +149,7 @@ fn test_physics_world_cleanup() {
     world.insert_resource(physics_world);
 
     let entity = world
-        .spawn((
-            RigidBody::dynamic(),
-            Collider::sphere(1.0),
-        ))
+        .spawn((RigidBody::dynamic(), Collider::sphere(1.0)))
         .id();
 
     assert!(world.get::<RigidBody>(entity).is_some());
@@ -229,8 +226,12 @@ fn test_multiple_worlds_isolation() {
     let mut world1 = World::new();
     let mut world2 = World::new();
 
-    let entity1 = world1.spawn(Transform::from_translation([1.0, 0.0, 0.0])).id();
-    let entity2 = world2.spawn(Transform::from_translation([2.0, 0.0, 0.0])).id();
+    let entity1 = world1
+        .spawn(Transform::from_translation([1.0, 0.0, 0.0]))
+        .id();
+    let entity2 = world2
+        .spawn(Transform::from_translation([2.0, 0.0, 0.0]))
+        .id();
 
     let data1 = world1.get::<Transform>(entity1).unwrap();
     let data2 = world2.get::<Transform>(entity2).unwrap();
@@ -309,8 +310,8 @@ fn test_error_handling_across_crates() {
 /// Test resource insertion and removal in ECS.
 #[test]
 fn test_ecs_resource_lifecycle() {
-    use praxis_input::InputState;
     use praxis_ecs::World;
+    use praxis_input::InputState;
 
     let mut world = World::new();
 

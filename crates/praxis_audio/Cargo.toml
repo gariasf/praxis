@@ -1,0 +1,15 @@
+[package]
+name = "praxis_audio"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+kira = { version = "0.9", features = ["cpal"] }
+praxis_ecs = { path = "../praxis_ecs", version = "0.1.0" }
+praxis_math = { path = "../praxis_math", version = "0.1.0" }
+praxis_utils = { path = "../praxis_utils", version = "0.1.0" }
+bevy_ecs = "0.14"
+
+[lints]
+workspace = true

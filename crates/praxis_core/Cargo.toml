@@ -10,3 +10,4 @@ praxis_graphics = { path = "../praxis_graphics", version = "0.1.0" }
 praxis_window = { path = "../praxis_window", version = "0.1.0" }
 praxis_ecs = { path = "../praxis_ecs", version = "0.1.0" }
 praxis_input = { path = "../praxis_input", version = "0.1.0" }
+praxis_audio = { path = "../praxis_audio", version = "0.1.0" }

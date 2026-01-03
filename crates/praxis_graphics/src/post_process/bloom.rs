@@ -12,8 +12,8 @@ use praxis_utils::{debug, eyre, info, trace, Result};
 use std::sync::Arc;
 use vulkano::{
     command_buffer::{
-        AutoCommandBufferBuilder, PrimaryAutoCommandBuffer, RenderPassBeginInfo,
-        SubpassBeginInfo, SubpassEndInfo,
+        AutoCommandBufferBuilder, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo,
+        SubpassEndInfo,
     },
     descriptor_set::{
         allocator::StandardDescriptorSetAllocator, DescriptorSet, WriteDescriptorSet,
@@ -98,8 +98,13 @@ impl BrightnessExtractionPass {
 
         let vs_module = shaders::post_process_vs::load(device.clone())
             .map_err(|e| eyre::eyre!("Failed to load post-process vertex shader: {}", e))?;
-        let fs_module = shaders::post_process_brightness_extract_fs::load(device.clone())
-            .map_err(|e| eyre::eyre!("Failed to load brightness extraction fragment shader: {}", e))?;
+        let fs_module =
+            shaders::post_process_brightness_extract_fs::load(device.clone()).map_err(|e| {
+                eyre::eyre!(
+                    "Failed to load brightness extraction fragment shader: {}",
+                    e
+                )
+            })?;
 
         let vs_entry = vs_module
             .entry_point("main")
@@ -150,8 +155,10 @@ impl BrightnessExtractionPass {
         .map_err(|e| eyre::eyre!("Failed to create graphics pipeline: {}", e))?;
 
         let quad = FullScreenQuad::new(memory_allocator)?;
-        let descriptor_set_allocator =
-            Arc::new(StandardDescriptorSetAllocator::new(device, Default::default()));
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            device,
+            Default::default(),
+        ));
 
         debug!("Brightness extraction pass created successfully");
 
@@ -230,11 +237,7 @@ impl PostProcessPass for BrightnessExtractionPass {
         };
 
         builder
-            .push_constants(
-                self.pipeline.layout().clone(),
-                0,
-                push_constants,
-            )
+            .push_constants(self.pipeline.layout().clone(), 0, push_constants)
             .map_err(|e| eyre::eyre!("Failed to push constants: {}", e))?;
 
         unsafe {
@@ -279,8 +282,13 @@ impl GaussianBlurHorizontalPass {
 
         let vs_module = shaders::post_process_vs::load(device.clone())
             .map_err(|e| eyre::eyre!("Failed to load post-process vertex shader: {}", e))?;
-        let fs_module = shaders::post_process_gaussian_blur_h_fs::load(device.clone())
-            .map_err(|e| eyre::eyre!("Failed to load Gaussian blur horizontal fragment shader: {}", e))?;
+        let fs_module =
+            shaders::post_process_gaussian_blur_h_fs::load(device.clone()).map_err(|e| {
+                eyre::eyre!(
+                    "Failed to load Gaussian blur horizontal fragment shader: {}",
+                    e
+                )
+            })?;
 
         let vs_entry = vs_module
             .entry_point("main")
@@ -331,8 +339,10 @@ impl GaussianBlurHorizontalPass {
         .map_err(|e| eyre::eyre!("Failed to create graphics pipeline: {}", e))?;
 
         let quad = FullScreenQuad::new(memory_allocator)?;
-        let descriptor_set_allocator =
-            Arc::new(StandardDescriptorSetAllocator::new(device, Default::default()));
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            device,
+            Default::default(),
+        ));
 
         debug!("Gaussian blur horizontal pass created successfully");
 
@@ -406,11 +416,7 @@ impl PostProcessPass for GaussianBlurHorizontalPass {
         };
 
         builder
-            .push_constants(
-                self.pipeline.layout().clone(),
-                0,
-                push_constants,
-            )
+            .push_constants(self.pipeline.layout().clone(), 0, push_constants)
             .map_err(|e| eyre::eyre!("Failed to push constants: {}", e))?;
 
         unsafe {
@@ -455,8 +461,13 @@ impl GaussianBlurVerticalPass {
 
         let vs_module = shaders::post_process_vs::load(device.clone())
             .map_err(|e| eyre::eyre!("Failed to load post-process vertex shader: {}", e))?;
-        let fs_module = shaders::post_process_gaussian_blur_v_fs::load(device.clone())
-            .map_err(|e| eyre::eyre!("Failed to load Gaussian blur vertical fragment shader: {}", e))?;
+        let fs_module =
+            shaders::post_process_gaussian_blur_v_fs::load(device.clone()).map_err(|e| {
+                eyre::eyre!(
+                    "Failed to load Gaussian blur vertical fragment shader: {}",
+                    e
+                )
+            })?;
 
         let vs_entry = vs_module
             .entry_point("main")
@@ -507,8 +518,10 @@ impl GaussianBlurVerticalPass {
         .map_err(|e| eyre::eyre!("Failed to create graphics pipeline: {}", e))?;
 
         let quad = FullScreenQuad::new(memory_allocator)?;
-        let descriptor_set_allocator =
-            Arc::new(StandardDescriptorSetAllocator::new(device, Default::default()));
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            device,
+            Default::default(),
+        ));
 
         debug!("Gaussian blur vertical pass created successfully");
 
@@ -582,11 +595,7 @@ impl PostProcessPass for GaussianBlurVerticalPass {
         };
 
         builder
-            .push_constants(
-                self.pipeline.layout().clone(),
-                0,
-                push_constants,
-            )
+            .push_constants(self.pipeline.layout().clone(), 0, push_constants)
             .map_err(|e| eyre::eyre!("Failed to push constants: {}", e))?;
 
         unsafe {
@@ -687,8 +696,10 @@ impl ToneMapPass {
         .map_err(|e| eyre::eyre!("Failed to create graphics pipeline: {}", e))?;
 
         let quad = FullScreenQuad::new(memory_allocator)?;
-        let descriptor_set_allocator =
-            Arc::new(StandardDescriptorSetAllocator::new(device, Default::default()));
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            device,
+            Default::default(),
+        ));
 
         debug!("Tone map pass created successfully");
 
@@ -779,11 +790,7 @@ impl ToneMapPass {
         };
 
         builder
-            .push_constants(
-                self.pipeline.layout().clone(),
-                0,
-                push_constants,
-            )
+            .push_constants(self.pipeline.layout().clone(), 0, push_constants)
             .map_err(|e| eyre::eyre!("Failed to push constants: {}", e))?;
 
         unsafe {
@@ -926,9 +933,11 @@ impl BloomEffect {
     }
 
     pub fn set_config(&mut self, config: BloomConfig) {
-        self.brightness_pass.set_threshold(config.brightness_threshold);
+        self.brightness_pass
+            .set_threshold(config.brightness_threshold);
         self.tone_map_pass.set_exposure(config.exposure);
-        self.tone_map_pass.set_bloom_intensity(config.bloom_intensity);
+        self.tone_map_pass
+            .set_bloom_intensity(config.bloom_intensity);
         self.config = config;
     }
 
@@ -956,22 +965,30 @@ impl BloomEffect {
         let extent = scene_input.extent();
 
         let bright_target = pool.acquire(extent)?;
-        self.brightness_pass.execute(builder, scene_input, &bright_target)?;
+        self.brightness_pass
+            .execute(builder, scene_input, &bright_target)?;
 
         let mut blur_input = bright_target.clone();
         for i in 0..self.config.blur_iterations {
-            trace!("Bloom blur iteration {}/{}", i + 1, self.config.blur_iterations);
-            
+            trace!(
+                "Bloom blur iteration {}/{}",
+                i + 1,
+                self.config.blur_iterations
+            );
+
             let blur_h_target = pool.acquire(extent)?;
-            self.blur_h_pass.execute(builder, &blur_input, &blur_h_target)?;
+            self.blur_h_pass
+                .execute(builder, &blur_input, &blur_h_target)?;
 
             let blur_v_target = pool.acquire(extent)?;
-            self.blur_v_pass.execute(builder, &blur_h_target, &blur_v_target)?;
+            self.blur_v_pass
+                .execute(builder, &blur_h_target, &blur_v_target)?;
 
             blur_input = blur_v_target;
         }
 
-        self.tone_map_pass.execute_with_bloom(builder, scene_input, &blur_input, output)?;
+        self.tone_map_pass
+            .execute_with_bloom(builder, scene_input, &blur_input, output)?;
 
         trace!("Bloom effect applied successfully");
         Ok(())

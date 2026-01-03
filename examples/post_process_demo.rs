@@ -220,21 +220,14 @@ impl PostProcessState {
             .unwrap_or(Mat4::IDENTITY);
 
         let view = camera_transform.inverse();
-        let proj = Mat4::perspective_rh(
-            std::f32::consts::FRAC_PI_4,
-            1920.0 / 1080.0,
-            0.1,
-            100.0,
-        );
+        let proj = Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, 1920.0 / 1080.0, 0.1, 100.0);
 
-        let draw_commands = vec![
-            praxis_graphics::DrawCommand {
-                mesh_id: "cube".to_string(),
-                model: Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0)),
-                texture_name: None,
-                material_properties: None,
-            },
-        ];
+        let draw_commands = vec![praxis_graphics::DrawCommand {
+            mesh_id: "cube".to_string(),
+            model: Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0)),
+            texture_name: None,
+            material_properties: None,
+        }];
 
         let render_commands = RenderCommands {
             view,

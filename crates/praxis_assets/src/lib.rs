@@ -316,6 +316,9 @@ f 1 2 3
     #[test]
     fn test_load_gltf_nonexistent() {
         let result = load_gltf("nonexistent_test_file_99999.gltf");
-        assert!(result.is_err(), "load_gltf should fail for nonexistent file");
+        assert!(
+            result.is_err(),
+            "load_gltf should fail for nonexistent file"
+        );
     }
 }

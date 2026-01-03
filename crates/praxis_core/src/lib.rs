@@ -5,6 +5,7 @@ pub fn run() -> praxis_utils::Result<()> {
     praxis_utils::init()?;
     praxis_ecs::init()?;
     praxis_input::init()?;
+    praxis_audio::init()?;
     praxis_window::run()?;
 
     Ok(())

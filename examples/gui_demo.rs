@@ -106,7 +106,12 @@ impl Default for GuiDemoApp {
 impl GuiDemoApp {
     async fn setup_scene(
         window: Arc<Window>,
-    ) -> Result<(World, RenderContext, praxis_ecs::Entity, Vec<praxis_ecs::Entity>)> {
+    ) -> Result<(
+        World,
+        RenderContext,
+        praxis_ecs::Entity,
+        Vec<praxis_ecs::Entity>,
+    )> {
         info!("Setting up GUI demo scene");
 
         let mut render_context = RenderContext::new(window.clone()).await?;
@@ -363,7 +368,7 @@ impl GuiDemoApp {
         let mut mesh_query = world.inner().query::<&praxis_ecs::MeshHandle>();
         mesh_count = mesh_query.iter(world.inner()).count();
 
-        let mut light_query = world.inner().query:<&PointLight>();
+        let mut light_query = world.inner().query::<&PointLight>();
         light_count = light_query.iter(world.inner()).count();
 
         if entity_count > 0 {
@@ -544,8 +549,9 @@ impl GuiDemoApp {
         }
 
         if let Some(transform) = world.inner().get::<Transform>(camera_entity) {
-            if let Some(projection) =
-                world.inner().get::<praxis_ecs::PerspectiveProjection>(camera_entity)
+            if let Some(projection) = world
+                .inner()
+                .get::<praxis_ecs::PerspectiveProjection>(camera_entity)
             {
                 let view = praxis_math::Mat4::look_at_rh(
                     transform.translation,
@@ -554,8 +560,9 @@ impl GuiDemoApp {
                 );
                 let proj_matrix = projection.compute_matrix();
 
-                if let Some(mut matrices) =
-                    world.inner_mut().get_mut::<praxis_ecs::CameraMatrices>(camera_entity)
+                if let Some(mut matrices) = world
+                    .inner_mut()
+                    .get_mut::<praxis_ecs::CameraMatrices>(camera_entity)
                 {
                     matrices.update(view, proj_matrix);
                 }
@@ -779,7 +786,10 @@ impl ApplicationHandler for GuiDemoApp {
                 println!("Animation speed: {:.2}x", self.animation_speed);
             }
             _ => {
-                praxis_input::winit_integration::process_window_event(&mut self.input_state, &event);
+                praxis_input::winit_integration::process_window_event(
+                    &mut self.input_state,
+                    &event,
+                );
             }
         }
 

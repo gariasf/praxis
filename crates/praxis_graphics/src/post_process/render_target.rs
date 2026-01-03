@@ -103,7 +103,9 @@ impl RenderTarget {
                 image_type: ImageType::Dim2d,
                 format,
                 extent: [extent[0], extent[1], 1],
-                usage: ImageUsage::COLOR_ATTACHMENT | ImageUsage::SAMPLED | ImageUsage::TRANSFER_SRC,
+                usage: ImageUsage::COLOR_ATTACHMENT
+                    | ImageUsage::SAMPLED
+                    | ImageUsage::TRANSFER_SRC,
                 ..Default::default()
             },
             AllocationCreateInfo::default(),

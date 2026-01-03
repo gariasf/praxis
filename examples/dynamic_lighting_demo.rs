@@ -176,10 +176,7 @@ impl App {
     }
 
     /// Creates a checkerboard texture with lighting detail baked in
-    fn create_detailed_checkerboard(
-        render_context: &mut RenderContext,
-        name: &str,
-    ) -> Result<()> {
+    fn create_detailed_checkerboard(render_context: &mut RenderContext, name: &str) -> Result<()> {
         let width = 256;
         let height = 256;
         let mut pixels = Vec::with_capacity((width * height * 4) as usize);
@@ -192,7 +189,8 @@ impl App {
                 // Add subtle gradients to simulate lighting variation
                 let dist_from_center_x = (x % checker_size) as f32 / checker_size as f32 - 0.5;
                 let dist_from_center_y = (y % checker_size) as f32 / checker_size as f32 - 0.5;
-                let center_influence = 1.0 - (dist_from_center_x.powi(2) + dist_from_center_y.powi(2)).sqrt() * 0.3;
+                let center_influence =
+                    1.0 - (dist_from_center_x.powi(2) + dist_from_center_y.powi(2)).sqrt() * 0.3;
 
                 let base = if is_light { 240.0 } else { 50.0 };
                 let value = (base * center_influence).clamp(0.0, 255.0) as u8;
@@ -231,8 +229,10 @@ impl App {
                     pixels.extend_from_slice(&[150, 150, 150, 255]);
                 } else {
                     // Brick with lighting variation
-                    let center_x = (local_x as f32 - brick_width as f32 / 2.0) / (brick_width as f32 / 2.0);
-                    let center_y = (local_y as f32 - brick_height as f32 / 2.0) / (brick_height as f32 / 2.0);
+                    let center_x =
+                        (local_x as f32 - brick_width as f32 / 2.0) / (brick_width as f32 / 2.0);
+                    let center_y =
+                        (local_y as f32 - brick_height as f32 / 2.0) / (brick_height as f32 / 2.0);
                     let lighting = 1.0 - (center_x.powi(2) + center_y.powi(2)) * 0.15;
 
                     let noise = ((x * 7 + y * 13) % 40) as u8;
@@ -417,7 +417,10 @@ impl App {
             ));
         }
 
-        info!("Spawned {} scene objects with detailed materials", 13 + materials.len());
+        info!(
+            "Spawned {} scene objects with detailed materials",
+            13 + materials.len()
+        );
         rotating_entities
     }
 
@@ -553,12 +556,8 @@ impl App {
         for (i, &entity) in self.rotating_entities.iter().enumerate() {
             if let Some(mut transform) = world.inner_mut().get_mut::<Transform>(entity) {
                 let speed = 0.4 + (i as f32 * 0.15);
-                let axis = Vec3::new(
-                    ((i as f32 * 0.7).sin()),
-                    1.0,
-                    ((i as f32 * 1.1).cos()),
-                )
-                .normalize();
+                let axis =
+                    Vec3::new(((i as f32 * 0.7).sin()), 1.0, ((i as f32 * 1.1).cos())).normalize();
                 transform.rotation = Quat::from_axis_angle(axis, elapsed_time * speed);
             }
         }
@@ -566,11 +565,17 @@ impl App {
 
     fn handle_input(&mut self) {
         // Lighting intensity controls
-        if self.input_state.is_key_just_pressed(praxis_input::Key::Digit1) {
+        if self
+            .input_state
+            .is_key_just_pressed(praxis_input::Key::Digit1)
+        {
             self.lighting_intensity = (self.lighting_intensity - 0.1).max(0.1);
             println!("Lighting intensity: {:.1}", self.lighting_intensity);
         }
-        if self.input_state.is_key_just_pressed(praxis_input::Key::Digit2) {
+        if self
+            .input_state
+            .is_key_just_pressed(praxis_input::Key::Digit2)
+        {
             self.lighting_intensity = (self.lighting_intensity + 0.1).min(3.0);
             println!("Lighting intensity: {:.1}", self.lighting_intensity);
         }

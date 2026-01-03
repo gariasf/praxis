@@ -1,8 +1,8 @@
 use praxis_core::run;
 use praxis_ecs::{Commands, Query, Res, ResMut, Resource, World};
 use praxis_graphics::{
-    colored_cube_mesh, sphere_mesh, BloomConfig, DrawCommand, MaterialProperties,
-    RenderCommands, RenderContext,
+    colored_cube_mesh, sphere_mesh, BloomConfig, DrawCommand, MaterialProperties, RenderCommands,
+    RenderContext,
 };
 use praxis_input::{InputState, Key};
 use praxis_math::{Mat4, Vec3};
@@ -142,13 +142,11 @@ fn input_system(input: Res<InputState>, mut bloom_config: ResMut<BloomConfigReso
     }
 
     if input.key_just_pressed(Key::Digit7) {
-        bloom_config.config.bloom_intensity =
-            (bloom_config.config.bloom_intensity - 0.05).max(0.0);
+        bloom_config.config.bloom_intensity = (bloom_config.config.bloom_intensity - 0.05).max(0.0);
         info!("Bloom intensity: {}", bloom_config.config.bloom_intensity);
     }
     if input.key_just_pressed(Key::Digit8) {
-        bloom_config.config.bloom_intensity =
-            (bloom_config.config.bloom_intensity + 0.05).min(2.0);
+        bloom_config.config.bloom_intensity = (bloom_config.config.bloom_intensity + 0.05).min(2.0);
         info!("Bloom intensity: {}", bloom_config.config.bloom_intensity);
     }
 }

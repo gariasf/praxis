@@ -190,12 +190,7 @@ impl PostProcessChain {
         trace!("Submitting post-processing command buffer");
         let future = vulkano::sync::now(self.graphics_queue.device().clone())
             .then_execute(self.graphics_queue.clone(), command_buffer)
-            .map_err(|e| {
-                eyre::eyre!(
-                    "Failed to submit post-processing command buffer: {}",
-                    e
-                )
-            })?
+            .map_err(|e| eyre::eyre!("Failed to submit post-processing command buffer: {}", e))?
             .then_signal_fence_and_flush()
             .map_err(|e| eyre::eyre!("Failed to flush post-processing commands: {}", e))?;
 

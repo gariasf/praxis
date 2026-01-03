@@ -19,7 +19,7 @@ use vulkano::{
     image::{
         sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo},
         view::{ImageView, ImageViewCreateInfo, ImageViewType},
-        Image, ImageCreateInfo, ImageType, ImageUsage, ImageSubresourceRange, ImageAspects,
+        Image, ImageAspects, ImageCreateInfo, ImageSubresourceRange, ImageType, ImageUsage,
     },
     memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
     sync::{self, GpuFuture},
@@ -570,7 +570,13 @@ impl Cubemap {
                 },
                 data.iter().copied(),
             )
-            .map_err(|e| eyre::eyre!("Failed to create staging buffer for face {}: {}", face_index, e))?;
+            .map_err(|e| {
+                eyre::eyre!(
+                    "Failed to create staging buffer for face {}: {}",
+                    face_index,
+                    e
+                )
+            })?;
 
             builder
                 .copy_buffer_to_image(CopyBufferToImageInfo {
@@ -590,7 +596,13 @@ impl Cubemap {
                     .into(),
                     ..CopyBufferToImageInfo::buffer_image(buffer, image.clone())
                 })
-                .map_err(|e| eyre::eyre!("Failed to copy buffer to image for face {}: {}", face_index, e))?;
+                .map_err(|e| {
+                    eyre::eyre!(
+                        "Failed to copy buffer to image for face {}: {}",
+                        face_index,
+                        e
+                    )
+                })?;
         }
 
         let command_buffer = builder

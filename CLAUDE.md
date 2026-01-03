@@ -28,6 +28,7 @@ cargo run --example scene_demo
 cargo run --example gui_demo
 cargo run --example physics_demo
 cargo run --example shadow_demo
+cargo run --example audio_demo
 
 # Check code without building
 cargo check --all
@@ -64,7 +65,7 @@ cargo doc --workspace --no-deps
 
 ### Workspace Structure
 
-Praxis uses a Cargo workspace with 11 crates organized by subsystem. The root `praxis` crate coordinates all subsystems:
+Praxis uses a Cargo workspace with 12 crates organized by subsystem. The root `praxis` crate coordinates all subsystems:
 
 - **praxis_core**: Engine lifecycle, main loop coordination, initialization sequence
 - **praxis_window**: Window management via `winit`, event loop handling
@@ -76,6 +77,7 @@ Praxis uses a Cargo workspace with 11 crates organized by subsystem. The root `p
 - **praxis_input**: Keyboard/mouse/gamepad handling
 - **praxis_gui**: Debug/editor GUI via `egui`
 - **praxis_physics**: Physics simulation using `Rapier3D`, collision detection, spatial queries
+- **praxis_audio**: Audio system using `kira`, spatial audio, sound management
 - **praxis_utils**: Shared utilities, logging (`tracing`), error handling, frame timing
 
 ### Initialization Flow
@@ -85,7 +87,7 @@ The engine follows a specific initialization sequence in `praxis_core::run()`:
 1. `praxis_utils::init()` - Sets up logging and error reporting
 2. `praxis_ecs::init()` - Initializes ECS system
 3. `praxis_input::init()` - Initializes input system
-4. `praxis_physics::init()` - Initializes physics system
+4. `praxis_audio::init()` - Initializes audio system
 5. `praxis_window::run()` - Creates event loop and window, then:
    - Window creation (default 1920x1080)
    - `State::new()` creates `RenderContext` asynchronously
@@ -391,6 +393,70 @@ All checks must pass before merging.
 - Resources: PhysicsWorld, PhysicsConfig, PhysicsTime, ContactEvents
 - System ordering critical: clear events → sync → step → sync → populate events
 
+### Audio System (praxis_audio)
+
+The audio system provides sound playback and spatial audio using Kira:
+
+- **AudioManager**: ECS resource managing the Kira audio backend and loaded sounds
+- **AudioSource**: Component for spatial audio attached to entities with Transform
+- **AudioListener**: Component marking the audio listener (typically the camera)
+- **play_sound_system**: System that processes audio playback and spatial audio updates
+- **update_spatial_audio_system**: Optimized system for updating spatial audio on transform changes
+
+#### Audio Components
+
+**AudioSource** properties:
+- `path`: Path to audio file (OGG, MP3, WAV, FLAC)
+- `volume`: Volume level (0.0 to 1.0)
+- `spatial`: Enable 3D spatial audio positioning
+- `looping`: Whether the audio loops continuously
+- `max_distance`: Distance beyond which sound is inaudible
+- `reference_distance`: Distance at which volume is at specified level
+- `state`: PlaybackState (Playing, Paused, Stopped)
+
+#### Spatial Audio
+
+Spatial audio uses inverse square law for distance attenuation:
+`volume = base_volume * (reference_distance / distance)^2`
+
+When `spatial` is true, the audio system:
+- Calculates distance between AudioSource and AudioListener
+- Applies distance-based attenuation
+- Adjusts panning based on relative position
+- Updates volume in real-time as entities move
+
+#### Usage Example
+
+```rust
+use praxis_audio::{AudioManager, AudioSource, AudioListener, play_sound_system};
+use praxis_ecs::{World, Schedule, Transform};
+
+let mut world = World::new();
+let audio_manager = AudioManager::new()?;
+world.insert_resource(audio_manager);
+
+// Attach listener to camera
+world.spawn((
+    Transform::from_xyz(0.0, 1.8, 0.0),
+    AudioListener,
+));
+
+// Spawn spatial audio source
+world.spawn((
+    Transform::from_xyz(10.0, 0.0, 0.0),
+    AudioSource::new("assets/sounds/ambient.ogg")
+        .with_volume(0.7)
+        .with_spatial(true)
+        .with_looping(true)
+        .with_max_distance(50.0),
+));
+
+let mut schedule = Schedule::default();
+schedule.add_systems(play_sound_system);
+```
+
+See `praxis_audio` documentation and `examples/audio_demo.rs` for detailed usage.
+
 ## Dependencies
 
 Key external crates:
@@ -404,6 +470,7 @@ Key external crates:
 - **Image Loading**: `image` (PNG/JPEG)
 - **GUI**: `egui`, `egui-winit`, `egui_vulkano`
 - **Physics**: `rapier3d` (rigid body dynamics, collision detection)
+- **Audio**: `kira` (audio playback, spatial audio)
 
 ## Project Philosophy
 

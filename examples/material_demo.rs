@@ -89,8 +89,7 @@ use praxis_ecs::{
     DirectionalLight, LightingData, PerspectiveCameraBundle, PointLight, Transform, World,
 };
 use praxis_graphics::{
-    sphere_mesh, textured_cube_mesh, DrawCommand, MaterialProperties, RenderCommands,
-    RenderContext,
+    sphere_mesh, textured_cube_mesh, DrawCommand, MaterialProperties, RenderCommands, RenderContext,
 };
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::Vec3;
@@ -260,10 +259,7 @@ impl App {
         Ok(())
     }
 
-    fn create_detailed_metal_texture(
-        render_context: &mut RenderContext,
-        name: &str,
-    ) -> Result<()> {
+    fn create_detailed_metal_texture(render_context: &mut RenderContext, name: &str) -> Result<()> {
         let width = 128;
         let height = 128;
         let mut pixels = Vec::with_capacity((width * height * 4) as usize);
@@ -291,10 +287,7 @@ impl App {
         Ok(())
     }
 
-    fn create_detailed_stone_texture(
-        render_context: &mut RenderContext,
-        name: &str,
-    ) -> Result<()> {
+    fn create_detailed_stone_texture(render_context: &mut RenderContext, name: &str) -> Result<()> {
         let width = 128;
         let height = 128;
         let mut pixels = Vec::with_capacity((width * height * 4) as usize);
@@ -573,7 +566,10 @@ impl App {
 
     fn handle_input(&mut self) {
         // Bloom threshold controls
-        if self.input_state.is_key_just_pressed(praxis_input::Key::Digit1) {
+        if self
+            .input_state
+            .is_key_just_pressed(praxis_input::Key::Digit1)
+        {
             self.post_process_settings.bloom_threshold =
                 (self.post_process_settings.bloom_threshold - 0.1).max(0.1);
             println!(
@@ -581,7 +577,10 @@ impl App {
                 self.post_process_settings.bloom_threshold
             );
         }
-        if self.input_state.is_key_just_pressed(praxis_input::Key::Digit2) {
+        if self
+            .input_state
+            .is_key_just_pressed(praxis_input::Key::Digit2)
+        {
             self.post_process_settings.bloom_threshold =
                 (self.post_process_settings.bloom_threshold + 0.1).min(5.0);
             println!(
@@ -591,7 +590,10 @@ impl App {
         }
 
         // Bloom intensity controls
-        if self.input_state.is_key_just_pressed(praxis_input::Key::Digit3) {
+        if self
+            .input_state
+            .is_key_just_pressed(praxis_input::Key::Digit3)
+        {
             self.post_process_settings.bloom_intensity =
                 (self.post_process_settings.bloom_intensity - 0.05).max(0.0);
             println!(
@@ -599,7 +601,10 @@ impl App {
                 self.post_process_settings.bloom_intensity
             );
         }
-        if self.input_state.is_key_just_pressed(praxis_input::Key::Digit4) {
+        if self
+            .input_state
+            .is_key_just_pressed(praxis_input::Key::Digit4)
+        {
             self.post_process_settings.bloom_intensity =
                 (self.post_process_settings.bloom_intensity + 0.05).min(2.0);
             println!(
@@ -609,20 +614,30 @@ impl App {
         }
 
         // Exposure controls
-        if self.input_state.is_key_just_pressed(praxis_input::Key::Digit5) {
+        if self
+            .input_state
+            .is_key_just_pressed(praxis_input::Key::Digit5)
+        {
             self.post_process_settings.exposure =
                 (self.post_process_settings.exposure - 0.1).max(0.1);
             println!("Exposure: {:.1}", self.post_process_settings.exposure);
         }
-        if self.input_state.is_key_just_pressed(praxis_input::Key::Digit6) {
+        if self
+            .input_state
+            .is_key_just_pressed(praxis_input::Key::Digit6)
+        {
             self.post_process_settings.exposure =
                 (self.post_process_settings.exposure + 0.1).min(5.0);
             println!("Exposure: {:.1}", self.post_process_settings.exposure);
         }
 
         // Color grading presets
-        if self.input_state.is_key_just_pressed(praxis_input::Key::Digit7)
-            || self.input_state.is_key_just_pressed(praxis_input::Key::Digit8)
+        if self
+            .input_state
+            .is_key_just_pressed(praxis_input::Key::Digit7)
+            || self
+                .input_state
+                .is_key_just_pressed(praxis_input::Key::Digit8)
         {
             self.post_process_settings.color_grading =
                 self.post_process_settings.color_grading.next();

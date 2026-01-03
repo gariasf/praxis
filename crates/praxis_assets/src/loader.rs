@@ -842,12 +842,7 @@ impl GltfAsset {
     where
         F: FnMut(usize, &GltfNode, usize),
     {
-        fn traverse_node<F>(
-            asset: &GltfAsset,
-            node_index: usize,
-            depth: usize,
-            f: &mut F,
-        )
+        fn traverse_node<F>(asset: &GltfAsset, node_index: usize, depth: usize, f: &mut F)
         where
             F: FnMut(usize, &GltfNode, usize),
         {
@@ -959,13 +954,10 @@ impl GltfLoader {
             let metallic = pbr.metallic_factor();
             let roughness = pbr.roughness_factor();
 
-            let base_color_texture_index = pbr
-                .base_color_texture()
-                .map(|info| info.texture().index());
+            let base_color_texture_index =
+                pbr.base_color_texture().map(|info| info.texture().index());
 
-            let normal_texture_index = material
-                .normal_texture()
-                .map(|info| info.texture().index());
+            let normal_texture_index = material.normal_texture().map(|info| info.texture().index());
 
             let gltf_material = GltfMaterial {
                 name: material.name().map(String::from),
@@ -980,10 +972,10 @@ impl GltfLoader {
 
         debug!("Processing {} meshes", document.meshes().len());
         let mut mesh_primitive_map: HashMap<usize, Vec<usize>> = HashMap::new();
-        
+
         for mesh in document.meshes() {
             let mut primitive_indices = Vec::new();
-            
+
             for primitive in mesh.primitives() {
                 if primitive.mode() != gltf::mesh::Mode::Triangles {
                     debug!(
@@ -1035,7 +1027,7 @@ impl GltfLoader {
                 primitive_indices.push(meshes.len());
                 meshes.push(mesh_data);
             }
-            
+
             mesh_primitive_map.insert(mesh.index(), primitive_indices);
         }
 
@@ -1310,14 +1302,12 @@ mod gltf_tests {
 
     #[test]
     fn test_gltf_asset_traverse_depth_first_single_level() {
-        let nodes = vec![
-            GltfNode {
-                name: Some("Root".to_string()),
-                transform: Mat4::IDENTITY,
-                mesh_indices: vec![],
-                children: vec![],
-            },
-        ];
+        let nodes = vec![GltfNode {
+            name: Some("Root".to_string()),
+            transform: Mat4::IDENTITY,
+            mesh_indices: vec![],
+            children: vec![],
+        }];
 
         let asset = GltfAsset {
             meshes: vec![],
@@ -1591,7 +1581,8 @@ mod gltf_tests {
             children: vec![],
         };
 
-        let (extracted_translation, extracted_rotation, extracted_scale) = node.decompose_transform();
+        let (extracted_translation, extracted_rotation, extracted_scale) =
+            node.decompose_transform();
 
         assert!((extracted_translation.x - translation.x).abs() < 0.01);
         assert!((extracted_translation.y - translation.y).abs() < 0.01);

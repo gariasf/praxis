@@ -329,9 +329,7 @@ impl ShadowMapManager {
     ///
     /// This render pass only has a depth attachment and no color attachment,
     /// as we only need to write depth values for shadow mapping.
-    fn create_shadow_render_pass(
-        device: &Arc<vulkano::device::Device>,
-    ) -> Result<Arc<RenderPass>> {
+    fn create_shadow_render_pass(device: &Arc<vulkano::device::Device>) -> Result<Arc<RenderPass>> {
         debug!("Creating shadow map render pass");
 
         let render_pass = vulkano::single_pass_renderpass!(
@@ -379,7 +377,11 @@ impl ShadowMapManager {
         // Extract camera position from view matrix
         let camera_pos = Self::extract_camera_position(camera_view);
 
-        for (i, matrix) in matrices.iter_mut().enumerate().take(self.config.cascade_count) {
+        for (i, matrix) in matrices
+            .iter_mut()
+            .enumerate()
+            .take(self.config.cascade_count)
+        {
             // Calculate near and far planes for this cascade
             let near = if i == 0 {
                 0.1
@@ -490,11 +492,13 @@ impl ShadowMapManager {
         camera_view: Mat4,
         camera_proj: Mat4,
     ) -> Result<()> {
-        let matrices = self.calculate_light_space_matrices(light_direction, camera_view, camera_proj);
+        let matrices =
+            self.calculate_light_space_matrices(light_direction, camera_view, camera_proj);
 
-        let mut write_guard = self.shadow_uniform_buffer.write().map_err(|e| {
-            eyre::eyre!("Failed to lock shadow uniform buffer for writing: {}", e)
-        })?;
+        let mut write_guard = self
+            .shadow_uniform_buffer
+            .write()
+            .map_err(|e| eyre::eyre!("Failed to lock shadow uniform buffer for writing: {}", e))?;
 
         write_guard.light_space_matrices = matrices;
 
@@ -631,12 +635,8 @@ mod tests {
         let view = Mat4::look_at_rh(camera_pos, Vec3::ZERO, Vec3::Y);
         let proj = Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, 16.0 / 9.0, 0.1, 100.0);
 
-        let corners = ShadowMapManager::calculate_frustum_corners(
-            view.inverse(),
-            proj.inverse(),
-            0.1,
-            50.0,
-        );
+        let corners =
+            ShadowMapManager::calculate_frustum_corners(view.inverse(), proj.inverse(), 0.1, 50.0);
 
         // Should have 8 corners
         assert_eq!(corners.len(), 8);

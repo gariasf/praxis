@@ -190,7 +190,10 @@ fn update_camera(mut query: Query<&mut Camera>, input: Res<InputState>) {
 }
 
 /// Update lighting based on animated light.
-fn update_lighting(mut query: Query<&mut AnimatedLight>, mut ctx: ResMut<praxis_graphics::RenderContext>) {
+fn update_lighting(
+    mut query: Query<&mut AnimatedLight>,
+    mut ctx: ResMut<praxis_graphics::RenderContext>,
+) {
     for mut light in query.iter_mut() {
         light.time += 0.016 * light.speed; // Assuming ~60 FPS
 

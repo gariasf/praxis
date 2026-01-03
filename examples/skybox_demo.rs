@@ -63,7 +63,7 @@ impl ApplicationCallbacks for SkyboxDemo {
 
         // Load the cubemap
         let render_context = ctx.render_context_mut();
-        
+
         let cubemap = Cubemap::from_faces(
             render_context.memory_allocator.clone(),
             render_context.command_buffer_allocator.clone(),
@@ -105,7 +105,7 @@ impl ApplicationCallbacks for SkyboxDemo {
 
         // Camera movement
         let mut movement = Vec3::ZERO;
-        
+
         if input.is_key_held(praxis_input::KeyCode::KeyW) {
             movement.z -= 1.0;
         }
@@ -121,7 +121,7 @@ impl ApplicationCallbacks for SkyboxDemo {
 
         if movement.length_squared() > 0.0 {
             movement = movement.normalize();
-            
+
             // Apply camera rotation to movement
             let yaw = self.camera_rotation.x;
             let rotated_movement = Vec3::new(
@@ -129,7 +129,7 @@ impl ApplicationCallbacks for SkyboxDemo {
                 movement.y,
                 movement.x * yaw.sin() + movement.z * yaw.cos(),
             );
-            
+
             self.camera_position += rotated_movement * self.move_speed * delta_time;
         }
 
@@ -137,7 +137,7 @@ impl ApplicationCallbacks for SkyboxDemo {
         let mouse_delta = input.mouse_delta();
         self.camera_rotation.x -= mouse_delta.x * self.look_sensitivity;
         self.camera_rotation.y -= mouse_delta.y * self.look_sensitivity;
-        
+
         // Clamp pitch to prevent gimbal lock
         self.camera_rotation.y = self.camera_rotation.y.clamp(-1.5, 1.5);
 
@@ -148,32 +148,28 @@ impl ApplicationCallbacks for SkyboxDemo {
         // Calculate view and projection matrices
         let yaw = self.camera_rotation.x;
         let pitch = self.camera_rotation.y;
-        
+
         let forward = Vec3::new(
             yaw.sin() * pitch.cos(),
             pitch.sin(),
             -yaw.cos() * pitch.cos(),
-        ).normalize();
-        
+        )
+        .normalize();
+
         let view = Mat4::look_at_rh(
             self.camera_position,
             self.camera_position + forward,
             Vec3::Y,
         );
-        
-        let aspect_ratio = ctx.window().inner_size().width as f32 
-            / ctx.window().inner_size().height as f32;
-        let proj = Mat4::perspective_rh(
-            70.0_f32.to_radians(),
-            aspect_ratio,
-            0.1,
-            1000.0,
-        );
+
+        let aspect_ratio =
+            ctx.window().inner_size().width as f32 / ctx.window().inner_size().height as f32;
+        let proj = Mat4::perspective_rh(70.0_f32.to_radians(), aspect_ratio, 0.1, 1000.0);
 
         // Render skybox
         if let Some(skybox_renderer) = &self.skybox_renderer {
             let render_context = ctx.render_context();
-            
+
             if let Some(cubemap_texture) = render_context.texture_manager().get_texture("skybox") {
                 // Create descriptor set for skybox
                 let descriptor_set = skybox_renderer.create_descriptor_set(
@@ -185,7 +181,10 @@ impl ApplicationCallbacks for SkyboxDemo {
 
                 // TODO: Actual rendering would happen in the render context
                 // This example shows the API structure
-                info!("Skybox ready to render at camera position: {:?}", self.camera_position);
+                info!(
+                    "Skybox ready to render at camera position: {:?}",
+                    self.camera_position
+                );
             }
         }
 

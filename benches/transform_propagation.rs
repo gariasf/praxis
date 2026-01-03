@@ -1,7 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use praxis_ecs::{
-    Children, GlobalTransform, Parent, Schedule, Transform, World,
-};
+use praxis_ecs::{Children, GlobalTransform, Parent, Schedule, Transform, World};
 use praxis_math::{Quat, Vec3};
 
 fn create_hierarchy(world: &mut World, depth: usize, breadth: usize) -> Vec<praxis_ecs::Entity> {
@@ -83,11 +81,11 @@ fn bench_transform_propagation_hierarchical(c: &mut Criterion) {
     let mut group = c.benchmark_group("transform_propagation_hierarchical");
 
     let test_cases: Vec<(usize, usize)> = vec![
-        (3, 2),   // depth=3, breadth=2: 15 entities
-        (4, 2),   // depth=4, breadth=2: 31 entities
-        (3, 4),   // depth=3, breadth=4: 85 entities
-        (4, 4),   // depth=4, breadth=4: 341 entities
-        (5, 3),   // depth=5, breadth=3: 364 entities
+        (3, 2), // depth=3, breadth=2: 15 entities
+        (4, 2), // depth=4, breadth=2: 31 entities
+        (3, 4), // depth=3, breadth=4: 85 entities
+        (4, 4), // depth=4, breadth=4: 341 entities
+        (5, 3), // depth=5, breadth=3: 364 entities
     ];
 
     for (depth, breadth) in test_cases {
@@ -181,43 +179,39 @@ fn bench_transform_propagation_deep_hierarchy(c: &mut Criterion) {
     let mut group = c.benchmark_group("transform_propagation_deep");
 
     for depth in [5, 10, 20, 50] {
-        group.bench_with_input(
-            BenchmarkId::from_parameter(depth),
-            &depth,
-            |b, &depth| {
-                let mut world = World::new();
+        group.bench_with_input(BenchmarkId::from_parameter(depth), &depth, |b, &depth| {
+            let mut world = World::new();
 
-                let mut previous_entity = world.spawn((
-                    Transform::from_xyz(0.0, 0.0, 0.0),
+            let mut previous_entity = world.spawn((
+                Transform::from_xyz(0.0, 0.0, 0.0),
+                GlobalTransform::default(),
+            ));
+
+            for _i in 1..depth {
+                let child = world.spawn((
+                    Transform::from_xyz(1.0, 0.0, 0.0),
                     GlobalTransform::default(),
+                    Parent(previous_entity),
                 ));
 
-                for _i in 1..depth {
-                    let child = world.spawn((
-                        Transform::from_xyz(1.0, 0.0, 0.0),
-                        GlobalTransform::default(),
-                        Parent(previous_entity),
-                    ));
+                world
+                    .insert_component(previous_entity, Children::with_children(vec![child]))
+                    .unwrap();
 
-                    world
-                        .insert_component(previous_entity, Children::with_children(vec![child]))
-                        .unwrap();
+                previous_entity = child;
+            }
 
-                    previous_entity = child;
-                }
+            let mut schedule = Schedule::default();
+            schedule.add_systems((
+                praxis_ecs::systems::sync_parent_child_relationships,
+                praxis_ecs::systems::propagate_transforms,
+            ));
 
-                let mut schedule = Schedule::default();
-                schedule.add_systems((
-                    praxis_ecs::systems::sync_parent_child_relationships,
-                    praxis_ecs::systems::propagate_transforms,
-                ));
-
-                b.iter(|| {
-                    world.inner_mut().run_schedule(&mut schedule);
-                    black_box(&world);
-                });
-            },
-        );
+            b.iter(|| {
+                world.inner_mut().run_schedule(&mut schedule);
+                black_box(&world);
+            });
+        });
     }
 
     group.finish();

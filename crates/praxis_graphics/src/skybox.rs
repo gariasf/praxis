@@ -9,9 +9,7 @@ use praxis_utils::{debug, eyre, trace, Result};
 use std::sync::Arc;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
-    descriptor_set::{
-        allocator::DescriptorSetAllocator, DescriptorSet, WriteDescriptorSet,
-    },
+    descriptor_set::{allocator::DescriptorSetAllocator, DescriptorSet, WriteDescriptorSet},
     device::Device,
     memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
     pipeline::{
@@ -80,9 +78,11 @@ impl SkyboxRenderer {
         let vs_module = Self::load_vertex_shader(device.clone())?;
         let fs_module = Self::load_fragment_shader(device.clone())?;
 
-        let vs = vs_module.entry_point("main")
+        let vs = vs_module
+            .entry_point("main")
             .ok_or_else(|| eyre::eyre!("Failed to find 'main' entry point in vertex shader"))?;
-        let fs = fs_module.entry_point("main")
+        let fs = fs_module
+            .entry_point("main")
             .ok_or_else(|| eyre::eyre!("Failed to find 'main' entry point in fragment shader"))?;
 
         let vertex_input_state = Vertex3D::per_vertex()
@@ -293,7 +293,9 @@ impl SkyboxRenderer {
     pub fn create_descriptor_set(
         &self,
         descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,
-        view_proj_buffer: impl Into<vulkano::buffer::Subbuffer<crate::uniform_buffer::ViewProjectionUniforms>>,
+        view_proj_buffer: impl Into<
+            vulkano::buffer::Subbuffer<crate::uniform_buffer::ViewProjectionUniforms>,
+        >,
         cubemap_view: Arc<vulkano::image::view::ImageView>,
         cubemap_sampler: Arc<vulkano::image::sampler::Sampler>,
     ) -> Result<Arc<DescriptorSet>> {

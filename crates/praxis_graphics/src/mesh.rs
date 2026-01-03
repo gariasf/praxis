@@ -281,7 +281,7 @@ impl MeshData {
 
             // Calculate tangent and bitangent
             let r = 1.0 / (delta_uv1[0] * delta_uv2[1] - delta_uv1[1] * delta_uv2[0]);
-            
+
             let tangent = [
                 r * (delta_uv2[1] * edge1[0] - delta_uv1[1] * edge2[0]),
                 r * (delta_uv2[1] * edge1[1] - delta_uv1[1] * edge2[1]),
@@ -325,7 +325,8 @@ impl MeshData {
             ];
 
             // Normalize tangent
-            let len = (t_ortho[0] * t_ortho[0] + t_ortho[1] * t_ortho[1] + t_ortho[2] * t_ortho[2]).sqrt();
+            let len = (t_ortho[0] * t_ortho[0] + t_ortho[1] * t_ortho[1] + t_ortho[2] * t_ortho[2])
+                .sqrt();
             let t_normalized = if len > 0.0001 {
                 [t_ortho[0] / len, t_ortho[1] / len, t_ortho[2] / len]
             } else {
@@ -342,7 +343,12 @@ impl MeshData {
             let dot_cross_b = cross[0] * b[0] + cross[1] * b[1] + cross[2] * b[2];
             let handedness = if dot_cross_b < 0.0 { -1.0 } else { 1.0 };
 
-            final_tangents[i] = [t_normalized[0], t_normalized[1], t_normalized[2], handedness];
+            final_tangents[i] = [
+                t_normalized[0],
+                t_normalized[1],
+                t_normalized[2],
+                handedness,
+            ];
         }
 
         self.tangents = Some(final_tangents);
@@ -802,11 +808,7 @@ mod tests {
 
     #[test]
     fn test_calculate_tangents_normalized() {
-        let positions = vec![
-            [0.0, 0.0, 0.0],
-            [5.0, 0.0, 0.0],
-            [5.0, 5.0, 0.0],
-        ];
+        let positions = vec![[0.0, 0.0, 0.0], [5.0, 0.0, 0.0], [5.0, 5.0, 0.0]];
         let normals = vec![[0.0, 0.0, 1.0], [0.0, 0.0, 1.0], [0.0, 0.0, 1.0]];
         let uvs = vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]];
         let indices = vec![0, 1, 2];
@@ -825,7 +827,9 @@ mod tests {
 
         // Verify tangent vectors are normalized (length ~1.0)
         for (i, tangent) in tangents.iter().enumerate() {
-            let length = (tangent[0] * tangent[0] + tangent[1] * tangent[1] + tangent[2] * tangent[2]).sqrt();
+            let length =
+                (tangent[0] * tangent[0] + tangent[1] * tangent[1] + tangent[2] * tangent[2])
+                    .sqrt();
             assert!(
                 (length - 1.0).abs() < 0.01,
                 "Tangent at vertex {} should be normalized, length={}",
@@ -837,11 +841,7 @@ mod tests {
 
     #[test]
     fn test_calculate_tangents_handedness() {
-        let positions = vec![
-            [0.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [1.0, 1.0, 0.0],
-        ];
+        let positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]];
         let normals = vec![[0.0, 0.0, 1.0], [0.0, 0.0, 1.0], [0.0, 0.0, 1.0]];
         let uvs = vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]];
         let indices = vec![0, 1, 2];
@@ -949,7 +949,9 @@ mod tests {
 
         // Shared vertices (0 and 1) should accumulate tangents from both triangles
         for tangent in tangents {
-            let length = (tangent[0] * tangent[0] + tangent[1] * tangent[1] + tangent[2] * tangent[2]).sqrt();
+            let length =
+                (tangent[0] * tangent[0] + tangent[1] * tangent[1] + tangent[2] * tangent[2])
+                    .sqrt();
             assert!((length - 1.0).abs() < 0.01);
         }
     }

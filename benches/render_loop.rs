@@ -1,7 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use praxis_ecs::{
-    camera, Camera, CameraMatrices, PerspectiveProjection, Schedule,
-    Transform, World,
+    camera, Camera, CameraMatrices, PerspectiveProjection, Schedule, Transform, World,
 };
 
 fn setup_world_with_cameras(camera_count: usize) -> World {
@@ -57,7 +56,9 @@ fn bench_camera_query_primary(c: &mut Criterion) {
                 world.inner_mut().run_schedule(&mut schedule);
 
                 b.iter(|| {
-                    let query = world.inner_mut().query::<camera::ActivePerspectiveCameras>();
+                    let query = world
+                        .inner_mut()
+                        .query::<camera::ActivePerspectiveCameras>();
                     let primary = camera::primary_perspective_camera(&query);
                     black_box(primary);
                 });
@@ -82,7 +83,9 @@ fn bench_camera_query_sorted(c: &mut Criterion) {
                 world.inner_mut().run_schedule(&mut schedule);
 
                 b.iter(|| {
-                    let query = world.inner_mut().query::<camera::ActivePerspectiveCameras>();
+                    let query = world
+                        .inner_mut()
+                        .query::<camera::ActivePerspectiveCameras>();
                     let sorted = camera::sorted_perspective_cameras(&query);
                     black_box(sorted);
                 });

@@ -114,8 +114,6 @@ f 1 2 3
     fs::remove_file(&test_file).ok();
 }
 
-
-
 /// Test loader with reference counting.
 #[test]
 fn test_arc_loader() {

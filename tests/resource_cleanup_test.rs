@@ -13,7 +13,7 @@ fn test_entity_lifecycle_with_multiple_components() {
     let mut world = World::new();
 
     let parent_entity = world.spawn(Transform::default()).id();
-    
+
     let entity = world
         .spawn((
             Transform::default(),
@@ -48,10 +48,7 @@ fn test_physics_resource_cleanup() {
     let entities: Vec<_> = (0..10)
         .map(|_| {
             world
-                .spawn((
-                    RigidBody::dynamic(),
-                    Collider::sphere(1.0),
-                ))
+                .spawn((RigidBody::dynamic(), Collider::sphere(1.0)))
                 .id()
         })
         .collect();
@@ -278,9 +275,7 @@ fn test_world_clear_all() {
 #[test]
 fn test_physics_entity_cleanup() {
     use praxis_ecs::World;
-    use praxis_physics::{
-        Collider, ExternalForces, PhysicsVelocity, RigidBody,
-    };
+    use praxis_physics::{Collider, ExternalForces, PhysicsVelocity, RigidBody};
 
     let mut world = World::new();
 

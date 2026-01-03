@@ -96,7 +96,10 @@ impl GltfAssetManager {
             debug!("Using cached GLTF asset: {}", path_str);
         }
 
-        Ok(self.assets.get(&path_str).expect("Asset should exist after loading"))
+        Ok(self
+            .assets
+            .get(&path_str)
+            .expect("Asset should exist after loading"))
     }
 
     /// Gets a reference to a cached asset by path.
