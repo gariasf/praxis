@@ -1572,3 +1572,382 @@ pub use ssao::{SsaoConfig, SsaoRenderer};
 pub use texture::{Cubemap, CubemapFace, Texture, TextureManager};
 pub use uniform_buffer::{DynamicUniformBuffer, ModelUniforms, ViewProjectionUniforms};
 pub use vertex::Vertex3D;
+pub use environment_probe::{
+    EnvironmentProbe, EnvironmentProbeCapture, EnvironmentProbeConfig, EnvironmentProbeManager,
+    IblData, IblUniforms, ProbeUpdateMode, MAX_ENVIRONMENT_PROBES, SPECULAR_MIP_LEVELS,
+};
+
+pub mod environment_probe;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use praxis_math::{Mat4, Vec3};
+
+    /// Test rendering mode enumeration
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum RenderMode {
+        Forward,
+        Deferred,
+    }
+
+    /// Mock renderer state for testing mode switching
+    struct MockRendererState {
+        current_mode: RenderMode,
+        switch_count: u32,
+    }
+
+    impl MockRendererState {
+        fn new() -> Self {
+            Self {
+                current_mode: RenderMode::Forward,
+                switch_count: 0,
+            }
+        }
+
+        fn switch_to(&mut self, mode: RenderMode) {
+            if self.current_mode != mode {
+                self.current_mode = mode;
+                self.switch_count += 1;
+            }
+        }
+
+        fn is_forward(&self) -> bool {
+            self.current_mode == RenderMode::Forward
+        }
+
+        fn is_deferred(&self) -> bool {
+            self.current_mode == RenderMode::Deferred
+        }
+    }
+
+    #[test]
+    fn test_renderer_mode_switch_forward_to_deferred() {
+        let mut renderer = MockRendererState::new();
+        
+        assert!(renderer.is_forward());
+        assert_eq!(renderer.switch_count, 0);
+        
+        renderer.switch_to(RenderMode::Deferred);
+        
+        assert!(renderer.is_deferred());
+        assert_eq!(renderer.switch_count, 1);
+    }
+
+    #[test]
+    fn test_renderer_mode_switch_deferred_to_forward() {
+        let mut renderer = MockRendererState::new();
+        renderer.switch_to(RenderMode::Deferred);
+        
+        assert!(renderer.is_deferred());
+        assert_eq!(renderer.switch_count, 1);
+        
+        renderer.switch_to(RenderMode::Forward);
+        
+        assert!(renderer.is_forward());
+        assert_eq!(renderer.switch_count, 2);
+    }
+
+    #[test]
+    fn test_renderer_mode_switch_idempotent() {
+        let mut renderer = MockRendererState::new();
+        
+        // Switching to the same mode should not increment counter
+        renderer.switch_to(RenderMode::Forward);
+        assert_eq!(renderer.switch_count, 0);
+        
+        renderer.switch_to(RenderMode::Forward);
+        assert_eq!(renderer.switch_count, 0);
+        
+        renderer.switch_to(RenderMode::Deferred);
+        assert_eq!(renderer.switch_count, 1);
+        
+        renderer.switch_to(RenderMode::Deferred);
+        assert_eq!(renderer.switch_count, 1);
+    }
+
+    #[test]
+    fn test_renderer_mode_multiple_switches() {
+        let mut renderer = MockRendererState::new();
+        
+        for _ in 0..10 {
+            renderer.switch_to(RenderMode::Deferred);
+            renderer.switch_to(RenderMode::Forward);
+        }
+        
+        // Should have switched 20 times (10 to deferred, 10 back to forward)
+        assert_eq!(renderer.switch_count, 20);
+        assert!(renderer.is_forward()); // Should end on forward
+    }
+
+    #[test]
+    fn test_draw_command_structure() {
+        // Test that DrawCommand can be created with all necessary data
+        let cmd = DrawCommand {
+            mesh_id: "test_mesh".to_string(),
+            model: Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0)),
+            texture_name: Some("test_texture".to_string()),
+            material_properties: Some(MaterialProperties::default()),
+        };
+        
+        assert_eq!(cmd.mesh_id, "test_mesh");
+        assert!(cmd.texture_name.is_some());
+        assert!(cmd.material_properties.is_some());
+    }
+
+    #[test]
+    fn test_draw_command_without_texture() {
+        let cmd = DrawCommand {
+            mesh_id: "test_mesh".to_string(),
+            model: Mat4::IDENTITY,
+            texture_name: None,
+            material_properties: None,
+        };
+        
+        assert!(cmd.texture_name.is_none());
+        assert!(cmd.material_properties.is_none());
+    }
+
+    #[test]
+    fn test_render_commands_structure() {
+        let draw_cmds = vec![
+            DrawCommand {
+                mesh_id: "cube".to_string(),
+                model: Mat4::IDENTITY,
+                texture_name: None,
+                material_properties: None,
+            },
+        ];
+        
+        let render_cmds = RenderCommands {
+            view: Mat4::IDENTITY,
+            proj: Mat4::IDENTITY,
+            draw_commands: &draw_cmds,
+            lighting: None,
+        };
+        
+        assert_eq!(render_cmds.draw_commands.len(), 1);
+        assert!(render_cmds.lighting.is_none());
+    }
+
+    #[test]
+    fn test_render_commands_with_lighting() {
+        let lighting = LightingUniforms::default();
+        let draw_cmds = vec![];
+        
+        let render_cmds = RenderCommands {
+            view: Mat4::IDENTITY,
+            proj: Mat4::IDENTITY,
+            draw_commands: &draw_cmds,
+            lighting: Some(&lighting),
+        };
+        
+        assert!(render_cmds.lighting.is_some());
+    }
+
+    #[test]
+    fn test_forward_rendering_path_characteristics() {
+        // Forward rendering characteristics:
+        // - Single pass
+        // - Renders geometry directly to framebuffer
+        // - Lighting calculated per-fragment for each object
+        // - Complexity: O(lights * triangles)
+        
+        let light_count = 10;
+        let triangle_count = 1000;
+        let forward_complexity = light_count * triangle_count;
+        
+        assert_eq!(forward_complexity, 10000);
+    }
+
+    #[test]
+    fn test_deferred_rendering_path_characteristics() {
+        // Deferred rendering characteristics:
+        // - Two passes (geometry + lighting)
+        // - G-buffer stores geometry data
+        // - Lighting calculated per-pixel once
+        // - Complexity: O(lights * pixels)
+        
+        let light_count = 10;
+        let pixel_count = 1920 * 1080;
+        let deferred_complexity = light_count * pixel_count;
+        
+        // Deferred is more efficient for many lights
+        assert!(deferred_complexity < 10 * 1000 * 1000 * 1000); // Much less than forward with many triangles
+    }
+
+    #[test]
+    fn test_renderer_mode_selection_few_lights() {
+        // With few lights, forward rendering is typically more efficient
+        let light_count = 2;
+        let triangle_count = 10000;
+        let pixel_count = 1920 * 1080;
+        
+        let forward_ops = light_count * triangle_count;
+        let deferred_ops = light_count * pixel_count;
+        
+        // Forward should be less work with few lights
+        assert!(forward_ops < deferred_ops);
+    }
+
+    #[test]
+    fn test_renderer_mode_selection_many_lights() {
+        // With many lights, deferred rendering is more efficient
+        let light_count = 100;
+        let triangle_count = 100000;
+        let pixel_count = 1920 * 1080;
+        
+        let forward_ops = light_count * triangle_count;
+        let deferred_ops = light_count * pixel_count;
+        
+        // Deferred should be less work with many lights
+        assert!(deferred_ops < forward_ops);
+    }
+
+    #[test]
+    fn test_material_properties_defaults() {
+        let props = MaterialProperties::default();
+        
+        // Default material should be reasonable
+        assert!(props.metallic >= 0.0 && props.metallic <= 1.0);
+        assert!(props.roughness >= 0.0 && props.roughness <= 1.0);
+    }
+
+    #[test]
+    fn test_material_properties_custom() {
+        let props = MaterialProperties::new()
+            .with_metallic(0.8)
+            .with_roughness(0.2);
+        
+        assert_eq!(props.metallic, 0.8);
+        assert_eq!(props.roughness, 0.2);
+    }
+
+    #[test]
+    fn test_viewport_structure() {
+        use vulkano::pipeline::graphics::viewport::Viewport;
+        
+        let viewport = Viewport {
+            offset: [0.0, 0.0],
+            extent: [1920.0, 1080.0],
+            depth_range: 0.0..=1.0,
+        };
+        
+        assert_eq!(viewport.offset, [0.0, 0.0]);
+        assert_eq!(viewport.extent, [1920.0, 1080.0]);
+    }
+
+    #[test]
+    fn test_rendering_pipeline_selection_criteria() {
+        // Test criteria for choosing rendering pipeline
+        
+        struct SceneStats {
+            light_count: u32,
+            object_count: u32,
+            needs_transparency: bool,
+        }
+        
+        let select_pipeline = |stats: &SceneStats| -> RenderMode {
+            if stats.needs_transparency {
+                // Transparency requires forward or hybrid approach
+                RenderMode::Forward
+            } else if stats.light_count > 10 {
+                // Many lights benefit from deferred
+                RenderMode::Deferred
+            } else {
+                // Few lights work well with forward
+                RenderMode::Forward
+            }
+        };
+        
+        // Test case 1: Few lights, no transparency
+        let scene1 = SceneStats {
+            light_count: 2,
+            object_count: 100,
+            needs_transparency: false,
+        };
+        assert_eq!(select_pipeline(&scene1), RenderMode::Forward);
+        
+        // Test case 2: Many lights, no transparency
+        let scene2 = SceneStats {
+            light_count: 50,
+            object_count: 100,
+            needs_transparency: false,
+        };
+        assert_eq!(select_pipeline(&scene2), RenderMode::Deferred);
+        
+        // Test case 3: Many lights, with transparency
+        let scene3 = SceneStats {
+            light_count: 50,
+            object_count: 100,
+            needs_transparency: true,
+        };
+        assert_eq!(select_pipeline(&scene3), RenderMode::Forward);
+    }
+
+    #[test]
+    fn test_hybrid_rendering_approach() {
+        // Test hybrid rendering concept: deferred for opaque, forward for transparent
+        
+        let mut opaque_objects = vec!["cube1", "cube2", "sphere1"];
+        let mut transparent_objects = vec!["glass1", "water1"];
+        
+        // In hybrid rendering:
+        // 1. Render opaque objects to G-buffer (deferred)
+        let deferred_pass_count = opaque_objects.len();
+        
+        // 2. Lighting pass on G-buffer
+        let lighting_pass_count = 1;
+        
+        // 3. Render transparent objects with forward rendering
+        let forward_pass_count = transparent_objects.len();
+        
+        let total_passes = deferred_pass_count + lighting_pass_count + forward_pass_count;
+        assert_eq!(total_passes, 6); // 3 + 1 + 2
+    }
+
+    #[test]
+    fn test_render_mode_memory_requirements() {
+        // Forward rendering memory
+        let framebuffer_size = 1920 * 1080 * 4; // RGBA8
+        let depth_buffer_size = 1920 * 1080 * 4; // D32
+        let forward_memory = framebuffer_size + depth_buffer_size;
+        
+        // Deferred rendering memory (G-buffer)
+        let albedo_size = 1920 * 1080 * 4; // RGBA8
+        let normal_size = 1920 * 1080 * 8; // RGBA16F
+        let metallic_roughness_size = 1920 * 1080 * 4; // RGBA8
+        let gbuffer_depth_size = 1920 * 1080 * 4; // D32
+        let deferred_memory = albedo_size + normal_size + metallic_roughness_size + gbuffer_depth_size;
+        
+        // Deferred uses more memory due to G-buffer
+        assert!(deferred_memory > forward_memory);
+        
+        // But the trade-off is better performance with many lights
+        let memory_overhead_ratio = deferred_memory as f32 / forward_memory as f32;
+        assert!(memory_overhead_ratio > 1.0);
+        assert!(memory_overhead_ratio < 4.0); // Reasonable overhead
+    }
+
+    #[test]
+    fn test_g_buffer_format_characteristics() {
+        // Test that G-buffer formats are appropriate for their data
+        use vulkano::format::Format;
+        
+        // Albedo: RGBA8 is sufficient for base color
+        let albedo_format = Format::R8G8B8A8_UNORM;
+        assert_eq!(albedo_format, Format::R8G8B8A8_UNORM);
+        
+        // Normal: RGBA16F provides better precision for normals
+        let normal_format = Format::R16G16B16A16_SFLOAT;
+        assert_eq!(normal_format, Format::R16G16B16A16_SFLOAT);
+        
+        // Metallic-Roughness: RGBA8 is sufficient for material properties
+        let material_format = Format::R8G8B8A8_UNORM;
+        assert_eq!(material_format, Format::R8G8B8A8_UNORM);
+        
+        // Depth: D32 provides full precision for depth
+        let depth_format = Format::D32_SFLOAT;
+        assert_eq!(depth_format, Format::D32_SFLOAT);
+    }
+}

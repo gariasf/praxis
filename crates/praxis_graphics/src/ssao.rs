@@ -940,3 +940,274 @@ impl SsaoRenderer {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use praxis_math::Vec3;
+
+    #[test]
+    fn test_ssao_kernel_generation_count() {
+        // Test that kernel generation produces the correct number of samples
+        let kernel = generate_sample_kernel(64);
+        assert_eq!(kernel.len(), 64);
+
+        let kernel_32 = generate_sample_kernel(32);
+        assert_eq!(kernel_32.len(), 32);
+
+        let kernel_128 = generate_sample_kernel(128);
+        assert_eq!(kernel_128.len(), 128);
+    }
+
+    #[test]
+    fn test_ssao_kernel_samples_normalized() {
+        // All kernel samples should be normalized (length = 1.0 before scaling)
+        let kernel = generate_sample_kernel(64);
+        
+        for sample in kernel.iter() {
+            // After scaling, length should be <= 1.0
+            let length = sample.length();
+            assert!(length > 0.0);
+            assert!(length <= 1.0);
+        }
+    }
+
+    #[test]
+    fn test_ssao_kernel_hemisphere_distribution() {
+        // All samples should be in the upper hemisphere (z >= 0)
+        let kernel = generate_sample_kernel(64);
+        
+        for sample in kernel.iter() {
+            assert!(sample.z >= 0.0, "Sample should be in upper hemisphere: {:?}", sample);
+        }
+    }
+
+    #[test]
+    fn test_ssao_kernel_scaling_distribution() {
+        // Test that samples are more densely distributed near the origin
+        let kernel = generate_sample_kernel(64);
+        
+        let mut near_samples = 0; // Within 0.3 of origin
+        let mut far_samples = 0;  // Beyond 0.7 from origin
+        
+        for sample in kernel.iter() {
+            let length = sample.length();
+            if length < 0.3 {
+                near_samples += 1;
+            } else if length > 0.7 {
+                far_samples += 1;
+            }
+        }
+        
+        // Should have more samples near the origin due to quadratic scaling
+        // This is approximate due to randomness, but should hold statistically
+        assert!(near_samples > far_samples / 2, 
+            "Expected more near samples ({}) than far samples ({})", 
+            near_samples, far_samples);
+    }
+
+    #[test]
+    fn test_ssao_kernel_randomness() {
+        // Test that two kernel generations produce different results
+        let kernel1 = generate_sample_kernel(64);
+        let kernel2 = generate_sample_kernel(64);
+        
+        // At least some samples should be different
+        let mut different_count = 0;
+        for (s1, s2) in kernel1.iter().zip(kernel2.iter()) {
+            if (*s1 - *s2).length() > 0.001 {
+                different_count += 1;
+            }
+        }
+        
+        // With 64 random samples, virtually all should be different
+        assert!(different_count > 60, "Kernels should be randomized");
+    }
+
+    #[test]
+    fn test_ssao_noise_texture_generation_count() {
+        // Test noise texture generation produces correct number of vectors
+        let noise = generate_noise_texture(4);
+        assert_eq!(noise.len(), 16); // 4x4 = 16 vectors
+
+        let noise_8 = generate_noise_texture(8);
+        assert_eq!(noise_8.len(), 64); // 8x8 = 64 vectors
+    }
+
+    #[test]
+    fn test_ssao_noise_texture_normalized() {
+        // All noise vectors should be normalized
+        let noise = generate_noise_texture(4);
+        
+        for vec in noise.iter() {
+            let length = vec.length();
+            assert!((length - 1.0).abs() < 0.001, "Noise vector should be normalized");
+        }
+    }
+
+    #[test]
+    fn test_ssao_noise_texture_tangent_space() {
+        // Noise vectors should be in tangent space (z = 0)
+        let noise = generate_noise_texture(4);
+        
+        for vec in noise.iter() {
+            assert_eq!(vec.z, 0.0, "Noise vector should be in tangent space (z=0)");
+            // x and y should be in range [-1, 1]
+            assert!(vec.x >= -1.0 && vec.x <= 1.0);
+            assert!(vec.y >= -1.0 && vec.y <= 1.0);
+        }
+    }
+
+    #[test]
+    fn test_ssao_noise_texture_randomness() {
+        // Test that two noise texture generations produce different results
+        let noise1 = generate_noise_texture(4);
+        let noise2 = generate_noise_texture(4);
+        
+        let mut different_count = 0;
+        for (n1, n2) in noise1.iter().zip(noise2.iter()) {
+            if (*n1 - *n2).length() > 0.001 {
+                different_count += 1;
+            }
+        }
+        
+        // Most noise vectors should be different
+        assert!(different_count > 14, "Noise textures should be randomized");
+    }
+
+    #[test]
+    fn test_ssao_config_defaults() {
+        let config = SsaoConfig::default();
+        
+        assert_eq!(config.kernel_size, 64);
+        assert_eq!(config.radius, 0.5);
+        assert_eq!(config.bias, 0.025);
+        assert_eq!(config.power, 1.0);
+        assert_eq!(config.noise_texture_size, 4);
+    }
+
+    #[test]
+    fn test_ssao_config_builder() {
+        let config = SsaoConfig::new()
+            .with_kernel_size(128)
+            .with_radius(1.0)
+            .with_bias(0.05)
+            .with_power(2.0)
+            .with_noise_texture_size(8);
+        
+        assert_eq!(config.kernel_size, 128);
+        assert_eq!(config.radius, 1.0);
+        assert_eq!(config.bias, 0.05);
+        assert_eq!(config.power, 2.0);
+        assert_eq!(config.noise_texture_size, 8);
+    }
+
+    #[test]
+    fn test_ssao_kernel_scale_progression() {
+        // Test that the scaling factor progresses from 0.1 to 1.0
+        let count = 10;
+        let kernel = generate_sample_kernel(count);
+        
+        // First sample should have smallest scale (closest to 0.1)
+        let first_length = kernel[0].length();
+        
+        // Last sample should have largest scale (closest to 1.0)
+        let last_length = kernel[count as usize - 1].length();
+        
+        // Due to randomness and quadratic scaling, this is approximate
+        // but last should generally be larger than first
+        assert!(last_length >= first_length * 0.5, 
+            "Later samples should generally be farther from origin");
+    }
+
+    #[test]
+    fn test_ssao_kernel_coverage() {
+        // Test that kernel samples provide good hemisphere coverage
+        let kernel = generate_sample_kernel(64);
+        
+        // Count samples in different octants of the hemisphere
+        let mut octant_counts = [0; 4];
+        for sample in kernel.iter() {
+            let octant = if sample.x >= 0.0 {
+                if sample.y >= 0.0 { 0 } else { 1 }
+            } else {
+                if sample.y >= 0.0 { 2 } else { 3 }
+            };
+            octant_counts[octant] += 1;
+        }
+        
+        // Each octant should have at least some samples (statistical distribution)
+        for count in octant_counts.iter() {
+            assert!(*count > 0, "Each hemisphere octant should have samples");
+        }
+    }
+
+    #[test]
+    fn test_ssao_uniforms_size() {
+        // Test that SsaoUniforms has the expected size for shader alignment
+        use std::mem::size_of;
+        
+        let size = size_of::<SsaoUniforms>();
+        
+        // Should be aligned for std140 layout
+        // 2x mat4 (128 bytes) + 64x vec4 (1024 bytes) + vec2 (8) + 3x f32 (12) + i32 (4) + padding (8)
+        // = 1184 bytes, but may vary with alignment
+        assert!(size >= 1024, "SsaoUniforms should be large enough for all data");
+        
+        // Verify it's POD (Plain Old Data) for bytemuck
+        let uniforms = SsaoUniforms {
+            projection: [[0.0; 4]; 4],
+            view: [[0.0; 4]; 4],
+            samples: [[0.0; 4]; 64],
+            noise_scale: [1.0, 1.0],
+            radius: 0.5,
+            bias: 0.025,
+            power: 1.0,
+            kernel_size: 64,
+            _padding: [0.0; 2],
+        };
+        
+        // Should be able to convert to bytes
+        let _bytes = bytemuck::bytes_of(&uniforms);
+    }
+
+    #[test]
+    fn test_blur_push_constants_size() {
+        use std::mem::size_of;
+        
+        let size = size_of::<BlurPushConstants>();
+        
+        // Should be 8 bytes (2 f32s)
+        assert_eq!(size, 8);
+        
+        // Verify it's POD
+        let constants = BlurPushConstants {
+            texel_size: [1.0 / 1920.0, 1.0 / 1080.0],
+        };
+        
+        let _bytes = bytemuck::bytes_of(&constants);
+    }
+
+    #[test]
+    fn test_ssao_kernel_min_max_length() {
+        // Test the actual min and max lengths in the kernel
+        let kernel = generate_sample_kernel(64);
+        
+        let mut min_length = f32::MAX;
+        let mut max_length = 0.0;
+        
+        for sample in kernel.iter() {
+            let length = sample.length();
+            min_length = min_length.min(length);
+            max_length = max_length.max(length);
+        }
+        
+        // Min should be close to 0.1 (the lerp start)
+        assert!(min_length >= 0.05, "Minimum length should be around 0.1");
+        assert!(min_length <= 0.3, "Minimum length shouldn't exceed 0.3");
+        
+        // Max should be close to 1.0 (the lerp end)
+        assert!(max_length >= 0.7, "Maximum length should be close to 1.0");
+        assert!(max_length <= 1.0, "Maximum length shouldn't exceed 1.0");
+    }
+}

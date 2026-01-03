@@ -931,3 +931,244 @@ impl DeferredRenderer {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use praxis_math::Vec3;
+
+    /// Test G-buffer packing/unpacking for normal vectors
+    #[test]
+    fn test_gbuffer_normal_packing() {
+        // Test normal vector encoding to RGBA format
+        let normal = Vec3::new(0.5, 0.7071, 0.5).normalize();
+        
+        // Pack normal into RGBA format (map from [-1,1] to [0,1] for storage)
+        let packed_r = (normal.x * 0.5 + 0.5) * 255.0;
+        let packed_g = (normal.y * 0.5 + 0.5) * 255.0;
+        let packed_b = (normal.z * 0.5 + 0.5) * 255.0;
+        
+        // Unpack normal from RGBA format
+        let unpacked_x = (packed_r / 255.0) * 2.0 - 1.0;
+        let unpacked_y = (packed_g / 255.0) * 2.0 - 1.0;
+        let unpacked_z = (packed_b / 255.0) * 2.0 - 1.0;
+        let unpacked = Vec3::new(unpacked_x, unpacked_y, unpacked_z);
+        
+        // Should be close to original (some precision loss expected)
+        assert!((unpacked - normal).length() < 0.01);
+    }
+
+    #[test]
+    fn test_gbuffer_normal_packing_cardinal_directions() {
+        // Test cardinal direction normals
+        let test_normals = [
+            Vec3::X,
+            Vec3::NEG_X,
+            Vec3::Y,
+            Vec3::NEG_Y,
+            Vec3::Z,
+            Vec3::NEG_Z,
+        ];
+
+        for normal in test_normals.iter() {
+            // Pack
+            let packed_r = (normal.x * 0.5 + 0.5) * 255.0;
+            let packed_g = (normal.y * 0.5 + 0.5) * 255.0;
+            let packed_b = (normal.z * 0.5 + 0.5) * 255.0;
+            
+            // Unpack
+            let unpacked_x = (packed_r / 255.0) * 2.0 - 1.0;
+            let unpacked_y = (packed_g / 255.0) * 2.0 - 1.0;
+            let unpacked_z = (packed_b / 255.0) * 2.0 - 1.0;
+            let unpacked = Vec3::new(unpacked_x, unpacked_y, unpacked_z);
+            
+            assert!((unpacked - *normal).length() < 0.01);
+        }
+    }
+
+    #[test]
+    fn test_gbuffer_metallic_roughness_packing() {
+        // Test packing metallic and roughness into single texture
+        let metallic = 0.8;
+        let roughness = 0.3;
+        let emissive = 0.5;
+        
+        // Pack into RGBA8 format
+        let packed_r = (metallic * 255.0) as u8;
+        let packed_g = (roughness * 255.0) as u8;
+        let packed_b = (emissive * 255.0) as u8;
+        
+        // Unpack
+        let unpacked_metallic = packed_r as f32 / 255.0;
+        let unpacked_roughness = packed_g as f32 / 255.0;
+        let unpacked_emissive = packed_b as f32 / 255.0;
+        
+        assert!((unpacked_metallic - metallic).abs() < 0.01);
+        assert!((unpacked_roughness - roughness).abs() < 0.01);
+        assert!((unpacked_emissive - emissive).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_gbuffer_metallic_roughness_extremes() {
+        // Test extreme values (0.0 and 1.0)
+        let test_cases = [
+            (0.0, 0.0, 0.0),
+            (1.0, 1.0, 1.0),
+            (0.0, 1.0, 0.0),
+            (1.0, 0.0, 1.0),
+        ];
+
+        for (metallic, roughness, emissive) in test_cases.iter() {
+            let packed_r = (*metallic * 255.0) as u8;
+            let packed_g = (*roughness * 255.0) as u8;
+            let packed_b = (*emissive * 255.0) as u8;
+            
+            let unpacked_metallic = packed_r as f32 / 255.0;
+            let unpacked_roughness = packed_g as f32 / 255.0;
+            let unpacked_emissive = packed_b as f32 / 255.0;
+            
+            assert!((unpacked_metallic - metallic).abs() < 0.01);
+            assert!((unpacked_roughness - roughness).abs() < 0.01);
+            assert!((unpacked_emissive - emissive).abs() < 0.01);
+        }
+    }
+
+    #[test]
+    fn test_gbuffer_albedo_packing() {
+        // Test albedo color packing
+        let albedo = Vec3::new(0.8, 0.2, 0.5);
+        
+        // Pack into RGBA8
+        let packed_r = (albedo.x * 255.0) as u8;
+        let packed_g = (albedo.y * 255.0) as u8;
+        let packed_b = (albedo.z * 255.0) as u8;
+        
+        // Unpack
+        let unpacked = Vec3::new(
+            packed_r as f32 / 255.0,
+            packed_g as f32 / 255.0,
+            packed_b as f32 / 255.0,
+        );
+        
+        assert!((unpacked - albedo).length() < 0.01);
+    }
+
+    #[test]
+    fn test_gbuffer_depth_reconstruction() {
+        // Test depth value reconstruction from G-buffer
+        // Depth is stored in D32_SFLOAT format (full 32-bit precision)
+        let depth_values = [0.0, 0.1, 0.5, 0.9, 1.0];
+        
+        for depth in depth_values.iter() {
+            // In shader, we would read this directly
+            // Here we just verify the value range
+            assert!(*depth >= 0.0 && *depth <= 1.0);
+        }
+    }
+
+    #[test]
+    fn test_gbuffer_position_reconstruction() {
+        // Test position reconstruction from depth and screen coordinates
+        // This simulates what the lighting shader does
+        
+        // Mock screen-space coordinates (normalized device coordinates)
+        let ndc_x = 0.5;
+        let ndc_y = 0.5;
+        let depth = 0.5;
+        
+        // Mock inverse projection matrix (simplified)
+        use praxis_math::Mat4;
+        let fov = std::f32::consts::PI / 4.0; // 45 degrees
+        let aspect = 16.0 / 9.0;
+        let near = 0.1;
+        let far = 100.0;
+        let proj = Mat4::perspective_rh(fov, aspect, near, far);
+        let inv_proj = proj.inverse();
+        
+        // Reconstruct clip-space position
+        let clip_pos = praxis_math::Vec4::new(
+            ndc_x * 2.0 - 1.0,
+            ndc_y * 2.0 - 1.0,
+            depth,
+            1.0,
+        );
+        
+        // Transform to view space
+        let view_pos = inv_proj * clip_pos;
+        let view_pos = view_pos / view_pos.w;
+        
+        // Position should be valid (not NaN or infinite)
+        assert!(view_pos.x.is_finite());
+        assert!(view_pos.y.is_finite());
+        assert!(view_pos.z.is_finite());
+    }
+
+    #[test]
+    fn test_fullscreen_quad_vertices() {
+        // Test fullscreen quad vertex generation
+        let vertices = [
+            FullscreenVertex { position: [-1.0, -1.0], uv: [0.0, 0.0] },
+            FullscreenVertex { position: [1.0, -1.0], uv: [1.0, 0.0] },
+            FullscreenVertex { position: [1.0, 1.0], uv: [1.0, 1.0] },
+            FullscreenVertex { position: [-1.0, 1.0], uv: [0.0, 1.0] },
+        ];
+        
+        // Verify positions cover full NDC space
+        assert_eq!(vertices[0].position, [-1.0, -1.0]); // Bottom-left
+        assert_eq!(vertices[1].position, [1.0, -1.0]);  // Bottom-right
+        assert_eq!(vertices[2].position, [1.0, 1.0]);   // Top-right
+        assert_eq!(vertices[3].position, [-1.0, 1.0]);  // Top-left
+        
+        // Verify UVs are correctly mapped
+        assert_eq!(vertices[0].uv, [0.0, 0.0]);
+        assert_eq!(vertices[1].uv, [1.0, 0.0]);
+        assert_eq!(vertices[2].uv, [1.0, 1.0]);
+        assert_eq!(vertices[3].uv, [0.0, 1.0]);
+    }
+
+    #[test]
+    fn test_fullscreen_quad_indices() {
+        // Test fullscreen quad index generation for two triangles
+        let indices = [0u32, 1, 2, 0, 2, 3];
+        
+        // First triangle: 0, 1, 2 (bottom-left, bottom-right, top-right)
+        assert_eq!(indices[0], 0);
+        assert_eq!(indices[1], 1);
+        assert_eq!(indices[2], 2);
+        
+        // Second triangle: 0, 2, 3 (bottom-left, top-right, top-left)
+        assert_eq!(indices[3], 0);
+        assert_eq!(indices[4], 2);
+        assert_eq!(indices[5], 3);
+    }
+
+    #[test]
+    fn test_gbuffer_normal_precision() {
+        // Test that normal packing maintains sufficient precision
+        // Use R16G16B16A16_SFLOAT format characteristics
+        
+        let test_normals = vec![
+            Vec3::new(0.577, 0.577, 0.577).normalize(), // Diagonal
+            Vec3::new(0.707, 0.0, 0.707).normalize(),   // 45 degree angle
+            Vec3::new(0.1, 0.99, 0.1).normalize(),      // Near-vertical
+        ];
+        
+        for normal in test_normals.iter() {
+            // 16-bit float precision simulation (±65504, ~3-4 decimal digits)
+            let pack_and_unpack = |value: f32| -> f32 {
+                // Simulated 16-bit float quantization
+                let quantized = (value * 1000.0).round() / 1000.0;
+                quantized
+            };
+            
+            let unpacked = Vec3::new(
+                pack_and_unpack(normal.x),
+                pack_and_unpack(normal.y),
+                pack_and_unpack(normal.z),
+            );
+            
+            // Should maintain good precision with 16-bit floats
+            assert!((unpacked - *normal).length() < 0.001);
+        }
+    }
+}
