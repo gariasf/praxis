@@ -13,11 +13,13 @@ Praxis is an educational yet capable game engine that prioritizes:
 ## Features
 
 ### Rendering
-- Vulkan-based forward renderer via vulkano
+- Vulkan-based forward and deferred rendering pipelines via vulkano
 - Cascaded shadow mapping with PCF soft shadows
 - PBR materials with normal mapping
-- HDR rendering with bloom and tonemapping
-- Skybox and environment rendering
+- HDR rendering with tone mapping (ACES, Reinhard, Uncharted 2)
+- Automatic and manual exposure control
+- Skybox and environment rendering with IBL support
+- Environment probes for physically-based reflections
 
 ### Animation
 - Skeletal animation with keyframe interpolation
@@ -95,6 +97,9 @@ praxis/
 | `animation_blending_demo` | Blend trees and cross-fades |
 | `multi_mesh_demo` | Multiple meshes with PBR materials |
 | `input_integration` | Keyboard and mouse input handling |
+| `deferred_demo` | Deferred rendering with many lights |
+| `hdr_demo` | HDR with tone mapping and exposure |
+| `environment_probe_demo` | IBL reflections with environment probes |
 
 Run any example with:
 ```bash

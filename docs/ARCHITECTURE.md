@@ -58,7 +58,11 @@ praxis/
   - Backend tied to `winit`.
   - Depends on: `praxis_window`, `praxis_core`.
 - **`praxis_graphics`:**
-  - Rendering abstraction layer. Defines traits for renderers, resources (textures, meshes, shaders), pipelines.
+  - Rendering abstraction layer with multiple pipeline options.
+  - **Forward Rendering**: Traditional single-pass rendering with immediate lighting
+  - **Deferred Rendering**: G-buffer based rendering for many lights (O(lights × pixels))
+  - **HDR Pipeline**: Floating-point rendering with tone mapping (ACES, Reinhard, Uncharted 2)
+  - **Environment Probes**: Image-based lighting (IBL) for realistic reflections
   - Backend: `vulkano` (abstraction over Vulkan).
   - Depends on: `praxis_core`, `praxis_window`, `praxis_math`.
 - **`praxis_math`:**
