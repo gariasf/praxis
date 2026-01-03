@@ -27,6 +27,8 @@ praxis/
 │   ├── praxis_assets/
 │   ├── praxis_math/
 │   ├── praxis_gui/
+│   ├── praxis_audio/
+│   ├── praxis_physics/
 │   ├── praxis_scripting/
 │   └── praxis_utils/
 ├── examples/           # Example applications using the engine
@@ -72,17 +74,29 @@ praxis/
   - Scene representation and management.
   - Scene graph for spatial organization.
   - Camera management.
+  - Skeletal animation system with bone hierarchies.
+  - Animation blending (cross-fade, blend trees, layered animation).
+  - Transform propagation for both regular and animated entities.
   - Integrates with `praxis_ecs`.
   - Depends on: `praxis_ecs`, `praxis_core`, `praxis_math`.
 - **`praxis_assets`:**
   - Asset loading, management, and caching.
   - Supports various formats:
     - Textures: `image` crate (PNG, JPEG).
-    - Models: `gltf` (GLTF 2.0/GLB with PBR materials), `tobj` (OBJ).
+    - Models: `gltf` (GLTF 2.0/GLB with PBR materials, animations), `tobj` (OBJ).
+    - Audio: OGG, MP3, WAV, FLAC via `kira`.
     - Configuration/Data: `serde` (with `serde_json`, `serde_yaml`, etc.).
-  - GLTF loader includes material, texture, and node hierarchy support.
+  - GLTF loader includes material, texture, animation, and node hierarchy support.
   - Asset caching via `GltfAssetManager` and `ObjAssetManager`.
   - Depends on: `praxis_core`, `praxis_utils`.
+- **`praxis_audio`:**
+  - Audio playback and management using Kira.
+  - 3D spatial audio with distance attenuation and doppler effect.
+  - Audio source components for ECS integration.
+  - Listener positioning (typically follows camera).
+  - Volume, pitch, and playback controls.
+  - Multiple audio format support (OGG, MP3, WAV, FLAC).
+  - Depends on: `praxis_core`, `praxis_math`, `praxis_ecs`.
 - **`praxis_gui`:**
   - Debugging and editor tools GUI.
   - Dependency: `egui`.
@@ -106,14 +120,16 @@ praxis/
 - **Build System:** `cargo`.
 - **Dependency Management:** `Cargo.toml` for each crate and the workspace root.
 - **Key Dependencies:**
-  - Windowing/Input: `winit`
+  - Windowing/Input: `winit`, `gilrs`
   - Graphics: `vulkano`, `vulkano-shaders`
   - Math: `glam`
   - ECS: `bevy_ecs`
   - Physics: `rapier3d`
+  - Audio: `kira`
   - Assets:
     - Textures: `image`
-    - Models: `gltf` (GLTF 2.0/GLB), `tobj` (OBJ)
+    - Models: `gltf` (GLTF 2.0/GLB with animations), `tobj` (OBJ)
+    - Audio: `kira` (OGG, MP3, WAV, FLAC)
     - Data: `serde`
   - GUI: `egui`, `egui-winit`, `egui_vulkano`
   - Logging: `tracing`, `tracing-subscriber`
