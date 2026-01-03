@@ -106,8 +106,10 @@
 //! 3. **Descriptor Sets**:
 //!    - Set 0, Binding 0: View/Projection uniform buffer
 //!    - Set 0, Binding 1: Model matrix (UniformBufferDynamic with dynamic offsets)
-//!    - Set 0, Binding 2: Texture sampler
+//!    - Set 0, Binding 2: Texture sampler (albedo)
 //!    - Set 0, Binding 3: Lighting uniform buffer
+//!    - Set 0, Binding 4: Shadow uniform buffer
+//!    - Set 0, Binding 5-8: Shadow map samplers (one per cascade)
 //!    - Set 1, Binding 0: Material properties uniform buffer
 //! 4. **Mesh Data**: `MeshData` supports UV coordinates via `with_uvs()` and `with_colors_and_uvs()`
 //! 5. **Primitives**: Textured primitives like `textured_cube_mesh()` and `textured_quad_mesh()`
@@ -121,9 +123,27 @@
 //! - **`DirectionalLightData`**: Sun-like lights with direction but no position
 //! - **`PointLightData`**: Omnidirectional lights with position and attenuation
 //!
-//! The lighting data is bound at descriptor set 0, binding 2 and automatically
+//! The lighting data is bound at descriptor set 0, binding 3 and automatically
 //! included in all descriptor sets. The fragment shader uses this data to compute
 //! Blinn-Phong lighting for each pixel.
+//!
+//! # Shadow Mapping System
+//!
+//! The shadow mapping system provides realistic shadows for directional lights:
+//!
+//! - **`ShadowMapManager`**: Manages shadow map resources and rendering
+//! - **`ShadowConfig`**: Configuration for shadow quality and cascade distances
+//! - **`ShadowUniforms`**: Shadow data passed to shaders (light-space matrices)
+//! - **Cascaded Shadow Maps (CSM)**: Multiple shadow maps at different distances
+//! - **PCF Filtering**: Percentage Closer Filtering for soft shadow edges
+//!
+//! Shadow mapping is a two-pass technique:
+//! 1. **Shadow Pass**: Render scene from light's perspective to depth texture
+//! 2. **Main Pass**: Sample shadow maps to determine if fragments are shadowed
+//!
+//! The shadow data is bound at descriptor set 0, binding 4 with shadow map samplers
+//! at bindings 5-8 (one per cascade). The fragment shader performs cascade selection
+//! and PCF filtering to produce smooth, realistic shadows.
 //!
 //! # Rendering Flow
 //!
@@ -149,6 +169,7 @@ pub mod mesh;
 mod pipeline;
 mod primitives;
 mod shaders;
+pub mod shadow;
 pub mod texture;
 pub mod uniform_buffer;
 mod vertex;
@@ -1268,6 +1289,7 @@ pub use primitives::{
     colored_cube_mesh, pyramid_mesh, quad_mesh, solid_cube_mesh, sphere_mesh, textured_cube_mesh,
     textured_quad_mesh,
 };
+pub use shadow::{ShadowConfig, ShadowMapManager, ShadowUniforms, MAX_SHADOW_CASCADES};
 pub use texture::{Texture, TextureManager};
 pub use uniform_buffer::{DynamicUniformBuffer, ModelUniforms, ViewProjectionUniforms};
 pub use vertex::Vertex3D;

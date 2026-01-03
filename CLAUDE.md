@@ -27,6 +27,7 @@ cargo run --example comprehensive_scene_demo
 cargo run --example scene_demo
 cargo run --example gui_demo
 cargo run --example physics_demo
+cargo run --example shadow_demo
 
 # Check code without building
 cargo check --all
@@ -245,6 +246,53 @@ These queries use spatial acceleration structures (BVH) for O(log n) performance
 
 See `praxis_physics` documentation and `examples/physics_demo.rs` for detailed usage patterns.
 
+### Shadow Mapping System
+
+The shadow mapping system provides realistic shadows using cascaded shadow maps (CSM):
+
+- **ShadowMapManager**: Manages shadow map resources and light-space matrix calculation
+- **ShadowConfig**: Configures shadow quality, cascade count, distances, and PCF filtering
+- **ShadowUniforms**: Shadow data passed to shaders (light-space matrices, cascade info)
+- **Cascaded Shadow Maps (CSM)**: Multiple shadow maps at different distances for quality
+- **PCF Filtering**: Percentage Closer Filtering for soft shadow edges
+
+#### Shadow Mapping Overview
+
+Shadow mapping uses a two-pass rendering technique:
+
+1. **Shadow Pass**: Render scene from light's perspective to depth texture (shadow map)
+2. **Main Pass**: Sample shadow maps to determine if fragments are shadowed
+
+#### Cascade Configuration
+
+CSM divides the view frustum into multiple cascades:
+- **Near cascade**: High detail for close objects (e.g., 0-20m)
+- **Mid cascades**: Medium detail for mid-range objects (e.g., 20-100m)
+- **Far cascade**: Lower detail for distant objects (e.g., 100-500m)
+
+Default configuration: 3 cascades at [20.0, 100.0, 500.0] meters
+
+#### PCF Filtering
+
+PCF samples multiple shadow map points and averages results:
+- **1 sample**: Hard shadows (best performance)
+- **4 samples**: 2×2 filter (soft shadows, good performance)
+- **9 samples**: 3×3 filter (softer shadows, medium performance)
+- **16 samples**: 4×4 filter (softest shadows, lower performance)
+
+#### Key Features
+
+**Light-Space Matrix Calculation**: Automatically computes view and projection matrices
+for rendering from light's perspective for each cascade, fitting frustum bounds tightly.
+
+**Shadow Bias**: Configurable bias to prevent shadow acne (self-shadowing artifacts).
+Default: 0.005, with additional hardware depth bias in shadow pipeline.
+
+**Cascade Selection**: Fragment shader automatically selects appropriate cascade based
+on distance from camera, ensuring optimal shadow quality at all ranges.
+
+See `praxis_graphics::shadow` documentation and `examples/shadow_demo.rs` for usage.
+
 ### Asset Loading
 
 The asset system supports loading various file formats:
@@ -287,6 +335,9 @@ All checks must pass before merging.
 - RenderContext manages Vulkan device, queues, swapchain
 - All rendering operations return `Result<()>` for error handling
 - Mesh and texture managers handle asset lifecycle
+- Shadow mapping requires separate render pass and pipeline
+- Shadow shaders in `src/shaders/shadow.vert` and `src/shaders/shadow.frag`
+- Main shaders include shadow sampling at bindings 4-8
 
 ### Window/Event Handling (praxis_window)
 - Uses winit 0.30.11 with `ApplicationHandler` trait

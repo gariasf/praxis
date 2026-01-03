@@ -336,6 +336,27 @@ layout(set = 0, binding = 3, std140) uniform LightingData {
 } lighting;
 
 // ============================================================================
+// Shadow Mapping Uniforms
+// ============================================================================
+// This uniform buffer at set 0, binding 4 contains shadow mapping data
+// including light-space transformation matrices for cascaded shadow maps.
+
+layout(set = 0, binding = 4, std140) uniform ShadowData {
+    mat4 light_space_matrices[4];  // Light-space matrices for each cascade
+    vec4 cascade_distances;         // Distance where each cascade ends (xyz used)
+    uint cascade_count;             // Number of active cascades
+    uint shadow_map_size;           // Shadow map resolution
+    uint pcf_samples;               // Number of PCF samples (1, 4, 9, or 16)
+    float bias;                     // Shadow bias to prevent acne
+} shadow;
+
+// Shadow map samplers (one per cascade)
+layout(set = 0, binding = 5) uniform sampler2DShadow shadow_map_0;
+layout(set = 0, binding = 6) uniform sampler2DShadow shadow_map_1;
+layout(set = 0, binding = 7) uniform sampler2DShadow shadow_map_2;
+layout(set = 0, binding = 8) uniform sampler2DShadow shadow_map_3;
+
+// ============================================================================
 // Lighting Constants
 // ============================================================================
 
@@ -344,6 +365,157 @@ layout(set = 0, binding = 3, std140) uniform LightingData {
 // Roughness 0.0 (smooth) → shininess 256.0 (very tight highlights)
 const float MIN_SHININESS = 2.0;
 const float MAX_SHININESS = 256.0;
+
+// ============================================================================
+// Shadow Mapping Functions
+// ============================================================================
+
+// Calculate shadow factor using PCF (Percentage Closer Filtering).
+//
+// PCF samples multiple points in the shadow map and averages the results,
+// creating soft shadow edges instead of hard aliasing.
+//
+// Arguments:
+//   cascade_index: Which shadow cascade to sample
+//   light_space_pos: Fragment position in light space (xyz/w)
+//
+// Returns:
+//   Shadow factor [0, 1] where 0 = fully shadowed, 1 = fully lit
+float calculate_shadow_pcf(uint cascade_index, vec3 light_space_pos) {
+    // Sample the appropriate shadow map based on cascade
+    float current_depth = light_space_pos.z;
+    
+    // Apply bias to prevent shadow acne
+    current_depth -= shadow.bias;
+    
+    // Calculate texel size for PCF offset
+    float texel_size = 1.0 / float(shadow.shadow_map_size);
+    
+    float shadow_sum = 0.0;
+    uint sample_count = 0;
+    
+    // PCF kernel based on configured sample count
+    if (shadow.pcf_samples == 1) {
+        // No filtering - single sample
+        if (cascade_index == 0) {
+            shadow_sum = texture(shadow_map_0, vec3(light_space_pos.xy, current_depth));
+        } else if (cascade_index == 1) {
+            shadow_sum = texture(shadow_map_1, vec3(light_space_pos.xy, current_depth));
+        } else if (cascade_index == 2) {
+            shadow_sum = texture(shadow_map_2, vec3(light_space_pos.xy, current_depth));
+        } else {
+            shadow_sum = texture(shadow_map_3, vec3(light_space_pos.xy, current_depth));
+        }
+        return shadow_sum;
+    } else if (shadow.pcf_samples == 4) {
+        // 2x2 PCF filter
+        for (int x = -1; x <= 0; x++) {
+            for (int y = -1; y <= 0; y++) {
+                vec2 offset = vec2(float(x), float(y)) * texel_size;
+                vec2 sample_coords = light_space_pos.xy + offset;
+                
+                if (cascade_index == 0) {
+                    shadow_sum += texture(shadow_map_0, vec3(sample_coords, current_depth));
+                } else if (cascade_index == 1) {
+                    shadow_sum += texture(shadow_map_1, vec3(sample_coords, current_depth));
+                } else if (cascade_index == 2) {
+                    shadow_sum += texture(shadow_map_2, vec3(sample_coords, current_depth));
+                } else {
+                    shadow_sum += texture(shadow_map_3, vec3(sample_coords, current_depth));
+                }
+                sample_count++;
+            }
+        }
+    } else if (shadow.pcf_samples == 9) {
+        // 3x3 PCF filter
+        for (int x = -1; x <= 1; x++) {
+            for (int y = -1; y <= 1; y++) {
+                vec2 offset = vec2(float(x), float(y)) * texel_size;
+                vec2 sample_coords = light_space_pos.xy + offset;
+                
+                if (cascade_index == 0) {
+                    shadow_sum += texture(shadow_map_0, vec3(sample_coords, current_depth));
+                } else if (cascade_index == 1) {
+                    shadow_sum += texture(shadow_map_1, vec3(sample_coords, current_depth));
+                } else if (cascade_index == 2) {
+                    shadow_sum += texture(shadow_map_2, vec3(sample_coords, current_depth));
+                } else {
+                    shadow_sum += texture(shadow_map_3, vec3(sample_coords, current_depth));
+                }
+                sample_count++;
+            }
+        }
+    } else {
+        // 4x4 PCF filter (16 samples)
+        for (int x = -2; x <= 1; x++) {
+            for (int y = -2; y <= 1; y++) {
+                vec2 offset = vec2(float(x), float(y)) * texel_size;
+                vec2 sample_coords = light_space_pos.xy + offset;
+                
+                if (cascade_index == 0) {
+                    shadow_sum += texture(shadow_map_0, vec3(sample_coords, current_depth));
+                } else if (cascade_index == 1) {
+                    shadow_sum += texture(shadow_map_1, vec3(sample_coords, current_depth));
+                } else if (cascade_index == 2) {
+                    shadow_sum += texture(shadow_map_2, vec3(sample_coords, current_depth));
+                } else {
+                    shadow_sum += texture(shadow_map_3, vec3(sample_coords, current_depth));
+                }
+                sample_count++;
+            }
+        }
+    }
+    
+    return shadow_sum / float(sample_count);
+}
+
+// Calculate shadow factor for directional light with cascade selection.
+//
+// Selects the appropriate shadow cascade based on fragment distance from camera,
+// then performs PCF filtering for soft shadows.
+//
+// Arguments:
+//   light_index: Index of the directional light (for future per-light shadows)
+//
+// Returns:
+//   Shadow factor [0, 1] where 0 = fully shadowed, 1 = fully lit
+float calculate_shadow(uint light_index) {
+    // If no shadow cascades are active, assume fully lit
+    if (shadow.cascade_count == 0) {
+        return 1.0;
+    }
+    
+    // Calculate view-space depth (distance from camera)
+    vec3 view_pos = (view_proj.view * vec4(v_world_pos, 1.0)).xyz;
+    float view_depth = abs(view_pos.z);
+    
+    // Select cascade based on distance
+    uint cascade_index = 0;
+    for (uint i = 0; i < shadow.cascade_count; i++) {
+        if (view_depth < shadow.cascade_distances[i]) {
+            cascade_index = i;
+            break;
+        }
+        cascade_index = i;
+    }
+    
+    // Transform fragment to light space
+    vec4 light_space_pos_4 = shadow.light_space_matrices[cascade_index] * vec4(v_world_pos, 1.0);
+    vec3 light_space_pos = light_space_pos_4.xyz / light_space_pos_4.w;
+    
+    // Transform from NDC [-1, 1] to texture coordinates [0, 1]
+    light_space_pos.xy = light_space_pos.xy * 0.5 + 0.5;
+    
+    // Check if fragment is outside shadow map bounds
+    if (light_space_pos.x < 0.0 || light_space_pos.x > 1.0 ||
+        light_space_pos.y < 0.0 || light_space_pos.y > 1.0 ||
+        light_space_pos.z < 0.0 || light_space_pos.z > 1.0) {
+        return 1.0; // Outside shadow map, assume lit
+    }
+    
+    // Perform PCF filtering
+    return calculate_shadow_pcf(cascade_index, light_space_pos);
+}
 
 // ============================================================================
 // Lighting Calculation Functions
@@ -523,13 +695,20 @@ void main() {
         // Specular color varies based on metallic: white for dielectrics, colored for metals
         float specular = calculate_specular(normal, light_dir, view_dir, shininess);
         
+        // === Shadow Calculation ===
+        // Calculate shadow factor for this directional light
+        // Shadow factor is 0.0 (fully shadowed) to 1.0 (fully lit)
+        // PCF filtering provides soft shadow edges
+        float shadow_factor = calculate_shadow(i);
+        
         // === Combine Components ===
         // Multiply by light color and intensity, then accumulate
         // Diffuse uses albedo color (light scattered through surface)
         // Specular uses specular_color (light reflected from surface)
         // Specular is scaled by 0.5 to prevent over-brightening
-        vec3 diffuse_contrib = light.color.rgb * light.intensity * diffuse;
-        vec3 specular_contrib = light.color.rgb * light.intensity * specular * specular_color * 0.5;
+        // Both diffuse and specular are modulated by shadow_factor
+        vec3 diffuse_contrib = light.color.rgb * light.intensity * diffuse * shadow_factor;
+        vec3 specular_contrib = light.color.rgb * light.intensity * specular * specular_color * 0.5 * shadow_factor;
         lighting_result += diffuse_contrib + specular_contrib;
     }
     

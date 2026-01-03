@@ -348,3 +348,152 @@ pub fn create_simple_pipeline_3d(
     debug!("Creating simple 3D pipeline with default configuration");
     create_graphics_pipeline::<Vertex3D>(device, render_pass, extent, PipelineConfig::default())
 }
+
+/// Creates a graphics pipeline for shadow map generation using `Vertex3D`.
+///
+/// This pipeline is optimized for depth-only rendering:
+/// - No color attachments
+/// - Only depth attachment
+/// - Simplified shaders (no lighting, texturing, etc.)
+/// - Back-face culling enabled (standard for shadow maps)
+///
+/// # Note
+///
+/// This function is part of the public API for the shadow mapping system.
+/// It may not be used internally but is available for external use.
+#[allow(dead_code)]
+pub fn create_shadow_pipeline(
+    device: &Arc<Device>,
+    render_pass: &Arc<RenderPass>,
+    extent: [u32; 2],
+) -> Result<Arc<GraphicsPipeline>> {
+    info!("Creating shadow map pipeline");
+    let pipeline_start = std::time::Instant::now();
+
+    // Load shadow-specific shaders
+    trace!("Loading shadow vertex shader module");
+    let vs_module = shaders::shadow_vs::load(device.clone()).map_err(|e| {
+        error!("Failed to load shadow vertex shader: {}", e);
+        eyre::eyre!("Failed to load shadow vertex shader: {}", e)
+    })?;
+
+    let vs_entry = vs_module.entry_point("main").ok_or_else(|| {
+        error!("Failed to find 'main' entry point in shadow vertex shader");
+        eyre::eyre!("Failed to find 'main' entry point in shadow vertex shader")
+    })?;
+
+    trace!("Loading shadow fragment shader module");
+    let fs_module = shaders::shadow_fs::load(device.clone()).map_err(|e| {
+        error!("Failed to load shadow fragment shader: {}", e);
+        eyre::eyre!("Failed to load shadow fragment shader: {}", e)
+    })?;
+
+    let fs_entry = fs_module.entry_point("main").ok_or_else(|| {
+        error!("Failed to find 'main' entry point in shadow fragment shader");
+        eyre::eyre!("Failed to find 'main' entry point in shadow fragment shader")
+    })?;
+
+    // Create pipeline stages from shader entry points
+    let stages = [
+        PipelineShaderStageCreateInfo::new(vs_entry.clone()),
+        PipelineShaderStageCreateInfo::new(fs_entry),
+    ];
+
+    // Vertex input state
+    let vertex_input_state = Vertex3D::per_vertex()
+        .definition(&vs_entry)
+        .map_err(|e| eyre::eyre!("Failed to create vertex input state: {}", e))?;
+
+    // Create pipeline layout
+    debug!("Creating shadow pipeline layout from shader stages");
+    let layout = create_pipeline_layout(device, &stages)?;
+
+    // Get the subpass
+    trace!("Getting subpass from shadow render pass");
+    let subpass = Subpass::from(render_pass.clone(), 0).ok_or_else(|| {
+        error!("Failed to get subpass from shadow render pass");
+        eyre::eyre!("Failed to get subpass from shadow render pass")
+    })?;
+
+    // Create viewport
+    trace!(
+        "Creating shadow viewport with extent: {}x{}",
+        extent[0],
+        extent[1]
+    );
+    let viewport = vulkano::pipeline::graphics::viewport::Viewport {
+        offset: [0.0, 0.0],
+        extent: [extent[0] as f32, extent[1] as f32],
+        depth_range: 0.0..=1.0,
+    };
+
+    let create_info = GraphicsPipelineCreateInfo {
+        stages: stages.into_iter().collect(),
+
+        vertex_input_state: Some(vertex_input_state),
+
+        input_assembly_state: Some(InputAssemblyState {
+            topology: PrimitiveTopology::TriangleList,
+            ..Default::default()
+        }),
+
+        viewport_state: Some(ViewportState {
+            viewports: [viewport].into_iter().collect(),
+            ..Default::default()
+        }),
+
+        rasterization_state: Some(RasterizationState {
+            cull_mode: CullMode::Back,
+            front_face: FrontFace::CounterClockwise,
+            // Enable depth bias to reduce shadow acne
+            depth_bias: Some(vulkano::pipeline::graphics::rasterization::DepthBiasState {
+                constant_factor: 1.75,
+                clamp: 0.0,
+                slope_factor: 1.75,
+            }),
+            ..Default::default()
+        }),
+
+        multisample_state: Some(MultisampleState::default()),
+
+        // Depth testing enabled for shadow map writing
+        depth_stencil_state: Some(DepthStencilState {
+            depth: Some(DepthState {
+                compare_op: CompareOp::Less,
+                write_enable: true,
+            }),
+            ..Default::default()
+        }),
+
+        // No color blending (no color attachments)
+        color_blend_state: Some(ColorBlendState::with_attachment_states(
+            subpass.num_color_attachments(),
+            ColorBlendAttachmentState::default(),
+        )),
+
+        // Dynamic viewport
+        dynamic_state: [DynamicState::Viewport].into_iter().collect(),
+
+        subpass: Some(subpass.into()),
+
+        ..GraphicsPipelineCreateInfo::layout(layout)
+    };
+
+    debug!("Creating shadow graphics pipeline with assembled configuration");
+    let pipeline = GraphicsPipeline::new(
+        device.clone(),
+        None, // No pipeline cache
+        create_info,
+    )
+    .map_err(|e| {
+        error!("Failed to create shadow graphics pipeline: {}", e);
+        eyre::eyre!("Failed to create shadow graphics pipeline: {}", e)
+    })?;
+
+    info!(
+        "Successfully created shadow graphics pipeline in {:?}",
+        pipeline_start.elapsed()
+    );
+
+    Ok(pipeline)
+}

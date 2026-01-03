@@ -17,3 +17,19 @@ pub mod fs {
         path: "src/shaders/triangle.frag"
     }
 }
+
+/// Compiled vertex shader for shadow map generation.
+pub mod shadow_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/shaders/shadow.vert"
+    }
+}
+
+/// Compiled fragment shader for shadow map generation.
+pub mod shadow_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/shadow.frag"
+    }
+}
