@@ -152,11 +152,130 @@ mod tests {
         let vertex = Vertex3D::new([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
         assert_eq!(vertex.position, [0.0, 0.0, 0.0]);
         assert_eq!(vertex.color, [1.0, 1.0, 1.0]);
+        assert_eq!(vertex.normal, [0.0, 1.0, 0.0]);
+        assert_eq!(vertex.uv, [0.0, 0.0]);
+    }
+
+    #[test]
+    fn test_vertex3d_with_uv() {
+        let vertex = Vertex3D::with_uv([1.0, 2.0, 3.0], [0.5, 0.6, 0.7], [0.25, 0.75]);
+        assert_eq!(vertex.position, [1.0, 2.0, 3.0]);
+        assert_eq!(vertex.color, [0.5, 0.6, 0.7]);
+        assert_eq!(vertex.uv, [0.25, 0.75]);
+        assert_eq!(vertex.normal, [0.0, 1.0, 0.0]);
+    }
+
+    #[test]
+    fn test_vertex3d_with_all() {
+        let vertex = Vertex3D::with_all(
+            [1.0, 2.0, 3.0],
+            [0.0, 0.0, 1.0],
+            [0.5, 0.6, 0.7],
+            [0.25, 0.75],
+        );
+        assert_eq!(vertex.position, [1.0, 2.0, 3.0]);
+        assert_eq!(vertex.normal, [0.0, 0.0, 1.0]);
+        assert_eq!(vertex.color, [0.5, 0.6, 0.7]);
+        assert_eq!(vertex.uv, [0.25, 0.75]);
+    }
+
+    #[test]
+    fn test_vertex3d_default() {
+        let vertex = Vertex3D::default();
+        assert_eq!(vertex.position, [0.0, 0.0, 0.0]);
+        assert_eq!(vertex.normal, [0.0, 0.0, 0.0]);
+        assert_eq!(vertex.color, [0.0, 0.0, 0.0]);
+        assert_eq!(vertex.uv, [0.0, 0.0]);
     }
 
     #[test]
     fn test_vertex3d_size() {
-        // Ensure our vertex struct has the expected size
-        assert_eq!(std::mem::size_of::<Vertex3D>(), 44); // 3*4 + 3*4 + 3*4 + 2*4 = 44 bytes
+        assert_eq!(std::mem::size_of::<Vertex3D>(), 44);
+    }
+
+    #[test]
+    fn test_vertex3d_alignment() {
+        assert_eq!(std::mem::align_of::<Vertex3D>(), 4);
+    }
+
+    #[test]
+    fn test_vertex3d_clone() {
+        let vertex1 = Vertex3D::with_all(
+            [1.0, 2.0, 3.0],
+            [0.0, 1.0, 0.0],
+            [0.8, 0.9, 1.0],
+            [0.5, 0.5],
+        );
+        let vertex2 = vertex1;
+        assert_eq!(vertex1.position, vertex2.position);
+        assert_eq!(vertex1.normal, vertex2.normal);
+        assert_eq!(vertex1.color, vertex2.color);
+        assert_eq!(vertex1.uv, vertex2.uv);
+    }
+
+    #[test]
+    fn test_vertex3d_copy() {
+        let vertex1 = Vertex3D::new([1.0, 2.0, 3.0], [0.5, 0.5, 0.5]);
+        let vertex2 = vertex1;
+        assert_eq!(vertex1.position, [1.0, 2.0, 3.0]);
+        assert_eq!(vertex2.position, [1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn test_vertex3d_position_extremes() {
+        let vertex = Vertex3D::new([f32::MAX, f32::MIN, 0.0], [1.0, 1.0, 1.0]);
+        assert_eq!(vertex.position[0], f32::MAX);
+        assert_eq!(vertex.position[1], f32::MIN);
+        assert_eq!(vertex.position[2], 0.0);
+    }
+
+    #[test]
+    fn test_vertex3d_color_values() {
+        let vertex = Vertex3D::new([0.0, 0.0, 0.0], [0.0, 0.5, 1.0]);
+        assert_eq!(vertex.color, [0.0, 0.5, 1.0]);
+    }
+
+    #[test]
+    fn test_vertex3d_uv_range() {
+        let vertex = Vertex3D::with_uv([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [0.0, 1.0]);
+        assert_eq!(vertex.uv, [0.0, 1.0]);
+
+        let vertex2 = Vertex3D::with_uv([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [0.5, 0.5]);
+        assert_eq!(vertex2.uv, [0.5, 0.5]);
+    }
+
+    #[test]
+    fn test_vertex3d_normal_vectors() {
+        let up = Vertex3D::with_all([0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 1.0], [0.0, 0.0]);
+        assert_eq!(up.normal, [0.0, 1.0, 0.0]);
+
+        let right = Vertex3D::with_all([0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 1.0], [0.0, 0.0]);
+        assert_eq!(right.normal, [1.0, 0.0, 0.0]);
+
+        let forward = Vertex3D::with_all([0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0, 1.0], [0.0, 0.0]);
+        assert_eq!(forward.normal, [0.0, 0.0, 1.0]);
+    }
+
+    #[test]
+    fn test_vertex3d_bytemuck_pod() {
+        let vertex = Vertex3D::new([1.0, 2.0, 3.0], [0.5, 0.6, 0.7]);
+        let bytes = bytemuck::bytes_of(&vertex);
+        assert_eq!(bytes.len(), 44);
+    }
+
+    #[test]
+    fn test_vertex3d_bytemuck_cast() {
+        let vertex = Vertex3D::with_all(
+            [1.0, 2.0, 3.0],
+            [0.0, 1.0, 0.0],
+            [0.5, 0.6, 0.7],
+            [0.25, 0.75],
+        );
+        let bytes = bytemuck::bytes_of(&vertex);
+        let vertex_back: &Vertex3D = bytemuck::from_bytes(bytes);
+        assert_eq!(vertex_back.position, vertex.position);
+        assert_eq!(vertex_back.normal, vertex.normal);
+        assert_eq!(vertex_back.color, vertex.color);
+        assert_eq!(vertex_back.uv, vertex.uv);
     }
 }

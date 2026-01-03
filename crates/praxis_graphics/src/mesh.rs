@@ -332,6 +332,57 @@ mod tests {
         assert_eq!(mesh.positions.len(), 3);
         assert_eq!(mesh.indices.len(), 3);
         assert!(mesh.colors.is_none());
+        assert!(mesh.normals.is_none());
+        assert!(mesh.uvs.is_none());
+    }
+
+    #[test]
+    fn test_mesh_data_with_colors() {
+        let positions = vec![[0.0, 1.0, 0.0], [-1.0, -1.0, 0.0]];
+        let colors = vec![[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+        let indices = vec![0, 1, 2];
+
+        let mesh = MeshData::with_colors(positions.clone(), colors.clone(), indices.clone());
+        assert_eq!(mesh.positions.len(), 2);
+        assert_eq!(mesh.colors.as_ref().unwrap().len(), 2);
+        assert_eq!(mesh.colors.as_ref().unwrap()[0], [1.0, 0.0, 0.0]);
+        assert_eq!(mesh.colors.as_ref().unwrap()[1], [0.0, 1.0, 0.0]);
+        assert!(mesh.uvs.is_none());
+        assert!(mesh.normals.is_none());
+    }
+
+    #[test]
+    fn test_mesh_data_with_uvs() {
+        let positions = vec![[0.0, 1.0, 0.0], [-1.0, -1.0, 0.0]];
+        let uvs = vec![[0.0, 0.0], [1.0, 1.0]];
+        let indices = vec![0, 1, 2];
+
+        let mesh = MeshData::with_uvs(positions.clone(), uvs.clone(), indices.clone());
+        assert_eq!(mesh.positions.len(), 2);
+        assert_eq!(mesh.uvs.as_ref().unwrap().len(), 2);
+        assert_eq!(mesh.uvs.as_ref().unwrap()[0], [0.0, 0.0]);
+        assert_eq!(mesh.uvs.as_ref().unwrap()[1], [1.0, 1.0]);
+        assert!(mesh.colors.is_none());
+        assert!(mesh.normals.is_none());
+    }
+
+    #[test]
+    fn test_mesh_data_with_colors_and_uvs() {
+        let positions = vec![[0.0, 1.0, 0.0], [-1.0, -1.0, 0.0]];
+        let colors = vec![[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+        let uvs = vec![[0.0, 0.0], [1.0, 1.0]];
+        let indices = vec![0, 1, 2];
+
+        let mesh = MeshData::with_colors_and_uvs(
+            positions.clone(),
+            colors.clone(),
+            uvs.clone(),
+            indices.clone(),
+        );
+        assert_eq!(mesh.positions.len(), 2);
+        assert_eq!(mesh.colors.as_ref().unwrap().len(), 2);
+        assert_eq!(mesh.uvs.as_ref().unwrap().len(), 2);
+        assert!(mesh.normals.is_none());
     }
 
     #[test]
@@ -359,6 +410,128 @@ mod tests {
         let vertices = mesh.to_vertices();
 
         assert_eq!(vertices.len(), 1);
-        assert_eq!(vertices[0].color, [1.0, 1.0, 1.0]); // Default white
+        assert_eq!(vertices[0].color, [1.0, 1.0, 1.0]);
+    }
+
+    #[test]
+    fn test_mesh_data_to_vertices_default_normal() {
+        let positions = vec![[0.0, 1.0, 0.0]];
+        let indices = vec![0];
+
+        let mesh = MeshData::new(positions, indices);
+        let vertices = mesh.to_vertices();
+
+        assert_eq!(vertices.len(), 1);
+        assert_eq!(vertices[0].normal, [0.0, 1.0, 0.0]);
+    }
+
+    #[test]
+    fn test_mesh_data_to_vertices_default_uv() {
+        let positions = vec![[0.0, 1.0, 0.0]];
+        let indices = vec![0];
+
+        let mesh = MeshData::new(positions, indices);
+        let vertices = mesh.to_vertices();
+
+        assert_eq!(vertices.len(), 1);
+        assert_eq!(vertices[0].uv, [0.0, 0.0]);
+    }
+
+    #[test]
+    fn test_mesh_data_to_vertices_with_normals() {
+        let positions = vec![[0.0, 1.0, 0.0], [1.0, 0.0, 0.0]];
+        let normals = vec![[0.0, 0.0, 1.0], [1.0, 0.0, 0.0]];
+        let indices = vec![0, 1];
+
+        let mesh = MeshData {
+            positions,
+            colors: None,
+            normals: Some(normals),
+            uvs: None,
+            indices,
+        };
+        let vertices = mesh.to_vertices();
+
+        assert_eq!(vertices.len(), 2);
+        assert_eq!(vertices[0].normal, [0.0, 0.0, 1.0]);
+        assert_eq!(vertices[1].normal, [1.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn test_mesh_data_to_vertices_with_all_attributes() {
+        let positions = vec![[1.0, 2.0, 3.0]];
+        let colors = vec![[0.5, 0.6, 0.7]];
+        let normals = vec![[0.0, 1.0, 0.0]];
+        let uvs = vec![[0.25, 0.75]];
+        let indices = vec![0];
+
+        let mesh = MeshData {
+            positions,
+            colors: Some(colors),
+            normals: Some(normals),
+            uvs: Some(uvs),
+            indices,
+        };
+        let vertices = mesh.to_vertices();
+
+        assert_eq!(vertices.len(), 1);
+        assert_eq!(vertices[0].position, [1.0, 2.0, 3.0]);
+        assert_eq!(vertices[0].color, [0.5, 0.6, 0.7]);
+        assert_eq!(vertices[0].normal, [0.0, 1.0, 0.0]);
+        assert_eq!(vertices[0].uv, [0.25, 0.75]);
+    }
+
+    #[test]
+    fn test_mesh_data_empty_mesh() {
+        let mesh = MeshData::new(vec![], vec![]);
+        assert_eq!(mesh.positions.len(), 0);
+        assert_eq!(mesh.indices.len(), 0);
+        let vertices = mesh.to_vertices();
+        assert_eq!(vertices.len(), 0);
+    }
+
+    #[test]
+    fn test_mesh_data_mismatched_color_length() {
+        let positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]];
+        let colors = vec![[1.0, 1.0, 1.0]];
+        let indices = vec![0, 1];
+
+        let mesh = MeshData {
+            positions,
+            colors: Some(colors),
+            normals: None,
+            uvs: None,
+            indices,
+        };
+        let vertices = mesh.to_vertices();
+
+        assert_eq!(vertices[0].color, [1.0, 1.0, 1.0]);
+        assert_eq!(vertices[1].color, [1.0, 1.0, 1.0]);
+    }
+
+    #[test]
+    fn test_mesh_data_single_vertex() {
+        let positions = vec![[5.0, 10.0, 15.0]];
+        let indices = vec![0];
+
+        let mesh = MeshData::new(positions, indices);
+        let vertices = mesh.to_vertices();
+
+        assert_eq!(vertices.len(), 1);
+        assert_eq!(vertices[0].position, [5.0, 10.0, 15.0]);
+    }
+
+    #[test]
+    fn test_mesh_data_triangle() {
+        let positions = vec![[0.0, 1.0, 0.0], [-1.0, -1.0, 0.0], [1.0, -1.0, 0.0]];
+        let colors = vec![[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+        let indices = vec![0, 1, 2];
+
+        let mesh = MeshData::with_colors(positions, colors, indices);
+        assert_eq!(mesh.positions.len(), 3);
+        assert_eq!(mesh.indices.len(), 3);
+        
+        let vertices = mesh.to_vertices();
+        assert_eq!(vertices.len(), 3);
     }
 }

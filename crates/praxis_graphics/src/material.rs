@@ -456,9 +456,166 @@ mod tests {
     #[test]
     fn test_material_manager_clear() {
         let mut manager = MaterialManager::new();
-        // We can't easily create real materials without Vulkan setup,
-        // but we can test the clear operation
         manager.clear();
         assert_eq!(manager.material_count(), 0);
+    }
+
+    #[test]
+    fn test_material_properties_metallic_clamping_upper() {
+        let props = MaterialProperties::new().with_metallic(2.5);
+        assert_eq!(props.metallic, 1.0);
+    }
+
+    #[test]
+    fn test_material_properties_metallic_clamping_lower() {
+        let props = MaterialProperties::new().with_metallic(-1.0);
+        assert_eq!(props.metallic, 0.0);
+    }
+
+    #[test]
+    fn test_material_properties_roughness_clamping_upper() {
+        let props = MaterialProperties::new().with_roughness(10.0);
+        assert_eq!(props.roughness, 1.0);
+    }
+
+    #[test]
+    fn test_material_properties_roughness_clamping_lower() {
+        let props = MaterialProperties::new().with_roughness(-5.0);
+        assert_eq!(props.roughness, 0.0);
+    }
+
+    #[test]
+    fn test_material_properties_emissive_no_clamping() {
+        let props = MaterialProperties::new().with_emissive_strength(5.0);
+        assert_eq!(props.emissive_strength, 5.0);
+
+        let props2 = MaterialProperties::new().with_emissive_strength(-1.0);
+        assert_eq!(props2.emissive_strength, -1.0);
+    }
+
+    #[test]
+    fn test_material_properties_base_color() {
+        let color = [0.2, 0.4, 0.6, 0.8];
+        let props = MaterialProperties::new().with_base_color(color);
+        assert_eq!(props.base_color, color);
+    }
+
+    #[test]
+    fn test_material_properties_chaining() {
+        let props = MaterialProperties::new()
+            .with_base_color([0.5, 0.5, 0.5, 1.0])
+            .with_metallic(0.7)
+            .with_roughness(0.3)
+            .with_emissive_strength(2.0);
+
+        assert_eq!(props.base_color, [0.5, 0.5, 0.5, 1.0]);
+        assert_eq!(props.metallic, 0.7);
+        assert_eq!(props.roughness, 0.3);
+        assert_eq!(props.emissive_strength, 2.0);
+    }
+
+    #[test]
+    fn test_material_properties_size() {
+        assert_eq!(std::mem::size_of::<MaterialProperties>(), 32);
+    }
+
+    #[test]
+    fn test_material_properties_alignment() {
+        assert_eq!(std::mem::align_of::<MaterialProperties>(), 4);
+    }
+
+    #[test]
+    fn test_material_properties_pod() {
+        let props = MaterialProperties::default();
+        let bytes = bytemuck::bytes_of(&props);
+        assert_eq!(bytes.len(), 32);
+    }
+
+    #[test]
+    fn test_material_properties_equality() {
+        let props1 = MaterialProperties::new().with_metallic(0.5);
+        let props2 = MaterialProperties::new().with_metallic(0.5);
+        assert_eq!(props1, props2);
+    }
+
+    #[test]
+    fn test_material_properties_inequality() {
+        let props1 = MaterialProperties::new().with_metallic(0.5);
+        let props2 = MaterialProperties::new().with_metallic(0.6);
+        assert_ne!(props1, props2);
+    }
+
+    #[test]
+    fn test_material_properties_clone() {
+        let props1 = MaterialProperties::new().with_roughness(0.8);
+        let props2 = props1;
+        assert_eq!(props1.roughness, props2.roughness);
+    }
+
+    #[test]
+    fn test_material_properties_copy() {
+        let props1 = MaterialProperties::new();
+        let props2 = props1;
+        assert_eq!(props1.metallic, props2.metallic);
+    }
+
+    #[test]
+    fn test_material_properties_zero_metallic() {
+        let props = MaterialProperties::new().with_metallic(0.0);
+        assert_eq!(props.metallic, 0.0);
+    }
+
+    #[test]
+    fn test_material_properties_full_metallic() {
+        let props = MaterialProperties::new().with_metallic(1.0);
+        assert_eq!(props.metallic, 1.0);
+    }
+
+    #[test]
+    fn test_material_properties_zero_roughness() {
+        let props = MaterialProperties::new().with_roughness(0.0);
+        assert_eq!(props.roughness, 0.0);
+    }
+
+    #[test]
+    fn test_material_properties_full_roughness() {
+        let props = MaterialProperties::new().with_roughness(1.0);
+        assert_eq!(props.roughness, 1.0);
+    }
+
+    #[test]
+    fn test_material_manager_default() {
+        let manager = MaterialManager::default();
+        assert_eq!(manager.material_count(), 0);
+    }
+
+    #[test]
+    fn test_material_properties_realistic_metal() {
+        let metal = MaterialProperties::new()
+            .with_metallic(1.0)
+            .with_roughness(0.2);
+
+        assert_eq!(metal.metallic, 1.0);
+        assert_eq!(metal.roughness, 0.2);
+    }
+
+    #[test]
+    fn test_material_properties_realistic_plastic() {
+        let plastic = MaterialProperties::new()
+            .with_metallic(0.0)
+            .with_roughness(0.6);
+
+        assert_eq!(plastic.metallic, 0.0);
+        assert_eq!(plastic.roughness, 0.6);
+    }
+
+    #[test]
+    fn test_material_properties_emissive_object() {
+        let emissive = MaterialProperties::new()
+            .with_emissive_strength(3.0)
+            .with_base_color([1.0, 0.8, 0.0, 1.0]);
+
+        assert_eq!(emissive.emissive_strength, 3.0);
+        assert_eq!(emissive.base_color, [1.0, 0.8, 0.0, 1.0]);
     }
 }
