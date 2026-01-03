@@ -65,3 +65,35 @@ pub mod post_process_blur_fs {
         path: "src/shaders/post_process_blur.frag"
     }
 }
+
+/// Compiled fragment shader for brightness extraction (bloom).
+pub mod post_process_brightness_extract_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/post_process_brightness_extract.frag"
+    }
+}
+
+/// Compiled fragment shader for horizontal Gaussian blur (bloom).
+pub mod post_process_gaussian_blur_h_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/post_process_gaussian_blur_h.frag"
+    }
+}
+
+/// Compiled fragment shader for vertical Gaussian blur (bloom).
+pub mod post_process_gaussian_blur_v_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/post_process_gaussian_blur_v.frag"
+    }
+}
+
+/// Compiled fragment shader for tone mapping with bloom.
+pub mod post_process_tone_map_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/post_process_tone_map.frag"
+    }
+}

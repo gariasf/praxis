@@ -55,12 +55,17 @@
 //! # }
 //! ```
 
+pub mod bloom;
 mod chain;
 mod full_screen_quad;
 mod pass;
 pub mod passes;
 mod render_target;
 
+pub use bloom::{
+    BloomConfig, BloomEffect, BrightnessExtractionPass, GaussianBlurHorizontalPass,
+    GaussianBlurVerticalPass, ToneMapPass,
+};
 pub use chain::PostProcessChain;
 pub use full_screen_quad::{FullScreenQuad, QuadVertex};
 pub use pass::{PostProcessContext, PostProcessPass};

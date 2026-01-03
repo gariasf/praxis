@@ -164,6 +164,21 @@
 //! - Image filtering (blur, sharpen, edge detection)
 //! - Screen-space effects (bloom, depth of field, motion blur)
 //!
+//! ## Bloom Effect
+//!
+//! The bloom effect creates a glow around bright areas of the scene:
+//!
+//! - **`BloomEffect`**: Complete bloom implementation with configurable parameters
+//! - **`BloomConfig`**: Configuration for brightness threshold, blur iterations, exposure, and intensity
+//! - **Brightness Extraction**: Isolates bright pixels above a threshold
+//! - **Separable Gaussian Blur**: Efficient two-pass blur (horizontal and vertical)
+//! - **HDR Tone Mapping**: Reinhard tone mapping with gamma correction
+//!
+//! The bloom effect uses a multi-pass pipeline:
+//! 1. Extract bright pixels (brightness > threshold)
+//! 2. Apply separable Gaussian blur multiple times for smooth glow
+//! 3. Combine blurred bloom with original scene using tone mapping
+//!
 //! See the `post_process` module documentation and `POST_PROCESSING.md` for detailed
 //! information on implementing custom effects.
 //!
@@ -1341,8 +1356,9 @@ pub use lighting::{
 pub use material::{Material, MaterialManager, MaterialProperties};
 pub use mesh::{GpuMesh, MeshData};
 pub use post_process::{
-    CopyPass, FullScreenQuad, GrayscalePass, PostProcessChain, PostProcessContext,
-    PostProcessPass, QuadVertex, RenderTarget, RenderTargetPool,
+    BloomConfig, BloomEffect, BrightnessExtractionPass, CopyPass, FullScreenQuad,
+    GaussianBlurHorizontalPass, GaussianBlurVerticalPass, GrayscalePass, PostProcessChain,
+    PostProcessContext, PostProcessPass, QuadVertex, RenderTarget, RenderTargetPool, ToneMapPass,
 };
 pub use primitives::{
     colored_cube_mesh, pyramid_mesh, quad_mesh, solid_cube_mesh, sphere_mesh, textured_cube_mesh,
