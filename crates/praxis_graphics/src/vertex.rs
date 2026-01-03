@@ -4,7 +4,7 @@
 
 use vulkano::pipeline::graphics::vertex_input::Vertex;
 
-/// Vertex data for 3D rendering with texture support and lighting.
+/// Vertex data for 3D rendering with texture support, lighting, and skeletal animation.
 ///
 /// Each vertex contains:
 /// - A 3D position in model/world space
@@ -12,18 +12,18 @@ use vulkano::pipeline::graphics::vertex_input::Vertex;
 /// - An RGB color value
 /// - UV texture coordinates
 /// - A tangent vector for normal mapping
+/// - Bone indices for skeletal animation (up to 4 bones per vertex)
+/// - Bone weights for skeletal animation (sum should equal 1.0)
 ///
 /// # Memory Layout
 ///
 /// The struct is marked with `#[repr(C)]` to ensure predictable memory layout:
 ///
 /// ```text
-/// Vertex3D (64 bytes total):
-/// ┌──────────────────┬──────────────────┬──────────────────┬──────────────┬──────────────────┬────────┐
-/// │ position (12b)   │ normal (12b)     │ color (12b)      │ uv (8b)      │ tangent (16b)    │pad (4b)│
-/// ├──────┬──────┬────┼──────┬──────┬────┼──────┬──────┬────┼──────┬───────┼──────┬──────┬────┬────┬────┤
-/// │ x:f32│ y:f32│z:f32│ x:f32│ y:f32│z:f32│ r:f32│ g:f32│b:f32│ u:f32│ v:f32│ x:f32│ y:f32│z:f32│w:f32│pad│
-/// └──────┴──────┴────┴──────┴──────┴────┴──────┴──────┴────┴──────┴───────┴──────┴──────┴────┴────┴────┘
+/// Vertex3D (96 bytes total):
+/// ┌──────────────┬──────────────┬──────────────┬──────────┬──────────────┬────────────────┬────────────────┐
+/// │ position(12b)│ normal(12b)  │ color(12b)   │ uv(8b)   │ tangent(16b) │ bone_indices(16b)│ bone_weights(16b)│
+/// └──────────────┴──────────────┴──────────────┴──────────┴──────────────┴────────────────┴────────────────┘
 /// ```
 ///
 /// # Shader Binding
@@ -34,6 +34,8 @@ use vulkano::pipeline::graphics::vertex_input::Vertex;
 /// - `location = 2`: color (vec3)
 /// - `location = 3`: uv (vec2)
 /// - `location = 4`: tangent (vec4, w component indicates handedness for bitangent)
+/// - `location = 5`: bone_indices (ivec4, 4 bone indices per vertex)
+/// - `location = 6`: bone_weights (vec4, 4 weights per vertex)
 ///
 /// # Texture Coordinates
 ///
@@ -101,9 +103,21 @@ pub struct Vertex3D {
     #[format(R32G32B32A32_SFLOAT)]
     pub tangent: [f32; 4],
 
-    /// Padding to ensure 64-byte alignment for optimal GPU performance.
-    #[format(R32_SFLOAT)]
-    pub _padding: f32,
+    /// Bone indices for skeletal animation (up to 4 bones per vertex).
+    ///
+    /// Each vertex can be influenced by up to 4 bones. The indices reference
+    /// bones in the skeleton's bone array. If fewer than 4 bones are needed,
+    /// unused indices should be set to 0 and their weights to 0.0.
+    #[format(R32G32B32A32_SINT)]
+    pub bone_indices: [i32; 4],
+
+    /// Bone weights for skeletal animation (must sum to 1.0).
+    ///
+    /// Each weight corresponds to the influence of the bone at the same index
+    /// in bone_indices. For example, bone_weights[0] is the weight for the bone
+    /// at bone_indices[0]. The sum of all weights should equal 1.0.
+    #[format(R32G32B32A32_SFLOAT)]
+    pub bone_weights: [f32; 4],
 }
 
 impl Vertex3D {
@@ -127,7 +141,8 @@ impl Vertex3D {
             color,
             uv: [0.0, 0.0],
             tangent: [1.0, 0.0, 0.0, 1.0],
-            _padding: 0.0,
+            bone_indices: [0, 0, 0, 0],
+            bone_weights: [1.0, 0.0, 0.0, 0.0],
         }
     }
 
@@ -145,7 +160,8 @@ impl Vertex3D {
             color,
             uv,
             tangent: [1.0, 0.0, 0.0, 1.0],
-            _padding: 0.0,
+            bone_indices: [0, 0, 0, 0],
+            bone_weights: [1.0, 0.0, 0.0, 0.0],
         }
     }
 
@@ -164,7 +180,8 @@ impl Vertex3D {
             color,
             uv,
             tangent: [1.0, 0.0, 0.0, 1.0],
-            _padding: 0.0,
+            bone_indices: [0, 0, 0, 0],
+            bone_weights: [1.0, 0.0, 0.0, 0.0],
         }
     }
 
@@ -190,7 +207,39 @@ impl Vertex3D {
             color,
             uv,
             tangent,
-            _padding: 0.0,
+            bone_indices: [0, 0, 0, 0],
+            bone_weights: [1.0, 0.0, 0.0, 0.0],
+        }
+    }
+
+    /// Creates a new vertex with all attributes including skeletal animation data.
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - 3D position in model space
+    /// * `normal` - Normal vector (should be normalized)
+    /// * `color` - RGB color values in range [0.0, 1.0]
+    /// * `uv` - Texture coordinates in range [0.0, 1.0]
+    /// * `tangent` - Tangent vector (xyz) with handedness (w: +1 or -1)
+    /// * `bone_indices` - Indices of bones that influence this vertex (up to 4)
+    /// * `bone_weights` - Weights for each bone influence (should sum to 1.0)
+    pub fn with_skinning(
+        position: [f32; 3],
+        normal: [f32; 3],
+        color: [f32; 3],
+        uv: [f32; 2],
+        tangent: [f32; 4],
+        bone_indices: [i32; 4],
+        bone_weights: [f32; 4],
+    ) -> Self {
+        Self {
+            position,
+            normal,
+            color,
+            uv,
+            tangent,
+            bone_indices,
+            bone_weights,
         }
     }
 }
@@ -242,7 +291,7 @@ mod tests {
 
     #[test]
     fn test_vertex3d_size() {
-        assert_eq!(std::mem::size_of::<Vertex3D>(), 64);
+        assert_eq!(std::mem::size_of::<Vertex3D>(), 96);
     }
 
     #[test]
@@ -327,7 +376,7 @@ mod tests {
     fn test_vertex3d_bytemuck_pod() {
         let vertex = Vertex3D::new([1.0, 2.0, 3.0], [0.5, 0.6, 0.7]);
         let bytes = bytemuck::bytes_of(&vertex);
-        assert_eq!(bytes.len(), 44);
+        assert_eq!(bytes.len(), 96);
     }
 
     #[test]

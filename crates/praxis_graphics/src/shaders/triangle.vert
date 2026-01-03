@@ -127,6 +127,8 @@ layout(location = 1) in vec3 normal;    // Vertex normal in model space (unit ve
 layout(location = 2) in vec3 color;     // Vertex color (RGB, range [0,1])
 layout(location = 3) in vec2 uv;        // Texture coordinates (range typically [0,1])
 layout(location = 4) in vec4 tangent;   // Vertex tangent in model space (xyz) + handedness (w)
+layout(location = 5) in ivec4 bone_indices;  // Bone indices (up to 4 bones per vertex)
+layout(location = 6) in vec4 bone_weights;   // Bone weights (must sum to 1.0)
 
 // ============================================================================
 // Output Variables (to Fragment Shader)
@@ -195,9 +197,72 @@ layout(set = 0, binding = 1, std140) uniform Model {
 } model_ubo;
 
 // ============================================================================
+// Bone Matrices Uniform Buffer (Skeletal Animation)
+// ============================================================================
+// This uniform buffer contains the skinning matrices for all bones (up to 256).
+// Each matrix represents the transformation from bind pose to the current animated pose.
+//
+// Data Flow:
+//   1. CPU: Application computes bone transforms from animation data
+//   2. CPU: Combines world transform with inverse bind matrix per bone
+//   3. CPU: Writes to host-visible uniform buffer once per animated object
+//   4. GPU: Bound to descriptor set at set 0, binding 10
+//   5. GPU: Read by vertex shader for vertices with bone weights
+//
+// For non-animated meshes, all matrices are identity (no transformation).
+// For animated meshes, vertices are transformed by a weighted blend of up to 4 bones.
+//
+// The std140 layout ensures consistent memory layout:
+// - mat4 array of 256 elements = 256 * 64 bytes = 16,384 bytes total
+
+layout(set = 0, binding = 10, std140) uniform BoneMatrices {
+    mat4 bone_matrices[256];  // Skinning matrices for up to 256 bones
+} bone_matrices_ubo;
+
+// ============================================================================
 // Main Vertex Shader
 // ============================================================================
 void main() {
+    // ========================================================================
+    // Step 0: Apply skeletal animation (GPU skinning)
+    // ========================================================================
+    
+    // Compute the skinned position and normal by blending up to 4 bone transforms
+    // This is the core of GPU skinning: each vertex is transformed by a weighted
+    // combination of bone matrices, allowing smooth deformation of the mesh.
+    //
+    // For non-animated meshes, bone_matrices[0] is identity and bone_weights = (1,0,0,0),
+    // so this step has no effect and the vertex uses its original position/normal.
+    //
+    // The skinning transformation happens in model space before the model matrix
+    // is applied, so the final transformation is:
+    //   world_pos = model * skinned_pos = model * (sum of bone_matrix[i] * pos * weight[i])
+    
+    vec4 skinned_position = vec4(0.0);
+    vec3 skinned_normal = vec3(0.0);
+    
+    // Blend the position and normal using up to 4 bones
+    for (int i = 0; i < 4; i++) {
+        int bone_index = bone_indices[i];
+        float bone_weight = bone_weights[i];
+        
+        // Skip bones with zero weight (optimization)
+        if (bone_weight > 0.0) {
+            mat4 bone_transform = bone_matrices_ubo.bone_matrices[bone_index];
+            
+            // Transform position by this bone's matrix and add weighted contribution
+            skinned_position += bone_transform * vec4(position, 1.0) * bone_weight;
+            
+            // Transform normal by this bone's matrix (3x3 upper-left part)
+            // Normals are directions, so we use w=0.0 to ignore translation
+            skinned_normal += mat3(bone_transform) * normal * bone_weight;
+        }
+    }
+    
+    // Use skinned position and normal (or original if no animation)
+    vec3 final_position = skinned_position.xyz;
+    vec3 final_normal = skinned_normal;
+    
     // ========================================================================
     // Step 1: Transform position to world space
     // ========================================================================
@@ -211,7 +276,7 @@ void main() {
     // - w=0.0 would indicate a DIRECTION (not affected by translation)
     //
     // Matrix-vector multiplication: [4x4] * [4x1] = [4x1]
-    vec4 world_pos = model_ubo.model * vec4(position, 1.0);
+    vec4 world_pos = model_ubo.model * vec4(final_position, 1.0);
     
     // ========================================================================
     // Step 2: Transform position to clip space
@@ -243,7 +308,7 @@ void main() {
     //   - mat3(model_ubo.model) extracts just the rotation/scale portion
     //
     // For non-uniform scaling (different scale on x,y,z axes), we should use:
-    //   v_normal = mat3(transpose(inverse(model_ubo.model))) * normal;
+    //   v_normal = mat3(transpose(inverse(model_ubo.model))) * final_normal;
     // This is the "normal matrix" that handles non-uniform scaling correctly.
     //
     // However, for uniform scaling and rotations, mat3(model_ubo.model) works fine
@@ -251,15 +316,27 @@ void main() {
     //
     // The fragment shader will re-normalize this vector since interpolation
     // can change its length.
-    v_normal = mat3(model_ubo.model) * normal;
+    v_normal = mat3(model_ubo.model) * final_normal;
     
     // ========================================================================
     // Step 3b: Transform tangent and compute bitangent for TBN matrix
     // ========================================================================
     
-    // Transform tangent to world space using the same 3x3 model matrix
+    // Apply skinning to tangent (same process as normal)
+    vec3 skinned_tangent = vec3(0.0);
+    for (int i = 0; i < 4; i++) {
+        int bone_index = bone_indices[i];
+        float bone_weight = bone_weights[i];
+        
+        if (bone_weight > 0.0) {
+            mat4 bone_transform = bone_matrices_ubo.bone_matrices[bone_index];
+            skinned_tangent += mat3(bone_transform) * tangent.xyz * bone_weight;
+        }
+    }
+    
+    // Transform skinned tangent to world space using the 3x3 model matrix
     // Tangent is a direction vector like the normal, so it doesn't need translation
-    vec3 world_tangent = mat3(model_ubo.model) * tangent.xyz;
+    vec3 world_tangent = mat3(model_ubo.model) * skinned_tangent;
     v_tangent = world_tangent;
     
     // Compute bitangent in world space using the cross product

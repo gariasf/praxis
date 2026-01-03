@@ -226,7 +226,8 @@ impl MeshData {
                     color,
                     uv,
                     tangent,
-                    _padding: 0.0,
+                    bone_indices: [0, 0, 0, 0],
+                    bone_weights: [1.0, 0.0, 0.0, 0.0],
                 }
             })
             .collect()

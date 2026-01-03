@@ -91,6 +91,88 @@ pub struct ModelUniforms {
     pub model: [[f32; 4]; 4],
 }
 
+/// Bone matrices uniform buffer for skeletal animation (up to 256 bones).
+///
+/// This uniform buffer contains the final skinning matrices for all bones in a skeleton.
+/// Each matrix transforms a vertex from bind pose to the current animated pose.
+///
+/// # Memory Layout
+///
+/// The std140 layout ensures consistent memory layout between CPU and GPU:
+/// ```text
+/// BoneMatricesUniforms (16384 bytes total):
+/// ┌──────────────────────────────────────┐
+/// │ bone_matrices[0]   (64 bytes)        │
+/// │ bone_matrices[1]   (64 bytes)        │
+/// │ ...                                  │
+/// │ bone_matrices[255] (64 bytes)        │
+/// └──────────────────────────────────────┘
+/// Total: 256 * 64 = 16,384 bytes
+/// ```
+///
+/// # Usage
+///
+/// This buffer is bound at set 0, binding 10 in the shader pipeline.
+/// For non-animated meshes, all matrices default to identity, resulting in
+/// no transformation (the model matrix is applied instead).
+///
+/// For animated meshes, the bone matrices are computed from:
+/// ```text
+/// skinning_matrix[i] = world_transform[i] * inverse_bind_matrix[i]
+/// ```
+///
+/// The vertex shader uses these matrices with bone weights to compute the
+/// final vertex position and normal in model space before applying the
+/// model matrix to transform to world space.
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct BoneMatricesUniforms {
+    /// Array of bone skinning matrices (up to 256 bones).
+    ///
+    /// Each matrix is a 4x4 transformation matrix that combines:
+    /// - The bone's current animated world transform
+    /// - The bone's inverse bind pose matrix
+    ///
+    /// If fewer than 256 bones are used, the remaining matrices should be
+    /// set to identity to avoid affecting vertices.
+    pub bone_matrices: [[[f32; 4]; 4]; 256],
+}
+
+impl BoneMatricesUniforms {
+    /// Creates a new bone matrices uniform buffer with all matrices set to identity.
+    ///
+    /// This is the default state for non-animated meshes, where bone transformations
+    /// have no effect (equivalent to a single bone at index 0 with weight 1.0).
+    pub fn identity() -> Self {
+        Self {
+            bone_matrices: [Mat4::IDENTITY.to_cols_array_2d(); 256],
+        }
+    }
+
+    /// Creates a new bone matrices uniform buffer from a slice of matrices.
+    ///
+    /// # Arguments
+    ///
+    /// * `matrices` - Slice of bone matrices (up to 256). Remaining matrices are set to identity.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the slice contains more than 256 matrices.
+    pub fn from_matrices(matrices: &[Mat4]) -> Self {
+        assert!(
+            matrices.len() <= 256,
+            "Too many bone matrices: {} (max 256)",
+            matrices.len()
+        );
+
+        let mut result = Self::identity();
+        for (i, matrix) in matrices.iter().enumerate() {
+            result.bone_matrices[i] = matrix.to_cols_array_2d();
+        }
+        result
+    }
+}
+
 /// Dynamic uniform buffer manager using a ring buffer strategy.
 ///
 /// This manages a large buffer divided into frames, where each frame can hold
