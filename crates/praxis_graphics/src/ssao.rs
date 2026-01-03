@@ -944,7 +944,6 @@ impl SsaoRenderer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use praxis_math::Vec3;
 
     #[test]
     fn test_ssao_kernel_generation_count() {

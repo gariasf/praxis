@@ -213,6 +213,14 @@ impl AssetLoader<MeshData> for MeshLoader {
             }
         }
 
+        // Validate that we have actual vertex data
+        if positions.is_empty() {
+            return Err(eyre::eyre!(
+                "OBJ file '{}' contains no vertex data",
+                path.display()
+            ));
+        }
+
         info!(
             "Successfully loaded {} model(s) from {} ({} total vertices, {} total indices)",
             models.len(),
@@ -240,7 +248,6 @@ impl AssetLoader<MeshData> for MeshLoader {
 mod tests {
     use super::*;
     use std::fs;
-    use std::io::Write;
 
     #[test]
     fn test_mesh_loader_creation() {
@@ -1837,7 +1844,7 @@ mod gltf_tests {
 
     #[test]
     fn test_gltf_loader_creation() {
-        let loader = GltfLoader::new();
+        let _loader = GltfLoader::new();
         let _default_loader = GltfLoader::default();
     }
 
@@ -1907,7 +1914,7 @@ mod gltf_tests {
             children: vec![],
         };
 
-        let (extracted_translation, extracted_rotation, extracted_scale) =
+        let (extracted_translation, _extracted_rotation, extracted_scale) =
             node.decompose_transform();
 
         assert!((extracted_translation.x - translation.x).abs() < 0.01);

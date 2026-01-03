@@ -66,7 +66,7 @@
 //! ));
 //!
 //! // Run the schedule to propagate transforms
-//! world.inner_mut().run_schedule(&mut schedule);
+//! schedule.run(world.inner_mut());
 //!
 //! // Child's global position will be (15, 0, 0)
 //! ```
@@ -243,7 +243,7 @@
 //! ));
 //!
 //! // Run the schedule to gather lighting data
-//! world.inner_mut().run_schedule(&mut schedule);
+//! schedule.run(world.inner_mut());
 //! ```
 //!
 //! The gathered lighting data can then be accessed in render systems:
@@ -308,8 +308,8 @@ pub mod camera {
     /// use praxis_ecs::{Query, camera};
     ///
     /// fn render_system(cameras: Query<camera::ActivePerspectiveCameras>) {
-    ///     for (entity, camera, transform, projection, matrices) in cameras.iter() {
-    ///         // Render with this camera
+    ///     for cam in cameras.iter() {
+    ///         // Access fields: cam.entity, cam.camera, cam.transform, cam.projection, cam.matrices
     ///     }
     /// }
     /// ```
@@ -333,8 +333,8 @@ pub mod camera {
     /// use praxis_ecs::{Query, camera};
     ///
     /// fn render_system(cameras: Query<camera::ActiveOrthographicCameras>) {
-    ///     for (entity, camera, transform, projection, matrices) in cameras.iter() {
-    ///         // Render with this camera
+    ///     for cam in cameras.iter() {
+    ///         // Access fields: cam.entity, cam.camera, cam.transform, cam.projection, cam.matrices
     ///     }
     /// }
     /// ```
@@ -587,14 +587,14 @@ mod tests {
 
         let inactive_entity = world.spawn((
             inactive_camera,
-            Transform::default(),
+            Transform::from_xyz(0.0, 0.0, 10.0),
             PerspectiveProjection::default(),
             CameraMatrices::default(),
         ));
 
         let active_camera = world.spawn((
             Camera::default(),
-            Transform::default(),
+            Transform::from_xyz(0.0, 0.0, 10.0), // Position camera away from origin so view != identity
             PerspectiveProjection::default(),
             CameraMatrices::default(),
         ));

@@ -95,7 +95,7 @@ pub fn init() -> Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
+mod lib_tests {
     use super::*;
 
     #[test]

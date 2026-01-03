@@ -1225,7 +1225,7 @@ impl Default for PointLight {
 ///        }
 ///    }
 ///    ```
-#[derive(Resource, Debug, Clone, Default)]
+#[derive(Resource, Debug, Clone)]
 pub struct LightingData {
     /// Collected directional light data with world-space directions.
     ///
@@ -1244,6 +1244,12 @@ pub struct LightingData {
     /// This is a constant base illumination applied to all objects to prevent them from
     /// being completely black in shadow. Default is a soft gray (0.1, 0.1, 0.1).
     pub ambient_color: Vec3,
+}
+
+impl Default for LightingData {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LightingData {

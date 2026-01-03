@@ -11,7 +11,7 @@
 
 use super::*;
 use praxis_ecs::{IntoSystemConfigs, Schedule, Transform, World};
-use praxis_math::{Quat, Vec3};
+use praxis_math::Vec3;
 
 // ============================================================================
 // COMPONENT CREATION TESTS
@@ -1253,7 +1253,7 @@ fn test_cleanup_physics_entities() {
     }
 
     // Despawn entity
-    world.despawn(entity);
+    world.despawn(entity).expect("Failed to despawn entity");
 
     // Run cleanup system
     let mut cleanup_schedule = Schedule::default();

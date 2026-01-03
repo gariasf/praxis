@@ -9,8 +9,9 @@ use bevy_ecs::{
     entity::Entity,
     query::{Added, Changed, Or, With, Without},
     schedule::SystemSet,
-    system::Commands,
+    system::{Commands, ParamSet},
 };
+use std::collections::HashSet;
 
 use crate::{
     Camera, CameraMatrices, Children, DirectionalLight, DirectionalLightInfo, GlobalTransform,
@@ -63,9 +64,26 @@ pub fn sync_parent_child_relationships(
     changed_parents: Query<(Entity, &Parent), Changed<Parent>>,
     mut parents_query: Query<&mut Children>,
 ) {
+    // Track children to add to parents that don't have Children component yet
+    // We collect these first to avoid multiple overlapping commands
+    let mut pending_children: std::collections::HashMap<Entity, Vec<Entity>> =
+        std::collections::HashMap::new();
+
     // Handle newly added Parent components
     for (child_entity, parent) in added_parents.iter() {
-        add_child_to_parent(child_entity, parent.0, &mut commands, &mut parents_query);
+        if let Ok(mut children) = parents_query.get_mut(parent.0) {
+            if !children.0.contains(&child_entity) {
+                trace!(
+                    "Adding child entity {:?} to parent {:?}",
+                    child_entity,
+                    parent.0
+                );
+                children.push(child_entity);
+            }
+        } else {
+            // Parent doesn't have Children component yet, add to pending
+            pending_children.entry(parent.0).or_default().push(child_entity);
+        }
     }
 
     // Handle changed Parent components
@@ -77,32 +95,32 @@ pub fn sync_parent_child_relationships(
             continue;
         }
 
-        add_child_to_parent(child_entity, parent.0, &mut commands, &mut parents_query);
-    }
-}
-
-/// Helper function to add a child to a parent's Children component.
-fn add_child_to_parent(
-    child_entity: Entity,
-    parent_entity: Entity,
-    commands: &mut Commands,
-    parents_query: &mut Query<&mut Children>,
-) {
-    if let Ok(mut children) = parents_query.get_mut(parent_entity) {
-        if !children.0.contains(&child_entity) {
-            trace!(
-                "Adding child entity {:?} to parent {:?}",
-                child_entity,
-                parent_entity
-            );
-            children.push(child_entity);
+        if let Ok(mut children) = parents_query.get_mut(parent.0) {
+            if !children.0.contains(&child_entity) {
+                trace!(
+                    "Adding child entity {:?} to parent {:?}",
+                    child_entity,
+                    parent.0
+                );
+                children.push(child_entity);
+            }
+        } else {
+            // Parent doesn't have Children component yet, add to pending
+            pending_children.entry(parent.0).or_default().push(child_entity);
         }
-    } else {
-        // Parent doesn't have a Children component yet, add one
-        trace!("Creating Children component for parent {:?}", parent_entity);
+    }
+
+    // Insert Children components for all parents that don't have them yet
+    // This ensures we add all children in one command rather than overlapping commands
+    for (parent_entity, children) in pending_children {
+        trace!(
+            "Creating Children component for parent {:?} with {} children",
+            parent_entity,
+            children.len()
+        );
         commands
             .entity(parent_entity)
-            .insert(Children::with_children(vec![child_entity]));
+            .insert(Children::with_children(children));
     }
 }
 
@@ -184,32 +202,44 @@ pub fn cleanup_removed_parents(
 /// ```
 #[allow(clippy::type_complexity)]
 pub fn propagate_transforms(
-    mut root_query: Query<
-        (Entity, &Transform, &mut GlobalTransform, Option<&Children>),
-        (Without<Parent>, Or<(Changed<Transform>, Added<Transform>)>),
-    >,
-    mut all_roots: Query<
-        (Entity, &Transform, &mut GlobalTransform, Option<&Children>),
-        Without<Parent>,
-    >,
+    mut root_queries: ParamSet<(
+        Query<
+            (Entity, &Transform, &mut GlobalTransform, Option<&Children>),
+            (Without<Parent>, Or<(Changed<Transform>, Added<Transform>)>),
+        >,
+        Query<
+            (Entity, &Transform, &mut GlobalTransform, Option<&Children>),
+            Without<Parent>,
+        >,
+    )>,
     mut child_query: Query<(&Transform, &mut GlobalTransform, Option<&Children>), With<Parent>>,
 ) {
-    // First pass: Update root entities whose transforms changed
-    for (_entity, transform, mut global_transform, children) in root_query.iter_mut() {
-        // Update this root's global transform
+    // First pass: Collect changed roots and process them
+    // We collect into intermediate vectors because we can only access one ParamSet query at a time
+    let mut changed_roots = HashSet::new();
+    let mut children_to_propagate: Vec<(Vec<Entity>, praxis_math::Mat4)> = Vec::new();
+
+    for (entity, transform, mut global_transform, children) in root_queries.p0().iter_mut() {
+        changed_roots.insert(entity);
         global_transform.matrix = transform.compute_matrix();
 
-        // Propagate to all descendants
         if let Some(children) = children {
-            propagate_recursive(&children.0, &global_transform.matrix, &mut child_query);
+            children_to_propagate.push((children.0.clone(), global_transform.matrix));
         }
+    }
+
+    // Propagate to children of changed roots
+    for (children, parent_matrix) in children_to_propagate {
+        propagate_recursive(&children, &parent_matrix, &mut child_query);
     }
 
     // Second pass: Update root entities that didn't change but need their children updated
     // This handles cases where children were added or a parent was removed
-    for (entity, transform, mut global_transform, children) in all_roots.iter_mut() {
+    let mut unchanged_children: Vec<(Vec<Entity>, praxis_math::Mat4)> = Vec::new();
+
+    for (entity, transform, mut global_transform, children) in root_queries.p1().iter_mut() {
         // Skip if we already processed this in the first pass
-        if root_query.get(entity).is_ok() {
+        if changed_roots.contains(&entity) {
             continue;
         }
 
@@ -218,8 +248,13 @@ pub fn propagate_transforms(
 
         // Check if any children were added to this root
         if let Some(children) = children {
-            propagate_to_added_children(&children.0, &global_transform.matrix, &mut child_query);
+            unchanged_children.push((children.0.clone(), global_transform.matrix));
         }
+    }
+
+    // Propagate to children of unchanged roots
+    for (children, parent_matrix) in unchanged_children {
+        propagate_to_added_children(&children, &parent_matrix, &mut child_query);
     }
 }
 
@@ -284,23 +319,48 @@ fn propagate_to_added_children(
 /// ```
 #[allow(clippy::type_complexity)]
 pub fn propagate_transforms_for_reparented(
-    // Entities whose Parent component was added or changed
-    mut reparented: Query<
-        (&Parent, &Transform, &mut GlobalTransform, Option<&Children>),
+    // Entities whose Parent component was added or changed (read-only first pass)
+    reparented: Query<
+        (Entity, &Parent, &Transform, Option<&Children>),
         Or<(Added<Parent>, Changed<Parent>)>,
     >,
-    parent_query: Query<&GlobalTransform>,
-    mut child_query: Query<(&Transform, &mut GlobalTransform, Option<&Children>), With<Parent>>,
+    // ParamSet to avoid read/write conflicts on GlobalTransform
+    mut global_set: ParamSet<(
+        Query<&GlobalTransform>,      // p0: for reading parent transforms
+        Query<&mut GlobalTransform>,  // p1: for writing entity transforms
+        Query<(&Transform, &mut GlobalTransform, Option<&Children>), With<Parent>>, // p2: for child propagation
+    )>,
 ) {
-    for (parent, transform, mut global_transform, maybe_children) in reparented.iter_mut() {
-        // Get parent's global transform
-        if let Ok(parent_global) = parent_query.get(parent.0) {
-            // Update this entity's global transform
-            global_transform.matrix = parent_global.matrix * transform.compute_matrix();
+    // First pass: collect all data we need (using read-only access to parent GlobalTransforms)
+    let updates: Vec<(Entity, praxis_math::Mat4, Option<Vec<Entity>>)> = {
+        let parent_query = global_set.p0();
+        reparented
+            .iter()
+            .filter_map(|(entity, parent, transform, maybe_children)| {
+                parent_query.get(parent.0).ok().map(|parent_global| {
+                    let new_matrix = parent_global.matrix * transform.compute_matrix();
+                    (entity, new_matrix, maybe_children.map(|c| c.0.clone()))
+                })
+            })
+            .collect()
+    };
 
-            // Propagate to descendants
+    // Second pass: apply updates (using mutable access)
+    {
+        let mut write_query = global_set.p1();
+        for (entity, new_matrix, _) in &updates {
+            if let Ok(mut global) = write_query.get_mut(*entity) {
+                global.matrix = *new_matrix;
+            }
+        }
+    }
+
+    // Third pass: propagate to children using p2
+    {
+        let mut child_query = global_set.p2();
+        for (_, new_matrix, maybe_children) in updates {
             if let Some(children) = maybe_children {
-                propagate_recursive(&children.0, &global_transform.matrix, &mut child_query);
+                propagate_recursive(&children, &new_matrix, &mut child_query);
             }
         }
     }
@@ -324,23 +384,48 @@ pub fn propagate_transforms_for_reparented(
 /// ```
 #[allow(clippy::type_complexity)]
 pub fn propagate_transforms_for_changed_children(
-    // Entities with Parent whose Transform changed
-    mut changed: Query<
-        (&Parent, &Transform, &mut GlobalTransform, Option<&Children>),
+    // Entities with Parent whose Transform changed (read-only first pass)
+    changed: Query<
+        (Entity, &Parent, &Transform, Option<&Children>),
         (With<Parent>, Changed<Transform>),
     >,
-    parent_query: Query<&GlobalTransform>,
-    mut child_query: Query<(&Transform, &mut GlobalTransform, Option<&Children>), With<Parent>>,
+    // ParamSet to avoid read/write conflicts on GlobalTransform
+    mut global_set: ParamSet<(
+        Query<&GlobalTransform>,      // p0: for reading parent transforms
+        Query<&mut GlobalTransform>,  // p1: for writing entity transforms
+        Query<(&Transform, &mut GlobalTransform, Option<&Children>), With<Parent>>, // p2: for child propagation
+    )>,
 ) {
-    for (parent, transform, mut global_transform, maybe_children) in changed.iter_mut() {
-        // Get parent's global transform
-        if let Ok(parent_global) = parent_query.get(parent.0) {
-            // Update this entity's global transform
-            global_transform.matrix = parent_global.matrix * transform.compute_matrix();
+    // First pass: collect all data we need (using read-only access to parent GlobalTransforms)
+    let updates: Vec<(Entity, praxis_math::Mat4, Option<Vec<Entity>>)> = {
+        let parent_query = global_set.p0();
+        changed
+            .iter()
+            .filter_map(|(entity, parent, transform, maybe_children)| {
+                parent_query.get(parent.0).ok().map(|parent_global| {
+                    let new_matrix = parent_global.matrix * transform.compute_matrix();
+                    (entity, new_matrix, maybe_children.map(|c| c.0.clone()))
+                })
+            })
+            .collect()
+    };
 
-            // Propagate to descendants
+    // Second pass: apply updates (using mutable access)
+    {
+        let mut write_query = global_set.p1();
+        for (entity, new_matrix, _) in &updates {
+            if let Ok(mut global) = write_query.get_mut(*entity) {
+                global.matrix = *new_matrix;
+            }
+        }
+    }
+
+    // Third pass: propagate to children using p2
+    {
+        let mut child_query = global_set.p2();
+        for (_, new_matrix, maybe_children) in updates {
             if let Some(children) = maybe_children {
-                propagate_recursive(&children.0, &global_transform.matrix, &mut child_query);
+                propagate_recursive(&children, &new_matrix, &mut child_query);
             }
         }
     }
@@ -1793,7 +1878,7 @@ mod tests {
         let mut world = World::new();
 
         let parent = world.spawn(Transform::default());
-        let child = world.spawn((Transform::default(), Parent(parent)));
+        let _child = world.spawn((Transform::default(), Parent(parent)));
 
         let mut schedule = bevy_ecs::schedule::Schedule::default();
         schedule.add_systems(sync_parent_child_relationships);
@@ -1982,8 +2067,6 @@ mod tests {
 
     #[test]
     fn test_multiple_active_cameras_with_different_priorities() {
-        use crate::camera;
-
         let mut world = World::new();
 
         let _low_priority = world.spawn((

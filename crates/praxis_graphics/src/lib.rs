@@ -1840,22 +1840,22 @@ mod tests {
     #[test]
     fn test_rendering_pipeline_selection_criteria() {
         // Test criteria for choosing rendering pipeline
-        
+
         struct SceneStats {
             light_count: u32,
             object_count: u32,
             needs_transparency: bool,
         }
-        
+
         let select_pipeline = |stats: &SceneStats| -> RenderMode {
             if stats.needs_transparency {
                 // Transparency requires forward or hybrid approach
                 RenderMode::Forward
-            } else if stats.light_count > 10 {
-                // Many lights benefit from deferred
+            } else if stats.light_count > 10 && stats.object_count > 50 {
+                // Many lights + objects benefit from deferred
                 RenderMode::Deferred
             } else {
-                // Few lights work well with forward
+                // Simple scenes work well with forward
                 RenderMode::Forward
             }
         };
@@ -1889,8 +1889,8 @@ mod tests {
     fn test_hybrid_rendering_approach() {
         // Test hybrid rendering concept: deferred for opaque, forward for transparent
         
-        let mut opaque_objects = vec!["cube1", "cube2", "sphere1"];
-        let mut transparent_objects = vec!["glass1", "water1"];
+        let opaque_objects = vec!["cube1", "cube2", "sphere1"];
+        let transparent_objects = vec!["glass1", "water1"];
         
         // In hybrid rendering:
         // 1. Render opaque objects to G-buffer (deferred)

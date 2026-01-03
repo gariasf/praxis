@@ -349,7 +349,7 @@ pub fn calculate_doppler_factor(
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use super::*;
 
     #[test]

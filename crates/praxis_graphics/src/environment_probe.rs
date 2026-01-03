@@ -885,7 +885,7 @@ mod tests {
         // All points should be unique
         for i in 0..points.len() {
             for j in (i + 1)..points.len() {
-                let diff = ((points[i].0 - points[j].0).abs() + (points[i].1 - points[j].1).abs());
+                let diff = (points[i].0 - points[j].0).abs() + (points[i].1 - points[j].1).abs();
                 assert!(diff > 0.001, "Points should be distributed");
             }
         }

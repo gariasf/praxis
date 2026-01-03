@@ -462,7 +462,7 @@ impl World {
     /// let mut world = World::new();
     /// let mut query = world.query::<&Position>();
     ///
-    /// for position in query.iter(&world) {
+    /// for position in query.iter(world.inner()) {
     ///     println!("Entity at ({}, {})", position.x, position.y);
     /// }
     /// ```
@@ -486,7 +486,7 @@ impl World {
     /// let mut world = World::new();
     /// let mut query = world.query_filtered::<&Position, With<Enemy>>();
     ///
-    /// for position in query.iter(&world) {
+    /// for position in query.iter(world.inner()) {
     ///     println!("Enemy at ({}, {})", position.x, position.y);
     /// }
     /// ```
@@ -830,10 +830,13 @@ mod tests {
 
         assert_eq!(enemies.len(), 3);
 
+        // Verify each enemy was spawned with correct health values
+        let mut total_health = 0;
         for entity in enemies {
-            let enemy = world.inner().get::<Enemy>(entity);
-            assert!(enemy.is_some());
+            let enemy = world.inner().get::<Enemy>(entity).expect("Enemy should exist");
+            total_health += enemy.health;
         }
+        assert_eq!(total_health, 225); // 100 + 50 + 75
     }
 
     #[test]

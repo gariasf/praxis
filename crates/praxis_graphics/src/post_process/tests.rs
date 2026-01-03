@@ -2,10 +2,7 @@
 
 #[cfg(test)]
 mod post_process_tests {
-    use crate::post_process::{
-        BrightnessExtractionPass, GaussianBlurHorizontalPass, GaussianBlurVerticalPass, ToneMapPass,
-    };
-    use crate::post_process::{CopyPass, GrayscalePass, PostProcessPass};
+    use crate::post_process::PostProcessPass;
     use vulkano::command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer};
 
     #[test]
@@ -223,7 +220,7 @@ mod post_process_tests {
             }
         }
 
-        let mut pass = ErrorPass;
+        let pass = ErrorPass;
         // We can't actually execute without a real command buffer, but we can verify the trait works
         assert_eq!(pass.name(), "Error");
     }
@@ -528,12 +525,14 @@ mod post_process_tests {
             format_name: "R8G8B8A8_UNORM".to_string(),
             bits_per_pixel: 32,
         };
+        assert_eq!(rgba8.format_name, "R8G8B8A8_UNORM");
         assert_eq!(rgba8.bits_per_pixel, 32);
 
         let rgba16f = MockRenderTargetFormat {
             format_name: "R16G16B16A16_SFLOAT".to_string(),
             bits_per_pixel: 64,
         };
+        assert_eq!(rgba16f.format_name, "R16G16B16A16_SFLOAT");
         assert_eq!(rgba16f.bits_per_pixel, 64);
     }
 
@@ -551,10 +550,19 @@ mod post_process_tests {
                     capacity,
                 }
             }
+
+            fn add_pass(&mut self, name: &str) {
+                self.passes.push(name.to_string());
+            }
         }
 
-        let chain = MockChain::with_capacity(10);
+        let mut chain = MockChain::with_capacity(10);
         assert_eq!(chain.capacity, 10);
+        assert!(chain.passes.is_empty());
+
+        chain.add_pass("Bloom");
+        chain.add_pass("ToneMap");
+        assert_eq!(chain.passes.len(), 2);
     }
 
     #[test]
@@ -571,6 +579,7 @@ mod post_process_tests {
             total_time_ms: 0.0,
         };
 
+        assert_eq!(stats.name, "Bloom");
         stats.execution_count += 1;
         stats.total_time_ms += 16.7;
 
