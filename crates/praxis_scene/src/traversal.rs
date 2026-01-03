@@ -455,4 +455,490 @@ mod tests {
         let not_found = find_entity_by_name(&world, "Boss", None);
         assert_eq!(not_found, None);
     }
+
+    #[test]
+    fn test_scene_graph_iterator_breadth_first() {
+        let mut world = World::new();
+
+        let root = world.spawn((Transform::default(), GlobalTransform::default()));
+
+        let child1 = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(root),
+        ));
+
+        let child2 = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(root),
+        ));
+
+        let grandchild1 = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(child1),
+        ));
+
+        world
+            .entity_mut(root)
+            .insert(Children(vec![child1, child2]));
+        world
+            .entity_mut(child1)
+            .insert(Children(vec![grandchild1]));
+
+        let visited: Vec<Entity> =
+            SceneGraphIterator::new(&world, root, TraversalOrder::BreadthFirst).collect();
+
+        assert_eq!(visited.len(), 4);
+        assert_eq!(visited[0], root);
+        assert_eq!(visited[1], child1);
+        assert_eq!(visited[2], child2);
+        assert_eq!(visited[3], grandchild1);
+    }
+
+    #[test]
+    fn test_scene_graph_iterator_empty() {
+        let mut world = World::new();
+        let root = world.spawn((Transform::default(), GlobalTransform::default()));
+
+        let visited: Vec<Entity> =
+            SceneGraphIterator::new(&world, root, TraversalOrder::DepthFirst).collect();
+
+        assert_eq!(visited.len(), 1);
+        assert_eq!(visited[0], root);
+    }
+
+    #[test]
+    fn test_scene_graph_iterator_depth_first_complex() {
+        let mut world = World::new();
+
+        let root = world.spawn((Transform::default(), GlobalTransform::default()));
+
+        let child1 = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(root),
+        ));
+
+        let child2 = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(root),
+        ));
+
+        let grandchild1 = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(child1),
+        ));
+
+        let grandchild2 = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(child2),
+        ));
+
+        world
+            .entity_mut(root)
+            .insert(Children(vec![child1, child2]));
+        world
+            .entity_mut(child1)
+            .insert(Children(vec![grandchild1]));
+        world
+            .entity_mut(child2)
+            .insert(Children(vec![grandchild2]));
+
+        let visited: Vec<Entity> =
+            SceneGraphIterator::new(&world, root, TraversalOrder::DepthFirst).collect();
+
+        assert_eq!(visited.len(), 5);
+        assert_eq!(visited[0], root);
+        let child1_idx = visited.iter().position(|&e| e == child1).unwrap();
+        let grandchild1_idx = visited.iter().position(|&e| e == grandchild1).unwrap();
+        assert!(grandchild1_idx > child1_idx);
+    }
+
+    #[test]
+    fn test_get_all_children_empty() {
+        let mut world = World::new();
+        let root = world.spawn((Transform::default(), GlobalTransform::default()));
+
+        let descendants = get_all_children(&world, root);
+        assert_eq!(descendants.len(), 0);
+    }
+
+    #[test]
+    fn test_get_all_children_deep_hierarchy() {
+        let mut world = World::new();
+
+        let root = world.spawn((Transform::default(), GlobalTransform::default()));
+
+        let child = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(root),
+        ));
+
+        let grandchild = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(child),
+        ));
+
+        let great_grandchild = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(grandchild),
+        ));
+
+        world.entity_mut(root).insert(Children(vec![child]));
+        world.entity_mut(child).insert(Children(vec![grandchild]));
+        world
+            .entity_mut(grandchild)
+            .insert(Children(vec![great_grandchild]));
+
+        let descendants = get_all_children(&world, root);
+        assert_eq!(descendants.len(), 3);
+        assert!(descendants.contains(&child));
+        assert!(descendants.contains(&grandchild));
+        assert!(descendants.contains(&great_grandchild));
+    }
+
+    #[test]
+    fn test_get_all_children_multiple_branches() {
+        let mut world = World::new();
+
+        let root = world.spawn((Transform::default(), GlobalTransform::default()));
+
+        let child1 = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(root),
+        ));
+
+        let child2 = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(root),
+        ));
+
+        let grandchild1 = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(child1),
+        ));
+
+        let grandchild2 = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(child2),
+        ));
+
+        world
+            .entity_mut(root)
+            .insert(Children(vec![child1, child2]));
+        world
+            .entity_mut(child1)
+            .insert(Children(vec![grandchild1]));
+        world
+            .entity_mut(child2)
+            .insert(Children(vec![grandchild2]));
+
+        let descendants = get_all_children(&world, root);
+        assert_eq!(descendants.len(), 4);
+        assert!(descendants.contains(&child1));
+        assert!(descendants.contains(&child2));
+        assert!(descendants.contains(&grandchild1));
+        assert!(descendants.contains(&grandchild2));
+    }
+
+    #[test]
+    fn test_get_parent_chain_empty() {
+        let mut world = World::new();
+        let root = world.spawn((Transform::default(), GlobalTransform::default()));
+
+        let chain = get_parent_chain(&world, root);
+        assert_eq!(chain.len(), 0);
+    }
+
+    #[test]
+    fn test_get_parent_chain_deep() {
+        let mut world = World::new();
+
+        let root = world.spawn((Transform::default(), GlobalTransform::default()));
+        let child = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(root),
+        ));
+        let grandchild = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(child),
+        ));
+        let great_grandchild = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(grandchild),
+        ));
+
+        let chain = get_parent_chain(&world, great_grandchild);
+        assert_eq!(chain.len(), 3);
+        assert_eq!(chain[0], grandchild);
+        assert_eq!(chain[1], child);
+        assert_eq!(chain[2], root);
+    }
+
+    #[test]
+    fn test_get_root_entity_deep_hierarchy() {
+        let mut world = World::new();
+
+        let root = world.spawn((Transform::default(), GlobalTransform::default()));
+        let child = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(root),
+        ));
+        let grandchild = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(child),
+        ));
+
+        assert_eq!(get_root_entity(&world, grandchild), root);
+        assert_eq!(get_root_entity(&world, child), root);
+        assert_eq!(get_root_entity(&world, root), root);
+    }
+
+    #[test]
+    fn test_is_ancestor_of_false() {
+        let mut world = World::new();
+
+        let entity1 = world.spawn((Transform::default(), GlobalTransform::default()));
+        let entity2 = world.spawn((Transform::default(), GlobalTransform::default()));
+
+        assert!(!is_ancestor_of(&world, entity1, entity2));
+        assert!(!is_ancestor_of(&world, entity2, entity1));
+    }
+
+    #[test]
+    fn test_is_ancestor_of_direct_parent() {
+        let mut world = World::new();
+
+        let parent = world.spawn((Transform::default(), GlobalTransform::default()));
+        let child = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(parent),
+        ));
+
+        assert!(is_ancestor_of(&world, parent, child));
+        assert!(!is_ancestor_of(&world, child, parent));
+    }
+
+    #[test]
+    fn test_is_ancestor_of_self() {
+        let mut world = World::new();
+        let entity = world.spawn((Transform::default(), GlobalTransform::default()));
+
+        assert!(!is_ancestor_of(&world, entity, entity));
+    }
+
+    #[test]
+    fn test_get_entity_depth_complex() {
+        let mut world = World::new();
+
+        let root = world.spawn((Transform::default(), GlobalTransform::default()));
+        let child1 = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(root),
+        ));
+        let child2 = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(root),
+        ));
+        let grandchild = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(child1),
+        ));
+
+        assert_eq!(get_entity_depth(&world, root), 0);
+        assert_eq!(get_entity_depth(&world, child1), 1);
+        assert_eq!(get_entity_depth(&world, child2), 1);
+        assert_eq!(get_entity_depth(&world, grandchild), 2);
+    }
+
+    #[test]
+    fn test_get_root_entities_single() {
+        let mut world = World::new();
+        let root = world.spawn((Transform::default(), GlobalTransform::default()));
+
+        let roots = get_root_entities(&world);
+        assert_eq!(roots.len(), 1);
+        assert!(roots.contains(&root));
+    }
+
+    #[test]
+    fn test_get_root_entities_multiple() {
+        let mut world = World::new();
+
+        let root1 = world.spawn((Transform::default(), GlobalTransform::default()));
+        let root2 = world.spawn((Transform::default(), GlobalTransform::default()));
+
+        let child = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(root1),
+        ));
+
+        world.entity_mut(root1).insert(Children(vec![child]));
+
+        let roots = get_root_entities(&world);
+        assert_eq!(roots.len(), 2);
+        assert!(roots.contains(&root1));
+        assert!(roots.contains(&root2));
+        assert!(!roots.contains(&child));
+    }
+
+    #[test]
+    fn test_get_root_entities_no_transform() {
+        let mut world = World::new();
+
+        let _entity_without_transform = world.spawn(());
+        let root = world.spawn((Transform::default(), GlobalTransform::default()));
+
+        let roots = get_root_entities(&world);
+        assert_eq!(roots.len(), 1);
+        assert!(roots.contains(&root));
+    }
+
+    #[test]
+    fn test_find_entities_by_name_multiple() {
+        let mut world = World::new();
+
+        let entity1 = world.spawn((
+            Name::new("Player"),
+            Transform::default(),
+            GlobalTransform::default(),
+        ));
+
+        let entity2 = world.spawn((
+            Name::new("Player"),
+            Transform::default(),
+            GlobalTransform::default(),
+        ));
+
+        let _entity3 = world.spawn((
+            Name::new("Enemy"),
+            Transform::default(),
+            GlobalTransform::default(),
+        ));
+
+        let found = find_entities_by_name(&world, "Player", None);
+        assert_eq!(found.len(), 2);
+        assert!(found.contains(&entity1));
+        assert!(found.contains(&entity2));
+    }
+
+    #[test]
+    fn test_find_entities_by_name_with_root() {
+        let mut world = World::new();
+
+        let root = world.spawn((
+            Name::new("Root"),
+            Transform::default(),
+            GlobalTransform::default(),
+        ));
+
+        let child1 = world.spawn((
+            Name::new("Target"),
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(root),
+        ));
+
+        let child2 = world.spawn((
+            Name::new("Other"),
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(root),
+        ));
+
+        let _other_root = world.spawn((
+            Name::new("Target"),
+            Transform::default(),
+            GlobalTransform::default(),
+        ));
+
+        world
+            .entity_mut(root)
+            .insert(Children(vec![child1, child2]));
+
+        let found = find_entities_by_name(&world, "Target", Some(root));
+        assert_eq!(found.len(), 1);
+        assert!(found.contains(&child1));
+    }
+
+    #[test]
+    fn test_find_entity_by_name_first() {
+        let mut world = World::new();
+
+        let entity1 = world.spawn((
+            Name::new("Duplicate"),
+            Transform::default(),
+            GlobalTransform::default(),
+        ));
+
+        let _entity2 = world.spawn((
+            Name::new("Duplicate"),
+            Transform::default(),
+            GlobalTransform::default(),
+        ));
+
+        let found = find_entity_by_name(&world, "Duplicate", None);
+        assert!(found.is_some());
+        assert_eq!(found.unwrap(), entity1);
+    }
+
+    #[test]
+    fn test_traversal_order_enum() {
+        assert_eq!(TraversalOrder::DepthFirst, TraversalOrder::DepthFirst);
+        assert_ne!(TraversalOrder::DepthFirst, TraversalOrder::BreadthFirst);
+
+        let order = TraversalOrder::BreadthFirst;
+        let order_clone = order;
+        assert_eq!(order, order_clone);
+    }
+
+    #[test]
+    fn test_scene_graph_iterator_large_tree() {
+        let mut world = World::new();
+
+        let root = world.spawn((Transform::default(), GlobalTransform::default()));
+
+        let mut children = Vec::new();
+        for _ in 0..5 {
+            let child = world.spawn((
+                Transform::default(),
+                GlobalTransform::default(),
+                Parent(root),
+            ));
+            children.push(child);
+        }
+
+        world.entity_mut(root).insert(Children(children.clone()));
+
+        let visited: Vec<Entity> =
+            SceneGraphIterator::new(&world, root, TraversalOrder::BreadthFirst).collect();
+
+        assert_eq!(visited.len(), 6);
+        assert_eq!(visited[0], root);
+        for child in children {
+            assert!(visited.contains(&child));
+        }
+    }
 }

@@ -227,4 +227,258 @@ mod tests {
         assert_eq!(loaded_scene.entity_count(), scene.entity_count());
         assert_eq!(loaded_scene.entities[0].name, scene.entities[0].name);
     }
+
+    #[test]
+    fn test_loader_new() {
+        let loader = SceneLoader::new();
+        assert!(loader.base_path().is_none());
+    }
+
+    #[test]
+    fn test_loader_default() {
+        let loader = SceneLoader::default();
+        assert!(loader.base_path().is_none());
+    }
+
+    #[test]
+    fn test_loader_with_base_path() {
+        let loader = SceneLoader::with_base_path("assets/scenes");
+        assert_eq!(loader.base_path(), Some("assets/scenes"));
+    }
+
+    #[test]
+    fn test_loader_set_base_path() {
+        let mut loader = SceneLoader::new();
+        loader.set_base_path("custom/path");
+        assert_eq!(loader.base_path(), Some("custom/path"));
+    }
+
+    #[test]
+    fn test_load_from_string_with_children() {
+        let ron = r#"
+        (
+            name: "Hierarchy Scene",
+            entities: [
+                (
+                    name: Some("Parent"),
+                    transform: Some((
+                        translation: (0.0, 0.0, 0.0),
+                        rotation: (0.0, 0.0, 0.0, 1.0),
+                        scale: (1.0, 1.0, 1.0),
+                    )),
+                    children: [
+                        (
+                            name: Some("Child"),
+                            transform: Some((
+                                translation: (1.0, 0.0, 0.0),
+                                rotation: (0.0, 0.0, 0.0, 1.0),
+                                scale: (1.0, 1.0, 1.0),
+                            )),
+                            children: [],
+                        ),
+                    ],
+                ),
+            ],
+            metadata: (),
+        )
+        "#;
+
+        let loader = SceneLoader::new();
+        let scene = loader.load_from_string(ron).unwrap();
+
+        assert_eq!(scene.name, "Hierarchy Scene");
+        assert_eq!(scene.entity_count(), 1);
+        assert_eq!(scene.entities[0].children.len(), 1);
+        assert_eq!(scene.total_entity_count(), 2);
+    }
+
+    #[test]
+    fn test_load_from_string_empty_scene() {
+        let ron = r#"
+        (
+            name: "Empty Scene",
+            entities: [],
+            metadata: (),
+        )
+        "#;
+
+        let loader = SceneLoader::new();
+        let scene = loader.load_from_string(ron).unwrap();
+
+        assert_eq!(scene.name, "Empty Scene");
+        assert_eq!(scene.entity_count(), 0);
+    }
+
+    #[test]
+    fn test_load_from_string_with_metadata() {
+        let ron = r#"
+        (
+            name: "Metadata Scene",
+            entities: [],
+            metadata: (
+                description: Some("Test scene with metadata"),
+                author: Some("Test Author"),
+                version: Some("1.0.0"),
+                tags: ["test", "demo"],
+            ),
+        )
+        "#;
+
+        let loader = SceneLoader::new();
+        let scene = loader.load_from_string(ron).unwrap();
+
+        assert_eq!(scene.name, "Metadata Scene");
+        assert_eq!(scene.metadata.description.as_deref(), Some("Test scene with metadata"));
+        assert_eq!(scene.metadata.author.as_deref(), Some("Test Author"));
+        assert_eq!(scene.metadata.version.as_deref(), Some("1.0.0"));
+        assert_eq!(scene.metadata.tags.len(), 2);
+    }
+
+    #[test]
+    fn test_load_from_string_invalid_ron() {
+        let invalid_ron = "this is not valid RON";
+
+        let loader = SceneLoader::new();
+        let result = loader.load_from_string(invalid_ron);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_save_to_string_empty_scene() {
+        let scene = SceneDefinition::new("Empty Scene");
+
+        let loader = SceneLoader::new();
+        let ron_string = loader.save_to_string(&scene).unwrap();
+
+        assert!(ron_string.contains("Empty Scene"));
+        assert!(ron_string.contains("entities: []"));
+    }
+
+    #[test]
+    fn test_save_to_string_with_metadata() {
+        let mut scene = SceneDefinition::new("Test Scene");
+        scene.metadata.description = Some("A test scene".to_string());
+        scene.metadata.author = Some("Test Author".to_string());
+        scene.metadata.tags = vec!["test".to_string(), "demo".to_string()];
+
+        let loader = SceneLoader::new();
+        let ron_string = loader.save_to_string(&scene).unwrap();
+
+        assert!(ron_string.contains("Test Scene"));
+        assert!(ron_string.contains("A test scene"));
+        assert!(ron_string.contains("Test Author"));
+    }
+
+    #[test]
+    fn test_roundtrip_with_hierarchy() {
+        let mut scene = SceneDefinition::new("Hierarchy Test");
+        
+        let child = EntityDefinition::new()
+            .with_name("Child")
+            .with_transform(TransformDef::from_translation(1.0, 0.0, 0.0));
+        
+        let parent = EntityDefinition::new()
+            .with_name("Parent")
+            .with_transform(TransformDef::from_translation(0.0, 0.0, 0.0))
+            .with_child(child);
+        
+        scene.add_entity(parent);
+
+        let loader = SceneLoader::new();
+        let ron_string = loader.save_to_string(&scene).unwrap();
+        let loaded_scene = loader.load_from_string(&ron_string).unwrap();
+
+        assert_eq!(loaded_scene.name, scene.name);
+        assert_eq!(loaded_scene.total_entity_count(), scene.total_entity_count());
+        assert_eq!(loaded_scene.entities[0].children.len(), 1);
+    }
+
+    #[test]
+    fn test_save_and_load_complex_scene() {
+        let mut scene = SceneDefinition::new("Complex Scene");
+        
+        scene.add_entity(
+            EntityDefinition::perspective_camera("MainCamera", (0.0, 5.0, 10.0), 1.22, 1.77)
+        );
+        
+        scene.add_entity(
+            EntityDefinition::directional_light("Sun", (0.0, -1.0, 0.0), (1.0, 1.0, 0.9), 1.5)
+        );
+        
+        scene.add_entity(
+            EntityDefinition::mesh_entity("Cube", (0.0, 0.0, 0.0), "cube_mesh")
+        );
+
+        let loader = SceneLoader::new();
+        let ron_string = loader.save_to_string(&scene).unwrap();
+        let loaded_scene = loader.load_from_string(&ron_string).unwrap();
+
+        assert_eq!(loaded_scene.entity_count(), 3);
+        assert!(loaded_scene.entities[0].camera.is_some());
+        assert!(loaded_scene.entities[1].directional_light.is_some());
+        assert!(loaded_scene.entities[2].mesh.is_some());
+    }
+
+    #[test]
+    fn test_load_from_string_with_mesh_and_texture() {
+        let ron = r#"
+        (
+            name: "Textured Scene",
+            entities: [
+                (
+                    name: Some("TexturedCube"),
+                    transform: Some((
+                        translation: (0.0, 0.0, 0.0),
+                        rotation: (0.0, 0.0, 0.0, 1.0),
+                        scale: (1.0, 1.0, 1.0),
+                    )),
+                    mesh: Some("cube_mesh"),
+                    texture: Some("cube_texture"),
+                    children: [],
+                ),
+            ],
+            metadata: (),
+        )
+        "#;
+
+        let loader = SceneLoader::new();
+        let scene = loader.load_from_string(ron).unwrap();
+
+        assert_eq!(scene.entity_count(), 1);
+        assert_eq!(scene.entities[0].mesh.as_deref(), Some("cube_mesh"));
+        assert_eq!(scene.entities[0].texture.as_deref(), Some("cube_texture"));
+    }
+
+    #[test]
+    fn test_roundtrip_preserves_visibility() {
+        let mut scene = SceneDefinition::new("Visibility Test");
+        let mut entity = EntityDefinition::new()
+            .with_name("HiddenEntity")
+            .with_transform(TransformDef::from_translation(0.0, 0.0, 0.0));
+        entity.visible = Some(false);
+        scene.add_entity(entity);
+
+        let loader = SceneLoader::new();
+        let ron_string = loader.save_to_string(&scene).unwrap();
+        let loaded_scene = loader.load_from_string(&ron_string).unwrap();
+
+        assert_eq!(loaded_scene.entities[0].visible, Some(false));
+    }
+
+    #[test]
+    fn test_roundtrip_preserves_active_state() {
+        let mut scene = SceneDefinition::new("Active Test");
+        let mut entity = EntityDefinition::new()
+            .with_name("InactiveEntity")
+            .with_transform(TransformDef::from_translation(0.0, 0.0, 0.0));
+        entity.active = Some(false);
+        scene.add_entity(entity);
+
+        let loader = SceneLoader::new();
+        let ron_string = loader.save_to_string(&scene).unwrap();
+        let loaded_scene = loader.load_from_string(&ron_string).unwrap();
+
+        assert_eq!(loaded_scene.entities[0].active, Some(false));
+    }
 }

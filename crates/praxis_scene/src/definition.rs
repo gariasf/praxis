@@ -579,3 +579,343 @@ impl EntityDefinition {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scene_definition_new() {
+        let scene = SceneDefinition::new("Test Scene");
+        assert_eq!(scene.name, "Test Scene");
+        assert_eq!(scene.entity_count(), 0);
+    }
+
+    #[test]
+    fn test_scene_definition_add_entity() {
+        let mut scene = SceneDefinition::new("Test");
+        let entity = EntityDefinition::new().with_name("Entity1");
+        scene.add_entity(entity);
+        assert_eq!(scene.entity_count(), 1);
+    }
+
+    #[test]
+    fn test_scene_definition_total_entity_count() {
+        let mut scene = SceneDefinition::new("Test");
+        
+        let child = EntityDefinition::new().with_name("Child");
+        let parent = EntityDefinition::new().with_name("Parent").with_child(child);
+        
+        scene.add_entity(parent);
+        assert_eq!(scene.entity_count(), 1);
+        assert_eq!(scene.total_entity_count(), 2);
+    }
+
+    #[test]
+    fn test_scene_definition_total_entity_count_complex() {
+        let mut scene = SceneDefinition::new("Test");
+        
+        let grandchild1 = EntityDefinition::new().with_name("Grandchild1");
+        let grandchild2 = EntityDefinition::new().with_name("Grandchild2");
+        let child1 = EntityDefinition::new().with_name("Child1").with_child(grandchild1);
+        let child2 = EntityDefinition::new().with_name("Child2").with_child(grandchild2);
+        let parent = EntityDefinition::new().with_name("Parent")
+            .with_child(child1)
+            .with_child(child2);
+        
+        scene.add_entity(parent);
+        assert_eq!(scene.entity_count(), 1);
+        assert_eq!(scene.total_entity_count(), 5);
+    }
+
+    #[test]
+    fn test_scene_metadata_default() {
+        let metadata = SceneMetadata::default();
+        assert!(metadata.description.is_none());
+        assert!(metadata.author.is_none());
+        assert!(metadata.version.is_none());
+        assert!(metadata.tags.is_empty());
+    }
+
+    #[test]
+    fn test_entity_definition_new() {
+        let entity = EntityDefinition::new();
+        assert!(entity.name.is_none());
+        assert!(entity.transform.is_none());
+        assert!(entity.mesh.is_none());
+        assert_eq!(entity.children.len(), 0);
+    }
+
+    #[test]
+    fn test_entity_definition_default() {
+        let entity = EntityDefinition::default();
+        assert!(entity.name.is_none());
+    }
+
+    #[test]
+    fn test_entity_definition_with_name() {
+        let entity = EntityDefinition::new().with_name("TestEntity");
+        assert_eq!(entity.name.as_deref(), Some("TestEntity"));
+    }
+
+    #[test]
+    fn test_entity_definition_with_transform() {
+        let transform = TransformDef::from_translation(1.0, 2.0, 3.0);
+        let entity = EntityDefinition::new().with_transform(transform);
+        assert!(entity.transform.is_some());
+    }
+
+    #[test]
+    fn test_entity_definition_with_mesh() {
+        let entity = EntityDefinition::new().with_mesh("cube");
+        assert_eq!(entity.mesh.as_deref(), Some("cube"));
+    }
+
+    #[test]
+    fn test_entity_definition_with_child() {
+        let child = EntityDefinition::new().with_name("Child");
+        let parent = EntityDefinition::new().with_name("Parent").with_child(child);
+        assert_eq!(parent.children.len(), 1);
+        assert_eq!(parent.children[0].name.as_deref(), Some("Child"));
+    }
+
+    #[test]
+    fn test_entity_definition_total_count() {
+        let entity = EntityDefinition::new().with_name("Single");
+        assert_eq!(entity.total_count(), 1);
+    }
+
+    #[test]
+    fn test_entity_definition_total_count_with_children() {
+        let child1 = EntityDefinition::new().with_name("Child1");
+        let child2 = EntityDefinition::new().with_name("Child2");
+        let parent = EntityDefinition::new()
+            .with_name("Parent")
+            .with_child(child1)
+            .with_child(child2);
+        assert_eq!(parent.total_count(), 3);
+    }
+
+    #[test]
+    fn test_transform_def_identity() {
+        let transform = TransformDef::identity();
+        assert_eq!(transform.translation, (0.0, 0.0, 0.0));
+        assert_eq!(transform.rotation, (0.0, 0.0, 0.0, 1.0));
+        assert_eq!(transform.scale, (1.0, 1.0, 1.0));
+    }
+
+    #[test]
+    fn test_transform_def_default() {
+        let transform = TransformDef::default();
+        assert_eq!(transform.translation, (0.0, 0.0, 0.0));
+        assert_eq!(transform.rotation, (0.0, 0.0, 0.0, 1.0));
+        assert_eq!(transform.scale, (1.0, 1.0, 1.0));
+    }
+
+    #[test]
+    fn test_transform_def_from_translation() {
+        let transform = TransformDef::from_translation(5.0, 10.0, 15.0);
+        assert_eq!(transform.translation, (5.0, 10.0, 15.0));
+        assert_eq!(transform.rotation, (0.0, 0.0, 0.0, 1.0));
+        assert_eq!(transform.scale, (1.0, 1.0, 1.0));
+    }
+
+    #[test]
+    fn test_transform_def_to_components() {
+        let transform = TransformDef {
+            translation: (1.0, 2.0, 3.0),
+            rotation: (0.0, 0.0, 0.0, 1.0),
+            scale: (2.0, 2.0, 2.0),
+        };
+        let (translation, rotation, scale) = transform.to_components();
+        assert_eq!(translation, Vec3::new(1.0, 2.0, 3.0));
+        assert_eq!(rotation, Quat::from_xyzw(0.0, 0.0, 0.0, 1.0));
+        assert_eq!(scale, Vec3::new(2.0, 2.0, 2.0));
+    }
+
+    #[test]
+    fn test_camera_def_perspective() {
+        let camera = CameraDef::perspective(1.22, 1.77, 0.1, 1000.0);
+        assert_eq!(camera.camera_type, CameraType::Perspective);
+        assert_eq!(camera.fov, Some(1.22));
+        assert_eq!(camera.aspect_ratio, Some(1.77));
+        assert_eq!(camera.near, 0.1);
+        assert_eq!(camera.far, 1000.0);
+        assert!(camera.is_active);
+    }
+
+    #[test]
+    fn test_camera_def_orthographic() {
+        let camera = CameraDef::orthographic(-10.0, 10.0, -7.5, 7.5, 0.1, 100.0);
+        assert_eq!(camera.camera_type, CameraType::Orthographic);
+        assert_eq!(camera.left, Some(-10.0));
+        assert_eq!(camera.right, Some(10.0));
+        assert_eq!(camera.bottom, Some(-7.5));
+        assert_eq!(camera.top, Some(7.5));
+        assert_eq!(camera.near, 0.1);
+        assert_eq!(camera.far, 100.0);
+    }
+
+    #[test]
+    fn test_camera_type_equality() {
+        assert_eq!(CameraType::Perspective, CameraType::Perspective);
+        assert_eq!(CameraType::Orthographic, CameraType::Orthographic);
+        assert_ne!(CameraType::Perspective, CameraType::Orthographic);
+    }
+
+    #[test]
+    fn test_directional_light_def_new() {
+        let light = DirectionalLightDef::new((0.0, -1.0, 0.0), (1.0, 0.8, 0.6), 1.5);
+        assert_eq!(light.direction, (0.0, -1.0, 0.0));
+        assert_eq!(light.color, (1.0, 0.8, 0.6));
+        assert_eq!(light.intensity, 1.5);
+    }
+
+    #[test]
+    fn test_directional_light_def_default() {
+        let light = DirectionalLightDef::default();
+        assert_eq!(light.direction, (0.0, -1.0, 0.0));
+        assert_eq!(light.color, (1.0, 1.0, 1.0));
+        assert_eq!(light.intensity, 1.0);
+    }
+
+    #[test]
+    fn test_directional_light_def_to_components() {
+        let light = DirectionalLightDef::new((1.0, 0.0, 0.0), (1.0, 0.5, 0.25), 2.0);
+        let (direction, color, intensity) = light.to_components();
+        assert_eq!(direction, Vec3::new(1.0, 0.0, 0.0));
+        assert_eq!(color, Vec3::new(1.0, 0.5, 0.25));
+        assert_eq!(intensity, 2.0);
+    }
+
+    #[test]
+    fn test_point_light_def_new() {
+        let light = PointLightDef::new((1.0, 0.8, 0.6), 2.5, 15.0);
+        assert_eq!(light.color, (1.0, 0.8, 0.6));
+        assert_eq!(light.intensity, 2.5);
+        assert_eq!(light.range, 15.0);
+    }
+
+    #[test]
+    fn test_point_light_def_default() {
+        let light = PointLightDef::default();
+        assert_eq!(light.color, (1.0, 1.0, 1.0));
+        assert_eq!(light.intensity, 1.0);
+        assert_eq!(light.range, 10.0);
+    }
+
+    #[test]
+    fn test_point_light_def_to_components() {
+        let light = PointLightDef::new((0.5, 0.7, 0.9), 3.0, 20.0);
+        let (color, intensity, range) = light.to_components();
+        assert_eq!(color, Vec3::new(0.5, 0.7, 0.9));
+        assert_eq!(intensity, 3.0);
+        assert_eq!(range, 20.0);
+    }
+
+    #[test]
+    fn test_entity_definition_perspective_camera() {
+        let camera = EntityDefinition::perspective_camera("MainCamera", (0.0, 5.0, 10.0), 1.22, 1.77);
+        assert_eq!(camera.name.as_deref(), Some("MainCamera"));
+        assert!(camera.transform.is_some());
+        assert!(camera.camera.is_some());
+        
+        let camera_def = camera.camera.unwrap();
+        assert_eq!(camera_def.camera_type, CameraType::Perspective);
+    }
+
+    #[test]
+    fn test_entity_definition_orthographic_camera() {
+        let camera = EntityDefinition::orthographic_camera("OrthoCamera", (0.0, 0.0, 10.0), (20.0, 15.0));
+        assert_eq!(camera.name.as_deref(), Some("OrthoCamera"));
+        assert!(camera.transform.is_some());
+        assert!(camera.camera.is_some());
+        
+        let camera_def = camera.camera.unwrap();
+        assert_eq!(camera_def.camera_type, CameraType::Orthographic);
+    }
+
+    #[test]
+    fn test_entity_definition_directional_light() {
+        let light = EntityDefinition::directional_light("Sun", (0.0, -1.0, 0.0), (1.0, 1.0, 0.9), 1.5);
+        assert_eq!(light.name.as_deref(), Some("Sun"));
+        assert!(light.directional_light.is_some());
+        
+        let light_def = light.directional_light.unwrap();
+        assert_eq!(light_def.direction, (0.0, -1.0, 0.0));
+    }
+
+    #[test]
+    fn test_entity_definition_point_light() {
+        let light = EntityDefinition::point_light("Lamp", (0.0, 2.0, 0.0), (1.0, 0.8, 0.6), 2.0, 10.0);
+        assert_eq!(light.name.as_deref(), Some("Lamp"));
+        assert!(light.transform.is_some());
+        assert!(light.point_light.is_some());
+        
+        let light_def = light.point_light.unwrap();
+        assert_eq!(light_def.intensity, 2.0);
+        assert_eq!(light_def.range, 10.0);
+    }
+
+    #[test]
+    fn test_entity_definition_mesh_entity() {
+        let entity = EntityDefinition::mesh_entity("Cube", (1.0, 2.0, 3.0), "cube_mesh");
+        assert_eq!(entity.name.as_deref(), Some("Cube"));
+        assert!(entity.transform.is_some());
+        assert_eq!(entity.mesh.as_deref(), Some("cube_mesh"));
+        assert!(entity.texture.is_none());
+    }
+
+    #[test]
+    fn test_entity_definition_textured_mesh_entity() {
+        let entity = EntityDefinition::textured_mesh_entity(
+            "TexturedCube",
+            (1.0, 2.0, 3.0),
+            "cube_mesh",
+            "cube_texture",
+        );
+        assert_eq!(entity.name.as_deref(), Some("TexturedCube"));
+        assert!(entity.transform.is_some());
+        assert_eq!(entity.mesh.as_deref(), Some("cube_mesh"));
+        assert_eq!(entity.texture.as_deref(), Some("cube_texture"));
+    }
+
+    #[test]
+    fn test_entity_definition_builder_pattern() {
+        let entity = EntityDefinition::new()
+            .with_name("TestEntity")
+            .with_transform(TransformDef::from_translation(1.0, 2.0, 3.0))
+            .with_mesh("test_mesh")
+            .with_child(EntityDefinition::new().with_name("Child1"))
+            .with_child(EntityDefinition::new().with_name("Child2"));
+        
+        assert_eq!(entity.name.as_deref(), Some("TestEntity"));
+        assert!(entity.transform.is_some());
+        assert_eq!(entity.mesh.as_deref(), Some("test_mesh"));
+        assert_eq!(entity.children.len(), 2);
+    }
+
+    #[test]
+    fn test_scene_definition_clone() {
+        let mut scene1 = SceneDefinition::new("Test");
+        scene1.add_entity(EntityDefinition::new().with_name("Entity1"));
+        
+        let scene2 = scene1.clone();
+        assert_eq!(scene1.name, scene2.name);
+        assert_eq!(scene1.entity_count(), scene2.entity_count());
+    }
+
+    #[test]
+    fn test_transform_def_clone() {
+        let transform1 = TransformDef::from_translation(1.0, 2.0, 3.0);
+        let transform2 = transform1;
+        assert_eq!(transform1.translation, transform2.translation);
+    }
+
+    #[test]
+    fn test_camera_def_clone() {
+        let camera1 = CameraDef::perspective(1.22, 1.77, 0.1, 1000.0);
+        let camera2 = camera1;
+        assert_eq!(camera1.fov, camera2.fov);
+    }
+}

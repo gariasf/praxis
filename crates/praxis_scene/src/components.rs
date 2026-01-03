@@ -2,6 +2,69 @@
 
 use bevy_ecs::component::Component;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scene_component_creation() {
+        let handle = SceneHandle::new("test_scene");
+        let scene = Scene::new(handle.clone());
+        assert_eq!(scene.handle(), &handle);
+    }
+
+    #[test]
+    fn test_scene_component_clone() {
+        let handle = SceneHandle::new("test_scene");
+        let scene1 = Scene::new(handle.clone());
+        let scene2 = scene1.clone();
+        assert_eq!(scene1, scene2);
+    }
+
+    #[test]
+    fn test_scene_handle_new() {
+        let handle = SceneHandle::new("my_scene");
+        assert_eq!(handle.id(), "my_scene");
+    }
+
+    #[test]
+    fn test_scene_handle_generate() {
+        let handle1 = SceneHandle::generate();
+        let handle2 = SceneHandle::generate();
+        assert_ne!(handle1.id(), handle2.id());
+        assert!(handle1.id().starts_with("scene_"));
+        assert!(handle2.id().starts_with("scene_"));
+    }
+
+    #[test]
+    fn test_scene_handle_from_str() {
+        let handle = SceneHandle::from("test_scene");
+        assert_eq!(handle.id(), "test_scene");
+    }
+
+    #[test]
+    fn test_scene_handle_from_string() {
+        let handle = SceneHandle::from(String::from("test_scene"));
+        assert_eq!(handle.id(), "test_scene");
+    }
+
+    #[test]
+    fn test_scene_handle_equality() {
+        let handle1 = SceneHandle::new("scene1");
+        let handle2 = SceneHandle::new("scene1");
+        let handle3 = SceneHandle::new("scene2");
+        assert_eq!(handle1, handle2);
+        assert_ne!(handle1, handle3);
+    }
+
+    #[test]
+    fn test_scene_handle_clone() {
+        let handle1 = SceneHandle::new("test");
+        let handle2 = handle1.clone();
+        assert_eq!(handle1, handle2);
+    }
+}
+
 /// Component marking an entity as belonging to a specific scene.
 ///
 /// This component is used to track which scene an entity belongs to,

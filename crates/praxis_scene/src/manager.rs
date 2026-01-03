@@ -364,4 +364,332 @@ mod tests {
         manager.unload_all(&mut world);
         assert_eq!(manager.loaded_scene_count(), 0);
     }
+
+    #[test]
+    fn test_unload_scene_not_found() {
+        let mut world = World::new();
+        let mut manager = SceneManager::new();
+
+        let handle = SceneHandle::new("nonexistent");
+        let result = manager.unload_scene(&mut world, &handle);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_get_scene_entities_valid() {
+        let mut world = World::new();
+        let mut manager = SceneManager::new();
+
+        let mut scene = SceneDefinition::new("Test Scene");
+        scene.add_entity(
+            EntityDefinition::new()
+                .with_name("Entity1")
+                .with_transform(TransformDef::from_translation(0.0, 0.0, 0.0)),
+        );
+
+        let handle = manager.spawn_scene(&mut world, &scene).unwrap();
+
+        let entities = manager.get_scene_entities(&handle);
+        assert!(entities.is_some());
+        assert_eq!(entities.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_get_scene_entities_invalid() {
+        let manager = SceneManager::new();
+        let handle = SceneHandle::new("nonexistent");
+
+        let entities = manager.get_scene_entities(&handle);
+        assert!(entities.is_none());
+    }
+
+    #[test]
+    fn test_spawn_empty_scene() {
+        let mut world = World::new();
+        let mut manager = SceneManager::new();
+
+        let scene = SceneDefinition::new("Empty Scene");
+        let handle = manager.spawn_scene(&mut world, &scene).unwrap();
+
+        assert!(manager.is_scene_loaded(&handle));
+        let entities = manager.get_scene_entities(&handle).unwrap();
+        assert_eq!(entities.len(), 0);
+    }
+
+    #[test]
+    fn test_spawn_scene_with_components() {
+        let mut world = World::new();
+        let mut manager = SceneManager::new();
+
+        let mut scene = SceneDefinition::new("Test Scene");
+        let mut entity = EntityDefinition::new()
+            .with_name("TestEntity")
+            .with_transform(TransformDef::from_translation(1.0, 2.0, 3.0))
+            .with_mesh("test_mesh");
+        entity.visible = Some(true);
+        entity.active = Some(true);
+
+        scene.add_entity(entity);
+
+        let handle = manager.spawn_scene(&mut world, &scene).unwrap();
+
+        let entities = manager.get_scene_entities(&handle).unwrap();
+        assert_eq!(entities.len(), 1);
+
+        let spawned_entity = entities[0];
+        assert!(world.get::<Name>(spawned_entity).is_some());
+        assert!(world.get::<Transform>(spawned_entity).is_some());
+        assert!(world.get::<MeshHandle>(spawned_entity).is_some());
+        assert!(world.get::<Visibility>(spawned_entity).is_some());
+        assert!(world.get::<Active>(spawned_entity).is_some());
+    }
+
+    #[test]
+    fn test_despawn_recursive() {
+        let mut world = World::new();
+        let mut manager = SceneManager::new();
+
+        let child = EntityDefinition::new()
+            .with_name("Child")
+            .with_transform(TransformDef::from_translation(1.0, 0.0, 0.0));
+
+        let parent = EntityDefinition::new()
+            .with_name("Parent")
+            .with_transform(TransformDef::from_translation(0.0, 0.0, 0.0))
+            .with_child(child);
+
+        let mut scene = SceneDefinition::new("Hierarchy Scene");
+        scene.add_entity(parent);
+
+        let handle = manager.spawn_scene(&mut world, &scene).unwrap();
+        let entities = manager.get_scene_entities(&handle).unwrap();
+        assert_eq!(entities.len(), 1);
+
+        manager.unload_scene(&mut world, &handle);
+        assert!(!manager.is_scene_loaded(&handle));
+    }
+
+    #[test]
+    fn test_manager_default() {
+        let manager = SceneManager::default();
+        assert_eq!(manager.loaded_scene_count(), 0);
+    }
+
+    #[test]
+    fn test_scene_with_camera() {
+        let mut world = World::new();
+        let mut manager = SceneManager::new();
+
+        let camera_entity =
+            EntityDefinition::perspective_camera("MainCamera", (0.0, 5.0, 10.0), 1.22, 16.0 / 9.0);
+
+        let mut scene = SceneDefinition::new("Camera Scene");
+        scene.add_entity(camera_entity);
+
+        let handle = manager.spawn_scene(&mut world, &scene).unwrap();
+        let entities = manager.get_scene_entities(&handle).unwrap();
+        let spawned_entity = entities[0];
+
+        assert!(world.get::<Camera>(spawned_entity).is_some());
+        assert!(world.get::<PerspectiveProjection>(spawned_entity).is_some());
+        assert!(world.get::<CameraMatrices>(spawned_entity).is_some());
+    }
+
+    #[test]
+    fn test_scene_with_directional_light() {
+        let mut world = World::new();
+        let mut manager = SceneManager::new();
+
+        let light_entity = EntityDefinition::directional_light(
+            "Sun",
+            (0.0, -1.0, 0.0),
+            (1.0, 1.0, 1.0),
+            1.5,
+        );
+
+        let mut scene = SceneDefinition::new("Light Scene");
+        scene.add_entity(light_entity);
+
+        let handle = manager.spawn_scene(&mut world, &scene).unwrap();
+        let entities = manager.get_scene_entities(&handle).unwrap();
+        let spawned_entity = entities[0];
+
+        assert!(world.get::<DirectionalLight>(spawned_entity).is_some());
+    }
+
+    #[test]
+    fn test_scene_with_point_light() {
+        let mut world = World::new();
+        let mut manager = SceneManager::new();
+
+        let light_entity =
+            EntityDefinition::point_light("Lamp", (0.0, 2.0, 0.0), (1.0, 0.8, 0.6), 2.0, 10.0);
+
+        let mut scene = SceneDefinition::new("Point Light Scene");
+        scene.add_entity(light_entity);
+
+        let handle = manager.spawn_scene(&mut world, &scene).unwrap();
+        let entities = manager.get_scene_entities(&handle).unwrap();
+        let spawned_entity = entities[0];
+
+        assert!(world.get::<PointLight>(spawned_entity).is_some());
+        assert!(world.get::<Transform>(spawned_entity).is_some());
+    }
+
+    #[test]
+    fn test_scene_with_texture() {
+        let mut world = World::new();
+        let mut manager = SceneManager::new();
+
+        let entity = EntityDefinition::textured_mesh_entity(
+            "TexturedCube",
+            (0.0, 0.0, 0.0),
+            "cube_mesh",
+            "cube_texture",
+        );
+
+        let mut scene = SceneDefinition::new("Textured Scene");
+        scene.add_entity(entity);
+
+        let handle = manager.spawn_scene(&mut world, &scene).unwrap();
+        let entities = manager.get_scene_entities(&handle).unwrap();
+        let spawned_entity = entities[0];
+
+        assert!(world.get::<MeshHandle>(spawned_entity).is_some());
+        assert!(world.get::<TextureHandle>(spawned_entity).is_some());
+    }
+
+    #[test]
+    fn test_deep_hierarchy_spawning() {
+        let mut world = World::new();
+        let mut manager = SceneManager::new();
+
+        let great_grandchild = EntityDefinition::new()
+            .with_name("GreatGrandchild")
+            .with_transform(TransformDef::from_translation(3.0, 0.0, 0.0));
+
+        let grandchild = EntityDefinition::new()
+            .with_name("Grandchild")
+            .with_transform(TransformDef::from_translation(2.0, 0.0, 0.0))
+            .with_child(great_grandchild);
+
+        let child = EntityDefinition::new()
+            .with_name("Child")
+            .with_transform(TransformDef::from_translation(1.0, 0.0, 0.0))
+            .with_child(grandchild);
+
+        let parent = EntityDefinition::new()
+            .with_name("Parent")
+            .with_transform(TransformDef::from_translation(0.0, 0.0, 0.0))
+            .with_child(child);
+
+        let mut scene = SceneDefinition::new("Deep Hierarchy");
+        scene.add_entity(parent);
+
+        let handle = manager.spawn_scene(&mut world, &scene).unwrap();
+        assert!(manager.is_scene_loaded(&handle));
+
+        let entities = manager.get_scene_entities(&handle).unwrap();
+        assert_eq!(entities.len(), 1);
+
+        manager.unload_scene(&mut world, &handle);
+        assert!(!manager.is_scene_loaded(&handle));
+    }
+
+    #[test]
+    fn test_multiple_root_entities() {
+        let mut world = World::new();
+        let mut manager = SceneManager::new();
+
+        let mut scene = SceneDefinition::new("Multiple Roots");
+        scene.add_entity(
+            EntityDefinition::new()
+                .with_name("Root1")
+                .with_transform(TransformDef::from_translation(0.0, 0.0, 0.0)),
+        );
+        scene.add_entity(
+            EntityDefinition::new()
+                .with_name("Root2")
+                .with_transform(TransformDef::from_translation(5.0, 0.0, 0.0)),
+        );
+        scene.add_entity(
+            EntityDefinition::new()
+                .with_name("Root3")
+                .with_transform(TransformDef::from_translation(10.0, 0.0, 0.0)),
+        );
+
+        let handle = manager.spawn_scene(&mut world, &scene).unwrap();
+        let entities = manager.get_scene_entities(&handle).unwrap();
+        assert_eq!(entities.len(), 3);
+
+        manager.unload_scene(&mut world, &handle);
+    }
+
+    #[test]
+    fn test_unload_all_empty() {
+        let mut world = World::new();
+        let mut manager = SceneManager::new();
+
+        manager.unload_all(&mut world);
+        assert_eq!(manager.loaded_scene_count(), 0);
+    }
+
+    #[test]
+    fn test_visibility_hidden() {
+        let mut world = World::new();
+        let mut manager = SceneManager::new();
+
+        let mut entity = EntityDefinition::new()
+            .with_name("HiddenEntity")
+            .with_transform(TransformDef::from_translation(0.0, 0.0, 0.0));
+        entity.visible = Some(false);
+
+        let mut scene = SceneDefinition::new("Visibility Test");
+        scene.add_entity(entity);
+
+        let handle = manager.spawn_scene(&mut world, &scene).unwrap();
+        let entities = manager.get_scene_entities(&handle).unwrap();
+        let spawned_entity = entities[0];
+
+        let visibility = world.get::<Visibility>(spawned_entity).unwrap();
+        assert_eq!(*visibility, Visibility::Hidden);
+    }
+
+    #[test]
+    fn test_inactive_entity() {
+        let mut world = World::new();
+        let mut manager = SceneManager::new();
+
+        let mut entity = EntityDefinition::new()
+            .with_name("InactiveEntity")
+            .with_transform(TransformDef::from_translation(0.0, 0.0, 0.0));
+        entity.active = Some(false);
+
+        let mut scene = SceneDefinition::new("Active Test");
+        scene.add_entity(entity);
+
+        let handle = manager.spawn_scene(&mut world, &scene).unwrap();
+        let entities = manager.get_scene_entities(&handle).unwrap();
+        let spawned_entity = entities[0];
+
+        assert!(world.get::<Active>(spawned_entity).is_none());
+    }
+
+    #[test]
+    fn test_orthographic_camera() {
+        let mut world = World::new();
+        let mut manager = SceneManager::new();
+
+        let camera_entity = EntityDefinition::orthographic_camera("OrthoCamera", (0.0, 0.0, 10.0), (20.0, 15.0));
+
+        let mut scene = SceneDefinition::new("Ortho Camera Scene");
+        scene.add_entity(camera_entity);
+
+        let handle = manager.spawn_scene(&mut world, &scene).unwrap();
+        let entities = manager.get_scene_entities(&handle).unwrap();
+        let spawned_entity = entities[0];
+
+        assert!(world.get::<Camera>(spawned_entity).is_some());
+        assert!(world.get::<OrthographicProjection>(spawned_entity).is_some());
+    }
 }
