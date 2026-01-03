@@ -322,50 +322,34 @@ Descriptor Set Architecture
 
 ### Current Praxis Implementation
 
-In the current implementation, Praxis creates one descriptor set per object per frame:
+In the current implementation, Praxis uses a unified rendering API with `DrawCommand` and `RenderCommands`:
 
 ```rust
 // From RenderContext::render()
-for draw_cmd in cmds.draw_commands.iter() {
-    // 1. Create uniform buffer with model/view/proj matrices
-    let uniforms = Uniforms {
-        model: draw_cmd.model.to_cols_array_2d(),
-        view: cmds.view.to_cols_array_2d(),
-        proj: cmds.proj.to_cols_array_2d(),
-    };
+let draw_commands = vec![
+    DrawCommand {
+        mesh_id: "cube".to_string(),
+        model: Mat4::IDENTITY,
+        texture_name: None, // Optional: use Some("texture_name") for custom texture
+        material_properties: None, // Optional: use Some() for custom materials
+    },
+];
 
-    let buffer = Buffer::from_data(
-        self.memory_allocator.clone(),
-        BufferCreateInfo {
-            usage: BufferUsage::UNIFORM_BUFFER,
-            ..Default::default()
-        },
-        AllocationCreateInfo {
-            memory_type_filter: MemoryTypeFilter::PREFER_HOST
-                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-            ..Default::default()
-        },
-        uniforms,
-    )?;
+let cmds = RenderCommands {
+    view: camera_view,
+    proj: camera_proj,
+    draw_commands: &draw_commands,
+    lighting: None, // Optional: use Some() for dynamic lighting
+};
 
-    // 2. Create descriptor set binding the buffer
-    let set = DescriptorSet::new(
-        self.descriptor_set_allocator.clone(),
-        self.descriptor_set_layout.clone(),
-        [
-            WriteDescriptorSet::buffer(0, buffer.clone()),
-            WriteDescriptorSet::image_view_sampler(
-                1,
-                texture.view.clone(),
-                texture.sampler.clone(),
-            ),
-        ],
-        [],
-    )?;
-}
+render_context.render(&cmds)?;
 ```
 
-**Note**: This approach is simple but not optimal. See the [Dynamic Uniform Buffer Ring System](#dynamic-uniform-buffer-ring-system) section for the more efficient approach.
+**Key features of the unified API**:
+- Single `render()` method handles all rendering
+- `DrawCommand` specifies mesh, transform, optional texture, and optional material
+- `RenderCommands` provides camera matrices, draw commands, and optional lighting
+- Automatic material batching and descriptor set reuse for optimal performance
 
 ### Data Layout: std140
 
@@ -516,7 +500,7 @@ Result: Only entities with BOTH components are processed.
 
 ### Rendering Data Flow Example
 
-Here's how data flows from ECS components to the GPU:
+Here's how data flows from ECS components to the GPU using the unified rendering API:
 
 ```text
 ECS to GPU Data Flow
@@ -553,7 +537,9 @@ ECS to GPU Data Flow
    │ for (transform, .., mesh) in .. {│
    │     draw_cmds.push(DrawCommand { │
    │         mesh_id: mesh.id,        │
-   │         model: global_transform  │
+   │         model: global_transform, │
+   │         texture_name: None,      │
+   │         material_properties: None│
    │     });                          │
    │ }                                │
    └──────────┬───────────────────────┘
@@ -575,9 +561,8 @@ ECS to GPU Data Flow
 5. GPU Rendering
    ┌──────────────────────────────────┐
    │ For each draw command:           │
-   │   - Create uniform buffer        │
    │   - Bind mesh buffers            │
-   │   - Bind descriptor set          │
+   │   - Bind descriptor sets         │
    │   - Draw indexed                 │
    └──────────────────────────────────┘
 ```
