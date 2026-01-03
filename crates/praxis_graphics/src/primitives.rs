@@ -124,6 +124,7 @@ pub fn colored_cube_mesh() -> MeshData {
         colors: Some(colors),
         normals: Some(normals),
         uvs: None,
+        tangents: None,
         indices,
     }
 }
@@ -217,6 +218,7 @@ pub fn solid_cube_mesh(color: [f32; 3]) -> MeshData {
         colors: Some(colors),
         normals: Some(normals),
         uvs: None,
+        tangents: None,
         indices,
     }
 }
@@ -346,6 +348,7 @@ pub fn textured_cube_mesh(color: [f32; 3]) -> MeshData {
         colors: Some(colors),
         normals: Some(normals),
         uvs: Some(uvs),
+        tangents: None,
         indices,
     }
 }
@@ -385,6 +388,7 @@ pub fn quad_mesh(size: f32, color: [f32; 3]) -> MeshData {
         colors: Some(colors),
         normals: Some(normals),
         uvs: None,
+        tangents: None,
         indices,
     }
 }
@@ -433,6 +437,7 @@ pub fn textured_quad_mesh(size: f32, color: [f32; 3]) -> MeshData {
         colors: Some(colors),
         normals: Some(normals),
         uvs: Some(uvs),
+        tangents: None,
         indices,
     }
 }
@@ -516,6 +521,7 @@ pub fn pyramid_mesh(base_color: [f32; 3], tip_color: [f32; 3]) -> MeshData {
         colors: Some(colors),
         normals: Some(normals),
         uvs: None,
+        tangents: None,
         indices,
     }
 }
@@ -602,6 +608,7 @@ pub fn sphere_mesh(radius: f32, sectors: u32, stacks: u32, color: [f32; 3]) -> M
         colors: Some(colors),
         normals: Some(normals),
         uvs: Some(uvs),
+        tangents: None,
         indices,
     }
 }

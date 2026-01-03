@@ -223,6 +223,7 @@ impl AssetLoader<MeshData> for MeshLoader {
             colors: None,
             normals: if has_normals { Some(normals) } else { None },
             uvs: if has_uvs { Some(uvs) } else { None },
+            tangents: None,
             indices,
         })
     }

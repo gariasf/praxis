@@ -97,7 +97,7 @@ impl GpuMesh {
 /// CPU-side mesh data definition.
 ///
 /// This structure holds the mesh data before it's uploaded to the GPU.
-/// It supports various vertex attributes like positions, colors, normals, and UVs.
+/// It supports various vertex attributes like positions, colors, normals, UVs, and tangents.
 #[derive(Debug, Clone)]
 pub struct MeshData {
     /// Vertex positions in local space.
@@ -112,6 +112,10 @@ pub struct MeshData {
     /// Texture coordinates (UV). If None, UVs are not used.
     pub uvs: Option<Vec<[f32; 2]>>,
 
+    /// Tangent vectors for normal mapping. Each tangent is a vec4 where xyz is the tangent
+    /// direction and w is the handedness (+1 or -1) for computing the bitangent.
+    pub tangents: Option<Vec<[f32; 4]>>,
+
     /// Triangle indices.
     pub indices: Vec<u16>,
 }
@@ -124,6 +128,7 @@ impl MeshData {
             colors: None,
             normals: None,
             uvs: None,
+            tangents: None,
             indices,
         }
     }
@@ -135,6 +140,7 @@ impl MeshData {
             colors: Some(colors),
             normals: None,
             uvs: None,
+            tangents: None,
             indices,
         }
     }
@@ -148,6 +154,7 @@ impl MeshData {
             colors: None,
             normals: None,
             uvs: Some(uvs),
+            tangents: None,
             indices,
         }
     }
@@ -164,6 +171,7 @@ impl MeshData {
             colors: Some(colors),
             normals: None,
             uvs: Some(uvs),
+            tangents: None,
             indices,
         }
     }
@@ -173,10 +181,12 @@ impl MeshData {
     /// If colors are not provided, vertices will use white (1.0, 1.0, 1.0).
     /// If normals are not provided, vertices will use up direction (0.0, 1.0, 0.0).
     /// If UVs are not provided, vertices will use (0.0, 0.0).
+    /// If tangents are not provided, vertices will use (1.0, 0.0, 0.0, 1.0).
     pub fn to_vertices(&self) -> Vec<Vertex3D> {
         let default_color = [1.0, 1.0, 1.0];
         let default_normal = [0.0, 1.0, 0.0];
         let default_uv = [0.0, 0.0];
+        let default_tangent = [1.0, 0.0, 0.0, 1.0];
 
         self.positions
             .iter()
@@ -203,14 +213,140 @@ impl MeshData {
                     .copied()
                     .unwrap_or(default_uv);
 
+                let tangent = self
+                    .tangents
+                    .as_ref()
+                    .and_then(|tangents| tangents.get(i))
+                    .copied()
+                    .unwrap_or(default_tangent);
+
                 Vertex3D {
                     position,
                     normal,
                     color,
                     uv,
+                    tangent,
+                    _padding: 0.0,
                 }
             })
             .collect()
+    }
+
+    /// Calculates tangent vectors for normal mapping using the method described by
+    /// Lengyel's "Mathematics for 3D Game Programming and Computer Graphics".
+    ///
+    /// This method requires positions, normals, UVs, and indices to be present.
+    /// It calculates tangents per-triangle and accumulates them at vertices,
+    /// then orthogonalizes and normalizes them. The handedness is stored in the w component.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` if tangents were calculated successfully, or an error if
+    /// required data (normals, UVs) is missing.
+    pub fn calculate_tangents(&mut self) -> Result<()> {
+        if self.normals.is_none() {
+            return Err(eyre::eyre!("Normals required for tangent calculation"));
+        }
+        if self.uvs.is_none() {
+            return Err(eyre::eyre!("UVs required for tangent calculation"));
+        }
+
+        let vertex_count = self.positions.len();
+        let mut tangents = vec![[0.0f32, 0.0, 0.0]; vertex_count];
+        let mut bitangents = vec![[0.0f32, 0.0, 0.0]; vertex_count];
+
+        let uvs = self.uvs.as_ref().unwrap();
+
+        // Calculate tangents and bitangents per triangle
+        for tri in self.indices.chunks_exact(3) {
+            let i0 = tri[0] as usize;
+            let i1 = tri[1] as usize;
+            let i2 = tri[2] as usize;
+
+            let p0 = self.positions[i0];
+            let p1 = self.positions[i1];
+            let p2 = self.positions[i2];
+
+            let uv0 = uvs[i0];
+            let uv1 = uvs[i1];
+            let uv2 = uvs[i2];
+
+            // Calculate edge vectors in position space
+            let edge1 = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
+            let edge2 = [p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]];
+
+            // Calculate edge vectors in UV space
+            let delta_uv1 = [uv1[0] - uv0[0], uv1[1] - uv0[1]];
+            let delta_uv2 = [uv2[0] - uv0[0], uv2[1] - uv0[1]];
+
+            // Calculate tangent and bitangent
+            let r = 1.0 / (delta_uv1[0] * delta_uv2[1] - delta_uv1[1] * delta_uv2[0]);
+            
+            let tangent = [
+                r * (delta_uv2[1] * edge1[0] - delta_uv1[1] * edge2[0]),
+                r * (delta_uv2[1] * edge1[1] - delta_uv1[1] * edge2[1]),
+                r * (delta_uv2[1] * edge1[2] - delta_uv1[1] * edge2[2]),
+            ];
+
+            let bitangent = [
+                r * (-delta_uv2[0] * edge1[0] + delta_uv1[0] * edge2[0]),
+                r * (-delta_uv2[0] * edge1[1] + delta_uv1[0] * edge2[1]),
+                r * (-delta_uv2[0] * edge1[2] + delta_uv1[0] * edge2[2]),
+            ];
+
+            // Accumulate for each vertex of the triangle
+            for &idx in &[i0, i1, i2] {
+                tangents[idx][0] += tangent[0];
+                tangents[idx][1] += tangent[1];
+                tangents[idx][2] += tangent[2];
+
+                bitangents[idx][0] += bitangent[0];
+                bitangents[idx][1] += bitangent[1];
+                bitangents[idx][2] += bitangent[2];
+            }
+        }
+
+        // Orthogonalize and normalize tangents
+        let normals = self.normals.as_ref().unwrap();
+        let mut final_tangents = vec![[0.0f32; 4]; vertex_count];
+
+        for i in 0..vertex_count {
+            let n = normals[i];
+            let t = tangents[i];
+            let b = bitangents[i];
+
+            // Gram-Schmidt orthogonalize
+            // t' = normalize(t - n * dot(n, t))
+            let dot_nt = n[0] * t[0] + n[1] * t[1] + n[2] * t[2];
+            let t_ortho = [
+                t[0] - n[0] * dot_nt,
+                t[1] - n[1] * dot_nt,
+                t[2] - n[2] * dot_nt,
+            ];
+
+            // Normalize tangent
+            let len = (t_ortho[0] * t_ortho[0] + t_ortho[1] * t_ortho[1] + t_ortho[2] * t_ortho[2]).sqrt();
+            let t_normalized = if len > 0.0001 {
+                [t_ortho[0] / len, t_ortho[1] / len, t_ortho[2] / len]
+            } else {
+                [1.0, 0.0, 0.0]
+            };
+
+            // Calculate handedness
+            // cross(n, t) dot b < 0 => handedness = -1, else 1
+            let cross = [
+                n[1] * t_normalized[2] - n[2] * t_normalized[1],
+                n[2] * t_normalized[0] - n[0] * t_normalized[2],
+                n[0] * t_normalized[1] - n[1] * t_normalized[0],
+            ];
+            let dot_cross_b = cross[0] * b[0] + cross[1] * b[1] + cross[2] * b[2];
+            let handedness = if dot_cross_b < 0.0 { -1.0 } else { 1.0 };
+
+            final_tangents[i] = [t_normalized[0], t_normalized[1], t_normalized[2], handedness];
+        }
+
+        self.tangents = Some(final_tangents);
+        Ok(())
     }
 
     /// Uploads this mesh data to the GPU.
@@ -448,6 +584,7 @@ mod tests {
             colors: None,
             normals: Some(normals),
             uvs: None,
+            tangents: None,
             indices,
         };
         let vertices = mesh.to_vertices();
@@ -470,6 +607,7 @@ mod tests {
             colors: Some(colors),
             normals: Some(normals),
             uvs: Some(uvs),
+            tangents: None,
             indices,
         };
         let vertices = mesh.to_vertices();
@@ -501,6 +639,7 @@ mod tests {
             colors: Some(colors),
             normals: None,
             uvs: None,
+            tangents: None,
             indices,
         };
         let vertices = mesh.to_vertices();

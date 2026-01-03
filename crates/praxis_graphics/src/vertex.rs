@@ -11,18 +11,19 @@ use vulkano::pipeline::graphics::vertex_input::Vertex;
 /// - A normal vector for lighting calculations
 /// - An RGB color value
 /// - UV texture coordinates
+/// - A tangent vector for normal mapping
 ///
 /// # Memory Layout
 ///
 /// The struct is marked with `#[repr(C)]` to ensure predictable memory layout:
 ///
 /// ```text
-/// Vertex3D (44 bytes total):
-/// ┌──────────────────┬──────────────────┬──────────────────┬──────────────┐
-/// │ position (12b)   │ normal (12b)     │ color (12b)      │ uv (8b)      │
-/// ├──────┬──────┬────┼──────┬──────┬────┼──────┬──────┬────┼──────┬───────┤
-/// │ x:f32│ y:f32│z:f32│ x:f32│ y:f32│z:f32│ r:f32│ g:f32│b:f32│ u:f32│ v:f32│
-/// └──────┴──────┴────┴──────┴──────┴────┴──────┴──────┴────┴──────┴───────┘
+/// Vertex3D (64 bytes total):
+/// ┌──────────────────┬──────────────────┬──────────────────┬──────────────┬──────────────────┬────────┐
+/// │ position (12b)   │ normal (12b)     │ color (12b)      │ uv (8b)      │ tangent (16b)    │pad (4b)│
+/// ├──────┬──────┬────┼──────┬──────┬────┼──────┬──────┬────┼──────┬───────┼──────┬──────┬────┬────┬────┤
+/// │ x:f32│ y:f32│z:f32│ x:f32│ y:f32│z:f32│ r:f32│ g:f32│b:f32│ u:f32│ v:f32│ x:f32│ y:f32│z:f32│w:f32│pad│
+/// └──────┴──────┴────┴──────┴──────┴────┴──────┴──────┴────┴──────┴───────┴──────┴──────┴────┴────┴────┘
 /// ```
 ///
 /// # Shader Binding
@@ -32,6 +33,7 @@ use vulkano::pipeline::graphics::vertex_input::Vertex;
 /// - `location = 1`: normal (vec3)
 /// - `location = 2`: color (vec3)
 /// - `location = 3`: uv (vec2)
+/// - `location = 4`: tangent (vec4, w component indicates handedness for bitangent)
 ///
 /// # Texture Coordinates
 ///
@@ -46,6 +48,12 @@ use vulkano::pipeline::graphics::vertex_input::Vertex;
 ///   └──────────────> u
 ///     0            1
 /// ```
+///
+/// # Tangent Space
+///
+/// The tangent vector (with normal) forms the TBN (Tangent-Bitangent-Normal) matrix
+/// for normal mapping. The tangent.w component stores the handedness (+1 or -1) for
+/// computing the bitangent: `bitangent = cross(normal, tangent.xyz) * tangent.w`
 ///
 /// # Example
 ///
@@ -84,6 +92,18 @@ pub struct Vertex3D {
     /// on the sampler configuration.
     #[format(R32G32_SFLOAT)]
     pub uv: [f32; 2],
+
+    /// Tangent vector for normal mapping (xyz) with handedness (w).
+    ///
+    /// The tangent vector, along with the normal, forms the tangent space basis.
+    /// The w component stores the handedness (+1.0 or -1.0) used to compute the
+    /// bitangent: `bitangent = cross(normal, tangent.xyz) * tangent.w`
+    #[format(R32G32B32A32_SFLOAT)]
+    pub tangent: [f32; 4],
+
+    /// Padding to ensure 64-byte alignment for optimal GPU performance.
+    #[format(R32_SFLOAT)]
+    pub _padding: f32,
 }
 
 impl Vertex3D {
@@ -106,6 +126,8 @@ impl Vertex3D {
             normal: [0.0, 1.0, 0.0],
             color,
             uv: [0.0, 0.0],
+            tangent: [1.0, 0.0, 0.0, 1.0],
+            _padding: 0.0,
         }
     }
 
@@ -122,6 +144,8 @@ impl Vertex3D {
             normal: [0.0, 1.0, 0.0],
             color,
             uv,
+            tangent: [1.0, 0.0, 0.0, 1.0],
+            _padding: 0.0,
         }
     }
 
@@ -139,6 +163,34 @@ impl Vertex3D {
             normal,
             color,
             uv,
+            tangent: [1.0, 0.0, 0.0, 1.0],
+            _padding: 0.0,
+        }
+    }
+
+    /// Creates a new vertex with all attributes including tangent.
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - 3D position in world space
+    /// * `normal` - Normal vector (should be normalized)
+    /// * `color` - RGB color values in range [0.0, 1.0]
+    /// * `uv` - Texture coordinates in range [0.0, 1.0]
+    /// * `tangent` - Tangent vector (xyz) with handedness (w: +1 or -1)
+    pub fn with_tangent(
+        position: [f32; 3],
+        normal: [f32; 3],
+        color: [f32; 3],
+        uv: [f32; 2],
+        tangent: [f32; 4],
+    ) -> Self {
+        Self {
+            position,
+            normal,
+            color,
+            uv,
+            tangent,
+            _padding: 0.0,
         }
     }
 }
@@ -190,7 +242,7 @@ mod tests {
 
     #[test]
     fn test_vertex3d_size() {
-        assert_eq!(std::mem::size_of::<Vertex3D>(), 44);
+        assert_eq!(std::mem::size_of::<Vertex3D>(), 64);
     }
 
     #[test]

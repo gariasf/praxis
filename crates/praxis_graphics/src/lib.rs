@@ -101,8 +101,8 @@
 //!
 //! The graphics pipeline supports texture sampling through:
 //!
-//! 1. **Vertex Format**: `Vertex3D` includes UV coordinates (binding location 2)
-//! 2. **Shaders**: Vertex shader passes UVs to fragment shader, which samples textures
+//! 1. **Vertex Format**: `Vertex3D` includes UV coordinates (binding location 3) and tangents (binding location 4)
+//! 2. **Shaders**: Vertex shader computes TBN matrix and passes to fragment shader for normal mapping
 //! 3. **Descriptor Sets**:
 //!    - Set 0, Binding 0: View/Projection uniform buffer
 //!    - Set 0, Binding 1: Model matrix (UniformBufferDynamic with dynamic offsets)
@@ -110,9 +110,11 @@
 //!    - Set 0, Binding 3: Lighting uniform buffer
 //!    - Set 0, Binding 4: Shadow uniform buffer
 //!    - Set 0, Binding 5-8: Shadow map samplers (one per cascade)
+//!    - Set 0, Binding 9: Normal map texture sampler
 //!    - Set 1, Binding 0: Material properties uniform buffer
-//! 4. **Mesh Data**: `MeshData` supports UV coordinates via `with_uvs()` and `with_colors_and_uvs()`
+//! 4. **Mesh Data**: `MeshData` supports UV coordinates and tangents via `calculate_tangents()`
 //! 5. **Primitives**: Textured primitives like `textured_cube_mesh()` and `textured_quad_mesh()`
+//! 6. **Normal Mapping**: TBN matrix computed in vertex shader for per-pixel normal perturbation
 //!
 //! # Lighting System
 //!
@@ -519,6 +521,12 @@ impl RenderContext {
             .create_default_white_texture()
             .map_err(|e| eyre::eyre!("Failed to create default white texture: {}", e))?;
 
+        // Create default flat normal map texture
+        debug!("Creating default flat normal map texture");
+        texture_manager
+            .create_default_flat_normal()
+            .map_err(|e| eyre::eyre!("Failed to create default flat normal texture: {}", e))?;
+
         // Initialize material manager
         debug!("Creating material manager");
         let material_manager = material::MaterialManager::new();
@@ -837,6 +845,11 @@ impl RenderContext {
             .get_texture("_default_white")
             .ok_or_else(|| eyre::eyre!("Default white texture not found"))?;
 
+        let default_normal_map = self
+            .texture_manager
+            .get_texture("_default_flat_normal")
+            .ok_or_else(|| eyre::eyre!("Default flat normal texture not found"))?;
+
         let mut draw_list: Vec<(
             Arc<DescriptorSet>,
             Arc<DescriptorSet>,
@@ -887,6 +900,11 @@ impl RenderContext {
                         texture.sampler.clone(),
                     ),
                     WriteDescriptorSet::buffer(3, self.lighting_buffer.buffer().clone()),
+                    WriteDescriptorSet::image_view_sampler(
+                        9,
+                        default_normal_map.view.clone(),
+                        default_normal_map.sampler.clone(),
+                    ),
                 ],
                 [],
             )

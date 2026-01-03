@@ -115,6 +115,8 @@ layout(location = 0) in vec3 v_world_pos;  // Fragment position in world space
 layout(location = 1) in vec3 v_normal;     // Interpolated normal in world space
 layout(location = 2) in vec3 v_color;      // Interpolated vertex color
 layout(location = 3) in vec2 v_uv;         // Interpolated UV coordinates
+layout(location = 4) in vec3 v_tangent;    // Interpolated tangent in world space
+layout(location = 5) in vec3 v_bitangent;  // Interpolated bitangent in world space
 
 // ============================================================================
 // Output Variables
@@ -145,6 +147,11 @@ layout(set = 0, binding = 1, std140) uniform Model {
 // Texture sampler at binding 2
 // Samples the albedo (base color) texture at the given UV coordinates
 layout(set = 0, binding = 2) uniform sampler2D albedo_texture;
+
+// Normal map texture sampler at binding 9
+// Samples the normal map texture to perturb surface normals for detail
+// Normal maps store normals in tangent space as RGB values [0,1] mapped from [-1,1]
+layout(set = 0, binding = 9) uniform sampler2D normal_map;
 
 // ============================================================================
 // Material Properties Uniform Buffer
@@ -623,12 +630,32 @@ void main() {
     float alpha = tex_color.a * material.base_color.a;
     
     // ========================================================================
-    // Step 2: Prepare Lighting Inputs
+    // Step 2: Prepare Lighting Inputs with Normal Mapping
     // ========================================================================
     
-    // Normalize the interpolated normal (interpolation can change length)
-    // Normals must be unit length for lighting calculations to be correct
-    vec3 normal = normalize(v_normal);
+    // Sample the normal map to get the tangent-space normal
+    // Normal maps store normals as RGB [0,1] which we need to map to [-1,1]
+    vec3 tangent_normal = texture(normal_map, v_uv).rgb;
+    tangent_normal = tangent_normal * 2.0 - 1.0;  // Map from [0,1] to [-1,1]
+    
+    // Construct TBN (Tangent-Bitangent-Normal) matrix to transform from tangent space to world space
+    // This matrix is built from the orthonormal basis vectors at this fragment
+    // T (tangent) points in the direction of increasing U
+    // B (bitangent) points in the direction of increasing V
+    // N (normal) points perpendicular to the surface
+    //
+    // We need to re-normalize these vectors because interpolation doesn't preserve length
+    vec3 T = normalize(v_tangent);
+    vec3 B = normalize(v_bitangent);
+    vec3 N = normalize(v_normal);
+    
+    // Build the TBN matrix - transforms from tangent space to world space
+    // Each column is one of the basis vectors
+    mat3 TBN = mat3(T, B, N);
+    
+    // Transform the tangent-space normal to world space using the TBN matrix
+    // This perturbs the geometric normal based on the normal map detail
+    vec3 normal = normalize(TBN * tangent_normal);
     
     // Calculate view direction (from fragment toward camera)
     // Used for specular calculations (highlights depend on view angle)

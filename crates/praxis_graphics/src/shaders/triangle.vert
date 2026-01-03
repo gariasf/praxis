@@ -126,6 +126,7 @@ layout(location = 0) in vec3 position;  // Vertex position in model space
 layout(location = 1) in vec3 normal;    // Vertex normal in model space (unit vector)
 layout(location = 2) in vec3 color;     // Vertex color (RGB, range [0,1])
 layout(location = 3) in vec2 uv;        // Texture coordinates (range typically [0,1])
+layout(location = 4) in vec4 tangent;   // Vertex tangent in model space (xyz) + handedness (w)
 
 // ============================================================================
 // Output Variables (to Fragment Shader)
@@ -136,6 +137,8 @@ layout(location = 0) out vec3 v_world_pos;  // Fragment position in world space
 layout(location = 1) out vec3 v_normal;     // Fragment normal in world space
 layout(location = 2) out vec3 v_color;      // Fragment color (interpolated)
 layout(location = 3) out vec2 v_uv;         // Fragment UV coordinates (interpolated)
+layout(location = 4) out vec3 v_tangent;    // Fragment tangent in world space
+layout(location = 5) out vec3 v_bitangent;  // Fragment bitangent in world space
 
 // ============================================================================
 // Per-Frame Uniform Buffer (View and Projection)
@@ -249,6 +252,21 @@ void main() {
     // The fragment shader will re-normalize this vector since interpolation
     // can change its length.
     v_normal = mat3(model_ubo.model) * normal;
+    
+    // ========================================================================
+    // Step 3b: Transform tangent and compute bitangent for TBN matrix
+    // ========================================================================
+    
+    // Transform tangent to world space using the same 3x3 model matrix
+    // Tangent is a direction vector like the normal, so it doesn't need translation
+    vec3 world_tangent = mat3(model_ubo.model) * tangent.xyz;
+    v_tangent = world_tangent;
+    
+    // Compute bitangent in world space using the cross product
+    // bitangent = cross(normal, tangent) * handedness
+    // The handedness (tangent.w) handles mirrored UV coordinates
+    // If UVs are mirrored, handedness will be -1.0, otherwise 1.0
+    v_bitangent = cross(v_normal, world_tangent) * tangent.w;
     
     // ========================================================================
     // Step 4: Pass world position to fragment shader

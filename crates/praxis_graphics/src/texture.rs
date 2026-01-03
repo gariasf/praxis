@@ -242,6 +242,27 @@ impl Texture {
             vec![255, 255, 255, 255],
         )
     }
+
+    /// Creates a 1x1 flat normal map texture.
+    ///
+    /// This normal map represents a flat surface with normal pointing straight up
+    /// in tangent space: (0, 0, 1) encoded as RGB (128, 128, 255).
+    /// This is useful as a default when no normal map is specified.
+    pub fn flat_normal(
+        allocator: Arc<dyn MemoryAllocator>,
+        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+        queue: Arc<Queue>,
+    ) -> Result<Self> {
+        trace!("Creating default flat normal map texture");
+        Self::from_rgba8(
+            allocator,
+            command_buffer_allocator,
+            queue,
+            1,
+            1,
+            vec![128, 128, 255, 255],
+        )
+    }
 }
 
 /// Texture asset manager that caches loaded textures.
@@ -411,6 +432,20 @@ impl TextureManager {
             self.queue.clone(),
         )?;
         self.add_texture("_default_white", texture);
+        Ok(())
+    }
+
+    /// Creates a default flat normal map texture and adds it to the cache.
+    ///
+    /// This is useful for objects that don't have a normal map assigned.
+    /// The flat normal map represents (0, 0, 1) in tangent space (straight up).
+    pub fn create_default_flat_normal(&mut self) -> Result<()> {
+        let texture = Texture::flat_normal(
+            self.allocator.clone(),
+            self.command_buffer_allocator.clone(),
+            self.queue.clone(),
+        )?;
+        self.add_texture("_default_flat_normal", texture);
         Ok(())
     }
 }
