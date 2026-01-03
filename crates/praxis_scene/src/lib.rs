@@ -28,7 +28,7 @@
 //! let scene_def = scene_loader.load_from_file("assets/scenes/level1.ron").unwrap();
 //!
 //! // Spawn scene entities into the world
-//! let scene_handle = scene_manager.spawn_scene(&mut world, scene_def).unwrap();
+//! let scene_handle = scene_manager.spawn_scene(&mut world, &scene_def).unwrap();
 //!
 //! // Later, unload the scene
 //! scene_manager.unload_scene(&mut world, &scene_handle);

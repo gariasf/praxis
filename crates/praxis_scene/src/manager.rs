@@ -1,11 +1,5 @@
 //! Scene manager for spawning and managing scene instances.
 
-#![allow(clippy::needless_pass_by_value)]
-#![allow(clippy::unused_self)]
-#![allow(clippy::only_used_in_recursion)]
-#![allow(clippy::unnecessary_wraps)]
-#![allow(clippy::option_if_let_else)]
-
 use crate::{
     components::{Scene, SceneHandle},
     definition::{CameraType, EntityDefinition, SceneDefinition},
@@ -33,7 +27,7 @@ use std::collections::HashMap;
 /// let mut manager = SceneManager::new();
 ///
 /// let scene_def = SceneDefinition::new("TestScene");
-/// let handle = manager.spawn_scene(&mut world, scene_def).unwrap();
+/// let handle = manager.spawn_scene(&mut world, &scene_def).unwrap();
 ///
 /// // Later, unload the scene
 /// manager.unload_scene(&mut world, &handle);
@@ -68,7 +62,7 @@ impl SceneManager {
     pub fn spawn_scene(
         &mut self,
         world: &mut World,
-        scene_def: SceneDefinition,
+        scene_def: &SceneDefinition,
     ) -> Result<SceneHandle> {
         let handle = SceneHandle::generate();
         info!(
@@ -80,7 +74,7 @@ impl SceneManager {
         let mut root_entities = Vec::new();
 
         for entity_def in &scene_def.entities {
-            let entity = self.spawn_entity_recursive(world, entity_def, &handle, None)?;
+            let entity = Self::spawn_entity_recursive(world, entity_def, &handle, None)?;
             root_entities.push(entity);
         }
 
@@ -97,16 +91,15 @@ impl SceneManager {
 
     /// Spawns an entity and its children recursively.
     fn spawn_entity_recursive(
-        &self,
         world: &mut World,
         entity_def: &EntityDefinition,
         scene_handle: &SceneHandle,
         parent: Option<Entity>,
     ) -> Result<Entity> {
-        let entity = self.spawn_entity(world, entity_def, scene_handle, parent)?;
+        let entity = Self::spawn_entity(world, entity_def, scene_handle, parent);
 
         for child_def in &entity_def.children {
-            self.spawn_entity_recursive(world, child_def, scene_handle, Some(entity))?;
+            Self::spawn_entity_recursive(world, child_def, scene_handle, Some(entity))?;
         }
 
         Ok(entity)
@@ -114,12 +107,11 @@ impl SceneManager {
 
     /// Spawns a single entity from a definition.
     fn spawn_entity(
-        &self,
         world: &mut World,
         entity_def: &EntityDefinition,
         scene_handle: &SceneHandle,
         parent: Option<Entity>,
-    ) -> Result<Entity> {
+    ) -> Entity {
         let mut entity_builder = world.spawn_empty();
 
         entity_builder.insert(Scene(scene_handle.clone()));
@@ -200,15 +192,13 @@ impl SceneManager {
             });
         }
 
-        let visibility = if let Some(visible) = entity_def.visible {
+        let visibility = entity_def.visible.map_or(Visibility::Visible, |visible| {
             if visible {
                 Visibility::Visible
             } else {
                 Visibility::Hidden
             }
-        } else {
-            Visibility::Visible
-        };
+        });
         entity_builder.insert(visibility);
 
         if entity_def.active.unwrap_or(true) {
@@ -227,7 +217,7 @@ impl SceneManager {
             entity_def.name.as_deref().unwrap_or("<unnamed>")
         );
 
-        Ok(entity)
+        entity
     }
 
     /// Unloads a scene, removing all its entities from the world.
@@ -241,27 +231,30 @@ impl SceneManager {
     ///
     /// Returns `true` if the scene was found and unloaded, `false` if the scene handle was not found.
     pub fn unload_scene(&mut self, world: &mut World, handle: &SceneHandle) -> bool {
-        if let Some(root_entities) = self.scenes.remove(handle) {
-            info!("Unloading scene '{}'", handle.id());
+        self.scenes.remove(handle).map_or_else(
+            || {
+                debug!("Scene '{}' not found in manager", handle.id());
+                false
+            },
+            |root_entities| {
+                info!("Unloading scene '{}'", handle.id());
 
-            for entity in root_entities {
-                self.despawn_recursive(world, entity);
-            }
+                for entity in root_entities {
+                    Self::despawn_recursive(world, entity);
+                }
 
-            debug!("Scene '{}' unloaded", handle.id());
-            true
-        } else {
-            debug!("Scene '{}' not found in manager", handle.id());
-            false
-        }
+                debug!("Scene '{}' unloaded", handle.id());
+                true
+            },
+        )
     }
 
     /// Despawns an entity and all its descendants recursively.
-    fn despawn_recursive(&self, world: &mut World, entity: Entity) {
+    fn despawn_recursive(world: &mut World, entity: Entity) {
         if let Some(children) = world.get::<Children>(entity) {
             let children_vec: Vec<Entity> = children.0.clone();
             for child in children_vec {
-                self.despawn_recursive(world, child);
+                Self::despawn_recursive(world, child);
             }
         }
 
@@ -314,7 +307,7 @@ mod tests {
                 .with_transform(TransformDef::from_translation(1.0, 2.0, 3.0)),
         );
 
-        let handle = manager.spawn_scene(&mut world, scene).unwrap();
+        let handle = manager.spawn_scene(&mut world, &scene).unwrap();
 
         assert!(manager.is_scene_loaded(&handle));
         assert_eq!(manager.loaded_scene_count(), 1);
@@ -342,7 +335,7 @@ mod tests {
         let mut scene = SceneDefinition::new("Hierarchy Scene");
         scene.add_entity(parent);
 
-        let handle = manager.spawn_scene(&mut world, scene).unwrap();
+        let handle = manager.spawn_scene(&mut world, &scene).unwrap();
 
         assert!(manager.is_scene_loaded(&handle));
 
@@ -361,8 +354,8 @@ mod tests {
         let scene1 = SceneDefinition::new("Scene 1");
         let scene2 = SceneDefinition::new("Scene 2");
 
-        let handle1 = manager.spawn_scene(&mut world, scene1).unwrap();
-        let handle2 = manager.spawn_scene(&mut world, scene2).unwrap();
+        let handle1 = manager.spawn_scene(&mut world, &scene1).unwrap();
+        let handle2 = manager.spawn_scene(&mut world, &scene2).unwrap();
 
         assert_eq!(manager.loaded_scene_count(), 2);
         assert!(manager.is_scene_loaded(&handle1));

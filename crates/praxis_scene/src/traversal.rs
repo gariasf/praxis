@@ -1,7 +1,5 @@
 //! Scene graph traversal utilities.
 
-#![allow(clippy::option_if_let_else)]
-
 use praxis_ecs::{Children, Entity, Parent, World};
 use std::collections::VecDeque;
 
@@ -259,11 +257,10 @@ pub fn get_entity_depth(world: &World, entity: Entity) -> usize {
 pub fn find_entities_by_name(world: &World, name: &str, root: Option<Entity>) -> Vec<Entity> {
     let mut results = Vec::new();
 
-    let entities_to_check: Vec<Entity> = if let Some(root_entity) = root {
-        SceneGraphIterator::new(world, root_entity, TraversalOrder::DepthFirst).collect()
-    } else {
-        world.iter_entities().map(|e| e.id()).collect()
-    };
+    let entities_to_check: Vec<Entity> = root.map_or_else(
+        || world.iter_entities().map(|e| e.id()).collect(),
+        |root_entity| SceneGraphIterator::new(world, root_entity, TraversalOrder::DepthFirst).collect(),
+    );
 
     for entity in entities_to_check {
         if let Some(entity_name) = world.get::<praxis_ecs::Name>(entity) {
