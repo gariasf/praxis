@@ -6,7 +6,10 @@
       "Bash(wc:*)",
       "Bash(find:*)",
       "mcp__filesystem__list_directory",
-      "mcp__filesystem__edit_file"
+      "mcp__filesystem__edit_file",
+      "Bash(cargo check:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo test:*)"
     ],
     "deny": [],
     "ask": []
