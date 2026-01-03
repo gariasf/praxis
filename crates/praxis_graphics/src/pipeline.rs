@@ -43,6 +43,7 @@ use vulkano::{
     pipeline::{
         graphics::{
             color_blend::{ColorBlendAttachmentState, ColorBlendState},
+            depth_stencil::{CompareOp, DepthState, DepthStencilState},
             input_assembly::{InputAssemblyState, PrimitiveTopology},
             multisample::MultisampleState,
             rasterization::{CullMode, FrontFace, RasterizationState},
@@ -192,6 +193,15 @@ where
 
         // Multisampling (anti-aliasing) - disabled for now
         multisample_state: Some(MultisampleState::default()),
+
+        // Depth testing: closer objects pass the test and overwrite farther objects
+        depth_stencil_state: Some(DepthStencilState {
+            depth: Some(DepthState {
+                compare_op: CompareOp::Less,
+                write_enable: true,
+            }),
+            ..Default::default()
+        }),
 
         // This uses standard alpha blending: finalColor = srcColor * srcAlpha + dstColor * (1 - srcAlpha)
         color_blend_state: Some(ColorBlendState::with_attachment_states(
