@@ -113,3 +113,35 @@ pub mod skybox_fs {
         path: "src/shaders/skybox.frag"
     }
 }
+
+/// Compiled vertex shader for deferred rendering geometry pass.
+pub mod deferred_geometry_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/shaders/deferred_geometry.vert"
+    }
+}
+
+/// Compiled fragment shader for deferred rendering geometry pass.
+pub mod deferred_geometry_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/deferred_geometry.frag"
+    }
+}
+
+/// Compiled vertex shader for deferred rendering lighting pass.
+pub mod deferred_lighting_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/shaders/deferred_lighting.vert"
+    }
+}
+
+/// Compiled fragment shader for deferred rendering lighting pass.
+pub mod deferred_lighting_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/deferred_lighting.frag"
+    }
+}

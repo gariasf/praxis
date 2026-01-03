@@ -14,6 +14,7 @@
 //! - `texture`: Texture loading and management
 //! - `material`: Material system with texture support and descriptor set management
 //! - `lighting`: Lighting uniforms and buffer management
+//! - `deferred`: Deferred rendering with G-buffer passes
 //! - `post_process`: Post-processing framework for screen-space effects
 //!
 //! # Unified Rendering API
@@ -198,6 +199,33 @@
 //! uses reversed depth testing to ensure the skybox always appears at infinite
 //! distance, behind all other geometry.
 //!
+//! # Deferred Rendering System
+//!
+//! The deferred rendering system provides an alternative rendering path optimized
+//! for many-light scenarios:
+//!
+//! - **`DeferredRenderer`**: Complete deferred rendering pipeline
+//! - **`GBuffer`**: Multiple render targets storing geometry data
+//! - **Geometry Pass**: Renders scene to G-buffer (albedo, normal, metallic-roughness, depth)
+//! - **Lighting Pass**: Full-screen pass accumulating lighting from all lights
+//!
+//! ## Benefits Over Forward Rendering
+//!
+//! - **Many Lights**: Lighting cost is O(lights × pixels) instead of O(lights × triangles)
+//! - **Efficient Culling**: Only visible pixels are lit, occluded geometry is skipped
+//! - **Decoupled Shading**: Geometry and lighting calculations are independent
+//!
+//! ## Trade-offs
+//!
+//! - **Memory**: Requires multiple full-screen render targets (G-buffer)
+//! - **Bandwidth**: Multiple render target writes and reads
+//! - **Transparency**: Difficult to handle (requires hybrid forward pass)
+//! - **MSAA**: Expensive with multiple render targets
+//!
+//! The deferred renderer can be used alongside the forward renderer, allowing
+//! applications to choose the best rendering path for their needs or use both
+//! (e.g., deferred for opaque geometry, forward for transparent objects).
+//!
 //! # Rendering Flow
 //!
 //! ```text
@@ -216,6 +244,7 @@
 //! ```
 
 mod device;
+pub mod deferred;
 pub mod lighting;
 pub mod material;
 pub mod mesh;
@@ -1366,6 +1395,7 @@ impl RenderContext {
 }
 
 // Public re-exports
+pub use deferred::{DeferredRenderer, GBuffer};
 pub use lighting::{
     DirectionalLightData, LightingUniformBuffer, LightingUniforms, PointLightData,
     MAX_DIRECTIONAL_LIGHTS, MAX_POINT_LIGHTS,

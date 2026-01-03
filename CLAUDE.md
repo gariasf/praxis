@@ -32,6 +32,7 @@ cargo run --example audio_demo
 cargo run --example skeletal_animation_demo
 cargo run --example animation_blending_demo
 cargo run --example gltf_animation_loader_demo
+cargo run --example deferred_demo
 
 # Check code without building
 cargo check --all
@@ -142,6 +143,30 @@ The method automatically handles:
 - Dynamic lighting updates
 
 Examples demonstrate various usage patterns.
+
+#### Deferred Rendering
+
+The engine provides a complete deferred rendering pipeline alongside forward rendering:
+
+- **`DeferredRenderer`**: Manages G-buffer and lighting passes
+- **`GBuffer`**: Multiple render targets (albedo, normal, metallic-roughness, depth)
+- **Geometry Pass**: Renders scene geometry to G-buffer
+- **Lighting Pass**: Full-screen accumulation of all lights from G-buffer data
+
+**Benefits:**
+- **Many Lights**: O(lights × pixels) instead of O(lights × triangles)
+- **Efficient Culling**: Only visible pixels are lit
+- **Decoupled Shading**: Geometry and lighting are independent
+
+**Trade-offs:**
+- Higher memory usage (multiple full-screen render targets)
+- Higher bandwidth (multiple render target writes/reads)
+- Transparency requires hybrid forward rendering
+- MSAA is expensive with multiple render targets
+
+Applications can choose between forward and deferred rendering or use both (e.g., deferred for opaque, forward for transparent).
+
+See `praxis_graphics::deferred` and `examples/deferred_demo.rs` for usage.
 
 ### ECS Integration
 
