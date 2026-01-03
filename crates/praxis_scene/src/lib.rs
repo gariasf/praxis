@@ -77,6 +77,9 @@ mod loader;
 mod manager;
 mod traversal;
 
+#[cfg(test)]
+mod animation_tests;
+
 pub use animation::*;
 pub use components::*;
 pub use definition::*;

@@ -67,6 +67,9 @@ mod components;
 mod manager;
 mod systems;
 
+#[cfg(test)]
+mod audio_tests;
+
 pub use components::*;
 pub use manager::*;
 pub use systems::*;

@@ -244,11 +244,11 @@ pub fn update_listener_system(
 
 /// Spatial audio parameters calculated from source and listener positions.
 #[derive(Debug, Clone, Copy)]
-struct SpatialParams {
+pub struct SpatialParams {
     /// Volume attenuation factor (0.0 to 1.0).
-    attenuation: f32,
+    pub attenuation: f32,
     /// Stereo panning (-1.0 left, 0.0 center, 1.0 right).
-    panning: f32,
+    pub panning: f32,
 }
 
 /// Calculates spatial audio parameters based on source and listener positions.
@@ -266,7 +266,8 @@ struct SpatialParams {
 /// # Returns
 ///
 /// Spatial parameters including attenuation and panning
-fn calculate_spatial_params(
+#[must_use]
+pub fn calculate_spatial_params(
     source_pos: Vec3,
     listener_pos: Vec3,
     reference_distance: f32,
@@ -311,7 +312,8 @@ fn calculate_spatial_params(
 /// # Returns
 ///
 /// Playback rate factor (1.0 = normal, >1.0 = higher pitch, <1.0 = lower pitch)
-fn calculate_doppler_factor(
+#[must_use]
+pub fn calculate_doppler_factor(
     previous_pos: Vec3,
     current_pos: Vec3,
     listener_pos: Vec3,
@@ -347,7 +349,7 @@ fn calculate_doppler_factor(
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
 
     #[test]
