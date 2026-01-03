@@ -673,4 +673,386 @@ mod tests {
         let vertices = mesh.to_vertices();
         assert_eq!(vertices.len(), 3);
     }
+
+    #[test]
+    fn test_calculate_tangents_simple_quad() {
+        let positions = vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ];
+        let normals = vec![
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+        ];
+        let uvs = vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+        let indices = vec![0, 1, 2, 0, 2, 3];
+
+        let mut mesh = MeshData {
+            positions,
+            colors: None,
+            normals: Some(normals),
+            uvs: Some(uvs),
+            tangents: None,
+            indices,
+        };
+
+        let result = mesh.calculate_tangents();
+        assert!(result.is_ok());
+        assert!(mesh.tangents.is_some());
+
+        let tangents = mesh.tangents.unwrap();
+        assert_eq!(tangents.len(), 4);
+
+        // For a flat quad in XY plane with standard UVs, tangent should point along +X
+        for tangent in &tangents {
+            assert!((tangent[0] - 1.0).abs() < 0.1, "Tangent X should be ~1.0");
+            assert!(tangent[1].abs() < 0.1, "Tangent Y should be ~0.0");
+            assert!(tangent[2].abs() < 0.1, "Tangent Z should be ~0.0");
+            // Handedness should be +1 or -1
+            assert!(tangent[3].abs() > 0.5);
+        }
+    }
+
+    #[test]
+    fn test_calculate_tangents_requires_normals() {
+        let positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]];
+        let uvs = vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]];
+        let indices = vec![0, 1, 2];
+
+        let mut mesh = MeshData {
+            positions,
+            colors: None,
+            normals: None,
+            uvs: Some(uvs),
+            tangents: None,
+            indices,
+        };
+
+        let result = mesh.calculate_tangents();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Normals required"));
+    }
+
+    #[test]
+    fn test_calculate_tangents_requires_uvs() {
+        let positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]];
+        let normals = vec![[0.0, 0.0, 1.0], [0.0, 0.0, 1.0], [0.0, 0.0, 1.0]];
+        let indices = vec![0, 1, 2];
+
+        let mut mesh = MeshData {
+            positions,
+            colors: None,
+            normals: Some(normals),
+            uvs: None,
+            tangents: None,
+            indices,
+        };
+
+        let result = mesh.calculate_tangents();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("UVs required"));
+    }
+
+    #[test]
+    fn test_calculate_tangents_orthogonality() {
+        let positions = vec![
+            [0.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+            [2.0, 2.0, 0.0],
+            [0.0, 2.0, 0.0],
+        ];
+        let normals = vec![
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+        ];
+        let uvs = vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+        let indices = vec![0, 1, 2, 0, 2, 3];
+
+        let mut mesh = MeshData {
+            positions,
+            colors: None,
+            normals: Some(normals.clone()),
+            uvs: Some(uvs),
+            tangents: None,
+            indices,
+        };
+
+        mesh.calculate_tangents().unwrap();
+        let tangents = mesh.tangents.as_ref().unwrap();
+
+        // Verify tangent is orthogonal to normal
+        for i in 0..4 {
+            let t = tangents[i];
+            let n = normals[i];
+            let dot = t[0] * n[0] + t[1] * n[1] + t[2] * n[2];
+            assert!(
+                dot.abs() < 0.01,
+                "Tangent and normal should be orthogonal, dot={} at vertex {}",
+                dot,
+                i
+            );
+        }
+    }
+
+    #[test]
+    fn test_calculate_tangents_normalized() {
+        let positions = vec![
+            [0.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [5.0, 5.0, 0.0],
+        ];
+        let normals = vec![[0.0, 0.0, 1.0], [0.0, 0.0, 1.0], [0.0, 0.0, 1.0]];
+        let uvs = vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]];
+        let indices = vec![0, 1, 2];
+
+        let mut mesh = MeshData {
+            positions,
+            colors: None,
+            normals: Some(normals),
+            uvs: Some(uvs),
+            tangents: None,
+            indices,
+        };
+
+        mesh.calculate_tangents().unwrap();
+        let tangents = mesh.tangents.as_ref().unwrap();
+
+        // Verify tangent vectors are normalized (length ~1.0)
+        for (i, tangent) in tangents.iter().enumerate() {
+            let length = (tangent[0] * tangent[0] + tangent[1] * tangent[1] + tangent[2] * tangent[2]).sqrt();
+            assert!(
+                (length - 1.0).abs() < 0.01,
+                "Tangent at vertex {} should be normalized, length={}",
+                i,
+                length
+            );
+        }
+    }
+
+    #[test]
+    fn test_calculate_tangents_handedness() {
+        let positions = vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+        ];
+        let normals = vec![[0.0, 0.0, 1.0], [0.0, 0.0, 1.0], [0.0, 0.0, 1.0]];
+        let uvs = vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]];
+        let indices = vec![0, 1, 2];
+
+        let mut mesh = MeshData {
+            positions,
+            colors: None,
+            normals: Some(normals),
+            uvs: Some(uvs),
+            tangents: None,
+            indices,
+        };
+
+        mesh.calculate_tangents().unwrap();
+        let tangents = mesh.tangents.as_ref().unwrap();
+
+        // Verify handedness is either +1 or -1
+        for (i, tangent) in tangents.iter().enumerate() {
+            let w = tangent[3];
+            assert!(
+                (w - 1.0).abs() < 0.01 || (w + 1.0).abs() < 0.01,
+                "Tangent handedness at vertex {} should be +1 or -1, got {}",
+                i,
+                w
+            );
+        }
+    }
+
+    #[test]
+    fn test_calculate_tangents_multiple_triangles() {
+        let positions = vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.5, 1.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+            [1.5, 1.0, 0.0],
+        ];
+        let normals = vec![
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+        ];
+        let uvs = vec![
+            [0.0, 0.0],
+            [0.5, 0.0],
+            [0.25, 1.0],
+            [0.5, 0.0],
+            [1.0, 0.0],
+            [0.75, 1.0],
+        ];
+        let indices = vec![0, 1, 2, 3, 4, 5];
+
+        let mut mesh = MeshData {
+            positions,
+            colors: None,
+            normals: Some(normals),
+            uvs: Some(uvs),
+            tangents: None,
+            indices,
+        };
+
+        let result = mesh.calculate_tangents();
+        assert!(result.is_ok());
+        assert!(mesh.tangents.is_some());
+
+        let tangents = mesh.tangents.unwrap();
+        assert_eq!(tangents.len(), 6);
+    }
+
+    #[test]
+    fn test_calculate_tangents_shared_vertex() {
+        let positions = vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.5, 1.0, 0.0],
+            [0.5, -1.0, 0.0],
+        ];
+        let normals = vec![
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+        ];
+        let uvs = vec![[0.0, 0.5], [1.0, 0.5], [0.5, 1.0], [0.5, 0.0]];
+        let indices = vec![0, 1, 2, 0, 1, 3];
+
+        let mut mesh = MeshData {
+            positions,
+            colors: None,
+            normals: Some(normals),
+            uvs: Some(uvs),
+            tangents: None,
+            indices,
+        };
+
+        let result = mesh.calculate_tangents();
+        assert!(result.is_ok());
+
+        let tangents = mesh.tangents.as_ref().unwrap();
+        assert_eq!(tangents.len(), 4);
+
+        // Shared vertices (0 and 1) should accumulate tangents from both triangles
+        for tangent in tangents {
+            let length = (tangent[0] * tangent[0] + tangent[1] * tangent[1] + tangent[2] * tangent[2]).sqrt();
+            assert!((length - 1.0).abs() < 0.01);
+        }
+    }
+
+    #[test]
+    fn test_calculate_tangents_degenerate_uv() {
+        let positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]];
+        let normals = vec![[0.0, 0.0, 1.0], [0.0, 0.0, 1.0], [0.0, 0.0, 1.0]];
+        let uvs = vec![[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]];
+        let indices = vec![0, 1, 2];
+
+        let mut mesh = MeshData {
+            positions,
+            colors: None,
+            normals: Some(normals),
+            uvs: Some(uvs),
+            tangents: None,
+            indices,
+        };
+
+        let result = mesh.calculate_tangents();
+        assert!(result.is_ok());
+
+        let tangents = mesh.tangents.as_ref().unwrap();
+        for tangent in tangents {
+            assert!(tangent[0].is_finite());
+            assert!(tangent[1].is_finite());
+            assert!(tangent[2].is_finite());
+            assert!(tangent[3].is_finite());
+        }
+    }
+
+    #[test]
+    fn test_mesh_data_with_tangents() {
+        let positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]];
+        let tangents = vec![[1.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 1.0]];
+        let indices = vec![0, 1];
+
+        let mesh = MeshData {
+            positions,
+            colors: None,
+            normals: None,
+            uvs: None,
+            tangents: Some(tangents.clone()),
+            indices,
+        };
+
+        let vertices = mesh.to_vertices();
+        assert_eq!(vertices.len(), 2);
+        assert_eq!(vertices[0].tangent, tangents[0]);
+        assert_eq!(vertices[1].tangent, tangents[1]);
+    }
+
+    #[test]
+    fn test_mesh_data_default_tangent() {
+        let positions = vec![[0.0, 0.0, 0.0]];
+        let indices = vec![0];
+
+        let mesh = MeshData::new(positions, indices);
+        let vertices = mesh.to_vertices();
+
+        assert_eq!(vertices.len(), 1);
+        assert_eq!(vertices[0].tangent, [1.0, 0.0, 0.0, 1.0]);
+    }
+
+    #[test]
+    fn test_calculate_tangents_cube_face() {
+        let positions = vec![
+            [-1.0, -1.0, 1.0],
+            [1.0, -1.0, 1.0],
+            [1.0, 1.0, 1.0],
+            [-1.0, 1.0, 1.0],
+        ];
+        let normals = vec![
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+        ];
+        let uvs = vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+        let indices = vec![0, 1, 2, 0, 2, 3];
+
+        let mut mesh = MeshData {
+            positions,
+            colors: None,
+            normals: Some(normals.clone()),
+            uvs: Some(uvs),
+            tangents: None,
+            indices,
+        };
+
+        mesh.calculate_tangents().unwrap();
+        let tangents = mesh.tangents.as_ref().unwrap();
+
+        for i in 0..4 {
+            let t = [tangents[i][0], tangents[i][1], tangents[i][2]];
+            let n = normals[i];
+
+            let t_len = (t[0] * t[0] + t[1] * t[1] + t[2] * t[2]).sqrt();
+            assert!((t_len - 1.0).abs() < 0.01);
+
+            let dot = t[0] * n[0] + t[1] * n[1] + t[2] * n[2];
+            assert!(dot.abs() < 0.01);
+        }
+    }
 }

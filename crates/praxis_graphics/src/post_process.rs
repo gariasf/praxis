@@ -61,6 +61,8 @@ mod full_screen_quad;
 mod pass;
 pub mod passes;
 mod render_target;
+#[cfg(test)]
+mod tests;
 
 pub use bloom::{
     BloomConfig, BloomEffect, BrightnessExtractionPass, GaussianBlurHorizontalPass,

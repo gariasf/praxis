@@ -1112,3 +1112,493 @@ impl Default for GltfLoader {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod gltf_tests {
+    use super::*;
+
+    #[test]
+    fn test_gltf_node_has_mesh() {
+        let node_with_mesh = GltfNode {
+            name: Some("MeshNode".to_string()),
+            transform: Mat4::IDENTITY,
+            mesh_indices: vec![0, 1],
+            children: vec![],
+        };
+        assert!(node_with_mesh.has_mesh());
+
+        let node_without_mesh = GltfNode {
+            name: Some("EmptyNode".to_string()),
+            transform: Mat4::IDENTITY,
+            mesh_indices: vec![],
+            children: vec![],
+        };
+        assert!(!node_without_mesh.has_mesh());
+    }
+
+    #[test]
+    fn test_gltf_node_decompose_transform_identity() {
+        let node = GltfNode {
+            name: None,
+            transform: Mat4::IDENTITY,
+            mesh_indices: vec![],
+            children: vec![],
+        };
+
+        let (translation, rotation, scale) = node.decompose_transform();
+        assert!((translation.x - 0.0).abs() < 0.001);
+        assert!((translation.y - 0.0).abs() < 0.001);
+        assert!((translation.z - 0.0).abs() < 0.001);
+        assert!((rotation.w - 1.0).abs() < 0.001);
+        assert!((scale.x - 1.0).abs() < 0.001);
+        assert!((scale.y - 1.0).abs() < 0.001);
+        assert!((scale.z - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_gltf_node_decompose_transform_translation() {
+        let transform = Mat4::from_translation(Vec3::new(10.0, 20.0, 30.0));
+        let node = GltfNode {
+            name: None,
+            transform,
+            mesh_indices: vec![],
+            children: vec![],
+        };
+
+        let (translation, _rotation, _scale) = node.decompose_transform();
+        assert!((translation.x - 10.0).abs() < 0.001);
+        assert!((translation.y - 20.0).abs() < 0.001);
+        assert!((translation.z - 30.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_gltf_node_decompose_transform_scale() {
+        let transform = Mat4::from_scale(Vec3::new(2.0, 3.0, 4.0));
+        let node = GltfNode {
+            name: None,
+            transform,
+            mesh_indices: vec![],
+            children: vec![],
+        };
+
+        let (_translation, _rotation, scale) = node.decompose_transform();
+        assert!((scale.x - 2.0).abs() < 0.001);
+        assert!((scale.y - 3.0).abs() < 0.001);
+        assert!((scale.z - 4.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_gltf_node_decompose_transform_rotation() {
+        let rotation = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
+        let transform = Mat4::from_quat(rotation);
+        let node = GltfNode {
+            name: None,
+            transform,
+            mesh_indices: vec![],
+            children: vec![],
+        };
+
+        let (_translation, extracted_rotation, _scale) = node.decompose_transform();
+        assert!((extracted_rotation.x - rotation.x).abs() < 0.001);
+        assert!((extracted_rotation.y - rotation.y).abs() < 0.001);
+        assert!((extracted_rotation.z - rotation.z).abs() < 0.001);
+        assert!((extracted_rotation.w - rotation.w).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_gltf_node_children() {
+        let node = GltfNode {
+            name: Some("Parent".to_string()),
+            transform: Mat4::IDENTITY,
+            mesh_indices: vec![],
+            children: vec![1, 2, 3],
+        };
+
+        assert_eq!(node.children.len(), 3);
+        assert_eq!(node.children[0], 1);
+        assert_eq!(node.children[1], 2);
+        assert_eq!(node.children[2], 3);
+    }
+
+    #[test]
+    fn test_gltf_material_default() {
+        let material = GltfMaterial::default();
+
+        assert_eq!(material.base_color, [1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(material.metallic, 0.0);
+        assert_eq!(material.roughness, 0.5);
+        assert!(material.base_color_texture_index.is_none());
+        assert!(material.normal_texture_index.is_none());
+        assert!(material.name.is_none());
+    }
+
+    #[test]
+    fn test_gltf_material_to_material_properties() {
+        let material = GltfMaterial {
+            name: Some("TestMaterial".to_string()),
+            base_color: [0.8, 0.2, 0.1, 1.0],
+            metallic: 0.7,
+            roughness: 0.3,
+            base_color_texture_index: Some(0),
+            normal_texture_index: Some(1),
+        };
+
+        let props = material.to_material_properties();
+        assert_eq!(props.base_color, [0.8, 0.2, 0.1, 1.0]);
+        assert_eq!(props.metallic, 0.7);
+        assert_eq!(props.roughness, 0.3);
+    }
+
+    #[test]
+    fn test_gltf_texture_format() {
+        assert_eq!(GltfTextureFormat::R8G8B8A8, GltfTextureFormat::R8G8B8A8);
+        assert_eq!(GltfTextureFormat::R8G8B8, GltfTextureFormat::R8G8B8);
+        assert_ne!(GltfTextureFormat::R8G8B8A8, GltfTextureFormat::R8G8B8);
+    }
+
+    #[test]
+    fn test_gltf_texture_creation() {
+        let texture = GltfTexture {
+            data: vec![255, 0, 0, 255],
+            width: 1,
+            height: 1,
+            format: GltfTextureFormat::R8G8B8A8,
+        };
+
+        assert_eq!(texture.data.len(), 4);
+        assert_eq!(texture.width, 1);
+        assert_eq!(texture.height, 1);
+        assert_eq!(texture.format, GltfTextureFormat::R8G8B8A8);
+    }
+
+    #[test]
+    fn test_gltf_asset_nodes_with_meshes() {
+        let nodes = vec![
+            GltfNode {
+                name: Some("Node0".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![0],
+                children: vec![],
+            },
+            GltfNode {
+                name: Some("Node1".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![],
+                children: vec![],
+            },
+            GltfNode {
+                name: Some("Node2".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![1, 2],
+                children: vec![],
+            },
+        ];
+
+        let asset = GltfAsset {
+            meshes: vec![],
+            materials: vec![],
+            textures: vec![],
+            nodes,
+            root_nodes: vec![0, 1, 2],
+        };
+
+        let nodes_with_meshes: Vec<_> = asset.nodes_with_meshes().collect();
+        assert_eq!(nodes_with_meshes.len(), 2);
+        assert_eq!(nodes_with_meshes[0].0, 0);
+        assert_eq!(nodes_with_meshes[1].0, 2);
+    }
+
+    #[test]
+    fn test_gltf_asset_traverse_depth_first_single_level() {
+        let nodes = vec![
+            GltfNode {
+                name: Some("Root".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![],
+                children: vec![],
+            },
+        ];
+
+        let asset = GltfAsset {
+            meshes: vec![],
+            materials: vec![],
+            textures: vec![],
+            nodes,
+            root_nodes: vec![0],
+        };
+
+        let mut visited = Vec::new();
+        asset.traverse_depth_first(|index, _node, depth| {
+            visited.push((index, depth));
+        });
+
+        assert_eq!(visited.len(), 1);
+        assert_eq!(visited[0], (0, 0));
+    }
+
+    #[test]
+    fn test_gltf_asset_traverse_depth_first_hierarchy() {
+        let nodes = vec![
+            GltfNode {
+                name: Some("Root".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![],
+                children: vec![1, 2],
+            },
+            GltfNode {
+                name: Some("Child1".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![],
+                children: vec![3],
+            },
+            GltfNode {
+                name: Some("Child2".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![],
+                children: vec![],
+            },
+            GltfNode {
+                name: Some("GrandChild".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![],
+                children: vec![],
+            },
+        ];
+
+        let asset = GltfAsset {
+            meshes: vec![],
+            materials: vec![],
+            textures: vec![],
+            nodes,
+            root_nodes: vec![0],
+        };
+
+        let mut visited = Vec::new();
+        asset.traverse_depth_first(|index, _node, depth| {
+            visited.push((index, depth));
+        });
+
+        assert_eq!(visited.len(), 4);
+        assert_eq!(visited[0], (0, 0));
+        assert_eq!(visited[1], (1, 1));
+        assert_eq!(visited[2], (3, 2));
+        assert_eq!(visited[3], (2, 1));
+    }
+
+    #[test]
+    fn test_gltf_asset_traverse_depth_first_multiple_roots() {
+        let nodes = vec![
+            GltfNode {
+                name: Some("Root1".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![],
+                children: vec![2],
+            },
+            GltfNode {
+                name: Some("Root2".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![],
+                children: vec![3],
+            },
+            GltfNode {
+                name: Some("Child1".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![],
+                children: vec![],
+            },
+            GltfNode {
+                name: Some("Child2".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![],
+                children: vec![],
+            },
+        ];
+
+        let asset = GltfAsset {
+            meshes: vec![],
+            materials: vec![],
+            textures: vec![],
+            nodes,
+            root_nodes: vec![0, 1],
+        };
+
+        let mut visited = Vec::new();
+        asset.traverse_depth_first(|index, _node, depth| {
+            visited.push((index, depth));
+        });
+
+        assert_eq!(visited.len(), 4);
+        assert_eq!(visited[0], (0, 0));
+        assert_eq!(visited[1], (2, 1));
+        assert_eq!(visited[2], (1, 0));
+        assert_eq!(visited[3], (3, 1));
+    }
+
+    #[test]
+    fn test_gltf_asset_traverse_depth_first_deep_hierarchy() {
+        let nodes = vec![
+            GltfNode {
+                name: Some("Level0".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![],
+                children: vec![1],
+            },
+            GltfNode {
+                name: Some("Level1".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![],
+                children: vec![2],
+            },
+            GltfNode {
+                name: Some("Level2".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![],
+                children: vec![3],
+            },
+            GltfNode {
+                name: Some("Level3".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![],
+                children: vec![],
+            },
+        ];
+
+        let asset = GltfAsset {
+            meshes: vec![],
+            materials: vec![],
+            textures: vec![],
+            nodes,
+            root_nodes: vec![0],
+        };
+
+        let mut max_depth = 0;
+        asset.traverse_depth_first(|_index, _node, depth| {
+            max_depth = max_depth.max(depth);
+        });
+
+        assert_eq!(max_depth, 3);
+    }
+
+    #[test]
+    fn test_gltf_asset_traverse_with_node_names() {
+        let nodes = vec![
+            GltfNode {
+                name: Some("Parent".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![],
+                children: vec![1, 2],
+            },
+            GltfNode {
+                name: Some("LeftChild".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![],
+                children: vec![],
+            },
+            GltfNode {
+                name: Some("RightChild".to_string()),
+                transform: Mat4::IDENTITY,
+                mesh_indices: vec![],
+                children: vec![],
+            },
+        ];
+
+        let asset = GltfAsset {
+            meshes: vec![],
+            materials: vec![],
+            textures: vec![],
+            nodes,
+            root_nodes: vec![0],
+        };
+
+        let mut names = Vec::new();
+        asset.traverse_depth_first(|_index, node, _depth| {
+            if let Some(name) = &node.name {
+                names.push(name.clone());
+            }
+        });
+
+        assert_eq!(names.len(), 3);
+        assert_eq!(names[0], "Parent");
+        assert_eq!(names[1], "LeftChild");
+        assert_eq!(names[2], "RightChild");
+    }
+
+    #[test]
+    fn test_gltf_loader_creation() {
+        let loader = GltfLoader::new();
+        let _default_loader = GltfLoader::default();
+    }
+
+    #[test]
+    fn test_gltf_node_multiple_mesh_indices() {
+        let node = GltfNode {
+            name: Some("MultiMesh".to_string()),
+            transform: Mat4::IDENTITY,
+            mesh_indices: vec![0, 1, 2, 3],
+            children: vec![],
+        };
+
+        assert!(node.has_mesh());
+        assert_eq!(node.mesh_indices.len(), 4);
+    }
+
+    #[test]
+    fn test_gltf_material_with_textures() {
+        let material = GltfMaterial {
+            name: Some("TexturedMaterial".to_string()),
+            base_color: [1.0, 1.0, 1.0, 1.0],
+            metallic: 1.0,
+            roughness: 0.0,
+            base_color_texture_index: Some(5),
+            normal_texture_index: Some(7),
+        };
+
+        assert_eq!(material.base_color_texture_index, Some(5));
+        assert_eq!(material.normal_texture_index, Some(7));
+    }
+
+    #[test]
+    fn test_gltf_asset_empty() {
+        let asset = GltfAsset {
+            meshes: vec![],
+            materials: vec![],
+            textures: vec![],
+            nodes: vec![],
+            root_nodes: vec![],
+        };
+
+        assert_eq!(asset.meshes.len(), 0);
+        assert_eq!(asset.materials.len(), 0);
+        assert_eq!(asset.textures.len(), 0);
+        assert_eq!(asset.nodes.len(), 0);
+        assert_eq!(asset.root_nodes.len(), 0);
+
+        let nodes_with_meshes: Vec<_> = asset.nodes_with_meshes().collect();
+        assert_eq!(nodes_with_meshes.len(), 0);
+    }
+
+    #[test]
+    fn test_gltf_node_transform_combined() {
+        let translation = Vec3::new(5.0, 10.0, 15.0);
+        let rotation = Quat::from_rotation_y(std::f32::consts::FRAC_PI_4);
+        let scale = Vec3::new(2.0, 3.0, 4.0);
+        let transform = Mat4::from_scale_rotation_translation(scale, rotation, translation);
+
+        let node = GltfNode {
+            name: None,
+            transform,
+            mesh_indices: vec![],
+            children: vec![],
+        };
+
+        let (extracted_translation, extracted_rotation, extracted_scale) = node.decompose_transform();
+
+        assert!((extracted_translation.x - translation.x).abs() < 0.01);
+        assert!((extracted_translation.y - translation.y).abs() < 0.01);
+        assert!((extracted_translation.z - translation.z).abs() < 0.01);
+
+        assert!((extracted_scale.x - scale.x).abs() < 0.01);
+        assert!((extracted_scale.y - scale.y).abs() < 0.01);
+        assert!((extracted_scale.z - scale.z).abs() < 0.01);
+    }
+}

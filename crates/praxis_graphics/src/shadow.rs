@@ -585,4 +585,251 @@ mod tests {
         assert!((pos.y - 10.0).abs() < 0.01);
         assert!((pos.z - 15.0).abs() < 0.01);
     }
+
+    #[test]
+    fn test_shadow_config_custom() {
+        let config = ShadowConfig {
+            shadow_map_size: 2048,
+            cascade_count: 4,
+            cascade_distances: [10.0, 50.0, 200.0, 800.0],
+            pcf_samples: 16,
+            bias: 0.001,
+        };
+
+        assert_eq!(config.shadow_map_size, 2048);
+        assert_eq!(config.cascade_count, 4);
+        assert_eq!(config.cascade_distances[0], 10.0);
+        assert_eq!(config.cascade_distances[3], 800.0);
+        assert_eq!(config.pcf_samples, 16);
+        assert_eq!(config.bias, 0.001);
+    }
+
+    #[test]
+    fn test_shadow_uniforms_initialization() {
+        let uniforms = ShadowUniforms {
+            cascade_count: 3,
+            shadow_map_size: 2048,
+            pcf_samples: 9,
+            bias: 0.01,
+            ..Default::default()
+        };
+
+        assert_eq!(uniforms.cascade_count, 3);
+        assert_eq!(uniforms.shadow_map_size, 2048);
+        assert_eq!(uniforms.pcf_samples, 9);
+        assert_eq!(uniforms.bias, 0.01);
+
+        // Verify cascade distances are zero-initialized
+        for distance in &uniforms.cascade_distances {
+            assert_eq!(*distance, 0.0);
+        }
+    }
+
+    #[test]
+    fn test_calculate_frustum_corners() {
+        let camera_pos = Vec3::new(0.0, 5.0, 10.0);
+        let view = Mat4::look_at_rh(camera_pos, Vec3::ZERO, Vec3::Y);
+        let proj = Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, 16.0 / 9.0, 0.1, 100.0);
+
+        let corners = ShadowMapManager::calculate_frustum_corners(
+            view.inverse(),
+            proj.inverse(),
+            0.1,
+            50.0,
+        );
+
+        // Should have 8 corners
+        assert_eq!(corners.len(), 8);
+
+        // All corners should be different
+        for (i, corner) in corners.iter().enumerate() {
+            for (j, other) in corners.iter().enumerate() {
+                if i != j {
+                    let distance = corner.distance(*other);
+                    assert!(distance > 0.0001, "Corners {} and {} are too close", i, j);
+                }
+            }
+        }
+
+        // Near corners should be closer to camera than far corners
+        let near_center = (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0;
+        let far_center = (corners[4] + corners[5] + corners[6] + corners[7]) / 4.0;
+        let near_dist = camera_pos.distance(near_center);
+        let far_dist = camera_pos.distance(far_center);
+        assert!(near_dist < far_dist);
+    }
+
+    #[test]
+    fn test_calculate_light_space_bounds() {
+        let corners = [
+            Vec3::new(-1.0, -1.0, -1.0),
+            Vec3::new(1.0, -1.0, -1.0),
+            Vec3::new(-1.0, 1.0, -1.0),
+            Vec3::new(1.0, 1.0, -1.0),
+            Vec3::new(-1.0, -1.0, 1.0),
+            Vec3::new(1.0, -1.0, 1.0),
+            Vec3::new(-1.0, 1.0, 1.0),
+            Vec3::new(1.0, 1.0, 1.0),
+        ];
+
+        let light_view = Mat4::IDENTITY;
+        let (min, max) = ShadowMapManager::calculate_light_space_bounds(&corners, light_view);
+
+        // For identity transform, bounds should match corner extents
+        assert!((min.x - (-1.0)).abs() < 0.0001);
+        assert!((min.y - (-1.0)).abs() < 0.0001);
+        assert!((min.z - (-1.0)).abs() < 0.0001);
+        assert!((max.x - 1.0).abs() < 0.0001);
+        assert!((max.y - 1.0).abs() < 0.0001);
+        assert!((max.z - 1.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_calculate_light_space_bounds_transformed() {
+        let corners = [
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(2.0, 0.0, 0.0),
+            Vec3::new(0.0, 2.0, 0.0),
+            Vec3::new(2.0, 2.0, 0.0),
+            Vec3::new(0.0, 0.0, 2.0),
+            Vec3::new(2.0, 0.0, 2.0),
+            Vec3::new(0.0, 2.0, 2.0),
+            Vec3::new(2.0, 2.0, 2.0),
+        ];
+
+        // Transform that translates by (-1, -1, -1)
+        let light_view = Mat4::from_translation(Vec3::new(-1.0, -1.0, -1.0));
+        let (min, max) = ShadowMapManager::calculate_light_space_bounds(&corners, light_view);
+
+        // After translation, bounds should be [-1, -1, -1] to [1, 1, 1]
+        assert!((min.x - (-1.0)).abs() < 0.0001);
+        assert!((min.y - (-1.0)).abs() < 0.0001);
+        assert!((min.z - (-1.0)).abs() < 0.0001);
+        assert!((max.x - 1.0).abs() < 0.0001);
+        assert!((max.y - 1.0).abs() < 0.0001);
+        assert!((max.z - 1.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_cascade_distances_ascending() {
+        let config = ShadowConfig::default();
+
+        // Verify cascade distances are in ascending order
+        for i in 1..config.cascade_count {
+            assert!(
+                config.cascade_distances[i] > config.cascade_distances[i - 1],
+                "Cascade distance {} ({}) should be greater than cascade {} ({})",
+                i,
+                config.cascade_distances[i],
+                i - 1,
+                config.cascade_distances[i - 1]
+            );
+        }
+    }
+
+    #[test]
+    fn test_max_shadow_cascades_constant() {
+        assert_eq!(MAX_SHADOW_CASCADES, 4);
+    }
+
+    #[test]
+    fn test_shadow_map_size_power_of_two() {
+        let common_sizes = [512, 1024, 2048, 4096];
+        for size in common_sizes {
+            let config = ShadowConfig {
+                shadow_map_size: size,
+                ..Default::default()
+            };
+            // Verify size is a power of two
+            assert_eq!(
+                size.count_ones(),
+                1,
+                "Shadow map size {} should be a power of two",
+                size
+            );
+            assert!(config.shadow_map_size >= 512 && config.shadow_map_size <= 8192);
+        }
+    }
+
+    #[test]
+    fn test_pcf_samples_valid_values() {
+        let valid_samples = [1, 4, 9, 16];
+        for samples in valid_samples {
+            let config = ShadowConfig {
+                pcf_samples: samples,
+                ..Default::default()
+            };
+            assert_eq!(config.pcf_samples, samples);
+        }
+    }
+
+    #[test]
+    fn test_shadow_bias_range() {
+        // Test typical bias values
+        let typical_biases = [0.0001, 0.001, 0.005, 0.01, 0.1];
+        for bias in typical_biases {
+            let config = ShadowConfig {
+                bias,
+                ..Default::default()
+            };
+            assert!(config.bias >= 0.0 && config.bias <= 1.0);
+        }
+    }
+
+    #[test]
+    fn test_light_space_matrices_initialization() {
+        let uniforms = ShadowUniforms::default();
+
+        // Verify all matrices are zero-initialized
+        for matrix in &uniforms.light_space_matrices {
+            for &value in matrix {
+                assert_eq!(value, 0.0);
+            }
+        }
+    }
+
+    #[test]
+    fn test_extract_camera_position_identity() {
+        let view = Mat4::IDENTITY;
+        let pos = ShadowMapManager::extract_camera_position(view);
+
+        // Identity view should give zero position
+        assert!((pos.x - 0.0).abs() < 0.01);
+        assert!((pos.y - 0.0).abs() < 0.01);
+        assert!((pos.z - 0.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_extract_camera_position_various_positions() {
+        let test_positions = vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(10.0, 20.0, 30.0),
+            Vec3::new(-5.0, 15.0, -10.0),
+            Vec3::new(100.0, 0.0, 100.0),
+        ];
+
+        for expected_pos in test_positions {
+            let view = Mat4::look_at_rh(expected_pos, expected_pos + Vec3::Z, Vec3::Y);
+            let extracted_pos = ShadowMapManager::extract_camera_position(view);
+
+            assert!(
+                (extracted_pos.x - expected_pos.x).abs() < 0.01,
+                "X position mismatch: expected {}, got {}",
+                expected_pos.x,
+                extracted_pos.x
+            );
+            assert!(
+                (extracted_pos.y - expected_pos.y).abs() < 0.01,
+                "Y position mismatch: expected {}, got {}",
+                expected_pos.y,
+                extracted_pos.y
+            );
+            assert!(
+                (extracted_pos.z - expected_pos.z).abs() < 0.01,
+                "Z position mismatch: expected {}, got {}",
+                expected_pos.z,
+                extracted_pos.z
+            );
+        }
+    }
 }
