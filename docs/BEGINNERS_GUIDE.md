@@ -14,10 +14,11 @@ This guide provides comprehensive explanations of the core concepts and architec
 8. [Rust-Specific Patterns](#rust-specific-patterns)
 9. [Lighting System Architecture](#lighting-system-architecture)
 10. [Material System](#material-system)
-11. [Physics System](#physics-system)
-12. [Shadow Mapping System](#shadow-mapping-system)
-13. [Normal Mapping](#normal-mapping)
-14. [Post-Processing Pipeline](#post-processing-pipeline)
+11. [Animation System](#animation-system)
+12. [Physics System](#physics-system)
+13. [Shadow Mapping System](#shadow-mapping-system)
+14. [Normal Mapping](#normal-mapping)
+15. [Post-Processing Pipeline](#post-processing-pipeline)
 
 ---
 
@@ -1993,6 +1994,455 @@ Each frame:
   GPU cost: Lighting computation in fragment shader
     - Per pixel, per light
 ```
+
+---
+
+## Animation System
+
+The animation system in Praxis brings characters and objects to life through skeletal animation. Understanding how animations work is essential for creating dynamic, believable game characters.
+
+### What is Skeletal Animation?
+
+Skeletal animation is a technique where a character is rigged with a hierarchy of bones, and animations deform the mesh by transforming these bones over time.
+
+```text
+Skeletal Animation Concept
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Character Mesh + Skeleton
+┌─────────────────────────────────────────────────────────────┐
+│                                                              │
+│        ●  ← Head bone                                       │
+│        │                                                     │
+│    ┌───┴───┐                                                │
+│    │       │    ← Arm bones                                 │
+│    ●       ●                                                 │
+│        │                                                     │
+│        ●  ← Spine bone                                      │
+│        │                                                     │
+│    ┌───┴───┐                                                │
+│    │       │    ← Leg bones                                 │
+│    ●       ●                                                 │
+│                                                              │
+│  Each bone:                                                  │
+│   - Has a position, rotation, and scale                     │
+│   - Connected to parent bone (hierarchy)                    │
+│   - Influences nearby mesh vertices                         │
+│                                                              │
+│  Animation changes bone transforms over time                │
+│  Mesh deforms automatically to follow bones                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Core Animation Components
+
+Praxis uses several ECS components for animation:
+
+```rust
+// Core components
+Skeleton          // Bone hierarchy and bind poses
+AnimationPlayer   // Controls playback of animations
+AnimatedPose      // Stores computed bone transforms
+
+// Optional advanced component
+AnimationBlender  // Advanced blending features
+```
+
+#### Skeleton Component
+
+Defines the bone structure:
+
+```text
+Skeleton Hierarchy Example
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Root (Pelvis)
+ │
+ ├─► Spine
+ │    │
+ │    ├─► Left Arm → Left Hand
+ │    └─► Right Arm → Right Hand
+ │
+ ├─► Left Leg → Left Foot
+ └─► Right Leg → Right Foot
+
+Key concepts:
+- Bind Pose: Default "rest" position
+- Parent-Child: Children move with parents
+- Local Transform: Relative to parent
+- World Transform: Absolute position
+```
+
+#### AnimationClip
+
+Stores keyframe data:
+
+```text
+Animation Clip Structure
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"Walk" Animation (2.0 seconds)
+│
+├─► Bone 0 (Root)
+│    ├─► Translation: [(0.0s, 0,0,0), (1.0s, 1,0,0), (2.0s, 2,0,0)]
+│    ├─► Rotation: [(0.0s, 0°), (1.0s, 5°), (2.0s, 0°)]
+│    └─► Scale: [(0.0s, 1,1,1), ...]
+│
+├─► Bone 1 (Spine)
+│    └─► ...
+│
+└─► Bone N
+     └─► ...
+
+Between keyframes: smooth interpolation
+- Translation/Scale: Linear interpolation (LERP)
+- Rotation: Spherical interpolation (SLERP)
+```
+
+### Animation Data Flow
+
+```text
+Per-Frame Animation Update
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Update Time
+   current_time += delta_time × speed
+   │
+   ▼
+2. Sample Keyframes
+   For each bone track:
+     translation = interpolate(keyframes, current_time)
+     rotation = interpolate(keyframes, current_time)
+     scale = interpolate(keyframes, current_time)
+   │
+   ▼
+3. Blend Animations (if multiple playing)
+   final_pose = animation1 × weight1 + animation2 × weight2
+   │
+   ▼
+4. Propagate Hierarchy
+   For each bone (parent before child):
+     world_transform = parent_transform × local_transform
+   │
+   ▼
+5. Compute Skinning
+   For each bone:
+     skinning_matrix = world_transform × inverse_bind_matrix
+   │
+   ▼
+6. GPU Skinning
+   Vertex shader applies bone transforms to vertices
+```
+
+### Keyframe Interpolation
+
+The system automatically interpolates between keyframes for smooth motion:
+
+```text
+Interpolation Example
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Translation Keyframes:
+  t=0.0s:  Position (0, 0, 0)
+  t=1.0s:  Position (10, 0, 0)
+
+Query at t=0.5s:
+  ┌─────────────────────────────────────────┐
+  │ 1. Find surrounding keyframes:          │
+  │    before = 0.0s                        │
+  │    after  = 1.0s                        │
+  │                                         │
+  │ 2. Calculate blend weight:              │
+  │    t = (0.5 - 0.0) / (1.0 - 0.0) = 0.5 │
+  │                                         │
+  │ 3. Interpolate:                         │
+  │    result = lerp(                       │
+  │      (0,0,0),                           │
+  │      (10,0,0),                          │
+  │      0.5                                │
+  │    ) = (5, 0, 0)                        │
+  └─────────────────────────────────────────┘
+
+Timeline:
+  0.0s      0.5s       1.0s
+  (0,0,0) → (5,0,0) → (10,0,0)
+            ↑
+        Interpolated!
+```
+
+### Animation Blending
+
+Multiple animations can play simultaneously with weights:
+
+```text
+Animation Blending
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Playing Two Animations:
+  Walk (weight: 0.7)  → Bone rotation: 10°
+  Run  (weight: 0.3)  → Bone rotation: 30°
+
+Blended Result:
+  final_rotation = 0.7 × 10° + 0.3 × 30°
+                 = 7° + 9°
+                 = 16°
+
+Visual:
+  Walk only (1.0, 0.0):  ████████████░░░░░░░░
+  Blend (0.7, 0.3):      ████████████████░░░░
+  Run only (0.0, 1.0):   ████████████████████
+```
+
+### Advanced Blending Features
+
+The `AnimationBlender` component provides sophisticated blending:
+
+#### 1. Cross-Fade Transitions
+
+Smooth transitions between animations:
+
+```text
+Cross-Fade Example
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+blender.cross_fade("Idle", "Walk", 0.3); // 0.3 second transition
+
+Time:     0.0      0.15     0.3
+          │         │        │
+Idle:     100%      50%      0%     ████████░░░░░░░░
+Walk:     0%        50%      100%   ░░░░░░░░████████
+
+Result: Smooth blend from idle to walk over 0.3 seconds
+```
+
+#### 2. 1D Blend Trees
+
+Parameter-driven blending (e.g., based on speed):
+
+```text
+1D Blend Tree
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Speed Parameter: 0.0 to 1.0
+
+  0.0         0.5         1.0
+  Idle        Walk        Run
+  │           │           │
+  └───────────┴───────────┘
+
+Set speed to 0.75:
+  - Between Walk (0.5) and Run (1.0)
+  - 50% Walk + 50% Run
+  - Smooth transition as speed changes
+```
+
+#### 3. 2D Blend Trees
+
+Two-parameter blending (e.g., directional movement):
+
+```text
+2D Blend Tree
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+      Forward
+        (0,1)
+          │
+          │
+Left ─────┼───── Right
+ (-1,0)   │      (1,0)
+          │
+        Back
+        (0,-1)
+
+Input: (0.5, 0.5) - Moving forward-right
+Result: Blend Forward + Right animations
+Use case: 8-directional character movement
+```
+
+#### 4. Layered Animation
+
+Multiple animation layers with bone masking:
+
+```text
+Layered Animation
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Layer 0 (Base): Walk
+  Mask: All bones
+  Result: ████████████████  Full body walks
+
+Layer 1 (Upper): Wave
+  Mask: Right arm only
+  Result: ░░░░░░░░████░░░░  Only right arm waves
+
+Combined: Character walks while waving right arm!
+
+Use cases:
+  - Walk + Upper body action (aim, wave, drink)
+  - Run + Lower body (special footwork)
+  - Idle + Facial animation
+```
+
+### GLTF Animation Loading
+
+Praxis supports loading animations from GLTF files:
+
+```rust
+use praxis_assets::GltfLoader;
+
+// Load GLTF file
+let loader = GltfLoader::new();
+let asset = loader.load_gltf("assets/models/character.gltf")?;
+
+// Extract animations
+let mut player = AnimationPlayer::new();
+for animation in &asset.animations {
+    let name = animation.name.clone().unwrap_or_default();
+    player.add_clip(name, animation.clip.clone());
+}
+
+// Use skeleton
+let skeleton = asset.skins[0].skeleton.clone();
+let pose = AnimatedPose::new(skeleton.bone_count());
+
+world.spawn((skeleton, player, pose));
+```
+
+### Animation Update System
+
+Animations are updated each frame by a system:
+
+```rust
+fn animation_system(
+    mut query: Query<(&Skeleton, &mut AnimationPlayer, &mut AnimatedPose)>
+) {
+    let delta_time = 0.016; // From timing system
+    praxis_scene::update_animations(delta_time, &mut query);
+}
+```
+
+### Transform Hierarchy Propagation
+
+Bone transforms propagate through the hierarchy:
+
+```text
+Hierarchy Propagation
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Shoulder (Parent)
+  Local: Rotation 45°
+  World: Rotation 45°
+  │
+  └─► Elbow (Child)
+       Local: Rotation 30° (relative to parent)
+       World: Rotation 75° (45° + 30°)
+       │
+       └─► Hand (Grandchild)
+            Local: Rotation 15°
+            World: Rotation 90° (75° + 15°)
+
+When shoulder rotates:
+  - Elbow moves with shoulder (keeps same local transform)
+  - Hand moves with elbow (keeps same local transform)
+  - All world transforms update automatically
+
+Formula for each bone:
+  world_transform[bone] = world_transform[parent] × local_transform[bone]
+```
+
+### Performance Considerations
+
+```text
+Animation Performance
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Typical costs (60 FPS):
+
+50-bone character, 1 animation:
+  - Keyframe sampling: ~1-2 μs
+  - Hierarchy propagation: ~1-2 μs
+  - Total: ~5 μs per character
+
+100 animated characters:
+  - Animation update: ~0.5 ms
+  - ~3% of 16.67ms frame budget
+  - Very reasonable!
+
+Optimization tips:
+  ✓ Use bone masking to skip unused bones
+  ✓ Reduce animation update rate for distant characters
+  ✓ Use LOD: simpler skeletons at distance
+  ✓ Cull offscreen characters
+
+Scalability guidelines:
+  ✓ <50 bones: Excellent
+  ✓ 50-100 bones: Good
+  ⚠ 100+ bones: Consider LOD
+```
+
+### Common Animation Patterns
+
+```rust
+// 1. Simple looping animation
+player.add_clip("Walk", walk_clip);
+player.play("Walk");
+player.set_looping("Walk", true);
+
+// 2. Animation speed control
+player.set_speed("Walk", 2.0); // 2x speed
+
+// 3. Multiple animations with weights
+player.play("Walk");
+player.set_weight("Walk", 0.7);
+player.play("Idle");
+player.set_weight("Idle", 0.3);
+
+// 4. Cross-fade transition
+blender.cross_fade("Idle", "Walk", 0.3);
+
+// 5. Parameter-driven blending
+blend_tree.set_parameter(0.75); // Speed-based blend
+```
+
+### Animation Workflow Summary
+
+```text
+Complete Animation Workflow
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Asset Creation (Artist)
+   Create character in 3D software (Blender, Maya, etc.)
+   Rig with bones
+   Animate
+   Export as GLTF
+   │
+   ▼
+2. Loading (Praxis)
+   GltfLoader reads file
+   Extracts Skeleton + AnimationClips
+   │
+   ▼
+3. Setup (Game Code)
+   Create AnimationPlayer
+   Add clips to player
+   Spawn entity with Skeleton + Player + Pose
+   │
+   ▼
+4. Runtime (Game Loop)
+   Animation system updates each frame
+   Samples keyframes
+   Blends animations
+   Propagates hierarchy
+   Computes skinning matrices
+   │
+   ▼
+5. Rendering (GPU)
+   Vertex shader applies bone transforms
+   Mesh deforms to match animation
+   Character moves smoothly!
+```
+
+For comprehensive details on the animation system, including blending algorithms and implementation details, see [Animation System Documentation](animation_system.md).
 
 ---
 
