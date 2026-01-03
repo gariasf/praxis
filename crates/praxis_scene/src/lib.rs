@@ -70,15 +70,14 @@
 //! )
 //! ```
 
-// TODO: Implement animation module
-// mod animation;
+mod animation;
 mod components;
 mod definition;
 mod loader;
 mod manager;
 mod traversal;
 
-// pub use animation::*;
+pub use animation::*;
 pub use components::*;
 pub use definition::*;
 pub use loader::*;

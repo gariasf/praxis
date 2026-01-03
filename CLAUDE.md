@@ -30,6 +30,7 @@ cargo run --example physics_demo
 cargo run --example shadow_demo
 cargo run --example audio_demo
 cargo run --example skeletal_animation_demo
+cargo run --example animation_blending_demo
 
 # Check code without building
 cargo check --all
@@ -226,6 +227,139 @@ player.set_weight("Run", 0.3);
 
 Transforms are blended using weighted lerp/slerp based on animation weights.
 
+#### Advanced Animation Blending System
+
+The `AnimationBlender` component provides sophisticated animation blending capabilities:
+
+**Core Features**:
+- **Cross-fade Transitions**: Smooth transitions between animations over time
+- **Blend Trees**: 1D/2D blend spaces for parameter-driven animation blending
+- **Layered Animation**: Multiple animation layers with bone masking
+- **Additive Blending**: Add animations on top of base animations
+
+**AnimationBlender**: Advanced blending component
+- `new()`: Creates new blender
+- `add_clip(name, clip)`: Adds clip to library
+- `play(clip_name)`: Plays animation on base layer
+- `cross_fade(from, to, duration)`: Cross-fades between animations
+- `add_blend_tree(name, node)`: Adds a blend tree
+- `activate_blend_tree(name)`: Activates a blend tree
+- `set_blend_parameter(tree_name, value)`: Sets 1D blend parameter
+- `set_blend_parameters_2d(tree_name, x, y)`: Sets 2D blend parameters
+- `add_layer(layer)`: Adds an animation layer
+- `play_on_layer(layer_index, clip_name)`: Plays clip on specific layer
+- `update(delta_time)`: Updates blending state
+- `evaluate(skeleton)`: Produces final AnimatedPose
+
+**Blend Tree Types**:
+- **BlendNode1D**: 1D blend space (e.g., idle->walk->run based on speed)
+  - `add_clip(name, parameter)`: Adds clip at parameter value
+  - `set_parameter(value)`: Sets current parameter for blending
+- **BlendNode2D**: 2D blend space (e.g., 8-directional movement)
+  - `add_clip(name, x, y)`: Adds clip at 2D position
+  - `set_parameters(x, y)`: Sets current position for blending
+- **AdditiveBlendNode**: Additive blending
+  - `set_base(clip_name)`: Sets base animation
+  - `set_additive(clip_name)`: Sets additive animation
+  - `set_weight(weight)`: Sets additive weight
+
+**Animation Layers**:
+- **AnimationLayer**: Layer for partial skeleton animation
+  - `new(weight)`: Creates layer with weight
+  - `set_mask(mask)`: Sets bone mask for this layer
+  - `set_blend_mode(mode)`: Sets Override or Additive mode
+  - `play(clip_name)`: Plays clip on this layer
+- **BoneMask**: Controls which bones a layer affects
+  - `with_bone_count(count)`: Creates mask for skeleton
+  - `enable_bone(index)`: Enables specific bone
+  - `enable_bone_and_children(index)`: Enables bone hierarchy
+
+**Cross-Fade Transitions**:
+- **CrossFadeTransition**: Smooth transition state
+  - `new(from, to, duration)`: Creates transition
+  - `blend_weight()`: Gets current blend weight (0.0 to 1.0)
+  - `is_complete()`: Checks if transition finished
+
+#### Animation Blending Examples
+
+**Cross-fade transition**:
+```rust
+let mut blender = AnimationBlender::new();
+blender.add_clip("Idle", idle_clip);
+blender.add_clip("Walk", walk_clip);
+
+blender.play("Idle");
+// Later, smoothly transition to walk over 0.3 seconds
+blender.cross_fade("Idle", "Walk", 0.3);
+```
+
+**1D Blend Tree (speed-based)**:
+```rust
+let mut blend_tree = BlendNode1D::new();
+blend_tree.add_clip("Idle", 0.0);
+blend_tree.add_clip("Walk", 0.5);
+blend_tree.add_clip("Run", 1.0);
+
+blender.add_blend_tree("Movement", blend_tree.into());
+blender.activate_blend_tree("Movement");
+blender.set_blend_parameter("Movement", 0.75); // 75% between walk and run
+```
+
+**2D Blend Tree (directional movement)**:
+```rust
+let mut blend_tree = BlendNode2D::new();
+blend_tree.add_clip("Forward", 0.0, 1.0);
+blend_tree.add_clip("Back", 0.0, -1.0);
+blend_tree.add_clip("Left", -1.0, 0.0);
+blend_tree.add_clip("Right", 1.0, 0.0);
+
+blender.add_blend_tree("Locomotion", blend_tree.into());
+blender.activate_blend_tree("Locomotion");
+blender.set_blend_parameters_2d("Locomotion", 0.5, 0.5); // Forward-right
+```
+
+**Layered animation with bone masking**:
+```rust
+// Base layer: full body walk
+blender.play("Walk");
+
+// Upper body layer: aim animation
+let mut upper_body_mask = BoneMask::with_bone_count(skeleton.bone_count());
+upper_body_mask.enable_bone(spine_index);
+upper_body_mask.enable_bone_and_children(left_arm_index);
+upper_body_mask.enable_bone_and_children(right_arm_index);
+
+let mut upper_layer = AnimationLayer::new(1.0);
+upper_layer.set_mask(upper_body_mask);
+upper_layer.set_blend_mode(LayerBlendMode::Override);
+
+blender.add_layer(upper_layer);
+blender.play_on_layer(0, "Aim");
+// Result: Character walks while aiming upper body
+```
+
+**Additive blending**:
+```rust
+let mut additive_node = AdditiveBlendNode::new();
+additive_node.set_base("Walk");
+additive_node.set_additive("Recoil");
+additive_node.set_weight(1.0);
+
+blender.add_blend_tree("CombatMovement", additive_node.into());
+blender.activate_blend_tree("CombatMovement");
+// Result: Walk animation with recoil added on top
+```
+
+**Update system**:
+```rust
+fn blending_system(
+    mut query: Query<(&Skeleton, &mut AnimationBlender, &mut AnimatedPose)>
+) {
+    let delta_time = 0.016;
+    praxis_scene::update_animation_blenders(delta_time, &mut query);
+}
+```
+
 #### Usage Example
 
 ```rust
@@ -260,7 +394,7 @@ fn animation_system(mut query: Query<(&Skeleton, &mut AnimationPlayer, &mut Anim
 }
 ```
 
-See `praxis_scene::animation` and `examples/skeletal_animation_demo.rs` for complete usage.
+See `praxis_scene::animation`, `examples/skeletal_animation_demo.rs`, and `examples/animation_blending_demo.rs` for complete usage.
 
 ### Input System
 
