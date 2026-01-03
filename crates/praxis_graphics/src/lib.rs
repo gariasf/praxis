@@ -103,7 +103,7 @@
 //!
 //! 1. **Vertex Format**: `Vertex3D` includes UV coordinates (binding location 2)
 //! 2. **Shaders**: Vertex shader passes UVs to fragment shader, which samples textures
-//! 3. **Descriptor Sets**: 
+//! 3. **Descriptor Sets**:
 //!    - Set 0, Binding 0: View/Projection uniform buffer
 //!    - Set 0, Binding 1: Model matrix (UniformBufferDynamic with dynamic offsets)
 //!    - Set 0, Binding 2: Texture sampler
@@ -508,12 +508,8 @@ impl RenderContext {
 
         // Create dynamic uniform buffer with 3 frames in flight and 1024 max objects
         debug!("Creating dynamic uniform buffer");
-        let dynamic_uniform_buffer = uniform_buffer::DynamicUniformBuffer::new(
-            &device,
-            memory_allocator.clone(),
-            3,
-            1024,
-        )?;
+        let dynamic_uniform_buffer =
+            uniform_buffer::DynamicUniformBuffer::new(&device, memory_allocator.clone(), 3, 1024)?;
 
         // Create initial view/projection buffer with identity matrices
         debug!("Creating view/projection buffer");
@@ -776,7 +772,7 @@ impl RenderContext {
         }
 
         let view_proj_uniforms = uniform_buffer::ViewProjectionUniforms::new(cmds.view, cmds.proj);
-        
+
         {
             let mut write_lock = self.view_proj_buffer.write().map_err(|e| {
                 eyre::eyre!("Failed to lock view/projection buffer for writing: {}", e)
@@ -784,18 +780,22 @@ impl RenderContext {
             *write_lock = view_proj_uniforms;
         }
 
-        let mut indexed_commands: Vec<(usize, &DrawCommand)> = 
+        let mut indexed_commands: Vec<(usize, &DrawCommand)> =
             cmds.draw_commands.iter().enumerate().collect();
-        
+
         indexed_commands.sort_by(|(_, a), (_, b)| {
             let tex_a = a.texture_name.as_deref().unwrap_or("_default_white");
             let tex_b = b.texture_name.as_deref().unwrap_or("_default_white");
-            
+
             match tex_a.cmp(tex_b) {
                 std::cmp::Ordering::Equal => {
-                    let props_a = a.material_properties.unwrap_or_else(material::MaterialProperties::default);
-                    let props_b = b.material_properties.unwrap_or_else(material::MaterialProperties::default);
-                    
+                    let props_a = a
+                        .material_properties
+                        .unwrap_or_else(material::MaterialProperties::default);
+                    let props_b = b
+                        .material_properties
+                        .unwrap_or_else(material::MaterialProperties::default);
+
                     let bytes_a = bytemuck::bytes_of(&props_a);
                     let bytes_b = bytemuck::bytes_of(&props_b);
                     bytes_a.cmp(bytes_b)
@@ -816,8 +816,12 @@ impl RenderContext {
             .get_texture("_default_white")
             .ok_or_else(|| eyre::eyre!("Default white texture not found"))?;
 
-        let mut draw_list: Vec<(Arc<DescriptorSet>, Arc<DescriptorSet>, &mesh::GpuMesh, usize)> =
-            Vec::with_capacity(indexed_commands.len());
+        let mut draw_list: Vec<(
+            Arc<DescriptorSet>,
+            Arc<DescriptorSet>,
+            &mesh::GpuMesh,
+            usize,
+        )> = Vec::with_capacity(indexed_commands.len());
 
         let mut current_texture_name: Option<String> = None;
         let mut current_material_props: Option<material::MaterialProperties> = None;
@@ -829,12 +833,14 @@ impl RenderContext {
                 .get_mesh(&draw_cmd.mesh_id)
                 .ok_or_else(|| eyre::eyre!("Mesh '{}' not found", draw_cmd.mesh_id))?;
 
-            let texture_name = draw_cmd.texture_name
+            let texture_name = draw_cmd
+                .texture_name
                 .as_deref()
                 .unwrap_or("_default_white")
                 .to_string();
 
-            let material_props = draw_cmd.material_properties
+            let material_props = draw_cmd
+                .material_properties
                 .unwrap_or_else(material::MaterialProperties::default);
 
             let material_changed = current_texture_name.as_ref() != Some(&texture_name)
@@ -960,23 +966,25 @@ impl RenderContext {
                 .bind_index_buffer(mesh.index_buffer.clone())
                 .map_err(|e| eyre::eyre!("Failed to bind index buffer: {}", e))?;
 
-            let dynamic_offset = self.dynamic_uniform_buffer.get_dynamic_offset(*object_index);
-                
+            let dynamic_offset = self
+                .dynamic_uniform_buffer
+                .get_dynamic_offset(*object_index);
+
             unsafe {
                 let set_with_offsets = vulkano::descriptor_set::DescriptorSetWithOffsets::new(
                     transform_set.clone(),
                     [dynamic_offset],
                 );
-                
-                command_buffer_builder
-                    .bind_descriptor_sets_unchecked(
-                        PipelineBindPoint::Graphics,
-                        self.graphics_pipeline.layout().clone(),
-                        0,
-                        set_with_offsets,
-                    );
 
-                let material_changed = last_material_set.as_ref()
+                command_buffer_builder.bind_descriptor_sets_unchecked(
+                    PipelineBindPoint::Graphics,
+                    self.graphics_pipeline.layout().clone(),
+                    0,
+                    set_with_offsets,
+                );
+
+                let material_changed = last_material_set
+                    .as_ref()
                     .is_none_or(|last| !Arc::ptr_eq(last, material_set));
 
                 if material_changed {
@@ -987,8 +995,10 @@ impl RenderContext {
                             1,
                             material_set.clone(),
                         )
-                        .map_err(|e| eyre::eyre!("Failed to bind material descriptor set: {}", e))?;
-                    
+                        .map_err(|e| {
+                            eyre::eyre!("Failed to bind material descriptor set: {}", e)
+                        })?;
+
                     last_material_set = Some(material_set.clone());
                 }
 
@@ -1260,4 +1270,4 @@ pub use primitives::{
 };
 pub use texture::{Texture, TextureManager};
 pub use uniform_buffer::{DynamicUniformBuffer, ModelUniforms, ViewProjectionUniforms};
-pub use vertex::Vertex2D;
+pub use vertex::Vertex3D;

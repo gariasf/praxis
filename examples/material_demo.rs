@@ -10,7 +10,7 @@
 //! - **Material batching**: Efficient rendering when multiple objects share materials
 //!
 //! The demo creates a gallery of objects demonstrating different material properties:
-//! 
+//!
 //! **Row 1 (Metallic)**: Cubes with varying metallic values (0.0 to 1.0)
 //!   - Non-metallic (plastic-like) to fully metallic
 //!   - Shows how metallic affects specular reflections
@@ -65,8 +65,7 @@
 
 use praxis_ecs::{PerspectiveCameraBundle, Transform, World};
 use praxis_graphics::{
-    sphere_mesh, textured_cube_mesh, DrawCommand, MaterialProperties,
-    RenderCommands, RenderContext,
+    sphere_mesh, textured_cube_mesh, DrawCommand, MaterialProperties, RenderCommands, RenderContext,
 };
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::{Quat, Vec3};
@@ -189,18 +188,16 @@ impl App {
         // Load the meshes we'll use for the demo. We use:
         // - Cubes for metallic demonstrations (flat faces show reflections well)
         // - Spheres for roughness demonstrations (curved surface shows gradients)
-        
-        render_context.mesh_manager_mut().load_mesh(
-            "cube",
-            textured_cube_mesh([1.0, 1.0, 1.0]),
-        )?;
+
+        render_context
+            .mesh_manager_mut()
+            .load_mesh("cube", textured_cube_mesh([1.0, 1.0, 1.0]))?;
 
         // Generate a UV sphere with good tessellation for smooth lighting
         // sectors=36, stacks=18 gives a good balance of detail and performance
-        render_context.mesh_manager_mut().load_mesh(
-            "sphere",
-            sphere_mesh(0.5, 36, 18, [1.0, 1.0, 1.0]),
-        )?;
+        render_context
+            .mesh_manager_mut()
+            .load_mesh("sphere", sphere_mesh(0.5, 36, 18, [1.0, 1.0, 1.0]))?;
 
         info!("Creating procedural textures...");
 

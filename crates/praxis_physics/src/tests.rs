@@ -8,8 +8,8 @@
 //! - Collision event handling
 
 use super::*;
-use praxis_ecs::{Schedule, Transform, World, IntoSystemConfigs};
-use praxis_math::{Vec3, Quat};
+use praxis_ecs::{IntoSystemConfigs, Schedule, Transform, World};
+use praxis_math::{Quat, Vec3};
 
 // ============================================================================
 // COMPONENT CREATION TESTS
@@ -63,7 +63,10 @@ fn test_collider_component_creation() {
     // Test 3: Create capsule colliders
     let capsule_y = Collider::capsule_y(2.0, 0.5);
     match capsule_y {
-        Collider::CapsuleY { half_height, radius } => {
+        Collider::CapsuleY {
+            half_height,
+            radius,
+        } => {
             assert_eq!(half_height, 2.0);
             assert_eq!(radius, 0.5);
         }
@@ -72,7 +75,10 @@ fn test_collider_component_creation() {
 
     let capsule_x = Collider::capsule_x(1.5, 0.3);
     match capsule_x {
-        Collider::CapsuleX { half_height, radius } => {
+        Collider::CapsuleX {
+            half_height,
+            radius,
+        } => {
             assert_eq!(half_height, 1.5);
             assert_eq!(radius, 0.3);
         }
@@ -81,7 +87,10 @@ fn test_collider_component_creation() {
 
     let capsule_z = Collider::capsule_z(1.0, 0.4);
     match capsule_z {
-        Collider::CapsuleZ { half_height, radius } => {
+        Collider::CapsuleZ {
+            half_height,
+            radius,
+        } => {
             assert_eq!(half_height, 1.0);
             assert_eq!(radius, 0.4);
         }
@@ -91,7 +100,10 @@ fn test_collider_component_creation() {
     // Test 4: Create cylinder collider
     let cylinder = Collider::cylinder_y(3.0, 1.0);
     match cylinder {
-        Collider::CylinderY { half_height, radius } => {
+        Collider::CylinderY {
+            half_height,
+            radius,
+        } => {
             assert_eq!(half_height, 3.0);
             assert_eq!(radius, 1.0);
         }
@@ -112,10 +124,7 @@ fn test_physics_velocity_component_creation() {
     assert_eq!(angular_only.angular, Vec3::new(0.5, 1.0, 1.5));
 
     // Test 3: Create velocity with both components
-    let both = PhysicsVelocity::new(
-        Vec3::new(1.0, 2.0, 3.0),
-        Vec3::new(0.1, 0.2, 0.3),
-    );
+    let both = PhysicsVelocity::new(Vec3::new(1.0, 2.0, 3.0), Vec3::new(0.1, 0.2, 0.3));
     assert_eq!(both.linear, Vec3::new(1.0, 2.0, 3.0));
     assert_eq!(both.angular, Vec3::new(0.1, 0.2, 0.3));
 
@@ -147,8 +156,8 @@ fn test_external_forces_component() {
     // Test 5: Apply force at point (generates both force and torque)
     let mut forces2 = ExternalForces::default();
     forces2.apply_force_at_point(
-        Vec3::new(10.0, 0.0, 0.0),  // Force
-        Vec3::new(0.0, 1.0, 0.0),   // Point (lever arm)
+        Vec3::new(10.0, 0.0, 0.0), // Force
+        Vec3::new(0.0, 1.0, 0.0),  // Point (lever arm)
     );
     assert_eq!(forces2.force, Vec3::new(10.0, 0.0, 0.0));
     // Torque = point.cross(force) = (0,1,0) × (10,0,0) = (0,0,-10)
@@ -261,7 +270,7 @@ fn test_collision_event_receiver() {
     let mut receiver = CollisionEventReceiver::new();
     let entity1 = bevy_ecs::entity::Entity::from_raw(1);
     let entity2 = bevy_ecs::entity::Entity::from_raw(2);
-    
+
     receiver.add_event(CollisionEvent::CollisionStarted(entity1, entity2));
     assert_eq!(receiver.event_count(), 1);
     assert!(receiver.has_events());
@@ -283,7 +292,7 @@ fn test_collision_event_receiver() {
 fn test_physics_world_creation() {
     // Test 1: Create physics world
     let physics_world = PhysicsWorld::new();
-    
+
     // Verify internal state is initialized (we can't check private fields,
     // but we can verify methods work)
     let test_entity = bevy_ecs::entity::Entity::from_raw(999);
@@ -351,7 +360,7 @@ fn test_contact_events() {
     let entity2 = bevy_ecs::entity::Entity::from_raw(2);
     events.collision_started.push((entity1, entity2));
     events.collision_stopped.push((entity1, entity2));
-    
+
     assert_eq!(events.collision_started.len(), 1);
     assert_eq!(events.collision_stopped.len(), 1);
 
@@ -382,13 +391,16 @@ fn test_physics_step_system_execution() {
 
     // Test 3: Create schedule with physics systems
     let mut schedule = Schedule::default();
-    schedule.add_systems((
-        clear_collision_event_receivers,
-        sync_physics_transforms_system,
-        physics_step_system,
-        sync_physics_transforms_system,
-        populate_collision_events,
-    ).chain());
+    schedule.add_systems(
+        (
+            clear_collision_event_receivers,
+            sync_physics_transforms_system,
+            physics_step_system,
+            sync_physics_transforms_system,
+            populate_collision_events,
+        )
+            .chain(),
+    );
 
     // Test 4: Run schedule (should not panic)
     world.inner_mut().run_schedule(&mut schedule);
@@ -544,13 +556,16 @@ fn test_complete_physics_pipeline() {
 
     // Test 4: Set up systems
     let mut schedule = Schedule::default();
-    schedule.add_systems((
-        clear_collision_event_receivers,
-        sync_physics_transforms_system,
-        physics_step_system,
-        sync_physics_transforms_system,
-        populate_collision_events,
-    ).chain());
+    schedule.add_systems(
+        (
+            clear_collision_event_receivers,
+            sync_physics_transforms_system,
+            physics_step_system,
+            sync_physics_transforms_system,
+            populate_collision_events,
+        )
+            .chain(),
+    );
 
     // Test 5: Run multiple physics steps
     for _ in 0..10 {
@@ -576,7 +591,7 @@ fn test_complete_physics_pipeline() {
 #[test]
 fn test_fixed_timestep_accumulation() {
     // Test that physics runs correct number of steps based on accumulated time
-    
+
     // Test 1: Set up world
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());

@@ -2,69 +2,7 @@
 ///
 /// These are provided as examples and for testing. Real applications
 /// would typically load vertex data from files or generate it procedurally.
-use crate::{
-    mesh::MeshData,
-    vertex::{Vertex2D, Vertex3D},
-};
-
-/// Creates vertices for a triangle with one vertex of each primary color.
-///
-/// The triangle is centered at the origin with vertices at:
-/// ```text
-///        (0, 0.5) Blue
-///           /\
-///          /  \
-///         /    \
-///        /      \
-///       /________\
-/// (-0.5, -0.5)  (0.5, -0.5)
-///     Red          Green
-/// ```
-#[allow(dead_code)]
-pub fn colored_triangle() -> [Vertex2D; 3] {
-    [
-        Vertex2D::new([-0.5, -0.5], [1.0, 0.0, 0.0]), // Bottom-left (red)
-        Vertex2D::new([0.5, -0.5], [0.0, 1.0, 0.0]),  // Bottom-right (green)
-        Vertex2D::new([0.0, 0.5], [0.0, 0.0, 1.0]),   // Top (blue)
-    ]
-}
-
-/// Creates the unique vertices and index list for a coloured unit cube centred at the origin.
-///
-/// The cube is defined in model-space coordinates (range -0.5..0.5 on each axis). It returns
-/// a tuple `(vertices, indices)` where `vertices` contains the eight unique `Vertex3D`s and
-/// `indices` defines 12 triangles (36 indices) that reference those vertices.
-///
-/// Note: This version does not include per-face normals. For proper lighting, use `colored_cube_mesh()`.
-#[allow(dead_code)]
-pub fn colored_cube() -> (Vec<Vertex3D>, Vec<u16>) {
-    // 8 unique cube vertices (normals default to up)
-    let vertices = vec![
-        // Back face (z = -0.5)
-        Vertex3D::new([-0.5, -0.5, -0.5], [1.0, 0.0, 0.0]), // 0
-        Vertex3D::new([0.5, -0.5, -0.5], [0.0, 1.0, 0.0]),  // 1
-        Vertex3D::new([0.5, 0.5, -0.5], [0.0, 0.0, 1.0]),   // 2
-        Vertex3D::new([-0.5, 0.5, -0.5], [1.0, 1.0, 0.0]),  // 3
-        // Front face (z = 0.5)
-        Vertex3D::new([-0.5, -0.5, 0.5], [1.0, 0.0, 1.0]), // 4
-        Vertex3D::new([0.5, -0.5, 0.5], [0.0, 1.0, 1.0]),  // 5
-        Vertex3D::new([0.5, 0.5, 0.5], [1.0, 1.0, 1.0]),   // 6
-        Vertex3D::new([-0.5, 0.5, 0.5], [0.0, 0.0, 0.0]),  // 7
-    ];
-
-    // 12 triangles (two per face) expressed as 36 indices
-    let indices: Vec<u16> = vec![
-        // Back face
-        0, 1, 2, 2, 3, 0, // Front face
-        4, 6, 5, 4, 7, 6, // Bottom face
-        4, 5, 1, 4, 1, 0, // Top face
-        3, 2, 6, 3, 6, 7, // Left face
-        4, 0, 3, 4, 3, 7, // Right face
-        1, 5, 6, 1, 6, 2,
-    ];
-
-    (vertices, indices)
-}
+use crate::mesh::MeshData;
 
 /// Creates mesh data for a colored cube with proper per-face normals.
 ///
@@ -612,7 +550,8 @@ pub fn sphere_mesh(radius: f32, sectors: u32, stacks: u32, color: [f32; 3]) -> M
 
     // Generate vertices
     for i in 0..=stacks {
-        let stack_angle = std::f32::consts::PI / 2.0 - (i as f32) * std::f32::consts::PI / (stacks as f32);
+        let stack_angle =
+            std::f32::consts::PI / 2.0 - (i as f32) * std::f32::consts::PI / (stacks as f32);
         let xy = radius * stack_angle.cos();
         let z = radius * stack_angle.sin();
 

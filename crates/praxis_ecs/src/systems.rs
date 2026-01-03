@@ -884,8 +884,8 @@ pub fn gather_lighting_system(
 mod tests {
     use super::*;
     use crate::World;
-    use praxis_math::{Mat4, Quat, Vec3};
     use bevy_ecs::schedule::IntoSystemConfigs;
+    use praxis_math::{Mat4, Quat, Vec3};
 
     #[test]
     fn test_transform_propagation_simple() {

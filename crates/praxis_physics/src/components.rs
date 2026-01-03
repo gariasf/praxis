@@ -73,7 +73,7 @@ pub enum RigidBody {
     ///
     /// Physical properties like mass, velocity, and acceleration apply.
     Dynamic,
-    
+
     /// Static body that never moves.
     ///
     /// Static bodies:
@@ -84,7 +84,7 @@ pub enum RigidBody {
     ///
     /// Most efficient body type for non-moving geometry.
     Static,
-    
+
     /// Kinematic body controlled by animation or code.
     ///
     /// Kinematic bodies:
@@ -182,20 +182,20 @@ pub enum Collider {
         /// The full width of the box is 2 * hx. This is the distance from the
         /// center to the left/right faces.
         hx: f32,
-        
+
         /// Half-height (y-axis) in world units.
         ///
         /// The full height of the box is 2 * hy. This is the distance from the
         /// center to the top/bottom faces.
         hy: f32,
-        
+
         /// Half-depth (z-axis) in world units.
         ///
         /// The full depth of the box is 2 * hz. This is the distance from the
         /// center to the front/back faces.
         hz: f32,
     },
-    
+
     /// Sphere collider with radius.
     ///
     /// A perfect sphere defined by its radius. Spheres are the most efficient
@@ -209,7 +209,7 @@ pub enum Collider {
         /// making collision detection very fast.
         radius: f32,
     },
-    
+
     /// Capsule collider aligned with Y-axis (vertical).
     ///
     /// A capsule is a cylinder with hemispherical caps on both ends. It's
@@ -223,14 +223,14 @@ pub enum Collider {
         /// the hemispherical caps. Total capsule height is:
         /// 2 * (`half_height` + radius).
         half_height: f32,
-        
+
         /// Radius of the cylindrical segment and hemispherical caps in world units.
         ///
         /// This defines the thickness of the capsule. The radius is constant
         /// along the entire length and applies to both the cylinder and the caps.
         radius: f32,
     },
-    
+
     /// Capsule collider aligned with X-axis (horizontal).
     ///
     /// Same as `CapsuleY` but oriented along the X-axis. Useful for lying objects
@@ -240,11 +240,11 @@ pub enum Collider {
         ///
         /// This is half the length along the X-axis, not including the caps.
         half_height: f32,
-        
+
         /// Radius of the cylindrical segment and hemispherical caps in world units.
         radius: f32,
     },
-    
+
     /// Capsule collider aligned with Z-axis (horizontal).
     ///
     /// Same as `CapsuleY` but oriented along the Z-axis. Useful for depth-aligned
@@ -254,11 +254,11 @@ pub enum Collider {
         ///
         /// This is half the length along the Z-axis, not including the caps.
         half_height: f32,
-        
+
         /// Radius of the cylindrical segment and hemispherical caps in world units.
         radius: f32,
     },
-    
+
     /// Cylinder collider aligned with Y-axis (vertical).
     ///
     /// A cylinder is a round shape with flat top and bottom faces. Unlike a
@@ -270,7 +270,7 @@ pub enum Collider {
         /// This is the distance from the center to the top or bottom flat face.
         /// Total cylinder height is 2 * `half_height`.
         half_height: f32,
-        
+
         /// Radius of the circular cross-section in world units.
         ///
         /// This defines the width of the cylinder. The diameter is 2 * radius.
@@ -309,7 +309,10 @@ impl Collider {
     /// * `radius` - Radius of the capsule (applies to cylinder and caps)
     #[must_use]
     pub const fn capsule_y(half_height: f32, radius: f32) -> Self {
-        Self::CapsuleY { half_height, radius }
+        Self::CapsuleY {
+            half_height,
+            radius,
+        }
     }
 
     /// Creates an X-aligned capsule collider.
@@ -320,7 +323,10 @@ impl Collider {
     /// * `radius` - Radius of the capsule
     #[must_use]
     pub const fn capsule_x(half_height: f32, radius: f32) -> Self {
-        Self::CapsuleX { half_height, radius }
+        Self::CapsuleX {
+            half_height,
+            radius,
+        }
     }
 
     /// Creates a Z-aligned capsule collider.
@@ -331,7 +337,10 @@ impl Collider {
     /// * `radius` - Radius of the capsule
     #[must_use]
     pub const fn capsule_z(half_height: f32, radius: f32) -> Self {
-        Self::CapsuleZ { half_height, radius }
+        Self::CapsuleZ {
+            half_height,
+            radius,
+        }
     }
 
     /// Creates a Y-aligned cylinder collider.
@@ -342,7 +351,10 @@ impl Collider {
     /// * `radius` - Radius of the circular cross-section
     #[must_use]
     pub const fn cylinder_y(half_height: f32, radius: f32) -> Self {
-        Self::CylinderY { half_height, radius }
+        Self::CylinderY {
+            half_height,
+            radius,
+        }
     }
 }
 
@@ -418,7 +430,7 @@ pub struct PhysicsVelocity {
     /// - Vec3(0.0, -9.8, 0.0) = falling at 9.8 units/sec
     /// - Vec3(3.0, 4.0, 0.0) = moving at 5 units/sec at an angle
     pub linear: Vec3,
-    
+
     /// Angular velocity vector in radians per second.
     ///
     /// This is the rate of change of the body's orientation. The vector
@@ -499,7 +511,7 @@ impl PhysicsVelocity {
 pub struct ExternalForces {
     /// Accumulated force in Newtons.
     pub force: Vec3,
-    
+
     /// Accumulated torque in Newton-meters.
     pub torque: Vec3,
 }
@@ -559,7 +571,7 @@ impl ExternalForces {
 pub struct Mass {
     /// Mass in kilograms.
     pub mass: f32,
-    
+
     /// Angular inertia factor (simplified scalar).
     pub angular_inertia: f32,
 }
@@ -726,7 +738,7 @@ impl Default for Restitution {
 pub struct CollisionGroups {
     /// Bit mask of groups this body belongs to.
     pub memberships: u32,
-    
+
     /// Bit mask of groups this body can collide with.
     pub filter: u32,
 }
@@ -735,7 +747,10 @@ impl CollisionGroups {
     /// Creates collision groups with specified membership and filter.
     #[must_use]
     pub const fn new(memberships: u32, filter: u32) -> Self {
-        Self { memberships, filter }
+        Self {
+            memberships,
+            filter,
+        }
     }
 
     /// Creates collision groups that collide with everything.
@@ -797,10 +812,10 @@ impl Default for CollisionGroups {
 pub struct Sleeping {
     /// Whether sleeping is enabled.
     pub enabled: bool,
-    
+
     /// Linear velocity threshold for sleeping.
     pub linear_threshold: f32,
-    
+
     /// Angular velocity threshold for sleeping.
     pub angular_threshold: f32,
 }
@@ -1099,7 +1114,7 @@ pub enum CollisionEvent {
     /// The event is generated during `physics_step_system` and available
     /// immediately after for consumption by gameplay systems.
     CollisionStarted(bevy_ecs::entity::Entity, bevy_ecs::entity::Entity),
-    
+
     /// Two bodies stopped colliding this frame.
     ///
     /// This event fires once when contact that existed in the previous frame
@@ -1120,7 +1135,7 @@ pub enum CollisionEvent {
     /// Generated at the end of the physics step when comparing the previous
     /// frame's contact manifold with the current frame's.
     CollisionStopped(bevy_ecs::entity::Entity, bevy_ecs::entity::Entity),
-    
+
     /// Two bodies continued colliding this frame.
     ///
     /// This event fires every frame where contact exists between two bodies,

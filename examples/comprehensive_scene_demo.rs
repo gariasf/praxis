@@ -22,7 +22,7 @@
 
 use praxis_assets::load_obj_mesh;
 use praxis_ecs::{PerspectiveCameraBundle, Transform, World};
-use praxis_graphics::{DrawCommand, RenderContext, RenderCommands};
+use praxis_graphics::{DrawCommand, RenderCommands, RenderContext};
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::{Quat, Vec3};
 use praxis_utils::{info, Result};

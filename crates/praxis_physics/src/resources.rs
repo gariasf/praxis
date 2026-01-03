@@ -63,81 +63,81 @@ pub struct PhysicsWorld {
     /// Stores all rigid bodies in the simulation. Each body has properties like
     /// position, velocity, mass, and forces. Bodies are identified by `RigidBodyHandle`.
     pub(crate) rigid_body_set: RigidBodySet,
-    
+
     /// Rapier's collider set.
     ///
     /// Stores all collision shapes in the simulation. Colliders are attached to
     /// rigid bodies and define the geometry used for collision detection. Identified
     /// by `ColliderHandle`.
     pub(crate) collider_set: ColliderSet,
-    
+
     /// Rapier's integration parameters.
     ///
     /// Controls simulation settings like timestep, solver iterations, and damping.
     /// These parameters affect the accuracy and stability of the physics simulation.
     pub(crate) integration_parameters: IntegrationParameters,
-    
+
     /// Rapier's physics pipeline.
     ///
     /// The core simulation engine that orchestrates collision detection, constraint
     /// solving, and integration. This is what actually advances the simulation forward.
     pub(crate) physics_pipeline: PhysicsPipeline,
-    
+
     /// Rapier's island manager.
     ///
     /// Groups connected bodies into "islands" for more efficient simulation. Bodies
     /// at rest can be put to sleep as a group, avoiding unnecessary computation.
     pub(crate) island_manager: IslandManager,
-    
+
     /// Rapier's broad phase.
     ///
     /// The first stage of collision detection that quickly eliminates pairs of objects
     /// that are too far apart to collide. Uses spatial partitioning for efficiency.
     pub(crate) broad_phase: DefaultBroadPhase,
-    
+
     /// Rapier's narrow phase.
     ///
     /// The second stage of collision detection that performs precise geometric tests
     /// on potentially colliding pairs identified by the broad phase.
     pub(crate) narrow_phase: NarrowPhase,
-    
+
     /// Rapier's impulse joint set.
     ///
     /// Stores joints that constrain bodies using impulses (instantaneous forces).
     /// Examples include hinges, sliders, and fixed joints.
     pub(crate) impulse_joint_set: ImpulseJointSet,
-    
+
     /// Rapier's multibody joint set.
     ///
     /// Stores articulated joints for complex linked structures like robots or ragdolls.
     /// These use a more sophisticated solver than impulse joints.
     pub(crate) multibody_joint_set: MultibodyJointSet,
-    
+
     /// Rapier's CCD (Continuous Collision Detection) solver.
     ///
     /// Handles fast-moving objects that might otherwise tunnel through thin obstacles.
     /// CCD uses swept collision tests to prevent missed collisions.
     pub(crate) ccd_solver: CCDSolver,
-    
+
     /// Query pipeline for raycasts and spatial queries.
     ///
     /// Provides efficient spatial queries like raycasting, shape casting, and
     /// intersection tests. Built from the current state of bodies and colliders.
     pub(crate) query_pipeline: QueryPipeline,
-    
+
     /// Mapping from ECS entities to Rapier rigid body handles.
     ///
     /// This is the forward mapping in our wrapper pattern. When systems need to
     /// find the Rapier body for an entity, they use this `HashMap`.
     pub(crate) entity_to_body: HashMap<Entity, RigidBodyHandle>,
-    
+
     /// Mapping from Rapier rigid body handles to ECS entities.
     ///
     /// This is the reverse mapping. When processing collision events or other
     /// Rapier callbacks that provide handles, we use this to find the corresponding
     /// ECS entity.
     pub(crate) body_to_entity: HashMap<RigidBodyHandle, Entity>,
-    
+
     /// Mapping from ECS entities to Rapier collider handles.
     ///
     /// Similar to `entity_to_body` but for colliders. An entity can have both
@@ -377,9 +377,9 @@ impl PhysicsWorld {
             point![origin.x, origin.y, origin.z],
             vector![direction.x, direction.y, direction.z],
         );
-        
+
         let filter = QueryFilter::default();
-        
+
         self.query_pipeline
             .cast_ray(
                 &self.rigid_body_set,
@@ -482,11 +482,11 @@ impl PhysicsWorld {
             point![origin.x, origin.y, origin.z],
             vector![direction.x, direction.y, direction.z],
         );
-        
+
         let filter = QueryFilter::default();
-        
+
         let hits = Vec::new();
-        
+
         self.query_pipeline.cast_ray_and_get_normal(
             &self.rigid_body_set,
             &self.collider_set,
@@ -495,7 +495,7 @@ impl PhysicsWorld {
             solid,
             filter,
         );
-        
+
         // Note: Rapier's raycast_all API is complex and would require custom handling
         // For now, we provide the single-hit version. A full implementation would require
         // iterating through all potential hits and filtering appropriately.
@@ -770,7 +770,7 @@ impl PhysicsWorld {
     pub fn point_inside(&self, point: Vec3) -> Option<Entity> {
         let rapier_point = point![point.x, point.y, point.z];
         let filter = QueryFilter::default();
-        
+
         let mut result = None;
         self.query_pipeline.intersections_with_point(
             &self.rigid_body_set,
@@ -827,7 +827,7 @@ pub struct PhysicsConfig {
     /// Gravity vector in units per second squared.
     /// Default: (0.0, -9.81, 0.0) for Earth gravity.
     pub gravity: Vec3,
-    
+
     /// Fixed timestep for physics simulation in seconds.
     /// Default: 1/60 = 0.016666... seconds (60 Hz).
     pub timestep: f32,
@@ -902,7 +902,7 @@ impl Default for PhysicsConfig {
 pub struct ContactEvents {
     /// Pairs of entities that started colliding this frame.
     pub collision_started: Vec<(Entity, Entity)>,
-    
+
     /// Pairs of entities that stopped colliding this frame.
     pub collision_stopped: Vec<(Entity, Entity)>,
 }

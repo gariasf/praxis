@@ -26,17 +26,16 @@
 //! cargo run --example physics_demo
 //! ```
 
-use praxis_ecs::{PerspectiveCameraBundle, Transform, World, IntoSystemConfigs};
+use praxis_ecs::{IntoSystemConfigs, PerspectiveCameraBundle, Transform, World};
 use praxis_graphics::{DrawCommand, RenderCommands, RenderContext};
 use praxis_input::{Action, InputMap, InputState};
-use praxis_math::{Quat, Vec3, Mat4};
+use praxis_math::{Mat4, Quat, Vec3};
 use praxis_physics::{
-    Collider, PhysicsConfig, PhysicsTime, PhysicsWorld, PhysicsVelocity, RigidBody,
-    Restitution, Friction, ContactEvents,
-    physics_step_system, sync_physics_transforms_system,
-    clear_collision_event_receivers, populate_collision_events,
+    clear_collision_event_receivers, physics_step_system, populate_collision_events,
+    sync_physics_transforms_system, Collider, ContactEvents, Friction, PhysicsConfig, PhysicsTime,
+    PhysicsVelocity, PhysicsWorld, Restitution, RigidBody,
 };
-use praxis_utils::{info, Result, FrameTimer};
+use praxis_utils::{info, FrameTimer, Result};
 use std::sync::Arc;
 use std::time::Instant;
 use winit::application::ApplicationHandler;
@@ -81,7 +80,7 @@ impl CameraController {
         // Mouse coordinates are in screen space (pixels), we scale to reasonable rotation speed
         self.yaw -= delta_x * self.mouse_sensitivity;
         self.pitch -= delta_y * self.mouse_sensitivity;
-        
+
         // Step 2: Clamp pitch to prevent camera flipping upside down
         // Max pitch prevents the "gimbal lock" feeling when looking straight up/down
         self.pitch = self.pitch.clamp(-self.max_pitch, self.max_pitch);
@@ -92,11 +91,11 @@ impl CameraController {
         // Step 1: Create yaw rotation (around Y axis - horizontal rotation)
         // Yaw controls which direction we're facing on the XZ plane
         let yaw_quat = Quat::from_rotation_y(self.yaw);
-        
+
         // Step 2: Create pitch rotation (around X axis - vertical rotation)
         // Pitch controls looking up and down
         let pitch_quat = Quat::from_rotation_x(self.pitch);
-        
+
         // Step 3: Combine rotations (yaw first, then pitch)
         // Order matters! Yaw * Pitch gives FPS-style camera
         // Pitch * Yaw would give flight-simulator style
@@ -153,24 +152,24 @@ impl App {
         // ====================================================================
         // STEP 2: INITIALIZE PHYSICS RESOURCES
         // ====================================================================
-        
+
         // PhysicsWorld wraps the Rapier3D physics engine and manages:
         // - Rigid body set (all physics bodies in the simulation)
         // - Collider set (all collision shapes)
         // - Physics pipeline (collision detection, constraint solving, integration)
         // - Mappings between ECS entities and Rapier handles
         world.insert_resource(PhysicsWorld::new());
-        
+
         // PhysicsConfig contains global physics settings:
         // - Gravity: (0, -9.81, 0) = Earth gravity pulling down on Y axis
         // - Timestep: 1/60 second = 60Hz physics simulation rate
         // Fixed timestep ensures deterministic physics regardless of frame rate
         world.insert_resource(PhysicsConfig::default());
-        
+
         // PhysicsTime accumulates frame delta times for fixed timestep integration
         // When accumulator >= timestep, we run one physics step
         world.insert_resource(PhysicsTime::new());
-        
+
         // ContactEvents stores collision events (started, stopped) each frame
         // Gameplay systems can query this to react to collisions
         world.insert_resource(ContactEvents::new());
@@ -178,7 +177,7 @@ impl App {
         // ====================================================================
         // STEP 3: CREATE CAMERA
         // ====================================================================
-        
+
         // Step 3a: Position camera above the scene looking at the action
         // Starting position: (0, 10, 20) gives a good overview of the falling objects
         // Looking slightly down toward the origin where objects will land
@@ -190,20 +189,20 @@ impl App {
         // - PerspectiveProjection (FOV, near/far planes)
         // - CameraMatrices (view and projection matrices for rendering)
         let camera_entity = world.spawn(PerspectiveCameraBundle::new_at(camera_transform));
-        
+
         // Step 3c: Store camera entity reference for updates
         self.camera_controller.camera_entity = Some(camera_entity);
 
         // ====================================================================
         // STEP 4: CREATE GROUND PLANE (STATIC BODY)
         // ====================================================================
-        
+
         // Static bodies never move and have infinite mass
         // Perfect for level geometry like floors, walls, terrain
-        
+
         // Step 4a: Position ground at origin with no rotation
         let ground_transform = Transform::from_xyz(0.0, 0.0, 0.0);
-        
+
         // Step 4b: Spawn ground entity with physics components
         world.spawn((
             ground_transform,
@@ -223,16 +222,16 @@ impl App {
         // ====================================================================
         // STEP 5: CREATE FALLING CUBES (DYNAMIC BODIES)
         // ====================================================================
-        
+
         // Dynamic bodies are fully simulated - they respond to forces, gravity, and collisions
         // These cubes will fall under gravity and stack on the ground
-        
+
         let cube_positions = [
-            Vec3::new(-5.0, 10.0, 0.0),   // Left
-            Vec3::new(-2.5, 12.0, 0.0),   // Left-center, higher
-            Vec3::new(0.0, 15.0, 0.0),    // Center, highest
-            Vec3::new(2.5, 12.0, 0.0),    // Right-center, higher
-            Vec3::new(5.0, 10.0, 0.0),    // Right
+            Vec3::new(-5.0, 10.0, 0.0), // Left
+            Vec3::new(-2.5, 12.0, 0.0), // Left-center, higher
+            Vec3::new(0.0, 15.0, 0.0),  // Center, highest
+            Vec3::new(2.5, 12.0, 0.0),  // Right-center, higher
+            Vec3::new(5.0, 10.0, 0.0),  // Right
         ];
 
         for (i, &position) in cube_positions.iter().enumerate() {
@@ -264,16 +263,16 @@ impl App {
         // ====================================================================
         // STEP 6: CREATE BOUNCING SPHERES (DYNAMIC BODIES)
         // ====================================================================
-        
+
         // These spheres have high restitution, so they'll bounce energetically
         // They demonstrate elastic collisions
-        
+
         let sphere_positions = [
-            Vec3::new(-6.0, 20.0, -5.0),  // Back-left, very high
-            Vec3::new(-3.0, 18.0, -5.0),  // Back left-center
-            Vec3::new(0.0, 22.0, -5.0),   // Back center, highest
-            Vec3::new(3.0, 18.0, -5.0),   // Back right-center
-            Vec3::new(6.0, 20.0, -5.0),   // Back-right, very high
+            Vec3::new(-6.0, 20.0, -5.0), // Back-left, very high
+            Vec3::new(-3.0, 18.0, -5.0), // Back left-center
+            Vec3::new(0.0, 22.0, -5.0),  // Back center, highest
+            Vec3::new(3.0, 18.0, -5.0),  // Back right-center
+            Vec3::new(6.0, 20.0, -5.0),  // Back-right, very high
         ];
 
         for (i, &position) in sphere_positions.iter().enumerate() {
@@ -283,7 +282,7 @@ impl App {
             // Step 6b: Give each sphere a small random initial velocity for visual interest
             // Small sideways velocity makes the bouncing patterns more interesting
             let initial_velocity = PhysicsVelocity::linear(Vec3::new(
-                (i as f32 - 2.0) * 0.5,  // Spread velocities: -1.0, -0.5, 0.0, 0.5, 1.0
+                (i as f32 - 2.0) * 0.5, // Spread velocities: -1.0, -0.5, 0.0, 0.5, 1.0
                 0.0,
                 0.0,
             ));
@@ -313,24 +312,28 @@ impl App {
     fn update_camera(&mut self, delta_time: f32) {
         // Step 1: Get world and camera entity, early return if not initialized
         let Some(world) = &mut self.world else { return };
-        let Some(camera_entity) = self.camera_controller.camera_entity else { return };
+        let Some(camera_entity) = self.camera_controller.camera_entity else {
+            return;
+        };
 
         // Step 2: Get mutable reference to camera transform
         // We use world.get_mut() because we need to modify the Transform component
-        let Ok(mut transform) = world.get_mut::<Transform>(camera_entity) else { return };
+        let Ok(mut transform) = world.get_mut::<Transform>(camera_entity) else {
+            return;
+        };
 
         // ====================================================================
         // STEP 3: CALCULATE MOVEMENT DIRECTION IN WORLD SPACE
         // ====================================================================
-        
+
         // Step 3a: Get camera rotation to determine which way is "forward"
         let rotation = self.camera_controller.get_rotation();
-        
+
         // Step 3b: Calculate forward vector (where camera is looking)
         // Start with -Z (forward in right-handed coords) and rotate by camera orientation
         // This gives us the direction the camera is facing in world space
         let forward = rotation * Vec3::new(0.0, 0.0, -1.0);
-        
+
         // Step 3c: Calculate right vector (perpendicular to forward)
         // Start with +X (right in right-handed coords) and rotate by camera orientation
         // This gives us the direction "to the right" from camera's perspective
@@ -339,10 +342,13 @@ impl App {
         // ====================================================================
         // STEP 4: CALCULATE MOVEMENT DELTA FROM INPUT
         // ====================================================================
-        
+
         // Step 4a: Determine movement speed (sprint or normal)
         // Sprint multiplier makes camera move faster when shift is held
-        let speed = if self.input_state.is_action_active(&Action::new("sprint"), &self.input_map) {
+        let speed = if self
+            .input_state
+            .is_action_active(&Action::new("sprint"), &self.input_map)
+        {
             self.camera_controller.move_speed * self.camera_controller.sprint_multiplier
         } else {
             self.camera_controller.move_speed
@@ -351,28 +357,46 @@ impl App {
         // Step 4b: Accumulate movement from WASD keys
         // Each input contributes to movement in a specific direction
         let mut movement = Vec3::ZERO;
-        
+
         // Forward/backward movement along the camera's looking direction
-        if self.input_state.is_action_active(&Action::new("forward"), &self.input_map) {
+        if self
+            .input_state
+            .is_action_active(&Action::new("forward"), &self.input_map)
+        {
             movement += forward;
         }
-        if self.input_state.is_action_active(&Action::new("backward"), &self.input_map) {
+        if self
+            .input_state
+            .is_action_active(&Action::new("backward"), &self.input_map)
+        {
             movement -= forward;
         }
-        
+
         // Left/right strafing perpendicular to looking direction
-        if self.input_state.is_action_active(&Action::new("left"), &self.input_map) {
+        if self
+            .input_state
+            .is_action_active(&Action::new("left"), &self.input_map)
+        {
             movement -= right;
         }
-        if self.input_state.is_action_active(&Action::new("right"), &self.input_map) {
+        if self
+            .input_state
+            .is_action_active(&Action::new("right"), &self.input_map)
+        {
             movement += right;
         }
-        
+
         // Vertical movement (world space, not camera relative)
-        if self.input_state.is_action_active(&Action::new("up"), &self.input_map) {
+        if self
+            .input_state
+            .is_action_active(&Action::new("up"), &self.input_map)
+        {
             movement += Vec3::Y;
         }
-        if self.input_state.is_action_active(&Action::new("down"), &self.input_map) {
+        if self
+            .input_state
+            .is_action_active(&Action::new("down"), &self.input_map)
+        {
             movement -= Vec3::Y;
         }
 
@@ -386,13 +410,13 @@ impl App {
         // ====================================================================
         // STEP 5: APPLY MOVEMENT TO CAMERA TRANSFORM
         // ====================================================================
-        
+
         // Step 5a: Scale movement by speed and delta time
         // delta_time ensures movement is frame-rate independent
         // At 60fps (dt=0.0167s), speed=5.0 → moves 0.083 units per frame
         // At 30fps (dt=0.0333s), speed=5.0 → moves 0.167 units per frame (same distance per second)
         transform.translation += movement * speed * delta_time;
-        
+
         // Step 5b: Update camera rotation from controller
         transform.rotation = self.camera_controller.get_rotation();
     }
@@ -405,7 +429,7 @@ impl App {
         // ====================================================================
         // STEP 2: ACCUMULATE FRAME TIME FOR FIXED TIMESTEP
         // ====================================================================
-        
+
         // Fixed timestep physics simulation: Run physics at constant rate (60Hz)
         // regardless of frame rate. This ensures deterministic behavior.
         //
@@ -424,7 +448,7 @@ impl App {
         // Example at 120fps (8.33ms per frame):
         // Frame 1: accumulator = 8.33ms, run 0 steps, remainder = 8.33ms
         // Frame 2: accumulator = 16.67ms (8.33 + 8.33), run 1 step, remainder = 0ms
-        
+
         {
             let mut physics_time = world.inner_mut().resource_mut::<PhysicsTime>();
             physics_time.add(delta_time);
@@ -433,17 +457,17 @@ impl App {
         // ====================================================================
         // STEP 3: RUN PHYSICS SYSTEMS IN CORRECT ORDER
         // ====================================================================
-        
+
         // The physics update pipeline must run in this exact order:
         //
         // 1. clear_collision_event_receivers: Clear previous frame's collision events
         //    This prevents events from accumulating across frames
         //
-        // 2. sync_physics_transforms_system (pre-physics): 
+        // 2. sync_physics_transforms_system (pre-physics):
         //    Copy ECS Transform changes to Rapier rigid bodies
         //    This allows kinematic bodies to move and dynamic bodies to be teleported
         //
-        // 3. physics_step_system: 
+        // 3. physics_step_system:
         //    Run the Rapier physics simulation using fixed timestep
         //    This updates rigid body positions based on forces, gravity, and collisions
         //    May run 0, 1, or multiple times depending on accumulated time
@@ -455,15 +479,18 @@ impl App {
         // 5. populate_collision_events:
         //    Distribute collision events to entities with CollisionEventReceiver components
         //    This allows game logic to react to collisions
-        
+
         let mut schedule = praxis_ecs::Schedule::default();
-        schedule.add_systems((
-            clear_collision_event_receivers,
-            sync_physics_transforms_system,
-            physics_step_system,
-            sync_physics_transforms_system,
-            populate_collision_events,
-        ).chain());
+        schedule.add_systems(
+            (
+                clear_collision_event_receivers,
+                sync_physics_transforms_system,
+                physics_step_system,
+                sync_physics_transforms_system,
+                populate_collision_events,
+            )
+                .chain(),
+        );
 
         // Execute all systems in order
         world.inner_mut().run_schedule(&mut schedule);
@@ -482,11 +509,11 @@ impl App {
         // ====================================================================
         // STEP 2: QUERY CAMERA FOR VIEW/PROJECTION MATRICES
         // ====================================================================
-        
+
         // Camera matrices transform 3D world coordinates to 2D screen coordinates
         // - View matrix: Camera position and orientation (where we're looking from)
         // - Projection matrix: Perspective projection (FOV, near/far planes)
-        
+
         let mut view_matrix = Mat4::IDENTITY;
         let mut proj_matrix = Mat4::IDENTITY;
 
@@ -502,16 +529,15 @@ impl App {
         // ====================================================================
         // STEP 3: COLLECT DRAW COMMANDS FOR ALL RENDERABLE ENTITIES
         // ====================================================================
-        
+
         // We need to render all entities that have:
         // - Transform: Position, rotation, scale in world space
         // - RigidBody: Physics body type (we render all physics objects)
-        
+
         let mut draw_commands = Vec::new();
 
-        for (entity, (transform, rigid_body)) in world
-            .query::<(&Transform, &RigidBody)>()
-            .iter(world)
+        for (entity, (transform, rigid_body)) in
+            world.query::<(&Transform, &RigidBody)>().iter(world)
         {
             // Step 3a: Compute model matrix from transform
             // Model matrix transforms from object space to world space
@@ -528,8 +554,8 @@ impl App {
             // - Blue: Dynamic bodies (cubes, spheres)
             // - Yellow: Kinematic bodies (none in this demo, but supported)
             let color = match rigid_body {
-                RigidBody::Static => Vec3::new(0.2, 0.8, 0.2),    // Green
-                RigidBody::Dynamic => Vec3::new(0.3, 0.5, 1.0),   // Blue
+                RigidBody::Static => Vec3::new(0.2, 0.8, 0.2), // Green
+                RigidBody::Dynamic => Vec3::new(0.3, 0.5, 1.0), // Blue
                 RigidBody::Kinematic => Vec3::new(1.0, 1.0, 0.3), // Yellow
             };
 
@@ -545,7 +571,7 @@ impl App {
         // ====================================================================
         // STEP 4: SUBMIT DRAW COMMANDS TO RENDERER
         // ====================================================================
-        
+
         // RenderCommands packages all data needed for one frame:
         // - View matrix: Where the camera is
         // - Projection matrix: How to project 3D to 2D
@@ -594,8 +620,7 @@ impl ApplicationHandler for App {
             self.render_context = Some(render_context);
 
             // Step 4: Initialize scene with physics objects
-            self.init_scene()
-                .expect("Failed to initialize scene");
+            self.init_scene().expect("Failed to initialize scene");
 
             // Step 5: Lock cursor for FPS camera control
             if let Some(window) = &self.window {
@@ -623,12 +648,9 @@ impl ApplicationHandler for App {
 
             // Handle keyboard input
             WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        logical_key,
-                        state,
-                        ..
-                    },
+                event: KeyEvent {
+                    logical_key, state, ..
+                },
                 ..
             } => {
                 // Update input state for camera movement
@@ -727,7 +749,8 @@ impl ApplicationHandler for App {
         // Handle mouse movement for camera rotation (only when cursor is locked)
         if self.cursor_locked {
             if let DeviceEvent::MouseMotion { delta } = event {
-                self.camera_controller.update_rotation(delta.0 as f32, delta.1 as f32);
+                self.camera_controller
+                    .update_rotation(delta.0 as f32, delta.1 as f32);
             }
         }
     }

@@ -294,7 +294,8 @@ fn create_pipeline_layout(
 
     // Automatically derive the layout from shader stages
     // This inspects the shaders to determine what resources they expect
-    let mut descriptor_set_layout_create_infos = PipelineDescriptorSetLayoutCreateInfo::from_stages(stages);
+    let mut descriptor_set_layout_create_infos =
+        PipelineDescriptorSetLayoutCreateInfo::from_stages(stages);
 
     // Modify set 0, binding 1 to use UniformBufferDynamic instead of UniformBuffer
     // This allows us to use dynamic offsets for the model matrix, enabling
@@ -302,7 +303,8 @@ fn create_pipeline_layout(
     if let Some(set_0) = descriptor_set_layout_create_infos.set_layouts.get_mut(0) {
         if let Some(binding) = set_0.bindings.get_mut(&1) {
             trace!("Modifying binding 1 to use UniformBufferDynamic");
-            binding.descriptor_type = vulkano::descriptor_set::layout::DescriptorType::UniformBufferDynamic;
+            binding.descriptor_type =
+                vulkano::descriptor_set::layout::DescriptorType::UniformBufferDynamic;
         } else {
             error!("Binding 1 not found in set 0");
         }

@@ -3,18 +3,18 @@
 //! This module provides systems that integrate Rapier physics simulation
 //! with the Praxis ECS architecture.
 
-use praxis_ecs::{Entity, Query, Res, ResMut, Transform, With, Changed};
+use bevy_ecs::removal_detection::RemovedComponents;
+use praxis_ecs::{Changed, Entity, Query, Res, ResMut, Transform, With};
 use praxis_math::{Quat, Vec3};
 use rapier3d::prelude::{
-    ColliderBuilder, Isometry, RigidBodyBuilder, RigidBodyType, SharedShape, vector, nalgebra,
+    nalgebra, vector, ColliderBuilder, Isometry, RigidBodyBuilder, RigidBodyType, SharedShape,
 };
-use bevy_ecs::removal_detection::RemovedComponents;
 
 use crate::components::{
-    Collider as PraxisCollider, ExternalForces, Friction, Restitution,
-    RigidBody as PraxisRigidBody, Sensor, PhysicsVelocity, CollisionEventReceiver, CollisionEvent,
+    Collider as PraxisCollider, CollisionEvent, CollisionEventReceiver, ExternalForces, Friction,
+    PhysicsVelocity, Restitution, RigidBody as PraxisRigidBody, Sensor,
 };
-use crate::resources::{PhysicsWorld, PhysicsConfig, ContactEvents, PhysicsTime};
+use crate::resources::{ContactEvents, PhysicsConfig, PhysicsTime, PhysicsWorld};
 
 /// Advances the Rapier physics simulation by one fixed timestep.
 ///
@@ -132,7 +132,7 @@ pub fn physics_step_system(
     // Note: In production, you might want to clamp the number of steps to
     // prevent the "spiral of death" where physics can't keep up with real-time.
     // For example: `let max_steps = 3;` and break after max_steps iterations.
-    
+
     while physics_time.should_step(config.timestep) {
         // Clear previous frame's collision events at the start of each physics step.
         // These events are generated during the narrow phase and should be consumed
@@ -148,7 +148,7 @@ pub fn physics_step_system(
         // - How far ahead in time to integrate (position += velocity * dt)
         // - Constraint solver time budget (impulses are scaled by dt)
         // - Damping application (exponential decay over dt)
-        
+
         physics_world.integration_parameters.dt = config.timestep;
 
         // Convert gravity from Praxis Vec3 to Rapier's nalgebra vector type.
@@ -215,23 +215,23 @@ pub fn physics_step_system(
             ref mut query_pipeline,
             ..
         } = *physics_world;
-        
+
         // Execute one complete physics step advancing the simulation by dt.
         // This call performs all the stages described above.
         physics_pipeline.step(
-            &gravity,                    // Constant acceleration applied to all dynamic bodies
-            integration_parameters,      // Timestep, solver iterations, damping, etc.
-            island_manager,              // Groups connected bodies for efficient solving
-            broad_phase,                 // Spatial partitioning for collision culling
-            narrow_phase,                // Precise collision detection
-            rigid_body_set,              // All rigid bodies in the simulation
-            collider_set,                // All collision shapes
-            impulse_joint_set,           // Constraints connecting bodies
-            multibody_joint_set,         // Articulated joint hierarchies
-            ccd_solver,                  // Continuous collision detection
-            Some(query_pipeline),        // Optional: update spatial queries (raycasts, etc.)
-            &(),                         // Physics hooks (custom collision filtering)
-            &event_handler,              // Collision event callbacks
+            &gravity,               // Constant acceleration applied to all dynamic bodies
+            integration_parameters, // Timestep, solver iterations, damping, etc.
+            island_manager,         // Groups connected bodies for efficient solving
+            broad_phase,            // Spatial partitioning for collision culling
+            narrow_phase,           // Precise collision detection
+            rigid_body_set,         // All rigid bodies in the simulation
+            collider_set,           // All collision shapes
+            impulse_joint_set,      // Constraints connecting bodies
+            multibody_joint_set,    // Articulated joint hierarchies
+            ccd_solver,             // Continuous collision detection
+            Some(query_pipeline),   // Optional: update spatial queries (raycasts, etc.)
+            &(),                    // Physics hooks (custom collision filtering)
+            &event_handler,         // Collision event callbacks
         );
 
         // ====================================================================
@@ -247,7 +247,7 @@ pub fn physics_step_system(
         //
         // This is what makes the system fixed timestep: we always step by
         // exactly config.timestep seconds, never more or less.
-        
+
         physics_time.step(config.timestep);
     }
 
@@ -465,7 +465,7 @@ pub fn sync_physics_transforms_system(
     // 2. Frame N: Transform marked as "changed" (by physics system)
     // 3. Frame N+1: Changed<Transform> sees it as changed
     // 4. Frame N+1: We sync it to physics (overwriting with current value)
-    // 
+    //
     // Wait, that sounds like it would cause a feedback loop! Why doesn't it?
     //
     // Because we run this system TWICE per frame:
@@ -494,7 +494,7 @@ pub fn sync_physics_transforms_system(
         // Each ECS entity with a RigidBody component needs a corresponding
         // Rapier rigid body. We maintain a mapping between Entity IDs and
         // RigidBodyHandles in the PhysicsWorld resource.
-        
+
         let body_handle = if let Some(handle) = physics_world.get_body_handle(entity) {
             // Body already exists, use it
             handle
@@ -510,7 +510,7 @@ pub fn sync_physics_transforms_system(
             //
             // We create the appropriate Rapier body type based on the
             // component's variant.
-            
+
             let rapier_body_type = match rigid_body {
                 PraxisRigidBody::Dynamic => RigidBodyType::Dynamic,
                 PraxisRigidBody::Static => RigidBodyType::Fixed,
@@ -519,7 +519,7 @@ pub fn sync_physics_transforms_system(
 
             // Convert ECS transform to Rapier's position representation.
             //
-            // **Rotation conversion:** 
+            // **Rotation conversion:**
             // Rapier internally uses unit quaternions but the builder expects
             // an axis-angle vector. We convert glam::Quat to nalgebra AxisAngle:
             //
@@ -542,11 +542,13 @@ pub fn sync_physics_transforms_system(
                     transform.translation.y,
                     transform.translation.z
                 ])
-                .rotation(vector![
-                    transform.rotation.x,
-                    transform.rotation.y,
-                    transform.rotation.z
-                ] * transform.rotation.w)
+                .rotation(
+                    vector![
+                        transform.rotation.x,
+                        transform.rotation.y,
+                        transform.rotation.z
+                    ] * transform.rotation.w,
+                )
                 .build();
 
             // Insert the body into Rapier's rigid body set and create bidirectional
@@ -594,7 +596,7 @@ pub fn sync_physics_transforms_system(
                 // Set the position and rotation of the kinematic body to match
                 // the ECS Transform. This makes the physics simulation aware of
                 // the body's new position for collision detection and resolution.
-                
+
                 body.set_position(
                     Isometry::new(
                         vector![
@@ -612,7 +614,7 @@ pub fn sync_physics_transforms_system(
                 );
             }
         }
-        
+
         // Note: We don't update dynamic body positions here because they're
         // controlled by the physics simulation. If gameplay code wants to
         // teleport a dynamic body, it should still modify the Transform,
@@ -669,7 +671,7 @@ pub fn sync_physics_transforms_system(
                 // - Rotation: A unit quaternion representing the body's orientation
                 //
                 // We extract these and convert them to Praxis/glam types.
-                
+
                 let position = body.position();
                 let translation = position.translation;
                 let rotation = position.rotation;
@@ -716,7 +718,7 @@ pub fn sync_physics_transforms_system(
 
                 let axis = rotation.scaled_axis();
                 let angle = axis.norm(); // sqrt(x² + y² + z²) = magnitude
-                
+
                 if angle > 0.0 {
                     // Significant rotation detected, normalize the axis and create quaternion
                     let axis_normalized = axis / angle;
@@ -789,11 +791,13 @@ pub fn sync_transforms_to_physics(
                     transform.translation.y,
                     transform.translation.z
                 ])
-                .rotation(vector![
-                    transform.rotation.x,
-                    transform.rotation.y,
-                    transform.rotation.z
-                ] * transform.rotation.w)
+                .rotation(
+                    vector![
+                        transform.rotation.x,
+                        transform.rotation.y,
+                        transform.rotation.z
+                    ] * transform.rotation.w,
+                )
                 .build();
 
             let handle = physics_world.rigid_body_set.insert(rapier_body);
@@ -878,7 +882,7 @@ pub fn step_physics_simulation(
         ref mut query_pipeline,
         ..
     } = *physics_world;
-    
+
     physics_pipeline.step(
         &gravity,
         integration_parameters,
@@ -1021,7 +1025,9 @@ pub fn sync_colliders(
         }
 
         // Get rigid body handle
-        let Some(body_handle) = physics_world.get_body_handle(entity) else { continue };
+        let Some(body_handle) = physics_world.get_body_handle(entity) else {
+            continue;
+        };
 
         // Create Rapier collider shape
         let shape: SharedShape = match collider {
@@ -1062,12 +1068,9 @@ pub fn sync_colliders(
             ref mut entity_to_collider,
             ..
         } = *physics_world;
-        
-        let collider_handle = collider_set.insert_with_parent(
-            rapier_collider,
-            body_handle,
-            rigid_body_set,
-        );
+
+        let collider_handle =
+            collider_set.insert_with_parent(rapier_collider, body_handle, rigid_body_set);
 
         entity_to_collider.insert(entity, collider_handle);
     }
@@ -1280,7 +1283,7 @@ pub fn cleanup_physics_entities(
         // - The component was added and removed in the same frame
         //
         // We use get_body_handle() to safely check if a Rapier body exists.
-        
+
         let Some(body_handle) = physics_world.get_body_handle(entity) else {
             // Entity has no Rapier body, nothing to clean up
             continue;
@@ -1300,7 +1303,7 @@ pub fn cleanup_physics_entities(
         // Note: This implementation only handles the primary collider tracked in
         // entity_to_collider. If the game uses multiple colliders per body, those
         // would need additional tracking and cleanup.
-        
+
         if let Some(collider_handle) = physics_world.get_collider_handle(entity) {
             // Remove the collider from Rapier's collider set.
             // The remove() method returns the removed collider (if it existed),
@@ -1315,14 +1318,14 @@ pub fn cleanup_physics_entities(
                 ref mut entity_to_collider,
                 ..
             } = *physics_world;
-            
+
             collider_set.remove(
                 collider_handle,
                 island_manager,
                 rigid_body_set,
                 true, // wake_up: Wake bodies in contact with this collider
             );
-            
+
             // Remove the collider handle from our entity-to-collider mapping
             entity_to_collider.remove(&entity);
         }
@@ -1339,7 +1342,7 @@ pub fn cleanup_physics_entities(
         // - The body is removed from the broad phase spatial structure
         //
         // Again, destructure to avoid multiple mutable borrows.
-        
+
         let PhysicsWorld {
             ref mut rigid_body_set,
             ref mut island_manager,
@@ -1350,7 +1353,7 @@ pub fn cleanup_physics_entities(
             ref mut body_to_entity,
             ..
         } = *physics_world;
-        
+
         rigid_body_set.remove(
             body_handle,
             island_manager,
@@ -1372,10 +1375,10 @@ pub fn cleanup_physics_entities(
         // - Memory leaks (HashMap entries persist forever)
         // - Dangling references (lookups return stale entities)
         // - Incorrect collision events (events reference despawned entities)
-        
+
         // Remove the Entity → Handle mapping
         entity_to_body.remove(&entity);
-        
+
         // Remove the Handle → Entity mapping
         body_to_entity.remove(&body_handle);
 
@@ -1455,9 +1458,7 @@ pub fn cleanup_physics_entities(
 /// - **Query**: Entities with `CollisionEventReceiver` components (mutable)
 /// - **Ordering**: Should run before `physics_step_system`
 #[allow(clippy::needless_pass_by_value)]
-pub fn clear_collision_event_receivers(
-    mut query: Query<&mut CollisionEventReceiver>,
-) {
+pub fn clear_collision_event_receivers(mut query: Query<&mut CollisionEventReceiver>) {
     for mut receiver in &mut query {
         receiver.clear();
     }
@@ -1608,20 +1609,20 @@ pub fn populate_collision_events(
 ) {
     // Build a quick lookup map for entities with receivers
     // This allows O(1) lookup when processing events
-    let mut receivers: std::collections::HashMap<Entity, CollisionEventReceiver> = 
-        query.iter_mut()
-            .map(|(entity, receiver)| (entity, receiver.clone()))
-            .collect();
+    let mut receivers: std::collections::HashMap<Entity, CollisionEventReceiver> = query
+        .iter_mut()
+        .map(|(entity, receiver)| (entity, receiver.clone()))
+        .collect();
 
     // Process collision started events
     for (entity1, entity2) in &contact_events.collision_started {
         let event = CollisionEvent::CollisionStarted(*entity1, *entity2);
-        
+
         // Send event to entity1 if it has a receiver
         if let Some(receiver) = receivers.get_mut(entity1) {
             receiver.add_event(event);
         }
-        
+
         // Send event to entity2 if it has a receiver
         if let Some(receiver) = receivers.get_mut(entity2) {
             receiver.add_event(event);
@@ -1631,16 +1632,16 @@ pub fn populate_collision_events(
     // Process collision stopped events
     for (entity1, entity2) in &contact_events.collision_stopped {
         let event = CollisionEvent::CollisionStopped(*entity1, *entity2);
-        
+
         if let Some(receiver) = receivers.get_mut(entity1) {
             receiver.add_event(event);
         }
-        
+
         if let Some(receiver) = receivers.get_mut(entity2) {
             receiver.add_event(event);
         }
     }
-    
+
     // Write the updated receivers back to the query
     for (entity, mut receiver) in &mut query {
         if let Some(updated) = receivers.remove(&entity) {

@@ -92,29 +92,7 @@ pub trait AssetLoader<T> {
 /// println!("Loaded {} vertices", mesh.positions.len());
 /// # Ok::<(), praxis_utils::eyre::Report>(())
 /// ```
-pub struct MeshLoader {
-    /// Configuration options for the loader
-    _config: MeshLoaderConfig,
-}
-
-/// Configuration options for mesh loading.
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-struct MeshLoaderConfig {
-    /// Whether to load normals from the OBJ file
-    load_normals: bool,
-    /// Whether to load texture coordinates from the OBJ file
-    load_uvs: bool,
-}
-
-impl Default for MeshLoaderConfig {
-    fn default() -> Self {
-        Self {
-            load_normals: true,
-            load_uvs: true,
-        }
-    }
-}
+pub struct MeshLoader {}
 
 impl MeshLoader {
     /// Creates a new mesh loader with default configuration.
@@ -127,9 +105,7 @@ impl MeshLoader {
     /// let loader = MeshLoader::new();
     /// ```
     pub fn new() -> Self {
-        Self {
-            _config: MeshLoaderConfig::default(),
-        }
+        Self {}
     }
 }
 

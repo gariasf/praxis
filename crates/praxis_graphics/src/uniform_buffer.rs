@@ -25,7 +25,7 @@
 //! ```
 
 use praxis_math::Mat4;
-use praxis_utils::{Result, debug, eyre, info, trace};
+use praxis_utils::{debug, eyre, info, trace, Result};
 use std::sync::Arc;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
@@ -142,7 +142,10 @@ impl DynamicUniformBuffer {
             .min_uniform_buffer_offset_alignment
             .as_devicesize() as usize;
 
-        debug!("Minimum uniform buffer offset alignment: {} bytes", min_alignment);
+        debug!(
+            "Minimum uniform buffer offset alignment: {} bytes",
+            min_alignment
+        );
 
         // Calculate aligned size for each object's uniform data
         let object_size = std::mem::size_of::<ModelUniforms>();
@@ -236,9 +239,10 @@ impl DynamicUniformBuffer {
         );
 
         // Get write access to the buffer
-        let mut write_lock = self.buffer.write().map_err(|e| {
-            eyre::eyre!("Failed to lock uniform buffer for writing: {}", e)
-        })?;
+        let mut write_lock = self
+            .buffer
+            .write()
+            .map_err(|e| eyre::eyre!("Failed to lock uniform buffer for writing: {}", e))?;
 
         // Calculate starting offset for current frame
         let frame_offset = self.current_frame * self.frame_stride;
@@ -246,7 +250,7 @@ impl DynamicUniformBuffer {
         // Write each model matrix at its aligned offset
         for (i, model) in models.iter().enumerate() {
             let object_offset = frame_offset + (i * self.aligned_object_size);
-            
+
             let uniforms = ModelUniforms {
                 model: model.to_cols_array_2d(),
             };

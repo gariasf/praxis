@@ -31,8 +31,7 @@ use praxis_ecs::{
     DirectionalLight, LightingData, PerspectiveCameraBundle, PointLight, Transform, World,
 };
 use praxis_graphics::{
-    textured_cube_mesh, textured_quad_mesh, DrawCommand, RenderContext,
-    RenderCommands,
+    textured_cube_mesh, textured_quad_mesh, DrawCommand, RenderCommands, RenderContext,
 };
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::{Quat, Vec3};
@@ -377,8 +376,8 @@ impl App {
         world.spawn((
             DirectionalLight::new(
                 Vec3::new(0.3, -0.8, 0.5).normalize(), // Direction toward ground
-                Vec3::new(1.0, 0.95, 0.85),             // Warm white color
-                0.6,                                    // Moderate intensity
+                Vec3::new(1.0, 0.95, 0.85),            // Warm white color
+                0.6,                                   // Moderate intensity
             ),
             praxis_ecs::Name::new("Sun Light"),
         ));
@@ -539,7 +538,11 @@ impl App {
         praxis_ecs::systems::gather_lighting_system(
             world.resource_mut::<LightingData>(),
             world.query::<(&DirectionalLight, Option<&Transform>)>(),
-            world.query::<(&PointLight, Option<&praxis_ecs::GlobalTransform>, Option<&Transform>)>(),
+            world.query::<(
+                &PointLight,
+                Option<&praxis_ecs::GlobalTransform>,
+                Option<&Transform>,
+            )>(),
         );
 
         // Step 2: Get the collected lighting data from the resource

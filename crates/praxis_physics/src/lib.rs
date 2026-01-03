@@ -71,17 +71,17 @@
 //!         for event in &receiver.events {
 //!             match event {
 //!                 CollisionEvent::CollisionStarted(self_entity, other_entity) => {
-//!                     println!("Player {:?} started colliding with {:?}", 
+//!                     println!("Player {:?} started colliding with {:?}",
 //!                              self_entity, other_entity);
 //!                     // Play impact sound, trigger damage, etc.
 //!                 }
 //!                 CollisionEvent::CollisionStopped(self_entity, other_entity) => {
-//!                     println!("Player {:?} stopped colliding with {:?}", 
+//!                     println!("Player {:?} stopped colliding with {:?}",
 //!                              self_entity, other_entity);
 //!                     // Stop continuous effects
 //!                 }
 //!                 CollisionEvent::CollisionPersisted(self_entity, other_entity) => {
-//!                     println!("Player {:?} continues colliding with {:?}", 
+//!                     println!("Player {:?} continues colliding with {:?}",
 //!                              self_entity, other_entity);
 //!                     // Apply damage over time
 //!                 }
