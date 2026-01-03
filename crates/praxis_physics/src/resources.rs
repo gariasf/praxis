@@ -688,10 +688,11 @@ impl PhysicsWorld {
         _shape: &dyn Shape,
         _max_distance: f32,
     ) -> Option<(Entity, f32)> {
-        // Shape casting is not exposed in a simple way in rapier 0.22
-        // For now, we'll return None as a placeholder
-        // A full implementation would use query_pipeline.cast_shape() with proper
-        // conversion between Praxis types (Vec3, Quat) and Rapier types (Isometry, SharedShape)
+        // TODO: Implement shape casting
+        // This is currently a placeholder. The implementation requires:
+        // 1. Converting Praxis types (Vec3, Quat) to Rapier types
+        // 2. Calling QueryPipeline::cast_shape with proper parameters
+        // 3. Converting Rapier results back to Praxis Entity
         None
     }
 
