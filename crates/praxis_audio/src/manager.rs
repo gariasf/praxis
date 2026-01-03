@@ -2,7 +2,10 @@
 
 use kira::{
     manager::{backend::DefaultBackend, AudioManager as KiraAudioManager, AudioManagerSettings},
-    sound::static_sound::{StaticSoundData, StaticSoundHandle, StaticSoundSettings},
+    sound::{
+        static_sound::{StaticSoundData, StaticSoundHandle, StaticSoundSettings},
+        PlaybackRate,
+    },
     tween::Tween,
     Volume,
 };
@@ -205,6 +208,43 @@ impl AudioManager {
     pub fn set_sound_volume(&mut self, sound_id: u64, volume: f32) -> Result<()> {
         if let Some(handle) = self.playing_sounds.get_mut(&sound_id) {
             handle.set_volume(Volume::Amplitude(volume.into()), Tween::default());
+        }
+        Ok(())
+    }
+
+    /// Sets the playback rate of a playing sound.
+    ///
+    /// This is used for doppler effect simulation. A rate of 1.0 is normal speed,
+    /// values > 1.0 are faster (higher pitch), values < 1.0 are slower (lower pitch).
+    ///
+    /// # Arguments
+    ///
+    /// * `sound_id` - ID returned from `play_sound`
+    /// * `rate` - Playback rate (0.5 to 2.0 recommended range)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the playback rate cannot be set.
+    pub fn set_sound_playback_rate(&mut self, sound_id: u64, rate: f32) -> Result<()> {
+        if let Some(handle) = self.playing_sounds.get_mut(&sound_id) {
+            handle.set_playback_rate(PlaybackRate::Factor(rate.into()), Tween::default());
+        }
+        Ok(())
+    }
+
+    /// Sets the panning of a playing sound.
+    ///
+    /// # Arguments
+    ///
+    /// * `sound_id` - ID returned from `play_sound`
+    /// * `panning` - Pan value (-1.0 left, 0.0 center, 1.0 right)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the panning cannot be set.
+    pub fn set_sound_panning(&mut self, sound_id: u64, panning: f32) -> Result<()> {
+        if let Some(handle) = self.playing_sounds.get_mut(&sound_id) {
+            handle.set_panning(f64::from(panning), Tween::default());
         }
         Ok(())
     }

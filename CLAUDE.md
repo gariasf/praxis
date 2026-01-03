@@ -402,6 +402,7 @@ The audio system provides sound playback and spatial audio using Kira:
 - **AudioListener**: Component marking the audio listener (typically the camera)
 - **play_sound_system**: System that processes audio playback and spatial audio updates
 - **update_spatial_audio_system**: Optimized system for updating spatial audio on transform changes
+- **update_listener_system**: System that updates spatial audio when listener transform changes
 
 #### Audio Components
 
@@ -412,6 +413,8 @@ The audio system provides sound playback and spatial audio using Kira:
 - `looping`: Whether the audio loops continuously
 - `max_distance`: Distance beyond which sound is inaudible
 - `reference_distance`: Distance at which volume is at specified level
+- `doppler_enabled`: Enable doppler effect for pitch shifting
+- `doppler_scale`: Scale factor for doppler effect (0.0 to disable, 1.0 for normal)
 - `state`: PlaybackState (Playing, Paused, Stopped)
 
 #### Spatial Audio
@@ -422,14 +425,33 @@ Spatial audio uses inverse square law for distance attenuation:
 When `spatial` is true, the audio system:
 - Calculates distance between AudioSource and AudioListener
 - Applies distance-based attenuation
-- Adjusts panning based on relative position
-- Updates volume in real-time as entities move
+- Adjusts stereo panning based on relative X-axis position
+- Updates volume and panning in real-time as entities move
+
+#### Doppler Effect
+
+The doppler effect simulates realistic pitch changes based on relative velocity:
+- Pitch increases when source approaches listener (higher frequency)
+- Pitch decreases when source moves away (lower frequency)
+- Uses classic doppler formula: `f' = f * c / (c - v_radial)`
+- Speed of sound: 343.0 world units/second (configurable in systems.rs)
+- Playback rate clamped to 0.5-2.0 range for stability
+
+Enable doppler with `.with_doppler(true)` and adjust intensity with `.with_doppler_scale(factor)`.
+
+#### Listener Transform Synchronization
+
+The audio system tracks the AudioListener component (typically on the camera):
+- Listener position used as reference for all spatial calculations
+- `update_listener_system` efficiently updates all audio sources when listener moves
+- Change detection ensures minimal overhead when listener is stationary
+- Multiple listeners supported (first found is used)
 
 #### Usage Example
 
 ```rust
-use praxis_audio::{AudioManager, AudioSource, AudioListener, play_sound_system};
-use praxis_ecs::{World, Schedule, Transform};
+use praxis_audio::{AudioManager, AudioSource, AudioListener, play_sound_system, update_listener_system};
+use praxis_ecs::{World, Schedule, Transform, IntoSystemConfigs};
 
 let mut world = World::new();
 let audio_manager = AudioManager::new()?;
@@ -441,18 +463,20 @@ world.spawn((
     AudioListener,
 ));
 
-// Spawn spatial audio source
+// Spawn spatial audio source with doppler effect
 world.spawn((
     Transform::from_xyz(10.0, 0.0, 0.0),
     AudioSource::new("assets/sounds/ambient.ogg")
         .with_volume(0.7)
         .with_spatial(true)
         .with_looping(true)
-        .with_max_distance(50.0),
+        .with_max_distance(50.0)
+        .with_doppler(true)
+        .with_doppler_scale(1.0),
 ));
 
 let mut schedule = Schedule::default();
-schedule.add_systems(play_sound_system);
+schedule.add_systems((play_sound_system, update_listener_system).chain());
 ```
 
 See `praxis_audio` documentation and `examples/audio_demo.rs` for detailed usage.

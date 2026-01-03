@@ -49,8 +49,17 @@ pub struct AudioSource {
     /// At this distance, the volume is at the specified level.
     pub reference_distance: f32,
 
+    /// Whether to enable doppler effect for this source.
+    pub doppler_enabled: bool,
+
+    /// Doppler scale factor (0.0 to disable, 1.0 for normal, higher for exaggerated).
+    pub doppler_scale: f32,
+
     /// Handle to the playing sound instance (internal use).
     pub(crate) sound_handle: Option<SoundHandle>,
+
+    /// Previous position for velocity calculation (internal use).
+    pub(crate) previous_position: Option<praxis_math::Vec3>,
 }
 
 impl AudioSource {
@@ -77,7 +86,10 @@ impl AudioSource {
             state: AudioState::Stopped,
             max_distance: 100.0,
             reference_distance: 1.0,
+            doppler_enabled: false,
+            doppler_scale: 1.0,
             sound_handle: None,
+            previous_position: None,
         }
     }
 
@@ -128,6 +140,28 @@ impl AudioSource {
     #[must_use]
     pub const fn with_reference_distance(mut self, distance: f32) -> Self {
         self.reference_distance = distance;
+        self
+    }
+
+    /// Enables or disables the doppler effect.
+    ///
+    /// # Arguments
+    ///
+    /// * `enabled` - Whether to enable doppler effect
+    #[must_use]
+    pub const fn with_doppler(mut self, enabled: bool) -> Self {
+        self.doppler_enabled = enabled;
+        self
+    }
+
+    /// Sets the doppler scale factor.
+    ///
+    /// # Arguments
+    ///
+    /// * `scale` - Doppler scale (0.0 to disable, 1.0 for normal, higher for exaggerated)
+    #[must_use]
+    pub const fn with_doppler_scale(mut self, scale: f32) -> Self {
+        self.doppler_scale = scale;
         self
     }
 

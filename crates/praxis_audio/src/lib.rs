@@ -13,7 +13,7 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use praxis_audio::{AudioManager, AudioSource, play_sound_system};
+//! use praxis_audio::{AudioManager, AudioSource, AudioListener, play_sound_system};
 //! use praxis_ecs::{World, Schedule};
 //! use praxis_math::Vec3;
 //!
@@ -24,12 +24,19 @@
 //! let mut schedule = Schedule::default();
 //! schedule.add_systems(play_sound_system);
 //!
+//! // Spawn a listener (typically attached to the camera)
+//! world.spawn((
+//!     praxis_ecs::Transform::from_xyz(0.0, 0.0, 0.0),
+//!     AudioListener,
+//! ));
+//!
 //! // Spawn an entity with spatial audio
 //! world.spawn((
 //!     praxis_ecs::Transform::from_xyz(5.0, 0.0, 0.0),
 //!     AudioSource::new("explosion.ogg")
 //!         .with_volume(0.8)
-//!         .with_spatial(true),
+//!         .with_spatial(true)
+//!         .with_doppler(true),
 //! ));
 //! ```
 //!
@@ -38,6 +45,13 @@
 //! Spatial audio automatically adjusts volume and panning based on the distance
 //! between the audio source and the listener (camera). The attenuation follows
 //! an inverse square law for realistic distance falloff.
+//!
+//! # Doppler Effect
+//!
+//! The doppler effect simulates pitch changes based on relative velocity between
+//! the audio source and listener. Enable it with `.with_doppler(true)` on the
+//! `AudioSource` component. The effect scales with velocity and can be adjusted
+//! with `.with_doppler_scale()`.
 //!
 //! # Loading Sounds
 //!
