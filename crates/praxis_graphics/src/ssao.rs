@@ -1194,7 +1194,7 @@ mod tests {
         let kernel = generate_sample_kernel(64);
         
         let mut min_length = f32::MAX;
-        let mut max_length = 0.0;
+        let mut max_length: f32 = 0.0;
         
         for sample in kernel.iter() {
             let length = sample.length();

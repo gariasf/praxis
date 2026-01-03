@@ -6,6 +6,7 @@ mod post_process_tests {
         BrightnessExtractionPass, GaussianBlurHorizontalPass, GaussianBlurVerticalPass, ToneMapPass,
     };
     use crate::post_process::{CopyPass, GrayscalePass, PostProcessPass};
+    use vulkano::command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer};
 
     #[test]
     fn test_copy_pass_name() {
@@ -13,9 +14,7 @@ mod post_process_tests {
         impl PostProcessPass for MockCopyPass {
             fn execute(
                 &mut self,
-                _builder: &mut crate::post_process::pass::AutoCommandBufferBuilder<
-                    crate::post_process::pass::PrimaryAutoCommandBuffer,
-                >,
+                _builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
                 _input: &crate::post_process::RenderTarget,
                 _output: &crate::post_process::RenderTarget,
             ) -> praxis_utils::Result<()> {
@@ -38,9 +37,7 @@ mod post_process_tests {
         impl PostProcessPass for MockGrayscalePass {
             fn execute(
                 &mut self,
-                _builder: &mut crate::post_process::pass::AutoCommandBufferBuilder<
-                    crate::post_process::pass::PrimaryAutoCommandBuffer,
-                >,
+                _builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
                 _input: &crate::post_process::RenderTarget,
                 _output: &crate::post_process::RenderTarget,
             ) -> praxis_utils::Result<()> {
@@ -61,9 +58,7 @@ mod post_process_tests {
         impl PostProcessPass for MockBrightnessPass {
             fn execute(
                 &mut self,
-                _builder: &mut crate::post_process::pass::AutoCommandBufferBuilder<
-                    crate::post_process::pass::PrimaryAutoCommandBuffer,
-                >,
+                _builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
                 _input: &crate::post_process::RenderTarget,
                 _output: &crate::post_process::RenderTarget,
             ) -> praxis_utils::Result<()> {
@@ -84,9 +79,7 @@ mod post_process_tests {
         impl PostProcessPass for MockBlurHPass {
             fn execute(
                 &mut self,
-                _builder: &mut crate::post_process::pass::AutoCommandBufferBuilder<
-                    crate::post_process::pass::PrimaryAutoCommandBuffer,
-                >,
+                _builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
                 _input: &crate::post_process::RenderTarget,
                 _output: &crate::post_process::RenderTarget,
             ) -> praxis_utils::Result<()> {
@@ -107,9 +100,7 @@ mod post_process_tests {
         impl PostProcessPass for MockBlurVPass {
             fn execute(
                 &mut self,
-                _builder: &mut crate::post_process::pass::AutoCommandBufferBuilder<
-                    crate::post_process::pass::PrimaryAutoCommandBuffer,
-                >,
+                _builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
                 _input: &crate::post_process::RenderTarget,
                 _output: &crate::post_process::RenderTarget,
             ) -> praxis_utils::Result<()> {
@@ -130,9 +121,7 @@ mod post_process_tests {
         impl PostProcessPass for MockToneMapPass {
             fn execute(
                 &mut self,
-                _builder: &mut crate::post_process::pass::AutoCommandBufferBuilder<
-                    crate::post_process::pass::PrimaryAutoCommandBuffer,
-                >,
+                _builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
                 _input: &crate::post_process::RenderTarget,
                 _output: &crate::post_process::RenderTarget,
             ) -> praxis_utils::Result<()> {
@@ -153,9 +142,7 @@ mod post_process_tests {
         impl PostProcessPass for TestPass {
             fn execute(
                 &mut self,
-                _builder: &mut crate::post_process::pass::AutoCommandBufferBuilder<
-                    crate::post_process::pass::PrimaryAutoCommandBuffer,
-                >,
+                _builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
                 _input: &crate::post_process::RenderTarget,
                 _output: &crate::post_process::RenderTarget,
             ) -> praxis_utils::Result<()> {
@@ -177,9 +164,7 @@ mod post_process_tests {
         impl PostProcessPass for DepthPass {
             fn execute(
                 &mut self,
-                _builder: &mut crate::post_process::pass::AutoCommandBufferBuilder<
-                    crate::post_process::pass::PrimaryAutoCommandBuffer,
-                >,
+                _builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
                 _input: &crate::post_process::RenderTarget,
                 _output: &crate::post_process::RenderTarget,
             ) -> praxis_utils::Result<()> {
@@ -203,9 +188,7 @@ mod post_process_tests {
         impl PostProcessPass for AlphaPass {
             fn execute(
                 &mut self,
-                _builder: &mut crate::post_process::pass::AutoCommandBufferBuilder<
-                    crate::post_process::pass::PrimaryAutoCommandBuffer,
-                >,
+                _builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
                 _input: &crate::post_process::RenderTarget,
                 _output: &crate::post_process::RenderTarget,
             ) -> praxis_utils::Result<()> {
@@ -229,9 +212,7 @@ mod post_process_tests {
         impl PostProcessPass for ErrorPass {
             fn execute(
                 &mut self,
-                _builder: &mut crate::post_process::pass::AutoCommandBufferBuilder<
-                    crate::post_process::pass::PrimaryAutoCommandBuffer,
-                >,
+                _builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
                 _input: &crate::post_process::RenderTarget,
                 _output: &crate::post_process::RenderTarget,
             ) -> praxis_utils::Result<()> {
@@ -253,9 +234,7 @@ mod post_process_tests {
         impl PostProcessPass for Pass1 {
             fn execute(
                 &mut self,
-                _builder: &mut crate::post_process::pass::AutoCommandBufferBuilder<
-                    crate::post_process::pass::PrimaryAutoCommandBuffer,
-                >,
+                _builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
                 _input: &crate::post_process::RenderTarget,
                 _output: &crate::post_process::RenderTarget,
             ) -> praxis_utils::Result<()> {
@@ -270,9 +249,7 @@ mod post_process_tests {
         impl PostProcessPass for Pass2 {
             fn execute(
                 &mut self,
-                _builder: &mut crate::post_process::pass::AutoCommandBufferBuilder<
-                    crate::post_process::pass::PrimaryAutoCommandBuffer,
-                >,
+                _builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
                 _input: &crate::post_process::RenderTarget,
                 _output: &crate::post_process::RenderTarget,
             ) -> praxis_utils::Result<()> {
@@ -444,9 +421,7 @@ mod post_process_tests {
         impl PostProcessPass for OrderedPass {
             fn execute(
                 &mut self,
-                _builder: &mut crate::post_process::pass::AutoCommandBufferBuilder<
-                    crate::post_process::pass::PrimaryAutoCommandBuffer,
-                >,
+                _builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
                 _input: &crate::post_process::RenderTarget,
                 _output: &crate::post_process::RenderTarget,
             ) -> praxis_utils::Result<()> {

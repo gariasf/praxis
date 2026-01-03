@@ -515,6 +515,9 @@ mod tests {
     #[derive(Component)]
     struct TestComponent(i32);
 
+    #[derive(Component)]
+    struct SecondComponent(String);
+
     #[derive(Resource)]
     struct TestResource(String);
 
@@ -738,7 +741,7 @@ mod tests {
         let mut count = 0;
         let mut sum = 0;
 
-        for component in query.iter(&world) {
+        for component in query.iter(world.inner()) {
             count += 1;
             sum += component.0;
         }
@@ -764,7 +767,7 @@ mod tests {
         world.spawn((Player, Position(30)));
 
         let mut query = world.query_filtered::<&Position, With<Player>>();
-        let positions: Vec<i32> = query.iter(&world).map(|p| p.0).collect();
+        let positions: Vec<i32> = query.iter(world.inner()).map(|p| p.0).collect();
 
         assert_eq!(positions.len(), 2);
         assert!(positions.contains(&10));
@@ -792,15 +795,15 @@ mod tests {
 
         world
             .entity_mut(entity)
-            .insert(TestResource("Test".to_string()));
+            .insert(SecondComponent("Test".to_string()));
 
         let component = world.inner().get::<TestComponent>(entity);
-        let resource = world.inner().get::<TestResource>(entity);
+        let second = world.inner().get::<SecondComponent>(entity);
 
         assert!(component.is_some());
-        assert!(resource.is_some());
+        assert!(second.is_some());
         assert_eq!(component.unwrap().0, 10);
-        assert_eq!(resource.unwrap().0, "Test");
+        assert_eq!(second.unwrap().0, "Test");
     }
 
     #[test]

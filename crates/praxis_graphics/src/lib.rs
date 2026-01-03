@@ -1773,7 +1773,7 @@ mod tests {
         let deferred_complexity = light_count * pixel_count;
         
         // Deferred is more efficient for many lights
-        assert!(deferred_complexity < 10 * 1000 * 1000 * 1000); // Much less than forward with many triangles
+        assert!(deferred_complexity < 10_000_000_000_i64); // Much less than forward with many triangles
     }
 
     #[test]
