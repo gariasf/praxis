@@ -33,6 +33,7 @@ cargo run --example skeletal_animation_demo
 cargo run --example animation_blending_demo
 cargo run --example gltf_animation_loader_demo
 cargo run --example deferred_demo
+cargo run --example hdr_demo
 
 # Check code without building
 cargo check --all
@@ -167,6 +168,49 @@ The engine provides a complete deferred rendering pipeline alongside forward ren
 Applications can choose between forward and deferred rendering or use both (e.g., deferred for opaque, forward for transparent).
 
 See `praxis_graphics::deferred` and `examples/deferred_demo.rs` for usage.
+
+#### HDR Rendering
+
+The HDR (High Dynamic Range) rendering system provides floating-point rendering with tone mapping:
+
+- **`HdrRenderTarget`**: Floating-point render targets (R16G16B16A16_SFLOAT)
+- **`ToneMapper`**: Complete tone mapping system with exposure control
+- **`ToneMappingOperator`**: Multiple operators (ACES, Reinhard, Uncharted 2)
+- **`ExposureCalculator`**: Automatic and manual exposure calculation
+
+**HDR Pipeline:**
+1. Render scene to floating-point HDR target (values can exceed 1.0)
+2. Calculate average scene luminance for auto-exposure
+3. Apply exposure adjustment based on luminance or manual value
+4. Apply tone mapping to convert HDR to displayable LDR [0,1]
+5. Apply gamma correction (typically 2.2)
+
+**Tone Mapping Operators:**
+- **Reinhard**: Simple and fast, `color / (color + 1)`
+- **ACES**: Industry-standard filmic curve (default, recommended)
+- **Uncharted 2**: High contrast, dramatic look (Hable tone mapping)
+
+**Exposure Modes:**
+- **Manual**: Fixed exposure value for artistic control
+- **Automatic**: Dynamic exposure based on scene luminance with smooth adaptation
+
+**Usage:**
+```rust
+// Create HDR render target
+let hdr_render_pass = render_context.create_hdr_render_pass()?;
+let hdr_target = HdrRenderTarget::new(memory_allocator, hdr_render_pass, [1920, 1080])?;
+
+// Create tone mapper with ACES
+let mut tone_mapper = ToneMapper::new(device, memory_allocator, format, ToneMappingOperator::ACES)?;
+
+// Set automatic exposure
+tone_mapper.set_exposure_mode(ExposureMode::Automatic { speed: 2.0 });
+
+// Apply tone mapping
+tone_mapper.apply(builder, &hdr_target, output_framebuffer, extent, average_luminance, delta_time)?;
+```
+
+See `praxis_graphics::hdr`, `crates/praxis_graphics/HDR_RENDERING.md`, and `examples/hdr_demo.rs` for usage.
 
 ### ECS Integration
 

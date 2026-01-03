@@ -177,3 +177,11 @@ pub mod ssao_blur_fs {
         path: "src/shaders/ssao_blur.frag"
     }
 }
+
+/// Compiled fragment shader for HDR tone mapping with multiple operators.
+pub mod hdr_tone_map_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/hdr_tone_map.frag"
+    }
+}

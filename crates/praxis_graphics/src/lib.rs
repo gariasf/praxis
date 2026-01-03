@@ -15,6 +15,7 @@
 //! - `material`: Material system with texture support and descriptor set management
 //! - `lighting`: Lighting uniforms and buffer management
 //! - `deferred`: Deferred rendering with G-buffer passes
+//! - `hdr`: High Dynamic Range rendering with tone mapping
 //! - `ssao`: Screen-space ambient occlusion for realistic shadowing
 //! - `post_process`: Post-processing framework for screen-space effects
 //!
@@ -252,6 +253,65 @@
 //! applications to choose the best rendering path for their needs or use both
 //! (e.g., deferred for opaque geometry, forward for transparent objects).
 //!
+//! # HDR Rendering System
+//!
+//! The HDR (High Dynamic Range) rendering system provides a complete pipeline for
+//! rendering with floating-point precision and tone mapping to displayable LDR:
+//!
+//! - **`HdrRenderTarget`**: Floating-point render targets (R16G16B16A16_SFLOAT)
+//! - **`ExposureCalculator`**: Automatic and manual exposure calculation
+//! - **`ToneMapper`**: Tone mapping with multiple operators (ACES, Reinhard, Uncharted 2)
+//! - **`ToneMappingOperator`**: Selection of tone mapping algorithms
+//!
+//! ## HDR Pipeline
+//!
+//! The HDR rendering pipeline works in these stages:
+//!
+//! 1. **HDR Scene Rendering**: Render scene to floating-point target (values can exceed 1.0)
+//! 2. **Luminance Calculation**: Calculate average scene brightness for auto-exposure
+//! 3. **Exposure Adjustment**: Apply exposure based on scene luminance or manual value
+//! 4. **Tone Mapping**: Map HDR values to LDR [0,1] range using selected operator
+//! 5. **Gamma Correction**: Apply final gamma correction (typically 2.2)
+//!
+//! ## Tone Mapping Operators
+//!
+//! - **Reinhard**: Simple and fast, `color / (color + 1)`
+//! - **ACES**: Industry-standard filmic curve, used in film and AAA games
+//! - **Uncharted 2**: High contrast, used in Uncharted 2 (Hable tone mapping)
+//!
+//! ## Exposure Modes
+//!
+//! - **Manual**: Fixed exposure value set by the application
+//! - **Automatic**: Dynamic exposure based on average scene luminance with smooth adaptation
+//!
+//! ## Usage Example
+//!
+//! ```rust,no_run
+//! use praxis_graphics::{HdrRenderTarget, ToneMapper, ToneMappingOperator, ExposureMode};
+//!
+//! # async fn example() -> praxis_utils::Result<()> {
+//! // Create HDR render target for scene rendering
+//! // let hdr_target = HdrRenderTarget::new(memory_allocator, render_pass, [1920, 1080])?;
+//!
+//! // Create tone mapper with ACES operator
+//! // let mut tone_mapper = ToneMapper::new(device, memory_allocator, format, ToneMappingOperator::ACES)?;
+//!
+//! // Set automatic exposure
+//! // tone_mapper.set_exposure_mode(ExposureMode::Automatic { speed: 2.0 });
+//!
+//! // In render loop:
+//! // 1. Render scene to HDR target
+//! // render_scene_to_hdr(&hdr_target);
+//!
+//! // 2. Apply tone mapping
+//! // let average_luminance = 0.5; // From scene analysis or fixed value
+//! // tone_mapper.apply(builder, &hdr_target, output_framebuffer, extent, average_luminance, delta_time)?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! See the `hdr` module documentation for detailed information on implementing HDR rendering.
+//!
 //! # Rendering Flow
 //!
 //! ```text
@@ -271,6 +331,7 @@
 
 mod device;
 pub mod deferred;
+pub mod hdr;
 pub mod lighting;
 pub mod material;
 pub mod mesh;
@@ -810,6 +871,22 @@ impl RenderContext {
     /// Returns an error if render pass creation fails.
     pub fn create_post_process_render_pass(&self) -> Result<Arc<RenderPass>> {
         Self::create_render_pass(&self.device, vulkano::format::Format::R8G8B8A8_UNORM)
+    }
+
+    /// Creates a render pass suitable for HDR rendering.
+    ///
+    /// This render pass uses R16G16B16A16_SFLOAT format to support HDR values
+    /// beyond the [0,1] range.
+    ///
+    /// # Returns
+    ///
+    /// A render pass configured for HDR rendering operations.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if render pass creation fails.
+    pub fn create_hdr_render_pass(&self) -> Result<Arc<RenderPass>> {
+        Self::create_render_pass(&self.device, vulkano::format::Format::R16G16B16A16_SFLOAT)
     }
 
     /// Checks if the window is currently minimized (0×0 size).
@@ -1423,6 +1500,10 @@ impl RenderContext {
 
 // Public re-exports
 pub use deferred::{DeferredRenderer, GBuffer};
+pub use hdr::{
+    calculate_luminance, ExposureCalculator, ExposureMode, HdrRenderTarget,
+    ToneMapPass as HdrToneMapPass, ToneMapper, ToneMappingOperator,
+};
 pub use lighting::{
     DirectionalLightData, LightingUniformBuffer, LightingUniforms, PointLightData,
     MAX_DIRECTIONAL_LIGHTS, MAX_POINT_LIGHTS,
