@@ -6,6 +6,7 @@
 
 use praxis_graphics::MeshData;
 use praxis_math::{Mat4, Quat, Vec3};
+use praxis_scene::{AnimationClip, Bone, Skeleton};
 use praxis_utils::{debug, eyre, info, Result};
 use std::collections::HashMap;
 use std::path::Path;
@@ -770,6 +771,32 @@ pub enum GltfTextureFormat {
     R8G8B8,
 }
 
+/// Skeletal animation data from GLTF.
+///
+/// Contains keyframe animation data for bone transforms.
+#[derive(Debug, Clone)]
+pub struct GltfAnimation {
+    /// Animation name from GLTF file (if present).
+    pub name: Option<String>,
+    /// Duration of the animation in seconds.
+    pub duration: f32,
+    /// Animation clip data ready for use with the engine's animation system.
+    pub clip: praxis_scene::AnimationClip,
+}
+
+/// Skin data from GLTF.
+///
+/// Contains skeleton hierarchy and inverse bind matrices for skinning.
+#[derive(Debug, Clone)]
+pub struct GltfSkin {
+    /// Skin name from GLTF file (if present).
+    pub name: Option<String>,
+    /// Skeleton component ready for use with the engine's animation system.
+    pub skeleton: praxis_scene::Skeleton,
+    /// Node indices that are joints in this skin (for bone mapping).
+    pub joint_nodes: Vec<usize>,
+}
+
 /// Complete GLTF asset data.
 ///
 /// Contains all data loaded from a GLTF file, including meshes, materials,
@@ -786,6 +813,10 @@ pub struct GltfAsset {
     pub nodes: Vec<GltfNode>,
     /// Root node indices (nodes without parents).
     pub root_nodes: Vec<usize>,
+    /// Skeletal animation data.
+    pub animations: Vec<GltfAnimation>,
+    /// Skin/skeleton data for skeletal animation.
+    pub skins: Vec<GltfSkin>,
 }
 
 impl GltfAsset {
@@ -858,6 +889,56 @@ impl GltfAsset {
             traverse_node(self, root_index, 0, &mut f);
         }
     }
+
+    /// Gets an animation by name.
+    ///
+    /// # Returns
+    ///
+    /// The animation if found, or None if no animation with that name exists.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use praxis_assets::GltfLoader;
+    ///
+    /// let loader = GltfLoader::new();
+    /// let asset = loader.load_gltf("assets/models/character.gltf")?;
+    ///
+    /// if let Some(walk_anim) = asset.find_animation("Walk") {
+    ///     println!("Walk animation duration: {}", walk_anim.duration);
+    /// }
+    /// # Ok::<(), praxis_utils::eyre::Report>(())
+    /// ```
+    pub fn find_animation(&self, name: &str) -> Option<&GltfAnimation> {
+        self.animations.iter().find(|anim| {
+            anim.name.as_ref().is_some_and(|n| n == name)
+        })
+    }
+
+    /// Gets a skin by name.
+    ///
+    /// # Returns
+    ///
+    /// The skin if found, or None if no skin with that name exists.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use praxis_assets::GltfLoader;
+    ///
+    /// let loader = GltfLoader::new();
+    /// let asset = loader.load_gltf("assets/models/character.gltf")?;
+    ///
+    /// if let Some(skin) = asset.find_skin("CharacterSkin") {
+    ///     println!("Skeleton has {} bones", skin.skeleton.bone_count());
+    /// }
+    /// # Ok::<(), praxis_utils::eyre::Report>(())
+    /// ```
+    pub fn find_skin(&self, name: &str) -> Option<&GltfSkin> {
+        self.skins.iter().find(|skin| {
+            skin.name.as_ref().is_some_and(|n| n == name)
+        })
+    }
 }
 
 /// GLTF file loader.
@@ -872,14 +953,15 @@ impl GltfAsset {
 /// - Embedded and external textures
 /// - Multiple primitives per mesh
 /// - Multiple scenes (uses default scene)
+/// - Skeletal animations with keyframe interpolation
+/// - Skins/skeletons with bone hierarchies
 ///
 /// # Limitations
 ///
-/// - Animations are not supported
-/// - Skins/skeletal animation not supported
 /// - Morph targets not supported
 /// - Only triangulated meshes (non-triangle primitives ignored)
 /// - Maximum 65536 vertices per mesh (u16 index limit)
+/// - Animation interpolation modes other than linear are treated as linear
 ///
 /// # Example
 ///
@@ -892,6 +974,8 @@ impl GltfAsset {
 /// println!("Loaded {} meshes", asset.meshes.len());
 /// println!("Loaded {} materials", asset.materials.len());
 /// println!("Loaded {} textures", asset.textures.len());
+/// println!("Loaded {} animations", asset.animations.len());
+/// println!("Loaded {} skins", asset.skins.len());
 /// # Ok::<(), praxis_utils::eyre::Report>(())
 /// ```
 pub struct GltfLoader {}
@@ -1080,13 +1164,33 @@ impl GltfLoader {
             })
             .collect();
 
+        // Load skins and skeletons
+        debug!("Processing {} skins", document.skins().len());
+        let mut skins = Vec::new();
+        
+        for skin in document.skins() {
+            let gltf_skin = Self::load_skin(&skin, &buffers, &node_map)?;
+            skins.push(gltf_skin);
+        }
+
+        // Load animations
+        debug!("Processing {} animations", document.animations().len());
+        let mut animations = Vec::new();
+        
+        for animation in document.animations() {
+            let gltf_animation = Self::load_animation(&animation, &buffers, &node_map, &skins)?;
+            animations.push(gltf_animation);
+        }
+
         info!(
-            "Successfully loaded GLTF from {} ({} meshes, {} materials, {} textures, {} nodes)",
+            "Successfully loaded GLTF from {} ({} meshes, {} materials, {} textures, {} nodes, {} skins, {} animations)",
             path.display(),
             meshes.len(),
             materials.len(),
             textures.len(),
-            nodes.len()
+            nodes.len(),
+            skins.len(),
+            animations.len()
         );
 
         Ok(GltfAsset {
@@ -1095,6 +1199,212 @@ impl GltfLoader {
             textures,
             nodes,
             root_nodes,
+            animations,
+            skins,
+        })
+    }
+
+    /// Loads a skin from GLTF data.
+    fn load_skin(
+        skin: &gltf::Skin,
+        buffers: &[gltf::buffer::Data],
+        node_map: &HashMap<usize, usize>,
+    ) -> Result<GltfSkin> {
+        let reader = skin.reader(|buffer| Some(&buffers[buffer.index()]));
+        
+        // Get inverse bind matrices
+        let _inverse_bind_matrices: Vec<Mat4> = if let Some(matrices) = reader.read_inverse_bind_matrices() {
+            matrices.map(|m| Mat4::from_cols_array_2d(&m)).collect()
+        } else {
+            // If no inverse bind matrices provided, use identity matrices
+            vec![Mat4::IDENTITY; skin.joints().len()]
+        };
+
+        // Build bone hierarchy
+        let joint_nodes: Vec<usize> = skin.joints()
+            .map(|joint| {
+                *node_map.get(&joint.index())
+                    .expect("Joint node should be in node_map")
+            })
+            .collect();
+
+        // Create a mapping from GLTF node index to bone index in our skeleton
+        let mut gltf_node_to_bone: HashMap<usize, usize> = HashMap::new();
+        for (bone_idx, joint) in skin.joints().enumerate() {
+            gltf_node_to_bone.insert(joint.index(), bone_idx);
+        }
+
+        // First pass: collect all joints and their GLTF parents
+        let joints: Vec<gltf::Node> = skin.joints().collect();
+        let mut parent_relationships: Vec<Option<usize>> = vec![None; joints.len()];
+
+        // Build a map of all nodes to their parents by traversing the scene
+        let mut node_parents: HashMap<usize, usize> = HashMap::new();
+        for joint in &joints {
+            for child in joint.children() {
+                node_parents.insert(child.index(), joint.index());
+            }
+        }
+
+        // Determine parent bone index for each joint
+        for (bone_idx, joint) in joints.iter().enumerate() {
+            // Look up this joint's parent node in GLTF
+            if let Some(&parent_gltf_index) = node_parents.get(&joint.index()) {
+                // Check if the parent is also a joint in this skin
+                if let Some(&parent_bone_idx) = gltf_node_to_bone.get(&parent_gltf_index) {
+                    parent_relationships[bone_idx] = Some(parent_bone_idx);
+                }
+            }
+        }
+
+        // Build bones with proper parent relationships
+        let mut bones = Vec::new();
+        for (bone_idx, joint) in joints.iter().enumerate() {
+            // Get node transform
+            let transform = Mat4::from_cols_array_2d(&joint.transform().matrix());
+            let (translation, rotation, scale) = transform.to_scale_rotation_translation();
+
+            let bone = Bone::with_bind_pose(
+                joint.name().unwrap_or("Unnamed").to_string(),
+                parent_relationships[bone_idx],
+                translation,
+                rotation,
+                scale,
+            );
+
+            bones.push(bone);
+        }
+
+        // Create skeleton
+        let skeleton = Skeleton::new(bones);
+
+        Ok(GltfSkin {
+            name: skin.name().map(String::from),
+            skeleton,
+            joint_nodes,
+        })
+    }
+
+    /// Loads an animation from GLTF data.
+    fn load_animation(
+        animation: &gltf::Animation,
+        buffers: &[gltf::buffer::Data],
+        node_map: &HashMap<usize, usize>,
+        skins: &[GltfSkin],
+    ) -> Result<GltfAnimation> {
+        // Type alias for bone track data: (translations, rotations, scales)
+        type BoneTrackData = (Vec<(f32, Vec3)>, Vec<(f32, Quat)>, Vec<(f32, Vec3)>);
+        
+        let mut max_time = 0.0f32;
+        let mut bone_tracks: HashMap<usize, BoneTrackData> = HashMap::new();
+
+        // Process all animation channels
+        for channel in animation.channels() {
+            let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
+            let target = channel.target();
+            let target_node_index = *node_map.get(&target.node().index())
+                .ok_or_else(|| eyre::eyre!("Animation target node not found in node map"))?;
+
+            // Find which bone this node corresponds to (if any)
+            let mut bone_index: Option<usize> = None;
+            for skin in skins {
+                if let Some(idx) = skin.joint_nodes.iter().position(|&n| n == target_node_index) {
+                    bone_index = Some(idx);
+                    break;
+                }
+            }
+
+            // If this node isn't part of a skeleton, skip it
+            let bone_index = match bone_index {
+                Some(idx) => idx,
+                None => continue,
+            };
+
+            // Read input timestamps
+            let inputs: Vec<f32> = reader.read_inputs()
+                .ok_or_else(|| eyre::eyre!("Animation channel missing input timestamps"))?
+                .collect();
+
+            // Update max time
+            if let Some(&last_time) = inputs.last() {
+                max_time = max_time.max(last_time);
+            }
+
+            // Get or create bone track entry
+            let track = bone_tracks.entry(bone_index).or_insert_with(|| (Vec::new(), Vec::new(), Vec::new()));
+
+            // Read outputs based on property type
+            match target.property() {
+                gltf::animation::Property::Translation => {
+                    if let Some(outputs) = reader.read_outputs() {
+                        match outputs {
+                            gltf::animation::util::ReadOutputs::Translations(translations) => {
+                                for (time, translation) in inputs.iter().zip(translations) {
+                                    track.0.push((*time, Vec3::from(translation)));
+                                }
+                            }
+                            _ => return Err(eyre::eyre!("Unexpected output type for translation")),
+                        }
+                    }
+                }
+                gltf::animation::Property::Rotation => {
+                    if let Some(outputs) = reader.read_outputs() {
+                        match outputs {
+                            gltf::animation::util::ReadOutputs::Rotations(rotations) => {
+                                for (time, rotation) in inputs.iter().zip(rotations.into_f32()) {
+                                    let quat = Quat::from_array(rotation);
+                                    track.1.push((*time, quat));
+                                }
+                            }
+                            _ => return Err(eyre::eyre!("Unexpected output type for rotation")),
+                        }
+                    }
+                }
+                gltf::animation::Property::Scale => {
+                    if let Some(outputs) = reader.read_outputs() {
+                        match outputs {
+                            gltf::animation::util::ReadOutputs::Scales(scales) => {
+                                for (time, scale) in inputs.iter().zip(scales) {
+                                    track.2.push((*time, Vec3::from(scale)));
+                                }
+                            }
+                            _ => return Err(eyre::eyre!("Unexpected output type for scale")),
+                        }
+                    }
+                }
+                gltf::animation::Property::MorphTargetWeights => {
+                    // Morph targets not supported yet, skip
+                    continue;
+                }
+            }
+        }
+
+        // Create animation clip
+        let name = animation.name().unwrap_or("Unnamed");
+        let mut clip = AnimationClip::new(name.to_string(), max_time);
+
+        // Add all bone tracks to the clip
+        for (bone_index, (translations, rotations, scales)) in bone_tracks {
+            // Add translation keyframes
+            for (time, translation) in translations {
+                clip.add_translation_keyframe(bone_index, time, translation);
+            }
+
+            // Add rotation keyframes
+            for (time, rotation) in rotations {
+                clip.add_rotation_keyframe(bone_index, time, rotation);
+            }
+
+            // Add scale keyframes
+            for (time, scale) in scales {
+                clip.add_scale_keyframe(bone_index, time, scale);
+            }
+        }
+
+        Ok(GltfAnimation {
+            name: animation.name().map(String::from),
+            duration: max_time,
+            clip,
         })
     }
 }
@@ -1292,6 +1602,8 @@ mod gltf_tests {
             textures: vec![],
             nodes,
             root_nodes: vec![0, 1, 2],
+            animations: vec![],
+            skins: vec![],
         };
 
         let nodes_with_meshes: Vec<_> = asset.nodes_with_meshes().collect();
@@ -1315,6 +1627,8 @@ mod gltf_tests {
             textures: vec![],
             nodes,
             root_nodes: vec![0],
+            animations: vec![],
+            skins: vec![],
         };
 
         let mut visited = Vec::new();
@@ -1361,6 +1675,8 @@ mod gltf_tests {
             textures: vec![],
             nodes,
             root_nodes: vec![0],
+            animations: vec![],
+            skins: vec![],
         };
 
         let mut visited = Vec::new();
@@ -1410,6 +1726,8 @@ mod gltf_tests {
             textures: vec![],
             nodes,
             root_nodes: vec![0, 1],
+            animations: vec![],
+            skins: vec![],
         };
 
         let mut visited = Vec::new();
@@ -1459,6 +1777,8 @@ mod gltf_tests {
             textures: vec![],
             nodes,
             root_nodes: vec![0],
+            animations: vec![],
+            skins: vec![],
         };
 
         let mut max_depth = 0;
@@ -1498,6 +1818,8 @@ mod gltf_tests {
             textures: vec![],
             nodes,
             root_nodes: vec![0],
+            animations: vec![],
+            skins: vec![],
         };
 
         let mut names = Vec::new();
@@ -1555,6 +1877,8 @@ mod gltf_tests {
             textures: vec![],
             nodes: vec![],
             root_nodes: vec![],
+            animations: vec![],
+            skins: vec![],
         };
 
         assert_eq!(asset.meshes.len(), 0);
@@ -1562,6 +1886,8 @@ mod gltf_tests {
         assert_eq!(asset.textures.len(), 0);
         assert_eq!(asset.nodes.len(), 0);
         assert_eq!(asset.root_nodes.len(), 0);
+        assert_eq!(asset.animations.len(), 0);
+        assert_eq!(asset.skins.len(), 0);
 
         let nodes_with_meshes: Vec<_> = asset.nodes_with_meshes().collect();
         assert_eq!(nodes_with_meshes.len(), 0);

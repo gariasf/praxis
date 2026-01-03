@@ -50,6 +50,8 @@
 //! println!("Loaded {} materials", asset.materials.len());
 //! println!("Loaded {} textures", asset.textures.len());
 //! println!("Scene has {} nodes", asset.nodes.len());
+//! println!("Loaded {} animations", asset.animations.len());
+//! println!("Loaded {} skins", asset.skins.len());
 //! # Ok(())
 //! # }
 //! ```
@@ -105,8 +107,8 @@ use std::path::Path;
 
 pub use gltf_manager::GltfAssetManager;
 pub use loader::{
-    AssetLoader, GltfAsset, GltfLoader, GltfMaterial, GltfNode, GltfTexture, GltfTextureFormat,
-    MeshLoader,
+    AssetLoader, GltfAnimation, GltfAsset, GltfLoader, GltfMaterial, GltfNode, GltfSkin,
+    GltfTexture, GltfTextureFormat, MeshLoader,
 };
 
 /// Loads an OBJ mesh file and uploads it to the GPU via a mesh asset manager.

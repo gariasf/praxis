@@ -10,3 +10,4 @@ gltf = { version = "1.4", features = ["names"] }
 praxis_utils = { path = "../praxis_utils", version = "0.1.0" }
 praxis_graphics = { path = "../praxis_graphics", version = "0.1.0" }
 praxis_math = { path = "../praxis_math", version = "0.1.0" }
+praxis_scene = { path = "../praxis_scene", version = "0.1.0" }

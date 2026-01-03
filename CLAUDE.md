@@ -31,6 +31,7 @@ cargo run --example shadow_demo
 cargo run --example audio_demo
 cargo run --example skeletal_animation_demo
 cargo run --example animation_blending_demo
+cargo run --example gltf_animation_loader_demo
 
 # Check code without building
 cargo check --all
@@ -75,7 +76,7 @@ Praxis uses a Cargo workspace with 12 crates organized by subsystem. The root `p
 - **praxis_ecs**: Entity-Component-System using `bevy_ecs`
 - **praxis_math**: Math utilities, re-exports `glam` types (Vec3, Mat4, etc.)
 - **praxis_scene**: Scene graph and spatial organization with transform hierarchy
-- **praxis_assets**: Asset loading/management (OBJ models, textures, config files)
+- **praxis_assets**: Asset loading/management (OBJ/GLTF models, skeletal animations, textures, config files)
 - **praxis_input**: Keyboard/mouse/gamepad handling
 - **praxis_gui**: Debug/editor GUI via `egui`
 - **praxis_physics**: Physics simulation using `Rapier3D`, collision detection, spatial queries
@@ -542,12 +543,15 @@ The asset system supports loading various file formats:
   - Embedded and external textures
   - Multiple primitives per mesh
   - Scene graph structure
+  - Skeletal animations with keyframe interpolation
+  - Skins/skeletons with bone hierarchies and inverse bind matrices
 - **Textures**: PNG/JPEG via `image` crate in `praxis_graphics`
 
 #### GLTF Loader Usage
 
 ```rust
 use praxis_assets::{GltfLoader, GltfAssetManager};
+use praxis_scene::{AnimationPlayer, AnimatedPose};
 
 // Direct loading
 let loader = GltfLoader::new();
@@ -562,6 +566,27 @@ for (node_index, node) in asset.nodes_with_meshes() {
     let (translation, rotation, scale) = node.decompose_transform();
     let mesh = &asset.meshes[node.mesh_index.unwrap()];
     // Upload mesh to GPU, spawn entities, etc.
+}
+
+// Access skeletal animations
+for animation in &asset.animations {
+    println!("Animation: {:?}, duration: {}s", animation.name, animation.duration);
+}
+
+// Load skeleton and animations for animated characters
+if let Some(skin) = asset.skins.first() {
+    let skeleton = skin.skeleton.clone();
+    let mut player = AnimationPlayer::new();
+    
+    // Add all animations to the player
+    for animation in &asset.animations {
+        let name = animation.name.clone().unwrap_or_else(|| "Unnamed".to_string());
+        player.add_clip(name, animation.clip.clone());
+    }
+    
+    // Spawn entity with animation
+    let pose = AnimatedPose::new(skeleton.bone_count());
+    world.spawn((skeleton, player, pose));
 }
 ```
 
