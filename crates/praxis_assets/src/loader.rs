@@ -5,7 +5,9 @@
 //! different file formats.
 
 use praxis_graphics::MeshData;
+use praxis_math::{Mat4, Quat, Vec3};
 use praxis_utils::{debug, eyre, info, Result};
+use std::collections::HashMap;
 use std::path::Path;
 
 /// Generic trait for loading assets from files.
@@ -620,5 +622,493 @@ f 1 2 3
         assert!(result.is_ok(), "Should work through generic trait");
 
         fs::remove_file(&test_file).ok();
+    }
+}
+
+/// Node in a GLTF scene hierarchy.
+///
+/// Represents a node in the GLTF scene graph with transform, mesh, and children.
+#[derive(Debug, Clone)]
+pub struct GltfNode {
+    /// Node name from GLTF file (if present).
+    pub name: Option<String>,
+    /// Local transform matrix.
+    pub transform: Mat4,
+    /// Indices of mesh primitives associated with this node.
+    /// GLTF meshes can have multiple primitives; each becomes a separate mesh
+    /// in the meshes array. This vec contains all primitive indices for this node's mesh.
+    pub mesh_indices: Vec<usize>,
+    /// Indices of child nodes.
+    pub children: Vec<usize>,
+}
+
+impl GltfNode {
+    /// Checks if this node has any associated meshes.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the node has at least one mesh primitive, `false` otherwise.
+    pub fn has_mesh(&self) -> bool {
+        !self.mesh_indices.is_empty()
+    }
+
+    /// Decomposes the transform matrix into translation, rotation, and scale.
+    ///
+    /// This is useful for converting GLTF node transforms into engine-friendly
+    /// transform components.
+    ///
+    /// # Returns
+    ///
+    /// A tuple of (translation, rotation, scale) where:
+    /// - translation is a Vec3
+    /// - rotation is a Quat
+    /// - scale is a Vec3
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use praxis_assets::GltfLoader;
+    ///
+    /// let loader = GltfLoader::new();
+    /// let asset = loader.load_gltf("assets/models/scene.gltf")?;
+    ///
+    /// for node in &asset.nodes {
+    ///     let (translation, rotation, scale) = node.decompose_transform();
+    ///     println!("Node {:?}: pos={:?}, rot={:?}, scale={:?}",
+    ///         node.name, translation, rotation, scale);
+    /// }
+    /// # Ok::<(), praxis_utils::eyre::Report>(())
+    /// ```
+    pub fn decompose_transform(&self) -> (Vec3, Quat, Vec3) {
+        let (scale, rotation, translation) = self.transform.to_scale_rotation_translation();
+        (translation, rotation, scale)
+    }
+}
+
+/// Material data from GLTF.
+///
+/// Contains material properties extracted from GLTF materials.
+#[derive(Debug, Clone)]
+pub struct GltfMaterial {
+    /// Material name from GLTF file (if present).
+    pub name: Option<String>,
+    /// Base color factor (RGBA).
+    pub base_color: [f32; 4],
+    /// Metallic factor [0.0, 1.0].
+    pub metallic: f32,
+    /// Roughness factor [0.0, 1.0].
+    pub roughness: f32,
+    /// Index of base color texture (if any).
+    pub base_color_texture_index: Option<usize>,
+    /// Index of normal map texture (if any).
+    pub normal_texture_index: Option<usize>,
+}
+
+impl Default for GltfMaterial {
+    fn default() -> Self {
+        Self {
+            name: None,
+            base_color: [1.0, 1.0, 1.0, 1.0],
+            metallic: 0.0,
+            roughness: 0.5,
+            base_color_texture_index: None,
+            normal_texture_index: None,
+        }
+    }
+}
+
+impl GltfMaterial {
+    /// Converts this GLTF material to graphics material properties.
+    ///
+    /// This is useful for uploading material properties to the GPU for rendering.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use praxis_assets::GltfLoader;
+    ///
+    /// let loader = GltfLoader::new();
+    /// let asset = loader.load_gltf("assets/models/scene.gltf")?;
+    ///
+    /// for material in &asset.materials {
+    ///     let props = material.to_material_properties();
+    ///     println!("Material: metallic={}, roughness={}",
+    ///         props.metallic, props.roughness);
+    /// }
+    /// # Ok::<(), praxis_utils::eyre::Report>(())
+    /// ```
+    pub fn to_material_properties(&self) -> praxis_graphics::MaterialProperties {
+        praxis_graphics::MaterialProperties::new()
+            .with_base_color(self.base_color)
+            .with_metallic(self.metallic)
+            .with_roughness(self.roughness)
+            .with_emissive_strength(0.0)
+    }
+}
+
+/// Texture data from GLTF.
+///
+/// Contains raw image data and format information.
+#[derive(Debug, Clone)]
+pub struct GltfTexture {
+    /// Image data in the format specified by `format`.
+    pub data: Vec<u8>,
+    /// Image width in pixels.
+    pub width: u32,
+    /// Image height in pixels.
+    pub height: u32,
+    /// Image format (e.g., R8G8B8A8).
+    pub format: GltfTextureFormat,
+}
+
+/// Texture format for GLTF textures.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GltfTextureFormat {
+    /// 8-bit RGBA format.
+    R8G8B8A8,
+    /// 8-bit RGB format.
+    R8G8B8,
+}
+
+/// Complete GLTF asset data.
+///
+/// Contains all data loaded from a GLTF file, including meshes, materials,
+/// textures, and the scene hierarchy.
+#[derive(Debug, Clone)]
+pub struct GltfAsset {
+    /// All meshes in the GLTF file.
+    pub meshes: Vec<MeshData>,
+    /// All materials in the GLTF file.
+    pub materials: Vec<GltfMaterial>,
+    /// All textures in the GLTF file.
+    pub textures: Vec<GltfTexture>,
+    /// Scene graph nodes.
+    pub nodes: Vec<GltfNode>,
+    /// Root node indices (nodes without parents).
+    pub root_nodes: Vec<usize>,
+}
+
+impl GltfAsset {
+    /// Gets all nodes that have meshes.
+    ///
+    /// # Returns
+    ///
+    /// An iterator over pairs of (node_index, node) for all nodes with meshes.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use praxis_assets::GltfLoader;
+    ///
+    /// let loader = GltfLoader::new();
+    /// let asset = loader.load_gltf("assets/models/scene.gltf")?;
+    ///
+    /// for (node_index, node) in asset.nodes_with_meshes() {
+    ///     println!("Node {} has {} mesh primitives", node_index, node.mesh_indices.len());
+    /// }
+    /// # Ok::<(), praxis_utils::eyre::Report>(())
+    /// ```
+    pub fn nodes_with_meshes(&self) -> impl Iterator<Item = (usize, &GltfNode)> {
+        self.nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, node)| !node.mesh_indices.is_empty())
+    }
+
+    /// Traverses the scene hierarchy depth-first starting from root nodes.
+    ///
+    /// Calls the provided function for each node in depth-first order,
+    /// passing the node index, node reference, and current depth.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Function to call for each node (node_index, node, depth)
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use praxis_assets::GltfLoader;
+    ///
+    /// let loader = GltfLoader::new();
+    /// let asset = loader.load_gltf("assets/models/scene.gltf")?;
+    ///
+    /// asset.traverse_depth_first(|node_index, node, depth| {
+    ///     let indent = "  ".repeat(depth);
+    ///     println!("{}{}: {:?}", indent, node_index, node.name);
+    /// });
+    /// # Ok::<(), praxis_utils::eyre::Report>(())
+    /// ```
+    pub fn traverse_depth_first<F>(&self, mut f: F)
+    where
+        F: FnMut(usize, &GltfNode, usize),
+    {
+        fn traverse_node<F>(
+            asset: &GltfAsset,
+            node_index: usize,
+            depth: usize,
+            f: &mut F,
+        )
+        where
+            F: FnMut(usize, &GltfNode, usize),
+        {
+            let node = &asset.nodes[node_index];
+            f(node_index, node, depth);
+
+            for &child_index in &node.children {
+                traverse_node(asset, child_index, depth + 1, f);
+            }
+        }
+
+        for &root_index in &self.root_nodes {
+            traverse_node(self, root_index, 0, &mut f);
+        }
+    }
+}
+
+/// GLTF file loader.
+///
+/// This loader parses GLTF/GLB files and converts them to engine-compatible data structures.
+///
+/// # Supported Features
+///
+/// - Meshes with positions, normals, UVs, and tangents
+/// - Node hierarchies with transforms
+/// - PBR materials (base color, metallic, roughness)
+/// - Embedded and external textures
+/// - Multiple primitives per mesh
+/// - Multiple scenes (uses default scene)
+///
+/// # Limitations
+///
+/// - Animations are not supported
+/// - Skins/skeletal animation not supported
+/// - Morph targets not supported
+/// - Only triangulated meshes (non-triangle primitives ignored)
+/// - Maximum 65536 vertices per mesh (u16 index limit)
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_assets::GltfLoader;
+///
+/// let loader = GltfLoader::new();
+/// let asset = loader.load_gltf("assets/models/scene.gltf")?;
+///
+/// println!("Loaded {} meshes", asset.meshes.len());
+/// println!("Loaded {} materials", asset.materials.len());
+/// println!("Loaded {} textures", asset.textures.len());
+/// # Ok::<(), praxis_utils::eyre::Report>(())
+/// ```
+pub struct GltfLoader {}
+
+impl GltfLoader {
+    /// Creates a new GLTF loader with default configuration.
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    /// Loads a GLTF file and returns the complete asset data.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the GLTF or GLB file to load
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The file doesn't exist or cannot be read
+    /// - The GLTF format is invalid
+    /// - Required data is missing or malformed
+    pub fn load_gltf(&self, path: impl AsRef<Path>) -> Result<GltfAsset> {
+        let path = path.as_ref();
+        info!("Loading GLTF from: {}", path.display());
+
+        let (document, buffers, images) = gltf::import(path)
+            .map_err(|e| eyre::eyre!("Failed to load GLTF file '{}': {}", path.display(), e))?;
+
+        let mut meshes = Vec::new();
+        let mut materials = Vec::new();
+        let mut textures = Vec::new();
+        let mut nodes = Vec::new();
+
+        debug!("Processing {} textures", document.textures().len());
+        for texture in document.textures() {
+            let image = &images[texture.source().index()];
+            let gltf_texture = GltfTexture {
+                data: image.pixels.clone(),
+                width: image.width,
+                height: image.height,
+                format: match image.format {
+                    gltf::image::Format::R8G8B8A8 => GltfTextureFormat::R8G8B8A8,
+                    gltf::image::Format::R8G8B8 => GltfTextureFormat::R8G8B8,
+                    _ => {
+                        return Err(eyre::eyre!(
+                            "Unsupported texture format: {:?}",
+                            image.format
+                        ))
+                    }
+                },
+            };
+            textures.push(gltf_texture);
+        }
+
+        debug!("Processing {} materials", document.materials().len());
+        for material in document.materials() {
+            let pbr = material.pbr_metallic_roughness();
+            let base_color = pbr.base_color_factor();
+            let metallic = pbr.metallic_factor();
+            let roughness = pbr.roughness_factor();
+
+            let base_color_texture_index = pbr
+                .base_color_texture()
+                .map(|info| info.texture().index());
+
+            let normal_texture_index = material
+                .normal_texture()
+                .map(|info| info.texture().index());
+
+            let gltf_material = GltfMaterial {
+                name: material.name().map(String::from),
+                base_color,
+                metallic,
+                roughness,
+                base_color_texture_index,
+                normal_texture_index,
+            };
+            materials.push(gltf_material);
+        }
+
+        debug!("Processing {} meshes", document.meshes().len());
+        let mut mesh_primitive_map: HashMap<usize, Vec<usize>> = HashMap::new();
+        
+        for mesh in document.meshes() {
+            let mut primitive_indices = Vec::new();
+            
+            for primitive in mesh.primitives() {
+                if primitive.mode() != gltf::mesh::Mode::Triangles {
+                    debug!(
+                        "Skipping non-triangle primitive in mesh '{}'",
+                        mesh.name().unwrap_or("unnamed")
+                    );
+                    continue;
+                }
+
+                let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
+
+                let positions: Vec<[f32; 3]> = reader
+                    .read_positions()
+                    .ok_or_else(|| eyre::eyre!("Mesh primitive missing positions"))?
+                    .collect();
+
+                let normals: Option<Vec<[f32; 3]>> =
+                    reader.read_normals().map(|iter| iter.collect());
+
+                let uvs: Option<Vec<[f32; 2]>> = reader
+                    .read_tex_coords(0)
+                    .map(|iter| iter.into_f32().collect());
+
+                let tangents: Option<Vec<[f32; 4]>> =
+                    reader.read_tangents().map(|iter| iter.collect());
+
+                let indices: Vec<u16> = reader
+                    .read_indices()
+                    .ok_or_else(|| eyre::eyre!("Mesh primitive missing indices"))?
+                    .into_u32()
+                    .map(|i| {
+                        if i > u16::MAX as u32 {
+                            Err(eyre::eyre!("Index {} exceeds u16::MAX", i))
+                        } else {
+                            Ok(i as u16)
+                        }
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+
+                let mesh_data = MeshData {
+                    positions,
+                    colors: None,
+                    normals,
+                    uvs,
+                    tangents,
+                    indices,
+                };
+
+                primitive_indices.push(meshes.len());
+                meshes.push(mesh_data);
+            }
+            
+            mesh_primitive_map.insert(mesh.index(), primitive_indices);
+        }
+
+        let default_scene = document
+            .default_scene()
+            .or_else(|| document.scenes().next())
+            .ok_or_else(|| eyre::eyre!("GLTF file contains no scenes"))?;
+
+        debug!("Processing {} nodes", document.nodes().len());
+        let mut node_map: HashMap<usize, usize> = HashMap::new();
+
+        for (new_index, node) in document.nodes().enumerate() {
+            node_map.insert(node.index(), new_index);
+        }
+
+        for node in document.nodes() {
+            let transform = Mat4::from_cols_array_2d(&node.transform().matrix());
+
+            let mesh_indices = node
+                .mesh()
+                .and_then(|mesh| mesh_primitive_map.get(&mesh.index()))
+                .cloned()
+                .unwrap_or_default();
+
+            let children: Vec<usize> = node
+                .children()
+                .map(|child| {
+                    *node_map
+                        .get(&child.index())
+                        .expect("Child node should be in node_map")
+                })
+                .collect();
+
+            let gltf_node = GltfNode {
+                name: node.name().map(String::from),
+                transform,
+                mesh_indices,
+                children,
+            };
+
+            nodes.push(gltf_node);
+        }
+
+        let root_nodes: Vec<usize> = default_scene
+            .nodes()
+            .map(|node| {
+                *node_map
+                    .get(&node.index())
+                    .expect("Root node should be in node_map")
+            })
+            .collect();
+
+        info!(
+            "Successfully loaded GLTF from {} ({} meshes, {} materials, {} textures, {} nodes)",
+            path.display(),
+            meshes.len(),
+            materials.len(),
+            textures.len(),
+            nodes.len()
+        );
+
+        Ok(GltfAsset {
+            meshes,
+            materials,
+            textures,
+            nodes,
+            root_nodes,
+        })
+    }
+}
+
+impl Default for GltfLoader {
+    fn default() -> Self {
+        Self::new()
     }
 }

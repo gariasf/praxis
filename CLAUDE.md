@@ -297,9 +297,38 @@ See `praxis_graphics::shadow` documentation and `examples/shadow_demo.rs` for us
 
 The asset system supports loading various file formats:
 
-- **OBJ Models**: Via custom parser in `praxis_assets`
-- **Textures**: PNG/JPEG via `image` crate
-- **Future**: Plans for GLTF, materials, and other formats
+- **OBJ Models**: Via `tobj` crate in `praxis_assets`
+- **GLTF/GLB Models**: Via `gltf` crate in `praxis_assets`, supporting:
+  - Meshes with positions, normals, UVs, and tangents
+  - Node hierarchies with transforms
+  - PBR materials (base color, metallic, roughness)
+  - Embedded and external textures
+  - Multiple primitives per mesh
+  - Scene graph structure
+- **Textures**: PNG/JPEG via `image` crate in `praxis_graphics`
+
+#### GLTF Loader Usage
+
+```rust
+use praxis_assets::{GltfLoader, GltfAssetManager};
+
+// Direct loading
+let loader = GltfLoader::new();
+let asset = loader.load_gltf("assets/models/scene.gltf")?;
+
+// Cached loading
+let mut manager = GltfAssetManager::new();
+let asset = manager.load("assets/models/scene.gltf")?;
+
+// Access loaded data
+for (node_index, node) in asset.nodes_with_meshes() {
+    let (translation, rotation, scale) = node.decompose_transform();
+    let mesh = &asset.meshes[node.mesh_index.unwrap()];
+    // Upload mesh to GPU, spawn entities, etc.
+}
+```
+
+The `GltfAssetManager` caches loaded assets by file path to avoid redundant loading operations.
 
 ## Code Quality Standards
 

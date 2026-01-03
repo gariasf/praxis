@@ -8,9 +8,11 @@
 //!
 //! - **`AssetLoader`**: Generic trait for loading any asset type from files
 //! - **`MeshLoader`**: OBJ file loader implementation
+//! - **`GltfLoader`**: GLTF/GLB file loader implementation
+//! - **`GltfAssetManager`**: Caching manager for GLTF assets
 //! - Integration with `praxis_graphics::MeshAssetManager` for GPU upload
 //!
-//! # Example
+//! # OBJ File Loading
 //!
 //! ```rust,no_run
 //! use praxis_assets::{MeshLoader, AssetLoader};
@@ -31,6 +33,46 @@
 //! # }
 //! ```
 //!
+//! # GLTF File Loading
+//!
+//! ```rust,no_run
+//! use praxis_assets::GltfLoader;
+//!
+//! # fn example() -> praxis_utils::Result<()> {
+//! // Create a GLTF loader
+//! let loader = GltfLoader::new();
+//!
+//! // Load a GLTF file
+//! let asset = loader.load_gltf("assets/models/scene.gltf")?;
+//!
+//! // Access loaded data
+//! println!("Loaded {} meshes", asset.meshes.len());
+//! println!("Loaded {} materials", asset.materials.len());
+//! println!("Loaded {} textures", asset.textures.len());
+//! println!("Scene has {} nodes", asset.nodes.len());
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # GLTF Asset Management
+//!
+//! For caching and reusing GLTF assets:
+//!
+//! ```rust,no_run
+//! use praxis_assets::GltfAssetManager;
+//!
+//! # fn example() -> praxis_utils::Result<()> {
+//! let mut manager = GltfAssetManager::new();
+//!
+//! // Load and cache a GLTF file
+//! let asset = manager.load("assets/models/scene.gltf")?;
+//!
+//! // Subsequent loads return the cached version
+//! let asset2 = manager.load("assets/models/scene.gltf")?;
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! # High-Level Integration
 //!
 //! For convenience, you can also use the integration helpers:
@@ -46,10 +88,14 @@
 //!     "cube",
 //!     "assets/models/cube.obj"
 //! )?;
+//!
+//! // Load a GLTF file
+//! let gltf_asset = praxis_assets::load_gltf("assets/models/scene.gltf")?;
 //! # Ok(())
 //! # }
 //! ```
 
+pub mod gltf_manager;
 pub mod loader;
 
 use praxis_graphics::mesh::MeshAssetManager;
@@ -57,7 +103,11 @@ use praxis_graphics::MeshData;
 use praxis_utils::Result;
 use std::path::Path;
 
-pub use loader::{AssetLoader, MeshLoader};
+pub use gltf_manager::GltfAssetManager;
+pub use loader::{
+    AssetLoader, GltfAsset, GltfLoader, GltfMaterial, GltfNode, GltfTexture, GltfTextureFormat,
+    MeshLoader,
+};
 
 /// Loads an OBJ mesh file and uploads it to the GPU via a mesh asset manager.
 ///
@@ -133,6 +183,37 @@ pub fn load_obj_mesh(
 pub fn load_obj(path: impl AsRef<Path>) -> Result<MeshData> {
     let loader = MeshLoader::new();
     loader.load(path)
+}
+
+/// Loads a GLTF file and returns the complete asset data.
+///
+/// This is a convenience function that creates a loader and loads the GLTF file.
+///
+/// # Arguments
+///
+/// * `path` - Path to the GLTF or GLB file to load
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The file doesn't exist or cannot be read
+/// - The GLTF format is invalid
+/// - Required data is missing or malformed
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_assets;
+///
+/// let asset = praxis_assets::load_gltf("assets/models/scene.gltf")?;
+/// println!("Loaded {} meshes", asset.meshes.len());
+/// println!("Loaded {} materials", asset.materials.len());
+/// println!("Loaded {} textures", asset.textures.len());
+/// # Ok::<(), praxis_utils::eyre::Report>(())
+/// ```
+pub fn load_gltf(path: impl AsRef<Path>) -> Result<GltfAsset> {
+    let loader = GltfLoader::new();
+    loader.load_gltf(path)
 }
 
 /// Initializes the asset system.
@@ -230,5 +311,11 @@ f 1 2 3
         assert!(result1.is_ok());
         assert!(result2.is_ok());
         assert!(result3.is_ok());
+    }
+
+    #[test]
+    fn test_load_gltf_nonexistent() {
+        let result = load_gltf("nonexistent_test_file_99999.gltf");
+        assert!(result.is_err(), "load_gltf should fail for nonexistent file");
     }
 }
