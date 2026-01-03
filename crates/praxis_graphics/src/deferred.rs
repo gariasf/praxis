@@ -189,7 +189,7 @@ pub struct DeferredRenderer {
     lighting_pipeline: Arc<GraphicsPipeline>,
 
     /// G-buffer storing geometry data
-    gbuffer: Option<GBuffer>,
+    pub gbuffer: Option<GBuffer>,
 
     /// Full-screen quad vertex buffer for lighting pass
     fullscreen_quad_vertices: vulkano::buffer::Subbuffer<[FullscreenVertex]>,
@@ -602,6 +602,55 @@ impl DeferredRenderer {
             gbuffer,
             view_proj_buffer,
             lighting_buffer,
+            None, // SSAO texture - can be provided via render_with_ssao
+        )?;
+
+        Ok(())
+    }
+
+    /// Renders the scene using deferred rendering with SSAO integration.
+    ///
+    /// This performs two passes:
+    /// 1. Geometry pass: Renders meshes to G-buffer
+    /// 2. Lighting pass: Accumulates lighting from G-buffer to output framebuffer, with SSAO applied to ambient
+    #[allow(clippy::too_many_arguments)]
+    pub fn render_with_ssao(
+        &self,
+        builder: &mut AutoCommandBufferBuilder<impl vulkano::command_buffer::allocator::CommandBufferAllocator>,
+        output_framebuffer: Arc<Framebuffer>,
+        viewport: Viewport,
+        draw_commands: &[DrawCommand],
+        view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
+        dynamic_uniform_buffer: &crate::uniform_buffer::DynamicUniformBuffer,
+        mesh_manager: &mesh::MeshAssetManager,
+        texture_manager: &crate::texture::TextureManager,
+        lighting_buffer: vulkano::buffer::Subbuffer<lighting::LightingUniforms>,
+        ssao_texture: Arc<ImageView>,
+    ) -> Result<()> {
+        let gbuffer = self
+            .gbuffer
+            .as_ref()
+            .ok_or_else(|| eyre::eyre!("G-buffer not initialized"))?;
+
+        self.geometry_pass_render(
+            builder,
+            gbuffer,
+            viewport.clone(),
+            draw_commands,
+            view_proj_buffer.clone(),
+            dynamic_uniform_buffer,
+            mesh_manager,
+            texture_manager,
+        )?;
+
+        self.lighting_pass_render(
+            builder,
+            output_framebuffer,
+            viewport,
+            gbuffer,
+            view_proj_buffer,
+            lighting_buffer,
+            Some(ssao_texture),
         )?;
 
         Ok(())
@@ -763,6 +812,7 @@ impl DeferredRenderer {
         gbuffer: &GBuffer,
         view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
         lighting_buffer: vulkano::buffer::Subbuffer<lighting::LightingUniforms>,
+        ssao_texture: Option<Arc<ImageView>>,
     ) -> Result<()> {
         trace!("Beginning lighting pass");
 
@@ -797,6 +847,36 @@ impl DeferredRenderer {
         )
         .map_err(|e| eyre::eyre!("Failed to create G-buffer sampler: {}", e))?;
 
+        // Create default white SSAO texture if not provided (1.0 = no occlusion)
+        let default_ssao_texture = if ssao_texture.is_none() {
+            use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
+            use vulkano::memory::allocator::AllocationCreateInfo;
+            
+            let image = Image::new(
+                self.memory_allocator.clone(),
+                ImageCreateInfo {
+                    image_type: ImageType::Dim2d,
+                    format: vulkano::format::Format::R32_SFLOAT,
+                    extent: [1, 1, 1],
+                    usage: ImageUsage::SAMPLED,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+            )
+            .map_err(|e| eyre::eyre!("Failed to create default SSAO texture: {}", e))?;
+            
+            Some(ImageView::new_default(image)
+                .map_err(|e| eyre::eyre!("Failed to create default SSAO image view: {}", e))?)
+        } else {
+            None
+        };
+
+        let ssao_view = ssao_texture.as_ref().or(default_ssao_texture.as_ref()).unwrap();
+
         let descriptor_set = DescriptorSet::new(
             self.descriptor_set_allocator.clone(),
             self.lighting_pipeline.layout().set_layouts()[0].clone(),
@@ -812,9 +892,10 @@ impl DeferredRenderer {
                     gbuffer.metallic_roughness.clone(),
                     sampler.clone(),
                 ),
-                WriteDescriptorSet::image_view_sampler(3, gbuffer.depth.clone(), sampler),
+                WriteDescriptorSet::image_view_sampler(3, gbuffer.depth.clone(), sampler.clone()),
                 WriteDescriptorSet::buffer(4, view_proj_buffer),
                 WriteDescriptorSet::buffer(5, lighting_buffer),
+                WriteDescriptorSet::image_view_sampler(6, ssao_view.clone(), sampler),
             ],
             [],
         )

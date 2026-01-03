@@ -21,6 +21,9 @@ layout(set = 0, binding = 4, std140) uniform ViewProjection {
     float _padding;
 } view_proj;
 
+// SSAO occlusion texture (optional - binding 6)
+layout(set = 0, binding = 6) uniform sampler2D ssao_occlusion;
+
 // Lighting data structures
 struct DirectionalLight {
     vec4 direction;
@@ -112,8 +115,11 @@ void main() {
     float diffuse_factor = 1.0 - metallic;
     vec3 specular_color = mix(vec3(1.0), albedo, metallic);
     
-    // Start with ambient lighting
-    vec3 lighting_result = lighting.ambient_color.rgb;
+    // Sample SSAO occlusion factor (1.0 = no occlusion, 0.0 = full occlusion)
+    float occlusion = texture(ssao_occlusion, v_uv).r;
+    
+    // Start with ambient lighting, modulated by SSAO
+    vec3 lighting_result = lighting.ambient_color.rgb * occlusion;
     
     // Process directional lights
     for (uint i = 0; i < lighting.directional_light_count; i++) {

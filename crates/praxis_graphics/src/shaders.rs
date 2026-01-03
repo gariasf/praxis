@@ -145,3 +145,35 @@ pub mod deferred_lighting_fs {
         path: "src/shaders/deferred_lighting.frag"
     }
 }
+
+/// Compiled vertex shader for SSAO pass.
+pub mod ssao_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/shaders/ssao.vert"
+    }
+}
+
+/// Compiled fragment shader for SSAO pass.
+pub mod ssao_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/ssao.frag"
+    }
+}
+
+/// Compiled vertex shader for SSAO blur pass.
+pub mod ssao_blur_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/shaders/ssao_blur.vert"
+    }
+}
+
+/// Compiled fragment shader for SSAO blur pass.
+pub mod ssao_blur_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/ssao_blur.frag"
+    }
+}

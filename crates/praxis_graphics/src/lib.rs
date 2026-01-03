@@ -15,6 +15,7 @@
 //! - `material`: Material system with texture support and descriptor set management
 //! - `lighting`: Lighting uniforms and buffer management
 //! - `deferred`: Deferred rendering with G-buffer passes
+//! - `ssao`: Screen-space ambient occlusion for realistic shadowing
 //! - `post_process`: Post-processing framework for screen-space effects
 //!
 //! # Unified Rendering API
@@ -185,6 +186,31 @@
 //! See the `post_process` module documentation and `POST_PROCESSING.md` for detailed
 //! information on implementing custom effects.
 //!
+//! # Screen-Space Ambient Occlusion (SSAO)
+//!
+//! The SSAO system provides realistic ambient occlusion effects:
+//!
+//! - **`SsaoRenderer`**: Complete SSAO implementation with configurable parameters
+//! - **`SsaoConfig`**: Configuration for kernel size, radius, bias, and power
+//! - **Hemisphere Sampling**: Randomly distributed samples for accurate occlusion
+//! - **Noise Texture**: Reduces banding artifacts by rotating the sample kernel
+//! - **Blur Pass**: Smooths the occlusion texture to reduce noise
+//!
+//! SSAO darkens areas that are surrounded by geometry (crevices, corners, contact points)
+//! to simulate indirect lighting occlusion. The effect uses the G-buffer depth and
+//! normal textures from deferred rendering.
+//!
+//! The SSAO implementation uses:
+//! 1. Generate hemisphere sample kernel with varying distribution
+//! 2. Generate random noise texture for kernel rotation
+//! 3. SSAO pass: Sample depth buffer in hemisphere around each pixel
+//! 4. Blur pass: Apply box blur to reduce noise artifacts
+//!
+//! The resulting occlusion texture can be integrated into lighting calculations
+//! to darken occluded areas, providing more realistic ambient lighting.
+//!
+//! See the `ssao` module documentation for usage details.
+//!
 //! # Skybox System
 //!
 //! The skybox system provides realistic background rendering using cubemaps:
@@ -254,6 +280,7 @@ mod primitives;
 mod shaders;
 pub mod shadow;
 pub mod skybox;
+pub mod ssao;
 pub mod texture;
 pub mod uniform_buffer;
 mod vertex;
@@ -1413,6 +1440,7 @@ pub use primitives::{
 };
 pub use shadow::{ShadowConfig, ShadowMapManager, ShadowUniforms, MAX_SHADOW_CASCADES};
 pub use skybox::SkyboxRenderer;
+pub use ssao::{SsaoConfig, SsaoRenderer};
 pub use texture::{Cubemap, CubemapFace, Texture, TextureManager};
 pub use uniform_buffer::{DynamicUniformBuffer, ModelUniforms, ViewProjectionUniforms};
 pub use vertex::Vertex3D;
