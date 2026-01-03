@@ -159,4 +159,4 @@ Logical game actions that abstract physical inputs:
 
 ## License
 
-GPL-3.0-or-later
+MIT

@@ -5,7 +5,8 @@
       "mcp__filesystem__read_multiple_files",
       "Bash(wc:*)",
       "Bash(find:*)",
-      "mcp__filesystem__list_directory"
+      "mcp__filesystem__list_directory",
+      "mcp__filesystem__edit_file"
     ],
     "deny": [],
     "ask": []
