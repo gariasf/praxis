@@ -479,3 +479,340 @@ pub fn init() -> Result<()> {
     debug!("ECS system initialized successfully");
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_init() {
+        let result = init();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_camera_query_helpers() {
+        let mut world = World::new();
+
+        let camera1 = world.spawn((
+            Camera::with_priority(5),
+            Transform::from_xyz(0.0, 0.0, 10.0),
+            PerspectiveProjection::default(),
+            CameraMatrices::default(),
+        ));
+
+        let camera2 = world.spawn((
+            Camera::with_priority(1),
+            Transform::from_xyz(5.0, 5.0, 5.0),
+            PerspectiveProjection::default(),
+            CameraMatrices::default(),
+        ));
+
+        let camera3 = world.spawn((
+            Camera::with_priority(10),
+            Transform::from_xyz(-5.0, 0.0, 10.0),
+            PerspectiveProjection::default(),
+            CameraMatrices::default(),
+        ));
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(systems::update_perspective_cameras);
+        world.inner_mut().run_schedule(&mut schedule);
+
+        let mut query = world.inner_mut().query::<camera::ActivePerspectiveCameras>();
+
+        let primary = camera::primary_perspective_camera(&query);
+        assert!(primary.is_some());
+        let (entity, _, _) = primary.unwrap();
+        assert_eq!(entity, camera3);
+
+        let sorted = camera::sorted_perspective_cameras(&query);
+        assert_eq!(sorted.len(), 3);
+        assert_eq!(sorted[0].0, camera2);
+        assert_eq!(sorted[1].0, camera1);
+        assert_eq!(sorted[2].0, camera3);
+    }
+
+    #[test]
+    fn test_orthographic_camera_helpers() {
+        let mut world = World::new();
+
+        let camera1 = world.spawn((
+            Camera::with_priority(3),
+            Transform::from_xyz(0.0, 10.0, 0.0),
+            OrthographicProjection::default(),
+            CameraMatrices::default(),
+        ));
+
+        let camera2 = world.spawn((
+            Camera::with_priority(7),
+            Transform::from_xyz(0.0, 15.0, 0.0),
+            OrthographicProjection::default(),
+            CameraMatrices::default(),
+        ));
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(systems::update_orthographic_cameras);
+        world.inner_mut().run_schedule(&mut schedule);
+
+        let mut query = world.inner_mut().query::<camera::ActiveOrthographicCameras>();
+
+        let primary = camera::primary_orthographic_camera(&query);
+        assert!(primary.is_some());
+        let (entity, camera_comp, _) = primary.unwrap();
+        assert_eq!(entity, camera2);
+        assert_eq!(camera_comp.priority, 7);
+
+        let sorted = camera::sorted_orthographic_cameras(&query);
+        assert_eq!(sorted.len(), 2);
+        assert_eq!(sorted[0].0, camera1);
+        assert_eq!(sorted[1].0, camera2);
+    }
+
+    #[test]
+    fn test_inactive_camera_filtered_out() {
+        let mut world = World::new();
+
+        let mut inactive_camera = Camera::default();
+        inactive_camera.deactivate();
+
+        world.spawn((
+            inactive_camera,
+            Transform::default(),
+            PerspectiveProjection::default(),
+            CameraMatrices::default(),
+        ));
+
+        let active_camera = world.spawn((
+            Camera::default(),
+            Transform::default(),
+            PerspectiveProjection::default(),
+            CameraMatrices::default(),
+        ));
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(systems::update_perspective_cameras);
+        world.inner_mut().run_schedule(&mut schedule);
+
+        let mut query = world.inner_mut().query::<camera::ActivePerspectiveCameras>();
+
+        let primary = camera::primary_perspective_camera(&query);
+        assert!(primary.is_some());
+        let (entity, _, _) = primary.unwrap();
+        assert_eq!(entity, active_camera);
+
+        let sorted = camera::sorted_perspective_cameras(&query);
+        assert_eq!(sorted.len(), 1);
+    }
+
+    #[test]
+    fn test_system_scheduling() {
+        use systems::*;
+
+        let mut world = World::new();
+        let mut schedule = Schedule::default();
+
+        schedule.add_systems((
+            sync_parent_child_relationships,
+            cleanup_removed_parents,
+            propagate_transforms,
+            propagate_transforms_for_reparented,
+            propagate_transforms_for_changed_children,
+        ).chain());
+
+        let parent = world.spawn((
+            Transform::from_xyz(10.0, 0.0, 0.0),
+            GlobalTransform::default(),
+        ));
+
+        let child = world.spawn((
+            Transform::from_xyz(5.0, 0.0, 0.0),
+            GlobalTransform::default(),
+            Parent(parent),
+        ));
+
+        world.inner_mut().run_schedule(&mut schedule);
+
+        let children = world.inner().get::<Children>(parent);
+        assert!(children.is_some());
+
+        let global_transform = world.inner().get::<GlobalTransform>(child);
+        assert!(global_transform.is_some());
+        let pos = global_transform.unwrap().translation();
+        assert!((pos.x - 15.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_lighting_data_resource() {
+        let mut world = World::new();
+        
+        world.insert_resource(LightingData::default());
+        
+        world.spawn(DirectionalLight::new(
+            Vec3::new(0.0, -1.0, 0.0),
+            Vec3::ONE,
+            1.0,
+        ));
+        
+        world.spawn((
+            Transform::from_xyz(10.0, 5.0, 0.0),
+            PointLight::new(Vec3::ONE, 10.0, 20.0),
+        ));
+        
+        let mut schedule = Schedule::default();
+        schedule.add_systems(systems::gather_lighting_system);
+        world.inner_mut().run_schedule(&mut schedule);
+        
+        let lighting_data = world.inner().resource::<LightingData>();
+        assert_eq!(lighting_data.directional_light_count(), 1);
+        assert_eq!(lighting_data.point_light_count(), 1);
+        assert_eq!(lighting_data.ambient_color, Vec3::new(0.1, 0.1, 0.1));
+    }
+
+    #[test]
+    fn test_component_derivation() {
+        #[derive(Component, Debug, Clone, Copy, PartialEq)]
+        struct CustomComponent {
+            value: i32,
+        }
+
+        let mut world = World::new();
+        let entity = world.spawn(CustomComponent { value: 42 });
+
+        let component = world.inner().get::<CustomComponent>(entity);
+        assert!(component.is_some());
+        assert_eq!(component.unwrap().value, 42);
+    }
+
+    #[test]
+    fn test_multiple_schedules() {
+        let mut world = World::new();
+
+        #[derive(ScheduleLabel, Debug, Clone, PartialEq, Eq, Hash)]
+        struct UpdateSchedule;
+
+        #[derive(ScheduleLabel, Debug, Clone, PartialEq, Eq, Hash)]
+        struct RenderSchedule;
+
+        let mut update_schedule = Schedule::new(UpdateSchedule);
+        update_schedule.add_systems(systems::propagate_transforms);
+
+        let mut render_schedule = Schedule::new(RenderSchedule);
+        render_schedule.add_systems(systems::gather_lighting_system);
+
+        world.insert_resource(LightingData::default());
+
+        world.add_schedule(update_schedule);
+        world.add_schedule(render_schedule);
+
+        let root = world.spawn((
+            Transform::from_xyz(5.0, 0.0, 0.0),
+            GlobalTransform::default(),
+        ));
+
+        world.run_schedule(UpdateSchedule);
+
+        let global = world.inner().get::<GlobalTransform>(root);
+        assert!(global.is_some());
+    }
+
+    #[test]
+    fn test_query_with_added_changed_filters() {
+        use bevy_ecs::query::Changed;
+
+        #[derive(Component, Debug, Clone, Copy)]
+        struct Position {
+            x: f32,
+            y: f32,
+        }
+
+        let mut world = World::new();
+
+        let entity1 = world.spawn(Position { x: 0.0, y: 0.0 });
+        let entity2 = world.spawn(Position { x: 5.0, y: 5.0 });
+        let _entity3 = world.spawn(Position { x: 10.0, y: 10.0 });
+
+        world.inner_mut().clear_trackers();
+
+        {
+            let mut pos = world.inner_mut().get_mut::<Position>(entity1).unwrap();
+            pos.x = 100.0;
+        }
+
+        {
+            let mut pos = world.inner_mut().get_mut::<Position>(entity2).unwrap();
+            pos.y = 200.0;
+        }
+
+        let mut query = world.inner_mut().query_filtered::<Entity, Changed<Position>>();
+        let changed_entities: Vec<Entity> = query.iter(&world.inner()).collect();
+
+        assert!(changed_entities.contains(&entity1));
+        assert!(changed_entities.contains(&entity2));
+    }
+
+    #[test]
+    fn test_bundle_usage() {
+        use systems::TransformBundle;
+
+        let mut world = World::new();
+
+        let entity = world.spawn(TransformBundle::from_xyz(10.0, 20.0, 30.0));
+
+        let transform = world.inner().get::<Transform>(entity);
+        let global_transform = world.inner().get::<GlobalTransform>(entity);
+
+        assert!(transform.is_some());
+        assert!(global_transform.is_some());
+        assert_eq!(transform.unwrap().translation, Vec3::new(10.0, 20.0, 30.0));
+    }
+
+    #[test]
+    fn test_perspective_camera_bundle_usage() {
+        use systems::PerspectiveCameraBundle;
+
+        let mut world = World::new();
+
+        let entity = world.spawn(PerspectiveCameraBundle::new(
+            Vec3::new(0.0, 5.0, 10.0),
+            70.0_f32.to_radians(),
+            16.0 / 9.0,
+        ));
+
+        let camera = world.inner().get::<Camera>(entity);
+        let transform = world.inner().get::<Transform>(entity);
+        let projection = world.inner().get::<PerspectiveProjection>(entity);
+        let matrices = world.inner().get::<CameraMatrices>(entity);
+
+        assert!(camera.is_some());
+        assert!(transform.is_some());
+        assert!(projection.is_some());
+        assert!(matrices.is_some());
+
+        assert_eq!(transform.unwrap().translation, Vec3::new(0.0, 5.0, 10.0));
+        assert_eq!(projection.unwrap().fov, 70.0_f32.to_radians());
+    }
+
+    #[test]
+    fn test_orthographic_camera_bundle_usage() {
+        use systems::OrthographicCameraBundle;
+
+        let mut world = World::new();
+
+        let entity = world.spawn(OrthographicCameraBundle::new(
+            Vec3::new(0.0, 10.0, 0.0),
+            20.0,
+            10.0,
+        ));
+
+        let camera = world.inner().get::<Camera>(entity);
+        let transform = world.inner().get::<Transform>(entity);
+        let projection = world.inner().get::<OrthographicProjection>(entity);
+
+        assert!(camera.is_some());
+        assert!(transform.is_some());
+        assert!(projection.is_some());
+
+        assert_eq!(transform.unwrap().translation, Vec3::new(0.0, 10.0, 0.0));
+    }
+}

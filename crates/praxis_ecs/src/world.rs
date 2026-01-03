@@ -573,4 +573,291 @@ mod tests {
         // Resource should be gone
         assert!(world.get_resource::<TestResource>().is_none());
     }
+
+    #[test]
+    fn test_component_insertion() {
+        let mut world = World::new();
+        
+        let entity = world.spawn(());
+        
+        world
+            .insert_component(entity, TestComponent(42))
+            .expect("Failed to insert component");
+        
+        let component = world.inner().get::<TestComponent>(entity);
+        assert!(component.is_some());
+        assert_eq!(component.unwrap().0, 42);
+    }
+
+    #[test]
+    fn test_component_removal() {
+        let mut world = World::new();
+        
+        let entity = world.spawn(TestComponent(100));
+        
+        let removed = world.remove_component::<TestComponent>(entity);
+        assert!(removed.is_some());
+        assert_eq!(removed.unwrap().0, 100);
+        
+        let component = world.inner().get::<TestComponent>(entity);
+        assert!(component.is_none());
+    }
+
+    #[test]
+    fn test_component_insertion_nonexistent_entity() {
+        let mut world = World::new();
+        
+        use bevy_ecs::entity::Entity;
+        let fake_entity = Entity::from_raw(999999);
+        
+        let result = world.insert_component(fake_entity, TestComponent(42));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_despawn_nonexistent_entity() {
+        let mut world = World::new();
+        
+        use bevy_ecs::entity::Entity;
+        let fake_entity = Entity::from_raw(999999);
+        
+        let result = world.despawn(fake_entity);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_spawn_empty() {
+        let mut world = World::new();
+        
+        let entity = world.spawn_empty()
+            .insert(TestComponent(42))
+            .id();
+        
+        let component = world.inner().get::<TestComponent>(entity);
+        assert!(component.is_some());
+        assert_eq!(component.unwrap().0, 42);
+    }
+
+    #[test]
+    fn test_get_component() {
+        let mut world = World::new();
+        
+        let entity = world.spawn(TestComponent(77));
+        
+        let component = world.get::<TestComponent>(entity);
+        assert!(component.is_some());
+        assert_eq!(component.unwrap().0, 77);
+        
+        use bevy_ecs::entity::Entity;
+        let fake_entity = Entity::from_raw(999999);
+        let nonexistent = world.get::<TestComponent>(fake_entity);
+        assert!(nonexistent.is_none());
+    }
+
+    #[test]
+    fn test_get_resource_mut() {
+        let mut world = World::new();
+        
+        world.insert_resource(TestResource("Initial".to_string()));
+        
+        if let Some(resource) = world.get_resource_mut::<TestResource>() {
+            resource.0 = "Modified".to_string();
+        }
+        
+        let resource = world.get_resource::<TestResource>();
+        assert_eq!(resource.unwrap().0, "Modified");
+    }
+
+    #[test]
+    fn test_clear_entities() {
+        let mut world = World::new();
+        
+        world.spawn(TestComponent(1));
+        world.spawn(TestComponent(2));
+        world.spawn(TestComponent(3));
+        
+        assert_eq!(world.entity_count(), 3);
+        assert_eq!(world.stats().active_entities, 3);
+        
+        world.clear_entities();
+        
+        assert_eq!(world.entity_count(), 0);
+        assert_eq!(world.stats().active_entities, 0);
+    }
+
+    #[test]
+    fn test_world_stats() {
+        let mut world = World::new();
+        
+        let entity1 = world.spawn(TestComponent(1));
+        let entity2 = world.spawn(TestComponent(2));
+        let _entity3 = world.spawn(TestComponent(3));
+        
+        let stats = world.stats();
+        assert_eq!(stats.entities_spawned, 3);
+        assert_eq!(stats.active_entities, 3);
+        assert_eq!(stats.entities_despawned, 0);
+        
+        world.despawn(entity1).unwrap();
+        world.despawn(entity2).unwrap();
+        
+        let stats = world.stats();
+        assert_eq!(stats.entities_spawned, 3);
+        assert_eq!(stats.entities_despawned, 2);
+        assert_eq!(stats.active_entities, 1);
+    }
+
+    #[test]
+    fn test_spawn_multiple_components() {
+        #[derive(Component)]
+        struct Health(i32);
+        
+        #[derive(Component)]
+        struct Speed(f32);
+        
+        let mut world = World::new();
+        
+        let entity = world.spawn((Health(100), Speed(5.0)));
+        
+        let health = world.inner().get::<Health>(entity);
+        let speed = world.inner().get::<Speed>(entity);
+        
+        assert!(health.is_some());
+        assert!(speed.is_some());
+        assert_eq!(health.unwrap().0, 100);
+        assert_eq!(speed.unwrap().0, 5.0);
+    }
+
+    #[test]
+    fn test_query_creation() {
+        let mut world = World::new();
+        
+        world.spawn(TestComponent(1));
+        world.spawn(TestComponent(2));
+        world.spawn(TestComponent(3));
+        
+        let mut query = world.query::<&TestComponent>();
+        let mut count = 0;
+        let mut sum = 0;
+        
+        for component in query.iter(&world) {
+            count += 1;
+            sum += component.0;
+        }
+        
+        assert_eq!(count, 3);
+        assert_eq!(sum, 6);
+    }
+
+    #[test]
+    fn test_filtered_query() {
+        use bevy_ecs::query::With;
+        
+        #[derive(Component)]
+        struct Player;
+        
+        #[derive(Component)]
+        struct Position(i32);
+        
+        let mut world = World::new();
+        
+        world.spawn((Player, Position(10)));
+        world.spawn(Position(20));
+        world.spawn((Player, Position(30)));
+        
+        let mut query = world.query_filtered::<&Position, With<Player>>();
+        let positions: Vec<i32> = query.iter(&world).map(|p| p.0).collect();
+        
+        assert_eq!(positions.len(), 2);
+        assert!(positions.contains(&10));
+        assert!(positions.contains(&30));
+        assert!(!positions.contains(&20));
+    }
+
+    #[test]
+    fn test_iter_entities() {
+        let mut world = World::new();
+        
+        world.spawn(TestComponent(1));
+        world.spawn(TestComponent(2));
+        world.spawn(TestComponent(3));
+        
+        let entity_count = world.iter_entities().count();
+        assert_eq!(entity_count, 3);
+    }
+
+    #[test]
+    fn test_entity_mut() {
+        let mut world = World::new();
+        
+        let entity = world.spawn(TestComponent(10));
+        
+        world.entity_mut(entity).insert(TestResource("Test".to_string()));
+        
+        let component = world.inner().get::<TestComponent>(entity);
+        let resource = world.inner().get::<TestResource>(entity);
+        
+        assert!(component.is_some());
+        assert!(resource.is_some());
+        assert_eq!(component.unwrap().0, 10);
+        assert_eq!(resource.unwrap().0, "Test");
+    }
+
+    #[test]
+    fn test_default_world() {
+        let world = World::default();
+        assert_eq!(world.entity_count(), 0);
+        assert_eq!(world.stats().active_entities, 0);
+    }
+
+    #[test]
+    fn test_batch_spawn_with_different_components() {
+        #[derive(Component)]
+        struct Enemy {
+            health: i32,
+        }
+        
+        let mut world = World::new();
+        
+        let enemies = world.spawn_batch(vec![
+            Enemy { health: 100 },
+            Enemy { health: 50 },
+            Enemy { health: 75 },
+        ]);
+        
+        assert_eq!(enemies.len(), 3);
+        
+        for entity in enemies {
+            let enemy = world.inner().get::<Enemy>(entity);
+            assert!(enemy.is_some());
+        }
+    }
+
+    #[test]
+    fn test_stats_after_multiple_operations() {
+        let mut world = World::new();
+        
+        let e1 = world.spawn(TestComponent(1));
+        let e2 = world.spawn(TestComponent(2));
+        let e3 = world.spawn(TestComponent(3));
+        
+        assert_eq!(world.stats().entities_spawned, 3);
+        assert_eq!(world.stats().active_entities, 3);
+        
+        world.despawn(e1).unwrap();
+        
+        assert_eq!(world.stats().entities_despawned, 1);
+        assert_eq!(world.stats().active_entities, 2);
+        
+        world.spawn(TestComponent(4));
+        
+        assert_eq!(world.stats().entities_spawned, 4);
+        assert_eq!(world.stats().active_entities, 3);
+        
+        world.despawn(e2).unwrap();
+        world.despawn(e3).unwrap();
+        
+        assert_eq!(world.stats().entities_despawned, 3);
+        assert_eq!(world.stats().active_entities, 1);
+    }
 }

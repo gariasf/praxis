@@ -1619,4 +1619,234 @@ mod tests {
         assert_eq!(handle1, handle2);
         assert_ne!(handle1, handle3);
     }
+
+    #[test]
+    fn test_name_component() {
+        let name1 = Name::new("Player");
+        assert_eq!(name1.as_str(), "Player");
+
+        let name2: Name = "Enemy".into();
+        assert_eq!(name2.as_str(), "Enemy");
+
+        let name3: Name = "Boss".to_string().into();
+        assert_eq!(name3.as_str(), "Boss");
+    }
+
+    #[test]
+    fn test_transform_from_translation() {
+        let transform = Transform::from_translation(Vec3::new(5.0, 10.0, 15.0));
+        assert_eq!(transform.translation, Vec3::new(5.0, 10.0, 15.0));
+        assert_eq!(transform.rotation, Quat::IDENTITY);
+        assert_eq!(transform.scale, Vec3::ONE);
+    }
+
+    #[test]
+    fn test_transform_from_rotation() {
+        let rotation = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
+        let transform = Transform::from_rotation(rotation);
+        assert_eq!(transform.translation, Vec3::ZERO);
+        assert_eq!(transform.rotation, rotation);
+        assert_eq!(transform.scale, Vec3::ONE);
+    }
+
+    #[test]
+    fn test_transform_from_scale() {
+        let scale = Vec3::new(2.0, 3.0, 4.0);
+        let transform = Transform::from_scale(scale);
+        assert_eq!(transform.translation, Vec3::ZERO);
+        assert_eq!(transform.rotation, Quat::IDENTITY);
+        assert_eq!(transform.scale, scale);
+    }
+
+    #[test]
+    fn test_transform_direction() {
+        let transform = Transform {
+            translation: Vec3::new(10.0, 0.0, 0.0),
+            rotation: Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
+            scale: Vec3::new(2.0, 1.0, 1.0),
+        };
+
+        let direction = Vec3::new(1.0, 0.0, 0.0);
+        let transformed = transform.transform_direction(direction);
+        
+        assert!(transformed.x.abs() < 0.001);
+        assert!(transformed.y.abs() < 0.001);
+        assert!((transformed.z.abs() - 2.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_global_transform_from_transform() {
+        let transform = Transform::from_xyz(5.0, 10.0, 15.0);
+        let global_transform = GlobalTransform::from(transform);
+        
+        let translation = global_transform.translation();
+        assert_eq!(translation, Vec3::new(5.0, 10.0, 15.0));
+    }
+
+    #[test]
+    fn test_global_transform_from_scale_rotation_translation() {
+        let scale = Vec3::new(2.0, 2.0, 2.0);
+        let rotation = Quat::IDENTITY;
+        let translation = Vec3::new(10.0, 20.0, 30.0);
+        
+        let global_transform = GlobalTransform::from_scale_rotation_translation(scale, rotation, translation);
+        
+        assert_eq!(global_transform.translation(), translation);
+        let extracted_scale = global_transform.scale();
+        assert!((extracted_scale.x - 2.0).abs() < 0.001);
+        assert!((extracted_scale.y - 2.0).abs() < 0.001);
+        assert!((extracted_scale.z - 2.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_global_transform_transform_direction() {
+        let matrix = Mat4::from_rotation_y(std::f32::consts::FRAC_PI_2);
+        let global_transform = GlobalTransform::from_matrix(matrix);
+        
+        let direction = Vec3::new(1.0, 0.0, 0.0);
+        let transformed = global_transform.transform_direction(direction);
+        
+        assert!(transformed.x.abs() < 0.001);
+        assert!(transformed.y.abs() < 0.001);
+        assert!(transformed.z.abs() > 0.99);
+    }
+
+    #[test]
+    fn test_parent_component() {
+        use bevy_ecs::entity::Entity;
+        let parent_entity = Entity::from_raw(42);
+        let parent = Parent(parent_entity);
+        assert_eq!(parent.0, parent_entity);
+    }
+
+    #[test]
+    fn test_children_component_operations() {
+        use bevy_ecs::entity::Entity;
+        
+        let mut children = Children::new();
+        assert!(children.is_empty());
+        assert_eq!(children.len(), 0);
+        
+        let child1 = Entity::from_raw(1);
+        let child2 = Entity::from_raw(2);
+        let child3 = Entity::from_raw(3);
+        
+        children.push(child1);
+        children.push(child2);
+        children.push(child3);
+        
+        assert_eq!(children.len(), 3);
+        assert!(!children.is_empty());
+        
+        let mut iter = children.iter();
+        assert_eq!(iter.next(), Some(&child1));
+        assert_eq!(iter.next(), Some(&child2));
+        assert_eq!(iter.next(), Some(&child3));
+        assert_eq!(iter.next(), None);
+        
+        assert!(children.remove(child2));
+        assert_eq!(children.len(), 2);
+        assert!(!children.remove(child2));
+    }
+
+    #[test]
+    fn test_children_with_children() {
+        use bevy_ecs::entity::Entity;
+        
+        let child1 = Entity::from_raw(1);
+        let child2 = Entity::from_raw(2);
+        
+        let children = Children::with_children(vec![child1, child2]);
+        assert_eq!(children.len(), 2);
+        assert_eq!(children.0[0], child1);
+        assert_eq!(children.0[1], child2);
+    }
+
+    #[test]
+    fn test_active_component() {
+        let active = Active;
+        assert_eq!(std::mem::size_of_val(&active), 0);
+    }
+
+    #[test]
+    fn test_texture_handle() {
+        let handle = TextureHandle::new("brick_texture");
+        assert_eq!(handle.id(), "brick_texture");
+        
+        let handle2: TextureHandle = "wood_texture".into();
+        assert_eq!(handle2.id(), "wood_texture");
+        
+        let handle3: TextureHandle = "metal_texture".to_string().into();
+        assert_eq!(handle3.id(), "metal_texture");
+    }
+
+    #[test]
+    fn test_texture_handle_equality() {
+        let handle1 = TextureHandle::new("brick");
+        let handle2 = TextureHandle::new("brick");
+        let handle3 = TextureHandle::new("wood");
+        
+        assert_eq!(handle1, handle2);
+        assert_ne!(handle1, handle3);
+    }
+
+    #[test]
+    fn test_material_properties_component() {
+        let props = MaterialPropertiesComponent::new()
+            .with_base_color([1.0, 0.5, 0.0, 1.0])
+            .with_metallic(0.8)
+            .with_roughness(0.2)
+            .with_emissive_strength(1.5);
+        
+        assert_eq!(props.0.base_color, [1.0, 0.5, 0.0, 1.0]);
+        assert_eq!(props.0.metallic, 0.8);
+        assert_eq!(props.0.roughness, 0.2);
+        assert_eq!(props.0.emissive_strength, 1.5);
+    }
+
+    #[test]
+    fn test_lighting_data_operations() {
+        let mut lighting_data = LightingData::new();
+        
+        assert_eq!(lighting_data.directional_light_count(), 0);
+        assert_eq!(lighting_data.point_light_count(), 0);
+        assert_eq!(lighting_data.ambient_color, Vec3::new(0.1, 0.1, 0.1));
+        
+        lighting_data.directional_lights.push(DirectionalLightInfo {
+            direction: Vec3::new(0.0, -1.0, 0.0),
+            color: Vec3::ONE,
+            intensity: 1.0,
+        });
+        
+        lighting_data.point_lights.push(PointLightInfo {
+            position: Vec3::ZERO,
+            color: Vec3::ONE,
+            intensity: 1.0,
+            range: 10.0,
+        });
+        
+        assert_eq!(lighting_data.directional_light_count(), 1);
+        assert_eq!(lighting_data.point_light_count(), 1);
+        
+        lighting_data.clear();
+        
+        assert_eq!(lighting_data.directional_light_count(), 0);
+        assert_eq!(lighting_data.point_light_count(), 0);
+    }
+
+    #[test]
+    fn test_directional_light_white() {
+        let light = DirectionalLight::white();
+        assert_eq!(light.direction, Vec3::new(0.0, -1.0, 0.0));
+        assert_eq!(light.color, Vec3::ONE);
+        assert_eq!(light.intensity, 1.0);
+    }
+
+    #[test]
+    fn test_point_light_white() {
+        let light = PointLight::white();
+        assert_eq!(light.color, Vec3::ONE);
+        assert_eq!(light.intensity, 1.0);
+        assert_eq!(light.range, 10.0);
+    }
 }

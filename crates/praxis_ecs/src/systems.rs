@@ -1699,4 +1699,337 @@ mod tests {
         let lighting_data = world.inner().resource::<LightingData>();
         assert_eq!(lighting_data.directional_light_count(), 0);
     }
+
+    #[test]
+    fn test_transform_bundle_from_transform() {
+        let transform = Transform::from_xyz(5.0, 10.0, 15.0);
+        let bundle = TransformBundle::from_transform(transform);
+        
+        assert_eq!(bundle.transform.translation, Vec3::new(5.0, 10.0, 15.0));
+        assert_eq!(bundle.global_transform.translation(), Vec3::new(5.0, 10.0, 15.0));
+    }
+
+    #[test]
+    fn test_perspective_camera_bundle_with_near_far() {
+        let bundle = PerspectiveCameraBundle::with_near_far(
+            Vec3::new(1.0, 2.0, 3.0),
+            90.0_f32.to_radians(),
+            16.0 / 9.0,
+            0.5,
+            500.0,
+        );
+        
+        assert_eq!(bundle.transform.translation, Vec3::new(1.0, 2.0, 3.0));
+        assert_eq!(bundle.projection.fov, 90.0_f32.to_radians());
+        assert_eq!(bundle.projection.near, 0.5);
+        assert_eq!(bundle.projection.far, 500.0);
+    }
+
+    #[test]
+    fn test_orthographic_camera_bundle_with_near_far() {
+        let bundle = OrthographicCameraBundle::with_near_far(
+            Vec3::new(5.0, 10.0, 0.0),
+            30.0,
+            20.0,
+            0.5,
+            500.0,
+        );
+        
+        assert_eq!(bundle.transform.translation, Vec3::new(5.0, 10.0, 0.0));
+        assert_eq!(bundle.projection.left, -15.0);
+        assert_eq!(bundle.projection.right, 15.0);
+        assert_eq!(bundle.projection.bottom, -10.0);
+        assert_eq!(bundle.projection.top, 10.0);
+        assert_eq!(bundle.projection.near, 0.5);
+        assert_eq!(bundle.projection.far, 500.0);
+    }
+
+    #[test]
+    fn test_orthographic_camera_bundle_with_bounds() {
+        let bundle = OrthographicCameraBundle::with_bounds(
+            Vec3::new(0.0, 5.0, 0.0),
+            -20.0,
+            20.0,
+            -15.0,
+            15.0,
+            0.2,
+            800.0,
+        );
+        
+        assert_eq!(bundle.transform.translation, Vec3::new(0.0, 5.0, 0.0));
+        assert_eq!(bundle.projection.left, -20.0);
+        assert_eq!(bundle.projection.right, 20.0);
+        assert_eq!(bundle.projection.bottom, -15.0);
+        assert_eq!(bundle.projection.top, 15.0);
+        assert_eq!(bundle.projection.near, 0.2);
+        assert_eq!(bundle.projection.far, 800.0);
+    }
+
+    #[test]
+    fn test_sync_parent_child_relationships_multiple_children() {
+        let mut world = World::new();
+        
+        let parent = world.spawn(Transform::default());
+        let child1 = world.spawn((Transform::default(), Parent(parent)));
+        let child2 = world.spawn((Transform::default(), Parent(parent)));
+        let child3 = world.spawn((Transform::default(), Parent(parent)));
+        
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems(sync_parent_child_relationships);
+        world.inner_mut().run_schedule(&mut schedule);
+        
+        let children = world.inner().get::<Children>(parent).unwrap();
+        assert_eq!(children.len(), 3);
+        assert!(children.0.contains(&child1));
+        assert!(children.0.contains(&child2));
+        assert!(children.0.contains(&child3));
+    }
+
+    #[test]
+    fn test_sync_parent_child_avoids_duplicates() {
+        let mut world = World::new();
+        
+        let parent = world.spawn(Transform::default());
+        let child = world.spawn((Transform::default(), Parent(parent)));
+        
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems(sync_parent_child_relationships);
+        
+        world.inner_mut().run_schedule(&mut schedule);
+        world.inner_mut().run_schedule(&mut schedule);
+        world.inner_mut().run_schedule(&mut schedule);
+        
+        let children = world.inner().get::<Children>(parent).unwrap();
+        assert_eq!(children.len(), 1);
+    }
+
+    #[test]
+    fn test_transform_propagation_root_without_children() {
+        let mut world = World::new();
+        
+        let root = world.spawn((
+            Transform::from_xyz(5.0, 10.0, 15.0),
+            GlobalTransform::default(),
+        ));
+        
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems(propagate_transforms);
+        world.inner_mut().run_schedule(&mut schedule);
+        
+        let global = world.inner().get::<GlobalTransform>(root).unwrap();
+        let pos = global.translation();
+        assert_eq!(pos, Vec3::new(5.0, 10.0, 15.0));
+    }
+
+    #[test]
+    fn test_transform_propagation_skips_unchanged() {
+        let mut world = World::new();
+        
+        let root = world.spawn((
+            Transform::from_xyz(10.0, 0.0, 0.0),
+            GlobalTransform::default(),
+        ));
+        
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems(propagate_transforms);
+        
+        world.inner_mut().run_schedule(&mut schedule);
+        
+        let global1 = *world.inner().get::<GlobalTransform>(root).unwrap();
+        
+        world.inner_mut().run_schedule(&mut schedule);
+        
+        let global2 = *world.inner().get::<GlobalTransform>(root).unwrap();
+        
+        assert_eq!(global1.matrix, global2.matrix);
+    }
+
+    #[test]
+    fn test_complex_hierarchy_with_multiple_branches() {
+        let mut world = World::new();
+        
+        let root = world.spawn((
+            Transform::from_xyz(10.0, 0.0, 0.0),
+            GlobalTransform::default(),
+        ));
+        
+        let branch1 = world.spawn((
+            Transform::from_xyz(5.0, 0.0, 0.0),
+            GlobalTransform::default(),
+            Parent(root),
+        ));
+        
+        let branch2 = world.spawn((
+            Transform::from_xyz(0.0, 5.0, 0.0),
+            GlobalTransform::default(),
+            Parent(root),
+        ));
+        
+        let leaf1 = world.spawn((
+            Transform::from_xyz(2.0, 0.0, 0.0),
+            GlobalTransform::default(),
+            Parent(branch1),
+        ));
+        
+        let leaf2 = world.spawn((
+            Transform::from_xyz(0.0, 3.0, 0.0),
+            GlobalTransform::default(),
+            Parent(branch2),
+        ));
+        
+        world.insert_component(root, Children::with_children(vec![branch1, branch2])).unwrap();
+        world.insert_component(branch1, Children::with_children(vec![leaf1])).unwrap();
+        world.insert_component(branch2, Children::with_children(vec![leaf2])).unwrap();
+        
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems(propagate_transforms);
+        world.inner_mut().run_schedule(&mut schedule);
+        
+        let leaf1_pos = world.inner().get::<GlobalTransform>(leaf1).unwrap().translation();
+        assert!((leaf1_pos.x - 17.0).abs() < 0.001);
+        assert!(leaf1_pos.y.abs() < 0.001);
+        
+        let leaf2_pos = world.inner().get::<GlobalTransform>(leaf2).unwrap().translation();
+        assert!((leaf2_pos.x - 10.0).abs() < 0.001);
+        assert!((leaf2_pos.y - 8.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_cleanup_removed_parents_keeps_valid_children() {
+        let mut world = World::new();
+        
+        let parent = world.spawn((Transform::default(), GlobalTransform::default()));
+        
+        let child1 = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(parent),
+        ));
+        
+        let child2 = world.spawn((
+            Transform::default(),
+            GlobalTransform::default(),
+            Parent(parent),
+        ));
+        
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems(sync_parent_child_relationships);
+        world.inner_mut().run_schedule(&mut schedule);
+        
+        let children_before = world.inner().get::<Children>(parent).unwrap().len();
+        assert_eq!(children_before, 2);
+        
+        world.inner_mut().entity_mut(child1).remove::<Parent>();
+        
+        let mut cleanup_schedule = bevy_ecs::schedule::Schedule::default();
+        cleanup_schedule.add_systems(cleanup_removed_parents);
+        world.inner_mut().run_schedule(&mut cleanup_schedule);
+        
+        let children_after = world.inner().get::<Children>(parent).unwrap();
+        assert_eq!(children_after.len(), 1);
+        assert!(children_after.0.contains(&child2));
+        assert!(!children_after.0.contains(&child1));
+    }
+
+    #[test]
+    fn test_camera_with_changed_projection() {
+        let mut world = World::new();
+        
+        let camera = world.spawn((
+            Camera::default(),
+            Transform::from_xyz(0.0, 0.0, 10.0),
+            PerspectiveProjection::default(),
+            CameraMatrices::default(),
+        ));
+        
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems(update_perspective_cameras);
+        world.inner_mut().run_schedule(&mut schedule);
+        
+        let matrices1 = *world.inner().get::<CameraMatrices>(camera).unwrap();
+        
+        {
+            let mut projection = world.inner_mut().get_mut::<PerspectiveProjection>(camera).unwrap();
+            projection.fov = 90.0_f32.to_radians();
+        }
+        
+        world.inner_mut().run_schedule(&mut schedule);
+        
+        let matrices2 = *world.inner().get::<CameraMatrices>(camera).unwrap();
+        
+        assert_ne!(matrices1.projection, matrices2.projection);
+    }
+
+    #[test]
+    fn test_multiple_active_cameras_with_different_priorities() {
+        use crate::camera;
+        
+        let mut world = World::new();
+        
+        let _low_priority = world.spawn((
+            Camera::with_priority(0),
+            Transform::from_xyz(0.0, 0.0, 10.0),
+            PerspectiveProjection::default(),
+            CameraMatrices::default(),
+        ));
+        
+        let high_priority = world.spawn((
+            Camera::with_priority(10),
+            Transform::from_xyz(0.0, 5.0, 10.0),
+            PerspectiveProjection::default(),
+            CameraMatrices::default(),
+        ));
+        
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems(update_perspective_cameras);
+        world.inner_mut().run_schedule(&mut schedule);
+        
+        let mut query = world.inner_mut().query::<camera::ActivePerspectiveCameras>();
+        let primary = camera::primary_perspective_camera(&query);
+        
+        assert!(primary.is_some());
+        let (entity, camera_comp, _) = primary.unwrap();
+        assert_eq!(entity, high_priority);
+        assert_eq!(camera_comp.priority, 10);
+    }
+
+    #[test]
+    fn test_sorted_cameras_ordering() {
+        use crate::camera;
+        
+        let mut world = World::new();
+        
+        world.spawn((
+            Camera::with_priority(5),
+            Transform::default(),
+            PerspectiveProjection::default(),
+            CameraMatrices::default(),
+        ));
+        
+        world.spawn((
+            Camera::with_priority(1),
+            Transform::default(),
+            PerspectiveProjection::default(),
+            CameraMatrices::default(),
+        ));
+        
+        world.spawn((
+            Camera::with_priority(10),
+            Transform::default(),
+            PerspectiveProjection::default(),
+            CameraMatrices::default(),
+        ));
+        
+        let mut schedule = bevy_ecs::schedule::Schedule::default();
+        schedule.add_systems(update_perspective_cameras);
+        world.inner_mut().run_schedule(&mut schedule);
+        
+        let mut query = world.inner_mut().query::<camera::ActivePerspectiveCameras>();
+        let sorted = camera::sorted_perspective_cameras(&query);
+        
+        assert_eq!(sorted.len(), 3);
+        assert_eq!(sorted[0].1.priority, 1);
+        assert_eq!(sorted[1].1.priority, 5);
+        assert_eq!(sorted[2].1.priority, 10);
+    }
 }
