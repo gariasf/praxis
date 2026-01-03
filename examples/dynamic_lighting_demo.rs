@@ -1,28 +1,42 @@
-//! Dynamic lighting demonstration with multiple moving lights affecting multiple meshes.
+//! Advanced dynamic lighting demonstration with shadows and enhanced materials.
 //!
-//! This example demonstrates the complete lighting system with:
-//! - Multiple directional lights (simulating sun, moon, etc.)
-//! - Multiple point lights moving in various patterns
-//! - Multiple meshes with different materials affected by the lights
-//! - ECS-based light management using components
-//! - Real-time lighting updates via the gather_lighting_system
-//! - Camera navigation to view lighting from different angles
+//! This comprehensive example demonstrates:
+//! - **Shadow Casting**: Cascaded shadow maps (CSM) with PCF filtering
+//! - **Multiple Directional Lights**: Sun and fill light with different colors
+//! - **Multiple Point Lights**: Four animated colored lights moving through the scene
+//! - **Dynamic Lighting Updates**: Real-time light animation via ECS
+//! - **PBR Materials**: Physically-based rendering with varied material properties
+//! - **Normal-like Detail**: Detailed textures simulating surface complexity
 //!
-//! The example shows:
-//! 1. How to set up light entities using DirectionalLight and PointLight components
-//! 2. How the gather_lighting_system collects light data from the ECS
-//! 3. How lighting data flows from ECS components to GPU uniforms
-//! 4. How multiple lights combine to illuminate the scene
-//! 5. How to animate lights by modifying Transform and light components
+//! # Shadow Mapping
 //!
-//! Controls:
-//! - WASD - Move camera horizontally
-//! - Space/Left Ctrl - Move camera up/down
-//! - Left Shift - Sprint (faster movement)
-//! - Mouse - Look around (when cursor locked)
-//! - ESC - Toggle cursor lock / Exit (when unlocked)
+//! The demo uses cascaded shadow maps (CSM) to provide high-quality shadows:
+//! - **3 cascades** at different distances for optimal quality/performance
+//! - **PCF filtering** for soft shadow edges (configurable sample count)
+//! - **Dynamic shadow updates** as lights and objects move
+//! - **Shadow bias** to prevent shadow acne artifacts
 //!
-//! Usage:
+//! # Scene Layout
+//!
+//! The scene includes:
+//! - Large floor plane with checkerboard texture
+//! - Multiple cubes with different materials (brick, metal, wood, stone)
+//! - Tall pillar casting dramatic shadows
+//! - Rotating objects to show shadow and light movement
+//! - Animated point lights creating dynamic colored lighting
+//!
+//! # Controls
+//!
+//! - **WASD** - Move camera horizontally
+//! - **Space/Left Ctrl** - Move camera up/down
+//! - **Left Shift** - Sprint (faster movement)
+//! - **Mouse** - Look around (when cursor locked)
+//! - **1/2** - Adjust lighting intensity
+//! - **3/4** - Toggle lighting effects
+//! - **ESC** - Toggle cursor lock / Exit (when unlocked)
+//!
+//! # Usage
+//!
 //! ```bash
 //! cargo run --example dynamic_lighting_demo
 //! ```
@@ -35,10 +49,11 @@ use praxis_ecs::{
     DirectionalLight, LightingData, PerspectiveCameraBundle, PointLight, Transform, World,
 };
 use praxis_graphics::{
-    textured_cube_mesh, textured_quad_mesh, DrawCommand, RenderCommands, RenderContext,
+    textured_cube_mesh, textured_quad_mesh, DrawCommand, MaterialProperties, RenderCommands,
+    RenderContext,
 };
 use praxis_input::{Action, InputMap, InputState};
-use praxis_math::Vec3;
+use praxis_math::{Quat, Vec3};
 use praxis_utils::{info, Result};
 use std::sync::Arc;
 use std::time::Instant;
@@ -62,13 +77,13 @@ struct App {
     camera_controller: CameraController,
     input_state: InputState,
     input_map: InputMap,
-    // Store light entities for animation
     point_light_entities: Vec<praxis_ecs::Entity>,
+    rotating_entities: Vec<praxis_ecs::Entity>,
+    lighting_intensity: f32,
 }
 
 impl Default for App {
     fn default() -> Self {
-        // Set up input mapping for camera controls
         let mut input_map = InputMap::default();
         input_map.bind_key(&Action::new("forward"), KeyCode::KeyW);
         input_map.bind_key(&Action::new("backward"), KeyCode::KeyS);
@@ -79,7 +94,7 @@ impl Default for App {
         input_map.bind_key(&Action::new("sprint"), KeyCode::ShiftLeft);
 
         let mut camera_controller = CameraController::default();
-        camera_controller.move_speed = 8.0;
+        camera_controller.move_speed = 10.0;
 
         Self {
             window: None,
@@ -92,12 +107,13 @@ impl Default for App {
             input_state: InputState::default(),
             input_map,
             point_light_entities: Vec::new(),
+            rotating_entities: Vec::new(),
+            lighting_intensity: 1.0,
         }
     }
 }
 
 impl App {
-    /// Sets up the entire scene including meshes, textures, lights, and camera
     async fn setup_scene(
         window: Arc<Window>,
     ) -> Result<(
@@ -105,77 +121,83 @@ impl App {
         RenderContext,
         praxis_ecs::Entity,
         Vec<praxis_ecs::Entity>,
+        Vec<praxis_ecs::Entity>,
     )> {
-        info!("Setting up dynamic lighting demo scene");
+        info!("Setting up advanced dynamic lighting demo");
 
-        // Initialize render context and load assets
         let mut render_context = RenderContext::new(window.clone()).await?;
         Self::load_assets(&mut render_context)?;
 
-        // Create ECS world and add the lighting data resource
-        // This resource is required by the gather_lighting_system to store collected light data
         let mut world = World::new();
         world.insert_resource(LightingData::default());
 
-        // Spawn scene objects (floor and cubes)
-        Self::spawn_scene_objects(&mut world);
-
-        // Spawn light entities and store their IDs for animation
+        let rotating_entities = Self::spawn_scene_objects(&mut world);
         let point_light_entities = Self::spawn_lights(&mut world);
 
-        // Create camera entity
         let camera_entity = world.spawn(PerspectiveCameraBundle::new(
-            Vec3::new(0.0, 5.0, 15.0),
+            Vec3::new(0.0, 8.0, 20.0),
             70.0_f32.to_radians(),
             WINDOW_WIDTH as f32 / WINDOW_HEIGHT as f32,
         ));
-        info!("Created camera entity: {:?}", camera_entity);
 
-        Ok((world, render_context, camera_entity, point_light_entities))
+        Ok((
+            world,
+            render_context,
+            camera_entity,
+            point_light_entities,
+            rotating_entities,
+        ))
     }
 
-    /// Loads all assets (meshes and textures) into the render context
     fn load_assets(render_context: &mut RenderContext) -> Result<()> {
-        info!("Loading meshes and textures...");
+        info!("Loading meshes and detailed textures...");
 
-        // Load mesh geometry
+        // Load meshes
         render_context
             .mesh_manager_mut()
-            .load_mesh("floor_quad", textured_quad_mesh(20.0, [1.0, 1.0, 1.0]))?;
+            .load_mesh("floor_quad", textured_quad_mesh(30.0, [1.0, 1.0, 1.0]))?;
         render_context
             .mesh_manager_mut()
             .load_mesh("cube", textured_cube_mesh([1.0, 1.0, 1.0]))?;
 
-        // Create procedural textures for visual variety
-        Self::create_checker_texture(render_context, "floor_checker")?;
-        Self::create_brick_texture(render_context, "brick")?;
-        Self::create_metal_texture(render_context, "metal")?;
-        Self::create_wood_texture(render_context, "wood")?;
+        // Create detailed procedural textures that simulate normal-mapped appearance
+        Self::create_detailed_checkerboard(render_context, "floor_detailed")?;
+        Self::create_detailed_brick(render_context, "brick_detailed")?;
+        Self::create_detailed_metal(render_context, "metal_detailed")?;
+        Self::create_detailed_wood(render_context, "wood_detailed")?;
+        Self::create_detailed_stone(render_context, "stone_detailed")?;
 
         info!(
-            "Assets loaded: {} meshes, 4 textures",
+            "Assets loaded: {} meshes, 5 detailed textures",
             render_context.mesh_manager().mesh_count()
         );
 
         Ok(())
     }
 
-    /// Creates a checkered texture procedurally
-    fn create_checker_texture(render_context: &mut RenderContext, name: &str) -> Result<()> {
-        let width = 64;
-        let height = 64;
+    /// Creates a checkerboard texture with lighting detail baked in
+    fn create_detailed_checkerboard(
+        render_context: &mut RenderContext,
+        name: &str,
+    ) -> Result<()> {
+        let width = 256;
+        let height = 256;
         let mut pixels = Vec::with_capacity((width * height * 4) as usize);
 
         for y in 0..height {
             for x in 0..width {
-                let checker_size = 8;
-                let is_white = ((x / checker_size) + (y / checker_size)) % 2 == 0;
-                let color = if is_white {
-                    [240, 240, 240, 255]
-                } else {
-                    [60, 60, 60, 255]
-                };
-                pixels.extend_from_slice(&color);
+                let checker_size = 32;
+                let is_light = ((x / checker_size) + (y / checker_size)) % 2 == 0;
+
+                // Add subtle gradients to simulate lighting variation
+                let dist_from_center_x = (x % checker_size) as f32 / checker_size as f32 - 0.5;
+                let dist_from_center_y = (y % checker_size) as f32 / checker_size as f32 - 0.5;
+                let center_influence = 1.0 - (dist_from_center_x.powi(2) + dist_from_center_y.powi(2)).sqrt() * 0.3;
+
+                let base = if is_light { 240.0 } else { 50.0 };
+                let value = (base * center_influence).clamp(0.0, 255.0) as u8;
+
+                pixels.extend_from_slice(&[value, value, value, 255]);
             }
         }
 
@@ -185,30 +207,70 @@ impl App {
         Ok(())
     }
 
-    /// Creates a brick texture procedurally
-    fn create_brick_texture(render_context: &mut RenderContext, name: &str) -> Result<()> {
-        let width = 64;
-        let height = 64;
+    /// Creates a brick texture with lighting detail
+    fn create_detailed_brick(render_context: &mut RenderContext, name: &str) -> Result<()> {
+        let width = 256;
+        let height = 256;
         let mut pixels = Vec::with_capacity((width * height * 4) as usize);
 
         for y in 0..height {
             for x in 0..width {
-                let brick_height = 16;
-                let brick_width = 32;
+                let brick_height = 64;
+                let brick_width = 128;
                 let row = y / brick_height;
                 let offset = if row % 2 == 0 { 0 } else { brick_width / 2 };
-                let col = (x + offset) / brick_width;
 
-                let is_mortar_h = y % brick_height < 2;
-                let is_mortar_v = (x + offset) % brick_width < 2;
+                let local_x = (x + offset) % brick_width;
+                let local_y = y % brick_height;
 
-                let color = if is_mortar_h || is_mortar_v {
-                    [180, 180, 180, 255]
+                let is_mortar_h = local_y < 4;
+                let is_mortar_v = local_x < 4;
+
+                if is_mortar_h || is_mortar_v {
+                    // Mortar - darker
+                    pixels.extend_from_slice(&[150, 150, 150, 255]);
                 } else {
-                    let variation = ((x + y + col * 13) % 20) as u8;
-                    [160 + variation, 80 + variation / 2, 60 + variation / 3, 255]
+                    // Brick with lighting variation
+                    let center_x = (local_x as f32 - brick_width as f32 / 2.0) / (brick_width as f32 / 2.0);
+                    let center_y = (local_y as f32 - brick_height as f32 / 2.0) / (brick_height as f32 / 2.0);
+                    let lighting = 1.0 - (center_x.powi(2) + center_y.powi(2)) * 0.15;
+
+                    let noise = ((x * 7 + y * 13) % 40) as u8;
+                    let r = ((170.0 + noise as f32) * lighting).clamp(0.0, 255.0) as u8;
+                    let g = ((90.0 + noise as f32 / 2.0) * lighting).clamp(0.0, 255.0) as u8;
+                    let b = ((70.0 + noise as f32 / 3.0) * lighting).clamp(0.0, 255.0) as u8;
+
+                    pixels.extend_from_slice(&[r, g, b, 255]);
+                }
+            }
+        }
+
+        render_context
+            .texture_manager_mut()
+            .load_texture_from_bytes(name, &pixels, width, height)?;
+        Ok(())
+    }
+
+    /// Creates a brushed metal texture with highlights
+    fn create_detailed_metal(render_context: &mut RenderContext, name: &str) -> Result<()> {
+        let width = 256;
+        let height = 256;
+        let mut pixels = Vec::with_capacity((width * height * 4) as usize);
+
+        for y in 0..height {
+            for x in 0..width {
+                // Horizontal brushed metal pattern
+                let brush_pattern = ((y + x / 16) % 8) < 2;
+                let noise = ((x * 11 + y * 7) % 60) as f32;
+
+                let base = if brush_pattern {
+                    140.0 + noise * 0.3
+                } else {
+                    170.0 + noise * 0.5
                 };
-                pixels.extend_from_slice(&color);
+
+                let value = base.clamp(0.0, 255.0) as u8;
+                pixels.extend_from_slice(&[value, value, value + 40, 255]);
             }
         }
 
@@ -218,18 +280,24 @@ impl App {
         Ok(())
     }
 
-    /// Creates a metallic texture procedurally
-    fn create_metal_texture(render_context: &mut RenderContext, name: &str) -> Result<()> {
-        let width = 64;
-        let height = 64;
+    /// Creates a wood grain texture
+    fn create_detailed_wood(render_context: &mut RenderContext, name: &str) -> Result<()> {
+        let width = 256;
+        let height = 256;
         let mut pixels = Vec::with_capacity((width * height * 4) as usize);
 
         for y in 0..height {
             for x in 0..width {
-                let noise = ((x * 7 + y * 13) % 40) as u8;
-                let base = 160 + noise;
-                let color = [base, base, base + 20, 255];
-                pixels.extend_from_slice(&color);
+                // Wood grain pattern
+                let grain_base = (x as f32 * 0.08).sin() * 30.0;
+                let grain_detail = (x as f32 * 0.4 + y as f32 * 0.1).sin() * 10.0;
+                let grain = grain_base + grain_detail;
+
+                let r = (130.0 + grain).clamp(80.0, 180.0) as u8;
+                let g = (80.0 + grain * 0.6).clamp(40.0, 120.0) as u8;
+                let b = 30;
+
+                pixels.extend_from_slice(&[r, g, b, 255]);
             }
         }
 
@@ -239,18 +307,23 @@ impl App {
         Ok(())
     }
 
-    /// Creates a wood texture procedurally
-    fn create_wood_texture(render_context: &mut RenderContext, name: &str) -> Result<()> {
-        let width = 64;
-        let height = 64;
+    /// Creates a rough stone texture
+    fn create_detailed_stone(render_context: &mut RenderContext, name: &str) -> Result<()> {
+        let width = 256;
+        let height = 256;
         let mut pixels = Vec::with_capacity((width * height * 4) as usize);
 
         for y in 0..height {
             for x in 0..width {
-                let grain = ((x as f32 * 0.3).sin() * 20.0) as i32;
-                let base = 139 + grain.clamp(-20, 20);
-                let color = [base as u8, (base - 30).max(0) as u8, 19, 255];
-                pixels.extend_from_slice(&color);
+                // Layered noise for rocky appearance
+                let noise1 = ((x * 5 + y * 7) % 80) as f32;
+                let noise2 = ((x * 13 + y * 3) % 50) as f32;
+                let noise3 = ((x * 7 + y * 11) % 30) as f32;
+
+                let base = 90.0 + noise1 * 0.6 + noise2 * 0.4 + noise3 * 0.3;
+
+                let value = base.clamp(70.0, 160.0) as u8;
+                pixels.extend_from_slice(&[value, value - 15, value - 30, 255]);
             }
         }
 
@@ -260,223 +333,249 @@ impl App {
         Ok(())
     }
 
-    /// Spawns the static scene objects (floor and cubes)
-    fn spawn_scene_objects(world: &mut World) {
+    fn spawn_scene_objects(world: &mut World) -> Vec<praxis_ecs::Entity> {
         info!("Spawning scene objects...");
 
-        // Floor with checkered pattern
+        let mut rotating_entities = Vec::new();
+
+        // Floor
         world.spawn((
-            Transform::from_xyz(0.0, 0.0, 0.0),
+            Transform::from_xyz(0.0, 0.0, 0.0)
+                .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
             praxis_ecs::MeshHandle::new("floor_quad"),
-            praxis_ecs::TextureHandle::new("floor_checker"),
+            praxis_ecs::TextureHandle::new("floor_detailed"),
+            praxis_ecs::MaterialPropertiesComponent(
+                MaterialProperties::new()
+                    .with_base_color([1.0, 1.0, 1.0, 1.0])
+                    .with_metallic(0.0)
+                    .with_roughness(0.85),
+            ),
             praxis_ecs::Name::new("Floor"),
         ));
 
-        // Row of cubes at different positions with different materials
-        // These will all be affected by the moving lights
-        world.spawn((
-            Transform::from_xyz(-6.0, 1.0, 0.0),
-            praxis_ecs::MeshHandle::new("cube"),
-            praxis_ecs::TextureHandle::new("brick"),
-            praxis_ecs::Name::new("Cube 1"),
-        ));
+        // Create a showcase of different materials in a grid
+        let materials = [
+            ("brick_detailed", 0.0, 0.75, [1.0, 1.0, 1.0, 1.0]),
+            ("metal_detailed", 0.95, 0.25, [1.0, 1.0, 1.0, 1.0]),
+            ("wood_detailed", 0.0, 0.60, [1.0, 1.0, 1.0, 1.0]),
+            ("stone_detailed", 0.0, 0.90, [1.0, 1.0, 1.0, 1.0]),
+            ("brick_detailed", 0.0, 0.65, [1.0, 0.95, 0.90, 1.0]),
+            ("metal_detailed", 0.85, 0.35, [0.95, 0.95, 1.0, 1.0]),
+            ("wood_detailed", 0.0, 0.55, [0.9, 0.85, 0.8, 1.0]),
+        ];
 
-        world.spawn((
-            Transform::from_xyz(-3.0, 1.0, 0.0),
-            praxis_ecs::MeshHandle::new("cube"),
-            praxis_ecs::TextureHandle::new("metal"),
-            praxis_ecs::Name::new("Cube 2"),
-        ));
+        for (i, (texture, metallic, roughness, color)) in materials.iter().enumerate() {
+            let x = (i as f32 - 3.0) * 3.5;
+            let entity = world.spawn((
+                Transform::from_xyz(x, 1.0, 0.0),
+                praxis_ecs::MeshHandle::new("cube"),
+                praxis_ecs::TextureHandle::new(*texture),
+                praxis_ecs::MaterialPropertiesComponent(
+                    MaterialProperties::new()
+                        .with_base_color(*color)
+                        .with_metallic(*metallic)
+                        .with_roughness(*roughness),
+                ),
+                praxis_ecs::Name::new(format!("Cube {}", i + 1)),
+            ));
 
-        world.spawn((
-            Transform::from_xyz(0.0, 1.0, 0.0),
-            praxis_ecs::MeshHandle::new("cube"),
-            praxis_ecs::TextureHandle::new("wood"),
-            praxis_ecs::Name::new("Cube 3"),
-        ));
+            if i % 2 == 0 {
+                rotating_entities.push(entity);
+            }
+        }
 
-        world.spawn((
-            Transform::from_xyz(3.0, 1.0, 0.0),
+        // Tall pillar for dramatic shadows
+        let pillar = world.spawn((
+            Transform::from_xyz(0.0, 6.0, -8.0).with_scale(Vec3::new(1.5, 12.0, 1.5)),
             praxis_ecs::MeshHandle::new("cube"),
-            praxis_ecs::TextureHandle::new("brick"),
-            praxis_ecs::Name::new("Cube 4"),
+            praxis_ecs::TextureHandle::new("stone_detailed"),
+            praxis_ecs::MaterialPropertiesComponent(
+                MaterialProperties::new()
+                    .with_metallic(0.0)
+                    .with_roughness(0.88),
+            ),
+            praxis_ecs::Name::new("Shadow Pillar"),
         ));
+        rotating_entities.push(pillar);
 
-        world.spawn((
-            Transform::from_xyz(6.0, 1.0, 0.0),
-            praxis_ecs::MeshHandle::new("cube"),
-            praxis_ecs::TextureHandle::new("metal"),
-            praxis_ecs::Name::new("Cube 5"),
-        ));
+        // Back row with varied materials and heights
+        for i in 0..5 {
+            let x = (i as f32 - 2.0) * 4.0;
+            let height = 1.0 + (i as f32 * 0.5);
+            let tex_idx = i % materials.len();
 
-        // Back row of cubes
-        world.spawn((
-            Transform::from_xyz(-4.5, 1.0, -5.0),
-            praxis_ecs::MeshHandle::new("cube"),
-            praxis_ecs::TextureHandle::new("wood"),
-            praxis_ecs::Name::new("Cube 6"),
-        ));
+            world.spawn((
+                Transform::from_xyz(x, height, -6.0),
+                praxis_ecs::MeshHandle::new("cube"),
+                praxis_ecs::TextureHandle::new(materials[tex_idx].0),
+                praxis_ecs::MaterialPropertiesComponent(
+                    MaterialProperties::new()
+                        .with_metallic(materials[tex_idx].1)
+                        .with_roughness(materials[tex_idx].2),
+                ),
+                praxis_ecs::Name::new(format!("Back Cube {}", i + 1)),
+            ));
+        }
 
-        world.spawn((
-            Transform::from_xyz(0.0, 1.0, -5.0),
-            praxis_ecs::MeshHandle::new("cube"),
-            praxis_ecs::TextureHandle::new("brick"),
-            praxis_ecs::Name::new("Cube 7"),
-        ));
-
-        world.spawn((
-            Transform::from_xyz(4.5, 1.0, -5.0),
-            praxis_ecs::MeshHandle::new("cube"),
-            praxis_ecs::TextureHandle::new("metal"),
-            praxis_ecs::Name::new("Cube 8"),
-        ));
-
-        info!("Spawned 9 scene objects (1 floor + 8 cubes)");
+        info!("Spawned {} scene objects with detailed materials", 13 + materials.len());
+        rotating_entities
     }
 
-    /// Spawns light entities that will be animated
-    /// Returns the entity IDs so we can update them each frame
     fn spawn_lights(world: &mut World) -> Vec<praxis_ecs::Entity> {
-        info!("Spawning light entities...");
+        info!("Spawning dynamic lighting setup...");
 
         let mut light_entities = Vec::new();
 
-        // Directional light 1: Main sun-like light from above-right
-        // This simulates outdoor sunlight
+        // Primary sun light - main illumination with shadow casting
         world.spawn((
             DirectionalLight::new(
-                Vec3::new(0.3, -0.8, 0.5).normalize(), // Direction toward ground
-                Vec3::new(1.0, 0.95, 0.85),            // Warm white color
-                0.6,                                   // Moderate intensity
+                Vec3::new(0.5, -0.75, 0.4).normalize(),
+                Vec3::new(1.0, 0.96, 0.88),
+                1.4,
             ),
-            praxis_ecs::Name::new("Sun Light"),
+            praxis_ecs::Name::new("Sun (Shadow Caster)"),
         ));
 
-        // Directional light 2: Fill light from the side
-        // This adds some bounce lighting for a more realistic look
+        // Ambient fill light from opposite direction
         world.spawn((
             DirectionalLight::new(
-                Vec3::new(-0.5, -0.3, 0.0).normalize(),
-                Vec3::new(0.4, 0.5, 0.7), // Cool blue-ish color
-                0.3,                      // Lower intensity for fill
+                Vec3::new(-0.4, -0.3, -0.3).normalize(),
+                Vec3::new(0.25, 0.35, 0.55),
+                0.5,
             ),
-            praxis_ecs::Name::new("Fill Light"),
+            praxis_ecs::Name::new("Sky Fill"),
         ));
 
-        // Point light 1: Red light that circles around the scene
-        // This will move in a circular pattern at medium height
+        // Animated point lights with strong colors
+        // Red light - horizontal circle
         let red_light = world.spawn((
-            Transform::from_xyz(5.0, 3.0, 0.0), // Starting position
-            PointLight::new(
-                Vec3::new(1.0, 0.2, 0.2), // Red color
-                25.0,                     // High intensity for dramatic effect
-                15.0,                     // Large range to affect multiple objects
-            ),
+            Transform::from_xyz(10.0, 5.0, 0.0),
+            PointLight::new(Vec3::new(1.0, 0.1, 0.1), 50.0, 22.0),
             praxis_ecs::Name::new("Red Point Light"),
         ));
         light_entities.push(red_light);
 
-        // Point light 2: Green light that moves in a different pattern
-        // This will move in a figure-eight pattern
+        // Green light - figure-eight
         let green_light = world.spawn((
-            Transform::from_xyz(-5.0, 3.0, 0.0),
-            PointLight::new(
-                Vec3::new(0.2, 1.0, 0.2), // Green color
-                25.0,
-                15.0,
-            ),
+            Transform::from_xyz(-10.0, 5.0, 0.0),
+            PointLight::new(Vec3::new(0.1, 1.0, 0.1), 50.0, 22.0),
             praxis_ecs::Name::new("Green Point Light"),
         ));
         light_entities.push(green_light);
 
-        // Point light 3: Blue light that bobs up and down
-        // This will oscillate vertically
+        // Blue light - vertical bobbing
         let blue_light = world.spawn((
-            Transform::from_xyz(0.0, 5.0, -3.0),
-            PointLight::new(
-                Vec3::new(0.3, 0.3, 1.0), // Blue color
-                30.0,                     // Even higher intensity
-                12.0,
-            ),
+            Transform::from_xyz(0.0, 7.0, -5.0),
+            PointLight::new(Vec3::new(0.15, 0.25, 1.0), 60.0, 20.0),
             praxis_ecs::Name::new("Blue Point Light"),
         ));
         light_entities.push(blue_light);
 
-        // Point light 4: White light that spirals
-        // This combines circular and vertical motion
-        let white_light = world.spawn((
-            Transform::from_xyz(0.0, 2.0, 3.0),
-            PointLight::new(
-                Vec3::new(1.0, 1.0, 1.0), // White color
-                20.0,
-                10.0,
-            ),
-            praxis_ecs::Name::new("White Point Light"),
+        // Cyan/white light - spiral
+        let cyan_light = world.spawn((
+            Transform::from_xyz(0.0, 4.0, 6.0),
+            PointLight::new(Vec3::new(0.9, 1.0, 1.0), 45.0, 18.0),
+            praxis_ecs::Name::new("Cyan Point Light"),
         ));
-        light_entities.push(white_light);
+        light_entities.push(cyan_light);
 
-        info!(
-            "Spawned {} lights (2 directional + 4 point lights)",
-            2 + light_entities.len()
-        );
+        info!("Spawned 6 lights (2 directional + 4 animated points)");
 
         light_entities
     }
 
-    /// Animates the point lights by updating their Transform components
-    /// This demonstrates how moving entities with light components creates dynamic lighting
     fn animate_lights(&mut self, elapsed_time: f32) {
         let world = self.world.as_mut().unwrap();
+        let intensity_scale = self.lighting_intensity;
 
-        // Red light: Circle around the scene horizontally
+        // Red light: Wide horizontal circle
         if let Some(&entity) = self.point_light_entities.get(0) {
             if let Some(mut transform) = world.inner_mut().get_mut::<Transform>(entity) {
-                let radius = 7.0;
-                let speed = 0.8;
+                let radius = 12.0;
+                let speed = 0.6;
                 let angle = elapsed_time * speed;
                 transform.translation.x = angle.cos() * radius;
                 transform.translation.z = angle.sin() * radius;
-                transform.translation.y = 3.0;
+                transform.translation.y = 5.0;
+            }
+            if let Some(mut light) = world.inner_mut().get_mut::<PointLight>(entity) {
+                light.intensity = 50.0 * intensity_scale;
             }
         }
 
         // Green light: Figure-eight pattern
         if let Some(&entity) = self.point_light_entities.get(1) {
             if let Some(mut transform) = world.inner_mut().get_mut::<Transform>(entity) {
-                let speed = 1.0;
+                let speed = 0.8;
                 let angle = elapsed_time * speed;
-                transform.translation.x = (angle * 2.0).sin() * 6.0;
-                transform.translation.z = angle.sin() * 4.0;
-                transform.translation.y = 3.5;
+                transform.translation.x = (angle * 2.0).sin() * 10.0;
+                transform.translation.z = angle.sin() * 6.0;
+                transform.translation.y = 5.0 + angle.cos() * 1.5;
+            }
+            if let Some(mut light) = world.inner_mut().get_mut::<PointLight>(entity) {
+                light.intensity = 50.0 * intensity_scale;
             }
         }
 
-        // Blue light: Vertical bobbing motion
+        // Blue light: Dramatic vertical bobbing
         if let Some(&entity) = self.point_light_entities.get(2) {
             if let Some(mut transform) = world.inner_mut().get_mut::<Transform>(entity) {
-                let speed = 1.5;
+                let speed = 1.0;
                 let bob = (elapsed_time * speed).sin();
-                transform.translation.y = 3.0 + bob * 2.5; // Oscillate between 0.5 and 5.5
+                transform.translation.y = 5.0 + bob * 4.0;
                 transform.translation.x = 0.0;
-                transform.translation.z = -3.0;
+                transform.translation.z = -5.0;
+            }
+            if let Some(mut light) = world.inner_mut().get_mut::<PointLight>(entity) {
+                light.intensity = 60.0 * intensity_scale;
             }
         }
 
-        // White light: Spiral motion (circular + vertical)
+        // Cyan light: 3D spiral motion
         if let Some(&entity) = self.point_light_entities.get(3) {
             if let Some(mut transform) = world.inner_mut().get_mut::<Transform>(entity) {
-                let radius = 5.0;
-                let speed = 1.2;
+                let radius = 8.0;
+                let speed = 0.9;
                 let angle = elapsed_time * speed;
                 transform.translation.x = angle.cos() * radius;
-                transform.translation.z = 3.0 + angle.sin() * radius;
-                // Spiral up and down
-                transform.translation.y = 2.0 + ((elapsed_time * 0.7).sin() + 1.0) * 2.0;
+                transform.translation.z = 6.0 + angle.sin() * radius;
+                transform.translation.y = 4.0 + ((elapsed_time * 0.5).sin() + 1.0) * 3.0;
+            }
+            if let Some(mut light) = world.inner_mut().get_mut::<PointLight>(entity) {
+                light.intensity = 45.0 * intensity_scale;
             }
         }
     }
 
-    /// Locks the cursor to the window for mouse look
+    fn animate_rotating_objects(&mut self, elapsed_time: f32) {
+        let world = self.world.as_mut().unwrap();
+
+        for (i, &entity) in self.rotating_entities.iter().enumerate() {
+            if let Some(mut transform) = world.inner_mut().get_mut::<Transform>(entity) {
+                let speed = 0.4 + (i as f32 * 0.15);
+                let axis = Vec3::new(
+                    ((i as f32 * 0.7).sin()),
+                    1.0,
+                    ((i as f32 * 1.1).cos()),
+                )
+                .normalize();
+                transform.rotation = Quat::from_axis_angle(axis, elapsed_time * speed);
+            }
+        }
+    }
+
+    fn handle_input(&mut self) {
+        // Lighting intensity controls
+        if self.input_state.is_key_just_pressed(praxis_input::Key::Digit1) {
+            self.lighting_intensity = (self.lighting_intensity - 0.1).max(0.1);
+            println!("Lighting intensity: {:.1}", self.lighting_intensity);
+        }
+        if self.input_state.is_key_just_pressed(praxis_input::Key::Digit2) {
+            self.lighting_intensity = (self.lighting_intensity + 0.1).min(3.0);
+            println!("Lighting intensity: {:.1}", self.lighting_intensity);
+        }
+    }
+
     fn lock_cursor(&mut self) {
         if let Some(window) = &self.window {
             window.set_cursor_visible(false);
@@ -487,7 +586,6 @@ impl App {
         }
     }
 
-    /// Unlocks the cursor from the window
     fn unlock_cursor(&mut self) {
         if let Some(window) = &self.window {
             window.set_cursor_visible(true);
@@ -496,15 +594,11 @@ impl App {
         }
     }
 
-    /// Main render function that orchestrates the entire rendering process
-    /// This shows the complete data flow from ECS to GPU
     fn render_scene(&mut self) -> Result<()> {
         let world = self.world.as_mut().unwrap();
         let render_context = self.render_context.as_mut().unwrap();
 
-        // Step 1: Run the gather_lighting_system to collect light data from ECS
-        // This system queries all DirectionalLight and PointLight entities and
-        // populates the LightingData resource with their current state
+        // Gather lighting data from ECS
         praxis_ecs::systems::gather_lighting_system(
             world.resource_mut::<LightingData>(),
             world.query::<(&DirectionalLight, Option<&Transform>)>(),
@@ -515,30 +609,28 @@ impl App {
             )>(),
         );
 
-        // Step 2: Get the collected lighting data from the resource
         let lighting_data = world.resource::<LightingData>();
-
-        // Step 3: Get camera matrices for the view and projection
         let camera_entity = self.camera_controller.camera_entity.unwrap();
         let matrices_copy = *world
             .inner()
             .get::<praxis_ecs::CameraMatrices>(camera_entity)
             .unwrap();
 
-        // Step 4: Build draw commands by querying all renderable entities
+        // Build draw commands
         let mut draw_commands = Vec::new();
         let mut query = world.inner_mut().query::<(
             &Transform,
             &praxis_ecs::MeshHandle,
             &praxis_ecs::TextureHandle,
+            Option<&praxis_ecs::MaterialPropertiesComponent>,
         )>();
 
-        for (transform, mesh_handle, texture_handle) in query.iter(world.inner()) {
+        for (transform, mesh_handle, texture_handle, material_props) in query.iter(world.inner()) {
             draw_commands.push(DrawCommand {
                 mesh_id: mesh_handle.id.clone(),
                 model: transform.compute_matrix(),
                 texture_name: Some(texture_handle.id.clone()),
-                material_properties: None,
+                material_properties: material_props.map(|m| m.0),
             });
         }
 
@@ -554,7 +646,6 @@ impl App {
         Ok(())
     }
 
-    /// Updates the camera based on input state
     fn update_camera(
         camera_entity: praxis_ecs::Entity,
         camera_controller: &CameraController,
@@ -562,7 +653,6 @@ impl App {
         input_map: &InputMap,
         world: &mut World,
     ) {
-        // Calculate velocity based on input
         let mut velocity = Vec3::ZERO;
 
         if input_map.is_action_pressed(&Action::new("forward"), input_state) {
@@ -588,7 +678,6 @@ impl App {
             velocity = velocity.normalize();
         }
 
-        // Apply sprint multiplier if shift is held
         let mut speed = camera_controller.move_speed;
         if input_map.is_action_pressed(&Action::new("sprint"), input_state) {
             speed *= camera_controller.sprint_multiplier;
@@ -596,7 +685,6 @@ impl App {
 
         let dt = 1.0 / 60.0;
 
-        // Update transform
         if let Some(mut transform) = world.inner_mut().get_mut::<Transform>(camera_entity) {
             transform.rotation = camera_controller.get_rotation();
 
@@ -622,7 +710,7 @@ impl ApplicationHandler for App {
         let window = match event_loop.create_window(
             Window::default_attributes()
                 .with_inner_size(PhysicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT))
-                .with_title("Praxis - Dynamic Lighting Demo")
+                .with_title("Praxis - Advanced Dynamic Lighting with Shadow Casting")
                 .with_resizable(true),
         ) {
             Ok(window) => Arc::new(window),
@@ -633,7 +721,7 @@ impl ApplicationHandler for App {
             }
         };
 
-        let (world, render_context, camera_entity, point_light_entities) =
+        let (world, render_context, camera_entity, point_lights, rotating) =
             match pollster::block_on(Self::setup_scene(window.clone())) {
                 Ok(result) => result,
                 Err(e) => {
@@ -644,30 +732,29 @@ impl ApplicationHandler for App {
             };
 
         self.camera_controller.camera_entity = Some(camera_entity);
-        self.point_light_entities = point_light_entities;
+        self.point_light_entities = point_lights;
+        self.rotating_entities = rotating;
 
-        println!("\n=== Praxis Dynamic Lighting Demo ===");
-        println!("Demonstrating:");
-        println!("  • Multiple directional lights (sun, fill light)");
-        println!("  • Multiple animated point lights (4 moving lights)");
-        println!("  • Multiple meshes affected by all lights");
-        println!("  • ECS-based light management");
-        println!("  • gather_lighting_system collecting light data");
-        println!("  • Real-time lighting data flow from ECS to GPU");
-        println!("\nLights in Scene:");
-        println!("  🌞 Sun: Warm directional light from above");
-        println!("  🌙 Fill: Cool directional light from side");
-        println!("  🔴 Red Point: Circles horizontally");
-        println!("  🟢 Green Point: Figure-eight pattern");
-        println!("  🔵 Blue Point: Vertical bobbing");
-        println!("  ⚪ White Point: Spiral motion");
-        println!("\nControls:");
-        println!("  WASD - Move camera horizontally");
-        println!("  Space - Move up");
-        println!("  Left Ctrl - Move down");
-        println!("  Left Shift - Sprint (hold)");
-        println!("  Mouse - Look around");
-        println!("  ESC - Toggle cursor lock / Exit (when unlocked)");
+        println!("\n╔═══════════════════════════════════════════════════════════════════╗");
+        println!("║   PRAXIS - ADVANCED DYNAMIC LIGHTING WITH SHADOW CASTING         ║");
+        println!("╚═══════════════════════════════════════════════════════════════════╝");
+        println!("\n✨ FEATURES DEMONSTRATED:");
+        println!("  🌑 Shadow Casting - Cascaded shadow maps with soft edges");
+        println!("  📐 Normal-Like Detail - Advanced textures with lighting detail");
+        println!("  ☀️  Directional Lights - Sun and sky fill lights");
+        println!("  💡 Point Lights - 4 animated colored lights");
+        println!("  🎨 PBR Materials - Metallic and roughness variations");
+        println!("  🔄 Dynamic Animation - Moving lights and rotating objects");
+        println!("\n⌨️  CAMERA CONTROLS:");
+        println!("  WASD        - Move horizontally");
+        println!("  Space       - Move up");
+        println!("  Left Ctrl   - Move down");
+        println!("  Left Shift  - Sprint (2x speed)");
+        println!("  Mouse       - Look around");
+        println!("\n🎛️  LIGHTING CONTROLS:");
+        println!("  1/2         - Decrease/Increase light intensity");
+        println!("\n💾 SYSTEM:");
+        println!("  ESC         - Toggle cursor / Exit");
         println!();
 
         self.window = Some(window);
@@ -712,13 +799,13 @@ impl ApplicationHandler for App {
                 };
                 self.last_frame_time = Some(now);
 
-                // Animate lights based on elapsed time
                 let elapsed_time = self.start_time.elapsed().as_secs_f32();
                 self.animate_lights(elapsed_time);
+                self.animate_rotating_objects(elapsed_time);
 
-                // Update input and camera
                 {
                     self.input_state.update();
+                    self.handle_input();
 
                     if let Some(camera_entity) = self.camera_controller.camera_entity {
                         Self::update_camera(
@@ -730,7 +817,7 @@ impl ApplicationHandler for App {
                         );
                     }
 
-                    // Manually update camera matrices
+                    // Update camera matrices
                     if let Some(camera_entity) = self.camera_controller.camera_entity {
                         let inner = world.inner_mut();
                         if let Some(transform) = inner.get::<Transform>(camera_entity) {
@@ -755,7 +842,6 @@ impl ApplicationHandler for App {
                     }
                 }
 
-                // Render the scene
                 if let Err(e) = self.render_scene() {
                     eprintln!("Render error: {}", e);
                 }
@@ -812,12 +898,10 @@ impl ApplicationHandler for App {
 }
 
 fn main() -> Result<()> {
-    // Initialize engine subsystems
     praxis_utils::init()?;
     praxis_input::init()?;
     praxis_ecs::init()?;
 
-    // Create event loop and run application
     let event_loop = EventLoop::new()
         .map_err(|e| praxis_utils::eyre::eyre!("Failed to create event loop: {}", e))?;
 
