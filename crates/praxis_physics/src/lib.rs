@@ -16,7 +16,7 @@
 //! use praxis_physics::{
 //!     PhysicsWorld, PhysicsConfig, PhysicsTime, ContactEvents,
 //!     RigidBody, Collider, PhysicsVelocity, CollisionEventReceiver,
-//!     physics_step_system, sync_physics_transforms_system,
+//!     cleanup_physics_entities, physics_step_system, sync_physics_transforms_system,
 //!     clear_collision_event_receivers, populate_collision_events,
 //! };
 //! use praxis_ecs::{World, Schedule, IntoSystemConfigs, Transform};
@@ -29,11 +29,12 @@
 //!
 //! let mut schedule = Schedule::default();
 //! schedule.add_systems((
-//!     clear_collision_event_receivers,
-//!     sync_physics_transforms_system,
-//!     physics_step_system,
-//!     sync_physics_transforms_system,
-//!     populate_collision_events,
+//!     cleanup_physics_entities,           // Clean up despawned entities
+//!     clear_collision_event_receivers,    // Clear old collision events
+//!     sync_physics_transforms_system,     // ECS → Physics
+//!     physics_step_system,                // Run simulation
+//!     sync_physics_transforms_system,     // Physics → ECS
+//!     populate_collision_events,          // Distribute collision events
 //! ).chain());
 //!
 //! // Create a static ground plane
@@ -161,11 +162,13 @@
 //!
 //! # Systems
 //!
-//! The physics simulation requires two core systems to be scheduled in order:
+//! The physics simulation requires these core systems to be scheduled in order:
 //!
-//! 1. **`sync_physics_transforms_system`**: Bidirectionally syncs Transform components
+//! 1. **`cleanup_physics_entities`**: Removes Rapier bodies/colliders for despawned entities
+//!    (should run before physics to avoid processing stale entities)
+//! 2. **`sync_physics_transforms_system`**: Bidirectionally syncs Transform components
 //!    with Rapier rigid body positions (should be called before and after physics step)
-//! 2. **`physics_step_system`**: Advances the physics simulation using fixed timestep integration
+//! 3. **`physics_step_system`**: Advances the physics simulation using fixed timestep integration
 //!
 //! For collision events, add these systems:
 //! 1. **`clear_collision_event_receivers`**: Clears event buffers (before physics step)

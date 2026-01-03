@@ -3,11 +3,12 @@
 //! This module provides systems that integrate Rapier physics simulation
 //! with the Praxis ECS architecture.
 
-use praxis_ecs::{Commands, Entity, Query, Res, ResMut, Transform, With, Changed};
+use praxis_ecs::{Entity, Query, Res, ResMut, Transform, With, Changed};
 use praxis_math::{Quat, Vec3};
 use rapier3d::prelude::{
     ColliderBuilder, Isometry, RigidBodyBuilder, RigidBodyType, SharedShape, vector, nalgebra,
 };
+use bevy_ecs::removal_detection::RemovedComponents;
 
 use crate::components::{
     Collider as PraxisCollider, ExternalForces, Friction, Restitution,
@@ -1128,17 +1129,260 @@ pub fn sync_physics_properties(
     }
 }
 
-/// Removes physics bodies and colliders for despawned entities.
+/// Removes physics bodies and colliders for despawned entities or entities with removed physics components.
 ///
-/// This system should be run to clean up Rapier resources when ECS entities
-/// with physics components are despawned.
+/// This system detects when `RigidBody` components are removed from entities (either through
+/// explicit component removal or entity despawn) and cleans up the corresponding Rapier handles.
+/// This prevents memory leaks and ensures the physics simulation doesn't reference stale entities.
 ///
-/// Note: This is a placeholder. Proper cleanup requires tracking entity
-/// despawn events, which may need integration with `bevy_ecs` removal detection.
-pub const fn cleanup_physics_entities(_commands: Commands, _physics_world: ResMut<PhysicsWorld>) {
-    // Placeholder for cleanup logic
-    // In a full implementation, this would detect removed RigidBody components
-    // and clean up the corresponding Rapier handles
+/// # What is `RemovedComponents`?
+///
+/// `RemovedComponents<T>` is a special `bevy_ecs` system parameter that tracks component removal
+/// events. It fires when:
+/// - A component is explicitly removed from an entity (e.g., `commands.entity(e).remove::<T>()`)
+/// - An entity is despawned (all its components are implicitly removed)
+/// - Components are cleared or replaced in bulk operations
+///
+/// ## Why This Matters for Physics
+///
+/// The physics system maintains bidirectional mappings between ECS entities and Rapier handles:
+/// - `entity_to_body: HashMap<Entity, RigidBodyHandle>`
+/// - `body_to_entity: HashMap<RigidBodyHandle, Entity>`
+/// - `entity_to_collider: HashMap<Entity, ColliderHandle>`
+///
+/// When an entity is removed from the ECS world, these mappings become stale. If not cleaned up:
+/// 1. **Memory Leak**: Rapier's `RigidBodySet` and `ColliderSet` retain the physics objects forever
+/// 2. **Dangling References**: The mappings point to entities that no longer exist
+/// 3. **Collision Events**: Collision detection may generate events for dead entities
+/// 4. **Performance Degradation**: The physics simulation wastes time on non-existent objects
+///
+/// # Cleanup Process
+///
+/// For each removed `RigidBody` component, this system:
+///
+/// 1. **Lookup Entity Handle**: Check if the entity has a rigid body in the physics world
+/// 2. **Remove Colliders**: Remove any colliders attached to the rigid body (Rapier requires
+///    this before removing the body)
+/// 3. **Remove Body**: Remove the rigid body from Rapier's `RigidBodySet`
+/// 4. **Clean Mappings**: Remove all bidirectional mappings between entity and handles
+///
+/// ## Why Remove Colliders First?
+///
+/// Rapier maintains parent-child relationships between bodies and colliders. A collider is
+/// always attached to a rigid body. If you remove a body without removing its colliders first,
+/// the colliders become orphaned and cause internal consistency issues in Rapier's data structures.
+///
+/// The proper order is:
+/// 1. Remove collider from `ColliderSet`
+/// 2. Remove body from `RigidBodySet`
+/// 3. Clean up mappings
+///
+/// # System Ordering
+///
+/// This system should run:
+/// - **After** gameplay systems that might despawn entities or remove components
+/// - **Before** the physics simulation step to avoid processing removed entities
+/// - **In the same schedule** as other physics systems for consistency
+///
+/// Typical ordering:
+/// ```text
+/// 1. Gameplay systems (despawn entities, remove components)
+/// 2. cleanup_physics_entities (clean up stale physics objects) ← This system
+/// 3. sync_physics_transforms_system (sync ECS to physics)
+/// 4. physics_step_system (run simulation)
+/// 5. sync_physics_transforms_system (sync physics to ECS)
+/// ```
+///
+/// # Example Integration
+///
+/// ```rust,no_run
+/// use praxis_ecs::{Schedule, IntoSystemConfigs};
+/// use praxis_physics::{
+///     cleanup_physics_entities,
+///     sync_physics_transforms_system,
+///     physics_step_system,
+/// };
+///
+/// let mut schedule = Schedule::default();
+/// schedule.add_systems((
+///     cleanup_physics_entities,           // 1. Clean up removed entities
+///     sync_physics_transforms_system,     // 2. ECS → Physics
+///     physics_step_system,                // 3. Simulate
+///     sync_physics_transforms_system,     // 4. Physics → ECS
+/// ).chain());
+/// ```
+///
+/// # Example: Despawning Physics Entities
+///
+/// ```rust,no_run
+/// use praxis_physics::{RigidBody, Collider};
+/// use praxis_ecs::{Commands, Entity, Query, Transform};
+///
+/// fn despawn_fallen_objects(
+///     mut commands: Commands,
+///     query: Query<(Entity, &Transform), With<RigidBody>>,
+/// ) {
+///     for (entity, transform) in &query {
+///         if transform.translation.y < -100.0 {
+///             // Entity fell off the map, despawn it
+///             commands.entity(entity).despawn();
+///             // cleanup_physics_entities will automatically clean up Rapier handles
+///         }
+///     }
+/// }
+/// ```
+///
+/// # Performance Characteristics
+///
+/// - **Time Complexity**: O(n) where n is the number of removed components
+/// - **Typical Case**: 0-10 removals per frame (very fast)
+/// - **Worst Case**: Mass despawn of hundreds of entities (still fast, single hash map lookups)
+/// - **Memory**: No allocations, only `HashMap` removals
+///
+/// # Edge Cases and Notes
+///
+/// - **No `RigidBody` Handle**: If an entity's `RigidBody` component is removed but it never
+///   had a corresponding Rapier body (e.g., the sync system hasn't run yet), this system
+///   safely does nothing for that entity.
+///
+/// - **Collider Without Body**: This system only triggers on `RigidBody` removal. If you
+///   remove a `Collider` component but leave the `RigidBody`, the collider will persist
+///   in Rapier. Consider this a feature (you can swap colliders) or add a separate cleanup
+///   system for colliders if needed.
+///
+/// - **Multiple Colliders**: Rapier supports multiple colliders per body. This system removes
+///   only the primary collider tracked in `entity_to_collider`. Additional colliders would
+///   need separate tracking and cleanup.
+///
+/// - **Joints**: If the removed body was part of a joint constraint, Rapier automatically
+///   removes the joint. No special handling needed.
+///
+/// # System Requirements
+///
+/// - **Resources**: `PhysicsWorld` (`ResMut`) - mutable access to physics state
+/// - **System Parameter**: `RemovedComponents<RigidBody>` - tracks removed `RigidBody` components
+/// - **Ordering**: Should run before physics simulation to avoid processing stale entities
+#[allow(clippy::needless_pass_by_value)]
+pub fn cleanup_physics_entities(
+    mut physics_world: ResMut<PhysicsWorld>,
+    mut removed_bodies: RemovedComponents<PraxisRigidBody>,
+) {
+    // Iterate over all entities that had their RigidBody component removed this frame.
+    // This includes both explicit component removal and entity despawning.
+    for entity in removed_bodies.read() {
+        // ====================================================================
+        // CHECK IF ENTITY HAS PHYSICS REPRESENTATION
+        // ====================================================================
+        //
+        // Not all entities with RigidBody components necessarily have Rapier
+        // bodies yet. The body might not have been created if:
+        // - The entity was created and despawned before sync_physics_transforms ran
+        // - The component was added and removed in the same frame
+        //
+        // We use get_body_handle() to safely check if a Rapier body exists.
+        
+        let Some(body_handle) = physics_world.get_body_handle(entity) else {
+            // Entity has no Rapier body, nothing to clean up
+            continue;
+        };
+
+        // ====================================================================
+        // REMOVE COLLIDERS ATTACHED TO THE BODY
+        // ====================================================================
+        //
+        // Rapier requires colliders to be removed before their parent rigid body.
+        // Colliders are always attached to a rigid body (they can't exist independently
+        // in Rapier's architecture).
+        //
+        // If we try to remove the body first, Rapier's internal data structures
+        // would be left in an inconsistent state with orphaned colliders.
+        //
+        // Note: This implementation only handles the primary collider tracked in
+        // entity_to_collider. If the game uses multiple colliders per body, those
+        // would need additional tracking and cleanup.
+        
+        if let Some(collider_handle) = physics_world.get_collider_handle(entity) {
+            // Remove the collider from Rapier's collider set.
+            // The remove() method returns the removed collider (if it existed),
+            // but we don't need it, so we discard the result.
+            //
+            // We need to destructure physics_world to get separate mutable references
+            // to avoid multiple mutable borrows of the same struct.
+            let PhysicsWorld {
+                ref mut collider_set,
+                ref mut island_manager,
+                ref mut rigid_body_set,
+                ref mut entity_to_collider,
+                ..
+            } = *physics_world;
+            
+            collider_set.remove(
+                collider_handle,
+                island_manager,
+                rigid_body_set,
+                true, // wake_up: Wake bodies in contact with this collider
+            );
+            
+            // Remove the collider handle from our entity-to-collider mapping
+            entity_to_collider.remove(&entity);
+        }
+
+        // ====================================================================
+        // REMOVE RIGID BODY FROM RAPIER
+        // ====================================================================
+        //
+        // Now that all colliders are removed, it's safe to remove the rigid body.
+        // This removes the body from Rapier's simulation:
+        // - The body is removed from the island (group of connected bodies)
+        // - Any joints involving this body are automatically removed
+        // - Contact constraints involving this body are cleared
+        // - The body is removed from the broad phase spatial structure
+        //
+        // Again, destructure to avoid multiple mutable borrows.
+        
+        let PhysicsWorld {
+            ref mut rigid_body_set,
+            ref mut island_manager,
+            ref mut collider_set,
+            ref mut impulse_joint_set,
+            ref mut multibody_joint_set,
+            ref mut entity_to_body,
+            ref mut body_to_entity,
+            ..
+        } = *physics_world;
+        
+        rigid_body_set.remove(
+            body_handle,
+            island_manager,
+            collider_set,
+            impulse_joint_set,
+            multibody_joint_set,
+            true, // wake_up: Wake bodies in contact with this body
+        );
+
+        // ====================================================================
+        // CLEAN UP BIDIRECTIONAL MAPPINGS
+        // ====================================================================
+        //
+        // We maintain two mappings for fast bidirectional lookup:
+        // - entity_to_body: Entity → RigidBodyHandle (for ECS → Physics queries)
+        // - body_to_entity: RigidBodyHandle → Entity (for Physics → ECS queries)
+        //
+        // Both must be cleaned up to prevent:
+        // - Memory leaks (HashMap entries persist forever)
+        // - Dangling references (lookups return stale entities)
+        // - Incorrect collision events (events reference despawned entities)
+        
+        // Remove the Entity → Handle mapping
+        entity_to_body.remove(&entity);
+        
+        // Remove the Handle → Entity mapping
+        body_to_entity.remove(&body_handle);
+
+        // Note: We don't need to log or track the removed entity unless we're
+        // debugging. In production, entity removal is a normal operation that
+        // happens frequently (projectiles despawning, destroyed objects, etc.)
+    }
 }
 
 /// Clears collision event receivers at the start of each physics step.
