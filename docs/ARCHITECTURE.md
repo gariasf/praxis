@@ -77,10 +77,11 @@ praxis/
 - **`praxis_assets`:**
   - Asset loading, management, and caching.
   - Supports various formats:
-    - Textures: `image` crate.
-    - Models: `russimp` (Assimp bindings) or `gltf`.
+    - Textures: `image` crate (PNG, JPEG).
+    - Models: `gltf` (GLTF 2.0/GLB with PBR materials), `tobj` (OBJ).
     - Configuration/Data: `serde` (with `serde_json`, `serde_yaml`, etc.).
-  - Asynchronous loading capabilities.
+  - GLTF loader includes material, texture, and node hierarchy support.
+  - Asset caching via `GltfAssetManager` and `ObjAssetManager`.
   - Depends on: `praxis_core`, `praxis_utils`.
 - **`praxis_gui`:**
   - Debugging and editor tools GUI.
@@ -106,15 +107,15 @@ praxis/
 - **Dependency Management:** `Cargo.toml` for each crate and the workspace root.
 - **Key Dependencies:**
   - Windowing/Input: `winit`
-  - Graphics: `vulkano`
+  - Graphics: `vulkano`, `vulkano-shaders`
   - Math: `glam`
   - ECS: `bevy_ecs`
+  - Physics: `rapier3d`
   - Assets:
     - Textures: `image`
-    - Models: `russimp` or `gltf`
+    - Models: `gltf` (GLTF 2.0/GLB), `tobj` (OBJ)
     - Data: `serde`
-  - GUI: `egui`
-  - Scripting: `mlua`
+  - GUI: `egui`, `egui-winit`, `egui_vulkano`
   - Logging: `tracing`, `tracing-subscriber`
   - Error Reporting: `color-eyre`
 - **Dependency Versions:** Use latest stable versions where compatible and reasonable. Pin versions in `Cargo.lock` for reproducible builds.
