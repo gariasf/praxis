@@ -426,10 +426,7 @@ fn test_rigid_body_creation_dynamic() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
 
-    let entity = world.spawn((
-        Transform::from_xyz(1.0, 2.0, 3.0),
-        RigidBody::Dynamic,
-    ));
+    let entity = world.spawn((Transform::from_xyz(1.0, 2.0, 3.0), RigidBody::Dynamic));
 
     let mut schedule = Schedule::default();
     schedule.add_systems(sync_physics_transforms_system);
@@ -439,7 +436,10 @@ fn test_rigid_body_creation_dynamic() {
     let body_handle = physics_world.get_body_handle(entity);
     assert!(body_handle.is_some(), "Dynamic body should be created");
 
-    let body = physics_world.rigid_body_set.get(body_handle.unwrap()).unwrap();
+    let body = physics_world
+        .rigid_body_set
+        .get(body_handle.unwrap())
+        .unwrap();
     assert!(body.is_dynamic());
 }
 
@@ -448,10 +448,7 @@ fn test_rigid_body_creation_static() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
 
-    let entity = world.spawn((
-        Transform::from_xyz(0.0, 0.0, 0.0),
-        RigidBody::Static,
-    ));
+    let entity = world.spawn((Transform::from_xyz(0.0, 0.0, 0.0), RigidBody::Static));
 
     let mut schedule = Schedule::default();
     schedule.add_systems(sync_physics_transforms_system);
@@ -461,7 +458,10 @@ fn test_rigid_body_creation_static() {
     let body_handle = physics_world.get_body_handle(entity);
     assert!(body_handle.is_some(), "Static body should be created");
 
-    let body = physics_world.rigid_body_set.get(body_handle.unwrap()).unwrap();
+    let body = physics_world
+        .rigid_body_set
+        .get(body_handle.unwrap())
+        .unwrap();
     assert!(body.is_fixed());
 }
 
@@ -470,10 +470,7 @@ fn test_rigid_body_creation_kinematic() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
 
-    let entity = world.spawn((
-        Transform::from_xyz(5.0, 5.0, 5.0),
-        RigidBody::Kinematic,
-    ));
+    let entity = world.spawn((Transform::from_xyz(5.0, 5.0, 5.0), RigidBody::Kinematic));
 
     let mut schedule = Schedule::default();
     schedule.add_systems(sync_physics_transforms_system);
@@ -483,7 +480,10 @@ fn test_rigid_body_creation_kinematic() {
     let body_handle = physics_world.get_body_handle(entity);
     assert!(body_handle.is_some(), "Kinematic body should be created");
 
-    let body = physics_world.rigid_body_set.get(body_handle.unwrap()).unwrap();
+    let body = physics_world
+        .rigid_body_set
+        .get(body_handle.unwrap())
+        .unwrap();
     assert!(body.is_kinematic());
 }
 
@@ -492,10 +492,7 @@ fn test_kinematic_body_position_update() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
 
-    let entity = world.spawn((
-        Transform::from_xyz(0.0, 0.0, 0.0),
-        RigidBody::Kinematic,
-    ));
+    let entity = world.spawn((Transform::from_xyz(0.0, 0.0, 0.0), RigidBody::Kinematic));
 
     let mut schedule = Schedule::default();
     schedule.add_systems(sync_physics_transforms_system);
@@ -536,11 +533,14 @@ fn test_dynamic_body_physics_updates_transform() {
     ));
 
     let mut schedule = Schedule::default();
-    schedule.add_systems((
-        sync_physics_transforms_system,
-        physics_step_system,
-        sync_physics_transforms_system,
-    ).chain());
+    schedule.add_systems(
+        (
+            sync_physics_transforms_system,
+            physics_step_system,
+            sync_physics_transforms_system,
+        )
+            .chain(),
+    );
 
     // Run physics for several steps
     for _ in 0..5 {
@@ -552,7 +552,10 @@ fn test_dynamic_body_physics_updates_transform() {
 
     // Verify object fell due to gravity
     let transform = world.get::<Transform>(entity).unwrap();
-    assert!(transform.translation.y < 10.0, "Dynamic body should fall under gravity");
+    assert!(
+        transform.translation.y < 10.0,
+        "Dynamic body should fall under gravity"
+    );
 }
 
 #[test]
@@ -617,11 +620,14 @@ fn test_friction_and_restitution_sync() {
     ));
 
     let mut schedule = Schedule::default();
-    schedule.add_systems((
-        sync_physics_transforms_system,
-        sync_colliders,
-        sync_physics_properties,
-    ).chain());
+    schedule.add_systems(
+        (
+            sync_physics_transforms_system,
+            sync_colliders,
+            sync_physics_properties,
+        )
+            .chain(),
+    );
     world.inner_mut().run_schedule(&mut schedule);
 
     // Verify properties were applied
@@ -733,7 +739,7 @@ fn test_collision_stopped_event() {
     let receiver1 = world.get::<CollisionEventReceiver>(entity1).unwrap();
     assert_eq!(receiver1.event_count(), 1);
     match receiver1.events[0] {
-        CollisionEvent::CollisionStopped(_, _) => {}, // Expected
+        CollisionEvent::CollisionStopped(_, _) => {} // Expected
         _ => panic!("Expected CollisionStopped event"),
     }
 }
@@ -817,26 +823,36 @@ fn test_raycast_basic() {
 
     // Sync to create physics bodies
     let mut schedule = Schedule::default();
-    schedule.add_systems((sync_physics_transforms_system, sync_colliders, physics_step_system).chain());
-    
+    schedule.add_systems(
+        (
+            sync_physics_transforms_system,
+            sync_colliders,
+            physics_step_system,
+        )
+            .chain(),
+    );
+
     let mut physics_time = world.inner_mut().resource_mut::<PhysicsTime>();
     physics_time.add(1.0 / 60.0);
     drop(physics_time);
-    
+
     world.inner_mut().run_schedule(&mut schedule);
 
     // Perform raycast from above pointing down
     let physics_world = world.inner_mut().resource::<PhysicsWorld>();
     let result = physics_world.raycast(
-        Vec3::new(0.0, 10.0, 0.0),  // Origin above target
-        Vec3::new(0.0, -1.0, 0.0),  // Direction down
-        100.0,                       // Max distance
-        true,                        // Solid
+        Vec3::new(0.0, 10.0, 0.0), // Origin above target
+        Vec3::new(0.0, -1.0, 0.0), // Direction down
+        100.0,                     // Max distance
+        true,                      // Solid
     );
 
     assert!(result.is_some(), "Raycast should hit the box");
     let (_entity, distance) = result.unwrap();
-    assert!(distance > 8.0 && distance < 10.0, "Hit distance should be ~9.0 (10 - box half height)");
+    assert!(
+        distance > 8.0 && distance < 10.0,
+        "Hit distance should be ~9.0 (10 - box half height)"
+    );
 }
 
 #[test]
@@ -855,19 +871,26 @@ fn test_raycast_miss() {
     ));
 
     let mut schedule = Schedule::default();
-    schedule.add_systems((sync_physics_transforms_system, sync_colliders, physics_step_system).chain());
-    
+    schedule.add_systems(
+        (
+            sync_physics_transforms_system,
+            sync_colliders,
+            physics_step_system,
+        )
+            .chain(),
+    );
+
     let mut physics_time = world.inner_mut().resource_mut::<PhysicsTime>();
     physics_time.add(1.0 / 60.0);
     drop(physics_time);
-    
+
     world.inner_mut().run_schedule(&mut schedule);
 
     // Raycast away from target
     let physics_world = world.inner_mut().resource::<PhysicsWorld>();
     let result = physics_world.raycast(
-        Vec3::new(10.0, 0.0, 0.0),  // Origin far away
-        Vec3::new(1.0, 0.0, 0.0),   // Direction away from target
+        Vec3::new(10.0, 0.0, 0.0), // Origin far away
+        Vec3::new(1.0, 0.0, 0.0),  // Direction away from target
         100.0,
         true,
     );
@@ -890,12 +913,19 @@ fn test_raycast_max_distance() {
     ));
 
     let mut schedule = Schedule::default();
-    schedule.add_systems((sync_physics_transforms_system, sync_colliders, physics_step_system).chain());
-    
+    schedule.add_systems(
+        (
+            sync_physics_transforms_system,
+            sync_colliders,
+            physics_step_system,
+        )
+            .chain(),
+    );
+
     let mut physics_time = world.inner_mut().resource_mut::<PhysicsTime>();
     physics_time.add(1.0 / 60.0);
     drop(physics_time);
-    
+
     world.inner_mut().run_schedule(&mut schedule);
 
     // Raycast with insufficient max distance
@@ -903,11 +933,14 @@ fn test_raycast_max_distance() {
     let result = physics_world.raycast(
         Vec3::new(0.0, 10.0, 0.0),
         Vec3::new(0.0, -1.0, 0.0),
-        5.0,  // Too short to reach target
+        5.0, // Too short to reach target
         true,
     );
 
-    assert!(result.is_none(), "Raycast should not reach target with short max_distance");
+    assert!(
+        result.is_none(),
+        "Raycast should not reach target with short max_distance"
+    );
 }
 
 #[test]
@@ -925,12 +958,19 @@ fn test_point_inside_basic() {
     ));
 
     let mut schedule = Schedule::default();
-    schedule.add_systems((sync_physics_transforms_system, sync_colliders, physics_step_system).chain());
-    
+    schedule.add_systems(
+        (
+            sync_physics_transforms_system,
+            sync_colliders,
+            physics_step_system,
+        )
+            .chain(),
+    );
+
     let mut physics_time = world.inner_mut().resource_mut::<PhysicsTime>();
     physics_time.add(1.0 / 60.0);
     drop(physics_time);
-    
+
     world.inner_mut().run_schedule(&mut schedule);
 
     // Test point inside box
@@ -955,12 +995,19 @@ fn test_point_outside() {
     ));
 
     let mut schedule = Schedule::default();
-    schedule.add_systems((sync_physics_transforms_system, sync_colliders, physics_step_system).chain());
-    
+    schedule.add_systems(
+        (
+            sync_physics_transforms_system,
+            sync_colliders,
+            physics_step_system,
+        )
+            .chain(),
+    );
+
     let mut physics_time = world.inner_mut().resource_mut::<PhysicsTime>();
     physics_time.add(1.0 / 60.0);
     drop(physics_time);
-    
+
     world.inner_mut().run_schedule(&mut schedule);
 
     // Test point outside box
@@ -1065,7 +1112,7 @@ fn test_fixed_timestep_partial_accumulation() {
     // Add less than one timestep
     {
         let mut physics_time = world.inner_mut().resource_mut::<PhysicsTime>();
-        physics_time.add(0.5 / 60.0);  // Half timestep
+        physics_time.add(0.5 / 60.0); // Half timestep
     }
 
     let mut schedule = Schedule::default();
@@ -1094,9 +1141,12 @@ fn test_fixed_timestep_accumulation_over_frames() {
         physics_time.add(0.5 / 60.0);
     }
     world.inner_mut().run_schedule(&mut schedule);
-    
+
     let time1 = world.inner_mut().resource::<PhysicsTime>().accumulator;
-    assert!((time1 - 0.5 / 60.0).abs() < 0.0001, "Should retain 0.5 timestep");
+    assert!(
+        (time1 - 0.5 / 60.0).abs() < 0.0001,
+        "Should retain 0.5 timestep"
+    );
 
     // Frame 2: Add another 0.7 timestep (total 1.2)
     {
@@ -1104,9 +1154,12 @@ fn test_fixed_timestep_accumulation_over_frames() {
         physics_time.add(0.7 / 60.0);
     }
     world.inner_mut().run_schedule(&mut schedule);
-    
+
     let time2 = world.inner_mut().resource::<PhysicsTime>().accumulator;
-    assert!((time2 - 0.2 / 60.0).abs() < 0.0001, "Should retain 0.2 timestep after consuming 1.0");
+    assert!(
+        (time2 - 0.2 / 60.0).abs() < 0.0001,
+        "Should retain 0.2 timestep after consuming 1.0"
+    );
 }
 
 #[test]
@@ -1125,11 +1178,14 @@ fn test_fixed_timestep_with_simulation() {
     ));
 
     let mut schedule = Schedule::default();
-    schedule.add_systems((
-        sync_physics_transforms_system,
-        physics_step_system,
-        sync_physics_transforms_system,
-    ).chain());
+    schedule.add_systems(
+        (
+            sync_physics_transforms_system,
+            physics_step_system,
+            sync_physics_transforms_system,
+        )
+            .chain(),
+    );
 
     let initial_y = world.get::<Transform>(entity).unwrap().translation.y;
 
@@ -1143,7 +1199,10 @@ fn test_fixed_timestep_with_simulation() {
 
     // Verify gravity affected the body
     let final_y = world.get::<Transform>(entity).unwrap().translation.y;
-    assert!(final_y < initial_y, "Body should fall due to gravity in fixed timestep simulation");
+    assert!(
+        final_y < initial_y,
+        "Body should fall due to gravity in fixed timestep simulation"
+    );
 }
 
 #[test]
@@ -1288,12 +1347,15 @@ fn test_multiple_dynamic_bodies() {
     ));
 
     let mut schedule = Schedule::default();
-    schedule.add_systems((
-        sync_physics_transforms_system,
-        sync_colliders,
-        physics_step_system,
-        sync_physics_transforms_system,
-    ).chain());
+    schedule.add_systems(
+        (
+            sync_physics_transforms_system,
+            sync_colliders,
+            physics_step_system,
+            sync_physics_transforms_system,
+        )
+            .chain(),
+    );
 
     let initial_y1 = world.get::<Transform>(body1).unwrap().translation.y;
     let initial_y2 = world.get::<Transform>(body2).unwrap().translation.y;
@@ -1309,7 +1371,7 @@ fn test_multiple_dynamic_bodies() {
     // Both bodies should fall
     let final_y1 = world.get::<Transform>(body1).unwrap().translation.y;
     let final_y2 = world.get::<Transform>(body2).unwrap().translation.y;
-    
+
     assert!(final_y1 < initial_y1, "Body 1 should fall");
     assert!(final_y2 < initial_y2, "Body 2 should fall");
 }
@@ -1356,12 +1418,15 @@ fn test_static_body_does_not_move() {
     ));
 
     let mut schedule = Schedule::default();
-    schedule.add_systems((
-        sync_physics_transforms_system,
-        sync_colliders,
-        physics_step_system,
-        sync_physics_transforms_system,
-    ).chain());
+    schedule.add_systems(
+        (
+            sync_physics_transforms_system,
+            sync_colliders,
+            physics_step_system,
+            sync_physics_transforms_system,
+        )
+            .chain(),
+    );
 
     let initial_pos = world.get::<Transform>(static_entity).unwrap().translation;
 

@@ -246,13 +246,28 @@ mod tests {
 
     #[test]
     fn test_vertex3d_normal_vectors() {
-        let up = Vertex3D::with_all([0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 1.0], [0.0, 0.0]);
+        let up = Vertex3D::with_all(
+            [0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 1.0],
+            [0.0, 0.0],
+        );
         assert_eq!(up.normal, [0.0, 1.0, 0.0]);
 
-        let right = Vertex3D::with_all([0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 1.0], [0.0, 0.0]);
+        let right = Vertex3D::with_all(
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0],
+            [0.0, 0.0],
+        );
         assert_eq!(right.normal, [1.0, 0.0, 0.0]);
 
-        let forward = Vertex3D::with_all([0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0, 1.0], [0.0, 0.0]);
+        let forward = Vertex3D::with_all(
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 1.0, 1.0],
+            [0.0, 0.0],
+        );
         assert_eq!(forward.normal, [0.0, 0.0, 1.0]);
     }
 

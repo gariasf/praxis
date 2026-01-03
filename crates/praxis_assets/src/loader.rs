@@ -235,6 +235,8 @@ impl AssetLoader<MeshData> for MeshLoader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::io::Write;
 
     #[test]
     fn test_mesh_loader_creation() {
@@ -253,5 +255,369 @@ mod tests {
         let extensions = loader.supported_extensions();
         assert_eq!(extensions.len(), 1);
         assert_eq!(extensions[0], "obj");
+    }
+
+    #[test]
+    fn test_load_simple_triangle() {
+        let loader = MeshLoader::new();
+        let obj_content = r#"
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.5 1.0 0.0
+f 1 2 3
+"#;
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_triangle.obj");
+        fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let result = loader.load(&test_file);
+        assert!(result.is_ok(), "Failed to load simple triangle");
+
+        let mesh = result.unwrap();
+        assert_eq!(mesh.positions.len(), 3, "Should have 3 vertices");
+        assert_eq!(mesh.indices.len(), 3, "Should have 3 indices");
+        assert!(mesh.normals.is_none(), "Should not have normals");
+        assert!(mesh.uvs.is_none(), "Should not have UVs");
+
+        fs::remove_file(&test_file).ok();
+    }
+
+    #[test]
+    fn test_load_mesh_with_normals() {
+        let loader = MeshLoader::new();
+        let obj_content = r#"
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.5 1.0 0.0
+vn 0.0 0.0 1.0
+vn 0.0 0.0 1.0
+vn 0.0 0.0 1.0
+f 1//1 2//2 3//3
+"#;
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_normals.obj");
+        fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let result = loader.load(&test_file);
+        assert!(result.is_ok(), "Failed to load mesh with normals");
+
+        let mesh = result.unwrap();
+        assert_eq!(mesh.positions.len(), 3);
+        assert!(mesh.normals.is_some(), "Should have normals");
+        let normals = mesh.normals.unwrap();
+        assert_eq!(normals.len(), 3);
+
+        fs::remove_file(&test_file).ok();
+    }
+
+    #[test]
+    fn test_load_mesh_with_uvs() {
+        let loader = MeshLoader::new();
+        let obj_content = r#"
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.5 1.0 0.0
+vt 0.0 0.0
+vt 1.0 0.0
+vt 0.5 1.0
+f 1/1 2/2 3/3
+"#;
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_uvs.obj");
+        fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let result = loader.load(&test_file);
+        assert!(result.is_ok(), "Failed to load mesh with UVs");
+
+        let mesh = result.unwrap();
+        assert_eq!(mesh.positions.len(), 3);
+        assert!(mesh.uvs.is_some(), "Should have UVs");
+        let uvs = mesh.uvs.unwrap();
+        assert_eq!(uvs.len(), 3);
+
+        fs::remove_file(&test_file).ok();
+    }
+
+    #[test]
+    fn test_load_mesh_with_normals_and_uvs() {
+        let loader = MeshLoader::new();
+        let obj_content = r#"
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.5 1.0 0.0
+vt 0.0 0.0
+vt 1.0 0.0
+vt 0.5 1.0
+vn 0.0 0.0 1.0
+vn 0.0 0.0 1.0
+vn 0.0 0.0 1.0
+f 1/1/1 2/2/2 3/3/3
+"#;
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_complete.obj");
+        fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let result = loader.load(&test_file);
+        assert!(result.is_ok(), "Failed to load mesh with normals and UVs");
+
+        let mesh = result.unwrap();
+        assert_eq!(mesh.positions.len(), 3);
+        assert!(mesh.normals.is_some(), "Should have normals");
+        assert!(mesh.uvs.is_some(), "Should have UVs");
+
+        fs::remove_file(&test_file).ok();
+    }
+
+    #[test]
+    fn test_load_nonexistent_file() {
+        let loader = MeshLoader::new();
+        let result = loader.load("nonexistent_file_12345.obj");
+        assert!(result.is_err(), "Should fail to load nonexistent file");
+    }
+
+    #[test]
+    fn test_load_empty_obj_file() {
+        let loader = MeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_empty.obj");
+        fs::write(&test_file, "").expect("Failed to write test file");
+
+        let result = loader.load(&test_file);
+        assert!(result.is_err(), "Should fail to load empty OBJ file");
+
+        fs::remove_file(&test_file).ok();
+    }
+
+    #[test]
+    fn test_load_quad_mesh_triangulated() {
+        let loader = MeshLoader::new();
+        let obj_content = r#"
+v -1.0 -1.0 0.0
+v  1.0 -1.0 0.0
+v  1.0  1.0 0.0
+v -1.0  1.0 0.0
+f 1 2 3 4
+"#;
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_quad.obj");
+        fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let result = loader.load(&test_file);
+        assert!(result.is_ok(), "Should load quad and triangulate");
+
+        let mesh = result.unwrap();
+        assert_eq!(mesh.positions.len(), 4);
+        assert_eq!(
+            mesh.indices.len(),
+            6,
+            "Quad should be triangulated to 6 indices"
+        );
+
+        fs::remove_file(&test_file).ok();
+    }
+
+    #[test]
+    fn test_load_multiple_models_merged() {
+        let loader = MeshLoader::new();
+        let obj_content = r#"
+o Model1
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.5 1.0 0.0
+f 1 2 3
+
+o Model2
+v 2.0 0.0 0.0
+v 3.0 0.0 0.0
+v 2.5 1.0 0.0
+f 4 5 6
+"#;
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_multi.obj");
+        fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let result = loader.load(&test_file);
+        assert!(result.is_ok(), "Should load and merge multiple models");
+
+        let mesh = result.unwrap();
+        assert_eq!(mesh.positions.len(), 6, "Should have 6 total vertices");
+        assert_eq!(mesh.indices.len(), 6, "Should have 6 total indices");
+
+        fs::remove_file(&test_file).ok();
+    }
+
+    #[test]
+    fn test_load_inconsistent_normals() {
+        let loader = MeshLoader::new();
+        let obj_content = r#"
+o Model1
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.5 1.0 0.0
+vn 0.0 0.0 1.0
+vn 0.0 0.0 1.0
+vn 0.0 0.0 1.0
+f 1//1 2//2 3//3
+
+o Model2
+v 2.0 0.0 0.0
+v 3.0 0.0 0.0
+v 2.5 1.0 0.0
+f 4 5 6
+"#;
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_inconsistent_normals.obj");
+        fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let result = loader.load(&test_file);
+        assert!(result.is_err(), "Should fail with inconsistent normals");
+        let error_msg = result.unwrap_err().to_string();
+        assert!(
+            error_msg.contains("missing normals") || error_msg.contains("consistent attributes")
+        );
+
+        fs::remove_file(&test_file).ok();
+    }
+
+    #[test]
+    fn test_load_inconsistent_uvs() {
+        let loader = MeshLoader::new();
+        let obj_content = r#"
+o Model1
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.5 1.0 0.0
+vt 0.0 0.0
+vt 1.0 0.0
+vt 0.5 1.0
+f 1/1 2/2 3/3
+
+o Model2
+v 2.0 0.0 0.0
+v 3.0 0.0 0.0
+v 2.5 1.0 0.0
+f 4 5 6
+"#;
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_inconsistent_uvs.obj");
+        fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let result = loader.load(&test_file);
+        assert!(result.is_err(), "Should fail with inconsistent UVs");
+        let error_msg = result.unwrap_err().to_string();
+        assert!(
+            error_msg.contains("missing texture coordinates")
+                || error_msg.contains("consistent attributes")
+        );
+
+        fs::remove_file(&test_file).ok();
+    }
+
+    #[test]
+    fn test_vertex_data_correctness() {
+        let loader = MeshLoader::new();
+        let obj_content = r#"
+v 1.0 2.0 3.0
+v 4.0 5.0 6.0
+v 7.0 8.0 9.0
+f 1 2 3
+"#;
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_vertex_data.obj");
+        fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let result = loader.load(&test_file);
+        assert!(result.is_ok());
+
+        let mesh = result.unwrap();
+        assert_eq!(mesh.positions[0], [1.0, 2.0, 3.0]);
+        assert_eq!(mesh.positions[1], [4.0, 5.0, 6.0]);
+        assert_eq!(mesh.positions[2], [7.0, 8.0, 9.0]);
+
+        fs::remove_file(&test_file).ok();
+    }
+
+    #[test]
+    fn test_index_offset_in_merged_models() {
+        let loader = MeshLoader::new();
+        let obj_content = r#"
+o Model1
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.5 1.0 0.0
+f 1 2 3
+
+o Model2
+v 2.0 0.0 0.0
+v 3.0 0.0 0.0
+v 2.5 1.0 0.0
+f 4 5 6
+"#;
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_index_offset.obj");
+        fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let result = loader.load(&test_file);
+        assert!(result.is_ok());
+
+        let mesh = result.unwrap();
+        assert_eq!(mesh.indices[0], 0);
+        assert_eq!(mesh.indices[1], 1);
+        assert_eq!(mesh.indices[2], 2);
+        assert_eq!(mesh.indices[3], 3);
+        assert_eq!(mesh.indices[4], 4);
+        assert_eq!(mesh.indices[5], 5);
+
+        fs::remove_file(&test_file).ok();
+    }
+
+    #[test]
+    fn test_path_as_ref_trait() {
+        let loader = MeshLoader::new();
+        let obj_content = r#"
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.5 1.0 0.0
+f 1 2 3
+"#;
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_path_trait.obj");
+        fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let path_str = test_file.to_str().unwrap();
+        let result1 = loader.load(path_str);
+        assert!(result1.is_ok(), "Should work with &str");
+
+        let path_string = test_file.to_string_lossy().to_string();
+        let result2 = loader.load(path_string);
+        assert!(result2.is_ok(), "Should work with String");
+
+        let result3 = loader.load(&test_file);
+        assert!(result3.is_ok(), "Should work with &Path");
+
+        fs::remove_file(&test_file).ok();
+    }
+
+    #[test]
+    fn test_asset_loader_trait() {
+        fn generic_load<L: AssetLoader<MeshData>>(loader: &L, path: &str) -> Result<MeshData> {
+            loader.load(path)
+        }
+
+        let loader = MeshLoader::new();
+        let obj_content = r#"
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.5 1.0 0.0
+f 1 2 3
+"#;
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_trait.obj");
+        fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let result = generic_load(&loader, test_file.to_str().unwrap());
+        assert!(result.is_ok(), "Should work through generic trait");
+
+        fs::remove_file(&test_file).ok();
     }
 }

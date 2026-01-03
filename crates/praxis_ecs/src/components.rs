@@ -1668,7 +1668,7 @@ mod tests {
 
         let direction = Vec3::new(1.0, 0.0, 0.0);
         let transformed = transform.transform_direction(direction);
-        
+
         assert!(transformed.x.abs() < 0.001);
         assert!(transformed.y.abs() < 0.001);
         assert!((transformed.z.abs() - 2.0).abs() < 0.001);
@@ -1678,7 +1678,7 @@ mod tests {
     fn test_global_transform_from_transform() {
         let transform = Transform::from_xyz(5.0, 10.0, 15.0);
         let global_transform = GlobalTransform::from(transform);
-        
+
         let translation = global_transform.translation();
         assert_eq!(translation, Vec3::new(5.0, 10.0, 15.0));
     }
@@ -1688,9 +1688,10 @@ mod tests {
         let scale = Vec3::new(2.0, 2.0, 2.0);
         let rotation = Quat::IDENTITY;
         let translation = Vec3::new(10.0, 20.0, 30.0);
-        
-        let global_transform = GlobalTransform::from_scale_rotation_translation(scale, rotation, translation);
-        
+
+        let global_transform =
+            GlobalTransform::from_scale_rotation_translation(scale, rotation, translation);
+
         assert_eq!(global_transform.translation(), translation);
         let extracted_scale = global_transform.scale();
         assert!((extracted_scale.x - 2.0).abs() < 0.001);
@@ -1702,10 +1703,10 @@ mod tests {
     fn test_global_transform_transform_direction() {
         let matrix = Mat4::from_rotation_y(std::f32::consts::FRAC_PI_2);
         let global_transform = GlobalTransform::from_matrix(matrix);
-        
+
         let direction = Vec3::new(1.0, 0.0, 0.0);
         let transformed = global_transform.transform_direction(direction);
-        
+
         assert!(transformed.x.abs() < 0.001);
         assert!(transformed.y.abs() < 0.001);
         assert!(transformed.z.abs() > 0.99);
@@ -1722,28 +1723,28 @@ mod tests {
     #[test]
     fn test_children_component_operations() {
         use bevy_ecs::entity::Entity;
-        
+
         let mut children = Children::new();
         assert!(children.is_empty());
         assert_eq!(children.len(), 0);
-        
+
         let child1 = Entity::from_raw(1);
         let child2 = Entity::from_raw(2);
         let child3 = Entity::from_raw(3);
-        
+
         children.push(child1);
         children.push(child2);
         children.push(child3);
-        
+
         assert_eq!(children.len(), 3);
         assert!(!children.is_empty());
-        
+
         let mut iter = children.iter();
         assert_eq!(iter.next(), Some(&child1));
         assert_eq!(iter.next(), Some(&child2));
         assert_eq!(iter.next(), Some(&child3));
         assert_eq!(iter.next(), None);
-        
+
         assert!(children.remove(child2));
         assert_eq!(children.len(), 2);
         assert!(!children.remove(child2));
@@ -1752,10 +1753,10 @@ mod tests {
     #[test]
     fn test_children_with_children() {
         use bevy_ecs::entity::Entity;
-        
+
         let child1 = Entity::from_raw(1);
         let child2 = Entity::from_raw(2);
-        
+
         let children = Children::with_children(vec![child1, child2]);
         assert_eq!(children.len(), 2);
         assert_eq!(children.0[0], child1);
@@ -1772,10 +1773,10 @@ mod tests {
     fn test_texture_handle() {
         let handle = TextureHandle::new("brick_texture");
         assert_eq!(handle.id(), "brick_texture");
-        
+
         let handle2: TextureHandle = "wood_texture".into();
         assert_eq!(handle2.id(), "wood_texture");
-        
+
         let handle3: TextureHandle = "metal_texture".to_string().into();
         assert_eq!(handle3.id(), "metal_texture");
     }
@@ -1785,7 +1786,7 @@ mod tests {
         let handle1 = TextureHandle::new("brick");
         let handle2 = TextureHandle::new("brick");
         let handle3 = TextureHandle::new("wood");
-        
+
         assert_eq!(handle1, handle2);
         assert_ne!(handle1, handle3);
     }
@@ -1797,7 +1798,7 @@ mod tests {
             .with_metallic(0.8)
             .with_roughness(0.2)
             .with_emissive_strength(1.5);
-        
+
         assert_eq!(props.0.base_color, [1.0, 0.5, 0.0, 1.0]);
         assert_eq!(props.0.metallic, 0.8);
         assert_eq!(props.0.roughness, 0.2);
@@ -1807,29 +1808,29 @@ mod tests {
     #[test]
     fn test_lighting_data_operations() {
         let mut lighting_data = LightingData::new();
-        
+
         assert_eq!(lighting_data.directional_light_count(), 0);
         assert_eq!(lighting_data.point_light_count(), 0);
         assert_eq!(lighting_data.ambient_color, Vec3::new(0.1, 0.1, 0.1));
-        
+
         lighting_data.directional_lights.push(DirectionalLightInfo {
             direction: Vec3::new(0.0, -1.0, 0.0),
             color: Vec3::ONE,
             intensity: 1.0,
         });
-        
+
         lighting_data.point_lights.push(PointLightInfo {
             position: Vec3::ZERO,
             color: Vec3::ONE,
             intensity: 1.0,
             range: 10.0,
         });
-        
+
         assert_eq!(lighting_data.directional_light_count(), 1);
         assert_eq!(lighting_data.point_light_count(), 1);
-        
+
         lighting_data.clear();
-        
+
         assert_eq!(lighting_data.directional_light_count(), 0);
         assert_eq!(lighting_data.point_light_count(), 0);
     }

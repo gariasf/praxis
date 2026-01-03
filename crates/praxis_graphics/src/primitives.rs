@@ -625,7 +625,7 @@ mod tests {
     fn test_colored_cube_mesh_colors() {
         let mesh = colored_cube_mesh();
         let colors = mesh.colors.as_ref().unwrap();
-        
+
         assert_eq!(colors[0], [1.0, 0.0, 0.0]);
         assert_eq!(colors[4], [0.0, 1.0, 0.0]);
         assert_eq!(colors[8], [0.0, 0.0, 1.0]);
@@ -638,7 +638,7 @@ mod tests {
     fn test_colored_cube_mesh_normals() {
         let mesh = colored_cube_mesh();
         let normals = mesh.normals.as_ref().unwrap();
-        
+
         assert_eq!(normals[0], [0.0, 0.0, -1.0]);
         assert_eq!(normals[4], [0.0, 0.0, 1.0]);
         assert_eq!(normals[8], [0.0, -1.0, 0.0]);
@@ -670,7 +670,7 @@ mod tests {
         let color = [0.8, 0.2, 0.4];
         let mesh = solid_cube_mesh(color);
         let colors = mesh.colors.as_ref().unwrap();
-        
+
         for c in colors {
             assert_eq!(*c, color);
         }
@@ -692,7 +692,7 @@ mod tests {
     fn test_textured_cube_mesh_uvs() {
         let mesh = textured_cube_mesh([1.0, 1.0, 1.0]);
         let uvs = mesh.uvs.as_ref().unwrap();
-        
+
         for uv in uvs {
             assert!(uv[0] >= 0.0 && uv[0] <= 1.0);
             assert!(uv[1] >= 0.0 && uv[1] <= 1.0);
@@ -713,7 +713,7 @@ mod tests {
         let size = 5.0;
         let mesh = quad_mesh(size, [1.0, 1.0, 1.0]);
         let half_size = size / 2.0;
-        
+
         assert_eq!(mesh.positions[0], [-half_size, 0.0, -half_size]);
         assert_eq!(mesh.positions[1], [half_size, 0.0, -half_size]);
         assert_eq!(mesh.positions[2], [half_size, 0.0, half_size]);
@@ -724,7 +724,7 @@ mod tests {
     fn test_quad_mesh_normals() {
         let mesh = quad_mesh(1.0, [1.0, 1.0, 1.0]);
         let normals = mesh.normals.as_ref().unwrap();
-        
+
         for normal in normals {
             assert_eq!(*normal, [0.0, 1.0, 0.0]);
         }
@@ -743,7 +743,7 @@ mod tests {
     fn test_textured_quad_mesh_uvs() {
         let mesh = textured_quad_mesh(1.0, [1.0, 1.0, 1.0]);
         let uvs = mesh.uvs.as_ref().unwrap();
-        
+
         assert_eq!(uvs[0], [0.0, 1.0]);
         assert_eq!(uvs[1], [1.0, 1.0]);
         assert_eq!(uvs[2], [1.0, 0.0]);
@@ -762,7 +762,7 @@ mod tests {
     #[test]
     fn test_pyramid_mesh_tip_position() {
         let mesh = pyramid_mesh([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]);
-        
+
         assert_eq!(mesh.positions[6], [0.0, 1.0, 0.0]);
         assert_eq!(mesh.positions[9], [0.0, 1.0, 0.0]);
         assert_eq!(mesh.positions[12], [0.0, 1.0, 0.0]);
@@ -775,11 +775,11 @@ mod tests {
         let tip_color = [0.0, 1.0, 0.0];
         let mesh = pyramid_mesh(base_color, tip_color);
         let colors = mesh.colors.as_ref().unwrap();
-        
+
         for i in 0..4 {
             assert_eq!(colors[i], base_color);
         }
-        
+
         assert_eq!(colors[6], tip_color);
         assert_eq!(colors[9], tip_color);
         assert_eq!(colors[12], tip_color);
@@ -789,7 +789,7 @@ mod tests {
     #[test]
     fn test_sphere_mesh_structure() {
         let mesh = sphere_mesh(1.0, 36, 18, [1.0, 1.0, 1.0]);
-        
+
         let expected_vertices = (18 + 1) * (36 + 1);
         assert_eq!(mesh.positions.len(), expected_vertices);
         assert!(mesh.colors.is_some());
@@ -801,7 +801,7 @@ mod tests {
     fn test_sphere_mesh_radius() {
         let radius = 2.5;
         let mesh = sphere_mesh(radius, 36, 18, [1.0, 1.0, 1.0]);
-        
+
         for pos in &mesh.positions {
             let length = (pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]).sqrt();
             assert!((length - radius).abs() < 0.01);
@@ -812,9 +812,10 @@ mod tests {
     fn test_sphere_mesh_normals() {
         let mesh = sphere_mesh(1.0, 36, 18, [1.0, 1.0, 1.0]);
         let normals = mesh.normals.as_ref().unwrap();
-        
+
         for normal in normals {
-            let length = (normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]).sqrt();
+            let length =
+                (normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]).sqrt();
             assert!((length - 1.0).abs() < 0.01);
         }
     }
@@ -823,7 +824,7 @@ mod tests {
     fn test_sphere_mesh_uvs() {
         let mesh = sphere_mesh(1.0, 36, 18, [1.0, 1.0, 1.0]);
         let uvs = mesh.uvs.as_ref().unwrap();
-        
+
         for uv in uvs {
             assert!(uv[0] >= 0.0 && uv[0] <= 1.0);
             assert!(uv[1] >= 0.0 && uv[1] <= 1.0);
@@ -842,7 +843,7 @@ mod tests {
         let color = [0.3, 0.7, 0.9];
         let mesh = sphere_mesh(1.0, 36, 18, color);
         let colors = mesh.colors.as_ref().unwrap();
-        
+
         for c in colors {
             assert_eq!(*c, color);
         }
@@ -859,7 +860,7 @@ mod tests {
             pyramid_mesh([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]),
             sphere_mesh(1.0, 36, 18, [1.0, 1.0, 1.0]),
         ];
-        
+
         for mesh in meshes {
             assert_eq!(mesh.indices.len() % 3, 0);
         }

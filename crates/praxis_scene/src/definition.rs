@@ -602,10 +602,12 @@ mod tests {
     #[test]
     fn test_scene_definition_total_entity_count() {
         let mut scene = SceneDefinition::new("Test");
-        
+
         let child = EntityDefinition::new().with_name("Child");
-        let parent = EntityDefinition::new().with_name("Parent").with_child(child);
-        
+        let parent = EntityDefinition::new()
+            .with_name("Parent")
+            .with_child(child);
+
         scene.add_entity(parent);
         assert_eq!(scene.entity_count(), 1);
         assert_eq!(scene.total_entity_count(), 2);
@@ -614,15 +616,20 @@ mod tests {
     #[test]
     fn test_scene_definition_total_entity_count_complex() {
         let mut scene = SceneDefinition::new("Test");
-        
+
         let grandchild1 = EntityDefinition::new().with_name("Grandchild1");
         let grandchild2 = EntityDefinition::new().with_name("Grandchild2");
-        let child1 = EntityDefinition::new().with_name("Child1").with_child(grandchild1);
-        let child2 = EntityDefinition::new().with_name("Child2").with_child(grandchild2);
-        let parent = EntityDefinition::new().with_name("Parent")
+        let child1 = EntityDefinition::new()
+            .with_name("Child1")
+            .with_child(grandchild1);
+        let child2 = EntityDefinition::new()
+            .with_name("Child2")
+            .with_child(grandchild2);
+        let parent = EntityDefinition::new()
+            .with_name("Parent")
             .with_child(child1)
             .with_child(child2);
-        
+
         scene.add_entity(parent);
         assert_eq!(scene.entity_count(), 1);
         assert_eq!(scene.total_entity_count(), 5);
@@ -674,7 +681,9 @@ mod tests {
     #[test]
     fn test_entity_definition_with_child() {
         let child = EntityDefinition::new().with_name("Child");
-        let parent = EntityDefinition::new().with_name("Parent").with_child(child);
+        let parent = EntityDefinition::new()
+            .with_name("Parent")
+            .with_child(child);
         assert_eq!(parent.children.len(), 1);
         assert_eq!(parent.children[0].name.as_deref(), Some("Child"));
     }
@@ -815,43 +824,47 @@ mod tests {
 
     #[test]
     fn test_entity_definition_perspective_camera() {
-        let camera = EntityDefinition::perspective_camera("MainCamera", (0.0, 5.0, 10.0), 1.22, 1.77);
+        let camera =
+            EntityDefinition::perspective_camera("MainCamera", (0.0, 5.0, 10.0), 1.22, 1.77);
         assert_eq!(camera.name.as_deref(), Some("MainCamera"));
         assert!(camera.transform.is_some());
         assert!(camera.camera.is_some());
-        
+
         let camera_def = camera.camera.unwrap();
         assert_eq!(camera_def.camera_type, CameraType::Perspective);
     }
 
     #[test]
     fn test_entity_definition_orthographic_camera() {
-        let camera = EntityDefinition::orthographic_camera("OrthoCamera", (0.0, 0.0, 10.0), (20.0, 15.0));
+        let camera =
+            EntityDefinition::orthographic_camera("OrthoCamera", (0.0, 0.0, 10.0), (20.0, 15.0));
         assert_eq!(camera.name.as_deref(), Some("OrthoCamera"));
         assert!(camera.transform.is_some());
         assert!(camera.camera.is_some());
-        
+
         let camera_def = camera.camera.unwrap();
         assert_eq!(camera_def.camera_type, CameraType::Orthographic);
     }
 
     #[test]
     fn test_entity_definition_directional_light() {
-        let light = EntityDefinition::directional_light("Sun", (0.0, -1.0, 0.0), (1.0, 1.0, 0.9), 1.5);
+        let light =
+            EntityDefinition::directional_light("Sun", (0.0, -1.0, 0.0), (1.0, 1.0, 0.9), 1.5);
         assert_eq!(light.name.as_deref(), Some("Sun"));
         assert!(light.directional_light.is_some());
-        
+
         let light_def = light.directional_light.unwrap();
         assert_eq!(light_def.direction, (0.0, -1.0, 0.0));
     }
 
     #[test]
     fn test_entity_definition_point_light() {
-        let light = EntityDefinition::point_light("Lamp", (0.0, 2.0, 0.0), (1.0, 0.8, 0.6), 2.0, 10.0);
+        let light =
+            EntityDefinition::point_light("Lamp", (0.0, 2.0, 0.0), (1.0, 0.8, 0.6), 2.0, 10.0);
         assert_eq!(light.name.as_deref(), Some("Lamp"));
         assert!(light.transform.is_some());
         assert!(light.point_light.is_some());
-        
+
         let light_def = light.point_light.unwrap();
         assert_eq!(light_def.intensity, 2.0);
         assert_eq!(light_def.range, 10.0);
@@ -888,7 +901,7 @@ mod tests {
             .with_mesh("test_mesh")
             .with_child(EntityDefinition::new().with_name("Child1"))
             .with_child(EntityDefinition::new().with_name("Child2"));
-        
+
         assert_eq!(entity.name.as_deref(), Some("TestEntity"));
         assert!(entity.transform.is_some());
         assert_eq!(entity.mesh.as_deref(), Some("test_mesh"));
@@ -899,7 +912,7 @@ mod tests {
     fn test_scene_definition_clone() {
         let mut scene1 = SceneDefinition::new("Test");
         scene1.add_entity(EntityDefinition::new().with_name("Entity1"));
-        
+
         let scene2 = scene1.clone();
         assert_eq!(scene1.name, scene2.name);
         assert_eq!(scene1.entity_count(), scene2.entity_count());

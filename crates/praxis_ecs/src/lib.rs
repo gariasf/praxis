@@ -519,7 +519,9 @@ mod tests {
         schedule.add_systems(systems::update_perspective_cameras);
         world.inner_mut().run_schedule(&mut schedule);
 
-        let mut query = world.inner_mut().query::<camera::ActivePerspectiveCameras>();
+        let mut query = world
+            .inner_mut()
+            .query::<camera::ActivePerspectiveCameras>();
 
         let primary = camera::primary_perspective_camera(&query);
         assert!(primary.is_some());
@@ -555,7 +557,9 @@ mod tests {
         schedule.add_systems(systems::update_orthographic_cameras);
         world.inner_mut().run_schedule(&mut schedule);
 
-        let mut query = world.inner_mut().query::<camera::ActiveOrthographicCameras>();
+        let mut query = world
+            .inner_mut()
+            .query::<camera::ActiveOrthographicCameras>();
 
         let primary = camera::primary_orthographic_camera(&query);
         assert!(primary.is_some());
@@ -594,7 +598,9 @@ mod tests {
         schedule.add_systems(systems::update_perspective_cameras);
         world.inner_mut().run_schedule(&mut schedule);
 
-        let mut query = world.inner_mut().query::<camera::ActivePerspectiveCameras>();
+        let mut query = world
+            .inner_mut()
+            .query::<camera::ActivePerspectiveCameras>();
 
         let primary = camera::primary_perspective_camera(&query);
         assert!(primary.is_some());
@@ -612,13 +618,16 @@ mod tests {
         let mut world = World::new();
         let mut schedule = Schedule::default();
 
-        schedule.add_systems((
-            sync_parent_child_relationships,
-            cleanup_removed_parents,
-            propagate_transforms,
-            propagate_transforms_for_reparented,
-            propagate_transforms_for_changed_children,
-        ).chain());
+        schedule.add_systems(
+            (
+                sync_parent_child_relationships,
+                cleanup_removed_parents,
+                propagate_transforms,
+                propagate_transforms_for_reparented,
+                propagate_transforms_for_changed_children,
+            )
+                .chain(),
+        );
 
         let parent = world.spawn((
             Transform::from_xyz(10.0, 0.0, 0.0),
@@ -645,24 +654,24 @@ mod tests {
     #[test]
     fn test_lighting_data_resource() {
         let mut world = World::new();
-        
+
         world.insert_resource(LightingData::default());
-        
+
         world.spawn(DirectionalLight::new(
             Vec3::new(0.0, -1.0, 0.0),
             Vec3::ONE,
             1.0,
         ));
-        
+
         world.spawn((
             Transform::from_xyz(10.0, 5.0, 0.0),
             PointLight::new(Vec3::ONE, 10.0, 20.0),
         ));
-        
+
         let mut schedule = Schedule::default();
         schedule.add_systems(systems::gather_lighting_system);
         world.inner_mut().run_schedule(&mut schedule);
-        
+
         let lighting_data = world.inner().resource::<LightingData>();
         assert_eq!(lighting_data.directional_light_count(), 1);
         assert_eq!(lighting_data.point_light_count(), 1);
@@ -744,7 +753,9 @@ mod tests {
             pos.y = 200.0;
         }
 
-        let mut query = world.inner_mut().query_filtered::<Entity, Changed<Position>>();
+        let mut query = world
+            .inner_mut()
+            .query_filtered::<Entity, Changed<Position>>();
         let changed_entities: Vec<Entity> = query.iter(&world.inner()).collect();
 
         assert!(changed_entities.contains(&entity1));

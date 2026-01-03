@@ -414,5 +414,3 @@ impl TextureManager {
         Ok(())
     }
 }
-
-

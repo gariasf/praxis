@@ -500,12 +500,8 @@ mod tests {
         let mut world = World::new();
         let mut manager = SceneManager::new();
 
-        let light_entity = EntityDefinition::directional_light(
-            "Sun",
-            (0.0, -1.0, 0.0),
-            (1.0, 1.0, 1.0),
-            1.5,
-        );
+        let light_entity =
+            EntityDefinition::directional_light("Sun", (0.0, -1.0, 0.0), (1.0, 1.0, 1.0), 1.5);
 
         let mut scene = SceneDefinition::new("Light Scene");
         scene.add_entity(light_entity);
@@ -680,7 +676,8 @@ mod tests {
         let mut world = World::new();
         let mut manager = SceneManager::new();
 
-        let camera_entity = EntityDefinition::orthographic_camera("OrthoCamera", (0.0, 0.0, 10.0), (20.0, 15.0));
+        let camera_entity =
+            EntityDefinition::orthographic_camera("OrthoCamera", (0.0, 0.0, 10.0), (20.0, 15.0));
 
         let mut scene = SceneDefinition::new("Ortho Camera Scene");
         scene.add_entity(camera_entity);
@@ -690,6 +687,8 @@ mod tests {
         let spawned_entity = entities[0];
 
         assert!(world.get::<Camera>(spawned_entity).is_some());
-        assert!(world.get::<OrthographicProjection>(spawned_entity).is_some());
+        assert!(world
+            .get::<OrthographicProjection>(spawned_entity)
+            .is_some());
     }
 }

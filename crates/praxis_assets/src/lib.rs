@@ -162,3 +162,73 @@ pub fn init() -> Result<()> {
     info!("Initializing asset system");
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_init() {
+        let result = init();
+        assert!(result.is_ok(), "Initialization should succeed");
+    }
+
+    #[test]
+    fn test_load_obj_function() {
+        let obj_content = r#"
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.5 1.0 0.0
+f 1 2 3
+"#;
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_load_obj.obj");
+        fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let result = load_obj(&test_file);
+        assert!(result.is_ok(), "load_obj should succeed");
+
+        let mesh = result.unwrap();
+        assert_eq!(mesh.positions.len(), 3);
+        assert_eq!(mesh.indices.len(), 3);
+
+        fs::remove_file(&test_file).ok();
+    }
+
+    #[test]
+    fn test_load_obj_with_string_path() {
+        let obj_content = r#"
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.5 1.0 0.0
+f 1 2 3
+"#;
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_load_obj_string.obj");
+        fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let path_string = test_file.to_string_lossy().to_string();
+        let result = load_obj(path_string);
+        assert!(result.is_ok(), "load_obj should work with String");
+
+        fs::remove_file(&test_file).ok();
+    }
+
+    #[test]
+    fn test_load_obj_nonexistent() {
+        let result = load_obj("nonexistent_test_file_99999.obj");
+        assert!(result.is_err(), "load_obj should fail for nonexistent file");
+    }
+
+    #[test]
+    fn test_multiple_init_calls() {
+        let result1 = init();
+        let result2 = init();
+        let result3 = init();
+
+        assert!(result1.is_ok());
+        assert!(result2.is_ok());
+        assert!(result3.is_ok());
+    }
+}

@@ -6,8 +6,8 @@
 use bevy_ecs::entity::Entity;
 use bevy_ecs::system::Resource;
 use praxis_math::Vec3;
-use rapier3d::prelude::*;
 use rapier3d::parry::query::ShapeCastOptions;
+use rapier3d::prelude::*;
 use std::collections::HashMap;
 
 /// Physics world resource managing the Rapier physics pipeline.

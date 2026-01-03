@@ -259,7 +259,9 @@ pub fn find_entities_by_name(world: &World, name: &str, root: Option<Entity>) ->
 
     let entities_to_check: Vec<Entity> = root.map_or_else(
         || world.iter_entities().map(|e| e.id()).collect(),
-        |root_entity| SceneGraphIterator::new(world, root_entity, TraversalOrder::DepthFirst).collect(),
+        |root_entity| {
+            SceneGraphIterator::new(world, root_entity, TraversalOrder::DepthFirst).collect()
+        },
     );
 
     for entity in entities_to_check {
@@ -483,9 +485,7 @@ mod tests {
         world
             .entity_mut(root)
             .insert(Children(vec![child1, child2]));
-        world
-            .entity_mut(child1)
-            .insert(Children(vec![grandchild1]));
+        world.entity_mut(child1).insert(Children(vec![grandchild1]));
 
         let visited: Vec<Entity> =
             SceneGraphIterator::new(&world, root, TraversalOrder::BreadthFirst).collect();
@@ -542,12 +542,8 @@ mod tests {
         world
             .entity_mut(root)
             .insert(Children(vec![child1, child2]));
-        world
-            .entity_mut(child1)
-            .insert(Children(vec![grandchild1]));
-        world
-            .entity_mut(child2)
-            .insert(Children(vec![grandchild2]));
+        world.entity_mut(child1).insert(Children(vec![grandchild1]));
+        world.entity_mut(child2).insert(Children(vec![grandchild2]));
 
         let visited: Vec<Entity> =
             SceneGraphIterator::new(&world, root, TraversalOrder::DepthFirst).collect();
@@ -638,12 +634,8 @@ mod tests {
         world
             .entity_mut(root)
             .insert(Children(vec![child1, child2]));
-        world
-            .entity_mut(child1)
-            .insert(Children(vec![grandchild1]));
-        world
-            .entity_mut(child2)
-            .insert(Children(vec![grandchild2]));
+        world.entity_mut(child1).insert(Children(vec![grandchild1]));
+        world.entity_mut(child2).insert(Children(vec![grandchild2]));
 
         let descendants = get_all_children(&world, root);
         assert_eq!(descendants.len(), 4);

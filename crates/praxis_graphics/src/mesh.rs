@@ -530,7 +530,7 @@ mod tests {
         let mesh = MeshData::with_colors(positions, colors, indices);
         assert_eq!(mesh.positions.len(), 3);
         assert_eq!(mesh.indices.len(), 3);
-        
+
         let vertices = mesh.to_vertices();
         assert_eq!(vertices.len(), 3);
     }

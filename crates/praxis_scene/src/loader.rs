@@ -48,10 +48,10 @@ impl SceneLoader {
     /// Returns an error if the file cannot be read or parsed.
     pub fn load_from_file(&self, path: impl AsRef<Path>) -> Result<SceneDefinition> {
         let path = path.as_ref();
-        let full_path = self.base_path.as_ref().map_or_else(
-            || path.to_path_buf(),
-            |base| Path::new(base).join(path),
-        );
+        let full_path = self
+            .base_path
+            .as_ref()
+            .map_or_else(|| path.to_path_buf(), |base| Path::new(base).join(path));
 
         debug!("Loading scene from: {}", full_path.display());
 
@@ -101,10 +101,10 @@ impl SceneLoader {
     /// Returns an error if the file cannot be written or the scene cannot be serialized.
     pub fn save_to_file(&self, scene: &SceneDefinition, path: impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
-        let full_path = self.base_path.as_ref().map_or_else(
-            || path.to_path_buf(),
-            |base| Path::new(base).join(path),
-        );
+        let full_path = self
+            .base_path
+            .as_ref()
+            .map_or_else(|| path.to_path_buf(), |base| Path::new(base).join(path));
 
         debug!("Saving scene to: {}", full_path.display());
 
@@ -328,7 +328,10 @@ mod tests {
         let scene = loader.load_from_string(ron).unwrap();
 
         assert_eq!(scene.name, "Metadata Scene");
-        assert_eq!(scene.metadata.description.as_deref(), Some("Test scene with metadata"));
+        assert_eq!(
+            scene.metadata.description.as_deref(),
+            Some("Test scene with metadata")
+        );
         assert_eq!(scene.metadata.author.as_deref(), Some("Test Author"));
         assert_eq!(scene.metadata.version.as_deref(), Some("1.0.0"));
         assert_eq!(scene.metadata.tags.len(), 2);
@@ -373,16 +376,16 @@ mod tests {
     #[test]
     fn test_roundtrip_with_hierarchy() {
         let mut scene = SceneDefinition::new("Hierarchy Test");
-        
+
         let child = EntityDefinition::new()
             .with_name("Child")
             .with_transform(TransformDef::from_translation(1.0, 0.0, 0.0));
-        
+
         let parent = EntityDefinition::new()
             .with_name("Parent")
             .with_transform(TransformDef::from_translation(0.0, 0.0, 0.0))
             .with_child(child);
-        
+
         scene.add_entity(parent);
 
         let loader = SceneLoader::new();
@@ -390,25 +393,36 @@ mod tests {
         let loaded_scene = loader.load_from_string(&ron_string).unwrap();
 
         assert_eq!(loaded_scene.name, scene.name);
-        assert_eq!(loaded_scene.total_entity_count(), scene.total_entity_count());
+        assert_eq!(
+            loaded_scene.total_entity_count(),
+            scene.total_entity_count()
+        );
         assert_eq!(loaded_scene.entities[0].children.len(), 1);
     }
 
     #[test]
     fn test_save_and_load_complex_scene() {
         let mut scene = SceneDefinition::new("Complex Scene");
-        
-        scene.add_entity(
-            EntityDefinition::perspective_camera("MainCamera", (0.0, 5.0, 10.0), 1.22, 1.77)
-        );
-        
-        scene.add_entity(
-            EntityDefinition::directional_light("Sun", (0.0, -1.0, 0.0), (1.0, 1.0, 0.9), 1.5)
-        );
-        
-        scene.add_entity(
-            EntityDefinition::mesh_entity("Cube", (0.0, 0.0, 0.0), "cube_mesh")
-        );
+
+        scene.add_entity(EntityDefinition::perspective_camera(
+            "MainCamera",
+            (0.0, 5.0, 10.0),
+            1.22,
+            1.77,
+        ));
+
+        scene.add_entity(EntityDefinition::directional_light(
+            "Sun",
+            (0.0, -1.0, 0.0),
+            (1.0, 1.0, 0.9),
+            1.5,
+        ));
+
+        scene.add_entity(EntityDefinition::mesh_entity(
+            "Cube",
+            (0.0, 0.0, 0.0),
+            "cube_mesh",
+        ));
 
         let loader = SceneLoader::new();
         let ron_string = loader.save_to_string(&scene).unwrap();
