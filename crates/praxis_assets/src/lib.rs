@@ -136,6 +136,29 @@ pub fn load_obj(path: impl AsRef<Path>) -> Result<MeshData> {
 }
 
 /// Initializes the asset system.
-pub fn init() {
-    println!("Asset system initialized");
+///
+/// This function sets up any necessary global state for the asset system.
+/// Currently, it's a placeholder for future initialization needs.
+///
+/// # Purpose
+///
+/// The initialization function serves as a centralized entry point for asset
+/// subsystem setup. Currently, it:
+/// - Logs initialization status for debugging and monitoring
+/// - Provides a hook for future initialization needs (e.g., asset cache setup,
+///   thread pool configuration for parallel loading)
+///
+/// # Example
+///
+/// ```rust,no_run
+/// praxis_assets::init().expect("Failed to initialize asset system");
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if initialization fails. Currently, this function always succeeds.
+pub fn init() -> Result<()> {
+    use praxis_utils::info;
+    info!("Initializing asset system");
+    Ok(())
 }

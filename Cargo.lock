@@ -2528,6 +2528,7 @@ name = "praxis_math"
 version = "0.1.0"
 dependencies = [
  "glam",
+ "praxis_utils",
 ]
 
 [[package]]
