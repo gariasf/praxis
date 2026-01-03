@@ -367,15 +367,12 @@ pub struct RenderContext {
     lighting_buffer: lighting::LightingUniformBuffer,
 
     /// Dynamic uniform buffer for per-object model matrices.
-    #[allow(dead_code)]
     dynamic_uniform_buffer: uniform_buffer::DynamicUniformBuffer,
 
     /// Descriptor set layout for per-frame view/projection data.
-    #[allow(dead_code)]
     view_proj_descriptor_set_layout: Arc<vulkano::descriptor_set::layout::DescriptorSetLayout>,
 
     /// Buffer for per-frame view/projection uniforms.
-    #[allow(dead_code)]
     view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
 }
 
