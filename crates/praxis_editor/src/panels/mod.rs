@@ -22,7 +22,18 @@ pub trait EditorPanel {
     fn title(&self) -> &str;
 
     /// Updates and renders the panel UI.
-    fn ui(&mut self, ui: &mut Ui);
+    ///
+    /// # Arguments
+    ///
+    /// * `ui` - The egui UI context
+    /// * `world` - Optional shared reference to the ECS world
+    /// * `render_context` - Optional shared reference to the rendering context
+    fn ui(
+        &mut self,
+        ui: &mut Ui,
+        world: Option<&praxis_ecs::World>,
+        render_context: Option<&praxis_graphics::RenderContext>,
+    );
 
     /// Called when the panel is about to be closed.
     fn on_close(&mut self) {}

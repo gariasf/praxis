@@ -31,6 +31,7 @@ use winit::keyboard::KeyCode;
 /// - Mouse/keyboard event handling within viewport bounds
 /// - Gizmo overlay rendering
 /// - Entity selection via raycasting
+#[allow(dead_code)]
 pub struct ViewportPanel {
     title: String,
     /// Viewport-specific camera entity
@@ -75,6 +76,7 @@ pub struct ViewportPanel {
     viewport_rect: Option<egui::Rect>,
 }
 
+#[allow(dead_code)]
 impl ViewportPanel {
     /// Creates a new viewport panel.
     #[must_use]
@@ -625,7 +627,12 @@ impl EditorPanel for ViewportPanel {
         &self.title
     }
 
-    fn ui(&mut self, ui: &mut Ui) {
+    fn ui(
+        &mut self,
+        ui: &mut Ui,
+        _world: Option<&praxis_ecs::World>,
+        _render_context: Option<&praxis_graphics::RenderContext>,
+    ) {
         ui.horizontal(|ui| {
             ui.heading("Viewport");
             ui.separator();

@@ -278,12 +278,14 @@ impl EditorState {
     /// * `undo_system` - Optional mutable reference to the undo/redo system for menu integration
     /// * `world` - Optional mutable reference to the ECS world for executing undo/redo commands
     /// * `selection_system` - Optional mutable reference to the selection system
+    /// * `render_context` - Optional shared reference to the render context for panel access
     pub fn ui(
         &mut self,
         ctx: &egui::Context,
         mut undo_system: Option<&mut UndoRedoSystem>,
         mut world: Option<&mut World>,
         selection_system: Option<&mut SelectionSystem>,
+        render_context: Option<&praxis_graphics::RenderContext>,
     ) {
         if !self.visible {
             return;
@@ -361,7 +363,7 @@ impl EditorState {
         self.scene_panel
             .set_border_color(self.play_mode_system.viewport_border_color_egui());
 
-        self.render_dock_area(ctx, world, undo_system, selection_system);
+        self.render_dock_area(ctx, world, undo_system, selection_system, render_context);
     }
 
     fn render_dock_area(
@@ -370,6 +372,7 @@ impl EditorState {
         world: Option<&mut World>,
         undo_system: Option<&mut UndoRedoSystem>,
         selection_system: Option<&mut SelectionSystem>,
+        render_context: Option<&praxis_graphics::RenderContext>,
     ) {
         let mut tab_viewer = EditorTabViewer {
             scene_panel: &mut self.scene_panel,
@@ -380,6 +383,7 @@ impl EditorState {
             world,
             undo_system,
             selection_system,
+            render_context,
         };
 
         DockArea::new(&mut self.dock_state)
@@ -403,6 +407,7 @@ struct EditorTabViewer<'a> {
     world: Option<&'a mut World>,
     undo_system: Option<&'a mut UndoRedoSystem>,
     selection_system: Option<&'a mut SelectionSystem>,
+    render_context: Option<&'a praxis_graphics::RenderContext>,
 }
 
 impl TabViewer for EditorTabViewer<'_> {
@@ -420,7 +425,10 @@ impl TabViewer for EditorTabViewer<'_> {
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
         match tab {
-            EditorTab::Scene => self.scene_panel.ui(ui),
+            EditorTab::Scene => {
+                let world_ref = self.world.as_ref().map(|w| w as &World);
+                self.scene_panel.ui(ui, world_ref, self.render_context);
+            }
             EditorTab::Hierarchy => {
                 // Check if we have all required resources
                 if let (Some(world), Some(undo_system), Some(selection_system)) = (
@@ -432,18 +440,26 @@ impl TabViewer for EditorTabViewer<'_> {
                         .ui_with_world(ui, world, undo_system, selection_system);
                 } else {
                     // Fallback to basic UI
-                    self.hierarchy_panel.ui(ui);
+                    let world_ref = self.world.as_ref().map(|w| w as &World);
+                    self.hierarchy_panel.ui(ui, world_ref, self.render_context);
                 }
             }
             EditorTab::Inspector => {
                 if let Some(world) = &mut self.world {
                     self.inspector_panel.ui_with_world(ui, world);
                 } else {
-                    self.inspector_panel.ui(ui);
+                    let world_ref = self.world.as_ref().map(|w| w as &World);
+                    self.inspector_panel.ui(ui, world_ref, self.render_context);
                 }
             }
-            EditorTab::Console => self.console_panel.ui(ui),
-            EditorTab::Assets => self.assets_panel.ui(ui),
+            EditorTab::Console => {
+                let world_ref = self.world.as_ref().map(|w| w as &World);
+                self.console_panel.ui(ui, world_ref, self.render_context);
+            }
+            EditorTab::Assets => {
+                let world_ref = self.world.as_ref().map(|w| w as &World);
+                self.assets_panel.ui(ui, world_ref, self.render_context);
+            }
         }
     }
 }

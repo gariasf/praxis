@@ -135,9 +135,9 @@ impl ApplicationHandler for App {
                             .unwrap()
                             .context()
                             .clone();
-                        // Note: We pass None for undo_system, world, and selection to avoid borrowing issues
+                        // Note: We pass None for undo_system, world, selection, and render_context to avoid borrowing issues
                         // In a full implementation, these would be properly integrated
-                        editor_state.ui(&ctx, None, None, None);
+                        editor_state.ui(&ctx, None, None, None, None);
                     }
                 }
 

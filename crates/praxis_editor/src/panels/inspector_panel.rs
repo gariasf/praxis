@@ -676,7 +676,12 @@ impl EditorPanel for InspectorPanel {
         &self.title
     }
 
-    fn ui(&mut self, ui: &mut Ui) {
+    fn ui(
+        &mut self,
+        ui: &mut Ui,
+        _world: Option<&praxis_ecs::World>,
+        _render_context: Option<&praxis_graphics::RenderContext>,
+    ) {
         ui.heading("Inspector");
         ui.separator();
         ui.label("Use ui_with_world() for full functionality.");

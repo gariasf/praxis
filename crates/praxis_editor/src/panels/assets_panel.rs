@@ -1123,7 +1123,12 @@ impl EditorPanel for AssetsPanel {
         &self.title
     }
 
-    fn ui(&mut self, ui: &mut Ui) {
+    fn ui(
+        &mut self,
+        ui: &mut Ui,
+        _world: Option<&praxis_ecs::World>,
+        _render_context: Option<&praxis_graphics::RenderContext>,
+    ) {
         self.process_file_events();
         self.process_thumbnail_queue();
 
