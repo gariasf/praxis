@@ -124,7 +124,7 @@ impl ApplicationHandler for App {
                 // Update input state
                 if let Some(world) = &mut self.world {
                     {
-                        let mut input_state = world.get_resource_mut::<InputState>().unwrap();
+                        let input_state = world.get_resource_mut::<InputState>().unwrap();
                         input_state.update();
                     }
 

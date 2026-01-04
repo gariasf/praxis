@@ -149,7 +149,7 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 {
-                    let mut input_state = world.get_resource_mut::<InputState>().unwrap();
+                    let input_state = world.get_resource_mut::<InputState>().unwrap();
                     input_state.update();
                 }
 
@@ -181,7 +181,7 @@ impl ApplicationHandler for App {
                         .unwrap()
                         .is_key_just_pressed(KeyCode::Digit4);
 
-                    let mut selection = world.get_resource_mut::<SelectionSystem>().unwrap();
+                    let selection = world.get_resource_mut::<SelectionSystem>().unwrap();
 
                     if pressed_1 && !selectable_entities.is_empty() {
                         selection.select_entity(
