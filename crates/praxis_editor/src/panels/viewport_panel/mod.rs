@@ -6,9 +6,7 @@ use super::EditorPanel;
 use crate::gizmo::{Gizmo, GizmoSystem};
 use crate::selection::{Selectable, SelectionMode, SelectionSystem};
 use egui::Ui;
-use praxis_ecs::{
-    CameraMatrices, Entity, GlobalTransform, MeshHandle, Transform, With, World,
-};
+use praxis_ecs::{CameraMatrices, Entity, GlobalTransform, MeshHandle, Transform, With, World};
 use praxis_graphics::{DrawCommand, RenderContext, RenderTarget};
 use praxis_input::InputState;
 use praxis_math::{Mat4, Vec2, Vec3};
@@ -478,18 +476,18 @@ impl ViewportPanel {
     }
 
     /// Registers the viewport texture with egui.
-    /// 
+    ///
     /// This method provides the integration point for registering the offscreen
     /// texture with the egui renderer. The actual implementation depends on the
     /// egui integration library being used (e.g., egui_winit_vulkano).
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `texture_id` - The egui texture ID to assign to this viewport's texture
     pub fn set_texture_id(&mut self, texture_id: egui::TextureId) {
         self.texture_id = Some(texture_id);
     }
-    
+
     /// Gets the texture ID if registered.
     pub fn texture_id(&self) -> Option<egui::TextureId> {
         self.texture_id

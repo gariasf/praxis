@@ -427,7 +427,8 @@ impl TabViewer for EditorTabViewer<'_> {
         match tab {
             EditorTab::Scene => {
                 let world_ref = self.world.as_ref().map(|w| w as &World);
-                self.scene_panel.ui(ui, world_ref, self.render_context.as_deref_mut());
+                self.scene_panel
+                    .ui(ui, world_ref, self.render_context.as_deref_mut());
             }
             EditorTab::Hierarchy => {
                 // Check if we have all required resources
@@ -441,7 +442,8 @@ impl TabViewer for EditorTabViewer<'_> {
                 } else {
                     // Fallback to basic UI
                     let world_ref = self.world.as_ref().map(|w| w as &World);
-                    self.hierarchy_panel.ui(ui, world_ref, self.render_context.as_deref_mut());
+                    self.hierarchy_panel
+                        .ui(ui, world_ref, self.render_context.as_deref_mut());
                 }
             }
             EditorTab::Inspector => {
@@ -449,16 +451,19 @@ impl TabViewer for EditorTabViewer<'_> {
                     self.inspector_panel.ui_with_world(ui, world);
                 } else {
                     let world_ref = self.world.as_ref().map(|w| w as &World);
-                    self.inspector_panel.ui(ui, world_ref, self.render_context.as_deref_mut());
+                    self.inspector_panel
+                        .ui(ui, world_ref, self.render_context.as_deref_mut());
                 }
             }
             EditorTab::Console => {
                 let world_ref = self.world.as_ref().map(|w| w as &World);
-                self.console_panel.ui(ui, world_ref, self.render_context.as_deref_mut());
+                self.console_panel
+                    .ui(ui, world_ref, self.render_context.as_deref_mut());
             }
             EditorTab::Assets => {
                 let world_ref = self.world.as_ref().map(|w| w as &World);
-                self.assets_panel.ui(ui, world_ref, self.render_context.as_deref_mut());
+                self.assets_panel
+                    .ui(ui, world_ref, self.render_context.as_deref_mut());
             }
         }
     }

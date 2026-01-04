@@ -496,10 +496,14 @@ impl AssetsPanel {
     }
 
     /// Attempts to reload an asset from disk if it's currently loaded
-    fn reload_asset_if_loaded(&self, path: &PathBuf, render_context: &mut praxis_graphics::RenderContext) {
+    fn reload_asset_if_loaded(
+        &self,
+        path: &PathBuf,
+        render_context: &mut praxis_graphics::RenderContext,
+    ) {
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
             let asset_type = AssetType::from_extension(ext);
-            
+
             match asset_type {
                 AssetType::Texture => {
                     match render_context.texture_manager_mut().reload_texture(path) {
@@ -519,7 +523,10 @@ impl AssetsPanel {
                     let loader = praxis_assets::MeshLoader::new();
                     match loader.load(path) {
                         Ok(mesh_data) => {
-                            match render_context.mesh_manager_mut().reload_mesh(path, mesh_data) {
+                            match render_context
+                                .mesh_manager_mut()
+                                .reload_mesh(path, mesh_data)
+                            {
                                 Ok(true) => {
                                     info!("🔄 Hot-reloaded mesh: {}", path.display());
                                 }

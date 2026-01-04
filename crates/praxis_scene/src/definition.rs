@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 ///
 /// This should be incremented whenever the scene format changes in a
 /// backwards-incompatible way. Migration code should be added for each version.
-pub const CURRENT_SCENE_VERSION: u32 = 1;
+///
+/// Version 2: Added physics, audio, animation, and material support
+pub const CURRENT_SCENE_VERSION: u32 = 2;
 
 /// A complete scene definition loaded from RON format.
 ///
@@ -149,6 +151,14 @@ pub struct EntityDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub texture: Option<String>,
 
+    /// Optional material handle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub material: Option<String>,
+
+    /// Optional material properties.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub material_properties: Option<MaterialPropertiesDef>,
+
     /// Optional camera configuration.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub camera: Option<CameraDef>,
@@ -160,6 +170,42 @@ pub struct EntityDefinition {
     /// Optional point light configuration.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub point_light: Option<PointLightDef>,
+
+    /// Optional rigid body configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rigid_body: Option<RigidBodyDef>,
+
+    /// Optional collider configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collider: Option<ColliderDef>,
+
+    /// Optional physics velocity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub physics_velocity: Option<PhysicsVelocityDef>,
+
+    /// Optional mass properties.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mass: Option<MassDef>,
+
+    /// Optional friction coefficient.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub friction: Option<f32>,
+
+    /// Optional restitution coefficient.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restitution: Option<f32>,
+
+    /// Optional audio source configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_source: Option<AudioSourceDef>,
+
+    /// Optional animation player configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub animation_player: Option<AnimationPlayerDef>,
+
+    /// Optional skeleton configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skeleton: Option<SkeletonDef>,
 
     /// Optional visibility setting.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -183,9 +229,20 @@ impl EntityDefinition {
             transform: None,
             mesh: None,
             texture: None,
+            material: None,
+            material_properties: None,
             camera: None,
             directional_light: None,
             point_light: None,
+            rigid_body: None,
+            collider: None,
+            physics_velocity: None,
+            mass: None,
+            friction: None,
+            restitution: None,
+            audio_source: None,
+            animation_player: None,
+            skeleton: None,
             visible: None,
             active: None,
             children: Vec::new(),
@@ -495,8 +552,19 @@ impl EntityDefinition {
             camera: Some(CameraDef::perspective(fov, aspect_ratio, 0.1, 1000.0)),
             mesh: None,
             texture: None,
+            material: None,
+            material_properties: None,
             directional_light: None,
             point_light: None,
+            rigid_body: None,
+            collider: None,
+            physics_velocity: None,
+            mass: None,
+            friction: None,
+            restitution: None,
+            audio_source: None,
+            animation_player: None,
+            skeleton: None,
             visible: None,
             active: None,
             children: Vec::new(),
@@ -527,8 +595,19 @@ impl EntityDefinition {
             )),
             mesh: None,
             texture: None,
+            material: None,
+            material_properties: None,
             directional_light: None,
             point_light: None,
+            rigid_body: None,
+            collider: None,
+            physics_velocity: None,
+            mass: None,
+            friction: None,
+            restitution: None,
+            audio_source: None,
+            animation_player: None,
+            skeleton: None,
             visible: None,
             active: None,
             children: Vec::new(),
@@ -552,8 +631,19 @@ impl EntityDefinition {
             transform: None,
             mesh: None,
             texture: None,
+            material: None,
+            material_properties: None,
             camera: None,
             point_light: None,
+            rigid_body: None,
+            collider: None,
+            physics_velocity: None,
+            mass: None,
+            friction: None,
+            restitution: None,
+            audio_source: None,
+            animation_player: None,
+            skeleton: None,
             visible: None,
             active: None,
             children: Vec::new(),
@@ -582,8 +672,19 @@ impl EntityDefinition {
             }),
             mesh: None,
             texture: None,
+            material: None,
+            material_properties: None,
             camera: None,
             directional_light: None,
+            rigid_body: None,
+            collider: None,
+            physics_velocity: None,
+            mass: None,
+            friction: None,
+            restitution: None,
+            audio_source: None,
+            animation_player: None,
+            skeleton: None,
             visible: None,
             active: None,
             children: Vec::new(),
@@ -605,9 +706,20 @@ impl EntityDefinition {
             }),
             mesh: Some(mesh_id.into()),
             texture: None,
+            material: None,
+            material_properties: None,
             camera: None,
             directional_light: None,
             point_light: None,
+            rigid_body: None,
+            collider: None,
+            physics_velocity: None,
+            mass: None,
+            friction: None,
+            restitution: None,
+            audio_source: None,
+            animation_player: None,
+            skeleton: None,
             visible: None,
             active: None,
             children: Vec::new(),
@@ -630,9 +742,20 @@ impl EntityDefinition {
             }),
             mesh: Some(mesh_id.into()),
             texture: Some(texture_id.into()),
+            material: None,
+            material_properties: None,
             camera: None,
             directional_light: None,
             point_light: None,
+            rigid_body: None,
+            collider: None,
+            physics_velocity: None,
+            mass: None,
+            friction: None,
+            restitution: None,
+            audio_source: None,
+            animation_player: None,
+            skeleton: None,
             visible: None,
             active: None,
             children: Vec::new(),
@@ -994,6 +1117,352 @@ impl EditorPreferences {
 impl Default for EditorPreferences {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// ============================================================================
+// Physics Component Definitions (Version 2+)
+// ============================================================================
+
+/// Rigid body type definition for physics simulation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RigidBodyDef {
+    /// Dynamic body affected by forces and collisions.
+    Dynamic,
+    /// Static body that never moves.
+    Static,
+    /// Kinematic body controlled by animation or code.
+    Kinematic,
+}
+
+/// Collider shape definition for physics simulation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ColliderDef {
+    /// Box collider with half-extents (hx, hy, hz).
+    Cuboid {
+        /// Half-width (x-axis).
+        hx: f32,
+        /// Half-height (y-axis).
+        hy: f32,
+        /// Half-depth (z-axis).
+        hz: f32,
+    },
+    /// Sphere collider with radius.
+    Sphere {
+        /// Radius of the sphere.
+        radius: f32,
+    },
+    /// Capsule aligned with Y-axis.
+    CapsuleY {
+        /// Half-height of cylindrical segment.
+        half_height: f32,
+        /// Radius of capsule.
+        radius: f32,
+    },
+    /// Capsule aligned with X-axis.
+    CapsuleX {
+        /// Half-height of cylindrical segment.
+        half_height: f32,
+        /// Radius of capsule.
+        radius: f32,
+    },
+    /// Capsule aligned with Z-axis.
+    CapsuleZ {
+        /// Half-height of cylindrical segment.
+        half_height: f32,
+        /// Radius of capsule.
+        radius: f32,
+    },
+    /// Cylinder aligned with Y-axis.
+    CylinderY {
+        /// Half-height of cylinder.
+        half_height: f32,
+        /// Radius of cylinder.
+        radius: f32,
+    },
+}
+
+/// Physics velocity definition for rigid bodies.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct PhysicsVelocityDef {
+    /// Linear velocity (x, y, z) in units per second.
+    pub linear: (f32, f32, f32),
+    /// Angular velocity (x, y, z) in radians per second.
+    pub angular: (f32, f32, f32),
+}
+
+impl PhysicsVelocityDef {
+    /// Creates a velocity with zero values.
+    #[must_use]
+    pub const fn zero() -> Self {
+        Self {
+            linear: (0.0, 0.0, 0.0),
+            angular: (0.0, 0.0, 0.0),
+        }
+    }
+
+    /// Creates a velocity with only linear component.
+    #[must_use]
+    pub const fn linear(x: f32, y: f32, z: f32) -> Self {
+        Self {
+            linear: (x, y, z),
+            angular: (0.0, 0.0, 0.0),
+        }
+    }
+
+    /// Creates a velocity with only angular component.
+    #[must_use]
+    pub const fn angular(x: f32, y: f32, z: f32) -> Self {
+        Self {
+            linear: (0.0, 0.0, 0.0),
+            angular: (x, y, z),
+        }
+    }
+}
+
+/// Mass properties definition for rigid bodies.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct MassDef {
+    /// Mass in kilograms.
+    pub mass: f32,
+    /// Angular inertia factor.
+    pub angular_inertia: f32,
+}
+
+impl MassDef {
+    /// Creates a mass definition with the given mass value.
+    #[must_use]
+    pub const fn new(mass: f32) -> Self {
+        Self {
+            mass,
+            angular_inertia: mass,
+        }
+    }
+}
+
+impl Default for MassDef {
+    fn default() -> Self {
+        Self::new(1.0)
+    }
+}
+
+// ============================================================================
+// Audio Component Definitions (Version 2+)
+// ============================================================================
+
+/// Audio source definition for spatial audio.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioSourceDef {
+    /// Path to the audio file.
+    pub path: String,
+    /// Volume level (0.0 to 1.0).
+    #[serde(default = "default_audio_volume")]
+    pub volume: f32,
+    /// Whether to enable spatial audio positioning.
+    #[serde(default)]
+    pub spatial: bool,
+    /// Whether the audio should loop continuously.
+    #[serde(default)]
+    pub looping: bool,
+    /// Whether to auto-play on spawn.
+    #[serde(default)]
+    pub auto_play: bool,
+    /// Maximum distance for audio attenuation.
+    #[serde(default = "default_audio_max_distance")]
+    pub max_distance: f32,
+    /// Reference distance for audio attenuation.
+    #[serde(default = "default_audio_reference_distance")]
+    pub reference_distance: f32,
+}
+
+const fn default_audio_volume() -> f32 {
+    1.0
+}
+
+const fn default_audio_max_distance() -> f32 {
+    100.0
+}
+
+const fn default_audio_reference_distance() -> f32 {
+    1.0
+}
+
+impl AudioSourceDef {
+    /// Creates a new audio source definition.
+    #[must_use]
+    pub fn new(path: impl Into<String>) -> Self {
+        Self {
+            path: path.into(),
+            volume: 1.0,
+            spatial: false,
+            looping: false,
+            auto_play: false,
+            max_distance: 100.0,
+            reference_distance: 1.0,
+        }
+    }
+}
+
+// ============================================================================
+// Animation Component Definitions (Version 2+)
+// ============================================================================
+
+/// Animation player definition for skeletal animation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnimationPlayerDef {
+    /// Animation clips with their names.
+    pub clips: Vec<AnimationClipDef>,
+    /// Name of the clip to play on spawn (optional).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_play: Option<String>,
+}
+
+impl AnimationPlayerDef {
+    /// Creates a new empty animation player definition.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            clips: Vec::new(),
+            auto_play: None,
+        }
+    }
+}
+
+impl Default for AnimationPlayerDef {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Animation clip definition.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnimationClipDef {
+    /// Name of the animation clip.
+    pub name: String,
+    /// Duration of the animation in seconds.
+    pub duration: f32,
+    /// Animation tracks for each bone (bone index -> track data).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tracks: Vec<BoneTrackDef>,
+}
+
+/// Bone track definition with keyframe data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BoneTrackDef {
+    /// Bone index this track applies to.
+    pub bone_index: usize,
+    /// Translation keyframes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub translation_keyframes: Vec<KeyframeDef<(f32, f32, f32)>>,
+    /// Rotation keyframes (quaternion as x, y, z, w).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rotation_keyframes: Vec<KeyframeDef<(f32, f32, f32, f32)>>,
+    /// Scale keyframes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scale_keyframes: Vec<KeyframeDef<(f32, f32, f32)>>,
+}
+
+/// Keyframe definition with time and value.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct KeyframeDef<T> {
+    /// Time in seconds.
+    pub time: f32,
+    /// Value at this keyframe.
+    pub value: T,
+}
+
+/// Skeleton definition with bone hierarchy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkeletonDef {
+    /// List of bones in the skeleton.
+    pub bones: Vec<BoneDef>,
+}
+
+impl SkeletonDef {
+    /// Creates a new skeleton definition.
+    #[must_use]
+    pub const fn new(bones: Vec<BoneDef>) -> Self {
+        Self { bones }
+    }
+}
+
+/// Bone definition in a skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BoneDef {
+    /// Name of the bone.
+    pub name: String,
+    /// Index of the parent bone (None for root bones).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_index: Option<usize>,
+    /// Bind pose translation (x, y, z).
+    pub bind_pose_translation: (f32, f32, f32),
+    /// Bind pose rotation (x, y, z, w quaternion).
+    pub bind_pose_rotation: (f32, f32, f32, f32),
+    /// Bind pose scale (x, y, z).
+    pub bind_pose_scale: (f32, f32, f32),
+}
+
+// ============================================================================
+// Material Component Definitions (Version 2+)
+// ============================================================================
+
+/// Material properties definition for PBR rendering.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct MaterialPropertiesDef {
+    /// Base color tint (RGBA).
+    #[serde(default = "default_base_color")]
+    pub base_color: [f32; 4],
+    /// Metallic factor [0.0, 1.0].
+    #[serde(default)]
+    pub metallic: f32,
+    /// Roughness factor [0.0, 1.0].
+    #[serde(default = "default_roughness")]
+    pub roughness: f32,
+    /// Emissive strength.
+    #[serde(default)]
+    pub emissive_strength: f32,
+}
+
+const fn default_base_color() -> [f32; 4] {
+    [1.0, 1.0, 1.0, 1.0]
+}
+
+const fn default_roughness() -> f32 {
+    0.5
+}
+
+impl Default for MaterialPropertiesDef {
+    fn default() -> Self {
+        Self {
+            base_color: [1.0, 1.0, 1.0, 1.0],
+            metallic: 0.0,
+            roughness: 0.5,
+            emissive_strength: 0.0,
+        }
+    }
+}
+
+impl MaterialPropertiesDef {
+    /// Creates a new material properties definition with default values.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            base_color: [1.0, 1.0, 1.0, 1.0],
+            metallic: 0.0,
+            roughness: 0.5,
+            emissive_strength: 0.0,
+        }
+    }
+
+    /// Converts to component types.
+    #[must_use]
+    pub const fn to_values(&self) -> ([f32; 4], f32, f32, f32) {
+        (
+            self.base_color,
+            self.metallic,
+            self.roughness,
+            self.emissive_strength,
+        )
     }
 }
 
@@ -1467,5 +1936,178 @@ mod tests {
         let camera1 = CameraDef::perspective(1.22, 1.77, 0.1, 1000.0);
         let camera2 = camera1;
         assert_eq!(camera1.fov, camera2.fov);
+    }
+
+    // Tests for new Version 2 component definitions
+
+    #[test]
+    fn test_rigid_body_def() {
+        let dynamic = RigidBodyDef::Dynamic;
+        let static_body = RigidBodyDef::Static;
+        let kinematic = RigidBodyDef::Kinematic;
+
+        assert_ne!(dynamic, static_body);
+        assert_ne!(dynamic, kinematic);
+        assert_ne!(static_body, kinematic);
+    }
+
+    #[test]
+    fn test_collider_def_cuboid() {
+        let collider = ColliderDef::Cuboid {
+            hx: 1.0,
+            hy: 2.0,
+            hz: 3.0,
+        };
+
+        match collider {
+            ColliderDef::Cuboid { hx, hy, hz } => {
+                assert_eq!(hx, 1.0);
+                assert_eq!(hy, 2.0);
+                assert_eq!(hz, 3.0);
+            }
+            _ => panic!("Expected Cuboid variant"),
+        }
+    }
+
+    #[test]
+    fn test_collider_def_sphere() {
+        let collider = ColliderDef::Sphere { radius: 5.0 };
+
+        match collider {
+            ColliderDef::Sphere { radius } => {
+                assert_eq!(radius, 5.0);
+            }
+            _ => panic!("Expected Sphere variant"),
+        }
+    }
+
+    #[test]
+    fn test_physics_velocity_def_zero() {
+        let vel = PhysicsVelocityDef::zero();
+        assert_eq!(vel.linear, (0.0, 0.0, 0.0));
+        assert_eq!(vel.angular, (0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_physics_velocity_def_linear() {
+        let vel = PhysicsVelocityDef::linear(1.0, 2.0, 3.0);
+        assert_eq!(vel.linear, (1.0, 2.0, 3.0));
+        assert_eq!(vel.angular, (0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_physics_velocity_def_angular() {
+        let vel = PhysicsVelocityDef::angular(0.5, 1.0, 1.5);
+        assert_eq!(vel.linear, (0.0, 0.0, 0.0));
+        assert_eq!(vel.angular, (0.5, 1.0, 1.5));
+    }
+
+    #[test]
+    fn test_mass_def_new() {
+        let mass = MassDef::new(10.0);
+        assert_eq!(mass.mass, 10.0);
+        assert_eq!(mass.angular_inertia, 10.0);
+    }
+
+    #[test]
+    fn test_mass_def_default() {
+        let mass = MassDef::default();
+        assert_eq!(mass.mass, 1.0);
+        assert_eq!(mass.angular_inertia, 1.0);
+    }
+
+    #[test]
+    fn test_audio_source_def_new() {
+        let audio = AudioSourceDef::new("assets/sounds/test.ogg");
+        assert_eq!(audio.path, "assets/sounds/test.ogg");
+        assert_eq!(audio.volume, 1.0);
+        assert!(!audio.spatial);
+        assert!(!audio.looping);
+        assert!(!audio.auto_play);
+        assert_eq!(audio.max_distance, 100.0);
+        assert_eq!(audio.reference_distance, 1.0);
+    }
+
+    #[test]
+    fn test_animation_player_def_new() {
+        let player = AnimationPlayerDef::new();
+        assert!(player.clips.is_empty());
+        assert!(player.auto_play.is_none());
+    }
+
+    #[test]
+    fn test_animation_player_def_default() {
+        let player = AnimationPlayerDef::default();
+        assert!(player.clips.is_empty());
+    }
+
+    #[test]
+    fn test_skeleton_def_new() {
+        let bone = BoneDef {
+            name: "Root".to_string(),
+            parent_index: None,
+            bind_pose_translation: (0.0, 0.0, 0.0),
+            bind_pose_rotation: (0.0, 0.0, 0.0, 1.0),
+            bind_pose_scale: (1.0, 1.0, 1.0),
+        };
+
+        let skeleton = SkeletonDef::new(vec![bone]);
+        assert_eq!(skeleton.bones.len(), 1);
+        assert_eq!(skeleton.bones[0].name, "Root");
+    }
+
+    #[test]
+    fn test_material_properties_def_new() {
+        let props = MaterialPropertiesDef::new();
+        assert_eq!(props.base_color, [1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(props.metallic, 0.0);
+        assert_eq!(props.roughness, 0.5);
+        assert_eq!(props.emissive_strength, 0.0);
+    }
+
+    #[test]
+    fn test_material_properties_def_default() {
+        let props = MaterialPropertiesDef::default();
+        assert_eq!(props.base_color, [1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(props.metallic, 0.0);
+        assert_eq!(props.roughness, 0.5);
+    }
+
+    #[test]
+    fn test_material_properties_def_to_values() {
+        let props = MaterialPropertiesDef {
+            base_color: [0.5, 0.5, 0.5, 1.0],
+            metallic: 0.8,
+            roughness: 0.2,
+            emissive_strength: 1.5,
+        };
+
+        let (color, metallic, roughness, emissive) = props.to_values();
+        assert_eq!(color, [0.5, 0.5, 0.5, 1.0]);
+        assert_eq!(metallic, 0.8);
+        assert_eq!(roughness, 0.2);
+        assert_eq!(emissive, 1.5);
+    }
+
+    #[test]
+    fn test_entity_definition_with_new_components() {
+        let mut entity = EntityDefinition::new().with_name("Complex Entity");
+
+        entity.material = Some("brick".to_string());
+        entity.rigid_body = Some(RigidBodyDef::Dynamic);
+        entity.collider = Some(ColliderDef::Sphere { radius: 1.0 });
+        entity.audio_source = Some(AudioSourceDef::new("sound.ogg"));
+
+        assert_eq!(entity.name.as_deref(), Some("Complex Entity"));
+        assert!(entity.material.is_some());
+        assert!(entity.rigid_body.is_some());
+        assert!(entity.collider.is_some());
+        assert!(entity.audio_source.is_some());
+    }
+
+    #[test]
+    fn test_scene_version_2() {
+        let scene = SceneDefinition::new("Version 2 Scene");
+        assert_eq!(scene.version, 2);
     }
 }

@@ -1,0 +1,294 @@
+(
+    version: 2,
+    name: "Scene Format V2 Demo",
+    metadata: (
+        description: Some("Demonstrates all new features in Scene Format Version 2"),
+        author: Some("Praxis Engine"),
+        version: Some("2.0"),
+        tags: ["physics", "audio", "animation", "materials"],
+    ),
+    entities: [
+        // Physics entity with rigid body and collider
+        (
+            name: Some("Dynamic Cube"),
+            transform: Some((
+                translation: (0.0, 5.0, 0.0),
+                rotation: (0.0, 0.0, 0.0, 1.0),
+                scale: (1.0, 1.0, 1.0),
+            )),
+            mesh: Some("cube"),
+            material: Some("brick"),
+            rigid_body: Some(Dynamic),
+            collider: Some(Cuboid(
+                hx: 0.5,
+                hy: 0.5,
+                hz: 0.5,
+            )),
+            physics_velocity: Some((
+                linear: (1.0, 0.0, 0.0),
+                angular: (0.0, 0.5, 0.0),
+            )),
+            mass: Some((
+                mass: 10.0,
+                angular_inertia: 10.0,
+            )),
+            friction: Some(0.6),
+            restitution: Some(0.4),
+        ),
+        
+        // Ground plane with static physics
+        (
+            name: Some("Ground"),
+            transform: Some((
+                translation: (0.0, 0.0, 0.0),
+                rotation: (0.0, 0.0, 0.0, 1.0),
+                scale: (10.0, 0.1, 10.0),
+            )),
+            mesh: Some("plane"),
+            material: Some("concrete"),
+            material_properties: Some((
+                base_color: [0.5, 0.5, 0.5, 1.0],
+                metallic: 0.0,
+                roughness: 0.8,
+                emissive_strength: 0.0,
+            )),
+            rigid_body: Some(Static),
+            collider: Some(Cuboid(
+                hx: 5.0,
+                hy: 0.05,
+                hz: 5.0,
+            )),
+        ),
+        
+        // Bouncy sphere
+        (
+            name: Some("Bouncy Ball"),
+            transform: Some((
+                translation: (-2.0, 3.0, 0.0),
+                rotation: (0.0, 0.0, 0.0, 1.0),
+                scale: (1.0, 1.0, 1.0),
+            )),
+            mesh: Some("sphere"),
+            material: Some("rubber"),
+            material_properties: Some((
+                base_color: [1.0, 0.2, 0.2, 1.0],
+                metallic: 0.0,
+                roughness: 0.3,
+                emissive_strength: 0.0,
+            )),
+            rigid_body: Some(Dynamic),
+            collider: Some(Sphere(radius: 0.5)),
+            mass: Some((
+                mass: 5.0,
+                angular_inertia: 5.0,
+            )),
+            restitution: Some(0.9),
+        ),
+        
+        // Character with capsule collider
+        (
+            name: Some("Player"),
+            transform: Some((
+                translation: (0.0, 2.0, 3.0),
+                rotation: (0.0, 0.0, 0.0, 1.0),
+                scale: (1.0, 1.0, 1.0),
+            )),
+            mesh: Some("character_mesh"),
+            material: Some("skin"),
+            rigid_body: Some(Kinematic),
+            collider: Some(CapsuleY(
+                half_height: 0.5,
+                radius: 0.4,
+            )),
+            // Animation system
+            skeleton: Some((
+                bones: [
+                    (
+                        name: "Root",
+                        parent_index: None,
+                        bind_pose_translation: (0.0, 0.0, 0.0),
+                        bind_pose_rotation: (0.0, 0.0, 0.0, 1.0),
+                        bind_pose_scale: (1.0, 1.0, 1.0),
+                    ),
+                    (
+                        name: "Spine",
+                        parent_index: Some(0),
+                        bind_pose_translation: (0.0, 1.0, 0.0),
+                        bind_pose_rotation: (0.0, 0.0, 0.0, 1.0),
+                        bind_pose_scale: (1.0, 1.0, 1.0),
+                    ),
+                ],
+            )),
+            animation_player: Some((
+                clips: [
+                    (
+                        name: "Idle",
+                        duration: 2.0,
+                        tracks: [
+                            (
+                                bone_index: 0,
+                                translation_keyframes: [
+                                    (time: 0.0, value: (0.0, 0.0, 0.0)),
+                                    (time: 1.0, value: (0.0, 0.1, 0.0)),
+                                    (time: 2.0, value: (0.0, 0.0, 0.0)),
+                                ],
+                                rotation_keyframes: [],
+                                scale_keyframes: [],
+                            ),
+                        ],
+                    ),
+                    (
+                        name: "Walk",
+                        duration: 1.0,
+                        tracks: [],
+                    ),
+                ],
+                auto_play: Some("Idle"),
+            )),
+        ),
+        
+        // Ambient audio source
+        (
+            name: Some("Ambient Sound"),
+            transform: Some((
+                translation: (0.0, 1.0, 0.0),
+                rotation: (0.0, 0.0, 0.0, 1.0),
+                scale: (1.0, 1.0, 1.0),
+            )),
+            audio_source: Some((
+                path: "assets/audio/ambient.ogg",
+                volume: 0.5,
+                spatial: false,
+                looping: true,
+                auto_play: true,
+                max_distance: 100.0,
+                reference_distance: 1.0,
+            )),
+        ),
+        
+        // Spatial audio with position
+        (
+            name: Some("Fire Sound"),
+            transform: Some((
+                translation: (5.0, 0.5, 5.0),
+                rotation: (0.0, 0.0, 0.0, 1.0),
+                scale: (1.0, 1.0, 1.0),
+            )),
+            audio_source: Some((
+                path: "assets/audio/fire_crackle.ogg",
+                volume: 0.8,
+                spatial: true,
+                looping: true,
+                auto_play: true,
+                max_distance: 20.0,
+                reference_distance: 1.0,
+            )),
+        ),
+        
+        // Metallic object with PBR material
+        (
+            name: Some("Metal Sphere"),
+            transform: Some((
+                translation: (3.0, 1.0, 0.0),
+                rotation: (0.0, 0.0, 0.0, 1.0),
+                scale: (1.0, 1.0, 1.0),
+            )),
+            mesh: Some("sphere"),
+            material_properties: Some((
+                base_color: [0.8, 0.8, 0.9, 1.0],
+                metallic: 0.95,
+                roughness: 0.1,
+                emissive_strength: 0.0,
+            )),
+            rigid_body: Some(Dynamic),
+            collider: Some(Sphere(radius: 0.5)),
+        ),
+        
+        // Emissive glowing object
+        (
+            name: Some("Glowing Orb"),
+            transform: Some((
+                translation: (-3.0, 2.0, 0.0),
+                rotation: (0.0, 0.0, 0.0, 1.0),
+                scale: (0.5, 0.5, 0.5),
+            )),
+            mesh: Some("sphere"),
+            material_properties: Some((
+                base_color: [0.0, 0.8, 1.0, 1.0],
+                metallic: 0.0,
+                roughness: 0.5,
+                emissive_strength: 5.0,
+            )),
+        ),
+        
+        // Camera
+        (
+            name: Some("Main Camera"),
+            transform: Some((
+                translation: (0.0, 5.0, 10.0),
+                rotation: (0.0, 0.0, 0.0, 1.0),
+                scale: (1.0, 1.0, 1.0),
+            )),
+            camera: Some((
+                camera_type: Perspective,
+                fov: Some(1.22173),
+                aspect_ratio: Some(1.77778),
+                near: 0.1,
+                far: 1000.0,
+                is_active: true,
+                priority: 0,
+            )),
+        ),
+        
+        // Directional light (sun)
+        (
+            name: Some("Sun"),
+            directional_light: Some((
+                direction: (0.5, -1.0, 0.3),
+                color: (1.0, 0.95, 0.8),
+                intensity: 1.0,
+            )),
+        ),
+        
+        // Point light near fire
+        (
+            name: Some("Fire Light"),
+            transform: Some((
+                translation: (5.0, 1.0, 5.0),
+                rotation: (0.0, 0.0, 0.0, 1.0),
+                scale: (1.0, 1.0, 1.0),
+            )),
+            point_light: Some((
+                color: (1.0, 0.5, 0.2),
+                intensity: 5.0,
+                range: 10.0,
+            )),
+        ),
+    ],
+    editor_data: Some((
+        camera: Some((
+            position: (0.0, 10.0, 15.0),
+            target: (0.0, 0.0, 0.0),
+            distance: 18.0,
+            pitch: -0.6,
+            yaw: 0.0,
+            fov: 60.0,
+            near_clip: 0.1,
+            far_clip: 1000.0,
+            mode: Orbit,
+        )),
+        selected_entities: [],
+        viewport: Some((
+            show_grid: true,
+            show_gizmos: true,
+            show_wireframe: false,
+            show_bounds: false,
+            show_lights: true,
+            show_cameras: false,
+            grid_size: 20,
+            grid_spacing: 1.0,
+            background_color: (0.118, 0.118, 0.137),
+            gizmo_mode: Translate,
+        )),
+    )),
+)

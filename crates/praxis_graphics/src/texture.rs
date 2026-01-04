@@ -476,17 +476,17 @@ impl TextureManager {
     /// or an error if reloading failed.
     pub fn reload_texture(&mut self, path: impl AsRef<Path>) -> Result<bool> {
         let path = path.as_ref();
-        
+
         if let Some(name) = self.path_to_name.get(path).cloned() {
             debug!("Reloading texture '{}' from '{}'", name, path.display());
-            
+
             let texture = Texture::from_file(
                 self.allocator.clone(),
                 self.command_buffer_allocator.clone(),
                 self.queue.clone(),
                 path,
             )?;
-            
+
             self.textures.insert(name.clone(), texture);
             info!("Texture '{}' reloaded successfully", name);
             Ok(true)

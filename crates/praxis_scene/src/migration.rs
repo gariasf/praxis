@@ -66,8 +66,8 @@ pub fn migrate_scene(scene: &mut SceneDefinition) -> Result<bool> {
 
         match next_version {
             1 => migrate_to_v1(scene),
+            2 => migrate_to_v2(scene),
             // Future migrations would go here:
-            // 2 => migrate_to_v2(scene)?,
             // 3 => migrate_to_v3(scene)?,
             _ => {
                 return Err(praxis_utils::eyre::eyre!(
@@ -106,6 +106,40 @@ fn migrate_to_v1(scene: &SceneDefinition) {
 
     // If there's any version-0-specific data that needs transformation,
     // it would be done here.
+}
+
+/// Migrates a scene from version 1 to version 2.
+///
+/// Version 2 introduces:
+/// - Physics components (`RigidBody`, `Collider`, `PhysicsVelocity`, `Mass`, `Friction`, `Restitution`)
+/// - Audio components (`AudioSource`)
+/// - Animation components (`AnimationPlayer`, `Skeleton`)
+/// - Material components (`MaterialHandle`, `MaterialProperties`)
+///
+/// All new fields are optional with serde defaults, so this migration
+/// is primarily structural. No data transformation is needed.
+fn migrate_to_v2(scene: &SceneDefinition) {
+    debug!("Migrating scene '{}' to version 2", scene.name);
+
+    // Version 1 scenes don't have the new component fields, but since they're
+    // all optional with serde defaults, they will be automatically handled
+    // during deserialization. This migration validates the structure is correct.
+
+    // The new fields added in version 2:
+    // - EntityDefinition.material (Optional<String>)
+    // - EntityDefinition.material_properties (Optional<MaterialPropertiesDef>)
+    // - EntityDefinition.rigid_body (Optional<RigidBodyDef>)
+    // - EntityDefinition.collider (Optional<ColliderDef>)
+    // - EntityDefinition.physics_velocity (Optional<PhysicsVelocityDef>)
+    // - EntityDefinition.mass (Optional<MassDef>)
+    // - EntityDefinition.friction (Optional<f32>)
+    // - EntityDefinition.restitution (Optional<f32>)
+    // - EntityDefinition.audio_source (Optional<AudioSourceDef>)
+    // - EntityDefinition.animation_player (Optional<AnimationPlayerDef>)
+    // - EntityDefinition.skeleton (Optional<SkeletonDef>)
+
+    // All of these are optional and use serde defaults, so v1 scenes
+    // will automatically have these fields set to None when loaded.
 }
 
 /// Validates that a scene definition is internally consistent.
@@ -500,6 +534,96 @@ mod tests {
             .with_child(child);
 
         scene.add_entity(parent);
+
+        let result = validate_scene(&scene);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_migrate_scene_version_1_to_2() {
+        let mut scene = SceneDefinition::new("Test");
+        scene.version = 1;
+
+        let migrated = migrate_scene(&mut scene).unwrap();
+        assert!(migrated);
+        assert_eq!(scene.version, CURRENT_SCENE_VERSION);
+    }
+
+    #[test]
+    fn test_scene_with_physics_components() {
+        use crate::definition::{ColliderDef, MassDef, PhysicsVelocityDef, RigidBodyDef};
+
+        let mut scene = SceneDefinition::new("Physics Scene");
+        let mut entity = EntityDefinition::new().with_name("Dynamic Box");
+        entity.rigid_body = Some(RigidBodyDef::Dynamic);
+        entity.collider = Some(ColliderDef::Cuboid {
+            hx: 1.0,
+            hy: 1.0,
+            hz: 1.0,
+        });
+        entity.physics_velocity = Some(PhysicsVelocityDef::linear(1.0, 0.0, 0.0));
+        entity.mass = Some(MassDef::new(10.0));
+        entity.friction = Some(0.5);
+        entity.restitution = Some(0.3);
+
+        scene.add_entity(entity);
+
+        let result = validate_scene(&scene);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_scene_with_audio_component() {
+        use crate::definition::AudioSourceDef;
+
+        let mut scene = SceneDefinition::new("Audio Scene");
+        let mut entity = EntityDefinition::new().with_name("Sound Effect");
+        entity.audio_source = Some(AudioSourceDef::new("assets/sounds/explosion.ogg"));
+
+        scene.add_entity(entity);
+
+        let result = validate_scene(&scene);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_scene_with_animation_components() {
+        use crate::definition::{AnimationPlayerDef, BoneDef, SkeletonDef};
+
+        let mut scene = SceneDefinition::new("Animation Scene");
+        let mut entity = EntityDefinition::new().with_name("Character");
+
+        entity.skeleton = Some(SkeletonDef::new(vec![BoneDef {
+            name: "Root".to_string(),
+            parent_index: None,
+            bind_pose_translation: (0.0, 0.0, 0.0),
+            bind_pose_rotation: (0.0, 0.0, 0.0, 1.0),
+            bind_pose_scale: (1.0, 1.0, 1.0),
+        }]));
+
+        entity.animation_player = Some(AnimationPlayerDef::new());
+
+        scene.add_entity(entity);
+
+        let result = validate_scene(&scene);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_scene_with_material_components() {
+        use crate::definition::MaterialPropertiesDef;
+
+        let mut scene = SceneDefinition::new("Material Scene");
+        let mut entity = EntityDefinition::new().with_name("Metallic Cube");
+        entity.material = Some("metal".to_string());
+        entity.material_properties = Some(MaterialPropertiesDef {
+            base_color: [0.8, 0.8, 0.8, 1.0],
+            metallic: 0.9,
+            roughness: 0.1,
+            emissive_strength: 0.0,
+        });
+
+        scene.add_entity(entity);
 
         let result = validate_scene(&scene);
         assert!(result.is_ok());

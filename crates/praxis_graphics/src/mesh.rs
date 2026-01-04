@@ -493,14 +493,14 @@ impl MeshAssetManager {
     ) -> Result<()> {
         let id = id.into();
         let path = path.as_ref();
-        
+
         debug!("Loading mesh '{}' from file '{}'", id, path.display());
-        
+
         let gpu_mesh = mesh_data.upload(self.allocator.clone())?;
-        
+
         self.meshes.insert(id.clone(), gpu_mesh);
         self.path_to_id.insert(path.to_path_buf(), id.clone());
-        
+
         trace!("Mesh '{}' loaded successfully from file", id);
         Ok(())
     }
@@ -527,12 +527,12 @@ impl MeshAssetManager {
         mesh_data: MeshData,
     ) -> Result<bool> {
         let path = path.as_ref();
-        
+
         if let Some(id) = self.path_to_id.get(path).cloned() {
             debug!("Reloading mesh '{}' from '{}'", id, path.display());
-            
+
             let gpu_mesh = mesh_data.upload(self.allocator.clone())?;
-            
+
             self.meshes.insert(id.clone(), gpu_mesh);
             praxis_utils::info!("Mesh '{}' reloaded successfully", id);
             Ok(true)
