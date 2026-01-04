@@ -5,7 +5,8 @@ use crate::menu_bar::{
     check_keyboard_shortcuts, handle_menu_action, render_menu_bar, MenuBarState,
 };
 use crate::panels::{
-    AssetsPanel, ConsolePanel, EditorPanel, HierarchyPanel, InspectorPanel, SceneViewPanel,
+    AssetsPanel, ConsolePanel, EditorPanel, HierarchyPanel, InspectorPanel, LogBuffer,
+    SceneViewPanel,
 };
 use crate::play_mode::PlayModeSystem;
 use crate::toolbar::{handle_toolbar_action, render_toolbar, ToolbarState};
@@ -85,6 +86,44 @@ impl EditorState {
             toolbar_state: ToolbarState::new(),
             play_mode_system: PlayModeSystem::new(),
         }
+    }
+
+    /// Creates a new editor state with a shared log buffer for console integration.
+    #[must_use]
+    pub fn with_log_buffer(log_buffer: LogBuffer) -> Self {
+        let mut dock_state = DockState::new(vec![EditorTab::Scene]);
+
+        let tree = dock_state.main_surface_mut();
+
+        let [scene, right] = tree.split_right(NodeIndex::root(), 0.75, vec![EditorTab::Scene]);
+
+        let [_right_top, right_bottom] = tree.split_below(right, 0.7, vec![EditorTab::Inspector]);
+
+        let [left, _scene] = tree.split_left(scene, 0.2, vec![EditorTab::Hierarchy]);
+
+        tree.split_below(left, 0.6, vec![EditorTab::Assets]);
+
+        tree.split_below(right_bottom, 0.5, vec![EditorTab::Console]);
+
+        Self {
+            mode: EditorMode::default(),
+            dock_state,
+            scene_panel: SceneViewPanel::new(),
+            hierarchy_panel: HierarchyPanel::new(),
+            inspector_panel: InspectorPanel::new(),
+            console_panel: ConsolePanel::with_buffer(log_buffer),
+            assets_panel: AssetsPanel::new(),
+            visible: true,
+            menu_bar_state: MenuBarState::new(),
+            toolbar_state: ToolbarState::new(),
+            play_mode_system: PlayModeSystem::new(),
+        }
+    }
+
+    /// Gets the log buffer from the console panel
+    #[must_use]
+    pub fn log_buffer(&self) -> &LogBuffer {
+        self.console_panel.log_buffer()
     }
 
     /// Returns the current editor mode.

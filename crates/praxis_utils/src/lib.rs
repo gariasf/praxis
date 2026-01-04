@@ -7,6 +7,8 @@
 mod observability;
 pub mod timing;
 
+pub use observability::{init_tracing, init_tracing_with_layer};
+
 // Re-export common utility items for convenience
 pub use color_eyre::{
     eyre::{self, Error},
@@ -34,8 +36,8 @@ pub use tracing::{debug, error, info, instrument, trace, warn};
 /// }
 /// ```
 pub fn init() -> Result<()> {
-    info!("Initializing Praxis utilities...");
     observability::init_tracing()?;
+    info!("Praxis utilities initialized");
 
     Ok(())
 }

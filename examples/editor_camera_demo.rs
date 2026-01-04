@@ -7,12 +7,9 @@
 //! - Focus on selection (F key)
 //! - Smooth interpolated movement
 
-use praxis_ecs::{
-    PerspectiveCameraBundle, Schedule, Transform, World, GlobalTransform,
-};
+use praxis_ecs::{GlobalTransform, PerspectiveCameraBundle, Schedule, Transform, World};
 use praxis_editor::{
-    EditorCamera, EditorCameraController, SelectionSystem, Selectable,
-    update_editor_camera_system,
+    update_editor_camera_system, EditorCamera, EditorCameraController, Selectable, SelectionSystem,
 };
 use praxis_input::InputState;
 use praxis_math::Vec3;
@@ -167,10 +164,22 @@ impl ApplicationHandler for App {
                         }
                     }
 
-                    let pressed_1 = world.get_resource::<InputState>().unwrap().is_key_just_pressed(KeyCode::Digit1);
-                    let pressed_2 = world.get_resource::<InputState>().unwrap().is_key_just_pressed(KeyCode::Digit2);
-                    let pressed_3 = world.get_resource::<InputState>().unwrap().is_key_just_pressed(KeyCode::Digit3);
-                    let pressed_4 = world.get_resource::<InputState>().unwrap().is_key_just_pressed(KeyCode::Digit4);
+                    let pressed_1 = world
+                        .get_resource::<InputState>()
+                        .unwrap()
+                        .is_key_just_pressed(KeyCode::Digit1);
+                    let pressed_2 = world
+                        .get_resource::<InputState>()
+                        .unwrap()
+                        .is_key_just_pressed(KeyCode::Digit2);
+                    let pressed_3 = world
+                        .get_resource::<InputState>()
+                        .unwrap()
+                        .is_key_just_pressed(KeyCode::Digit3);
+                    let pressed_4 = world
+                        .get_resource::<InputState>()
+                        .unwrap()
+                        .is_key_just_pressed(KeyCode::Digit4);
 
                     let mut selection = world.get_resource_mut::<SelectionSystem>().unwrap();
 
@@ -234,7 +243,14 @@ impl ApplicationHandler for App {
                 }
 
                 let mut input_state = world.get_resource_mut::<InputState>().unwrap();
-                praxis_input::winit_integration::process_window_event(&mut input_state, &WindowEvent::KeyboardInput { device_id: winit::event::DeviceId::dummy(), event: event.clone(), is_synthetic: false });
+                praxis_input::winit_integration::process_window_event(
+                    &mut input_state,
+                    &WindowEvent::KeyboardInput {
+                        device_id: winit::event::DeviceId::dummy(),
+                        event: event.clone(),
+                        is_synthetic: false,
+                    },
+                );
             }
             _ => {
                 let mut input_state = world.get_resource_mut::<InputState>().unwrap();

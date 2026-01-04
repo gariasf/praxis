@@ -1,8 +1,9 @@
 use color_eyre::Result;
 use tracing_subscriber::{
     fmt::{self, format::FmtSpan},
-    prelude::*,
-    EnvFilter,
+    layer::SubscriberExt,
+    util::SubscriberInitExt,
+    EnvFilter, Layer,
 };
 
 /// Initializes the tracing system.
@@ -47,6 +48,58 @@ pub fn init_tracing() -> Result<()> {
         .with(filter_layer)
         .with(fmt_layer)
         .init();
+
+    Ok(())
+}
+
+/// Initializes the tracing system with an optional custom layer.
+///
+/// This allows adding custom subscribers, such as a console panel layer for capturing
+/// logs in the editor.
+///
+/// # Type Parameters
+///
+/// * `L` - A layer type that implements the `Layer` trait
+///
+/// # Examples
+///
+/// ```ignore
+/// use praxis_editor::ConsoleLayer;
+///
+/// let console_layer = ConsoleLayer::new(log_buffer);
+/// init_tracing_with_layer(Some(console_layer))?;
+/// ```
+pub fn init_tracing_with_layer<L>(custom_layer: Option<L>) -> Result<()>
+where
+    L: Layer<tracing_subscriber::layer::Layered<EnvFilter, tracing_subscriber::Registry>>
+        + Send
+        + Sync
+        + 'static,
+{
+    color_eyre::install()?;
+
+    let filter_layer = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new("debug"))?
+        .add_directive("winit=info".parse().unwrap())
+        .add_directive("vulkano=debug".parse().unwrap());
+
+    if let Some(layer) = custom_layer {
+        tracing_subscriber::registry()
+            .with(filter_layer)
+            .with(layer)
+            .init();
+    } else {
+        let fmt_layer = fmt::layer()
+            .with_target(true)
+            .with_thread_ids(true)
+            .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+            .pretty();
+
+        tracing_subscriber::registry()
+            .with(filter_layer)
+            .with(fmt_layer)
+            .init();
+    }
 
     Ok(())
 }

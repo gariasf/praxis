@@ -13,7 +13,7 @@
 //!   - `SceneViewPanel`: 3D viewport for visualizing and interacting with the scene
 //!   - `HierarchyPanel`: Tree view of scene entities
 //!   - `InspectorPanel`: Component editing for selected entities
-//!   - `ConsolePanel`: Log output and command execution
+//!   - `ConsolePanel`: Log output with filtering, search, and tracing integration
 //!   - `AssetsPanel`: Project asset browser
 //!
 //! # Usage
@@ -69,6 +69,36 @@
 //! - Models: OBJ, GLTF, GLB
 //! - Audio: WAV, OGG, MP3
 //! - Scenes: SCENE files
+//!
+//! ## Console Panel
+//!
+//! The `ConsolePanel` provides comprehensive logging and debugging:
+//! - **Real-time Log Capture**: Integrates with `praxis_utils::tracing` to capture all engine logs
+//! - **Log Filtering**: Filter by level (trace/debug/info/warn/error) with toggle buttons
+//! - **Search Functionality**: Real-time search to filter messages by content or module
+//! - **Auto-scroll**: Automatically scroll to new messages or manually review history
+//! - **Clear Button**: Remove all messages with one click
+//! - **Color Coding**: Visual distinction between log levels with timestamps
+//! - **Thread-safe**: Uses `Arc<Mutex<VecDeque>>` for safe concurrent access
+//! - **Buffer Limit**: Maintains maximum of 1000 messages to prevent memory overflow
+//!
+//! **Usage:**
+//! ```rust,no_run
+//! use praxis_editor::{init_with_console, LogBuffer, EditorState};
+//!
+//! // Create shared log buffer
+//! let log_buffer = LogBuffer::new();
+//!
+//! // Initialize with console integration
+//! init_with_console(log_buffer.clone()).unwrap();
+//!
+//! // Create editor with log buffer
+//! let editor = EditorState::with_log_buffer(log_buffer);
+//!
+//! // All engine logs now appear in the console panel
+//! ```
+//!
+//! See `CONSOLE_PANEL_IMPLEMENTATION.md` and `examples/console_demo.rs` for details.
 //!
 //! # Selection System
 //!
@@ -228,8 +258,8 @@ pub use menu_bar::{
     check_keyboard_shortcuts, handle_menu_action, render_menu_bar, MenuBarAction, MenuBarState,
 };
 pub use panels::{
-    AssetEntry, AssetImportConfig, AssetType, AssetsPanel, ConsolePanel, EditorPanel,
-    HierarchyPanel, InspectorPanel, SceneViewPanel, ViewportPanel,
+    AssetEntry, AssetImportConfig, AssetType, AssetsPanel, ConsoleLayer, ConsolePanel, EditorPanel,
+    HierarchyPanel, InspectorPanel, LogBuffer, LogLevel, LogMessage, SceneViewPanel, ViewportPanel,
 };
 pub use play_mode::{PlayModeState, PlayModeSystem, SceneSnapshot, SnapshotMetadata};
 pub use selection::{
@@ -246,7 +276,7 @@ pub use undo::{
     UndoRedoSystem,
 };
 
-use praxis_utils::{info, Result};
+use praxis_utils::{info, init_tracing_with_layer, Result};
 
 /// Initializes the editor system.
 ///
@@ -271,5 +301,36 @@ use praxis_utils::{info, Result};
 /// Returns an error if initialization fails. Currently, this function always succeeds.
 pub fn init() -> Result<()> {
     info!("Initializing editor system");
+    Ok(())
+}
+
+/// Initializes the editor system with console log capturing.
+///
+/// This function sets up the tracing system with a custom layer that captures
+/// logs and sends them to the provided log buffer, which can then be displayed
+/// in the console panel.
+///
+/// # Arguments
+///
+/// * `log_buffer` - The log buffer to capture logs into
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_editor::{init_with_console, LogBuffer, ConsolePanel};
+///
+/// let log_buffer = LogBuffer::new();
+/// init_with_console(log_buffer.clone()).expect("Failed to initialize");
+///
+/// let console_panel = ConsolePanel::with_buffer(log_buffer);
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if initialization fails.
+pub fn init_with_console(log_buffer: LogBuffer) -> Result<()> {
+    let console_layer = ConsoleLayer::new(log_buffer);
+    init_tracing_with_layer(Some(console_layer))?;
+    info!("Editor system initialized with console log capture");
     Ok(())
 }
