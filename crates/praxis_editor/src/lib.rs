@@ -54,6 +54,22 @@
 //! Each panel implements the `EditorPanel` trait, providing a consistent interface for
 //! rendering and lifecycle management.
 //!
+//! ## Asset Browser Panel
+//!
+//! The `AssetsPanel` provides comprehensive asset management:
+//! - **Filesystem Browser**: Navigate the assets/ directory with breadcrumb navigation
+//! - **Thumbnail Preview**: Automatic thumbnail generation for texture assets
+//! - **Search & Filter**: Real-time search across asset names
+//! - **Drag-and-Drop**: Drag assets to scene view for instant placement
+//! - **Import Dialogs**: Configure import settings per asset type
+//! - **Hot-Reload**: Automatic detection of asset changes via file watcher
+//!
+//! Supported asset types:
+//! - Textures: PNG, JPG, JPEG
+//! - Models: OBJ, GLTF, GLB
+//! - Audio: WAV, OGG, MP3
+//! - Scenes: SCENE files
+//!
 //! # Selection System
 //!
 //! The editor includes a comprehensive entity selection system with:
@@ -71,15 +87,17 @@ mod gizmo;
 mod panels;
 pub mod selection;
 mod undo;
+pub mod drag_drop;
 
+pub use drag_drop::{DragDropPayload, DragDropSystem};
 pub use editor_mode::EditorMode;
 pub use editor_state::{EditorState, EditorTab};
 pub use gizmo::{
     Gizmo, GizmoAxis, GizmoInteraction, GizmoMode, GizmoSpace, GizmoSystem, TransformGizmo,
 };
 pub use panels::{
-    AssetsPanel, ConsolePanel, EditorPanel, HierarchyPanel, InspectorPanel, SceneViewPanel,
-    ViewportPanel,
+    AssetEntry, AssetImportConfig, AssetType, AssetsPanel, ConsolePanel, EditorPanel,
+    HierarchyPanel, InspectorPanel, SceneViewPanel, ViewportPanel,
 };
 pub use selection::{
     handle_selection_input_system, update_selection_system, Selectable, Selected, SelectionEvent,

@@ -11,7 +11,9 @@ pub use hierarchy_panel::HierarchyPanel;
 pub use inspector_panel::InspectorPanel;
 pub use scene_view_panel::SceneViewPanel;
 pub use console_panel::ConsolePanel;
-pub use assets_panel::AssetsPanel;
+pub use assets_panel::{
+    AssetEntry, AssetImportConfig, AssetType, AssetsPanel,
+};
 pub use viewport_panel::ViewportPanel;
 
 use egui::Ui;

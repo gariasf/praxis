@@ -95,3 +95,8 @@ LITERATURE.md
 
 # Criterion benchmark results
 target/criterion/
+
+# Asset Browser - Generated thumbnails cache (if we add disk caching in the future)
+.asset_thumbnails/
+*.thumb
+.thumbnail_cache/
