@@ -3,13 +3,22 @@
 mod viewport_grid;
 
 use super::EditorPanel;
+use crate::gizmo::{Gizmo, GizmoSystem};
+use crate::selection::{Selectable, SelectionMode, SelectionSystem};
 use egui::Ui;
-use praxis_ecs::{Entity, Transform};
-use praxis_graphics::{DrawCommand, RenderCommands, RenderContext, RenderTarget};
+use praxis_ecs::{
+    CameraMatrices, Entity, GlobalTransform, MeshHandle, Transform, With, World,
+};
+use praxis_graphics::{DrawCommand, RenderContext, RenderTarget};
 use praxis_input::InputState;
-use praxis_math::{Mat4, Vec3};
+use praxis_math::{Mat4, Vec2, Vec3};
 use praxis_utils::Result;
+use std::sync::Arc;
 use viewport_grid::GridRenderer;
+use vulkano::format::Format;
+use vulkano::image::view::ImageView;
+use vulkano::image::{Image, ImageUsage};
+use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
 use winit::keyboard::KeyCode;
 
 /// Viewport panel providing 3D scene rendering with camera controls.
@@ -20,14 +29,19 @@ use winit::keyboard::KeyCode;
 /// - Grid floor rendering
 /// - Viewport-specific camera entity
 /// - Mouse/keyboard event handling within viewport bounds
+/// - Gizmo overlay rendering
+/// - Entity selection via raycasting
 pub struct ViewportPanel {
     title: String,
     /// Viewport-specific camera entity
     camera_entity: Option<Entity>,
     /// Offscreen render target for viewport rendering
     render_target: Option<RenderTarget>,
+    /// Offscreen image for rendering the scene
+    offscreen_image: Option<Arc<Image>>,
+    /// Image view for the offscreen image
+    offscreen_image_view: Option<Arc<ImageView>>,
     /// egui texture ID for displaying the rendered viewport
-    #[allow(dead_code)] // Will be used when texture display is implemented
     texture_id: Option<egui::TextureId>,
     /// Camera distance from the origin (for orbit)
     camera_distance: f32,
@@ -53,6 +67,12 @@ pub struct ViewportPanel {
     show_grid: bool,
     /// Grid renderer
     grid_renderer: Option<GridRenderer>,
+    /// Whether gizmos are enabled
+    show_gizmos: bool,
+    /// Whether the viewport is currently hovered
+    is_hovered: bool,
+    /// Viewport rect in screen space
+    viewport_rect: Option<egui::Rect>,
 }
 
 impl ViewportPanel {
@@ -63,6 +83,8 @@ impl ViewportPanel {
             title: "Viewport".to_string(),
             camera_entity: None,
             render_target: None,
+            offscreen_image: None,
+            offscreen_image_view: None,
             texture_id: None,
             camera_distance: 10.0,
             camera_pitch: -30.0_f32.to_radians(),
@@ -76,6 +98,9 @@ impl ViewportPanel {
             viewport_size: [800, 600],
             show_grid: true,
             grid_renderer: None,
+            show_gizmos: true,
+            is_hovered: false,
+            viewport_rect: None,
         }
     }
 
@@ -86,14 +111,38 @@ impl ViewportPanel {
         // Create render pass for viewport
         let render_pass = render_context.create_post_process_render_pass()?;
 
+        // Create offscreen image
+        let offscreen_image = Image::new(
+            render_context.memory_allocator().clone(),
+            vulkano::image::ImageCreateInfo {
+                image_type: vulkano::image::ImageType::Dim2d,
+                format: Format::R8G8B8A8_UNORM,
+                extent: [self.viewport_size[0], self.viewport_size[1], 1],
+                usage: ImageUsage::COLOR_ATTACHMENT
+                    | ImageUsage::SAMPLED
+                    | ImageUsage::TRANSFER_SRC,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                ..Default::default()
+            },
+        )
+        .map_err(|e| praxis_utils::eyre::eyre!("Failed to create offscreen image: {}", e))?;
+
+        let offscreen_image_view = ImageView::new_default(offscreen_image.clone())
+            .map_err(|e| praxis_utils::eyre::eyre!("Failed to create image view: {}", e))?;
+
         // Create offscreen render target
         let render_target = RenderTarget::new(
             render_context.memory_allocator().clone(),
             render_pass,
             self.viewport_size,
-            vulkano::format::Format::R8G8B8A8_UNORM,
+            Format::R8G8B8A8_UNORM,
         )?;
 
+        self.offscreen_image = Some(offscreen_image);
+        self.offscreen_image_view = Some(offscreen_image_view);
         self.render_target = Some(render_target);
 
         // Initialize grid renderer
@@ -130,9 +179,44 @@ impl ViewportPanel {
         transform
     }
 
-    /// Handles mouse input for camera controls within the viewport bounds.
-    fn handle_camera_input(&mut self, ui: &mut Ui, viewport_rect: egui::Rect) {
+    /// Computes camera matrices (view and projection).
+    fn compute_camera_matrices(&self) -> CameraMatrices {
+        let camera_transform = self.compute_camera_transform();
+        let view = camera_transform.compute_inverse_matrix();
+        let aspect_ratio = self.viewport_size[0] as f32 / self.viewport_size[1] as f32;
+        let proj = Mat4::perspective_rh(
+            self.fov.to_radians(),
+            aspect_ratio,
+            self.near_clip,
+            self.far_clip,
+        );
+
+        CameraMatrices {
+            view,
+            projection: proj,
+            view_projection: proj * view,
+        }
+    }
+
+    /// Handles mouse input for camera controls and entity selection.
+    fn handle_viewport_input(
+        &mut self,
+        ui: &mut Ui,
+        viewport_rect: egui::Rect,
+        world: &mut World,
+        input_state: &InputState,
+    ) {
         let response = ui.allocate_rect(viewport_rect, egui::Sense::click_and_drag());
+
+        self.is_hovered = response.hovered();
+        self.viewport_rect = Some(viewport_rect);
+
+        // Handle left-click for entity selection (only when not dragging)
+        if response.clicked_by(egui::PointerButton::Primary) && !self.is_dragging {
+            if let Some(click_pos) = response.interact_pointer_pos() {
+                self.handle_entity_selection(click_pos, viewport_rect, world, input_state);
+            }
+        }
 
         // Handle right-click drag for orbit
         if response.dragged_by(egui::PointerButton::Secondary) {
@@ -180,6 +264,123 @@ impl ViewportPanel {
                 self.camera_distance = self.camera_distance.clamp(1.0, 1000.0);
             }
         }
+
+        // Update gizmo hover if enabled
+        if self.show_gizmos && self.is_hovered {
+            if let Some(mouse_pos) = response.interact_pointer_pos() {
+                self.update_gizmo_hover(mouse_pos, viewport_rect, world);
+            }
+        }
+    }
+
+    /// Handles entity selection via raycasting.
+    fn handle_entity_selection(
+        &mut self,
+        click_pos: egui::Pos2,
+        viewport_rect: egui::Rect,
+        world: &mut World,
+        input_state: &InputState,
+    ) {
+        // Convert click position to viewport-relative coordinates
+        let viewport_pos = Vec2::new(
+            click_pos.x - viewport_rect.min.x,
+            click_pos.y - viewport_rect.min.y,
+        );
+        let viewport_size = Vec2::new(viewport_rect.width(), viewport_rect.height());
+
+        // Get camera matrices
+        let camera_matrices = self.compute_camera_matrices();
+        let camera_transform = self.compute_camera_transform();
+
+        // Determine selection mode based on modifiers
+        let ctrl = input_state.is_key_pressed(KeyCode::ControlLeft)
+            || input_state.is_key_pressed(KeyCode::ControlRight);
+        let shift = input_state.is_key_pressed(KeyCode::ShiftLeft)
+            || input_state.is_key_pressed(KeyCode::ShiftRight);
+        let alt = input_state.is_key_pressed(KeyCode::AltLeft)
+            || input_state.is_key_pressed(KeyCode::AltRight);
+
+        let mode = if ctrl {
+            SelectionMode::Remove
+        } else if shift {
+            SelectionMode::Add
+        } else if alt {
+            SelectionMode::Toggle
+        } else {
+            SelectionMode::Replace
+        };
+
+        // Perform simple raycast picking directly
+        // Convert screen space to NDC
+        let ndc_x = (2.0 * viewport_pos.x) / viewport_size.x - 1.0;
+        let ndc_y = 1.0 - (2.0 * viewport_pos.y) / viewport_size.y;
+
+        // Compute ray in world space
+        let ray_origin = camera_transform.translation;
+        let inv_vp = camera_matrices.view_projection.inverse();
+        let near_point = inv_vp * praxis_math::Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
+        let near_point = near_point.truncate() / near_point.w;
+        let far_point = inv_vp * praxis_math::Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
+        let far_point = far_point.truncate() / far_point.w;
+        let ray_dir = (far_point - near_point).normalize();
+
+        // Find closest entity intersecting the ray
+        let mut closest_entity = None;
+        let mut closest_distance = f32::MAX;
+
+        let mut query = world.query_filtered::<(Entity, &GlobalTransform), With<Selectable>>();
+        for (entity, global_transform) in query.iter(world.inner()) {
+            let entity_pos = global_transform.translation();
+            let to_entity = entity_pos - ray_origin;
+            let projection = to_entity.dot(ray_dir);
+
+            if projection < 0.0 {
+                continue; // Behind camera
+            }
+
+            let closest_point = ray_origin + ray_dir * projection;
+            let distance_to_ray = (entity_pos - closest_point).length();
+            let pick_radius = 1.0; // Simple sphere-based picking
+
+            if distance_to_ray <= pick_radius && projection < closest_distance {
+                closest_distance = projection;
+                closest_entity = Some(entity);
+            }
+        }
+
+        // Apply selection
+        let selection_system = world.get_resource_mut::<SelectionSystem>().unwrap();
+        if let Some(entity) = closest_entity {
+            selection_system.select_entity(entity, mode);
+        } else if mode == SelectionMode::Replace {
+            // Clear selection if clicking on empty space in replace mode
+            selection_system.clear();
+        }
+    }
+
+    /// Updates gizmo hover state based on mouse position.
+    fn update_gizmo_hover(
+        &self,
+        mouse_pos: egui::Pos2,
+        viewport_rect: egui::Rect,
+        world: &mut World,
+    ) {
+        let gizmo_system = world.get_resource_mut::<GizmoSystem>();
+        if gizmo_system.is_none() {
+            return;
+        }
+        let gizmo_system = gizmo_system.unwrap();
+
+        // Convert mouse position to viewport-relative coordinates
+        let viewport_pos = Vec2::new(
+            (mouse_pos.x - viewport_rect.min.x) / viewport_rect.width(),
+            (mouse_pos.y - viewport_rect.min.y) / viewport_rect.height(),
+        );
+
+        let camera_matrices = self.compute_camera_matrices();
+        let camera_position = self.compute_camera_position();
+
+        gizmo_system.update_hover(viewport_pos, &camera_matrices, camera_position);
     }
 
     /// Handles keyboard input for camera controls.
@@ -210,27 +411,10 @@ impl ViewportPanel {
         }
     }
 
-    /// Renders the viewport contents to the offscreen render target.
-    pub fn render_viewport(&mut self, _render_context: &mut RenderContext) -> Result<()> {
-        let _render_target = match &self.render_target {
-            Some(rt) => rt,
-            None => return Ok(()), // Not initialized yet
-        };
-
-        // Update camera transform
-        let camera_transform = self.compute_camera_transform();
-
-        // Compute view and projection matrices
-        let view = camera_transform.compute_inverse_matrix();
-        let aspect_ratio = self.viewport_size[0] as f32 / self.viewport_size[1] as f32;
-        let proj = Mat4::perspective_rh(
-            self.fov.to_radians(),
-            aspect_ratio,
-            self.near_clip,
-            self.far_clip,
-        );
-
-        // Build draw commands
+    /// Builds draw commands for the viewport scene.
+    ///
+    /// This queries the world for entities with meshes and builds DrawCommands.
+    pub fn build_draw_commands(&self, world: &mut World) -> Vec<DrawCommand> {
         let mut draw_commands = Vec::new();
 
         // Add grid if enabled
@@ -245,26 +429,68 @@ impl ViewportPanel {
             }
         }
 
-        // TODO: Query and add scene entities with mesh components
-        // This would involve:
-        // 1. Querying the ECS world for entities with MeshHandle and Transform
-        // 2. Converting them to DrawCommand instances
-        // 3. Adding them to draw_commands
+        // Query scene entities with meshes
+        let mut mesh_query = world.query::<(&Transform, &MeshHandle)>();
+        for (transform, mesh_handle) in mesh_query.iter(world.inner()) {
+            draw_commands.push(DrawCommand {
+                mesh_id: mesh_handle.id.clone(),
+                model: transform.compute_matrix(),
+                texture_name: None,
+                material_properties: None,
+            });
+        }
 
-        // Render the viewport
-        let _render_commands = RenderCommands {
-            view,
-            proj,
-            draw_commands: &draw_commands,
-            lighting: None, // TODO: Add lighting from scene
-        };
+        // Add gizmo rendering if enabled
+        if self.show_gizmos {
+            if let Some(gizmo_system) = world.get_resource::<GizmoSystem>() {
+                if let Some(gizmo) = gizmo_system.active_gizmo() {
+                    let gizmo_draw_commands = self.build_gizmo_draw_commands(gizmo, gizmo_system);
+                    draw_commands.extend(gizmo_draw_commands);
+                }
+            }
+        }
 
-        // Note: This would ideally render to our offscreen target, but the current
-        // RenderContext::render() renders to the swapchain. We'll need to extend
-        // RenderContext to support rendering to arbitrary framebuffers.
-        // For now, this is a placeholder for the architecture.
+        draw_commands
+    }
 
-        Ok(())
+    /// Builds draw commands for gizmo rendering.
+    fn build_gizmo_draw_commands(
+        &self,
+        gizmo: &Gizmo,
+        gizmo_system: &GizmoSystem,
+    ) -> Vec<DrawCommand> {
+        let draw_commands = Vec::new();
+
+        // Get gizmo lines
+        let lines = gizmo.get_lines(gizmo_system.mode(), gizmo_system.space());
+
+        // For each line, we would create a mesh and draw command
+        // This is a placeholder - actual implementation would need
+        // line rendering support in the graphics system
+        for (_start, _end, _color) in lines {
+            // TODO: Create line mesh and add draw command
+            // This requires line rendering primitive support
+        }
+
+        draw_commands
+    }
+
+    /// Registers the viewport texture with egui.
+    /// 
+    /// This method provides the integration point for registering the offscreen
+    /// texture with the egui renderer. The actual implementation depends on the
+    /// egui integration library being used (e.g., egui_winit_vulkano).
+    /// 
+    /// # Arguments
+    /// 
+    /// * `texture_id` - The egui texture ID to assign to this viewport's texture
+    pub fn set_texture_id(&mut self, texture_id: egui::TextureId) {
+        self.texture_id = Some(texture_id);
+    }
+    
+    /// Gets the texture ID if registered.
+    pub fn texture_id(&self) -> Option<egui::TextureId> {
+        self.texture_id
     }
 
     /// Resizes the viewport render target.
@@ -279,6 +505,31 @@ impl ViewportPanel {
 
         self.viewport_size = new_size;
 
+        // Recreate offscreen image
+        let offscreen_image = Image::new(
+            render_context.memory_allocator().clone(),
+            vulkano::image::ImageCreateInfo {
+                image_type: vulkano::image::ImageType::Dim2d,
+                format: Format::R8G8B8A8_UNORM,
+                extent: [new_size[0], new_size[1], 1],
+                usage: ImageUsage::COLOR_ATTACHMENT
+                    | ImageUsage::SAMPLED
+                    | ImageUsage::TRANSFER_SRC,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                ..Default::default()
+            },
+        )
+        .map_err(|e| praxis_utils::eyre::eyre!("Failed to create offscreen image: {}", e))?;
+
+        let offscreen_image_view = ImageView::new_default(offscreen_image.clone())
+            .map_err(|e| praxis_utils::eyre::eyre!("Failed to create image view: {}", e))?;
+
+        self.offscreen_image = Some(offscreen_image);
+        self.offscreen_image_view = Some(offscreen_image_view);
+
         // Recreate render target with new size
         if self.render_target.is_some() {
             let render_pass = render_context.create_post_process_render_pass()?;
@@ -286,7 +537,7 @@ impl ViewportPanel {
                 render_context.memory_allocator().clone(),
                 render_pass,
                 self.viewport_size,
-                vulkano::format::Format::R8G8B8A8_UNORM,
+                Format::R8G8B8A8_UNORM,
             )?;
             self.render_target = Some(render_target);
         }
@@ -299,6 +550,11 @@ impl ViewportPanel {
         self.render_target.as_ref()
     }
 
+    /// Gets the offscreen image view.
+    pub fn offscreen_image_view(&self) -> Option<&Arc<ImageView>> {
+        self.offscreen_image_view.as_ref()
+    }
+
     /// Sets whether to show the grid.
     pub fn set_show_grid(&mut self, show: bool) {
         self.show_grid = show;
@@ -307,6 +563,16 @@ impl ViewportPanel {
     /// Gets whether the grid is shown.
     pub fn show_grid(&self) -> bool {
         self.show_grid
+    }
+
+    /// Sets whether to show gizmos.
+    pub fn set_show_gizmos(&mut self, show: bool) {
+        self.show_gizmos = show;
+    }
+
+    /// Gets whether gizmos are shown.
+    pub fn show_gizmos(&self) -> bool {
+        self.show_gizmos
     }
 
     /// Gets the camera distance.
@@ -336,6 +602,16 @@ impl ViewportPanel {
         self.camera_yaw = 45.0_f32.to_radians();
         self.camera_target = Vec3::ZERO;
     }
+
+    /// Returns whether the viewport is currently hovered.
+    pub fn is_hovered(&self) -> bool {
+        self.is_hovered
+    }
+
+    /// Gets the viewport rect in screen space.
+    pub fn viewport_rect(&self) -> Option<egui::Rect> {
+        self.viewport_rect
+    }
 }
 
 impl Default for ViewportPanel {
@@ -354,6 +630,8 @@ impl EditorPanel for ViewportPanel {
             ui.heading("Viewport");
             ui.separator();
             ui.checkbox(&mut self.show_grid, "Show Grid");
+            ui.separator();
+            ui.checkbox(&mut self.show_gizmos, "Show Gizmos");
 
             if ui.button("Reset Camera").clicked() {
                 self.reset_camera();
@@ -366,35 +644,36 @@ impl EditorPanel for ViewportPanel {
         let available_size = ui.available_size();
         let viewport_size = egui::vec2(available_size.x, available_size.y - 30.0); // Leave space for controls
 
-        // Draw viewport area
+        // Allocate space for viewport
         let (rect, _response) = ui.allocate_exact_size(viewport_size, egui::Sense::hover());
 
-        // Handle camera input
-        self.handle_camera_input(ui, rect);
-
-        // Render viewport background
-        ui.painter()
-            .rect_filled(rect, 0.0, egui::Color32::from_rgb(30, 30, 35));
-
-        // TODO: Display the actual rendered texture from render_target
-        // This would involve:
-        // 1. Converting the Vulkan image to an egui texture
-        // 2. Registering it with egui
-        // 3. Drawing it with ui.image()
-
-        // Draw a placeholder message
-        let text = if self.render_target.is_some() {
-            "Viewport (3D Scene)"
+        // Display the rendered texture if available
+        if let Some(texture_id) = self.texture_id {
+            ui.painter().image(
+                texture_id,
+                rect,
+                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                egui::Color32::WHITE,
+            );
         } else {
-            "Viewport (Not Initialized)"
-        };
-        ui.painter().text(
-            rect.center(),
-            egui::Align2::CENTER_CENTER,
-            text,
-            egui::FontId::proportional(16.0),
-            egui::Color32::GRAY,
-        );
+            // Render viewport background
+            ui.painter()
+                .rect_filled(rect, 0.0, egui::Color32::from_rgb(30, 30, 35));
+
+            // Draw a placeholder message
+            let text = if self.render_target.is_some() {
+                "Viewport (3D Scene)"
+            } else {
+                "Viewport (Not Initialized)"
+            };
+            ui.painter().text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                text,
+                egui::FontId::proportional(16.0),
+                egui::Color32::GRAY,
+            );
+        }
 
         // Camera info overlay
         ui.painter().rect_filled(
@@ -427,6 +706,8 @@ impl EditorPanel for ViewportPanel {
         ui.horizontal(|ui| {
             ui.label("Controls:");
             ui.separator();
+            ui.label("🖱 Left-Click: Select");
+            ui.separator();
             ui.label("🖱 Right-Click+Drag: Orbit");
             ui.separator();
             ui.label("🖱 Middle-Click+Drag: Pan");
@@ -448,6 +729,7 @@ mod tests {
         assert_eq!(panel.title(), "Viewport");
         assert_eq!(panel.camera_distance(), 10.0);
         assert!(panel.show_grid());
+        assert!(panel.show_gizmos());
     }
 
     #[test]
@@ -506,6 +788,18 @@ mod tests {
     }
 
     #[test]
+    fn test_gizmo_visibility() {
+        let mut panel = ViewportPanel::new();
+        assert!(panel.show_gizmos());
+
+        panel.set_show_gizmos(false);
+        assert!(!panel.show_gizmos());
+
+        panel.set_show_gizmos(true);
+        assert!(panel.show_gizmos());
+    }
+
+    #[test]
     fn test_compute_camera_position() {
         let panel = ViewportPanel::new();
         let position = panel.compute_camera_position();
@@ -540,5 +834,11 @@ mod tests {
         let entity = Entity::from_raw(42);
         panel.set_camera_entity(entity);
         assert_eq!(panel.camera_entity(), Some(entity));
+    }
+
+    #[test]
+    fn test_hover_state() {
+        let panel = ViewportPanel::new();
+        assert!(!panel.is_hovered());
     }
 }
