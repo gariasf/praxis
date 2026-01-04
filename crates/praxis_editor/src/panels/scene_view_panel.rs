@@ -10,6 +10,8 @@ pub struct SceneViewPanel {
     title: String,
     /// Last dropped asset (if any)
     last_dropped_asset: Option<AssetEntry>,
+    /// Viewport border color (set externally based on play mode)
+    border_color: Color32,
 }
 
 impl SceneViewPanel {
@@ -19,6 +21,7 @@ impl SceneViewPanel {
         Self {
             title: "Scene".to_string(),
             last_dropped_asset: None,
+            border_color: Color32::from_rgb(76, 76, 89), // Default dark gray
         }
     }
 
@@ -30,6 +33,16 @@ impl SceneViewPanel {
     /// Checks if the scene view can accept a drop
     pub fn can_accept_drop(&self, asset: &AssetEntry) -> bool {
         !asset.is_directory
+    }
+
+    /// Sets the viewport border color (used for play mode indicators)
+    pub fn set_border_color(&mut self, color: Color32) {
+        self.border_color = color;
+    }
+
+    /// Gets the current viewport border color
+    pub const fn border_color(&self) -> Color32 {
+        self.border_color
     }
 }
 
@@ -50,13 +63,14 @@ impl EditorPanel for SceneViewPanel {
 
         let response = ui.allocate_response(ui.available_size(), egui::Sense::click_and_drag());
 
-        if response.hovered() {
-            ui.painter().rect_stroke(
-                response.rect,
-                0.0,
-                egui::Stroke::new(2.0, Color32::from_rgb(100, 150, 200)),
-            );
+        // Draw border with color based on play mode
+        ui.painter().rect_stroke(
+            response.rect,
+            0.0,
+            egui::Stroke::new(3.0, self.border_color),
+        );
 
+        if response.hovered() {
             if ui.input(|i| i.pointer.any_released()) {
                 info!("Potential drop target activated in scene view");
             }

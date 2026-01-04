@@ -109,6 +109,37 @@
 //!
 //! See the [`toolbar`] module for detailed API documentation.
 //!
+//! # Play Mode System
+//!
+//! The editor provides a comprehensive play mode system for testing game functionality:
+//! - **Edit/Play State Machine**: Clean transitions between Edit and Play modes
+//! - **Scene Snapshot/Restore**: Automatic capture and restoration of scene state
+//! - **Runtime ECS Isolation**: Changes made in play mode don't affect the original scene
+//! - **Input Routing Toggle**: Configurable input handling for play mode
+//! - **Visual Indicators**: Viewport border color changes and button states reflect current mode
+//!
+//! **Usage:**
+//! ```rust,no_run
+//! use praxis_editor::EditorState;
+//! use praxis_ecs::World;
+//!
+//! let mut world = World::new();
+//! let mut editor = EditorState::new();
+//!
+//! // Enter play mode (takes snapshot)
+//! editor.enter_play_mode(&mut world).unwrap();
+//!
+//! // Exit play mode (restores snapshot)
+//! editor.exit_play_mode(&mut world).unwrap();
+//! ```
+//!
+//! **Visual Feedback:**
+//! - Edit Mode: Dark gray viewport border
+//! - Play Mode: Green viewport border, green Play button
+//! - Paused Mode: Orange viewport border
+//!
+//! See `PLAY_MODE_SYSTEM.md` for comprehensive documentation.
+//!
 //! # Command System and Undo/Redo
 //!
 //! The editor provides a comprehensive undo/redo system with full integration:
@@ -141,6 +172,7 @@ pub mod entity_operations;
 mod gizmo;
 mod menu_bar;
 mod panels;
+mod play_mode;
 pub mod selection;
 mod toolbar;
 mod undo;
@@ -160,6 +192,7 @@ pub use panels::{
     AssetEntry, AssetImportConfig, AssetType, AssetsPanel, ConsolePanel, EditorPanel,
     HierarchyPanel, InspectorPanel, SceneViewPanel, ViewportPanel,
 };
+pub use play_mode::{PlayModeState, PlayModeSystem, SceneSnapshot, SnapshotMetadata};
 pub use selection::{
     handle_selection_input_system, update_selection_system, Selectable, Selected, SelectionEvent,
     SelectionMode, SelectionSystem,

@@ -7,11 +7,11 @@ use crate::menu_bar::{
 use crate::panels::{
     AssetsPanel, ConsolePanel, EditorPanel, HierarchyPanel, InspectorPanel, SceneViewPanel,
 };
+use crate::play_mode::PlayModeSystem;
 use crate::toolbar::{handle_toolbar_action, render_toolbar, ToolbarState};
 use crate::UndoRedoSystem;
-use bevy_ecs::world::World;
 use egui_dock::{DockArea, DockState, NodeIndex, Style, TabViewer};
-use praxis_utils::info;
+use praxis_utils::{error, info};
 
 /// Tab identifier for different editor panels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +50,8 @@ pub struct EditorState {
     menu_bar_state: MenuBarState,
     /// Toolbar state.
     toolbar_state: ToolbarState,
+    /// Play mode system for managing edit/play transitions.
+    play_mode_system: PlayModeSystem,
 }
 
 impl EditorState {
@@ -81,6 +83,7 @@ impl EditorState {
             visible: true,
             menu_bar_state: MenuBarState::new(),
             toolbar_state: ToolbarState::new(),
+            play_mode_system: PlayModeSystem::new(),
         }
     }
 
@@ -173,6 +176,60 @@ impl EditorState {
         &mut self.toolbar_state
     }
 
+    /// Gets a reference to the play mode system.
+    #[must_use]
+    pub const fn play_mode_system(&self) -> &PlayModeSystem {
+        &self.play_mode_system
+    }
+
+    /// Gets a mutable reference to the play mode system.
+    #[must_use]
+    pub fn play_mode_system_mut(&mut self) -> &mut PlayModeSystem {
+        &mut self.play_mode_system
+    }
+
+    /// Enters play mode by taking a snapshot and transitioning state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if snapshot or state transition fails.
+    pub fn enter_play_mode(&mut self, world: &mut praxis_ecs::World) -> praxis_utils::Result<()> {
+        self.play_mode_system.enter_play_mode(world)?;
+        self.mode = self.play_mode_system.editor_mode();
+        self.toolbar_state.editor_mode = self.mode;
+        self.menu_bar_state.mode = self.mode;
+        Ok(())
+    }
+
+    /// Exits play mode and restores the snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if restoration fails.
+    pub fn exit_play_mode(&mut self, world: &mut praxis_ecs::World) -> praxis_utils::Result<()> {
+        self.play_mode_system.exit_play_mode(world)?;
+        self.mode = self.play_mode_system.editor_mode();
+        self.toolbar_state.editor_mode = self.mode;
+        self.menu_bar_state.mode = self.mode;
+        Ok(())
+    }
+
+    /// Pauses play mode.
+    pub fn pause_play_mode(&mut self) {
+        self.play_mode_system.pause_play_mode();
+        self.mode = self.play_mode_system.editor_mode();
+        self.toolbar_state.editor_mode = self.mode;
+        self.menu_bar_state.mode = self.mode;
+    }
+
+    /// Resumes play mode from paused state.
+    pub fn resume_play_mode(&mut self) {
+        self.play_mode_system.resume_play_mode();
+        self.mode = self.play_mode_system.editor_mode();
+        self.toolbar_state.editor_mode = self.mode;
+        self.menu_bar_state.mode = self.mode;
+    }
+
     /// Renders the editor UI.
     ///
     /// # Arguments
@@ -183,7 +240,7 @@ impl EditorState {
         &mut self,
         ctx: &egui::Context,
         mut undo_system: Option<&mut UndoRedoSystem>,
-        mut world: Option<&mut World>,
+        mut world: Option<&mut praxis_ecs::World>,
     ) {
         if !self.visible {
             return;
@@ -205,7 +262,7 @@ impl EditorState {
                 action,
                 &mut self.menu_bar_state,
                 undo_system.as_deref_mut(),
-                world.as_deref_mut(),
+                world.as_deref_mut().map(|w| w.inner_mut()),
             );
         }
 
@@ -220,11 +277,46 @@ impl EditorState {
 
         // Handle all toolbar actions
         for action in toolbar_actions {
-            handle_toolbar_action(action, &mut self.toolbar_state);
+            use crate::ToolbarAction;
+            match action {
+                ToolbarAction::Play => {
+                    // Enter play mode if we have a world
+                    if let Some(ref mut w) = world {
+                        if let Err(e) = self.enter_play_mode(w) {
+                            error!("Failed to enter play mode: {}", e);
+                        }
+                    } else {
+                        info!("Cannot enter play mode without world");
+                    }
+                }
+                ToolbarAction::Pause => {
+                    self.pause_play_mode();
+                }
+                ToolbarAction::Stop => {
+                    // Exit play mode if we have a world
+                    if let Some(ref mut w) = world {
+                        if let Err(e) = self.exit_play_mode(w) {
+                            error!("Failed to exit play mode: {}", e);
+                        }
+                    } else {
+                        info!("Cannot exit play mode without world");
+                    }
+                }
+                _ => {
+                    // Handle other actions normally
+                    handle_toolbar_action(action, &mut self.toolbar_state);
+                }
+            }
         }
 
-        // Sync mode back to EditorState from toolbar
-        self.mode = self.toolbar_state.editor_mode;
+        // Sync mode back to EditorState from toolbar (for non-play actions)
+        if !self.play_mode_system.is_playing() {
+            self.mode = self.toolbar_state.editor_mode;
+        }
+
+        // Update scene panel border color based on play mode
+        self.scene_panel
+            .set_border_color(self.play_mode_system.viewport_border_color_egui());
 
         self.render_dock_area(ctx);
     }

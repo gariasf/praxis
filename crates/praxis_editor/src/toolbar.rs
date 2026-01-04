@@ -234,24 +234,48 @@ pub fn render_toolbar(ctx: &egui::Context, state: &mut ToolbarState) -> Vec<Tool
                 let is_playing = state.editor_mode == EditorMode::Play;
                 let is_edit = state.editor_mode == EditorMode::Edit;
 
+                // Play button - green when ready to play
+                let play_button = if is_edit {
+                    egui::Button::new("▶ Play")
+                        .fill(egui::Color32::from_rgb(40, 120, 50))
+                } else {
+                    egui::Button::new("▶ Play")
+                };
+                
                 if ui
-                    .add_enabled(is_edit, egui::Button::new("▶ Play"))
+                    .add_enabled(is_edit, play_button)
                     .on_hover_text("Start play mode (F5)")
                     .clicked()
                 {
                     actions.push(ToolbarAction::Play);
                 }
 
+                // Pause button - yellow/orange when playing
+                let pause_button = if is_playing {
+                    egui::Button::new("⏸ Pause")
+                        .fill(egui::Color32::from_rgb(200, 150, 40))
+                } else {
+                    egui::Button::new("⏸ Pause")
+                };
+
                 if ui
-                    .add_enabled(is_playing, egui::Button::new("⏸ Pause"))
+                    .add_enabled(is_playing, pause_button)
                     .on_hover_text("Pause play mode (F6)")
                     .clicked()
                 {
                     actions.push(ToolbarAction::Pause);
                 }
 
+                // Stop button - red when playing
+                let stop_button = if is_playing {
+                    egui::Button::new("⏹ Stop")
+                        .fill(egui::Color32::from_rgb(180, 40, 40))
+                } else {
+                    egui::Button::new("⏹ Stop")
+                };
+
                 if ui
-                    .add_enabled(is_playing, egui::Button::new("⏹ Stop"))
+                    .add_enabled(is_playing, stop_button)
                     .on_hover_text("Stop play mode and return to edit (F7)")
                     .clicked()
                 {
@@ -365,18 +389,24 @@ pub fn handle_toolbar_action(action: ToolbarAction, state: &mut ToolbarState) ->
             false
         }
         ToolbarAction::Play => {
+            // Note: Actual play mode transition is handled by EditorState
+            // This just updates the toolbar state
             state.editor_mode = EditorMode::Play;
-            info!("Play mode activated");
+            info!("Play action triggered");
             false
         }
         ToolbarAction::Pause => {
+            // Note: Actual pause is handled by EditorState
+            // Pause returns to Edit mode for UI purposes
             state.editor_mode = EditorMode::Edit;
-            info!("Play mode paused (returned to edit mode)");
+            info!("Pause action triggered");
             false
         }
         ToolbarAction::Stop => {
+            // Note: Actual stop is handled by EditorState
+            // Stop returns to Edit mode
             state.editor_mode = EditorMode::Edit;
-            info!("Play mode stopped (returned to edit mode)");
+            info!("Stop action triggered");
             false
         }
         ToolbarAction::SetCameraPreset(preset) => {
