@@ -1316,3 +1316,29 @@ The Praxis skeletal animation system provides:
 - **Flexibility**: Multiple blending modes, bone masking, dynamic parameter control
 
 The system is designed to handle everything from simple character animations to complex multi-layered, parameter-driven animation states typical in modern games.
+
+---
+
+## Advanced Animation Features
+
+For more sophisticated animation techniques, see [Advanced Animation Features](animation_advanced_features.md):
+
+- **Inverse Kinematics (IK)**: Procedural limb positioning for hands reaching objects, feet on terrain, head tracking, etc.
+  - Two-bone IK for arms/legs
+  - Chain IK for spines/tails
+  - Look-at IK for aiming/tracking
+
+- **Animation Retargeting**: Apply animations from one skeleton to another
+  - Automatic bone mapping by name
+  - Manual mapping for custom rigs
+  - Cross-species animation support
+
+- **Enhanced Additive Blending**: Layer animations with reference poses
+  - Weapon recoil, breathing, damage reactions
+  - Local and world-space modes
+  - Weight-based blending
+
+- **Root Motion Extraction**: Extract character movement from animations
+  - Precise character controller movement
+  - Translation and rotation extraction
+  - Frame-rate independent motion

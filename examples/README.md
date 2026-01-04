@@ -30,6 +30,7 @@ cargo run --example comprehensive_scene_demo
 |---------|-------------|
 | `skeletal_animation_demo` | Bone hierarchies and keyframe animation |
 | `animation_blending_demo` | Cross-fading, blend trees, layers |
+| `animation_advanced_demo` | IK, retargeting, additive blending, root motion |
 | `gltf_animation_loader_demo` | Loading animations from GLTF files |
 
 ### Physics
