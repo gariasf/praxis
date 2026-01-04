@@ -2349,3 +2349,40 @@ pub enum EnvironmentProbeUpdateMode {
     /// Update continuously every frame (expensive).
     Continuous,
 }
+
+/// Component marking that an entity is currently visible to the camera after frustum culling.
+///
+/// This component is added/updated by the frustum culling system to entities that
+/// pass visibility tests. Renderers can query for this component to only process visible entities.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, Query, Visible, MeshHandle};
+///
+/// fn render_system(visible_entities: Query<(&MeshHandle, &Visible)>) {
+///     for (mesh, _) in visible_entities.iter() {
+///         // Entity is visible, render it
+///     }
+/// }
+/// ```
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct Visible;
+
+/// Component marking that an entity has been culled and is not visible to the camera.
+///
+/// This component is added by the frustum culling system to entities that
+/// fail visibility tests. It can be used for debugging, analytics, or to avoid
+/// updating non-visible entities.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, Query, Culled};
+///
+/// fn update_system(culled_entities: Query<&Culled>) {
+///     // Skip expensive updates for culled entities
+/// }
+/// ```
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct Culled;

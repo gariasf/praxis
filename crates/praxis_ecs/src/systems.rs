@@ -2144,3 +2144,188 @@ mod tests {
         assert_eq!(world.inner().get::<Camera>(cam3).unwrap().priority, 10);
     }
 }
+
+/// Resource storing the current camera frustum for culling.
+///
+/// This resource is updated each frame by `update_frustum_from_camera` and used by
+/// `frustum_culling_system` to determine entity visibility.
+#[derive(crate::Resource, Debug, Clone)]
+pub struct CameraFrustum {
+    /// View-projection matrix used to extract frustum planes.
+    pub view_projection: praxis_math::Mat4,
+    /// Camera position in world space.
+    pub position: Vec3,
+}
+
+impl Default for CameraFrustum {
+    fn default() -> Self {
+        Self {
+            view_projection: praxis_math::Mat4::IDENTITY,
+            position: Vec3::ZERO,
+        }
+    }
+}
+
+/// System that updates the `CameraFrustum` resource from the active camera.
+///
+/// This system should run before frustum culling. It extracts the view-projection
+/// matrix and position from the primary active camera and stores them in the resource.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, Schedule};
+/// use praxis_ecs::systems::{update_frustum_from_camera, frustum_culling_system};
+///
+/// let mut world = World::new();
+/// world.insert_resource(praxis_ecs::systems::CameraFrustum::default());
+///
+/// let mut schedule = Schedule::default();
+/// schedule.add_systems((
+///     update_frustum_from_camera,
+///     frustum_culling_system,
+/// ).chain());
+/// ```
+pub fn update_frustum_from_camera(
+    mut camera_frustum: crate::ResMut<CameraFrustum>,
+    cameras: Query<(&Camera, &CameraMatrices, Option<&GlobalTransform>, Option<&Transform>)>,
+) {
+    if let Some((_, matrices, maybe_global, maybe_local)) = cameras
+        .iter()
+        .filter(|(cam, _, _, _)| cam.is_active)
+        .max_by_key(|(cam, _, _, _)| cam.priority)
+    {
+        camera_frustum.view_projection = matrices.view_projection;
+        
+        camera_frustum.position = if let Some(global) = maybe_global {
+            global.translation()
+        } else if let Some(local) = maybe_local {
+            local.translation
+        } else {
+            Vec3::ZERO
+        };
+    }
+}
+
+/// System that performs frustum culling on entities with bounding boxes.
+///
+/// This system tests each entity with a `BoundingBox` and `GlobalTransform` against
+/// the camera frustum. Entities that are visible are marked with the `Visible` component,
+/// while culled entities are marked with `Culled`.
+///
+/// # Requirements
+///
+/// - The `CameraFrustum` resource must exist and be updated before this system runs
+/// - Entities must have `BoundingBox` and `GlobalTransform` components
+/// - The `Transform` propagation systems must run before this to ensure `GlobalTransform` is up-to-date
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, Schedule, BoundingBox, Transform, GlobalTransform};
+/// use praxis_ecs::systems::{update_frustum_from_camera, frustum_culling_system};
+/// use praxis_math::Vec3;
+///
+/// let mut world = World::new();
+/// world.insert_resource(praxis_ecs::systems::CameraFrustum::default());
+///
+/// // Spawn entity with bounding box
+/// world.spawn((
+///     Transform::from_xyz(0.0, 0.0, 0.0),
+///     GlobalTransform::default(),
+///     BoundingBox::from_min_max(Vec3::NEG_ONE, Vec3::ONE),
+/// ));
+///
+/// let mut schedule = Schedule::default();
+/// schedule.add_systems((
+///     update_frustum_from_camera,
+///     frustum_culling_system,
+/// ).chain());
+/// ```
+pub fn frustum_culling_system(
+    mut commands: Commands,
+    camera_frustum: crate::Res<CameraFrustum>,
+    entities: Query<(crate::Entity, &crate::BoundingBox, &GlobalTransform)>,
+) {
+    // Extract frustum planes from view-projection matrix
+    let m = camera_frustum.view_projection.to_cols_array_2d();
+    
+    // 6 frustum planes: near, far, left, right, top, bottom
+    let planes = [
+        // Near plane: row3 + row2
+        [m[0][3] + m[0][2], m[1][3] + m[1][2], m[2][3] + m[2][2], m[3][3] + m[3][2]],
+        // Far plane: row3 - row2
+        [m[0][3] - m[0][2], m[1][3] - m[1][2], m[2][3] - m[2][2], m[3][3] - m[3][2]],
+        // Left plane: row3 + row0
+        [m[0][3] + m[0][0], m[1][3] + m[1][0], m[2][3] + m[2][0], m[3][3] + m[3][0]],
+        // Right plane: row3 - row0
+        [m[0][3] - m[0][0], m[1][3] - m[1][0], m[2][3] - m[2][0], m[3][3] - m[3][0]],
+        // Top plane: row3 - row1
+        [m[0][3] - m[0][1], m[1][3] - m[1][1], m[2][3] - m[2][1], m[3][3] - m[3][1]],
+        // Bottom plane: row3 + row1
+        [m[0][3] + m[0][1], m[1][3] + m[1][1], m[2][3] + m[2][1], m[3][3] + m[3][1]],
+    ];
+    
+    // Normalize planes
+    let mut normalized_planes = [[0.0f32; 4]; 6];
+    for (i, plane) in planes.iter().enumerate() {
+        let length = (plane[0] * plane[0] + plane[1] * plane[1] + plane[2] * plane[2]).sqrt();
+        normalized_planes[i] = [
+            plane[0] / length,
+            plane[1] / length,
+            plane[2] / length,
+            plane[3] / length,
+        ];
+    }
+    
+    for (entity, bbox, global_transform) in entities.iter() {
+        // Transform AABB corners to world space
+        let corners = [
+            Vec3::new(bbox.min.x, bbox.min.y, bbox.min.z),
+            Vec3::new(bbox.max.x, bbox.min.y, bbox.min.z),
+            Vec3::new(bbox.min.x, bbox.max.y, bbox.min.z),
+            Vec3::new(bbox.max.x, bbox.max.y, bbox.min.z),
+            Vec3::new(bbox.min.x, bbox.min.y, bbox.max.z),
+            Vec3::new(bbox.max.x, bbox.min.y, bbox.max.z),
+            Vec3::new(bbox.min.x, bbox.max.y, bbox.max.z),
+            Vec3::new(bbox.max.x, bbox.max.y, bbox.max.z),
+        ];
+        
+        let mut world_min = global_transform.matrix.transform_point3(corners[0]);
+        let mut world_max = world_min;
+        
+        for corner in corners.iter().skip(1) {
+            let transformed = global_transform.matrix.transform_point3(*corner);
+            world_min = world_min.min(transformed);
+            world_max = world_max.max(transformed);
+        }
+        
+        // Test AABB against frustum planes
+        let mut is_visible = true;
+        for plane in &normalized_planes {
+            let normal = Vec3::new(plane[0], plane[1], plane[2]);
+            let distance = plane[3];
+            
+            // Positive vertex test - find the corner furthest along the normal
+            let positive_vertex = Vec3::new(
+                if normal.x >= 0.0 { world_max.x } else { world_min.x },
+                if normal.y >= 0.0 { world_max.y } else { world_min.y },
+                if normal.z >= 0.0 { world_max.z } else { world_min.z },
+            );
+            
+            // If positive vertex is outside this plane, the box is completely outside the frustum
+            if normal.dot(positive_vertex) + distance < 0.0 {
+                is_visible = false;
+                break;
+            }
+        }
+        
+        if is_visible {
+            commands.entity(entity).insert(crate::Visible);
+            commands.entity(entity).remove::<crate::Culled>();
+        } else {
+            commands.entity(entity).insert(crate::Culled);
+            commands.entity(entity).remove::<crate::Visible>();
+        }
+    }
+}
