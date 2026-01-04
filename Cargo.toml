@@ -165,6 +165,46 @@ path = "examples/networking_demo.rs"
 name = "terrain_demo"
 path = "examples/terrain_demo.rs"
 
+[[example]]
+name = "animation_demo"
+path = "examples/animation_demo.rs"
+
+[[example]]
+name = "skeletal_animation_demo"
+path = "examples/skeletal_animation_demo.rs"
+
+[[example]]
+name = "animation_blending_demo"
+path = "examples/animation_blending_demo.rs"
+
+[[example]]
+name = "gltf_animation_loader_demo"
+path = "examples/gltf_animation_loader_demo.rs"
+
+[[example]]
+name = "material_demo"
+path = "examples/material_demo.rs"
+
+[[example]]
+name = "console_demo"
+path = "examples/console_demo.rs"
+
+[[example]]
+name = "scene_serialization_demo"
+path = "examples/scene_serialization_demo.rs"
+
+[[example]]
+name = "menu_bar_demo"
+path = "examples/menu_bar_demo.rs"
+
+[[example]]
+name = "editor_camera_demo"
+path = "examples/editor_camera_demo.rs"
+
+[[example]]
+name = "selection_demo"
+path = "examples/selection_demo.rs"
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 vulkano = "0.35.1"
