@@ -144,6 +144,11 @@ pub struct PhysicsWorld {
     /// Similar to `entity_to_body` but for colliders. An entity can have both
     /// a rigid body and one or more colliders.
     pub(crate) entity_to_collider: HashMap<Entity, ColliderHandle>,
+    
+    /// Mapping from ECS entities to Rapier impulse joint handles.
+    ///
+    /// Tracks joints created for entities with joint components.
+    pub(crate) entity_to_joint: HashMap<Entity, ImpulseJointHandle>,
 }
 
 impl PhysicsWorld {
@@ -168,6 +173,7 @@ impl PhysicsWorld {
             entity_to_body: HashMap::new(),
             body_to_entity: HashMap::new(),
             entity_to_collider: HashMap::new(),
+            entity_to_joint: HashMap::new(),
         }
     }
 

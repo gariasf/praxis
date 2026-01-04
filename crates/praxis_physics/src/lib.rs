@@ -188,6 +188,14 @@
 mod components;
 mod resources;
 mod systems;
+mod joints;
+mod vehicle;
+mod cloth;
+mod ragdoll;
+mod joint_systems;
+mod vehicle_systems;
+mod cloth_systems;
+mod ragdoll_systems;
 
 #[cfg(test)]
 mod tests;
@@ -195,6 +203,14 @@ mod tests;
 pub use components::*;
 pub use resources::*;
 pub use systems::*;
+pub use joints::*;
+pub use vehicle::*;
+pub use cloth::*;
+pub use ragdoll::*;
+pub use joint_systems::*;
+pub use vehicle_systems::*;
+pub use cloth_systems::*;
+pub use ragdoll_systems::*;
 
 use praxis_utils::{info, Result};
 
