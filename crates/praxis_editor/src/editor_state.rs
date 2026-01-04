@@ -55,6 +55,8 @@ pub struct EditorState {
     toolbar_state: ToolbarState,
     /// Play mode system for managing edit/play transitions.
     play_mode_system: PlayModeSystem,
+    /// Current scene file path (if loaded from or saved to a file).
+    current_scene_path: Option<std::path::PathBuf>,
 }
 
 impl EditorState {
@@ -87,6 +89,7 @@ impl EditorState {
             menu_bar_state: MenuBarState::new(),
             toolbar_state: ToolbarState::new(),
             play_mode_system: PlayModeSystem::new(),
+            current_scene_path: None,
         }
     }
 
@@ -119,6 +122,7 @@ impl EditorState {
             menu_bar_state: MenuBarState::new(),
             toolbar_state: ToolbarState::new(),
             play_mode_system: PlayModeSystem::new(),
+            current_scene_path: None,
         }
     }
 
@@ -229,6 +233,17 @@ impl EditorState {
         &mut self.play_mode_system
     }
 
+    /// Gets the current scene file path.
+    #[must_use]
+    pub fn current_scene_path(&self) -> Option<&std::path::Path> {
+        self.current_scene_path.as_deref()
+    }
+
+    /// Sets the current scene file path.
+    pub fn set_current_scene_path(&mut self, path: Option<std::path::PathBuf>) {
+        self.current_scene_path = path;
+    }
+
     /// Enters play mode by taking a snapshot and transitioning state.
     ///
     /// # Errors
@@ -294,20 +309,68 @@ impl EditorState {
         // Update menu bar state with current mode
         self.menu_bar_state.mode = self.mode;
 
+        // Handle unsaved changes dialog if shown
+        if self.menu_bar_state.show_unsaved_dialog {
+            use crate::scene_operations::show_unsaved_changes_dialog;
+            if let Some(choice) = show_unsaved_changes_dialog(ctx) {
+                self.menu_bar_state.show_unsaved_dialog = false;
+                if choice {
+                    let current_path = self.current_scene_path.clone();
+                    let mut scene_path_setter = |path: Option<std::path::PathBuf>| {
+                        self.current_scene_path = path;
+                    };
+                    handle_menu_action(
+                        crate::MenuBarAction::SaveScene,
+                        &mut self.menu_bar_state,
+                        undo_system.as_deref_mut(),
+                        world.as_mut().map(|w| w.inner_mut()),
+                        current_path.as_deref(),
+                        &mut scene_path_setter,
+                    );
+                }
+                if let Some(pending) = self.menu_bar_state.pending_action.take() {
+                    if !choice || self.menu_bar_state.pending_action.is_none() {
+                        let current_path = self.current_scene_path.clone();
+                        let mut scene_path_setter = |path: Option<std::path::PathBuf>| {
+                            self.current_scene_path = path;
+                        };
+                        handle_menu_action(
+                            pending,
+                            &mut self.menu_bar_state,
+                            undo_system.as_deref_mut(),
+                            world.as_mut().map(|w| w.inner_mut()),
+                            current_path.as_deref(),
+                            &mut scene_path_setter,
+                        );
+                    }
+                }
+            }
+        }
+
         // Render menu bar and collect actions
-        let mut menu_actions =
-            render_menu_bar(ctx, &mut self.menu_bar_state, undo_system.as_deref());
+        let mut menu_actions = render_menu_bar(
+            ctx,
+            &mut self.menu_bar_state,
+            undo_system.as_deref(),
+            self.current_scene_path.as_deref(),
+        );
 
         // Check for keyboard shortcuts
         menu_actions.extend(check_keyboard_shortcuts(ctx));
 
         // Handle all menu actions
         for action in menu_actions {
+            let current_path = self.current_scene_path.clone();
+            let mut scene_path_setter = |path: Option<std::path::PathBuf>| {
+                self.current_scene_path = path;
+            };
             handle_menu_action(
                 action,
                 &mut self.menu_bar_state,
                 undo_system.as_deref_mut(),
                 world.as_mut().map(|w| w.inner_mut()),
+                current_path.as_deref(),
+                &mut scene_path_setter,
             );
         }
 

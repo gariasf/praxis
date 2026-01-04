@@ -241,6 +241,7 @@ mod gizmo;
 mod menu_bar;
 mod panels;
 mod play_mode;
+mod scene_operations;
 pub mod selection;
 mod toolbar;
 mod undo;
@@ -262,6 +263,7 @@ pub use panels::{
     HierarchyPanel, InspectorPanel, LogBuffer, LogLevel, LogMessage, SceneViewPanel, ViewportPanel,
 };
 pub use play_mode::{PlayModeState, PlayModeSystem, SceneSnapshot, SnapshotMetadata};
+pub use scene_operations::{capture_scene_from_world, load_scene_into_world, show_unsaved_changes_dialog};
 pub use selection::{
     handle_selection_input_system, update_selection_system, Selectable, Selected, SelectionEvent,
     SelectionMode, SelectionSystem,

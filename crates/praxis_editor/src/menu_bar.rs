@@ -10,6 +10,7 @@
 use crate::{EditorMode, UndoRedoSystem};
 use bevy_ecs::world::World;
 use egui::Key;
+use std::path::Path;
 
 /// Actions that can be triggered by menu items.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,6 +63,10 @@ pub struct MenuBarState {
     pub console_visible: bool,
     pub assets_visible: bool,
     pub scene_visible: bool,
+    /// Whether to show the unsaved changes dialog.
+    pub show_unsaved_dialog: bool,
+    /// Pending action after unsaved changes dialog.
+    pub pending_action: Option<MenuBarAction>,
 }
 
 impl MenuBarState {
@@ -75,6 +80,8 @@ impl MenuBarState {
             console_visible: true,
             assets_visible: true,
             scene_visible: true,
+            show_unsaved_dialog: false,
+            pending_action: None,
         }
     }
 }
@@ -90,6 +97,7 @@ pub fn render_menu_bar(
     ctx: &egui::Context,
     state: &mut MenuBarState,
     undo_system: Option<&UndoRedoSystem>,
+    current_scene_path: Option<&Path>,
 ) -> Vec<MenuBarAction> {
     let mut actions = Vec::new();
 
@@ -116,6 +124,7 @@ pub fn render_menu_bar(
                 ui.separator();
 
                 let is_dirty = undo_system.is_some_and(|s| s.is_dirty());
+                let has_path = current_scene_path.is_some();
                 let save_text = if is_dirty {
                     "Save Scene *"
                 } else {
@@ -123,7 +132,10 @@ pub fn render_menu_bar(
                 };
 
                 if ui
-                    .add(egui::Button::new(save_text).shortcut_text("Ctrl+S"))
+                    .add_enabled(
+                        has_path || is_dirty,
+                        egui::Button::new(save_text).shortcut_text("Ctrl+S"),
+                    )
                     .clicked()
                 {
                     actions.push(MenuBarAction::SaveScene);
@@ -323,15 +335,27 @@ pub fn render_menu_bar(
 
             // Right-aligned status indicators
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if undo_system.is_some_and(|s| s.is_dirty()) {
+                ui.label(format!("Mode: {:?}", state.mode));
+
+                if let Some(path) = current_scene_path {
+                    ui.separator();
+                    let file_name = path
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("Untitled");
+                    let display_text = if undo_system.is_some_and(|s| s.is_dirty()) {
+                        format!("{file_name} *")
+                    } else {
+                        file_name.to_string()
+                    };
+                    ui.label(display_text);
+                } else if undo_system.is_some_and(|s| s.is_dirty()) {
+                    ui.separator();
                     ui.label(
-                        egui::RichText::new("● Unsaved")
+                        egui::RichText::new("Untitled *")
                             .color(egui::Color32::from_rgb(255, 200, 0)),
                     );
-                    ui.separator();
                 }
-
-                ui.label(format!("Mode: {:?}", state.mode));
             });
         });
     });
@@ -395,32 +419,121 @@ pub fn check_keyboard_shortcuts(ctx: &egui::Context) -> Vec<MenuBarAction> {
     actions
 }
 
+/// Helper function to save the current scene to a file.
+fn save_scene_to_file(
+    world: Option<&mut World>,
+    undo_system: Option<&mut UndoRedoSystem>,
+    path: &Path,
+) {
+    use crate::scene_operations::capture_scene_from_world;
+    use praxis_scene::SceneLoader;
+    use praxis_utils::{error, info};
+
+    if let Some(w) = world {
+        let scene_name = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Untitled");
+        let scene = capture_scene_from_world(w, scene_name);
+
+        let loader = SceneLoader::new();
+        match loader.save_to_file(&scene, path) {
+            Ok(()) => {
+                info!("Saved scene to: {}", path.display());
+                if let Some(system) = undo_system {
+                    system.mark_saved();
+                }
+            }
+            Err(e) => {
+                error!("Failed to save scene: {}", e);
+            }
+        }
+    }
+}
+
 /// Handles menu bar actions by executing them.
 pub fn handle_menu_action(
     action: MenuBarAction,
     state: &mut MenuBarState,
-    undo_system: Option<&mut UndoRedoSystem>,
+    mut undo_system: Option<&mut UndoRedoSystem>,
     world: Option<&mut World>,
+    current_scene_path: Option<&std::path::Path>,
+    set_scene_path: &mut dyn FnMut(Option<std::path::PathBuf>),
 ) {
     use praxis_utils::{error, info};
+    use crate::scene_operations::load_scene_into_world;
 
     match action {
         // File actions
         MenuBarAction::NewScene => {
-            info!("New scene requested");
+            if let Some(ref system) = undo_system {
+                if system.is_dirty() {
+                    state.show_unsaved_dialog = true;
+                    state.pending_action = Some(MenuBarAction::NewScene);
+                    return;
+                }
+            }
+
+            if let Some(w) = world {
+                w.clear_entities();
+                info!("Created new scene");
+                set_scene_path(None);
+                if let Some(ref mut system) = undo_system {
+                    system.clear();
+                }
+            }
         }
         MenuBarAction::OpenScene => {
-            info!("Open scene requested");
+            if let Some(ref system) = undo_system {
+                if system.is_dirty() {
+                    state.show_unsaved_dialog = true;
+                    state.pending_action = Some(MenuBarAction::OpenScene);
+                    return;
+                }
+            }
+
+            if let Some(path) = rfd::FileDialog::new()
+                .add_filter("Scene Files", &["ron"])
+                .pick_file()
+            {
+                if let Some(w) = world {
+                    match load_scene_into_world(w, &path) {
+                        Ok(()) => {
+                            info!("Loaded scene from: {}", path.display());
+                            set_scene_path(Some(path));
+                            if let Some(ref mut system) = undo_system {
+                                system.clear();
+                                system.mark_saved();
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to load scene: {}", e);
+                        }
+                    }
+                }
+            }
         }
         MenuBarAction::SaveScene => {
-            info!("Save scene requested");
-            if let Some(system) = undo_system {
-                system.mark_saved();
-                info!("Scene marked as saved");
+            if let Some(path) = current_scene_path {
+                save_scene_to_file(world, undo_system, path);
+            } else if let Some(path) = rfd::FileDialog::new()
+                .add_filter("Scene Files", &["ron"])
+                .set_file_name("untitled.ron")
+                .save_file()
+            {
+                save_scene_to_file(world, undo_system, &path);
+                set_scene_path(Some(path));
             }
         }
         MenuBarAction::SaveSceneAs => {
-            info!("Save scene as requested");
+            if let Some(path) = rfd::FileDialog::new()
+                .add_filter("Scene Files", &["ron"])
+                .set_file_name("untitled.ron")
+                .save_file()
+            {
+                save_scene_to_file(world, undo_system, &path);
+                set_scene_path(Some(path));
+            }
         }
         MenuBarAction::Exit => {
             info!("Exit requested");
