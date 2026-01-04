@@ -17,8 +17,9 @@ Task-oriented tutorials for implementing features:
 - [Post-Processing](guides/post-processing.md) - Bloom, color grading, effects
 - [Particles](guides/particles.md) - Practical particle effect examples
 - [Spatial Optimization](guides/spatial-optimization.md) - Frustum culling, LOD, and occlusion culling
-- [Animation](animation_system.md) - Skeletal animation and blending
-- [Audio](audio_system.md) - Spatial audio with Kira
+- [Animation](guides/animation.md) - Skeletal animation and blending
+- [Audio](guides/audio.md) - Spatial audio with Kira
+- [Input](guides/input.md) - Keyboard, mouse, and gamepad handling
 - [Profiling](profiling.md) - Performance analysis and optimization
 
 For comprehensive particle system documentation, see [crates/praxis_graphics/PARTICLES.md](../crates/praxis_graphics/PARTICLES.md).
@@ -53,20 +54,61 @@ Editor tools and workflows:
 
 Run examples to see features in action:
 ```bash
+# Core Demos
 cargo run --example comprehensive_scene_demo  # Complete scene with assets
-cargo run --example particles_demo            # Particle system effects
-cargo run --example audio_demo                # Spatial audio
-cargo run --example editor_demo               # Full editor interface
-cargo run --example profiling_demo            # Performance profiling
-cargo run --example skeletal_animation_demo   # Skeletal animation
-cargo run --example environment_probe_demo    # IBL reflections
-```
+cargo run --example scene_demo                # Basic scene rendering
+cargo run --example multi_mesh_demo           # Multiple mesh rendering
 
-The following examples are planned for future implementation:
-- `deferred_demo` - Deferred rendering with G-buffer
-- `hdr_demo` - HDR with tone mapping
-- `shadow_demo` - Cascaded shadow maps
-- `physics_demo` - Rapier3D physics integration
+# Animation
+cargo run --example skeletal_animation_demo   # Skeletal animation
+cargo run --example animation_demo            # Basic animation
+cargo run --example animation_blending_demo   # Animation blending
+cargo run --example gltf_animation_loader_demo # GLTF animation loading
+
+# Audio
+cargo run --example audio_demo                # Spatial audio
+cargo run --example audio_simple              # Simple audio playback
+
+# Editor
+cargo run --example editor_demo               # Full editor interface
+cargo run --example editor_camera_demo        # Editor camera controls
+cargo run --example selection_demo            # Entity selection
+cargo run --example undo_redo_system_demo     # Undo/redo system
+
+# Effects & Optimization
+cargo run --example particles_demo            # Particle system effects
+cargo run --example spatial_optimization_demo # Frustum culling and LOD
+cargo run --example spatial_partitioning_demo # Spatial partitioning
+cargo run --example lod_demo                  # Level of detail
+cargo run --example environment_probe_demo    # IBL reflections
+cargo run --example advanced_lighting_demo    # Advanced lighting
+
+# Systems
+cargo run --example gui_demo                  # GUI system
+cargo run --example console_demo              # Debug console
+cargo run --example material_demo             # Material system
+cargo run --example procedural_texture_demo   # Procedural textures
+cargo run --example terrain_demo              # Terrain rendering
+cargo run --example scripting_demo            # Lua scripting
+cargo run --example scripting_advanced_demo   # Advanced scripting
+cargo run --example networking_demo           # Networking features
+
+# Performance & Tools
+cargo run --example profiling_demo            # Performance profiling
+cargo run --example profiling_advanced_demo   # Advanced profiling
+
+# Input & Camera
+cargo run --example input_integration         # Input handling
+cargo run --example fps_camera_controller     # FPS camera
+
+# Low-level
+cargo run --example ecs_integration           # ECS integration
+cargo run --example transform_propagation_demo # Transform hierarchy
+cargo run --example command_system_demo       # Command system
+cargo run --example command_serialization_demo # Command serialization
+cargo run --example scene_serialization_demo  # Scene serialization
+cargo run --example menu_bar_demo             # Menu bar UI
+```
 
 ## Development
 
