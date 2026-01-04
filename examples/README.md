@@ -18,11 +18,16 @@ cargo run --example comprehensive_scene_demo
 
 | Example | Description |
 |---------|-------------|
-| `deferred_demo` | Deferred rendering with G-buffer visualization |
-| `hdr_demo` | HDR rendering with tone mapping operators |
-| `shadow_demo` | Cascaded shadow maps with PCF filtering |
 | `multi_mesh_demo` | Multiple meshes with transforms |
-| `skybox_demo` | Cubemap skybox rendering |
+| `material_demo` | Material system demonstration |
+| `environment_probe_demo` | Environment map reflections |
+| `particles_demo` | GPU-accelerated particle system |
+
+**Planned for future implementation:**
+- `deferred_demo` - Deferred rendering with G-buffer visualization
+- `hdr_demo` - HDR rendering with tone mapping operators
+- `shadow_demo` - Cascaded shadow maps with PCF filtering
+- `skybox_demo` - Cubemap skybox rendering
 
 ### Animation
 
@@ -35,9 +40,8 @@ cargo run --example comprehensive_scene_demo
 
 ### Physics
 
-| Example | Description |
-|---------|-------------|
-| `physics_demo` | Rapier3D integration, collisions, forces |
+**Planned for future implementation:**
+- `physics_demo` - Rapier3D integration, collisions, forces
 
 ### Audio
 
@@ -68,10 +72,13 @@ cargo run --example comprehensive_scene_demo
 
 | Example | Description |
 |---------|-------------|
-| `obj_loader_demo` | Loading OBJ mesh files |
 | `comprehensive_scene_demo` | Complete asset pipeline |
 | `scene_demo` | Scene loading and saving |
 | `environment_probe_demo` | Environment map reflections |
+| `gltf_animation_loader_demo` | Loading animations from GLTF files |
+
+**Planned for future implementation:**
+- `obj_loader_demo` - Loading OBJ mesh files
 
 ### GUI
 
@@ -94,17 +101,6 @@ cargo run --example comprehensive_scene_demo
 ```
 
 **Controls:** WASD (move), Mouse (look), Shift (sprint), ESC (exit)
-
-### Deferred Rendering Demo
-
-Shows the deferred rendering pipeline:
-- G-buffer visualization (albedo, normals, depth)
-- Multiple light sources
-- Efficient many-lights rendering
-
-```bash
-cargo run --example deferred_demo
-```
 
 ### Editor Demo
 

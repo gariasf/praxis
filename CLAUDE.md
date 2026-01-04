@@ -22,9 +22,9 @@ cargo fmt --all                # Format code
 cargo clippy --all -- -D warnings  # Lint (must pass)
 
 # Run Examples
-cargo run --example deferred_demo
-cargo run --example hdr_demo
-cargo run --example physics_demo
+cargo run --example comprehensive_scene_demo
+cargo run --example skeletal_animation_demo
+cargo run --example audio_demo
 cargo run --example editor_demo
 
 # Documentation

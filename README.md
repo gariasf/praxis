@@ -52,10 +52,10 @@ cd praxis
 cargo build
 
 # Run examples
-cargo run --example physics_demo
 cargo run --example comprehensive_scene_demo
 cargo run --example fps_camera_controller
 cargo run --example audio_demo
+cargo run --example skeletal_animation_demo
 ```
 
 ## Requirements
@@ -89,7 +89,6 @@ praxis/
 
 | Example | Description |
 |---------|-------------|
-| `physics_demo` | Rigid body physics with collisions |
 | `comprehensive_scene_demo` | Scene loading with lighting and textures |
 | `fps_camera_controller` | First-person camera movement |
 | `audio_demo` | Spatial audio with doppler effect |
@@ -97,9 +96,18 @@ praxis/
 | `animation_blending_demo` | Blend trees and cross-fades |
 | `multi_mesh_demo` | Multiple meshes with PBR materials |
 | `input_integration` | Keyboard and mouse input handling |
-| `deferred_demo` | Deferred rendering with many lights |
-| `hdr_demo` | HDR with tone mapping and exposure |
 | `environment_probe_demo` | IBL reflections with environment probes |
+| `editor_demo` | Full editor interface with undo/redo |
+| `particles_demo` | GPU-accelerated particle system |
+
+### Planned Examples
+The following examples are planned for future implementation:
+- `deferred_demo` - Deferred rendering with many lights
+- `hdr_demo` - HDR with tone mapping and exposure
+- `shadow_demo` - Cascaded shadow maps demonstration
+- `skybox_demo` - Cubemap skybox rendering
+- `physics_demo` - Rigid body physics with collisions
+- `obj_loader_demo` - OBJ mesh file loading
 
 Run any example with:
 ```bash

@@ -50,15 +50,20 @@ Editor tools and workflows:
 
 Run examples to see features in action:
 ```bash
-cargo run --example deferred_demo      # Deferred rendering
-cargo run --example hdr_demo           # HDR with tone mapping
-cargo run --example shadow_demo        # Cascaded shadow maps
-cargo run --example particles_demo     # Particle system effects
-cargo run --example physics_demo       # Rapier3D physics
-cargo run --example audio_demo         # Spatial audio
-cargo run --example editor_demo        # Full editor interface
-cargo run --example profiling_demo     # Performance profiling
+cargo run --example comprehensive_scene_demo  # Complete scene with assets
+cargo run --example particles_demo            # Particle system effects
+cargo run --example audio_demo                # Spatial audio
+cargo run --example editor_demo               # Full editor interface
+cargo run --example profiling_demo            # Performance profiling
+cargo run --example skeletal_animation_demo   # Skeletal animation
+cargo run --example environment_probe_demo    # IBL reflections
 ```
+
+The following examples are planned for future implementation:
+- `deferred_demo` - Deferred rendering with G-buffer
+- `hdr_demo` - HDR with tone mapping
+- `shadow_demo` - Cascaded shadow maps
+- `physics_demo` - Rapier3D physics integration
 
 ## Development
 
