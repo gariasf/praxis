@@ -101,7 +101,9 @@ impl InspectorPanel {
             let mut transform = original_transform;
 
             // Cache the original transform if not already cached
-            self.cached_transforms.entry(entity).or_insert(original_transform);
+            self.cached_transforms
+                .entry(entity)
+                .or_insert(original_transform);
 
             let mut changed = false;
 

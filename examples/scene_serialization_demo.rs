@@ -8,8 +8,8 @@
 //! - Runtime scene creation (without editor data)
 
 use praxis_scene::{
-    EditorCamera, EditorData, EditorPreferences, EntityDefinition, GizmoMode,
-    SceneDefinition, SceneLoader, TransformDef, ViewportSettings,
+    EditorCamera, EditorData, EditorPreferences, EntityDefinition, GizmoMode, SceneDefinition,
+    SceneLoader, TransformDef, ViewportSettings,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
