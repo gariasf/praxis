@@ -1,6 +1,6 @@
 //! Comprehensive integration tests for animation system functionality.
 
-use praxis_math::{Mat4, Quat, Vec3};
+use praxis_math::{Quat, Vec3};
 use praxis_scene::*;
 use std::f32::consts::PI;
 

@@ -70,7 +70,7 @@ fn bench_physics_step(c: &mut Criterion) {
                 }
 
                 b.iter(|| {
-                    world.inner_mut().run_schedule(&mut schedule);
+                    schedule.run(world.inner_mut());
                     black_box(&world);
 
                     let mut physics_time = world.inner_mut().resource_mut::<PhysicsTime>();
@@ -108,7 +108,7 @@ fn bench_physics_step_with_collision_events(c: &mut Criterion) {
                 }
 
                 b.iter(|| {
-                    world.inner_mut().run_schedule(&mut schedule);
+                    schedule.run(world.inner_mut());
                     black_box(&world);
 
                     let mut physics_time = world.inner_mut().resource_mut::<PhysicsTime>();
@@ -130,7 +130,7 @@ fn bench_physics_raycast(c: &mut Criterion) {
         physics_step_system,
         sync_physics_transforms_system,
     ));
-    world.inner_mut().run_schedule(&mut schedule);
+    schedule.run(world.inner_mut());
 
     c.bench_function("physics_raycast", |b| {
         b.iter(|| {
@@ -152,7 +152,7 @@ fn bench_physics_point_inside(c: &mut Criterion) {
         physics_step_system,
         sync_physics_transforms_system,
     ));
-    world.inner_mut().run_schedule(&mut schedule);
+    schedule.run(world.inner_mut());
 
     c.bench_function("physics_point_inside", |b| {
         b.iter(|| {
@@ -177,7 +177,7 @@ fn bench_transform_sync_to_physics(c: &mut Criterion) {
                 schedule.add_systems(sync_physics_transforms_system);
 
                 b.iter(|| {
-                    world.inner_mut().run_schedule(&mut schedule);
+                    schedule.run(world.inner_mut());
                     black_box(&world);
                 });
             },

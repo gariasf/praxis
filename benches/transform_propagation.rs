@@ -67,7 +67,7 @@ fn bench_transform_propagation_flat(c: &mut Criterion) {
                 ));
 
                 b.iter(|| {
-                    world.inner_mut().run_schedule(&mut schedule);
+                    schedule.run(world.inner_mut());
                     black_box(&world);
                 });
             },
@@ -107,7 +107,7 @@ fn bench_transform_propagation_hierarchical(c: &mut Criterion) {
                 ));
 
                 b.iter(|| {
-                    world.inner_mut().run_schedule(&mut schedule);
+                    schedule.run(world.inner_mut());
                     black_box(&world);
                 });
             },
@@ -165,7 +165,7 @@ fn bench_transform_propagation_with_rotation(c: &mut Criterion) {
                 ));
 
                 b.iter(|| {
-                    world.inner_mut().run_schedule(&mut schedule);
+                    schedule.run(world.inner_mut());
                     black_box(&world);
                 });
             },
@@ -208,7 +208,7 @@ fn bench_transform_propagation_deep_hierarchy(c: &mut Criterion) {
             ));
 
             b.iter(|| {
-                world.inner_mut().run_schedule(&mut schedule);
+                schedule.run(world.inner_mut());
                 black_box(&world);
             });
         });
@@ -241,7 +241,7 @@ fn bench_parent_child_sync(c: &mut Criterion) {
                 schedule.add_systems(praxis_ecs::systems::sync_parent_child_relationships);
 
                 b.iter(|| {
-                    world.inner_mut().run_schedule(&mut schedule);
+                    schedule.run(world.inner_mut());
                     black_box(&world);
                 });
             },
@@ -265,9 +265,9 @@ fn bench_transform_modification_propagation(c: &mut Criterion) {
     c.bench_function("transform_modification_propagation", |b| {
         b.iter(|| {
             let entities: Vec<_> = world
-                .inner()
+                .inner_mut()
                 .query::<praxis_ecs::Entity>()
-                .iter(&world.inner())
+                .iter(world.inner_mut())
                 .collect();
 
             if let Some(&entity) = entities.get(5) {
@@ -276,7 +276,7 @@ fn bench_transform_modification_propagation(c: &mut Criterion) {
                 }
             }
 
-            world.inner_mut().run_schedule(&mut schedule);
+            schedule.run(world.inner_mut());
             black_box(&world);
         });
     });

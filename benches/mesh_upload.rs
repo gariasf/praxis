@@ -89,6 +89,7 @@ fn create_mesh_data(vertex_count: usize) -> MeshData {
         colors: Some(colors),
         normals: Some(normals),
         uvs: Some(uvs),
+        tangents: None,
         indices,
     }
 }

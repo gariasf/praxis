@@ -32,7 +32,7 @@ fn bench_camera_matrix_updates(c: &mut Criterion) {
                 schedule.add_systems(praxis_ecs::systems::update_perspective_cameras);
 
                 b.iter(|| {
-                    world.inner_mut().run_schedule(&mut schedule);
+                    schedule.run(world.inner_mut());
                     black_box(&world);
                 });
             },
@@ -53,13 +53,16 @@ fn bench_camera_query_primary(c: &mut Criterion) {
                 let mut world = setup_world_with_cameras(camera_count);
                 let mut schedule = Schedule::default();
                 schedule.add_systems(praxis_ecs::systems::update_perspective_cameras);
-                world.inner_mut().run_schedule(&mut schedule);
+                schedule.run(world.inner_mut());
 
                 b.iter(|| {
-                    let query = world
+                    // Find the highest priority active camera
+                    let mut query = world
                         .inner_mut()
                         .query::<camera::ActivePerspectiveCameras>();
-                    let primary = camera::primary_perspective_camera(&query);
+                    let primary = query
+                        .iter(world.inner_mut())
+                        .max_by_key(|cam| cam.camera.priority);
                     black_box(primary);
                 });
             },
@@ -80,13 +83,15 @@ fn bench_camera_query_sorted(c: &mut Criterion) {
                 let mut world = setup_world_with_cameras(camera_count);
                 let mut schedule = Schedule::default();
                 schedule.add_systems(praxis_ecs::systems::update_perspective_cameras);
-                world.inner_mut().run_schedule(&mut schedule);
+                schedule.run(world.inner_mut());
 
                 b.iter(|| {
-                    let query = world
+                    // Collect and sort cameras by priority
+                    let mut query = world
                         .inner_mut()
                         .query::<camera::ActivePerspectiveCameras>();
-                    let sorted = camera::sorted_perspective_cameras(&query);
+                    let mut sorted: Vec<_> = query.iter(world.inner_mut()).collect();
+                    sorted.sort_by_key(|cam| std::cmp::Reverse(cam.camera.priority));
                     black_box(sorted);
                 });
             },
