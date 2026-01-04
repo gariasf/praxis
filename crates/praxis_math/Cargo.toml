@@ -5,5 +5,5 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-glam = "0.30.4"
+glam = { version = "0.30.4", features = ["serde"] }
 praxis_utils = { path = "../praxis_utils" }

@@ -610,6 +610,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "bindgen"
 version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1209,6 +1218,20 @@ name = "cursor-icon"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
+
+[[package]]
+name = "dashmap"
+version = "6.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
+dependencies = [
+ "cfg-if",
+ "crossbeam-utils",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core",
+]
 
 [[package]]
 name = "dasp_sample"
@@ -1865,6 +1888,9 @@ name = "glam"
 version = "0.30.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50a99dbe56b72736564cfa4b85bf9a33079f16ae8b74983ab06af3b1a3696b11"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "glob"
@@ -2533,6 +2559,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "mio"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69d83b0086dc8ecf3ce9ae2874b2d1290252e2a30720bea58a5c6639b0092873"
+dependencies = [
+ "libc",
+ "wasi 0.11.0+wasi-snapshot-preview1",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "mlua"
 version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2722,7 +2759,7 @@ dependencies = [
  "kqueue",
  "libc",
  "log",
- "mio",
+ "mio 0.8.11",
  "walkdir",
  "windows-sys 0.48.0",
 ]
@@ -3443,6 +3480,7 @@ dependencies = [
  "praxis_gui",
  "praxis_input",
  "praxis_math",
+ "praxis_networking",
  "praxis_physics",
  "praxis_procedural",
  "praxis_profiling",
@@ -3451,6 +3489,8 @@ dependencies = [
  "praxis_spatial",
  "praxis_utils",
  "praxis_window",
+ "tokio",
+ "tracing-subscriber",
  "vulkano",
  "winit",
 ]
@@ -3579,6 +3619,25 @@ version = "0.1.0"
 dependencies = [
  "glam 0.30.4",
  "praxis_utils",
+]
+
+[[package]]
+name = "praxis_networking"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bincode",
+ "color-eyre",
+ "crossbeam-channel",
+ "dashmap",
+ "parking_lot",
+ "praxis_ecs",
+ "praxis_math",
+ "praxis_profiling",
+ "praxis_utils",
+ "serde",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -4425,6 +4484,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "socket2"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17129e116933cf371d018bb80ae557e889637989d8638274fb25622827b03881"
+dependencies = [
+ "libc",
+ "windows-sys 0.60.2",
+]
+
+[[package]]
 name = "spade"
 version = "2.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4726,6 +4795,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04aca6092e5978e708ee784e8ab9b5cf3cdb598b28f99a2f257446e7081a7025"
 dependencies = [
  "ahash",
+]
+
+[[package]]
+name = "tokio"
+version = "1.49.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72a2903cd7736441aac9df9d7688bd0ce48edccaadf181c3b90be801e81d3d86"
+dependencies = [
+ "bytes",
+ "libc",
+ "mio 1.1.0",
+ "parking_lot",
+ "pin-project-lite",
+ "signal-hook-registry",
+ "socket2",
+ "tokio-macros",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "tokio-macros"
+version = "2.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af407857209536a95c8e56f8231ef2c2e2aff839b22e07a1ffcbc617e9db9fa5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

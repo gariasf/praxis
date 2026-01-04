@@ -33,7 +33,7 @@ cargo doc --workspace --no-deps --open
 
 ## Architecture
 
-14-crate workspace organized by subsystem:
+15-crate workspace organized by subsystem:
 
 | Crate | Purpose |
 |-------|---------|
@@ -51,6 +51,7 @@ cargo doc --workspace --no-deps --open
 | `praxis_procedural` | Procedural textures |
 | `praxis_profiling` | Performance profiling |
 | `praxis_scripting` | Lua scripting integration |
+| `praxis_networking` | Networking and multiplayer |
 | `praxis_editor` | Editor tools |
 | `praxis_utils` | Logging, errors, timing |
 
@@ -129,6 +130,24 @@ context.enable_hot_reload("scripts")?;
 ```
 
 **Details**: `crates/praxis_scripting/README.md`, `docs/guides/scripting.md`
+
+### Networking
+- **Client-Server**: TCP/UDP transport with connection management
+- **Entity Replication**: Automatic component synchronization
+- **Interpolation/Extrapolation**: Smooth remote entity movement
+- **Lag Compensation**: Server-side rewind for fair hit detection
+- **Network Profiler**: Bandwidth and latency monitoring
+```rust
+let config = NetworkConfig::default();
+let mut server = NetworkServer::new(config).await?;
+server.start().await?;
+
+let mut registry = ReplicationRegistry::new();
+registry.register_transform();
+registry.register_velocity();
+```
+
+**Details**: `crates/praxis_networking/README.md`
 
 ### Editor
 - Selection: `SelectionSystem`, `Selectable` component

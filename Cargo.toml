@@ -17,6 +17,7 @@ members = [
     "crates/praxis_gui",
     "crates/praxis_input",
     "crates/praxis_math",
+    "crates/praxis_networking",
     "crates/praxis_physics",
     "crates/praxis_procedural",
     "crates/praxis_profiling",
@@ -47,6 +48,7 @@ praxis_input = { path = "crates/praxis_input", version = "0.1.0" }
 praxis_math = { path = "crates/praxis_math", version = "0.1.0" }
 praxis_assets = { path = "crates/praxis_assets", version = "0.1.0" }
 praxis_scene = { path = "crates/praxis_scene", version = "0.1.0" }
+praxis_networking = { path = "crates/praxis_networking", version = "0.1.0" }
 praxis_physics = { path = "crates/praxis_physics", version = "0.1.0" }
 praxis_audio = { path = "crates/praxis_audio", version = "0.1.0" }
 praxis_gui = { path = "crates/praxis_gui", version = "0.1.0" }
@@ -153,10 +155,16 @@ path = "examples/scripting_demo.rs"
 name = "scripting_advanced_demo"
 path = "examples/scripting_advanced_demo.rs"
 
+[[example]]
+name = "networking_demo"
+path = "examples/networking_demo.rs"
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 vulkano = "0.35.1"
 bevy_ecs = "0.14"
+tokio = { version = "1.40", features = ["full"] }
+tracing-subscriber = "0.3"
 
 [[bench]]
 name = "mesh_upload"
