@@ -42,6 +42,7 @@ cargo run --example selection_demo
 cargo run --example command_system_demo
 cargo run --example command_serialization_demo
 cargo run --example editor_camera_demo
+cargo run --example editor_demo
 
 # Check code without building
 cargo check --all

@@ -45,6 +45,7 @@ praxis_assets = { path = "crates/praxis_assets", version = "0.1.0" }
 praxis_scene = { path = "crates/praxis_scene", version = "0.1.0" }
 praxis_physics = { path = "crates/praxis_physics", version = "0.1.0" }
 praxis_audio = { path = "crates/praxis_audio", version = "0.1.0" }
+praxis_gui = { path = "crates/praxis_gui", version = "0.1.0" }
 winit = { version = "0.30.11", features = ["rwh_05"] }
 pollster = "0.4"
 
@@ -103,6 +104,10 @@ path = "examples/command_serialization_demo.rs"
 [[example]]
 name = "undo_redo_system_demo"
 path = "examples/undo_redo_system_demo.rs"
+
+[[example]]
+name = "editor_demo"
+path = "examples/editor_demo.rs"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

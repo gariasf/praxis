@@ -3042,6 +3042,7 @@ dependencies = [
  "praxis_ecs",
  "praxis_editor",
  "praxis_graphics",
+ "praxis_gui",
  "praxis_input",
  "praxis_math",
  "praxis_physics",
