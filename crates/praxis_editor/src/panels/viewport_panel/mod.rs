@@ -19,6 +19,58 @@ use vulkano::image::{Image, ImageUsage};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
 use winit::keyboard::KeyCode;
 
+/// Camera preset view types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CameraPreset {
+    /// Perspective view from default angle
+    Perspective,
+    /// Top orthographic view (looking down Y axis)
+    Top,
+    /// Bottom orthographic view (looking up Y axis)
+    Bottom,
+    /// Front orthographic view (looking along -Z axis)
+    Front,
+    /// Back orthographic view (looking along +Z axis)
+    Back,
+    /// Right orthographic view (looking along -X axis)
+    Right,
+    /// Left orthographic view (looking along +X axis)
+    Left,
+}
+
+/// Camera settings for the viewport.
+#[derive(Debug, Clone)]
+pub struct CameraSettings {
+    /// Movement speed multiplier
+    pub move_speed: f32,
+    /// Orbit sensitivity (mouse drag)
+    pub orbit_sensitivity: f32,
+    /// Pan sensitivity (middle mouse drag)
+    pub pan_sensitivity: f32,
+    /// Zoom sensitivity (scroll wheel)
+    pub zoom_sensitivity: f32,
+    /// Smooth interpolation speed (0 = instant, higher = smoother)
+    pub smoothness: f32,
+    /// Whether to use orthographic projection
+    pub orthographic: bool,
+    /// Orthographic size (half-height of view)
+    pub ortho_size: f32,
+}
+
+impl Default for CameraSettings {
+    fn default() -> Self {
+        Self {
+            move_speed: 5.0,
+            orbit_sensitivity: 0.005,
+            pan_sensitivity: 0.001,
+            zoom_sensitivity: 0.001,
+            smoothness: 10.0,
+            orthographic: false,
+            ortho_size: 10.0,
+        }
+    }
+}
+
 /// Viewport panel providing 3D scene rendering with camera controls.
 ///
 /// Features:
@@ -29,6 +81,10 @@ use winit::keyboard::KeyCode;
 /// - Mouse/keyboard event handling within viewport bounds
 /// - Gizmo overlay rendering
 /// - Entity selection via raycasting
+/// - Smooth camera interpolation
+/// - Focus on selection (F key)
+/// - Camera presets (top/front/side orthographic views)
+/// - Configurable camera settings
 #[allow(dead_code)]
 pub struct ViewportPanel {
     title: String,
@@ -50,6 +106,14 @@ pub struct ViewportPanel {
     camera_yaw: f32,
     /// Camera target position (orbit center)
     camera_target: Vec3,
+    /// Desired camera distance (for smooth interpolation)
+    desired_distance: f32,
+    /// Desired camera pitch (for smooth interpolation)
+    desired_pitch: f32,
+    /// Desired camera yaw (for smooth interpolation)
+    desired_yaw: f32,
+    /// Desired camera target (for smooth interpolation)
+    desired_target: Vec3,
     /// Whether the mouse is currently dragging in the viewport
     is_dragging: bool,
     /// Last mouse position for delta calculations
@@ -72,6 +136,10 @@ pub struct ViewportPanel {
     is_hovered: bool,
     /// Viewport rect in screen space
     viewport_rect: Option<egui::Rect>,
+    /// Camera settings (speed, sensitivity, etc.)
+    camera_settings: CameraSettings,
+    /// Whether to show the camera settings window
+    show_settings: bool,
 }
 
 #[allow(dead_code)]
@@ -79,6 +147,11 @@ impl ViewportPanel {
     /// Creates a new viewport panel.
     #[must_use]
     pub fn new() -> Self {
+        let initial_distance = 10.0;
+        let initial_pitch = -30.0_f32.to_radians();
+        let initial_yaw = 45.0_f32.to_radians();
+        let initial_target = Vec3::ZERO;
+
         Self {
             title: "Viewport".to_string(),
             camera_entity: None,
@@ -86,10 +159,14 @@ impl ViewportPanel {
             offscreen_image: None,
             offscreen_image_view: None,
             texture_id: None,
-            camera_distance: 10.0,
-            camera_pitch: -30.0_f32.to_radians(),
-            camera_yaw: 45.0_f32.to_radians(),
-            camera_target: Vec3::ZERO,
+            camera_distance: initial_distance,
+            camera_pitch: initial_pitch,
+            camera_yaw: initial_yaw,
+            camera_target: initial_target,
+            desired_distance: initial_distance,
+            desired_pitch: initial_pitch,
+            desired_yaw: initial_yaw,
+            desired_target: initial_target,
             is_dragging: false,
             last_mouse_pos: None,
             fov: 60.0,
@@ -101,6 +178,8 @@ impl ViewportPanel {
             show_gizmos: true,
             is_hovered: false,
             viewport_rect: None,
+            camera_settings: CameraSettings::default(),
+            show_settings: false,
         }
     }
 
@@ -184,18 +263,149 @@ impl ViewportPanel {
         let camera_transform = self.compute_camera_transform();
         let view = camera_transform.compute_inverse_matrix();
         let aspect_ratio = self.viewport_size[0] as f32 / self.viewport_size[1] as f32;
-        let proj = Mat4::perspective_rh(
-            self.fov.to_radians(),
-            aspect_ratio,
-            self.near_clip,
-            self.far_clip,
-        );
+        
+        let proj = if self.camera_settings.orthographic {
+            let width = self.camera_settings.ortho_size * aspect_ratio;
+            let height = self.camera_settings.ortho_size;
+            Mat4::orthographic_rh(
+                -width,
+                width,
+                -height,
+                height,
+                self.near_clip,
+                self.far_clip,
+            )
+        } else {
+            Mat4::perspective_rh(
+                self.fov.to_radians(),
+                aspect_ratio,
+                self.near_clip,
+                self.far_clip,
+            )
+        };
 
         CameraMatrices {
             view,
             projection: proj,
             view_projection: proj * view,
         }
+    }
+
+    /// Updates camera interpolation.
+    pub fn update_camera(&mut self, delta_time: f32) {
+        let t = (self.camera_settings.smoothness * delta_time).min(1.0);
+
+        // Interpolate distance
+        self.camera_distance = self.camera_distance + (self.desired_distance - self.camera_distance) * t;
+
+        // Interpolate angles
+        self.camera_yaw = self.camera_yaw + (self.desired_yaw - self.camera_yaw) * t;
+        self.camera_pitch = self.camera_pitch + (self.desired_pitch - self.camera_pitch) * t;
+
+        // Interpolate target
+        self.camera_target = self.camera_target.lerp(self.desired_target, t);
+    }
+
+    /// Applies a camera preset view.
+    pub fn apply_camera_preset(&mut self, preset: CameraPreset) {
+        match preset {
+            CameraPreset::Perspective => {
+                self.camera_settings.orthographic = false;
+                self.desired_pitch = -30.0_f32.to_radians();
+                self.desired_yaw = 45.0_f32.to_radians();
+                self.desired_distance = 10.0;
+            }
+            CameraPreset::Top => {
+                self.camera_settings.orthographic = true;
+                self.desired_pitch = std::f32::consts::FRAC_PI_2 - 0.01;
+                self.desired_yaw = 0.0;
+                self.desired_distance = 15.0;
+            }
+            CameraPreset::Bottom => {
+                self.camera_settings.orthographic = true;
+                self.desired_pitch = -std::f32::consts::FRAC_PI_2 + 0.01;
+                self.desired_yaw = 0.0;
+                self.desired_distance = 15.0;
+            }
+            CameraPreset::Front => {
+                self.camera_settings.orthographic = true;
+                self.desired_pitch = 0.0;
+                self.desired_yaw = 0.0;
+                self.desired_distance = 15.0;
+            }
+            CameraPreset::Back => {
+                self.camera_settings.orthographic = true;
+                self.desired_pitch = 0.0;
+                self.desired_yaw = std::f32::consts::PI;
+                self.desired_distance = 15.0;
+            }
+            CameraPreset::Right => {
+                self.camera_settings.orthographic = true;
+                self.desired_pitch = 0.0;
+                self.desired_yaw = std::f32::consts::FRAC_PI_2;
+                self.desired_distance = 15.0;
+            }
+            CameraPreset::Left => {
+                self.camera_settings.orthographic = true;
+                self.desired_pitch = 0.0;
+                self.desired_yaw = -std::f32::consts::FRAC_PI_2;
+                self.desired_distance = 15.0;
+            }
+        }
+    }
+
+    /// Focuses the camera on the given position with optional distance.
+    pub fn focus_on(&mut self, position: Vec3, distance: Option<f32>) {
+        self.desired_target = position;
+        if let Some(dist) = distance {
+            self.desired_distance = dist.clamp(1.0, 1000.0);
+        }
+    }
+
+    /// Focuses the camera on selected entities.
+    pub fn focus_on_selection(&mut self, world: &mut World) {
+        // Collect selected entities first to avoid borrow checker issues
+        let selected_entities: Vec<Entity> = {
+            let selection_system = world.get_resource::<SelectionSystem>();
+            if selection_system.is_none() {
+                return;
+            }
+            let selection_system = selection_system.unwrap();
+
+            if selection_system.is_empty() {
+                return;
+            }
+
+            selection_system.selected_entities().collect()
+        };
+
+        // Compute bounding box of selected entities
+        let mut min = Vec3::splat(f32::MAX);
+        let mut max = Vec3::splat(f32::MIN);
+        let mut count = 0;
+
+        let mut query = world.query_filtered::<&GlobalTransform, With<Selectable>>();
+        for entity in selected_entities {
+            if let Ok(transform) = query.get(world.inner(), entity) {
+                let pos = transform.translation();
+                min = min.min(pos);
+                max = max.max(pos);
+                count += 1;
+            }
+        }
+
+        if count == 0 {
+            return;
+        }
+
+        // Calculate center and size
+        let center = (min + max) * 0.5;
+        let size = (max - min).length();
+
+        // Focus on center with distance based on size
+        let distance = if size > 0.1 { size * 2.0 } else { 5.0 };
+
+        self.focus_on(center, Some(distance));
     }
 
     /// Handles mouse input for camera controls and entity selection.
@@ -223,12 +433,12 @@ impl ViewportPanel {
             if let Some(current_pos) = response.interact_pointer_pos() {
                 if let Some(last_pos) = self.last_mouse_pos {
                     let delta = current_pos - last_pos;
-                    self.camera_yaw -= delta.x * 0.005;
-                    self.camera_pitch -= delta.y * 0.005;
+                    self.desired_yaw -= delta.x * self.camera_settings.orbit_sensitivity;
+                    self.desired_pitch -= delta.y * self.camera_settings.orbit_sensitivity;
 
                     // Clamp pitch to avoid gimbal lock
                     const MAX_PITCH: f32 = std::f32::consts::FRAC_PI_2 - 0.01;
-                    self.camera_pitch = self.camera_pitch.clamp(-MAX_PITCH, MAX_PITCH);
+                    self.desired_pitch = self.desired_pitch.clamp(-MAX_PITCH, MAX_PITCH);
                 }
                 self.last_mouse_pos = Some(current_pos);
                 self.is_dragging = true;
@@ -244,9 +454,9 @@ impl ViewportPanel {
                         Vec3::new(self.camera_yaw.cos(), 0.0, -self.camera_yaw.sin()).normalize();
                     let up = Vec3::Y;
 
-                    let pan_speed = self.camera_distance * 0.001;
-                    self.camera_target -= right * delta.x * pan_speed;
-                    self.camera_target += up * delta.y * pan_speed;
+                    let pan_speed = self.camera_distance * self.camera_settings.pan_sensitivity;
+                    self.desired_target -= right * delta.x * pan_speed;
+                    self.desired_target += up * delta.y * pan_speed;
                 }
                 self.last_mouse_pos = Some(current_pos);
                 self.is_dragging = true;
@@ -260,8 +470,8 @@ impl ViewportPanel {
         if response.hovered() {
             let scroll_delta = ui.input(|i| i.smooth_scroll_delta.y);
             if scroll_delta.abs() > 0.01 {
-                self.camera_distance *= (1.0 - scroll_delta * 0.001).max(0.1);
-                self.camera_distance = self.camera_distance.clamp(1.0, 1000.0);
+                self.desired_distance *= (1.0 - scroll_delta * self.camera_settings.zoom_sensitivity).max(0.1);
+                self.desired_distance = self.desired_distance.clamp(1.0, 1000.0);
             }
         }
 
@@ -384,30 +594,55 @@ impl ViewportPanel {
     }
 
     /// Handles keyboard input for camera controls.
-    pub fn handle_keyboard_input(&mut self, input_state: &InputState, delta_time: f32) {
-        let move_speed = 5.0 * delta_time;
+    pub fn handle_keyboard_input(&mut self, input_state: &InputState, delta_time: f32, world: &mut World) {
+        let move_speed = self.camera_settings.move_speed * delta_time;
 
         // WASD for camera target movement
         let forward = Vec3::new(self.camera_yaw.sin(), 0.0, self.camera_yaw.cos()).normalize();
         let right = Vec3::new(self.camera_yaw.cos(), 0.0, -self.camera_yaw.sin()).normalize();
 
         if input_state.is_key_pressed(KeyCode::KeyW) {
-            self.camera_target += forward * move_speed;
+            self.desired_target += forward * move_speed;
         }
         if input_state.is_key_pressed(KeyCode::KeyS) {
-            self.camera_target -= forward * move_speed;
+            self.desired_target -= forward * move_speed;
         }
         if input_state.is_key_pressed(KeyCode::KeyA) {
-            self.camera_target -= right * move_speed;
+            self.desired_target -= right * move_speed;
         }
         if input_state.is_key_pressed(KeyCode::KeyD) {
-            self.camera_target += right * move_speed;
+            self.desired_target += right * move_speed;
         }
         if input_state.is_key_pressed(KeyCode::KeyQ) {
-            self.camera_target.y -= move_speed;
+            self.desired_target.y -= move_speed;
         }
         if input_state.is_key_pressed(KeyCode::KeyE) {
-            self.camera_target.y += move_speed;
+            self.desired_target.y += move_speed;
+        }
+
+        // F key to focus on selection
+        if input_state.is_key_just_pressed(KeyCode::KeyF) {
+            self.focus_on_selection(world);
+        }
+
+        // Number keys for camera presets
+        if input_state.is_key_just_pressed(KeyCode::Numpad7) || 
+           (input_state.is_key_just_pressed(KeyCode::Digit7) && 
+            !input_state.is_key_pressed(KeyCode::ShiftLeft) && 
+            !input_state.is_key_pressed(KeyCode::ShiftRight)) {
+            self.apply_camera_preset(CameraPreset::Top);
+        }
+        if input_state.is_key_just_pressed(KeyCode::Numpad1) || 
+           (input_state.is_key_just_pressed(KeyCode::Digit1) && 
+            !input_state.is_key_pressed(KeyCode::ShiftLeft) && 
+            !input_state.is_key_pressed(KeyCode::ShiftRight)) {
+            self.apply_camera_preset(CameraPreset::Front);
+        }
+        if input_state.is_key_just_pressed(KeyCode::Numpad3) || 
+           (input_state.is_key_just_pressed(KeyCode::Digit3) && 
+            !input_state.is_key_pressed(KeyCode::ShiftLeft) && 
+            !input_state.is_key_pressed(KeyCode::ShiftRight)) {
+            self.apply_camera_preset(CameraPreset::Right);
         }
     }
 
@@ -582,7 +817,7 @@ impl ViewportPanel {
 
     /// Sets the camera distance.
     pub fn set_camera_distance(&mut self, distance: f32) {
-        self.camera_distance = distance.clamp(1.0, 1000.0);
+        self.desired_distance = distance.clamp(1.0, 1000.0);
     }
 
     /// Gets the camera target position.
@@ -592,15 +827,16 @@ impl ViewportPanel {
 
     /// Sets the camera target position.
     pub fn set_camera_target(&mut self, target: Vec3) {
-        self.camera_target = target;
+        self.desired_target = target;
     }
 
     /// Resets the camera to default position.
     pub fn reset_camera(&mut self) {
-        self.camera_distance = 10.0;
-        self.camera_pitch = -30.0_f32.to_radians();
-        self.camera_yaw = 45.0_f32.to_radians();
-        self.camera_target = Vec3::ZERO;
+        self.desired_distance = 10.0;
+        self.desired_pitch = -30.0_f32.to_radians();
+        self.desired_yaw = 45.0_f32.to_radians();
+        self.desired_target = Vec3::ZERO;
+        self.camera_settings.orthographic = false;
     }
 
     /// Returns whether the viewport is currently hovered.
@@ -611,6 +847,72 @@ impl ViewportPanel {
     /// Gets the viewport rect in screen space.
     pub fn viewport_rect(&self) -> Option<egui::Rect> {
         self.viewport_rect
+    }
+
+    /// Gets a reference to the camera settings.
+    pub fn camera_settings(&self) -> &CameraSettings {
+        &self.camera_settings
+    }
+
+    /// Gets a mutable reference to the camera settings.
+    pub fn camera_settings_mut(&mut self) -> &mut CameraSettings {
+        &mut self.camera_settings
+    }
+
+    /// Shows the camera settings window.
+    fn show_camera_settings(&mut self, ctx: &egui::Context) {
+        egui::Window::new("Camera Settings")
+            .open(&mut self.show_settings)
+            .resizable(true)
+            .default_width(300.0)
+            .show(ctx, |ui| {
+                ui.heading("Movement");
+                ui.add(
+                    egui::Slider::new(&mut self.camera_settings.move_speed, 1.0..=20.0)
+                        .text("Move Speed"),
+                );
+
+                ui.separator();
+                ui.heading("Mouse Sensitivity");
+                ui.add(
+                    egui::Slider::new(&mut self.camera_settings.orbit_sensitivity, 0.001..=0.02)
+                        .text("Orbit")
+                        .logarithmic(true),
+                );
+                ui.add(
+                    egui::Slider::new(&mut self.camera_settings.pan_sensitivity, 0.0001..=0.01)
+                        .text("Pan")
+                        .logarithmic(true),
+                );
+                ui.add(
+                    egui::Slider::new(&mut self.camera_settings.zoom_sensitivity, 0.0001..=0.01)
+                        .text("Zoom")
+                        .logarithmic(true),
+                );
+
+                ui.separator();
+                ui.heading("Smoothing");
+                ui.add(
+                    egui::Slider::new(&mut self.camera_settings.smoothness, 0.0..=50.0)
+                        .text("Smoothness"),
+                );
+                ui.label("(0 = instant, higher = smoother)");
+
+                ui.separator();
+                ui.heading("Projection");
+                ui.checkbox(&mut self.camera_settings.orthographic, "Orthographic");
+                if self.camera_settings.orthographic {
+                    ui.add(
+                        egui::Slider::new(&mut self.camera_settings.ortho_size, 1.0..=50.0)
+                            .text("Ortho Size"),
+                    );
+                }
+
+                ui.separator();
+                if ui.button("Reset to Defaults").clicked() {
+                    self.camera_settings = CameraSettings::default();
+                }
+            });
     }
 }
 
@@ -631,6 +933,7 @@ impl EditorPanel for ViewportPanel {
         _world: Option<&praxis_ecs::World>,
         _render_context: Option<&mut praxis_graphics::RenderContext>,
     ) {
+        // Top toolbar
         ui.horizontal(|ui| {
             ui.heading("Viewport");
             ui.separator();
@@ -640,6 +943,48 @@ impl EditorPanel for ViewportPanel {
 
             if ui.button("Reset Camera").clicked() {
                 self.reset_camera();
+            }
+
+            ui.separator();
+            
+            // Camera preset buttons
+            ui.menu_button("Camera Presets", |ui| {
+                if ui.button("📷 Perspective").clicked() {
+                    self.apply_camera_preset(CameraPreset::Perspective);
+                    ui.close_menu();
+                }
+                ui.separator();
+                if ui.button("⬇ Top (7)").clicked() {
+                    self.apply_camera_preset(CameraPreset::Top);
+                    ui.close_menu();
+                }
+                if ui.button("⬆ Bottom").clicked() {
+                    self.apply_camera_preset(CameraPreset::Bottom);
+                    ui.close_menu();
+                }
+                ui.separator();
+                if ui.button("➡ Front (1)").clicked() {
+                    self.apply_camera_preset(CameraPreset::Front);
+                    ui.close_menu();
+                }
+                if ui.button("⬅ Back").clicked() {
+                    self.apply_camera_preset(CameraPreset::Back);
+                    ui.close_menu();
+                }
+                ui.separator();
+                if ui.button("➡ Right (3)").clicked() {
+                    self.apply_camera_preset(CameraPreset::Right);
+                    ui.close_menu();
+                }
+                if ui.button("⬅ Left").clicked() {
+                    self.apply_camera_preset(CameraPreset::Left);
+                    ui.close_menu();
+                }
+            });
+
+            ui.separator();
+            if ui.button("⚙ Settings").clicked() {
+                self.show_settings = !self.show_settings;
             }
         });
 
@@ -681,10 +1026,16 @@ impl EditorPanel for ViewportPanel {
         }
 
         // Camera info overlay
+        let projection_type = if self.camera_settings.orthographic {
+            "Orthographic"
+        } else {
+            "Perspective"
+        };
+
         ui.painter().rect_filled(
             egui::Rect::from_min_size(
                 rect.left_top() + egui::vec2(5.0, 5.0),
-                egui::vec2(200.0, 90.0),
+                egui::vec2(220.0, 110.0),
             ),
             3.0,
             egui::Color32::from_rgba_premultiplied(20, 20, 25, 200),
@@ -694,7 +1045,8 @@ impl EditorPanel for ViewportPanel {
             rect.left_top() + egui::vec2(10.0, 10.0),
             egui::Align2::LEFT_TOP,
             format!(
-                "Distance: {:.1}\nPitch: {:.1}°\nYaw: {:.1}°\nTarget: ({:.1}, {:.1}, {:.1})",
+                "Projection: {}\nDistance: {:.1}\nPitch: {:.1}°\nYaw: {:.1}°\nTarget: ({:.1}, {:.1}, {:.1})",
+                projection_type,
                 self.camera_distance,
                 self.camera_pitch.to_degrees(),
                 self.camera_yaw.to_degrees(),
@@ -719,8 +1071,17 @@ impl EditorPanel for ViewportPanel {
             ui.separator();
             ui.label("🖱 Scroll: Zoom");
             ui.separator();
-            ui.label("⌨ WASD/QE: Move Target");
+            ui.label("⌨ WASD/QE: Move");
+            ui.separator();
+            ui.label("⌨ F: Focus Selection");
+            ui.separator();
+            ui.label("⌨ 1/3/7: Camera Presets");
         });
+
+        // Show settings window if enabled
+        if self.show_settings {
+            self.show_camera_settings(ui.ctx());
+        }
     }
 }
 
@@ -747,13 +1108,15 @@ mod tests {
     fn test_camera_distance_clamping() {
         let mut panel = ViewportPanel::new();
         panel.set_camera_distance(0.5); // Below minimum
-        assert_eq!(panel.camera_distance(), 1.0);
+        panel.update_camera(1.0);
+        assert_eq!(panel.desired_distance, 1.0);
 
         panel.set_camera_distance(2000.0); // Above maximum
-        assert_eq!(panel.camera_distance(), 1000.0);
+        panel.update_camera(1.0);
+        assert_eq!(panel.desired_distance, 1000.0);
 
         panel.set_camera_distance(50.0); // Within range
-        assert_eq!(panel.camera_distance(), 50.0);
+        assert_eq!(panel.desired_distance, 50.0);
     }
 
     #[test]
@@ -761,7 +1124,7 @@ mod tests {
         let mut panel = ViewportPanel::new();
         let target = Vec3::new(5.0, 2.0, 3.0);
         panel.set_camera_target(target);
-        assert_eq!(panel.camera_target(), target);
+        assert_eq!(panel.desired_target, target);
     }
 
     #[test]
@@ -771,13 +1134,15 @@ mod tests {
         // Modify camera
         panel.set_camera_distance(50.0);
         panel.set_camera_target(Vec3::new(10.0, 5.0, 8.0));
+        panel.camera_settings.orthographic = true;
 
         // Reset
         panel.reset_camera();
 
         // Verify defaults
-        assert_eq!(panel.camera_distance(), 10.0);
-        assert_eq!(panel.camera_target(), Vec3::ZERO);
+        assert_eq!(panel.desired_distance, 10.0);
+        assert_eq!(panel.desired_target, Vec3::ZERO);
+        assert!(!panel.camera_settings.orthographic);
     }
 
     #[test]
@@ -845,5 +1210,58 @@ mod tests {
     fn test_hover_state() {
         let panel = ViewportPanel::new();
         assert!(!panel.is_hovered());
+    }
+
+    #[test]
+    fn test_camera_settings_default() {
+        let settings = CameraSettings::default();
+        assert_eq!(settings.move_speed, 5.0);
+        assert_eq!(settings.orbit_sensitivity, 0.005);
+        assert_eq!(settings.smoothness, 10.0);
+        assert!(!settings.orthographic);
+    }
+
+    #[test]
+    fn test_camera_preset_top() {
+        let mut panel = ViewportPanel::new();
+        panel.apply_camera_preset(CameraPreset::Top);
+        assert!(panel.camera_settings.orthographic);
+        assert!(panel.desired_pitch > 0.0);
+    }
+
+    #[test]
+    fn test_camera_preset_front() {
+        let mut panel = ViewportPanel::new();
+        panel.apply_camera_preset(CameraPreset::Front);
+        assert!(panel.camera_settings.orthographic);
+        assert!((panel.desired_pitch.abs()) < 0.01);
+        assert!((panel.desired_yaw.abs()) < 0.01);
+    }
+
+    #[test]
+    fn test_smooth_interpolation() {
+        let mut panel = ViewportPanel::new();
+        panel.desired_distance = 20.0;
+
+        // After small update, should be between initial and target
+        panel.update_camera(0.01);
+        let distance_after_small = panel.camera_distance;
+        assert!(distance_after_small > 10.0);
+        assert!(distance_after_small < 20.0);
+
+        // After large update, should reach target
+        panel.update_camera(1.0);
+        assert!((panel.camera_distance - 20.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_focus_on() {
+        let mut panel = ViewportPanel::new();
+        let focus_point = Vec3::new(10.0, 5.0, -3.0);
+        let distance = 20.0;
+
+        panel.focus_on(focus_point, Some(distance));
+        assert_eq!(panel.desired_target, focus_point);
+        assert_eq!(panel.desired_distance, distance);
     }
 }
