@@ -49,9 +49,8 @@ impl LodGroup {
 
     /// Sorts LOD levels by distance.
     fn sort_levels(&mut self) {
-        self.levels.sort_by(|a, b| {
-            a.distance.partial_cmp(&b.distance).unwrap()
-        });
+        self.levels
+            .sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
     }
 
     /// Selects the appropriate mesh ID for the given distance.
@@ -61,7 +60,7 @@ impl LodGroup {
                 return Some(&level.mesh_id);
             }
         }
-        
+
         self.levels.last().map(|l| l.mesh_id.as_str())
     }
 
@@ -125,14 +124,23 @@ impl LodManager {
     }
 
     /// Selects the appropriate LOD for an entity based on distance from camera.
-    pub fn select_lod(&self, entity: Entity, camera_position: Vec3, entity_position: Vec3) -> Option<LodSelection> {
+    pub fn select_lod(
+        &self,
+        entity: Entity,
+        camera_position: Vec3,
+        entity_position: Vec3,
+    ) -> Option<LodSelection> {
         let group_name = self.entity_lod_groups.get(&entity)?;
         let group = self.groups.get(group_name)?;
 
         let distance = camera_position.distance(entity_position);
         let mesh_id = group.select_lod(distance)?;
 
-        let level_index = group.levels.iter().position(|l| l.mesh_id == mesh_id).unwrap_or(0);
+        let level_index = group
+            .levels
+            .iter()
+            .position(|l| l.mesh_id == mesh_id)
+            .unwrap_or(0);
 
         Some(LodSelection {
             entity,
@@ -143,12 +151,14 @@ impl LodManager {
     }
 
     /// Selects LODs for multiple entities.
-    pub fn select_lods(&self, entities: &[(Entity, Vec3)], camera_position: Vec3) -> Vec<LodSelection> {
+    pub fn select_lods(
+        &self,
+        entities: &[(Entity, Vec3)],
+        camera_position: Vec3,
+    ) -> Vec<LodSelection> {
         entities
             .iter()
-            .filter_map(|(entity, position)| {
-                self.select_lod(*entity, camera_position, *position)
-            })
+            .filter_map(|(entity, position)| self.select_lod(*entity, camera_position, *position))
             .collect()
     }
 
@@ -224,7 +234,7 @@ mod tests {
             LodLevel::new(30.0, "rock_low"),
         ];
         manager.register_lod_levels("rock", levels);
-        
+
         assert_eq!(manager.group_count(), 1);
     }
 
@@ -232,12 +242,15 @@ mod tests {
     fn test_lod_manager_entity_assignment() {
         let mut manager = LodManager::new();
         let entity = Entity::from_raw(1);
-        
-        manager.register_lod_levels("tree", vec![
-            LodLevel::new(0.0, "tree_high"),
-            LodLevel::new(50.0, "tree_low"),
-        ]);
-        
+
+        manager.register_lod_levels(
+            "tree",
+            vec![
+                LodLevel::new(0.0, "tree_high"),
+                LodLevel::new(50.0, "tree_low"),
+            ],
+        );
+
         manager.assign_entity(entity, "tree");
         assert_eq!(manager.entity_count(), 1);
     }
@@ -246,17 +259,20 @@ mod tests {
     fn test_lod_manager_selection() {
         let mut manager = LodManager::new();
         let entity = Entity::from_raw(1);
-        
-        manager.register_lod_levels("tree", vec![
-            LodLevel::new(0.0, "tree_high"),
-            LodLevel::new(50.0, "tree_low"),
-        ]);
-        
+
+        manager.register_lod_levels(
+            "tree",
+            vec![
+                LodLevel::new(0.0, "tree_high"),
+                LodLevel::new(50.0, "tree_low"),
+            ],
+        );
+
         manager.assign_entity(entity, "tree");
-        
+
         let camera_pos = Vec3::ZERO;
         let entity_pos = Vec3::new(30.0, 0.0, 0.0);
-        
+
         let selection = manager.select_lod(entity, camera_pos, entity_pos);
         assert!(selection.is_some());
         assert_eq!(selection.unwrap().mesh_id, "tree_high");
@@ -265,23 +281,26 @@ mod tests {
     #[test]
     fn test_lod_manager_batch_selection() {
         let mut manager = LodManager::new();
-        
-        manager.register_lod_levels("tree", vec![
-            LodLevel::new(0.0, "tree_high"),
-            LodLevel::new(50.0, "tree_low"),
-        ]);
-        
+
+        manager.register_lod_levels(
+            "tree",
+            vec![
+                LodLevel::new(0.0, "tree_high"),
+                LodLevel::new(50.0, "tree_low"),
+            ],
+        );
+
         let entity1 = Entity::from_raw(1);
         let entity2 = Entity::from_raw(2);
-        
+
         manager.assign_entity(entity1, "tree");
         manager.assign_entity(entity2, "tree");
-        
+
         let entities = vec![
             (entity1, Vec3::new(20.0, 0.0, 0.0)),
             (entity2, Vec3::new(60.0, 0.0, 0.0)),
         ];
-        
+
         let selections = manager.select_lods(&entities, Vec3::ZERO);
         assert_eq!(selections.len(), 2);
         assert_eq!(selections[0].mesh_id, "tree_high");

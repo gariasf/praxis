@@ -57,7 +57,7 @@ impl BvhNode {
     /// Queries entities within a radius of a point.
     pub fn query_radius(&self, point: Vec3, radius: f32, results: &mut Vec<Entity>) {
         let radius_sq = radius * radius;
-        
+
         if self.bounds().distance_squared(point) > radius_sq {
             return;
         }
@@ -84,8 +84,17 @@ impl BvhNode {
     }
 
     /// Queries all entities that intersect with a ray.
-    pub fn query_ray(&self, origin: Vec3, direction: Vec3, max_distance: f32, results: &mut Vec<Entity>) {
-        if !self.bounds().intersects_ray(origin, direction, max_distance) {
+    pub fn query_ray(
+        &self,
+        origin: Vec3,
+        direction: Vec3,
+        max_distance: f32,
+        results: &mut Vec<Entity>,
+    ) {
+        if !self
+            .bounds()
+            .intersects_ray(origin, direction, max_distance)
+        {
             return;
         }
 
@@ -114,7 +123,7 @@ pub struct Bvh {
 impl Bvh {
     /// Creates a new empty BVH.
     pub fn new() -> Self {
-        Self { 
+        Self {
             root: None,
             entity_bounds: HashMap::new(),
         }
@@ -149,7 +158,7 @@ impl Bvh {
         }
 
         let size = combined_bounds.size();
-        
+
         let split_axis = if size.x >= size.y && size.x >= size.z {
             0
         } else if size.y >= size.z {
@@ -161,19 +170,19 @@ impl Bvh {
         entities.sort_by(|(_, a), (_, b)| {
             let a_center = a.center();
             let b_center = b.center();
-            
+
             let a_val = match split_axis {
                 0 => a_center.x,
                 1 => a_center.y,
                 _ => a_center.z,
             };
-            
+
             let b_val = match split_axis {
                 0 => b_center.x,
                 1 => b_center.y,
                 _ => b_center.z,
             };
-            
+
             a_val.partial_cmp(&b_val).unwrap()
         });
 
@@ -186,7 +195,11 @@ impl Bvh {
 
         let bounds = left.bounds().union(right.bounds());
 
-        BvhNode::Internal { bounds, left, right }
+        BvhNode::Internal {
+            bounds,
+            left,
+            right,
+        }
     }
 
     /// Queries all entities that intersect the given bounds.
@@ -238,13 +251,20 @@ impl Bvh {
     }
 
     /// Queries all entities that intersect with a ray and returns them sorted by distance.
-    pub fn query_ray_sorted(&self, origin: Vec3, direction: Vec3, max_distance: f32) -> Vec<(Entity, f32)> {
+    pub fn query_ray_sorted(
+        &self,
+        origin: Vec3,
+        direction: Vec3,
+        max_distance: f32,
+    ) -> Vec<(Entity, f32)> {
         let entities = self.query_ray(origin, direction, max_distance);
         let mut results = Vec::new();
 
         for entity in entities {
             if let Some(bounds) = self.entity_bounds.get(&entity) {
-                if let Some(distance) = bounds.ray_intersection_distance(origin, direction, max_distance) {
+                if let Some(distance) =
+                    bounds.ray_intersection_distance(origin, direction, max_distance)
+                {
                     results.push((entity, distance));
                 }
             }
@@ -314,10 +334,16 @@ mod tests {
     fn test_bvh_build() {
         let mut bvh = Bvh::new();
         let entities = vec![
-            (Entity::from_raw(1), Aabb::from_min_max(Vec3::ZERO, Vec3::ONE)),
-            (Entity::from_raw(2), Aabb::from_min_max(Vec3::new(5.0, 0.0, 0.0), Vec3::new(6.0, 1.0, 1.0))),
+            (
+                Entity::from_raw(1),
+                Aabb::from_min_max(Vec3::ZERO, Vec3::ONE),
+            ),
+            (
+                Entity::from_raw(2),
+                Aabb::from_min_max(Vec3::new(5.0, 0.0, 0.0), Vec3::new(6.0, 1.0, 1.0)),
+            ),
         ];
-        
+
         bvh.build(entities);
         assert_eq!(bvh.entity_count(), 2);
     }
@@ -329,14 +355,18 @@ mod tests {
         let entity2 = Entity::from_raw(2);
         let entities = vec![
             (entity1, Aabb::from_min_max(Vec3::ZERO, Vec3::ONE)),
-            (entity2, Aabb::from_min_max(Vec3::new(10.0, 0.0, 0.0), Vec3::new(11.0, 1.0, 1.0))),
+            (
+                entity2,
+                Aabb::from_min_max(Vec3::new(10.0, 0.0, 0.0), Vec3::new(11.0, 1.0, 1.0)),
+            ),
         ];
-        
+
         bvh.build(entities);
 
-        let query_bounds = Aabb::from_min_max(Vec3::new(-5.0, -5.0, -5.0), Vec3::new(5.0, 5.0, 5.0));
+        let query_bounds =
+            Aabb::from_min_max(Vec3::new(-5.0, -5.0, -5.0), Vec3::new(5.0, 5.0, 5.0));
         let results = bvh.query(&query_bounds);
-        
+
         assert!(results.contains(&entity1));
         assert!(!results.contains(&entity2));
     }
@@ -348,13 +378,16 @@ mod tests {
         let entity2 = Entity::from_raw(2);
         let entities = vec![
             (entity1, Aabb::from_min_max(Vec3::ZERO, Vec3::ONE)),
-            (entity2, Aabb::from_min_max(Vec3::new(20.0, 0.0, 0.0), Vec3::new(21.0, 1.0, 1.0))),
+            (
+                entity2,
+                Aabb::from_min_max(Vec3::new(20.0, 0.0, 0.0), Vec3::new(21.0, 1.0, 1.0)),
+            ),
         ];
-        
+
         bvh.build(entities);
 
         let results = bvh.query_radius(Vec3::ZERO, 10.0);
-        
+
         assert!(results.contains(&entity1));
         assert!(!results.contains(&entity2));
     }
@@ -362,13 +395,14 @@ mod tests {
     #[test]
     fn test_bvh_clear() {
         let mut bvh = Bvh::new();
-        let entities = vec![
-            (Entity::from_raw(1), Aabb::from_min_max(Vec3::ZERO, Vec3::ONE)),
-        ];
-        
+        let entities = vec![(
+            Entity::from_raw(1),
+            Aabb::from_min_max(Vec3::ZERO, Vec3::ONE),
+        )];
+
         bvh.build(entities);
         assert!(!bvh.is_empty());
-        
+
         bvh.clear();
         assert!(bvh.is_empty());
     }
@@ -406,7 +440,7 @@ mod tests {
     #[test]
     fn test_bvh_ray_query() {
         let mut bvh = Bvh::new();
-        
+
         for i in 0..5 {
             let entity = Entity::from_raw(i);
             let x = (i as f32 * 10.0) + 5.0;
@@ -417,26 +451,35 @@ mod tests {
         let origin = Vec3::ZERO;
         let direction = Vec3::X;
         let results = bvh.query_ray(origin, direction, 100.0);
-        
+
         assert!(!results.is_empty());
     }
 
     #[test]
     fn test_bvh_ray_sorted() {
         let mut bvh = Bvh::new();
-        
+
         let entity1 = Entity::from_raw(1);
         let entity2 = Entity::from_raw(2);
         let entity3 = Entity::from_raw(3);
-        
-        bvh.insert(entity1, Aabb::from_center_half_extents(Vec3::new(10.0, 0.0, 0.0), Vec3::splat(1.0)));
-        bvh.insert(entity2, Aabb::from_center_half_extents(Vec3::new(30.0, 0.0, 0.0), Vec3::splat(1.0)));
-        bvh.insert(entity3, Aabb::from_center_half_extents(Vec3::new(20.0, 0.0, 0.0), Vec3::splat(1.0)));
+
+        bvh.insert(
+            entity1,
+            Aabb::from_center_half_extents(Vec3::new(10.0, 0.0, 0.0), Vec3::splat(1.0)),
+        );
+        bvh.insert(
+            entity2,
+            Aabb::from_center_half_extents(Vec3::new(30.0, 0.0, 0.0), Vec3::splat(1.0)),
+        );
+        bvh.insert(
+            entity3,
+            Aabb::from_center_half_extents(Vec3::new(20.0, 0.0, 0.0), Vec3::splat(1.0)),
+        );
 
         let results = bvh.query_ray_sorted(Vec3::ZERO, Vec3::X, 100.0);
-        
+
         assert_eq!(results.len(), 3);
-        
+
         for i in 0..results.len() - 1 {
             assert!(results[i].1 <= results[i + 1].1);
         }
@@ -447,9 +490,9 @@ mod tests {
         let mut bvh = Bvh::new();
         let entity = Entity::from_raw(1);
         let bounds = Aabb::from_min_max(Vec3::ZERO, Vec3::ONE);
-        
+
         bvh.insert(entity, bounds);
-        
+
         let retrieved = bvh.get_bounds(entity);
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().min, Vec3::ZERO);

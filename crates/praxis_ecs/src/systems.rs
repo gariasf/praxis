@@ -9,7 +9,7 @@ use bevy_ecs::{
     entity::Entity,
     query::{Added, Changed, Or, With, Without},
     schedule::SystemSet,
-    system::{Commands, ParamSet},
+    system::{Commands, ParamSet, Res, Resource},
 };
 use std::collections::HashSet;
 
@@ -966,6 +966,95 @@ pub fn gather_lighting_system(
 
     // Note: The ambient_color in LightingData is not modified by this system
     // It can be set manually or left at its default value (0.1, 0.1, 0.1)
+}
+
+/// Updates LOD groups based on camera distance.
+///
+/// This system updates all entities with `LodGroupComponent` and `GlobalTransform`,
+/// calculating their distance from the active camera and updating the LOD level accordingly.
+///
+/// # Requirements
+///
+/// - Must run after `propagate_transforms` to ensure `GlobalTransform` is up to date
+/// - Requires at least one active camera in the scene
+/// - Delta time resource must be available for smooth transitions
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, Schedule, IntoSystemConfigs};
+/// use praxis_ecs::systems::{update_lod_system, CoreSystemSet};
+///
+/// let mut world = World::new();
+/// let mut schedule = Schedule::default();
+///
+/// schedule.add_systems(
+///     update_lod_system.in_set(CoreSystemSet::PostUpdate)
+/// );
+/// ```
+pub fn update_lod_system(
+    mut lod_entities: Query<(&mut crate::LodGroupComponent, &crate::GlobalTransform)>,
+    cameras: Query<(&crate::Camera, &crate::GlobalTransform)>,
+    time: Option<Res<DeltaTime>>,
+) {
+    // Get delta time, default to 16ms if not available
+    let delta_time = time.map(|t| t.0).unwrap_or(0.016);
+
+    // Find the active camera position
+    let camera_position = cameras
+        .iter()
+        .find(|(camera, _)| camera.is_active)
+        .map(|(_, transform)| transform.translation());
+
+    if let Some(camera_pos) = camera_position {
+        // Update each LOD group
+        for (mut lod_group, transform) in lod_entities.iter_mut() {
+            let object_position = transform.translation();
+
+            // Calculate squared distance (avoids sqrt)
+            let delta = object_position - camera_pos;
+            let distance_squared = delta.length_squared();
+
+            // Update the LOD group
+            lod_group.0.update(distance_squared, delta_time);
+        }
+    }
+}
+
+/// Resource for storing delta time between frames.
+///
+/// This resource should be updated each frame with the time elapsed since the last frame.
+/// It's used by systems that need to interpolate or animate over time, such as the LOD system.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, systems::DeltaTime};
+///
+/// let mut world = World::new();
+/// world.insert_resource(DeltaTime(0.016)); // 60 FPS
+///
+/// // In your main loop:
+/// // world.insert_resource(DeltaTime(elapsed_seconds));
+/// ```
+#[derive(Resource, Debug, Clone, Copy, Default)]
+pub struct DeltaTime(pub f32);
+
+impl DeltaTime {
+    /// Creates a new delta time resource.
+    pub fn new(seconds: f32) -> Self {
+        Self(seconds)
+    }
+
+    /// Gets the delta time in seconds.
+    pub fn as_secs(&self) -> f32 {
+        self.0
+    }
+
+    /// Gets the delta time in milliseconds.
+    pub fn as_millis(&self) -> f32 {
+        self.0 * 1000.0
+    }
 }
 
 #[cfg(test)]
@@ -2188,7 +2277,12 @@ impl Default for CameraFrustum {
 /// ```
 pub fn update_frustum_from_camera(
     mut camera_frustum: crate::ResMut<CameraFrustum>,
-    cameras: Query<(&Camera, &CameraMatrices, Option<&GlobalTransform>, Option<&Transform>)>,
+    cameras: Query<(
+        &Camera,
+        &CameraMatrices,
+        Option<&GlobalTransform>,
+        Option<&Transform>,
+    )>,
 ) {
     if let Some((_, matrices, maybe_global, maybe_local)) = cameras
         .iter()
@@ -2196,7 +2290,7 @@ pub fn update_frustum_from_camera(
         .max_by_key(|(cam, _, _, _)| cam.priority)
     {
         camera_frustum.view_projection = matrices.view_projection;
-        
+
         camera_frustum.position = if let Some(global) = maybe_global {
             global.translation()
         } else if let Some(local) = maybe_local {
@@ -2249,23 +2343,53 @@ pub fn frustum_culling_system(
 ) {
     // Extract frustum planes from view-projection matrix
     let m = camera_frustum.view_projection.to_cols_array_2d();
-    
+
     // 6 frustum planes: near, far, left, right, top, bottom
     let planes = [
         // Near plane: row3 + row2
-        [m[0][3] + m[0][2], m[1][3] + m[1][2], m[2][3] + m[2][2], m[3][3] + m[3][2]],
+        [
+            m[0][3] + m[0][2],
+            m[1][3] + m[1][2],
+            m[2][3] + m[2][2],
+            m[3][3] + m[3][2],
+        ],
         // Far plane: row3 - row2
-        [m[0][3] - m[0][2], m[1][3] - m[1][2], m[2][3] - m[2][2], m[3][3] - m[3][2]],
+        [
+            m[0][3] - m[0][2],
+            m[1][3] - m[1][2],
+            m[2][3] - m[2][2],
+            m[3][3] - m[3][2],
+        ],
         // Left plane: row3 + row0
-        [m[0][3] + m[0][0], m[1][3] + m[1][0], m[2][3] + m[2][0], m[3][3] + m[3][0]],
+        [
+            m[0][3] + m[0][0],
+            m[1][3] + m[1][0],
+            m[2][3] + m[2][0],
+            m[3][3] + m[3][0],
+        ],
         // Right plane: row3 - row0
-        [m[0][3] - m[0][0], m[1][3] - m[1][0], m[2][3] - m[2][0], m[3][3] - m[3][0]],
+        [
+            m[0][3] - m[0][0],
+            m[1][3] - m[1][0],
+            m[2][3] - m[2][0],
+            m[3][3] - m[3][0],
+        ],
         // Top plane: row3 - row1
-        [m[0][3] - m[0][1], m[1][3] - m[1][1], m[2][3] - m[2][1], m[3][3] - m[3][1]],
+        [
+            m[0][3] - m[0][1],
+            m[1][3] - m[1][1],
+            m[2][3] - m[2][1],
+            m[3][3] - m[3][1],
+        ],
         // Bottom plane: row3 + row1
-        [m[0][3] + m[0][1], m[1][3] + m[1][1], m[2][3] + m[2][1], m[3][3] + m[3][1]],
+        [
+            m[0][3] + m[0][1],
+            m[1][3] + m[1][1],
+            m[2][3] + m[2][1],
+            m[3][3] + m[3][1],
+        ],
     ];
-    
+
     // Normalize planes
     let mut normalized_planes = [[0.0f32; 4]; 6];
     for (i, plane) in planes.iter().enumerate() {
@@ -2277,7 +2401,7 @@ pub fn frustum_culling_system(
             plane[3] / length,
         ];
     }
-    
+
     for (entity, bbox, global_transform) in entities.iter() {
         // Transform AABB corners to world space
         let corners = [
@@ -2290,36 +2414,48 @@ pub fn frustum_culling_system(
             Vec3::new(bbox.min.x, bbox.max.y, bbox.max.z),
             Vec3::new(bbox.max.x, bbox.max.y, bbox.max.z),
         ];
-        
+
         let mut world_min = global_transform.matrix.transform_point3(corners[0]);
         let mut world_max = world_min;
-        
+
         for corner in corners.iter().skip(1) {
             let transformed = global_transform.matrix.transform_point3(*corner);
             world_min = world_min.min(transformed);
             world_max = world_max.max(transformed);
         }
-        
+
         // Test AABB against frustum planes
         let mut is_visible = true;
         for plane in &normalized_planes {
             let normal = Vec3::new(plane[0], plane[1], plane[2]);
             let distance = plane[3];
-            
+
             // Positive vertex test - find the corner furthest along the normal
             let positive_vertex = Vec3::new(
-                if normal.x >= 0.0 { world_max.x } else { world_min.x },
-                if normal.y >= 0.0 { world_max.y } else { world_min.y },
-                if normal.z >= 0.0 { world_max.z } else { world_min.z },
+                if normal.x >= 0.0 {
+                    world_max.x
+                } else {
+                    world_min.x
+                },
+                if normal.y >= 0.0 {
+                    world_max.y
+                } else {
+                    world_min.y
+                },
+                if normal.z >= 0.0 {
+                    world_max.z
+                } else {
+                    world_min.z
+                },
             );
-            
+
             // If positive vertex is outside this plane, the box is completely outside the frustum
             if normal.dot(positive_vertex) + distance < 0.0 {
                 is_visible = false;
                 break;
             }
         }
-        
+
         if is_visible {
             commands.entity(entity).insert(crate::Visible);
             commands.entity(entity).remove::<crate::Culled>();

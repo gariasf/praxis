@@ -7,15 +7,15 @@
 //! - Automatic rebalancing
 //! - ECS integration
 
-use praxis_ecs::{World, Schedule, IntoSystemConfigs};
+use bevy_ecs::entity::Entity;
+use praxis_ecs::{IntoSystemConfigs, Schedule, World};
 use praxis_math::Vec3;
 use praxis_spatial::{
-    Aabb, Octree, Bvh, SpatialManager, SpatialConfig, SpatialStructureType,
-    SpatialResource, SpatialBundle, SpatialEntity, SpatialBounds,
-    insert_spatial_entities, update_spatial_entities, remove_spatial_entities,
-    flush_spatial_updates, auto_rebalance_spatial, SpatialSystemSet,
+    auto_rebalance_spatial, flush_spatial_updates, insert_spatial_entities,
+    remove_spatial_entities, update_spatial_entities, Aabb, Bvh, Octree, SpatialBounds,
+    SpatialBundle, SpatialConfig, SpatialEntity, SpatialManager, SpatialResource,
+    SpatialStructureType, SpatialSystemSet,
 };
-use bevy_ecs::entity::Entity;
 
 fn main() {
     println!("=== Spatial Partitioning Demo ===\n");
@@ -203,7 +203,7 @@ fn demo_ecs_integration() {
     println!("--- ECS Integration Demo ---");
 
     let mut world = World::new();
-    
+
     let spatial_config = SpatialConfig {
         center: Vec3::ZERO,
         size: 500.0,
@@ -211,7 +211,7 @@ fn demo_ecs_integration() {
         movement_threshold: 1.0,
         rebalance_interval: 100,
     };
-    
+
     world.insert_resource(SpatialResource::new_octree(spatial_config));
 
     let mut schedule = Schedule::default();
@@ -231,7 +231,7 @@ fn demo_ecs_integration() {
         let x = (i as f32 * 12.0) - 84.0;
         let z = ((i as f32 * 0.5).sin() * 20.0);
         let bounds = Aabb::from_center_half_extents(Vec3::new(x, 0.0, z), Vec3::splat(3.0));
-        
+
         world.spawn(SpatialBundle::new(bounds));
     }
 
@@ -239,7 +239,10 @@ fn demo_ecs_integration() {
 
     let spatial = world.inner().resource::<SpatialResource>();
     println!("  Spawned entities in ECS");
-    println!("  Spatial manager contains {} entities", spatial.manager.entity_count());
+    println!(
+        "  Spatial manager contains {} entities",
+        spatial.manager.entity_count()
+    );
 
     let test_entity = world.spawn((
         SpatialEntity::enabled(),
@@ -252,7 +255,10 @@ fn demo_ecs_integration() {
     println!("  After spawn: {} entities", spatial.manager.entity_count());
 
     {
-        let mut bounds = world.inner_mut().get_mut::<SpatialBounds>(test_entity).unwrap();
+        let mut bounds = world
+            .inner_mut()
+            .get_mut::<SpatialBounds>(test_entity)
+            .unwrap();
         bounds.aabb = Aabb::from_center_half_extents(Vec3::new(100.0, 0.0, 0.0), Vec3::splat(2.0));
     }
 
@@ -260,18 +266,27 @@ fn demo_ecs_integration() {
 
     let spatial = world.inner().resource::<SpatialResource>();
     if let Some(stored_bounds) = spatial.manager.get_bounds(test_entity) {
-        println!("  Updated bounds in spatial manager: center = {:?}", stored_bounds.center());
+        println!(
+            "  Updated bounds in spatial manager: center = {:?}",
+            stored_bounds.center()
+        );
     }
 
     world.despawn(test_entity);
     schedule.run(world.inner_mut());
 
     let spatial = world.inner().resource::<SpatialResource>();
-    println!("  After despawn: {} entities", spatial.manager.entity_count());
+    println!(
+        "  After despawn: {} entities",
+        spatial.manager.entity_count()
+    );
 
     let spatial = world.inner().resource::<SpatialResource>();
     let query_result = spatial.manager.query_radius(Vec3::ZERO, 100.0);
-    println!("  Radius query from origin found {} entities", query_result.len());
+    println!(
+        "  Radius query from origin found {} entities",
+        query_result.len()
+    );
 
     println!();
 }

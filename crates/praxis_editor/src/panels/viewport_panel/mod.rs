@@ -263,7 +263,7 @@ impl ViewportPanel {
         let camera_transform = self.compute_camera_transform();
         let view = camera_transform.compute_inverse_matrix();
         let aspect_ratio = self.viewport_size[0] as f32 / self.viewport_size[1] as f32;
-        
+
         let proj = if self.camera_settings.orthographic {
             let width = self.camera_settings.ortho_size * aspect_ratio;
             let height = self.camera_settings.ortho_size;
@@ -296,7 +296,8 @@ impl ViewportPanel {
         let t = (self.camera_settings.smoothness * delta_time).min(1.0);
 
         // Interpolate distance
-        self.camera_distance = self.camera_distance + (self.desired_distance - self.camera_distance) * t;
+        self.camera_distance =
+            self.camera_distance + (self.desired_distance - self.camera_distance) * t;
 
         // Interpolate angles
         self.camera_yaw = self.camera_yaw + (self.desired_yaw - self.camera_yaw) * t;
@@ -470,7 +471,8 @@ impl ViewportPanel {
         if response.hovered() {
             let scroll_delta = ui.input(|i| i.smooth_scroll_delta.y);
             if scroll_delta.abs() > 0.01 {
-                self.desired_distance *= (1.0 - scroll_delta * self.camera_settings.zoom_sensitivity).max(0.1);
+                self.desired_distance *=
+                    (1.0 - scroll_delta * self.camera_settings.zoom_sensitivity).max(0.1);
                 self.desired_distance = self.desired_distance.clamp(1.0, 1000.0);
             }
         }
@@ -594,7 +596,12 @@ impl ViewportPanel {
     }
 
     /// Handles keyboard input for camera controls.
-    pub fn handle_keyboard_input(&mut self, input_state: &InputState, delta_time: f32, world: &mut World) {
+    pub fn handle_keyboard_input(
+        &mut self,
+        input_state: &InputState,
+        delta_time: f32,
+        world: &mut World,
+    ) {
         let move_speed = self.camera_settings.move_speed * delta_time;
 
         // WASD for camera target movement
@@ -626,22 +633,25 @@ impl ViewportPanel {
         }
 
         // Number keys for camera presets
-        if input_state.is_key_just_pressed(KeyCode::Numpad7) || 
-           (input_state.is_key_just_pressed(KeyCode::Digit7) && 
-            !input_state.is_key_pressed(KeyCode::ShiftLeft) && 
-            !input_state.is_key_pressed(KeyCode::ShiftRight)) {
+        if input_state.is_key_just_pressed(KeyCode::Numpad7)
+            || (input_state.is_key_just_pressed(KeyCode::Digit7)
+                && !input_state.is_key_pressed(KeyCode::ShiftLeft)
+                && !input_state.is_key_pressed(KeyCode::ShiftRight))
+        {
             self.apply_camera_preset(CameraPreset::Top);
         }
-        if input_state.is_key_just_pressed(KeyCode::Numpad1) || 
-           (input_state.is_key_just_pressed(KeyCode::Digit1) && 
-            !input_state.is_key_pressed(KeyCode::ShiftLeft) && 
-            !input_state.is_key_pressed(KeyCode::ShiftRight)) {
+        if input_state.is_key_just_pressed(KeyCode::Numpad1)
+            || (input_state.is_key_just_pressed(KeyCode::Digit1)
+                && !input_state.is_key_pressed(KeyCode::ShiftLeft)
+                && !input_state.is_key_pressed(KeyCode::ShiftRight))
+        {
             self.apply_camera_preset(CameraPreset::Front);
         }
-        if input_state.is_key_just_pressed(KeyCode::Numpad3) || 
-           (input_state.is_key_just_pressed(KeyCode::Digit3) && 
-            !input_state.is_key_pressed(KeyCode::ShiftLeft) && 
-            !input_state.is_key_pressed(KeyCode::ShiftRight)) {
+        if input_state.is_key_just_pressed(KeyCode::Numpad3)
+            || (input_state.is_key_just_pressed(KeyCode::Digit3)
+                && !input_state.is_key_pressed(KeyCode::ShiftLeft)
+                && !input_state.is_key_pressed(KeyCode::ShiftRight))
+        {
             self.apply_camera_preset(CameraPreset::Right);
         }
     }
@@ -946,7 +956,7 @@ impl EditorPanel for ViewportPanel {
             }
 
             ui.separator();
-            
+
             // Camera preset buttons
             ui.menu_button("Camera Presets", |ui| {
                 if ui.button("📷 Perspective").clicked() {

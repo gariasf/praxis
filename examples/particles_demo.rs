@@ -42,10 +42,10 @@ fn main() -> Result<()> {
         velocity_randomness: 1.0,
         initial_color: [1.0, 0.8, 0.2, 1.0],
         color_over_lifetime: Some(vec![
-            [1.0, 0.8, 0.2, 1.0],  // Yellow-orange
-            [1.0, 0.3, 0.0, 0.8],  // Orange-red
-            [0.5, 0.0, 0.0, 0.3],  // Dark red
-            [0.1, 0.0, 0.0, 0.0],  // Fade to black
+            [1.0, 0.8, 0.2, 1.0], // Yellow-orange
+            [1.0, 0.3, 0.0, 0.8], // Orange-red
+            [0.5, 0.0, 0.0, 0.3], // Dark red
+            [0.1, 0.0, 0.0, 0.0], // Fade to black
         ]),
         initial_size: 0.3,
         size_over_lifetime: Some(vec![0.1, 0.5, 0.8, 0.4]),
@@ -79,10 +79,10 @@ fn main() -> Result<()> {
         velocity_randomness: 0.5,
         initial_color: [0.5, 0.5, 0.5, 0.5],
         color_over_lifetime: Some(vec![
-            [0.5, 0.5, 0.5, 0.5],  // Gray
-            [0.4, 0.4, 0.4, 0.3],  // Lighter gray
-            [0.3, 0.3, 0.3, 0.1],  // Very light gray
-            [0.2, 0.2, 0.2, 0.0],  // Fade out
+            [0.5, 0.5, 0.5, 0.5], // Gray
+            [0.4, 0.4, 0.4, 0.3], // Lighter gray
+            [0.3, 0.3, 0.3, 0.1], // Very light gray
+            [0.2, 0.2, 0.2, 0.0], // Fade out
         ]),
         initial_size: 0.5,
         size_over_lifetime: Some(vec![0.3, 0.8, 1.2, 1.5]),
@@ -113,10 +113,10 @@ fn main() -> Result<()> {
         velocity_randomness: 5.0,
         initial_color: [1.0, 1.0, 0.5, 1.0],
         color_over_lifetime: Some(vec![
-            [1.0, 1.0, 0.5, 1.0],  // Bright yellow
-            [1.0, 0.5, 0.0, 0.8],  // Orange
-            [1.0, 0.0, 0.0, 0.5],  // Red
-            [0.2, 0.0, 0.0, 0.0],  // Fade out
+            [1.0, 1.0, 0.5, 1.0], // Bright yellow
+            [1.0, 0.5, 0.0, 0.8], // Orange
+            [1.0, 0.0, 0.0, 0.5], // Red
+            [0.2, 0.0, 0.0, 0.0], // Fade out
         ]),
         initial_size: 0.2,
         size_over_lifetime: Some(vec![0.2, 0.5, 0.3, 0.1]),

@@ -168,10 +168,11 @@ impl OcclusionQueryPool {
 
         let mut results = vec![0u64; query_count as usize];
 
-        match self
-            .query_pool
-            .get_results(0..query_count, &mut results, vulkano::query::QueryResultFlags::empty())
-        {
+        match self.query_pool.get_results(
+            0..query_count,
+            &mut results,
+            vulkano::query::QueryResultFlags::empty(),
+        ) {
             Ok(_) => {
                 for query in self.active_queries.values_mut() {
                     if let Some(&sample_count) = results.get(query.query_index as usize) {
@@ -335,11 +336,15 @@ pub struct OcclusionCullerStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use praxis_math::Vec3;
 
     #[test]
     fn test_occlusion_query_result() {
         assert_eq!(OcclusionQueryResult::Pending, OcclusionQueryResult::Pending);
-        assert_ne!(OcclusionQueryResult::Visible, OcclusionQueryResult::Occluded);
+        assert_ne!(
+            OcclusionQueryResult::Visible,
+            OcclusionQueryResult::Occluded
+        );
     }
 
     #[test]

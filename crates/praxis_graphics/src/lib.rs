@@ -381,6 +381,7 @@ mod device;
 pub mod hdr;
 pub mod lighting;
 pub mod line_renderer;
+pub mod lod;
 pub mod material;
 pub mod mesh;
 pub mod particles;
@@ -1579,6 +1580,9 @@ pub use lighting::{
     MAX_DIRECTIONAL_LIGHTS, MAX_POINT_LIGHTS,
 };
 pub use line_renderer::{Line, LineBatch, LineRenderer, LineVertex};
+pub use lod::{
+    LodGroup, LodLevel, LodManager, LodStatistics, DEFAULT_TRANSITION_DURATION, MAX_LOD_LEVELS,
+};
 pub use material::{Material, MaterialManager, MaterialProperties};
 pub use mesh::{GpuMesh, MeshData};
 pub use particles::{

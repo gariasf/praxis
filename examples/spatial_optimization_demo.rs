@@ -72,14 +72,13 @@ fn main() -> praxis_utils::Result<()> {
             entities_with_bounds.push((entity, aabb));
 
             // Assign to LOD manager
-            visibility_system.lod_manager_mut().assign_entity(entity, lod_group);
+            visibility_system
+                .lod_manager_mut()
+                .assign_entity(entity, lod_group);
         }
     }
 
-    info!(
-        "Spawned {} entities in octree",
-        entities_with_bounds.len()
-    );
+    info!("Spawned {} entities in octree", entities_with_bounds.len());
 
     // Build BVH
     bvh.build(entities_with_bounds.clone());
@@ -131,11 +130,7 @@ fn setup_lod_groups(lod_manager: &mut LodManager) {
     info!("Configured {} LOD groups", lod_manager.group_count());
 }
 
-fn simulate_camera_culling(
-    octree: &Octree,
-    bvh: &Bvh,
-    visibility_system: &VisibilitySystem,
-) {
+fn simulate_camera_culling(octree: &Octree, bvh: &Bvh, visibility_system: &VisibilitySystem) {
     info!("\n=== Camera Culling Simulation ===");
 
     // Create camera at different positions
@@ -172,14 +167,8 @@ fn simulate_camera_culling(
             }
         }
 
-        info!(
-            "  Nearby entities (octree): {}",
-            nearby_entities.len()
-        );
-        info!(
-            "  Visible after frustum culling: {}",
-            visible_count
-        );
+        info!("  Nearby entities (octree): {}", nearby_entities.len());
+        info!("  Visible after frustum culling: {}", visible_count);
         info!(
             "  Culled: {} ({:.1}%)",
             nearby_entities.len() - visible_count,
@@ -206,10 +195,8 @@ fn demonstrate_spatial_queries(octree: &Octree, bvh: &Bvh) {
     info!("  BVH found: {} entities", bvh_results.len());
 
     // AABB query
-    let query_bounds = Aabb::from_min_max(
-        Vec3::new(-25.0, -5.0, -25.0),
-        Vec3::new(25.0, 5.0, 25.0),
-    );
+    let query_bounds =
+        Aabb::from_min_max(Vec3::new(-25.0, -5.0, -25.0), Vec3::new(25.0, 5.0, 25.0));
 
     let octree_box_results = octree.query(&query_bounds);
     let bvh_box_results = bvh.query(&query_bounds);
@@ -232,7 +219,11 @@ fn demonstrate_lod_selection(
     ];
 
     for (i, camera_pos) in camera_positions.iter().enumerate() {
-        info!("\nLOD selection from camera position {}: {:?}", i + 1, camera_pos);
+        info!(
+            "\nLOD selection from camera position {}: {:?}",
+            i + 1,
+            camera_pos
+        );
 
         // Convert entities and bounds to positions
         let entities_with_positions: Vec<_> = entities_with_bounds

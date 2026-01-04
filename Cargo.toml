@@ -123,6 +123,10 @@ path = "examples/spatial_optimization_demo.rs"
 name = "spatial_partitioning_demo"
 path = "examples/spatial_partitioning_demo.rs"
 
+[[example]]
+name = "lod_demo"
+path = "examples/lod_demo.rs"
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 vulkano = "0.35.1"

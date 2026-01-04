@@ -161,9 +161,17 @@ pub enum ParticleForce {
     /// Constant gravity force.
     Gravity { strength: Vec3 },
     /// Wind force with turbulence.
-    Wind { direction: Vec3, strength: f32, turbulence: f32 },
+    Wind {
+        direction: Vec3,
+        strength: f32,
+        turbulence: f32,
+    },
     /// Point attractor.
-    Attraction { position: Vec3, strength: f32, radius: f32 },
+    Attraction {
+        position: Vec3,
+        strength: f32,
+        radius: f32,
+    },
     /// Radial force (positive = push away, negative = pull in).
     Radial { origin: Vec3, strength: f32 },
     /// Drag/air resistance.
@@ -257,7 +265,7 @@ impl ParticleEmitter {
     pub fn new(config: ParticleEmitterConfig) -> Self {
         let max_particles = config.max_particles.min(MAX_PARTICLES_PER_EMITTER);
         let particles = vec![Particle::new(); max_particles];
-        
+
         Self {
             config,
             particles,
@@ -343,7 +351,11 @@ impl ParticleEmitter {
                     ParticleForce::Gravity { strength } => {
                         particle.velocity += *strength * delta_time;
                     }
-                    ParticleForce::Wind { direction, strength, turbulence } => {
+                    ParticleForce::Wind {
+                        direction,
+                        strength,
+                        turbulence,
+                    } => {
                         let wind = *direction * *strength;
                         let turb = if *turbulence > 0.0 {
                             Vec3::new(
@@ -356,11 +368,16 @@ impl ParticleEmitter {
                         };
                         particle.velocity += (wind + turb) * delta_time;
                     }
-                    ParticleForce::Attraction { position, strength, radius } => {
+                    ParticleForce::Attraction {
+                        position,
+                        strength,
+                        radius,
+                    } => {
                         let to_attractor = *position - particle.position;
                         let distance = to_attractor.length();
                         if distance < *radius && distance > 0.001 {
-                            let force = to_attractor / distance * *strength / (distance * distance).max(0.1);
+                            let force = to_attractor / distance * *strength
+                                / (distance * distance).max(0.1);
                             particle.velocity += force * delta_time;
                         }
                     }
@@ -414,7 +431,7 @@ impl ParticleEmitter {
     fn emit_particle(&mut self) {
         // Calculate spawn position before borrowing particles
         let spawn_position = self.position + self.get_spawn_offset();
-        
+
         // Find an inactive particle slot
         let particle = match self.particles.iter_mut().find(|p| !p.active) {
             Some(p) => p,
@@ -423,7 +440,7 @@ impl ParticleEmitter {
 
         // Initialize particle
         particle.active = true;
-        particle.lifetime = self.config.particle_lifetime 
+        particle.lifetime = self.config.particle_lifetime
             + (rand::random::<f32>() - 0.5) * 2.0 * self.config.lifetime_randomness;
         particle.initial_lifetime = particle.lifetime;
 
@@ -442,7 +459,7 @@ impl ParticleEmitter {
         particle.color = self.config.initial_color;
 
         // Set size
-        particle.size = self.config.initial_size 
+        particle.size = self.config.initial_size
             + (rand::random::<f32>() - 0.5) * 2.0 * self.config.size_randomness;
 
         // Set rotation
@@ -455,29 +472,21 @@ impl ParticleEmitter {
     fn get_spawn_offset(&self) -> Vec3 {
         match self.config.shape {
             EmitterShape::Point => Vec3::ZERO,
-            EmitterShape::Sphere { radius } => {
-                random_point_on_sphere() * radius
-            }
-            EmitterShape::Box { extents } => {
-                Vec3::new(
-                    (rand::random::<f32>() - 0.5) * extents.x,
-                    (rand::random::<f32>() - 0.5) * extents.y,
-                    (rand::random::<f32>() - 0.5) * extents.z,
-                )
-            }
+            EmitterShape::Sphere { radius } => random_point_on_sphere() * radius,
+            EmitterShape::Box { extents } => Vec3::new(
+                (rand::random::<f32>() - 0.5) * extents.x,
+                (rand::random::<f32>() - 0.5) * extents.y,
+                (rand::random::<f32>() - 0.5) * extents.z,
+            ),
             EmitterShape::Circle { radius } => {
                 let angle = rand::random::<f32>() * std::f32::consts::TAU;
-                Vec3::new(
-                    angle.cos() * radius,
-                    0.0,
-                    angle.sin() * radius,
-                )
+                Vec3::new(angle.cos() * radius, 0.0, angle.sin() * radius)
             }
             EmitterShape::Cone { radius, angle } => {
                 let theta = rand::random::<f32>() * std::f32::consts::TAU;
                 let phi = rand::random::<f32>() * angle;
                 let r = rand::random::<f32>() * radius;
-                
+
                 Vec3::new(
                     phi.sin() * theta.cos() * r,
                     phi.cos() * r,
@@ -494,8 +503,9 @@ impl ParticleEmitter {
 
     /// Converts active particles to instance data.
     fn to_instances(&self) -> Vec<ParticleInstance> {
-        let atlas_index = if let (Some((row, col)), Some((_rows, cols))) = 
-            (self.config.atlas_cell, self.config.atlas_grid) {
+        let atlas_index = if let (Some((row, col)), Some((_rows, cols))) =
+            (self.config.atlas_cell, self.config.atlas_grid)
+        {
             (row * cols + col) as f32
         } else {
             0.0
@@ -628,7 +638,10 @@ impl ParticleSystem {
             return Ok(());
         }
 
-        trace!("Preparing {} particle instances for rendering", all_instances.len());
+        trace!(
+            "Preparing {} particle instances for rendering",
+            all_instances.len()
+        );
 
         // Create or update instance buffer
         let instance_buffer = Buffer::from_iter(
@@ -652,7 +665,10 @@ impl ParticleSystem {
 
     /// Gets the total number of active particles across all emitters.
     pub fn total_active_particles(&self) -> usize {
-        self.emitters.values().map(|e| e.active_particle_count()).sum()
+        self.emitters
+            .values()
+            .map(|e| e.active_particle_count())
+            .sum()
     }
 
     /// Gets the number of emitters.
@@ -695,12 +711,8 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
 fn random_point_on_sphere() -> Vec3 {
     let theta = rand::random::<f32>() * std::f32::consts::TAU;
     let phi = (rand::random::<f32>() * 2.0 - 1.0).acos();
-    
-    Vec3::new(
-        phi.sin() * theta.cos(),
-        phi.sin() * theta.sin(),
-        phi.cos(),
-    )
+
+    Vec3::new(phi.sin() * theta.cos(), phi.sin() * theta.sin(), phi.cos())
 }
 
 #[cfg(test)]
@@ -732,7 +744,7 @@ mod tests {
         let mut particle = Particle::new();
         particle.initial_lifetime = 10.0;
         particle.lifetime = 5.0;
-        
+
         assert_eq!(particle.lifetime_t(), 0.5);
     }
 
@@ -762,7 +774,7 @@ mod tests {
     fn test_emitter_position() {
         let config = ParticleEmitterConfig::default();
         let mut emitter = ParticleEmitter::new(config);
-        
+
         let pos = Vec3::new(1.0, 2.0, 3.0);
         emitter.set_position(pos);
         assert_eq!(emitter.position(), pos);
@@ -772,12 +784,12 @@ mod tests {
     fn test_emitter_activation() {
         let config = ParticleEmitterConfig::default();
         let mut emitter = ParticleEmitter::new(config);
-        
+
         assert!(emitter.is_active());
-        
+
         emitter.deactivate();
         assert!(!emitter.is_active());
-        
+
         emitter.activate();
         assert!(emitter.is_active());
     }
@@ -789,10 +801,10 @@ mod tests {
             ..Default::default()
         };
         let mut emitter = ParticleEmitter::new(config);
-        
+
         emitter.update(0.1);
         assert!(emitter.active_particle_count() > 0);
-        
+
         emitter.reset();
         assert_eq!(emitter.active_particle_count(), 0);
     }
@@ -802,7 +814,7 @@ mod tests {
         let force = ParticleForce::Gravity {
             strength: Vec3::new(0.0, -9.8, 0.0),
         };
-        
+
         match force {
             ParticleForce::Gravity { strength } => {
                 assert_eq!(strength.y, -9.8);
@@ -818,7 +830,7 @@ mod tests {
             strength: 5.0,
             turbulence: 0.5,
         };
-        
+
         match force {
             ParticleForce::Wind { strength, .. } => {
                 assert_eq!(strength, 5.0);
@@ -839,7 +851,7 @@ mod tests {
         let a = [0.0, 0.0, 0.0, 1.0];
         let b = [1.0, 1.0, 1.0, 1.0];
         let result = lerp_color(a, b, 0.5);
-        
+
         assert_eq!(result, [0.5, 0.5, 0.5, 1.0]);
     }
 
@@ -848,7 +860,10 @@ mod tests {
         for _ in 0..100 {
             let point = random_point_on_sphere();
             let length = point.length();
-            assert!((length - 1.0).abs() < 0.001, "Point should be on unit sphere");
+            assert!(
+                (length - 1.0).abs() < 0.001,
+                "Point should be on unit sphere"
+            );
         }
     }
 

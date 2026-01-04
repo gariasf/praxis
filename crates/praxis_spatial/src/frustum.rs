@@ -233,7 +233,7 @@ mod tests {
         let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 5.0), Vec3::ZERO, Vec3::Y);
         let proj = Mat4::perspective_rh(60.0_f32.to_radians(), 16.0 / 9.0, 0.1, 100.0);
         let frustum = Frustum::from_view_projection(proj * view);
-        
+
         assert_eq!(frustum.planes.len(), 6);
     }
 
@@ -259,7 +259,7 @@ mod tests {
     #[test]
     fn test_frustum_culler_update() {
         let mut culler = FrustumCuller::new();
-        
+
         let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 5.0), Vec3::ZERO, Vec3::Y);
         let proj = Mat4::perspective_rh(60.0_f32.to_radians(), 1.0, 0.1, 100.0);
         culler.update(proj * view);

@@ -4,7 +4,9 @@
 //! and LOD selection into a single visibility determination pipeline.
 
 use crate::{
-    aabb::Aabb, frustum::FrustumCuller, lod::{LodManager, LodSelection}
+    aabb::Aabb,
+    frustum::FrustumCuller,
+    lod::{LodManager, LodSelection},
 };
 use bevy_ecs::entity::Entity;
 use praxis_math::{Mat4, Vec3};
@@ -157,7 +159,9 @@ impl VisibilitySystem {
                 continue;
             }
 
-            let lod = self.lod_manager.select_lod(entity, camera_position, position);
+            let lod = self
+                .lod_manager
+                .select_lod(entity, camera_position, position);
 
             results.push(CullingResult {
                 entity,
@@ -172,10 +176,7 @@ impl VisibilitySystem {
     }
 
     /// Performs frustum culling only on a list of entities.
-    pub fn frustum_cull_only(
-        &self,
-        entities: &[(Entity, Aabb)],
-    ) -> Vec<Entity> {
+    pub fn frustum_cull_only(&self, entities: &[(Entity, Aabb)]) -> Vec<Entity> {
         entities
             .iter()
             .filter(|(_, bounds)| self.frustum_culler.is_visible(bounds))
@@ -251,7 +252,7 @@ mod tests {
     #[test]
     fn test_visibility_system_distance_culling() {
         let system = VisibilitySystem::with_max_distance(50.0);
-        
+
         let entities = vec![
             (
                 Entity::from_raw(1),
@@ -266,8 +267,10 @@ mod tests {
         ];
 
         let (results, stats) = system.cull_entities(&entities, Vec3::ZERO);
-        
+
         assert_eq!(stats.distance_culled, 1);
-        assert!(results.iter().any(|r| r.cull_reason == Some(CullReason::DistanceCull)));
+        assert!(results
+            .iter()
+            .any(|r| r.cull_reason == Some(CullReason::DistanceCull)));
     }
 }

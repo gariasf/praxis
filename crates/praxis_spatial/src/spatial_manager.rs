@@ -141,7 +141,7 @@ impl SpatialManager {
         if should_update {
             self.previous_positions.insert(entity, new_center);
             self.dirty_entities.insert(entity);
-            
+
             match self.structure_type {
                 SpatialStructureType::Octree => self.octree.update(entity, new_bounds),
                 SpatialStructureType::Bvh => {
@@ -207,9 +207,17 @@ impl SpatialManager {
     }
 
     /// Queries all entities that intersect with a ray and returns them sorted by distance.
-    pub fn query_ray_sorted(&self, origin: Vec3, direction: Vec3, max_distance: f32) -> Vec<(Entity, f32)> {
+    pub fn query_ray_sorted(
+        &self,
+        origin: Vec3,
+        direction: Vec3,
+        max_distance: f32,
+    ) -> Vec<(Entity, f32)> {
         match self.structure_type {
-            SpatialStructureType::Octree => self.octree.query_ray_sorted(origin, direction, max_distance),
+            SpatialStructureType::Octree => {
+                self.octree
+                    .query_ray_sorted(origin, direction, max_distance)
+            }
             SpatialStructureType::Bvh => self.bvh.query_ray_sorted(origin, direction, max_distance),
         }
     }
@@ -351,9 +359,9 @@ impl SpatialManager {
     /// Finds the nearest entity to a given point within `max_distance`.
     pub fn query_nearest(&self, point: Vec3, max_distance: f32) -> Option<(Entity, f32)> {
         let candidates = self.query_radius(point, max_distance);
-        
+
         let mut nearest: Option<(Entity, f32)> = None;
-        
+
         for entity in candidates {
             if let Some(bounds) = self.get_bounds(entity) {
                 let distance = bounds.center().distance(point);
@@ -368,14 +376,14 @@ impl SpatialManager {
                 }
             }
         }
-        
+
         nearest
     }
 
     /// Finds the K nearest entities to a given point within `max_distance`.
     pub fn query_k_nearest(&self, point: Vec3, k: usize, max_distance: f32) -> Vec<(Entity, f32)> {
         let candidates = self.query_radius(point, max_distance);
-        
+
         let mut distances: Vec<(Entity, f32)> = candidates
             .into_iter()
             .filter_map(|entity| {
@@ -386,7 +394,7 @@ impl SpatialManager {
             })
             .filter(|(_, distance)| *distance <= max_distance)
             .collect();
-        
+
         distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
         distances.truncate(k);
         distances
@@ -444,9 +452,13 @@ mod tests {
         let entity2 = Entity::from_raw(2);
 
         manager.insert(entity1, Aabb::from_min_max(Vec3::ZERO, Vec3::ONE));
-        manager.insert(entity2, Aabb::from_min_max(Vec3::new(10.0, 0.0, 0.0), Vec3::new(11.0, 1.0, 1.0)));
+        manager.insert(
+            entity2,
+            Aabb::from_min_max(Vec3::new(10.0, 0.0, 0.0), Vec3::new(11.0, 1.0, 1.0)),
+        );
 
-        let query_bounds = Aabb::from_min_max(Vec3::new(-5.0, -5.0, -5.0), Vec3::new(5.0, 5.0, 5.0));
+        let query_bounds =
+            Aabb::from_min_max(Vec3::new(-5.0, -5.0, -5.0), Vec3::new(5.0, 5.0, 5.0));
         let results = manager.query(&query_bounds);
 
         assert!(results.contains(&entity1));
@@ -507,9 +519,18 @@ mod tests {
         let entity2 = Entity::from_raw(2);
         let entity3 = Entity::from_raw(3);
 
-        manager.insert(entity1, Aabb::from_center_half_extents(Vec3::new(5.0, 0.0, 0.0), Vec3::ONE));
-        manager.insert(entity2, Aabb::from_center_half_extents(Vec3::new(10.0, 0.0, 0.0), Vec3::ONE));
-        manager.insert(entity3, Aabb::from_center_half_extents(Vec3::new(3.0, 0.0, 0.0), Vec3::ONE));
+        manager.insert(
+            entity1,
+            Aabb::from_center_half_extents(Vec3::new(5.0, 0.0, 0.0), Vec3::ONE),
+        );
+        manager.insert(
+            entity2,
+            Aabb::from_center_half_extents(Vec3::new(10.0, 0.0, 0.0), Vec3::ONE),
+        );
+        manager.insert(
+            entity3,
+            Aabb::from_center_half_extents(Vec3::new(3.0, 0.0, 0.0), Vec3::ONE),
+        );
 
         let nearest = manager.query_nearest(Vec3::ZERO, 100.0);
         assert!(nearest.is_some());
@@ -524,7 +545,10 @@ mod tests {
         for i in 0..10 {
             let entity = Entity::from_raw(i);
             let x = (i as f32 * 5.0);
-            manager.insert(entity, Aabb::from_center_half_extents(Vec3::new(x, 0.0, 0.0), Vec3::ONE));
+            manager.insert(
+                entity,
+                Aabb::from_center_half_extents(Vec3::new(x, 0.0, 0.0), Vec3::ONE),
+            );
         }
 
         let k_nearest = manager.query_k_nearest(Vec3::ZERO, 3, 100.0);

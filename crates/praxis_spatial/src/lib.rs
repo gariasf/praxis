@@ -71,13 +71,15 @@ pub use bvh::{Bvh, BvhNode};
 pub use culling::{CullReason, CullingResult, CullingStats, VisibilitySystem};
 pub use frustum::{Frustum, FrustumCuller, Plane};
 pub use lod::{LodGroup, LodLevel, LodManager, LodSelection};
-pub use occlusion::{OcclusionCuller, OcclusionCullerStats, OcclusionQuery, OcclusionQueryPool, OcclusionQueryResult};
+pub use occlusion::{
+    OcclusionCuller, OcclusionCullerStats, OcclusionQuery, OcclusionQueryPool, OcclusionQueryResult,
+};
 pub use octree::{Octree, OctreeNode};
 pub use spatial_manager::{SpatialConfig, SpatialManager, SpatialStats, SpatialStructureType};
 pub use spatial_systems::{
-    SpatialBundle, SpatialBounds, SpatialEntity, SpatialResource, SpatialSystemConfig,
-    SpatialSystemSet, auto_rebalance_spatial, flush_spatial_updates, insert_spatial_entities,
-    remove_spatial_entities, update_spatial_enabled, update_spatial_entities,
+    auto_rebalance_spatial, flush_spatial_updates, insert_spatial_entities,
+    remove_spatial_entities, update_spatial_enabled, update_spatial_entities, SpatialBounds,
+    SpatialBundle, SpatialEntity, SpatialResource, SpatialSystemConfig, SpatialSystemSet,
 };
 
 use praxis_utils::{info, Result};

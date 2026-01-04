@@ -2124,6 +2124,89 @@ impl From<String> for LodComponent {
     }
 }
 
+/// LOD (Level of Detail) group component for managing mesh variants at different detail levels.
+///
+/// This component wraps the `LodGroup` from the graphics system and allows attaching
+/// LOD management directly to entities. The LOD system automatically selects the appropriate
+/// mesh variant based on distance from the camera.
+///
+/// # LOD System Benefits
+///
+/// - **Performance**: Reduces triangle count for distant objects
+/// - **Visual Quality**: Maintains high detail where it matters (near camera)
+/// - **Smooth Transitions**: Alpha-blended transitions between LOD levels prevent popping
+/// - **Flexible Configuration**: Per-entity LOD settings and global LOD bias
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, Transform, LodGroupComponent};
+/// use praxis_graphics::lod::{LodLevel, LodGroup};
+///
+/// let mut world = World::new();
+///
+/// // Create LOD group with 3 detail levels
+/// let lod_group = LodGroup::new(vec![
+///     LodLevel::new("tree_high", 0.0, 20.0),    // High detail: 0-20 units
+///     LodLevel::new("tree_medium", 20.0, 50.0), // Medium: 20-50 units
+///     LodLevel::new("tree_low", 50.0, 100.0),   // Low detail: 50-100 units
+/// ]);
+///
+/// // Spawn entity with LOD
+/// world.spawn((
+///     Transform::from_xyz(10.0, 0.0, 10.0),
+///     LodGroupComponent(lod_group),
+/// ));
+/// ```
+///
+/// Note: This type is a newtype wrapper to avoid circular dependencies between
+/// praxis_ecs and praxis_graphics. The actual LodGroup type is defined in
+/// praxis_graphics and must be imported for construction.
+#[derive(Component, Debug, Clone)]
+pub struct LodGroupComponent(pub praxis_graphics::lod::LodGroup);
+
+impl LodGroupComponent {
+    /// Creates a new LOD group component from a graphics LOD group.
+    pub fn new(lod_group: praxis_graphics::lod::LodGroup) -> Self {
+        Self(lod_group)
+    }
+
+    /// Gets a reference to the underlying LOD group.
+    pub fn lod_group(&self) -> &praxis_graphics::lod::LodGroup {
+        &self.0
+    }
+
+    /// Gets a mutable reference to the underlying LOD group.
+    pub fn lod_group_mut(&mut self) -> &mut praxis_graphics::lod::LodGroup {
+        &mut self.0
+    }
+
+    /// Gets the mesh ID that should currently be rendered.
+    pub fn current_mesh_id(&self) -> &str {
+        self.0.current_mesh_id()
+    }
+
+    /// Gets all meshes that should be rendered (including transitions).
+    pub fn get_render_meshes(&self) -> Vec<(&str, f32)> {
+        self.0.get_render_meshes()
+    }
+
+    /// Checks if the LOD group is currently transitioning between levels.
+    pub fn is_transitioning(&self) -> bool {
+        self.0.is_transitioning()
+    }
+
+    /// Gets the current LOD level index.
+    pub fn current_level(&self) -> usize {
+        self.0.current_level()
+    }
+
+    /// Gets the number of LOD levels.
+    pub fn level_count(&self) -> usize {
+        self.0.level_count()
+    }
+}
+
 /// Particle emitter component for spawning and managing particles.
 ///
 /// This component marks an entity as a particle emitter, which spawns and manages
