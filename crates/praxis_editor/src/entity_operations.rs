@@ -187,9 +187,8 @@
 //! ```
 
 use crate::undo::{
-    AddComponentCommand, ComponentData, CompositeCommand, CreateEntityCommand,
-    DeleteEntityCommand, EditorCommand, RemoveComponentCommand, SerializableCommand,
-    UndoRedoSystem,
+    AddComponentCommand, ComponentData, CompositeCommand, CreateEntityCommand, DeleteEntityCommand,
+    EditorCommand, RemoveComponentCommand, SerializableCommand, UndoRedoSystem,
 };
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
@@ -220,7 +219,11 @@ impl fmt::Display for EntityOperationsError {
                 write!(f, "Entity {:?} not found in World", entity)
             }
             Self::ComponentNotFound { entity, component } => {
-                write!(f, "Component '{}' not found on entity {:?}", component, entity)
+                write!(
+                    f,
+                    "Component '{}' not found on entity {:?}",
+                    component, entity
+                )
             }
             Self::CommandExecutionFailed(msg) => {
                 write!(f, "Command execution failed: {}", msg)
@@ -288,12 +291,12 @@ impl EntityOperations {
     ) -> Result<Entity> {
         let mut command = CreateEntityCommand::new(vec![]);
         self.execute_create_command(world, undo_system, &mut command)?;
-        
-        command.entity
-            .map(|e| e.into())
-            .ok_or_else(|| EntityOperationsError::CommandExecutionFailed(
+
+        command.entity.map(|e| e.into()).ok_or_else(|| {
+            EntityOperationsError::CommandExecutionFailed(
                 "Failed to retrieve created entity".to_string(),
-            ))
+            )
+        })
     }
 
     /// Creates a new entity with a transform component.
@@ -313,12 +316,12 @@ impl EntityOperations {
     ) -> Result<Entity> {
         let mut command = CreateEntityCommand::with_transform(transform);
         self.execute_create_command(world, undo_system, &mut command)?;
-        
-        command.entity
-            .map(|e| e.into())
-            .ok_or_else(|| EntityOperationsError::CommandExecutionFailed(
+
+        command.entity.map(|e| e.into()).ok_or_else(|| {
+            EntityOperationsError::CommandExecutionFailed(
                 "Failed to retrieve created entity".to_string(),
-            ))
+            )
+        })
     }
 
     /// Creates a new entity with name and transform components.
@@ -344,12 +347,12 @@ impl EntityOperations {
         ];
         let mut command = CreateEntityCommand::new(components);
         self.execute_create_command(world, undo_system, &mut command)?;
-        
-        command.entity
-            .map(|e| e.into())
-            .ok_or_else(|| EntityOperationsError::CommandExecutionFailed(
+
+        command.entity.map(|e| e.into()).ok_or_else(|| {
+            EntityOperationsError::CommandExecutionFailed(
                 "Failed to retrieve created entity".to_string(),
-            ))
+            )
+        })
     }
 
     // ============================================================================
@@ -493,12 +496,12 @@ impl EntityOperations {
         // Create the duplicate
         let mut command = CreateEntityCommand::new(components);
         self.execute_create_command(world, undo_system, &mut command)?;
-        
-        command.entity
-            .map(|e| e.into())
-            .ok_or_else(|| EntityOperationsError::CommandExecutionFailed(
+
+        command.entity.map(|e| e.into()).ok_or_else(|| {
+            EntityOperationsError::CommandExecutionFailed(
                 "Failed to retrieve duplicated entity".to_string(),
-            ))
+            )
+        })
     }
 
     /// Duplicates multiple entities at once.
@@ -605,12 +608,7 @@ impl EntityOperations {
         entity: Entity,
         name: impl Into<String>,
     ) -> Result<()> {
-        self.add_component(
-            world,
-            undo_system,
-            entity,
-            ComponentData::Name(name.into()),
-        )
+        self.add_component(world, undo_system, entity, ComponentData::Name(name.into()))
     }
 
     /// Adds a Parent component to an entity.
@@ -806,14 +804,13 @@ impl EntityOperations {
     /// # Errors
     ///
     /// Returns error if no batch is in progress or command execution fails.
-    pub fn end_batch(
-        &mut self,
-        world: &mut World,
-        undo_system: &mut UndoRedoSystem,
-    ) -> Result<()> {
-        let batch = self.batch_operation.take().ok_or(
-            EntityOperationsError::InvalidOperation("No batch operation in progress".to_string()),
-        )?;
+    pub fn end_batch(&mut self, world: &mut World, undo_system: &mut UndoRedoSystem) -> Result<()> {
+        let batch = self
+            .batch_operation
+            .take()
+            .ok_or(EntityOperationsError::InvalidOperation(
+                "No batch operation in progress".to_string(),
+            ))?;
 
         if batch.commands.is_empty() {
             return Ok(());
@@ -871,13 +868,17 @@ impl EntityOperations {
     ) -> Result<()> {
         if let Some(batch) = &mut self.batch_operation {
             // Execute to get entity, then add to batch
-            command.execute(world)
+            command
+                .execute(world)
                 .map_err(|e| EntityOperationsError::CommandExecutionFailed(e.to_string()))?;
-            batch.commands.push(SerializableCommand::CreateEntity(command.clone()));
+            batch
+                .commands
+                .push(SerializableCommand::CreateEntity(command.clone()));
             Ok(())
         } else {
             // Execute and add to undo system
-            command.execute(world)
+            command
+                .execute(world)
                 .map_err(|e| EntityOperationsError::CommandExecutionFailed(e.to_string()))?;
             undo_system
                 .execute_command(world, Box::new(command.clone()))
@@ -1011,10 +1012,7 @@ mod tests {
         let mut undo_system = UndoRedoSystem::new();
         let mut entity_ops = EntityOperations::new();
 
-        let original = world.spawn((
-            Transform::from_xyz(10.0, 0.0, 0.0),
-            Name::new("Original"),
-        ));
+        let original = world.spawn((Transform::from_xyz(10.0, 0.0, 0.0), Name::new("Original")));
 
         let duplicate = entity_ops
             .duplicate_entity(&mut world, &mut undo_system, original)
@@ -1136,7 +1134,10 @@ mod tests {
         undo_system.undo(&mut world).unwrap();
 
         // Entity should be removed after undo
-        assert!(world.get_entity(entity).is_none() || !world.get_entity(entity).unwrap().contains::<Transform>());
+        assert!(
+            world.get_entity(entity).is_none()
+                || !world.get_entity(entity).unwrap().contains::<Transform>()
+        );
     }
 
     #[test]
