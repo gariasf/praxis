@@ -8,6 +8,8 @@ license = "MIT"
 praxis_ecs = { path = "../praxis_ecs" }
 praxis_math = { path = "../praxis_math" }
 praxis_utils = { path = "../praxis_utils" }
+praxis_physics = { path = "../praxis_physics" }
+praxis_audio = { path = "../praxis_audio" }
 egui = "0.29"
 egui-winit = "0.29"
 egui_winit_vulkano = "0.28"
