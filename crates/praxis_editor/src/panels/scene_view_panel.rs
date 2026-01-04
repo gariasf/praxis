@@ -70,10 +70,8 @@ impl EditorPanel for SceneViewPanel {
             egui::Stroke::new(3.0, self.border_color),
         );
 
-        if response.hovered() {
-            if ui.input(|i| i.pointer.any_released()) {
-                info!("Potential drop target activated in scene view");
-            }
+        if response.hovered() && ui.input(|i| i.pointer.any_released()) {
+            info!("Potential drop target activated in scene view");
         }
 
         ui.painter().text(

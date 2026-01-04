@@ -335,7 +335,7 @@ impl PlayModeSystem {
             if let Some(parent_comp) = bevy_world.get::<Parent>(*entity) {
                 // This is a child entity - it will be added to its parent's children
                 let parent_entity = parent_comp.0;
-                if entity_data.get(&parent_entity).is_some() {
+                if entity_data.contains_key(&parent_entity) {
                     // We'll handle children in the third pass
                     continue;
                 }
@@ -425,7 +425,7 @@ impl PlayModeSystem {
                     top: None,
                     near: persp.near,
                     far: persp.far,
-                    is_active: world.get::<Camera>(entity).map_or(true, |c| c.is_active),
+                    is_active: world.get::<Camera>(entity).is_none_or(|c| c.is_active),
                     priority: world.get::<Camera>(entity).map_or(0, |c| c.priority),
                 });
             }
@@ -441,7 +441,7 @@ impl PlayModeSystem {
                     top: Some(ortho.top),
                     near: ortho.near,
                     far: ortho.far,
-                    is_active: world.get::<Camera>(entity).map_or(true, |c| c.is_active),
+                    is_active: world.get::<Camera>(entity).is_none_or(|c| c.is_active),
                     priority: world.get::<Camera>(entity).map_or(0, |c| c.priority),
                 });
             }

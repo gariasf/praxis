@@ -172,7 +172,7 @@ struct MessageVisitor<'a> {
 impl<'a> tracing::field::Visit for MessageVisitor<'a> {
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
         if field.name() == "message" {
-            *self.message = format!("{:?}", value);
+            *self.message = format!("{value:?}");
             if self.message.starts_with('"') && self.message.ends_with('"') {
                 *self.message = self.message[1..self.message.len() - 1].to_string();
             }
@@ -337,7 +337,7 @@ impl ConsolePanel {
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let total = self.log_buffer.len();
-                ui.label(format!("{} messages", total));
+                ui.label(format!("{total} messages"));
             });
         });
     }
@@ -404,11 +404,12 @@ impl ConsolePanel {
             ui.label(">");
             let response = ui.text_edit_singleline(&mut self.command_input);
 
-            if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                if !self.command_input.is_empty() {
-                    self.add_log(format!("> {}", self.command_input));
-                    self.command_input.clear();
-                }
+            if response.lost_focus()
+                && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                && !self.command_input.is_empty()
+            {
+                self.add_log(format!("> {}", self.command_input));
+                self.command_input.clear();
             }
         });
     }

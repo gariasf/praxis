@@ -222,20 +222,16 @@ impl fmt::Display for EntityOperationsError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::EntityNotFound(entity) => {
-                write!(f, "Entity {:?} not found in World", entity)
+                write!(f, "Entity {entity:?} not found in World")
             }
             Self::ComponentNotFound { entity, component } => {
-                write!(
-                    f,
-                    "Component '{}' not found on entity {:?}",
-                    component, entity
-                )
+                write!(f, "Component '{component}' not found on entity {entity:?}")
             }
             Self::CommandExecutionFailed(msg) => {
-                write!(f, "Command execution failed: {}", msg)
+                write!(f, "Command execution failed: {msg}")
             }
             Self::InvalidOperation(msg) => {
-                write!(f, "Invalid operation: {}", msg)
+                write!(f, "Invalid operation: {msg}")
             }
         }
     }

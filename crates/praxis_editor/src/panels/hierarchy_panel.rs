@@ -80,7 +80,7 @@ impl HierarchyPanel {
                         .entity_ops
                         .delete_entities(world, undo_system, selected)
                     {
-                        eprintln!("Failed to delete entities: {}", e);
+                        eprintln!("Failed to delete entities: {e}");
                     }
                     selection_system.clear();
                 }
@@ -148,7 +148,7 @@ impl HierarchyPanel {
             let name = entity_ref
                 .get::<Name>()
                 .map(|n| n.0.clone())
-                .unwrap_or_else(|| format!("Entity {:?}", entity));
+                .unwrap_or_else(|| format!("Entity {entity:?}"));
 
             let has_children = entity_ref
                 .get::<Children>()
@@ -381,7 +381,7 @@ impl HierarchyPanel {
         match undo_system.execute_command(world, Box::new(command)) {
             Ok(_) => true,
             Err(e) => {
-                eprintln!("Failed to reparent entity: {}", e);
+                eprintln!("Failed to reparent entity: {e}");
                 false
             }
         }

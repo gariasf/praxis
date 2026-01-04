@@ -195,7 +195,7 @@ pub enum SerializableCommand {
 impl SerializableCommand {
     /// Creates a command from RON string.
     pub fn from_ron(ron: &str) -> Result<Self> {
-        ron::from_str(ron).map_err(|e| format!("Failed to deserialize command: {}", e))
+        ron::from_str(ron).map_err(|e| format!("Failed to deserialize command: {e}"))
     }
 
     /// Converts the command to a boxed trait object.
@@ -329,12 +329,12 @@ impl EditorCommand for TransformEditCommand {
 
     fn description(&self) -> String {
         let entity: Entity = self.entity.into();
-        format!("Transform Entity {:?}", entity)
+        format!("Transform Entity {entity:?}")
     }
 
     fn to_ron(&self) -> Result<String> {
         let serializable = SerializableCommand::TransformEdit(self.clone());
-        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {}", e))
+        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {e}"))
     }
 
     fn type_id(&self) -> &'static str {
@@ -579,7 +579,7 @@ impl EditorCommand for CreateEntityCommand {
 
     fn to_ron(&self) -> Result<String> {
         let serializable = SerializableCommand::CreateEntity(self.clone());
-        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {}", e))
+        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {e}"))
     }
 
     fn type_id(&self) -> &'static str {
@@ -775,12 +775,12 @@ impl EditorCommand for DeleteEntityCommand {
 
     fn description(&self) -> String {
         let entity: Entity = self.entity.into();
-        format!("Delete Entity {:?}", entity)
+        format!("Delete Entity {entity:?}")
     }
 
     fn to_ron(&self) -> Result<String> {
         let serializable = SerializableCommand::DeleteEntity(self.clone());
-        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {}", e))
+        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {e}"))
     }
 
     fn type_id(&self) -> &'static str {
@@ -984,12 +984,12 @@ impl EditorCommand for AddComponentCommand {
             ComponentData::AudioSource(_) => "AudioSource",
             ComponentData::PerspectiveProjection(_) => "PerspectiveProjection",
         };
-        format!("Add {} to {:?}", component_name, entity)
+        format!("Add {component_name} to {entity:?}")
     }
 
     fn to_ron(&self) -> Result<String> {
         let serializable = SerializableCommand::AddComponent(self.clone());
-        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {}", e))
+        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {e}"))
     }
 
     fn type_id(&self) -> &'static str {
@@ -1195,12 +1195,12 @@ impl EditorCommand for RemoveComponentCommand {
             ComponentData::AudioSource(_) => "AudioSource",
             ComponentData::PerspectiveProjection(_) => "PerspectiveProjection",
         };
-        format!("Remove {} from {:?}", component_name, entity)
+        format!("Remove {component_name} from {entity:?}")
     }
 
     fn to_ron(&self) -> Result<String> {
         let serializable = SerializableCommand::RemoveComponent(self.clone());
-        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {}", e))
+        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {e}"))
     }
 
     fn type_id(&self) -> &'static str {
@@ -1292,15 +1292,15 @@ impl EditorCommand for SetParentCommand {
         match self.new_parent {
             Some(parent_ser) => {
                 let parent: Entity = parent_ser.into();
-                format!("Set Parent of {:?} to {:?}", entity, parent)
+                format!("Set Parent of {entity:?} to {parent:?}")
             }
-            None => format!("Remove Parent from {:?}", entity),
+            None => format!("Remove Parent from {entity:?}"),
         }
     }
 
     fn to_ron(&self) -> Result<String> {
         let serializable = SerializableCommand::SetParent(self.clone());
-        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {}", e))
+        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {e}"))
     }
 
     fn type_id(&self) -> &'static str {
@@ -1381,7 +1381,7 @@ impl EditorCommand for CompositeCommand {
 
     fn to_ron(&self) -> Result<String> {
         let serializable = SerializableCommand::Composite(self.clone());
-        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {}", e))
+        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {e}"))
     }
 
     fn type_id(&self) -> &'static str {
@@ -1535,7 +1535,7 @@ impl CommandHistory {
             commands: serialized_commands,
         };
 
-        ron::to_string(&data).map_err(|e| format!("Failed to serialize history: {}", e))
+        ron::to_string(&data).map_err(|e| format!("Failed to serialize history: {e}"))
     }
 
     /// Loads command history from RON.
@@ -1548,7 +1548,7 @@ impl CommandHistory {
         }
 
         let data: HistoryData =
-            ron::from_str(ron).map_err(|e| format!("Failed to deserialize history: {}", e))?;
+            ron::from_str(ron).map_err(|e| format!("Failed to deserialize history: {e}"))?;
 
         self.clear();
 
@@ -1682,11 +1682,7 @@ impl UndoRedoSystem {
     /// Updates the dirty state based on whether we're at the saved undo count.
     fn update_dirty_state(&mut self) {
         // If we've returned to the saved undo count, we're no longer dirty
-        if self.history.undo_count() == self.saved_undo_count {
-            self.dirty = false;
-        } else {
-            self.dirty = true;
-        }
+        self.dirty = self.history.undo_count() != self.saved_undo_count;
     }
 
     /// Serializes the command history to RON.

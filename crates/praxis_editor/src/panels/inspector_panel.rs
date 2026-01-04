@@ -59,7 +59,7 @@ impl InspectorPanel {
 
         // Display entity header
         ui.horizontal(|ui| {
-            ui.strong(format!("Entity {:?}", entity));
+            ui.strong(format!("Entity {entity:?}"));
         });
         ui.separator();
 
@@ -101,9 +101,7 @@ impl InspectorPanel {
             let mut transform = original_transform;
 
             // Cache the original transform if not already cached
-            if !self.cached_transforms.contains_key(&entity) {
-                self.cached_transforms.insert(entity, original_transform);
-            }
+            self.cached_transforms.entry(entity).or_insert(original_transform);
 
             let mut changed = false;
 
