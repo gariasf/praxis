@@ -62,10 +62,12 @@ impl HierarchyPanel {
         // Toolbar with create/delete buttons
         ui.horizontal(|ui| {
             if ui.button("➕ Create Entity").clicked() {
-                if let Ok(entity) = self
-                    .entity_ops
-                    .create_entity_with_components(world, undo_system, "New Entity", Default::default())
-                {
+                if let Ok(entity) = self.entity_ops.create_entity_with_components(
+                    world,
+                    undo_system,
+                    "New Entity",
+                    Default::default(),
+                ) {
                     selection_system.select_entity(entity, SelectionMode::Replace);
                 }
             }
@@ -74,7 +76,10 @@ impl HierarchyPanel {
             ui.add_enabled_ui(!selection_system.is_empty(), |ui| {
                 if ui.button("🗑 Delete").clicked() {
                     let selected: Vec<Entity> = selection_system.selected_entities().collect();
-                    if let Err(e) = self.entity_ops.delete_entities(world, undo_system, selected) {
+                    if let Err(e) = self
+                        .entity_ops
+                        .delete_entities(world, undo_system, selected)
+                    {
                         eprintln!("Failed to delete entities: {}", e);
                     }
                     selection_system.clear();
@@ -198,14 +203,7 @@ impl HierarchyPanel {
         // Render children if expanded
         if is_expanded && has_children {
             for child in children_vec {
-                self.render_entity_node(
-                    ui,
-                    world,
-                    child,
-                    depth + 1,
-                    selection_system,
-                    undo_system,
-                );
+                self.render_entity_node(ui, world, child, depth + 1, selection_system, undo_system);
             }
         }
     }
@@ -227,7 +225,10 @@ impl HierarchyPanel {
                 ui.visuals().selection.stroke.color,
             )
         } else {
-            (ui.visuals().widgets.inactive.bg_fill, ui.visuals().text_color())
+            (
+                ui.visuals().widgets.inactive.bg_fill,
+                ui.visuals().text_color(),
+            )
         };
 
         // Create selectable label
@@ -241,8 +242,7 @@ impl HierarchyPanel {
 
             // Background
             if response.hovered() {
-                ui.painter()
-                    .rect_filled(rect, 2.0, visuals.bg_fill);
+                ui.painter().rect_filled(rect, 2.0, visuals.bg_fill);
             } else if is_selected {
                 ui.painter().rect_filled(rect, 2.0, bg_color);
             }
@@ -253,7 +253,11 @@ impl HierarchyPanel {
                 egui::Align2::LEFT_CENTER,
                 name,
                 egui::FontId::default(),
-                if is_selected { text_color } else { ui.visuals().text_color() },
+                if is_selected {
+                    text_color
+                } else {
+                    ui.visuals().text_color()
+                },
             );
 
             // Drag-and-drop source
@@ -269,7 +273,8 @@ impl HierarchyPanel {
             }
 
             // Drop target highlight
-            if response.hovered() && self.drag_entity.is_some() && self.drag_entity != Some(entity) {
+            if response.hovered() && self.drag_entity.is_some() && self.drag_entity != Some(entity)
+            {
                 ui.painter().rect_stroke(
                     rect,
                     2.0,
@@ -372,7 +377,7 @@ impl HierarchyPanel {
         // Create and execute SetParent command
         use crate::undo::SetParentCommand;
         let command = SetParentCommand::new(child, old_parent, new_parent);
-        
+
         match undo_system.execute_command(world, Box::new(command)) {
             Ok(_) => true,
             Err(e) => {

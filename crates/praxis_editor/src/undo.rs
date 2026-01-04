@@ -453,7 +453,9 @@ impl CreateEntityCommand {
 impl EditorCommand for CreateEntityCommand {
     fn execute(&mut self, world: &mut World) -> Result<()> {
         use praxis_audio::AudioSource;
-        use praxis_ecs::{MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection};
+        use praxis_ecs::{
+            MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection,
+        };
         use praxis_graphics::MaterialProperties;
         use praxis_physics::{Collider, Mass, PhysicsVelocity, RigidBody};
 
@@ -484,7 +486,7 @@ impl EditorCommand for CreateEntityCommand {
                             .with_base_color(props.base_color)
                             .with_metallic(props.metallic)
                             .with_roughness(props.roughness)
-                            .with_emissive_strength(props.emissive_strength)
+                            .with_emissive_strength(props.emissive_strength),
                     ));
                 }
                 ComponentData::RigidBody(rb) => {
@@ -496,12 +498,26 @@ impl EditorCommand for CreateEntityCommand {
                 }
                 ComponentData::Collider(col) => {
                     entity_mut.insert(match col {
-                        SerializableCollider::Cuboid { hx, hy, hz } => Collider::cuboid(*hx, *hy, *hz),
+                        SerializableCollider::Cuboid { hx, hy, hz } => {
+                            Collider::cuboid(*hx, *hy, *hz)
+                        }
                         SerializableCollider::Sphere { radius } => Collider::sphere(*radius),
-                        SerializableCollider::CapsuleY { half_height, radius } => Collider::capsule_y(*half_height, *radius),
-                        SerializableCollider::CapsuleX { half_height, radius } => Collider::capsule_x(*half_height, *radius),
-                        SerializableCollider::CapsuleZ { half_height, radius } => Collider::capsule_z(*half_height, *radius),
-                        SerializableCollider::CylinderY { half_height, radius } => Collider::cylinder_y(*half_height, *radius),
+                        SerializableCollider::CapsuleY {
+                            half_height,
+                            radius,
+                        } => Collider::capsule_y(*half_height, *radius),
+                        SerializableCollider::CapsuleX {
+                            half_height,
+                            radius,
+                        } => Collider::capsule_x(*half_height, *radius),
+                        SerializableCollider::CapsuleZ {
+                            half_height,
+                            radius,
+                        } => Collider::capsule_z(*half_height, *radius),
+                        SerializableCollider::CylinderY {
+                            half_height,
+                            radius,
+                        } => Collider::cylinder_y(*half_height, *radius),
                     });
                 }
                 ComponentData::PhysicsVelocity(vel) => {
@@ -646,7 +662,9 @@ impl EditorCommand for DeleteEntityCommand {
 
     fn undo(&mut self, world: &mut World) -> Result<()> {
         use praxis_audio::AudioSource;
-        use praxis_ecs::{MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection};
+        use praxis_ecs::{
+            MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection,
+        };
         use praxis_graphics::MaterialProperties;
         use praxis_physics::{Collider, Mass, PhysicsVelocity, RigidBody};
 
@@ -676,7 +694,7 @@ impl EditorCommand for DeleteEntityCommand {
                             .with_base_color(props.base_color)
                             .with_metallic(props.metallic)
                             .with_roughness(props.roughness)
-                            .with_emissive_strength(props.emissive_strength)
+                            .with_emissive_strength(props.emissive_strength),
                     ));
                 }
                 ComponentData::RigidBody(rb) => {
@@ -688,12 +706,26 @@ impl EditorCommand for DeleteEntityCommand {
                 }
                 ComponentData::Collider(col) => {
                     entity_mut.insert(match col {
-                        SerializableCollider::Cuboid { hx, hy, hz } => Collider::cuboid(*hx, *hy, *hz),
+                        SerializableCollider::Cuboid { hx, hy, hz } => {
+                            Collider::cuboid(*hx, *hy, *hz)
+                        }
                         SerializableCollider::Sphere { radius } => Collider::sphere(*radius),
-                        SerializableCollider::CapsuleY { half_height, radius } => Collider::capsule_y(*half_height, *radius),
-                        SerializableCollider::CapsuleX { half_height, radius } => Collider::capsule_x(*half_height, *radius),
-                        SerializableCollider::CapsuleZ { half_height, radius } => Collider::capsule_z(*half_height, *radius),
-                        SerializableCollider::CylinderY { half_height, radius } => Collider::cylinder_y(*half_height, *radius),
+                        SerializableCollider::CapsuleY {
+                            half_height,
+                            radius,
+                        } => Collider::capsule_y(*half_height, *radius),
+                        SerializableCollider::CapsuleX {
+                            half_height,
+                            radius,
+                        } => Collider::capsule_x(*half_height, *radius),
+                        SerializableCollider::CapsuleZ {
+                            half_height,
+                            radius,
+                        } => Collider::capsule_z(*half_height, *radius),
+                        SerializableCollider::CylinderY {
+                            half_height,
+                            radius,
+                        } => Collider::cylinder_y(*half_height, *radius),
                     });
                 }
                 ComponentData::PhysicsVelocity(vel) => {
@@ -782,7 +814,9 @@ impl AddComponentCommand {
 impl EditorCommand for AddComponentCommand {
     fn execute(&mut self, world: &mut World) -> Result<()> {
         use praxis_audio::AudioSource;
-        use praxis_ecs::{MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection};
+        use praxis_ecs::{
+            MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection,
+        };
         use praxis_graphics::MaterialProperties;
         use praxis_physics::{Collider, Mass, PhysicsVelocity, RigidBody};
 
@@ -811,7 +845,7 @@ impl EditorCommand for AddComponentCommand {
                             .with_base_color(props.base_color)
                             .with_metallic(props.metallic)
                             .with_roughness(props.roughness)
-                            .with_emissive_strength(props.emissive_strength)
+                            .with_emissive_strength(props.emissive_strength),
                     ));
                 }
                 ComponentData::RigidBody(rb) => {
@@ -823,12 +857,26 @@ impl EditorCommand for AddComponentCommand {
                 }
                 ComponentData::Collider(col) => {
                     entity_mut.insert(match col {
-                        SerializableCollider::Cuboid { hx, hy, hz } => Collider::cuboid(*hx, *hy, *hz),
+                        SerializableCollider::Cuboid { hx, hy, hz } => {
+                            Collider::cuboid(*hx, *hy, *hz)
+                        }
                         SerializableCollider::Sphere { radius } => Collider::sphere(*radius),
-                        SerializableCollider::CapsuleY { half_height, radius } => Collider::capsule_y(*half_height, *radius),
-                        SerializableCollider::CapsuleX { half_height, radius } => Collider::capsule_x(*half_height, *radius),
-                        SerializableCollider::CapsuleZ { half_height, radius } => Collider::capsule_z(*half_height, *radius),
-                        SerializableCollider::CylinderY { half_height, radius } => Collider::cylinder_y(*half_height, *radius),
+                        SerializableCollider::CapsuleY {
+                            half_height,
+                            radius,
+                        } => Collider::capsule_y(*half_height, *radius),
+                        SerializableCollider::CapsuleX {
+                            half_height,
+                            radius,
+                        } => Collider::capsule_x(*half_height, *radius),
+                        SerializableCollider::CapsuleZ {
+                            half_height,
+                            radius,
+                        } => Collider::capsule_z(*half_height, *radius),
+                        SerializableCollider::CylinderY {
+                            half_height,
+                            radius,
+                        } => Collider::cylinder_y(*half_height, *radius),
                     });
                 }
                 ComponentData::PhysicsVelocity(vel) => {
@@ -868,7 +916,9 @@ impl EditorCommand for AddComponentCommand {
 
     fn undo(&mut self, world: &mut World) -> Result<()> {
         use praxis_audio::AudioSource;
-        use praxis_ecs::{MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection};
+        use praxis_ecs::{
+            MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection,
+        };
         use praxis_physics::{Collider, Mass, PhysicsVelocity, RigidBody};
 
         let entity: Entity = self.entity.into();
@@ -975,7 +1025,9 @@ impl RemoveComponentCommand {
 impl EditorCommand for RemoveComponentCommand {
     fn execute(&mut self, world: &mut World) -> Result<()> {
         use praxis_audio::AudioSource;
-        use praxis_ecs::{MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection};
+        use praxis_ecs::{
+            MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection,
+        };
         use praxis_physics::{Collider, Mass, PhysicsVelocity, RigidBody};
 
         let entity: Entity = self.entity.into();
@@ -1027,7 +1079,9 @@ impl EditorCommand for RemoveComponentCommand {
 
     fn undo(&mut self, world: &mut World) -> Result<()> {
         use praxis_audio::AudioSource;
-        use praxis_ecs::{MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection};
+        use praxis_ecs::{
+            MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection,
+        };
         use praxis_graphics::MaterialProperties;
         use praxis_physics::{Collider, Mass, PhysicsVelocity, RigidBody};
 
@@ -1056,7 +1110,7 @@ impl EditorCommand for RemoveComponentCommand {
                             .with_base_color(props.base_color)
                             .with_metallic(props.metallic)
                             .with_roughness(props.roughness)
-                            .with_emissive_strength(props.emissive_strength)
+                            .with_emissive_strength(props.emissive_strength),
                     ));
                 }
                 ComponentData::RigidBody(rb) => {
@@ -1068,12 +1122,26 @@ impl EditorCommand for RemoveComponentCommand {
                 }
                 ComponentData::Collider(col) => {
                     entity_mut.insert(match col {
-                        SerializableCollider::Cuboid { hx, hy, hz } => Collider::cuboid(*hx, *hy, *hz),
+                        SerializableCollider::Cuboid { hx, hy, hz } => {
+                            Collider::cuboid(*hx, *hy, *hz)
+                        }
                         SerializableCollider::Sphere { radius } => Collider::sphere(*radius),
-                        SerializableCollider::CapsuleY { half_height, radius } => Collider::capsule_y(*half_height, *radius),
-                        SerializableCollider::CapsuleX { half_height, radius } => Collider::capsule_x(*half_height, *radius),
-                        SerializableCollider::CapsuleZ { half_height, radius } => Collider::capsule_z(*half_height, *radius),
-                        SerializableCollider::CylinderY { half_height, radius } => Collider::cylinder_y(*half_height, *radius),
+                        SerializableCollider::CapsuleY {
+                            half_height,
+                            radius,
+                        } => Collider::capsule_y(*half_height, *radius),
+                        SerializableCollider::CapsuleX {
+                            half_height,
+                            radius,
+                        } => Collider::capsule_x(*half_height, *radius),
+                        SerializableCollider::CapsuleZ {
+                            half_height,
+                            radius,
+                        } => Collider::capsule_z(*half_height, *radius),
+                        SerializableCollider::CylinderY {
+                            half_height,
+                            radius,
+                        } => Collider::cylinder_y(*half_height, *radius),
                     });
                 }
                 ComponentData::PhysicsVelocity(vel) => {

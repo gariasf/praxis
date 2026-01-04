@@ -183,10 +183,7 @@ fn test_duplicate_entity() {
     let mut entity_ops = EntityOperations::new();
 
     let original = world
-        .spawn((
-            Transform::from_xyz(10.0, 0.0, 0.0),
-            Name::new("Original"),
-        ))
+        .spawn((Transform::from_xyz(10.0, 0.0, 0.0), Name::new("Original")))
         .id();
 
     let result = entity_ops.duplicate_entity(&mut world, &mut undo_system, original);
@@ -620,12 +617,7 @@ fn test_create_hierarchy_batch() {
 
     // Create parent
     let parent = entity_ops
-        .create_entity_with_components(
-            &mut world,
-            &mut undo_system,
-            "Parent",
-            Transform::default(),
-        )
+        .create_entity_with_components(&mut world, &mut undo_system, "Parent", Transform::default())
         .unwrap();
 
     // Create children

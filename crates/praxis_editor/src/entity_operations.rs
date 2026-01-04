@@ -1018,7 +1018,9 @@ mod tests {
         let mut undo_system = UndoRedoSystem::new();
         let mut entity_ops = EntityOperations::new();
 
-        let original = world.spawn((Transform::from_xyz(10.0, 0.0, 0.0), Name::new("Original"))).id();
+        let original = world
+            .spawn((Transform::from_xyz(10.0, 0.0, 0.0), Name::new("Original")))
+            .id();
 
         let duplicate = entity_ops
             .duplicate_entity(&mut world, &mut undo_system, original)

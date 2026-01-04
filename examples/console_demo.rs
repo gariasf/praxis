@@ -28,14 +28,14 @@ use std::time::Duration;
 fn main() -> Result<()> {
     // Create a shared log buffer
     let log_buffer = LogBuffer::new();
-    
+
     // Initialize tracing with console capture
     init_with_console(log_buffer.clone())?;
-    
+
     info!("Starting Console Demo");
     info!("Welcome to the Praxis Console Demo!");
     info!("The console captures all engine logs in real-time");
-    
+
     println!("\n=== Praxis Console Demo ===");
     println!("Demonstration of the console panel with log filtering");
     println!("\nFeatures:");
@@ -46,19 +46,19 @@ fn main() -> Result<()> {
     println!("  • Auto-scroll toggle for automatic scrolling");
     println!("  • Color-coded log levels with timestamps");
     println!("\nGenerating sample logs...\n");
-    
+
     // Generate various log levels
     debug!("Debug message: Debugging information");
     info!("Info message: General information about operation");
     warn!("Warning message: Something might be wrong");
     error!("Error message: An error has occurred");
     trace!("Trace message: Very detailed debug information");
-    
+
     // Generate logs from different modules
     info!(target: "praxis_graphics", "Graphics system initialized");
     info!(target: "praxis_ecs", "ECS system ready");
     info!(target: "praxis_audio", "Audio system started");
-    
+
     // Generate a series of messages
     for i in 1..=10 {
         match i % 4 {
@@ -70,18 +70,18 @@ fn main() -> Result<()> {
         }
         thread::sleep(Duration::from_millis(100));
     }
-    
+
     // Display captured logs
     println!("\n=== Captured Logs ===");
     let messages = log_buffer.get_messages();
     println!("Total messages captured: {}", messages.len());
-    
+
     // Group by level
     let mut counts = std::collections::HashMap::new();
     for msg in &messages {
         *counts.entry(msg.level).or_insert(0) += 1;
     }
-    
+
     println!("\nLog counts by level:");
     if let Some(&count) = counts.get(&LogLevel::Trace) {
         println!("  TRACE: {}", count);
@@ -98,18 +98,19 @@ fn main() -> Result<()> {
     if let Some(&count) = counts.get(&LogLevel::Error) {
         println!("  ERROR: {}", count);
     }
-    
+
     // Show recent messages
     println!("\nRecent messages:");
     for msg in messages.iter().rev().take(10).rev() {
-        println!("[{}] [{}] {}: {}", 
-            msg.timestamp, 
-            msg.level.label(), 
-            msg.target, 
+        println!(
+            "[{}] [{}] {}: {}",
+            msg.timestamp,
+            msg.level.label(),
+            msg.target,
             msg.message
         );
     }
-    
+
     println!("\n=== Console Panel Features ===");
     println!("The ConsolePanel provides:");
     println!("  • Real-time log capture via custom tracing layer");
@@ -120,7 +121,7 @@ fn main() -> Result<()> {
     println!("  • Auto-scroll or manual history review");
     println!("  • Clear all messages with one click");
     println!("  • Color-coded levels with timestamps");
-    
+
     println!("\n=== Usage Example ===");
     println!("use praxis_editor::{{init_with_console, EditorState, LogBuffer}};");
     println!();
@@ -129,8 +130,8 @@ fn main() -> Result<()> {
     println!("let editor = EditorState::with_log_buffer(log_buffer);");
     println!();
     println!("// All engine logs now appear in the console panel");
-    
+
     info!("Console demo completed successfully");
-    
+
     Ok(())
 }

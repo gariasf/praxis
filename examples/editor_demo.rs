@@ -130,7 +130,11 @@ impl ApplicationHandler for App {
 
                     // Render editor UI
                     if let Some(editor_state) = &mut self.editor_state {
-                        let ctx = world.get_resource::<EguiContext>().unwrap().context().clone();
+                        let ctx = world
+                            .get_resource::<EguiContext>()
+                            .unwrap()
+                            .context()
+                            .clone();
                         // Note: We pass None for undo_system, world, and selection to avoid borrowing issues
                         // In a full implementation, these would be properly integrated
                         editor_state.ui(&ctx, None, None, None);

@@ -7,7 +7,8 @@ use bevy_ecs::entity::Entity;
 use egui::{Color32, DragValue, Ui};
 use praxis_audio::AudioSource;
 use praxis_ecs::{
-    MaterialHandle, MaterialPropertiesComponent, MeshHandle, Name, PerspectiveProjection, Transform, World,
+    MaterialHandle, MaterialPropertiesComponent, MeshHandle, Name, PerspectiveProjection,
+    Transform, World,
 };
 use praxis_math::Quat;
 use praxis_physics::{Collider, Mass, PhysicsVelocity, RigidBody};
@@ -80,7 +81,7 @@ impl InspectorPanel {
 
     fn display_name_component(&mut self, ui: &mut Ui, world: &mut World, entity: Entity) {
         let name = world.get::<Name>(entity).map(|n| n.as_str().to_string());
-        
+
         if let Some(mut name_str) = name {
             ui.collapsing("Name", |ui| {
                 ui.horizontal(|ui| {
@@ -95,7 +96,7 @@ impl InspectorPanel {
 
     fn display_transform_component(&mut self, ui: &mut Ui, world: &mut World, entity: Entity) {
         let transform = world.get::<Transform>(entity).copied();
-        
+
         if let Some(original_transform) = transform {
             let mut transform = original_transform;
 
@@ -174,12 +175,17 @@ impl InspectorPanel {
             if changed {
                 // Apply immediately
                 world.entity_mut(entity).insert(transform);
-                
+
                 // On mouse release, create undo command
                 if ui.input(|i| i.pointer.any_released()) {
-                    let old_transform = self.cached_transforms.get(&entity).copied().unwrap_or(original_transform);
-                    let command = Box::new(TransformEditCommand::new(entity, old_transform, transform));
-                    
+                    let old_transform = self
+                        .cached_transforms
+                        .get(&entity)
+                        .copied()
+                        .unwrap_or(original_transform);
+                    let command =
+                        Box::new(TransformEditCommand::new(entity, old_transform, transform));
+
                     // Execute through undo system
                     if let Some(undo_system) = world.get_resource_mut::<UndoRedoSystem>() {
                         // Manually add to history since we already applied the change
@@ -200,7 +206,7 @@ impl InspectorPanel {
 
     fn display_mesh_handle_component(&mut self, ui: &mut Ui, world: &mut World, entity: Entity) {
         let mesh_handle = world.get::<MeshHandle>(entity).map(|m| m.id().to_string());
-        
+
         if let Some(mut mesh_id) = mesh_handle {
             ui.collapsing("Mesh Handle", |ui| {
                 ui.horizontal(|ui| {
@@ -213,24 +219,40 @@ impl InspectorPanel {
         }
     }
 
-    fn display_material_handle_component(&mut self, ui: &mut Ui, world: &mut World, entity: Entity) {
-        let material_handle = world.get::<MaterialHandle>(entity).map(|m| m.id().to_string());
-        
+    fn display_material_handle_component(
+        &mut self,
+        ui: &mut Ui,
+        world: &mut World,
+        entity: Entity,
+    ) {
+        let material_handle = world
+            .get::<MaterialHandle>(entity)
+            .map(|m| m.id().to_string());
+
         if let Some(mut material_id) = material_handle {
             ui.collapsing("Material Handle", |ui| {
                 ui.horizontal(|ui| {
                     ui.label("Material ID:");
                     if ui.text_edit_singleline(&mut material_id).changed() {
-                        world.entity_mut(entity).insert(MaterialHandle::new(material_id));
+                        world
+                            .entity_mut(entity)
+                            .insert(MaterialHandle::new(material_id));
                     }
                 });
             });
         }
     }
 
-    fn display_material_properties_component(&mut self, ui: &mut Ui, world: &mut World, entity: Entity) {
-        let mat_props = world.get::<MaterialPropertiesComponent>(entity).map(|m| m.0);
-        
+    fn display_material_properties_component(
+        &mut self,
+        ui: &mut Ui,
+        world: &mut World,
+        entity: Entity,
+    ) {
+        let mat_props = world
+            .get::<MaterialPropertiesComponent>(entity)
+            .map(|m| m.0);
+
         if let Some(mut props) = mat_props {
             let mut changed = false;
 
@@ -277,14 +299,16 @@ impl InspectorPanel {
             });
 
             if changed {
-                world.entity_mut(entity).insert(MaterialPropertiesComponent(props));
+                world
+                    .entity_mut(entity)
+                    .insert(MaterialPropertiesComponent(props));
             }
         }
     }
 
     fn display_rigidbody_component(&mut self, ui: &mut Ui, world: &mut World, entity: Entity) {
         let rigidbody = world.get::<RigidBody>(entity).copied();
-        
+
         if let Some(original_rb) = rigidbody {
             let mut rb = original_rb;
             let mut changed = false;
@@ -321,78 +345,88 @@ impl InspectorPanel {
 
     fn display_collider_component(&mut self, ui: &mut Ui, world: &mut World, entity: Entity) {
         let collider = world.get::<Collider>(entity).cloned();
-        
+
         if let Some(mut collider) = collider {
             let mut changed = false;
 
-            ui.collapsing("Collider", |ui| {
-                match &mut collider {
-                    Collider::Cuboid { hx, hy, hz } => {
-                        ui.label("Type: Cuboid");
-                        ui.horizontal(|ui| {
-                            ui.label("Half-X:");
-                            changed |= ui.add(DragValue::new(hx).speed(0.1)).changed();
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label("Half-Y:");
-                            changed |= ui.add(DragValue::new(hy).speed(0.1)).changed();
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label("Half-Z:");
-                            changed |= ui.add(DragValue::new(hz).speed(0.1)).changed();
-                        });
-                    }
-                    Collider::Sphere { radius } => {
-                        ui.label("Type: Sphere");
-                        ui.horizontal(|ui| {
-                            ui.label("Radius:");
-                            changed |= ui.add(DragValue::new(radius).speed(0.1)).changed();
-                        });
-                    }
-                    Collider::CapsuleY { half_height, radius } => {
-                        ui.label("Type: Capsule Y");
-                        ui.horizontal(|ui| {
-                            ui.label("Half-Height:");
-                            changed |= ui.add(DragValue::new(half_height).speed(0.1)).changed();
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label("Radius:");
-                            changed |= ui.add(DragValue::new(radius).speed(0.1)).changed();
-                        });
-                    }
-                    Collider::CapsuleX { half_height, radius } => {
-                        ui.label("Type: Capsule X");
-                        ui.horizontal(|ui| {
-                            ui.label("Half-Height:");
-                            changed |= ui.add(DragValue::new(half_height).speed(0.1)).changed();
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label("Radius:");
-                            changed |= ui.add(DragValue::new(radius).speed(0.1)).changed();
-                        });
-                    }
-                    Collider::CapsuleZ { half_height, radius } => {
-                        ui.label("Type: Capsule Z");
-                        ui.horizontal(|ui| {
-                            ui.label("Half-Height:");
-                            changed |= ui.add(DragValue::new(half_height).speed(0.1)).changed();
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label("Radius:");
-                            changed |= ui.add(DragValue::new(radius).speed(0.1)).changed();
-                        });
-                    }
-                    Collider::CylinderY { half_height, radius } => {
-                        ui.label("Type: Cylinder Y");
-                        ui.horizontal(|ui| {
-                            ui.label("Half-Height:");
-                            changed |= ui.add(DragValue::new(half_height).speed(0.1)).changed();
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label("Radius:");
-                            changed |= ui.add(DragValue::new(radius).speed(0.1)).changed();
-                        });
-                    }
+            ui.collapsing("Collider", |ui| match &mut collider {
+                Collider::Cuboid { hx, hy, hz } => {
+                    ui.label("Type: Cuboid");
+                    ui.horizontal(|ui| {
+                        ui.label("Half-X:");
+                        changed |= ui.add(DragValue::new(hx).speed(0.1)).changed();
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Half-Y:");
+                        changed |= ui.add(DragValue::new(hy).speed(0.1)).changed();
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Half-Z:");
+                        changed |= ui.add(DragValue::new(hz).speed(0.1)).changed();
+                    });
+                }
+                Collider::Sphere { radius } => {
+                    ui.label("Type: Sphere");
+                    ui.horizontal(|ui| {
+                        ui.label("Radius:");
+                        changed |= ui.add(DragValue::new(radius).speed(0.1)).changed();
+                    });
+                }
+                Collider::CapsuleY {
+                    half_height,
+                    radius,
+                } => {
+                    ui.label("Type: Capsule Y");
+                    ui.horizontal(|ui| {
+                        ui.label("Half-Height:");
+                        changed |= ui.add(DragValue::new(half_height).speed(0.1)).changed();
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Radius:");
+                        changed |= ui.add(DragValue::new(radius).speed(0.1)).changed();
+                    });
+                }
+                Collider::CapsuleX {
+                    half_height,
+                    radius,
+                } => {
+                    ui.label("Type: Capsule X");
+                    ui.horizontal(|ui| {
+                        ui.label("Half-Height:");
+                        changed |= ui.add(DragValue::new(half_height).speed(0.1)).changed();
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Radius:");
+                        changed |= ui.add(DragValue::new(radius).speed(0.1)).changed();
+                    });
+                }
+                Collider::CapsuleZ {
+                    half_height,
+                    radius,
+                } => {
+                    ui.label("Type: Capsule Z");
+                    ui.horizontal(|ui| {
+                        ui.label("Half-Height:");
+                        changed |= ui.add(DragValue::new(half_height).speed(0.1)).changed();
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Radius:");
+                        changed |= ui.add(DragValue::new(radius).speed(0.1)).changed();
+                    });
+                }
+                Collider::CylinderY {
+                    half_height,
+                    radius,
+                } => {
+                    ui.label("Type: Cylinder Y");
+                    ui.horizontal(|ui| {
+                        ui.label("Half-Height:");
+                        changed |= ui.add(DragValue::new(half_height).speed(0.1)).changed();
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Radius:");
+                        changed |= ui.add(DragValue::new(radius).speed(0.1)).changed();
+                    });
                 }
             });
 
@@ -402,9 +436,14 @@ impl InspectorPanel {
         }
     }
 
-    fn display_physics_velocity_component(&mut self, ui: &mut Ui, world: &mut World, entity: Entity) {
+    fn display_physics_velocity_component(
+        &mut self,
+        ui: &mut Ui,
+        world: &mut World,
+        entity: Entity,
+    ) {
         let velocity = world.get::<PhysicsVelocity>(entity).copied();
-        
+
         if let Some(mut velocity) = velocity {
             let mut changed = false;
 
@@ -450,7 +489,7 @@ impl InspectorPanel {
 
     fn display_mass_component(&mut self, ui: &mut Ui, world: &mut World, entity: Entity) {
         let mass = world.get::<Mass>(entity).copied();
-        
+
         if let Some(mut mass) = mass {
             let mut changed = false;
 
@@ -458,14 +497,22 @@ impl InspectorPanel {
                 ui.horizontal(|ui| {
                     ui.label("Mass:");
                     changed |= ui
-                        .add(DragValue::new(&mut mass.mass).speed(0.1).range(0.0..=f32::MAX))
+                        .add(
+                            DragValue::new(&mut mass.mass)
+                                .speed(0.1)
+                                .range(0.0..=f32::MAX),
+                        )
                         .changed();
                 });
 
                 ui.horizontal(|ui| {
                     ui.label("Angular Inertia:");
                     changed |= ui
-                        .add(DragValue::new(&mut mass.angular_inertia).speed(0.1).range(0.0..=f32::MAX))
+                        .add(
+                            DragValue::new(&mut mass.angular_inertia)
+                                .speed(0.1)
+                                .range(0.0..=f32::MAX),
+                        )
                         .changed();
                 });
             });
@@ -478,7 +525,7 @@ impl InspectorPanel {
 
     fn display_audio_source_component(&mut self, ui: &mut Ui, world: &mut World, entity: Entity) {
         let audio_source = world.get::<AudioSource>(entity).cloned();
-        
+
         if let Some(mut audio) = audio_source {
             let mut changed = false;
 
@@ -508,14 +555,22 @@ impl InspectorPanel {
                 ui.horizontal(|ui| {
                     ui.label("Max Distance:");
                     changed |= ui
-                        .add(DragValue::new(&mut audio.max_distance).speed(1.0).range(0.0..=f32::MAX))
+                        .add(
+                            DragValue::new(&mut audio.max_distance)
+                                .speed(1.0)
+                                .range(0.0..=f32::MAX),
+                        )
                         .changed();
                 });
 
                 ui.horizontal(|ui| {
                     ui.label("Reference Distance:");
                     changed |= ui
-                        .add(DragValue::new(&mut audio.reference_distance).speed(0.1).range(0.0..=f32::MAX))
+                        .add(
+                            DragValue::new(&mut audio.reference_distance)
+                                .speed(0.1)
+                                .range(0.0..=f32::MAX),
+                        )
                         .changed();
                 });
 
@@ -548,7 +603,7 @@ impl InspectorPanel {
 
     fn display_camera_component(&mut self, ui: &mut Ui, world: &mut World, entity: Entity) {
         let camera = world.get::<PerspectiveProjection>(entity).copied();
-        
+
         if let Some(mut camera) = camera {
             let mut changed = false;
 
@@ -557,7 +612,11 @@ impl InspectorPanel {
                     ui.label("FOV (degrees):");
                     let mut fov_degrees = camera.fov.to_degrees();
                     if ui
-                        .add(DragValue::new(&mut fov_degrees).speed(1.0).range(1.0..=179.0))
+                        .add(
+                            DragValue::new(&mut fov_degrees)
+                                .speed(1.0)
+                                .range(1.0..=179.0),
+                        )
                         .changed()
                     {
                         camera.fov = fov_degrees.to_radians();
@@ -568,21 +627,33 @@ impl InspectorPanel {
                 ui.horizontal(|ui| {
                     ui.label("Aspect Ratio:");
                     changed |= ui
-                        .add(DragValue::new(&mut camera.aspect_ratio).speed(0.01).range(0.1..=10.0))
+                        .add(
+                            DragValue::new(&mut camera.aspect_ratio)
+                                .speed(0.01)
+                                .range(0.1..=10.0),
+                        )
                         .changed();
                 });
 
                 ui.horizontal(|ui| {
                     ui.label("Near Plane:");
                     changed |= ui
-                        .add(DragValue::new(&mut camera.near).speed(0.01).range(0.001..=1000.0))
+                        .add(
+                            DragValue::new(&mut camera.near)
+                                .speed(0.01)
+                                .range(0.001..=1000.0),
+                        )
                         .changed();
                 });
 
                 ui.horizontal(|ui| {
                     ui.label("Far Plane:");
                     changed |= ui
-                        .add(DragValue::new(&mut camera.far).speed(1.0).range(0.1..=10000.0))
+                        .add(
+                            DragValue::new(&mut camera.far)
+                                .speed(1.0)
+                                .range(0.1..=10000.0),
+                        )
                         .changed();
                 });
             });

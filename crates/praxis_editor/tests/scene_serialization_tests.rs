@@ -449,15 +449,12 @@ fn test_complex_scene_roundtrip() {
     ));
 
     // Add mesh hierarchy
-    let child = EntityDefinition::textured_mesh_entity(
-        "Child",
-        (1.0, 0.0, 0.0),
-        "cube",
-        "texture1",
-    );
+    let child =
+        EntityDefinition::textured_mesh_entity("Child", (1.0, 0.0, 0.0), "cube", "texture1");
 
-    let parent = EntityDefinition::textured_mesh_entity("Parent", (0.0, 0.0, 0.0), "cube", "texture2")
-        .with_child(child);
+    let parent =
+        EntityDefinition::textured_mesh_entity("Parent", (0.0, 0.0, 0.0), "cube", "texture2")
+            .with_child(child);
 
     scene.add_entity(parent);
 
