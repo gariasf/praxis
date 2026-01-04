@@ -645,7 +645,7 @@ let meshes: Vec<_> = chunk_ids
 
 - [Procedural Textures](procedural_textures.md) - For generating terrain textures
 - [LOD System](lod_system.md) - General LOD concepts
-- [Spatial Optimization](spatial_optimization.md) - For frustum culling
+- [Spatial Optimization](guides/spatial-optimization.md) - For frustum culling
 - [Editor System](editor_system.md) - For terrain editing UI
 
 ## Examples

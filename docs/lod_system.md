@@ -333,5 +333,5 @@ Potential future additions:
 
 - [Mesh System](mesh_system.md)
 - [Rendering Pipeline](RENDERING_EXPLAINED.md)
-- [Spatial Optimization](spatial_optimization.md)
+- [Spatial Optimization](guides/spatial-optimization.md)
 - [Frustum Culling](frustum_culling.md)

@@ -16,6 +16,7 @@ Task-oriented tutorials for implementing features:
 - [Shadows](guides/shadows.md) - Cascaded shadow maps with PCF
 - [Post-Processing](guides/post-processing.md) - Bloom, color grading, effects
 - [Particles](guides/particles.md) - Practical particle effect examples
+- [Spatial Optimization](guides/spatial-optimization.md) - Frustum culling, LOD, and occlusion culling
 - [Animation](animation_system.md) - Skeletal animation and blending
 - [Audio](audio_system.md) - Spatial audio with Kira
 - [Profiling](profiling.md) - Performance analysis and optimization

@@ -2,12 +2,14 @@
 
 Comprehensive spatial optimization systems for the Praxis game engine, providing efficient culling and Level-of-Detail (LOD) management.
 
+> **For high-level guidance on spatial optimization concepts and when to use each technique, see [docs/guides/spatial-optimization.md](../../docs/guides/spatial-optimization.md)**
+
 ## Features
 
 ### 🔍 Frustum Culling
-- **View frustum extraction** from camera view-projection matrices
-- **AABB intersection tests** for fast rejection of off-screen objects
-- **Sphere intersection tests** for alternative bounding volumes
+- View frustum extraction from camera view-projection matrices
+- AABB intersection tests for fast rejection of off-screen objects
+- Sphere intersection tests for alternative bounding volumes
 - Dramatically reduces rendering cost by eliminating invisible objects
 
 ### 🌳 Spatial Partitioning
@@ -38,17 +40,17 @@ Comprehensive spatial optimization systems for the Praxis game engine, providing
 - Easy switching between structure types
 
 ### 📐 Level of Detail (LOD) System
-- **Distance-based mesh switching** to reduce polygon count
-- **LOD groups** with multiple quality levels
-- **Smooth transitions** between LOD levels
-- **Configurable distance thresholds** per object type
+- Distance-based mesh switching to reduce polygon count
+- LOD groups with multiple quality levels
+- Smooth transitions between LOD levels
+- Configurable distance thresholds per object type
 - Significant performance gains for distant objects
 
 ### 🚫 Occlusion Culling
-- **Hardware occlusion queries** using Vulkan
-- **Query pool management** for efficient GPU queries
-- **Temporal coherence** - reuse previous frame results
-- **Conditional rendering** - skip fully occluded objects
+- Hardware occlusion queries using Vulkan
+- Query pool management for efficient GPU queries
+- Temporal coherence - reuse previous frame results
+- Conditional rendering - skip fully occluded objects
 - Reduces overdraw and fragment shader cost
 
 ## Architecture
@@ -366,6 +368,43 @@ println!("Cull rate: {:.1}%", stats.cull_rate());
 5. **Batch queries:** Query multiple objects at once for better cache utilization
 6. **Configure thresholds:** Tune octree depth, LOD distances, query pool size for your scene
 
+### Configuration Parameters
+
+#### Octree
+- **Size:** Should encompass all objects with margin
+- **Max Depth:** 8-12 levels (deeper = finer subdivision)
+- **Max Objects:** 4-16 per node (lower = more subdivision)
+
+#### BVH
+- Automatically balanced during construction
+- No manual tuning required
+- Rebuild when >10-20% of objects move
+
+#### LOD
+- **Distance Thresholds:**
+  - LOD 0→1: 30-50% of max view distance
+  - LOD 1→2: 50-70% of max view distance
+  - LOD 2→3: 70-90% of max view distance
+- **Geometric Ratios:** Each level should be 30-50% the polycount of the previous
+
+## Integration with ECS
+
+Add spatial components to entities:
+
+```rust
+use praxis_ecs::{World, Transform, BoundingBox, LodComponent, MeshHandle};
+use praxis_math::Vec3;
+
+let mut world = World::new();
+
+world.spawn((
+    Transform::from_xyz(0.0, 0.0, 0.0),
+    MeshHandle::new("tree_high"),
+    BoundingBox::from_center_half_extents(Vec3::ZERO, Vec3::splat(3.0)),
+    LodComponent::new("tree"),
+));
+```
+
 ## Examples
 
 ### Spatial Partitioning Demo
@@ -399,23 +438,11 @@ This demonstrates:
 - Spatial queries (radius and AABB)
 - Performance statistics
 
-## Integration with ECS
+## Additional Documentation
 
-Add spatial components to entities:
-
-```rust
-use praxis_ecs::{World, Transform, BoundingBox, LodComponent, MeshHandle};
-use praxis_math::Vec3;
-
-let mut world = World::new();
-
-world.spawn((
-    Transform::from_xyz(0.0, 0.0, 0.0),
-    MeshHandle::new("tree_high"),
-    BoundingBox::from_center_half_extents(Vec3::ZERO, Vec3::splat(3.0)),
-    LodComponent::new("tree"),
-));
-```
+- **[SPATIAL_PARTITIONING.md](SPATIAL_PARTITIONING.md)** - Detailed spatial partitioning guide
+- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - API quick reference and common patterns
+- **[docs/guides/spatial-optimization.md](../../docs/guides/spatial-optimization.md)** - High-level concepts and when to use each technique
 
 ## Testing
 

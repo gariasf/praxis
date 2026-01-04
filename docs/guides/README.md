@@ -9,6 +9,7 @@ Task-oriented guides for implementing features with Praxis.
 - [Shadows](shadows.md) - Cascaded shadow mapping with PCF
 - [Post-Processing](post-processing.md) - Bloom, color grading, effects
 - [Particles](particles.md) - Practical particle effect examples
+- [Spatial Optimization](spatial-optimization.md) - Frustum culling, LOD, and occlusion culling
 
 ## Animation
 
