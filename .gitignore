@@ -107,3 +107,8 @@ profiling_advanced_trace.json
 performance_report.txt
 *.trace
 *.json.gz
+
+# Lua scripting system
+*.luac
+.luacheckrc
+lua_modules/

@@ -1,0 +1,56 @@
+//! Scripting system for the Praxis engine using Lua.
+//!
+//! This crate provides a comprehensive scripting layer that allows runtime game logic
+//! to be written in Lua, with full access to the ECS World and engine APIs.
+//!
+//! # Features
+//!
+//! - **ECS Integration**: Access and modify entities, components, and resources from Lua
+//! - **Hot-Reload**: Automatically reload scripts when files change for rapid iteration
+//! - **Sandboxing**: Restrict access to dangerous operations for security
+//! - **Performance Monitoring**: Track script execution time to detect expensive operations
+//! - **Type-Safe Bindings**: Expose Rust APIs to Lua with type safety
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! use praxis_scripting::{ScriptingContext, ScriptingConfig};
+//!
+//! let config = ScriptingConfig::default();
+//! let mut context = ScriptingContext::new(config).unwrap();
+//!
+//! context.load_script("game_logic", "scripts/game.lua").unwrap();
+//! context.call_function::<_, ()>("game_logic", "update", 0.016).unwrap();
+//! ```
+
+mod bindings;
+mod context;
+mod hot_reload;
+mod performance;
+mod sandbox;
+mod script_component;
+
+pub use context::{ScriptingContext, ScriptingConfig};
+pub use hot_reload::{HotReloadWatcher, ScriptEvent};
+pub use performance::{ScriptPerformanceMonitor, ScriptStats};
+pub use sandbox::{SandboxConfig, SandboxLevel};
+pub use script_component::{ScriptComponent, ScriptInstance};
+
+use praxis_utils::{info, Result};
+
+/// Initializes the scripting system.
+pub fn init() -> Result<()> {
+    info!("Initializing scripting system");
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_init() {
+        let result = init();
+        assert!(result.is_ok());
+    }
+}

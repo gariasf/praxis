@@ -21,6 +21,7 @@ members = [
     "crates/praxis_procedural",
     "crates/praxis_profiling",
     "crates/praxis_scene",
+    "crates/praxis_scripting",
     "crates/praxis_spatial",
     "crates/praxis_utils",
     "crates/praxis_window",
@@ -52,6 +53,7 @@ praxis_gui = { path = "crates/praxis_gui", version = "0.1.0" }
 praxis_spatial = { path = "crates/praxis_spatial", version = "0.1.0" }
 praxis_procedural = { path = "crates/praxis_procedural", version = "0.1.0" }
 praxis_profiling = { path = "crates/praxis_profiling", version = "0.1.0" }
+praxis_scripting = { path = "crates/praxis_scripting", version = "0.1.0" }
 winit = { version = "0.30.11", features = ["rwh_05"] }
 pollster = "0.4"
 
@@ -142,6 +144,14 @@ path = "examples/profiling_demo.rs"
 [[example]]
 name = "profiling_advanced_demo"
 path = "examples/profiling_advanced_demo.rs"
+
+[[example]]
+name = "scripting_demo"
+path = "examples/scripting_demo.rs"
+
+[[example]]
+name = "scripting_advanced_demo"
+path = "examples/scripting_advanced_demo.rs"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

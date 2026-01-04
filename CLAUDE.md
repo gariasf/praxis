@@ -33,7 +33,7 @@ cargo doc --workspace --no-deps --open
 
 ## Architecture
 
-13-crate workspace organized by subsystem:
+14-crate workspace organized by subsystem:
 
 | Crate | Purpose |
 |-------|---------|
@@ -50,6 +50,7 @@ cargo doc --workspace --no-deps --open
 | `praxis_audio` | Audio (Kira) |
 | `praxis_procedural` | Procedural textures |
 | `praxis_profiling` | Performance profiling |
+| `praxis_scripting` | Lua scripting integration |
 | `praxis_editor` | Editor tools |
 | `praxis_utils` | Logging, errors, timing |
 
@@ -113,6 +114,21 @@ let texture = manager.generate_texture(&graph, params)?;
 - Blend trees, layered animation, cross-fading
 
 **Details**: `docs/animation_system.md`
+
+### Scripting
+- **Lua 5.4** integration via `mlua`
+- **ECS access**: Query/modify entities and components from scripts
+- **Hot-reload**: Auto-reload scripts on file changes
+- **Sandboxing**: Configurable security levels (None/Moderate/Strict)
+- **Performance monitoring**: Track execution time, warn on slow scripts
+```rust
+let config = ScriptingConfig::default();
+let mut context = ScriptingContext::new(config)?;
+context.load_script("game_logic", "scripts/game.lua")?;
+context.enable_hot_reload("scripts")?;
+```
+
+**Details**: `crates/praxis_scripting/README.md`, `docs/guides/scripting.md`
 
 ### Editor
 - Selection: `SelectionSystem`, `Selectable` component
