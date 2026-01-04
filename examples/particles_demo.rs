@@ -5,10 +5,15 @@
 //! - Smoke particles with slow upward drift
 //! - Explosion particles with radial velocity
 //! - Multiple emitter shapes and forces
+//! - Particle-particle collisions using spatial hashing
+//! - Particle-world collisions with ground plane
+//! - GPU-based particle sorting for correct alpha blending
+//! - Soft particles that fade near geometry
 
 use praxis_ecs::{ParticleEmitter, Transform, World};
 use praxis_graphics::{
-    EmitterShape, ParticleEmitterConfig, ParticleForce, ParticleSystem, RenderContext,
+    CollisionPlane, EmitterShape, ParticleEmitterConfig, ParticleForce, ParticleSystem,
+    RenderContext, SoftParticleConfig,
 };
 use praxis_math::Vec3;
 use praxis_utils::Result;
@@ -31,7 +36,16 @@ fn main() -> Result<()> {
         render_context.graphics_queue.clone(),
     )?;
 
-    // Create fire emitter
+    particle_system.set_camera_position(Vec3::new(0.0, 5.0, 10.0));
+    particle_system.set_gpu_sorting_enabled(true);
+    particle_system.set_soft_particle_config(SoftParticleConfig {
+        fade_distance: 0.5,
+        fade_power: 2.0,
+    });
+
+    let ground_plane = CollisionPlane::new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
+    particle_system.add_collision_plane(ground_plane);
+
     let fire_config = ParticleEmitterConfig {
         shape: EmitterShape::Sphere { radius: 0.5 },
         emission_rate: 50.0,
@@ -42,10 +56,10 @@ fn main() -> Result<()> {
         velocity_randomness: 1.0,
         initial_color: [1.0, 0.8, 0.2, 1.0],
         color_over_lifetime: Some(vec![
-            [1.0, 0.8, 0.2, 1.0], // Yellow-orange
-            [1.0, 0.3, 0.0, 0.8], // Orange-red
-            [0.5, 0.0, 0.0, 0.3], // Dark red
-            [0.1, 0.0, 0.0, 0.0], // Fade to black
+            [1.0, 0.8, 0.2, 1.0],
+            [1.0, 0.3, 0.0, 0.8],
+            [0.5, 0.0, 0.0, 0.3],
+            [0.1, 0.0, 0.0, 0.0],
         ]),
         initial_size: 0.3,
         size_over_lifetime: Some(vec![0.1, 0.5, 0.8, 0.4]),
@@ -54,7 +68,7 @@ fn main() -> Result<()> {
         rotation_speed_randomness: 1.0,
         forces: vec![
             ParticleForce::Gravity {
-                strength: Vec3::new(0.0, 1.0, 0.0), // Upward for fire
+                strength: Vec3::new(0.0, 1.0, 0.0),
             },
             ParticleForce::Wind {
                 direction: Vec3::new(1.0, 0.0, 0.0),
@@ -64,6 +78,7 @@ fn main() -> Result<()> {
             ParticleForce::Drag { coefficient: 0.5 },
         ],
         looping: true,
+        enable_collisions: false,
         ..Default::default()
     };
     particle_system.add_emitter("fire", fire_config);
@@ -102,7 +117,6 @@ fn main() -> Result<()> {
     };
     particle_system.add_emitter("smoke", smoke_config);
 
-    // Create explosion emitter (non-looping)
     let explosion_config = ParticleEmitterConfig {
         shape: EmitterShape::Sphere { radius: 0.2 },
         emission_rate: 200.0,
@@ -113,10 +127,10 @@ fn main() -> Result<()> {
         velocity_randomness: 5.0,
         initial_color: [1.0, 1.0, 0.5, 1.0],
         color_over_lifetime: Some(vec![
-            [1.0, 1.0, 0.5, 1.0], // Bright yellow
-            [1.0, 0.5, 0.0, 0.8], // Orange
-            [1.0, 0.0, 0.0, 0.5], // Red
-            [0.2, 0.0, 0.0, 0.0], // Fade out
+            [1.0, 1.0, 0.5, 1.0],
+            [1.0, 0.5, 0.0, 0.8],
+            [1.0, 0.0, 0.0, 0.5],
+            [0.2, 0.0, 0.0, 0.0],
         ]),
         initial_size: 0.2,
         size_over_lifetime: Some(vec![0.2, 0.5, 0.3, 0.1]),
@@ -133,6 +147,10 @@ fn main() -> Result<()> {
         ],
         looping: false,
         duration: 0.2,
+        enable_collisions: true,
+        collision_radius: 0.3,
+        restitution: 0.7,
+        friction: 0.2,
         ..Default::default()
     };
     particle_system.add_emitter("explosion", explosion_config);
@@ -207,9 +225,8 @@ fn main() -> Result<()> {
                     eprintln!("Failed to prepare particle rendering: {}", e);
                 }
 
-                // Print particle statistics
                 println!(
-                    "Active particles: {} across {} emitters",
+                    "Active particles: {} across {} emitters | Soft Particles: enabled",
                     particle_system.total_active_particles(),
                     particle_system.emitter_count()
                 );

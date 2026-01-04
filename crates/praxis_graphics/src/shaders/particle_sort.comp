@@ -1,0 +1,41 @@
+#version 450
+
+layout(local_size_x = 256) in;
+
+layout(set = 0, binding = 0) buffer ParticleBuffer {
+    vec4 position_distance[];
+} particles;
+
+layout(push_constant) uniform PushConstants {
+    uint stage;
+    uint substage;
+    uint num_particles;
+} pc;
+
+void main() {
+    uint id = gl_GlobalInvocationID.x;
+    
+    if (id >= pc.num_particles) {
+        return;
+    }
+    
+    uint distance = uint(1 << pc.stage);
+    uint offset = uint(1 << pc.substage);
+    
+    uint partner_id = id ^ offset;
+    
+    if (partner_id < pc.num_particles && partner_id > id) {
+        bool ascending = ((id & distance) == 0);
+        
+        float dist_a = particles.position_distance[id].w;
+        float dist_b = particles.position_distance[partner_id].w;
+        
+        bool should_swap = (ascending && dist_a < dist_b) || (!ascending && dist_a > dist_b);
+        
+        if (should_swap) {
+            vec4 temp = particles.position_distance[id];
+            particles.position_distance[id] = particles.position_distance[partner_id];
+            particles.position_distance[partner_id] = temp;
+        }
+    }
+}

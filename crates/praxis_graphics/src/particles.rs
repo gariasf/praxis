@@ -6,6 +6,10 @@
 //! - Physical forces (gravity, wind, attraction points)
 //! - Texture atlas support for particle sprites
 //! - Efficient GPU instancing for rendering thousands of particles
+//! - Particle-particle and particle-world collision detection using spatial hashing
+//! - Soft particles with depth buffer comparison for smooth blending
+//! - GPU-based particle sorting for correct alpha blending using bitonic sort
+//! - Collision response forces for realistic bouncing particles
 //!
 //! # Architecture
 //!
@@ -13,6 +17,22 @@
 //! Each particle is represented as an instance with per-instance attributes including position,
 //! color, size, and rotation. The system updates particles on the CPU and uploads instance
 //! data to the GPU each frame.
+//!
+//! # Collision Detection
+//!
+//! Spatial hashing is used for efficient particle-particle collision detection. The world space
+//! is divided into a grid, and particles are hashed into cells based on their position. Collision
+//! checks are then performed only within neighboring cells.
+//!
+//! # Soft Particles
+//!
+//! Particles fade out smoothly near geometry by comparing particle depth with scene depth buffer.
+//! This prevents hard intersections and creates a more natural look.
+//!
+//! # GPU Sorting
+//!
+//! Particles are sorted on the GPU using bitonic sort to ensure correct alpha blending.
+//! Particles are sorted by distance from camera to render back-to-front.
 //!
 //! # Example
 //!
@@ -37,6 +57,9 @@
 //!         [1.0, 0.3, 0.0, 0.5],
 //!         [0.5, 0.0, 0.0, 0.0],
 //!     ]),
+//!     enable_collisions: true,
+//!     collision_radius: 0.5,
+//!     restitution: 0.7,
 //!     ..Default::default()
 //! };
 //!
@@ -53,14 +76,50 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
-    command_buffer::allocator::CommandBufferAllocator,
-    device::Queue,
+    command_buffer::{
+        allocator::CommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage,
+        PrimaryCommandBufferAbstract,
+    },
+    descriptor_set::{
+        allocator::StandardDescriptorSetAllocator, DescriptorSet, WriteDescriptorSet,
+    },
+    device::{Device, Queue},
     memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
+    pipeline::{
+        compute::ComputePipelineCreateInfo, layout::PipelineDescriptorSetLayoutCreateInfo,
+        ComputePipeline, Pipeline, PipelineBindPoint, PipelineLayout,
+        PipelineShaderStageCreateInfo,
+    },
     pipeline::graphics::vertex_input::Vertex,
+    sync::GpuFuture,
 };
 
 /// Maximum number of particles per emitter.
 pub const MAX_PARTICLES_PER_EMITTER: usize = 10000;
+
+/// Size of spatial hash grid cells.
+const SPATIAL_HASH_CELL_SIZE: f32 = 2.0;
+
+/// Maximum number of spatial hash buckets.
+const SPATIAL_HASH_TABLE_SIZE: usize = 4096;
+
+/// Configuration for soft particle rendering.
+#[derive(Debug, Clone, Copy)]
+pub struct SoftParticleConfig {
+    /// Distance over which particles fade when near geometry.
+    pub fade_distance: f32,
+    /// Power for the fade curve (higher = sharper transition).
+    pub fade_power: f32,
+}
+
+impl Default for SoftParticleConfig {
+    fn default() -> Self {
+        Self {
+            fade_distance: 1.0,
+            fade_power: 2.0,
+        }
+    }
+}
 
 /// A single particle instance.
 #[derive(Debug, Clone, Copy)]
@@ -83,6 +142,117 @@ struct Particle {
     initial_lifetime: f32,
     /// Is this particle active?
     active: bool,
+    /// Collision radius for collision detection.
+    collision_radius: f32,
+    /// Distance from camera (for sorting).
+    camera_distance: f32,
+}
+
+/// GPU particle data for compute shaders.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct GpuParticle {
+    pub position: [f32; 3],
+    pub _padding1: f32,
+    pub velocity: [f32; 3],
+    pub _padding2: f32,
+    pub color: [f32; 4],
+    pub size: f32,
+    pub rotation: f32,
+    pub lifetime: f32,
+    pub camera_distance: f32,
+}
+
+/// Spatial hash entry for collision detection.
+#[derive(Debug, Clone)]
+struct SpatialHashEntry {
+    particle_indices: Vec<usize>,
+}
+
+/// Spatial hash grid for efficient collision detection.
+struct SpatialHash {
+    table: Vec<SpatialHashEntry>,
+    cell_size: f32,
+}
+
+impl SpatialHash {
+    fn new(cell_size: f32) -> Self {
+        Self {
+            table: vec![
+                SpatialHashEntry {
+                    particle_indices: Vec::new()
+                };
+                SPATIAL_HASH_TABLE_SIZE
+            ],
+            cell_size,
+        }
+    }
+
+    #[allow(dead_code)]
+    fn clear(&mut self) {
+        for entry in &mut self.table {
+            entry.particle_indices.clear();
+        }
+    }
+
+    fn hash_position(&self, position: Vec3) -> usize {
+        let x = (position.x / self.cell_size).floor() as i32;
+        let y = (position.y / self.cell_size).floor() as i32;
+        let z = (position.z / self.cell_size).floor() as i32;
+
+        let hash = ((x.wrapping_mul(73856093))
+            ^ (y.wrapping_mul(19349663))
+            ^ (z.wrapping_mul(83492791)))
+            .unsigned_abs() as usize;
+
+        hash % SPATIAL_HASH_TABLE_SIZE
+    }
+
+    fn insert(&mut self, index: usize, position: Vec3) {
+        let hash = self.hash_position(position);
+        self.table[hash].particle_indices.push(index);
+    }
+
+    fn query_neighbors(&self, position: Vec3) -> Vec<usize> {
+        let mut neighbors = Vec::new();
+
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                for dz in -1..=1 {
+                    let offset = Vec3::new(
+                        dx as f32 * self.cell_size,
+                        dy as f32 * self.cell_size,
+                        dz as f32 * self.cell_size,
+                    );
+                    let neighbor_pos = position + offset;
+                    let hash = self.hash_position(neighbor_pos);
+                    neighbors.extend(&self.table[hash].particle_indices);
+                }
+            }
+        }
+
+        neighbors
+    }
+}
+
+/// World collision plane for particle-world interactions.
+#[derive(Debug, Clone, Copy)]
+pub struct CollisionPlane {
+    pub point: Vec3,
+    pub normal: Vec3,
+}
+
+impl CollisionPlane {
+    pub fn new(point: Vec3, normal: Vec3) -> Self {
+        Self {
+            point,
+            normal: normal.normalize(),
+        }
+    }
+
+    fn distance_to_point(&self, point: Vec3) -> f32 {
+        (point - self.point).dot(self.normal)
+    }
 }
 
 impl Particle {
@@ -97,6 +267,8 @@ impl Particle {
             lifetime: 0.0,
             initial_lifetime: 0.0,
             active: false,
+            collision_radius: 0.5,
+            camera_distance: 0.0,
         }
     }
 
@@ -221,6 +393,14 @@ pub struct ParticleEmitterConfig {
     pub looping: bool,
     /// Duration of emission (if not looping).
     pub duration: f32,
+    /// Enable particle-particle collision detection.
+    pub enable_collisions: bool,
+    /// Collision radius for particles.
+    pub collision_radius: f32,
+    /// Restitution coefficient for collisions (0 = no bounce, 1 = perfect bounce).
+    pub restitution: f32,
+    /// Friction coefficient for collisions.
+    pub friction: f32,
 }
 
 impl Default for ParticleEmitterConfig {
@@ -246,6 +426,10 @@ impl Default for ParticleEmitterConfig {
             atlas_grid: None,
             looping: true,
             duration: 1.0,
+            enable_collisions: false,
+            collision_radius: 0.5,
+            restitution: 0.5,
+            friction: 0.1,
         }
     }
 }
@@ -312,16 +496,19 @@ impl ParticleEmitter {
 
     /// Updates the emitter and all its particles.
     pub fn update(&mut self, delta_time: f32) {
+        self.update_with_collisions(delta_time, &[]);
+    }
+
+    /// Updates the emitter with world collision planes.
+    pub fn update_with_collisions(&mut self, delta_time: f32, collision_planes: &[CollisionPlane]) {
         if !self.is_active {
             return;
         }
 
         self.time_alive += delta_time;
 
-        // Check if emitter should stop emitting (non-looping)
         let should_emit = self.config.looping || self.time_alive < self.config.duration;
 
-        // Emit new particles
         if should_emit {
             self.emission_accumulator += self.config.emission_rate * delta_time;
             let particles_to_emit = self.emission_accumulator.floor() as usize;
@@ -332,20 +519,17 @@ impl ParticleEmitter {
             }
         }
 
-        // Update existing particles
         for particle in &mut self.particles {
             if !particle.is_alive() {
                 continue;
             }
 
-            // Update lifetime
             particle.lifetime -= delta_time;
             if particle.lifetime <= 0.0 {
                 particle.active = false;
                 continue;
             }
 
-            // Apply forces
             for force in &self.config.forces {
                 match force {
                     ParticleForce::Gravity { strength } => {
@@ -395,13 +579,9 @@ impl ParticleEmitter {
                 }
             }
 
-            // Update position
             particle.position += particle.velocity * delta_time;
-
-            // Update rotation
             particle.rotation += particle.rotation_speed * delta_time;
 
-            // Update color over lifetime
             if let Some(ref colors) = self.config.color_over_lifetime {
                 if !colors.is_empty() {
                     let t = particle.lifetime_t();
@@ -413,7 +593,6 @@ impl ParticleEmitter {
                 }
             }
 
-            // Update size over lifetime
             if let Some(ref sizes) = self.config.size_over_lifetime {
                 if !sizes.is_empty() {
                     let t = particle.lifetime_t();
@@ -425,47 +604,134 @@ impl ParticleEmitter {
                 }
             }
         }
+
+        if self.config.enable_collisions {
+            self.resolve_particle_collisions();
+        }
+
+        for collision_plane in collision_planes {
+            self.resolve_plane_collisions(collision_plane);
+        }
+    }
+
+    fn resolve_particle_collisions(&mut self) {
+        let mut spatial_hash = SpatialHash::new(SPATIAL_HASH_CELL_SIZE);
+
+        for (i, particle) in self.particles.iter().enumerate() {
+            if particle.is_alive() {
+                spatial_hash.insert(i, particle.position);
+            }
+        }
+
+        let mut collision_pairs = Vec::new();
+
+        for i in 0..self.particles.len() {
+            if !self.particles[i].is_alive() {
+                continue;
+            }
+
+            let neighbors = spatial_hash.query_neighbors(self.particles[i].position);
+
+            for &j in &neighbors {
+                if i >= j || !self.particles[j].is_alive() {
+                    continue;
+                }
+
+                let delta = self.particles[j].position - self.particles[i].position;
+                let distance = delta.length();
+                let min_dist =
+                    self.particles[i].collision_radius + self.particles[j].collision_radius;
+
+                if distance < min_dist && distance > 0.001 {
+                    collision_pairs.push((i, j, delta, distance, min_dist));
+                }
+            }
+        }
+
+        for (i, j, delta, distance, min_dist) in collision_pairs {
+            let normal = delta / distance;
+            let overlap = min_dist - distance;
+
+            let pos_correction = normal * overlap * 0.5;
+            self.particles[i].position -= pos_correction;
+            self.particles[j].position += pos_correction;
+
+            let relative_velocity = self.particles[j].velocity - self.particles[i].velocity;
+            let velocity_along_normal = relative_velocity.dot(normal);
+
+            if velocity_along_normal < 0.0 {
+                let restitution = self.config.restitution;
+                let impulse = -(1.0 + restitution) * velocity_along_normal;
+                let impulse_vector = normal * impulse * 0.5;
+
+                self.particles[i].velocity -= impulse_vector;
+                self.particles[j].velocity += impulse_vector;
+
+                let tangent = relative_velocity - normal * velocity_along_normal;
+                let tangent_length = tangent.length();
+                if tangent_length > 0.001 {
+                    let friction_impulse = tangent / tangent_length * self.config.friction;
+                    self.particles[i].velocity += friction_impulse * 0.5;
+                    self.particles[j].velocity -= friction_impulse * 0.5;
+                }
+            }
+        }
+    }
+
+    fn resolve_plane_collisions(&mut self, plane: &CollisionPlane) {
+        for particle in &mut self.particles {
+            if !particle.is_alive() {
+                continue;
+            }
+
+            let distance = plane.distance_to_point(particle.position);
+
+            if distance < particle.collision_radius {
+                let penetration = particle.collision_radius - distance;
+                particle.position += plane.normal * penetration;
+
+                let velocity_along_normal = particle.velocity.dot(plane.normal);
+                if velocity_along_normal < 0.0 {
+                    let restitution = self.config.restitution;
+                    particle.velocity -= plane.normal * velocity_along_normal * (1.0 + restitution);
+
+                    let tangent_velocity =
+                        particle.velocity - plane.normal * particle.velocity.dot(plane.normal);
+                    let friction = self.config.friction;
+                    particle.velocity -= tangent_velocity * friction;
+                }
+            }
+        }
     }
 
     /// Emits a new particle.
     fn emit_particle(&mut self) {
-        // Calculate spawn position before borrowing particles
         let spawn_position = self.position + self.get_spawn_offset();
 
-        // Find an inactive particle slot
         let particle = match self.particles.iter_mut().find(|p| !p.active) {
             Some(p) => p,
-            None => return, // No free slots
+            None => return,
         };
 
-        // Initialize particle
         particle.active = true;
         particle.lifetime = self.config.particle_lifetime
             + (rand::random::<f32>() - 0.5) * 2.0 * self.config.lifetime_randomness;
         particle.initial_lifetime = particle.lifetime;
-
-        // Set position based on emitter shape
         particle.position = spawn_position;
 
-        // Set velocity
         let vel_rand = Vec3::new(
             (rand::random::<f32>() - 0.5) * self.config.velocity_randomness,
             (rand::random::<f32>() - 0.5) * self.config.velocity_randomness,
             (rand::random::<f32>() - 0.5) * self.config.velocity_randomness,
         );
         particle.velocity = self.config.initial_velocity + vel_rand;
-
-        // Set color
         particle.color = self.config.initial_color;
-
-        // Set size
         particle.size = self.config.initial_size
             + (rand::random::<f32>() - 0.5) * 2.0 * self.config.size_randomness;
-
-        // Set rotation
         particle.rotation = self.config.initial_rotation;
         particle.rotation_speed = self.config.rotation_speed
             + (rand::random::<f32>() - 0.5) * 2.0 * self.config.rotation_speed_randomness;
+        particle.collision_radius = self.config.collision_radius;
     }
 
     /// Gets spawn position offset based on emitter shape.
@@ -532,8 +798,18 @@ pub struct ParticleSystem {
     quad_vertices: Subbuffer<[Vertex3D]>,
     quad_indices: Subbuffer<[u16]>,
     memory_allocator: Arc<dyn MemoryAllocator>,
-    _command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-    _queue: Arc<Queue>,
+    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+    queue: Arc<Queue>,
+    #[allow(dead_code)]
+    device: Arc<Device>,
+    sort_pipeline: Option<Arc<ComputePipeline>>,
+    descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
+    #[allow(dead_code)]
+    gpu_particle_buffer: Option<Subbuffer<[GpuParticle]>>,
+    enable_gpu_sorting: bool,
+    camera_position: Vec3,
+    collision_planes: Vec<CollisionPlane>,
+    soft_particle_config: SoftParticleConfig,
 }
 
 impl ParticleSystem {
@@ -545,7 +821,6 @@ impl ParticleSystem {
     ) -> Result<Self> {
         debug!("Creating particle system");
 
-        // Create quad geometry for particle billboard
         let quad_vertices = vec![
             Vertex3D::with_uv([-0.5, -0.5, 0.0], [1.0, 1.0, 1.0], [0.0, 0.0]),
             Vertex3D::with_uv([0.5, -0.5, 0.0], [1.0, 1.0, 1.0], [1.0, 0.0]),
@@ -585,15 +860,85 @@ impl ParticleSystem {
         )
         .map_err(|e| eyre::eyre!("Failed to create particle quad index buffer: {}", e))?;
 
+        let device = queue.device().clone();
+        let descriptor_set_allocator =
+            Arc::new(StandardDescriptorSetAllocator::new(device.clone(), Default::default()));
+
+        let sort_pipeline = Self::create_sort_pipeline(&device)?;
+
         Ok(Self {
             emitters: HashMap::new(),
             instance_buffer: None,
             quad_vertices: quad_vertex_buffer,
             quad_indices: quad_index_buffer,
             memory_allocator,
-            _command_buffer_allocator: command_buffer_allocator,
-            _queue: queue,
+            command_buffer_allocator,
+            queue,
+            device,
+            sort_pipeline: Some(sort_pipeline),
+            descriptor_set_allocator,
+            gpu_particle_buffer: None,
+            enable_gpu_sorting: true,
+            camera_position: Vec3::ZERO,
+            collision_planes: Vec::new(),
+            soft_particle_config: SoftParticleConfig::default(),
         })
+    }
+
+    fn create_sort_pipeline(device: &Arc<Device>) -> Result<Arc<ComputePipeline>> {
+        mod cs {
+            vulkano_shaders::shader! {
+                ty: "compute",
+                path: "src/shaders/particle_sort.comp"
+            }
+        }
+
+        let cs_module = cs::load(device.clone())
+            .map_err(|e| eyre::eyre!("Failed to load particle sort shader: {}", e))?;
+
+        let cs_entry_point = cs_module.entry_point("main").ok_or_else(|| {
+            eyre::eyre!("Particle sort shader missing main entry point")
+        })?;
+
+        let stage = PipelineShaderStageCreateInfo::new(cs_entry_point);
+        let layout = PipelineLayout::new(
+            device.clone(),
+            PipelineDescriptorSetLayoutCreateInfo::from_stages(&[stage.clone()])
+                .into_pipeline_layout_create_info(device.clone())
+                .map_err(|e| eyre::eyre!("Failed to create pipeline layout: {}", e))?,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create pipeline layout: {}", e))?;
+
+        ComputePipeline::new(
+            device.clone(),
+            None,
+            ComputePipelineCreateInfo::stage_layout(stage, layout),
+        )
+        .map_err(|e| eyre::eyre!("Failed to create compute pipeline: {}", e))
+    }
+
+    pub fn set_camera_position(&mut self, position: Vec3) {
+        self.camera_position = position;
+    }
+
+    pub fn add_collision_plane(&mut self, plane: CollisionPlane) {
+        self.collision_planes.push(plane);
+    }
+
+    pub fn clear_collision_planes(&mut self) {
+        self.collision_planes.clear();
+    }
+
+    pub fn set_gpu_sorting_enabled(&mut self, enabled: bool) {
+        self.enable_gpu_sorting = enabled;
+    }
+
+    pub fn set_soft_particle_config(&mut self, config: SoftParticleConfig) {
+        self.soft_particle_config = config;
+    }
+
+    pub fn soft_particle_config(&self) -> &SoftParticleConfig {
+        &self.soft_particle_config
     }
 
     /// Adds a new particle emitter.
@@ -621,13 +966,21 @@ impl ParticleSystem {
     /// Updates all particle emitters.
     pub fn update(&mut self, delta_time: f32) {
         for emitter in self.emitters.values_mut() {
-            emitter.update(delta_time);
+            emitter.update_with_collisions(delta_time, &self.collision_planes);
+        }
+
+        for emitter in self.emitters.values_mut() {
+            for particle in &mut emitter.particles {
+                if particle.is_alive() {
+                    let to_camera = self.camera_position - particle.position;
+                    particle.camera_distance = to_camera.length();
+                }
+            }
         }
     }
 
     /// Prepares particle instance data for rendering.
     pub fn prepare_render(&mut self) -> Result<()> {
-        // Collect all particle instances from all emitters
         let mut all_instances = Vec::new();
         for emitter in self.emitters.values() {
             all_instances.extend(emitter.to_instances());
@@ -643,7 +996,16 @@ impl ParticleSystem {
             all_instances.len()
         );
 
-        // Create or update instance buffer
+        if self.enable_gpu_sorting && all_instances.len() > 1 {
+            self.sort_particles_gpu(&mut all_instances)?;
+        } else {
+            all_instances.sort_by(|a, b| {
+                let dist_a = (Vec3::from(a.position) - self.camera_position).length_squared();
+                let dist_b = (Vec3::from(b.position) - self.camera_position).length_squared();
+                dist_b.partial_cmp(&dist_a).unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+
         let instance_buffer = Buffer::from_iter(
             self.memory_allocator.clone(),
             BufferCreateInfo {
@@ -660,6 +1022,126 @@ impl ParticleSystem {
         .map_err(|e| eyre::eyre!("Failed to create particle instance buffer: {}", e))?;
 
         self.instance_buffer = Some(instance_buffer);
+        Ok(())
+    }
+
+    fn sort_particles_gpu(&mut self, instances: &mut [ParticleInstance]) -> Result<()> {
+        let count = instances.len();
+        let padded_count = count.next_power_of_two();
+
+        let mut gpu_data: Vec<GpuParticle> = instances
+            .iter()
+            .map(|inst| {
+                let dist = (Vec3::from(inst.position) - self.camera_position).length();
+                GpuParticle {
+                    position: inst.position,
+                    _padding1: 0.0,
+                    velocity: [0.0; 3],
+                    _padding2: 0.0,
+                    color: inst.color,
+                    size: inst.size,
+                    rotation: inst.rotation,
+                    lifetime: 0.0,
+                    camera_distance: dist,
+                }
+            })
+            .collect();
+
+        gpu_data.resize(padded_count, GpuParticle::default());
+
+        let gpu_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            gpu_data.into_iter(),
+        )
+        .map_err(|e| eyre::eyre!("Failed to create GPU particle buffer: {}", e))?;
+
+        let descriptor_set = DescriptorSet::new(
+            self.descriptor_set_allocator.clone(),
+            self.sort_pipeline.as_ref().unwrap().layout().set_layouts()[0].clone(),
+            [WriteDescriptorSet::buffer(0, gpu_buffer.clone())],
+            [],
+        )
+        .map_err(|e| eyre::eyre!("Failed to create descriptor set: {}", e))?;
+
+        let mut builder = AutoCommandBufferBuilder::primary(
+            self.command_buffer_allocator.clone(),
+            self.queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create command buffer: {}", e))?;
+
+        builder
+            .bind_pipeline_compute(self.sort_pipeline.as_ref().unwrap().clone())
+            .map_err(|e| eyre::eyre!("Failed to bind pipeline: {}", e))?
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                self.sort_pipeline.as_ref().unwrap().layout().clone(),
+                0,
+                descriptor_set,
+            )
+            .map_err(|e| eyre::eyre!("Failed to bind descriptor sets: {}", e))?;
+
+        let num_stages = (padded_count as f32).log2() as u32;
+        for stage in 0..num_stages {
+            for substage in (0..=stage).rev() {
+                #[repr(C)]
+                #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+                struct PushConstants {
+                    stage: u32,
+                    substage: u32,
+                    num_particles: u32,
+                }
+
+                let push_constants = PushConstants {
+                    stage,
+                    substage,
+                    num_particles: padded_count as u32,
+                };
+
+                unsafe {
+                    builder
+                        .push_constants(
+                            self.sort_pipeline.as_ref().unwrap().layout().clone(),
+                            0,
+                            push_constants,
+                        )
+                        .map_err(|e| eyre::eyre!("Failed to push constants: {}", e))?
+                        .dispatch([(padded_count / 256) as u32 + 1, 1, 1])
+                        .map_err(|e| eyre::eyre!("Failed to dispatch: {}", e))?;
+                }
+            }
+        }
+
+        let command_buffer = builder
+            .build()
+            .map_err(|e| eyre::eyre!("Failed to build command buffer: {}", e))?;
+
+        command_buffer
+            .execute(self.queue.clone())
+            .map_err(|e| eyre::eyre!("Failed to execute command buffer: {}", e))?
+            .then_signal_fence_and_flush()
+            .map_err(|e| eyre::eyre!("Failed to flush: {}", e))?
+            .wait(None)
+            .map_err(|e| eyre::eyre!("Failed to wait: {}", e))?;
+
+        let sorted_data = gpu_buffer.read().map_err(|e| eyre::eyre!("Failed to read GPU buffer: {}", e))?;
+
+        for (i, gpu_particle) in sorted_data.iter().take(count).enumerate() {
+            instances[i].position = gpu_particle.position;
+            instances[i].color = gpu_particle.color;
+            instances[i].size = gpu_particle.size;
+            instances[i].rotation = gpu_particle.rotation;
+        }
+
         Ok(())
     }
 

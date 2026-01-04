@@ -1602,8 +1602,8 @@ pub use lod::{
 pub use material::{Material, MaterialManager, MaterialProperties};
 pub use mesh::{GpuMesh, MeshData};
 pub use particles::{
-    EmitterShape, ParticleEmitterConfig, ParticleForce, ParticleInstance, ParticleSystem,
-    MAX_PARTICLES_PER_EMITTER,
+    CollisionPlane, EmitterShape, GpuParticle, ParticleEmitterConfig, ParticleForce,
+    ParticleInstance, ParticleSystem, SoftParticleConfig, MAX_PARTICLES_PER_EMITTER,
 };
 pub use post_process::{
     BloomConfig, BloomEffect, BrightnessExtractionPass, ChromaticAberrationConfig,

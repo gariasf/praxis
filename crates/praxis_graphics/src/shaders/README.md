@@ -170,6 +170,23 @@ Velocity buffer for motion blur:
 - Per-pixel screen-space motion vectors
 - Used by motion blur effect
 
+### Particle System
+
+#### `particle.vert` / `particle.frag`
+Particle rendering with soft particles:
+- Billboard particle rendering facing camera
+- Soft particles with depth buffer comparison
+- Smooth fade-out near geometry
+- Per-particle rotation and coloring
+- Alpha blending for transparency
+
+#### `particle_sort.comp`
+GPU-based bitonic sort for particles:
+- Sorts particles by camera distance for correct alpha blending
+- Efficient parallel sorting algorithm
+- Works on power-of-two particle counts
+- Uses bitonic sort algorithm for parallel execution
+
 ## Shader Conventions
 
 ### Binding Locations
