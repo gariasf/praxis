@@ -1,6 +1,7 @@
 //! Core editor state management and coordination.
 
 use crate::editor_mode::EditorMode;
+use crate::menu_bar::{check_keyboard_shortcuts, handle_menu_action, render_menu_bar, MenuBarState};
 use crate::panels::{
     AssetsPanel, ConsolePanel, EditorPanel, HierarchyPanel, InspectorPanel, SceneViewPanel,
 };
@@ -42,6 +43,8 @@ pub struct EditorState {
     assets_panel: AssetsPanel,
     /// Whether the editor is visible.
     visible: bool,
+    /// Menu bar state.
+    menu_bar_state: MenuBarState,
 }
 
 impl EditorState {
@@ -91,6 +94,7 @@ impl EditorState {
             console_panel: ConsolePanel::new(),
             assets_panel: AssetsPanel::new(),
             visible: true,
+            menu_bar_state: MenuBarState::new(),
         }
     }
 
@@ -159,150 +163,47 @@ impl EditorState {
         &mut self.assets_panel
     }
 
+    /// Gets a reference to the menu bar state.
+    #[must_use]
+    pub const fn menu_bar_state(&self) -> &MenuBarState {
+        &self.menu_bar_state
+    }
+
+    /// Gets a mutable reference to the menu bar state.
+    #[must_use]
+    pub fn menu_bar_state_mut(&mut self) -> &mut MenuBarState {
+        &mut self.menu_bar_state
+    }
+
     /// Renders the editor UI.
     /// 
     /// # Arguments
     /// * `ctx` - The egui context
     /// * `undo_system` - Optional mutable reference to the undo/redo system for menu integration
     /// * `world` - Optional mutable reference to the ECS world for executing undo/redo commands
-    pub fn ui(&mut self, ctx: &egui::Context, undo_system: Option<&mut UndoRedoSystem>, world: Option<&mut World>) {
+    pub fn ui(&mut self, ctx: &egui::Context, mut undo_system: Option<&mut UndoRedoSystem>, mut world: Option<&mut World>) {
         if !self.visible {
             return;
         }
 
-        self.render_menu_bar(ctx, undo_system, world);
+        // Update menu bar state with current mode
+        self.menu_bar_state.mode = self.mode;
+
+        // Render menu bar and collect actions
+        let mut actions = render_menu_bar(ctx, &mut self.menu_bar_state, undo_system.as_deref());
+        
+        // Check for keyboard shortcuts
+        actions.extend(check_keyboard_shortcuts(ctx));
+
+        // Handle all actions
+        for action in actions {
+            handle_menu_action(action, &mut self.menu_bar_state, undo_system.as_deref_mut(), world.as_deref_mut());
+        }
+
+        // Sync mode back to EditorState
+        self.mode = self.menu_bar_state.mode;
+
         self.render_dock_area(ctx);
-    }
-
-    fn render_menu_bar(&mut self, ctx: &egui::Context, mut undo_system: Option<&mut UndoRedoSystem>, mut world: Option<&mut World>) {
-        egui::TopBottomPanel::top("editor_menu_bar").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
-                // File menu
-                ui.menu_button("File", |ui| {
-                    if ui.button("New Scene").clicked() {
-                        info!("New scene requested");
-                        ui.close_menu();
-                    }
-                    if ui.button("Open Scene").clicked() {
-                        info!("Open scene requested");
-                        ui.close_menu();
-                    }
-                    
-                    // Show dirty indicator in save button
-                    let is_dirty = undo_system.as_ref().map_or(false, |s| s.is_dirty());
-                    let save_text = if is_dirty {
-                        "Save Scene *"
-                    } else {
-                        "Save Scene"
-                    };
-                    
-                    if ui.button(save_text).clicked() {
-                        info!("Save scene requested");
-                        if let Some(system) = undo_system.as_mut() {
-                            system.mark_saved();
-                            info!("Scene marked as saved");
-                        }
-                        ui.close_menu();
-                    }
-                    
-                    ui.separator();
-                    if ui.button("Exit").clicked() {
-                        info!("Exit requested");
-                        ui.close_menu();
-                    }
-                });
-
-                // Edit menu with undo/redo
-                ui.menu_button("Edit", |ui| {
-                    // Collect state info before borrowing mutably
-                    let (can_undo, can_redo, undo_text, redo_text, undo_count, redo_count) = 
-                        if let Some(ref system) = undo_system {
-                            let can_undo = system.can_undo();
-                            let can_redo = system.can_redo();
-                            
-                            let undo_text = if let Some(desc) = system.undo_description() {
-                                format!("Undo: {} (Ctrl+Z)", desc)
-                            } else {
-                                "Undo (Ctrl+Z)".to_string()
-                            };
-                            
-                            let redo_text = if let Some(desc) = system.redo_description() {
-                                format!("Redo: {} (Ctrl+Y)", desc)
-                            } else {
-                                "Redo (Ctrl+Y)".to_string()
-                            };
-                            
-                            (can_undo, can_redo, undo_text, redo_text, system.undo_count(), system.redo_count())
-                        } else {
-                            (false, false, "Undo (Ctrl+Z)".to_string(), "Redo (Ctrl+Y)".to_string(), 0, 0)
-                        };
-                    
-                    // Undo button with description and shortcut
-                    let undo_button = ui.add_enabled(can_undo, egui::Button::new(&undo_text));
-                    if undo_button.clicked() {
-                        if let (Some(system), Some(world)) = (undo_system.as_mut(), world.as_mut()) {
-                            if let Err(e) = system.undo(world) {
-                                praxis_utils::error!("Undo failed: {}", e);
-                            } else {
-                                info!("Undo executed");
-                            }
-                        }
-                        ui.close_menu();
-                    }
-                    
-                    // Redo button with description and shortcut
-                    let redo_button = ui.add_enabled(can_redo, egui::Button::new(&redo_text));
-                    if redo_button.clicked() {
-                        if let (Some(system), Some(world)) = (undo_system.as_mut(), world.as_mut()) {
-                            if let Err(e) = system.redo(world) {
-                                praxis_utils::error!("Redo failed: {}", e);
-                            } else {
-                                info!("Redo executed");
-                            }
-                        }
-                        ui.close_menu();
-                    }
-                    
-                    ui.separator();
-                    
-                    // Show command history info
-                    ui.label(format!("History: {} undo / {} redo", undo_count, redo_count));
-                });
-
-                // View menu
-                ui.menu_button("View", |ui| {
-                    if ui
-                        .checkbox(&mut self.visible, "Show Editor")
-                        .clicked()
-                    {
-                        ui.close_menu();
-                    }
-                });
-
-                ui.separator();
-
-                // Play/Edit mode toggle
-                let mode_text = match self.mode {
-                    EditorMode::Edit => "▶ Play",
-                    EditorMode::Play => "⏸ Edit",
-                };
-
-                if ui.button(mode_text).clicked() {
-                    self.toggle_mode();
-                }
-
-                // Right-aligned status indicators
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    // Show dirty indicator
-                    if undo_system.as_ref().map_or(false, |s| s.is_dirty()) {
-                        ui.label(egui::RichText::new("● Unsaved").color(egui::Color32::from_rgb(255, 200, 0)));
-                        ui.separator();
-                    }
-                    
-                    ui.label(format!("Mode: {:?}", self.mode));
-                });
-            });
-        });
     }
 
     fn render_dock_area(&mut self, ctx: &egui::Context) {

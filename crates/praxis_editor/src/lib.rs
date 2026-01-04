@@ -81,6 +81,20 @@
 //!
 //! See the [`selection`] module and `SELECTION_SYSTEM.md` for detailed documentation.
 //!
+//! # MenuBar System
+//!
+//! The editor provides a comprehensive menu bar system with standard menus and keyboard shortcuts:
+//! - **File Menu**: New, Open, Save, Save As, Exit with shortcuts (Ctrl+N/O/S, Ctrl+Shift+S, Alt+F4)
+//! - **Edit Menu**: Undo, Redo, Copy, Paste, Duplicate with shortcuts (Ctrl+Z/Y/C/V/D)
+//! - **Entity Menu**: Create Empty, Create Primitives (Cube, Sphere, Plane, Cylinder, Cone), Delete (Delete key)
+//! - **View Menu**: Toggle visibility of Hierarchy, Inspector, Console, Assets, and Scene View panels
+//! - **Help Menu**: About, Documentation (F1)
+//!
+//! The menu bar automatically integrates with the undo/redo system, showing command descriptions
+//! and dirty state indicators when there are unsaved changes.
+//!
+//! See the [`menu_bar`] module for detailed API documentation.
+//!
 //! # Command System and Undo/Redo
 //!
 //! The editor provides a comprehensive undo/redo system with full integration:
@@ -109,6 +123,7 @@ mod command_shortcuts;
 mod editor_mode;
 mod editor_state;
 mod gizmo;
+mod menu_bar;
 mod panels;
 pub mod selection;
 mod undo;
@@ -120,6 +135,9 @@ pub use editor_mode::EditorMode;
 pub use editor_state::{EditorState, EditorTab};
 pub use gizmo::{
     Gizmo, GizmoAxis, GizmoInteraction, GizmoMode, GizmoSpace, GizmoSystem, TransformGizmo,
+};
+pub use menu_bar::{
+    check_keyboard_shortcuts, handle_menu_action, render_menu_bar, MenuBarAction, MenuBarState,
 };
 pub use panels::{
     AssetEntry, AssetImportConfig, AssetType, AssetsPanel, ConsolePanel, EditorPanel,
