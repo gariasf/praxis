@@ -39,6 +39,8 @@ cargo run --example deferred_demo
 cargo run --example hdr_demo
 cargo run --example environment_probe_demo
 cargo run --example selection_demo
+cargo run --example command_system_demo
+cargo run --example command_serialization_demo
 
 # Check code without building
 cargo check --all

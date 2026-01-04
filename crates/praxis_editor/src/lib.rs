@@ -80,7 +80,23 @@
 //! - **Selection events**: Track when selection changes for UI updates
 //!
 //! See the [`selection`] module and `SELECTION_SYSTEM.md` for detailed documentation.
+//!
+//! # Command System
+//!
+//! The editor provides a comprehensive undo/redo system with serialization support:
+//! - **EditorCommand trait**: Base interface for all undoable operations
+//! - **CommandHistory**: Manages undo/redo stacks with configurable size limits
+//! - **Concrete commands**: Transform edits, entity creation/deletion, component management, hierarchy changes
+//! - **Composite commands**: Group multiple operations into a single undoable action
+//! - **RON serialization**: Save and load command history for session recovery or replay
+//!
+//! **Keyboard shortcuts:**
+//! - Ctrl+Z: Undo
+//! - Ctrl+Y or Ctrl+Shift+Z: Redo
+//!
+//! See `COMMAND_SYSTEM.md` for detailed documentation and examples.
 
+mod command_shortcuts;
 mod editor_mode;
 mod editor_state;
 mod gizmo;
@@ -89,6 +105,7 @@ pub mod selection;
 mod undo;
 pub mod drag_drop;
 
+pub use command_shortcuts::{handle_command_shortcuts, is_redo_pressed, is_undo_pressed};
 pub use drag_drop::{DragDropPayload, DragDropSystem};
 pub use editor_mode::EditorMode;
 pub use editor_state::{EditorState, EditorTab};
@@ -103,7 +120,12 @@ pub use selection::{
     handle_selection_input_system, update_selection_system, Selectable, Selected, SelectionEvent,
     SelectionMode, SelectionSystem,
 };
-pub use undo::{TransformCommand, UndoRedoSystem};
+pub use undo::{
+    AddComponentCommand, CommandHistory, ComponentData, CompositeCommand, CreateEntityCommand,
+    DeleteEntityCommand, EditorCommand, RemoveComponentCommand, SerializableCommand,
+    SerializableEntity, SerializableTransform, SetParentCommand, TransformEditCommand,
+    UndoRedoSystem,
+};
 
 use praxis_utils::{info, Result};
 

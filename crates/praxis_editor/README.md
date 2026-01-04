@@ -1,274 +1,224 @@
 # Praxis Editor
 
-The editor system for the Praxis game engine, providing a comprehensive suite of tools for creating and managing game content.
+The editor system for the Praxis game engine, providing a comprehensive development environment with dockable panels, asset management, and powerful editing tools.
 
 ## Features
 
-### Viewport Panel
+### Core Editor
 
-The `ViewportPanel` provides a 3D scene viewport with full camera controls:
-
-- **Offscreen Rendering**: Renders to a framebuffer that can be displayed in egui
-- **Orbit Camera**: Right-click + drag to orbit around a target point
-- **Pan Camera**: Middle-click + drag to pan the camera
-- **Zoom**: Mouse wheel to zoom in/out
-- **Keyboard Movement**: WASD/QE to move the camera target
-- **Grid Floor**: Visual reference grid with axis indicators (X=red, Z=blue)
-- **Camera Information**: Real-time display of camera parameters
-
-See [VIEWPORT_PANEL.md](VIEWPORT_PANEL.md) for detailed documentation.
-
-### Editor Panels
-
-The editor uses a dockable panel system powered by `egui_dock`:
-
-- **ViewportPanel**: 3D scene viewport with camera controls
-- **SceneViewPanel**: Scene visualization
-- **HierarchyPanel**: Entity hierarchy tree view
-- **InspectorPanel**: Component editing for selected entities
-- **ConsolePanel**: Log output and command execution
-- **AssetsPanel**: Project asset browser
+- **Dockable Panel System**: Flexible UI layout using `egui_dock`
+- **Scene View**: 3D viewport for visualizing and interacting with scenes
+- **Hierarchy Panel**: Tree view of scene entities
+- **Inspector Panel**: Component editing for selected entities
+- **Console Panel**: Log output and command execution
+- **Assets Panel**: Project asset browser with drag-and-drop
 
 ### Selection System
 
-Comprehensive entity selection with:
-- Multi-entity selection (add/remove/toggle modes)
-- Click-to-select in viewport
-- Marquee selection
+- Multi-entity selection with add/remove/toggle modes
+- Click-to-select with raycast picking
+- Marquee (box) selection
 - Keyboard shortcuts (Ctrl+A, Ctrl+D)
-- Selection events for UI updates
+- Selection change events
 
 See `SELECTION_SYSTEM.md` for detailed documentation.
 
+### Command System
+
+Comprehensive undo/redo system with serialization support:
+
+- **EditorCommand Trait**: Base interface for all commands
+- **CommandHistory**: Manages undo/redo stacks
+- **Concrete Commands**:
+  - `TransformEditCommand`: Edit entity transforms
+  - `CreateEntityCommand`: Create new entities
+  - `DeleteEntityCommand`: Delete entities
+  - `AddComponentCommand`: Add components
+  - `RemoveComponentCommand`: Remove components
+  - `SetParentCommand`: Change entity hierarchy
+  - `CompositeCommand`: Group multiple operations
+
+**Key Features**:
+- Full execute/undo/redo support
+- RON serialization for save/load
+- Command batching with composites
+- Type-safe command implementations
+- History management with size limits
+
+See `COMMAND_SYSTEM.md` for detailed documentation.
+
+### Gizmo System
+
+Interactive 3D gizmos for transform manipulation:
+
+- Translation, rotation, and scale gizmos
+- Local and world space modes
+- Visual feedback and snapping
+- Undo/redo integration
+
+### Drag-and-Drop
+
+Asset drag-and-drop system for placing assets in the scene:
+
+- Drag models, textures, and other assets
+- Visual feedback during drag
+- Integration with scene view
+
 ## Usage
 
-### Basic Setup
-
 ```rust
-use praxis_editor::{EditorState, ViewportPanel};
-use praxis_graphics::RenderContext;
+use praxis_editor::{EditorState, EditorMode, UndoRedoSystem};
+use praxis_ecs::World;
 
-// Initialize the editor system
-praxis_editor::init()?;
+// Initialize the editor
+praxis_editor::init().expect("Failed to initialize editor");
 
 // Create editor state
 let mut editor = EditorState::new();
 
-// Create and initialize viewport
-let mut viewport = ViewportPanel::new();
-viewport.initialize(&mut render_context)?;
+// Set up command system
+let mut world = World::new();
+world.insert_resource(UndoRedoSystem::new());
+
+// Toggle between edit and play modes
+editor.set_mode(EditorMode::Play);
+
+// Render editor UI (called every frame)
+// editor.ui(&egui_context);
 ```
 
-### Camera Controls
-
-The viewport uses an orbit camera system:
+## Command System Example
 
 ```rust
-// Programmatic camera control
-viewport.set_camera_distance(15.0);
-viewport.set_camera_target(Vec3::new(0.0, 0.0, 0.0));
-viewport.reset_camera();
+use praxis_editor::{CommandHistory, TransformEditCommand};
+use praxis_ecs::{World, Transform};
 
-// Get camera transform for rendering
-let camera_transform = viewport.compute_camera_transform();
-let view_matrix = camera_transform.compute_inverse_matrix();
+let mut world = World::new();
+let mut history = CommandHistory::new();
+
+// Create entity and edit transform
+let entity = world.spawn(Transform::default()).id();
+let command = TransformEditCommand::new(
+    entity,
+    Transform::default(),
+    Transform::from_xyz(10.0, 5.0, 0.0)
+);
+
+// Execute command
+history.execute(&mut world, Box::new(command)).unwrap();
+
+// Undo
+history.undo(&mut world).unwrap();
+
+// Redo
+history.redo(&mut world).unwrap();
+
+// Serialize history
+let ron = history.to_ron().unwrap();
+std::fs::write("history.ron", ron).unwrap();
 ```
 
-### Grid Rendering
+## Examples
 
-The viewport includes a grid floor for spatial reference:
+Run the command system demo:
 
-```rust
-// Toggle grid visibility
-viewport.set_show_grid(true);
+```bash
+cargo run --example command_system_demo
+```
 
-// Grid features:
-// - 50x50 unit grid by default
-// - Center lines highlighted
-// - X-axis in red, Z-axis in blue
+Run the selection system demo:
+
+```bash
+cargo run --example selection_demo
 ```
 
 ## Architecture
 
 ### Panel System
 
-All editor panels implement the `EditorPanel` trait:
+The editor uses `egui_dock` for flexible panel management:
 
 ```rust
 pub trait EditorPanel {
     fn title(&self) -> &str;
-    fn ui(&mut self, ui: &mut Ui);
-    fn on_close(&mut self) {}
+    fn ui(&mut self, ui: &mut egui::Ui);
 }
 ```
 
-### Viewport Rendering Pipeline
+Panels can be:
+- Dragged and rearranged
+- Split horizontally or vertically
+- Tabbed together
+- Closed and reopened
 
-```text
-┌─────────────────────┐
-│  ViewportPanel      │
-│  - Camera state     │
-│  - Grid renderer    │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│  Offscreen Target   │
-│  - Framebuffer      │
-│  - Render pass      │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│  Vulkan Image       │
-│  (RGBA texture)     │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│  egui::Image        │
-│  (Display in UI)    │
-└─────────────────────┘
-```
+### Selection System
 
-### Camera System
+Entity selection is managed through ECS:
 
-The viewport uses spherical coordinates for orbit control:
+- `Selectable` component: Marks entities as selectable
+- `Selected` component: Marks currently selected entities
+- `SelectionSystem` resource: Manages selection state
+- `SelectionEvent`: Events fired on selection changes
 
-- **Distance**: Radius from target point (1.0 to 1000.0)
-- **Pitch**: Vertical angle (±89 degrees to avoid gimbal lock)
-- **Yaw**: Horizontal angle (unlimited rotation)
-- **Target**: Center point of orbit
+### Command System
 
-Camera position computation:
-```rust
-position = target + Vec3(
-    distance * cos(pitch) * sin(yaw),
-    distance * sin(pitch),
-    distance * cos(pitch) * cos(yaw)
-)
-```
+Commands follow the command pattern:
 
-## Dependencies
+1. **Execute**: Apply changes to the world
+2. **Undo**: Revert changes
+3. **Redo**: Reapply changes (defaults to execute)
 
-- `praxis_ecs`: Entity-component system
-- `praxis_graphics`: Rendering and graphics APIs
-- `praxis_math`: Math utilities (Vec3, Mat4, etc.)
-- `praxis_input`: Input handling
-- `praxis_utils`: Utilities and error handling
-- `egui`: Immediate mode GUI
-- `egui_dock`: Dockable panel system
-- `vulkano`: Vulkan bindings
+All commands are serializable via RON format for:
+- Session recovery
+- Replay functionality
+- Collaboration tools
 
-## Testing
+## Integration
 
-Run tests for the editor:
-
-```bash
-cargo test -p praxis_editor
-```
-
-Tests cover:
-- Viewport panel creation and configuration
-- Camera transform calculations
-- Grid mesh generation
-- Panel interface compliance
-
-## Examples
-
-### Creating a Viewport
+### With ECS World
 
 ```rust
-use praxis_editor::ViewportPanel;
-use praxis_graphics::RenderContext;
-
-let mut viewport = ViewportPanel::new();
-viewport.initialize(&mut render_context)?;
-
-// Use in your editor loop
-// viewport.ui(&mut egui_ui);
-```
-
-### Custom Camera Position
-
-```rust
-use praxis_editor::ViewportPanel;
-use praxis_math::Vec3;
-
-let mut viewport = ViewportPanel::new();
-viewport.initialize(&mut render_context)?;
-
-// Position camera to look at a specific object
-viewport.set_camera_target(Vec3::new(5.0, 2.0, 3.0));
-viewport.set_camera_distance(15.0);
-```
-
-### Integrating with ECS
-
-```rust
-use praxis_editor::ViewportPanel;
-use praxis_ecs::{World, Camera, Transform, PerspectiveProjection};
+use praxis_editor::{SelectionSystem, UndoRedoSystem};
+use praxis_ecs::World;
 
 let mut world = World::new();
-let mut viewport = ViewportPanel::new();
 
-// Create a camera entity for the viewport
-let camera_entity = world.spawn((
-    Camera::new(),
-    PerspectiveProjection::default(),
-    Transform::default(),
-));
-
-viewport.set_camera_entity(camera_entity);
-
-// Update camera transform each frame
-let camera_transform = viewport.compute_camera_transform();
-// Apply to camera entity...
+// Add editor systems
+world.insert_resource(SelectionSystem::new());
+world.insert_resource(UndoRedoSystem::new());
 ```
 
-## Performance Considerations
+### With Input System
 
-### Offscreen Rendering
+```rust
+use praxis_editor::handle_selection_input_system;
+use praxis_ecs::Schedule;
 
-Each viewport requires GPU memory for its render target:
-- 800x600 RGBA: ~1.8 MB
-- 1920x1080 RGBA: ~8.3 MB
+let mut schedule = Schedule::default();
+schedule.add_systems(handle_selection_input_system);
+```
 
-### Grid Rendering
+### With Rendering
 
-The default 50x50 grid generates:
-- ~200 lines (2 vertices each)
-- ~400 vertices total
-- Minimal GPU cost
+```rust
+use praxis_editor::update_selection_system;
 
-### Input Handling
-
-Input events are filtered to viewport bounds, preventing unnecessary processing when the mouse is outside the viewport.
-
-## Known Limitations
-
-1. **Texture Display**: Rendered texture not yet displayed in egui (requires additional integration)
-2. **Scene Rendering**: Scene entities not yet queried and rendered (requires ECS query system)
-3. **Lighting**: Scene lighting not yet integrated with viewport rendering
-4. **Multiple Viewports**: Architecturally supported but not fully tested
-
-## Future Enhancements
-
-- [ ] Display rendered Vulkan texture in egui
-- [ ] Query and render scene entities in viewport
-- [ ] Integrate scene lighting in viewport
-- [ ] Add gizmos for object manipulation
-- [ ] Add viewport-specific rendering settings
-- [ ] Add camera preset positions
-- [ ] Add viewport statistics (FPS, triangle count)
-- [ ] Add screenshot functionality
-- [ ] Add grid customization UI
+// Update selection state each frame
+schedule.add_systems(update_selection_system);
+```
 
 ## Documentation
 
-- [VIEWPORT_PANEL.md](VIEWPORT_PANEL.md) - Detailed viewport panel documentation
-- [SELECTION_SYSTEM.md](SELECTION_SYSTEM.md) - Selection system documentation
-- [lib.rs](src/lib.rs) - API documentation
+- [Command System](COMMAND_SYSTEM.md) - Detailed command pattern documentation
+- [Selection System](SELECTION_SYSTEM.md) - Selection system documentation
+
+## Dependencies
+
+- `bevy_ecs`: Entity-Component-System
+- `egui`: Immediate mode GUI
+- `egui_dock`: Dockable panels
+- `serde`: Serialization
+- `ron`: Rusty Object Notation
 
 ## License
 

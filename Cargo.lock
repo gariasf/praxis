@@ -3069,6 +3069,8 @@ dependencies = [
  "praxis_math",
  "praxis_scene",
  "praxis_utils",
+ "ron",
+ "serde",
  "vulkano",
  "winit",
 ]
