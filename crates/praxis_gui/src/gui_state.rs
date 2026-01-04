@@ -1,6 +1,6 @@
 //! Central GUI state manager that coordinates all GUI components.
 
-use crate::{DebugUi, EguiIntegration, EntityInspector, TransformGizmos};
+use crate::{DebugUi, EguiIntegration, EntityInspector, HierarchyPanel, TransformGizmos};
 use praxis_ecs::World;
 use std::sync::Arc;
 use vulkano::device::Queue;
@@ -19,6 +19,8 @@ pub struct GuiState {
     pub debug_ui: DebugUi,
     /// Entity inspector for viewing and editing ECS data.
     pub entity_inspector: EntityInspector,
+    /// Hierarchy panel for scene graph visualization.
+    pub hierarchy_panel: HierarchyPanel,
     /// Transform gizmos for runtime scene editing.
     pub transform_gizmos: TransformGizmos,
 }
@@ -37,6 +39,7 @@ impl GuiState {
             egui_integration,
             debug_ui: DebugUi::new(),
             entity_inspector: EntityInspector::new(),
+            hierarchy_panel: HierarchyPanel::new(),
             transform_gizmos: TransformGizmos::new(),
         }
     }
@@ -61,7 +64,12 @@ impl GuiState {
         let ctx = self.egui_integration.context();
 
         self.debug_ui.render(ctx);
-        self.entity_inspector.render(ctx, world);
+        self.hierarchy_panel.render(ctx, world);
+        
+        // Pass the selected entity from hierarchy panel to entity inspector
+        let selected_entity = self.hierarchy_panel.selection_state.primary_selection;
+        self.entity_inspector.render(ctx, world, selected_entity);
+        
         self.transform_gizmos.render(ctx, world);
 
         let (full_output, clipped_primitives) = self.egui_integration.end_frame(window);

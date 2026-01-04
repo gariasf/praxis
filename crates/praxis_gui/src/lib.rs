@@ -7,12 +7,14 @@ mod egui_integration;
 mod entity_inspector;
 mod gizmos;
 mod gui_state;
+mod hierarchy_panel;
 
 pub use debug_ui::DebugUi;
 pub use egui_integration::EguiIntegration;
 pub use entity_inspector::EntityInspector;
 pub use gizmos::{Gizmo, GizmoMode, TransformGizmos};
 pub use gui_state::GuiState;
+pub use hierarchy_panel::HierarchyPanel;
 
 use praxis_utils::{info, Result};
 

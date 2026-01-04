@@ -10,18 +10,12 @@ use praxis_math::Quat;
 pub struct EntityInspector {
     /// Whether the inspector is visible.
     pub visible: bool,
-    /// Currently selected entity.
-    pub selected_entity: Option<Entity>,
-    /// Search filter for entity list.
-    search_filter: String,
 }
 
 impl Default for EntityInspector {
     fn default() -> Self {
         Self {
             visible: true,
-            selected_entity: None,
-            search_filter: String::new(),
         }
     }
 }
@@ -33,73 +27,31 @@ impl EntityInspector {
     }
 
     /// Renders the entity inspector UI.
-    pub fn render(&mut self, ctx: &egui::Context, world: &mut World) {
+    /// 
+    /// The selected_entity parameter should come from the HierarchyPanel's selection_state.
+    pub fn render(&mut self, ctx: &egui::Context, world: &mut World, selected_entity: Option<Entity>) {
         if !self.visible {
             return;
         }
 
         egui::Window::new("Entity Inspector")
-            .default_pos(egui::pos2(300.0, 50.0))
+            .default_pos(egui::pos2(320.0, 50.0))
             .default_size(egui::vec2(400.0, 600.0))
             .resizable(true)
             .show(ctx, |ui| {
-                self.render_entity_list(ui, world);
-                ui.separator();
-                self.render_selected_entity(ui, world);
-            });
-    }
-
-    /// Renders the entity list.
-    fn render_entity_list(&mut self, ui: &mut egui::Ui, world: &mut World) {
-        ui.heading("Entities");
-
-        ui.horizontal(|ui| {
-            ui.label("Search:");
-            ui.text_edit_singleline(&mut self.search_filter);
-        });
-
-        ui.separator();
-
-        egui::ScrollArea::vertical()
-            .max_height(200.0)
-            .show(ui, |ui| {
-                let mut query = world.query::<(Entity, Option<&Name>)>();
-
-                for (entity, name) in query.iter(world.inner()) {
-                    let entity_name = if let Some(name) = name {
-                        name.as_str()
-                    } else {
-                        "Unnamed Entity"
-                    };
-
-                    if !self.search_filter.is_empty()
-                        && !entity_name
-                            .to_lowercase()
-                            .contains(&self.search_filter.to_lowercase())
-                    {
-                        continue;
-                    }
-
-                    let label = format!("{entity_name} (ID: {entity:?})");
-                    let is_selected = self.selected_entity == Some(entity);
-
-                    if ui.selectable_label(is_selected, label).clicked() {
-                        self.selected_entity = Some(entity);
-                    }
-                }
+                self.render_selected_entity(ui, world, selected_entity);
             });
     }
 
     /// Renders details for the selected entity.
-    fn render_selected_entity(&mut self, ui: &mut egui::Ui, world: &mut World) {
-        let Some(entity) = self.selected_entity else {
+    fn render_selected_entity(&mut self, ui: &mut egui::Ui, world: &mut World, selected_entity: Option<Entity>) {
+        let Some(entity) = selected_entity else {
             ui.label("No entity selected");
             return;
         };
 
         if world.inner().get_entity(entity).is_none() {
             ui.label("Selected entity no longer exists");
-            self.selected_entity = None;
             return;
         }
 
@@ -297,10 +249,5 @@ impl EntityInspector {
     /// Sets the visibility of the entity inspector.
     pub fn set_visible(&mut self, visible: bool) {
         self.visible = visible;
-    }
-
-    /// Selects an entity.
-    pub fn select_entity(&mut self, entity: Entity) {
-        self.selected_entity = Some(entity);
     }
 }
