@@ -582,7 +582,10 @@ mod tests {
         let loaded_scene = loader.load_from_string(old_scene_ron).unwrap();
 
         // Scene should be migrated to current version
-        assert_eq!(loaded_scene.version, crate::definition::CURRENT_SCENE_VERSION);
+        assert_eq!(
+            loaded_scene.version,
+            crate::definition::CURRENT_SCENE_VERSION
+        );
         assert_eq!(loaded_scene.name, "Old Scene");
         assert_eq!(loaded_scene.entity_count(), 1);
     }
@@ -640,12 +643,7 @@ mod tests {
         let ron_string = loader.save_to_string(&scene).unwrap();
         let loaded_scene = loader.load_from_string(&ron_string).unwrap();
 
-        let loaded_camera = loaded_scene
-            .editor_data()
-            .unwrap()
-            .camera
-            .as_ref()
-            .unwrap();
+        let loaded_camera = loaded_scene.editor_data().unwrap().camera.as_ref().unwrap();
 
         assert_eq!(loaded_camera.position, (5.0, 10.0, 15.0));
         assert_eq!(loaded_camera.target, (0.0, 1.0, 0.0));

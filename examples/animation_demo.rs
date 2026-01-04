@@ -18,9 +18,7 @@
 use praxis_ecs::{Component, World};
 use praxis_input::InputState;
 use praxis_math::{Quat, Vec3};
-use praxis_scene::{
-    AnimatedPose, AnimationBlender, AnimationClip, BlendNode1D, Bone, Skeleton,
-};
+use praxis_scene::{AnimatedPose, AnimationBlender, AnimationClip, BlendNode1D, Bone, Skeleton};
 use praxis_utils::{info, Result};
 use std::time::{Duration, Instant};
 use winit::keyboard::KeyCode;

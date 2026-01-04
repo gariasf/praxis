@@ -242,10 +242,7 @@ fn validate_editor_data(editor_data: &crate::definition::EditorData) -> Result<(
 
         // Validate background color is in valid range
         let (r, g, b) = viewport.background_color;
-        if !(0.0..=1.0).contains(&r)
-            || !(0.0..=1.0).contains(&g)
-            || !(0.0..=1.0).contains(&b)
-        {
+        if !(0.0..=1.0).contains(&r) || !(0.0..=1.0).contains(&g) || !(0.0..=1.0).contains(&b) {
             return Err(praxis_utils::eyre::eyre!(
                 "Viewport background color ({}, {}, {}) components must be in range [0, 1]",
                 r,

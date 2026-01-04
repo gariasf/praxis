@@ -387,7 +387,9 @@ impl GuiDemoApp {
         };
 
         info!("=== Entity List ===");
-        let mut query = world.inner_mut().query::<(praxis_ecs::Entity, Option<&Name>)>();
+        let mut query = world
+            .inner_mut()
+            .query::<(praxis_ecs::Entity, Option<&Name>)>();
 
         for (entity, name) in query.iter(world.inner()) {
             let name_str = name.map(|n| n.as_str()).unwrap_or("Unnamed");

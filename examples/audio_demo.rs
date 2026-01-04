@@ -16,10 +16,10 @@ use praxis_ecs::{
     World,
 };
 use praxis_input::InputState;
-use winit::keyboard::KeyCode;
 use praxis_math::Vec3;
 use praxis_utils::{info, Result};
 use std::time::{Duration, Instant};
+use winit::keyboard::KeyCode;
 
 #[derive(Resource)]
 struct DemoState {

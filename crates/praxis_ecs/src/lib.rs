@@ -457,7 +457,9 @@ pub use bevy_ecs::{
     entity::Entity,
     query::{Added, Changed, Or, QueryState, With, Without},
     schedule::{IntoSystemConfigs, Schedule, ScheduleLabel, Schedules, SystemSet},
-    system::{Commands, In, IntoSystem, Local, ParamSet, Res, ResMut, Resource, System, SystemParam},
+    system::{
+        Commands, In, IntoSystem, Local, ParamSet, Res, ResMut, Resource, System, SystemParam,
+    },
     world::World as BevyWorld,
 };
 

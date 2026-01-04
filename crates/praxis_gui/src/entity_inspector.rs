@@ -22,9 +22,14 @@ impl EntityInspector {
     }
 
     /// Renders the entity inspector UI.
-    /// 
+    ///
     /// The selected_entity parameter should come from the HierarchyPanel's selection_state.
-    pub fn render(&mut self, ctx: &egui::Context, world: &mut World, selected_entity: Option<Entity>) {
+    pub fn render(
+        &mut self,
+        ctx: &egui::Context,
+        world: &mut World,
+        selected_entity: Option<Entity>,
+    ) {
         self.panel.render(ctx, world, selected_entity);
     }
 

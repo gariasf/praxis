@@ -34,7 +34,9 @@
 //! - **Escape**: Exit
 
 use praxis_core::{Engine, EngineBuilder};
-use praxis_ecs::{Commands, IntoSystemConfigs, Query, Res, ResMut, Resource, Schedule, Transform, With, World};
+use praxis_ecs::{
+    Commands, IntoSystemConfigs, Query, Res, ResMut, Resource, Schedule, Transform, With, World,
+};
 use praxis_editor::{EditorMode, EditorState, UndoRedoSystem};
 use praxis_gui::EguiContext;
 use praxis_input::InputState;
@@ -99,7 +101,7 @@ fn main() -> Result<()> {
 
     // Create ECS world and schedule
     let mut world = praxis_ecs::World::new();
-    
+
     // Insert resources
     world.insert_resource(InputState::default());
     world.insert_resource(EditorState::new());
@@ -113,7 +115,7 @@ fn main() -> Result<()> {
 
     // Create state and run event loop
     let mut state = State::new(window.clone()).await?;
-    
+
     event_loop.run(move |event, elwt| {
         match event {
             winit::event::Event::WindowEvent { event, .. } => match event {
@@ -128,12 +130,16 @@ fn main() -> Result<()> {
                         info!("Escape pressed, exiting");
                         elwt.exit();
                     }
-                    
+
                     // Update input state
                     let mut input = world.get_resource_mut::<InputState>().unwrap();
                     input.handle_keyboard_input(event.physical_key, event.state);
                 }
-                WindowEvent::MouseInput { state: button_state, button, .. } => {
+                WindowEvent::MouseInput {
+                    state: button_state,
+                    button,
+                    ..
+                } => {
                     let mut input = world.get_resource_mut::<InputState>().unwrap();
                     input.handle_mouse_button(button.into(), button_state);
                 }

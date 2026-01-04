@@ -137,6 +137,7 @@ mod command_shortcuts;
 pub mod drag_drop;
 mod editor_mode;
 mod editor_state;
+pub mod entity_operations;
 mod gizmo;
 mod menu_bar;
 mod panels;
@@ -148,6 +149,7 @@ pub use command_shortcuts::{handle_command_shortcuts, is_redo_pressed, is_undo_p
 pub use drag_drop::{DragDropPayload, DragDropSystem};
 pub use editor_mode::EditorMode;
 pub use editor_state::{EditorState, EditorTab};
+pub use entity_operations::{EntityOperations, EntityOperationsError};
 pub use gizmo::{
     Gizmo, GizmoAxis, GizmoInteraction, GizmoMode, GizmoSpace, GizmoSystem, TransformGizmo,
 };

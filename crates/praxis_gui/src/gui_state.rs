@@ -65,11 +65,11 @@ impl GuiState {
 
         self.debug_ui.render(ctx);
         self.hierarchy_panel.render(ctx, world);
-        
+
         // Pass the selected entity from hierarchy panel to entity inspector
         let selected_entity = self.hierarchy_panel.selection_state.primary_selection;
         self.entity_inspector.render(ctx, world, selected_entity);
-        
+
         self.transform_gizmos.render(ctx, world);
 
         let (full_output, clipped_primitives) = self.egui_integration.end_frame(window);

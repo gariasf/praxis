@@ -25,12 +25,12 @@ mod common;
 use common::{create_demo_scene, PrimitiveShape};
 use praxis_core::{Engine, EngineBuilder};
 use praxis_ecs::{
-    Camera, CameraMatrices, Commands, Entity, GlobalTransform, IntoSystemConfigs, 
+    Camera, CameraMatrices, Commands, Entity, GlobalTransform, IntoSystemConfigs,
     PerspectiveProjection, Query, Res, ResMut, Resource, Schedule, Transform, With,
 };
 use praxis_editor::{
-    handle_selection_input_system, update_selection_system, Selectable, Selected, 
-    SelectionMode, SelectionSystem,
+    handle_selection_input_system, update_selection_system, Selectable, Selected, SelectionMode,
+    SelectionSystem,
 };
 use praxis_graphics::{MaterialProperties, RenderContext};
 use praxis_input::{InputState, MouseButton};
@@ -84,12 +84,11 @@ fn handle_mouse_selection_system(
     );
 
     // Determine selection mode from modifiers
-    let shift = input.is_key_pressed(KeyCode::ShiftLeft)
-        || input.is_key_pressed(KeyCode::ShiftRight);
-    let ctrl = input.is_key_pressed(KeyCode::ControlLeft)
-        || input.is_key_pressed(KeyCode::ControlRight);
-    let alt = input.is_key_pressed(KeyCode::AltLeft)
-        || input.is_key_pressed(KeyCode::AltRight);
+    let shift =
+        input.is_key_pressed(KeyCode::ShiftLeft) || input.is_key_pressed(KeyCode::ShiftRight);
+    let ctrl =
+        input.is_key_pressed(KeyCode::ControlLeft) || input.is_key_pressed(KeyCode::ControlRight);
+    let alt = input.is_key_pressed(KeyCode::AltLeft) || input.is_key_pressed(KeyCode::AltRight);
 
     let selection_mode = if shift {
         SelectionMode::Add
@@ -117,7 +116,7 @@ fn handle_mouse_selection_system(
         if let Some((rect_min, rect_max)) = selection.end_marquee() {
             // Check if this was a click (small movement) or a drag (marquee)
             let drag_distance = (rect_max - rect_min).length();
-            
+
             if drag_distance < 5.0 {
                 // Click selection - raycast pick
                 if let Some(entity) = selection.raycast_pick(
@@ -141,7 +140,7 @@ fn handle_mouse_selection_system(
                     camera_matrices,
                     &selectable_query,
                 );
-                
+
                 if !entities.is_empty() {
                     selection.select_entities(entities, selection_mode);
                 }
@@ -220,7 +219,7 @@ fn main() -> Result<()> {
 
     // Create ECS world and schedule
     let mut world = praxis_ecs::World::new();
-    
+
     // Insert resources
     world.insert_resource(InputState::default());
     world.insert_resource(SelectionSystem::new());
@@ -229,13 +228,16 @@ fn main() -> Result<()> {
 
     // Setup systems
     let mut schedule = Schedule::default();
-    schedule.add_systems((
-        handle_selection_input_system,
-        handle_mouse_selection_system,
-        update_selection_system,
-        print_selection_events_system,
-        update_selected_visuals_system,
-    ).chain());
+    schedule.add_systems(
+        (
+            handle_selection_input_system,
+            handle_mouse_selection_system,
+            update_selection_system,
+            print_selection_events_system,
+            update_selected_visuals_system,
+        )
+            .chain(),
+    );
 
     // Create camera
     world.spawn((
@@ -249,7 +251,7 @@ fn main() -> Result<()> {
     for x in -2..=2 {
         for z in -2..=2 {
             let position = Vec3::new(x as f32 * 3.0, 0.0, z as f32 * 3.0);
-            
+
             world.spawn((
                 Transform::from_translation(position),
                 GlobalTransform::default(),
@@ -286,7 +288,7 @@ fn main() -> Result<()> {
 
     // Create state and run event loop
     let mut state = State::new(window.clone()).await?;
-    
+
     event_loop.run(move |event, elwt| {
         match event {
             winit::event::Event::WindowEvent { event, .. } => match event {
@@ -301,12 +303,16 @@ fn main() -> Result<()> {
                         info!("Escape pressed, exiting");
                         elwt.exit();
                     }
-                    
+
                     // Update input state
                     let mut input = world.get_resource_mut::<InputState>().unwrap();
                     input.handle_keyboard_input(event.physical_key, event.state);
                 }
-                WindowEvent::MouseInput { state: button_state, button, .. } => {
+                WindowEvent::MouseInput {
+                    state: button_state,
+                    button,
+                    ..
+                } => {
                     let mut input = world.get_resource_mut::<InputState>().unwrap();
                     input.handle_mouse_button(button.into(), button_state);
                 }

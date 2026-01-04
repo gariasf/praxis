@@ -136,7 +136,11 @@ fn demo_command_integration(world: &mut World) {
         "Created 3 entities - Total entities: {}",
         world.entities().len()
     );
-    println!("History: {} undo, {} redo", system.undo_count(), system.redo_count());
+    println!(
+        "History: {} undo, {} redo",
+        system.undo_count(),
+        system.redo_count()
+    );
     println!("Dirty: {}", system.is_dirty());
 
     // Undo all
@@ -151,7 +155,11 @@ fn demo_command_integration(world: &mut World) {
         "After undo all - Total entities: {}",
         world.entities().len()
     );
-    println!("History: {} undo, {} redo", system.undo_count(), system.redo_count());
+    println!(
+        "History: {} undo, {} redo",
+        system.undo_count(),
+        system.redo_count()
+    );
 
     // Redo all
     println!("\nRedoing all operations...");
@@ -165,7 +173,11 @@ fn demo_command_integration(world: &mut World) {
         "After redo all - Total entities: {}",
         world.entities().len()
     );
-    println!("History: {} undo, {} redo", system.undo_count(), system.redo_count());
+    println!(
+        "History: {} undo, {} redo",
+        system.undo_count(),
+        system.redo_count()
+    );
 
     println!("✓ Command integration working correctly");
 }

@@ -55,8 +55,7 @@ fn create_sample_scene() -> SceneDefinition {
     scene.add_entity(camera);
 
     // Add directional light
-    let light =
-        EntityDefinition::directional_light("Sun", (0.5, -1.0, 0.3), (1.0, 0.95, 0.9), 1.5);
+    let light = EntityDefinition::directional_light("Sun", (0.5, -1.0, 0.3), (1.0, 0.95, 0.9), 1.5);
     scene.add_entity(light);
 
     // Add a parent entity with children (hierarchy)
@@ -91,7 +90,10 @@ fn add_editor_data(scene: &mut SceneDefinition) {
         -0.4,            // Pitch (radians)
         0.8,             // Yaw (radians)
     );
-    println!("  Editor camera: Orbit mode at distance {}", editor_camera.distance);
+    println!(
+        "  Editor camera: Orbit mode at distance {}",
+        editor_camera.distance
+    );
 
     // Create viewport settings
     let mut viewport = ViewportSettings::new();
@@ -100,7 +102,10 @@ fn add_editor_data(scene: &mut SceneDefinition) {
     viewport.gizmo_mode = GizmoMode::Translate;
     viewport.grid_size = 20;
     viewport.grid_spacing = 1.0;
-    println!("  Viewport: Grid enabled, {} x {} grid", viewport.grid_size, viewport.grid_size);
+    println!(
+        "  Viewport: Grid enabled, {} x {} grid",
+        viewport.grid_size, viewport.grid_size
+    );
 
     // Create editor preferences
     let mut preferences = EditorPreferences::new();
@@ -109,7 +114,10 @@ fn add_editor_data(scene: &mut SceneDefinition) {
     preferences.snap_to_grid = false;
     preferences.snap_size = 1.0;
     preferences.rotation_snap = 15.0;
-    println!("  Preferences: Auto-save enabled (every {:.0}s)", preferences.auto_save_interval);
+    println!(
+        "  Preferences: Auto-save enabled (every {:.0}s)",
+        preferences.auto_save_interval
+    );
 
     // Create editor data
     let editor_data = EditorData::new()
@@ -129,7 +137,10 @@ fn save_scene(scene: &SceneDefinition) -> Result<(), Box<dyn std::error::Error>>
     let loader = SceneLoader::new();
     let ron_string = loader.save_to_string(scene)?;
 
-    println!("  Scene serialized to RON format ({} bytes)", ron_string.len());
+    println!(
+        "  Scene serialized to RON format ({} bytes)",
+        ron_string.len()
+    );
     println!("  Version: {}", scene.version);
 
     // In a real application, you would save to a file:
@@ -226,7 +237,11 @@ fn display_scene_info(scene: &SceneDefinition) {
     println!("\n=== Scene Information ===");
     println!("Name: {}", scene.name);
     println!("Version: {}", scene.version);
-    println!("Entities: {} root ({} total)", scene.entity_count(), scene.total_entity_count());
+    println!(
+        "Entities: {} root ({} total)",
+        scene.entity_count(),
+        scene.total_entity_count()
+    );
 
     // Display metadata
     if let Some(ref desc) = scene.metadata.description {
@@ -259,16 +274,26 @@ fn display_scene_info(scene: &SceneDefinition) {
 
         if let Some(ref viewport) = editor.viewport {
             println!("Viewport Settings:");
-            println!("  Grid: {} (size: {}, spacing: {})", 
-                viewport.show_grid, viewport.grid_size, viewport.grid_spacing);
-            println!("  Gizmos: {} (mode: {:?})", viewport.show_gizmos, viewport.gizmo_mode);
+            println!(
+                "  Grid: {} (size: {}, spacing: {})",
+                viewport.show_grid, viewport.grid_size, viewport.grid_spacing
+            );
+            println!(
+                "  Gizmos: {} (mode: {:?})",
+                viewport.show_gizmos, viewport.gizmo_mode
+            );
         }
 
         if let Some(ref prefs) = editor.preferences {
             println!("Editor Preferences:");
-            println!("  Auto-save: {} (interval: {:.0}s)", 
-                prefs.auto_save_enabled, prefs.auto_save_interval);
-            println!("  Snap to grid: {} (size: {})", prefs.snap_to_grid, prefs.snap_size);
+            println!(
+                "  Auto-save: {} (interval: {:.0}s)",
+                prefs.auto_save_enabled, prefs.auto_save_interval
+            );
+            println!(
+                "  Snap to grid: {} (size: {})",
+                prefs.snap_to_grid, prefs.snap_size
+            );
             println!("  Rotation snap: {}°", prefs.rotation_snap);
         }
     } else {
@@ -292,9 +317,11 @@ fn create_runtime_scene(scene: &SceneDefinition) -> Result<(), Box<dyn std::erro
     let loader = SceneLoader::new();
     let ron_string = loader.save_to_string(&runtime_scene)?;
 
-    println!("  Serialized size: {} bytes (vs {} bytes with editor data)", 
-        ron_string.len(), 
-        loader.save_to_string(scene)?.len());
+    println!(
+        "  Serialized size: {} bytes (vs {} bytes with editor data)",
+        ron_string.len(),
+        loader.save_to_string(scene)?.len()
+    );
 
     // Verify editor_data is not in the output
     if !ron_string.contains("editor_data") {

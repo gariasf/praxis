@@ -42,8 +42,7 @@ fn demo_single_command_serialization(world: &mut World) {
     println!("{}", ron_string);
 
     // Deserialize from RON
-    let deserialized =
-        SerializableCommand::from_ron(&ron_string).expect("Failed to deserialize");
+    let deserialized = SerializableCommand::from_ron(&ron_string).expect("Failed to deserialize");
     println!("\nSuccessfully deserialized command");
 
     // Execute the deserialized command
@@ -67,13 +66,17 @@ fn demo_composite_serialization(world: &mut World) {
     let mut composite = CompositeCommand::new("Create Three Entities".to_string());
 
     for i in 0..3 {
-        let cmd = CreateEntityCommand::with_transform(Transform::from_xyz(i as f32 * 5.0, 0.0, 0.0));
+        let cmd =
+            CreateEntityCommand::with_transform(Transform::from_xyz(i as f32 * 5.0, 0.0, 0.0));
         composite.add_command(SerializableCommand::CreateEntity(cmd));
     }
 
     // Serialize
     let ron_string = composite.to_ron().expect("Failed to serialize composite");
-    println!("Serialized CompositeCommand ({} operations):", composite.len());
+    println!(
+        "Serialized CompositeCommand ({} operations):",
+        composite.len()
+    );
     println!("{}", ron_string);
 
     // Deserialize
@@ -120,7 +123,10 @@ fn demo_history_serialization(world: &mut World) {
     let history_ron = history.to_ron().expect("Failed to serialize history");
     println!("\nSerialized history:");
     println!("Length: {} bytes", history_ron.len());
-    println!("First 200 chars: {}...", &history_ron[..200.min(history_ron.len())]);
+    println!(
+        "First 200 chars: {}...",
+        &history_ron[..200.min(history_ron.len())]
+    );
 
     // Deserialize into new history
     let mut new_history = CommandHistory::new();
@@ -153,7 +159,9 @@ fn demo_round_trip(world: &mut World) {
             Transform::default(),
             Transform::from_xyz(1.0, 2.0, 3.0),
         )),
-        Box::new(CreateEntityCommand::with_transform(Transform::from_xyz(5.0, 0.0, 0.0))),
+        Box::new(CreateEntityCommand::with_transform(Transform::from_xyz(
+            5.0, 0.0, 0.0,
+        ))),
         Box::new(praxis_editor::AddComponentCommand::new(
             entity,
             ComponentData::Name("TestEntity".to_string()),

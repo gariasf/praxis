@@ -31,6 +31,7 @@
 //! inspector.render(&ctx, &mut world, selected_entity);
 //! ```
 
+use praxis_audio::{AudioListener, AudioSource};
 use praxis_ecs::{
     Camera, Children, DirectionalLight, Entity, GlobalTransform, MaterialHandle,
     MaterialPropertiesComponent, MeshHandle, Name, OrthographicProjection, Parent,
@@ -38,7 +39,6 @@ use praxis_ecs::{
 };
 use praxis_math::Quat;
 use praxis_physics::{Collider, PhysicsVelocity, RigidBody};
-use praxis_audio::{AudioListener, AudioSource};
 
 /// Inspector panel state and configuration.
 pub struct InspectorPanel {
@@ -66,7 +66,12 @@ impl InspectorPanel {
     /// Renders the inspector panel UI.
     ///
     /// The selected_entity parameter should come from the HierarchyPanel's selection_state.
-    pub fn render(&mut self, ctx: &egui::Context, world: &mut World, selected_entity: Option<Entity>) {
+    pub fn render(
+        &mut self,
+        ctx: &egui::Context,
+        world: &mut World,
+        selected_entity: Option<Entity>,
+    ) {
         if !self.visible {
             return;
         }
@@ -81,7 +86,12 @@ impl InspectorPanel {
     }
 
     /// Renders details for the selected entity.
-    fn render_selected_entity(&mut self, ui: &mut egui::Ui, world: &mut World, selected_entity: Option<Entity>) {
+    fn render_selected_entity(
+        &mut self,
+        ui: &mut egui::Ui,
+        world: &mut World,
+        selected_entity: Option<Entity>,
+    ) {
         let Some(entity) = selected_entity else {
             ui.label("No entity selected");
             return;
@@ -139,10 +149,16 @@ impl InspectorPanel {
                 let has_mesh = world.inner().get::<MeshHandle>(entity).is_some();
                 let has_texture = world.inner().get::<TextureHandle>(entity).is_some();
                 let has_material = world.inner().get::<MaterialHandle>(entity).is_some();
-                let has_material_props = world.inner().get::<MaterialPropertiesComponent>(entity).is_some();
+                let has_material_props = world
+                    .inner()
+                    .get::<MaterialPropertiesComponent>(entity)
+                    .is_some();
                 let has_camera = world.inner().get::<Camera>(entity).is_some();
                 let has_persp_proj = world.inner().get::<PerspectiveProjection>(entity).is_some();
-                let has_ortho_proj = world.inner().get::<OrthographicProjection>(entity).is_some();
+                let has_ortho_proj = world
+                    .inner()
+                    .get::<OrthographicProjection>(entity)
+                    .is_some();
                 let has_dir_light = world.inner().get::<DirectionalLight>(entity).is_some();
                 let has_point_light = world.inner().get::<PointLight>(entity).is_some();
                 let has_rigid_body = world.inner().get::<RigidBody>(entity).is_some();
@@ -172,7 +188,9 @@ impl InspectorPanel {
                     let _ = world.insert_component(entity, MaterialHandle::new(""));
                     self.add_component_open = false;
                 }
-                if !has_material_props && ui.selectable_label(false, "Material Properties").clicked() {
+                if !has_material_props
+                    && ui.selectable_label(false, "Material Properties").clicked()
+                {
                     let _ = world.insert_component(entity, MaterialPropertiesComponent::default());
                     self.add_component_open = false;
                 }
@@ -180,11 +198,19 @@ impl InspectorPanel {
                     let _ = world.insert_component(entity, Camera::default());
                     self.add_component_open = false;
                 }
-                if !has_persp_proj && ui.selectable_label(false, "Perspective Projection").clicked() {
+                if !has_persp_proj
+                    && ui
+                        .selectable_label(false, "Perspective Projection")
+                        .clicked()
+                {
                     let _ = world.insert_component(entity, PerspectiveProjection::default());
                     self.add_component_open = false;
                 }
-                if !has_ortho_proj && ui.selectable_label(false, "Orthographic Projection").clicked() {
+                if !has_ortho_proj
+                    && ui
+                        .selectable_label(false, "Orthographic Projection")
+                        .clicked()
+                {
                     let _ = world.insert_component(entity, OrthographicProjection::default());
                     self.add_component_open = false;
                 }
@@ -271,7 +297,8 @@ impl InspectorPanel {
                     });
 
                     ui.label("Rotation (Euler):");
-                    let (mut x, mut y, mut z) = transform.rotation.to_euler(praxis_math::EulerRot::XYZ);
+                    let (mut x, mut y, mut z) =
+                        transform.rotation.to_euler(praxis_math::EulerRot::XYZ);
                     x = x.to_degrees();
                     y = y.to_degrees();
                     z = z.to_degrees();
@@ -312,7 +339,12 @@ impl InspectorPanel {
     }
 
     /// Renders the GlobalTransform component (read-only).
-    fn render_global_transform_component(&self, ui: &mut egui::Ui, world: &mut World, entity: Entity) {
+    fn render_global_transform_component(
+        &self,
+        ui: &mut egui::Ui,
+        world: &mut World,
+        entity: Entity,
+    ) {
         let mut query = world.query::<&GlobalTransform>();
         if let Ok(global_transform) = query.get(world.inner(), entity) {
             egui::CollapsingHeader::new("Global Transform (Read-Only)")
@@ -409,7 +441,12 @@ impl InspectorPanel {
     }
 
     /// Renders the MaterialPropertiesComponent.
-    fn render_material_properties_component(&self, ui: &mut egui::Ui, world: &mut World, entity: Entity) {
+    fn render_material_properties_component(
+        &self,
+        ui: &mut egui::Ui,
+        world: &mut World,
+        entity: Entity,
+    ) {
         let mut query = world.query::<&mut MaterialPropertiesComponent>();
         if let Ok(mut material_props) = query.get_mut(world.inner_mut(), entity) {
             let mut open = true;
@@ -422,17 +459,33 @@ impl InspectorPanel {
                             open = false;
                         }
                     });
-                    
+
                     ui.label("Base Color (RGBA):");
                     ui.horizontal(|ui| {
                         ui.label("R:");
-                        ui.add(egui::DragValue::new(&mut material_props.0.base_color[0]).speed(0.01).range(0.0..=1.0));
+                        ui.add(
+                            egui::DragValue::new(&mut material_props.0.base_color[0])
+                                .speed(0.01)
+                                .range(0.0..=1.0),
+                        );
                         ui.label("G:");
-                        ui.add(egui::DragValue::new(&mut material_props.0.base_color[1]).speed(0.01).range(0.0..=1.0));
+                        ui.add(
+                            egui::DragValue::new(&mut material_props.0.base_color[1])
+                                .speed(0.01)
+                                .range(0.0..=1.0),
+                        );
                         ui.label("B:");
-                        ui.add(egui::DragValue::new(&mut material_props.0.base_color[2]).speed(0.01).range(0.0..=1.0));
+                        ui.add(
+                            egui::DragValue::new(&mut material_props.0.base_color[2])
+                                .speed(0.01)
+                                .range(0.0..=1.0),
+                        );
                         ui.label("A:");
-                        ui.add(egui::DragValue::new(&mut material_props.0.base_color[3]).speed(0.01).range(0.0..=1.0));
+                        ui.add(
+                            egui::DragValue::new(&mut material_props.0.base_color[3])
+                                .speed(0.01)
+                                .range(0.0..=1.0),
+                        );
                     });
 
                     ui.horizontal(|ui| {
@@ -442,12 +495,19 @@ impl InspectorPanel {
 
                     ui.horizontal(|ui| {
                         ui.label("Roughness:");
-                        ui.add(egui::Slider::new(&mut material_props.0.roughness, 0.0..=1.0));
+                        ui.add(egui::Slider::new(
+                            &mut material_props.0.roughness,
+                            0.0..=1.0,
+                        ));
                     });
 
                     ui.horizontal(|ui| {
                         ui.label("Emissive Strength:");
-                        ui.add(egui::DragValue::new(&mut material_props.0.emissive_strength).speed(0.1).range(0.0..=100.0));
+                        ui.add(
+                            egui::DragValue::new(&mut material_props.0.emissive_strength)
+                                .speed(0.1)
+                                .range(0.0..=100.0),
+                        );
                     });
                 });
             if !open {
@@ -470,9 +530,9 @@ impl InspectorPanel {
                             open = false;
                         }
                     });
-                    
+
                     ui.checkbox(&mut camera.is_active, "Active");
-                    
+
                     ui.horizontal(|ui| {
                         ui.label("Priority:");
                         ui.add(egui::DragValue::new(&mut camera.priority).speed(1));
@@ -485,7 +545,12 @@ impl InspectorPanel {
     }
 
     /// Renders the PerspectiveProjection component.
-    fn render_perspective_projection_component(&self, ui: &mut egui::Ui, world: &mut World, entity: Entity) {
+    fn render_perspective_projection_component(
+        &self,
+        ui: &mut egui::Ui,
+        world: &mut World,
+        entity: Entity,
+    ) {
         let mut query = world.query::<&mut PerspectiveProjection>();
         if let Ok(mut projection) = query.get_mut(world.inner_mut(), entity) {
             let mut open = true;
@@ -498,28 +563,47 @@ impl InspectorPanel {
                             open = false;
                         }
                     });
-                    
+
                     let mut fov_degrees = projection.fov.to_degrees();
                     ui.horizontal(|ui| {
                         ui.label("FOV (degrees):");
-                        if ui.add(egui::DragValue::new(&mut fov_degrees).speed(1.0).range(1.0..=179.0)).changed() {
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut fov_degrees)
+                                    .speed(1.0)
+                                    .range(1.0..=179.0),
+                            )
+                            .changed()
+                        {
                             projection.fov = fov_degrees.to_radians();
                         }
                     });
-                    
+
                     ui.horizontal(|ui| {
                         ui.label("Aspect Ratio:");
-                        ui.add(egui::DragValue::new(&mut projection.aspect_ratio).speed(0.01).range(0.1..=10.0));
+                        ui.add(
+                            egui::DragValue::new(&mut projection.aspect_ratio)
+                                .speed(0.01)
+                                .range(0.1..=10.0),
+                        );
                     });
-                    
+
                     ui.horizontal(|ui| {
                         ui.label("Near Plane:");
-                        ui.add(egui::DragValue::new(&mut projection.near).speed(0.01).range(0.001..=100.0));
+                        ui.add(
+                            egui::DragValue::new(&mut projection.near)
+                                .speed(0.01)
+                                .range(0.001..=100.0),
+                        );
                     });
-                    
+
                     ui.horizontal(|ui| {
                         ui.label("Far Plane:");
-                        ui.add(egui::DragValue::new(&mut projection.far).speed(1.0).range(1.0..=10000.0));
+                        ui.add(
+                            egui::DragValue::new(&mut projection.far)
+                                .speed(1.0)
+                                .range(1.0..=10000.0),
+                        );
                     });
                 });
             if !open {
@@ -529,7 +613,12 @@ impl InspectorPanel {
     }
 
     /// Renders the OrthographicProjection component.
-    fn render_orthographic_projection_component(&self, ui: &mut egui::Ui, world: &mut World, entity: Entity) {
+    fn render_orthographic_projection_component(
+        &self,
+        ui: &mut egui::Ui,
+        world: &mut World,
+        entity: Entity,
+    ) {
         let mut query = world.query::<&mut OrthographicProjection>();
         if let Ok(mut projection) = query.get_mut(world.inner_mut(), entity) {
             let mut open = true;
@@ -542,35 +631,43 @@ impl InspectorPanel {
                             open = false;
                         }
                     });
-                    
+
                     ui.horizontal(|ui| {
                         ui.label("Left:");
                         ui.add(egui::DragValue::new(&mut projection.left).speed(0.1));
                     });
-                    
+
                     ui.horizontal(|ui| {
                         ui.label("Right:");
                         ui.add(egui::DragValue::new(&mut projection.right).speed(0.1));
                     });
-                    
+
                     ui.horizontal(|ui| {
                         ui.label("Bottom:");
                         ui.add(egui::DragValue::new(&mut projection.bottom).speed(0.1));
                     });
-                    
+
                     ui.horizontal(|ui| {
                         ui.label("Top:");
                         ui.add(egui::DragValue::new(&mut projection.top).speed(0.1));
                     });
-                    
+
                     ui.horizontal(|ui| {
                         ui.label("Near:");
-                        ui.add(egui::DragValue::new(&mut projection.near).speed(0.01).range(0.001..=100.0));
+                        ui.add(
+                            egui::DragValue::new(&mut projection.near)
+                                .speed(0.01)
+                                .range(0.001..=100.0),
+                        );
                     });
-                    
+
                     ui.horizontal(|ui| {
                         ui.label("Far:");
-                        ui.add(egui::DragValue::new(&mut projection.far).speed(1.0).range(1.0..=10000.0));
+                        ui.add(
+                            egui::DragValue::new(&mut projection.far)
+                                .speed(1.0)
+                                .range(1.0..=10000.0),
+                        );
                     });
                 });
             if !open {
@@ -580,7 +677,12 @@ impl InspectorPanel {
     }
 
     /// Renders the DirectionalLight component.
-    fn render_directional_light_component(&self, ui: &mut egui::Ui, world: &mut World, entity: Entity) {
+    fn render_directional_light_component(
+        &self,
+        ui: &mut egui::Ui,
+        world: &mut World,
+        entity: Entity,
+    ) {
         let mut query = world.query::<&mut DirectionalLight>();
         if let Ok(mut light) = query.get_mut(world.inner_mut(), entity) {
             let mut open = true;
@@ -593,34 +695,56 @@ impl InspectorPanel {
                             open = false;
                         }
                     });
-                    
+
                     ui.label("Direction:");
                     ui.horizontal(|ui| {
                         ui.label("X:");
-                        let mut changed = ui.add(egui::DragValue::new(&mut light.direction.x).speed(0.01)).changed();
+                        let mut changed = ui
+                            .add(egui::DragValue::new(&mut light.direction.x).speed(0.01))
+                            .changed();
                         ui.label("Y:");
-                        changed |= ui.add(egui::DragValue::new(&mut light.direction.y).speed(0.01)).changed();
+                        changed |= ui
+                            .add(egui::DragValue::new(&mut light.direction.y).speed(0.01))
+                            .changed();
                         ui.label("Z:");
-                        changed |= ui.add(egui::DragValue::new(&mut light.direction.z).speed(0.01)).changed();
-                        
+                        changed |= ui
+                            .add(egui::DragValue::new(&mut light.direction.z).speed(0.01))
+                            .changed();
+
                         if changed {
                             light.direction = light.direction.normalize();
                         }
                     });
-                    
+
                     ui.label("Color (RGB):");
                     ui.horizontal(|ui| {
                         ui.label("R:");
-                        ui.add(egui::DragValue::new(&mut light.color.x).speed(0.01).range(0.0..=1.0));
+                        ui.add(
+                            egui::DragValue::new(&mut light.color.x)
+                                .speed(0.01)
+                                .range(0.0..=1.0),
+                        );
                         ui.label("G:");
-                        ui.add(egui::DragValue::new(&mut light.color.y).speed(0.01).range(0.0..=1.0));
+                        ui.add(
+                            egui::DragValue::new(&mut light.color.y)
+                                .speed(0.01)
+                                .range(0.0..=1.0),
+                        );
                         ui.label("B:");
-                        ui.add(egui::DragValue::new(&mut light.color.z).speed(0.01).range(0.0..=1.0));
+                        ui.add(
+                            egui::DragValue::new(&mut light.color.z)
+                                .speed(0.01)
+                                .range(0.0..=1.0),
+                        );
                     });
-                    
+
                     ui.horizontal(|ui| {
                         ui.label("Intensity:");
-                        ui.add(egui::DragValue::new(&mut light.intensity).speed(0.1).range(0.0..=100.0));
+                        ui.add(
+                            egui::DragValue::new(&mut light.intensity)
+                                .speed(0.1)
+                                .range(0.0..=100.0),
+                        );
                     });
                 });
             if !open {
@@ -643,25 +767,45 @@ impl InspectorPanel {
                             open = false;
                         }
                     });
-                    
+
                     ui.label("Color (RGB):");
                     ui.horizontal(|ui| {
                         ui.label("R:");
-                        ui.add(egui::DragValue::new(&mut light.color.x).speed(0.01).range(0.0..=1.0));
+                        ui.add(
+                            egui::DragValue::new(&mut light.color.x)
+                                .speed(0.01)
+                                .range(0.0..=1.0),
+                        );
                         ui.label("G:");
-                        ui.add(egui::DragValue::new(&mut light.color.y).speed(0.01).range(0.0..=1.0));
+                        ui.add(
+                            egui::DragValue::new(&mut light.color.y)
+                                .speed(0.01)
+                                .range(0.0..=1.0),
+                        );
                         ui.label("B:");
-                        ui.add(egui::DragValue::new(&mut light.color.z).speed(0.01).range(0.0..=1.0));
+                        ui.add(
+                            egui::DragValue::new(&mut light.color.z)
+                                .speed(0.01)
+                                .range(0.0..=1.0),
+                        );
                     });
-                    
+
                     ui.horizontal(|ui| {
                         ui.label("Intensity:");
-                        ui.add(egui::DragValue::new(&mut light.intensity).speed(0.1).range(0.0..=100.0));
+                        ui.add(
+                            egui::DragValue::new(&mut light.intensity)
+                                .speed(0.1)
+                                .range(0.0..=100.0),
+                        );
                     });
-                    
+
                     ui.horizontal(|ui| {
                         ui.label("Range:");
-                        ui.add(egui::DragValue::new(&mut light.range).speed(0.1).range(0.1..=1000.0));
+                        ui.add(
+                            egui::DragValue::new(&mut light.range)
+                                .speed(0.1)
+                                .range(0.1..=1000.0),
+                        );
                     });
                 });
             if !open {
@@ -684,7 +828,7 @@ impl InspectorPanel {
                             open = false;
                         }
                     });
-                    
+
                     ui.horizontal(|ui| {
                         if ui.radio(rigid_body.is_dynamic(), "Dynamic").clicked() {
                             *rigid_body = RigidBody::Dynamic;
@@ -717,7 +861,7 @@ impl InspectorPanel {
                             open = false;
                         }
                     });
-                    
+
                     let current_type = match *collider {
                         Collider::Cuboid { .. } => "Cuboid",
                         Collider::Sphere { .. } => "Sphere",
@@ -726,30 +870,48 @@ impl InspectorPanel {
                         Collider::CapsuleZ { .. } => "Capsule Z",
                         Collider::CylinderY { .. } => "Cylinder Y",
                     };
-                    
+
                     egui::ComboBox::from_label("Shape Type")
                         .selected_text(current_type)
                         .show_ui(ui, |ui| {
-                            if ui.selectable_label(current_type == "Cuboid", "Cuboid").clicked() {
+                            if ui
+                                .selectable_label(current_type == "Cuboid", "Cuboid")
+                                .clicked()
+                            {
                                 *collider = Collider::cuboid(0.5, 0.5, 0.5);
                             }
-                            if ui.selectable_label(current_type == "Sphere", "Sphere").clicked() {
+                            if ui
+                                .selectable_label(current_type == "Sphere", "Sphere")
+                                .clicked()
+                            {
                                 *collider = Collider::sphere(0.5);
                             }
-                            if ui.selectable_label(current_type == "Capsule Y", "Capsule Y").clicked() {
+                            if ui
+                                .selectable_label(current_type == "Capsule Y", "Capsule Y")
+                                .clicked()
+                            {
                                 *collider = Collider::capsule_y(1.0, 0.5);
                             }
-                            if ui.selectable_label(current_type == "Capsule X", "Capsule X").clicked() {
+                            if ui
+                                .selectable_label(current_type == "Capsule X", "Capsule X")
+                                .clicked()
+                            {
                                 *collider = Collider::capsule_x(1.0, 0.5);
                             }
-                            if ui.selectable_label(current_type == "Capsule Z", "Capsule Z").clicked() {
+                            if ui
+                                .selectable_label(current_type == "Capsule Z", "Capsule Z")
+                                .clicked()
+                            {
                                 *collider = Collider::capsule_z(1.0, 0.5);
                             }
-                            if ui.selectable_label(current_type == "Cylinder Y", "Cylinder Y").clicked() {
+                            if ui
+                                .selectable_label(current_type == "Cylinder Y", "Cylinder Y")
+                                .clicked()
+                            {
                                 *collider = Collider::cylinder_y(1.0, 0.5);
                             }
                         });
-                    
+
                     match &mut *collider {
                         Collider::Cuboid { hx, hy, hz } => {
                             ui.label("Half Extents:");
@@ -765,29 +927,55 @@ impl InspectorPanel {
                         Collider::Sphere { radius } => {
                             ui.horizontal(|ui| {
                                 ui.label("Radius:");
-                                ui.add(egui::DragValue::new(radius).speed(0.01).range(0.01..=100.0));
+                                ui.add(
+                                    egui::DragValue::new(radius).speed(0.01).range(0.01..=100.0),
+                                );
                             });
                         }
-                        Collider::CapsuleY { half_height, radius } |
-                        Collider::CapsuleX { half_height, radius } |
-                        Collider::CapsuleZ { half_height, radius } => {
+                        Collider::CapsuleY {
+                            half_height,
+                            radius,
+                        }
+                        | Collider::CapsuleX {
+                            half_height,
+                            radius,
+                        }
+                        | Collider::CapsuleZ {
+                            half_height,
+                            radius,
+                        } => {
                             ui.horizontal(|ui| {
                                 ui.label("Half Height:");
-                                ui.add(egui::DragValue::new(half_height).speed(0.01).range(0.01..=100.0));
+                                ui.add(
+                                    egui::DragValue::new(half_height)
+                                        .speed(0.01)
+                                        .range(0.01..=100.0),
+                                );
                             });
                             ui.horizontal(|ui| {
                                 ui.label("Radius:");
-                                ui.add(egui::DragValue::new(radius).speed(0.01).range(0.01..=100.0));
+                                ui.add(
+                                    egui::DragValue::new(radius).speed(0.01).range(0.01..=100.0),
+                                );
                             });
                         }
-                        Collider::CylinderY { half_height, radius } => {
+                        Collider::CylinderY {
+                            half_height,
+                            radius,
+                        } => {
                             ui.horizontal(|ui| {
                                 ui.label("Half Height:");
-                                ui.add(egui::DragValue::new(half_height).speed(0.01).range(0.01..=100.0));
+                                ui.add(
+                                    egui::DragValue::new(half_height)
+                                        .speed(0.01)
+                                        .range(0.01..=100.0),
+                                );
                             });
                             ui.horizontal(|ui| {
                                 ui.label("Radius:");
-                                ui.add(egui::DragValue::new(radius).speed(0.01).range(0.01..=100.0));
+                                ui.add(
+                                    egui::DragValue::new(radius).speed(0.01).range(0.01..=100.0),
+                                );
                             });
                         }
                     }
@@ -799,7 +987,12 @@ impl InspectorPanel {
     }
 
     /// Renders the PhysicsVelocity component.
-    fn render_physics_velocity_component(&self, ui: &mut egui::Ui, world: &mut World, entity: Entity) {
+    fn render_physics_velocity_component(
+        &self,
+        ui: &mut egui::Ui,
+        world: &mut World,
+        entity: Entity,
+    ) {
         let mut query = world.query::<&mut PhysicsVelocity>();
         if let Ok(mut velocity) = query.get_mut(world.inner_mut(), entity) {
             let mut open = true;
@@ -812,7 +1005,7 @@ impl InspectorPanel {
                             open = false;
                         }
                     });
-                    
+
                     ui.label("Linear Velocity:");
                     ui.horizontal(|ui| {
                         ui.label("X:");
@@ -822,7 +1015,7 @@ impl InspectorPanel {
                         ui.label("Z:");
                         ui.add(egui::DragValue::new(&mut velocity.linear.z).speed(0.1));
                     });
-                    
+
                     ui.label("Angular Velocity:");
                     ui.horizontal(|ui| {
                         ui.label("X:");
@@ -853,7 +1046,7 @@ impl InspectorPanel {
                             open = false;
                         }
                     });
-                    
+
                     ui.horizontal(|ui| {
                         ui.label("Audio Path:");
                     });
@@ -861,35 +1054,47 @@ impl InspectorPanel {
                     if ui.text_edit_singleline(&mut path_text).changed() {
                         audio_source.path = path_text;
                     }
-                    
+
                     ui.horizontal(|ui| {
                         ui.label("Volume:");
                         ui.add(egui::Slider::new(&mut audio_source.volume, 0.0..=1.0));
                     });
-                    
+
                     ui.checkbox(&mut audio_source.spatial, "Spatial Audio");
                     ui.checkbox(&mut audio_source.looping, "Looping");
                     ui.checkbox(&mut audio_source.doppler_enabled, "Doppler Effect");
-                    
+
                     if audio_source.spatial {
                         ui.horizontal(|ui| {
                             ui.label("Max Distance:");
-                            ui.add(egui::DragValue::new(&mut audio_source.max_distance).speed(1.0).range(0.1..=1000.0));
+                            ui.add(
+                                egui::DragValue::new(&mut audio_source.max_distance)
+                                    .speed(1.0)
+                                    .range(0.1..=1000.0),
+                            );
                         });
-                        
+
                         ui.horizontal(|ui| {
                             ui.label("Reference Distance:");
-                            ui.add(egui::DragValue::new(&mut audio_source.reference_distance).speed(0.1).range(0.1..=100.0));
+                            ui.add(
+                                egui::DragValue::new(&mut audio_source.reference_distance)
+                                    .speed(0.1)
+                                    .range(0.1..=100.0),
+                            );
                         });
                     }
-                    
+
                     if audio_source.doppler_enabled {
                         ui.horizontal(|ui| {
                             ui.label("Doppler Scale:");
-                            ui.add(egui::DragValue::new(&mut audio_source.doppler_scale).speed(0.1).range(0.0..=5.0));
+                            ui.add(
+                                egui::DragValue::new(&mut audio_source.doppler_scale)
+                                    .speed(0.1)
+                                    .range(0.0..=5.0),
+                            );
                         });
                     }
-                    
+
                     ui.horizontal(|ui| {
                         if ui.button("▶ Play").clicked() {
                             audio_source.play();
@@ -901,7 +1106,7 @@ impl InspectorPanel {
                             audio_source.stop();
                         }
                     });
-                    
+
                     ui.label(format!("State: {:?}", audio_source.state));
                 });
             if !open {
@@ -911,7 +1116,12 @@ impl InspectorPanel {
     }
 
     /// Renders the AudioListener component.
-    fn render_audio_listener_component(&self, ui: &mut egui::Ui, world: &mut World, entity: Entity) {
+    fn render_audio_listener_component(
+        &self,
+        ui: &mut egui::Ui,
+        world: &mut World,
+        entity: Entity,
+    ) {
         let mut query = world.query::<&AudioListener>();
         if query.get(world.inner(), entity).is_ok() {
             let mut open = true;
@@ -946,7 +1156,7 @@ impl InspectorPanel {
                             open = false;
                         }
                     });
-                    
+
                     let mut is_visible = visibility.is_visible();
                     if ui.checkbox(&mut is_visible, "Visible").changed() {
                         if is_visible {

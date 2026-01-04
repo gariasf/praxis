@@ -132,7 +132,8 @@ fn demo_component_management(world: &mut World, history: &mut CommandHistory) {
     println!("Created empty entity {:?}", entity);
 
     // Add a Name component
-    let add_command = AddComponentCommand::new(entity, ComponentData::Name("TestEntity".to_string()));
+    let add_command =
+        AddComponentCommand::new(entity, ComponentData::Name("TestEntity".to_string()));
 
     println!("Adding Name component...");
     history
@@ -247,7 +248,10 @@ fn demo_composite_commands(world: &mut World, history: &mut CommandHistory) {
 
     let entity_count_after = world.entities().len();
     println!("Entity count after: {}", entity_count_after);
-    println!("Created {} entities", entity_count_after - entity_count_before);
+    println!(
+        "Created {} entities",
+        entity_count_after - entity_count_before
+    );
 
     // Undo the composite (undoes all operations)
     println!("Undoing composite command...");
@@ -279,8 +283,7 @@ fn demo_serialization(world: &mut World, history: &mut CommandHistory) {
 
     // Deserialize the command
     println!("\nDeserializing from RON...");
-    let deserialized =
-        SerializableCommand::from_ron(&ron_string).expect("Failed to deserialize");
+    let deserialized = SerializableCommand::from_ron(&ron_string).expect("Failed to deserialize");
     println!("Successfully deserialized command");
 
     // Execute the deserialized command
@@ -312,10 +315,7 @@ fn demo_serialization(world: &mut World, history: &mut CommandHistory) {
     new_history
         .from_ron(&history_ron)
         .expect("Failed to load history");
-    println!(
-        "Loaded history with {} commands",
-        new_history.undo_count()
-    );
+    println!("Loaded history with {} commands", new_history.undo_count());
 }
 
 fn demo_history_management(history: &mut CommandHistory) {

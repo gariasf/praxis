@@ -157,10 +157,7 @@ impl HierarchyPanel {
     fn render_entity_tree(&mut self, ui: &mut egui::Ui, world: &mut World) {
         egui::ScrollArea::vertical().show(ui, |ui| {
             // Background click to deselect
-            let response = ui.allocate_rect(
-                ui.available_rect_before_wrap(),
-                egui::Sense::click(),
-            );
+            let response = ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::click());
             if response.clicked() {
                 self.selection_state.clear();
             }
@@ -188,7 +185,13 @@ impl HierarchyPanel {
     }
 
     /// Renders a single entity node with its children.
-    fn render_entity_node(&mut self, ui: &mut egui::Ui, world: &mut World, entity: Entity, depth: usize) {
+    fn render_entity_node(
+        &mut self,
+        ui: &mut egui::Ui,
+        world: &mut World,
+        entity: Entity,
+        depth: usize,
+    ) {
         // Check if entity still exists
         if world.inner().get_entity(entity).is_none() {
             return;
@@ -199,14 +202,17 @@ impl HierarchyPanel {
 
         // Apply search filter
         if !self.search_filter.is_empty() {
-            let matches_filter = entity_name.to_lowercase().contains(&self.search_filter.to_lowercase());
+            let matches_filter = entity_name
+                .to_lowercase()
+                .contains(&self.search_filter.to_lowercase());
             if !matches_filter {
                 return;
             }
         }
 
         // Check if entity has children
-        let has_children = world.inner_mut()
+        let has_children = world
+            .inner_mut()
             .query::<&Children>()
             .get(world.inner(), entity)
             .map(|c| !c.is_empty())
@@ -236,7 +242,9 @@ impl HierarchyPanel {
             // Entity label with selection highlighting
             let label_text = format!("{entity_name} ({entity:?})");
             let label = if is_selected {
-                egui::RichText::new(label_text).strong().color(egui::Color32::LIGHT_BLUE)
+                egui::RichText::new(label_text)
+                    .strong()
+                    .color(egui::Color32::LIGHT_BLUE)
             } else {
                 egui::RichText::new(label_text)
             };
@@ -287,7 +295,11 @@ impl HierarchyPanel {
 
         // Render children if not collapsed
         if !is_collapsed && has_children {
-            if let Ok(children) = world.inner_mut().query::<&Children>().get(world.inner(), entity) {
+            if let Ok(children) = world
+                .inner_mut()
+                .query::<&Children>()
+                .get(world.inner(), entity)
+            {
                 let mut child_entities: Vec<Entity> = children.iter().copied().collect();
                 self.sort_entities_by_name(&mut child_entities, world);
 
@@ -300,7 +312,8 @@ impl HierarchyPanel {
 
     /// Gets the display name for an entity.
     fn get_entity_name(&self, world: &mut World, entity: Entity) -> String {
-        world.inner_mut()
+        world
+            .inner_mut()
             .query::<&Name>()
             .get(world.inner(), entity)
             .map(|n| n.as_str().to_string())
@@ -309,54 +322,50 @@ impl HierarchyPanel {
 
     /// Sorts entities by name.
     fn sort_entities_by_name(&self, entities: &mut [Entity], world: &mut World) {
-        entities.sort_by_cached_key(|entity| {
-            self.get_entity_name(world, *entity)
-        });
+        entities.sort_by_cached_key(|entity| self.get_entity_name(world, *entity));
     }
 
     /// Handles the context menu.
     fn handle_context_menu(&mut self, ctx: &egui::Context, world: &mut World) {
         let mut menu_open = self.context_menu.is_some();
-        
+
         if let Some(target) = self.context_menu {
             egui::Window::new("Context Menu")
                 .fixed_pos(ctx.pointer_hover_pos().unwrap_or_default())
                 .title_bar(false)
                 .resizable(false)
-                .show(ctx, |ui| {
-                    match target {
-                        ContextMenuTarget::Entity(entity) => {
-                            if ui.button("Create Child").clicked() {
-                                self.create_child_entity(world, entity);
-                                menu_open = false;
-                            }
-                            if ui.button("Duplicate").clicked() {
-                                self.duplicate_entity(world, entity);
-                                menu_open = false;
-                            }
-                            if ui.button("Delete").clicked() {
-                                self.delete_entity(world, entity);
-                                menu_open = false;
-                            }
-                            ui.separator();
-                            if ui.button("Remove Parent").clicked() {
-                                self.remove_parent(world, entity);
-                                menu_open = false;
-                            }
+                .show(ctx, |ui| match target {
+                    ContextMenuTarget::Entity(entity) => {
+                        if ui.button("Create Child").clicked() {
+                            self.create_child_entity(world, entity);
+                            menu_open = false;
                         }
-                        ContextMenuTarget::Background => {
-                            if ui.button("Create Entity").clicked() {
-                                self.create_root_entity(world);
-                                menu_open = false;
-                            }
-                            if ui.button("Create Camera").clicked() {
-                                self.create_camera_entity(world);
-                                menu_open = false;
-                            }
-                            if ui.button("Create Light").clicked() {
-                                self.create_light_entity(world);
-                                menu_open = false;
-                            }
+                        if ui.button("Duplicate").clicked() {
+                            self.duplicate_entity(world, entity);
+                            menu_open = false;
+                        }
+                        if ui.button("Delete").clicked() {
+                            self.delete_entity(world, entity);
+                            menu_open = false;
+                        }
+                        ui.separator();
+                        if ui.button("Remove Parent").clicked() {
+                            self.remove_parent(world, entity);
+                            menu_open = false;
+                        }
+                    }
+                    ContextMenuTarget::Background => {
+                        if ui.button("Create Entity").clicked() {
+                            self.create_root_entity(world);
+                            menu_open = false;
+                        }
+                        if ui.button("Create Camera").clicked() {
+                            self.create_camera_entity(world);
+                            menu_open = false;
+                        }
+                        if ui.button("Create Light").clicked() {
+                            self.create_light_entity(world);
+                            menu_open = false;
                         }
                     }
                 });
@@ -375,7 +384,7 @@ impl HierarchyPanel {
     /// Creates a new root entity.
     fn create_root_entity(&self, world: &mut World) {
         use praxis_ecs::{GlobalTransform, Transform};
-        
+
         world.spawn((
             Name::new("New Entity"),
             Transform::default(),
@@ -386,7 +395,7 @@ impl HierarchyPanel {
     /// Creates a child entity under the specified parent.
     fn create_child_entity(&self, world: &mut World, parent: Entity) {
         use praxis_ecs::{GlobalTransform, Transform};
-        
+
         world.spawn((
             Name::new("New Child"),
             Transform::default(),
@@ -397,8 +406,10 @@ impl HierarchyPanel {
 
     /// Creates a camera entity.
     fn create_camera_entity(&self, world: &mut World) {
-        use praxis_ecs::{Camera, CameraMatrices, GlobalTransform, PerspectiveProjection, Transform};
-        
+        use praxis_ecs::{
+            Camera, CameraMatrices, GlobalTransform, PerspectiveProjection, Transform,
+        };
+
         world.spawn((
             Name::new("Camera"),
             Transform::from_xyz(0.0, 5.0, 10.0),
@@ -413,7 +424,7 @@ impl HierarchyPanel {
     fn create_light_entity(&self, world: &mut World) {
         use praxis_ecs::{GlobalTransform, PointLight, Transform};
         use praxis_math::Vec3;
-        
+
         world.spawn((
             Name::new("Point Light"),
             Transform::from_xyz(0.0, 5.0, 0.0),
@@ -425,26 +436,34 @@ impl HierarchyPanel {
     /// Duplicates an entity and its components.
     fn duplicate_entity(&self, world: &mut World, entity: Entity) {
         use praxis_ecs::{GlobalTransform, Transform};
-        
+
         // Get components from original entity
-        let name = world.inner_mut().query::<&Name>().get(world.inner(), entity)
+        let name = world
+            .inner_mut()
+            .query::<&Name>()
+            .get(world.inner(), entity)
             .map(|n| format!("{} (Copy)", n.as_str()))
             .unwrap_or_else(|_| "Duplicated Entity".to_string());
-        
-        let transform = world.inner_mut().query::<&Transform>().get(world.inner(), entity)
+
+        let transform = world
+            .inner_mut()
+            .query::<&Transform>()
+            .get(world.inner(), entity)
             .copied()
             .unwrap_or_default();
-        
-        let parent = world.inner_mut().query::<&Parent>().get(world.inner(), entity)
+
+        let parent = world
+            .inner_mut()
+            .query::<&Parent>()
+            .get(world.inner(), entity)
             .copied()
             .ok();
 
         // Create new entity with copied components
-        let mut entity_builder = world.inner_mut().spawn((
-            Name::new(name),
-            transform,
-            GlobalTransform::default(),
-        ));
+        let mut entity_builder =
+            world
+                .inner_mut()
+                .spawn((Name::new(name), transform, GlobalTransform::default()));
 
         if let Some(parent) = parent {
             entity_builder.insert(parent);
@@ -454,15 +473,27 @@ impl HierarchyPanel {
     /// Deletes an entity and optionally its children.
     fn delete_entity(&mut self, world: &mut World, entity: Entity) {
         // Remove from parent's children list
-        if let Ok(parent) = world.inner_mut().query::<&Parent>().get(world.inner(), entity) {
+        if let Ok(parent) = world
+            .inner_mut()
+            .query::<&Parent>()
+            .get(world.inner(), entity)
+        {
             let parent_entity = parent.0;
-            if let Ok(mut children) = world.inner_mut().query::<&mut Children>().get_mut(world.inner_mut(), parent_entity) {
+            if let Ok(mut children) = world
+                .inner_mut()
+                .query::<&mut Children>()
+                .get_mut(world.inner_mut(), parent_entity)
+            {
                 children.remove(entity);
             }
         }
 
         // Delete children recursively
-        if let Ok(children) = world.inner_mut().query::<&Children>().get(world.inner(), entity) {
+        if let Ok(children) = world
+            .inner_mut()
+            .query::<&Children>()
+            .get(world.inner(), entity)
+        {
             let child_entities: Vec<Entity> = children.iter().copied().collect();
             for child in child_entities {
                 self.delete_entity(world, child);
@@ -472,7 +503,12 @@ impl HierarchyPanel {
         // Remove from selection
         self.selection_state.selected_entities.remove(&entity);
         if self.selection_state.primary_selection == Some(entity) {
-            self.selection_state.primary_selection = self.selection_state.selected_entities.iter().next().copied();
+            self.selection_state.primary_selection = self
+                .selection_state
+                .selected_entities
+                .iter()
+                .next()
+                .copied();
         }
 
         // Delete the entity
@@ -481,11 +517,19 @@ impl HierarchyPanel {
 
     /// Removes parent from an entity.
     fn remove_parent(&self, world: &mut World, entity: Entity) {
-        if let Ok(parent) = world.inner_mut().query::<&Parent>().get(world.inner(), entity) {
+        if let Ok(parent) = world
+            .inner_mut()
+            .query::<&Parent>()
+            .get(world.inner(), entity)
+        {
             let parent_entity = parent.0;
-            
+
             // Remove from parent's children list
-            if let Ok(mut children) = world.inner_mut().query::<&mut Children>().get_mut(world.inner_mut(), parent_entity) {
+            if let Ok(mut children) = world
+                .inner_mut()
+                .query::<&mut Children>()
+                .get_mut(world.inner_mut(), parent_entity)
+            {
                 children.remove(entity);
             }
         }
@@ -504,9 +548,17 @@ impl HierarchyPanel {
         }
 
         // Remove from old parent
-        if let Ok(old_parent) = world.inner_mut().query::<&Parent>().get(world.inner(), entity) {
+        if let Ok(old_parent) = world
+            .inner_mut()
+            .query::<&Parent>()
+            .get(world.inner(), entity)
+        {
             let old_parent_entity = old_parent.0;
-            if let Ok(mut children) = world.inner_mut().query::<&mut Children>().get_mut(world.inner_mut(), old_parent_entity) {
+            if let Ok(mut children) = world
+                .inner_mut()
+                .query::<&mut Children>()
+                .get_mut(world.inner_mut(), old_parent_entity)
+            {
                 children.remove(entity);
             }
         }
@@ -514,7 +566,7 @@ impl HierarchyPanel {
         // Set new parent
         if let Some(parent) = new_parent {
             world.inner_mut().entity_mut(entity).insert(Parent(parent));
-            
+
             // Add to new parent's children (will be handled by sync system)
         } else {
             world.inner_mut().entity_mut(entity).remove::<Parent>();
@@ -522,10 +574,19 @@ impl HierarchyPanel {
     }
 
     /// Checks if an entity is an ancestor of another entity.
-    fn is_ancestor_of(&self, world: &mut World, potential_ancestor: Entity, entity: Entity) -> bool {
+    fn is_ancestor_of(
+        &self,
+        world: &mut World,
+        potential_ancestor: Entity,
+        entity: Entity,
+    ) -> bool {
         let mut current = entity;
         loop {
-            if let Ok(parent) = world.inner_mut().query::<&Parent>().get(world.inner(), current) {
+            if let Ok(parent) = world
+                .inner_mut()
+                .query::<&Parent>()
+                .get(world.inner(), current)
+            {
                 if parent.0 == potential_ancestor {
                     return true;
                 }
