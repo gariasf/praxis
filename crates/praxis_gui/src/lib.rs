@@ -34,19 +34,12 @@ pub use inspector_panel::InspectorPanel;
 ///     // Use ctx to render GUI elements
 /// }
 /// ```
+#[derive(Default)]
 pub struct EguiContext {
     context: egui::Context,
 }
 
 impl praxis_ecs::Resource for EguiContext {}
-
-impl Default for EguiContext {
-    fn default() -> Self {
-        Self {
-            context: egui::Context::default(),
-        }
-    }
-}
 
 impl EguiContext {
     /// Creates a new `EguiContext` with a default egui context.

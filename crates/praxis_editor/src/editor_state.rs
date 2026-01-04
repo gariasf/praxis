@@ -9,9 +9,11 @@ use crate::panels::{
     SceneViewPanel,
 };
 use crate::play_mode::PlayModeSystem;
+use crate::selection::SelectionSystem;
 use crate::toolbar::{handle_toolbar_action, render_toolbar, ToolbarState};
 use crate::UndoRedoSystem;
 use egui_dock::{DockArea, DockState, NodeIndex, Style, TabViewer};
+use praxis_ecs::World;
 use praxis_utils::{error, info};
 
 /// Tab identifier for different editor panels.
@@ -275,11 +277,13 @@ impl EditorState {
     /// * `ctx` - The egui context
     /// * `undo_system` - Optional mutable reference to the undo/redo system for menu integration
     /// * `world` - Optional mutable reference to the ECS world for executing undo/redo commands
+    /// * `selection_system` - Optional mutable reference to the selection system
     pub fn ui(
         &mut self,
         ctx: &egui::Context,
         mut undo_system: Option<&mut UndoRedoSystem>,
-        mut world: Option<&mut praxis_ecs::World>,
+        mut world: Option<&mut World>,
+        selection_system: Option<&mut SelectionSystem>,
     ) {
         if !self.visible {
             return;
@@ -301,7 +305,7 @@ impl EditorState {
                 action,
                 &mut self.menu_bar_state,
                 undo_system.as_deref_mut(),
-                world.as_deref_mut().map(|w| w.inner_mut()),
+                world.as_mut().map(|w| w.inner_mut()),
             );
         }
 
@@ -320,7 +324,7 @@ impl EditorState {
             match action {
                 ToolbarAction::Play => {
                     // Enter play mode if we have a world
-                    if let Some(ref mut w) = world {
+                    if let Some(w) = world.as_mut() {
                         if let Err(e) = self.enter_play_mode(w) {
                             error!("Failed to enter play mode: {}", e);
                         }
@@ -333,7 +337,7 @@ impl EditorState {
                 }
                 ToolbarAction::Stop => {
                     // Exit play mode if we have a world
-                    if let Some(ref mut w) = world {
+                    if let Some(w) = world.as_mut() {
                         if let Err(e) = self.exit_play_mode(w) {
                             error!("Failed to exit play mode: {}", e);
                         }
@@ -357,16 +361,25 @@ impl EditorState {
         self.scene_panel
             .set_border_color(self.play_mode_system.viewport_border_color_egui());
 
-        self.render_dock_area(ctx);
+        self.render_dock_area(ctx, world, undo_system, selection_system);
     }
 
-    fn render_dock_area(&mut self, ctx: &egui::Context) {
+    fn render_dock_area(
+        &mut self,
+        ctx: &egui::Context,
+        world: Option<&mut World>,
+        undo_system: Option<&mut UndoRedoSystem>,
+        selection_system: Option<&mut SelectionSystem>,
+    ) {
         let mut tab_viewer = EditorTabViewer {
             scene_panel: &mut self.scene_panel,
             hierarchy_panel: &mut self.hierarchy_panel,
             inspector_panel: &mut self.inspector_panel,
             console_panel: &mut self.console_panel,
             assets_panel: &mut self.assets_panel,
+            world,
+            undo_system,
+            selection_system,
         };
 
         DockArea::new(&mut self.dock_state)
@@ -387,6 +400,9 @@ struct EditorTabViewer<'a> {
     inspector_panel: &'a mut InspectorPanel,
     console_panel: &'a mut ConsolePanel,
     assets_panel: &'a mut AssetsPanel,
+    world: Option<&'a mut World>,
+    undo_system: Option<&'a mut UndoRedoSystem>,
+    selection_system: Option<&'a mut SelectionSystem>,
 }
 
 impl TabViewer for EditorTabViewer<'_> {
@@ -405,7 +421,20 @@ impl TabViewer for EditorTabViewer<'_> {
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
         match tab {
             EditorTab::Scene => self.scene_panel.ui(ui),
-            EditorTab::Hierarchy => self.hierarchy_panel.ui(ui),
+            EditorTab::Hierarchy => {
+                // Check if we have all required resources
+                if let (Some(world), Some(undo_system), Some(selection_system)) = (
+                    self.world.as_mut().map(|w| w.inner_mut()),
+                    self.undo_system.as_deref_mut(),
+                    self.selection_system.as_deref_mut(),
+                ) {
+                    self.hierarchy_panel
+                        .ui_with_world(ui, world, undo_system, selection_system);
+                } else {
+                    // Fallback to basic UI
+                    self.hierarchy_panel.ui(ui);
+                }
+            }
             EditorTab::Inspector => self.inspector_panel.ui(ui),
             EditorTab::Console => self.console_panel.ui(ui),
             EditorTab::Assets => self.assets_panel.ui(ui),
