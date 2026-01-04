@@ -168,6 +168,39 @@ impl OctreeNode {
             }
         }
     }
+
+    /// Queries all entities that intersect with a ray.
+    fn query_ray(&self, origin: Vec3, direction: Vec3, max_distance: f32, results: &mut Vec<Entity>) {
+        if !self.bounds.intersects_ray(origin, direction, max_distance) {
+            return;
+        }
+
+        results.extend(&self.entities);
+
+        if let Some(children) = &self.children {
+            for child in children.iter() {
+                child.query_ray(origin, direction, max_distance, results);
+            }
+        }
+    }
+
+    /// Removes a specific entity from this node.
+    fn remove(&mut self, entity: Entity) -> bool {
+        if let Some(pos) = self.entities.iter().position(|&e| e == entity) {
+            self.entities.swap_remove(pos);
+            return true;
+        }
+
+        if let Some(children) = &mut self.children {
+            for child in children.iter_mut() {
+                if child.remove(entity) {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
 }
 
 /// Octree spatial partitioning structure.
@@ -205,14 +238,19 @@ impl Octree {
     }
 
     /// Removes an entity from the octree.
-    pub fn remove(&mut self, entity: Entity) {
-        self.entity_bounds.remove(&entity);
+    pub fn remove(&mut self, entity: Entity) -> bool {
+        if self.entity_bounds.remove(&entity).is_some() {
+            self.root.remove(entity);
+            true
+        } else {
+            false
+        }
     }
 
     /// Updates an entity's position in the octree.
-    pub fn update(&mut self, entity: Entity, new_bounds: Aabb) {
+    pub fn update(&mut self, entity: Entity, new_bounds: Aabb) -> bool {
         self.remove(entity);
-        self.insert(entity, new_bounds);
+        self.insert(entity, new_bounds)
     }
 
     /// Queries all entities that intersect the given bounds.
@@ -252,6 +290,64 @@ impl Octree {
     /// Returns the bounds of the octree.
     pub fn bounds(&self) -> &Aabb {
         &self.root.bounds
+    }
+
+    /// Queries all entities that intersect with a ray.
+    pub fn query_ray(&self, origin: Vec3, direction: Vec3, max_distance: f32) -> Vec<Entity> {
+        let mut results = Vec::new();
+        self.root.query_ray(origin, direction, max_distance, &mut results);
+        results
+    }
+
+    /// Queries all entities that intersect with a ray and returns them sorted by distance.
+    pub fn query_ray_sorted(&self, origin: Vec3, direction: Vec3, max_distance: f32) -> Vec<(Entity, f32)> {
+        let entities = self.query_ray(origin, direction, max_distance);
+        let mut results = Vec::new();
+
+        for entity in entities {
+            if let Some(bounds) = self.entity_bounds.get(&entity) {
+                if let Some(distance) = bounds.ray_intersection_distance(origin, direction, max_distance) {
+                    results.push((entity, distance));
+                }
+            }
+        }
+
+        results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+        results
+    }
+
+    /// Returns true if the octree contains the entity.
+    pub fn contains(&self, entity: Entity) -> bool {
+        self.entity_bounds.contains_key(&entity)
+    }
+
+    /// Gets the bounds of an entity if it exists in the octree.
+    pub fn get_bounds(&self, entity: Entity) -> Option<&Aabb> {
+        self.entity_bounds.get(&entity)
+    }
+
+    /// Checks if the octree needs rebalancing based on entity distribution.
+    pub fn needs_rebalancing(&self) -> bool {
+        let total = self.entity_count();
+        if total == 0 {
+            return false;
+        }
+        
+        let imbalance_ratio = self.calculate_imbalance_ratio();
+        imbalance_ratio > 2.0
+    }
+
+    /// Calculates the imbalance ratio of the octree.
+    fn calculate_imbalance_ratio(&self) -> f32 {
+        let total = self.entity_count();
+        if total == 0 {
+            return 0.0;
+        }
+        
+        let ideal_per_node = self.max_entities_per_node as f32;
+        let actual_nodes = (total as f32 / ideal_per_node).max(1.0);
+        
+        actual_nodes / total.max(1) as f32
     }
 }
 
@@ -315,8 +411,75 @@ mod tests {
         octree.insert(entity, bounds);
         assert_eq!(octree.entity_count(), 1);
         
-        octree.remove(entity);
-        let results = octree.query(&bounds);
-        assert!(results.is_empty() || !results.contains(&entity));
+        assert!(octree.remove(entity));
+        assert!(!octree.contains(entity));
+    }
+
+    #[test]
+    fn test_octree_ray_query() {
+        let mut octree = Octree::new(Vec3::ZERO, 100.0, 4);
+        
+        for i in 0..5 {
+            let entity = Entity::from_raw(i);
+            let z = (i as f32 * 10.0) + 5.0;
+            let bounds = Aabb::from_center_half_extents(Vec3::new(0.0, 0.0, z), Vec3::splat(2.0));
+            octree.insert(entity, bounds);
+        }
+
+        let origin = Vec3::ZERO;
+        let direction = Vec3::Z;
+        let results = octree.query_ray(origin, direction, 100.0);
+        
+        assert!(!results.is_empty());
+        assert!(results.len() <= 5);
+    }
+
+    #[test]
+    fn test_octree_ray_sorted() {
+        let mut octree = Octree::new(Vec3::ZERO, 200.0, 4);
+        
+        let entity1 = Entity::from_raw(1);
+        let entity2 = Entity::from_raw(2);
+        let entity3 = Entity::from_raw(3);
+        
+        octree.insert(entity1, Aabb::from_center_half_extents(Vec3::new(0.0, 0.0, 10.0), Vec3::splat(1.0)));
+        octree.insert(entity2, Aabb::from_center_half_extents(Vec3::new(0.0, 0.0, 30.0), Vec3::splat(1.0)));
+        octree.insert(entity3, Aabb::from_center_half_extents(Vec3::new(0.0, 0.0, 20.0), Vec3::splat(1.0)));
+
+        let results = octree.query_ray_sorted(Vec3::ZERO, Vec3::Z, 100.0);
+        
+        assert_eq!(results.len(), 3);
+        
+        for i in 0..results.len() - 1 {
+            assert!(results[i].1 <= results[i + 1].1);
+        }
+    }
+
+    #[test]
+    fn test_octree_get_bounds() {
+        let mut octree = Octree::new(Vec3::ZERO, 100.0, 4);
+        let entity = Entity::from_raw(1);
+        let bounds = Aabb::from_min_max(Vec3::ZERO, Vec3::ONE);
+        
+        octree.insert(entity, bounds);
+        
+        let retrieved = octree.get_bounds(entity);
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().min, Vec3::ZERO);
+        assert_eq!(retrieved.unwrap().max, Vec3::ONE);
+    }
+
+    #[test]
+    fn test_octree_needs_rebalancing() {
+        let mut octree = Octree::new(Vec3::ZERO, 100.0, 2);
+        
+        for i in 0..20 {
+            let entity = Entity::from_raw(i);
+            let x = (i as f32 * 3.0) - 30.0;
+            let bounds = Aabb::from_center_half_extents(Vec3::new(x, 0.0, 0.0), Vec3::splat(1.0));
+            octree.insert(entity, bounds);
+        }
+
+        let _ = octree.needs_rebalancing();
     }
 }

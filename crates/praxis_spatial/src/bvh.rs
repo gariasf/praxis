@@ -6,6 +6,7 @@
 use crate::aabb::Aabb;
 use bevy_ecs::entity::Entity;
 use praxis_math::Vec3;
+use std::collections::HashMap;
 
 /// Node in the BVH tree.
 #[derive(Debug, Clone)]
@@ -81,6 +82,23 @@ impl BvhNode {
             Self::Internal { left, right, .. } => left.entity_count() + right.entity_count(),
         }
     }
+
+    /// Queries all entities that intersect with a ray.
+    pub fn query_ray(&self, origin: Vec3, direction: Vec3, max_distance: f32, results: &mut Vec<Entity>) {
+        if !self.bounds().intersects_ray(origin, direction, max_distance) {
+            return;
+        }
+
+        match self {
+            Self::Leaf { entity, .. } => {
+                results.push(*entity);
+            }
+            Self::Internal { left, right, .. } => {
+                left.query_ray(origin, direction, max_distance, results);
+                right.query_ray(origin, direction, max_distance, results);
+            }
+        }
+    }
 }
 
 /// Bounding Volume Hierarchy for spatial partitioning.
@@ -89,19 +107,30 @@ impl BvhNode {
 pub struct Bvh {
     /// Root node of the BVH.
     root: Option<BvhNode>,
+    /// Map from entity to its bounding box for dynamic updates.
+    entity_bounds: HashMap<Entity, Aabb>,
 }
 
 impl Bvh {
     /// Creates a new empty BVH.
     pub fn new() -> Self {
-        Self { root: None }
+        Self { 
+            root: None,
+            entity_bounds: HashMap::new(),
+        }
     }
 
     /// Builds a BVH from a list of entities and their bounding boxes.
     pub fn build(&mut self, entities: Vec<(Entity, Aabb)>) {
         if entities.is_empty() {
             self.root = None;
+            self.entity_bounds.clear();
             return;
+        }
+
+        self.entity_bounds.clear();
+        for (entity, bounds) in &entities {
+            self.entity_bounds.insert(*entity, *bounds);
         }
 
         self.root = Some(Self::build_recursive(entities));
@@ -186,6 +215,7 @@ impl Bvh {
     /// Clears the BVH.
     pub fn clear(&mut self) {
         self.root = None;
+        self.entity_bounds.clear();
     }
 
     /// Returns true if the BVH is empty.
@@ -196,6 +226,70 @@ impl Bvh {
     /// Returns the root bounding box, if any.
     pub fn bounds(&self) -> Option<&Aabb> {
         self.root.as_ref().map(BvhNode::bounds)
+    }
+
+    /// Queries all entities that intersect with a ray.
+    pub fn query_ray(&self, origin: Vec3, direction: Vec3, max_distance: f32) -> Vec<Entity> {
+        let mut results = Vec::new();
+        if let Some(root) = &self.root {
+            root.query_ray(origin, direction, max_distance, &mut results);
+        }
+        results
+    }
+
+    /// Queries all entities that intersect with a ray and returns them sorted by distance.
+    pub fn query_ray_sorted(&self, origin: Vec3, direction: Vec3, max_distance: f32) -> Vec<(Entity, f32)> {
+        let entities = self.query_ray(origin, direction, max_distance);
+        let mut results = Vec::new();
+
+        for entity in entities {
+            if let Some(bounds) = self.entity_bounds.get(&entity) {
+                if let Some(distance) = bounds.ray_intersection_distance(origin, direction, max_distance) {
+                    results.push((entity, distance));
+                }
+            }
+        }
+
+        results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+        results
+    }
+
+    /// Adds a single entity to the BVH (triggers rebuild).
+    pub fn insert(&mut self, entity: Entity, bounds: Aabb) {
+        self.entity_bounds.insert(entity, bounds);
+        self.rebuild();
+    }
+
+    /// Removes an entity from the BVH (triggers rebuild).
+    pub fn remove(&mut self, entity: Entity) -> bool {
+        if self.entity_bounds.remove(&entity).is_some() {
+            self.rebuild();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Updates an entity's bounds in the BVH (triggers rebuild).
+    pub fn update(&mut self, entity: Entity, new_bounds: Aabb) {
+        self.entity_bounds.insert(entity, new_bounds);
+        self.rebuild();
+    }
+
+    /// Rebuilds the BVH from current entity bounds.
+    pub fn rebuild(&mut self) {
+        let entities: Vec<_> = self.entity_bounds.iter().map(|(&e, &b)| (e, b)).collect();
+        self.build(entities);
+    }
+
+    /// Returns true if the BVH contains the entity.
+    pub fn contains(&self, entity: Entity) -> bool {
+        self.entity_bounds.contains_key(&entity)
+    }
+
+    /// Gets the bounds of an entity if it exists in the BVH.
+    pub fn get_bounds(&self, entity: Entity) -> Option<&Aabb> {
+        self.entity_bounds.get(&entity)
     }
 }
 
@@ -277,5 +371,88 @@ mod tests {
         
         bvh.clear();
         assert!(bvh.is_empty());
+    }
+
+    #[test]
+    fn test_bvh_insert_remove() {
+        let mut bvh = Bvh::new();
+        let entity = Entity::from_raw(1);
+        let bounds = Aabb::from_min_max(Vec3::ZERO, Vec3::ONE);
+
+        bvh.insert(entity, bounds);
+        assert!(bvh.contains(entity));
+        assert_eq!(bvh.entity_count(), 1);
+
+        assert!(bvh.remove(entity));
+        assert!(!bvh.contains(entity));
+        assert_eq!(bvh.entity_count(), 0);
+    }
+
+    #[test]
+    fn test_bvh_update() {
+        let mut bvh = Bvh::new();
+        let entity = Entity::from_raw(1);
+        let bounds1 = Aabb::from_min_max(Vec3::ZERO, Vec3::ONE);
+        let bounds2 = Aabb::from_min_max(Vec3::new(5.0, 0.0, 0.0), Vec3::new(6.0, 1.0, 1.0));
+
+        bvh.insert(entity, bounds1);
+        bvh.update(entity, bounds2);
+
+        let stored = bvh.get_bounds(entity);
+        assert!(stored.is_some());
+        assert_eq!(stored.unwrap().min, Vec3::new(5.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_bvh_ray_query() {
+        let mut bvh = Bvh::new();
+        
+        for i in 0..5 {
+            let entity = Entity::from_raw(i);
+            let x = (i as f32 * 10.0) + 5.0;
+            let bounds = Aabb::from_center_half_extents(Vec3::new(x, 0.0, 0.0), Vec3::splat(2.0));
+            bvh.insert(entity, bounds);
+        }
+
+        let origin = Vec3::ZERO;
+        let direction = Vec3::X;
+        let results = bvh.query_ray(origin, direction, 100.0);
+        
+        assert!(!results.is_empty());
+    }
+
+    #[test]
+    fn test_bvh_ray_sorted() {
+        let mut bvh = Bvh::new();
+        
+        let entity1 = Entity::from_raw(1);
+        let entity2 = Entity::from_raw(2);
+        let entity3 = Entity::from_raw(3);
+        
+        bvh.insert(entity1, Aabb::from_center_half_extents(Vec3::new(10.0, 0.0, 0.0), Vec3::splat(1.0)));
+        bvh.insert(entity2, Aabb::from_center_half_extents(Vec3::new(30.0, 0.0, 0.0), Vec3::splat(1.0)));
+        bvh.insert(entity3, Aabb::from_center_half_extents(Vec3::new(20.0, 0.0, 0.0), Vec3::splat(1.0)));
+
+        let results = bvh.query_ray_sorted(Vec3::ZERO, Vec3::X, 100.0);
+        
+        assert_eq!(results.len(), 3);
+        
+        for i in 0..results.len() - 1 {
+            assert!(results[i].1 <= results[i + 1].1);
+        }
+    }
+
+    #[test]
+    fn test_bvh_get_bounds() {
+        let mut bvh = Bvh::new();
+        let entity = Entity::from_raw(1);
+        let bounds = Aabb::from_min_max(Vec3::ZERO, Vec3::ONE);
+        
+        bvh.insert(entity, bounds);
+        
+        let retrieved = bvh.get_bounds(entity);
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().min, Vec3::ZERO);
+        assert_eq!(retrieved.unwrap().max, Vec3::ONE);
     }
 }

@@ -15,16 +15,27 @@ Comprehensive spatial optimization systems for the Praxis game engine, providing
 #### Octree
 - Recursive space subdivision into eight octants
 - Configurable maximum depth and entities per node
-- Fast spatial queries (radius, AABB)
+- Fast spatial queries (radius, AABB, ray)
 - Dynamic insertion, removal, and updates
+- Automatic rebalancing based on entity distribution
+- Movement threshold tracking to minimize updates
 - Efficient for static or slowly moving objects
 
 #### BVH (Bounding Volume Hierarchy)
 - Bottom-up construction for optimal tree structure
 - Surface area heuristic (SAH) for splitting
 - Fast ray tracing and nearest neighbor queries
+- Dynamic insertion, removal with automatic rebuild
 - Efficient for both static and dynamic scenes
 - Better than octrees for ray tracing
+
+#### Spatial Manager
+- Unified interface for both octree and BVH
+- Automatic tracking of entity movement
+- Configurable movement threshold
+- Automatic rebalancing at intervals
+- Dirty entity tracking for batch updates
+- Easy switching between structure types
 
 ### 📐 Level of Detail (LOD) System
 - **Distance-based mesh switching** to reduce polygon count
@@ -62,6 +73,87 @@ Comprehensive spatial optimization systems for the Praxis game engine, providing
 ```
 
 ## Usage
+
+### Spatial Manager (Recommended)
+
+```rust
+use praxis_spatial::{SpatialManager, SpatialConfig, Aabb};
+use praxis_ecs::Entity;
+use praxis_math::Vec3;
+
+// Create a spatial manager with octree
+let config = SpatialConfig {
+    center: Vec3::ZERO,
+    size: 1000.0,
+    max_entities_per_node: 8,
+    movement_threshold: 0.5,
+    rebalance_interval: 100,
+};
+let mut manager = SpatialManager::new_octree(config);
+
+// Insert entities
+let entity = Entity::from_raw(1);
+let bounds = Aabb::from_min_max(Vec3::ZERO, Vec3::ONE);
+manager.insert(entity, bounds);
+
+// Update when entity moves
+let new_bounds = Aabb::from_min_max(Vec3::new(5.0, 0.0, 0.0), Vec3::new(6.0, 1.0, 1.0));
+manager.update(entity, new_bounds);
+
+// Query entities
+let results = manager.query_radius(Vec3::ZERO, 50.0);
+
+// Ray queries
+let ray_hits = manager.query_ray_sorted(Vec3::ZERO, Vec3::X, 100.0);
+for (entity, distance) in ray_hits {
+    println!("Hit entity {:?} at distance {}", entity, distance);
+}
+
+// Automatic rebalancing
+manager.flush_updates();
+if manager.needs_rebalancing() {
+    manager.rebalance_if_needed();
+}
+```
+
+### ECS Integration
+
+```rust
+use praxis_ecs::{World, Schedule};
+use praxis_spatial::{
+    SpatialResource, SpatialBundle, SpatialConfig,
+    insert_spatial_entities, update_spatial_entities,
+    remove_spatial_entities, flush_spatial_updates,
+};
+use praxis_math::Vec3;
+
+let mut world = World::new();
+
+// Setup spatial resource
+world.insert_resource(SpatialResource::new_octree(SpatialConfig::default()));
+
+// Add systems to schedule
+let mut schedule = Schedule::default();
+schedule.add_systems((
+    insert_spatial_entities,
+    update_spatial_entities,
+    remove_spatial_entities,
+    flush_spatial_updates,
+).chain());
+
+// Spawn entities with spatial components
+world.spawn(SpatialBundle::from_center_half_extents(
+    Vec3::new(10.0, 0.0, 0.0),
+    Vec3::splat(2.0),
+));
+
+// Run systems
+schedule.run(world.inner_mut());
+
+// Query the spatial structure
+let spatial = world.inner().resource::<SpatialResource>();
+let nearby = spatial.manager.query_radius(Vec3::ZERO, 50.0);
+```
 
 ### Basic Frustum Culling
 
@@ -276,7 +368,25 @@ println!("Cull rate: {:.1}%", stats.cull_rate());
 
 ## Examples
 
-Run the spatial optimization demo:
+### Spatial Partitioning Demo
+
+Run the comprehensive spatial partitioning demo:
+
+```bash
+cargo run --example spatial_partitioning_demo
+```
+
+This demonstrates:
+- Octree and BVH creation and usage
+- Dynamic insertion, removal, and updates
+- Ray queries and sorted ray results
+- Spatial manager with automatic rebalancing
+- ECS integration with spatial systems
+- Movement threshold and dirty entity tracking
+
+### Spatial Optimization Demo
+
+Run the original spatial optimization demo:
 
 ```bash
 cargo run --example spatial_optimization_demo

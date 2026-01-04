@@ -185,6 +185,57 @@ impl Aabb {
             Vec3::new(self.max.x, self.max.y, self.max.z),
         ]
     }
+
+    /// Tests if a ray intersects the AABB.
+    ///
+    /// Returns true if the ray intersects within `max_distance`.
+    /// Uses the slab method for efficient ray-box intersection.
+    pub fn intersects_ray(&self, origin: Vec3, direction: Vec3, max_distance: f32) -> bool {
+        let inv_dir = Vec3::new(
+            if direction.x == 0.0 { f32::INFINITY } else { 1.0 / direction.x },
+            if direction.y == 0.0 { f32::INFINITY } else { 1.0 / direction.y },
+            if direction.z == 0.0 { f32::INFINITY } else { 1.0 / direction.z },
+        );
+
+        let t1 = (self.min.x - origin.x) * inv_dir.x;
+        let t2 = (self.max.x - origin.x) * inv_dir.x;
+        let t3 = (self.min.y - origin.y) * inv_dir.y;
+        let t4 = (self.max.y - origin.y) * inv_dir.y;
+        let t5 = (self.min.z - origin.z) * inv_dir.z;
+        let t6 = (self.max.z - origin.z) * inv_dir.z;
+
+        let tmin = t1.min(t2).max(t3.min(t4)).max(t5.min(t6));
+        let tmax = t1.max(t2).min(t3.max(t4)).min(t5.max(t6));
+
+        tmax >= 0.0 && tmin <= tmax && tmin <= max_distance
+    }
+
+    /// Computes the intersection distance of a ray with the AABB.
+    ///
+    /// Returns Some(distance) if the ray intersects within `max_distance`, None otherwise.
+    pub fn ray_intersection_distance(&self, origin: Vec3, direction: Vec3, max_distance: f32) -> Option<f32> {
+        let inv_dir = Vec3::new(
+            if direction.x == 0.0 { f32::INFINITY } else { 1.0 / direction.x },
+            if direction.y == 0.0 { f32::INFINITY } else { 1.0 / direction.y },
+            if direction.z == 0.0 { f32::INFINITY } else { 1.0 / direction.z },
+        );
+
+        let t1 = (self.min.x - origin.x) * inv_dir.x;
+        let t2 = (self.max.x - origin.x) * inv_dir.x;
+        let t3 = (self.min.y - origin.y) * inv_dir.y;
+        let t4 = (self.max.y - origin.y) * inv_dir.y;
+        let t5 = (self.min.z - origin.z) * inv_dir.z;
+        let t6 = (self.max.z - origin.z) * inv_dir.z;
+
+        let tmin = t1.min(t2).max(t3.min(t4)).max(t5.min(t6));
+        let tmax = t1.max(t2).min(t3.max(t4)).min(t5.max(t6));
+
+        if tmax >= 0.0 && tmin <= tmax && tmin <= max_distance {
+            Some(tmin.max(0.0))
+        } else {
+            None
+        }
+    }
 }
 
 /// Trait for objects that have bounding volumes.
@@ -248,5 +299,50 @@ mod tests {
         let aabb = Aabb::from_min_max(Vec3::ZERO, Vec3::ONE);
         let point = Vec3::new(2.0, 0.5, 0.5);
         assert!((aabb.distance(point) - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_aabb_ray_intersection() {
+        let aabb = Aabb::from_min_max(Vec3::new(5.0, 0.0, 0.0), Vec3::new(6.0, 1.0, 1.0));
+        
+        let origin = Vec3::ZERO;
+        let direction = Vec3::X;
+        
+        assert!(aabb.intersects_ray(origin, direction, 100.0));
+        assert!(!aabb.intersects_ray(origin, direction, 3.0));
+        
+        let wrong_direction = Vec3::Y;
+        assert!(!aabb.intersects_ray(origin, wrong_direction, 100.0));
+    }
+
+    #[test]
+    fn test_aabb_ray_intersection_distance() {
+        let aabb = Aabb::from_min_max(Vec3::new(5.0, -1.0, -1.0), Vec3::new(6.0, 1.0, 1.0));
+        
+        let origin = Vec3::ZERO;
+        let direction = Vec3::X;
+        
+        let distance = aabb.ray_intersection_distance(origin, direction, 100.0);
+        assert!(distance.is_some());
+        
+        let dist = distance.unwrap();
+        assert!((dist - 5.0).abs() < 0.001);
+        
+        let no_hit = aabb.ray_intersection_distance(origin, direction, 3.0);
+        assert!(no_hit.is_none());
+    }
+
+    #[test]
+    fn test_aabb_ray_from_inside() {
+        let aabb = Aabb::from_min_max(Vec3::new(-5.0, -5.0, -5.0), Vec3::new(5.0, 5.0, 5.0));
+        
+        let origin = Vec3::ZERO;
+        let direction = Vec3::X;
+        
+        assert!(aabb.intersects_ray(origin, direction, 100.0));
+        
+        let distance = aabb.ray_intersection_distance(origin, direction, 100.0);
+        assert!(distance.is_some());
+        assert_eq!(distance.unwrap(), 0.0);
     }
 }
