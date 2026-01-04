@@ -15,6 +15,7 @@ praxis_input = { path = "../praxis_input" }
 praxis_graphics = { path = "../praxis_graphics" }
 praxis_physics = { path = "../praxis_physics" }
 praxis_audio = { path = "../praxis_audio" }
+praxis_terrain = { path = "../praxis_terrain" }
 bevy_ecs = "0.14"
 egui = "0.29"
 egui_dock = "0.14"

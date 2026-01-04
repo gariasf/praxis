@@ -261,7 +261,7 @@ pub use menu_bar::{
 pub use panels::{
     AssetEntry, AssetImportConfig, AssetType, AssetsPanel, AssetsPanelExt, ConsoleLayer,
     ConsolePanel, EditorPanel, HierarchyPanel, InspectorPanel, LogBuffer, LogLevel, LogMessage,
-    SceneViewPanel, SceneViewPanelExt, ViewportPanel,
+    SceneViewPanel, SceneViewPanelExt, TerrainPanel, TerrainPanelExt, ViewportPanel,
 };
 pub use play_mode::{PlayModeState, PlayModeSystem, SceneSnapshot, SnapshotMetadata};
 pub use scene_operations::{

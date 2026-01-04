@@ -1,0 +1,19 @@
+[package]
+name = "praxis_terrain"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+vulkano = "0.35.1"
+vulkano-shaders = "0.35.0"
+bytemuck = { version = "1.23.1", features = ["derive"] }
+praxis_utils = { path = "../praxis_utils", version = "0.1.0" }
+praxis_math = { path = "../praxis_math", version = "0.1.0" }
+praxis_graphics = { path = "../praxis_graphics", version = "0.1.0" }
+praxis_ecs = { path = "../praxis_ecs", version = "0.1.0" }
+bevy_ecs = "0.14"
+image = { version = "0.25", default-features = false, features = ["png"] }
+noise = "0.9"
+rayon = "1.10"
+rand = "0.8"
