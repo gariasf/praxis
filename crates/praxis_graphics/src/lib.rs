@@ -398,6 +398,8 @@ pub mod lighting;
 pub mod line_renderer;
 pub mod lod;
 pub mod material;
+pub mod material_instancing;
+pub mod material_layers;
 pub mod mesh;
 pub mod particles;
 mod pipeline;
@@ -1599,7 +1601,15 @@ pub use line_renderer::{Line, LineBatch, LineRenderer, LineVertex};
 pub use lod::{
     LodGroup, LodLevel, LodManager, LodStatistics, DEFAULT_TRANSITION_DURATION, MAX_LOD_LEVELS,
 };
-pub use material::{Material, MaterialManager, MaterialProperties};
+pub use material::{
+    BlendMode, ExtendedPbrProperties, Material, MaterialLayer, MaterialManager,
+    MaterialProperties, ParallaxProperties,
+};
+pub use material_instancing::{InstancingStats, MaterialInstance, MaterialInstanceManager};
+pub use material_layers::{
+    LayerParamsUniforms, MaterialLayerCache, MaterialLayerRenderer, MaterialTextureSet,
+    MAX_MATERIAL_LAYERS,
+};
 pub use mesh::{GpuMesh, MeshData};
 pub use particles::{
     CollisionPlane, EmitterShape, GpuParticle, ParticleEmitterConfig, ParticleForce,

@@ -1,104 +1,20 @@
-//! Material system for defining surface properties.
+//! Advanced material system for defining surface properties.
 //!
-//! This module provides a material system that defines how surfaces should be rendered,
-//! including texture references and material properties for efficient GPU resource access.
-//!
-//! # Material System Overview
-//!
-//! Materials define the visual properties of a surface, including:
-//! - Albedo (base color) texture
-//! - Material properties (metallic, roughness, emissive strength)
-//! - Future: Normal maps, metallic-roughness maps, etc.
-//!
-//! Each material stores references to its textures and properties, which are then used
-//! during rendering to create descriptor sets that bind GPU resources to shaders.
-//!
-//! # Descriptor Set Management
-//!
-//! Materials themselves do NOT create or store descriptor sets. Instead, they provide
-//! the texture and property data needed to create descriptor sets during rendering.
-//!
-//! This is because descriptor sets require binding multiple resources that are not
-//! available at material creation time:
-//! - Binding 0: Per-object uniforms (model/view/projection matrices) - frame-dependent
-//! - Binding 1: Material texture sampler - provided by the material
-//! - Binding 2: Lighting data - frame-dependent
-//!
-//! ## Why Per-Material Descriptor Sets Are More Efficient
-//!
-//! While materials don't store descriptor sets themselves, the rendering system can still
-//! achieve per-material efficiency by grouping draw calls:
-//!
-//! **Rendering Strategy:**
-//!
-//! 1. **Group by Material**: Sort draw commands by material ID before rendering
-//! 2. **Create Once Per Material**: For each unique material in a frame, create one
-//!    descriptor set that combines the material's texture with the frame's lighting data
-//! 3. **Update Per Object**: For each object using that material, only update the
-//!    per-object uniform data (model matrix), then draw
-//!
-//! **Benefits:**
-//!
-//! - **Reduced Allocations**: 100 objects with 10 materials = 10 descriptor sets per frame
-//!   (not 100), assuming lighting doesn't change
-//! - **Fewer GPU Binds**: Bind material resources once per material, not per object
-//! - **Better Cache Coherency**: GPU texture cache benefits from grouped material access
-//!
-//! ## Example: Material Sharing Benefits
-//!
-//! ```text
-//! Scenario: Rendering 1000 objects with 10 different materials (100 objects per material)
-//!
-//! Naive Approach (per-object descriptor sets):
-//! - Descriptor sets per frame: 1000
-//! - Texture binds per frame: 1000
-//! - Memory allocations: Very high
-//!
-//! Grouped Approach (group by material):
-//! - Descriptor sets per frame: 10
-//! - Texture binds per frame: 10
-//! - Memory allocations: Low
-//!
-//! Performance improvement: 100x reduction in descriptor sets and texture binds
-//! ```
-//!
-//! ## Descriptor Set Lifecycle
-//!
-//! When rendering with materials, descriptor sets follow this lifecycle:
-//!
-//! 1. **Frame Start**: Rendering system begins a new frame
-//! 2. **Material Grouping**: Draw commands are sorted/grouped by material ID
-//! 3. **Per-Material Setup**: For each unique material:
-//!    - Create a descriptor set binding:
-//!      * The material's texture at binding 1
-//!      * The current frame's lighting data at binding 2
-//!    - This descriptor set is used for all objects sharing this material
-//! 4. **Per-Object Drawing**: For each object using the current material:
-//!    - Update binding 0 with per-object uniforms (model matrix)
-//!    - Draw the object
-//! 5. **Frame End**: All descriptor sets are automatically reclaimed by the pool
-//!
-//! This approach balances efficiency (few descriptor sets) with flexibility (per-object
-//! transforms and per-frame lighting).
-//!
-//! ## Future Optimizations
-//!
-//! Potential future improvements include:
-//! - **Persistent Material Descriptor Sets**: Cache descriptor sets that only contain
-//!   material textures (binding 1), reusing them across frames
-//! - **Dynamic Uniform Buffers**: Use a single large buffer with dynamic offsets for
-//!   per-object data instead of separate descriptor sets
-//! - **Push Constants**: Use push constants for per-object transforms if they fit in
-//!   the 128-byte limit
+//! This module provides a comprehensive material system with:
+//! - Material instancing for efficient per-object parameter overrides
+//! - Material layers for blending multiple materials with mask textures
+//! - Parallax occlusion mapping for enhanced depth perception
+//! - Extended PBR features (clearcoat, sheen, transmission)
 
 use crate::texture::Texture;
 use praxis_utils::{debug, info};
 use std::collections::HashMap;
+use std::sync::Arc;
 
-/// Material properties for shader uniforms.
+/// Material properties for shader uniforms (PBR base).
 ///
 /// These properties can be uploaded to the GPU as uniform data to control
-/// material appearance beyond textures.
+/// material appearance.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct MaterialProperties {
@@ -161,59 +77,313 @@ impl MaterialProperties {
     }
 }
 
-/// Basic material with albedo texture and properties.
+/// Extended PBR properties for advanced material features.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ExtendedPbrProperties {
+    /// Clearcoat strength [0.0, 1.0]. Adds a second specular layer on top of the base.
+    pub clearcoat: f32,
+
+    /// Clearcoat roughness [0.0, 1.0]. Controls roughness of the clearcoat layer.
+    pub clearcoat_roughness: f32,
+
+    /// Sheen strength [0.0, 1.0]. Adds fabric-like reflectance at grazing angles.
+    pub sheen: f32,
+
+    /// Sheen tint [0.0, 1.0]. Tints the sheen color toward the base color.
+    pub sheen_tint: f32,
+
+    /// Transmission [0.0, 1.0]. Controls light transmission through the material (glass, water).
+    pub transmission: f32,
+
+    /// Index of refraction for transmission [1.0, 3.0]. Default is 1.5 (glass).
+    pub ior: f32,
+
+    /// Anisotropy [-1.0, 1.0]. Controls directional roughness (brushed metal).
+    pub anisotropy: f32,
+
+    /// Anisotropy rotation [0.0, 1.0]. Rotates the anisotropic direction.
+    pub anisotropy_rotation: f32,
+}
+
+impl Default for ExtendedPbrProperties {
+    fn default() -> Self {
+        Self {
+            clearcoat: 0.0,
+            clearcoat_roughness: 0.03,
+            sheen: 0.0,
+            sheen_tint: 0.0,
+            transmission: 0.0,
+            ior: 1.5,
+            anisotropy: 0.0,
+            anisotropy_rotation: 0.0,
+        }
+    }
+}
+
+impl ExtendedPbrProperties {
+    /// Creates default extended PBR properties.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets clearcoat strength [0.0, 1.0].
+    pub fn with_clearcoat(mut self, clearcoat: f32) -> Self {
+        self.clearcoat = clearcoat.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Sets clearcoat roughness [0.0, 1.0].
+    pub fn with_clearcoat_roughness(mut self, roughness: f32) -> Self {
+        self.clearcoat_roughness = roughness.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Sets sheen strength [0.0, 1.0].
+    pub fn with_sheen(mut self, sheen: f32) -> Self {
+        self.sheen = sheen.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Sets sheen tint [0.0, 1.0].
+    pub fn with_sheen_tint(mut self, tint: f32) -> Self {
+        self.sheen_tint = tint.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Sets transmission [0.0, 1.0].
+    pub fn with_transmission(mut self, transmission: f32) -> Self {
+        self.transmission = transmission.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Sets index of refraction [1.0, 3.0].
+    pub fn with_ior(mut self, ior: f32) -> Self {
+        self.ior = ior.clamp(1.0, 3.0);
+        self
+    }
+
+    /// Sets anisotropy [-1.0, 1.0].
+    pub fn with_anisotropy(mut self, anisotropy: f32) -> Self {
+        self.anisotropy = anisotropy.clamp(-1.0, 1.0);
+        self
+    }
+
+    /// Sets anisotropy rotation [0.0, 1.0].
+    pub fn with_anisotropy_rotation(mut self, rotation: f32) -> Self {
+        self.anisotropy_rotation = rotation.clamp(0.0, 1.0);
+        self
+    }
+}
+
+/// Parallax occlusion mapping parameters.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ParallaxProperties {
+    /// Height scale for parallax effect [0.0, 0.1]. Higher values = more depth.
+    pub height_scale: f32,
+
+    /// Minimum number of samples for parallax mapping [4, 32].
+    pub min_samples: u32,
+
+    /// Maximum number of samples for parallax mapping [4, 64].
+    pub max_samples: u32,
+
+    /// Enable parallax occlusion mapping (0 = disabled, 1 = enabled).
+    pub enabled: u32,
+}
+
+impl Default for ParallaxProperties {
+    fn default() -> Self {
+        Self {
+            height_scale: 0.05,
+            min_samples: 8,
+            max_samples: 32,
+            enabled: 0,
+        }
+    }
+}
+
+impl ParallaxProperties {
+    /// Creates default parallax properties (disabled).
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Enables parallax occlusion mapping.
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = if enabled { 1 } else { 0 };
+        self
+    }
+
+    /// Sets height scale [0.0, 0.1].
+    pub fn with_height_scale(mut self, scale: f32) -> Self {
+        self.height_scale = scale.clamp(0.0, 0.1);
+        self
+    }
+
+    /// Sets minimum samples [4, 32].
+    pub fn with_min_samples(mut self, samples: u32) -> Self {
+        self.min_samples = samples.clamp(4, 32);
+        self
+    }
+
+    /// Sets maximum samples [4, 64].
+    pub fn with_max_samples(mut self, samples: u32) -> Self {
+        self.max_samples = samples.clamp(4, 64);
+        self
+    }
+}
+
+/// Material layer blend mode.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BlendMode {
+    /// Replace base with layer (mask controls opacity).
+    Replace,
+    /// Add layer to base.
+    Add,
+    /// Multiply layer with base.
+    Multiply,
+    /// Overlay blend mode.
+    Overlay,
+}
+
+/// Material layer for multi-material blending.
+#[derive(Clone)]
+pub struct MaterialLayer {
+    /// Layer name for identification.
+    pub name: String,
+
+    /// Material to blend.
+    pub material_id: String,
+
+    /// Blend mask texture (R channel controls blend weight).
+    pub mask_texture: Option<Texture>,
+
+    /// Blend mode for this layer.
+    pub blend_mode: BlendMode,
+
+    /// Layer opacity [0.0, 1.0].
+    pub opacity: f32,
+
+    /// UV scale for this layer.
+    pub uv_scale: [f32; 2],
+}
+
+impl MaterialLayer {
+    /// Creates a new material layer.
+    pub fn new(name: impl Into<String>, material_id: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            material_id: material_id.into(),
+            mask_texture: None,
+            blend_mode: BlendMode::Replace,
+            opacity: 1.0,
+            uv_scale: [1.0, 1.0],
+        }
+    }
+
+    /// Sets the blend mask texture.
+    pub fn with_mask(mut self, texture: Texture) -> Self {
+        self.mask_texture = Some(texture);
+        self
+    }
+
+    /// Sets the blend mode.
+    pub fn with_blend_mode(mut self, mode: BlendMode) -> Self {
+        self.blend_mode = mode;
+        self
+    }
+
+    /// Sets the layer opacity.
+    pub fn with_opacity(mut self, opacity: f32) -> Self {
+        self.opacity = opacity.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Sets the UV scale.
+    pub fn with_uv_scale(mut self, scale: [f32; 2]) -> Self {
+        self.uv_scale = scale;
+        self
+    }
+}
+
+/// Advanced material with instancing support and extended features.
 ///
-/// A material defines the visual properties of a surface. This implementation
-/// supports a single albedo (base color) texture that is multiplied with the vertex color,
-/// along with basic material properties for PBR-style rendering.
-///
-/// # Rendering Integration
-///
-/// Materials store texture references and properties but do not create descriptor sets
-/// themselves. During rendering, the renderer creates descriptor sets that combine:
-/// - Per-object uniforms (transforms)
-/// - Material textures (from this struct)
-/// - Per-frame lighting data
-///
-/// By grouping draw calls by material, the renderer can minimize descriptor set creation
-/// and GPU binding operations. See the module-level documentation for details on
-/// efficient material-based rendering strategies.
+/// This material supports:
+/// - Base textures (albedo, normal, metallic-roughness, height, AO, emissive)
+/// - Material instancing (sharing base material with per-instance overrides)
+/// - Material layers (blending multiple materials)
+/// - Parallax occlusion mapping
+/// - Extended PBR features (clearcoat, sheen, transmission)
 #[derive(Clone)]
 pub struct Material {
+    /// Material ID for instancing.
+    pub id: String,
+
+    /// Base material ID (for instancing). None if this is a base material.
+    pub base_material_id: Option<String>,
+
     /// Albedo (base color) texture.
-    ///
-    /// This texture defines the base color of the material. It is multiplied
-    /// with the vertex color and base color tint in the fragment shader.
     pub albedo_texture: Texture,
 
-    /// Material properties (metallic, roughness, emissive, etc.).
+    /// Normal map texture.
+    pub normal_texture: Option<Texture>,
+
+    /// Metallic-roughness texture (R=metallic, G=roughness).
+    pub metallic_roughness_texture: Option<Texture>,
+
+    /// Height map for parallax occlusion mapping.
+    pub height_texture: Option<Texture>,
+
+    /// Ambient occlusion texture.
+    pub ao_texture: Option<Texture>,
+
+    /// Emissive texture.
+    pub emissive_texture: Option<Texture>,
+
+    /// Base material properties.
     pub properties: MaterialProperties,
+
+    /// Extended PBR properties.
+    pub extended_properties: ExtendedPbrProperties,
+
+    /// Parallax properties.
+    pub parallax_properties: ParallaxProperties,
+
+    /// Material layers for multi-material blending.
+    pub layers: Vec<MaterialLayer>,
 }
 
 impl Material {
     /// Creates a new material with the given albedo texture and default properties.
-    ///
-    /// # Arguments
-    ///
-    /// * `albedo_texture` - The albedo texture for this material
-    pub fn new(albedo_texture: Texture) -> Self {
+    pub fn new(id: impl Into<String>, albedo_texture: Texture) -> Self {
         Self {
+            id: id.into(),
+            base_material_id: None,
             albedo_texture,
+            normal_texture: None,
+            metallic_roughness_texture: None,
+            height_texture: None,
+            ao_texture: None,
+            emissive_texture: None,
             properties: MaterialProperties::default(),
+            extended_properties: ExtendedPbrProperties::default(),
+            parallax_properties: ParallaxProperties::default(),
+            layers: Vec::new(),
         }
     }
 
-    /// Creates a new material with the given texture and properties.
-    ///
-    /// # Arguments
-    ///
-    /// * `albedo_texture` - The albedo texture for this material
-    /// * `properties` - Material properties (metallic, roughness, etc.)
-    pub fn with_properties(albedo_texture: Texture, properties: MaterialProperties) -> Self {
-        Self {
-            albedo_texture,
-            properties,
-        }
+    /// Creates a material instance based on another material.
+    pub fn instance(
+        id: impl Into<String>,
+        base_material_id: impl Into<String>,
+        base_material: &Material,
+    ) -> Self {
+        let mut instance = base_material.clone();
+        instance.id = id.into();
+        instance.base_material_id = Some(base_material_id.into());
+        instance
     }
 
     /// Sets the material properties.
@@ -221,67 +391,121 @@ impl Material {
         self.properties = properties;
     }
 
+    /// Sets the extended PBR properties.
+    pub fn set_extended_properties(&mut self, properties: ExtendedPbrProperties) {
+        self.extended_properties = properties;
+    }
+
+    /// Sets the parallax properties.
+    pub fn set_parallax_properties(&mut self, properties: ParallaxProperties) {
+        self.parallax_properties = properties;
+    }
+
     /// Sets the albedo texture.
-    ///
-    /// This replaces the current texture with a new one.
     pub fn set_albedo_texture(&mut self, texture: Texture) {
         self.albedo_texture = texture;
     }
 
-    /// Gets a reference to the albedo texture.
-    pub fn albedo_texture(&self) -> &Texture {
-        &self.albedo_texture
+    /// Sets the normal map texture.
+    pub fn set_normal_texture(&mut self, texture: Option<Texture>) {
+        self.normal_texture = texture;
+    }
+
+    /// Sets the metallic-roughness texture.
+    pub fn set_metallic_roughness_texture(&mut self, texture: Option<Texture>) {
+        self.metallic_roughness_texture = texture;
+    }
+
+    /// Sets the height map texture.
+    pub fn set_height_texture(&mut self, texture: Option<Texture>) {
+        self.height_texture = texture;
+    }
+
+    /// Sets the ambient occlusion texture.
+    pub fn set_ao_texture(&mut self, texture: Option<Texture>) {
+        self.ao_texture = texture;
+    }
+
+    /// Sets the emissive texture.
+    pub fn set_emissive_texture(&mut self, texture: Option<Texture>) {
+        self.emissive_texture = texture;
+    }
+
+    /// Adds a material layer.
+    pub fn add_layer(&mut self, layer: MaterialLayer) {
+        self.layers.push(layer);
+    }
+
+    /// Removes a material layer by name.
+    pub fn remove_layer(&mut self, name: &str) -> bool {
+        if let Some(pos) = self.layers.iter().position(|l| l.name == name) {
+            self.layers.remove(pos);
+            true
+        } else {
+            false
+        }
     }
 
     /// Gets a reference to the material properties.
     pub fn properties(&self) -> &MaterialProperties {
         &self.properties
     }
+
+    /// Gets a reference to the extended PBR properties.
+    pub fn extended_properties(&self) -> &ExtendedPbrProperties {
+        &self.extended_properties
+    }
+
+    /// Gets a reference to the parallax properties.
+    pub fn parallax_properties(&self) -> &ParallaxProperties {
+        &self.parallax_properties
+    }
+
+    /// Gets the albedo texture.
+    pub fn albedo_texture(&self) -> &Texture {
+        &self.albedo_texture
+    }
+
+    /// Gets the normal texture.
+    pub fn normal_texture(&self) -> Option<&Texture> {
+        self.normal_texture.as_ref()
+    }
+
+    /// Gets the metallic-roughness texture.
+    pub fn metallic_roughness_texture(&self) -> Option<&Texture> {
+        self.metallic_roughness_texture.as_ref()
+    }
+
+    /// Gets the height texture.
+    pub fn height_texture(&self) -> Option<&Texture> {
+        self.height_texture.as_ref()
+    }
+
+    /// Gets the ambient occlusion texture.
+    pub fn ao_texture(&self) -> Option<&Texture> {
+        self.ao_texture.as_ref()
+    }
+
+    /// Gets the emissive texture.
+    pub fn emissive_texture(&self) -> Option<&Texture> {
+        self.emissive_texture.as_ref()
+    }
+
+    /// Gets the material layers.
+    pub fn layers(&self) -> &[MaterialLayer] {
+        &self.layers
+    }
+
+    /// Checks if this is a material instance.
+    pub fn is_instance(&self) -> bool {
+        self.base_material_id.is_some()
+    }
 }
 
-/// Material asset manager that caches loaded materials.
-///
-/// This manager maintains a cache of materials by name, avoiding redundant
-/// material creation. It provides convenient methods for creating materials
-/// from textures and managing the material cache.
-///
-/// # Shared Resource Management
-///
-/// The MaterialManager allows multiple entities to reference the same material
-/// by name. When 100 entities use the "brick" material, they all reference the
-/// same Material instance, which means:
-///
-/// - **Memory Efficiency**: Texture references are Arc-based, so cloning is cheap
-/// - **Consistent Appearance**: All objects with the same material look identical
-/// - **Easy Updates**: Changing a material affects all objects using it
-///
-/// # Rendering Integration
-///
-/// During rendering, the renderer can query materials by name and group draw calls
-/// by material for optimal performance. See the module-level documentation for
-/// details on efficient rendering strategies with materials.
-///
-/// # Usage Example
-///
-/// ```rust,no_run
-/// use praxis_graphics::{MaterialManager, Texture};
-/// use std::sync::Arc;
-///
-/// # fn example(texture: Texture) {
-/// let mut material_manager = MaterialManager::new();
-///
-/// // Create a material from a texture
-/// material_manager.create_material("brick", texture);
-///
-/// // Get a material for use during rendering
-/// if let Some(material) = material_manager.get_material("brick") {
-///     // Use material.albedo_texture() for rendering
-/// }
-/// # }
-/// ```
+/// Material asset manager with instancing support.
 pub struct MaterialManager {
-    /// Map of material name to material.
-    materials: HashMap<String, Material>,
+    /// Map of material ID to material.
+    materials: HashMap<String, Arc<Material>>,
 }
 
 impl MaterialManager {
@@ -293,87 +517,68 @@ impl MaterialManager {
         }
     }
 
-    /// Creates a material from a texture and adds it to the cache.
-    ///
-    /// This creates a material with default properties. If a material with the same
-    /// name already exists, it will be replaced.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - Unique identifier for the material
-    /// * `albedo_texture` - The albedo texture for the material
-    pub fn create_material(&mut self, name: impl Into<String>, albedo_texture: Texture) {
-        let name = name.into();
-        debug!("Creating material '{}'", name);
-
-        let material = Material::new(albedo_texture);
-        self.materials.insert(name.clone(), material);
-        info!("Material '{}' created and cached", name);
+    /// Adds a material to the manager.
+    pub fn add_material(&mut self, material: Material) {
+        let id = material.id.clone();
+        debug!("Adding material '{}'", id);
+        self.materials.insert(id, Arc::new(material));
+        info!("Material added to manager");
     }
 
-    /// Creates a material with custom properties and adds it to the cache.
+    /// Creates a material from a texture and adds it to the manager.
+    pub fn create_material(&mut self, id: impl Into<String>, albedo_texture: Texture) {
+        let id = id.into();
+        debug!("Creating material '{}'", id);
+        let material = Material::new(id.clone(), albedo_texture);
+        self.materials.insert(id, Arc::new(material));
+        info!("Material created and cached");
+    }
+
+    /// Creates a material instance based on another material.
     ///
-    /// If a material with the same name already exists, it will be replaced.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - Unique identifier for the material
-    /// * `albedo_texture` - The albedo texture for the material
-    /// * `properties` - Material properties (metallic, roughness, etc.)
-    pub fn create_material_with_properties(
+    /// This is efficient for per-object parameter overrides without duplicating texture data.
+    pub fn create_instance(
         &mut self,
-        name: impl Into<String>,
-        albedo_texture: Texture,
-        properties: MaterialProperties,
-    ) {
-        let name = name.into();
-        debug!("Creating material '{}' with custom properties", name);
+        id: impl Into<String>,
+        base_material_id: &str,
+    ) -> Result<(), String> {
+        let id = id.into();
+        let base = self
+            .materials
+            .get(base_material_id)
+            .ok_or_else(|| format!("Base material '{base_material_id}' not found"))?;
 
-        let material = Material::with_properties(albedo_texture, properties);
-        self.materials.insert(name.clone(), material);
-        info!("Material '{}' created and cached", name);
+        debug!(
+            "Creating material instance '{}' from '{}'",
+            id, base_material_id
+        );
+        let instance = Material::instance(&id, base_material_id, base);
+        self.materials.insert(id, Arc::new(instance));
+        info!("Material instance created");
+        Ok(())
     }
 
-    /// Adds a pre-created material to the cache.
-    ///
-    /// This is useful when you need to create a material with custom configuration
-    /// before adding it to the manager.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - Unique identifier for the material
-    /// * `material` - The material to add
-    pub fn add_material(&mut self, name: impl Into<String>, material: Material) {
-        let name = name.into();
-        debug!("Adding material '{}' to cache", name);
-        self.materials.insert(name, material);
+    /// Gets a material by ID.
+    pub fn get_material(&self, id: &str) -> Option<Arc<Material>> {
+        self.materials.get(id).cloned()
     }
 
-    /// Gets a material by name.
+    /// Gets a mutable reference to a material by ID.
     ///
-    /// Returns `None` if the material doesn't exist.
-    pub fn get_material(&self, name: &str) -> Option<&Material> {
-        self.materials.get(name)
+    /// Note: This will create a new Arc if the material is shared.
+    pub fn get_material_mut(&mut self, id: &str) -> Option<&mut Material> {
+        self.materials.get_mut(id).and_then(Arc::get_mut)
     }
 
-    /// Gets a mutable reference to a material by name.
-    ///
-    /// This allows modifying material properties or textures after creation.
-    pub fn get_material_mut(&mut self, name: &str) -> Option<&mut Material> {
-        self.materials.get_mut(name)
+    /// Checks if a material exists.
+    pub fn contains_material(&self, id: &str) -> bool {
+        self.materials.contains_key(id)
     }
 
-    /// Checks if a material exists in the cache.
-    pub fn contains_material(&self, name: &str) -> bool {
-        self.materials.contains_key(name)
-    }
-
-    /// Removes a material from the cache.
-    ///
-    /// Returns `true` if the material existed and was removed.
-    pub fn remove_material(&mut self, name: &str) -> bool {
-        if self.materials.remove(name).is_some() {
-            debug!("Material '{}' removed from cache", name);
+    /// Removes a material.
+    pub fn remove_material(&mut self, id: &str) -> bool {
+        if self.materials.remove(id).is_some() {
+            debug!("Material '{}' removed from cache", id);
             true
         } else {
             false
@@ -412,210 +617,173 @@ mod tests {
     }
 
     #[test]
-    fn test_material_properties_builder() {
-        let props = MaterialProperties::new()
-            .with_base_color([0.5, 0.5, 0.5, 1.0])
-            .with_metallic(0.8)
-            .with_roughness(0.2)
-            .with_emissive_strength(1.5);
-
-        assert_eq!(props.base_color, [0.5, 0.5, 0.5, 1.0]);
-        assert_eq!(props.metallic, 0.8);
-        assert_eq!(props.roughness, 0.2);
-        assert_eq!(props.emissive_strength, 1.5);
+    fn test_extended_pbr_defaults() {
+        let props = ExtendedPbrProperties::default();
+        assert_eq!(props.clearcoat, 0.0);
+        assert_eq!(props.sheen, 0.0);
+        assert_eq!(props.transmission, 0.0);
+        assert_eq!(props.ior, 1.5);
     }
 
     #[test]
-    fn test_material_properties_clamping() {
-        let props = MaterialProperties::new()
-            .with_metallic(1.5) // Should clamp to 1.0
-            .with_roughness(-0.5); // Should clamp to 0.0
-
-        assert_eq!(props.metallic, 1.0);
-        assert_eq!(props.roughness, 0.0);
+    fn test_parallax_properties_defaults() {
+        let props = ParallaxProperties::default();
+        assert_eq!(props.height_scale, 0.05);
+        assert_eq!(props.enabled, 0);
     }
 
     #[test]
-    fn test_material_manager_creation() {
-        let manager = MaterialManager::new();
-        assert_eq!(manager.material_count(), 0);
+    fn test_extended_pbr_builder() {
+        let props = ExtendedPbrProperties::new()
+            .with_clearcoat(0.8)
+            .with_transmission(0.9);
+
+        assert_eq!(props.clearcoat, 0.8);
+        assert_eq!(props.transmission, 0.9);
     }
 
     #[test]
-    fn test_material_manager_contains() {
-        let manager = MaterialManager::new();
-        assert!(!manager.contains_material("test"));
+    fn test_parallax_builder() {
+        let props = ParallaxProperties::new()
+            .enabled(true)
+            .with_height_scale(0.08);
+
+        assert_eq!(props.enabled, 1);
+        assert_eq!(props.height_scale, 0.08);
     }
 
     #[test]
-    fn test_material_manager_remove_nonexistent() {
-        let mut manager = MaterialManager::new();
-        assert!(!manager.remove_material("nonexistent"));
+    fn test_material_layer() {
+        let layer = MaterialLayer::new("layer1", "material1")
+            .with_opacity(0.5)
+            .with_blend_mode(BlendMode::Multiply);
+
+        assert_eq!(layer.name, "layer1");
+        assert_eq!(layer.opacity, 0.5);
+        assert_eq!(layer.blend_mode, BlendMode::Multiply);
     }
 
     #[test]
-    fn test_material_manager_clear() {
-        let mut manager = MaterialManager::new();
-        manager.clear();
-        assert_eq!(manager.material_count(), 0);
+    fn test_extended_pbr_clearcoat() {
+        let props = ExtendedPbrProperties::new()
+            .with_clearcoat(0.9)
+            .with_clearcoat_roughness(0.05);
+
+        assert_eq!(props.clearcoat, 0.9);
+        assert_eq!(props.clearcoat_roughness, 0.05);
     }
 
     #[test]
-    fn test_material_properties_metallic_clamping_upper() {
-        let props = MaterialProperties::new().with_metallic(2.5);
-        assert_eq!(props.metallic, 1.0);
+    fn test_extended_pbr_sheen() {
+        let props = ExtendedPbrProperties::new()
+            .with_sheen(0.7)
+            .with_sheen_tint(0.5);
+
+        assert_eq!(props.sheen, 0.7);
+        assert_eq!(props.sheen_tint, 0.5);
     }
 
     #[test]
-    fn test_material_properties_metallic_clamping_lower() {
-        let props = MaterialProperties::new().with_metallic(-1.0);
-        assert_eq!(props.metallic, 0.0);
+    fn test_extended_pbr_transmission() {
+        let props = ExtendedPbrProperties::new()
+            .with_transmission(0.9)
+            .with_ior(1.5);
+
+        assert_eq!(props.transmission, 0.9);
+        assert_eq!(props.ior, 1.5);
     }
 
     #[test]
-    fn test_material_properties_roughness_clamping_upper() {
-        let props = MaterialProperties::new().with_roughness(10.0);
-        assert_eq!(props.roughness, 1.0);
+    fn test_extended_pbr_anisotropy() {
+        let props = ExtendedPbrProperties::new()
+            .with_anisotropy(0.7)
+            .with_anisotropy_rotation(0.25);
+
+        assert_eq!(props.anisotropy, 0.7);
+        assert_eq!(props.anisotropy_rotation, 0.25);
     }
 
     #[test]
-    fn test_material_properties_roughness_clamping_lower() {
-        let props = MaterialProperties::new().with_roughness(-5.0);
-        assert_eq!(props.roughness, 0.0);
+    fn test_parallax_enabled() {
+        let props = ParallaxProperties::new().enabled(true);
+        assert_eq!(props.enabled, 1);
+
+        let props2 = ParallaxProperties::new().enabled(false);
+        assert_eq!(props2.enabled, 0);
     }
 
     #[test]
-    fn test_material_properties_emissive_no_clamping() {
-        let props = MaterialProperties::new().with_emissive_strength(5.0);
-        assert_eq!(props.emissive_strength, 5.0);
-
-        let props2 = MaterialProperties::new().with_emissive_strength(-1.0);
-        assert_eq!(props2.emissive_strength, -1.0);
+    fn test_parallax_height_scale() {
+        let props = ParallaxProperties::new().with_height_scale(0.08);
+        assert_eq!(props.height_scale, 0.08);
     }
 
     #[test]
-    fn test_material_properties_base_color() {
-        let color = [0.2, 0.4, 0.6, 0.8];
-        let props = MaterialProperties::new().with_base_color(color);
-        assert_eq!(props.base_color, color);
-    }
+    fn test_parallax_samples() {
+        let props = ParallaxProperties::new()
+            .with_min_samples(16)
+            .with_max_samples(48);
 
-    #[test]
-    fn test_material_properties_chaining() {
-        let props = MaterialProperties::new()
-            .with_base_color([0.5, 0.5, 0.5, 1.0])
-            .with_metallic(0.7)
-            .with_roughness(0.3)
-            .with_emissive_strength(2.0);
-
-        assert_eq!(props.base_color, [0.5, 0.5, 0.5, 1.0]);
-        assert_eq!(props.metallic, 0.7);
-        assert_eq!(props.roughness, 0.3);
-        assert_eq!(props.emissive_strength, 2.0);
+        assert_eq!(props.min_samples, 16);
+        assert_eq!(props.max_samples, 48);
     }
 
     #[test]
     fn test_material_properties_size() {
         assert_eq!(std::mem::size_of::<MaterialProperties>(), 32);
+        assert_eq!(std::mem::size_of::<ExtendedPbrProperties>(), 32);
+        assert_eq!(std::mem::size_of::<ParallaxProperties>(), 16);
     }
 
     #[test]
-    fn test_material_properties_alignment() {
-        assert_eq!(std::mem::align_of::<MaterialProperties>(), 4);
+    fn test_blend_mode_equality() {
+        assert_eq!(BlendMode::Replace, BlendMode::Replace);
+        assert_ne!(BlendMode::Add, BlendMode::Multiply);
     }
 
     #[test]
-    fn test_material_properties_pod() {
-        let props = MaterialProperties::default();
-        let bytes = bytemuck::bytes_of(&props);
-        assert_eq!(bytes.len(), 32);
+    fn test_layer_opacity_clamping() {
+        let layer = MaterialLayer::new("test", "mat").with_opacity(2.0);
+        assert_eq!(layer.opacity, 1.0);
+
+        let layer2 = MaterialLayer::new("test", "mat").with_opacity(-0.5);
+        assert_eq!(layer2.opacity, 0.0);
     }
 
     #[test]
-    fn test_material_properties_equality() {
-        let props1 = MaterialProperties::new().with_metallic(0.5);
-        let props2 = MaterialProperties::new().with_metallic(0.5);
-        assert_eq!(props1, props2);
+    fn test_clearcoat_clamping() {
+        let props = ExtendedPbrProperties::new().with_clearcoat(1.5);
+        assert_eq!(props.clearcoat, 1.0);
+
+        let props2 = ExtendedPbrProperties::new().with_clearcoat(-0.5);
+        assert_eq!(props2.clearcoat, 0.0);
     }
 
     #[test]
-    fn test_material_properties_inequality() {
-        let props1 = MaterialProperties::new().with_metallic(0.5);
-        let props2 = MaterialProperties::new().with_metallic(0.6);
-        assert_ne!(props1, props2);
+    fn test_ior_clamping() {
+        let props = ExtendedPbrProperties::new().with_ior(5.0);
+        assert_eq!(props.ior, 3.0);
+
+        let props2 = ExtendedPbrProperties::new().with_ior(0.5);
+        assert_eq!(props2.ior, 1.0);
     }
 
     #[test]
-    fn test_material_properties_clone() {
-        let props1 = MaterialProperties::new().with_roughness(0.8);
-        let props2 = props1;
-        assert_eq!(props1.roughness, props2.roughness);
+    fn test_parallax_height_scale_clamping() {
+        let props = ParallaxProperties::new().with_height_scale(0.5);
+        assert_eq!(props.height_scale, 0.1);
+
+        let props2 = ParallaxProperties::new().with_height_scale(-0.1);
+        assert_eq!(props2.height_scale, 0.0);
     }
 
     #[test]
-    fn test_material_properties_copy() {
-        let props1 = MaterialProperties::new();
-        let props2 = props1;
-        assert_eq!(props1.metallic, props2.metallic);
-    }
+    fn test_parallax_sample_clamping() {
+        let props = ParallaxProperties::new()
+            .with_min_samples(2)
+            .with_max_samples(100);
 
-    #[test]
-    fn test_material_properties_zero_metallic() {
-        let props = MaterialProperties::new().with_metallic(0.0);
-        assert_eq!(props.metallic, 0.0);
-    }
-
-    #[test]
-    fn test_material_properties_full_metallic() {
-        let props = MaterialProperties::new().with_metallic(1.0);
-        assert_eq!(props.metallic, 1.0);
-    }
-
-    #[test]
-    fn test_material_properties_zero_roughness() {
-        let props = MaterialProperties::new().with_roughness(0.0);
-        assert_eq!(props.roughness, 0.0);
-    }
-
-    #[test]
-    fn test_material_properties_full_roughness() {
-        let props = MaterialProperties::new().with_roughness(1.0);
-        assert_eq!(props.roughness, 1.0);
-    }
-
-    #[test]
-    fn test_material_manager_default() {
-        let manager = MaterialManager::default();
-        assert_eq!(manager.material_count(), 0);
-    }
-
-    #[test]
-    fn test_material_properties_realistic_metal() {
-        let metal = MaterialProperties::new()
-            .with_metallic(1.0)
-            .with_roughness(0.2);
-
-        assert_eq!(metal.metallic, 1.0);
-        assert_eq!(metal.roughness, 0.2);
-    }
-
-    #[test]
-    fn test_material_properties_realistic_plastic() {
-        let plastic = MaterialProperties::new()
-            .with_metallic(0.0)
-            .with_roughness(0.6);
-
-        assert_eq!(plastic.metallic, 0.0);
-        assert_eq!(plastic.roughness, 0.6);
-    }
-
-    #[test]
-    fn test_material_properties_emissive_object() {
-        let emissive = MaterialProperties::new()
-            .with_emissive_strength(3.0)
-            .with_base_color([1.0, 0.8, 0.0, 1.0]);
-
-        assert_eq!(emissive.emissive_strength, 3.0);
-        assert_eq!(emissive.base_color, [1.0, 0.8, 0.0, 1.0]);
+        assert_eq!(props.min_samples, 4);
+        assert_eq!(props.max_samples, 64);
     }
 }

@@ -98,6 +98,30 @@ pub mod post_process_tone_map_fs {
     }
 }
 
+/// Compiled fragment shader for advanced materials with parallax and extended PBR.
+pub mod advanced_material_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/advanced_material.frag"
+    }
+}
+
+/// Compiled vertex shader for material layer blending.
+pub mod material_layer_blend_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/shaders/material_layer_blend.vert"
+    }
+}
+
+/// Compiled fragment shader for material layer blending.
+pub mod material_layer_blend_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/material_layer_blend.frag"
+    }
+}
+
 /// Compiled vertex shader for skybox rendering.
 pub mod skybox_vs {
     vulkano_shaders::shader! {
