@@ -8,7 +8,7 @@
 //! - Runtime scene creation (without editor data)
 
 use praxis_scene::{
-    CameraMode, EditorCamera, EditorData, EditorPreferences, EntityDefinition, GizmoMode,
+    EditorCamera, EditorData, EditorPreferences, EntityDefinition, GizmoMode,
     SceneDefinition, SceneLoader, TransformDef, ViewportSettings,
 };
 

@@ -182,7 +182,7 @@ fn demo_round_trip(world: &mut World) {
         let deserialized = SerializableCommand::from_ron(&ron).expect("Failed to deserialize");
 
         // Convert back to trait object
-        let mut trait_object = deserialized.to_trait_object();
+        let trait_object = deserialized.to_trait_object();
 
         // Verify type ID matches
         assert_eq!(trait_object.type_id(), type_id);
