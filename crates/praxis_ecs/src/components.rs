@@ -2011,6 +2011,104 @@ impl From<String> for Skybox {
     }
 }
 
+/// Light probe component for capturing irradiance at a point.
+#[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct LightProbeComponent {
+    pub id: String,
+}
+
+impl LightProbeComponent {
+    pub fn new(id: impl Into<String>) -> Self {
+        Self { id: id.into() }
+    }
+
+    #[allow(dead_code)]
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+}
+
+impl From<&str> for LightProbeComponent {
+    fn from(id: &str) -> Self {
+        Self::new(id)
+    }
+}
+
+impl From<String> for LightProbeComponent {
+    fn from(id: String) -> Self {
+        Self { id }
+    }
+}
+
+/// Area light component for polygon lights.
+#[derive(Component, Debug, Clone, Copy)]
+#[allow(dead_code)]
+pub struct AreaLightComponent {
+    pub light_type: AreaLightType,
+    pub color: Vec3,
+    pub intensity: f32,
+    pub two_sided: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(dead_code)]
+pub enum AreaLightType {
+    Rectangle { width: f32, height: f32 },
+    Disk { radius: f32 },
+    Sphere { radius: f32 },
+}
+
+#[allow(dead_code)]
+impl AreaLightComponent {
+    pub fn rectangle(width: f32, height: f32) -> Self {
+        Self {
+            light_type: AreaLightType::Rectangle { width, height },
+            color: Vec3::ONE,
+            intensity: 1.0,
+            two_sided: false,
+        }
+    }
+
+    pub fn disk(radius: f32) -> Self {
+        Self {
+            light_type: AreaLightType::Disk { radius },
+            color: Vec3::ONE,
+            intensity: 1.0,
+            two_sided: false,
+        }
+    }
+
+    pub fn sphere(radius: f32) -> Self {
+        Self {
+            light_type: AreaLightType::Sphere { radius },
+            color: Vec3::ONE,
+            intensity: 1.0,
+            two_sided: true,
+        }
+    }
+
+    pub fn with_color(mut self, color: Vec3) -> Self {
+        self.color = color;
+        self
+    }
+
+    pub fn with_intensity(mut self, intensity: f32) -> Self {
+        self.intensity = intensity;
+        self
+    }
+
+    pub fn with_two_sided(mut self, two_sided: bool) -> Self {
+        self.two_sided = two_sided;
+        self
+    }
+}
+
+impl Default for AreaLightComponent {
+    fn default() -> Self {
+        Self::rectangle(1.0, 1.0)
+    }
+}
+
 /// Bounding volume component for spatial optimization.
 ///
 /// Stores an axis-aligned bounding box (AABB) used for frustum culling,

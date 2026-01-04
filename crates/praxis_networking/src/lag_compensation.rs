@@ -406,9 +406,10 @@ mod tests {
         buffer.add_state(HistoricalState::new(50, transform));
         buffer.add_state(HistoricalState::new(200, transform));
         
-        // Old state should be removed
-        assert_eq!(buffer.len(), 2);
+        // Old states should be removed (cutoff = 200 - 100 = 100, so states at 0 and 50 are removed)
+        assert_eq!(buffer.len(), 1);
         assert!(buffer.get_state_at(0).is_none());
+        assert!(buffer.get_state_at(50).is_none());
     }
 
     #[test]

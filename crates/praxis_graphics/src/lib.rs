@@ -1677,8 +1677,34 @@ pub use visual_feedback::{
     create_axis_indicator, create_bounding_box, create_grid, create_selection_outline,
     AxisIndicatorConfig, GridConfig,
 };
+pub use light_probe::{
+    LightProbe, LightProbeGrid, LightProbeManager, LightProbeData, ProbeBlendMode,
+    MAX_LIGHT_PROBES, PROBE_IRRADIANCE_COEFFS,
+};
+pub use volumetric_fog::{
+    VolumetricFog, VolumetricFogConfig, VolumetricFogRenderer, FogDensityFunction,
+    MAX_RAYMARCH_STEPS,
+};
+pub use god_rays::{
+    GodRays, GodRaysConfig, GodRaysRenderer, RadialBlurPass,
+};
+pub use area_lights::{
+    AreaLight, AreaLightType, AreaLightData, AreaLightManager, LtcMatrixData,
+    MAX_AREA_LIGHTS,
+};
+pub use light_linking::{
+    LightLinkingMask, LightLinkingManager, LightChannel, DEFAULT_LIGHT_CHANNEL,
+};
 
 pub mod environment_probe;
+pub mod light_probe;
+pub mod volumetric_fog;
+pub mod god_rays;
+pub mod area_lights;
+pub mod light_linking;
+
+#[cfg(test)]
+mod advanced_lighting_tests;
 
 #[cfg(test)]
 mod tests {

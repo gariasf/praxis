@@ -287,7 +287,7 @@ mod tests {
         let entity = world.spawn((
             NetworkId::new(1),
             ReplicatedTransform::new(Vec3::ZERO, Quat::IDENTITY, Vec3::ONE),
-        ));
+        )).id();
         
         let mut registry = ReplicationRegistry::new();
         registry.register_transform();

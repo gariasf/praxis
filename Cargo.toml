@@ -205,6 +205,10 @@ path = "examples/editor_camera_demo.rs"
 name = "selection_demo"
 path = "examples/selection_demo.rs"
 
+[[example]]
+name = "advanced_lighting_demo"
+path = "examples/advanced_lighting_demo.rs"
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 vulkano = "0.35.1"

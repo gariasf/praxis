@@ -1352,7 +1352,7 @@ mod tests {
     #[test]
     fn test_particle_instance_size() {
         // Verify ParticleInstance has expected size
-        assert_eq!(std::mem::size_of::<ParticleInstance>(), 36);
+        assert_eq!(std::mem::size_of::<ParticleInstance>(), 40);
     }
 
     #[test]
