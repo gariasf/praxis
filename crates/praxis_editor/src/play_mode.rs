@@ -186,20 +186,16 @@ impl PlayModeSystem {
     /// Gets the viewport border color based on current state
     pub fn viewport_border_color(&self) -> [f32; 3] {
         match self.state {
-            PlayModeState::Edit => [0.3, 0.3, 0.35], // Dark gray
+            PlayModeState::Edit => [0.3, 0.3, 0.35],   // Dark gray
             PlayModeState::Playing => [0.2, 0.8, 0.3], // Green
-            PlayModeState::Paused => [0.9, 0.7, 0.2], // Orange/Yellow
+            PlayModeState::Paused => [0.9, 0.7, 0.2],  // Orange/Yellow
         }
     }
 
     /// Gets the viewport border color as egui Color32
     pub fn viewport_border_color_egui(&self) -> egui::Color32 {
         let [r, g, b] = self.viewport_border_color();
-        egui::Color32::from_rgb(
-            (r * 255.0) as u8,
-            (g * 255.0) as u8,
-            (b * 255.0) as u8,
-        )
+        egui::Color32::from_rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8)
     }
 
     /// Enters play mode by taking a snapshot and transitioning state
@@ -369,7 +365,11 @@ impl PlayModeSystem {
     }
 
     /// Serializes a single entity to an entity definition
-    fn serialize_entity(&self, world: &BevyWorld, entity: Entity) -> praxis_scene::EntityDefinition {
+    fn serialize_entity(
+        &self,
+        world: &BevyWorld,
+        entity: Entity,
+    ) -> praxis_scene::EntityDefinition {
         use praxis_scene::{
             CameraDef, CameraType, DirectionalLightDef, EntityDefinition, PointLightDef,
             TransformDef,
@@ -424,9 +424,7 @@ impl PlayModeSystem {
                     top: None,
                     near: persp.near,
                     far: persp.far,
-                    is_active: world
-                        .get::<Camera>(entity)
-                        .map_or(true, |c| c.is_active),
+                    is_active: world.get::<Camera>(entity).map_or(true, |c| c.is_active),
                     priority: world.get::<Camera>(entity).map_or(0, |c| c.priority),
                 });
             }
@@ -442,9 +440,7 @@ impl PlayModeSystem {
                     top: Some(ortho.top),
                     near: ortho.near,
                     far: ortho.far,
-                    is_active: world
-                        .get::<Camera>(entity)
-                        .map_or(true, |c| c.is_active),
+                    is_active: world.get::<Camera>(entity).map_or(true, |c| c.is_active),
                     priority: world.get::<Camera>(entity).map_or(0, |c| c.priority),
                 });
             }
@@ -522,7 +518,7 @@ impl Default for PlayModeSystem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use praxis_ecs::World;
+    use praxis_ecs::{GlobalTransform, World};
 
     #[test]
     fn test_play_mode_system_creation() {

@@ -81,8 +81,6 @@ impl CameraController {
     }
 }
 
-/// This file provides common utilities for examples.
-/// Run other examples like `cargo run --example physics_demo` instead.
 fn main() {
     eprintln!("common.rs is a utility module, not a standalone example.");
     eprintln!("Run other examples like: cargo run --example physics_demo");

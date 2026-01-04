@@ -163,7 +163,45 @@
 //! - History info: Shows undo/redo stack counts
 //!
 //! See `COMMAND_SYSTEM.md` for detailed documentation and examples.
+//!
+//! # Editor Camera Controller
+//!
+//! The editor provides a dedicated camera controller with orbit controls, separate from game cameras:
+//! - **Orbit rotation**: Alt+LMB drag to rotate around target point
+//! - **Pan movement**: Alt+MMB drag to pan camera view
+//! - **Zoom**: Mouse scroll wheel to move closer/farther from target
+//! - **Focus on selection**: F key to frame selected entities in view
+//! - **Smooth interpolation**: Smooth camera movement with configurable speed
+//!
+//! **Setup:**
+//! ```rust,no_run
+//! use praxis_editor::{EditorCameraController, EditorCamera, update_editor_camera_system};
+//! use praxis_ecs::{World, Schedule, PerspectiveCameraBundle};
+//! use praxis_math::Vec3;
+//!
+//! let mut world = World::new();
+//! world.insert_resource(EditorCameraController::new());
+//!
+//! // Create editor camera entity
+//! world.spawn((
+//!     PerspectiveCameraBundle::new(Vec3::new(0.0, 5.0, 10.0), 70.0_f32.to_radians(), 16.0/9.0),
+//!     EditorCamera, // Marker component for editor camera
+//! ));
+//!
+//! let mut schedule = Schedule::default();
+//! schedule.add_systems(update_editor_camera_system);
+//! ```
+//!
+//! **Features:**
+//! - Independent from game cameras (use EditorCamera marker component)
+//! - Orbits around a target point with configurable distance
+//! - Smooth interpolation for all movements
+//! - Automatic framing of selected entities
+//! - Customizable sensitivity and constraints
+//!
+//! See the [`camera_controller`] module for detailed API documentation.
 
+mod camera_controller;
 mod command_shortcuts;
 pub mod drag_drop;
 mod editor_mode;
@@ -177,6 +215,7 @@ pub mod selection;
 mod toolbar;
 mod undo;
 
+pub use camera_controller::{update_editor_camera_system, EditorCamera, EditorCameraController};
 pub use command_shortcuts::{handle_command_shortcuts, is_redo_pressed, is_undo_pressed};
 pub use drag_drop::{DragDropPayload, DragDropSystem};
 pub use editor_mode::EditorMode;

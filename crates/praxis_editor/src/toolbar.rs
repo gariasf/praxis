@@ -236,12 +236,11 @@ pub fn render_toolbar(ctx: &egui::Context, state: &mut ToolbarState) -> Vec<Tool
 
                 // Play button - green when ready to play
                 let play_button = if is_edit {
-                    egui::Button::new("▶ Play")
-                        .fill(egui::Color32::from_rgb(40, 120, 50))
+                    egui::Button::new("▶ Play").fill(egui::Color32::from_rgb(40, 120, 50))
                 } else {
                     egui::Button::new("▶ Play")
                 };
-                
+
                 if ui
                     .add_enabled(is_edit, play_button)
                     .on_hover_text("Start play mode (F5)")
@@ -252,8 +251,7 @@ pub fn render_toolbar(ctx: &egui::Context, state: &mut ToolbarState) -> Vec<Tool
 
                 // Pause button - yellow/orange when playing
                 let pause_button = if is_playing {
-                    egui::Button::new("⏸ Pause")
-                        .fill(egui::Color32::from_rgb(200, 150, 40))
+                    egui::Button::new("⏸ Pause").fill(egui::Color32::from_rgb(200, 150, 40))
                 } else {
                     egui::Button::new("⏸ Pause")
                 };
@@ -268,8 +266,7 @@ pub fn render_toolbar(ctx: &egui::Context, state: &mut ToolbarState) -> Vec<Tool
 
                 // Stop button - red when playing
                 let stop_button = if is_playing {
-                    egui::Button::new("⏹ Stop")
-                        .fill(egui::Color32::from_rgb(180, 40, 40))
+                    egui::Button::new("⏹ Stop").fill(egui::Color32::from_rgb(180, 40, 40))
                 } else {
                     egui::Button::new("⏹ Stop")
                 };
