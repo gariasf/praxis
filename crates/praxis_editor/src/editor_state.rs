@@ -1,12 +1,13 @@
 //! Core editor state management and coordination.
 
+use crate::drag_drop::DragDropSystem;
 use crate::editor_mode::EditorMode;
 use crate::menu_bar::{
     check_keyboard_shortcuts, handle_menu_action, render_menu_bar, MenuBarState,
 };
 use crate::panels::{
-    AssetsPanel, ConsolePanel, EditorPanel, HierarchyPanel, InspectorPanel, LogBuffer,
-    SceneViewPanel,
+    AssetsPanel, AssetsPanelExt, ConsolePanel, EditorPanel, HierarchyPanel, InspectorPanel,
+    LogBuffer, SceneViewPanel, SceneViewPanelExt,
 };
 use crate::play_mode::PlayModeSystem;
 use crate::selection::SelectionSystem;
@@ -437,6 +438,11 @@ impl EditorState {
         selection_system: Option<&mut SelectionSystem>,
         render_context: Option<&mut praxis_graphics::RenderContext>,
     ) {
+        // Get or create drag-drop system from world
+        let drag_drop_system = world
+            .as_ref()
+            .and_then(|w| w.get_resource::<DragDropSystem>().cloned());
+
         let mut tab_viewer = EditorTabViewer {
             scene_panel: &mut self.scene_panel,
             hierarchy_panel: &mut self.hierarchy_panel,
@@ -447,11 +453,22 @@ impl EditorState {
             undo_system,
             selection_system,
             render_context,
+            drag_drop_system,
         };
 
         DockArea::new(&mut self.dock_state)
             .style(Style::from_egui(ctx.style().as_ref()))
             .show(ctx, &mut tab_viewer);
+
+        // Update drag-drop system in world
+        if let Some(mut dnd) = tab_viewer.drag_drop_system.take() {
+            dnd.reset_frame();
+            if let Some(w) = tab_viewer.world {
+                if let Some(resource) = w.get_resource_mut::<DragDropSystem>() {
+                    *resource = dnd;
+                }
+            }
+        }
     }
 }
 
@@ -471,6 +488,7 @@ struct EditorTabViewer<'a> {
     undo_system: Option<&'a mut UndoRedoSystem>,
     selection_system: Option<&'a mut SelectionSystem>,
     render_context: Option<&'a mut praxis_graphics::RenderContext>,
+    drag_drop_system: Option<DragDropSystem>,
 }
 
 impl TabViewer for EditorTabViewer<'_> {
@@ -489,9 +507,24 @@ impl TabViewer for EditorTabViewer<'_> {
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
         match tab {
             EditorTab::Scene => {
-                let world_ref = self.world.as_ref().map(|w| w as &World);
-                self.scene_panel
-                    .ui(ui, world_ref, self.render_context.as_deref_mut());
+                // Use drag-drop aware rendering for scene panel
+                if let (Some(world), Some(drag_drop)) = (
+                    self.world.as_mut().map(|w| w.inner_mut()),
+                    self.drag_drop_system.as_mut(),
+                ) {
+                    self.scene_panel.ui_with_world(
+                        ui,
+                        Some(world),
+                        Some(drag_drop),
+                        self.undo_system.as_deref_mut(),
+                        self.selection_system.as_deref_mut(),
+                    );
+                } else {
+                    // Fallback to basic UI
+                    let world_ref = self.world.as_ref().map(|w| w as &World);
+                    self.scene_panel
+                        .ui(ui, world_ref, self.render_context.as_deref_mut());
+                }
             }
             EditorTab::Hierarchy => {
                 // Check if we have all required resources
@@ -524,9 +557,18 @@ impl TabViewer for EditorTabViewer<'_> {
                     .ui(ui, world_ref, self.render_context.as_deref_mut());
             }
             EditorTab::Assets => {
-                let world_ref = self.world.as_ref().map(|w| w as &World);
-                self.assets_panel
-                    .ui(ui, world_ref, self.render_context.as_deref_mut());
+                // Use drag-drop aware rendering for assets panel
+                if let Some(drag_drop) = self.drag_drop_system.as_mut() {
+                    self.assets_panel.ui_with_drag_drop(
+                        ui,
+                        self.render_context.as_deref_mut(),
+                        Some(drag_drop),
+                    );
+                } else {
+                    let world_ref = self.world.as_ref().map(|w| w as &World);
+                    self.assets_panel
+                        .ui(ui, world_ref, self.render_context.as_deref_mut());
+                }
             }
         }
     }

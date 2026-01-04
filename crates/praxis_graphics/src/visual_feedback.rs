@@ -68,10 +68,10 @@ impl Default for AxisIndicatorConfig {
 /// A `LineBatch` containing all grid lines
 pub fn create_grid(config: &GridConfig) -> LineBatch {
     let mut batch = LineBatch::with_capacity((config.divisions * 4 + 4) as usize);
-    
+
     let half_size = config.size / 2.0;
     let step = config.size / config.divisions as f32;
-    
+
     // Draw lines parallel to X axis (along Z)
     for i in 0..=config.divisions {
         let z = -half_size + i as f32 * step;
@@ -80,14 +80,14 @@ pub fn create_grid(config: &GridConfig) -> LineBatch {
         } else {
             config.line_color
         };
-        
+
         batch.add(
             Vec3::new(-half_size, config.height, z),
             Vec3::new(half_size, config.height, z),
             color,
         );
     }
-    
+
     // Draw lines parallel to Z axis (along X)
     for i in 0..=config.divisions {
         let x = -half_size + i as f32 * step;
@@ -96,14 +96,14 @@ pub fn create_grid(config: &GridConfig) -> LineBatch {
         } else {
             config.line_color
         };
-        
+
         batch.add(
             Vec3::new(x, config.height, -half_size),
             Vec3::new(x, config.height, half_size),
             color,
         );
     }
-    
+
     batch
 }
 
@@ -122,30 +122,30 @@ pub fn create_grid(config: &GridConfig) -> LineBatch {
 /// A `LineBatch` containing the three axis lines
 pub fn create_axis_indicator(config: &AxisIndicatorConfig) -> LineBatch {
     let mut batch = LineBatch::with_capacity(3);
-    
+
     let origin = config.position;
-    
+
     // X axis - Red
     batch.add(
         origin,
         origin + Vec3::X * config.length,
         Vec3::new(1.0, 0.0, 0.0),
     );
-    
+
     // Y axis - Green
     batch.add(
         origin,
         origin + Vec3::Y * config.length,
         Vec3::new(0.0, 1.0, 0.0),
     );
-    
+
     // Z axis - Blue
     batch.add(
         origin,
         origin + Vec3::Z * config.length,
         Vec3::new(0.0, 0.0, 1.0),
     );
-    
+
     batch
 }
 
@@ -162,28 +162,76 @@ pub fn create_axis_indicator(config: &AxisIndicatorConfig) -> LineBatch {
 /// A `LineBatch` containing the 12 edges of the bounding box
 pub fn create_bounding_box(center: Vec3, size: Vec3, color: Vec3) -> LineBatch {
     let mut batch = LineBatch::with_capacity(12);
-    
+
     let min = center - size;
     let max = center + size;
-    
+
     // Bottom face (4 edges)
-    batch.add(Vec3::new(min.x, min.y, min.z), Vec3::new(max.x, min.y, min.z), color);
-    batch.add(Vec3::new(max.x, min.y, min.z), Vec3::new(max.x, min.y, max.z), color);
-    batch.add(Vec3::new(max.x, min.y, max.z), Vec3::new(min.x, min.y, max.z), color);
-    batch.add(Vec3::new(min.x, min.y, max.z), Vec3::new(min.x, min.y, min.z), color);
-    
+    batch.add(
+        Vec3::new(min.x, min.y, min.z),
+        Vec3::new(max.x, min.y, min.z),
+        color,
+    );
+    batch.add(
+        Vec3::new(max.x, min.y, min.z),
+        Vec3::new(max.x, min.y, max.z),
+        color,
+    );
+    batch.add(
+        Vec3::new(max.x, min.y, max.z),
+        Vec3::new(min.x, min.y, max.z),
+        color,
+    );
+    batch.add(
+        Vec3::new(min.x, min.y, max.z),
+        Vec3::new(min.x, min.y, min.z),
+        color,
+    );
+
     // Top face (4 edges)
-    batch.add(Vec3::new(min.x, max.y, min.z), Vec3::new(max.x, max.y, min.z), color);
-    batch.add(Vec3::new(max.x, max.y, min.z), Vec3::new(max.x, max.y, max.z), color);
-    batch.add(Vec3::new(max.x, max.y, max.z), Vec3::new(min.x, max.y, max.z), color);
-    batch.add(Vec3::new(min.x, max.y, max.z), Vec3::new(min.x, max.y, min.z), color);
-    
+    batch.add(
+        Vec3::new(min.x, max.y, min.z),
+        Vec3::new(max.x, max.y, min.z),
+        color,
+    );
+    batch.add(
+        Vec3::new(max.x, max.y, min.z),
+        Vec3::new(max.x, max.y, max.z),
+        color,
+    );
+    batch.add(
+        Vec3::new(max.x, max.y, max.z),
+        Vec3::new(min.x, max.y, max.z),
+        color,
+    );
+    batch.add(
+        Vec3::new(min.x, max.y, max.z),
+        Vec3::new(min.x, max.y, min.z),
+        color,
+    );
+
     // Vertical edges (4 edges)
-    batch.add(Vec3::new(min.x, min.y, min.z), Vec3::new(min.x, max.y, min.z), color);
-    batch.add(Vec3::new(max.x, min.y, min.z), Vec3::new(max.x, max.y, min.z), color);
-    batch.add(Vec3::new(max.x, min.y, max.z), Vec3::new(max.x, max.y, max.z), color);
-    batch.add(Vec3::new(min.x, min.y, max.z), Vec3::new(min.x, max.y, max.z), color);
-    
+    batch.add(
+        Vec3::new(min.x, min.y, min.z),
+        Vec3::new(min.x, max.y, min.z),
+        color,
+    );
+    batch.add(
+        Vec3::new(max.x, min.y, min.z),
+        Vec3::new(max.x, max.y, min.z),
+        color,
+    );
+    batch.add(
+        Vec3::new(max.x, min.y, max.z),
+        Vec3::new(max.x, max.y, max.z),
+        color,
+    );
+    batch.add(
+        Vec3::new(min.x, min.y, max.z),
+        Vec3::new(min.x, max.y, max.z),
+        color,
+    );
+
     batch
 }
 
@@ -202,7 +250,7 @@ pub fn create_bounding_box(center: Vec3, size: Vec3, color: Vec3) -> LineBatch {
 /// A `LineBatch` containing the selection outline
 pub fn create_selection_outline(transform: &Mat4, size: Vec3, color: Vec3) -> LineBatch {
     let mut batch = LineBatch::with_capacity(12);
-    
+
     // Define the 8 corners of a unit cube
     let corners = [
         Vec3::new(-size.x, -size.y, -size.z),
@@ -214,31 +262,31 @@ pub fn create_selection_outline(transform: &Mat4, size: Vec3, color: Vec3) -> Li
         Vec3::new(size.x, size.y, size.z),
         Vec3::new(-size.x, size.y, size.z),
     ];
-    
+
     // Transform corners by the entity's transform
     let transformed_corners: Vec<Vec3> = corners
         .iter()
         .map(|&corner| transform.transform_point3(corner))
         .collect();
-    
+
     // Bottom face (4 edges)
     batch.add(transformed_corners[0], transformed_corners[1], color);
     batch.add(transformed_corners[1], transformed_corners[2], color);
     batch.add(transformed_corners[2], transformed_corners[3], color);
     batch.add(transformed_corners[3], transformed_corners[0], color);
-    
+
     // Top face (4 edges)
     batch.add(transformed_corners[4], transformed_corners[5], color);
     batch.add(transformed_corners[5], transformed_corners[6], color);
     batch.add(transformed_corners[6], transformed_corners[7], color);
     batch.add(transformed_corners[7], transformed_corners[4], color);
-    
+
     // Vertical edges (4 edges)
     batch.add(transformed_corners[0], transformed_corners[4], color);
     batch.add(transformed_corners[1], transformed_corners[5], color);
     batch.add(transformed_corners[2], transformed_corners[6], color);
     batch.add(transformed_corners[3], transformed_corners[7], color);
-    
+
     batch
 }
 
@@ -259,11 +307,11 @@ where
 {
     let lines_vec: Vec<_> = lines.into_iter().collect();
     let mut batch = LineBatch::with_capacity(lines_vec.len());
-    
+
     for (start, end, color) in lines_vec {
         batch.add(start, end, color);
     }
-    
+
     batch
 }
 
@@ -275,7 +323,7 @@ mod tests {
     fn test_grid_creation() {
         let config = GridConfig::default();
         let batch = create_grid(&config);
-        
+
         let expected_lines = (config.divisions + 1) * 2;
         assert_eq!(batch.len(), expected_lines as usize);
     }
@@ -284,7 +332,7 @@ mod tests {
     fn test_axis_indicator_creation() {
         let config = AxisIndicatorConfig::default();
         let batch = create_axis_indicator(&config);
-        
+
         assert_eq!(batch.len(), 3);
     }
 
@@ -293,9 +341,9 @@ mod tests {
         let center = Vec3::ZERO;
         let size = Vec3::ONE;
         let color = Vec3::new(1.0, 1.0, 0.0);
-        
+
         let batch = create_bounding_box(center, size, color);
-        
+
         assert_eq!(batch.len(), 12);
     }
 
@@ -304,9 +352,9 @@ mod tests {
         let transform = Mat4::IDENTITY;
         let size = Vec3::new(0.5, 0.5, 0.5);
         let color = Vec3::new(1.0, 0.5, 0.0);
-        
+
         let batch = create_selection_outline(&transform, size, color);
-        
+
         assert_eq!(batch.len(), 12);
     }
 
@@ -317,9 +365,9 @@ mod tests {
             (Vec3::ZERO, Vec3::Y, Vec3::new(0.0, 1.0, 0.0)),
             (Vec3::ZERO, Vec3::Z, Vec3::new(0.0, 0.0, 1.0)),
         ];
-        
+
         let batch = create_gizmo_lines(lines);
-        
+
         assert_eq!(batch.len(), 3);
     }
 
@@ -354,7 +402,7 @@ mod tests {
             axis_color: Vec3::new(1.0, 1.0, 1.0),
             height: 0.5,
         };
-        
+
         let batch = create_grid(&config);
         assert_eq!(batch.len(), 22); // (10+1)*2 = 22 lines
     }
@@ -364,7 +412,7 @@ mod tests {
         let center = Vec3::new(5.0, 10.0, 15.0);
         let size = Vec3::new(2.0, 3.0, 4.0);
         let color = Vec3::ONE;
-        
+
         let batch = create_bounding_box(center, size, color);
         assert_eq!(batch.len(), 12);
     }
@@ -374,7 +422,7 @@ mod tests {
         let translation = Mat4::from_translation(Vec3::new(10.0, 5.0, 0.0));
         let size = Vec3::ONE;
         let color = Vec3::new(1.0, 0.5, 0.0);
-        
+
         let batch = create_selection_outline(&translation, size, color);
         assert_eq!(batch.len(), 12);
     }

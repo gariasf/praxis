@@ -460,8 +460,8 @@ pub fn handle_menu_action(
     current_scene_path: Option<&std::path::Path>,
     set_scene_path: &mut dyn FnMut(Option<std::path::PathBuf>),
 ) {
-    use praxis_utils::{error, info};
     use crate::scene_operations::load_scene_into_world;
+    use praxis_utils::{error, info};
 
     match action {
         // File actions

@@ -259,11 +259,14 @@ pub use menu_bar::{
     check_keyboard_shortcuts, handle_menu_action, render_menu_bar, MenuBarAction, MenuBarState,
 };
 pub use panels::{
-    AssetEntry, AssetImportConfig, AssetType, AssetsPanel, ConsoleLayer, ConsolePanel, EditorPanel,
-    HierarchyPanel, InspectorPanel, LogBuffer, LogLevel, LogMessage, SceneViewPanel, ViewportPanel,
+    AssetEntry, AssetImportConfig, AssetType, AssetsPanel, AssetsPanelExt, ConsoleLayer,
+    ConsolePanel, EditorPanel, HierarchyPanel, InspectorPanel, LogBuffer, LogLevel, LogMessage,
+    SceneViewPanel, SceneViewPanelExt, ViewportPanel,
 };
 pub use play_mode::{PlayModeState, PlayModeSystem, SceneSnapshot, SnapshotMetadata};
-pub use scene_operations::{capture_scene_from_world, load_scene_into_world, show_unsaved_changes_dialog};
+pub use scene_operations::{
+    capture_scene_from_world, load_scene_into_world, show_unsaved_changes_dialog,
+};
 pub use selection::{
     handle_selection_input_system, update_selection_system, Selectable, Selected, SelectionEvent,
     SelectionMode, SelectionSystem,

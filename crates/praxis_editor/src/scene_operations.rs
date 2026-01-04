@@ -52,7 +52,10 @@ pub fn capture_scene_from_world(world: &mut World, scene_name: &str) -> SceneDef
 }
 
 /// Recursively captures an entity and its children.
-fn capture_entity_recursive(world: &World, entity: bevy_ecs::entity::Entity) -> Option<EntityDefinition> {
+fn capture_entity_recursive(
+    world: &World,
+    entity: bevy_ecs::entity::Entity,
+) -> Option<EntityDefinition> {
     let mut entity_def = EntityDefinition::new();
 
     if let Some(name) = world.get::<Name>(entity) {

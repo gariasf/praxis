@@ -734,7 +734,11 @@ impl AssetsPanel {
     }
 
     /// Renders the asset grid
-    fn render_asset_grid(&mut self, ui: &mut Ui) {
+    fn render_asset_grid(
+        &mut self,
+        ui: &mut Ui,
+        mut drag_drop_system: Option<&mut crate::drag_drop::DragDropSystem>,
+    ) {
         let available_width = ui.available_width();
         let item_width = THUMBNAIL_SIZE + GRID_SPACING * 2.0;
         let columns = (available_width / item_width).max(1.0) as usize;
@@ -750,7 +754,7 @@ impl AssetsPanel {
             for row_start in (0..filtered_entries.len()).step_by(columns) {
                 ui.horizontal(|ui| {
                     for entry in filtered_entries.iter().skip(row_start).take(columns) {
-                        self.render_asset_item(ui, entry);
+                        self.render_asset_item(ui, entry, drag_drop_system.as_deref_mut());
                     }
                 });
             }
@@ -758,7 +762,12 @@ impl AssetsPanel {
     }
 
     /// Renders a single asset item
-    fn render_asset_item(&mut self, ui: &mut Ui, entry: &AssetEntry) {
+    fn render_asset_item(
+        &mut self,
+        ui: &mut Ui,
+        entry: &AssetEntry,
+        drag_drop_system: Option<&mut crate::drag_drop::DragDropSystem>,
+    ) {
         let item_size = Vec2::new(THUMBNAIL_SIZE + GRID_SPACING, THUMBNAIL_SIZE + 40.0);
         let (rect, response) = ui.allocate_exact_size(item_size, Sense::click_and_drag());
 
@@ -766,7 +775,7 @@ impl AssetsPanel {
             let is_hovered = response.hovered();
             let is_clicked = response.clicked();
             let is_double_clicked = response.double_clicked();
-            let is_dragged = response.dragged();
+            let is_drag_started = response.drag_started();
 
             let bg_color = if is_hovered {
                 Color32::from_rgb(60, 60, 60)
@@ -802,9 +811,19 @@ impl AssetsPanel {
                 self.show_import_dialog(entry);
             }
 
-            if is_dragged && !entry.is_directory {
+            // Start drag operation when drag begins
+            if is_drag_started && !entry.is_directory {
                 self.dragged_asset = Some(entry.clone());
 
+                // Notify drag-drop system
+                if let Some(dnd) = drag_drop_system {
+                    let payload = crate::drag_drop::DragDropPayload::from_asset(entry);
+                    dnd.start_drag(payload);
+                }
+            }
+
+            // Show drag preview when dragging
+            if response.dragged() && !entry.is_directory {
                 egui::Area::new(ui.id().with("drag_preview"))
                     .interactable(false)
                     .fixed_pos(ui.input(|i| i.pointer.hover_pos().unwrap_or_default()))
@@ -1208,7 +1227,7 @@ impl EditorPanel for AssetsPanel {
                 egui::vec2(ui.available_width(), available_height - 25.0),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
-                    self.render_asset_grid(ui);
+                    self.render_asset_grid(ui, None);
                 },
             );
 
@@ -1226,6 +1245,54 @@ impl EditorPanel for AssetsPanel {
     fn on_close(&mut self) {
         if let Some(watcher) = self.file_watcher.take() {
             drop(watcher);
+        }
+    }
+}
+
+/// Extension trait for AssetsPanel to handle drag-drop with system access
+pub trait AssetsPanelExt {
+    /// Renders the panel with drag-drop system access
+    fn ui_with_drag_drop(
+        &mut self,
+        ui: &mut Ui,
+        render_context: Option<&mut praxis_graphics::RenderContext>,
+        drag_drop_system: Option<&mut crate::drag_drop::DragDropSystem>,
+    );
+}
+
+impl AssetsPanelExt for AssetsPanel {
+    fn ui_with_drag_drop(
+        &mut self,
+        ui: &mut Ui,
+        render_context: Option<&mut praxis_graphics::RenderContext>,
+        drag_drop_system: Option<&mut crate::drag_drop::DragDropSystem>,
+    ) {
+        self.process_file_events(render_context);
+        self.process_thumbnail_queue();
+
+        ui.vertical(|ui| {
+            self.render_toolbar(ui);
+            ui.separator();
+            self.render_search(ui);
+            ui.separator();
+
+            let available_height = ui.available_height();
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), available_height - 25.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    self.render_asset_grid(ui, drag_drop_system);
+                },
+            );
+
+            ui.separator();
+            self.render_status_bar(ui);
+        });
+
+        self.render_import_dialog(ui.ctx());
+
+        if self.pending_thumbnail_count() > 0 {
+            ui.ctx().request_repaint();
         }
     }
 }

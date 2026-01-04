@@ -10,7 +10,9 @@ use std::sync::Arc;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer},
-    descriptor_set::{allocator::StandardDescriptorSetAllocator, DescriptorSet, WriteDescriptorSet},
+    descriptor_set::{
+        allocator::StandardDescriptorSetAllocator, DescriptorSet, WriteDescriptorSet,
+    },
     device::Device,
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
     pipeline::{
@@ -278,7 +280,12 @@ impl LineRenderer {
     }
 
     /// Updates the view and projection matrices.
-    pub fn update_view_projection(&mut self, view: Mat4, proj: Mat4, camera_position: Vec3) -> Result<()> {
+    pub fn update_view_projection(
+        &mut self,
+        view: Mat4,
+        proj: Mat4,
+        camera_position: Vec3,
+    ) -> Result<()> {
         let uniforms = ViewProjectionUniforms {
             view: view.to_cols_array_2d(),
             proj: proj.to_cols_array_2d(),
