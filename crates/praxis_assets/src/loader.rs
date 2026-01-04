@@ -917,9 +917,9 @@ impl GltfAsset {
     /// # Ok::<(), praxis_utils::eyre::Report>(())
     /// ```
     pub fn find_animation(&self, name: &str) -> Option<&GltfAnimation> {
-        self.animations.iter().find(|anim| {
-            anim.name.as_ref().is_some_and(|n| n == name)
-        })
+        self.animations
+            .iter()
+            .find(|anim| anim.name.as_ref().is_some_and(|n| n == name))
     }
 
     /// Gets a skin by name.
@@ -942,9 +942,9 @@ impl GltfAsset {
     /// # Ok::<(), praxis_utils::eyre::Report>(())
     /// ```
     pub fn find_skin(&self, name: &str) -> Option<&GltfSkin> {
-        self.skins.iter().find(|skin| {
-            skin.name.as_ref().is_some_and(|n| n == name)
-        })
+        self.skins
+            .iter()
+            .find(|skin| skin.name.as_ref().is_some_and(|n| n == name))
     }
 }
 
@@ -1174,7 +1174,7 @@ impl GltfLoader {
         // Load skins and skeletons
         debug!("Processing {} skins", document.skins().len());
         let mut skins = Vec::new();
-        
+
         for skin in document.skins() {
             let gltf_skin = Self::load_skin(&skin, &buffers, &node_map)?;
             skins.push(gltf_skin);
@@ -1183,7 +1183,7 @@ impl GltfLoader {
         // Load animations
         debug!("Processing {} animations", document.animations().len());
         let mut animations = Vec::new();
-        
+
         for animation in document.animations() {
             let gltf_animation = Self::load_animation(&animation, &buffers, &node_map, &skins)?;
             animations.push(gltf_animation);
@@ -1218,19 +1218,22 @@ impl GltfLoader {
         node_map: &HashMap<usize, usize>,
     ) -> Result<GltfSkin> {
         let reader = skin.reader(|buffer| Some(&buffers[buffer.index()]));
-        
+
         // Get inverse bind matrices
-        let _inverse_bind_matrices: Vec<Mat4> = if let Some(matrices) = reader.read_inverse_bind_matrices() {
-            matrices.map(|m| Mat4::from_cols_array_2d(&m)).collect()
-        } else {
-            // If no inverse bind matrices provided, use identity matrices
-            vec![Mat4::IDENTITY; skin.joints().len()]
-        };
+        let _inverse_bind_matrices: Vec<Mat4> =
+            if let Some(matrices) = reader.read_inverse_bind_matrices() {
+                matrices.map(|m| Mat4::from_cols_array_2d(&m)).collect()
+            } else {
+                // If no inverse bind matrices provided, use identity matrices
+                vec![Mat4::IDENTITY; skin.joints().len()]
+            };
 
         // Build bone hierarchy
-        let joint_nodes: Vec<usize> = skin.joints()
+        let joint_nodes: Vec<usize> = skin
+            .joints()
             .map(|joint| {
-                *node_map.get(&joint.index())
+                *node_map
+                    .get(&joint.index())
                     .expect("Joint node should be in node_map")
             })
             .collect();
@@ -1301,7 +1304,7 @@ impl GltfLoader {
     ) -> Result<GltfAnimation> {
         // Type alias for bone track data: (translations, rotations, scales)
         type BoneTrackData = (Vec<(f32, Vec3)>, Vec<(f32, Quat)>, Vec<(f32, Vec3)>);
-        
+
         let mut max_time = 0.0f32;
         let mut bone_tracks: HashMap<usize, BoneTrackData> = HashMap::new();
 
@@ -1309,13 +1312,18 @@ impl GltfLoader {
         for channel in animation.channels() {
             let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
             let target = channel.target();
-            let target_node_index = *node_map.get(&target.node().index())
+            let target_node_index = *node_map
+                .get(&target.node().index())
                 .ok_or_else(|| eyre::eyre!("Animation target node not found in node map"))?;
 
             // Find which bone this node corresponds to (if any)
             let mut bone_index: Option<usize> = None;
             for skin in skins {
-                if let Some(idx) = skin.joint_nodes.iter().position(|&n| n == target_node_index) {
+                if let Some(idx) = skin
+                    .joint_nodes
+                    .iter()
+                    .position(|&n| n == target_node_index)
+                {
                     bone_index = Some(idx);
                     break;
                 }
@@ -1328,7 +1336,8 @@ impl GltfLoader {
             };
 
             // Read input timestamps
-            let inputs: Vec<f32> = reader.read_inputs()
+            let inputs: Vec<f32> = reader
+                .read_inputs()
                 .ok_or_else(|| eyre::eyre!("Animation channel missing input timestamps"))?
                 .collect();
 
@@ -1338,7 +1347,9 @@ impl GltfLoader {
             }
 
             // Get or create bone track entry
-            let track = bone_tracks.entry(bone_index).or_insert_with(|| (Vec::new(), Vec::new(), Vec::new()));
+            let track = bone_tracks
+                .entry(bone_index)
+                .or_insert_with(|| (Vec::new(), Vec::new(), Vec::new()));
 
             // Read outputs based on property type
             match target.property() {

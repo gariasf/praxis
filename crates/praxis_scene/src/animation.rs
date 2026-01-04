@@ -252,11 +252,16 @@ impl Skeleton {
             let bone = &bones[i];
             let local_transform = bone.bind_pose_matrix();
 
-            world_transforms[i] = bone.parent_index.map_or(local_transform, |parent_idx| world_transforms[parent_idx] * local_transform);
+            world_transforms[i] = bone.parent_index.map_or(local_transform, |parent_idx| {
+                world_transforms[parent_idx] * local_transform
+            });
         }
 
         // Invert to get bone space from world space
-        world_transforms.iter().map(praxis_math::Mat4::inverse).collect()
+        world_transforms
+            .iter()
+            .map(praxis_math::Mat4::inverse)
+            .collect()
     }
 
     /// Recomputes inverse bind matrices after bone modifications.
@@ -309,21 +314,25 @@ impl BoneTrack {
 
     /// Adds a translation keyframe.
     pub fn add_translation_keyframe(&mut self, time: f32, translation: Vec3) {
-        self.translation_keyframes.push(Keyframe::new(time, translation));
+        self.translation_keyframes
+            .push(Keyframe::new(time, translation));
         // Keep keyframes sorted by time
-        self.translation_keyframes.sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
+        self.translation_keyframes
+            .sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
     }
 
     /// Adds a rotation keyframe.
     pub fn add_rotation_keyframe(&mut self, time: f32, rotation: Quat) {
         self.rotation_keyframes.push(Keyframe::new(time, rotation));
-        self.rotation_keyframes.sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
+        self.rotation_keyframes
+            .sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
     }
 
     /// Adds a scale keyframe.
     pub fn add_scale_keyframe(&mut self, time: f32, scale: Vec3) {
         self.scale_keyframes.push(Keyframe::new(time, scale));
-        self.scale_keyframes.sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
+        self.scale_keyframes
+            .sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
     }
 
     /// Samples translation at a given time using linear interpolation.
@@ -382,9 +391,7 @@ impl BoneTrack {
                 let t = (time - b.time) / (a.time - b.time);
                 Some(b.value.slerp(a.value, t))
             }
-            (Some(k), _) | (_, Some(k)) => {
-                Some(k.value)
-            }
+            (Some(k), _) | (_, Some(k)) => Some(k.value),
             _ => None,
         }
     }
@@ -412,9 +419,7 @@ impl BoneTrack {
                 let t = (time - b.time) / (a.time - b.time);
                 Some(b.value.lerp(a.value, t))
             }
-            (Some(k), _) | (_, Some(k)) => {
-                Some(k.value)
-            }
+            (Some(k), _) | (_, Some(k)) => Some(k.value),
             _ => None,
         }
     }
@@ -506,17 +511,20 @@ impl AnimationClip {
 
     /// Adds a translation keyframe to a bone track.
     pub fn add_translation_keyframe(&mut self, bone_index: usize, time: f32, translation: Vec3) {
-        self.add_bone_track(bone_index).add_translation_keyframe(time, translation);
+        self.add_bone_track(bone_index)
+            .add_translation_keyframe(time, translation);
     }
 
     /// Adds a rotation keyframe to a bone track.
     pub fn add_rotation_keyframe(&mut self, bone_index: usize, time: f32, rotation: Quat) {
-        self.add_bone_track(bone_index).add_rotation_keyframe(time, rotation);
+        self.add_bone_track(bone_index)
+            .add_rotation_keyframe(time, rotation);
     }
 
     /// Adds a scale keyframe to a bone track.
     pub fn add_scale_keyframe(&mut self, bone_index: usize, time: f32, scale: Vec3) {
-        self.add_bone_track(bone_index).add_scale_keyframe(time, scale);
+        self.add_bone_track(bone_index)
+            .add_scale_keyframe(time, scale);
     }
 
     /// Returns the number of bone tracks in this clip.
@@ -615,10 +623,10 @@ impl AnimatedPose {
 pub enum PlaybackState {
     /// Animation is playing.
     Playing,
-    
+
     /// Animation is paused at current time.
     Paused,
-    
+
     /// Animation has stopped and reset to beginning.
     Stopped,
 }
@@ -628,16 +636,16 @@ pub enum PlaybackState {
 struct PlayingClip {
     /// Current playback time in seconds.
     time: f32,
-    
+
     /// Playback speed multiplier (1.0 = normal speed).
     speed: f32,
-    
+
     /// Whether the animation should loop.
     looping: bool,
-    
+
     /// Current playback state.
     state: PlaybackState,
-    
+
     /// Weight for animation blending (0.0 to 1.0).
     weight: f32,
 }
@@ -677,7 +685,7 @@ impl PlayingClip {
 pub struct AnimationPlayer {
     /// Available animation clips indexed by name.
     clips: HashMap<String, AnimationClip>,
-    
+
     /// Currently playing clips with their playback state.
     playing_clips: HashMap<String, PlayingClip>,
 }
@@ -873,9 +881,7 @@ impl AnimationPlayer {
                 let rotation = track
                     .sample_rotation(time)
                     .unwrap_or(bone.bind_pose_rotation);
-                let scale = track
-                    .sample_scale(time)
-                    .unwrap_or(bone.bind_pose_scale);
+                let scale = track.sample_scale(time).unwrap_or(bone.bind_pose_scale);
 
                 // If weight is 1.0, just set the transform directly
                 if weight >= 0.999 {
@@ -955,8 +961,6 @@ pub fn update_animations(
         *pose = player.evaluate(skeleton);
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -1126,19 +1130,19 @@ mod tests {
 pub struct CrossFadeTransition {
     /// Name of the source animation (fading out).
     pub from_clip: String,
-    
+
     /// Name of the target animation (fading in).
     pub to_clip: String,
-    
+
     /// Total duration of the transition in seconds.
     pub duration: f32,
-    
+
     /// Current elapsed time in the transition.
     pub elapsed: f32,
-    
+
     /// Playback time in the source animation when transition started.
     pub from_time: f32,
-    
+
     /// Playback time to start at in the target animation.
     pub to_time: f32,
 }
@@ -1155,7 +1159,7 @@ impl CrossFadeTransition {
             to_time: 0.0,
         }
     }
-    
+
     /// Gets the blend weight (0.0 = fully from, 1.0 = fully to).
     pub fn blend_weight(&self) -> f32 {
         if self.duration <= 0.0 {
@@ -1163,12 +1167,12 @@ impl CrossFadeTransition {
         }
         (self.elapsed / self.duration).clamp(0.0, 1.0)
     }
-    
+
     /// Returns true if the transition is complete.
     pub fn is_complete(&self) -> bool {
         self.elapsed >= self.duration
     }
-    
+
     /// Updates the transition with delta time.
     pub fn update(&mut self, delta_time: f32) {
         self.elapsed += delta_time;
@@ -1183,7 +1187,7 @@ impl CrossFadeTransition {
 pub struct BlendNode1D {
     /// Clips with their parameter values.
     clips: Vec<(String, f32)>,
-    
+
     /// Current blend parameter value.
     parameter: f32,
 }
@@ -1196,38 +1200,38 @@ impl BlendNode1D {
             parameter: 0.0,
         }
     }
-    
+
     /// Adds a clip at a specific parameter value.
     pub fn add_clip(&mut self, name: impl Into<String>, parameter: f32) {
         self.clips.push((name.into(), parameter));
         self.clips.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
     }
-    
+
     /// Sets the current blend parameter.
     pub fn set_parameter(&mut self, value: f32) {
         self.parameter = value;
     }
-    
+
     /// Gets the current blend parameter.
     pub fn parameter(&self) -> f32 {
         self.parameter
     }
-    
+
     /// Computes blend weights for all clips based on the current parameter.
     pub fn compute_weights(&self) -> Vec<(String, f32)> {
         if self.clips.is_empty() {
             return Vec::new();
         }
-        
+
         if self.clips.len() == 1 {
             return vec![(self.clips[0].0.clone(), 1.0)];
         }
-        
+
         let mut result = Vec::new();
-        
+
         let mut before_idx = None;
         let mut after_idx = None;
-        
+
         for (i, (_, param)) in self.clips.iter().enumerate() {
             if *param <= self.parameter {
                 before_idx = Some(i);
@@ -1237,13 +1241,13 @@ impl BlendNode1D {
                 break;
             }
         }
-        
+
         match (before_idx, after_idx) {
             (Some(before), Some(after)) if before != after => {
                 let (_, param_before) = &self.clips[before];
                 let (_, param_after) = &self.clips[after];
                 let range = param_after - param_before;
-                
+
                 if range > 0.0 {
                     let t = (self.parameter - param_before) / range;
                     result.push((self.clips[before].0.clone(), 1.0 - t));
@@ -1257,7 +1261,7 @@ impl BlendNode1D {
             }
             _ => {}
         }
-        
+
         result
     }
 }
@@ -1276,10 +1280,10 @@ impl Default for BlendNode1D {
 pub struct BlendNode2D {
     /// Clips with their 2D parameter positions.
     clips: Vec<(String, f32, f32)>,
-    
+
     /// Current X parameter value.
     parameter_x: f32,
-    
+
     /// Current Y parameter value.
     parameter_y: f32,
 }
@@ -1293,66 +1297,66 @@ impl BlendNode2D {
             parameter_y: 0.0,
         }
     }
-    
+
     /// Adds a clip at a specific 2D position.
     pub fn add_clip(&mut self, name: impl Into<String>, x: f32, y: f32) {
         self.clips.push((name.into(), x, y));
     }
-    
+
     /// Sets the current blend parameters.
     pub fn set_parameters(&mut self, x: f32, y: f32) {
         self.parameter_x = x;
         self.parameter_y = y;
     }
-    
+
     /// Gets the current blend parameters.
     pub fn parameters(&self) -> (f32, f32) {
         (self.parameter_x, self.parameter_y)
     }
-    
+
     /// Computes blend weights using inverse distance weighting.
     pub fn compute_weights(&self) -> Vec<(String, f32)> {
         if self.clips.is_empty() {
             return Vec::new();
         }
-        
+
         if self.clips.len() == 1 {
             return vec![(self.clips[0].0.clone(), 1.0)];
         }
-        
+
         let mut result = Vec::new();
         let mut total_weight = 0.0;
-        
+
         for (name, x, y) in &self.clips {
             let dx = x - self.parameter_x;
             let dy = y - self.parameter_y;
             let dist_sq = dx.mul_add(dx, dy * dy);
-            
+
             let weight = if dist_sq < 0.0001 {
                 1000.0
             } else {
                 1.0 / dist_sq
             };
-            
+
             result.push((name.clone(), weight));
             total_weight += weight;
         }
-        
+
         if total_weight > 0.0 {
             for (_, weight) in &mut result {
                 *weight /= total_weight;
             }
         }
-        
+
         result.retain(|(_, w)| *w > 0.01);
-        
+
         total_weight = result.iter().map(|(_, w)| w).sum();
         if total_weight > 0.0 {
             for (_, weight) in &mut result {
                 *weight /= total_weight;
             }
         }
-        
+
         result
     }
 }
@@ -1371,10 +1375,10 @@ impl Default for BlendNode2D {
 pub struct AdditiveBlendNode {
     /// Base clip name.
     base_clip: Option<String>,
-    
+
     /// Additive clip name.
     additive_clip: Option<String>,
-    
+
     /// Weight of the additive animation (0.0 to 1.0).
     weight: f32,
 }
@@ -1388,25 +1392,29 @@ impl AdditiveBlendNode {
             weight: 1.0,
         }
     }
-    
+
     /// Sets the base clip.
     pub fn set_base(&mut self, clip_name: impl Into<String>) {
         self.base_clip = Some(clip_name.into());
     }
-    
+
     /// Sets the additive clip.
     pub fn set_additive(&mut self, clip_name: impl Into<String>) {
         self.additive_clip = Some(clip_name.into());
     }
-    
+
     /// Sets the additive weight.
     pub fn set_weight(&mut self, weight: f32) {
         self.weight = weight.clamp(0.0, 1.0);
     }
-    
+
     /// Gets the base and additive clips with weight.
     pub fn get_clips(&self) -> (Option<String>, Option<String>, f32) {
-        (self.base_clip.clone(), self.additive_clip.clone(), self.weight)
+        (
+            self.base_clip.clone(),
+            self.additive_clip.clone(),
+            self.weight,
+        )
     }
 }
 
@@ -1421,10 +1429,10 @@ impl Default for AdditiveBlendNode {
 pub enum BlendNode {
     /// 1D blend space.
     Blend1D(BlendNode1D),
-    
+
     /// 2D blend space.
     Blend2D(BlendNode2D),
-    
+
     /// Additive blend.
     Additive(AdditiveBlendNode),
 }
@@ -1461,21 +1469,21 @@ impl BoneMask {
             enabled_bones: Vec::new(),
         }
     }
-    
+
     /// Creates a bone mask for a specific bone count.
     pub fn with_bone_count(bone_count: usize) -> Self {
         Self {
             enabled_bones: vec![false; bone_count],
         }
     }
-    
+
     /// Creates a bone mask with all bones enabled.
     pub fn all_enabled(bone_count: usize) -> Self {
         Self {
             enabled_bones: vec![true; bone_count],
         }
     }
-    
+
     /// Enables a specific bone.
     pub fn enable_bone(&mut self, bone_index: usize) {
         if bone_index >= self.enabled_bones.len() {
@@ -1483,23 +1491,27 @@ impl BoneMask {
         }
         self.enabled_bones[bone_index] = true;
     }
-    
+
     /// Disables a specific bone.
     pub fn disable_bone(&mut self, bone_index: usize) {
         if bone_index < self.enabled_bones.len() {
             self.enabled_bones[bone_index] = false;
         }
     }
-    
+
     /// Enables a bone and all its children recursively.
     pub fn enable_bone_and_children(&mut self, bone_index: usize) {
         self.enable_bone(bone_index);
     }
-    
+
     /// Enables a bone and all its children recursively using skeleton information.
-    pub fn enable_bone_and_children_with_skeleton(&mut self, bone_index: usize, skeleton: &Skeleton) {
+    pub fn enable_bone_and_children_with_skeleton(
+        &mut self,
+        bone_index: usize,
+        skeleton: &Skeleton,
+    ) {
         self.enable_bone(bone_index);
-        
+
         for i in 0..skeleton.bone_count() {
             if let Some(bone) = skeleton.bone(i) {
                 if bone.parent_index == Some(bone_index) {
@@ -1508,12 +1520,12 @@ impl BoneMask {
             }
         }
     }
-    
+
     /// Checks if a bone is enabled.
     pub fn is_bone_enabled(&self, bone_index: usize) -> bool {
         self.enabled_bones.get(bone_index).copied().unwrap_or(false)
     }
-    
+
     /// Gets the weight for a specific bone (0.0 or 1.0).
     pub fn bone_weight(&self, bone_index: usize) -> f32 {
         if self.is_bone_enabled(bone_index) {
@@ -1535,7 +1547,7 @@ impl Default for BoneMask {
 pub enum LayerBlendMode {
     /// Override the base animation (default).
     Override,
-    
+
     /// Add to the base animation (additive blending).
     Additive,
 }
@@ -1549,22 +1561,22 @@ pub enum LayerBlendMode {
 pub struct AnimationLayer {
     /// Layer weight (0.0 to 1.0).
     weight: f32,
-    
+
     /// Bone mask for this layer.
     mask: Option<BoneMask>,
-    
+
     /// Blend mode for this layer.
     blend_mode: LayerBlendMode,
-    
+
     /// Currently playing clip on this layer.
     current_clip: Option<String>,
-    
+
     /// Playback time for the current clip.
     time: f32,
-    
+
     /// Playback speed multiplier.
     speed: f32,
-    
+
     /// Whether the animation should loop.
     looping: bool,
 }
@@ -1582,79 +1594,79 @@ impl AnimationLayer {
             looping: true,
         }
     }
-    
+
     /// Sets the layer weight.
     pub fn set_weight(&mut self, weight: f32) {
         self.weight = weight.clamp(0.0, 1.0);
     }
-    
+
     /// Gets the layer weight.
     pub fn weight(&self) -> f32 {
         self.weight
     }
-    
+
     /// Sets the bone mask.
     pub fn set_mask(&mut self, mask: BoneMask) {
         self.mask = Some(mask);
     }
-    
+
     /// Gets the bone mask.
     pub fn mask(&self) -> Option<&BoneMask> {
         self.mask.as_ref()
     }
-    
+
     /// Sets the blend mode.
     pub fn set_blend_mode(&mut self, mode: LayerBlendMode) {
         self.blend_mode = mode;
     }
-    
+
     /// Gets the blend mode.
     pub fn blend_mode(&self) -> LayerBlendMode {
         self.blend_mode
     }
-    
+
     /// Plays a clip on this layer.
     pub fn play(&mut self, clip_name: impl Into<String>) {
         self.current_clip = Some(clip_name.into());
         self.time = 0.0;
     }
-    
+
     /// Stops playback on this layer.
     pub fn stop(&mut self) {
         self.current_clip = None;
         self.time = 0.0;
     }
-    
+
     /// Gets the currently playing clip.
     pub fn current_clip(&self) -> Option<&str> {
         self.current_clip.as_deref()
     }
-    
+
     /// Gets the playback time.
     pub fn time(&self) -> f32 {
         self.time
     }
-    
+
     /// Sets the playback time.
     pub fn set_time(&mut self, time: f32) {
         self.time = time;
     }
-    
+
     /// Sets the playback speed.
     pub fn set_speed(&mut self, speed: f32) {
         self.speed = speed;
     }
-    
+
     /// Sets whether the animation should loop.
     pub fn set_looping(&mut self, looping: bool) {
         self.looping = looping;
     }
-    
+
     /// Updates the layer with delta time.
     pub fn update(&mut self, delta_time: f32, clip_duration: f32) {
         if self.current_clip.is_some() {
             self.time += delta_time * self.speed;
-            
+
             if self.time >= clip_duration {
                 if self.looping {
                     self.time %= clip_duration;
@@ -1694,28 +1706,28 @@ impl AnimationLayer {
 pub struct AnimationBlender {
     /// Animation clips library.
     clips: HashMap<String, AnimationClip>,
-    
+
     /// Base layer (layer 0) currently playing clip.
     base_clip: Option<String>,
-    
+
     /// Base layer playback time.
     base_time: f32,
-    
+
     /// Base layer playback speed.
     base_speed: f32,
-    
+
     /// Base layer looping.
     base_looping: bool,
-    
+
     /// Active cross-fade transition.
     cross_fade: Option<CrossFadeTransition>,
-    
+
     /// Blend trees indexed by name.
     blend_trees: HashMap<String, BlendNode>,
-    
+
     /// Currently active blend tree.
     active_blend_tree: Option<String>,
-    
+
     /// Additional animation layers.
     layers: Vec<AnimationLayer>,
 }
@@ -1735,23 +1747,23 @@ impl AnimationBlender {
             layers: Vec::new(),
         }
     }
-    
+
     /// Adds an animation clip to the library.
     pub fn add_clip(&mut self, name: impl Into<String>, clip: AnimationClip) {
         self.clips.insert(name.into(), clip);
     }
-    
+
     /// Builder method to add a clip.
     pub fn with_clip(mut self, name: impl Into<String>, clip: AnimationClip) -> Self {
         self.add_clip(name, clip);
         self
     }
-    
+
     /// Gets a clip by name.
     pub fn clip(&self, name: &str) -> Option<&AnimationClip> {
         self.clips.get(name)
     }
-    
+
     /// Plays an animation on the base layer immediately.
     pub fn play(&mut self, clip_name: impl Into<String>) {
         self.base_clip = Some(clip_name.into());
@@ -1759,24 +1771,24 @@ impl AnimationBlender {
         self.cross_fade = None;
         self.active_blend_tree = None;
     }
-    
+
     /// Starts a cross-fade transition to a new animation.
     pub fn cross_fade(&mut self, from: impl Into<String>, to: impl Into<String>, duration: f32) {
         let from_name = from.into();
         let to_name = to.into();
-        
+
         let mut transition = CrossFadeTransition::new(from_name.clone(), to_name, duration);
         transition.from_time = self.base_time;
-        
+
         self.cross_fade = Some(transition);
         self.base_clip = Some(from_name);
     }
-    
+
     /// Adds a blend tree.
     pub fn add_blend_tree(&mut self, name: impl Into<String>, node: BlendNode) {
         self.blend_trees.insert(name.into(), node);
     }
-    
+
     /// Activates a blend tree.
     pub fn activate_blend_tree(&mut self, name: impl Into<String>) {
         let name = name.into();
@@ -1786,94 +1798,94 @@ impl AnimationBlender {
             self.cross_fade = None;
         }
     }
-    
+
     /// Sets a 1D blend parameter.
     pub fn set_blend_parameter(&mut self, tree_name: &str, value: f32) {
         if let Some(BlendNode::Blend1D(node)) = self.blend_trees.get_mut(tree_name) {
             node.set_parameter(value);
         }
     }
-    
+
     /// Sets 2D blend parameters.
     pub fn set_blend_parameters_2d(&mut self, tree_name: &str, x: f32, y: f32) {
         if let Some(BlendNode::Blend2D(node)) = self.blend_trees.get_mut(tree_name) {
             node.set_parameters(x, y);
         }
     }
-    
+
     /// Adds an animation layer.
     pub fn add_layer(&mut self, layer: AnimationLayer) {
         self.layers.push(layer);
     }
-    
+
     /// Gets a layer by index.
     pub fn layer(&self, index: usize) -> Option<&AnimationLayer> {
         self.layers.get(index)
     }
-    
+
     /// Gets a mutable layer by index.
     pub fn layer_mut(&mut self, index: usize) -> Option<&mut AnimationLayer> {
         self.layers.get_mut(index)
     }
-    
+
     /// Plays an animation on a specific layer.
     pub fn play_on_layer(&mut self, layer_index: usize, clip_name: impl Into<String>) {
         if let Some(layer) = self.layers.get_mut(layer_index) {
             layer.play(clip_name);
         }
     }
-    
+
     /// Sets the base layer looping.
     pub fn set_looping(&mut self, looping: bool) {
         self.base_looping = looping;
     }
-    
+
     /// Sets the base layer playback speed.
     pub fn set_speed(&mut self, speed: f32) {
         self.base_speed = speed;
     }
-    
+
     /// Gets the current base layer clip.
     pub fn current_clip(&self) -> Option<&str> {
         self.base_clip.as_deref()
     }
-    
+
     /// Gets the current base layer time.
     pub fn current_time(&self) -> f32 {
         self.base_time
     }
-    
+
     /// Checks if a cross-fade is currently active.
     pub fn is_cross_fading(&self) -> bool {
         self.cross_fade.is_some()
     }
-    
+
     /// Gets the active blend tree name if any.
     pub fn active_blend_tree(&self) -> Option<&str> {
         self.active_blend_tree.as_deref()
     }
-    
+
     /// Gets the number of layers.
     pub fn layer_count(&self) -> usize {
         self.layers.len()
     }
-    
+
     /// Updates the blender with delta time.
     pub fn update(&mut self, delta_time: f32) {
         if let Some(ref mut transition) = self.cross_fade {
             transition.update(delta_time);
-            
+
             if transition.is_complete() {
                 self.base_clip = Some(transition.to_clip.clone());
                 self.base_time = transition.to_time;
                 self.cross_fade = None;
             }
         }
-        
+
         if let Some(clip_name) = &self.base_clip {
             if let Some(clip) = self.clips.get(clip_name) {
                 self.base_time += delta_time * self.base_speed;
-                
+
                 if self.base_time >= clip.duration() {
                     if self.base_looping {
                         self.base_time %= clip.duration();
@@ -1884,7 +1896,7 @@ impl AnimationBlender {
                 }
             }
         }
-        
+
         for layer in &mut self.layers {
             if let Some(clip_name) = layer.current_clip() {
                 if let Some(clip) = self.clips.get(clip_name) {
@@ -1893,17 +1905,17 @@ impl AnimationBlender {
             }
         }
     }
-    
+
     /// Evaluates the blender and produces an animated pose.
     pub fn evaluate(&self, skeleton: &Skeleton) -> AnimatedPose {
         let mut pose = AnimatedPose::new(skeleton.bone_count());
-        
+
         for i in 0..skeleton.bone_count() {
             if let Some(bone) = skeleton.bone(i) {
                 pose.set_local_transform(i, bone.bind_pose_matrix());
             }
         }
-        
+
         if let Some(ref transition) = self.cross_fade {
             self.evaluate_cross_fade(transition, &mut pose, skeleton);
         } else if let Some(ref tree_name) = self.active_blend_tree {
@@ -1913,7 +1925,7 @@ impl AnimationBlender {
                 self.apply_clip_to_pose(clip, self.base_time, 1.0, &mut pose, skeleton);
             }
         }
-        
+
         for layer in &self.layers {
             if let Some(clip_name) = layer.current_clip() {
                 if let Some(clip) = self.clips.get(clip_name) {
@@ -1921,13 +1933,13 @@ impl AnimationBlender {
                 }
             }
         }
-        
+
         pose.update_world_transforms(skeleton);
         pose.update_skinning_matrices(skeleton);
-        
+
         pose
     }
-    
+
     fn evaluate_cross_fade(
         &self,
         transition: &CrossFadeTransition,
@@ -1935,7 +1947,7 @@ impl AnimationBlender {
         skeleton: &Skeleton,
     ) {
         let blend_weight = transition.blend_weight();
-        
+
         if let Some(from_clip) = self.clips.get(&transition.from_clip) {
             self.apply_clip_to_pose(
                 from_clip,
@@ -1945,7 +1957,7 @@ impl AnimationBlender {
                 skeleton,
             );
         }
-        
+
         if let Some(to_clip) = self.clips.get(&transition.to_clip) {
             self.apply_clip_to_pose(
                 to_clip,
@@ -1956,7 +1968,7 @@ impl AnimationBlender {
             );
         }
     }
-    
+
     fn evaluate_blend_tree(&self, tree_name: &str, pose: &mut AnimatedPose, skeleton: &Skeleton) {
         if let Some(blend_node) = self.blend_trees.get(tree_name) {
             match blend_node {
@@ -1978,13 +1990,13 @@ impl AnimationBlender {
                 }
                 BlendNode::Additive(node) => {
                     let (base, additive, weight) = node.get_clips();
-                    
+
                     if let Some(base_name) = base {
                         if let Some(clip) = self.clips.get(&base_name) {
                             self.apply_clip_to_pose(clip, self.base_time, 1.0, pose, skeleton);
                         }
                     }
-                    
+
                     if let Some(additive_name) = additive {
                         if let Some(clip) = self.clips.get(&additive_name) {
                             self.apply_clip_to_pose(clip, self.base_time, weight, pose, skeleton);
@@ -1994,7 +2006,7 @@ impl AnimationBlender {
             }
         }
     }
-    
+
     fn apply_layer_to_pose(
         &self,
         layer: &AnimationLayer,
@@ -2003,14 +2015,16 @@ impl AnimationBlender {
         skeleton: &Skeleton,
     ) {
         for (bone_index, track) in clip.bone_tracks() {
-            let bone_weight = layer.mask().map_or(1.0, |mask| mask.bone_weight(*bone_index));
-            
+            let bone_weight = layer
+                .mask()
+                .map_or(1.0, |mask| mask.bone_weight(*bone_index));
+
             if bone_weight <= 0.0 {
                 continue;
             }
-            
+
             let final_weight = layer.weight() * bone_weight;
-            
+
             if final_weight > 0.001 {
                 if let Some(bone) = skeleton.bone(*bone_index) {
                     let translation = track
@@ -2022,7 +2036,7 @@ impl AnimationBlender {
                     let scale = track
                         .sample_scale(layer.time())
                         .unwrap_or(bone.bind_pose_scale);
-                    
+
                     if let Some(current) = pose.local_transform(*bone_index) {
                         let current_translation = current.col(3).truncate();
                         let current_scale = Vec3::new(
@@ -2031,11 +2045,12 @@ impl AnimationBlender {
                             current.col(2).truncate().length(),
                         );
                         let current_rotation = Quat::from_mat4(&current);
-                        
-                        let blended_translation = current_translation.lerp(translation, final_weight);
+
+                        let blended_translation =
+                            current_translation.lerp(translation, final_weight);
                         let blended_rotation = current_rotation.slerp(rotation, final_weight);
                         let blended_scale = current_scale.lerp(scale, final_weight);
-                        
+
                         let blended = Mat4::from_scale_rotation_translation(
                             blended_scale,
                             blended_rotation,
@@ -2047,7 +2062,7 @@ impl AnimationBlender {
             }
         }
     }
-    
+
     fn apply_clip_to_pose(
         &self,
         clip: &AnimationClip,
@@ -2064,12 +2079,11 @@ impl AnimationBlender {
                 let rotation = track
                     .sample_rotation(time)
                     .unwrap_or(bone.bind_pose_rotation);
-                let scale = track
-                    .sample_scale(time)
-                    .unwrap_or(bone.bind_pose_scale);
-                
+                let scale = track.sample_scale(time).unwrap_or(bone.bind_pose_scale);
+
                 if weight >= 0.999 {
-                    let transform = Mat4::from_scale_rotation_translation(scale, rotation, translation);
+                    let transform =
+                        Mat4::from_scale_rotation_translation(scale, rotation, translation);
                     pose.set_local_transform(*bone_index, transform);
                 } else if weight > 0.001 {
                     if let Some(current) = pose.local_transform(*bone_index) {
@@ -2080,11 +2094,11 @@ impl AnimationBlender {
                             current.col(2).truncate().length(),
                         );
                         let current_rotation = Quat::from_mat4(&current);
-                        
+
                         let blended_translation = current_translation.lerp(translation, weight);
                         let blended_rotation = current_rotation.slerp(rotation, weight);
                         let blended_scale = current_scale.lerp(scale, weight);
-                        
+
                         let blended = Mat4::from_scale_rotation_translation(
                             blended_scale,
                             blended_rotation,

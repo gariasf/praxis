@@ -85,11 +85,10 @@
 mod common;
 
 use common::CameraController;
-use praxis_ecs::{
-    DirectionalLight, LightingData, PerspectiveCameraBundle, PointLight, Transform, World,
-};
+use praxis_ecs::{DirectionalLight, PerspectiveCameraBundle, PointLight, Transform, World};
 use praxis_graphics::{
-    sphere_mesh, textured_cube_mesh, DrawCommand, MaterialProperties, RenderCommands, RenderContext,
+    sphere_mesh, textured_cube_mesh, DirectionalLightData, DrawCommand, LightingUniforms,
+    MaterialProperties, PointLightData, RenderCommands, RenderContext,
 };
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::Vec3;
@@ -171,7 +170,6 @@ struct App {
     render_context: Option<RenderContext>,
     cursor_locked: bool,
     last_frame_time: Option<Instant>,
-    start_time: Instant,
     camera_controller: CameraController,
     input_state: InputState,
     input_map: InputMap,
@@ -190,8 +188,10 @@ impl Default for App {
         input_map.bind_key(&Action::new("down"), KeyCode::ControlLeft);
         input_map.bind_key(&Action::new("sprint"), KeyCode::ShiftLeft);
 
-        let mut camera_controller = CameraController::default();
-        camera_controller.move_speed = 8.0;
+        let camera_controller = CameraController {
+            move_speed: 8.0,
+            ..CameraController::default()
+        };
 
         Self {
             window: None,
@@ -199,7 +199,6 @@ impl Default for App {
             render_context: None,
             cursor_locked: false,
             last_frame_time: None,
-            start_time: Instant::now(),
             camera_controller,
             input_state: InputState::default(),
             input_map,
@@ -219,7 +218,6 @@ impl App {
         Self::load_assets(&mut render_context)?;
 
         let mut world = World::new();
-        world.insert_resource(LightingData::default());
 
         Self::spawn_material_gallery(&mut world);
         let ambient_light = Self::spawn_lights(&mut world);
@@ -339,7 +337,7 @@ impl App {
         let height = 128;
         let mut pixels = Vec::with_capacity((width * height * 4) as usize);
 
-        for y in 0..height {
+        for _y in 0..height {
             for x in 0..width {
                 let t = x as f32 / width as f32;
                 let r = (255.0 * (1.0 - t * 0.5)) as u8;
@@ -390,7 +388,7 @@ impl App {
         info!("Spawning comprehensive material gallery...");
 
         let y_height = 1.0;
-        let spacing_x = 3.0;
+        let _spacing_x = 3.0;
         let spacing_z = 3.5;
         let positions = [-6.0, -3.0, 0.0, 3.0, 6.0];
 
@@ -409,7 +407,7 @@ impl App {
                         .with_metallic(metallic)
                         .with_roughness(0.3),
                 ),
-                praxis_ecs::Name::new(format!("Metallic {:.2}", metallic)),
+                praxis_ecs::Name::new(format!("Metallic {metallic:.2}")),
             ));
         }
 
@@ -428,7 +426,7 @@ impl App {
                         .with_metallic(0.0)
                         .with_roughness(roughness),
                 ),
-                praxis_ecs::Name::new(format!("Roughness {:.2}", roughness)),
+                praxis_ecs::Name::new(format!("Roughness {roughness:.2}")),
             ));
         }
 
@@ -448,7 +446,7 @@ impl App {
                         .with_metallic(0.0)
                         .with_roughness(0.4),
                 ),
-                praxis_ecs::Name::new(format!("Emissive {:.1}", emissive)),
+                praxis_ecs::Name::new(format!("Emissive {emissive:.1}")),
             ));
         }
 
@@ -566,10 +564,7 @@ impl App {
 
     fn handle_input(&mut self) {
         // Bloom threshold controls
-        if self
-            .input_state
-            .is_key_just_pressed(praxis_input::Key::Digit1)
-        {
+        if self.input_state.is_key_just_pressed(KeyCode::Digit1) {
             self.post_process_settings.bloom_threshold =
                 (self.post_process_settings.bloom_threshold - 0.1).max(0.1);
             println!(
@@ -577,10 +572,7 @@ impl App {
                 self.post_process_settings.bloom_threshold
             );
         }
-        if self
-            .input_state
-            .is_key_just_pressed(praxis_input::Key::Digit2)
-        {
+        if self.input_state.is_key_just_pressed(KeyCode::Digit2) {
             self.post_process_settings.bloom_threshold =
                 (self.post_process_settings.bloom_threshold + 0.1).min(5.0);
             println!(
@@ -590,10 +582,7 @@ impl App {
         }
 
         // Bloom intensity controls
-        if self
-            .input_state
-            .is_key_just_pressed(praxis_input::Key::Digit3)
-        {
+        if self.input_state.is_key_just_pressed(KeyCode::Digit3) {
             self.post_process_settings.bloom_intensity =
                 (self.post_process_settings.bloom_intensity - 0.05).max(0.0);
             println!(
@@ -601,10 +590,7 @@ impl App {
                 self.post_process_settings.bloom_intensity
             );
         }
-        if self
-            .input_state
-            .is_key_just_pressed(praxis_input::Key::Digit4)
-        {
+        if self.input_state.is_key_just_pressed(KeyCode::Digit4) {
             self.post_process_settings.bloom_intensity =
                 (self.post_process_settings.bloom_intensity + 0.05).min(2.0);
             println!(
@@ -614,30 +600,20 @@ impl App {
         }
 
         // Exposure controls
-        if self
-            .input_state
-            .is_key_just_pressed(praxis_input::Key::Digit5)
-        {
+        if self.input_state.is_key_just_pressed(KeyCode::Digit5) {
             self.post_process_settings.exposure =
                 (self.post_process_settings.exposure - 0.1).max(0.1);
             println!("Exposure: {:.1}", self.post_process_settings.exposure);
         }
-        if self
-            .input_state
-            .is_key_just_pressed(praxis_input::Key::Digit6)
-        {
+        if self.input_state.is_key_just_pressed(KeyCode::Digit6) {
             self.post_process_settings.exposure =
                 (self.post_process_settings.exposure + 0.1).min(5.0);
             println!("Exposure: {:.1}", self.post_process_settings.exposure);
         }
 
         // Color grading presets
-        if self
-            .input_state
-            .is_key_just_pressed(praxis_input::Key::Digit7)
-            || self
-                .input_state
-                .is_key_just_pressed(praxis_input::Key::Digit8)
+        if self.input_state.is_key_just_pressed(KeyCode::Digit7)
+            || self.input_state.is_key_just_pressed(KeyCode::Digit8)
         {
             self.post_process_settings.color_grading =
                 self.post_process_settings.color_grading.next();
@@ -681,18 +657,71 @@ impl App {
         let world = self.world.as_mut().unwrap();
         let render_context = self.render_context.as_mut().unwrap();
 
-        // Gather lighting
-        praxis_ecs::systems::gather_lighting_system(
-            world.resource_mut::<LightingData>(),
-            world.query::<(&DirectionalLight, Option<&Transform>)>(),
-            world.query::<(
+        // Build lighting uniforms directly from ECS components
+        let mut lighting = LightingUniforms {
+            ambient_color: [0.1, 0.1, 0.1, 1.0],
+            ..LightingUniforms::default()
+        };
+
+        // Gather directional lights
+        {
+            let mut dir_query = world.query::<(&DirectionalLight, Option<&Transform>)>();
+            for (dir_light, maybe_transform) in dir_query.iter(world.inner()) {
+                if lighting.directional_light_count as usize
+                    >= praxis_graphics::MAX_DIRECTIONAL_LIGHTS
+                {
+                    break;
+                }
+                let direction = if let Some(transform) = maybe_transform {
+                    transform.rotation * dir_light.direction
+                } else {
+                    dir_light.direction
+                };
+                lighting.directional_lights[lighting.directional_light_count as usize] =
+                    DirectionalLightData {
+                        direction: [direction.x, direction.y, direction.z, 0.0],
+                        color: [dir_light.color.x, dir_light.color.y, dir_light.color.z, 0.0],
+                        intensity: dir_light.intensity,
+                        _padding: [0.0; 3],
+                    };
+                lighting.directional_light_count += 1;
+            }
+        }
+
+        // Gather point lights
+        {
+            let mut point_query = world.query::<(
                 &PointLight,
                 Option<&praxis_ecs::GlobalTransform>,
                 Option<&Transform>,
-            )>(),
-        );
+            )>();
+            for (point_light, maybe_global, maybe_transform) in point_query.iter(world.inner()) {
+                if lighting.point_light_count as usize >= praxis_graphics::MAX_POINT_LIGHTS {
+                    break;
+                }
+                let position = if let Some(global) = maybe_global {
+                    global.translation()
+                } else if let Some(transform) = maybe_transform {
+                    transform.translation
+                } else {
+                    Vec3::ZERO
+                };
+                lighting.point_lights[lighting.point_light_count as usize] = PointLightData {
+                    position: [position.x, position.y, position.z, 0.0],
+                    color: [
+                        point_light.color.x,
+                        point_light.color.y,
+                        point_light.color.z,
+                        0.0,
+                    ],
+                    intensity: point_light.intensity,
+                    range: point_light.range,
+                    _padding: [0.0; 2],
+                };
+                lighting.point_light_count += 1;
+            }
+        }
 
-        let lighting_data = world.resource::<LightingData>();
         let camera_entity = self.camera_controller.camera_entity.unwrap();
         let matrices_copy = *world
             .inner()
@@ -701,27 +730,31 @@ impl App {
 
         // Build draw commands
         let mut draw_commands = Vec::new();
-        let mut query = world.inner_mut().query::<(
-            &Transform,
-            &praxis_ecs::MeshHandle,
-            &praxis_ecs::TextureHandle,
-            Option<&praxis_ecs::MaterialPropertiesComponent>,
-        )>();
+        {
+            let mut query = world.query::<(
+                &Transform,
+                &praxis_ecs::MeshHandle,
+                &praxis_ecs::TextureHandle,
+                Option<&praxis_ecs::MaterialPropertiesComponent>,
+            )>();
 
-        for (transform, mesh_handle, texture_handle, material_props) in query.iter(world.inner()) {
-            draw_commands.push(DrawCommand {
-                mesh_id: mesh_handle.id.clone(),
-                model: transform.compute_matrix(),
-                texture_name: Some(texture_handle.id.clone()),
-                material_properties: material_props.map(|m| m.0),
-            });
+            for (transform, mesh_handle, texture_handle, material_props) in
+                query.iter(world.inner())
+            {
+                draw_commands.push(DrawCommand {
+                    mesh_id: mesh_handle.id.clone(),
+                    model: transform.compute_matrix(),
+                    texture_name: Some(texture_handle.id.clone()),
+                    material_properties: material_props.map(|m| m.0),
+                });
+            }
         }
 
         let cmds = RenderCommands {
             view: matrices_copy.view,
             proj: matrices_copy.projection,
             draw_commands: &draw_commands,
-            lighting: Some(lighting_data),
+            lighting: Some(&lighting),
         };
 
         render_context.render(&cmds)?;
@@ -803,7 +836,7 @@ impl ApplicationHandler for App {
         ) {
             Ok(window) => Arc::new(window),
             Err(e) => {
-                eprintln!("Failed to create window: {}", e);
+                eprintln!("Failed to create window: {e}");
                 event_loop.exit();
                 return;
             }
@@ -813,7 +846,7 @@ impl ApplicationHandler for App {
             match pollster::block_on(Self::setup_scene(window.clone())) {
                 Ok(result) => result,
                 Err(e) => {
-                    eprintln!("Failed to setup scene: {}", e);
+                    eprintln!("Failed to setup scene: {e}");
                     event_loop.exit();
                     return;
                 }
@@ -865,10 +898,9 @@ impl ApplicationHandler for App {
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        let world = match self.world.as_mut() {
-            Some(world) => world,
-            None => return,
-        };
+        if self.world.is_none() {
+            return;
+        }
 
         match event {
             WindowEvent::CloseRequested => {
@@ -894,12 +926,14 @@ impl ApplicationHandler for App {
                 };
                 self.last_frame_time = Some(now);
 
-                {
-                    self.input_state.update();
-                    self.handle_input();
-                    self.update_ambient_light();
+                // Process input (doesn't need world)
+                self.input_state.update();
+                self.handle_input();
+                self.update_ambient_light();
 
-                    if let Some(camera_entity) = self.camera_controller.camera_entity {
+                // Update camera (needs world)
+                if let Some(camera_entity) = self.camera_controller.camera_entity {
+                    if let Some(world) = &mut self.world {
                         Self::update_camera(
                             camera_entity,
                             &self.camera_controller,
@@ -908,9 +942,11 @@ impl ApplicationHandler for App {
                             world,
                         );
                     }
+                }
 
-                    // Update camera matrices
-                    if let Some(camera_entity) = self.camera_controller.camera_entity {
+                // Update camera matrices (needs world)
+                if let Some(camera_entity) = self.camera_controller.camera_entity {
+                    if let Some(world) = &mut self.world {
                         let inner = world.inner_mut();
                         if let Some(transform) = inner.get::<Transform>(camera_entity) {
                             if let Some(projection) =
@@ -935,7 +971,7 @@ impl ApplicationHandler for App {
                 }
 
                 if let Err(e) = self.render_scene() {
-                    eprintln!("Render error: {}", e);
+                    eprintln!("Render error: {e}");
                 }
 
                 if let Some(window) = &self.window {

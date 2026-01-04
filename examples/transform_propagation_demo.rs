@@ -9,8 +9,8 @@ use praxis_ecs::systems::{
     propagate_transforms_for_reparented, sync_parent_child_relationships,
 };
 use praxis_ecs::{
-    Children, GlobalTransform, IntoSystemConfigs, Name, Parent, Schedule, Transform,
-    TransformBundle, World,
+    BevyWorld, Children, Entity, GlobalTransform, IntoSystemConfigs, Name, Parent, Schedule,
+    Transform, TransformBundle, World,
 };
 use praxis_math::{Quat, Vec3};
 
@@ -81,13 +81,13 @@ fn main() -> praxis_utils::Result<()> {
     ));
 
     println!("=== Initial State (Before Transform Propagation) ===\n");
-    print_entity_transforms(&world);
+    print_entity_transforms(&mut world);
 
     // Run transform propagation systems
-    world.inner_mut().run_schedule(&mut schedule);
+    schedule.run(world.inner_mut());
 
     println!("\n=== After Initial Transform Propagation ===\n");
-    print_entity_transforms(&world);
+    print_entity_transforms(&mut world);
 
     // Test 1: Rotate the platform
     println!("\n=== Test 1: Rotating Platform by 90 degrees around Y ===\n");
@@ -98,8 +98,8 @@ fn main() -> praxis_utils::Result<()> {
         }
     }
 
-    world.inner_mut().run_schedule(&mut schedule);
-    print_entity_transforms(&world);
+    schedule.run(world.inner_mut());
+    print_entity_transforms(&mut world);
 
     // Test 2: Move a child entity
     println!("\n=== Test 2: Moving Cube1 to (8, 1, 0) ===\n");
@@ -110,8 +110,8 @@ fn main() -> praxis_utils::Result<()> {
         }
     }
 
-    world.inner_mut().run_schedule(&mut schedule);
-    print_entity_transforms(&world);
+    schedule.run(world.inner_mut());
+    print_entity_transforms(&mut world);
 
     // Test 3: Scale the arm
     println!("\n=== Test 3: Scaling Arm by 2x ===\n");
@@ -122,8 +122,8 @@ fn main() -> praxis_utils::Result<()> {
         }
     }
 
-    world.inner_mut().run_schedule(&mut schedule);
-    print_entity_transforms(&world);
+    schedule.run(world.inner_mut());
+    print_entity_transforms(&mut world);
 
     // Test 4: Reparent hand to root
     println!("\n=== Test 4: Reparenting Hand to Root ===\n");
@@ -134,19 +134,19 @@ fn main() -> praxis_utils::Result<()> {
         }
     }
 
-    world.inner_mut().run_schedule(&mut schedule);
-    print_entity_transforms(&world);
+    schedule.run(world.inner_mut());
+    print_entity_transforms(&mut world);
 
     // Test 5: Create a new entity and parent it
     println!("\n=== Test 5: Adding New Cube3 to Platform ===\n");
-    let cube3 = world.spawn((
+    let _cube3 = world.spawn((
         Name::from("Cube3"),
         TransformBundle::from_xyz(0.0, 5.0, 0.0),
         Parent(platform),
     ));
 
-    world.inner_mut().run_schedule(&mut schedule);
-    print_entity_transforms(&world);
+    schedule.run(world.inner_mut());
+    print_entity_transforms(&mut world);
 
     // Test 6: Remove parent from an entity
     println!("\n=== Test 6: Removing Parent from Cube2 ===\n");
@@ -155,8 +155,8 @@ fn main() -> praxis_utils::Result<()> {
         inner.entity_mut(cube2).remove::<Parent>();
     }
 
-    world.inner_mut().run_schedule(&mut schedule);
-    print_entity_transforms(&world);
+    schedule.run(world.inner_mut());
+    print_entity_transforms(&mut world);
 
     // Verify parent-child relationships
     println!("\n=== Final Parent-Child Relationships ===\n");
@@ -167,11 +167,10 @@ fn main() -> praxis_utils::Result<()> {
 }
 
 /// Helper function to print entity transforms
-fn print_entity_transforms(world: &World) {
-    let inner = world.inner();
-    let mut query = inner.query::<(&Name, &Transform, &GlobalTransform)>();
+fn print_entity_transforms(world: &mut World) {
+    let mut query = world.query::<(&Name, &Transform, &GlobalTransform)>();
 
-    for (name, transform, global_transform) in query.iter(inner) {
+    for (name, transform, global_transform) in query.iter(world.inner()) {
         let local_pos = transform.translation;
         let global_pos = global_transform.translation();
 
@@ -192,29 +191,33 @@ fn print_entity_transforms(world: &World) {
 fn print_hierarchy(world: &World) {
     let inner = world.inner();
 
-    // Find root entities (no parent)
-    let mut root_query = inner.query::<(&Name, Option<&Children>)>();
-    let mut parent_query = inner.query::<&Parent>();
+    // Collect all entities that have parents
+    let mut entities_with_parents = std::collections::HashSet::new();
+    for entity_ref in inner.iter_entities() {
+        if entity_ref.get::<Parent>().is_some() {
+            entities_with_parents.insert(entity_ref.id());
+        }
+    }
 
-    for (entity, (name, maybe_children)) in root_query.iter_with_entity(inner) {
-        // Check if this entity has a parent
-        if parent_query.get(inner, entity).is_ok() {
+    // Find root entities (no parent) and print them
+    for entity_ref in inner.iter_entities() {
+        let entity = entity_ref.id();
+        // Skip if this entity has a parent
+        if entities_with_parents.contains(&entity) {
             continue;
         }
 
-        println!("{}", name.as_str());
-        if let Some(children) = maybe_children {
-            print_children(inner, &children.0, 1);
+        if let Some(name) = entity_ref.get::<Name>() {
+            println!("{}", name.as_str());
+            if let Some(children) = entity_ref.get::<Children>() {
+                print_children(inner, &children.0, 1);
+            }
         }
     }
 }
 
 /// Recursively print children with indentation
-fn print_children(
-    world: &bevy_ecs::world::World,
-    children: &[bevy_ecs::entity::Entity],
-    depth: usize,
-) {
+fn print_children(world: &BevyWorld, children: &[Entity], depth: usize) {
     let indent = "  ".repeat(depth);
 
     for &child in children {

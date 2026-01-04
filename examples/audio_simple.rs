@@ -4,8 +4,7 @@
 //! It shows the component and system structure.
 
 use praxis_audio::{play_sound_system, AudioListener, AudioManager, AudioSource};
-use praxis_ecs::{Query, Schedule, Transform, World};
-use praxis_math::Vec3;
+use praxis_ecs::{Schedule, Transform, World};
 use praxis_utils::{info, Result};
 
 fn main() -> Result<()> {
@@ -54,11 +53,11 @@ fn main() -> Result<()> {
     info!("Audio system setup complete!");
     info!("Note: Audio files would need to exist at the specified paths to actually play sounds.");
 
-    let audio_sources = world.inner_mut().query::<(&AudioSource, &Transform)>();
+    let mut audio_sources = world.inner_mut().query::<(&AudioSource, &Transform)>();
     let count = audio_sources.iter(&world.inner()).count();
     info!("Total audio sources in scene: {}", count);
 
-    let listeners = world.inner_mut().query::<(&AudioListener, &Transform)>();
+    let mut listeners = world.inner_mut().query::<(&AudioListener, &Transform)>();
     let listener_count = listeners.iter(&world.inner()).count();
     info!("Total audio listeners in scene: {}", listener_count);
 

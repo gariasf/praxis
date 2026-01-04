@@ -1923,10 +1923,7 @@ mod tests {
         );
 
         let probe_manual = EnvironmentProbe::new("manual").with_update_manual();
-        assert_eq!(
-            probe_manual.update_mode,
-            EnvironmentProbeUpdateMode::Manual
-        );
+        assert_eq!(probe_manual.update_mode, EnvironmentProbeUpdateMode::Manual);
 
         let probe_continuous = EnvironmentProbe::new("continuous").with_update_continuous();
         assert_eq!(

@@ -20,7 +20,7 @@ use vulkano::pipeline::graphics::vertex_input::Vertex;
 /// The struct is marked with `#[repr(C)]` to ensure predictable memory layout:
 ///
 /// ```text
-/// Vertex3D (96 bytes total):
+/// Vertex3D (92 bytes total):
 /// ┌──────────────┬──────────────┬──────────────┬──────────┬──────────────┬────────────────┬────────────────┐
 /// │ position(12b)│ normal(12b)  │ color(12b)   │ uv(8b)   │ tangent(16b) │ bone_indices(16b)│ bone_weights(16b)│
 /// └──────────────┴──────────────┴──────────────┴──────────┴──────────────┴────────────────┴────────────────┘
@@ -291,7 +291,9 @@ mod tests {
 
     #[test]
     fn test_vertex3d_size() {
-        assert_eq!(std::mem::size_of::<Vertex3D>(), 96);
+        // Vertex3D layout: position(12) + normal(12) + color(12) + uv(8) + tangent(16)
+        // + bone_indices(16) + bone_weights(16) = 92 bytes
+        assert_eq!(std::mem::size_of::<Vertex3D>(), 92);
     }
 
     #[test]
@@ -376,7 +378,7 @@ mod tests {
     fn test_vertex3d_bytemuck_pod() {
         let vertex = Vertex3D::new([1.0, 2.0, 3.0], [0.5, 0.6, 0.7]);
         let bytes = bytemuck::bytes_of(&vertex);
-        assert_eq!(bytes.len(), 96);
+        assert_eq!(bytes.len(), 92);
     }
 
     #[test]

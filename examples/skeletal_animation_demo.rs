@@ -7,7 +7,7 @@
 //! - Keyframe interpolation
 //! - Animation looping and blending
 
-use praxis_ecs::{Query, Schedule, World};
+use praxis_ecs::World;
 use praxis_math::{Quat, Vec3};
 use praxis_scene::{AnimatedPose, AnimationClip, AnimationPlayer, Bone, Skeleton};
 use praxis_utils::timing::FrameTimer;
@@ -50,17 +50,9 @@ fn create_walk_animation() -> AnimationClip {
 
     // Animate the spine rotating
     clip.add_rotation_keyframe(1, 0.0, Quat::IDENTITY);
-    clip.add_rotation_keyframe(
-        1,
-        0.5,
-        Quat::from_rotation_z(std::f32::consts::PI / 16.0),
-    );
+    clip.add_rotation_keyframe(1, 0.5, Quat::from_rotation_z(std::f32::consts::PI / 16.0));
     clip.add_rotation_keyframe(1, 1.0, Quat::IDENTITY);
-    clip.add_rotation_keyframe(
-        1,
-        1.5,
-        Quat::from_rotation_z(-std::f32::consts::PI / 16.0),
-    );
+    clip.add_rotation_keyframe(1, 1.5, Quat::from_rotation_z(-std::f32::consts::PI / 16.0));
     clip.add_rotation_keyframe(1, 2.0, Quat::IDENTITY);
 
     clip
@@ -77,35 +69,39 @@ fn create_idle_animation() -> AnimationClip {
 
     // Slight head rotation
     clip.add_rotation_keyframe(2, 0.0, Quat::IDENTITY);
-    clip.add_rotation_keyframe(
-        2,
-        1.0,
-        Quat::from_rotation_y(std::f32::consts::PI / 32.0),
-    );
+    clip.add_rotation_keyframe(2, 1.0, Quat::from_rotation_y(std::f32::consts::PI / 32.0));
     clip.add_rotation_keyframe(2, 2.0, Quat::IDENTITY);
 
     clip
 }
 
-/// Animation update system that advances animation playback.
-fn animation_update_system(
-    delta_time: f32,
-    mut query: Query<(&Skeleton, &mut AnimationPlayer, &mut AnimatedPose)>,
-) {
-    praxis_scene::update_animations(delta_time, &mut query);
+/// Updates animations for all entities with animation components.
+///
+/// This function iterates over all entities with Skeleton, AnimationPlayer, and AnimatedPose
+/// components and advances their animation playback.
+fn update_animations_manual(world: &mut World, delta_time: f32) {
+    let mut query = world.query::<(&Skeleton, &mut AnimationPlayer, &mut AnimatedPose)>();
+    for (skeleton, mut player, mut pose) in query.iter_mut(world.inner_mut()) {
+        // Update animation playback times
+        player.update(delta_time);
+
+        // Evaluate the current animation state and update the pose
+        *pose = player.evaluate(skeleton);
+    }
 }
 
-/// System that prints animation state for debugging.
-fn debug_animation_system(query: Query<(&AnimationPlayer, &AnimatedPose)>) {
-    for (player, pose) in query.iter() {
+/// Prints animation state for debugging.
+fn debug_animation_state(world: &mut World) {
+    let mut query = world.query::<(&AnimationPlayer, &AnimatedPose)>();
+    for (player, pose) in query.iter(world.inner()) {
         let playing_clips = player.playing_clips();
         if !playing_clips.is_empty() {
-            println!("Playing animations: {:?}", playing_clips);
+            println!("Playing animations: {playing_clips:?}");
 
             // Print first bone's local transform
             if let Some(transform) = pose.local_transform(0) {
                 let translation = transform.col(3).truncate();
-                println!("  Root bone position: {:?}", translation);
+                println!("  Root bone position: {translation:?}");
             }
         }
     }
@@ -125,7 +121,8 @@ fn main() {
             println!(
                 "  - {} (parent: {:?})",
                 bone.name,
-                bone.parent_index.map(|p| skeleton.bone(p).unwrap().name.as_str())
+                bone.parent_index
+                    .map(|p| skeleton.bone(p).unwrap().name.as_str())
             );
         }
     }
@@ -151,10 +148,7 @@ fn main() {
 
     // Spawn animated entity
     let entity = world.spawn((skeleton.clone(), player, pose));
-    println!("Spawned animated entity: {:?}\n", entity);
-
-    // Create schedule for systems
-    let mut schedule = Schedule::default();
+    println!("Spawned animated entity: {entity:?}\n");
 
     // Simulate animation for a few frames
     let mut timer = FrameTimer::new();
@@ -165,7 +159,7 @@ fn main() {
     // Play the walk animation
     {
         let mut query = world.query::<&mut AnimationPlayer>();
-        for mut player in query.iter_mut(&mut world) {
+        for mut player in query.iter_mut(world.inner_mut()) {
             player.play("Walk");
             player.set_looping("Walk", true);
             println!("Started playing 'Walk' animation (looping)\n");
@@ -178,23 +172,23 @@ fn main() {
     let frame_time = 1.0 / target_fps;
     let total_frames = (simulation_duration * target_fps) as usize;
 
-    println!("Running simulation for {:.1}s...\n", simulation_duration);
+    println!("Running simulation for {simulation_duration:.1}s...\n");
 
     for _ in 0..total_frames {
         frame += 1;
         timer.tick();
 
         // Update animations
-        {
-            let mut query = world.query::<(&Skeleton, &mut AnimationPlayer, &mut AnimatedPose)>();
-            animation_update_system(frame_time, &mut query);
-        }
+        update_animations_manual(&mut world, frame_time);
 
         // Print state every 60 frames (once per second)
         if frame % 60 == 0 {
-            println!("--- Frame {} (t={:.2}s) ---", frame, frame as f32 * frame_time);
-            let query = world.query::<(&AnimationPlayer, &AnimatedPose)>();
-            debug_animation_system(query);
+            println!(
+                "--- Frame {} (t={:.2}s) ---",
+                frame,
+                frame as f32 * frame_time
+            );
+            debug_animation_state(&mut world);
             println!();
         }
     }
@@ -204,27 +198,26 @@ fn main() {
     // Test pause/resume
     {
         let mut query = world.query::<&mut AnimationPlayer>();
-        for mut player in query.iter_mut(&mut world) {
+        for mut player in query.iter_mut(world.inner_mut()) {
             println!("Pausing animation...");
             player.pause("Walk");
 
             if let Some(time) = player.current_time("Walk") {
-                println!("  Paused at time: {:.2}s", time);
+                println!("  Paused at time: {time:.2}s");
             }
         }
     }
 
     // Run a few frames while paused
     for _ in 0..5 {
-        let mut query = world.query::<(&Skeleton, &mut AnimationPlayer, &mut AnimatedPose)>();
-        animation_update_system(frame_time, &mut query);
+        update_animations_manual(&mut world, frame_time);
     }
 
     {
-        let query = world.query::<&AnimationPlayer>();
-        for player in query.iter(&world) {
+        let mut query = world.query::<&AnimationPlayer>();
+        for player in query.iter(world.inner()) {
             if let Some(time) = player.current_time("Walk") {
-                println!("  Time after 5 frames: {:.2}s (should be unchanged)", time);
+                println!("  Time after 5 frames: {time:.2}s (should be unchanged)");
             }
         }
     }
@@ -232,7 +225,7 @@ fn main() {
     // Resume animation
     {
         let mut query = world.query::<&mut AnimationPlayer>();
-        for mut player in query.iter_mut(&mut world) {
+        for mut player in query.iter_mut(world.inner_mut()) {
             println!("\nResuming animation...");
             player.resume("Walk");
         }
@@ -243,7 +236,7 @@ fn main() {
     // Test animation speed
     {
         let mut query = world.query::<&mut AnimationPlayer>();
-        for mut player in query.iter_mut(&mut world) {
+        for mut player in query.iter_mut(world.inner_mut()) {
             println!("Setting animation speed to 2x...");
             player.set_speed("Walk", 2.0);
         }
@@ -251,15 +244,14 @@ fn main() {
 
     // Run a few frames with 2x speed
     for _ in 0..10 {
-        let mut query = world.query::<(&Skeleton, &mut AnimationPlayer, &mut AnimatedPose)>();
-        animation_update_system(frame_time, &mut query);
+        update_animations_manual(&mut world, frame_time);
     }
 
     {
-        let query = world.query::<&AnimationPlayer>();
-        for player in query.iter(&world) {
+        let mut query = world.query::<&AnimationPlayer>();
+        for player in query.iter(world.inner()) {
             if let Some(time) = player.current_time("Walk") {
-                println!("  Time after 10 frames at 2x speed: {:.2}s", time);
+                println!("  Time after 10 frames at 2x speed: {time:.2}s");
             }
         }
     }
@@ -269,7 +261,7 @@ fn main() {
     // Test stopping animation
     {
         let mut query = world.query::<&mut AnimationPlayer>();
-        for mut player in query.iter_mut(&mut world) {
+        for mut player in query.iter_mut(world.inner_mut()) {
             println!("Stopping animation...");
             player.stop("Walk");
             println!("  Is playing: {}", player.is_playing("Walk"));
@@ -281,7 +273,7 @@ fn main() {
     // Test animation blending with multiple clips
     {
         let mut query = world.query::<&mut AnimationPlayer>();
-        for mut player in query.iter_mut(&mut world) {
+        for mut player in query.iter_mut(world.inner_mut()) {
             println!("Playing both 'Walk' and 'Idle' animations...");
             player.play("Walk");
             player.set_weight("Walk", 0.7);
@@ -294,18 +286,17 @@ fn main() {
 
     // Run blended animation for a bit
     for _ in 0..60 {
-        let mut query = world.query::<(&Skeleton, &mut AnimationPlayer, &mut AnimatedPose)>();
-        animation_update_system(frame_time, &mut query);
+        update_animations_manual(&mut world, frame_time);
     }
 
     {
-        let query = world.query::<(&AnimationPlayer, &AnimatedPose)>();
-        for (player, pose) in query.iter(&world) {
+        let mut query = world.query::<(&AnimationPlayer, &AnimatedPose)>();
+        for (player, pose) in query.iter(world.inner()) {
             println!("\nAfter 1 second of blended animation:");
             println!("  Playing clips: {:?}", player.playing_clips());
             if let Some(transform) = pose.local_transform(0) {
                 let translation = transform.col(3).truncate();
-                println!("  Root bone position: {:?}", translation);
+                println!("  Root bone position: {translation:?}");
             }
         }
     }

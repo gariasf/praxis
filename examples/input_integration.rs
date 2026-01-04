@@ -3,7 +3,7 @@
 //! This example demonstrates how to integrate the input system with a winit
 //! event loop and ECS world.
 
-use bevy_ecs::world::World;
+use praxis_ecs::World;
 use praxis_input::{Action, InputMap, InputState, MouseButton};
 use praxis_utils::Result;
 use winit::application::ApplicationHandler;

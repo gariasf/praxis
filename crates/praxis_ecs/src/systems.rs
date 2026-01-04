@@ -82,7 +82,10 @@ pub fn sync_parent_child_relationships(
             }
         } else {
             // Parent doesn't have Children component yet, add to pending
-            pending_children.entry(parent.0).or_default().push(child_entity);
+            pending_children
+                .entry(parent.0)
+                .or_default()
+                .push(child_entity);
         }
     }
 
@@ -106,7 +109,10 @@ pub fn sync_parent_child_relationships(
             }
         } else {
             // Parent doesn't have Children component yet, add to pending
-            pending_children.entry(parent.0).or_default().push(child_entity);
+            pending_children
+                .entry(parent.0)
+                .or_default()
+                .push(child_entity);
         }
     }
 
@@ -207,10 +213,7 @@ pub fn propagate_transforms(
             (Entity, &Transform, &mut GlobalTransform, Option<&Children>),
             (Without<Parent>, Or<(Changed<Transform>, Added<Transform>)>),
         >,
-        Query<
-            (Entity, &Transform, &mut GlobalTransform, Option<&Children>),
-            Without<Parent>,
-        >,
+        Query<(Entity, &Transform, &mut GlobalTransform, Option<&Children>), Without<Parent>>,
     )>,
     mut child_query: Query<(&Transform, &mut GlobalTransform, Option<&Children>), With<Parent>>,
 ) {
@@ -326,8 +329,8 @@ pub fn propagate_transforms_for_reparented(
     >,
     // ParamSet to avoid read/write conflicts on GlobalTransform
     mut global_set: ParamSet<(
-        Query<&GlobalTransform>,      // p0: for reading parent transforms
-        Query<&mut GlobalTransform>,  // p1: for writing entity transforms
+        Query<&GlobalTransform>,     // p0: for reading parent transforms
+        Query<&mut GlobalTransform>, // p1: for writing entity transforms
         Query<(&Transform, &mut GlobalTransform, Option<&Children>), With<Parent>>, // p2: for child propagation
     )>,
 ) {
@@ -391,8 +394,8 @@ pub fn propagate_transforms_for_changed_children(
     >,
     // ParamSet to avoid read/write conflicts on GlobalTransform
     mut global_set: ParamSet<(
-        Query<&GlobalTransform>,      // p0: for reading parent transforms
-        Query<&mut GlobalTransform>,  // p1: for writing entity transforms
+        Query<&GlobalTransform>,     // p0: for reading parent transforms
+        Query<&mut GlobalTransform>, // p1: for writing entity transforms
         Query<(&Transform, &mut GlobalTransform, Option<&Children>), With<Parent>>, // p2: for child propagation
     )>,
 ) {

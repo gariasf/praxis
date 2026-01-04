@@ -2867,6 +2867,7 @@ dependencies = [
 name = "praxis"
 version = "0.1.0"
 dependencies = [
+ "bevy_ecs",
  "criterion",
  "pollster",
  "praxis_assets",

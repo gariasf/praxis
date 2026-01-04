@@ -387,8 +387,13 @@ impl ToneMapper {
         output_extent: [u32; 2],
         exposure: f32,
     ) -> Result<()> {
-        self.tone_map_pass
-            .execute(builder, hdr_input, output_framebuffer, output_extent, exposure)
+        self.tone_map_pass.execute(
+            builder,
+            hdr_input,
+            output_framebuffer,
+            output_extent,
+            exposure,
+        )
     }
 
     /// Sets the tone mapping operator.

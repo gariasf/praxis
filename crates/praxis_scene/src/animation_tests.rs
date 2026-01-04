@@ -41,11 +41,11 @@ mod tests {
     #[test]
     fn test_rotation_interpolation_slerp() {
         let mut track = BoneTrack::new();
-        
+
         // Rotation from no rotation to 90 degrees around Z axis
         let start_rotation = Quat::IDENTITY;
         let end_rotation = Quat::from_rotation_z(PI / 2.0);
-        
+
         track.add_rotation_keyframe(0.0, start_rotation);
         track.add_rotation_keyframe(1.0, end_rotation);
 
@@ -146,7 +146,7 @@ mod tests {
     #[test]
     fn test_keyframe_sorting() {
         let mut track = BoneTrack::new();
-        
+
         // Add keyframes in random order
         track.add_translation_keyframe(2.0, Vec3::new(20.0, 0.0, 0.0));
         track.add_translation_keyframe(0.0, Vec3::ZERO);
@@ -212,13 +212,7 @@ mod tests {
     #[test]
     fn test_bone_bind_pose_matrix_rotation() {
         let rotation = Quat::from_rotation_z(PI / 2.0);
-        let bone = Bone::with_bind_pose(
-            "Test".to_string(),
-            None,
-            Vec3::ZERO,
-            rotation,
-            Vec3::ONE,
-        );
+        let bone = Bone::with_bind_pose("Test".to_string(), None, Vec3::ZERO, rotation, Vec3::ONE);
 
         let matrix = bone.bind_pose_matrix();
         let extracted_rotation = Quat::from_mat4(&matrix);
@@ -228,13 +222,8 @@ mod tests {
     #[test]
     fn test_bone_bind_pose_matrix_scale() {
         let scale = Vec3::new(2.0, 3.0, 4.0);
-        let bone = Bone::with_bind_pose(
-            "Test".to_string(),
-            None,
-            Vec3::ZERO,
-            Quat::IDENTITY,
-            scale,
-        );
+        let bone =
+            Bone::with_bind_pose("Test".to_string(), None, Vec3::ZERO, Quat::IDENTITY, scale);
 
         let matrix = bone.bind_pose_matrix();
         let extracted_scale = Vec3::new(
@@ -251,13 +240,7 @@ mod tests {
         let rotation = Quat::from_rotation_y(PI / 4.0);
         let scale = Vec3::new(2.0, 2.0, 2.0);
 
-        let bone = Bone::with_bind_pose(
-            "Test".to_string(),
-            None,
-            translation,
-            rotation,
-            scale,
-        );
+        let bone = Bone::with_bind_pose("Test".to_string(), None, translation, rotation, scale);
 
         let matrix = bone.bind_pose_matrix();
 
@@ -290,7 +273,7 @@ mod tests {
         // Inverse of translation matrix should move back
         let original = skeleton.bone(0).unwrap().bind_pose_matrix();
         let identity = original * inverse_bind;
-        
+
         // Should be approximately identity
         assert!((identity - Mat4::IDENTITY).abs_diff_eq(Mat4::IDENTITY, 0.001));
     }
@@ -334,7 +317,7 @@ mod tests {
         let child2_inverse = skeleton.inverse_bind_matrix(2).unwrap();
         let world_pos = Vec3::new(2.0, 0.0, 0.0);
         let local_pos = child2_inverse.transform_point3(world_pos);
-        
+
         assert!(local_pos.length() < 0.001);
     }
 
@@ -362,7 +345,7 @@ mod tests {
 
         // Set root to translate by (5, 0, 0)
         pose.set_local_transform(0, Mat4::from_translation(Vec3::new(5.0, 0.0, 0.0)));
-        
+
         // Set child to translate by (2, 0, 0) relative to parent
         pose.set_local_transform(1, Mat4::from_translation(Vec3::new(2.0, 0.0, 0.0)));
 
@@ -381,22 +364,20 @@ mod tests {
 
     #[test]
     fn test_animated_pose_skinning_matrices() {
-        let bones = vec![
-            Bone::with_bind_pose(
-                "Root".to_string(),
-                None,
-                Vec3::ZERO,
-                Quat::IDENTITY,
-                Vec3::ONE,
-            ),
-        ];
+        let bones = vec![Bone::with_bind_pose(
+            "Root".to_string(),
+            None,
+            Vec3::ZERO,
+            Quat::IDENTITY,
+            Vec3::ONE,
+        )];
 
         let skeleton = Skeleton::new(bones);
         let mut pose = AnimatedPose::new(skeleton.bone_count());
 
         // Set animated transform
         pose.set_local_transform(0, Mat4::from_translation(Vec3::new(10.0, 0.0, 0.0)));
-        
+
         pose.update_world_transforms(&skeleton);
         pose.update_skinning_matrices(&skeleton);
 
@@ -404,7 +385,7 @@ mod tests {
         let skinning_matrix = pose.skinning_matrices()[0];
         let inverse_bind = skeleton.inverse_bind_matrix(0).unwrap();
         let world = pose.world_transform(0).unwrap();
-        
+
         let expected = world * inverse_bind;
         assert!((skinning_matrix - expected).abs_diff_eq(Mat4::IDENTITY, 0.001));
     }
@@ -458,11 +439,11 @@ mod tests {
         // At midpoint, should get 50/50
         node.set_parameter(0.5);
         let weights = node.compute_weights();
-        
+
         assert_eq!(weights.len(), 2);
         let sum: f32 = weights.iter().map(|(_, w)| w).sum();
         assert!((sum - 1.0).abs() < 0.001);
-        
+
         // Both should be approximately 0.5
         for (_, weight) in &weights {
             assert!((*weight - 0.5).abs() < 0.001);
@@ -538,11 +519,7 @@ mod tests {
 
     #[test]
     fn test_cross_fade_weight_progression() {
-        let mut transition = CrossFadeTransition::new(
-            "Idle".to_string(),
-            "Walk".to_string(),
-            1.0,
-        );
+        let mut transition = CrossFadeTransition::new("Idle".to_string(), "Walk".to_string(), 1.0);
 
         // At start, weight should be 0.0
         assert!((transition.blend_weight() - 0.0).abs() < 0.001);
@@ -559,15 +536,11 @@ mod tests {
 
     #[test]
     fn test_cross_fade_weight_clamping() {
-        let mut transition = CrossFadeTransition::new(
-            "Idle".to_string(),
-            "Walk".to_string(),
-            1.0,
-        );
+        let mut transition = CrossFadeTransition::new("Idle".to_string(), "Walk".to_string(), 1.0);
 
         // Update beyond duration
         transition.update(2.0);
-        
+
         // Weight should be clamped to 1.0
         assert!((transition.blend_weight() - 1.0).abs() < 0.001);
         assert!(transition.is_complete());
@@ -576,7 +549,7 @@ mod tests {
     #[test]
     fn test_animation_layer_weight_clamping() {
         let mut layer = AnimationLayer::new(0.5);
-        
+
         assert!((layer.weight() - 0.5).abs() < 0.001);
 
         // Test clamping above 1.0
@@ -607,7 +580,7 @@ mod tests {
     #[test]
     fn test_bone_mask_weight_values() {
         let mut mask = BoneMask::with_bone_count(5);
-        
+
         // Disabled bone should return 0.0 weight
         assert_eq!(mask.bone_weight(0), 0.0);
 
@@ -623,11 +596,11 @@ mod tests {
     #[test]
     fn test_multiple_animation_blend_normalization() {
         let mut player = AnimationPlayer::new();
-        
+
         let clip1 = AnimationClip::new("Clip1".to_string(), 1.0);
         let clip2 = AnimationClip::new("Clip2".to_string(), 1.0);
         let clip3 = AnimationClip::new("Clip3".to_string(), 1.0);
-        
+
         player.add_clip("Clip1".to_string(), clip1);
         player.add_clip("Clip2".to_string(), clip2);
         player.add_clip("Clip3".to_string(), clip3);

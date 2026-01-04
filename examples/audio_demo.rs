@@ -8,13 +8,16 @@
 //! - Multiple audio sources with different behaviors
 //! - Interactive listener movement with WASD controls
 
-use praxis_audio::{play_sound_system, update_listener_system, AudioListener, AudioManager, AudioSource};
-use praxis_ecs::{
-    Commands, Component, Entity, IntoSystemConfigs, Query, Res, ResMut, Resource, Schedule, 
-    Transform, With, Without, World,
+use praxis_audio::{
+    play_sound_system, update_listener_system, AudioListener, AudioManager, AudioSource,
 };
-use praxis_input::{InputState, KeyCode};
-use praxis_math::{Quat, Vec3};
+use praxis_ecs::{
+    Commands, Component, Entity, Query, Res, ResMut, Resource, Schedule, Transform, With, Without,
+    World,
+};
+use praxis_input::InputState;
+use winit::keyboard::KeyCode;
+use praxis_math::Vec3;
 use praxis_utils::{info, Result};
 use std::time::{Duration, Instant};
 
@@ -31,7 +34,7 @@ impl DemoState {
             elapsed_time: 0.0,
         }
     }
-    
+
     fn update(&mut self) -> f32 {
         let now = Instant::now();
         let delta_time = now.duration_since(self.last_update).as_secs_f32();
@@ -50,9 +53,18 @@ struct MovingSource {
 
 #[derive(Debug, Clone, Copy)]
 enum MovementType {
-    Circular { radius: f32, start_angle: f32 },
-    BackAndForth { axis: Vec3, distance: f32 },
-    Spiral { radius_speed: f32, angular_speed: f32 },
+    Circular {
+        radius: f32,
+        start_angle: f32,
+    },
+    BackAndForth {
+        axis: Vec3,
+        distance: f32,
+    },
+    Spiral {
+        radius_speed: f32,
+        angular_speed: f32,
+    },
 }
 
 /// Component for audio sources that orbit around a point
@@ -77,10 +89,7 @@ fn setup_audio_scene(mut commands: Commands) {
 
     // Spawn audio listener (camera)
     info!("Creating audio listener at origin");
-    commands.spawn((
-        Transform::from_xyz(0.0, 1.8, 0.0),
-        AudioListener,
-    ));
+    commands.spawn((Transform::from_xyz(0.0, 1.8, 0.0), AudioListener));
 
     info!("Note: This demo requires audio files to be placed in assets/sounds/");
     info!("Example files needed:");
@@ -267,7 +276,7 @@ fn update_listener_position(
         if movement.length_squared() > 0.0 {
             movement = movement.normalize() * move_speed * delta_time;
             transform.translation += movement;
-            
+
             // Clamp to reasonable bounds
             transform.translation.x = transform.translation.x.clamp(-50.0, 50.0);
             transform.translation.y = transform.translation.y.clamp(0.5, 20.0);
@@ -290,13 +299,13 @@ fn update_orbiting_sources(
 ) {
     for (mut transform, mut orbit) in query.iter_mut() {
         let delta_time = state.last_update.elapsed().as_secs_f32().min(0.1);
-        
+
         orbit.angle += orbit.speed * delta_time;
-        
+
         // Update position in circular orbit
         let x = orbit.center.x + orbit.radius * orbit.angle.cos();
         let z = orbit.center.z + orbit.radius * orbit.angle.sin();
-        
+
         transform.translation = Vec3::new(x, orbit.center.y, z);
     }
 }
@@ -306,10 +315,13 @@ fn update_moving_sources(
     state: Res<DemoState>,
 ) {
     let time = state.elapsed_time;
-    
-    for (mut transform, moving, entity) in query.iter_mut() {
+
+    for (mut transform, moving, _entity) in query.iter_mut() {
         match moving.movement_type {
-            MovementType::Circular { radius, start_angle } => {
+            MovementType::Circular {
+                radius,
+                start_angle,
+            } => {
                 let angle = start_angle + time * moving.speed;
                 transform.translation.x = radius * angle.cos();
                 transform.translation.z = radius * angle.sin();
@@ -318,7 +330,10 @@ fn update_moving_sources(
                 let offset = (time * moving.speed).sin() * distance;
                 transform.translation = axis * offset;
             }
-            MovementType::Spiral { radius_speed, angular_speed } => {
+            MovementType::Spiral {
+                radius_speed,
+                angular_speed,
+            } => {
                 let angle = time * angular_speed;
                 let radius = 5.0 + (time * radius_speed).sin() * 10.0;
                 transform.translation.x = radius * angle.cos();
@@ -336,11 +351,11 @@ fn update_path_followers(
         if follower.waypoints.is_empty() {
             continue;
         }
-        
+
         let target = follower.waypoints[follower.current_waypoint];
         let direction = target - transform.translation;
         let distance = direction.length();
-        
+
         if distance < 1.0 {
             // Reached waypoint, move to next
             follower.current_waypoint = (follower.current_waypoint + 1) % follower.waypoints.len();
@@ -348,7 +363,7 @@ fn update_path_followers(
             // Move towards waypoint
             let delta_time = state.last_update.elapsed().as_secs_f32().min(0.1);
             let movement = direction.normalize() * follower.speed * delta_time;
-            
+
             if movement.length() <= distance {
                 transform.translation += movement;
             } else {
@@ -367,24 +382,26 @@ fn print_status_system(
     if state.elapsed_time % 2.0 < 0.016 {
         if let Some(listener_transform) = listener_query.iter().next() {
             let source_count = sources_query.iter().count();
-            
+
             info!("Status Update:");
-            info!("  Listener position: ({:.1}, {:.1}, {:.1})", 
+            info!(
+                "  Listener position: ({:.1}, {:.1}, {:.1})",
                 listener_transform.translation.x,
                 listener_transform.translation.y,
                 listener_transform.translation.z
             );
             info!("  Active audio sources: {}", source_count);
-            
+
             // Print closest source
             let mut closest_distance = f32::MAX;
             for source_transform in sources_query.iter() {
-                let distance = (source_transform.translation - listener_transform.translation).length();
+                let distance =
+                    (source_transform.translation - listener_transform.translation).length();
                 if distance < closest_distance {
                     closest_distance = distance;
                 }
             }
-            
+
             if closest_distance < f32::MAX {
                 info!("  Closest source: {:.1} units away", closest_distance);
             }
@@ -413,22 +430,17 @@ fn main() -> Result<()> {
 
     world.insert_resource(DemoState::new());
 
-    // Create schedule
+    // Create schedule - add systems individually since large tuple chain is not supported
     let mut schedule = Schedule::default();
-    schedule.add_systems(
-        (
-            setup_audio_scene,
-            start_audio_sources,
-            update_listener_position,
-            update_orbiting_sources,
-            update_moving_sources,
-            update_path_followers,
-            play_sound_system,
-            update_listener_system,
-            print_status_system,
-        )
-            .chain(),
-    );
+    schedule.add_systems(setup_audio_scene);
+    schedule.add_systems(start_audio_sources);
+    schedule.add_systems(update_listener_position);
+    schedule.add_systems(update_orbiting_sources);
+    schedule.add_systems(update_moving_sources);
+    schedule.add_systems(update_path_followers);
+    schedule.add_systems(play_sound_system);
+    schedule.add_systems(update_listener_system);
+    schedule.add_systems(print_status_system);
 
     info!("Starting audio demo loop...");
     info!("Running for 60 seconds (press Ctrl+C to exit earlier)");
@@ -436,9 +448,9 @@ fn main() -> Result<()> {
 
     // Run for 60 seconds at 60 FPS
     let total_frames = 60 * 60; // 60 seconds at 60 FPS
-    
+
     for frame in 0..total_frames {
-        world.inner_mut().run_schedule(&mut schedule);
+        schedule.run(world.inner_mut());
 
         // Check for exit key
         if let Some(input) = world.inner().get_resource::<InputState>() {
@@ -468,6 +480,6 @@ fn main() -> Result<()> {
     info!("  ✓ Spiral movement pattern");
     info!("  ✓ Path-following behavior");
     info!("  ✓ Distant stationary music source");
-    
+
     Ok(())
 }

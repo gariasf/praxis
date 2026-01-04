@@ -2,8 +2,8 @@
 
 #[cfg(test)]
 mod tests {
+    use crate::systems::{calculate_doppler_factor, calculate_spatial_params};
     use crate::*;
-    use crate::systems::{calculate_spatial_params, calculate_doppler_factor};
     use praxis_math::Vec3;
 
     // ============================================================================
@@ -13,7 +13,7 @@ mod tests {
     #[test]
     fn test_audio_source_creation() {
         let source = AudioSource::new("test.ogg");
-        
+
         assert_eq!(source.path, "test.ogg");
         assert_eq!(source.volume, 1.0);
         assert_eq!(source.spatial, false);
@@ -45,15 +45,13 @@ mod tests {
 
     #[test]
     fn test_audio_source_volume_clamping() {
-        let source = AudioSource::new("test.ogg")
-            .with_volume(2.0);
-        
+        let source = AudioSource::new("test.ogg").with_volume(2.0);
+
         // Volume should be clamped to 1.0
         assert_eq!(source.volume, 1.0);
 
-        let source = AudioSource::new("test.ogg")
-            .with_volume(-0.5);
-        
+        let source = AudioSource::new("test.ogg").with_volume(-0.5);
+
         // Volume should be clamped to 0.0
         assert_eq!(source.volume, 0.0);
     }
@@ -61,7 +59,7 @@ mod tests {
     #[test]
     fn test_audio_source_state_transitions() {
         let mut source = AudioSource::new("test.ogg");
-        
+
         assert!(source.is_stopped());
         assert!(!source.is_playing());
         assert!(!source.is_paused());
@@ -95,7 +93,7 @@ mod tests {
     #[test]
     fn test_playback_settings_defaults() {
         let settings = PlaybackSettings::default();
-        
+
         assert_eq!(settings.volume, 1.0);
         assert_eq!(settings.looping, false);
         assert_eq!(settings.panning, 0.0);
@@ -148,12 +146,8 @@ mod tests {
         let reference_distance = 10.0;
         let max_distance = 100.0;
 
-        let params = calculate_spatial_params(
-            source_pos,
-            listener_pos,
-            reference_distance,
-            max_distance,
-        );
+        let params =
+            calculate_spatial_params(source_pos, listener_pos, reference_distance, max_distance);
 
         // At reference distance, attenuation should be 1.0
         assert!((params.attenuation - 1.0).abs() < 0.001);
@@ -166,12 +160,8 @@ mod tests {
         let reference_distance = 10.0;
         let max_distance = 100.0;
 
-        let params = calculate_spatial_params(
-            source_pos,
-            listener_pos,
-            reference_distance,
-            max_distance,
-        );
+        let params =
+            calculate_spatial_params(source_pos, listener_pos, reference_distance, max_distance);
 
         // Closer than reference distance should still be 1.0
         assert!((params.attenuation - 1.0).abs() < 0.001);
@@ -215,12 +205,8 @@ mod tests {
         let reference_distance = 10.0;
         let max_distance = 100.0;
 
-        let params = calculate_spatial_params(
-            source_pos,
-            listener_pos,
-            reference_distance,
-            max_distance,
-        );
+        let params =
+            calculate_spatial_params(source_pos, listener_pos, reference_distance, max_distance);
 
         // At max distance, attenuation should be 0.0
         assert_eq!(params.attenuation, 0.0);
@@ -233,12 +219,8 @@ mod tests {
         let reference_distance = 10.0;
         let max_distance = 100.0;
 
-        let params = calculate_spatial_params(
-            source_pos,
-            listener_pos,
-            reference_distance,
-            max_distance,
-        );
+        let params =
+            calculate_spatial_params(source_pos, listener_pos, reference_distance, max_distance);
 
         // Beyond max distance, attenuation should be 0.0
         assert_eq!(params.attenuation, 0.0);
@@ -252,12 +234,8 @@ mod tests {
         let max_distance = 100.0;
 
         // Distance is sqrt(3^2 + 4^2) = 5.0
-        let params = calculate_spatial_params(
-            source_pos,
-            listener_pos,
-            reference_distance,
-            max_distance,
-        );
+        let params =
+            calculate_spatial_params(source_pos, listener_pos, reference_distance, max_distance);
 
         // At reference distance, attenuation should be 1.0
         assert!((params.attenuation - 1.0).abs() < 0.001);
@@ -271,12 +249,8 @@ mod tests {
         let max_distance = 100.0;
 
         // Distance is sqrt(10^2 + 10^2 + 10^2) = sqrt(300) ≈ 17.32
-        let params = calculate_spatial_params(
-            source_pos,
-            listener_pos,
-            reference_distance,
-            max_distance,
-        );
+        let params =
+            calculate_spatial_params(source_pos, listener_pos, reference_distance, max_distance);
 
         let expected_distance = (300.0_f32).sqrt();
         let expected_attenuation = (reference_distance / expected_distance).powi(2);
@@ -290,12 +264,8 @@ mod tests {
         let reference_distance = 10.0;
         let max_distance = 100.0;
 
-        let params = calculate_spatial_params(
-            source_pos,
-            listener_pos,
-            reference_distance,
-            max_distance,
-        );
+        let params =
+            calculate_spatial_params(source_pos, listener_pos, reference_distance, max_distance);
 
         // Panning should be close to center (0.0)
         assert!(params.panning.abs() < 0.01);
@@ -308,12 +278,8 @@ mod tests {
         let reference_distance = 10.0;
         let max_distance = 100.0;
 
-        let params = calculate_spatial_params(
-            source_pos,
-            listener_pos,
-            reference_distance,
-            max_distance,
-        );
+        let params =
+            calculate_spatial_params(source_pos, listener_pos, reference_distance, max_distance);
 
         // Panning should be positive (right)
         assert!(params.panning > 0.0);
@@ -327,12 +293,8 @@ mod tests {
         let reference_distance = 10.0;
         let max_distance = 100.0;
 
-        let params = calculate_spatial_params(
-            source_pos,
-            listener_pos,
-            reference_distance,
-            max_distance,
-        );
+        let params =
+            calculate_spatial_params(source_pos, listener_pos, reference_distance, max_distance);
 
         // Panning should be negative (left)
         assert!(params.panning < 0.0);
@@ -346,12 +308,8 @@ mod tests {
         let reference_distance = 10.0;
         let max_distance = 100.0;
 
-        let params = calculate_spatial_params(
-            source_pos,
-            listener_pos,
-            reference_distance,
-            max_distance,
-        );
+        let params =
+            calculate_spatial_params(source_pos, listener_pos, reference_distance, max_distance);
 
         // Panning should be clamped to 1.0
         assert!((params.panning - 1.0).abs() < 0.001);
@@ -364,12 +322,8 @@ mod tests {
         let listener_pos = Vec3::ZERO;
         let doppler_scale = 1.0;
 
-        let factor = calculate_doppler_factor(
-            previous_pos,
-            current_pos,
-            listener_pos,
-            doppler_scale,
-        );
+        let factor =
+            calculate_doppler_factor(previous_pos, current_pos, listener_pos, doppler_scale);
 
         // Should be > 1.0 (higher pitch) when approaching
         assert!(factor > 1.0);
@@ -383,12 +337,8 @@ mod tests {
         let listener_pos = Vec3::ZERO;
         let doppler_scale = 1.0;
 
-        let factor = calculate_doppler_factor(
-            previous_pos,
-            current_pos,
-            listener_pos,
-            doppler_scale,
-        );
+        let factor =
+            calculate_doppler_factor(previous_pos, current_pos, listener_pos, doppler_scale);
 
         // Should be < 1.0 (lower pitch) when receding
         assert!(factor < 1.0);
@@ -402,12 +352,8 @@ mod tests {
         let listener_pos = Vec3::ZERO;
         let doppler_scale = 1.0;
 
-        let factor = calculate_doppler_factor(
-            previous_pos,
-            current_pos,
-            listener_pos,
-            doppler_scale,
-        );
+        let factor =
+            calculate_doppler_factor(previous_pos, current_pos, listener_pos, doppler_scale);
 
         // Should be approximately 1.0 when not moving
         assert!((factor - 1.0).abs() < 0.01);
@@ -420,12 +366,8 @@ mod tests {
         let listener_pos = Vec3::ZERO;
         let doppler_scale = 0.0;
 
-        let factor = calculate_doppler_factor(
-            previous_pos,
-            current_pos,
-            listener_pos,
-            doppler_scale,
-        );
+        let factor =
+            calculate_doppler_factor(previous_pos, current_pos, listener_pos, doppler_scale);
 
         // Should be 1.0 when disabled
         assert_eq!(factor, 1.0);
@@ -438,12 +380,8 @@ mod tests {
         let listener_pos = Vec3::ZERO;
         let doppler_scale = 1.0;
 
-        let factor = calculate_doppler_factor(
-            previous_pos,
-            current_pos,
-            listener_pos,
-            doppler_scale,
-        );
+        let factor =
+            calculate_doppler_factor(previous_pos, current_pos, listener_pos, doppler_scale);
 
         // Should be approximately 1.0 for perpendicular motion
         assert!((factor - 1.0).abs() < 0.1);
@@ -455,19 +393,10 @@ mod tests {
         let current_pos = Vec3::new(9.0, 0.0, 0.0);
         let listener_pos = Vec3::ZERO;
 
-        let factor_normal = calculate_doppler_factor(
-            previous_pos,
-            current_pos,
-            listener_pos,
-            1.0,
-        );
+        let factor_normal = calculate_doppler_factor(previous_pos, current_pos, listener_pos, 1.0);
 
-        let factor_exaggerated = calculate_doppler_factor(
-            previous_pos,
-            current_pos,
-            listener_pos,
-            2.0,
-        );
+        let factor_exaggerated =
+            calculate_doppler_factor(previous_pos, current_pos, listener_pos, 2.0);
 
         // Exaggerated scale should produce more extreme doppler shift
         assert!(factor_exaggerated > factor_normal || factor_exaggerated < 1.0);
@@ -481,12 +410,8 @@ mod tests {
         let listener_pos = Vec3::ZERO;
         let doppler_scale = 10.0; // High scale
 
-        let factor = calculate_doppler_factor(
-            previous_pos,
-            current_pos,
-            listener_pos,
-            doppler_scale,
-        );
+        let factor =
+            calculate_doppler_factor(previous_pos, current_pos, listener_pos, doppler_scale);
 
         // Should be clamped to reasonable range
         assert!(factor >= 0.5);
@@ -501,12 +426,8 @@ mod tests {
         let reference_distance = 10.0;
         let max_distance = 50.0;
 
-        let params = calculate_spatial_params(
-            source_pos,
-            listener_pos,
-            reference_distance,
-            max_distance,
-        );
+        let params =
+            calculate_spatial_params(source_pos, listener_pos, reference_distance, max_distance);
 
         // Distance is sqrt(15^2 + 5^2) ≈ 15.81
         let distance = (15.0_f32.powi(2) + 5.0_f32.powi(2)).sqrt();
@@ -520,7 +441,7 @@ mod tests {
     #[test]
     fn test_audio_source_default_distances() {
         let source = AudioSource::new("test.ogg");
-        
+
         assert_eq!(source.max_distance, 100.0);
         assert_eq!(source.reference_distance, 1.0);
     }
@@ -530,7 +451,7 @@ mod tests {
         let source = AudioSource::new("test.ogg")
             .with_max_distance(250.0)
             .with_reference_distance(10.0);
-        
+
         assert_eq!(source.max_distance, 250.0);
         assert_eq!(source.reference_distance, 10.0);
     }

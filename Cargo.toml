@@ -67,10 +67,6 @@ name = "fps_camera_controller"
 path = "examples/fps_camera_controller.rs"
 
 [[example]]
-name = "obj_loader_demo"
-path = "examples/obj_loader_demo.rs"
-
-[[example]]
 name = "comprehensive_scene_demo"
 path = "examples/comprehensive_scene_demo.rs"
 
@@ -81,10 +77,6 @@ path = "examples/scene_demo.rs"
 [[example]]
 name = "gui_demo"
 path = "examples/gui_demo.rs"
-
-[[example]]
-name = "physics_demo"
-path = "examples/physics_demo.rs"
 
 [[example]]
 name = "audio_demo"
@@ -101,6 +93,7 @@ path = "examples/environment_probe_demo.rs"
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 vulkano = "0.35.1"
+bevy_ecs = "0.14"
 
 [[bench]]
 name = "mesh_upload"

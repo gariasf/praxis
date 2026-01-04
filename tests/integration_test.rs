@@ -9,17 +9,26 @@ use praxis_utils::init;
 /// with other components.
 #[test]
 fn test_tracing_initialization() {
-    let result = std::panic::catch_unwind(|| {
-        init().expect("Tracing initialization should not panic");
-    });
-    assert!(result.is_ok(), "Tracing initialization should not panic");
+    // Note: praxis_utils::init() may succeed or fail depending on whether
+    // another test has already initialized the global tracing subscriber.
+    // Both outcomes are acceptable - what matters is it doesn't panic unexpectedly.
+    let result = init();
+    // Either success or an error about already being initialized is OK
+    if let Err(e) = &result {
+        let error_str = format!("{:?}", e);
+        assert!(
+            error_str.contains("already") || error_str.contains("set"),
+            "Unexpected initialization error: {:?}",
+            e
+        );
+    }
 }
 
 /// Test initialization order across multiple subsystems.
 #[test]
 fn test_cross_crate_initialization_order() {
-    let utils_result = praxis_utils::init();
-    assert!(utils_result.is_ok(), "Utils initialization should succeed");
+    // Utils init may fail if already initialized by another test, which is OK
+    let _ = praxis_utils::init();
 
     let ecs_result = praxis_ecs::init();
     assert!(
@@ -102,13 +111,13 @@ fn test_ecs_world_creation_and_cleanup() {
 
     let mut world = World::new();
 
-    let entity1 = world.spawn(Transform::default()).id();
-    let entity2 = world.spawn(Transform::default()).id();
+    let entity1 = world.spawn(Transform::default());
+    let entity2 = world.spawn(Transform::default());
 
     assert!(world.get::<Transform>(entity1).is_some());
     assert!(world.get::<Transform>(entity2).is_some());
 
-    world.despawn(entity1);
+    let _ = world.despawn(entity1);
     assert!(world.get::<Transform>(entity1).is_none());
     assert!(world.get::<Transform>(entity2).is_some());
 
@@ -124,17 +133,17 @@ fn test_input_state_cleanup() {
 
     let mut input_state = InputState::new();
 
-    input_state.key_down(KeyCode::KeyW);
-    input_state.key_down(KeyCode::KeyA);
-    assert!(input_state.is_key_down(KeyCode::KeyW));
-    assert!(input_state.is_key_down(KeyCode::KeyA));
+    input_state.press_key(KeyCode::KeyW);
+    input_state.press_key(KeyCode::KeyA);
+    assert!(input_state.is_key_pressed(KeyCode::KeyW));
+    assert!(input_state.is_key_pressed(KeyCode::KeyA));
 
-    input_state.key_up(KeyCode::KeyW);
-    assert!(!input_state.is_key_down(KeyCode::KeyW));
-    assert!(input_state.is_key_down(KeyCode::KeyA));
+    input_state.release_key(KeyCode::KeyW);
+    assert!(!input_state.is_key_pressed(KeyCode::KeyW));
+    assert!(input_state.is_key_pressed(KeyCode::KeyA));
 
     input_state.clear();
-    assert!(!input_state.is_key_down(KeyCode::KeyA));
+    assert!(!input_state.is_key_pressed(KeyCode::KeyA));
 }
 
 /// Test physics world creation and cleanup.
@@ -148,14 +157,12 @@ fn test_physics_world_cleanup() {
 
     world.insert_resource(physics_world);
 
-    let entity = world
-        .spawn((RigidBody::dynamic(), Collider::sphere(1.0)))
-        .id();
+    let entity = world.spawn((RigidBody::Dynamic, Collider::sphere(1.0)));
 
     assert!(world.get::<RigidBody>(entity).is_some());
     assert!(world.get::<Collider>(entity).is_some());
 
-    world.despawn(entity);
+    let _ = world.despawn(entity);
     assert!(world.get::<RigidBody>(entity).is_none());
 }
 
@@ -188,29 +195,26 @@ f 1 2 3
 #[test]
 fn test_scene_ecs_integration_cleanup() {
     use praxis_ecs::{GlobalTransform, Parent, Transform, World};
+    use praxis_math::Vec3;
 
     let mut world = World::new();
 
-    let parent = world
-        .spawn((
-            Transform::from_translation([0.0, 0.0, 0.0]),
-            GlobalTransform::default(),
-        ))
-        .id();
+    let parent = world.spawn((
+        Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)),
+        GlobalTransform::default(),
+    ));
 
-    let child = world
-        .spawn((
-            Transform::from_translation([1.0, 0.0, 0.0]),
-            GlobalTransform::default(),
-            Parent::new(parent),
-        ))
-        .id();
+    let child = world.spawn((
+        Transform::from_translation(Vec3::new(1.0, 0.0, 0.0)),
+        GlobalTransform::default(),
+        Parent(parent),
+    ));
 
     assert!(world.get::<Transform>(parent).is_some());
     assert!(world.get::<Transform>(child).is_some());
     assert!(world.get::<Parent>(child).is_some());
 
-    world.despawn(child);
+    let _ = world.despawn(child);
     assert!(world.get::<Transform>(child).is_none());
     assert!(world.get::<Transform>(parent).is_some());
 
@@ -222,25 +226,23 @@ fn test_scene_ecs_integration_cleanup() {
 #[test]
 fn test_multiple_worlds_isolation() {
     use praxis_ecs::{Transform, World};
+    use praxis_math::Vec3;
 
     let mut world1 = World::new();
     let mut world2 = World::new();
 
-    let entity1 = world1
-        .spawn(Transform::from_translation([1.0, 0.0, 0.0]))
-        .id();
-    let entity2 = world2
-        .spawn(Transform::from_translation([2.0, 0.0, 0.0]))
-        .id();
+    let entity1 = world1.spawn(Transform::from_translation(Vec3::new(1.0, 0.0, 0.0)));
+    let entity2 = world2.spawn(Transform::from_translation(Vec3::new(2.0, 0.0, 0.0)));
 
     let data1 = world1.get::<Transform>(entity1).unwrap();
     let data2 = world2.get::<Transform>(entity2).unwrap();
 
-    assert_eq!(data1.translation()[0], 1.0);
-    assert_eq!(data2.translation()[0], 2.0);
+    assert_eq!(data1.translation.x, 1.0);
+    assert_eq!(data2.translation.x, 2.0);
 
-    assert!(world1.get::<Transform>(entity2).is_none());
-    assert!(world2.get::<Transform>(entity1).is_none());
+    // Note: We don't test cross-world entity lookups here because entity IDs
+    // are generated independently per world and may overlap. The key isolation
+    // property is that entities in each world have their own data.
 }
 
 /// Test that asset loader can be used multiple times without issues.
@@ -274,23 +276,22 @@ f 1 2 3
 #[test]
 fn test_transform_physics_compatibility() {
     use praxis_ecs::{GlobalTransform, Transform, World};
+    use praxis_math::Vec3;
     use praxis_physics::{Collider, RigidBody};
 
     let mut world = World::new();
 
-    let entity = world
-        .spawn((
-            Transform::from_translation([5.0, 10.0, 15.0]),
-            GlobalTransform::default(),
-            RigidBody::dynamic(),
-            Collider::sphere(1.0),
-        ))
-        .id();
+    let entity = world.spawn((
+        Transform::from_translation(Vec3::new(5.0, 10.0, 15.0)),
+        GlobalTransform::default(),
+        RigidBody::Dynamic,
+        Collider::sphere(1.0),
+    ));
 
     let transform = world.get::<Transform>(entity).unwrap();
     let rigid_body = world.get::<RigidBody>(entity).unwrap();
 
-    assert_eq!(transform.translation(), [5.0, 10.0, 15.0]);
+    assert_eq!(transform.translation, Vec3::new(5.0, 10.0, 15.0));
     assert!(rigid_body.is_dynamic());
 }
 
@@ -321,7 +322,7 @@ fn test_ecs_resource_lifecycle() {
     assert!(world.contains_resource::<InputState>());
 
     {
-        let _input_state = world.resource::<InputState>();
+        let _input_state = world.get_resource::<InputState>().unwrap();
     }
 
     world.remove_resource::<InputState>();
@@ -362,25 +363,30 @@ f 1 2 3
 #[test]
 fn test_concurrent_world_operations() {
     use praxis_ecs::{Transform, World};
+    use praxis_math::Vec3;
 
     let mut world1 = World::new();
     let mut world2 = World::new();
 
     for i in 0..100 {
-        world1.spawn(Transform::from_translation([i as f32, 0.0, 0.0]));
-        world2.spawn(Transform::from_translation([(i * 2) as f32, 0.0, 0.0]));
+        world1.spawn(Transform::from_translation(Vec3::new(i as f32, 0.0, 0.0)));
+        world2.spawn(Transform::from_translation(Vec3::new(
+            (i * 2) as f32,
+            0.0,
+            0.0,
+        )));
     }
 
     let count1: Vec<_> = world1
         .query::<&Transform>()
-        .iter(&world1)
-        .map(|t| t.translation()[0])
+        .iter(world1.inner())
+        .map(|t| t.translation.x)
         .collect();
 
     let count2: Vec<_> = world2
         .query::<&Transform>()
-        .iter(&world2)
-        .map(|t| t.translation()[0])
+        .iter(world2.inner())
+        .map(|t| t.translation.x)
         .collect();
 
     assert_eq!(count1.len(), 100);

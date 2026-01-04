@@ -276,6 +276,30 @@ impl World {
             .map(|res| res.into_inner())
     }
 
+    /// Checks if a resource of type R exists in the world.
+    ///
+    /// # Returns
+    ///
+    /// true if the resource exists, false otherwise.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use praxis_ecs::{World, Resource};
+    ///
+    /// #[derive(Resource)]
+    /// struct GameConfig { difficulty: u32 }
+    ///
+    /// let mut world = World::new();
+    /// assert!(!world.contains_resource::<GameConfig>());
+    ///
+    /// world.insert_resource(GameConfig { difficulty: 5 });
+    /// assert!(world.contains_resource::<GameConfig>());
+    /// ```
+    pub fn contains_resource<R: Resource>(&self) -> bool {
+        self.inner.contains_resource::<R>()
+    }
+
     /// Adds a component to an existing entity.
     ///
     /// # Arguments
@@ -833,7 +857,10 @@ mod tests {
         // Verify each enemy was spawned with correct health values
         let mut total_health = 0;
         for entity in enemies {
-            let enemy = world.inner().get::<Enemy>(entity).expect("Enemy should exist");
+            let enemy = world
+                .inner()
+                .get::<Enemy>(entity)
+                .expect("Enemy should exist");
             total_health += enemy.health;
         }
         assert_eq!(total_health, 225); // 100 + 50 + 75

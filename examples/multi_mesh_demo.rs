@@ -235,6 +235,7 @@ impl ApplicationHandler for App {
                     draw_commands.push(DrawCommand {
                         mesh_id: "ground".to_string(),
                         model: Mat4::from_translation(Vec3::new(0.0, -1.0, 0.0)),
+                        texture_name: None,
                         material_properties: None,
                     });
 
@@ -243,6 +244,7 @@ impl ApplicationHandler for App {
                         mesh_id: "colored_cube".to_string(),
                         model: Mat4::from_rotation_y(state.rotation_angle)
                             * Mat4::from_translation(Vec3::new(0.0, 0.5, 0.0)),
+                        texture_name: None,
                         material_properties: None,
                     });
 
@@ -252,6 +254,7 @@ impl ApplicationHandler for App {
                         model: Mat4::from_translation(Vec3::new(-2.5, 0.0, 0.0))
                             * Mat4::from_rotation_y(state.rotation_angle * 0.7)
                             * Mat4::from_scale(Vec3::splat(0.8)),
+                        texture_name: None,
                         material_properties: None,
                     });
 
@@ -261,6 +264,7 @@ impl ApplicationHandler for App {
                         model: Mat4::from_translation(Vec3::new(2.5, 0.0, 0.0))
                             * Mat4::from_rotation_y(-state.rotation_angle * 0.7)
                             * Mat4::from_scale(Vec3::splat(0.8)),
+                        texture_name: None,
                         material_properties: None,
                     });
 
@@ -270,6 +274,7 @@ impl ApplicationHandler for App {
                         model: Mat4::from_translation(Vec3::new(0.0, 0.0, 2.5))
                             * Mat4::from_rotation_x(state.rotation_angle * 0.5)
                             * Mat4::from_scale(Vec3::splat(0.6)),
+                        texture_name: None,
                         material_properties: None,
                     });
 
@@ -278,6 +283,7 @@ impl ApplicationHandler for App {
                         mesh_id: "pyramid".to_string(),
                         model: Mat4::from_translation(Vec3::new(0.0, 0.0, -2.5))
                             * Mat4::from_rotation_y(state.rotation_angle * 1.2),
+                        texture_name: None,
                         material_properties: None,
                     });
 

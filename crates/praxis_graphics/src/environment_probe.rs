@@ -377,7 +377,12 @@ impl EnvironmentProbeManager {
         let probe_count = self.probes.len().min(MAX_ENVIRONMENT_PROBES);
         uniforms.probe_count = probe_count as u32;
 
-        for (i, probe) in self.probes.values().take(MAX_ENVIRONMENT_PROBES).enumerate() {
+        for (i, probe) in self
+            .probes
+            .values()
+            .take(MAX_ENVIRONMENT_PROBES)
+            .enumerate()
+        {
             uniforms.probe_positions[i] = [
                 probe.config.position.x,
                 probe.config.position.y,
@@ -572,11 +577,7 @@ impl EnvironmentProbeManager {
     fn integrate_brdf(ndotv: f32, roughness: f32) -> (f32, f32) {
         const SAMPLE_COUNT: u32 = 1024;
 
-        let v = Vec3::new(
-            (1.0 - ndotv * ndotv).sqrt(),
-            0.0,
-            ndotv,
-        );
+        let v = Vec3::new((1.0 - ndotv * ndotv).sqrt(), 0.0, ndotv);
 
         let mut scale = 0.0;
         let mut bias = 0.0;
@@ -686,11 +687,7 @@ fn importance_sample_ggx(xi: (f32, f32), n: Vec3, roughness: f32) -> Vec3 {
 
     let h = Vec3::new(phi.cos() * sin_theta, phi.sin() * sin_theta, cos_theta);
 
-    let up = if n.z.abs() < 0.999 {
-        Vec3::Z
-    } else {
-        Vec3::X
-    };
+    let up = if n.z.abs() < 0.999 { Vec3::Z } else { Vec3::X };
     let tangent = up.cross(n).normalize();
     let bitangent = n.cross(tangent);
 
@@ -724,7 +721,7 @@ mod tests {
     #[test]
     fn test_environment_probe_config_default() {
         let config = EnvironmentProbeConfig::default();
-        
+
         assert_eq!(config.position, Vec3::ZERO);
         assert_eq!(config.resolution, 256);
         assert_eq!(config.near_clip, 0.1);
@@ -741,7 +738,7 @@ mod tests {
             far_clip: 200.0,
             update_mode: ProbeUpdateMode::Continuous,
         };
-        
+
         assert_eq!(config.position, Vec3::new(10.0, 20.0, 30.0));
         assert_eq!(config.resolution, 512);
         assert_eq!(config.near_clip, 0.5);
@@ -776,7 +773,7 @@ mod tests {
     #[test]
     fn test_environment_probe_capture_face_count() {
         let capture = EnvironmentProbeCapture::new(Vec3::ZERO, 0.1, 100.0);
-        
+
         // Should have 6 face view matrices (one per cubemap face)
         assert_eq!(capture.face_view_matrices.len(), 6);
     }
@@ -786,10 +783,10 @@ mod tests {
         let near = 0.1;
         let far = 100.0;
         let capture = EnvironmentProbeCapture::new(Vec3::ZERO, near, far);
-        
+
         // Projection should be 90 degree FOV (for cubemap)
         let proj = capture.get_projection();
-        
+
         // Verify it's a valid projection matrix (not zero)
         assert_ne!(proj, Mat4::ZERO);
     }
@@ -798,15 +795,15 @@ mod tests {
     fn test_environment_probe_capture_face_directions() {
         let position = Vec3::new(5.0, 10.0, 15.0);
         let capture = EnvironmentProbeCapture::new(position, 0.1, 100.0);
-        
+
         // Each face view matrix should be valid
         for i in 0..6 {
             let view = capture.get_face_view(i);
             assert_ne!(view, Mat4::ZERO);
-            
+
             // Extract the translation component
             let translation = view.col(3).truncate();
-            
+
             // View matrix translation should be related to position
             // (inverse of position due to view transform)
             assert!(translation.is_finite());
@@ -818,14 +815,18 @@ mod tests {
         // Test that faces are in the expected order: +X, -X, +Y, -Y, +Z, -Z
         let position = Vec3::ZERO;
         let capture = EnvironmentProbeCapture::new(position, 0.1, 100.0);
-        
+
         // Each face should look in a different direction
         // We can verify by checking they're all different
         let views: Vec<_> = (0..6).map(|i| capture.get_face_view(i)).collect();
-        
+
         for i in 0..6 {
             for j in (i + 1)..6 {
-                assert_ne!(views[i], views[j], "Face {} and {} should be different", i, j);
+                assert_ne!(
+                    views[i], views[j],
+                    "Face {} and {} should be different",
+                    i, j
+                );
             }
         }
     }
@@ -833,10 +834,10 @@ mod tests {
     #[test]
     fn test_ibl_uniforms_default() {
         let uniforms = IblUniforms::default();
-        
+
         assert_eq!(uniforms.probe_count, 0);
         assert_eq!(uniforms.ibl_intensity, 1.0);
-        
+
         // All probe positions should be zero
         for pos in uniforms.probe_positions.iter() {
             assert_eq!(*pos, [0.0; 4]);
@@ -846,13 +847,13 @@ mod tests {
     #[test]
     fn test_ibl_uniforms_size() {
         use std::mem::size_of;
-        
+
         let size = size_of::<IblUniforms>();
-        
+
         // Should be properly aligned for std140
         // 8 probes * vec4 (16 bytes each) + u32 (4) + f32 (4) + padding (8) = 144 bytes minimum
         assert!(size >= 128, "IblUniforms should be large enough");
-        
+
         // Verify it's POD
         let uniforms = IblUniforms::default();
         let _bytes = bytemuck::bytes_of(&uniforms);
@@ -862,10 +863,10 @@ mod tests {
     fn test_hammersley_sequence() {
         // Test Hammersley sequence generation
         let samples = 8;
-        
+
         for i in 0..samples {
             let (u, v) = hammersley(i, samples);
-            
+
             // Both components should be in [0, 1]
             assert!(u >= 0.0 && u <= 1.0);
             assert!(v >= 0.0 && v <= 1.0);
@@ -877,11 +878,11 @@ mod tests {
         // Test that Hammersley sequence provides good distribution
         let samples = 16;
         let mut points = Vec::new();
-        
+
         for i in 0..samples {
             points.push(hammersley(i, samples));
         }
-        
+
         // All points should be unique
         for i in 0..points.len() {
             for j in (i + 1)..points.len() {
@@ -896,14 +897,17 @@ mod tests {
         // Test that importance sampling produces vectors in upper hemisphere
         let n = Vec3::Z; // Normal pointing up
         let roughness = 0.5;
-        
+
         for i in 0..10 {
             let xi = hammersley(i, 10);
             let h = importance_sample_ggx(xi, n, roughness);
-            
+
             // h should be normalized
-            assert!((h.length() - 1.0).abs() < 0.01, "Sample should be normalized");
-            
+            assert!(
+                (h.length() - 1.0).abs() < 0.01,
+                "Sample should be normalized"
+            );
+
             // h.z should be positive (upper hemisphere)
             assert!(h.z >= 0.0, "Sample should be in upper hemisphere");
         }
@@ -913,27 +917,30 @@ mod tests {
     fn test_importance_sample_ggx_roughness_effect() {
         let n = Vec3::Z;
         let xi = (0.5, 0.5);
-        
+
         // Lower roughness should produce samples more concentrated around normal
         let smooth = importance_sample_ggx(xi, n, 0.1);
         let rough = importance_sample_ggx(xi, n, 0.9);
-        
+
         // Smooth surface sample should be closer to normal (higher z)
-        assert!(smooth.z > rough.z, 
-            "Smooth sample z ({}) should be > rough sample z ({})", 
-            smooth.z, rough.z);
+        assert!(
+            smooth.z > rough.z,
+            "Smooth sample z ({}) should be > rough sample z ({})",
+            smooth.z,
+            rough.z
+        );
     }
 
     #[test]
     fn test_geometry_schlick_ggx() {
         let ndotv = 0.8;
         let roughness = 0.5;
-        
+
         let g = geometry_schlick_ggx(ndotv, roughness);
-        
+
         // Result should be in [0, 1]
         assert!(g >= 0.0 && g <= 1.0);
-        
+
         // Higher ndotv should give higher value (less occlusion)
         let g_high = geometry_schlick_ggx(0.9, roughness);
         let g_low = geometry_schlick_ggx(0.1, roughness);
@@ -943,11 +950,11 @@ mod tests {
     #[test]
     fn test_geometry_schlick_ggx_roughness() {
         let ndotv = 0.5;
-        
+
         // Rougher surfaces should have lower geometry term
         let smooth = geometry_schlick_ggx(ndotv, 0.1);
         let rough = geometry_schlick_ggx(ndotv, 0.9);
-        
+
         assert!(smooth > rough, "Smooth surfaces should have higher G term");
     }
 
@@ -957,9 +964,9 @@ mod tests {
         let v = Vec3::new(0.0, 0.5, 0.866).normalize(); // 30 degrees from normal
         let l = Vec3::new(0.5, 0.0, 0.866).normalize(); // 30 degrees from normal
         let roughness = 0.5;
-        
+
         let g = geometry_smith(n, v, l, roughness);
-        
+
         // Result should be in [0, 1]
         assert!(g >= 0.0 && g <= 1.0);
     }
@@ -970,9 +977,9 @@ mod tests {
         let v = Vec3::new(0.99, 0.0, 0.1).normalize(); // Grazing angle
         let l = Vec3::new(0.0, 0.99, 0.1).normalize(); // Grazing angle
         let roughness = 0.5;
-        
+
         let g = geometry_smith(n, v, l, roughness);
-        
+
         // Should be significantly occluded at grazing angles
         assert!(g < 0.5, "Grazing angles should have high occlusion");
     }
@@ -982,10 +989,10 @@ mod tests {
         // Test BRDF integration for various view angles
         let test_ndotv = [0.1, 0.3, 0.5, 0.7, 0.9];
         let roughness = 0.5;
-        
+
         for ndotv in test_ndotv.iter() {
             let (scale, bias) = EnvironmentProbeManager::integrate_brdf(*ndotv, roughness);
-            
+
             // Scale and bias should be in reasonable ranges [0, 1]
             assert!(scale >= 0.0 && scale <= 1.0, "Scale should be in [0,1]");
             assert!(bias >= 0.0 && bias <= 1.0, "Bias should be in [0,1]");
@@ -997,10 +1004,10 @@ mod tests {
         // Test BRDF integration for various roughness values
         let ndotv = 0.5;
         let test_roughness = [0.0, 0.25, 0.5, 0.75, 1.0];
-        
+
         for roughness in test_roughness.iter() {
             let (scale, bias) = EnvironmentProbeManager::integrate_brdf(ndotv, *roughness);
-            
+
             assert!(scale >= 0.0 && scale <= 1.0);
             assert!(bias >= 0.0 && bias <= 1.0);
         }
@@ -1009,11 +1016,11 @@ mod tests {
     #[test]
     fn test_brdf_integration_smooth_vs_rough() {
         let ndotv = 0.5;
-        
+
         // Smooth surfaces should have different BRDF characteristics
         let (scale_smooth, _) = EnvironmentProbeManager::integrate_brdf(ndotv, 0.0);
         let (scale_rough, _) = EnvironmentProbeManager::integrate_brdf(ndotv, 1.0);
-        
+
         // Values should be different for different roughness
         assert_ne!(scale_smooth, scale_rough);
     }
@@ -1039,18 +1046,18 @@ mod tests {
         // Test that capture uses proper perspective projection
         let capture = EnvironmentProbeCapture::new(Vec3::ZERO, 0.1, 100.0);
         let proj = capture.get_projection();
-        
+
         // For cubemap, FOV should be 90 degrees (PI/2)
         // Aspect ratio should be 1.0 (square faces)
-        
+
         // Verify projection matrix is not identity
         assert_ne!(proj, Mat4::IDENTITY);
-        
+
         // Verify it's a proper perspective projection (not orthographic)
         // In perspective, w component changes with z
         let test_point = praxis_math::Vec4::new(1.0, 1.0, -10.0, 1.0);
         let projected = proj * test_point;
-        
+
         // After projection, w should not be 1.0 (perspective division needed)
         assert_ne!(projected.w, 1.0);
     }
@@ -1060,16 +1067,20 @@ mod tests {
         // Test that different positions produce different view matrices
         let pos1 = Vec3::new(0.0, 0.0, 0.0);
         let pos2 = Vec3::new(10.0, 20.0, 30.0);
-        
+
         let capture1 = EnvironmentProbeCapture::new(pos1, 0.1, 100.0);
         let capture2 = EnvironmentProbeCapture::new(pos2, 0.1, 100.0);
-        
+
         // View matrices should be different for different positions
         for i in 0..6 {
             let view1 = capture1.get_face_view(i);
             let view2 = capture2.get_face_view(i);
-            
-            assert_ne!(view1, view2, "Face {} views should differ for different positions", i);
+
+            assert_ne!(
+                view1, view2,
+                "Face {} views should differ for different positions",
+                i
+            );
         }
     }
 }

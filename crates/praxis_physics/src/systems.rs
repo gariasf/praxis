@@ -4,7 +4,7 @@
 //! with the Praxis ECS architecture.
 
 use bevy_ecs::removal_detection::RemovedComponents;
-use praxis_ecs::{Changed, Entity, Query, Res, ResMut, Transform, With};
+use praxis_ecs::{Changed, Entity, ParamSet, Query, Res, ResMut, Transform, With};
 use praxis_math::{Quat, Vec3};
 use rapier3d::prelude::{
     nalgebra, vector, ColliderBuilder, Isometry, RigidBodyBuilder, RigidBodyType, SharedShape,
@@ -426,12 +426,16 @@ pub fn physics_step_system(
 #[allow(clippy::needless_pass_by_value)]
 pub fn sync_physics_transforms_system(
     mut physics_world: ResMut<PhysicsWorld>,
-    // Query for entities that have their Transform changed (by gameplay code)
-    // This is used for ECS → Physics synchronization
-    changed_query: Query<(Entity, &Transform, &PraxisRigidBody), Changed<Transform>>,
-    // Query for ALL entities with RigidBody components
-    // This is used for Physics → ECS synchronization (for dynamic bodies)
-    mut all_query: Query<(Entity, &mut Transform, &PraxisRigidBody), With<PraxisRigidBody>>,
+    // ParamSet is required because changed_query reads Transform while all_query mutates it.
+    // bevy_ecs requires disjoint queries or ParamSet for conflicting access patterns.
+    mut queries: ParamSet<(
+        // p0: Query for entities that have their Transform changed (by gameplay code)
+        // This is used for ECS → Physics synchronization
+        Query<(Entity, &Transform, &PraxisRigidBody), Changed<Transform>>,
+        // p1: Query for ALL entities with RigidBody components
+        // This is used for Physics → ECS synchronization (for dynamic bodies)
+        Query<(Entity, &mut Transform, &PraxisRigidBody), With<PraxisRigidBody>>,
+    )>,
 ) {
     // ========================================================================
     // PHASE 1: ECS → PHYSICS SYNCHRONIZATION
@@ -486,7 +490,7 @@ pub fn sync_physics_transforms_system(
     // - Change detection is cleared at the end of each frame
     // - Gameplay code runs before the first sync or after the second sync
 
-    for (entity, transform, rigid_body) in changed_query.iter() {
+    for (entity, transform, rigid_body) in queries.p0().iter() {
         // --------------------------------------------------------------------
         // GET OR CREATE RAPIER RIGID BODY HANDLE
         // --------------------------------------------------------------------
@@ -651,7 +655,7 @@ pub fn sync_physics_transforms_system(
     // - **Static bodies**: They never move in the physics simulation (by design),
     //   so there's nothing to copy back. Their Transform remains constant.
 
-    for (entity, mut transform, rigid_body) in &mut all_query {
+    for (entity, mut transform, rigid_body) in &mut queries.p1() {
         // Skip non-dynamic bodies. Only dynamic bodies are controlled by physics.
         if !rigid_body.is_dynamic() {
             continue;

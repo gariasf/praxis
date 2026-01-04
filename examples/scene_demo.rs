@@ -27,7 +27,7 @@ fn main() -> praxis_utils::Result<()> {
     // Demo 1: Create and spawn a simple scene programmatically
     println!("--- Demo 1: Programmatic Scene Creation ---");
     let scene1 = create_simple_scene();
-    let handle1 = scene_manager.spawn_scene(&mut world, scene1)?;
+    let handle1 = scene_manager.spawn_scene(&mut world, &scene1)?;
     println!("Spawned scene with handle: {}", handle1.id());
     println!("Loaded scenes: {}\n", scene_manager.loaded_scene_count());
 
@@ -35,7 +35,7 @@ fn main() -> praxis_utils::Result<()> {
     println!("--- Demo 2: Querying Scene Entities ---");
     {
         let mut query = world.query::<(&Name, &Transform)>();
-        for (name, transform) in query.iter(&world) {
+        for (name, transform) in query.iter(world.inner()) {
             println!(
                 "Entity '{}' at position: ({:.2}, {:.2}, {:.2})",
                 name.as_str(),
@@ -95,7 +95,7 @@ fn main() -> praxis_utils::Result<()> {
                 println!("Description: {}", description);
             }
 
-            let handle2 = scene_manager.spawn_scene(&mut world, scene_def)?;
+            let handle2 = scene_manager.spawn_scene(&mut world, &scene_def)?;
             println!("Spawned scene with handle: {}", handle2.id());
             println!(
                 "Total loaded scenes: {}\n",
@@ -105,7 +105,7 @@ fn main() -> praxis_utils::Result<()> {
             // Query all entities
             println!("All entities in world:");
             let mut query = world.query::<&Name>();
-            for name in query.iter(&world) {
+            for name in query.iter(world.inner()) {
                 println!("  - {}", name.as_str());
             }
             println!();

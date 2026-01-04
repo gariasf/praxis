@@ -43,14 +43,15 @@ use praxis_graphics::{
 };
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::{Quat, Vec3};
-use praxis_utils::{info, warn, FrameTimer, Result};
+use praxis_utils::timing::FrameTimer;
+use praxis_utils::{info, warn, Result};
 use std::sync::Arc;
 use std::time::Instant;
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
 use winit::event::{DeviceEvent, ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::keyboard::{Key, KeyCode, NamedKey};
+use winit::keyboard::{Key, KeyCode, NamedKey, PhysicalKey};
 use winit::window::{CursorGrabMode, Window, WindowId};
 
 const WINDOW_WIDTH: u32 = 1920;
@@ -345,7 +346,7 @@ impl GuiDemoApp {
         }
     }
 
-    fn print_debug_info(&self) {
+    fn print_debug_info(&mut self) {
         if !self.show_debug_info {
             return;
         }
@@ -353,23 +354,19 @@ impl GuiDemoApp {
         let fps = self.frame_timer.fps();
         let frame_time = 1000.0 / fps;
 
-        let world = match self.world.as_ref() {
+        let world = match self.world.as_mut() {
             Some(w) => w,
             None => return,
         };
 
-        let mut entity_count = 0;
-        let mut mesh_count = 0;
-        let mut light_count = 0;
+        let mut query = world.inner_mut().query::<()>();
+        let entity_count = query.iter(world.inner()).count();
 
-        let mut query = world.inner().query::<()>();
-        entity_count = query.iter(world.inner()).count();
+        let mut mesh_query = world.inner_mut().query::<&praxis_ecs::MeshHandle>();
+        let mesh_count = mesh_query.iter(world.inner()).count();
 
-        let mut mesh_query = world.inner().query::<&praxis_ecs::MeshHandle>();
-        mesh_count = mesh_query.iter(world.inner()).count();
-
-        let mut light_query = world.inner().query::<&PointLight>();
-        light_count = light_query.iter(world.inner()).count();
+        let mut light_query = world.inner_mut().query::<&PointLight>();
+        let light_count = light_query.iter(world.inner()).count();
 
         if entity_count > 0 {
             info!(
@@ -379,18 +376,18 @@ impl GuiDemoApp {
         }
     }
 
-    fn print_entity_list(&self) {
+    fn print_entity_list(&mut self) {
         if !self.show_entity_list {
             return;
         }
 
-        let world = match self.world.as_ref() {
+        let world = match self.world.as_mut() {
             Some(w) => w,
             None => return,
         };
 
         info!("=== Entity List ===");
-        let mut query = world.inner().query::<(praxis_ecs::Entity, Option<&Name>)>();
+        let mut query = world.inner_mut().query::<(praxis_ecs::Entity, Option<&Name>)>();
 
         for (entity, name) in query.iter(world.inner()) {
             let name_str = name.map(|n| n.as_str()).unwrap_or("Unnamed");
@@ -441,32 +438,11 @@ impl GuiDemoApp {
             });
         }
 
-        let mut lights = Vec::new();
-        let mut light_query = world.inner_mut().query::<(&Transform, &PointLight)>();
-        for (transform, light) in light_query.iter(world.inner()) {
-            lights.push(praxis_graphics::PointLightData {
-                position: transform.translation,
-                color: light.color,
-                intensity: light.intensity,
-                range: light.range,
-            });
-        }
-
-        let lighting = if lights.is_empty() {
-            None
-        } else {
-            Some(praxis_graphics::LightingData {
-                ambient: Vec3::new(0.2, 0.2, 0.2),
-                point_lights: lights,
-                directional_lights: Vec::new(),
-            })
-        };
-
         let cmds = RenderCommands {
             view: matrices_copy.view,
             proj: matrices_copy.projection,
             draw_commands: &draw_commands,
-            lighting: lighting.as_ref(),
+            lighting: None,
         };
 
         render_context.render(&cmds)?;
@@ -712,7 +688,7 @@ impl ApplicationHandler for GuiDemoApp {
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
-                        physical_key: KeyCode::F1,
+                        physical_key: PhysicalKey::Code(KeyCode::F1),
                         state: ElementState::Pressed,
                         ..
                     },
@@ -727,7 +703,7 @@ impl ApplicationHandler for GuiDemoApp {
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
-                        physical_key: KeyCode::F2,
+                        physical_key: PhysicalKey::Code(KeyCode::F2),
                         state: ElementState::Pressed,
                         ..
                     },
@@ -745,7 +721,7 @@ impl ApplicationHandler for GuiDemoApp {
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
-                        physical_key: KeyCode::F3,
+                        physical_key: PhysicalKey::Code(KeyCode::F3),
                         state: ElementState::Pressed,
                         ..
                     },
@@ -764,7 +740,7 @@ impl ApplicationHandler for GuiDemoApp {
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
-                        physical_key: KeyCode::F4,
+                        physical_key: PhysicalKey::Code(KeyCode::F4),
                         state: ElementState::Pressed,
                         ..
                     },
@@ -776,7 +752,7 @@ impl ApplicationHandler for GuiDemoApp {
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
-                        physical_key: KeyCode::F5,
+                        physical_key: PhysicalKey::Code(KeyCode::F5),
                         state: ElementState::Pressed,
                         ..
                     },
@@ -819,7 +795,6 @@ fn main() -> Result<()> {
     praxis_utils::init()?;
     praxis_input::init()?;
     praxis_ecs::init()?;
-    praxis_gui::init()?;
 
     info!("Starting GUI Demo");
 

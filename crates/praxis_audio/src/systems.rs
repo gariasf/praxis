@@ -29,7 +29,7 @@ const SPEED_OF_SOUND: f32 = 343.0;
 pub fn play_sound_system(
     mut audio_manager: ResMut<AudioManager>,
     mut audio_sources: Query<(&mut AudioSource, Option<&Transform>)>,
-    listener_query: &Query<&Transform, With<AudioListener>>,
+    listener_query: Query<&Transform, With<AudioListener>>,
 ) {
     let listener_transform = listener_query.iter().next();
 
@@ -138,7 +138,7 @@ pub fn play_sound_system(
 pub fn update_spatial_audio_system(
     mut audio_manager: ResMut<AudioManager>,
     mut audio_sources: Query<(&mut AudioSource, &Transform), Changed<Transform>>,
-    listener_query: &Query<&Transform, With<AudioListener>>,
+    listener_query: Query<&Transform, With<AudioListener>>,
 ) {
     let listener_transform = listener_query.iter().next();
 
@@ -201,7 +201,7 @@ pub fn update_spatial_audio_system(
 pub fn update_listener_system(
     mut audio_manager: ResMut<AudioManager>,
     mut audio_sources: Query<(&mut AudioSource, &Transform)>,
-    listener_query: &Query<&Transform, (With<AudioListener>, Changed<Transform>)>,
+    listener_query: Query<&Transform, (With<AudioListener>, Changed<Transform>)>,
 ) {
     // Only update if listener transform changed
     if let Some(listener_trans) = listener_query.iter().next() {

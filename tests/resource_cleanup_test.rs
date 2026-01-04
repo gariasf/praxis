@@ -3,6 +3,7 @@
 //! These tests verify that resources are properly managed across
 //! different subsystems and cleaned up correctly.
 
+use praxis_ecs::{Component, Resource};
 use std::fs;
 
 /// Test ECS entity lifecycle with multiple component types.
@@ -12,15 +13,13 @@ fn test_entity_lifecycle_with_multiple_components() {
 
     let mut world = World::new();
 
-    let parent_entity = world.spawn(Transform::default()).id();
+    let parent_entity = world.spawn(Transform::default());
 
-    let entity = world
-        .spawn((
-            Transform::default(),
-            GlobalTransform::default(),
-            Parent::new(parent_entity),
-        ))
-        .id();
+    let entity = world.spawn((
+        Transform::default(),
+        GlobalTransform::default(),
+        Parent(parent_entity),
+    ));
 
     assert!(world.get::<Transform>(entity).is_some());
     assert!(world.get::<GlobalTransform>(entity).is_some());
@@ -30,7 +29,7 @@ fn test_entity_lifecycle_with_multiple_components() {
     assert!(world.get::<Parent>(entity).is_none());
     assert!(world.get::<Transform>(entity).is_some());
 
-    world.despawn(entity);
+    let _ = world.despawn(entity);
     assert!(world.get::<Transform>(entity).is_none());
     assert!(world.get::<GlobalTransform>(entity).is_none());
 }
@@ -46,11 +45,7 @@ fn test_physics_resource_cleanup() {
     world.insert_resource(physics_world);
 
     let entities: Vec<_> = (0..10)
-        .map(|_| {
-            world
-                .spawn((RigidBody::dynamic(), Collider::sphere(1.0)))
-                .id()
-        })
+        .map(|_| world.spawn((RigidBody::Dynamic, Collider::sphere(1.0))))
         .collect();
 
     for entity in &entities {
@@ -59,7 +54,7 @@ fn test_physics_resource_cleanup() {
     }
 
     for entity in &entities[0..5] {
-        world.despawn(*entity);
+        let _ = world.despawn(*entity);
     }
 
     for entity in &entities[0..5] {
@@ -78,80 +73,69 @@ fn test_physics_resource_cleanup() {
 #[test]
 fn test_input_state_reset() {
     use praxis_input::InputState;
-    use winit::event::MouseButton;
     use winit::keyboard::KeyCode;
 
     let mut input_state = InputState::new();
 
-    input_state.key_down(KeyCode::KeyW);
-    input_state.key_down(KeyCode::KeyA);
-    input_state.key_down(KeyCode::KeyS);
-    input_state.key_down(KeyCode::KeyD);
-    input_state.mouse_button_down(MouseButton::Left);
+    input_state.press_key(KeyCode::KeyW);
+    input_state.press_key(KeyCode::KeyA);
+    input_state.press_key(KeyCode::KeyS);
+    input_state.press_key(KeyCode::KeyD);
 
-    assert!(input_state.is_key_down(KeyCode::KeyW));
-    assert!(input_state.is_key_down(KeyCode::KeyA));
-    assert!(input_state.is_key_down(KeyCode::KeyS));
-    assert!(input_state.is_key_down(KeyCode::KeyD));
-    assert!(input_state.is_mouse_button_down(MouseButton::Left));
+    assert!(input_state.is_key_pressed(KeyCode::KeyW));
+    assert!(input_state.is_key_pressed(KeyCode::KeyA));
+    assert!(input_state.is_key_pressed(KeyCode::KeyS));
+    assert!(input_state.is_key_pressed(KeyCode::KeyD));
 
     input_state.clear();
 
-    assert!(!input_state.is_key_down(KeyCode::KeyW));
-    assert!(!input_state.is_key_down(KeyCode::KeyA));
-    assert!(!input_state.is_key_down(KeyCode::KeyS));
-    assert!(!input_state.is_key_down(KeyCode::KeyD));
-    assert!(!input_state.is_mouse_button_down(MouseButton::Left));
+    assert!(!input_state.is_key_pressed(KeyCode::KeyW));
+    assert!(!input_state.is_key_pressed(KeyCode::KeyA));
+    assert!(!input_state.is_key_pressed(KeyCode::KeyS));
+    assert!(!input_state.is_key_pressed(KeyCode::KeyD));
 }
 
 /// Test scene graph cleanup with parent-child relationships.
 #[test]
 fn test_scene_graph_cleanup() {
     use praxis_ecs::{GlobalTransform, Parent, Transform, World};
+    use praxis_math::Vec3;
 
     let mut world = World::new();
 
-    let root = world
-        .spawn((
-            Transform::from_translation([0.0, 0.0, 0.0]),
-            GlobalTransform::default(),
-        ))
-        .id();
+    let root = world.spawn((
+        Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)),
+        GlobalTransform::default(),
+    ));
 
-    let child1 = world
-        .spawn((
-            Transform::from_translation([1.0, 0.0, 0.0]),
-            GlobalTransform::default(),
-            Parent::new(root),
-        ))
-        .id();
+    let child1 = world.spawn((
+        Transform::from_translation(Vec3::new(1.0, 0.0, 0.0)),
+        GlobalTransform::default(),
+        Parent(root),
+    ));
 
-    let child2 = world
-        .spawn((
-            Transform::from_translation([2.0, 0.0, 0.0]),
-            GlobalTransform::default(),
-            Parent::new(root),
-        ))
-        .id();
+    let child2 = world.spawn((
+        Transform::from_translation(Vec3::new(2.0, 0.0, 0.0)),
+        GlobalTransform::default(),
+        Parent(root),
+    ));
 
-    let grandchild = world
-        .spawn((
-            Transform::from_translation([0.0, 1.0, 0.0]),
-            GlobalTransform::default(),
-            Parent::new(child1),
-        ))
-        .id();
+    let grandchild = world.spawn((
+        Transform::from_translation(Vec3::new(0.0, 1.0, 0.0)),
+        GlobalTransform::default(),
+        Parent(child1),
+    ));
 
     assert!(world.get::<Parent>(child1).is_some());
     assert!(world.get::<Parent>(child2).is_some());
     assert!(world.get::<Parent>(grandchild).is_some());
 
-    world.despawn(child1);
+    let _ = world.despawn(child1);
     assert!(world.get::<Transform>(child1).is_none());
     assert!(world.get::<Transform>(root).is_some());
     assert!(world.get::<Transform>(child2).is_some());
 
-    world.despawn(root);
+    let _ = world.despawn(root);
     assert!(world.get::<Transform>(root).is_none());
 }
 
@@ -162,12 +146,12 @@ fn test_multiple_resource_cleanup() {
     use praxis_input::InputState;
     use praxis_physics::PhysicsWorld;
 
-    #[derive(praxis_ecs::Resource)]
+    #[derive(Resource)]
     struct GameState {
         level: u32,
     }
 
-    #[derive(praxis_ecs::Resource)]
+    #[derive(Resource)]
     struct AudioManager {
         volume: f32,
     }
@@ -237,13 +221,13 @@ f 1 2 3
 fn test_world_clear_all() {
     use praxis_ecs::World;
 
-    #[derive(praxis_ecs::Component)]
+    #[derive(Component)]
     struct Position {
         x: f32,
         y: f32,
     }
 
-    #[derive(praxis_ecs::Component)]
+    #[derive(Component)]
     struct Name {
         value: String,
     }
@@ -262,12 +246,12 @@ fn test_world_clear_all() {
         ));
     }
 
-    let count_before = world.query::<&Position>().iter(&world).count();
+    let count_before = world.query::<&Position>().iter(world.inner()).count();
     assert_eq!(count_before, 100);
 
     world.clear_entities();
 
-    let count_after = world.query::<&Position>().iter(&world).count();
+    let count_after = world.query::<&Position>().iter(world.inner()).count();
     assert_eq!(count_after, 0);
 }
 
@@ -279,14 +263,12 @@ fn test_physics_entity_cleanup() {
 
     let mut world = World::new();
 
-    let entity = world
-        .spawn((
-            RigidBody::dynamic(),
-            Collider::cuboid(1.0, 1.0, 1.0),
-            PhysicsVelocity::default(),
-            ExternalForces::default(),
-        ))
-        .id();
+    let entity = world.spawn((
+        RigidBody::Dynamic,
+        Collider::cuboid(1.0, 1.0, 1.0),
+        PhysicsVelocity::default(),
+        ExternalForces::default(),
+    ));
 
     assert!(world.get::<RigidBody>(entity).is_some());
     assert!(world.get::<Collider>(entity).is_some());
@@ -297,7 +279,7 @@ fn test_physics_entity_cleanup() {
     assert!(world.get::<ExternalForces>(entity).is_none());
     assert!(world.get::<RigidBody>(entity).is_some());
 
-    world.despawn(entity);
+    let _ = world.despawn(entity);
     assert!(world.get::<RigidBody>(entity).is_none());
     assert!(world.get::<Collider>(entity).is_none());
     assert!(world.get::<PhysicsVelocity>(entity).is_none());
@@ -338,36 +320,32 @@ f 1 2 3
 fn test_batch_entity_operations() {
     use praxis_ecs::World;
 
-    #[derive(praxis_ecs::Component)]
+    #[derive(Component)]
     struct BatchId {
         id: usize,
     }
 
     let mut world = World::new();
 
-    let batch1: Vec<_> = (0..50)
-        .map(|i| world.spawn(BatchId { id: i }).id())
-        .collect();
+    let batch1: Vec<_> = (0..50).map(|i| world.spawn(BatchId { id: i })).collect();
 
-    let batch2: Vec<_> = (50..100)
-        .map(|i| world.spawn(BatchId { id: i }).id())
-        .collect();
+    let batch2: Vec<_> = (50..100).map(|i| world.spawn(BatchId { id: i })).collect();
 
-    let total_count = world.query::<&BatchId>().iter(&world).count();
+    let total_count = world.query::<&BatchId>().iter(world.inner()).count();
     assert_eq!(total_count, 100);
 
     for entity in batch1 {
-        world.despawn(entity);
+        let _ = world.despawn(entity);
     }
 
-    let remaining_count = world.query::<&BatchId>().iter(&world).count();
+    let remaining_count = world.query::<&BatchId>().iter(world.inner()).count();
     assert_eq!(remaining_count, 50);
 
     for entity in batch2 {
-        world.despawn(entity);
+        let _ = world.despawn(entity);
     }
 
-    let final_count = world.query::<&BatchId>().iter(&world).count();
+    let final_count = world.query::<&BatchId>().iter(world.inner()).count();
     assert_eq!(final_count, 0);
 }
 
@@ -376,7 +354,7 @@ fn test_batch_entity_operations() {
 fn test_resource_replacement() {
     use praxis_ecs::World;
 
-    #[derive(praxis_ecs::Resource)]
+    #[derive(Resource)]
     struct Counter {
         value: i32,
     }
@@ -384,13 +362,13 @@ fn test_resource_replacement() {
     let mut world = World::new();
 
     world.insert_resource(Counter { value: 1 });
-    assert_eq!(world.resource::<Counter>().value, 1);
+    assert_eq!(world.get_resource::<Counter>().unwrap().value, 1);
 
     world.insert_resource(Counter { value: 2 });
-    assert_eq!(world.resource::<Counter>().value, 2);
+    assert_eq!(world.get_resource::<Counter>().unwrap().value, 2);
 
     world.insert_resource(Counter { value: 3 });
-    assert_eq!(world.resource::<Counter>().value, 3);
+    assert_eq!(world.get_resource::<Counter>().unwrap().value, 3);
 
     world.remove_resource::<Counter>();
     assert!(!world.contains_resource::<Counter>());
@@ -401,18 +379,18 @@ fn test_resource_replacement() {
 fn test_dynamic_component_management() {
     use praxis_ecs::World;
 
-    #[derive(praxis_ecs::Component)]
+    #[derive(Component)]
     struct Active;
 
-    #[derive(praxis_ecs::Component)]
+    #[derive(Component)]
     struct Visible;
 
-    #[derive(praxis_ecs::Component)]
+    #[derive(Component)]
     struct Selected;
 
     let mut world = World::new();
 
-    let entity = world.spawn(Active).id();
+    let entity = world.spawn(Active);
 
     assert!(world.get::<Active>(entity).is_some());
     assert!(world.get::<Visible>(entity).is_none());
@@ -440,12 +418,12 @@ fn test_dynamic_component_management() {
 fn test_game_loop_cleanup_pattern() {
     use praxis_ecs::World;
 
-    #[derive(praxis_ecs::Component)]
+    #[derive(Component)]
     struct Enemy {
         health: f32,
     }
 
-    #[derive(praxis_ecs::Resource)]
+    #[derive(Resource)]
     struct FrameCount {
         count: u32,
     }
@@ -459,16 +437,18 @@ fn test_game_loop_cleanup_pattern() {
         }
 
         {
-            let mut frame_count = world.resource_mut::<FrameCount>();
-            frame_count.count = frame;
+            let frame_count = world.get_resource_mut::<FrameCount>();
+            if let Some(fc) = frame_count {
+                fc.count = frame;
+            }
         }
 
-        let enemy_count = world.query::<&Enemy>().iter(&world).count();
+        let enemy_count = world.query::<&Enemy>().iter(world.inner()).count();
         assert_eq!(enemy_count, (frame + 1) as usize * 5);
     }
 
     world.clear_entities();
-    let final_count = world.query::<&Enemy>().iter(&world).count();
+    let final_count = world.query::<&Enemy>().iter(world.inner()).count();
     assert_eq!(final_count, 0);
 
     assert!(world.contains_resource::<FrameCount>());

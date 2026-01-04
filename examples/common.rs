@@ -3,7 +3,7 @@
 //! This module contains reusable components used in multiple examples,
 //! such as camera controllers and input handling utilities.
 
-use bevy_ecs::system::Resource;
+use praxis_ecs::Resource;
 use praxis_math::Quat;
 
 /// FPS-style camera controller with mouse look and WASD movement.
@@ -79,4 +79,11 @@ impl CameraController {
     pub fn get_rotation(&self) -> Quat {
         Quat::from_rotation_y(self.yaw) * Quat::from_rotation_x(self.pitch)
     }
+}
+
+/// This file provides common utilities for examples.
+/// Run other examples like `cargo run --example physics_demo` instead.
+fn main() {
+    eprintln!("common.rs is a utility module, not a standalone example.");
+    eprintln!("Run other examples like: cargo run --example physics_demo");
 }

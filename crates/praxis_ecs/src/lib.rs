@@ -457,7 +457,7 @@ pub use bevy_ecs::{
     entity::Entity,
     query::{Added, Changed, Or, QueryState, With, Without},
     schedule::{IntoSystemConfigs, Schedule, ScheduleLabel, Schedules, SystemSet},
-    system::{Commands, In, IntoSystem, Local, Res, ResMut, Resource, System, SystemParam},
+    system::{Commands, In, IntoSystem, Local, ParamSet, Res, ResMut, Resource, System, SystemParam},
     world::World as BevyWorld,
 };
 
@@ -604,10 +604,22 @@ mod tests {
         schedule.run(world.inner_mut());
 
         // Verify inactive camera is marked as inactive
-        assert!(!world.inner().get::<Camera>(inactive_entity).unwrap().is_active);
+        assert!(
+            !world
+                .inner()
+                .get::<Camera>(inactive_entity)
+                .unwrap()
+                .is_active
+        );
 
         // Verify active camera is marked as active
-        assert!(world.inner().get::<Camera>(active_camera).unwrap().is_active);
+        assert!(
+            world
+                .inner()
+                .get::<Camera>(active_camera)
+                .unwrap()
+                .is_active
+        );
 
         // Verify active camera has computed matrices
         let matrices = world.inner().get::<CameraMatrices>(active_camera).unwrap();

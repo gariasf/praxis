@@ -13,8 +13,7 @@ mod common;
 
 use common::CameraController;
 use praxis_ecs::{
-    camera, Camera, CameraMatrices, PerspectiveCameraBundle, PerspectiveProjection, Query,
-    Schedule, Transform, World,
+    Camera, PerspectiveCameraBundle, PerspectiveProjection, Query, Schedule, Transform, World,
 };
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::Vec3;
@@ -83,10 +82,8 @@ impl App {
         println!("Created FPS camera entity: {:?}", camera_entity);
 
         let mut schedule = Schedule::default();
-        schedule.add_systems((
-            praxis_ecs::systems::update_perspective_cameras,
-            fps_camera_movement_system,
-        ));
+        schedule.add_systems(praxis_ecs::systems::update_perspective_cameras);
+        schedule.add_systems(fps_camera_movement_system);
 
         (world, schedule)
     }
@@ -168,19 +165,11 @@ impl ApplicationHandler for App {
                 }
 
                 if let Some(schedule) = &mut self.schedule {
-                    world.inner_mut().run_schedule(schedule);
+                    schedule.run(world.inner_mut());
                 }
 
-                let cameras = world.query::<camera::ActivePerspectiveCameras>();
-                if let Some((_entity, camera, matrices)) =
-                    camera::primary_perspective_camera(&cameras)
-                {
-                    if camera.is_active {
-                        // In a real application, this is where we'd render the scene
-                        // using the camera's view_projection matrix
-                        let _ = matrices.view_projection;
-                    }
-                }
+                // Camera matrices would be used for rendering here
+                // The camera system runs via the schedule above
 
                 if let Some(window) = &self.window {
                     window.request_redraw();

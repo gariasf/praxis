@@ -15,15 +15,15 @@
 //! - Arrow Up/Down - Adjust speed parameter (in blend tree mode)
 //! - ESC - Exit demo
 
-use praxis_ecs::{Component, Query, World};
-use praxis_input::{InputState, KeyCode};
+use praxis_ecs::{Component, World};
+use praxis_input::InputState;
 use praxis_math::{Quat, Vec3};
 use praxis_scene::{
     AnimatedPose, AnimationBlender, AnimationClip, BlendNode1D, Bone, Skeleton,
-    update_animation_blenders,
 };
 use praxis_utils::{info, Result};
 use std::time::{Duration, Instant};
+use winit::keyboard::KeyCode;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum AnimationMode {
@@ -143,127 +143,125 @@ fn create_character_skeleton() -> Skeleton {
 
 fn create_idle_animation() -> AnimationClip {
     let mut clip = AnimationClip::new("Idle".to_string(), 2.0);
-    
+
     // Subtle breathing motion on chest
     clip.add_translation_keyframe(2, 0.0, Vec3::new(0.0, 0.5, 0.0));
     clip.add_translation_keyframe(2, 1.0, Vec3::new(0.0, 0.55, 0.0));
     clip.add_translation_keyframe(2, 2.0, Vec3::new(0.0, 0.5, 0.0));
-    
+
     // Slight head bob
     clip.add_translation_keyframe(3, 0.0, Vec3::new(0.0, 0.8, 0.0));
     clip.add_translation_keyframe(3, 1.0, Vec3::new(0.0, 0.82, 0.0));
     clip.add_translation_keyframe(3, 2.0, Vec3::new(0.0, 0.8, 0.0));
-    
+
     clip
 }
 
 fn create_walk_animation() -> AnimationClip {
     let mut clip = AnimationClip::new("Walk".to_string(), 1.2);
-    
+
     // Hip movement
     clip.add_translation_keyframe(0, 0.0, Vec3::ZERO);
     clip.add_translation_keyframe(0, 0.6, Vec3::new(0.0, 0.05, 0.0));
     clip.add_translation_keyframe(0, 1.2, Vec3::ZERO);
-    
+
     // Spine rotation
     clip.add_rotation_keyframe(1, 0.0, Quat::IDENTITY);
     clip.add_rotation_keyframe(1, 0.6, Quat::from_rotation_y(0.1));
     clip.add_rotation_keyframe(1, 1.2, Quat::IDENTITY);
-    
+
     // Left arm swing
     clip.add_rotation_keyframe(5, 0.0, Quat::from_rotation_z(0.3));
     clip.add_rotation_keyframe(5, 0.6, Quat::from_rotation_z(-0.3));
     clip.add_rotation_keyframe(5, 1.2, Quat::from_rotation_z(0.3));
-    
+
     // Right arm swing (opposite)
     clip.add_rotation_keyframe(7, 0.0, Quat::from_rotation_z(-0.3));
     clip.add_rotation_keyframe(7, 0.6, Quat::from_rotation_z(0.3));
     clip.add_rotation_keyframe(7, 1.2, Quat::from_rotation_z(-0.3));
-    
+
     // Left leg
     clip.add_rotation_keyframe(8, 0.0, Quat::from_rotation_x(-0.5));
     clip.add_rotation_keyframe(8, 0.6, Quat::from_rotation_x(0.5));
     clip.add_rotation_keyframe(8, 1.2, Quat::from_rotation_x(-0.5));
-    
+
     // Right leg (opposite)
     clip.add_rotation_keyframe(9, 0.0, Quat::from_rotation_x(0.5));
     clip.add_rotation_keyframe(9, 0.6, Quat::from_rotation_x(-0.5));
     clip.add_rotation_keyframe(9, 1.2, Quat::from_rotation_x(0.5));
-    
+
     clip
 }
 
 fn create_run_animation() -> AnimationClip {
     let mut clip = AnimationClip::new("Run".to_string(), 0.8);
-    
+
     // Hip movement (more pronounced)
     clip.add_translation_keyframe(0, 0.0, Vec3::ZERO);
     clip.add_translation_keyframe(0, 0.4, Vec3::new(0.0, 0.1, 0.0));
     clip.add_translation_keyframe(0, 0.8, Vec3::ZERO);
-    
+
     // Spine rotation (more pronounced)
     clip.add_rotation_keyframe(1, 0.0, Quat::IDENTITY);
     clip.add_rotation_keyframe(1, 0.4, Quat::from_rotation_y(0.2));
     clip.add_rotation_keyframe(1, 0.8, Quat::IDENTITY);
-    
+
     // Left arm swing (aggressive)
     clip.add_rotation_keyframe(5, 0.0, Quat::from_rotation_z(0.8));
     clip.add_rotation_keyframe(5, 0.4, Quat::from_rotation_z(-0.8));
     clip.add_rotation_keyframe(5, 0.8, Quat::from_rotation_z(0.8));
-    
+
     // Right arm swing (aggressive, opposite)
     clip.add_rotation_keyframe(7, 0.0, Quat::from_rotation_z(-0.8));
     clip.add_rotation_keyframe(7, 0.4, Quat::from_rotation_z(0.8));
     clip.add_rotation_keyframe(7, 0.8, Quat::from_rotation_z(-0.8));
-    
+
     // Left leg (aggressive)
     clip.add_rotation_keyframe(8, 0.0, Quat::from_rotation_x(-1.0));
     clip.add_rotation_keyframe(8, 0.4, Quat::from_rotation_x(1.0));
     clip.add_rotation_keyframe(8, 0.8, Quat::from_rotation_x(-1.0));
-    
+
     // Right leg (aggressive, opposite)
     clip.add_rotation_keyframe(9, 0.0, Quat::from_rotation_x(1.0));
     clip.add_rotation_keyframe(9, 0.4, Quat::from_rotation_x(-1.0));
     clip.add_rotation_keyframe(9, 0.8, Quat::from_rotation_x(1.0));
-    
+
     clip
 }
 
 fn create_animation_blender() -> AnimationBlender {
     let mut blender = AnimationBlender::new();
-    
+
     // Add all animation clips
     blender.add_clip("Idle", create_idle_animation());
     blender.add_clip("Walk", create_walk_animation());
     blender.add_clip("Run", create_run_animation());
-    
+
     // Create 1D blend tree for speed-based blending
     let mut blend_tree = BlendNode1D::new();
     blend_tree.add_clip("Idle", 0.0);
     blend_tree.add_clip("Walk", 0.5);
     blend_tree.add_clip("Run", 1.0);
-    
+
     blender.add_blend_tree("SpeedBlend", blend_tree.into());
-    
+
     blender
 }
 
-fn handle_input(
-    input: &InputState,
-    demo_state: &mut DemoState,
-    query: &mut Query<(&mut AnimationBlender,), praxis_ecs::With<AnimatedCharacter>>,
-) {
+fn handle_input(input: &InputState, demo_state: &mut DemoState, world: &mut World) {
     let now = Instant::now();
-    let time_since_change = now.duration_since(demo_state.last_mode_change).as_secs_f32();
-    
+    let time_since_change = now
+        .duration_since(demo_state.last_mode_change)
+        .as_secs_f32();
+
     // Prevent rapid mode switching
     if time_since_change < 0.3 {
         return;
     }
-    
+
     let mut mode_changed = false;
     let old_mode = demo_state.current_mode;
-    
+
     // Mode switching
     if input.is_key_just_pressed(KeyCode::Digit1) {
         demo_state.current_mode = AnimationMode::Idle;
@@ -278,7 +276,7 @@ fn handle_input(
         demo_state.current_mode = AnimationMode::BlendTree;
         mode_changed = true;
     }
-    
+
     // Speed parameter adjustment (for blend tree mode)
     if demo_state.current_mode == AnimationMode::BlendTree {
         if input.is_key_pressed(KeyCode::ArrowUp) {
@@ -288,10 +286,12 @@ fn handle_input(
             demo_state.speed_parameter = (demo_state.speed_parameter - 0.02).max(0.0);
         }
     }
-    
+
     // Apply mode change to blender
     if mode_changed {
-        for (mut blender,) in query.iter_mut() {
+        let inner_world = world.inner_mut();
+        let mut query = inner_world.query::<(&mut AnimationBlender, &AnimatedCharacter)>();
+        for (mut blender, _) in query.iter_mut(inner_world) {
             match demo_state.current_mode {
                 AnimationMode::Idle => {
                     if old_mode != AnimationMode::Idle {
@@ -334,43 +334,48 @@ fn handle_input(
         }
         demo_state.last_mode_change = now;
     }
-    
+
     // Update blend tree parameter
     if demo_state.current_mode == AnimationMode::BlendTree {
-        for (mut blender,) in query.iter_mut() {
+        let inner_world = world.inner_mut();
+        let mut query = inner_world.query::<(&mut AnimationBlender, &AnimatedCharacter)>();
+        for (mut blender, _) in query.iter_mut(inner_world) {
             blender.set_blend_parameter("SpeedBlend", demo_state.speed_parameter);
         }
     }
 }
 
-fn update_animations(
-    delta_time: f32,
-    query: &mut Query<(&Skeleton, &mut AnimationBlender, &mut AnimatedPose)>,
-) {
-    update_animation_blenders(delta_time, query);
+fn update_animations_manual(world: &mut World, delta_time: f32) {
+    let inner_world = world.inner_mut();
+    let mut query = inner_world.query::<(&Skeleton, &mut AnimationBlender, &mut AnimatedPose)>();
+    for (skeleton, mut blender, mut pose) in query.iter_mut(inner_world) {
+        blender.update(delta_time);
+        *pose = blender.evaluate(skeleton);
+    }
 }
 
-fn print_status(
-    query: &Query<(&AnimatedPose,), praxis_ecs::With<AnimatedCharacter>>,
-    demo_state: &DemoState,
-    frame: usize,
-) {
+fn print_status(world: &mut World, demo_state: &DemoState, frame: usize) {
     // Print status every 60 frames (1 second at 60 FPS)
     if frame % 60 == 0 {
-        for (pose,) in query.iter() {
+        let inner_world = world.inner_mut();
+        let mut query = inner_world.query::<(&AnimatedPose, &AnimatedCharacter)>();
+        for (pose, _) in query.iter(inner_world) {
             info!("=== Status Update (t={:.1}s) ===", demo_state.elapsed_time);
             info!("Current mode: {:?}", demo_state.current_mode);
-            
+
             if demo_state.current_mode == AnimationMode::BlendTree {
                 info!("Speed parameter: {:.2}", demo_state.speed_parameter);
             }
-            
+
             // Print root bone position
             if let Some(root_transform) = pose.local_transform(0) {
                 let pos = root_transform.col(3).truncate();
-                info!("Root bone position: ({:.2}, {:.2}, {:.2})", pos.x, pos.y, pos.z);
+                info!(
+                    "Root bone position: ({:.2}, {:.2}, {:.2})",
+                    pos.x, pos.y, pos.z
+                );
             }
-            
+
             info!("Animated bones: {}", pose.local_transforms().len());
         }
     }
@@ -405,22 +410,20 @@ fn main() -> Result<()> {
     // Create animated character
     let skeleton = create_character_skeleton();
     let mut blender = create_animation_blender();
-    
+
     // Start with idle animation
     blender.play("Idle");
     info!("Started with Idle animation");
     info!("");
-    
-    let pose = AnimatedPose::new(skeleton.bone_count());
-    
-    world.spawn((
-        skeleton.clone(),
-        blender,
-        pose,
-        AnimatedCharacter,
-    ));
 
-    info!("Spawned animated character with {} bones", skeleton.bone_count());
+    let pose = AnimatedPose::new(skeleton.bone_count());
+
+    world.spawn((skeleton.clone(), blender, pose, AnimatedCharacter));
+
+    info!(
+        "Spawned animated character with {} bones",
+        skeleton.bone_count()
+    );
     info!("Running demo for 60 seconds (press ESC to exit)...");
     info!("");
 
@@ -432,38 +435,29 @@ fn main() -> Result<()> {
     while demo_state.elapsed_time < 60.0 {
         frame += 1;
         let frame_start = Instant::now();
-        
+
         // Update input
         input_state.update();
-        
+
         // Check for exit
         if input_state.is_key_pressed(KeyCode::Escape) {
             info!("");
             info!("ESC pressed, exiting demo");
             break;
         }
-        
+
         // Handle input
-        {
-            let mut query = world.query_filtered::<(&mut AnimationBlender,), praxis_ecs::With<AnimatedCharacter>>();
-            handle_input(&input_state, &mut demo_state, &mut query);
-        }
-        
+        handle_input(&input_state, &mut demo_state, &mut world);
+
         // Update animations
         let delta_time = 1.0 / 60.0;
-        {
-            let mut query = world.query::<(&Skeleton, &mut AnimationBlender, &mut AnimatedPose)>();
-            update_animations(delta_time, &mut query);
-        }
-        
+        update_animations_manual(&mut world, delta_time);
+
         // Print status
-        {
-            let query = world.query_filtered::<(&AnimatedPose,), praxis_ecs::With<AnimatedCharacter>>();
-            print_status(&query, &demo_state, frame);
-        }
-        
+        print_status(&mut world, &demo_state, frame);
+
         demo_state.elapsed_time = start_time.elapsed().as_secs_f32();
-        
+
         // Frame rate limiting
         let frame_time = frame_start.elapsed();
         if frame_time < frame_duration {

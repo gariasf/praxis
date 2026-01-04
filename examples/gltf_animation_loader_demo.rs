@@ -34,7 +34,7 @@ fn main() {
             for (i, skin) in asset.skins.iter().enumerate() {
                 println!("Skin {}: {:?}", i, skin.name);
                 println!("  - {} bones", skin.skeleton.bone_count());
-                
+
                 // Print bone names
                 for (bone_idx, bone) in skin.skeleton.bones().iter().enumerate() {
                     let parent_str = match bone.parent_index {
@@ -57,12 +57,14 @@ fn main() {
             // Example: Create an animation player with loaded animations
             if !asset.animations.is_empty() && !asset.skins.is_empty() {
                 println!("Creating animation player...");
-                
+
                 let mut player = AnimationPlayer::new();
-                
+
                 // Add all animations to the player
                 for animation in &asset.animations {
-                    let name = animation.name.clone()
+                    let name = animation
+                        .name
+                        .clone()
                         .unwrap_or_else(|| format!("Animation{}", player.clips().len()));
                     player.add_clip(name.clone(), animation.clip.clone());
                     println!("  Added animation: {}", name);
@@ -77,11 +79,11 @@ fn main() {
 
                 // Example: Spawn an entity with skeleton and animation player
                 let mut world = World::new();
-                
+
                 if let Some(skin) = asset.skins.first() {
                     let skeleton = skin.skeleton.clone();
                     let pose = AnimatedPose::new(skeleton.bone_count());
-                    
+
                     world.spawn((skeleton, player, pose));
                     println!("\nSpawned animated entity in ECS world");
                 }
@@ -89,7 +91,7 @@ fn main() {
                 // Example: Update animations in a system
                 let mut schedule = Schedule::default();
                 schedule.add_systems(animation_update_system);
-                
+
                 println!("Animation system ready to update");
             }
 
@@ -117,7 +119,11 @@ fn main() {
 
 /// Animation update system that advances animation playback.
 fn animation_update_system(
-    mut query: Query<(&praxis_scene::Skeleton, &mut AnimationPlayer, &mut AnimatedPose)>,
+    mut query: Query<(
+        &praxis_scene::Skeleton,
+        &mut AnimationPlayer,
+        &mut AnimatedPose,
+    )>,
 ) {
     let delta_time = 0.016; // 60 FPS
     praxis_scene::update_animations(delta_time, &mut query);
