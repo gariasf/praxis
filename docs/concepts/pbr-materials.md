@@ -137,6 +137,7 @@ Praxis automatically sorts draw commands by material to minimize GPU state chang
 
 ## See Also
 
+- [BEGINNERS_GUIDE - Material System](../BEGINNERS_GUIDE.md#material-system) - Material data flow and batching
 - [Rendering Guide](../guides/rendering.md) - Using materials in practice
 - [RENDERING_EXPLAINED.md](../RENDERING_EXPLAINED.md) - Pipeline details
 - [Deferred Rendering](../deferred_rendering.md) - G-buffer material storage

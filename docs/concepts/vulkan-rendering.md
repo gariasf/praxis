@@ -119,6 +119,8 @@ Group draw calls by:
 
 ## See Also
 
+- [BEGINNERS_GUIDE - Rendering Pipeline Flow](../BEGINNERS_GUIDE.md#rendering-pipeline-flow) - Complete pipeline walkthrough
+- [BEGINNERS_GUIDE - Uniform Buffers](../BEGINNERS_GUIDE.md#uniform-buffers-and-descriptor-sets) - Descriptor set deep dive
 - [Rendering Guide](../guides/rendering.md) - Practical usage
 - [Deferred Rendering](../deferred_rendering.md) - G-buffer pipeline
 - [praxis_graphics crate](../../crates/praxis_graphics/README.md) - API docs

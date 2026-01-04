@@ -22,8 +22,14 @@ Task-oriented tutorials for implementing features:
 Educational explanations of engine design:
 - [Architecture](ARCHITECTURE.md) - Overall engine design and crate organization
 - [ECS Architecture](concepts/ecs-architecture.md) - Entity-Component-System patterns
-- [Deferred Rendering](deferred_rendering.md) - G-buffer and lighting passes
-- [Environment Probes](ENVIRONMENT_PROBES.md) - Image-based lighting
+- [Vulkan Rendering](concepts/vulkan-rendering.md) - Graphics pipeline fundamentals
+- [Transform Hierarchy](concepts/transform-hierarchy.md) - Scene graphs and spatial relationships
+- [PBR Materials](concepts/pbr-materials.md) - Physically-based rendering theory
+- [Lighting](concepts/lighting.md) - Directional and point light systems
+- [Animation](concepts/animation.md) - Skeletal animation and blending
+- [Physics](concepts/physics.md) - Rigid body simulation with Rapier3D
+- [Input](concepts/input.md) - Keyboard, mouse, and gamepad handling
+- [Spatial Audio](concepts/spatial-audio.md) - 3D audio positioning
 
 ### [Reference](reference/README.md)
 API documentation and specifications:

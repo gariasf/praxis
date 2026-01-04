@@ -149,6 +149,7 @@ fn render_system(query: Query<(&Transform, Option<&Material>)>) {
 
 ## See Also
 
+- [BEGINNERS_GUIDE - ECS Data Flow](../BEGINNERS_GUIDE.md#ecs-data-flow) - Deep dive with diagrams
 - [praxis_ecs crate](../../crates/praxis_ecs/README.md) - API documentation
 - [Transform Hierarchy](transform-hierarchy.md) - Scene graph concepts
 - [bevy_ecs documentation](https://docs.rs/bevy_ecs) - Underlying ECS library

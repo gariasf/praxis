@@ -4,11 +4,20 @@ Educational explanations of the theory and design behind Praxis systems.
 
 ## Contents
 
+### Core Architecture
 - [ECS Architecture](ecs-architecture.md) - Entity-Component-System patterns and rationale
-- [Vulkan Rendering](vulkan-rendering.md) - Graphics pipeline fundamentals
 - [Transform Hierarchy](transform-hierarchy.md) - Scene graphs and spatial relationships
+
+### Rendering
+- [Vulkan Rendering](vulkan-rendering.md) - Graphics pipeline fundamentals
 - [PBR Materials](pbr-materials.md) - Physically-based rendering theory
-- [Spatial Audio](spatial-audio.md) - 3D audio algorithms and implementation
+- [Lighting](lighting.md) - Directional and point light systems
+
+### Gameplay Systems
+- [Animation](animation.md) - Skeletal animation and blending
+- [Physics](physics.md) - Rigid body simulation with Rapier3D
+- [Input](input.md) - Keyboard, mouse, and gamepad handling
+- [Spatial Audio](spatial-audio.md) - 3D audio positioning and effects
 
 ## Purpose
 

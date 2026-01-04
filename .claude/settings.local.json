@@ -27,7 +27,8 @@
       "Bash(del \"J:\\\\Projects\\\\gariasf\\\\praxis\\\\crates\\\\praxis_editor\\\\UNDO_REDO.md\")",
       "Bash(del \"J:\\\\Projects\\\\gariasf\\\\praxis\\\\crates\\\\praxis_editor\\\\QUICK_START_UNDO_REDO.md\")",
       "Bash(del \"J:\\\\Projects\\\\gariasf\\\\praxis\\\\crates\\\\praxis_editor\\\\UNDO_REDO_FEATURE_SUMMARY.md\")",
-      "Bash(del \"J:\\\\Projects\\\\gariasf\\\\praxis\\\\crates\\\\praxis_graphics\\\\HDR_QUICK_START.md\")"
+      "Bash(del \"J:\\\\Projects\\\\gariasf\\\\praxis\\\\crates\\\\praxis_graphics\\\\HDR_QUICK_START.md\")",
+      "Bash(cargo clean:*)"
     ],
     "deny": [],
     "ask": []
