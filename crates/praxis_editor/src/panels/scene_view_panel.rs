@@ -61,7 +61,7 @@ impl EditorPanel for SceneViewPanel {
         &mut self,
         ui: &mut Ui,
         _world: Option<&praxis_ecs::World>,
-        _render_context: Option<&praxis_graphics::RenderContext>,
+        _render_context: Option<&mut praxis_graphics::RenderContext>,
     ) {
         ui.heading("Scene View");
         ui.separator();

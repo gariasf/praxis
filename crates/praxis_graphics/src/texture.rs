@@ -6,7 +6,7 @@
 
 use praxis_utils::{debug, eyre, info, trace, Result};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage},
@@ -274,6 +274,9 @@ pub struct TextureManager {
     /// Map of texture name to GPU texture.
     textures: HashMap<String, Texture>,
 
+    /// Map of file path to texture name for hot-reload support.
+    path_to_name: HashMap<PathBuf, String>,
+
     /// Memory allocator for creating GPU resources.
     allocator: Arc<dyn MemoryAllocator>,
 
@@ -299,6 +302,7 @@ impl TextureManager {
     ) -> Self {
         Self {
             textures: HashMap::new(),
+            path_to_name: HashMap::new(),
             allocator,
             command_buffer_allocator,
             queue,
@@ -331,6 +335,7 @@ impl TextureManager {
         )?;
 
         self.textures.insert(name.clone(), texture);
+        self.path_to_name.insert(path.to_path_buf(), name.clone());
         info!("Texture '{}' loaded and cached", name);
 
         Ok(())
@@ -408,7 +413,11 @@ impl TextureManager {
     ///
     /// Returns `true` if the texture existed and was removed.
     pub fn remove_texture(&mut self, name: &str) -> bool {
-        self.textures.remove(name).is_some()
+        let removed = self.textures.remove(name).is_some();
+        if removed {
+            self.path_to_name.retain(|_, v| v != name);
+        }
+        removed
     }
 
     /// Returns the number of cached textures.
@@ -420,6 +429,7 @@ impl TextureManager {
     pub fn clear(&mut self) {
         debug!("Clearing {} cached textures", self.textures.len());
         self.textures.clear();
+        self.path_to_name.clear();
     }
 
     /// Creates a default white texture and adds it to the cache.
@@ -447,6 +457,42 @@ impl TextureManager {
         )?;
         self.add_texture("_default_flat_normal", texture);
         Ok(())
+    }
+
+    /// Reloads a texture from disk by its file path.
+    ///
+    /// This method is used for hot-reload functionality. If the file path
+    /// corresponds to a loaded texture, it will be reloaded from disk and
+    /// the GPU resource will be updated.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the texture file to reload
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(true)` if the texture was found and reloaded successfully,
+    /// `Ok(false)` if the path doesn't correspond to any loaded texture,
+    /// or an error if reloading failed.
+    pub fn reload_texture(&mut self, path: impl AsRef<Path>) -> Result<bool> {
+        let path = path.as_ref();
+        
+        if let Some(name) = self.path_to_name.get(path).cloned() {
+            debug!("Reloading texture '{}' from '{}'", name, path.display());
+            
+            let texture = Texture::from_file(
+                self.allocator.clone(),
+                self.command_buffer_allocator.clone(),
+                self.queue.clone(),
+                path,
+            )?;
+            
+            self.textures.insert(name.clone(), texture);
+            info!("Texture '{}' reloaded successfully", name);
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 }
 

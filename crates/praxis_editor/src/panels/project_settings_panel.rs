@@ -538,7 +538,12 @@ impl EditorPanel for ProjectSettingsPanel {
         &self.title
     }
 
-    fn ui(&mut self, ui: &mut Ui) {
+    fn ui(
+        &mut self,
+        ui: &mut Ui,
+        _world: Option<&praxis_ecs::World>,
+        _render_context: Option<&mut praxis_graphics::RenderContext>,
+    ) {
         self.render_tabs(ui);
 
         egui::ScrollArea::vertical()

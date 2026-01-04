@@ -27,12 +27,12 @@ pub trait EditorPanel {
     ///
     /// * `ui` - The egui UI context
     /// * `world` - Optional shared reference to the ECS world
-    /// * `render_context` - Optional shared reference to the rendering context
+    /// * `render_context` - Optional mutable reference to the rendering context
     fn ui(
         &mut self,
         ui: &mut Ui,
         world: Option<&praxis_ecs::World>,
-        render_context: Option<&praxis_graphics::RenderContext>,
+        render_context: Option<&mut praxis_graphics::RenderContext>,
     );
 
     /// Called when the panel is about to be closed.

@@ -7,6 +7,7 @@
 use crate::vertex::Vertex3D;
 use praxis_utils::{debug, eyre, trace, Result};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
@@ -379,6 +380,9 @@ pub struct MeshAssetManager {
     /// Map of mesh ID to GPU mesh data.
     meshes: HashMap<String, GpuMesh>,
 
+    /// Map of file path to mesh ID for hot-reload support.
+    path_to_id: HashMap<PathBuf, String>,
+
     /// Memory allocator for creating GPU buffers.
     allocator: Arc<dyn MemoryAllocator>,
 }
@@ -392,6 +396,7 @@ impl MeshAssetManager {
     pub fn new(allocator: Arc<dyn MemoryAllocator>) -> Self {
         Self {
             meshes: HashMap::new(),
+            path_to_id: HashMap::new(),
             allocator,
         }
     }
@@ -440,7 +445,11 @@ impl MeshAssetManager {
     ///
     /// Returns `true` if the mesh existed and was removed.
     pub fn remove_mesh(&mut self, id: &str) -> bool {
-        self.meshes.remove(id).is_some()
+        let removed = self.meshes.remove(id).is_some();
+        if removed {
+            self.path_to_id.retain(|_, v| v != id);
+        }
+        removed
     }
 
     /// Returns the number of loaded meshes.
@@ -452,6 +461,7 @@ impl MeshAssetManager {
     pub fn clear(&mut self) {
         debug!("Clearing {} loaded meshes", self.meshes.len());
         self.meshes.clear();
+        self.path_to_id.clear();
     }
 
     /// Gets a reference to the memory allocator.
@@ -459,6 +469,76 @@ impl MeshAssetManager {
     /// This can be used to create custom GPU meshes outside of the asset manager.
     pub fn allocator(&self) -> &Arc<dyn MemoryAllocator> {
         &self.allocator
+    }
+
+    /// Loads a mesh from mesh data with a file path association.
+    ///
+    /// This method loads mesh data and associates it with a file path for hot-reload support.
+    /// If a mesh with the same ID already exists, it will be replaced.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique identifier for the mesh
+    /// * `path` - Path to the mesh file for hot-reload tracking
+    /// * `mesh_data` - Mesh data to upload
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if GPU buffer creation fails.
+    pub fn load_mesh_with_path(
+        &mut self,
+        id: impl Into<String>,
+        path: impl AsRef<std::path::Path>,
+        mesh_data: MeshData,
+    ) -> Result<()> {
+        let id = id.into();
+        let path = path.as_ref();
+        
+        debug!("Loading mesh '{}' from file '{}'", id, path.display());
+        
+        let gpu_mesh = mesh_data.upload(self.allocator.clone())?;
+        
+        self.meshes.insert(id.clone(), gpu_mesh);
+        self.path_to_id.insert(path.to_path_buf(), id.clone());
+        
+        trace!("Mesh '{}' loaded successfully from file", id);
+        Ok(())
+    }
+
+    /// Reloads a mesh from disk by its file path.
+    ///
+    /// This method is used for hot-reload functionality. If the file path
+    /// corresponds to a loaded mesh, it will be reloaded using the provided
+    /// mesh data and the GPU resource will be updated.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the mesh file to reload
+    /// * `mesh_data` - New mesh data to upload
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(true)` if the mesh was found and reloaded successfully,
+    /// `Ok(false)` if the path doesn't correspond to any loaded mesh,
+    /// or an error if reloading failed.
+    pub fn reload_mesh(
+        &mut self,
+        path: impl AsRef<std::path::Path>,
+        mesh_data: MeshData,
+    ) -> Result<bool> {
+        let path = path.as_ref();
+        
+        if let Some(id) = self.path_to_id.get(path).cloned() {
+            debug!("Reloading mesh '{}' from '{}'", id, path.display());
+            
+            let gpu_mesh = mesh_data.upload(self.allocator.clone())?;
+            
+            self.meshes.insert(id.clone(), gpu_mesh);
+            praxis_utils::info!("Mesh '{}' reloaded successfully", id);
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 }
 

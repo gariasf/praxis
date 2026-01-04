@@ -143,6 +143,7 @@
 use super::EditorPanel;
 use egui::{Color32, Context, Pos2, Rect, Sense, TextureId, Ui, Vec2};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use praxis_assets::AssetLoader;
 use praxis_utils::{debug, info, warn, Result};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -451,9 +452,9 @@ impl AssetsPanel {
     }
 
     /// Process file watcher events
-    fn process_file_events(&mut self) {
+    fn process_file_events(&mut self, render_context: Option<&mut praxis_graphics::RenderContext>) {
         let mut needs_refresh = false;
-        let mut paths_to_clear = Vec::new();
+        let mut paths_to_reload = Vec::new();
 
         if let Some(rx) = &self.file_watcher_rx {
             while let Ok(msg) = rx.try_recv() {
@@ -463,14 +464,14 @@ impl AssetsPanel {
                         if path.starts_with(&self.current_path) {
                             needs_refresh = true;
                         }
-                        paths_to_clear.push(path);
+                        paths_to_reload.push(path);
                     }
                     FileWatcherMessage::Deleted(path) => {
                         debug!("Asset deleted: {}", path.display());
                         if path.starts_with(&self.current_path) {
                             needs_refresh = true;
                         }
-                        paths_to_clear.push(path);
+                        self.thumbnail_cache.remove(&path);
                     }
                 }
             }
@@ -480,8 +481,65 @@ impl AssetsPanel {
             self.refresh_entries();
         }
 
-        for path in paths_to_clear {
-            self.thumbnail_cache.remove(&path);
+        // Reload GPU assets when files change
+        if let Some(ctx) = render_context {
+            for path in &paths_to_reload {
+                self.reload_asset_if_loaded(path, ctx);
+                self.thumbnail_cache.remove(path);
+            }
+        } else {
+            // If no render context, just clear thumbnails
+            for path in paths_to_reload {
+                self.thumbnail_cache.remove(&path);
+            }
+        }
+    }
+
+    /// Attempts to reload an asset from disk if it's currently loaded
+    fn reload_asset_if_loaded(&self, path: &PathBuf, render_context: &mut praxis_graphics::RenderContext) {
+        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+            let asset_type = AssetType::from_extension(ext);
+            
+            match asset_type {
+                AssetType::Texture => {
+                    match render_context.texture_manager_mut().reload_texture(path) {
+                        Ok(true) => {
+                            info!("🔄 Hot-reloaded texture: {}", path.display());
+                        }
+                        Ok(false) => {
+                            // Texture not currently loaded, ignore
+                        }
+                        Err(e) => {
+                            warn!("Failed to reload texture '{}': {}", path.display(), e);
+                        }
+                    }
+                }
+                AssetType::Model => {
+                    // Load mesh data from file first
+                    let loader = praxis_assets::MeshLoader::new();
+                    match loader.load(path) {
+                        Ok(mesh_data) => {
+                            match render_context.mesh_manager_mut().reload_mesh(path, mesh_data) {
+                                Ok(true) => {
+                                    info!("🔄 Hot-reloaded mesh: {}", path.display());
+                                }
+                                Ok(false) => {
+                                    // Mesh not currently loaded, ignore
+                                }
+                                Err(e) => {
+                                    warn!("Failed to reload mesh '{}': {}", path.display(), e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            warn!("Failed to load mesh data for '{}': {}", path.display(), e);
+                        }
+                    }
+                }
+                _ => {
+                    // Other asset types don't support hot-reload yet
+                }
+            }
         }
     }
 
@@ -1127,9 +1185,9 @@ impl EditorPanel for AssetsPanel {
         &mut self,
         ui: &mut Ui,
         _world: Option<&praxis_ecs::World>,
-        _render_context: Option<&praxis_graphics::RenderContext>,
+        render_context: Option<&mut praxis_graphics::RenderContext>,
     ) {
-        self.process_file_events();
+        self.process_file_events(render_context);
         self.process_thumbnail_queue();
 
         ui.vertical(|ui| {
