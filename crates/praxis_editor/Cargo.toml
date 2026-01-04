@@ -1,0 +1,19 @@
+[package]
+name = "praxis_editor"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+praxis_ecs = { path = "../praxis_ecs" }
+praxis_math = { path = "../praxis_math" }
+praxis_utils = { path = "../praxis_utils" }
+praxis_gui = { path = "../praxis_gui" }
+praxis_scene = { path = "../praxis_scene" }
+praxis_assets = { path = "../praxis_assets" }
+praxis_input = { path = "../praxis_input" }
+egui = "0.29"
+egui_dock = "0.14"
+egui-winit = "0.29"
+winit = "0.30.11"
+vulkano = "0.35.1"

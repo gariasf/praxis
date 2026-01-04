@@ -12,6 +12,7 @@ members = [
     "crates/praxis_assets",
     "crates/praxis_audio",
     "crates/praxis_ecs",
+    "crates/praxis_editor",
     "crates/praxis_graphics",
     "crates/praxis_gui",
     "crates/praxis_input",
@@ -37,6 +38,7 @@ praxis_utils = { path = "crates/praxis_utils", version = "0.1.0" }
 praxis_window = { path = "crates/praxis_window", version = "0.1.0" }
 praxis_graphics = { path = "crates/praxis_graphics", version = "0.1.0" }
 praxis_ecs = { path = "crates/praxis_ecs", version = "0.1.0" }
+praxis_editor = { path = "crates/praxis_editor", version = "0.1.0" }
 praxis_input = { path = "crates/praxis_input", version = "0.1.0" }
 praxis_math = { path = "crates/praxis_math", version = "0.1.0" }
 praxis_assets = { path = "crates/praxis_assets", version = "0.1.0" }
