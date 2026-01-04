@@ -81,18 +81,27 @@
 //!
 //! See the [`selection`] module and `SELECTION_SYSTEM.md` for detailed documentation.
 //!
-//! # Command System
+//! # Command System and Undo/Redo
 //!
-//! The editor provides a comprehensive undo/redo system with serialization support:
+//! The editor provides a comprehensive undo/redo system with full integration:
 //! - **EditorCommand trait**: Base interface for all undoable operations
-//! - **CommandHistory**: Manages undo/redo stacks with configurable size limits
+//! - **CommandHistory**: Manages undo/redo stacks with 100 entry maximum
+//! - **UndoRedoSystem**: ECS resource wrapper with dirty state tracking
 //! - **Concrete commands**: Transform edits, entity creation/deletion, component management, hierarchy changes
 //! - **Composite commands**: Group multiple operations into a single undoable action
 //! - **RON serialization**: Save and load command history for session recovery or replay
+//! - **Dirty state tracking**: Automatically tracks unsaved changes
+//! - **Menu bar integration**: Undo/Redo actions with descriptions and enabled state
 //!
 //! **Keyboard shortcuts:**
-//! - Ctrl+Z: Undo
-//! - Ctrl+Y or Ctrl+Shift+Z: Redo
+//! - Ctrl+Z: Undo last command
+//! - Ctrl+Y or Ctrl+Shift+Z: Redo last undone command
+//!
+//! **Menu bar features:**
+//! - Edit > Undo/Redo: Shows command descriptions and keyboard shortcuts
+//! - File > Save: Shows asterisk (*) when there are unsaved changes
+//! - Status bar: Displays unsaved indicator when dirty
+//! - History info: Shows undo/redo stack counts
 //!
 //! See `COMMAND_SYSTEM.md` for detailed documentation and examples.
 

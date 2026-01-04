@@ -100,6 +100,10 @@ path = "examples/command_system_demo.rs"
 name = "command_serialization_demo"
 path = "examples/command_serialization_demo.rs"
 
+[[example]]
+name = "undo_redo_system_demo"
+path = "examples/undo_redo_system_demo.rs"
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 vulkano = "0.35.1"

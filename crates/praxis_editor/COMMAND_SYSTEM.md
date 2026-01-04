@@ -45,14 +45,30 @@ pub struct CommandHistory {
 
 #### `UndoRedoSystem`
 
-ECS Resource wrapper for `CommandHistory`:
+ECS Resource wrapper for `CommandHistory` with dirty state tracking:
 
 ```rust
 #[derive(Resource)]
 pub struct UndoRedoSystem {
     pub history: CommandHistory,
+    dirty: bool,              // Tracks unsaved changes
+    saved_undo_count: usize,  // Undo count at last save
 }
 ```
+
+**Features:**
+- Command history management (max 100 entries)
+- Dirty state tracking for unsaved changes
+- Keyboard shortcuts (Ctrl+Z, Ctrl+Y)
+- Menu bar integration
+- Serialization support
+
+See `UNDO_REDO_SYSTEM.md` for complete documentation of the undo/redo system, including:
+- Dirty state tracking
+- Menu bar integration
+- Keyboard shortcuts
+- Usage examples
+- Best practices
 
 ## Concrete Commands
 
@@ -394,7 +410,7 @@ impl SerializableCommand {
 
 ### Performance Considerations
 
-1. **Limit history size**: The default is 1000 commands, adjust based on memory constraints
+1. **Limit history size**: The default is 100 commands to prevent unbounded memory growth
 2. **Be mindful of clone costs**: Commands are cloned during serialization
 3. **Lazy evaluation**: Don't capture expensive data until needed
 4. **Consider compression**: For large histories, compress the RON string

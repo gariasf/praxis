@@ -109,7 +109,7 @@ use std::collections::VecDeque;
 type Result<T> = std::result::Result<T, String>;
 
 /// Maximum number of commands to keep in history.
-const MAX_HISTORY_SIZE: usize = 1000;
+const MAX_HISTORY_SIZE: usize = 100;
 
 /// Trait for editor commands that can be executed, undone, and redone.
 ///
@@ -1085,9 +1085,22 @@ impl CommandHistory {
 }
 
 /// Resource wrapper for command history that can be inserted into the ECS world.
+/// 
+/// This system provides:
+/// - Command execution with undo/redo support
+/// - Dirty state tracking for unsaved changes
+/// - Keyboard shortcuts (Ctrl+Z, Ctrl+Y)
+/// - Menu bar integration
+/// - Maximum history size of 100 entries
 #[derive(Resource)]
 pub struct UndoRedoSystem {
     pub history: CommandHistory,
+    /// Tracks whether there are unsaved changes.
+    /// Set to true when commands are executed, false when saved.
+    dirty: bool,
+    /// The undo count when the last save occurred.
+    /// Used to determine if we've returned to a saved state.
+    saved_undo_count: usize,
 }
 
 impl Default for UndoRedoSystem {
@@ -1101,22 +1114,34 @@ impl UndoRedoSystem {
     pub fn new() -> Self {
         Self {
             history: CommandHistory::new(),
+            dirty: false,
+            saved_undo_count: 0,
         }
     }
 
-    /// Executes a command.
+    /// Executes a command and marks the state as dirty.
     pub fn execute_command(&mut self, world: &mut World, command: Box<dyn EditorCommand>) -> Result<()> {
-        self.history.execute(world, command)
+        self.history.execute(world, command)?;
+        self.dirty = true;
+        Ok(())
     }
 
-    /// Undoes the last command.
+    /// Undoes the last command and updates dirty state.
     pub fn undo(&mut self, world: &mut World) -> Result<bool> {
-        self.history.undo(world)
+        let result = self.history.undo(world)?;
+        if result {
+            self.update_dirty_state();
+        }
+        Ok(result)
     }
 
-    /// Redoes the last undone command.
+    /// Redoes the last undone command and updates dirty state.
     pub fn redo(&mut self, world: &mut World) -> Result<bool> {
-        self.history.redo(world)
+        let result = self.history.redo(world)?;
+        if result {
+            self.update_dirty_state();
+        }
+        Ok(result)
     }
 
     /// Returns true if there are commands that can be undone.
@@ -1139,9 +1164,11 @@ impl UndoRedoSystem {
         self.history.redo_description()
     }
 
-    /// Clears all undo/redo history.
+    /// Clears all undo/redo history and resets dirty state.
     pub fn clear(&mut self) {
         self.history.clear();
+        self.dirty = false;
+        self.saved_undo_count = 0;
     }
 
     /// Returns the number of commands in the undo stack.
@@ -1154,14 +1181,44 @@ impl UndoRedoSystem {
         self.history.redo_count()
     }
 
+    /// Returns true if there are unsaved changes.
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    /// Marks the current state as saved.
+    /// This resets the dirty flag and records the current undo count.
+    pub fn mark_saved(&mut self) {
+        self.dirty = false;
+        self.saved_undo_count = self.history.undo_count();
+    }
+
+    /// Marks the state as dirty (having unsaved changes).
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    /// Updates the dirty state based on whether we're at the saved undo count.
+    fn update_dirty_state(&mut self) {
+        // If we've returned to the saved undo count, we're no longer dirty
+        if self.history.undo_count() == self.saved_undo_count {
+            self.dirty = false;
+        } else {
+            self.dirty = true;
+        }
+    }
+
     /// Serializes the command history to RON.
     pub fn to_ron(&self) -> Result<String> {
         self.history.to_ron()
     }
 
     /// Loads command history from RON.
+    /// This marks the state as dirty since we've loaded new commands.
     pub fn from_ron(&mut self, ron: &str) -> Result<()> {
-        self.history.from_ron(ron)
+        self.history.from_ron(ron)?;
+        self.dirty = true;
+        Ok(())
     }
 }
 
@@ -1323,5 +1380,54 @@ mod tests {
         assert!(!system.can_redo());
         assert_eq!(system.undo_count(), 0);
         assert_eq!(system.redo_count(), 0);
+        assert!(!system.is_dirty());
+    }
+
+    #[test]
+    fn test_dirty_state_tracking() {
+        let mut world = World::new();
+        let mut system = UndoRedoSystem::new();
+        
+        // Initially clean
+        assert!(!system.is_dirty());
+        
+        // Execute command - becomes dirty
+        let entity = world.spawn(Transform::default()).id();
+        let command = Box::new(TransformEditCommand::new(
+            entity,
+            Transform::default(),
+            Transform::from_xyz(1.0, 0.0, 0.0),
+        ));
+        system.execute_command(&mut world, command).unwrap();
+        assert!(system.is_dirty());
+        
+        // Mark as saved - becomes clean
+        system.mark_saved();
+        assert!(!system.is_dirty());
+        
+        // Execute another command - becomes dirty again
+        let command = Box::new(TransformEditCommand::new(
+            entity,
+            Transform::from_xyz(1.0, 0.0, 0.0),
+            Transform::from_xyz(2.0, 0.0, 0.0),
+        ));
+        system.execute_command(&mut world, command).unwrap();
+        assert!(system.is_dirty());
+        
+        // Undo back to saved state - becomes clean
+        system.undo(&mut world).unwrap();
+        assert!(!system.is_dirty());
+        
+        // Redo - becomes dirty
+        system.redo(&mut world).unwrap();
+        assert!(system.is_dirty());
+    }
+
+    #[test]
+    fn test_max_history_size() {
+        let history = CommandHistory::new();
+        // Verify max history size is 100
+        assert_eq!(history.max_history_size, MAX_HISTORY_SIZE);
+        assert_eq!(MAX_HISTORY_SIZE, 100);
     }
 }

@@ -23,29 +23,36 @@ The editor system for the Praxis game engine, providing a comprehensive developm
 
 See `SELECTION_SYSTEM.md` for detailed documentation.
 
-### Command System
+### Undo/Redo System
 
-Comprehensive undo/redo system with serialization support:
+Comprehensive undo/redo system with full editor integration:
 
-- **EditorCommand Trait**: Base interface for all commands
-- **CommandHistory**: Manages undo/redo stacks
-- **Concrete Commands**:
-  - `TransformEditCommand`: Edit entity transforms
-  - `CreateEntityCommand`: Create new entities
-  - `DeleteEntityCommand`: Delete entities
-  - `AddComponentCommand`: Add components
-  - `RemoveComponentCommand`: Remove components
-  - `SetParentCommand`: Change entity hierarchy
-  - `CompositeCommand`: Group multiple operations
+- **UndoRedoSystem**: ECS resource with command history and dirty state tracking
+- **CommandHistory**: Manages undo/redo stacks (max 100 entries)
+- **Keyboard Shortcuts**: Ctrl+Z (undo), Ctrl+Y (redo)
+- **Menu Bar Integration**: Shows command descriptions and enabled state
+- **Dirty State Tracking**: Automatically tracks unsaved changes
+- **Visual Feedback**: Unsaved indicator in UI
+
+**Concrete Commands**:
+- `TransformEditCommand`: Edit entity transforms
+- `CreateEntityCommand`: Create new entities
+- `DeleteEntityCommand`: Delete entities
+- `AddComponentCommand`: Add components
+- `RemoveComponentCommand`: Remove components
+- `SetParentCommand`: Change entity hierarchy
+- `CompositeCommand`: Group multiple operations
 
 **Key Features**:
-- Full execute/undo/redo support
+- 100 command history limit (automatic cleanup)
+- Dirty state: tracks when you have unsaved changes
+- Smart state detection: becomes clean when undoing to saved state
+- Menu integration: Edit > Undo/Redo with shortcuts
+- Status indicators: Shows "● Unsaved" when dirty
 - RON serialization for save/load
-- Command batching with composites
 - Type-safe command implementations
-- History management with size limits
 
-See `COMMAND_SYSTEM.md` for detailed documentation.
+See `UNDO_REDO_SYSTEM.md` for complete documentation, or `QUICK_START_UNDO_REDO.md` for a quick start guide.
 
 ### Gizmo System
 
@@ -76,15 +83,20 @@ praxis_editor::init().expect("Failed to initialize editor");
 // Create editor state
 let mut editor = EditorState::new();
 
-// Set up command system
+// Set up undo/redo system
 let mut world = World::new();
 world.insert_resource(UndoRedoSystem::new());
 
 // Toggle between edit and play modes
 editor.set_mode(EditorMode::Play);
 
-// Render editor UI (called every frame)
-// editor.ui(&egui_context);
+// In your game loop
+let mut undo_system = world.remove_resource::<UndoRedoSystem>().unwrap();
+
+// Render editor UI with undo/redo integration
+editor.ui(&egui_context, Some(&mut undo_system), Some(&mut world));
+
+world.insert_resource(undo_system);
 ```
 
 ## Command System Example
@@ -120,10 +132,22 @@ std::fs::write("history.ron", ron).unwrap();
 
 ## Examples
 
+Run the undo/redo system demo (complete feature showcase):
+
+```bash
+cargo run --example undo_redo_system_demo
+```
+
 Run the command system demo:
 
 ```bash
 cargo run --example command_system_demo
+```
+
+Run the command serialization demo:
+
+```bash
+cargo run --example command_serialization_demo
 ```
 
 Run the selection system demo:
@@ -209,6 +233,9 @@ schedule.add_systems(update_selection_system);
 
 ## Documentation
 
+- [Undo/Redo System](UNDO_REDO_SYSTEM.md) - Complete undo/redo documentation
+- [Quick Start Guide](QUICK_START_UNDO_REDO.md) - Quick start for undo/redo
+- [Feature Summary](UNDO_REDO_FEATURE_SUMMARY.md) - Implementation summary
 - [Command System](COMMAND_SYSTEM.md) - Detailed command pattern documentation
 - [Selection System](SELECTION_SYSTEM.md) - Selection system documentation
 
