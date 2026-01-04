@@ -1,207 +1,126 @@
 # Praxis Examples
 
-This directory contains examples demonstrating how to use the Praxis game engine.
+Runnable demos demonstrating Praxis engine features.
 
-## Available Examples
-
-### ECS Integration
-
-Shows how the ECS integrates with the rest of the Praxis engine systems.
-
-To run:
+## Quick Start
 
 ```bash
-cargo run --example ecs_integration
+# Build all examples
+cargo build --examples
+
+# Run a specific example
+cargo run --example comprehensive_scene_demo
 ```
 
-### Transform Propagation Demo
+## Examples by Category
 
-Comprehensive demonstration of the transform propagation system, showing:
-- Automatic GlobalTransform updates from local Transform
-- Parent-child hierarchy management with Parent and Children components
-- Transform changes and propagation through hierarchies
-- Reparenting entities
-- Adding/removing entities from the hierarchy
-- Transform changes with rotation and scale
+### Rendering
 
-This example is particularly useful for understanding how the transform system works
-and how to properly set up entity hierarchies for scene graphs.
+| Example | Description |
+|---------|-------------|
+| `deferred_demo` | Deferred rendering with G-buffer visualization |
+| `hdr_demo` | HDR rendering with tone mapping operators |
+| `shadow_demo` | Cascaded shadow maps with PCF filtering |
+| `multi_mesh_demo` | Multiple meshes with transforms |
+| `skybox_demo` | Cubemap skybox rendering |
 
-To run:
+### Animation
 
-```bash
-cargo run --example transform_propagation_demo
-```
+| Example | Description |
+|---------|-------------|
+| `skeletal_animation_demo` | Bone hierarchies and keyframe animation |
+| `animation_blending_demo` | Cross-fading, blend trees, layers |
+| `gltf_animation_loader_demo` | Loading animations from GLTF files |
 
-### Multi-Mesh Demo
+### Physics
 
-A fully functional example that renders multiple different mesh types in a single scene:
-- Loading meshes into the mesh asset manager
-- Rendering cubes, pyramids, and quads with different transforms
-- Using DrawCommands to specify mesh and transform per object
-- Multiple rotating objects demonstrating the mesh system
+| Example | Description |
+|---------|-------------|
+| `physics_demo` | Rapier3D integration, collisions, forces |
 
-To run:
+### Audio
 
-```bash
-cargo run --example multi_mesh_demo
-```
+| Example | Description |
+|---------|-------------|
+| `audio_demo` | Spatial audio, distance attenuation, doppler |
 
-### Input Integration
+### Editor
 
-Shows how to integrate the input system with winit event loops and ECS.
+| Example | Description |
+|---------|-------------|
+| `editor_demo` | Full editor with panels and tools |
+| `selection_demo` | Entity selection, raycast picking |
+| `editor_camera_demo` | Orbit camera controller |
+| `command_system_demo` | Undo/redo command pattern |
+| `command_serialization_demo` | Command history serialization |
 
-To run:
+### Core Systems
 
-```bash
-cargo run --example input_integration
-```
+| Example | Description |
+|---------|-------------|
+| `ecs_integration` | ECS basics with Praxis |
+| `transform_propagation_demo` | Parent-child transform hierarchy |
+| `input_integration` | Keyboard, mouse, gamepad input |
+| `fps_camera_controller` | First-person camera controls |
 
-### FPS Camera Controller
+### Assets
 
-A fully functional FPS-style camera controller showing:
-- WASD movement with camera
-- Mouse look with sensitivity control
-- Sprint mode
-- Mouse cursor locking
-- Integration of input and camera systems
+| Example | Description |
+|---------|-------------|
+| `obj_loader_demo` | Loading OBJ mesh files |
+| `comprehensive_scene_demo` | Complete asset pipeline |
+| `scene_demo` | Scene loading and saving |
+| `environment_probe_demo` | Environment map reflections |
 
-To run:
+### GUI
 
-```bash
-cargo run --example fps_camera_controller
-```
+| Example | Description |
+|---------|-------------|
+| `gui_demo` | Basic egui integration |
 
-### OBJ Loader Demo
+## Featured Examples
 
-Demonstrates loading OBJ mesh files using the asset system:
-- Using the AssetLoader trait
-- Loading OBJ files from disk
-- Uploading meshes to GPU
-- Rendering loaded meshes
+### Comprehensive Scene Demo ★
 
-To run:
-
-```bash
-cargo run --example obj_loader_demo
-```
-
-### Scene Demo
-
-Demonstrates the scene management system including:
-- Loading scenes from RON files
-- Spawning scene entities into the world
-- Scene graph traversal
-- Finding entities by name
-- Unloading scenes
-- Creating and saving scenes programmatically
-
-To run:
-
-```bash
-cargo run --example scene_demo
-```
-
-### Comprehensive Scene Demo
-
-**★ Complete asset pipeline demonstration ★**
-
-This is the most comprehensive example showing the complete asset loading pipeline from disk to screen:
-- Loading OBJ mesh files from disk using praxis_assets
-- Procedural texture generation with various patterns (checker, brick, metal, wood)
-- ECS-based scene management with multiple objects
-- FPS camera controller with full navigation
-- Multiple textured objects in the scene
-- Integration of all major systems (ECS, graphics, input, camera, assets)
-
-Controls:
-- WASD - Move camera horizontally
-- Space/Left Ctrl - Move camera vertically
-- Left Shift - Sprint mode
-- Mouse - Look around (when cursor is locked)
-- ESC - Toggle cursor lock / Exit
-
-To run:
+The most complete example demonstrating the full asset pipeline:
+- OBJ mesh loading
+- Procedural texture generation
+- ECS-based scene management
+- FPS camera controller
 
 ```bash
 cargo run --example comprehensive_scene_demo
 ```
 
-### GUI Demo
+**Controls:** WASD (move), Mouse (look), Shift (sprint), ESC (exit)
 
-A basic example demonstrating GUI functionality.
+### Deferred Rendering Demo
 
-To run:
-
-```bash
-cargo run --example gui_demo
-```
-
-### Skybox Demo
-
-Demonstrates skybox rendering with cubemap textures. Shows how to:
-- Load a cubemap texture (from 6 faces or equirectangular image)
-- Create a skybox renderer with reversed depth
-- Render a skybox that always appears at infinite distance
-- First-person camera controls for viewing the skybox
-
-The skybox uses specialized rendering techniques:
-- Reversed depth testing to ensure it renders behind all geometry
-- Camera-centered transform (no translation, only rotation)
-- Cubemap texture sampling for seamless panoramic views
-
-To run:
+Shows the deferred rendering pipeline:
+- G-buffer visualization (albedo, normals, depth)
+- Multiple light sources
+- Efficient many-lights rendering
 
 ```bash
-cargo run --example skybox_demo
+cargo run --example deferred_demo
 ```
 
-Controls:
-- WASD - Move camera
-- Mouse - Look around
-- ESC - Exit
+### Editor Demo
 
-### Skeletal Animation Demo
-
-Comprehensive demonstration of the skeletal animation system showing:
-- Creating skeletons with hierarchical bone structures
-- Defining animation clips with keyframe data
-- Translation, rotation, and scale interpolation (linear and spherical)
-- Animation playback control (play, pause, resume, stop)
-- Animation looping and speed control
-- Multiple simultaneous animations with blending
-- Bone hierarchy evaluation and transform propagation
-
-This example is particularly useful for understanding:
-- How to set up a skeleton with parent-child bone relationships
-- How to create animation clips with keyframes for different bone properties
-- How to control animation playback programmatically
-- How animation blending works for smooth transitions
-
-To run:
+Full editor interface:
+- Dockable panels (hierarchy, inspector, console)
+- Entity selection and manipulation
+- Transform gizmos
+- Undo/redo
 
 ```bash
-cargo run --example skeletal_animation_demo
+cargo run --example editor_demo
 ```
 
-Features demonstrated:
-- 3-bone skeleton hierarchy (Root → Spine → Head)
-- Walk animation with translation and rotation keyframes
-- Idle animation with subtle bobbing motion
-- Animation control (play, pause, resume, stop)
-- Playback speed modification
-- Animation blending with weights
+## Documentation
 
-## Building Examples
+For detailed explanations of the systems demonstrated:
 
-To build all examples:
-
-```bash
-cargo build --examples
-```
-
-To build a specific example in release mode:
-
-```bash
-cargo build --example transform_propagation_demo --release
-```
+- [Guides](../docs/guides/README.md) - How-to documentation
+- [Concepts](../docs/concepts/README.md) - Theory and design
+- [Reference](../docs/reference/README.md) - API documentation
