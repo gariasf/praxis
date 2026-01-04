@@ -2963,6 +2963,7 @@ dependencies = [
 name = "praxis_editor"
 version = "0.1.0"
 dependencies = [
+ "bevy_ecs",
  "egui 0.29.1",
  "egui-winit 0.29.1",
  "egui_dock",

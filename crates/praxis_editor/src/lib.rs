@@ -67,14 +67,25 @@
 
 mod editor_mode;
 mod editor_state;
+mod gizmo;
 mod panels;
+pub mod selection;
+mod undo;
 
 pub use editor_mode::EditorMode;
 pub use editor_state::{EditorState, EditorTab};
+pub use gizmo::{
+    Gizmo, GizmoAxis, GizmoInteraction, GizmoMode, GizmoSpace, GizmoSystem, TransformGizmo,
+};
 pub use panels::{
     AssetsPanel, ConsolePanel, EditorPanel, HierarchyPanel, InspectorPanel, SceneViewPanel,
     ViewportPanel,
 };
+pub use selection::{
+    handle_selection_input_system, update_selection_system, Selectable, Selected, SelectionEvent,
+    SelectionMode, SelectionSystem,
+};
+pub use undo::{TransformCommand, UndoRedoSystem};
 
 use praxis_utils::{info, Result};
 

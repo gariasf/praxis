@@ -46,9 +46,9 @@ use bevy_ecs::component::Component;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::query::With;
 use bevy_ecs::system::{Commands, Query, Res, ResMut, Resource};
-use praxis_ecs::{Camera, CameraMatrices, GlobalTransform, PerspectiveProjection, Transform};
+use praxis_ecs::{CameraMatrices, GlobalTransform, Transform};
 use praxis_input::InputState;
-use praxis_math::{Mat4, Vec2, Vec3, Vec4};
+use praxis_math::{Vec2, Vec3, Vec4};
 use std::collections::{HashSet, VecDeque};
 use winit::keyboard::KeyCode;
 
@@ -374,13 +374,15 @@ impl SelectionSystem {
                         added.push(entity);
                     }
                 }
-                if !removed.is_empty() {
+                let has_added = !added.is_empty();
+                let has_removed = !removed.is_empty();
+                if has_removed {
                     self.push_event(SelectionEvent::Deselected(removed));
                 }
-                if !added.is_empty() {
+                if has_added {
                     self.push_event(SelectionEvent::Selected(added));
                 }
-                if !added.is_empty() || !removed.is_empty() {
+                if has_added || has_removed {
                     self.push_event(SelectionEvent::Changed);
                 }
             }
