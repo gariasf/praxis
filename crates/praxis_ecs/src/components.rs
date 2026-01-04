@@ -2011,6 +2011,119 @@ impl From<String> for Skybox {
     }
 }
 
+/// Bounding volume component for spatial optimization.
+///
+/// Stores an axis-aligned bounding box (AABB) used for frustum culling,
+/// occlusion culling, and spatial queries.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, BoundingBox, Transform};
+/// use praxis_math::Vec3;
+///
+/// let mut world = World::new();
+///
+/// // Spawn an entity with a bounding box
+/// world.spawn((
+///     Transform::from_xyz(0.0, 0.0, 0.0),
+///     BoundingBox::from_min_max(Vec3::new(-1.0, -1.0, -1.0), Vec3::new(1.0, 1.0, 1.0)),
+/// ));
+/// ```
+#[derive(Component, Debug, Clone, Copy)]
+pub struct BoundingBox {
+    /// Minimum corner of the box.
+    pub min: Vec3,
+    /// Maximum corner of the box.
+    pub max: Vec3,
+}
+
+impl BoundingBox {
+    /// Creates a new bounding box from minimum and maximum points.
+    pub fn from_min_max(min: Vec3, max: Vec3) -> Self {
+        Self { min, max }
+    }
+
+    /// Creates a bounding box from center and half-extents.
+    pub fn from_center_half_extents(center: Vec3, half_extents: Vec3) -> Self {
+        Self {
+            min: center - half_extents,
+            max: center + half_extents,
+        }
+    }
+
+    /// Returns the center of the bounding box.
+    pub fn center(&self) -> Vec3 {
+        (self.min + self.max) * 0.5
+    }
+
+    /// Returns the half-extents of the bounding box.
+    pub fn half_extents(&self) -> Vec3 {
+        (self.max - self.min) * 0.5
+    }
+
+    /// Returns the size of the bounding box.
+    pub fn size(&self) -> Vec3 {
+        self.max - self.min
+    }
+}
+
+impl Default for BoundingBox {
+    fn default() -> Self {
+        Self::from_center_half_extents(Vec3::ZERO, Vec3::ONE)
+    }
+}
+
+/// LOD (Level of Detail) component.
+///
+/// Specifies which LOD group this entity belongs to for distance-based mesh switching.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, LodComponent, MeshHandle, Transform};
+///
+/// let mut world = World::new();
+///
+/// // Spawn an entity that uses LOD
+/// world.spawn((
+///     Transform::from_xyz(0.0, 0.0, 0.0),
+///     MeshHandle::new("tree_high"),
+///     LodComponent::new("tree"),
+/// ));
+/// ```
+#[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct LodComponent {
+    /// Name of the LOD group this entity belongs to.
+    pub group_name: String,
+}
+
+impl LodComponent {
+    /// Creates a new LOD component.
+    pub fn new(group_name: impl Into<String>) -> Self {
+        Self {
+            group_name: group_name.into(),
+        }
+    }
+
+    /// Gets the LOD group name.
+    pub fn group_name(&self) -> &str {
+        &self.group_name
+    }
+}
+
+impl From<&str> for LodComponent {
+    fn from(group_name: &str) -> Self {
+        Self::new(group_name)
+    }
+}
+
+impl From<String> for LodComponent {
+    fn from(group_name: String) -> Self {
+        Self { group_name }
+    }
+}
+
 /// Particle emitter component for spawning and managing particles.
 ///
 /// This component marks an entity as a particle emitter, which spawns and manages

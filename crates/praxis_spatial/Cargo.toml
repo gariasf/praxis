@@ -1,0 +1,17 @@
+[package]
+name = "praxis_spatial"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+praxis_ecs = { path = "../praxis_ecs", version = "0.1.0" }
+praxis_math = { path = "../praxis_math", version = "0.1.0" }
+praxis_utils = { path = "../praxis_utils", version = "0.1.0" }
+praxis_graphics = { path = "../praxis_graphics", version = "0.1.0" }
+bevy_ecs = "0.14"
+vulkano = "0.35.1"
+bytemuck = { version = "1.23.1", features = ["derive"] }
+
+[lints]
+workspace = true

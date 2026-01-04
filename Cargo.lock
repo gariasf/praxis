@@ -3372,6 +3372,7 @@ dependencies = [
  "praxis_math",
  "praxis_physics",
  "praxis_scene",
+ "praxis_spatial",
  "praxis_utils",
  "praxis_window",
  "vulkano",
@@ -3524,6 +3525,19 @@ dependencies = [
  "praxis_utils",
  "ron",
  "serde",
+]
+
+[[package]]
+name = "praxis_spatial"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bytemuck",
+ "praxis_ecs",
+ "praxis_graphics",
+ "praxis_math",
+ "praxis_utils",
+ "vulkano",
 ]
 
 [[package]]

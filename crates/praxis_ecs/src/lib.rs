@@ -283,9 +283,9 @@ pub mod systems;
 mod world;
 
 pub use components::{
-    Active, Camera, CameraMatrices, Children, DirectionalLight, DirectionalLightInfo,
+    Active, BoundingBox, Camera, CameraMatrices, Children, DirectionalLight, DirectionalLightInfo,
     EngineManaged, EnvironmentProbe, EnvironmentProbeUpdateMode, GlobalTransform, LightingData,
-    MaterialHandle, MaterialPropertiesComponent, Mesh, MeshHandle, Name, NoSave,
+    LodComponent, MaterialHandle, MaterialPropertiesComponent, Mesh, MeshHandle, Name, NoSave,
     OrthographicProjection, Parent, ParticleEmitter, PerspectiveProjection, PointLight,
     PointLightInfo, Skybox, TextureHandle, Transform, Visibility,
 };
