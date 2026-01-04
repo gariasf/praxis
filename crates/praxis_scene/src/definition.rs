@@ -3,11 +3,23 @@
 use praxis_math::{Quat, Vec3};
 use serde::{Deserialize, Serialize};
 
+/// Current scene format version.
+///
+/// This should be incremented whenever the scene format changes in a
+/// backwards-incompatible way. Migration code should be added for each version.
+pub const CURRENT_SCENE_VERSION: u32 = 1;
+
 /// A complete scene definition loaded from RON format.
 ///
 /// This structure represents a scene that can be spawned into the ECS world.
+/// It supports both runtime scene data and editor-only data for complete
+/// scene state preservation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SceneDefinition {
+    /// Scene format version for migration support.
+    #[serde(default = "default_scene_version")]
+    pub version: u32,
+
     /// The name of the scene.
     pub name: String,
 
@@ -17,15 +29,26 @@ pub struct SceneDefinition {
     /// Optional metadata for the scene.
     #[serde(default)]
     pub metadata: SceneMetadata,
+
+    /// Editor-only data (camera, selection, viewport settings).
+    /// This data is not used at runtime but preserves editor state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub editor_data: Option<EditorData>,
+}
+
+const fn default_scene_version() -> u32 {
+    CURRENT_SCENE_VERSION
 }
 
 impl SceneDefinition {
     /// Creates a new empty scene definition.
     pub fn new(name: impl Into<String>) -> Self {
         Self {
+            version: CURRENT_SCENE_VERSION,
             name: name.into(),
             entities: Vec::new(),
             metadata: SceneMetadata::default(),
+            editor_data: None,
         }
     }
 
@@ -47,6 +70,43 @@ impl SceneDefinition {
         }
 
         self.entities.iter().map(count_recursive).sum()
+    }
+
+    /// Sets the editor data for the scene.
+    pub fn set_editor_data(&mut self, editor_data: EditorData) {
+        self.editor_data = Some(editor_data);
+    }
+
+    /// Gets a reference to the editor data if present.
+    #[must_use]
+    pub const fn editor_data(&self) -> Option<&EditorData> {
+        self.editor_data.as_ref()
+    }
+
+    /// Gets a mutable reference to the editor data if present.
+    pub const fn editor_data_mut(&mut self) -> Option<&mut EditorData> {
+        self.editor_data.as_mut()
+    }
+
+    /// Clears the editor data from the scene.
+    ///
+    /// This is useful when preparing a scene for runtime-only usage.
+    pub fn clear_editor_data(&mut self) {
+        self.editor_data = None;
+    }
+
+    /// Checks if the scene has editor data.
+    #[must_use]
+    pub const fn has_editor_data(&self) -> bool {
+        self.editor_data.is_some()
+    }
+
+    /// Creates a scene suitable for runtime use by removing editor data.
+    #[must_use]
+    pub fn to_runtime_scene(&self) -> Self {
+        let mut scene = self.clone();
+        scene.clear_editor_data();
+        scene
     }
 }
 
@@ -580,6 +640,363 @@ impl EntityDefinition {
     }
 }
 
+/// Editor-only data preserved with the scene.
+///
+/// This data is not used at runtime but preserves the complete editor state
+/// when saving and loading scenes in the editor.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EditorData {
+    /// Editor camera state (position, orientation, settings).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera: Option<EditorCamera>,
+
+    /// Selected entities (by entity index or name).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub selected_entities: Vec<String>,
+
+    /// Viewport settings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub viewport: Option<ViewportSettings>,
+
+    /// Editor preferences specific to this scene.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preferences: Option<EditorPreferences>,
+}
+
+impl EditorData {
+    /// Creates new empty editor data.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            camera: None,
+            selected_entities: Vec::new(),
+            viewport: None,
+            preferences: None,
+        }
+    }
+
+    /// Creates editor data with camera configuration.
+    #[must_use]
+    pub const fn with_camera(mut self, camera: EditorCamera) -> Self {
+        self.camera = Some(camera);
+        self
+    }
+
+    /// Creates editor data with selected entities.
+    #[must_use]
+    pub fn with_selected_entities(mut self, entities: Vec<String>) -> Self {
+        self.selected_entities = entities;
+        self
+    }
+
+    /// Creates editor data with viewport settings.
+    #[must_use]
+    pub const fn with_viewport(mut self, viewport: ViewportSettings) -> Self {
+        self.viewport = Some(viewport);
+        self
+    }
+
+    /// Creates editor data with editor preferences.
+    #[must_use]
+    pub fn with_preferences(mut self, preferences: EditorPreferences) -> Self {
+        self.preferences = Some(preferences);
+        self
+    }
+}
+
+impl Default for EditorData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Editor camera state.
+///
+/// Stores the complete state of the editor's scene view camera,
+/// including position, orientation, and camera settings.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct EditorCamera {
+    /// Camera position in world space.
+    pub position: (f32, f32, f32),
+
+    /// Camera target/look-at position (for orbit cameras).
+    pub target: (f32, f32, f32),
+
+    /// Camera distance from target (for orbit cameras).
+    pub distance: f32,
+
+    /// Camera pitch angle in radians.
+    pub pitch: f32,
+
+    /// Camera yaw angle in radians.
+    pub yaw: f32,
+
+    /// Field of view in degrees.
+    pub fov: f32,
+
+    /// Near clipping plane distance.
+    pub near_clip: f32,
+
+    /// Far clipping plane distance.
+    pub far_clip: f32,
+
+    /// Camera control mode.
+    pub mode: CameraMode,
+}
+
+impl EditorCamera {
+    /// Creates a new editor camera with default values.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            position: (0.0, 5.0, 10.0),
+            target: (0.0, 0.0, 0.0),
+            distance: 10.0,
+            pitch: -30.0_f32.to_radians(),
+            yaw: 45.0_f32.to_radians(),
+            fov: 60.0,
+            near_clip: 0.1,
+            far_clip: 1000.0,
+            mode: CameraMode::Orbit,
+        }
+    }
+
+    /// Creates an orbit camera with specified parameters.
+    #[must_use]
+    pub const fn orbit(target: (f32, f32, f32), distance: f32, pitch: f32, yaw: f32) -> Self {
+        Self {
+            position: (0.0, 0.0, 0.0), // Will be computed from orbit parameters
+            target,
+            distance,
+            pitch,
+            yaw,
+            fov: 60.0,
+            near_clip: 0.1,
+            far_clip: 1000.0,
+            mode: CameraMode::Orbit,
+        }
+    }
+
+    /// Creates a free camera with specified position and orientation.
+    #[must_use]
+    pub const fn free(position: (f32, f32, f32), pitch: f32, yaw: f32) -> Self {
+        Self {
+            position,
+            target: (0.0, 0.0, 0.0),
+            distance: 10.0,
+            pitch,
+            yaw,
+            fov: 60.0,
+            near_clip: 0.1,
+            far_clip: 1000.0,
+            mode: CameraMode::Free,
+        }
+    }
+}
+
+impl Default for EditorCamera {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Editor camera control mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CameraMode {
+    /// Orbit mode: camera orbits around a target point.
+    Orbit,
+    /// Free mode: camera moves freely with WASD/QE controls.
+    Free,
+    /// Fly mode: camera flies freely with smooth acceleration.
+    Fly,
+}
+
+/// Viewport settings for the editor.
+///
+/// Stores visual settings and display options for the scene viewport.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct ViewportSettings {
+    /// Whether to show the grid floor.
+    #[serde(default = "default_show_grid")]
+    pub show_grid: bool,
+
+    /// Whether to show gizmos for selected entities.
+    #[serde(default = "default_show_gizmos")]
+    pub show_gizmos: bool,
+
+    /// Whether to show wireframe overlay.
+    #[serde(default)]
+    pub show_wireframe: bool,
+
+    /// Whether to show entity bounding boxes.
+    #[serde(default)]
+    pub show_bounds: bool,
+
+    /// Whether to show lights as debug visualizations.
+    #[serde(default = "default_show_lights")]
+    pub show_lights: bool,
+
+    /// Whether to show camera frustums.
+    #[serde(default)]
+    pub show_cameras: bool,
+
+    /// Grid size (number of grid lines).
+    #[serde(default = "default_grid_size")]
+    pub grid_size: u32,
+
+    /// Grid spacing (distance between grid lines).
+    #[serde(default = "default_grid_spacing")]
+    pub grid_spacing: f32,
+
+    /// Viewport background color (RGB).
+    #[serde(default = "default_background_color")]
+    pub background_color: (f32, f32, f32),
+
+    /// Active gizmo mode.
+    #[serde(default)]
+    pub gizmo_mode: GizmoMode,
+}
+
+const fn default_show_grid() -> bool {
+    true
+}
+
+const fn default_show_gizmos() -> bool {
+    true
+}
+
+const fn default_show_lights() -> bool {
+    true
+}
+
+const fn default_grid_size() -> u32 {
+    20
+}
+
+const fn default_grid_spacing() -> f32 {
+    1.0
+}
+
+const fn default_background_color() -> (f32, f32, f32) {
+    (0.118, 0.118, 0.137) // Dark gray
+}
+
+impl ViewportSettings {
+    /// Creates default viewport settings.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            show_grid: true,
+            show_gizmos: true,
+            show_wireframe: false,
+            show_bounds: false,
+            show_lights: true,
+            show_cameras: false,
+            grid_size: 20,
+            grid_spacing: 1.0,
+            background_color: (0.118, 0.118, 0.137),
+            gizmo_mode: GizmoMode::Translate,
+        }
+    }
+}
+
+impl Default for ViewportSettings {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Gizmo mode for entity manipulation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GizmoMode {
+    /// Translate gizmo (move entities).
+    Translate,
+    /// Rotate gizmo (rotate entities).
+    Rotate,
+    /// Scale gizmo (scale entities).
+    Scale,
+}
+
+impl Default for GizmoMode {
+    fn default() -> Self {
+        Self::Translate
+    }
+}
+
+/// Editor preferences specific to a scene.
+///
+/// Stores user preferences and settings that affect how the editor
+/// displays and interacts with this particular scene.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EditorPreferences {
+    /// Whether to auto-save the scene.
+    #[serde(default = "default_auto_save")]
+    pub auto_save_enabled: bool,
+
+    /// Auto-save interval in seconds.
+    #[serde(default = "default_auto_save_interval")]
+    pub auto_save_interval: f32,
+
+    /// Snap to grid when moving entities.
+    #[serde(default)]
+    pub snap_to_grid: bool,
+
+    /// Grid snap size.
+    #[serde(default = "default_snap_size")]
+    pub snap_size: f32,
+
+    /// Rotation snap angle in degrees.
+    #[serde(default = "default_rotation_snap")]
+    pub rotation_snap: f32,
+
+    /// Last used asset browser path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_asset_path: Option<String>,
+
+    /// Collapsed hierarchy nodes (by entity name).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub collapsed_hierarchy_nodes: Vec<String>,
+}
+
+const fn default_auto_save() -> bool {
+    true
+}
+
+const fn default_auto_save_interval() -> f32 {
+    300.0 // 5 minutes
+}
+
+const fn default_snap_size() -> f32 {
+    1.0
+}
+
+const fn default_rotation_snap() -> f32 {
+    15.0
+}
+
+impl EditorPreferences {
+    /// Creates default editor preferences.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            auto_save_enabled: true,
+            auto_save_interval: 300.0,
+            snap_to_grid: false,
+            snap_size: 1.0,
+            rotation_snap: 15.0,
+            last_asset_path: None,
+            collapsed_hierarchy_nodes: Vec::new(),
+        }
+    }
+}
+
+impl Default for EditorPreferences {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -916,6 +1333,126 @@ mod tests {
         let scene2 = scene1.clone();
         assert_eq!(scene1.name, scene2.name);
         assert_eq!(scene1.entity_count(), scene2.entity_count());
+    }
+
+    #[test]
+    fn test_scene_version() {
+        let scene = SceneDefinition::new("Test");
+        assert_eq!(scene.version, CURRENT_SCENE_VERSION);
+    }
+
+    #[test]
+    fn test_editor_data_methods() {
+        let mut scene = SceneDefinition::new("Test");
+        assert!(!scene.has_editor_data());
+        assert!(scene.editor_data().is_none());
+
+        let editor_data = EditorData::new().with_camera(EditorCamera::new());
+        scene.set_editor_data(editor_data);
+
+        assert!(scene.has_editor_data());
+        assert!(scene.editor_data().is_some());
+        assert!(scene.editor_data_mut().is_some());
+
+        scene.clear_editor_data();
+        assert!(!scene.has_editor_data());
+    }
+
+    #[test]
+    fn test_to_runtime_scene() {
+        let mut scene = SceneDefinition::new("Test");
+        scene.set_editor_data(EditorData::new().with_camera(EditorCamera::new()));
+        assert!(scene.has_editor_data());
+
+        let runtime_scene = scene.to_runtime_scene();
+        assert!(!runtime_scene.has_editor_data());
+        assert_eq!(runtime_scene.name, scene.name);
+        assert_eq!(runtime_scene.entity_count(), scene.entity_count());
+    }
+
+    #[test]
+    fn test_editor_data_creation() {
+        let editor_data = EditorData::new();
+        assert!(editor_data.camera.is_none());
+        assert!(editor_data.selected_entities.is_empty());
+        assert!(editor_data.viewport.is_none());
+        assert!(editor_data.preferences.is_none());
+    }
+
+    #[test]
+    fn test_editor_data_builder() {
+        let camera = EditorCamera::new();
+        let viewport = ViewportSettings::new();
+
+        let editor_data = EditorData::new()
+            .with_camera(camera)
+            .with_selected_entities(vec!["Entity1".to_string()])
+            .with_viewport(viewport);
+
+        assert!(editor_data.camera.is_some());
+        assert_eq!(editor_data.selected_entities.len(), 1);
+        assert!(editor_data.viewport.is_some());
+    }
+
+    #[test]
+    fn test_editor_camera_default() {
+        let camera = EditorCamera::new();
+        assert_eq!(camera.fov, 60.0);
+        assert_eq!(camera.near_clip, 0.1);
+        assert_eq!(camera.far_clip, 1000.0);
+        assert_eq!(camera.mode, CameraMode::Orbit);
+    }
+
+    #[test]
+    fn test_editor_camera_orbit() {
+        let camera = EditorCamera::orbit((0.0, 0.0, 0.0), 15.0, -0.5, 0.8);
+        assert_eq!(camera.target, (0.0, 0.0, 0.0));
+        assert_eq!(camera.distance, 15.0);
+        assert_eq!(camera.mode, CameraMode::Orbit);
+    }
+
+    #[test]
+    fn test_editor_camera_free() {
+        let camera = EditorCamera::free((5.0, 10.0, 15.0), -0.3, 1.2);
+        assert_eq!(camera.position, (5.0, 10.0, 15.0));
+        assert_eq!(camera.mode, CameraMode::Free);
+    }
+
+    #[test]
+    fn test_viewport_settings_default() {
+        let viewport = ViewportSettings::new();
+        assert!(viewport.show_grid);
+        assert!(viewport.show_gizmos);
+        assert!(!viewport.show_wireframe);
+        assert_eq!(viewport.grid_size, 20);
+        assert_eq!(viewport.grid_spacing, 1.0);
+        assert_eq!(viewport.gizmo_mode, GizmoMode::Translate);
+    }
+
+    #[test]
+    fn test_gizmo_mode() {
+        assert_eq!(GizmoMode::default(), GizmoMode::Translate);
+        assert_ne!(GizmoMode::Translate, GizmoMode::Rotate);
+        assert_ne!(GizmoMode::Rotate, GizmoMode::Scale);
+    }
+
+    #[test]
+    fn test_camera_mode() {
+        assert_ne!(CameraMode::Orbit, CameraMode::Free);
+        assert_ne!(CameraMode::Free, CameraMode::Fly);
+        assert_ne!(CameraMode::Orbit, CameraMode::Fly);
+    }
+
+    #[test]
+    fn test_editor_preferences_default() {
+        let prefs = EditorPreferences::new();
+        assert!(prefs.auto_save_enabled);
+        assert_eq!(prefs.auto_save_interval, 300.0);
+        assert!(!prefs.snap_to_grid);
+        assert_eq!(prefs.snap_size, 1.0);
+        assert_eq!(prefs.rotation_snap, 15.0);
+        assert!(prefs.last_asset_path.is_none());
+        assert!(prefs.collapsed_hierarchy_nodes.is_empty());
     }
 
     #[test]

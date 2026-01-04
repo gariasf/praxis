@@ -75,6 +75,7 @@ mod components;
 mod definition;
 mod loader;
 mod manager;
+mod migration;
 mod traversal;
 
 #[cfg(test)]
@@ -85,6 +86,7 @@ pub use components::*;
 pub use definition::*;
 pub use loader::*;
 pub use manager::*;
+pub use migration::*;
 pub use traversal::*;
 
 use praxis_utils::{info, Result};

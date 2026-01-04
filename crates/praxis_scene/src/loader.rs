@@ -39,13 +39,15 @@ impl SceneLoader {
 
     /// Loads a scene definition from a RON file.
     ///
+    /// This automatically applies any necessary migrations and validates the scene.
+    ///
     /// # Arguments
     ///
     /// * `path` - Path to the RON scene file
     ///
     /// # Errors
     ///
-    /// Returns an error if the file cannot be read or parsed.
+    /// Returns an error if the file cannot be read, parsed, migrated, or validated.
     pub fn load_from_file(&self, path: impl AsRef<Path>) -> Result<SceneDefinition> {
         let path = path.as_ref();
         let full_path = self
@@ -73,18 +75,26 @@ impl SceneLoader {
 
     /// Loads a scene definition from a RON string.
     ///
+    /// This automatically applies any necessary migrations and validates the scene.
+    ///
     /// # Arguments
     ///
     /// * `ron_string` - RON-formatted scene definition
     ///
     /// # Errors
     ///
-    /// Returns an error if the RON cannot be parsed.
+    /// Returns an error if the RON cannot be parsed, migrated, or validated.
     pub fn load_from_string(&self, ron_string: &str) -> Result<SceneDefinition> {
-        let scene: SceneDefinition = ron::from_str(ron_string)
+        let mut scene: SceneDefinition = ron::from_str(ron_string)
             .map_err(|e| praxis_utils::eyre::eyre!("Failed to parse scene RON: {}", e))?;
 
         debug!("Parsed scene definition: {}", scene.name);
+
+        // Apply migrations if needed
+        crate::migration::migrate_scene(&mut scene)?;
+
+        // Validate the scene
+        crate::migration::validate_scene(&scene)?;
 
         Ok(scene)
     }
@@ -494,5 +504,187 @@ mod tests {
         let loaded_scene = loader.load_from_string(&ron_string).unwrap();
 
         assert_eq!(loaded_scene.entities[0].active, Some(false));
+    }
+
+    #[test]
+    fn test_save_and_load_with_editor_data() {
+        use crate::definition::{EditorCamera, EditorData, ViewportSettings};
+
+        let mut scene = SceneDefinition::new("Editor Scene");
+        let editor_data = EditorData::new()
+            .with_camera(EditorCamera::new())
+            .with_selected_entities(vec!["Entity1".to_string()])
+            .with_viewport(ViewportSettings::new());
+        scene.set_editor_data(editor_data);
+
+        scene.add_entity(EntityDefinition::mesh_entity(
+            "Entity1",
+            (0.0, 0.0, 0.0),
+            "cube",
+        ));
+
+        let loader = SceneLoader::new();
+        let ron_string = loader.save_to_string(&scene).unwrap();
+
+        // Verify editor_data is in the serialized form
+        assert!(ron_string.contains("editor_data"));
+
+        let loaded_scene = loader.load_from_string(&ron_string).unwrap();
+
+        assert!(loaded_scene.has_editor_data());
+        let editor = loaded_scene.editor_data().unwrap();
+        assert!(editor.camera.is_some());
+        assert_eq!(editor.selected_entities.len(), 1);
+        assert!(editor.viewport.is_some());
+    }
+
+    #[test]
+    fn test_save_without_editor_data() {
+        let mut scene = SceneDefinition::new("Runtime Scene");
+        scene.add_entity(EntityDefinition::mesh_entity(
+            "Entity1",
+            (0.0, 0.0, 0.0),
+            "cube",
+        ));
+
+        let loader = SceneLoader::new();
+        let ron_string = loader.save_to_string(&scene).unwrap();
+
+        // Verify editor_data is not in the serialized form
+        assert!(!ron_string.contains("editor_data"));
+
+        let loaded_scene = loader.load_from_string(&ron_string).unwrap();
+        assert!(!loaded_scene.has_editor_data());
+    }
+
+    #[test]
+    fn test_load_old_version_scene() {
+        // Simulate an old version scene (version 0) without version field
+        let old_scene_ron = r#"
+        (
+            name: "Old Scene",
+            entities: [
+                (
+                    name: Some("OldEntity"),
+                    transform: Some((
+                        translation: (1.0, 2.0, 3.0),
+                        rotation: (0.0, 0.0, 0.0, 1.0),
+                        scale: (1.0, 1.0, 1.0),
+                    )),
+                    children: [],
+                ),
+            ],
+            metadata: (),
+        )
+        "#;
+
+        let loader = SceneLoader::new();
+        let loaded_scene = loader.load_from_string(old_scene_ron).unwrap();
+
+        // Scene should be migrated to current version
+        assert_eq!(loaded_scene.version, crate::definition::CURRENT_SCENE_VERSION);
+        assert_eq!(loaded_scene.name, "Old Scene");
+        assert_eq!(loaded_scene.entity_count(), 1);
+    }
+
+    #[test]
+    fn test_validation_on_load() {
+        // Scene with invalid camera (near > far)
+        let invalid_scene_ron = r#"
+        (
+            version: 1,
+            name: "Invalid Scene",
+            entities: [
+                (
+                    name: Some("BadCamera"),
+                    camera: Some((
+                        camera_type: Perspective,
+                        fov: Some(1.0),
+                        aspect_ratio: Some(1.77),
+                        near: 100.0,
+                        far: 10.0,
+                        is_active: true,
+                        priority: 0,
+                    )),
+                    children: [],
+                ),
+            ],
+            metadata: (),
+        )
+        "#;
+
+        let loader = SceneLoader::new();
+        let result = loader.load_from_string(invalid_scene_ron);
+
+        // Should fail validation
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_roundtrip_with_editor_camera() {
+        use crate::definition::{CameraMode, EditorCamera, EditorData};
+
+        let mut scene = SceneDefinition::new("Camera Test");
+        let mut camera = EditorCamera::new();
+        camera.position = (5.0, 10.0, 15.0);
+        camera.target = (0.0, 1.0, 0.0);
+        camera.distance = 20.0;
+        camera.pitch = -0.5;
+        camera.yaw = 1.2;
+        camera.fov = 75.0;
+        camera.mode = CameraMode::Free;
+
+        scene.set_editor_data(EditorData::new().with_camera(camera));
+
+        let loader = SceneLoader::new();
+        let ron_string = loader.save_to_string(&scene).unwrap();
+        let loaded_scene = loader.load_from_string(&ron_string).unwrap();
+
+        let loaded_camera = loaded_scene
+            .editor_data()
+            .unwrap()
+            .camera
+            .as_ref()
+            .unwrap();
+
+        assert_eq!(loaded_camera.position, (5.0, 10.0, 15.0));
+        assert_eq!(loaded_camera.target, (0.0, 1.0, 0.0));
+        assert_eq!(loaded_camera.distance, 20.0);
+        assert_eq!(loaded_camera.fov, 75.0);
+        assert_eq!(loaded_camera.mode, CameraMode::Free);
+    }
+
+    #[test]
+    fn test_roundtrip_with_viewport_settings() {
+        use crate::definition::{EditorData, GizmoMode, ViewportSettings};
+
+        let mut scene = SceneDefinition::new("Viewport Test");
+        let mut viewport = ViewportSettings::new();
+        viewport.show_grid = false;
+        viewport.show_wireframe = true;
+        viewport.grid_size = 30;
+        viewport.grid_spacing = 2.0;
+        viewport.background_color = (0.2, 0.3, 0.4);
+        viewport.gizmo_mode = GizmoMode::Scale;
+
+        scene.set_editor_data(EditorData::new().with_viewport(viewport));
+
+        let loader = SceneLoader::new();
+        let ron_string = loader.save_to_string(&scene).unwrap();
+        let loaded_scene = loader.load_from_string(&ron_string).unwrap();
+
+        let loaded_viewport = loaded_scene
+            .editor_data()
+            .unwrap()
+            .viewport
+            .as_ref()
+            .unwrap();
+
+        assert!(!loaded_viewport.show_grid);
+        assert!(loaded_viewport.show_wireframe);
+        assert_eq!(loaded_viewport.grid_size, 30);
+        assert_eq!(loaded_viewport.grid_spacing, 2.0);
+        assert_eq!(loaded_viewport.background_color, (0.2, 0.3, 0.4));
+        assert_eq!(loaded_viewport.gizmo_mode, GizmoMode::Scale);
     }
 }
