@@ -54,11 +54,11 @@ fn main() -> Result<()> {
     info!("Note: Audio files would need to exist at the specified paths to actually play sounds.");
 
     let mut audio_sources = world.inner_mut().query::<(&AudioSource, &Transform)>();
-    let count = audio_sources.iter(&world.inner()).count();
+    let count = audio_sources.iter(world.inner()).count();
     info!("Total audio sources in scene: {}", count);
 
     let mut listeners = world.inner_mut().query::<(&AudioListener, &Transform)>();
-    let listener_count = listeners.iter(&world.inner()).count();
+    let listener_count = listeners.iter(world.inner()).count();
     info!("Total audio listeners in scene: {}", listener_count);
 
     info!("Demo complete!");

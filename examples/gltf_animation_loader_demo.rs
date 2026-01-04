@@ -38,7 +38,7 @@ fn main() {
                 // Print bone names
                 for (bone_idx, bone) in skin.skeleton.bones().iter().enumerate() {
                     let parent_str = match bone.parent_index {
-                        Some(p) => format!("parent: {}", p),
+                        Some(p) => format!("parent: {p}"),
                         None => "root bone".to_string(),
                     };
                     println!("    Bone {}: {} ({})", bone_idx, bone.name, parent_str);
@@ -67,14 +67,14 @@ fn main() {
                         .clone()
                         .unwrap_or_else(|| format!("Animation{}", player.clips().len()));
                     player.add_clip(name.clone(), animation.clip.clone());
-                    println!("  Added animation: {}", name);
+                    println!("  Added animation: {name}");
                 }
 
                 // Play the first animation
                 if let Some(first_anim) = asset.animations.first() {
                     let name = first_anim.name.as_deref().unwrap_or("Animation0");
                     player.play(name);
-                    println!("\nPlaying animation: {}", name);
+                    println!("\nPlaying animation: {name}");
                 }
 
                 // Example: Spawn an entity with skeleton and animation player
@@ -108,7 +108,7 @@ fn main() {
             }
         }
         Err(e) => {
-            println!("Failed to load GLTF file: {}", e);
+            println!("Failed to load GLTF file: {e}");
             println!("\nNote: This example requires a GLTF file with skeletal animations.");
             println!("Place a compatible file at: assets/models/animated_character.gltf");
         }

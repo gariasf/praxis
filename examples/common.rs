@@ -40,6 +40,7 @@ pub struct CameraController {
     /// Maximum pitch angle to prevent over-rotation (typically ~89 degrees)
     pub max_pitch: f32,
     /// Optional camera entity for ECS integration
+    #[allow(dead_code)]
     pub camera_entity: Option<praxis_ecs::Entity>,
 }
 
@@ -81,6 +82,9 @@ impl CameraController {
     }
 }
 
+/// This file provides common utilities for examples.
+/// Run other examples like `cargo run --example physics_demo` instead.
+#[allow(dead_code)]
 fn main() {
     eprintln!("common.rs is a utility module, not a standalone example.");
     eprintln!("Run other examples like: cargo run --example physics_demo");

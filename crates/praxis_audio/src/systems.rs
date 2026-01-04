@@ -26,6 +26,7 @@ const SPEED_OF_SOUND: f32 = 343.0;
 /// let mut schedule = Schedule::default();
 /// schedule.add_systems(play_sound_system);
 /// ```
+#[allow(clippy::needless_pass_by_value)] // Query must be passed by value for ECS systems
 pub fn play_sound_system(
     mut audio_manager: ResMut<AudioManager>,
     mut audio_sources: Query<(&mut AudioSource, Option<&Transform>)>,
@@ -135,6 +136,7 @@ pub fn play_sound_system(
 ///     update_spatial_audio_system,
 /// ).chain());
 /// ```
+#[allow(clippy::needless_pass_by_value)] // Query must be passed by value for ECS systems
 pub fn update_spatial_audio_system(
     mut audio_manager: ResMut<AudioManager>,
     mut audio_sources: Query<(&mut AudioSource, &Transform), Changed<Transform>>,
@@ -198,6 +200,7 @@ pub fn update_spatial_audio_system(
 ///     update_listener_system,
 /// ).chain());
 /// ```
+#[allow(clippy::needless_pass_by_value)] // Query must be passed by value for ECS systems
 pub fn update_listener_system(
     mut audio_manager: ResMut<AudioManager>,
     mut audio_sources: Query<(&mut AudioSource, &Transform)>,

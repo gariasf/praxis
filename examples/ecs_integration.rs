@@ -106,7 +106,7 @@ impl AppState {
                 let height = ((x * x + z * z) as f32).sqrt() * 0.3 - 2.0;
 
                 world.spawn((
-                    Name::from(format!("Grid Cube ({}, {})", x, z)),
+                    Name::from(format!("Grid Cube ({x}, {z})")),
                     TransformBundle::from_transform(Transform {
                         translation: Vec3::new(pos_x, height, pos_z),
                         rotation: Quat::IDENTITY,

@@ -59,8 +59,10 @@ impl App {
         let mut world = World::new();
 
         world.insert_resource(InputState::default());
-        let mut controller = CameraController::default();
-        controller.yaw = 0.0;
+        let controller = CameraController {
+            yaw: 0.0,
+            ..CameraController::default()
+        };
         world.insert_resource(controller);
 
         let mut input_map = InputMap::default();
@@ -79,7 +81,7 @@ impl App {
             WINDOW_WIDTH as f32 / WINDOW_HEIGHT as f32,
         ));
 
-        println!("Created FPS camera entity: {:?}", camera_entity);
+        println!("Created FPS camera entity: {camera_entity:?}");
 
         let mut schedule = Schedule::default();
         schedule.add_systems(praxis_ecs::systems::update_perspective_cameras);
@@ -160,7 +162,7 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 {
-                    let mut input_state = world.get_resource_mut::<InputState>().unwrap();
+                    let input_state = world.get_resource_mut::<InputState>().unwrap();
                     input_state.update();
                 }
 
@@ -193,8 +195,8 @@ impl ApplicationHandler for App {
                 }
             }
             _ => {
-                let mut input_state = world.get_resource_mut::<InputState>().unwrap();
-                praxis_input::winit_integration::process_window_event(&mut input_state, &event);
+                let input_state = world.get_resource_mut::<InputState>().unwrap();
+                praxis_input::winit_integration::process_window_event(input_state, &event);
             }
         }
 
@@ -219,7 +221,7 @@ impl ApplicationHandler for App {
         };
 
         if let DeviceEvent::MouseMotion { delta } = event {
-            let mut controller = world.get_resource_mut::<CameraController>().unwrap();
+            let controller = world.get_resource_mut::<CameraController>().unwrap();
             controller.update_rotation(delta.0 as f32, delta.1 as f32);
         }
     }
@@ -228,7 +230,7 @@ impl ApplicationHandler for App {
 fn fps_camera_movement_system(
     input_state: praxis_ecs::Res<InputState>,
     input_map: praxis_ecs::Res<InputMap>,
-    mut controller: praxis_ecs::ResMut<CameraController>,
+    controller: praxis_ecs::ResMut<CameraController>,
     mut cameras: Query<(&Camera, &mut Transform), praxis_ecs::With<PerspectiveProjection>>,
 ) {
     for (camera, mut transform) in cameras.iter_mut() {

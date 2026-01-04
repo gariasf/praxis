@@ -423,7 +423,7 @@ pub fn physics_step_system(
 /// - **Resources**: `PhysicsWorld` (`ResMut`)
 /// - **Query**: Entities with `Transform` and `RigidBody` components
 /// - **Change Detection**: Uses `Changed<Transform>` for ECS→Physics sync
-#[allow(clippy::needless_pass_by_value)]
+#[allow(clippy::needless_pass_by_value, clippy::type_complexity)]
 pub fn sync_physics_transforms_system(
     mut physics_world: ResMut<PhysicsWorld>,
     // ParamSet is required because changed_query reads Transform while all_query mutates it.
@@ -1223,7 +1223,7 @@ pub fn sync_physics_properties(
 ///
 /// ```rust,no_run
 /// use praxis_physics::{RigidBody, Collider};
-/// use praxis_ecs::{Commands, Entity, Query, Transform};
+/// use praxis_ecs::{Commands, Entity, Query, Transform, With};
 ///
 /// fn despawn_fallen_objects(
 ///     mut commands: Commands,

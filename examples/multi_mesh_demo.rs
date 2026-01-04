@@ -6,6 +6,8 @@
 //! - Using DrawCommands to render different meshes
 //! - Positioning meshes with transform matrices
 
+#![allow(clippy::vec_init_then_push)]
+
 use praxis_graphics::{
     colored_cube_mesh, pyramid_mesh, quad_mesh, solid_cube_mesh, DrawCommand, RenderCommands,
     RenderContext,

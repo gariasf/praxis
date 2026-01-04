@@ -560,7 +560,8 @@ pub struct RenderCommands<'a> {
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```rust,ignore
+/// // Requires async runtime and window handle
 /// let window = Arc::new(window);
 /// let mut ctx = RenderContext::new(window).await?;
 ///
@@ -642,7 +643,8 @@ impl RenderContext {
     ///
     /// # Example
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
+    /// // Requires async runtime and window handle
     /// let window = Arc::new(window);
     /// let context = RenderContext::new(window).await?;
     /// ```

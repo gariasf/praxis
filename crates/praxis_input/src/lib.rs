@@ -25,8 +25,8 @@
 //! world.insert_resource(InputState::default());
 //!
 //! let mut input_map = InputMap::default();
-//! input_map.bind_key(Action::new("jump"), KeyCode::Space);
-//! input_map.bind_key(Action::new("forward"), KeyCode::KeyW);
+//! input_map.bind_key(&Action::new("jump"), KeyCode::Space);
+//! input_map.bind_key(&Action::new("forward"), KeyCode::KeyW);
 //! world.insert_resource(input_map);
 //!
 //! // In your game loop, update input state and check actions

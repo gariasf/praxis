@@ -602,7 +602,7 @@ impl PhysicsWorld {
     ///         current_pos,
     ///         Quat::IDENTITY,
     ///         direction,
-    ///         &character_shape,
+    ///         character_shape.as_ref(),
     ///         distance,
     ///     ) {
     ///         None => {
@@ -646,7 +646,7 @@ impl PhysicsWorld {
     ///         vehicle_pos,
     ///         Quat::IDENTITY,
     ///         direction,
-    ///         &vehicle_shape,
+    ///         vehicle_shape.as_ref(),
     ///         look_ahead_distance,
     ///     ).is_none() // None = no collision = safe
     /// }
