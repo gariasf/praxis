@@ -225,7 +225,7 @@ pub struct TransformEditCommand {
 }
 
 /// Serializable entity representation.
-/// 
+///
 /// Note: Entity IDs are not stable across sessions and may need remapping when loading.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SerializableEntity {
@@ -330,8 +330,7 @@ impl EditorCommand for TransformEditCommand {
 
     fn to_ron(&self) -> Result<String> {
         let serializable = SerializableCommand::TransformEdit(self.clone());
-        ron::to_string(&serializable)
-            .map_err(|e| format!("Failed to serialize command: {}", e))
+        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {}", e))
     }
 
     fn type_id(&self) -> &'static str {
@@ -425,8 +424,7 @@ impl EditorCommand for CreateEntityCommand {
 
     fn to_ron(&self) -> Result<String> {
         let serializable = SerializableCommand::CreateEntity(self.clone());
-        ron::to_string(&serializable)
-            .map_err(|e| format!("Failed to serialize command: {}", e))
+        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {}", e))
     }
 
     fn type_id(&self) -> &'static str {
@@ -531,7 +529,8 @@ impl EditorCommand for DeleteEntityCommand {
         }
 
         if !self.children.is_empty() {
-            let children_entities: Vec<Entity> = self.children.iter().map(|e| (*e).into()).collect();
+            let children_entities: Vec<Entity> =
+                self.children.iter().map(|e| (*e).into()).collect();
             entity_mut.insert(Children::with_children(children_entities));
         }
 
@@ -546,8 +545,7 @@ impl EditorCommand for DeleteEntityCommand {
 
     fn to_ron(&self) -> Result<String> {
         let serializable = SerializableCommand::DeleteEntity(self.clone());
-        ron::to_string(&serializable)
-            .map_err(|e| format!("Failed to serialize command: {}", e))
+        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {}", e))
     }
 
     fn type_id(&self) -> &'static str {
@@ -634,8 +632,7 @@ impl EditorCommand for AddComponentCommand {
 
     fn to_ron(&self) -> Result<String> {
         let serializable = SerializableCommand::AddComponent(self.clone());
-        ron::to_string(&serializable)
-            .map_err(|e| format!("Failed to serialize command: {}", e))
+        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {}", e))
     }
 
     fn type_id(&self) -> &'static str {
@@ -724,8 +721,7 @@ impl EditorCommand for RemoveComponentCommand {
 
     fn to_ron(&self) -> Result<String> {
         let serializable = SerializableCommand::RemoveComponent(self.clone());
-        ron::to_string(&serializable)
-            .map_err(|e| format!("Failed to serialize command: {}", e))
+        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {}", e))
     }
 
     fn type_id(&self) -> &'static str {
@@ -825,8 +821,7 @@ impl EditorCommand for SetParentCommand {
 
     fn to_ron(&self) -> Result<String> {
         let serializable = SerializableCommand::SetParent(self.clone());
-        ron::to_string(&serializable)
-            .map_err(|e| format!("Failed to serialize command: {}", e))
+        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {}", e))
     }
 
     fn type_id(&self) -> &'static str {
@@ -907,8 +902,7 @@ impl EditorCommand for CompositeCommand {
 
     fn to_ron(&self) -> Result<String> {
         let serializable = SerializableCommand::Composite(self.clone());
-        ron::to_string(&serializable)
-            .map_err(|e| format!("Failed to serialize command: {}", e))
+        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {}", e))
     }
 
     fn type_id(&self) -> &'static str {
@@ -962,7 +956,11 @@ impl CommandHistory {
     ///
     /// This clears the redo stack since executing a new command
     /// invalidates any previously undone commands.
-    pub fn execute(&mut self, world: &mut World, mut command: Box<dyn EditorCommand>) -> Result<()> {
+    pub fn execute(
+        &mut self,
+        world: &mut World,
+        mut command: Box<dyn EditorCommand>,
+    ) -> Result<()> {
         command.execute(world)?;
 
         self.redo_stack.clear();
@@ -1085,7 +1083,7 @@ impl CommandHistory {
 }
 
 /// Resource wrapper for command history that can be inserted into the ECS world.
-/// 
+///
 /// This system provides:
 /// - Command execution with undo/redo support
 /// - Dirty state tracking for unsaved changes
@@ -1120,7 +1118,11 @@ impl UndoRedoSystem {
     }
 
     /// Executes a command and marks the state as dirty.
-    pub fn execute_command(&mut self, world: &mut World, command: Box<dyn EditorCommand>) -> Result<()> {
+    pub fn execute_command(
+        &mut self,
+        world: &mut World,
+        command: Box<dyn EditorCommand>,
+    ) -> Result<()> {
         self.history.execute(world, command)?;
         self.dirty = true;
         Ok(())
@@ -1275,9 +1277,7 @@ mod tests {
     #[test]
     fn test_delete_entity_command() {
         let mut world = World::new();
-        let entity = world
-            .spawn((Transform::default(), Name::new("Test")))
-            .id();
+        let entity = world.spawn((Transform::default(), Name::new("Test"))).id();
 
         let command = DeleteEntityCommand::from_world(entity, &world);
         assert!(command.is_ok());
@@ -1387,10 +1387,10 @@ mod tests {
     fn test_dirty_state_tracking() {
         let mut world = World::new();
         let mut system = UndoRedoSystem::new();
-        
+
         // Initially clean
         assert!(!system.is_dirty());
-        
+
         // Execute command - becomes dirty
         let entity = world.spawn(Transform::default()).id();
         let command = Box::new(TransformEditCommand::new(
@@ -1400,11 +1400,11 @@ mod tests {
         ));
         system.execute_command(&mut world, command).unwrap();
         assert!(system.is_dirty());
-        
+
         // Mark as saved - becomes clean
         system.mark_saved();
         assert!(!system.is_dirty());
-        
+
         // Execute another command - becomes dirty again
         let command = Box::new(TransformEditCommand::new(
             entity,
@@ -1413,11 +1413,11 @@ mod tests {
         ));
         system.execute_command(&mut world, command).unwrap();
         assert!(system.is_dirty());
-        
+
         // Undo back to saved state - becomes clean
         system.undo(&mut world).unwrap();
         assert!(!system.is_dirty());
-        
+
         // Redo - becomes dirty
         system.redo(&mut world).unwrap();
         assert!(system.is_dirty());

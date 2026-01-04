@@ -32,7 +32,7 @@ impl EditorPanel for InspectorPanel {
     fn ui(&mut self, ui: &mut Ui) {
         ui.heading("Inspector");
         ui.separator();
-        
+
         ui.label("Select an entity to inspect its components.");
     }
 }

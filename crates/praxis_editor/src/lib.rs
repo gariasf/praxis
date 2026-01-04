@@ -95,6 +95,20 @@
 //!
 //! See the [`menu_bar`] module for detailed API documentation.
 //!
+//! # Toolbar System
+//!
+//! The editor includes a toolbar with quick-access buttons for common operations:
+//! - **Gizmo Mode Buttons**: Translate (Move), Rotate, Scale modes with visual feedback
+//! - **Space Toggle**: Switch between World and Local coordinate spaces
+//! - **Snap Settings**: Toggle grid/angle snapping with configurable increments
+//! - **Playback Controls**: Play, Pause, Stop buttons for game simulation
+//! - **Camera Presets**: Quick access to Top, Front, Right, and Perspective views
+//!
+//! The toolbar automatically syncs with the editor state and provides visual feedback
+//! for the current mode and settings.
+//!
+//! See the [`toolbar`] module for detailed API documentation.
+//!
 //! # Command System and Undo/Redo
 //!
 //! The editor provides a comprehensive undo/redo system with full integration:
@@ -120,14 +134,15 @@
 //! See `COMMAND_SYSTEM.md` for detailed documentation and examples.
 
 mod command_shortcuts;
+pub mod drag_drop;
 mod editor_mode;
 mod editor_state;
 mod gizmo;
 mod menu_bar;
 mod panels;
 pub mod selection;
+mod toolbar;
 mod undo;
-pub mod drag_drop;
 
 pub use command_shortcuts::{handle_command_shortcuts, is_redo_pressed, is_undo_pressed};
 pub use drag_drop::{DragDropPayload, DragDropSystem};
@@ -146,6 +161,9 @@ pub use panels::{
 pub use selection::{
     handle_selection_input_system, update_selection_system, Selectable, Selected, SelectionEvent,
     SelectionMode, SelectionSystem,
+};
+pub use toolbar::{
+    handle_toolbar_action, render_toolbar, CameraPreset, SnapSettings, ToolbarAction, ToolbarState,
 };
 pub use undo::{
     AddComponentCommand, CommandHistory, ComponentData, CompositeCommand, CreateEntityCommand,

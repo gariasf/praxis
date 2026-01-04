@@ -26,7 +26,7 @@ pub fn create_grid_mesh(size: f32, divisions: u32, y_position: f32) -> MeshData 
     // Create grid lines parallel to X axis (running along Z)
     for i in 0..=divisions {
         let z = -half_size + i as f32 * step;
-        
+
         // Determine color based on position (highlight center lines)
         let color = if i == divisions / 2 {
             [0.5, 0.5, 0.5] // Center line brighter
@@ -48,7 +48,7 @@ pub fn create_grid_mesh(size: f32, divisions: u32, y_position: f32) -> MeshData 
     // Create grid lines parallel to Z axis (running along X)
     for i in 0..=divisions {
         let x = -half_size + i as f32 * step;
-        
+
         // Determine color based on position (highlight center lines)
         let color = if i == divisions / 2 {
             [0.5, 0.5, 0.5] // Center line brighter
@@ -69,7 +69,7 @@ pub fn create_grid_mesh(size: f32, divisions: u32, y_position: f32) -> MeshData 
 
     // Add axis lines (X = red, Z = blue)
     let center_idx = positions.len() as u16;
-    
+
     // X axis (red)
     positions.push([-half_size, y_position, 0.0]);
     positions.push([half_size, y_position, 0.0]);
@@ -146,7 +146,11 @@ impl GridRenderer {
 
     /// Sets the grid divisions.
     #[allow(dead_code)] // Public API for future use
-    pub fn set_grid_divisions(&mut self, divisions: u32, render_context: &mut RenderContext) -> Result<()> {
+    pub fn set_grid_divisions(
+        &mut self,
+        divisions: u32,
+        render_context: &mut RenderContext,
+    ) -> Result<()> {
         self.grid_divisions = divisions;
         self.reinitialize(render_context)
     }
@@ -182,12 +186,12 @@ mod tests {
     #[test]
     fn test_create_grid_mesh() {
         let mesh = create_grid_mesh(10.0, 10, 0.0);
-        
+
         // Should have vertices for grid lines and axis lines
         assert!(!mesh.positions.is_empty());
         assert!(mesh.colors.is_some());
         assert!(mesh.normals.is_some());
-        
+
         // Indices should come in pairs (line segments)
         assert_eq!(mesh.indices.len() % 2, 0);
     }

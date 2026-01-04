@@ -192,16 +192,17 @@ impl Gizmo {
 
         for axis in &axes {
             let axis_dir = rotation * axis.direction();
-            let axis_length = self.size * match mode {
-                GizmoMode::Translate => 2.0,
-                GizmoMode::Rotate => 1.5,
-                GizmoMode::Scale => 2.0,
-            };
+            let axis_length = self.size
+                * match mode {
+                    GizmoMode::Translate => 2.0,
+                    GizmoMode::Rotate => 1.5,
+                    GizmoMode::Scale => 2.0,
+                };
 
             // Ray-line distance calculation
             let to_gizmo = self.position - ray_origin;
             let ray_proj = to_gizmo.dot(ray_direction);
-            
+
             if ray_proj < 0.0 {
                 continue; // Behind camera
             }
@@ -209,10 +210,10 @@ impl Gizmo {
             // Find closest points on ray and axis
             let axis_start = self.position;
             let axis_end = self.position + axis_dir * axis_length;
-            
+
             let axis_vec = axis_end - axis_start;
             let axis_length_sq = axis_vec.length_squared();
-            
+
             if axis_length_sq < 0.0001 {
                 continue;
             }
@@ -220,15 +221,15 @@ impl Gizmo {
             // Parametric closest point calculation
             let t_axis = (to_gizmo.dot(axis_vec)) / axis_length_sq;
             let t_axis = t_axis.clamp(0.0, 1.0);
-            
+
             let point_on_axis = axis_start + axis_vec * t_axis;
             let point_on_ray = ray_origin + ray_direction * ray_proj;
-            
+
             let distance = (point_on_axis - point_on_ray).length();
-            
+
             // Threshold for picking (in world units)
             let pick_threshold = self.size * 0.2;
-            
+
             if distance < pick_threshold && distance < closest_distance {
                 closest_distance = distance;
                 closest_axis = Some(*axis);
@@ -253,11 +254,12 @@ impl Gizmo {
 
         for axis in &axes {
             let axis_dir = rotation * axis.direction();
-            let length = self.size * match mode {
-                GizmoMode::Translate => 2.0,
-                GizmoMode::Rotate => 1.5,
-                GizmoMode::Scale => 2.0,
-            };
+            let length = self.size
+                * match mode {
+                    GizmoMode::Translate => 2.0,
+                    GizmoMode::Rotate => 1.5,
+                    GizmoMode::Scale => 2.0,
+                };
 
             let color = if self.hovered_axis == Some(*axis) {
                 axis.highlight_color()
@@ -274,7 +276,7 @@ impl Gizmo {
             if mode == GizmoMode::Translate {
                 let arrow_size = self.size * 0.3;
                 let arrow_base = end - axis_dir * arrow_size;
-                
+
                 // Create perpendicular vectors for arrow
                 let perp1 = if axis_dir.dot(Vec3::Y).abs() < 0.9 {
                     axis_dir.cross(Vec3::Y).normalize()
@@ -282,7 +284,7 @@ impl Gizmo {
                     axis_dir.cross(Vec3::X).normalize()
                 };
                 let perp2 = axis_dir.cross(perp1).normalize();
-                
+
                 // Arrow lines
                 for i in 0..4 {
                     let angle = (i as f32) * std::f32::consts::PI * 0.5;
@@ -568,11 +570,17 @@ impl GizmoSystem {
                 GizmoMode::Scale => {
                     let scale_factor = 1.0 + interaction.drag_delta;
                     let scale_factor = scale_factor.max(0.01); // Prevent negative scale
-                    
+
                     match interaction.axis {
-                        GizmoAxis::X => new_transform.scale.x = initial_transform.scale.x * scale_factor,
-                        GizmoAxis::Y => new_transform.scale.y = initial_transform.scale.y * scale_factor,
-                        GizmoAxis::Z => new_transform.scale.z = initial_transform.scale.z * scale_factor,
+                        GizmoAxis::X => {
+                            new_transform.scale.x = initial_transform.scale.x * scale_factor
+                        }
+                        GizmoAxis::Y => {
+                            new_transform.scale.y = initial_transform.scale.y * scale_factor
+                        }
+                        GizmoAxis::Z => {
+                            new_transform.scale.z = initial_transform.scale.z * scale_factor
+                        }
                     }
                 }
             }
@@ -630,23 +638,23 @@ fn screen_to_ray(
 ) -> (Vec3, Vec3) {
     // Note: This is a simplified version. In practice, you'd need viewport size
     // to convert screen coordinates to NDC properly.
-    
+
     // Assume normalized coordinates for now
     let ndc_x = screen_pos.x * 2.0 - 1.0;
     let ndc_y = 1.0 - screen_pos.y * 2.0;
 
     // Unproject through inverse view-projection
     let inv_vp = camera_matrices.view_projection.inverse();
-    
+
     let near_point = inv_vp * Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
     let near_point = near_point.truncate() / near_point.w;
-    
+
     let far_point = inv_vp * Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
     let far_point = far_point.truncate() / far_point.w;
-    
+
     let ray_origin = camera_position;
     let ray_direction = (far_point - near_point).normalize();
-    
+
     (ray_origin, ray_direction)
 }
 
@@ -694,7 +702,7 @@ mod tests {
     fn test_gizmo_creation() {
         let position = Vec3::new(1.0, 2.0, 3.0);
         let gizmo = Gizmo::new(position);
-        
+
         assert_eq!(gizmo.position, position);
         assert_eq!(gizmo.rotation, Quat::IDENTITY);
         assert_eq!(gizmo.size, 1.0);
@@ -754,7 +762,7 @@ mod tests {
     #[test]
     fn test_gizmo_mode_change_cancels_interaction() {
         let mut system = GizmoSystem::new();
-        
+
         // Simulate an interaction
         system.interaction = Some(GizmoInteraction {
             axis: GizmoAxis::X,
@@ -763,9 +771,9 @@ mod tests {
             initial_transforms: vec![],
             drag_delta: 0.0,
         });
-        
+
         assert!(system.is_interacting());
-        
+
         system.set_mode(GizmoMode::Rotate);
         assert!(!system.is_interacting());
     }
@@ -773,7 +781,7 @@ mod tests {
     #[test]
     fn test_gizmo_space_change_cancels_interaction() {
         let mut system = GizmoSystem::new();
-        
+
         system.interaction = Some(GizmoInteraction {
             axis: GizmoAxis::X,
             start_screen_pos: Vec2::ZERO,
@@ -781,9 +789,9 @@ mod tests {
             initial_transforms: vec![],
             drag_delta: 0.0,
         });
-        
+
         assert!(system.is_interacting());
-        
+
         system.set_space(GizmoSpace::Local);
         assert!(!system.is_interacting());
     }

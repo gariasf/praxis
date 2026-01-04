@@ -525,12 +525,12 @@ impl SelectionSystem {
 
         for (entity, global_transform) in selectable_query.iter() {
             let entity_pos = global_transform.translation();
-            
+
             // Simple sphere-based picking (radius = 1.0 for now)
             // In a real implementation, you'd use the actual entity bounds
             let to_entity = entity_pos - ray_origin;
             let projection = to_entity.dot(ray_dir);
-            
+
             if projection < 0.0 {
                 continue; // Behind camera
             }
@@ -573,13 +573,9 @@ impl SelectionSystem {
 
         for (entity, global_transform) in selectable_query.iter() {
             let world_pos = global_transform.translation();
-            
+
             // Project world position to screen space
-            if let Some(screen_pos) = world_to_screen(
-                world_pos,
-                camera_matrices,
-                viewport_size,
-            ) {
+            if let Some(screen_pos) = world_to_screen(world_pos, camera_matrices, viewport_size) {
                 // Check if screen position is within the marquee rectangle
                 if screen_pos.x >= rect_min.x
                     && screen_pos.x <= rect_max.x
@@ -608,12 +604,12 @@ impl SelectionSystem {
 fn screen_to_ray(ndc: Vec2, camera_matrices: &CameraMatrices) -> Vec3 {
     // Compute inverse projection matrix
     let inv_projection = camera_matrices.projection.inverse();
-    
+
     // Convert NDC to view space
     let clip = Vec4::new(ndc.x, ndc.y, -1.0, 1.0);
     let view = inv_projection * clip;
     let view = Vec3::new(view.x, view.y, view.z) / view.w;
-    
+
     view.normalize()
 }
 
@@ -634,29 +630,30 @@ fn world_to_screen(
     viewport_size: Vec2,
 ) -> Option<Vec2> {
     // Transform to clip space
-    let clip_pos = camera_matrices.view_projection * Vec4::new(world_pos.x, world_pos.y, world_pos.z, 1.0);
-    
+    let clip_pos =
+        camera_matrices.view_projection * Vec4::new(world_pos.x, world_pos.y, world_pos.z, 1.0);
+
     // Check if behind camera
     if clip_pos.w <= 0.0 {
         return None;
     }
-    
+
     // Perspective divide to get NDC
     let ndc = Vec3::new(
         clip_pos.x / clip_pos.w,
         clip_pos.y / clip_pos.w,
         clip_pos.z / clip_pos.w,
     );
-    
+
     // Check if outside view frustum
     if ndc.x < -1.0 || ndc.x > 1.0 || ndc.y < -1.0 || ndc.y > 1.0 {
         return None;
     }
-    
+
     // Convert NDC to screen space
     let screen_x = (ndc.x + 1.0) * 0.5 * viewport_size.x;
     let screen_y = (1.0 - ndc.y) * 0.5 * viewport_size.y;
-    
+
     Some(Vec2::new(screen_x, screen_y))
 }
 
@@ -723,8 +720,8 @@ pub fn handle_selection_input_system(
         return;
     }
 
-    let ctrl = input.is_key_pressed(KeyCode::ControlLeft)
-        || input.is_key_pressed(KeyCode::ControlRight);
+    let ctrl =
+        input.is_key_pressed(KeyCode::ControlLeft) || input.is_key_pressed(KeyCode::ControlRight);
 
     // Ctrl+A: Select all
     if ctrl && input.is_key_just_pressed(KeyCode::KeyA) {

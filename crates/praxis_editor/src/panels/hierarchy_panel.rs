@@ -32,9 +32,9 @@ impl EditorPanel for HierarchyPanel {
     fn ui(&mut self, ui: &mut Ui) {
         ui.heading("Scene Hierarchy");
         ui.separator();
-        
+
         ui.label("Entity tree will be displayed here.");
-        
+
         if ui.button("Create Entity").clicked() {
             ui.label("Entity creation not yet implemented");
         }

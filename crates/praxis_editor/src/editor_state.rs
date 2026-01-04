@@ -1,10 +1,13 @@
 //! Core editor state management and coordination.
 
 use crate::editor_mode::EditorMode;
-use crate::menu_bar::{check_keyboard_shortcuts, handle_menu_action, render_menu_bar, MenuBarState};
+use crate::menu_bar::{
+    check_keyboard_shortcuts, handle_menu_action, render_menu_bar, MenuBarState,
+};
 use crate::panels::{
     AssetsPanel, ConsolePanel, EditorPanel, HierarchyPanel, InspectorPanel, SceneViewPanel,
 };
+use crate::toolbar::{handle_toolbar_action, render_toolbar, ToolbarState};
 use crate::UndoRedoSystem;
 use bevy_ecs::world::World;
 use egui_dock::{DockArea, DockState, NodeIndex, Style, TabViewer};
@@ -45,6 +48,8 @@ pub struct EditorState {
     visible: bool,
     /// Menu bar state.
     menu_bar_state: MenuBarState,
+    /// Toolbar state.
+    toolbar_state: ToolbarState,
 }
 
 impl EditorState {
@@ -55,35 +60,15 @@ impl EditorState {
 
         let tree = dock_state.main_surface_mut();
 
-        let [scene, right] = tree.split_right(
-            NodeIndex::root(),
-            0.75,
-            vec![EditorTab::Scene],
-        );
+        let [scene, right] = tree.split_right(NodeIndex::root(), 0.75, vec![EditorTab::Scene]);
 
-        let [_right_top, right_bottom] = tree.split_below(
-            right,
-            0.7,
-            vec![EditorTab::Inspector],
-        );
+        let [_right_top, right_bottom] = tree.split_below(right, 0.7, vec![EditorTab::Inspector]);
 
-        let [left, _scene] = tree.split_left(
-            scene,
-            0.2,
-            vec![EditorTab::Hierarchy],
-        );
+        let [left, _scene] = tree.split_left(scene, 0.2, vec![EditorTab::Hierarchy]);
 
-        tree.split_below(
-            left,
-            0.6,
-            vec![EditorTab::Assets],
-        );
+        tree.split_below(left, 0.6, vec![EditorTab::Assets]);
 
-        tree.split_below(
-            right_bottom,
-            0.5,
-            vec![EditorTab::Console],
-        );
+        tree.split_below(right_bottom, 0.5, vec![EditorTab::Console]);
 
         Self {
             mode: EditorMode::default(),
@@ -95,6 +80,7 @@ impl EditorState {
             assets_panel: AssetsPanel::new(),
             visible: true,
             menu_bar_state: MenuBarState::new(),
+            toolbar_state: ToolbarState::new(),
         }
     }
 
@@ -175,13 +161,30 @@ impl EditorState {
         &mut self.menu_bar_state
     }
 
+    /// Gets a reference to the toolbar state.
+    #[must_use]
+    pub const fn toolbar_state(&self) -> &ToolbarState {
+        &self.toolbar_state
+    }
+
+    /// Gets a mutable reference to the toolbar state.
+    #[must_use]
+    pub fn toolbar_state_mut(&mut self) -> &mut ToolbarState {
+        &mut self.toolbar_state
+    }
+
     /// Renders the editor UI.
-    /// 
+    ///
     /// # Arguments
     /// * `ctx` - The egui context
     /// * `undo_system` - Optional mutable reference to the undo/redo system for menu integration
     /// * `world` - Optional mutable reference to the ECS world for executing undo/redo commands
-    pub fn ui(&mut self, ctx: &egui::Context, mut undo_system: Option<&mut UndoRedoSystem>, mut world: Option<&mut World>) {
+    pub fn ui(
+        &mut self,
+        ctx: &egui::Context,
+        mut undo_system: Option<&mut UndoRedoSystem>,
+        mut world: Option<&mut World>,
+    ) {
         if !self.visible {
             return;
         }
@@ -190,18 +193,38 @@ impl EditorState {
         self.menu_bar_state.mode = self.mode;
 
         // Render menu bar and collect actions
-        let mut actions = render_menu_bar(ctx, &mut self.menu_bar_state, undo_system.as_deref());
-        
-        // Check for keyboard shortcuts
-        actions.extend(check_keyboard_shortcuts(ctx));
+        let mut menu_actions =
+            render_menu_bar(ctx, &mut self.menu_bar_state, undo_system.as_deref());
 
-        // Handle all actions
-        for action in actions {
-            handle_menu_action(action, &mut self.menu_bar_state, undo_system.as_deref_mut(), world.as_deref_mut());
+        // Check for keyboard shortcuts
+        menu_actions.extend(check_keyboard_shortcuts(ctx));
+
+        // Handle all menu actions
+        for action in menu_actions {
+            handle_menu_action(
+                action,
+                &mut self.menu_bar_state,
+                undo_system.as_deref_mut(),
+                world.as_deref_mut(),
+            );
         }
 
-        // Sync mode back to EditorState
+        // Sync mode back to EditorState from menu bar
         self.mode = self.menu_bar_state.mode;
+
+        // Update toolbar state with current mode and sync gizmo state
+        self.toolbar_state.editor_mode = self.mode;
+
+        // Render toolbar and collect actions
+        let toolbar_actions = render_toolbar(ctx, &mut self.toolbar_state);
+
+        // Handle all toolbar actions
+        for action in toolbar_actions {
+            handle_toolbar_action(action, &mut self.toolbar_state);
+        }
+
+        // Sync mode back to EditorState from toolbar
+        self.mode = self.toolbar_state.editor_mode;
 
         self.render_dock_area(ctx);
     }

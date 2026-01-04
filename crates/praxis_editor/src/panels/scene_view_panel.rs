@@ -48,10 +48,7 @@ impl EditorPanel for SceneViewPanel {
         ui.heading("Scene View");
         ui.separator();
 
-        let response = ui.allocate_response(
-            ui.available_size(),
-            egui::Sense::click_and_drag(),
-        );
+        let response = ui.allocate_response(ui.available_size(), egui::Sense::click_and_drag());
 
         if response.hovered() {
             ui.painter().rect_stroke(
@@ -72,7 +69,7 @@ impl EditorPanel for SceneViewPanel {
             egui::FontId::proportional(14.0),
             Color32::GRAY,
         );
-        
+
         ui.label("Camera controls:");
         ui.label("• Right-click + drag to rotate");
         ui.label("• WASD to move");

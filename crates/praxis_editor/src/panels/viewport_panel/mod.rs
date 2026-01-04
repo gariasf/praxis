@@ -354,7 +354,7 @@ impl EditorPanel for ViewportPanel {
             ui.heading("Viewport");
             ui.separator();
             ui.checkbox(&mut self.show_grid, "Show Grid");
-            
+
             if ui.button("Reset Camera").clicked() {
                 self.reset_camera();
             }
@@ -373,11 +373,8 @@ impl EditorPanel for ViewportPanel {
         self.handle_camera_input(ui, rect);
 
         // Render viewport background
-        ui.painter().rect_filled(
-            rect,
-            0.0,
-            egui::Color32::from_rgb(30, 30, 35),
-        );
+        ui.painter()
+            .rect_filled(rect, 0.0, egui::Color32::from_rgb(30, 30, 35));
 
         // TODO: Display the actual rendered texture from render_target
         // This would involve:
@@ -483,14 +480,14 @@ mod tests {
     #[test]
     fn test_reset_camera() {
         let mut panel = ViewportPanel::new();
-        
+
         // Modify camera
         panel.set_camera_distance(50.0);
         panel.set_camera_target(Vec3::new(10.0, 5.0, 8.0));
-        
+
         // Reset
         panel.reset_camera();
-        
+
         // Verify defaults
         assert_eq!(panel.camera_distance(), 10.0);
         assert_eq!(panel.camera_target(), Vec3::ZERO);
@@ -512,10 +509,10 @@ mod tests {
     fn test_compute_camera_position() {
         let panel = ViewportPanel::new();
         let position = panel.compute_camera_position();
-        
+
         // Should be at some distance from origin
         assert!(position.length() > 0.0);
-        
+
         // Distance should match camera_distance
         let distance_from_target = (position - panel.camera_target()).length();
         assert!((distance_from_target - panel.camera_distance()).abs() < 0.01);
@@ -525,18 +522,18 @@ mod tests {
     fn test_compute_camera_transform() {
         let panel = ViewportPanel::new();
         let transform = panel.compute_camera_transform();
-        
+
         // Transform should have the computed position
         let expected_pos = panel.compute_camera_position();
         let actual_pos = transform.translation;
-        
+
         assert!((expected_pos - actual_pos).length() < 0.01);
     }
 
     #[test]
     fn test_camera_entity() {
         use praxis_ecs::Entity;
-        
+
         let mut panel = ViewportPanel::new();
         assert!(panel.camera_entity().is_none());
 

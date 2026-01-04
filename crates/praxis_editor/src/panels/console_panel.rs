@@ -46,7 +46,7 @@ impl EditorPanel for ConsolePanel {
     fn ui(&mut self, ui: &mut Ui) {
         ui.heading("Console");
         ui.separator();
-        
+
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .stick_to_bottom(true)
@@ -54,26 +54,26 @@ impl EditorPanel for ConsolePanel {
                 for message in &self.log_messages {
                     ui.label(message);
                 }
-                
+
                 if self.log_messages.is_empty() {
                     ui.label("No messages");
                 }
             });
-        
+
         ui.separator();
-        
+
         ui.horizontal(|ui| {
             ui.label(">");
             let response = ui.text_edit_singleline(&mut self.command_input);
-            
-            if response.lost_focus() 
-                && ui.input(|i| i.key_pressed(egui::Key::Enter)) 
-                && !self.command_input.is_empty() 
+
+            if response.lost_focus()
+                && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                && !self.command_input.is_empty()
             {
                 self.add_log(format!("> {}", self.command_input));
                 self.command_input.clear();
             }
-            
+
             if ui.button("Clear").clicked() {
                 self.clear();
             }

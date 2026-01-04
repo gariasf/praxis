@@ -20,14 +20,14 @@ pub enum MenuBarAction {
     SaveScene,
     SaveSceneAs,
     Exit,
-    
+
     // Edit menu
     Undo,
     Redo,
     Copy,
     Paste,
     Duplicate,
-    
+
     // Entity menu
     CreateEmpty,
     CreateCube,
@@ -36,18 +36,18 @@ pub enum MenuBarAction {
     CreateCylinder,
     CreateCone,
     DeleteEntity,
-    
+
     // View menu
     ToggleHierarchy,
     ToggleInspector,
     ToggleConsole,
     ToggleAssets,
     ToggleScene,
-    
+
     // Help menu
     About,
     Documentation,
-    
+
     // Mode toggle
     TogglePlayMode,
 }
@@ -92,217 +92,267 @@ pub fn render_menu_bar(
     undo_system: Option<&UndoRedoSystem>,
 ) -> Vec<MenuBarAction> {
     let mut actions = Vec::new();
-    
+
     egui::TopBottomPanel::top("editor_menu_bar").show(ctx, |ui| {
         egui::menu::bar(ui, |ui| {
             // File Menu
             ui.menu_button("File", |ui| {
-                if ui.add(egui::Button::new("New Scene").shortcut_text("Ctrl+N")).clicked() {
+                if ui
+                    .add(egui::Button::new("New Scene").shortcut_text("Ctrl+N"))
+                    .clicked()
+                {
                     actions.push(MenuBarAction::NewScene);
                     ui.close_menu();
                 }
-                
-                if ui.add(egui::Button::new("Open Scene").shortcut_text("Ctrl+O")).clicked() {
+
+                if ui
+                    .add(egui::Button::new("Open Scene").shortcut_text("Ctrl+O"))
+                    .clicked()
+                {
                     actions.push(MenuBarAction::OpenScene);
                     ui.close_menu();
                 }
-                
+
                 ui.separator();
-                
+
                 let is_dirty = undo_system.is_some_and(|s| s.is_dirty());
                 let save_text = if is_dirty {
                     "Save Scene *"
                 } else {
                     "Save Scene"
                 };
-                
-                if ui.add(egui::Button::new(save_text).shortcut_text("Ctrl+S")).clicked() {
+
+                if ui
+                    .add(egui::Button::new(save_text).shortcut_text("Ctrl+S"))
+                    .clicked()
+                {
                     actions.push(MenuBarAction::SaveScene);
                     ui.close_menu();
                 }
-                
-                if ui.add(egui::Button::new("Save Scene As...").shortcut_text("Ctrl+Shift+S")).clicked() {
+
+                if ui
+                    .add(egui::Button::new("Save Scene As...").shortcut_text("Ctrl+Shift+S"))
+                    .clicked()
+                {
                     actions.push(MenuBarAction::SaveSceneAs);
                     ui.close_menu();
                 }
-                
+
                 ui.separator();
-                
-                if ui.add(egui::Button::new("Exit").shortcut_text("Alt+F4")).clicked() {
+
+                if ui
+                    .add(egui::Button::new("Exit").shortcut_text("Alt+F4"))
+                    .clicked()
+                {
                     actions.push(MenuBarAction::Exit);
                     ui.close_menu();
                 }
             });
-            
+
             // Edit Menu
             ui.menu_button("Edit", |ui| {
                 let (can_undo, can_redo, undo_text, redo_text) = if let Some(system) = undo_system {
-                    let undo_desc = system.undo_description()
+                    let undo_desc = system
+                        .undo_description()
                         .map(|d| format!("Undo: {d}"))
                         .unwrap_or_else(|| "Undo".to_string());
-                    let redo_desc = system.redo_description()
+                    let redo_desc = system
+                        .redo_description()
                         .map(|d| format!("Redo: {d}"))
                         .unwrap_or_else(|| "Redo".to_string());
                     (system.can_undo(), system.can_redo(), undo_desc, redo_desc)
                 } else {
                     (false, false, "Undo".to_string(), "Redo".to_string())
                 };
-                
-                if ui.add_enabled(
-                    can_undo,
-                    egui::Button::new(&undo_text).shortcut_text("Ctrl+Z")
-                ).clicked() {
+
+                if ui
+                    .add_enabled(
+                        can_undo,
+                        egui::Button::new(&undo_text).shortcut_text("Ctrl+Z"),
+                    )
+                    .clicked()
+                {
                     actions.push(MenuBarAction::Undo);
                     ui.close_menu();
                 }
-                
-                if ui.add_enabled(
-                    can_redo,
-                    egui::Button::new(&redo_text).shortcut_text("Ctrl+Y")
-                ).clicked() {
+
+                if ui
+                    .add_enabled(
+                        can_redo,
+                        egui::Button::new(&redo_text).shortcut_text("Ctrl+Y"),
+                    )
+                    .clicked()
+                {
                     actions.push(MenuBarAction::Redo);
                     ui.close_menu();
                 }
-                
+
                 ui.separator();
-                
-                if ui.add(egui::Button::new("Copy").shortcut_text("Ctrl+C")).clicked() {
+
+                if ui
+                    .add(egui::Button::new("Copy").shortcut_text("Ctrl+C"))
+                    .clicked()
+                {
                     actions.push(MenuBarAction::Copy);
                     ui.close_menu();
                 }
-                
-                if ui.add(egui::Button::new("Paste").shortcut_text("Ctrl+V")).clicked() {
+
+                if ui
+                    .add(egui::Button::new("Paste").shortcut_text("Ctrl+V"))
+                    .clicked()
+                {
                     actions.push(MenuBarAction::Paste);
                     ui.close_menu();
                 }
-                
-                if ui.add(egui::Button::new("Duplicate").shortcut_text("Ctrl+D")).clicked() {
+
+                if ui
+                    .add(egui::Button::new("Duplicate").shortcut_text("Ctrl+D"))
+                    .clicked()
+                {
                     actions.push(MenuBarAction::Duplicate);
                     ui.close_menu();
                 }
             });
-            
+
             // Entity Menu
             ui.menu_button("Entity", |ui| {
                 if ui.button("Create Empty").clicked() {
                     actions.push(MenuBarAction::CreateEmpty);
                     ui.close_menu();
                 }
-                
+
                 ui.separator();
-                
+
                 ui.menu_button("Create Primitive", |ui| {
                     if ui.button("Cube").clicked() {
                         actions.push(MenuBarAction::CreateCube);
                         ui.close_menu();
                     }
-                    
+
                     if ui.button("Sphere").clicked() {
                         actions.push(MenuBarAction::CreateSphere);
                         ui.close_menu();
                     }
-                    
+
                     if ui.button("Plane").clicked() {
                         actions.push(MenuBarAction::CreatePlane);
                         ui.close_menu();
                     }
-                    
+
                     if ui.button("Cylinder").clicked() {
                         actions.push(MenuBarAction::CreateCylinder);
                         ui.close_menu();
                     }
-                    
+
                     if ui.button("Cone").clicked() {
                         actions.push(MenuBarAction::CreateCone);
                         ui.close_menu();
                     }
                 });
-                
+
                 ui.separator();
-                
-                if ui.add(egui::Button::new("Delete").shortcut_text("Delete")).clicked() {
+
+                if ui
+                    .add(egui::Button::new("Delete").shortcut_text("Delete"))
+                    .clicked()
+                {
                     actions.push(MenuBarAction::DeleteEntity);
                     ui.close_menu();
                 }
             });
-            
+
             // View Menu
             ui.menu_button("View", |ui| {
-                if ui.checkbox(&mut state.hierarchy_visible, "Hierarchy").clicked() {
+                if ui
+                    .checkbox(&mut state.hierarchy_visible, "Hierarchy")
+                    .clicked()
+                {
                     actions.push(MenuBarAction::ToggleHierarchy);
                 }
-                
-                if ui.checkbox(&mut state.inspector_visible, "Inspector").clicked() {
+
+                if ui
+                    .checkbox(&mut state.inspector_visible, "Inspector")
+                    .clicked()
+                {
                     actions.push(MenuBarAction::ToggleInspector);
                 }
-                
+
                 if ui.checkbox(&mut state.console_visible, "Console").clicked() {
                     actions.push(MenuBarAction::ToggleConsole);
                 }
-                
+
                 if ui.checkbox(&mut state.assets_visible, "Assets").clicked() {
                     actions.push(MenuBarAction::ToggleAssets);
                 }
-                
-                if ui.checkbox(&mut state.scene_visible, "Scene View").clicked() {
+
+                if ui
+                    .checkbox(&mut state.scene_visible, "Scene View")
+                    .clicked()
+                {
                     actions.push(MenuBarAction::ToggleScene);
                 }
             });
-            
+
             // Help Menu
             ui.menu_button("Help", |ui| {
                 if ui.button("About Praxis").clicked() {
                     actions.push(MenuBarAction::About);
                     ui.close_menu();
                 }
-                
-                if ui.add(egui::Button::new("Documentation").shortcut_text("F1")).clicked() {
+
+                if ui
+                    .add(egui::Button::new("Documentation").shortcut_text("F1"))
+                    .clicked()
+                {
                     actions.push(MenuBarAction::Documentation);
                     ui.close_menu();
                 }
             });
-            
+
             ui.separator();
-            
+
             // Play/Edit mode toggle
             let mode_text = match state.mode {
                 EditorMode::Edit => "▶ Play",
                 EditorMode::Play => "⏸ Edit",
             };
-            
+
             if ui.button(mode_text).clicked() {
                 actions.push(MenuBarAction::TogglePlayMode);
             }
-            
+
             // Right-aligned status indicators
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if undo_system.is_some_and(|s| s.is_dirty()) {
-                    ui.label(egui::RichText::new("● Unsaved").color(egui::Color32::from_rgb(255, 200, 0)));
+                    ui.label(
+                        egui::RichText::new("● Unsaved")
+                            .color(egui::Color32::from_rgb(255, 200, 0)),
+                    );
                     ui.separator();
                 }
-                
+
                 ui.label(format!("Mode: {:?}", state.mode));
             });
         });
     });
-    
+
     actions
 }
 
 /// Checks for keyboard shortcuts and returns any triggered actions.
 pub fn check_keyboard_shortcuts(ctx: &egui::Context) -> Vec<MenuBarAction> {
     let mut actions = Vec::new();
-    
+
     // Only process shortcuts if not typing in a text field
     if ctx.wants_keyboard_input() {
         return actions;
     }
-    
+
     ctx.input(|i| {
         let ctrl = i.modifiers.ctrl;
         let shift = i.modifiers.shift;
         let alt = i.modifiers.alt;
-        
+
         // File shortcuts
         if ctrl && !shift && i.key_pressed(Key::N) {
             actions.push(MenuBarAction::NewScene);
@@ -319,7 +369,7 @@ pub fn check_keyboard_shortcuts(ctx: &egui::Context) -> Vec<MenuBarAction> {
         if alt && i.key_pressed(Key::F4) {
             actions.push(MenuBarAction::Exit);
         }
-        
+
         // Edit shortcuts (Undo/Redo handled by command_shortcuts system)
         if ctrl && !shift && i.key_pressed(Key::C) {
             actions.push(MenuBarAction::Copy);
@@ -330,18 +380,18 @@ pub fn check_keyboard_shortcuts(ctx: &egui::Context) -> Vec<MenuBarAction> {
         if ctrl && !shift && i.key_pressed(Key::D) {
             actions.push(MenuBarAction::Duplicate);
         }
-        
+
         // Entity shortcuts
         if !ctrl && !shift && i.key_pressed(Key::Delete) {
             actions.push(MenuBarAction::DeleteEntity);
         }
-        
+
         // Help shortcuts
         if !ctrl && !shift && i.key_pressed(Key::F1) {
             actions.push(MenuBarAction::Documentation);
         }
     });
-    
+
     actions
 }
 
@@ -353,7 +403,7 @@ pub fn handle_menu_action(
     world: Option<&mut World>,
 ) {
     use praxis_utils::{error, info};
-    
+
     match action {
         // File actions
         MenuBarAction::NewScene => {
@@ -375,7 +425,7 @@ pub fn handle_menu_action(
         MenuBarAction::Exit => {
             info!("Exit requested");
         }
-        
+
         // Edit actions
         MenuBarAction::Undo => {
             if let (Some(system), Some(world)) = (undo_system, world) {
@@ -404,7 +454,7 @@ pub fn handle_menu_action(
         MenuBarAction::Duplicate => {
             info!("Duplicate requested");
         }
-        
+
         // Entity actions
         MenuBarAction::CreateEmpty => {
             info!("Create empty entity requested");
@@ -427,7 +477,7 @@ pub fn handle_menu_action(
         MenuBarAction::DeleteEntity => {
             info!("Delete entity requested");
         }
-        
+
         // View actions
         MenuBarAction::ToggleHierarchy => {
             state.hierarchy_visible = !state.hierarchy_visible;
@@ -449,7 +499,7 @@ pub fn handle_menu_action(
             state.scene_visible = !state.scene_visible;
             info!("Scene view panel visibility: {}", state.scene_visible);
         }
-        
+
         // Help actions
         MenuBarAction::About => {
             info!("About dialog requested");
@@ -457,7 +507,7 @@ pub fn handle_menu_action(
         MenuBarAction::Documentation => {
             info!("Documentation requested");
         }
-        
+
         // Mode toggle
         MenuBarAction::TogglePlayMode => {
             state.mode = state.mode.toggle();

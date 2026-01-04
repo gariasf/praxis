@@ -454,7 +454,7 @@ impl AssetsPanel {
     fn process_file_events(&mut self) {
         let mut needs_refresh = false;
         let mut paths_to_clear = Vec::new();
-        
+
         if let Some(rx) = &self.file_watcher_rx {
             while let Ok(msg) = rx.try_recv() {
                 match msg {
@@ -475,11 +475,11 @@ impl AssetsPanel {
                 }
             }
         }
-        
+
         if needs_refresh {
             self.refresh_entries();
         }
-        
+
         for path in paths_to_clear {
             self.thumbnail_cache.remove(&path);
         }
@@ -541,8 +541,7 @@ impl AssetsPanel {
     /// Navigates back in history
     pub fn navigate_back(&mut self) {
         if let Some(path) = self.path_history.pop() {
-            self.path_forward_history
-                .push(self.current_path.clone());
+            self.path_forward_history.push(self.current_path.clone());
             self.current_path = path;
             self.refresh_entries();
         }
@@ -561,7 +560,9 @@ impl AssetsPanel {
     pub fn navigate_up(&mut self) {
         let parent_path = self.current_path.parent().map(|p| p.to_path_buf());
         if let Some(parent) = parent_path {
-            if parent.to_str().unwrap_or("").starts_with(ASSETS_ROOT) || parent == Path::new(ASSETS_ROOT.trim_end_matches('/')) {
+            if parent.to_str().unwrap_or("").starts_with(ASSETS_ROOT)
+                || parent == Path::new(ASSETS_ROOT.trim_end_matches('/'))
+            {
                 self.navigate_to(parent);
             }
         }
@@ -570,27 +571,15 @@ impl AssetsPanel {
     /// Renders the navigation toolbar
     fn render_toolbar(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
-            if ui
-                .button("⬅")
-                .on_hover_text("Back")
-                .clicked()
-            {
+            if ui.button("⬅").on_hover_text("Back").clicked() {
                 self.navigate_back();
             }
 
-            if ui
-                .button("➡")
-                .on_hover_text("Forward")
-                .clicked()
-            {
+            if ui.button("➡").on_hover_text("Forward").clicked() {
                 self.navigate_forward();
             }
 
-            if ui
-                .button("⬆")
-                .on_hover_text("Up")
-                .clicked()
-            {
+            if ui.button("⬆").on_hover_text("Up").clicked() {
                 self.navigate_up();
             }
 
@@ -627,30 +616,30 @@ impl AssetsPanel {
     /// Renders breadcrumb navigation
     fn render_breadcrumbs(&mut self, ui: &mut Ui) {
         ui.label("📁");
-        
+
         let path_str = self.current_path.to_str().unwrap_or("assets/");
         let components: Vec<String> = path_str
             .split('/')
             .filter(|s| !s.is_empty())
             .map(|s| s.to_string())
             .collect();
-        
+
         let mut paths_to_navigate = Vec::new();
         let mut path_builder = PathBuf::new();
-        
+
         for (i, component) in components.iter().enumerate() {
             if i > 0 {
                 ui.label("/");
             }
-            
+
             path_builder.push(component);
             let nav_path = path_builder.clone();
-            
+
             if ui.link(component.as_str()).clicked() {
                 paths_to_navigate.push(nav_path);
             }
         }
-        
+
         for path in paths_to_navigate {
             self.navigate_to(&path);
         }
@@ -750,7 +739,7 @@ impl AssetsPanel {
 
             if is_dragged && !entry.is_directory {
                 self.dragged_asset = Some(entry.clone());
-                
+
                 egui::Area::new(ui.id().with("drag_preview"))
                     .interactable(false)
                     .fixed_pos(ui.input(|i| i.pointer.hover_pos().unwrap_or_default()))
@@ -828,9 +817,7 @@ impl AssetsPanel {
                 }
                 #[cfg(target_os = "macos")]
                 {
-                    let _ = std::process::Command::new("open")
-                        .arg(&entry.path)
-                        .spawn();
+                    let _ = std::process::Command::new("open").arg(&entry.path).spawn();
                 }
                 #[cfg(target_os = "linux")]
                 {
@@ -942,7 +929,10 @@ impl AssetsPanel {
                     AssetType::Model => {
                         ui.horizontal(|ui| {
                             ui.label("Scale:");
-                            ui.add(egui::Slider::new(&mut self.import_config.model_scale, 0.01..=10.0));
+                            ui.add(egui::Slider::new(
+                                &mut self.import_config.model_scale,
+                                0.01..=10.0,
+                            ));
                         });
                     }
                     AssetType::Texture => {
@@ -1021,7 +1011,10 @@ impl AssetsPanel {
                         }
                     }
                     AssetType::Model => {
-                        debug!("Model thumbnail generation not yet implemented: {}", path.display());
+                        debug!(
+                            "Model thumbnail generation not yet implemented: {}",
+                            path.display()
+                        );
                         self.mark_thumbnail_failed(&path);
                     }
                     _ => {
@@ -1037,10 +1030,7 @@ impl AssetsPanel {
     /// Generates a thumbnail for a texture file
     fn generate_texture_thumbnail(path: &Path) -> Result<Vec<u8>> {
         let img = image::open(path)?;
-        let thumbnail = img.thumbnail(
-            THUMBNAIL_SIZE as u32,
-            THUMBNAIL_SIZE as u32,
-        );
+        let thumbnail = img.thumbnail(THUMBNAIL_SIZE as u32, THUMBNAIL_SIZE as u32);
         let rgba = thumbnail.to_rgba8();
         Ok(rgba.into_raw())
     }
@@ -1065,7 +1055,10 @@ impl AssetsPanel {
 
     /// Gets the filtered entry count (matching search)
     pub fn filtered_entry_count(&self) -> usize {
-        self.entries.iter().filter(|e| self.matches_filter(e)).count()
+        self.entries
+            .iter()
+            .filter(|e| self.matches_filter(e))
+            .count()
     }
 
     /// Clears the search filter

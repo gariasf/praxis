@@ -30,10 +30,10 @@ pub fn handle_command_shortcuts(
     mut undo_system: ResMut<UndoRedoSystem>,
     world: &mut World,
 ) {
-    let ctrl = input.is_key_pressed(KeyCode::ControlLeft)
-        || input.is_key_pressed(KeyCode::ControlRight);
-    let shift = input.is_key_pressed(KeyCode::ShiftLeft)
-        || input.is_key_pressed(KeyCode::ShiftRight);
+    let ctrl =
+        input.is_key_pressed(KeyCode::ControlLeft) || input.is_key_pressed(KeyCode::ControlRight);
+    let shift =
+        input.is_key_pressed(KeyCode::ShiftLeft) || input.is_key_pressed(KeyCode::ShiftRight);
 
     // Ctrl+Z: Undo
     if ctrl && !shift && input.is_key_just_pressed(KeyCode::KeyZ) {
@@ -54,20 +54,20 @@ pub fn handle_command_shortcuts(
 
 /// Helper to check if undo shortcut was pressed.
 pub fn is_undo_pressed(input: &InputState) -> bool {
-    let ctrl = input.is_key_pressed(KeyCode::ControlLeft)
-        || input.is_key_pressed(KeyCode::ControlRight);
-    let shift = input.is_key_pressed(KeyCode::ShiftLeft)
-        || input.is_key_pressed(KeyCode::ShiftRight);
+    let ctrl =
+        input.is_key_pressed(KeyCode::ControlLeft) || input.is_key_pressed(KeyCode::ControlRight);
+    let shift =
+        input.is_key_pressed(KeyCode::ShiftLeft) || input.is_key_pressed(KeyCode::ShiftRight);
 
     ctrl && !shift && input.is_key_just_pressed(KeyCode::KeyZ)
 }
 
 /// Helper to check if redo shortcut was pressed.
 pub fn is_redo_pressed(input: &InputState) -> bool {
-    let ctrl = input.is_key_pressed(KeyCode::ControlLeft)
-        || input.is_key_pressed(KeyCode::ControlRight);
-    let shift = input.is_key_pressed(KeyCode::ShiftLeft)
-        || input.is_key_pressed(KeyCode::ShiftRight);
+    let ctrl =
+        input.is_key_pressed(KeyCode::ControlLeft) || input.is_key_pressed(KeyCode::ControlRight);
+    let shift =
+        input.is_key_pressed(KeyCode::ShiftLeft) || input.is_key_pressed(KeyCode::ShiftRight);
 
     (ctrl && input.is_key_just_pressed(KeyCode::KeyY))
         || (ctrl && shift && input.is_key_just_pressed(KeyCode::KeyZ))
