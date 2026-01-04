@@ -8,6 +8,7 @@ Task-oriented guides for implementing features with Praxis.
 - [HDR and Tone Mapping](hdr-and-tonemapping.md) - High dynamic range rendering
 - [Shadows](shadows.md) - Cascaded shadow mapping with PCF
 - [Post-Processing](post-processing.md) - Bloom, color grading, effects
+- [Particles](particles.md) - Practical particle effect examples
 
 ## Animation
 

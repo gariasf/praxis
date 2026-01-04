@@ -15,10 +15,12 @@ Task-oriented tutorials for implementing features:
 - [HDR and Tone Mapping](guides/hdr-and-tonemapping.md) - High dynamic range rendering
 - [Shadows](guides/shadows.md) - Cascaded shadow maps with PCF
 - [Post-Processing](guides/post-processing.md) - Bloom, color grading, effects
-- [Particle System](particle_system.md) - GPU-accelerated particles with forces and effects
+- [Particles](guides/particles.md) - Practical particle effect examples
 - [Animation](animation_system.md) - Skeletal animation and blending
 - [Audio](audio_system.md) - Spatial audio with Kira
 - [Profiling](profiling.md) - Performance analysis and optimization
+
+For comprehensive particle system documentation, see [crates/praxis_graphics/PARTICLES.md](../crates/praxis_graphics/PARTICLES.md).
 
 ### [Concepts](concepts/README.md)
 Educational explanations of engine design:
