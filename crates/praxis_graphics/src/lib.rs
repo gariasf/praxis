@@ -168,6 +168,7 @@
 //! - Color grading (grayscale, sepia, etc.)
 //! - Image filtering (blur, sharpen, edge detection)
 //! - Screen-space effects (bloom, depth of field, motion blur)
+//! - Cinematic effects (vignette, chromatic aberration, film grain)
 //!
 //! ## Bloom Effect
 //!
@@ -183,6 +184,20 @@
 //! 1. Extract bright pixels (brightness > threshold)
 //! 2. Apply separable Gaussian blur multiple times for smooth glow
 //! 3. Combine blurred bloom with original scene using tone mapping
+//!
+//! ## Cinematic Post-Processing Effects
+//!
+//! Advanced cinematic effects for realistic and artistic presentation:
+//!
+//! - **`DepthOfFieldPass`**: Realistic camera lens focus with circle of confusion and bokeh blur
+//! - **`MotionBlurPass`**: Per-pixel motion blur using velocity buffers
+//! - **`ChromaticAberrationPass`**: Lens color fringing for realistic distortion
+//! - **`VignettePass`**: Edge darkening for cinematic framing
+//! - **`FilmGrainPass`**: Procedural grain noise to simulate film stock
+//!
+//! These effects can be chained together in a `PostProcessChain` to create
+//! sophisticated cinematic looks. Each effect is highly configurable with its
+//! own parameter structure.
 //!
 //! See the `post_process` module documentation and `POST_PROCESSING.md` for detailed
 //! information on implementing custom effects.
@@ -394,6 +409,7 @@ pub mod skybox;
 pub mod ssao;
 pub mod texture;
 pub mod uniform_buffer;
+pub mod velocity_buffer;
 mod vertex;
 pub mod visual_feedback;
 
@@ -1590,9 +1606,12 @@ pub use particles::{
     MAX_PARTICLES_PER_EMITTER,
 };
 pub use post_process::{
-    BloomConfig, BloomEffect, BrightnessExtractionPass, CopyPass, FullScreenQuad,
-    GaussianBlurHorizontalPass, GaussianBlurVerticalPass, GrayscalePass, PostProcessChain,
-    PostProcessContext, PostProcessPass, QuadVertex, RenderTarget, RenderTargetPool, ToneMapPass,
+    BloomConfig, BloomEffect, BrightnessExtractionPass, ChromaticAberrationConfig,
+    ChromaticAberrationPass, CopyPass, DepthOfFieldPass, DofConfig, FilmGrainConfig,
+    FilmGrainPass, FullScreenQuad, GaussianBlurHorizontalPass, GaussianBlurVerticalPass,
+    GrayscalePass, MotionBlurConfig, MotionBlurPass, PostProcessChain, PostProcessContext,
+    PostProcessPass, QuadVertex, RenderTarget, RenderTargetPool, ToneMapPass, VelocityUniforms,
+    VignetteConfig, VignettePass,
 };
 pub use primitives::{
     colored_cube_mesh, pyramid_mesh, quad_mesh, solid_cube_mesh, sphere_mesh, textured_cube_mesh,
@@ -1603,6 +1622,7 @@ pub use skybox::SkyboxRenderer;
 pub use ssao::{SsaoConfig, SsaoRenderer};
 pub use texture::{Cubemap, CubemapFace, Texture, TextureManager};
 pub use uniform_buffer::{DynamicUniformBuffer, ModelUniforms, ViewProjectionUniforms};
+pub use velocity_buffer::{VelocityBuffer, VelocityBufferRenderer};
 pub use vertex::Vertex3D;
 pub use visual_feedback::{
     create_axis_indicator, create_bounding_box, create_grid, create_selection_outline,

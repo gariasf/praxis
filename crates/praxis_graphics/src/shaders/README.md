@@ -125,6 +125,51 @@ Post-process tone mapping:
 - Gamma correction
 - Used in bloom combine pass
 
+### Cinematic Post-Processing Effects
+
+#### `post_process_dof.frag`
+Depth-of-Field with bokeh blur:
+- Circle of confusion calculation
+- Poisson disk sampling for bokeh
+- Depth-aware blur
+- Configurable focus distance and aperture
+
+#### `post_process_motion_blur.frag`
+Motion blur using velocity buffer:
+- Per-pixel velocity sampling
+- Sample accumulation along motion vectors
+- Shutter angle simulation
+- Configurable sample count
+
+#### `post_process_chromatic_aberration.frag`
+Chromatic aberration lens distortion:
+- Radial color fringing
+- Separate R/G/B channel offsets
+- Distance-based falloff
+- Configurable intensity
+
+#### `post_process_vignette.frag`
+Vignette darkening effect:
+- Edge darkening for cinematic framing
+- Configurable shape and smoothness
+- Center point control
+- Intensity adjustment
+
+#### `post_process_film_grain.frag`
+Film grain noise:
+- Procedural grain generation
+- Luminance-based intensity
+- Animated grain for realism
+- Configurable grain size
+
+### Velocity Buffer Generation
+
+#### `velocity_buffer.vert` / `velocity_buffer.frag`
+Velocity buffer for motion blur:
+- Current and previous frame MVP matrices
+- Per-pixel screen-space motion vectors
+- Used by motion blur effect
+
 ## Shader Conventions
 
 ### Binding Locations

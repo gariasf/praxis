@@ -185,3 +185,91 @@ pub mod hdr_tone_map_fs {
         path: "src/shaders/hdr_tone_map.frag"
     }
 }
+
+/// Compiled fragment shader for depth-of-field effect with bokeh blur.
+pub mod post_process_dof_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/post_process_dof.frag"
+    }
+}
+
+/// Compiled fragment shader for motion blur using velocity buffer.
+pub mod post_process_motion_blur_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/post_process_motion_blur.frag"
+    }
+}
+
+/// Compiled fragment shader for chromatic aberration lens distortion.
+pub mod post_process_chromatic_aberration_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/post_process_chromatic_aberration.frag"
+    }
+}
+
+/// Compiled fragment shader for vignette effect.
+pub mod post_process_vignette_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/post_process_vignette.frag"
+    }
+}
+
+/// Compiled fragment shader for film grain noise.
+pub mod post_process_film_grain_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/post_process_film_grain.frag"
+    }
+}
+
+/// Compiled vertex shader for velocity buffer generation.
+pub mod velocity_buffer_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/shaders/velocity_buffer.vert"
+    }
+}
+
+/// Compiled fragment shader for velocity buffer generation.
+pub mod velocity_buffer_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/velocity_buffer.frag"
+    }
+}
+
+/// Compiled vertex shader for line rendering.
+pub mod line_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/shaders/line.vert"
+    }
+}
+
+/// Compiled fragment shader for line rendering.
+pub mod line_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/line.frag"
+    }
+}
+
+/// Compiled vertex shader for equirectangular to cubemap conversion.
+pub mod equirect_to_cube_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/shaders/equirect_to_cube.vert"
+    }
+}
+
+/// Compiled fragment shader for equirectangular to cubemap conversion.
+pub mod equirect_to_cube_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/equirect_to_cube.frag"
+    }
+}

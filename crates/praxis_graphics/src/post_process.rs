@@ -57,6 +57,7 @@
 
 pub mod bloom;
 mod chain;
+pub mod cinematic;
 mod full_screen_quad;
 mod pass;
 pub mod passes;
@@ -69,6 +70,11 @@ pub use bloom::{
     GaussianBlurVerticalPass, ToneMapPass,
 };
 pub use chain::PostProcessChain;
+pub use cinematic::{
+    ChromaticAberrationConfig, ChromaticAberrationPass, DepthOfFieldPass, DofConfig,
+    FilmGrainConfig, FilmGrainPass, MotionBlurConfig, MotionBlurPass, VelocityUniforms,
+    VignetteConfig, VignettePass,
+};
 pub use full_screen_quad::{FullScreenQuad, QuadVertex};
 pub use pass::{PostProcessContext, PostProcessPass};
 pub use passes::{CopyPass, GrayscalePass};
