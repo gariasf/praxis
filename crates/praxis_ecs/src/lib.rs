@@ -286,8 +286,8 @@ pub use components::{
     Active, Camera, CameraMatrices, Children, DirectionalLight, DirectionalLightInfo,
     EngineManaged, EnvironmentProbe, EnvironmentProbeUpdateMode, GlobalTransform, LightingData,
     MaterialHandle, MaterialPropertiesComponent, Mesh, MeshHandle, Name, NoSave,
-    OrthographicProjection, Parent, PerspectiveProjection, PointLight, PointLightInfo, Skybox,
-    TextureHandle, Transform, Visibility,
+    OrthographicProjection, Parent, ParticleEmitter, PerspectiveProjection, PointLight,
+    PointLightInfo, Skybox, TextureHandle, Transform, Visibility,
 };
 pub use systems::*;
 pub use world::*;

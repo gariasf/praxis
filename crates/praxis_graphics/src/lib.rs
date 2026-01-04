@@ -383,6 +383,7 @@ pub mod lighting;
 pub mod line_renderer;
 pub mod material;
 pub mod mesh;
+pub mod particles;
 mod pipeline;
 pub mod post_process;
 mod primitives;
@@ -1580,6 +1581,10 @@ pub use lighting::{
 pub use line_renderer::{Line, LineBatch, LineRenderer, LineVertex};
 pub use material::{Material, MaterialManager, MaterialProperties};
 pub use mesh::{GpuMesh, MeshData};
+pub use particles::{
+    EmitterShape, ParticleEmitterConfig, ParticleForce, ParticleInstance, ParticleSystem,
+    MAX_PARTICLES_PER_EMITTER,
+};
 pub use post_process::{
     BloomConfig, BloomEffect, BrightnessExtractionPass, CopyPass, FullScreenQuad,
     GaussianBlurHorizontalPass, GaussianBlurVerticalPass, GrayscalePass, PostProcessChain,

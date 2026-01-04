@@ -19,6 +19,7 @@ This guide provides comprehensive explanations of the core concepts and architec
 13. [Shadow Mapping System](#shadow-mapping-system)
 14. [Normal Mapping](#normal-mapping)
 15. [Post-Processing Pipeline](#post-processing-pipeline)
+16. [Particle System](#particle-system)
 
 ---
 
@@ -4066,6 +4067,528 @@ pool.release(output);
 ```
 
 For detailed information, see [Post-Processing System Documentation](post_processing_system.md).
+
+---
+
+## Particle System
+
+The particle system brings dynamic visual effects to your game: fire, smoke, explosions, magic spells, sparks, and more. Understanding how particles work helps you create compelling visual feedback and atmosphere.
+
+### What are Particles?
+
+Particles are small, simple objects (usually billboarded quads) rendered in large quantities to create complex visual effects:
+
+```text
+Particle System Concept
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Fire Effect = Hundreds of Small Particles
+
+Each particle:
+  ▪️ Small colored quad
+  🔴 Position
+  🎨 Color (changes over time)
+  📏 Size (changes over time)
+  🔄 Rotation
+  ⏱️ Lifetime (dies after X seconds)
+  🚀 Velocity (moves each frame)
+
+Together they create:
+    🔥🔥🔥
+   🔥🔥🔥🔥
+  🔥🔥🔥🔥🔥  ← Looks like continuous fire!
+   🔥🔥🔥🔥      But actually hundreds of particles
+    🔥🔥🔥       being spawned, updated, and dying
+```
+
+### Particle System Architecture
+
+```text
+Particle System Flow
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────────────┐
+│                     Particle Emitter                         │
+│                                                              │
+│  Configuration:                                              │
+│  - Emission rate: 50 particles/second                       │
+│  - Lifetime: 2.0 seconds                                     │
+│  - Initial velocity: (0, 5, 0) ± randomness                 │
+│  - Color gradient: yellow → orange → red → black            │
+│  - Size curve: small → large → small                        │
+│  - Forces: gravity, wind, drag                              │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+                           ▼ Spawns particles
+┌─────────────────────────────────────────────────────────────┐
+│                    Particle Pool (CPU)                       │
+│  [10,000 particle slots]                                     │
+│                                                              │
+│  Active particles:                                           │
+│  Particle 0: pos(1,2,3), vel(0,3,0), life=1.5s, color=🔴    │
+│  Particle 1: pos(2,3,1), vel(1,2,0), life=0.8s, color=🟠    │
+│  Particle 2: pos(1,4,2), vel(0,4,0), life=1.2s, color=🔴    │
+│  ... (100 active)                                            │
+│                                                              │
+│  Inactive particles: [Particle 101..9999]                   │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+                           ▼ Each frame: Update positions,
+                           │            Apply forces,
+                           │            Check lifetimes
+┌─────────────────────────────────────────────────────────────┐
+│                Instance Buffer (GPU)                         │
+│  [Upload only active particles]                             │
+│                                                              │
+│  ParticleInstance 0: {pos, color, size, rotation}           │
+│  ParticleInstance 1: {pos, color, size, rotation}           │
+│  ParticleInstance 2: {pos, color, size, rotation}           │
+│  ... (100 instances = 3.6 KB)                               │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+                           ▼ GPU Instancing
+┌─────────────────────────────────────────────────────────────┐
+│                  GPU Rendering                               │
+│                                                              │
+│  Quad geometry (4 vertices, 6 indices) ×100 instances       │
+│  = Single draw call renders all 100 particles!              │
+│                                                              │
+│  Vertex shader: Transform quad → billboard facing camera    │
+│  Fragment shader: Sample texture, apply color               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Emitter Shapes
+
+Particles can spawn from various shapes:
+
+```text
+Emitter Shape Visualization
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Point:
+      ●  ← All particles spawn here
+    🔴🔴🔴
+   🔴🔴🔴🔴
+  🔴🔴🔴🔴🔴
+
+Sphere (radius):
+      ╱●●●╲   Particles spawn on surface
+     ● 🔴🔴 ●  or within volume
+    ●  🔴🔴  ●
+     ● 🔴🔴 ●
+      ╲●●●╱
+
+Box (extents):
+    ┌───────┐
+    │ 🔴🔴🔴 │  Particles spawn anywhere
+    │🔴🔴🔴🔴│  within the box
+    │ 🔴🔴🔴 │
+    └───────┘
+
+Circle (radius):
+       🔴
+    🔴     🔴    Particles spawn on
+   🔴   ●   🔴   the ring edge
+    🔴     🔴
+       🔴
+
+Cone (radius, angle):
+       ●
+      🔴🔴      Particles spawn within
+     🔴🔴🔴🔴    the cone volume
+    🔴🔴🔴🔴🔴
+```
+
+### Particle Properties
+
+Each particle tracks multiple properties that change over time:
+
+```text
+Particle Lifecycle
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Time:     0.0s           0.5s          1.0s          1.5s    2.0s
+          (spawn)                                             (death)
+
+Position: (0,0,0) ----→ (0,2,0) ---→ (0,5,0) ---→ (0,7,0) → (0,8,0)
+          ↑ Apply forces each frame: gravity, wind, drag
+
+Velocity: (0,5,0) ----→ (0,4,0) ---→ (0,3,0) ---→ (0,2,0) → (0,1,0)
+          ↑ Slows down due to drag force
+
+Color:    🟡 yellow --→ 🟠 orange --→ 🔴 red ---→ ⚫ black → ⬛ dead
+          [1,1,0,1]     [1,0.5,0,1]   [1,0,0,0.5] [0,0,0,0]
+          ↑ Interpolated from color gradient
+
+Size:     ▪️ 0.2 -----→ ● 0.8 -----→ ⬤ 1.2 ----→ ● 0.8 ---→ ▪️ 0.4
+          ↑ Grows then shrinks (size curve)
+
+Rotation: 0° --------→ 60° -------→ 120° ------→ 180° ---→ 240°
+          ↑ Constant rotation speed (2 rad/s)
+
+Lifetime: 2.0s ------→ 1.5s ------→ 1.0s ------→ 0.5s ---→ 0.0s
+          ↑ Decrements each frame, dies when <= 0
+```
+
+### Physical Forces
+
+Forces make particles move realistically:
+
+```text
+Force Types
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Gravity:
+          🔴
+        🔴       Constant downward force
+      🔴         (or any direction)
+    🔴
+  🔴             vel += gravity * dt
+             
+  Example: Fire goes up → gravity pulls down → curved motion
+
+Wind:
+  🔴 🔴 🔴 →→→   Directional force with
+ 🔴 🔴 🔴 →→→    optional turbulence
+🔴 🔴 🔴 →→→     (random variation)
+             
+  Example: Smoke drifts sideways with random fluctuation
+
+Attraction:
+     🔴🔴           Particles pulled toward
+    🔴 ● 🔴         a point (like a magnet)
+     🔴🔴       
+  ↑ attractor
+             
+  Example: Magic spell gathering energy to center
+
+Radial (Push/Pull):
+     🔴←●→🔴        Particles pushed away from
+       🔴          (or pulled toward) origin
+       🔴      
+             
+  Example: Explosion - particles blast outward from center
+
+Drag:
+  🔴→→→          Air resistance
+   🔴→→          slows particles down
+    🔴→      
+      🔴         vel *= (1 - drag * dt)
+             
+  Example: Sparks slow down quickly after initial burst
+```
+
+### Color and Size Over Lifetime
+
+Gradients create dynamic visual changes:
+
+```text
+Fire Particle Example
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Lifetime:    0%        25%        50%        75%       100%
+             │         │          │          │          │
+Color:       🟡 ----→ 🟠 ------→ 🔴 ------→ 🔴 -----→ ⚫
+             bright   orange     red        dark red   black
+             yellow                                     (fade)
+
+Size:        ▪️ -----→ ● ------→ ⬤ ------→ ● ------→ ▪️
+             0.1       0.5        1.0        0.7        0.3
+             (small)  (growing)  (peak)     (shrink)   (tiny)
+
+Configuration:
+  color_over_lifetime: [
+    [1.0, 1.0, 0.2, 1.0],  // 0%: bright yellow
+    [1.0, 0.5, 0.0, 0.9],  // 33%: orange
+    [1.0, 0.0, 0.0, 0.6],  // 66%: red
+    [0.2, 0.0, 0.0, 0.0],  // 100%: fade to black
+  ]
+  
+  size_over_lifetime: [0.1, 0.5, 1.0, 0.7, 0.3]
+
+Result: Particles start small and bright, grow and turn orange,
+        peak in size as red, then shrink and fade to black
+```
+
+### GPU Instancing
+
+Efficient rendering of thousands of particles:
+
+```text
+Instancing Explained
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Without Instancing (Bad):
+  For each particle:
+    1. Upload vertex data (4 vertices)
+    2. Issue draw call
+    3. GPU processes 4 vertices
+  
+  1000 particles = 1000 draw calls (SLOW!)
+  CPU spends most time on draw call overhead
+
+With Instancing (Good):
+  Upload once:
+    - Quad geometry (4 vertices, 6 indices)
+    - Instance buffer (1000 particle transforms)
+  
+  Issue one draw call:
+    glDrawElementsInstanced(6 indices, 1000 instances)
+  
+  GPU automatically:
+    - Replicates quad 1000 times
+    - Applies per-instance data to each
+  
+  1000 particles = 1 draw call (FAST!)
+  CPU overhead is minimal
+
+Per-Instance Data (36 bytes):
+  vec3 position    (12 bytes)
+  vec4 color       (16 bytes)
+  float size       (4 bytes)
+  float rotation   (4 bytes)
+
+1000 particles = 36 KB uploaded per frame (tiny!)
+```
+
+### Usage Example
+
+```rust
+use praxis_graphics::{
+    ParticleSystem, ParticleEmitterConfig,
+    EmitterShape, ParticleForce
+};
+use praxis_math::Vec3;
+
+// Create particle system
+let mut particle_system = ParticleSystem::new(
+    memory_allocator,
+    command_buffer_allocator,
+    queue,
+)?;
+
+// Configure fire emitter
+let fire_config = ParticleEmitterConfig {
+    shape: EmitterShape::Sphere { radius: 0.5 },
+    emission_rate: 50.0,              // 50 particles/second
+    max_particles: 500,                // Pool size
+    particle_lifetime: 2.0,            // Lives 2 seconds
+    lifetime_randomness: 0.3,          // ±0.3 seconds
+    
+    initial_velocity: Vec3::new(0.0, 3.0, 0.0),  // Upward
+    velocity_randomness: 1.0,                     // ±1.0 variation
+    
+    initial_color: [1.0, 0.8, 0.2, 1.0],         // Bright yellow
+    color_over_lifetime: Some(vec![
+        [1.0, 0.8, 0.2, 1.0],  // Yellow start
+        [1.0, 0.3, 0.0, 0.8],  // Orange middle
+        [0.5, 0.0, 0.0, 0.3],  // Dark red
+        [0.1, 0.0, 0.0, 0.0],  // Fade out
+    ]),
+    
+    initial_size: 0.3,
+    size_over_lifetime: Some(vec![0.1, 0.5, 0.8, 0.4]),
+    size_randomness: 0.1,
+    
+    rotation_speed: 2.0,              // 2 radians/second
+    rotation_speed_randomness: 1.0,    // ±1.0 variation
+    
+    forces: vec![
+        ParticleForce::Gravity {
+            strength: Vec3::new(0.0, 1.0, 0.0),  // Upward (hot air)
+        },
+        ParticleForce::Wind {
+            direction: Vec3::new(1.0, 0.0, 0.0),
+            strength: 0.5,
+            turbulence: 0.3,          // Random wobble
+        },
+        ParticleForce::Drag {
+            coefficient: 0.5,         // Air resistance
+        },
+    ],
+    
+    looping: true,                    // Continuous emission
+    ..Default::default()
+};
+
+particle_system.add_emitter("campfire", fire_config);
+
+// Position the emitter
+if let Some(emitter) = particle_system.get_emitter_mut("campfire") {
+    emitter.set_position(Vec3::new(0.0, 0.0, 0.0));
+}
+
+// Each frame:
+let delta_time = 0.016;  // ~60 FPS
+particle_system.update(delta_time);
+particle_system.prepare_render()?;
+
+// Rendering (integrate with your pipeline):
+// let instances = particle_system.instance_buffer();
+// let quad_verts = particle_system.quad_vertex_buffer();
+// let quad_indices = particle_system.quad_index_buffer();
+// Draw instanced with these buffers
+```
+
+### ECS Integration
+
+Attach particle emitters to entities:
+
+```rust
+use praxis_ecs::{World, Transform, ParticleEmitter};
+
+let mut world = World::new();
+
+// Torch entity with particle emitter
+world.spawn((
+    Transform::from_xyz(5.0, 1.0, 0.0),
+    ParticleEmitter::new("torch_fire"),
+));
+
+// The emitter follows the entity's transform
+// Useful for: torches, engines, magic effects, etc.
+```
+
+### Performance Considerations
+
+```text
+Particle Count Guidelines
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Total Active Particles vs Frame Time:
+  
+  100 particles:   ~0.1ms  (negligible)
+  1,000 particles: ~0.5ms  (good)
+  5,000 particles: ~2ms    (acceptable for heavy effects)
+  10,000 particles: ~5ms   (maximum per emitter)
+  50,000 particles: ~25ms  (avoid! will drop frames)
+
+Optimization Tips:
+
+1. Emission Rate × Lifetime = Steady State Count
+   - 50/sec × 2s = ~100 particles
+   - 100/sec × 5s = ~500 particles
+   - Plan accordingly!
+
+2. Cull Distant Emitters
+   - Don't update particles 100 meters away
+   - Save CPU time for visible effects
+
+3. Use Looping Wisely
+   - Continuous effects: looping = true (fire, smoke)
+   - One-shot effects: looping = false (explosion, splash)
+
+4. Texture Atlases
+   - Pack multiple sprites in one texture
+   - Reduces texture swaps during rendering
+
+5. Batch Similar Emitters
+   - System renders all particles in one draw call
+   - Very efficient!
+```
+
+### Common Effects Recipes
+
+```rust
+// Smoke
+let smoke = ParticleEmitterConfig {
+    shape: EmitterShape::Point,
+    emission_rate: 20.0,
+    particle_lifetime: 4.0,
+    initial_velocity: Vec3::new(0.0, 1.0, 0.0),
+    initial_color: [0.5, 0.5, 0.5, 0.5],
+    color_over_lifetime: Some(vec![
+        [0.5, 0.5, 0.5, 0.5],  // Gray
+        [0.3, 0.3, 0.3, 0.1],  // Fading
+        [0.2, 0.2, 0.2, 0.0],  // Transparent
+    ]),
+    size_over_lifetime: Some(vec![0.3, 1.0, 1.5]),
+    forces: vec![
+        ParticleForce::Wind {
+            direction: Vec3::new(1.0, 0.5, 0.0),
+            strength: 1.0,
+            turbulence: 0.8,
+        },
+    ],
+    ..Default::default()
+};
+
+// Explosion
+let explosion = ParticleEmitterConfig {
+    shape: EmitterShape::Sphere { radius: 0.2 },
+    emission_rate: 200.0,
+    particle_lifetime: 1.5,
+    initial_velocity: Vec3::ZERO,
+    velocity_randomness: 5.0,  // High randomness = radial burst
+    initial_color: [1.0, 1.0, 0.5, 1.0],  // Bright yellow
+    forces: vec![
+        ParticleForce::Radial {
+            origin: Vec3::ZERO,
+            strength: 10.0,  // Push outward
+        },
+        ParticleForce::Gravity {
+            strength: Vec3::new(0.0, -9.8, 0.0),  // Fall down
+        },
+    ],
+    looping: false,     // One-shot effect
+    duration: 0.2,      // Emit for 0.2 seconds then stop
+    ..Default::default()
+};
+
+// Magic Sparkles
+let sparkles = ParticleEmitterConfig {
+    shape: EmitterShape::Sphere { radius: 1.0 },
+    emission_rate: 30.0,
+    particle_lifetime: 1.0,
+    initial_velocity: Vec3::ZERO,
+    velocity_randomness: 0.5,
+    initial_color: [0.5, 0.5, 1.0, 1.0],  // Blue
+    size_over_lifetime: Some(vec![0.1, 0.3, 0.1]),
+    rotation_speed: 5.0,
+    forces: vec![
+        ParticleForce::Attraction {
+            position: Vec3::ZERO,
+            strength: 2.0,
+            radius: 5.0,
+        },
+    ],
+    ..Default::default()
+};
+```
+
+### Debugging Particles
+
+```text
+Common Issues and Solutions
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Issue: Particles not appearing
+  ✓ Check emission_rate > 0
+  ✓ Check particle_lifetime > 0
+  ✓ Check emitter.is_active() == true
+  ✓ Check max_particles is sufficient
+  ✓ Verify emitter position is in view
+
+Issue: Particles disappear instantly
+  ✓ Check lifetime isn't too short
+  ✓ Verify forces aren't pushing particles away too fast
+  ✓ Check color alpha doesn't fade to 0 immediately
+
+Issue: Performance problems
+  ✓ Count active particles (call total_active_particles())
+  ✓ Reduce emission_rate
+  ✓ Shorten particle_lifetime
+  ✓ Use fewer emitters
+  ✓ Reduce force complexity
+
+Issue: Particles look wrong
+  ✓ Verify color gradients are correct
+  ✓ Check size curve values
+  ✓ Test with simpler config first
+  ✓ Visualize one emitter at a time
+```
+
+For complete details, see [Particle System Documentation](particle_system.md).
 
 ---
 

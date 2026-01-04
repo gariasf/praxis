@@ -1867,6 +1867,28 @@ mod tests {
     }
 
     #[test]
+    fn test_particle_emitter_creation() {
+        let emitter = ParticleEmitter::new("fire");
+        assert_eq!(emitter.id(), "fire");
+
+        let emitter2: ParticleEmitter = "smoke".into();
+        assert_eq!(emitter2.id(), "smoke");
+
+        let emitter3: ParticleEmitter = "explosion".to_string().into();
+        assert_eq!(emitter3.id(), "explosion");
+    }
+
+    #[test]
+    fn test_particle_emitter_equality() {
+        let emitter1 = ParticleEmitter::new("fire");
+        let emitter2 = ParticleEmitter::new("fire");
+        let emitter3 = ParticleEmitter::new("smoke");
+
+        assert_eq!(emitter1, emitter2);
+        assert_ne!(emitter1, emitter3);
+    }
+
+    #[test]
     fn test_environment_probe_creation() {
         let probe = EnvironmentProbe::new("test_probe");
         assert_eq!(probe.id(), "test_probe");
@@ -1986,6 +2008,64 @@ impl From<&str> for Skybox {
 impl From<String> for Skybox {
     fn from(cubemap_id: String) -> Self {
         Self { cubemap_id }
+    }
+}
+
+/// Particle emitter component for spawning and managing particles.
+///
+/// This component marks an entity as a particle emitter, which spawns and manages
+/// particles according to its configuration. The particle system in the graphics
+/// module handles the actual particle simulation and rendering.
+///
+/// # Features
+///
+/// - **Multiple Emitter Shapes**: Point, sphere, box, circle, cone
+/// - **Particle Properties**: Lifetime, velocity, color, size, rotation
+/// - **Physical Forces**: Gravity, wind, attraction, radial forces, drag
+/// - **Texture Atlases**: Support for sprite sheet animations
+/// - **GPU Instancing**: Efficient rendering of thousands of particles
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, ParticleEmitter, Transform};
+/// use praxis_math::Vec3;
+///
+/// let mut world = World::new();
+///
+/// // Create a fire particle emitter
+/// world.spawn((
+///     Transform::from_xyz(0.0, 0.0, 0.0),
+///     ParticleEmitter::new("fire_emitter"),
+/// ));
+/// ```
+#[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ParticleEmitter {
+    /// Unique identifier for the particle emitter configuration.
+    pub id: String,
+}
+
+impl ParticleEmitter {
+    /// Creates a new particle emitter with the given identifier.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self { id: id.into() }
+    }
+
+    /// Gets the emitter identifier.
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+}
+
+impl From<&str> for ParticleEmitter {
+    fn from(id: &str) -> Self {
+        Self::new(id)
+    }
+}
+
+impl From<String> for ParticleEmitter {
+    fn from(id: String) -> Self {
+        Self { id }
     }
 }
 

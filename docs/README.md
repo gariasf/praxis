@@ -15,6 +15,7 @@ Task-oriented tutorials for implementing features:
 - [HDR and Tone Mapping](guides/hdr-and-tonemapping.md) - High dynamic range rendering
 - [Shadows](guides/shadows.md) - Cascaded shadow maps with PCF
 - [Post-Processing](guides/post-processing.md) - Bloom, color grading, effects
+- [Particle System](particle_system.md) - GPU-accelerated particles with forces and effects
 - [Animation](animation_system.md) - Skeletal animation and blending
 - [Audio](audio_system.md) - Spatial audio with Kira
 
@@ -51,6 +52,7 @@ Run examples to see features in action:
 cargo run --example deferred_demo      # Deferred rendering
 cargo run --example hdr_demo           # HDR with tone mapping
 cargo run --example shadow_demo        # Cascaded shadow maps
+cargo run --example particles_demo     # Particle system effects
 cargo run --example physics_demo       # Rapier3D physics
 cargo run --example audio_demo         # Spatial audio
 cargo run --example editor_demo        # Full editor interface
