@@ -344,6 +344,77 @@ pub enum ComponentData {
     Transform(SerializableTransform),
     Name(String),
     Parent(SerializableEntity),
+    MeshHandle(String),
+    MaterialHandle(String),
+    MaterialProperties(SerializableMaterialProperties),
+    RigidBody(SerializableRigidBody),
+    Collider(SerializableCollider),
+    PhysicsVelocity(SerializablePhysicsVelocity),
+    Mass(SerializableMass),
+    AudioSource(SerializableAudioSource),
+    PerspectiveProjection(SerializablePerspectiveProjection),
+}
+
+/// Serializable material properties.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct SerializableMaterialProperties {
+    pub base_color: [f32; 4],
+    pub metallic: f32,
+    pub roughness: f32,
+    pub emissive_strength: f32,
+}
+
+/// Serializable rigid body type.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum SerializableRigidBody {
+    Dynamic,
+    Static,
+    Kinematic,
+}
+
+/// Serializable collider shape.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SerializableCollider {
+    Cuboid { hx: f32, hy: f32, hz: f32 },
+    Sphere { radius: f32 },
+    CapsuleY { half_height: f32, radius: f32 },
+    CapsuleX { half_height: f32, radius: f32 },
+    CapsuleZ { half_height: f32, radius: f32 },
+    CylinderY { half_height: f32, radius: f32 },
+}
+
+/// Serializable physics velocity.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct SerializablePhysicsVelocity {
+    pub linear: [f32; 3],
+    pub angular: [f32; 3],
+}
+
+/// Serializable mass properties.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct SerializableMass {
+    pub mass: f32,
+    pub angular_inertia: f32,
+}
+
+/// Serializable audio source.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SerializableAudioSource {
+    pub path: String,
+    pub volume: f32,
+    pub spatial: bool,
+    pub looping: bool,
+    pub max_distance: f32,
+    pub reference_distance: f32,
+}
+
+/// Serializable perspective camera.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct SerializablePerspectiveProjection {
+    pub fov: f32,
+    pub aspect_ratio: f32,
+    pub near: f32,
+    pub far: f32,
 }
 
 /// Command for creating a new entity.
@@ -377,6 +448,11 @@ impl CreateEntityCommand {
 
 impl EditorCommand for CreateEntityCommand {
     fn execute(&mut self, world: &mut World) -> Result<()> {
+        use praxis_audio::AudioSource;
+        use praxis_ecs::{MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection};
+        use praxis_graphics::MaterialProperties;
+        use praxis_physics::{Collider, Mass, PhysicsVelocity, RigidBody};
+
         let mut entity_mut = world.spawn_empty();
         let entity = entity_mut.id();
 
@@ -391,6 +467,65 @@ impl EditorCommand for CreateEntityCommand {
                 ComponentData::Parent(parent) => {
                     let parent_entity: Entity = (*parent).into();
                     entity_mut.insert(Parent(parent_entity));
+                }
+                ComponentData::MeshHandle(id) => {
+                    entity_mut.insert(MeshHandle::new(id.clone()));
+                }
+                ComponentData::MaterialHandle(id) => {
+                    entity_mut.insert(MaterialHandle::new(id.clone()));
+                }
+                ComponentData::MaterialProperties(props) => {
+                    entity_mut.insert(MaterialPropertiesComponent(
+                        MaterialProperties::new()
+                            .with_base_color(props.base_color)
+                            .with_metallic(props.metallic)
+                            .with_roughness(props.roughness)
+                            .with_emissive_strength(props.emissive_strength)
+                    ));
+                }
+                ComponentData::RigidBody(rb) => {
+                    entity_mut.insert(match rb {
+                        SerializableRigidBody::Dynamic => RigidBody::Dynamic,
+                        SerializableRigidBody::Static => RigidBody::Static,
+                        SerializableRigidBody::Kinematic => RigidBody::Kinematic,
+                    });
+                }
+                ComponentData::Collider(col) => {
+                    entity_mut.insert(match col {
+                        SerializableCollider::Cuboid { hx, hy, hz } => Collider::cuboid(*hx, *hy, *hz),
+                        SerializableCollider::Sphere { radius } => Collider::sphere(*radius),
+                        SerializableCollider::CapsuleY { half_height, radius } => Collider::capsule_y(*half_height, *radius),
+                        SerializableCollider::CapsuleX { half_height, radius } => Collider::capsule_x(*half_height, *radius),
+                        SerializableCollider::CapsuleZ { half_height, radius } => Collider::capsule_z(*half_height, *radius),
+                        SerializableCollider::CylinderY { half_height, radius } => Collider::cylinder_y(*half_height, *radius),
+                    });
+                }
+                ComponentData::PhysicsVelocity(vel) => {
+                    entity_mut.insert(PhysicsVelocity::new(
+                        Vec3::from_array(vel.linear),
+                        Vec3::from_array(vel.angular),
+                    ));
+                }
+                ComponentData::Mass(mass) => {
+                    entity_mut.insert(Mass::with_inertia(mass.mass, mass.angular_inertia));
+                }
+                ComponentData::AudioSource(audio) => {
+                    entity_mut.insert(
+                        AudioSource::new(audio.path.clone())
+                            .with_volume(audio.volume)
+                            .with_spatial(audio.spatial)
+                            .with_looping(audio.looping)
+                            .with_max_distance(audio.max_distance)
+                            .with_reference_distance(audio.reference_distance),
+                    );
+                }
+                ComponentData::PerspectiveProjection(cam) => {
+                    entity_mut.insert(PerspectiveProjection::new(
+                        cam.fov,
+                        cam.aspect_ratio,
+                        cam.near,
+                        cam.far,
+                    ));
                 }
             }
         }
@@ -506,6 +641,11 @@ impl EditorCommand for DeleteEntityCommand {
     }
 
     fn undo(&mut self, world: &mut World) -> Result<()> {
+        use praxis_audio::AudioSource;
+        use praxis_ecs::{MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection};
+        use praxis_graphics::MaterialProperties;
+        use praxis_physics::{Collider, Mass, PhysicsVelocity, RigidBody};
+
         let mut entity_mut = world.spawn_empty();
 
         for component in &self.stored_components {
@@ -519,6 +659,65 @@ impl EditorCommand for DeleteEntityCommand {
                 ComponentData::Parent(parent) => {
                     let parent_entity: Entity = (*parent).into();
                     entity_mut.insert(Parent(parent_entity));
+                }
+                ComponentData::MeshHandle(id) => {
+                    entity_mut.insert(MeshHandle::new(id.clone()));
+                }
+                ComponentData::MaterialHandle(id) => {
+                    entity_mut.insert(MaterialHandle::new(id.clone()));
+                }
+                ComponentData::MaterialProperties(props) => {
+                    entity_mut.insert(MaterialPropertiesComponent(
+                        MaterialProperties::new()
+                            .with_base_color(props.base_color)
+                            .with_metallic(props.metallic)
+                            .with_roughness(props.roughness)
+                            .with_emissive_strength(props.emissive_strength)
+                    ));
+                }
+                ComponentData::RigidBody(rb) => {
+                    entity_mut.insert(match rb {
+                        SerializableRigidBody::Dynamic => RigidBody::Dynamic,
+                        SerializableRigidBody::Static => RigidBody::Static,
+                        SerializableRigidBody::Kinematic => RigidBody::Kinematic,
+                    });
+                }
+                ComponentData::Collider(col) => {
+                    entity_mut.insert(match col {
+                        SerializableCollider::Cuboid { hx, hy, hz } => Collider::cuboid(*hx, *hy, *hz),
+                        SerializableCollider::Sphere { radius } => Collider::sphere(*radius),
+                        SerializableCollider::CapsuleY { half_height, radius } => Collider::capsule_y(*half_height, *radius),
+                        SerializableCollider::CapsuleX { half_height, radius } => Collider::capsule_x(*half_height, *radius),
+                        SerializableCollider::CapsuleZ { half_height, radius } => Collider::capsule_z(*half_height, *radius),
+                        SerializableCollider::CylinderY { half_height, radius } => Collider::cylinder_y(*half_height, *radius),
+                    });
+                }
+                ComponentData::PhysicsVelocity(vel) => {
+                    entity_mut.insert(PhysicsVelocity::new(
+                        Vec3::from_array(vel.linear),
+                        Vec3::from_array(vel.angular),
+                    ));
+                }
+                ComponentData::Mass(mass) => {
+                    entity_mut.insert(Mass::with_inertia(mass.mass, mass.angular_inertia));
+                }
+                ComponentData::AudioSource(audio) => {
+                    entity_mut.insert(
+                        AudioSource::new(audio.path.clone())
+                            .with_volume(audio.volume)
+                            .with_spatial(audio.spatial)
+                            .with_looping(audio.looping)
+                            .with_max_distance(audio.max_distance)
+                            .with_reference_distance(audio.reference_distance),
+                    );
+                }
+                ComponentData::PerspectiveProjection(cam) => {
+                    entity_mut.insert(PerspectiveProjection::new(
+                        cam.fov,
+                        cam.aspect_ratio,
+                        cam.near,
+                        cam.far,
+                    ));
                 }
             }
         }
@@ -578,6 +777,11 @@ impl AddComponentCommand {
 
 impl EditorCommand for AddComponentCommand {
     fn execute(&mut self, world: &mut World) -> Result<()> {
+        use praxis_audio::AudioSource;
+        use praxis_ecs::{MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection};
+        use praxis_graphics::MaterialProperties;
+        use praxis_physics::{Collider, Mass, PhysicsVelocity, RigidBody};
+
         let entity: Entity = self.entity.into();
         if let Some(mut entity_mut) = world.get_entity_mut(entity) {
             match &self.component {
@@ -591,6 +795,65 @@ impl EditorCommand for AddComponentCommand {
                     let parent_entity: Entity = (*parent).into();
                     entity_mut.insert(Parent(parent_entity));
                 }
+                ComponentData::MeshHandle(id) => {
+                    entity_mut.insert(MeshHandle::new(id.clone()));
+                }
+                ComponentData::MaterialHandle(id) => {
+                    entity_mut.insert(MaterialHandle::new(id.clone()));
+                }
+                ComponentData::MaterialProperties(props) => {
+                    entity_mut.insert(MaterialPropertiesComponent(
+                        MaterialProperties::new()
+                            .with_base_color(props.base_color)
+                            .with_metallic(props.metallic)
+                            .with_roughness(props.roughness)
+                            .with_emissive_strength(props.emissive_strength)
+                    ));
+                }
+                ComponentData::RigidBody(rb) => {
+                    entity_mut.insert(match rb {
+                        SerializableRigidBody::Dynamic => RigidBody::Dynamic,
+                        SerializableRigidBody::Static => RigidBody::Static,
+                        SerializableRigidBody::Kinematic => RigidBody::Kinematic,
+                    });
+                }
+                ComponentData::Collider(col) => {
+                    entity_mut.insert(match col {
+                        SerializableCollider::Cuboid { hx, hy, hz } => Collider::cuboid(*hx, *hy, *hz),
+                        SerializableCollider::Sphere { radius } => Collider::sphere(*radius),
+                        SerializableCollider::CapsuleY { half_height, radius } => Collider::capsule_y(*half_height, *radius),
+                        SerializableCollider::CapsuleX { half_height, radius } => Collider::capsule_x(*half_height, *radius),
+                        SerializableCollider::CapsuleZ { half_height, radius } => Collider::capsule_z(*half_height, *radius),
+                        SerializableCollider::CylinderY { half_height, radius } => Collider::cylinder_y(*half_height, *radius),
+                    });
+                }
+                ComponentData::PhysicsVelocity(vel) => {
+                    entity_mut.insert(PhysicsVelocity::new(
+                        Vec3::from_array(vel.linear),
+                        Vec3::from_array(vel.angular),
+                    ));
+                }
+                ComponentData::Mass(mass) => {
+                    entity_mut.insert(Mass::with_inertia(mass.mass, mass.angular_inertia));
+                }
+                ComponentData::AudioSource(audio) => {
+                    entity_mut.insert(
+                        AudioSource::new(audio.path.clone())
+                            .with_volume(audio.volume)
+                            .with_spatial(audio.spatial)
+                            .with_looping(audio.looping)
+                            .with_max_distance(audio.max_distance)
+                            .with_reference_distance(audio.reference_distance),
+                    );
+                }
+                ComponentData::PerspectiveProjection(cam) => {
+                    entity_mut.insert(PerspectiveProjection::new(
+                        cam.fov,
+                        cam.aspect_ratio,
+                        cam.near,
+                        cam.far,
+                    ));
+                }
             }
             self.executed = true;
             Ok(())
@@ -600,6 +863,10 @@ impl EditorCommand for AddComponentCommand {
     }
 
     fn undo(&mut self, world: &mut World) -> Result<()> {
+        use praxis_audio::AudioSource;
+        use praxis_ecs::{MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection};
+        use praxis_physics::{Collider, Mass, PhysicsVelocity, RigidBody};
+
         let entity: Entity = self.entity.into();
         if let Some(mut entity_mut) = world.get_entity_mut(entity) {
             match &self.component {
@@ -611,6 +878,33 @@ impl EditorCommand for AddComponentCommand {
                 }
                 ComponentData::Parent(_) => {
                     entity_mut.remove::<Parent>();
+                }
+                ComponentData::MeshHandle(_) => {
+                    entity_mut.remove::<MeshHandle>();
+                }
+                ComponentData::MaterialHandle(_) => {
+                    entity_mut.remove::<MaterialHandle>();
+                }
+                ComponentData::MaterialProperties(_) => {
+                    entity_mut.remove::<MaterialPropertiesComponent>();
+                }
+                ComponentData::RigidBody(_) => {
+                    entity_mut.remove::<RigidBody>();
+                }
+                ComponentData::Collider(_) => {
+                    entity_mut.remove::<Collider>();
+                }
+                ComponentData::PhysicsVelocity(_) => {
+                    entity_mut.remove::<PhysicsVelocity>();
+                }
+                ComponentData::Mass(_) => {
+                    entity_mut.remove::<Mass>();
+                }
+                ComponentData::AudioSource(_) => {
+                    entity_mut.remove::<AudioSource>();
+                }
+                ComponentData::PerspectiveProjection(_) => {
+                    entity_mut.remove::<PerspectiveProjection>();
                 }
             }
             self.executed = false;
@@ -626,6 +920,15 @@ impl EditorCommand for AddComponentCommand {
             ComponentData::Transform(_) => "Transform",
             ComponentData::Name(_) => "Name",
             ComponentData::Parent(_) => "Parent",
+            ComponentData::MeshHandle(_) => "MeshHandle",
+            ComponentData::MaterialHandle(_) => "MaterialHandle",
+            ComponentData::MaterialProperties(_) => "MaterialProperties",
+            ComponentData::RigidBody(_) => "RigidBody",
+            ComponentData::Collider(_) => "Collider",
+            ComponentData::PhysicsVelocity(_) => "PhysicsVelocity",
+            ComponentData::Mass(_) => "Mass",
+            ComponentData::AudioSource(_) => "AudioSource",
+            ComponentData::PerspectiveProjection(_) => "PerspectiveProjection",
         };
         format!("Add {} to {:?}", component_name, entity)
     }
@@ -667,6 +970,10 @@ impl RemoveComponentCommand {
 
 impl EditorCommand for RemoveComponentCommand {
     fn execute(&mut self, world: &mut World) -> Result<()> {
+        use praxis_audio::AudioSource;
+        use praxis_ecs::{MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection};
+        use praxis_physics::{Collider, Mass, PhysicsVelocity, RigidBody};
+
         let entity: Entity = self.entity.into();
         if let Some(mut entity_mut) = world.get_entity_mut(entity) {
             match &self.component {
@@ -679,6 +986,33 @@ impl EditorCommand for RemoveComponentCommand {
                 ComponentData::Parent(_) => {
                     entity_mut.remove::<Parent>();
                 }
+                ComponentData::MeshHandle(_) => {
+                    entity_mut.remove::<MeshHandle>();
+                }
+                ComponentData::MaterialHandle(_) => {
+                    entity_mut.remove::<MaterialHandle>();
+                }
+                ComponentData::MaterialProperties(_) => {
+                    entity_mut.remove::<MaterialPropertiesComponent>();
+                }
+                ComponentData::RigidBody(_) => {
+                    entity_mut.remove::<RigidBody>();
+                }
+                ComponentData::Collider(_) => {
+                    entity_mut.remove::<Collider>();
+                }
+                ComponentData::PhysicsVelocity(_) => {
+                    entity_mut.remove::<PhysicsVelocity>();
+                }
+                ComponentData::Mass(_) => {
+                    entity_mut.remove::<Mass>();
+                }
+                ComponentData::AudioSource(_) => {
+                    entity_mut.remove::<AudioSource>();
+                }
+                ComponentData::PerspectiveProjection(_) => {
+                    entity_mut.remove::<PerspectiveProjection>();
+                }
             }
             self.executed = true;
             Ok(())
@@ -688,6 +1022,11 @@ impl EditorCommand for RemoveComponentCommand {
     }
 
     fn undo(&mut self, world: &mut World) -> Result<()> {
+        use praxis_audio::AudioSource;
+        use praxis_ecs::{MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection};
+        use praxis_graphics::MaterialProperties;
+        use praxis_physics::{Collider, Mass, PhysicsVelocity, RigidBody};
+
         let entity: Entity = self.entity.into();
         if let Some(mut entity_mut) = world.get_entity_mut(entity) {
             match &self.component {
@@ -700,6 +1039,65 @@ impl EditorCommand for RemoveComponentCommand {
                 ComponentData::Parent(parent) => {
                     let parent_entity: Entity = (*parent).into();
                     entity_mut.insert(Parent(parent_entity));
+                }
+                ComponentData::MeshHandle(id) => {
+                    entity_mut.insert(MeshHandle::new(id.clone()));
+                }
+                ComponentData::MaterialHandle(id) => {
+                    entity_mut.insert(MaterialHandle::new(id.clone()));
+                }
+                ComponentData::MaterialProperties(props) => {
+                    entity_mut.insert(MaterialPropertiesComponent(
+                        MaterialProperties::new()
+                            .with_base_color(props.base_color)
+                            .with_metallic(props.metallic)
+                            .with_roughness(props.roughness)
+                            .with_emissive_strength(props.emissive_strength)
+                    ));
+                }
+                ComponentData::RigidBody(rb) => {
+                    entity_mut.insert(match rb {
+                        SerializableRigidBody::Dynamic => RigidBody::Dynamic,
+                        SerializableRigidBody::Static => RigidBody::Static,
+                        SerializableRigidBody::Kinematic => RigidBody::Kinematic,
+                    });
+                }
+                ComponentData::Collider(col) => {
+                    entity_mut.insert(match col {
+                        SerializableCollider::Cuboid { hx, hy, hz } => Collider::cuboid(*hx, *hy, *hz),
+                        SerializableCollider::Sphere { radius } => Collider::sphere(*radius),
+                        SerializableCollider::CapsuleY { half_height, radius } => Collider::capsule_y(*half_height, *radius),
+                        SerializableCollider::CapsuleX { half_height, radius } => Collider::capsule_x(*half_height, *radius),
+                        SerializableCollider::CapsuleZ { half_height, radius } => Collider::capsule_z(*half_height, *radius),
+                        SerializableCollider::CylinderY { half_height, radius } => Collider::cylinder_y(*half_height, *radius),
+                    });
+                }
+                ComponentData::PhysicsVelocity(vel) => {
+                    entity_mut.insert(PhysicsVelocity::new(
+                        Vec3::from_array(vel.linear),
+                        Vec3::from_array(vel.angular),
+                    ));
+                }
+                ComponentData::Mass(mass) => {
+                    entity_mut.insert(Mass::with_inertia(mass.mass, mass.angular_inertia));
+                }
+                ComponentData::AudioSource(audio) => {
+                    entity_mut.insert(
+                        AudioSource::new(audio.path.clone())
+                            .with_volume(audio.volume)
+                            .with_spatial(audio.spatial)
+                            .with_looping(audio.looping)
+                            .with_max_distance(audio.max_distance)
+                            .with_reference_distance(audio.reference_distance),
+                    );
+                }
+                ComponentData::PerspectiveProjection(cam) => {
+                    entity_mut.insert(PerspectiveProjection::new(
+                        cam.fov,
+                        cam.aspect_ratio,
+                        cam.near,
+                        cam.far,
+                    ));
                 }
             }
             self.executed = false;
@@ -715,6 +1113,15 @@ impl EditorCommand for RemoveComponentCommand {
             ComponentData::Transform(_) => "Transform",
             ComponentData::Name(_) => "Name",
             ComponentData::Parent(_) => "Parent",
+            ComponentData::MeshHandle(_) => "MeshHandle",
+            ComponentData::MaterialHandle(_) => "MaterialHandle",
+            ComponentData::MaterialProperties(_) => "MaterialProperties",
+            ComponentData::RigidBody(_) => "RigidBody",
+            ComponentData::Collider(_) => "Collider",
+            ComponentData::PhysicsVelocity(_) => "PhysicsVelocity",
+            ComponentData::Mass(_) => "Mass",
+            ComponentData::AudioSource(_) => "AudioSource",
+            ComponentData::PerspectiveProjection(_) => "PerspectiveProjection",
         };
         format!("Remove {} from {:?}", component_name, entity)
     }
@@ -920,9 +1327,9 @@ impl EditorCommand for CompositeCommand {
 /// Commands can be serialized to/from RON for persistence.
 pub struct CommandHistory {
     /// Stack of commands that can be undone.
-    undo_stack: VecDeque<Box<dyn EditorCommand>>,
+    pub(crate) undo_stack: VecDeque<Box<dyn EditorCommand>>,
     /// Stack of commands that can be redone.
-    redo_stack: VecDeque<Box<dyn EditorCommand>>,
+    pub(crate) redo_stack: VecDeque<Box<dyn EditorCommand>>,
     /// Maximum number of commands to keep in history.
     max_history_size: usize,
 }

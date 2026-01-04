@@ -271,8 +271,10 @@ pub use toolbar::{
 };
 pub use undo::{
     AddComponentCommand, CommandHistory, ComponentData, CompositeCommand, CreateEntityCommand,
-    DeleteEntityCommand, EditorCommand, RemoveComponentCommand, SerializableCommand,
-    SerializableEntity, SerializableTransform, SetParentCommand, TransformEditCommand,
+    DeleteEntityCommand, EditorCommand, RemoveComponentCommand, SerializableAudioSource,
+    SerializableCollider, SerializableCommand, SerializableEntity, SerializableMass,
+    SerializableMaterialProperties, SerializablePerspectiveProjection, SerializablePhysicsVelocity,
+    SerializableRigidBody, SerializableTransform, SetParentCommand, TransformEditCommand,
     UndoRedoSystem,
 };
 

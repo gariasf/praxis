@@ -435,7 +435,13 @@ impl TabViewer for EditorTabViewer<'_> {
                     self.hierarchy_panel.ui(ui);
                 }
             }
-            EditorTab::Inspector => self.inspector_panel.ui(ui),
+            EditorTab::Inspector => {
+                if let Some(world) = &mut self.world {
+                    self.inspector_panel.ui_with_world(ui, world);
+                } else {
+                    self.inspector_panel.ui(ui);
+                }
+            }
             EditorTab::Console => self.console_panel.ui(ui),
             EditorTab::Assets => self.assets_panel.ui(ui),
         }
