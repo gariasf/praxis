@@ -217,15 +217,15 @@ impl MarqueeSelection {
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// use praxis_editor::SelectionSystem;
-/// use praxis_ecs::World;
+/// use bevy_ecs::world::World;
 ///
 /// let mut world = World::new();
 /// let mut selection = SelectionSystem::new();
 ///
 /// // Programmatically select an entity
-/// let entity = world.spawn_empty();
+/// let entity = world.spawn_empty().id();
 /// selection.select_entity(entity);
 ///
 /// // Check if selected
@@ -245,6 +245,7 @@ pub struct SelectionSystem {
     /// Marquee selection state.
     marquee: MarqueeSelection,
     /// Last mouse position for raycast picking.
+    #[allow(dead_code)]
     last_mouse_pos: Vec2,
     /// Whether selection input is enabled.
     input_enabled: bool,

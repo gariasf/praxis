@@ -6,10 +6,11 @@
 //! - Saving and loading entire command histories
 //! - Round-trip serialization testing
 
-use praxis_ecs::{Transform, World};
+use bevy_ecs::world::World;
+use praxis_ecs::Transform;
 use praxis_editor::{
-    CommandHistory, ComponentData, CompositeCommand, CreateEntityCommand, SerializableCommand,
-    TransformEditCommand,
+    CommandHistory, ComponentData, CompositeCommand, CreateEntityCommand, EditorCommand,
+    SerializableCommand, TransformEditCommand,
 };
 
 fn main() {

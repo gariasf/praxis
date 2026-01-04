@@ -85,6 +85,7 @@ pub struct PlayModeSystem {
     /// Scene snapshot taken when entering play mode
     snapshot: Option<SceneSnapshot>,
     /// Scene loader for serialization/deserialization
+    #[allow(dead_code)]
     scene_loader: SceneLoader,
     /// Scene manager for spawning/despawning
     scene_manager: SceneManager,
@@ -599,7 +600,7 @@ mod tests {
         let mut system = PlayModeSystem::new();
 
         // Add test entity
-        let original_entity = world.spawn((
+        let _original_entity = world.spawn((
             Name::new("OriginalEntity"),
             Transform::from_xyz(5.0, 10.0, 15.0),
             GlobalTransform::default(),

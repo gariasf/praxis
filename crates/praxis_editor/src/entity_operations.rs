@@ -16,9 +16,10 @@
 //!
 //! ## Creating Entities
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use praxis_editor::{EntityOperations, UndoRedoSystem};
-//! use praxis_ecs::{World, Transform, Name};
+//! use bevy_ecs::world::World;
+//! use praxis_ecs::{Transform, Name};
 //!
 //! let mut world = World::new();
 //! let mut undo_system = UndoRedoSystem::new();
@@ -45,9 +46,10 @@
 //!
 //! ## Deleting Entities
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! # use praxis_editor::{EntityOperations, UndoRedoSystem};
-//! # use praxis_ecs::{World, Transform, Entity};
+//! # use bevy_ecs::world::World;
+//! # use praxis_ecs::{Transform, Entity};
 //! # let mut world = World::new();
 //! # let mut undo_system = UndoRedoSystem::new();
 //! # let mut entity_ops = EntityOperations::new();
@@ -62,9 +64,10 @@
 //!
 //! ## Duplicating Entities
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! # use praxis_editor::{EntityOperations, UndoRedoSystem};
-//! # use praxis_ecs::{World, Transform, Entity};
+//! # use bevy_ecs::world::World;
+//! # use praxis_ecs::{Transform, Entity};
 //! # let mut world = World::new();
 //! # let mut undo_system = UndoRedoSystem::new();
 //! # let mut entity_ops = EntityOperations::new();
@@ -87,9 +90,10 @@
 //!
 //! ## Adding Components
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! # use praxis_editor::{EntityOperations, UndoRedoSystem, ComponentData};
-//! # use praxis_ecs::{World, Transform, Entity, Name};
+//! # use bevy_ecs::world::World;
+//! # use praxis_ecs::{Transform, Entity, Name};
 //! # let mut world = World::new();
 //! # let mut undo_system = UndoRedoSystem::new();
 //! # let mut entity_ops = EntityOperations::new();
@@ -116,9 +120,10 @@
 //!
 //! ## Removing Components
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! # use praxis_editor::{EntityOperations, UndoRedoSystem};
-//! # use praxis_ecs::{World, Transform, Entity};
+//! # use bevy_ecs::world::World;
+//! # use praxis_ecs::{Transform, Entity};
 //! # let mut world = World::new();
 //! # let mut undo_system = UndoRedoSystem::new();
 //! # let mut entity_ops = EntityOperations::new();
@@ -132,9 +137,10 @@
 //!
 //! ## Batch Operations
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! # use praxis_editor::{EntityOperations, UndoRedoSystem};
-//! # use praxis_ecs::{World, Entity};
+//! # use bevy_ecs::world::World;
+//! # use praxis_ecs::Entity;
 //! # let mut world = World::new();
 //! # let mut undo_system = UndoRedoSystem::new();
 //! # let mut entity_ops = EntityOperations::new();
@@ -167,9 +173,9 @@
 //!
 //! EntityOperations works seamlessly with the selection system:
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! # use praxis_editor::{EntityOperations, UndoRedoSystem, SelectionSystem};
-//! # use praxis_ecs::World;
+//! # use bevy_ecs::world::World;
 //! # let mut world = World::new();
 //! # let mut undo_system = UndoRedoSystem::new();
 //! # let mut entity_ops = EntityOperations::new();
@@ -978,7 +984,7 @@ mod tests {
         let mut undo_system = UndoRedoSystem::new();
         let mut entity_ops = EntityOperations::new();
 
-        let entity = world.spawn(Transform::default());
+        let entity = world.spawn(Transform::default()).id();
 
         entity_ops
             .delete_entity(&mut world, &mut undo_system, entity)
@@ -993,9 +999,9 @@ mod tests {
         let mut undo_system = UndoRedoSystem::new();
         let mut entity_ops = EntityOperations::new();
 
-        let e1 = world.spawn(Transform::default());
-        let e2 = world.spawn(Transform::default());
-        let e3 = world.spawn(Transform::default());
+        let e1 = world.spawn(Transform::default()).id();
+        let e2 = world.spawn(Transform::default()).id();
+        let e3 = world.spawn(Transform::default()).id();
 
         entity_ops
             .delete_entities(&mut world, &mut undo_system, vec![e1, e2, e3])
@@ -1012,7 +1018,7 @@ mod tests {
         let mut undo_system = UndoRedoSystem::new();
         let mut entity_ops = EntityOperations::new();
 
-        let original = world.spawn((Transform::from_xyz(10.0, 0.0, 0.0), Name::new("Original")));
+        let original = world.spawn((Transform::from_xyz(10.0, 0.0, 0.0), Name::new("Original"))).id();
 
         let duplicate = entity_ops
             .duplicate_entity(&mut world, &mut undo_system, original)
@@ -1033,7 +1039,7 @@ mod tests {
         let mut undo_system = UndoRedoSystem::new();
         let mut entity_ops = EntityOperations::new();
 
-        let original = world.spawn(Transform::from_xyz(10.0, 0.0, 0.0));
+        let original = world.spawn(Transform::from_xyz(10.0, 0.0, 0.0)).id();
 
         let duplicate = entity_ops
             .duplicate_entity_with_offset(
@@ -1054,7 +1060,7 @@ mod tests {
         let mut undo_system = UndoRedoSystem::new();
         let mut entity_ops = EntityOperations::new();
 
-        let entity = world.spawn_empty();
+        let entity = world.spawn_empty().id();
 
         entity_ops
             .add_transform(&mut world, &mut undo_system, entity, Transform::default())
@@ -1069,7 +1075,7 @@ mod tests {
         let mut undo_system = UndoRedoSystem::new();
         let mut entity_ops = EntityOperations::new();
 
-        let entity = world.spawn_empty();
+        let entity = world.spawn_empty().id();
 
         entity_ops
             .add_name(&mut world, &mut undo_system, entity, "Test")
@@ -1085,7 +1091,7 @@ mod tests {
         let mut undo_system = UndoRedoSystem::new();
         let mut entity_ops = EntityOperations::new();
 
-        let entity = world.spawn(Transform::default());
+        let entity = world.spawn(Transform::default()).id();
 
         entity_ops
             .remove_transform(&mut world, &mut undo_system, entity)

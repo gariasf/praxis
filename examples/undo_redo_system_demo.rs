@@ -8,11 +8,9 @@
 //! - Integration with editor operations
 //! - Visual feedback for command state
 
-use praxis_ecs::{Transform, World};
-use praxis_editor::{
-    CommandHistory, ComponentData, CreateEntityCommand, TransformEditCommand, UndoRedoSystem,
-};
-use praxis_math::Vec3;
+use bevy_ecs::world::World;
+use praxis_ecs::Transform;
+use praxis_editor::{CommandHistory, CreateEntityCommand, TransformEditCommand, UndoRedoSystem};
 
 fn main() {
     println!("=== UndoRedoSystem Complete Demo ===\n");

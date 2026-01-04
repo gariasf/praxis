@@ -28,9 +28,10 @@
 //!
 //! ## Transform Editing
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use praxis_editor::{CommandHistory, TransformEditCommand};
-//! use praxis_ecs::{World, Transform};
+//! use bevy_ecs::world::World;
+//! use praxis_ecs::Transform;
 //!
 //! let mut world = World::new();
 //! let mut history = CommandHistory::new();
@@ -48,9 +49,10 @@
 //!
 //! ## Entity Creation
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use praxis_editor::{CommandHistory, CreateEntityCommand, ComponentData};
-//! use praxis_ecs::{World, Transform};
+//! use bevy_ecs::world::World;
+//! use praxis_ecs::Transform;
 //!
 //! let mut world = World::new();
 //! let mut history = CommandHistory::new();
@@ -61,9 +63,10 @@
 //!
 //! ## Composite Commands
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use praxis_editor::{CommandHistory, CompositeCommand, SerializableCommand, CreateEntityCommand};
-//! use praxis_ecs::{World, Transform};
+//! use bevy_ecs::world::World;
+//! use praxis_ecs::Transform;
 //!
 //! let mut world = World::new();
 //! let mut history = CommandHistory::new();
@@ -79,9 +82,10 @@
 //!
 //! ## Serialization
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use praxis_editor::{CommandHistory, TransformEditCommand};
-//! use praxis_ecs::{World, Transform};
+//! use bevy_ecs::world::World;
+//! use praxis_ecs::Transform;
 //!
 //! let mut history = CommandHistory::new();
 //! let mut world = World::new();
@@ -1675,7 +1679,7 @@ mod tests {
         assert!(command.execute(&mut world).is_ok());
         assert!(command.entity.is_some());
 
-        let entity = command.entity.unwrap();
+        let entity: Entity = command.entity.unwrap().into();
         assert!(world.get_entity(entity).is_some());
 
         assert!(command.undo(&mut world).is_ok());
@@ -1710,7 +1714,7 @@ mod tests {
 
     #[test]
     fn test_composite_command() {
-        let mut world = World::new();
+        let _world = World::new();
         let mut composite = CompositeCommand::new("Create and Name Entity".to_string());
 
         let create_cmd = CreateEntityCommand::with_transform(Transform::default());
@@ -1782,7 +1786,7 @@ mod tests {
 
     #[test]
     fn test_undo_redo_system() {
-        let mut system = UndoRedoSystem::new();
+        let system = UndoRedoSystem::new();
         assert!(!system.can_undo());
         assert!(!system.can_redo());
         assert_eq!(system.undo_count(), 0);

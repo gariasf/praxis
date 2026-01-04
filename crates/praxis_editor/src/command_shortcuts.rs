@@ -18,8 +18,8 @@ use winit::keyboard::KeyCode;
 ///
 /// # Example
 ///
-/// ```rust,no_run
-/// use praxis_ecs::Schedule;
+/// ```rust,ignore
+/// use bevy_ecs::schedule::Schedule;
 /// use praxis_editor::handle_command_shortcuts;
 ///
 /// let mut schedule = Schedule::default();

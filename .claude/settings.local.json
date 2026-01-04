@@ -18,7 +18,9 @@
       "Bash(cargo doc:*)",
       "Bash(for:*)",
       "Bash(do echo \"=== $example ===\")",
-      "Bash(done)"
+      "Bash(done)",
+      "mcp__filesystem__read_text_file",
+      "Bash(xargs:*)"
     ],
     "deny": [],
     "ask": []
