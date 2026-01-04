@@ -239,9 +239,10 @@ impl Gizmo {
         closest_axis
     }
 
-    /// Gets the lines to render for this gizmo.
+    /// Gets the lines to render for this gizmo as tuples.
     ///
     /// Returns a list of (start, end, color) tuples for rendering.
+    /// This can be used with `praxis_graphics::create_gizmo_lines()` to create a `LineBatch`.
     pub fn get_lines(&self, mode: GizmoMode, space: GizmoSpace) -> Vec<(Vec3, Vec3, Vec3)> {
         let rotation = if space == GizmoSpace::Local {
             self.rotation

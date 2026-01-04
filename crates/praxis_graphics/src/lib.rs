@@ -380,6 +380,7 @@ pub mod deferred;
 mod device;
 pub mod hdr;
 pub mod lighting;
+pub mod line_renderer;
 pub mod material;
 pub mod mesh;
 mod pipeline;
@@ -392,6 +393,7 @@ pub mod ssao;
 pub mod texture;
 pub mod uniform_buffer;
 mod vertex;
+pub mod visual_feedback;
 
 use crate::{device::VulkanDevice, pipeline::create_simple_pipeline_3d};
 use praxis_math::Mat4;
@@ -1575,6 +1577,7 @@ pub use lighting::{
     DirectionalLightData, LightingUniformBuffer, LightingUniforms, PointLightData,
     MAX_DIRECTIONAL_LIGHTS, MAX_POINT_LIGHTS,
 };
+pub use line_renderer::{Line, LineBatch, LineRenderer, LineVertex};
 pub use material::{Material, MaterialManager, MaterialProperties};
 pub use mesh::{GpuMesh, MeshData};
 pub use post_process::{
@@ -1592,6 +1595,10 @@ pub use ssao::{SsaoConfig, SsaoRenderer};
 pub use texture::{Cubemap, CubemapFace, Texture, TextureManager};
 pub use uniform_buffer::{DynamicUniformBuffer, ModelUniforms, ViewProjectionUniforms};
 pub use vertex::Vertex3D;
+pub use visual_feedback::{
+    create_axis_indicator, create_bounding_box, create_grid, create_selection_outline,
+    AxisIndicatorConfig, GridConfig,
+};
 
 pub mod environment_probe;
 
