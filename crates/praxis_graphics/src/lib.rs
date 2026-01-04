@@ -889,6 +889,20 @@ impl RenderContext {
         &mut self.lighting_buffer
     }
 
+    /// Gets a reference to the memory allocator.
+    ///
+    /// Use this for allocating GPU resources like buffers and images.
+    pub fn memory_allocator(&self) -> &Arc<StandardMemoryAllocator> {
+        &self.memory_allocator
+    }
+
+    /// Gets a reference to the command buffer allocator.
+    ///
+    /// Use this for creating command buffers.
+    pub fn command_buffer_allocator(&self) -> &Arc<dyn CommandBufferAllocator> {
+        &self.command_buffer_allocator
+    }
+
     /// Marks the swapchain for recreation on the next frame.
     ///
     /// This should be called when the window is resized. The actual recreation

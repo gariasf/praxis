@@ -12,6 +12,7 @@ praxis_gui = { path = "../praxis_gui" }
 praxis_scene = { path = "../praxis_scene" }
 praxis_assets = { path = "../praxis_assets" }
 praxis_input = { path = "../praxis_input" }
+praxis_graphics = { path = "../praxis_graphics" }
 egui = "0.29"
 egui_dock = "0.14"
 egui-winit = "0.29"

@@ -2968,6 +2968,7 @@ dependencies = [
  "egui_dock",
  "praxis_assets",
  "praxis_ecs",
+ "praxis_graphics",
  "praxis_gui",
  "praxis_input",
  "praxis_math",

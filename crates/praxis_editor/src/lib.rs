@@ -73,6 +73,7 @@ pub use editor_mode::EditorMode;
 pub use editor_state::{EditorState, EditorTab};
 pub use panels::{
     AssetsPanel, ConsolePanel, EditorPanel, HierarchyPanel, InspectorPanel, SceneViewPanel,
+    ViewportPanel,
 };
 
 use praxis_utils::{info, Result};
