@@ -53,6 +53,17 @@
 //!
 //! Each panel implements the `EditorPanel` trait, providing a consistent interface for
 //! rendering and lifecycle management.
+//!
+//! # Selection System
+//!
+//! The editor includes a comprehensive entity selection system with:
+//! - **Multi-entity selection**: Select multiple entities with add/remove/toggle modes
+//! - **Click-to-select**: Raycast picking in viewport to select entities
+//! - **Marquee selection**: Drag to create selection rectangle
+//! - **Keyboard shortcuts**: Ctrl+A (select all), Ctrl+D (deselect all)
+//! - **Selection events**: Track when selection changes for UI updates
+//!
+//! See the [`selection`] module and `SELECTION_SYSTEM.md` for detailed documentation.
 
 mod editor_mode;
 mod editor_state;

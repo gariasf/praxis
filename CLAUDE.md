@@ -13,6 +13,9 @@ Praxis is a 3D game engine written in Rust, focusing on learning game engine fun
 # Build the entire workspace
 cargo build
 
+# Build praxis_editor specifically
+cargo build -p praxis_editor
+
 # Build in release mode
 cargo build --release
 
@@ -35,6 +38,7 @@ cargo run --example gltf_animation_loader_demo
 cargo run --example deferred_demo
 cargo run --example hdr_demo
 cargo run --example environment_probe_demo
+cargo run --example selection_demo
 
 # Check code without building
 cargo check --all
@@ -84,6 +88,7 @@ Praxis uses a Cargo workspace with 12 crates organized by subsystem. The root `p
 - **praxis_gui**: Debug/editor GUI via `egui`
 - **praxis_physics**: Physics simulation using `Rapier3D`, collision detection, spatial queries
 - **praxis_audio**: Audio system using `kira`, spatial audio, sound management
+- **praxis_editor**: Editor tools including selection system, panels, scene editing
 - **praxis_utils**: Shared utilities, logging (`tracing`), error handling, frame timing
 
 ### Initialization Flow
@@ -477,6 +482,78 @@ The input system provides keyboard, mouse, and gamepad support:
 - **Gamepad**: Button and axis support via `gilrs`
 
 See `praxis_input` and `examples/input_integration.rs` for usage.
+
+### Selection System
+
+The editor provides a comprehensive entity selection system with support for multi-entity
+selection, raycast picking, marquee selection, and keyboard shortcuts:
+
+- **SelectionSystem**: ECS resource managing selected entities and selection state
+- **Selectable**: Component marking entities that can be selected
+- **Selected**: Component automatically added/removed for selected entities
+- **SelectionEvent**: Events fired when selection changes (Selected, Deselected, Cleared, Changed)
+
+#### Selection Features
+
+**Multi-Entity Selection**:
+- Four selection modes: Replace, Add, Remove, Toggle
+- Batch selection operations for multiple entities
+- Selection state tracking with event history
+
+**Raycast Picking**:
+- Click entities in viewport to select them
+- Screen-space to world-space ray conversion using camera matrices
+- Sphere-based intersection testing (extensible to actual bounds)
+- Finds closest entity along the ray
+
+**Marquee Selection**:
+- Click and drag to create selection rectangle
+- Projects entities to screen space and tests against rectangle
+- Supports all selection modes with modifier keys
+- Distinguishes between clicks and drags
+
+**Keyboard Shortcuts**:
+- `Ctrl+A`: Select all selectable entities
+- `Ctrl+D`: Deselect all entities
+- `Shift+Click`: Add to selection
+- `Ctrl+Click`: Remove from selection
+- `Alt+Click`: Toggle selection
+
+#### Selection Systems
+
+The selection system provides two ECS systems:
+
+- **`update_selection_system`**: Synchronizes `Selected` components with selection state.
+  Automatically adds/removes the component as entities are selected/deselected.
+
+- **`handle_selection_input_system`**: Handles keyboard shortcuts (Ctrl+A, Ctrl+D).
+  Mouse input should be handled separately in viewport systems.
+
+#### Usage Example
+
+```rust
+use praxis_editor::{SelectionSystem, Selectable, update_selection_system};
+use praxis_ecs::{World, Schedule, Transform};
+
+// Setup
+let mut world = World::new();
+world.insert_resource(SelectionSystem::new());
+
+let mut schedule = Schedule::default();
+schedule.add_systems(update_selection_system);
+
+// Make entities selectable
+world.spawn((
+    Transform::default(),
+    Selectable,
+));
+
+// Programmatic selection
+let mut selection = world.get_resource_mut::<SelectionSystem>().unwrap();
+selection.select_entity(entity, SelectionMode::Replace);
+```
+
+See `crates/praxis_editor/SELECTION_SYSTEM.md` and `examples/selection_demo.rs` for complete documentation.
 
 ### Physics System
 
