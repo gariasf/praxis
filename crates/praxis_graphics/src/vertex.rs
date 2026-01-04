@@ -60,7 +60,7 @@ use vulkano::pipeline::graphics::vertex_input::Vertex;
 /// # Example
 ///
 /// ```rust
-/// use praxis_graphics::vertex::Vertex3D;
+/// use praxis_graphics::Vertex3D;
 ///
 /// // Create a textured vertex with lighting at origin
 /// let vertex = Vertex3D::with_all(
@@ -131,6 +131,8 @@ impl Vertex3D {
     /// # Example
     ///
     /// ```rust
+    /// use praxis_graphics::Vertex3D;
+    ///
     /// // Create a white vertex at the origin
     /// let vertex = Vertex3D::new([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
     /// ```

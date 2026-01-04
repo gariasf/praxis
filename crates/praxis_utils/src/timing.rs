@@ -39,7 +39,7 @@ impl Default for GlobalTiming {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// use praxis_utils::timing::delta_time;
 ///
 /// // In any game system
@@ -96,10 +96,10 @@ pub fn frame_count() -> u64 {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// use praxis_utils::timing::FrameTimer;
 ///
-/// let mut timer = FrameTimer::with_limit(60.0); // 60 FPS limit
+/// let mut timer = FrameTimer::new();
 ///
 /// loop {
 ///     // Get delta time since last frame

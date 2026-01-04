@@ -54,7 +54,7 @@
 //! ));
 //!
 //! // Run the simulation
-//! world.inner_mut().run_schedule(&mut schedule);
+//! schedule.run(world.inner_mut());
 //! ```
 //!
 //! # Collision Event Handling Example

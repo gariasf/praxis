@@ -262,28 +262,26 @@ impl GuiDemoApp {
             Name::new("Floor"),
         ));
 
-        let mut rotating = Vec::new();
-
-        rotating.push(world.spawn((
-            Transform::from_xyz(-4.0, 1.0, 0.0),
-            praxis_ecs::MeshHandle::new("textured_cube"),
-            praxis_ecs::TextureHandle::new("red_gradient"),
-            Name::new("Red Cube"),
-        )));
-
-        rotating.push(world.spawn((
-            Transform::from_xyz(0.0, 1.0, 0.0),
-            praxis_ecs::MeshHandle::new("textured_cube"),
-            praxis_ecs::TextureHandle::new("green_gradient"),
-            Name::new("Green Cube"),
-        )));
-
-        rotating.push(world.spawn((
-            Transform::from_xyz(4.0, 1.0, 0.0),
-            praxis_ecs::MeshHandle::new("textured_cube"),
-            praxis_ecs::TextureHandle::new("blue_gradient"),
-            Name::new("Blue Cube"),
-        )));
+        let rotating = vec![
+            world.spawn((
+                Transform::from_xyz(-4.0, 1.0, 0.0),
+                praxis_ecs::MeshHandle::new("textured_cube"),
+                praxis_ecs::TextureHandle::new("red_gradient"),
+                Name::new("Red Cube"),
+            )),
+            world.spawn((
+                Transform::from_xyz(0.0, 1.0, 0.0),
+                praxis_ecs::MeshHandle::new("textured_cube"),
+                praxis_ecs::TextureHandle::new("green_gradient"),
+                Name::new("Green Cube"),
+            )),
+            world.spawn((
+                Transform::from_xyz(4.0, 1.0, 0.0),
+                praxis_ecs::MeshHandle::new("textured_cube"),
+                praxis_ecs::TextureHandle::new("blue_gradient"),
+                Name::new("Blue Cube"),
+            )),
+        ];
 
         world.spawn((
             Transform::from_xyz(-4.0, 3.0, -4.0),
@@ -387,7 +385,9 @@ impl GuiDemoApp {
         };
 
         info!("=== Entity List ===");
-        let mut query = world.inner_mut().query::<(praxis_ecs::Entity, Option<&Name>)>();
+        let mut query = world
+            .inner_mut()
+            .query::<(praxis_ecs::Entity, Option<&Name>)>();
 
         for (entity, name) in query.iter(world.inner()) {
             let name_str = name.map(|n| n.as_str()).unwrap_or("Unnamed");
@@ -563,7 +563,7 @@ impl ApplicationHandler for GuiDemoApp {
         ) {
             Ok(window) => Arc::new(window),
             Err(e) => {
-                eprintln!("Failed to create window: {}", e);
+                eprintln!("Failed to create window: {e}");
                 event_loop.exit();
                 return;
             }
@@ -573,7 +573,7 @@ impl ApplicationHandler for GuiDemoApp {
             match pollster::block_on(Self::setup_scene(window.clone())) {
                 Ok(result) => result,
                 Err(e) => {
-                    eprintln!("Failed to setup scene: {}", e);
+                    eprintln!("Failed to setup scene: {e}");
                     event_loop.exit();
                     return;
                 }

@@ -7,11 +7,11 @@
 //! - Finding entities by name
 //! - Unloading scenes
 
-use praxis_ecs::{Name, Query, Transform, World};
+use praxis_ecs::{Name, Transform, World};
 use praxis_scene::{
-    find_entity_by_name, get_all_children, get_entity_depth, CameraDef, CameraType,
-    DirectionalLightDef, EntityDefinition, PointLightDef, SceneDefinition, SceneGraphIterator,
-    SceneLoader, SceneManager, TransformDef, TraversalOrder,
+    find_entity_by_name, get_all_children, get_entity_depth, CameraDef, DirectionalLightDef,
+    EntityDefinition, PointLightDef, SceneDefinition, SceneGraphIterator, SceneLoader,
+    SceneManager, TransformDef, TraversalOrder,
 };
 
 fn main() -> praxis_utils::Result<()> {
@@ -50,9 +50,9 @@ fn main() -> praxis_utils::Result<()> {
     // Demo 3: Find entities by name
     println!("--- Demo 3: Finding Entities by Name ---");
     if let Some(player) = find_entity_by_name(&world, "SimplePlayer", None) {
-        println!("Found 'SimplePlayer' entity: {:?}", player);
+        println!("Found 'SimplePlayer' entity: {player:?}");
         let depth = get_entity_depth(&world, player);
-        println!("Entity depth: {}", depth);
+        println!("Entity depth: {depth}");
 
         let children = get_all_children(&world, player);
         println!("Number of descendants: {}", children.len());
@@ -63,7 +63,7 @@ fn main() -> praxis_utils::Result<()> {
     println!("--- Demo 4: Scene Graph Traversal ---");
     if let Some(entities) = scene_manager.get_scene_entities(&handle1) {
         if let Some(&root) = entities.first() {
-            println!("Traversing from root entity: {:?}", root);
+            println!("Traversing from root entity: {root:?}");
             for (i, entity) in
                 SceneGraphIterator::new(&world, root, TraversalOrder::DepthFirst).enumerate()
             {
@@ -75,7 +75,7 @@ fn main() -> praxis_utils::Result<()> {
                     .map(|n| n.as_str())
                     .unwrap_or("<unnamed>");
 
-                println!("{}{}: {:?} - {}", indent, i, entity, name);
+                println!("{indent}{i}: {entity:?} - {name}");
             }
         }
     }
@@ -92,7 +92,7 @@ fn main() -> praxis_utils::Result<()> {
             println!("Total entities: {}", scene_def.total_entity_count());
 
             if let Some(ref description) = scene_def.metadata.description {
-                println!("Description: {}", description);
+                println!("Description: {description}");
             }
 
             let handle2 = scene_manager.spawn_scene(&mut world, &scene_def)?;
@@ -111,7 +111,7 @@ fn main() -> praxis_utils::Result<()> {
             println!();
         }
         Err(e) => {
-            println!("Could not load example_scene.ron: {}", e);
+            println!("Could not load example_scene.ron: {e}");
             println!("(This is expected if the file doesn't exist yet)\n");
         }
     }

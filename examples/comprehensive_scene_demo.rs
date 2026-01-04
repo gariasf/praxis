@@ -352,7 +352,7 @@ impl ApplicationHandler for App {
         ) {
             Ok(window) => Arc::new(window),
             Err(e) => {
-                eprintln!("Failed to create window: {}", e);
+                eprintln!("Failed to create window: {e}");
                 event_loop.exit();
                 return;
             }
@@ -362,7 +362,7 @@ impl ApplicationHandler for App {
             match pollster::block_on(Self::setup_scene(window.clone())) {
                 Ok(result) => result,
                 Err(e) => {
-                    eprintln!("Failed to setup scene: {}", e);
+                    eprintln!("Failed to setup scene: {e}");
                     event_loop.exit();
                     return;
                 }
@@ -468,7 +468,7 @@ impl ApplicationHandler for App {
                 }
 
                 if let Err(e) = self.render_scene() {
-                    eprintln!("Render error: {}", e);
+                    eprintln!("Render error: {e}");
                 }
 
                 if let Some(window) = &self.window {

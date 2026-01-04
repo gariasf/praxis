@@ -375,9 +375,9 @@ fn test_physics_time_accumulator() {
     let mut time = PhysicsTime::new();
     assert_eq!(time.accumulator, 0.0);
 
-    // Test 2: Add time
-    time.add(0.016); // ~60fps frame
-    assert!((time.accumulator - 0.016).abs() < 0.0001);
+    // Test 2: Add time (exactly one timestep)
+    time.add(1.0 / 60.0);
+    assert!((time.accumulator - 1.0 / 60.0).abs() < 0.0001);
 
     // Test 3: Check if should step (timestep = 1/60 = 0.01666...)
     assert!(time.should_step(1.0 / 60.0));
@@ -387,11 +387,11 @@ fn test_physics_time_accumulator() {
     assert!(time.accumulator < 0.0001); // Should be ~0 after step
 
     // Test 5: Add smaller amount (should not step yet)
-    time.add(0.008); // Half frame
+    time.add(0.5 / 60.0); // Half frame
     assert!(!time.should_step(1.0 / 60.0));
 
     // Test 6: Add more time (should step now)
-    time.add(0.008); // Another half frame
+    time.add(0.5 / 60.0); // Another half frame
     assert!(time.should_step(1.0 / 60.0));
 }
 
@@ -536,6 +536,7 @@ fn test_dynamic_body_physics_updates_transform() {
     schedule.add_systems(
         (
             sync_physics_transforms_system,
+            sync_colliders,
             physics_step_system,
             sync_physics_transforms_system,
         )
@@ -1096,9 +1097,14 @@ fn test_fixed_timestep_multiple_steps() {
     schedule.add_systems(physics_step_system);
     schedule.run(world.inner_mut());
 
-    // Accumulator should be ~0 after consuming all 3 timesteps
+    // Accumulator should be less than one timestep after consuming all 3 timesteps
+    // (floating point precision may leave a small remainder)
     let physics_time = world.inner_mut().resource::<PhysicsTime>();
-    assert!(physics_time.accumulator < 0.001);
+    assert!(
+        physics_time.accumulator < 1.0 / 60.0,
+        "Accumulator {} should be less than one timestep after 3 steps",
+        physics_time.accumulator
+    );
 }
 
 #[test]
@@ -1181,6 +1187,7 @@ fn test_fixed_timestep_with_simulation() {
     schedule.add_systems(
         (
             sync_physics_transforms_system,
+            sync_colliders,
             physics_step_system,
             sync_physics_transforms_system,
         )

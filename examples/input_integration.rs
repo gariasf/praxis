@@ -68,11 +68,11 @@ impl App {
             let action = Action::new(*action_name);
 
             if input_map.is_action_just_pressed(&action, input_state) {
-                println!("Action '{}' just pressed!", action_name);
+                println!("Action '{action_name}' just pressed!");
             }
 
             if input_map.is_action_just_released(&action, input_state) {
-                println!("Action '{}' released", action_name);
+                println!("Action '{action_name}' released");
             }
         }
 
@@ -136,7 +136,7 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 if let Some(window) = &self.window {
                     {
-                        let mut input_state = world.get_resource_mut::<InputState>().unwrap();
+                        let input_state = world.get_resource_mut::<InputState>().unwrap();
                         input_state.update();
                     }
 
@@ -158,8 +158,8 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             _ => {
-                let mut input_state = world.get_resource_mut::<InputState>().unwrap();
-                praxis_input::winit_integration::process_window_event(&mut input_state, &event);
+                let input_state = world.get_resource_mut::<InputState>().unwrap();
+                praxis_input::winit_integration::process_window_event(input_state, &event);
             }
         }
 

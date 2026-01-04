@@ -50,8 +50,8 @@ impl From<MouseButton> for InputBinding {
 /// let mut input_map = InputMap::default();
 ///
 /// // Bind multiple keys to the same action
-/// input_map.bind_key(Action::new("jump"), KeyCode::Space);
-/// input_map.bind_key(Action::new("jump"), KeyCode::KeyW);
+/// input_map.bind_key(&Action::new("jump"), KeyCode::Space);
+/// input_map.bind_key(&Action::new("jump"), KeyCode::KeyW);
 ///
 /// // Check if action is triggered
 /// let mut input_state = InputState::default();
@@ -97,7 +97,7 @@ impl InputMap {
     /// use winit::keyboard::KeyCode;
     ///
     /// let mut input_map = InputMap::new();
-    /// input_map.bind_key(Action::new("jump"), KeyCode::Space);
+    /// input_map.bind_key(&Action::new("jump"), KeyCode::Space);
     /// ```
     pub fn bind_key(&mut self, action: &Action, key: KeyCode) {
         self.bind(action, InputBinding::Key(key));
@@ -116,7 +116,7 @@ impl InputMap {
     /// use praxis_input::{InputMap, Action, MouseButton};
     ///
     /// let mut input_map = InputMap::new();
-    /// input_map.bind_mouse_button(Action::new("fire"), MouseButton::Left);
+    /// input_map.bind_mouse_button(&Action::new("fire"), MouseButton::Left);
     /// ```
     pub fn bind_mouse_button(&mut self, action: &Action, button: MouseButton) {
         self.bind(action, InputBinding::MouseButton(button));

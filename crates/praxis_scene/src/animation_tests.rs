@@ -190,7 +190,7 @@ mod tests {
         );
 
         let matrix = bone.bind_pose_matrix();
-        assert!((matrix - Mat4::IDENTITY).abs_diff_eq(Mat4::IDENTITY, 0.001));
+        assert!(matrix.abs_diff_eq(Mat4::IDENTITY, 0.001));
     }
 
     #[test]
@@ -275,7 +275,7 @@ mod tests {
         let identity = original * inverse_bind;
 
         // Should be approximately identity
-        assert!((identity - Mat4::IDENTITY).abs_diff_eq(Mat4::IDENTITY, 0.001));
+        assert!(identity.abs_diff_eq(Mat4::IDENTITY, 0.001));
     }
 
     #[test]
@@ -387,7 +387,7 @@ mod tests {
         let world = pose.world_transform(0).unwrap();
 
         let expected = world * inverse_bind;
-        assert!((skinning_matrix - expected).abs_diff_eq(Mat4::IDENTITY, 0.001));
+        assert!(skinning_matrix.abs_diff_eq(expected, 0.001));
     }
 
     // ============================================================================
