@@ -48,6 +48,7 @@ cargo doc --workspace --no-deps --open
 | `praxis_gui` | Editor GUI (egui) |
 | `praxis_physics` | Physics (Rapier3D) |
 | `praxis_audio` | Audio (Kira) |
+| `praxis_procedural` | Procedural textures |
 | `praxis_editor` | Editor tools |
 | `praxis_utils` | Logging, errors, timing |
 
@@ -87,6 +88,24 @@ fn damage_system(mut query: Query<&mut Health>) {
 - Bidirectional transform sync with ECS
 
 **Details**: `crates/praxis_physics/README.md`
+
+### Procedural Textures
+- **`TextureGraph`**: Node-based texture composition
+- **Noise functions**: Perlin, Simplex, Worley
+- **GPU generation**: Compute shader compilation
+- **Caching**: Automatic LRU cache
+```rust
+let mut graph = TextureGraph::new();
+let noise = graph.add_node(TextureNode::Noise {
+    noise_type: NoiseType::Perlin,
+    scale: 8.0, octaves: 4,
+    persistence: 0.5, lacunarity: 2.0,
+});
+graph.set_output(noise);
+let texture = manager.generate_texture(&graph, params)?;
+```
+
+**Details**: `crates/praxis_procedural/README.md`
 
 ### Animation
 - `Skeleton`, `AnimationClip`, `AnimationPlayer`

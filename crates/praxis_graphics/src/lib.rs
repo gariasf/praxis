@@ -83,6 +83,43 @@
 //! - **Texture Sampling**: Full support in shaders via UV coordinates
 //! - **Cubemap Loading**: Support for 6-face cubemaps and equirectangular conversion
 //!
+//! # Procedural Texture System
+//!
+//! The procedural texture system provides runtime texture generation using noise functions
+//! and programmable texture graphs:
+//!
+//! - **`ProceduralTextureManager`**: High-level manager for generating procedural textures
+//! - **Noise Functions**: Perlin, Simplex, and Worley (cellular) noise
+//! - **Texture Graphs**: Node-based system for combining operations (blend, transform, etc.)
+//! - **GPU Compute**: Shader-based generation for optimal performance
+//! - **Caching**: Automatic caching to avoid redundant generation
+//!
+//! ## Example
+//!
+//! ```rust,no_run
+//! use praxis_graphics::ProceduralTextureManager;
+//! use praxis_procedural::{TextureGraph, TextureNode, NoiseType, TextureGenerationParams};
+//!
+//! # async fn example() -> praxis_utils::Result<()> {
+//! // Create a texture graph
+//! let mut graph = TextureGraph::new();
+//! let noise_id = graph.add_node(TextureNode::Noise {
+//!     noise_type: NoiseType::Perlin,
+//!     scale: 8.0,
+//!     octaves: 4,
+//!     persistence: 0.5,
+//!     lacunarity: 2.0,
+//! });
+//! graph.set_output(noise_id);
+//!
+//! // Generate texture
+//! // let mut manager = ProceduralTextureManager::new(device, queue, mem_alloc, cmd_alloc, desc_alloc);
+//! // let params = TextureGenerationParams { width: 512, height: 512, seed: 0 };
+//! // let texture = manager.generate_texture(&graph, params)?;
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! # Material System
 //!
 //! The material system defines surface appearance with efficient descriptor set management:
@@ -404,6 +441,7 @@ pub mod mesh;
 pub mod particles;
 mod pipeline;
 pub mod post_process;
+pub mod procedural_texture;
 mod primitives;
 mod shaders;
 pub mod shadow;
@@ -1627,6 +1665,7 @@ pub use primitives::{
     colored_cube_mesh, pyramid_mesh, quad_mesh, solid_cube_mesh, sphere_mesh, textured_cube_mesh,
     textured_quad_mesh,
 };
+pub use procedural_texture::ProceduralTextureManager;
 pub use shadow::{ShadowConfig, ShadowMapManager, ShadowUniforms, MAX_SHADOW_CASCADES};
 pub use skybox::SkyboxRenderer;
 pub use ssao::{SsaoConfig, SsaoRenderer};

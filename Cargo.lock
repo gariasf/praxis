@@ -2198,7 +2198,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3371,6 +3371,7 @@ dependencies = [
  "praxis_input",
  "praxis_math",
  "praxis_physics",
+ "praxis_procedural",
  "praxis_scene",
  "praxis_spatial",
  "praxis_utils",
@@ -3462,6 +3463,7 @@ dependencies = [
  "image",
  "pollster",
  "praxis_math",
+ "praxis_procedural",
  "praxis_utils",
  "rand 0.8.5",
  "raw-window-handle 0.6.2",
@@ -3513,6 +3515,19 @@ dependencies = [
  "praxis_math",
  "praxis_utils",
  "rapier3d",
+]
+
+[[package]]
+name = "praxis_procedural"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "praxis_math",
+ "praxis_utils",
+ "rand 0.8.5",
+ "seahash",
+ "vulkano",
+ "vulkano-shaders",
 ]
 
 [[package]]
@@ -4074,6 +4089,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "seahash"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b"
+
+[[package]]
 name = "send_wrapper"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4472,7 +4493,7 @@ dependencies = [
  "getrandom 0.3.2",
  "once_cell",
  "rustix 1.0.7",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
