@@ -33,7 +33,7 @@ cargo doc --workspace --no-deps --open
 
 ## Architecture
 
-12-crate workspace organized by subsystem:
+13-crate workspace organized by subsystem:
 
 | Crate | Purpose |
 |-------|---------|
@@ -49,6 +49,7 @@ cargo doc --workspace --no-deps --open
 | `praxis_physics` | Physics (Rapier3D) |
 | `praxis_audio` | Audio (Kira) |
 | `praxis_procedural` | Procedural textures |
+| `praxis_profiling` | Performance profiling |
 | `praxis_editor` | Editor tools |
 | `praxis_utils` | Logging, errors, timing |
 

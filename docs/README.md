@@ -18,6 +18,7 @@ Task-oriented tutorials for implementing features:
 - [Particle System](particle_system.md) - GPU-accelerated particles with forces and effects
 - [Animation](animation_system.md) - Skeletal animation and blending
 - [Audio](audio_system.md) - Spatial audio with Kira
+- [Profiling](profiling.md) - Performance analysis and optimization
 
 ### [Concepts](concepts/README.md)
 Educational explanations of engine design:
@@ -56,6 +57,7 @@ cargo run --example particles_demo     # Particle system effects
 cargo run --example physics_demo       # Rapier3D physics
 cargo run --example audio_demo         # Spatial audio
 cargo run --example editor_demo        # Full editor interface
+cargo run --example profiling_demo     # Performance profiling
 ```
 
 ## Development

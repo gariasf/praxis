@@ -100,3 +100,10 @@ target/criterion/
 .asset_thumbnails/
 *.thumb
 .thumbnail_cache/
+
+# Profiling outputs
+profiling_trace.json
+profiling_advanced_trace.json
+performance_report.txt
+*.trace
+*.json.gz

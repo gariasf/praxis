@@ -3372,6 +3372,7 @@ dependencies = [
  "praxis_math",
  "praxis_physics",
  "praxis_procedural",
+ "praxis_profiling",
  "praxis_scene",
  "praxis_spatial",
  "praxis_utils",
@@ -3528,6 +3529,19 @@ dependencies = [
  "seahash",
  "vulkano",
  "vulkano-shaders",
+]
+
+[[package]]
+name = "praxis_profiling"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "parking_lot",
+ "praxis_graphics",
+ "praxis_utils",
+ "serde",
+ "serde_json",
+ "vulkano",
 ]
 
 [[package]]

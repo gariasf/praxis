@@ -19,6 +19,7 @@ members = [
     "crates/praxis_math",
     "crates/praxis_physics",
     "crates/praxis_procedural",
+    "crates/praxis_profiling",
     "crates/praxis_scene",
     "crates/praxis_spatial",
     "crates/praxis_utils",
@@ -50,6 +51,7 @@ praxis_audio = { path = "crates/praxis_audio", version = "0.1.0" }
 praxis_gui = { path = "crates/praxis_gui", version = "0.1.0" }
 praxis_spatial = { path = "crates/praxis_spatial", version = "0.1.0" }
 praxis_procedural = { path = "crates/praxis_procedural", version = "0.1.0" }
+praxis_profiling = { path = "crates/praxis_profiling", version = "0.1.0" }
 winit = { version = "0.30.11", features = ["rwh_05"] }
 pollster = "0.4"
 
@@ -132,6 +134,14 @@ path = "examples/lod_demo.rs"
 [[example]]
 name = "procedural_texture_demo"
 path = "examples/procedural_texture_demo.rs"
+
+[[example]]
+name = "profiling_demo"
+path = "examples/profiling_demo.rs"
+
+[[example]]
+name = "profiling_advanced_demo"
+path = "examples/profiling_advanced_demo.rs"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
