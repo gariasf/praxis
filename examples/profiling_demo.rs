@@ -6,10 +6,7 @@
 //! - Identify system bottlenecks
 //! - Export to Chrome tracing format
 
-use praxis_profiling::{
-    FramePhase, ProfileScope, Profiler,
-    ProfilerConfig,
-};
+use praxis_profiling::{FramePhase, ProfileScope, Profiler, ProfilerConfig};
 use std::thread;
 use std::time::Duration;
 
