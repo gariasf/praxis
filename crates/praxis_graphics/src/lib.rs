@@ -433,6 +433,31 @@
 //!     ├─► Submit to GPU
 //!     └─► Present to screen
 //! ```
+//!
+//! # Module Privacy Patterns
+//!
+//! This crate uses two patterns for module organization:
+//!
+//! ## Public Modules
+//!
+//! Most subsystems are exposed as public modules (`pub mod`), allowing direct access
+//! to their types and functions:
+//! - `deferred`, `hdr`, `lighting`, `material`, `mesh`, `texture`, etc.
+//!
+//! ## Private Modules with Selective Re-exports
+//!
+//! Implementation detail modules are kept private (`mod`) with only their public API
+//! re-exported at the crate root:
+//! - `device`: Internal Vulkan device setup (not re-exported)
+//! - `pipeline`: Internal pipeline creation (not re-exported)
+//! - `shaders`: Internal shader compilation (not re-exported)
+//! - `vertex`: Private module, `Vertex3D` re-exported
+//! - `primitives`: Private module, mesh generator functions re-exported
+//!
+//! This pattern provides:
+//! - **Encapsulation**: Implementation details remain hidden
+//! - **Stable API**: Public surface is clearly defined via re-exports
+//! - **Flexibility**: Internal organization can change without breaking users
 
 pub mod deferred;
 mod device;
@@ -447,6 +472,8 @@ pub mod mesh;
 pub mod particles;
 mod pipeline;
 pub mod post_process;
+/// Private module containing primitive mesh generators.
+/// Public API is re-exported at crate root (see `pub use primitives::{...}` below).
 mod primitives;
 pub mod procedural_texture;
 mod shaders;
@@ -456,6 +483,8 @@ pub mod ssao;
 pub mod texture;
 pub mod uniform_buffer;
 pub mod velocity_buffer;
+/// Private module containing vertex type definitions.
+/// Public API is re-exported at crate root (see `pub use vertex::Vertex3D` below).
 mod vertex;
 pub mod visual_feedback;
 
