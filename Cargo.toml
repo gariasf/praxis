@@ -247,3 +247,15 @@ harness = false
 [[bench]]
 name = "scene_serialization"
 harness = false
+
+[[bench]]
+name = "descriptor_set_allocation"
+harness = false
+
+[[bench]]
+name = "staging_buffer"
+harness = false
+
+[[bench]]
+name = "graphics_optimization"
+harness = false
