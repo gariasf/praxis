@@ -3737,6 +3737,7 @@ dependencies = [
  "praxis_math",
  "praxis_utils",
  "vulkano",
+ "vulkano-shaders",
 ]
 
 [[package]]

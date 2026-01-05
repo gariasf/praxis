@@ -60,6 +60,8 @@ pub mod aabb;
 pub mod bvh;
 pub mod culling;
 pub mod frustum;
+pub mod gpu_culling;
+pub mod gpu_integration;
 pub mod lod;
 pub mod occlusion;
 pub mod octree;
@@ -70,6 +72,11 @@ pub use aabb::{Aabb, BoundingVolume};
 pub use bvh::{Bvh, BvhNode};
 pub use culling::{CullReason, CullingResult, CullingStats, VisibilitySystem};
 pub use frustum::{Frustum, FrustumCuller, Plane};
+pub use gpu_culling::{
+    GpuCullingConfig, GpuCullingManager, GpuCullingResult, GpuCullingStats, GpuLodGroup,
+    GpuLodLevel, GpuObjectData, MAX_LOD_GROUPS, MAX_LOD_LEVELS_PER_GROUP,
+};
+pub use gpu_integration::{CullableObject, HybridCullingManager};
 pub use lod::{LodGroup, LodLevel, LodSelection, SpatialLodManager};
 pub use occlusion::{
     OcclusionCuller, OcclusionCullerStats, OcclusionQuery, OcclusionQueryPool, OcclusionQueryResult,
