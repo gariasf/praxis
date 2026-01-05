@@ -2,6 +2,8 @@
 
 Task-oriented guides for implementing features with Praxis.
 
+**New to Praxis?** Check out [Learning Paths](../learning-paths/) for structured progressions from beginner to advanced, with clear prerequisites and cross-references.
+
 ## Rendering
 
 - [Rendering](rendering.md) - Forward and deferred rendering pipelines

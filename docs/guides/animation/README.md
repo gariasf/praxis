@@ -2,6 +2,8 @@
 
 Comprehensive documentation for the Praxis skeletal animation system.
 
+**Looking for a structured learning path?** See [Animation Learning Path](../../learning-paths/animation.md) for a beginner → intermediate → advanced progression with exercises and time estimates.
+
 ## Overview
 
 The Praxis animation system provides a complete solution for character animation in games, from basic skeletal animation to advanced features like IK, retargeting, and root motion extraction.

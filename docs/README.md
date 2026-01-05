@@ -6,6 +6,7 @@ Welcome to the Praxis game engine documentation.
 
 - **[Getting Started](getting-started/README.md)** - Installation, setup, and first steps
 - **[Beginners Guide](beginners-guide.md)** - Learn Praxis concepts through hands-on examples
+- **[Learning Paths](learning-paths.md)** - Structured progressions from beginner to advanced ([Overview](LEARNING-PATHS-OVERVIEW.md))
 
 ## Documentation Sections
 
@@ -49,6 +50,19 @@ API documentation and specifications:
 - [Camera System](camera-system.md) - Camera types and controllers
 - [Mesh System](mesh-system.md) - Geometry loading and management
 - [Testing](testing.md) - Test organization and running tests
+
+### [Learning Paths](learning-paths/)
+Structured progressions for mastering Praxis subsystems:
+- **Core Systems**: [Rendering](learning-paths/rendering.md), [Animation](learning-paths/animation.md), [Physics](learning-paths/physics.md), [Scripting](learning-paths/scripting.md), [Networking](learning-paths/networking.md)
+- **Supporting Systems**: [Audio](learning-paths/audio.md), [Editor](learning-paths/editor.md), [Assets](learning-paths/assets.md)
+- **Cross-Cutting**: [Performance Optimization](learning-paths/performance.md)
+
+Each path provides:
+- Clear prerequisites and learning outcomes
+- Beginner → Intermediate → Advanced progression
+- Hands-on exercises and examples
+- Time estimates and checkpoints
+- Cross-references to related systems
 
 ### [Editor](editor/README.md)
 Editor tools and workflows:
