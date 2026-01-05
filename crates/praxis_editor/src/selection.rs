@@ -2,7 +2,7 @@
 //!
 //! This module provides a comprehensive selection system with support for:
 //! - Multi-entity selection with add/remove/toggle modes
-//! - Click-to-select with raycast picking in viewport
+//! - Click-to-select with raycast picking in viewport using accurate bounding box tests
 //! - Marquee (box) selection in viewport
 //! - Keyboard shortcuts (Ctrl+A for select all, Ctrl+D for deselect all)
 //! - Selection changed events for UI updates
@@ -15,18 +15,29 @@
 //! - **`Selected`**: Component marking entities that are currently selected
 //! - **`SelectionEvent`**: Events fired when selection changes
 //!
+//! # Raycast Picking
+//!
+//! The `raycast_pick` method uses actual mesh bounding boxes for precise 3D picking:
+//! 1. Entities with `BoundingBox` component: Uses the bounding box transformed to world space
+//! 2. Entities with `Mesh` component: Computes bounds from mesh vertices, transformed to world space
+//! 3. Fallback: Simple sphere test with 1.0 radius for entities without bounds
+//!
+//! This provides accurate selection even for complex meshes with non-uniform scales and rotations.
+//!
 //! # Usage
 //!
 //! ```rust,no_run
 //! use praxis_editor::{SelectionSystem, Selectable, update_selection_system};
-//! use praxis_ecs::{World, Schedule, Transform};
+//! use praxis_ecs::{World, Schedule, Transform, BoundingBox};
+//! use praxis_math::Vec3;
 //!
 //! let mut world = World::new();
 //! world.insert_resource(SelectionSystem::new());
 //!
-//! // Make an entity selectable
+//! // Make an entity selectable with bounding box for accurate picking
 //! world.spawn((
 //!     Transform::default(),
+//!     BoundingBox::from_center_half_extents(Vec3::ZERO, Vec3::ONE),
 //!     Selectable,
 //! ));
 //!
@@ -46,9 +57,10 @@ use bevy_ecs::component::Component;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::query::With;
 use bevy_ecs::system::{Commands, Query, Res, ResMut, Resource};
-use praxis_ecs::{CameraMatrices, GlobalTransform, Transform};
+use praxis_ecs::{BoundingBox, CameraMatrices, GlobalTransform, Mesh, Transform};
 use praxis_input::InputState;
 use praxis_math::{Vec2, Vec3, Vec4};
+use praxis_spatial::Aabb;
 use std::collections::{HashSet, VecDeque};
 use winit::keyboard::KeyCode;
 
@@ -489,7 +501,13 @@ impl SelectionSystem {
         }
     }
 
-    /// Performs raycast picking to find entity at screen position.
+    /// Performs raycast picking to find entity at screen position using accurate bounding box tests.
+    ///
+    /// This method uses actual mesh bounding boxes for precise 3D picking instead of hard-coded radii.
+    /// It queries entities in the following priority:
+    /// 1. Entities with `BoundingBox` component (transformed to world space)
+    /// 2. Entities with `Mesh` component (bounds computed from vertices, transformed to world space)
+    /// 3. Fallback: Simple sphere test with 1.0 radius for entities without bounds
     ///
     /// # Arguments
     ///
@@ -498,10 +516,48 @@ impl SelectionSystem {
     /// * `camera_transform` - Camera transform
     /// * `camera_matrices` - Camera view/projection matrices
     /// * `selectable_query` - Query for selectable entities with transforms
+    /// * `bounds_query` - Query for entity bounding boxes
+    /// * `mesh_query` - Query for entity meshes (for computing bounds if needed)
     ///
     /// # Returns
     ///
-    /// The entity that was picked, or None if nothing was hit.
+    /// The closest entity that intersects the ray, or None if nothing was hit.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use praxis_editor::{SelectionSystem, Selectable};
+    /// use praxis_ecs::{World, Query, With, GlobalTransform, BoundingBox, Mesh, Transform, CameraMatrices};
+    /// use praxis_math::Vec2;
+    ///
+    /// # fn example(
+    /// #     world: &World,
+    /// #     selection: &SelectionSystem,
+    /// #     camera_transform: &Transform,
+    /// #     camera_matrices: &CameraMatrices,
+    /// # ) {
+    /// // Prepare queries
+    /// let selectable_query: Query<(praxis_ecs::Entity, &GlobalTransform), With<Selectable>> = world.query_filtered();
+    /// let bounds_query: Query<&BoundingBox> = world.query();
+    /// let mesh_query: Query<&Mesh> = world.query();
+    ///
+    /// // Perform picking
+    /// let screen_pos = Vec2::new(400.0, 300.0);
+    /// let viewport_size = Vec2::new(800.0, 600.0);
+    /// if let Some(entity) = selection.raycast_pick(
+    ///     screen_pos,
+    ///     viewport_size,
+    ///     camera_transform,
+    ///     camera_matrices,
+    ///     &selectable_query,
+    ///     &bounds_query,
+    ///     &mesh_query,
+    /// ) {
+    ///     println!("Picked entity: {:?}", entity);
+    /// }
+    /// # }
+    /// ```
+    #[allow(clippy::too_many_arguments)]
     pub fn raycast_pick(
         &self,
         screen_pos: Vec2,
@@ -509,6 +565,8 @@ impl SelectionSystem {
         camera_transform: &Transform,
         camera_matrices: &CameraMatrices,
         selectable_query: &Query<(Entity, &GlobalTransform), With<Selectable>>,
+        bounds_query: &Query<&BoundingBox>,
+        mesh_query: &Query<&Mesh>,
     ) -> Option<Entity> {
         // Convert screen space to NDC (Normalized Device Coordinates)
         let ndc_x = (2.0 * screen_pos.x) / viewport_size.x - 1.0;
@@ -525,24 +583,54 @@ impl SelectionSystem {
         let mut closest_distance = f32::MAX;
 
         for (entity, global_transform) in selectable_query.iter() {
-            let entity_pos = global_transform.translation();
+            // Get entity bounds from BoundingBox component or compute from Mesh
+            let aabb = if let Ok(bounding_box) = bounds_query.get(entity) {
+                // Transform bounding box to world space
+                let world_matrix = global_transform.matrix;
+                Aabb::from_min_max(bounding_box.min, bounding_box.max).transform(&world_matrix)
+            } else if let Ok(mesh) = mesh_query.get(entity) {
+                // Compute bounds from mesh vertices
+                let vertices: Vec<Vec3> = mesh
+                    .vertices
+                    .iter()
+                    .map(|&[x, y, z]| Vec3::new(x, y, z))
+                    .collect();
 
-            // Simple sphere-based picking (radius = 1.0 for now)
-            // In a real implementation, you'd use the actual entity bounds
-            let to_entity = entity_pos - ray_origin;
-            let projection = to_entity.dot(ray_dir);
+                if let Some(local_aabb) = Aabb::from_points(&vertices) {
+                    // Transform to world space
+                    let world_matrix = global_transform.matrix;
+                    local_aabb.transform(&world_matrix)
+                } else {
+                    // No valid bounds, skip this entity
+                    continue;
+                }
+            } else {
+                // No bounds available, fall back to simple sphere test
+                let entity_pos = global_transform.translation();
+                let to_entity = entity_pos - ray_origin;
+                let projection = to_entity.dot(ray_dir);
 
-            if projection < 0.0 {
-                continue; // Behind camera
-            }
+                if projection < 0.0 {
+                    continue;
+                }
 
-            let closest_point = ray_origin + ray_dir * projection;
-            let distance_to_ray = (entity_pos - closest_point).length();
-            let pick_radius = 1.0; // TODO: Use actual entity bounds
+                let closest_point = ray_origin + ray_dir * projection;
+                let distance_to_ray = (entity_pos - closest_point).length();
+                let default_radius = 1.0;
 
-            if distance_to_ray <= pick_radius && projection < closest_distance {
-                closest_distance = projection;
-                closest_entity = Some(entity);
+                if distance_to_ray <= default_radius && projection < closest_distance {
+                    closest_distance = projection;
+                    closest_entity = Some(entity);
+                }
+                continue;
+            };
+
+            // Test ray-AABB intersection
+            if let Some(distance) = aabb.ray_intersection_distance(ray_origin, ray_dir, closest_distance) {
+                if distance < closest_distance {
+                    closest_distance = distance;
+                    closest_entity = Some(entity);
+                }
             }
         }
 

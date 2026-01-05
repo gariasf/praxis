@@ -3579,6 +3579,7 @@ dependencies = [
  "praxis_math",
  "praxis_physics",
  "praxis_scene",
+ "praxis_spatial",
  "praxis_terrain",
  "praxis_utils",
  "rfd",
