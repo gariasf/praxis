@@ -2077,18 +2077,42 @@ impl From<String> for Skybox {
     }
 }
 
-/// Light probe component for capturing irradiance at a point.
+/// **EXPERIMENTAL**: Light probe component for capturing irradiance at a point.
+///
+/// # Status: Not Implemented
+///
+/// This component is planned for a future lighting system enhancement but is not yet
+/// fully implemented. Light probes are intended to capture the lighting environment at
+/// specific locations in a scene and provide local ambient lighting data for nearby objects.
+///
+/// # Planned Features
+///
+/// - Capture irradiance maps at probe positions
+/// - Provide localized ambient lighting data
+/// - Support for light probe volumes (grid-based interpolation)
+/// - Integration with PBR material system
+///
+/// # Future Work
+///
+/// - Implement irradiance capture system
+/// - Add probe blending and interpolation
+/// - Create probe placement and baking tools
+/// - Integrate with the rendering pipeline
+///
+/// **Note**: This component currently has no functionality and should not be used in
+/// production code. It exists as a placeholder for future development.
 #[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LightProbeComponent {
     pub id: String,
 }
 
+// Allow dead code for experimental feature
+#[allow(dead_code)]
 impl LightProbeComponent {
     pub fn new(id: impl Into<String>) -> Self {
         Self { id: id.into() }
     }
 
-    #[allow(dead_code)]
     pub fn id(&self) -> &str {
         &self.id
     }
@@ -2106,9 +2130,51 @@ impl From<String> for LightProbeComponent {
     }
 }
 
-/// Area light component for polygon lights.
-#[derive(Component, Debug, Clone, Copy)]
+/// **EXPERIMENTAL**: Area light component for polygon lights.
+///
+/// # Status: Not Implemented
+///
+/// This component is designed for future area lighting support but is not yet integrated
+/// with the rendering system. Area lights represent light-emitting surfaces (rectangles, disks,
+/// spheres) that produce soft, realistic shadows and more natural-looking illumination compared
+/// to point lights.
+///
+/// # Planned Features
+///
+/// - Soft shadow generation from area light sources
+/// - Support for rectangular, disk, and spherical area lights
+/// - Two-sided emission for surfaces like neon signs
+/// - Integration with physically-based rendering
+/// - Light texture mapping for projectors and displays
+///
+/// # Future Work
+///
+/// - Implement area light shadow mapping algorithms (PCF, PCSS, or ray-traced soft shadows)
+/// - Add shader support for area light evaluation
+/// - Optimize performance for multiple area lights
+/// - Add visual gizmos for area light editing
+/// - Support for textured area lights
+///
+/// **Note**: This component currently has no rendering functionality and should not be used in
+/// production code. It exists as a placeholder for future development.
+///
+/// # Example (Future Usage)
+///
+/// ```rust,no_run
+/// # use praxis_ecs::{World, Transform};
+/// # use praxis_math::Vec3;
+/// // This is how area lights would be used once implemented:
+/// // let mut world = World::new();
+/// // world.spawn((
+/// //     Transform::from_xyz(0.0, 5.0, 0.0),
+/// //     AreaLightComponent::rectangle(2.0, 1.0)
+/// //         .with_color(Vec3::new(1.0, 0.9, 0.8))
+/// //         .with_intensity(10.0),
+/// // ));
+/// ```
+// Allow dead code for experimental feature
 #[allow(dead_code)]
+#[derive(Component, Debug, Clone, Copy)]
 pub struct AreaLightComponent {
     pub light_type: AreaLightType,
     pub color: Vec3,
@@ -2116,16 +2182,28 @@ pub struct AreaLightComponent {
     pub two_sided: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Types of area light shapes.
+///
+/// **Note**: Part of the experimental area lighting system. See [`AreaLightComponent`]
+/// for implementation status.
+// Allow dead code for experimental feature
 #[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AreaLightType {
+    /// Rectangular area light with width and height.
     Rectangle { width: f32, height: f32 },
+    
+    /// Circular disk area light with radius.
     Disk { radius: f32 },
+    
+    /// Spherical area light with radius (emits in all directions).
     Sphere { radius: f32 },
 }
 
+// Allow dead code for experimental feature
 #[allow(dead_code)]
 impl AreaLightComponent {
+    /// Creates a rectangular area light.
     pub fn rectangle(width: f32, height: f32) -> Self {
         Self {
             light_type: AreaLightType::Rectangle { width, height },
@@ -2135,6 +2213,7 @@ impl AreaLightComponent {
         }
     }
 
+    /// Creates a disk-shaped area light.
     pub fn disk(radius: f32) -> Self {
         Self {
             light_type: AreaLightType::Disk { radius },
@@ -2144,6 +2223,7 @@ impl AreaLightComponent {
         }
     }
 
+    /// Creates a spherical area light.
     pub fn sphere(radius: f32) -> Self {
         Self {
             light_type: AreaLightType::Sphere { radius },
@@ -2153,16 +2233,19 @@ impl AreaLightComponent {
         }
     }
 
+    /// Sets the light color.
     pub fn with_color(mut self, color: Vec3) -> Self {
         self.color = color;
         self
     }
 
+    /// Sets the light intensity.
     pub fn with_intensity(mut self, intensity: f32) -> Self {
         self.intensity = intensity;
         self
     }
 
+    /// Sets whether the light emits from both sides of the surface.
     pub fn with_two_sided(mut self, two_sided: bool) -> Self {
         self.two_sided = two_sided;
         self
