@@ -186,6 +186,27 @@ registry.register_velocity();
 
 **Details**: `docs/editor/README.md`
 
+## Naming Conventions
+
+### Type Suffixes
+
+Use these suffixes consistently to clarify responsibility:
+
+| Suffix | Purpose | Examples | When to Use |
+|--------|---------|----------|-------------|
+| **Manager** | Resource caching, asset loading, lifetime management | `AudioManager`, `TextureManager`, `SceneManager` | Manages a pool/cache of resources, handles allocation/deallocation, provides retrieval APIs |
+| **Renderer** | GPU rendering, draw calls, pipeline management | `DeferredRenderer`, `TerrainRenderer`, `ParticleRenderer` | Encapsulates Vulkan pipelines, command buffers, and draw logic; issues GPU commands |
+| **System** | ECS behavior, component processing | `SelectionSystem`, `UndoRedoSystem`, `PhysicsSystem` | Processes ECS components/queries each frame; implements game logic or editor behavior |
+
+**Functions** that act as systems use `_system` suffix (e.g., `physics_step_system`, `frustum_culling_system`).
+
+**Anti-patterns to avoid**:
+- Using `System` for non-ECS types (e.g., `ParticleSystem` that's actually a renderer)
+- Using `Manager` for types that only render (should be `Renderer`)
+- Using `Context` inconsistently (prefer `Manager` for resource management)
+
+**Note**: Some existing types predate these conventions. See `dev-notes/NAMING_STANDARDIZATION.md` for migration tracking.
+
 ## Code Quality
 
 ### Linting (must pass CI)
