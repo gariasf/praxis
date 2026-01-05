@@ -67,6 +67,46 @@ Benchmarks the hierarchical transform system that propagates transforms through 
 - Overhead of parent-child sync
 - Change detection performance
 
+### 5. Asset Loading (`asset_loading.rs`)
+
+Measures the performance of loading and parsing 3D model file formats (OBJ and GLTF).
+
+**Benchmarks:**
+- `obj_parsing`: OBJ file parsing across various vertex counts (100 to 10,000)
+- `obj_file_io`: Raw file I/O overhead for OBJ files
+- `gltf_parsing`: GLTF file parsing and buffer extraction (100 to 5,000 vertices)
+- `obj_with_normals_and_uvs`: Full OBJ parsing with all attributes
+- `obj_positions_only`: Minimal OBJ parsing (positions only)
+- `obj_load_real_cube_asset`: Loading the actual cube.obj asset from assets/
+
+**Metrics:**
+- Parsing time measured in vertices per second
+- File I/O vs parsing overhead
+- Impact of different attribute combinations
+
+### 6. Scene Serialization (`scene_serialization.rs`)
+
+Benchmarks scene definition serialization and deserialization using RON format.
+
+**Benchmarks:**
+- `scene_serialization`: Serialize scenes with varying entity counts (10 to 1,000)
+- `scene_deserialization`: Deserialize and validate scenes
+- `scene_roundtrip`: Full serialize-deserialize cycle
+- `scene_hierarchy_serialization`: Serialize hierarchical scenes with different depths
+- `scene_hierarchy_deserialization`: Deserialize hierarchical scenes
+- `scene_with_editor_data_serialization`: Serialize scenes with editor metadata
+- `scene_with_editor_data_deserialization`: Deserialize editor-enhanced scenes
+- `scene_to_runtime`: Convert editor scene to runtime scene (strips editor data)
+- `scene_metadata_serialization`: Serialize scenes with heavy metadata
+- `minimal_scene_serialization`: Minimal scene (empty) serialization baseline
+- `complex_scene_with_all_features`: Complex scene with cameras, lights, hierarchy, and editor data
+
+**Metrics:**
+- Serialization/deserialization time per entity
+- Impact of hierarchy depth on performance
+- Editor data overhead
+- RON format efficiency
+
 ## Running Benchmarks
 
 ### Run all benchmarks:
@@ -80,6 +120,8 @@ cargo bench --bench mesh_upload
 cargo bench --bench render_loop
 cargo bench --bench physics_step
 cargo bench --bench transform_propagation
+cargo bench --bench asset_loading
+cargo bench --bench scene_serialization
 ```
 
 ### Run a specific benchmark within a suite:
@@ -120,12 +162,22 @@ Criterion generates detailed reports including:
 - Target: < 1ms for 100-entity hierarchy
 - Watch for: Linear scaling with entity count, no unnecessary updates
 
+**Asset Loading:**
+- Target: < 10ms for 5k vertex OBJ, < 20ms for 5k vertex GLTF
+- Watch for: Linear scaling with vertex count, I/O bottlenecks
+
+**Scene Serialization:**
+- Target: < 5ms to serialize 100-entity scene, < 10ms to deserialize
+- Watch for: Linear scaling with entity count, hierarchy depth impact
+
 ## Performance Optimization Tips
 
 1. **Mesh Upload**: Batch uploads, reuse buffers, minimize vertex attributes
 2. **Render Loop**: Cache camera matrices, minimize camera count, use dirty flags
 3. **Physics**: Use spatial partitioning, reduce collider complexity, tune timestep
 4. **Transforms**: Flatten hierarchies where possible, batch updates, use change detection
+5. **Asset Loading**: Cache parsed assets, use async loading, prefer binary formats (GLB over GLTF)
+6. **Scene Serialization**: Minimize editor data in runtime builds, use binary formats for faster loading, cache deserialized scenes
 
 ## Continuous Benchmarking
 
@@ -166,6 +218,7 @@ criterion_main!(benches);
 ## Dependencies
 
 - `criterion = "0.5"` - Statistical benchmarking framework
+- `base64 = "0.22"` - For GLTF embedded buffer generation in asset loading benchmarks
 - HTML reports feature enabled for visualization
 - Access to Vulkan-capable GPU for mesh upload benchmarks
-- All engine crates (praxis_ecs, praxis_graphics, praxis_physics, etc.)
+- All engine crates (praxis_ecs, praxis_graphics, praxis_physics, praxis_assets, praxis_scene, etc.)

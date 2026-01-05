@@ -215,6 +215,7 @@ vulkano = "0.35.1"
 bevy_ecs = "0.14"
 tokio = { version = "1.40", features = ["full"] }
 tracing-subscriber = "0.3"
+base64 = "0.22"
 
 [[bench]]
 name = "mesh_upload"
@@ -230,4 +231,12 @@ harness = false
 
 [[bench]]
 name = "transform_propagation"
+harness = false
+
+[[bench]]
+name = "asset_loading"
+harness = false
+
+[[bench]]
+name = "scene_serialization"
 harness = false

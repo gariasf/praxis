@@ -13,6 +13,8 @@ cargo bench --bench mesh_upload
 cargo bench --bench render_loop  
 cargo bench --bench physics_step
 cargo bench --bench transform_propagation
+cargo bench --bench asset_loading
+cargo bench --bench scene_serialization
 
 # Run with pattern matching
 cargo bench -- physics          # All physics-related benchmarks
@@ -53,6 +55,10 @@ physics_step/100    time:   [25.1 ms 28.7 ms 32.4 ms]
 | camera_matrix_updates/10 | < 100μs | < 500μs |
 | physics_step/100 | < 16ms | < 25ms |
 | transform_propagation/1000 | < 1ms | < 2ms |
+| obj_parsing/5000 | < 10ms | < 20ms |
+| gltf_parsing/5000 | < 20ms | < 40ms |
+| scene_serialization/100 | < 5ms | < 10ms |
+| scene_deserialization/100 | < 10ms | < 20ms |
 
 ## 🔍 Finding Bottlenecks
 

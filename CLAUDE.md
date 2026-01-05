@@ -56,6 +56,15 @@ cargo run --example transform_propagation_demo
 
 # Documentation
 cargo doc --workspace --no-deps --open
+
+# Benchmarks
+cargo bench                          # Run all benchmarks
+cargo bench --bench asset_loading    # Asset loading (OBJ/GLTF)
+cargo bench --bench scene_serialization  # Scene serialization/deserialization
+cargo bench --bench mesh_upload      # GPU mesh upload
+cargo bench --bench physics_step     # Physics simulation
+cargo bench --bench transform_propagation  # Transform hierarchy
+cargo bench --bench render_loop      # Camera and rendering
 ```
 
 ## Architecture
