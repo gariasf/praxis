@@ -29,6 +29,7 @@ These documents explain *why* systems are designed the way they are, not just *h
 
 ## Related
 
+- [Learning Paths](../learning-paths/) - Structured learning progressions (read concepts first!)
 - [Beginner's Guide](../beginners-guide.md) - Comprehensive walkthrough of all systems
 - [Guides](../guides/README.md) - Practical how-to guides
 - [Architecture](../architecture.md) - High-level system design
