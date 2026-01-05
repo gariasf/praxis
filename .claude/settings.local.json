@@ -26,7 +26,8 @@
       "Bash(cargo clean:*)",
       "Bash(cargo fix:*)",
       "mcp__filesystem__get_file_info",
-      "mcp__filesystem__list_directory_with_sizes"
+      "mcp__filesystem__list_directory_with_sizes",
+      "Bash(cargo metadata:*)"
     ],
     "deny": [],
     "ask": []
