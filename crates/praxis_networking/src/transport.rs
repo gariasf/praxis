@@ -2,9 +2,9 @@
 
 use crossbeam_channel::{Receiver, Sender};
 use parking_lot::RwLock;
+use praxis_utils::Result;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
-use praxis_utils::Result;
 
 pub use std::net::SocketAddr;
 
@@ -13,13 +13,13 @@ pub use std::net::SocketAddr;
 pub struct TransportConfig {
     /// TCP port for reliable messages
     pub tcp_port: u16,
-    
+
     /// UDP port for unreliable messages
     pub udp_port: u16,
-    
+
     /// Socket buffer size
     pub buffer_size: usize,
-    
+
     /// Connection timeout in seconds
     pub timeout_seconds: u64,
 }
@@ -39,10 +39,10 @@ impl Default for TransportConfig {
 pub trait NetworkTransport: Send + Sync {
     /// Sends data reliably.
     fn send_reliable(&self, addr: SocketAddr, data: &[u8]) -> Result<()>;
-    
+
     /// Sends data unreliably (may be lost or arrive out of order).
     fn send_unreliable(&self, addr: SocketAddr, data: &[u8]) -> Result<()>;
-    
+
     /// Receives next message.
     fn receive(&self) -> Option<(SocketAddr, Vec<u8>)>;
 }
@@ -61,9 +61,9 @@ impl TcpTransport {
     pub async fn new(config: TransportConfig) -> Result<Self> {
         let addr = format!("0.0.0.0:{}", config.tcp_port);
         let listener = TcpListener::bind(&addr).await?;
-        
+
         let (tx, rx) = crossbeam_channel::unbounded();
-        
+
         Ok(Self {
             listener: Arc::new(RwLock::new(Some(listener))),
             connections: Arc::new(RwLock::new(Vec::new())),
@@ -71,7 +71,7 @@ impl TcpTransport {
             tx,
         })
     }
-    
+
     /// Accepts incoming connections.
     #[allow(clippy::await_holding_lock)]
     pub async fn accept_connections(&self) -> Result<()> {
@@ -99,12 +99,12 @@ impl NetworkTransport for TcpTransport {
         tracing::trace!("TCP send to {}: {} bytes", addr, data.len());
         Ok(())
     }
-    
+
     fn send_unreliable(&self, _addr: SocketAddr, _data: &[u8]) -> Result<()> {
         // TCP doesn't support unreliable sends
         Ok(())
     }
-    
+
     fn receive(&self) -> Option<(SocketAddr, Vec<u8>)> {
         self.rx.try_recv().ok()
     }
@@ -122,22 +122,22 @@ impl UdpTransport {
     pub async fn new(config: TransportConfig) -> Result<Self> {
         let addr = format!("0.0.0.0:{}", config.udp_port);
         let socket = UdpSocket::bind(&addr).await?;
-        
+
         let (tx, rx) = crossbeam_channel::unbounded();
-        
+
         Ok(Self {
             socket: Arc::new(socket),
             rx,
             tx,
         })
     }
-    
+
     /// Receives UDP packets in a background task.
     pub async fn receive_loop(&self, buffer_size: usize) -> Result<()> {
         let mut buffer = vec![0u8; buffer_size];
         let tx = self.tx.clone();
         let socket = self.socket.clone();
-        
+
         tokio::spawn(async move {
             loop {
                 match socket.recv_from(&mut buffer).await {
@@ -153,7 +153,7 @@ impl UdpTransport {
                 }
             }
         });
-        
+
         Ok(())
     }
 }
@@ -163,20 +163,20 @@ impl NetworkTransport for UdpTransport {
         // UDP doesn't support reliable sends
         Ok(())
     }
-    
+
     fn send_unreliable(&self, addr: SocketAddr, data: &[u8]) -> Result<()> {
         let socket = self.socket.clone();
         let data = data.to_vec();
-        
+
         tokio::spawn(async move {
             if let Err(e) = socket.send_to(&data, addr).await {
                 tracing::error!("UDP send error: {}", e);
             }
         });
-        
+
         Ok(())
     }
-    
+
     fn receive(&self) -> Option<(SocketAddr, Vec<u8>)> {
         self.rx.try_recv().ok()
     }

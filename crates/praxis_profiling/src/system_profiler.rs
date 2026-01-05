@@ -110,16 +110,18 @@ impl SystemProfiler {
             drop(active);
 
             let mut stats = self.system_stats.lock();
-            let stat = stats.entry(name.to_string()).or_insert_with(|| SystemStats {
-                name: name.to_string(),
-                total_time: Duration::ZERO,
-                execution_count: 0,
-                avg_time: Duration::ZERO,
-                min_time: Duration::MAX,
-                max_time: Duration::ZERO,
-                last_time: Duration::ZERO,
-                frame_percentage: 0.0,
-            });
+            let stat = stats
+                .entry(name.to_string())
+                .or_insert_with(|| SystemStats {
+                    name: name.to_string(),
+                    total_time: Duration::ZERO,
+                    execution_count: 0,
+                    avg_time: Duration::ZERO,
+                    min_time: Duration::MAX,
+                    max_time: Duration::ZERO,
+                    last_time: Duration::ZERO,
+                    frame_percentage: 0.0,
+                });
 
             stat.total_time += duration;
             stat.execution_count += 1;
@@ -183,8 +185,8 @@ impl SystemProfiler {
             let percentage = stat.frame_percentage / 100.0;
 
             if percentage >= self.bottleneck_threshold {
-                let severity = (percentage - self.bottleneck_threshold)
-                    / (1.0 - self.bottleneck_threshold);
+                let severity =
+                    (percentage - self.bottleneck_threshold) / (1.0 - self.bottleneck_threshold);
 
                 let recommendation = if percentage > 0.3 {
                     "Consider splitting into smaller systems or optimizing algorithm"

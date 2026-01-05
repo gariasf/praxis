@@ -70,7 +70,7 @@ pub use aabb::{Aabb, BoundingVolume};
 pub use bvh::{Bvh, BvhNode};
 pub use culling::{CullReason, CullingResult, CullingStats, VisibilitySystem};
 pub use frustum::{Frustum, FrustumCuller, Plane};
-pub use lod::{LodGroup, LodLevel, SpatialLodManager, LodSelection};
+pub use lod::{LodGroup, LodLevel, LodSelection, SpatialLodManager};
 pub use occlusion::{
     OcclusionCuller, OcclusionCullerStats, OcclusionQuery, OcclusionQueryPool, OcclusionQueryResult,
 };

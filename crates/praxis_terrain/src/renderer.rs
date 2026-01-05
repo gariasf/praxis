@@ -121,12 +121,8 @@ impl TerrainRenderer {
             ));
         }
 
-        let descriptor_set = DescriptorSet::new(
-            self.descriptor_set_allocator.clone(),
-            layout,
-            writes,
-            [],
-        )?;
+        let descriptor_set =
+            DescriptorSet::new(self.descriptor_set_allocator.clone(), layout, writes, [])?;
 
         Ok(descriptor_set)
     }

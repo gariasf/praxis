@@ -185,32 +185,32 @@
 //! components and Rapier rigid body positions. This allows both physics-driven and
 //! kinematic movement to work seamlessly.
 
+mod cloth;
+mod cloth_systems;
 mod components;
+mod joint_systems;
+mod joints;
+mod ragdoll;
+mod ragdoll_systems;
 mod resources;
 mod systems;
-mod joints;
 mod vehicle;
-mod cloth;
-mod ragdoll;
-mod joint_systems;
 mod vehicle_systems;
-mod cloth_systems;
-mod ragdoll_systems;
 
 #[cfg(test)]
 mod tests;
 
+pub use cloth::*;
+pub use cloth_systems::*;
 pub use components::*;
+pub use joint_systems::*;
+pub use joints::*;
+pub use ragdoll::*;
+pub use ragdoll_systems::*;
 pub use resources::*;
 pub use systems::*;
-pub use joints::*;
 pub use vehicle::*;
-pub use cloth::*;
-pub use ragdoll::*;
-pub use joint_systems::*;
 pub use vehicle_systems::*;
-pub use cloth_systems::*;
-pub use ragdoll_systems::*;
 
 use praxis_utils::{info, Result};
 

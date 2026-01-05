@@ -33,10 +33,10 @@
 //! # }
 //! ```
 
+use bytemuck::Zeroable;
 use praxis_math::Vec2;
 use praxis_utils::{eyre, Result};
 use std::sync::Arc;
-use bytemuck::Zeroable;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     descriptor_set::allocator::StandardDescriptorSetAllocator,
@@ -169,8 +169,10 @@ impl RadialBlurPass {
         )
         .map_err(|e| eyre::eyre!("Failed to create god rays uniform buffer: {}", e))?;
 
-        let descriptor_set_allocator =
-            Arc::new(StandardDescriptorSetAllocator::new(device.clone(), Default::default()));
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            device.clone(),
+            Default::default(),
+        ));
 
         Ok(Self {
             device,

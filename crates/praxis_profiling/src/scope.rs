@@ -53,19 +53,25 @@ pub fn set_scope_callback<F>(callback: F)
 where
     F: Fn(ScopeData) + Send + Sync + 'static,
 {
-    let mut state = SCOPE_STATE.get_or_init(|| Mutex::new(ScopeState::default())).lock();
+    let mut state = SCOPE_STATE
+        .get_or_init(|| Mutex::new(ScopeState::default()))
+        .lock();
     state.callback = Some(Arc::new(callback));
 }
 
 /// Clears the global scope callback.
 pub fn clear_scope_callback() {
-    let mut state = SCOPE_STATE.get_or_init(|| Mutex::new(ScopeState::default())).lock();
+    let mut state = SCOPE_STATE
+        .get_or_init(|| Mutex::new(ScopeState::default()))
+        .lock();
     state.callback = None;
 }
 
 /// Allocates a new unique scope ID.
 fn allocate_scope_id() -> ScopeId {
-    let mut state = SCOPE_STATE.get_or_init(|| Mutex::new(ScopeState::default())).lock();
+    let mut state = SCOPE_STATE
+        .get_or_init(|| Mutex::new(ScopeState::default()))
+        .lock();
     let id = state.next_id;
     state.next_id += 1;
     ScopeId(id)
@@ -73,7 +79,9 @@ fn allocate_scope_id() -> ScopeId {
 
 /// Gets the current parent scope ID for the calling thread.
 fn get_parent_scope_id() -> Option<ScopeId> {
-    let state = SCOPE_STATE.get_or_init(|| Mutex::new(ScopeState::default())).lock();
+    let state = SCOPE_STATE
+        .get_or_init(|| Mutex::new(ScopeState::default()))
+        .lock();
     let thread_id = std::thread::current().id();
     state
         .scope_stack
@@ -83,18 +91,18 @@ fn get_parent_scope_id() -> Option<ScopeId> {
 
 /// Pushes a scope ID onto the current thread's stack.
 fn push_scope_id(id: ScopeId) {
-    let mut state = SCOPE_STATE.get_or_init(|| Mutex::new(ScopeState::default())).lock();
+    let mut state = SCOPE_STATE
+        .get_or_init(|| Mutex::new(ScopeState::default()))
+        .lock();
     let thread_id = std::thread::current().id();
-    state
-        .scope_stack
-        .entry(thread_id)
-        .or_default()
-        .push(id);
+    state.scope_stack.entry(thread_id).or_default().push(id);
 }
 
 /// Pops a scope ID from the current thread's stack.
 fn pop_scope_id() {
-    let mut state = SCOPE_STATE.get_or_init(|| Mutex::new(ScopeState::default())).lock();
+    let mut state = SCOPE_STATE
+        .get_or_init(|| Mutex::new(ScopeState::default()))
+        .lock();
     let thread_id = std::thread::current().id();
     if let Some(stack) = state.scope_stack.get_mut(&thread_id) {
         stack.pop();
@@ -131,10 +139,12 @@ impl ProfileScope {
         let id = allocate_scope_id();
         let parent_id = get_parent_scope_id();
         let thread_id = std::thread::current().id();
-        
+
         // Calculate depth based on parent
         let depth = if parent_id.is_some() {
-            let state = SCOPE_STATE.get_or_init(|| Mutex::new(ScopeState::default())).lock();
+            let state = SCOPE_STATE
+                .get_or_init(|| Mutex::new(ScopeState::default()))
+                .lock();
             state
                 .scope_stack
                 .get(&thread_id)
@@ -162,7 +172,9 @@ impl Drop for ProfileScope {
         let duration = self.start_time.elapsed();
         pop_scope_id();
 
-        let state = SCOPE_STATE.get_or_init(|| Mutex::new(ScopeState::default())).lock();
+        let state = SCOPE_STATE
+            .get_or_init(|| Mutex::new(ScopeState::default()))
+            .lock();
         if let Some(callback) = &state.callback {
             let data = ScopeData {
                 id: self.id,
@@ -191,9 +203,11 @@ impl Drop for ProfileScope {
 #[macro_export]
 macro_rules! profile_scope {
     () => {
-        let _profile_scope = $crate::ProfileScope::new(
-            ::core::concat!(::core::module_path!(), "::", ::core::line!())
-        );
+        let _profile_scope = $crate::ProfileScope::new(::core::concat!(
+            ::core::module_path!(),
+            "::",
+            ::core::line!()
+        ));
     };
     ($name:expr) => {
         let _profile_scope = $crate::ProfileScope::new($name);

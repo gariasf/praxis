@@ -31,6 +31,7 @@
 //! # }
 //! ```
 
+use bytemuck::Zeroable;
 use praxis_math::{Vec3, Vec4};
 use praxis_utils::{eyre, Result};
 use std::sync::Arc;
@@ -39,7 +40,6 @@ use vulkano::{
     device::Device,
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
 };
-use bytemuck::Zeroable;
 
 /// Maximum number of light probes supported in the shader.
 pub const MAX_LIGHT_PROBES: usize = 64;
@@ -272,10 +272,7 @@ impl LightProbeGrid {
                     result.sh_coefficients[i] = c0.lerp(c1, tx);
                 }
 
-                result.intensity = (1.0 - tx)
-                    * (1.0 - ty)
-                    * (1.0 - tz)
-                    * c000.intensity
+                result.intensity = (1.0 - tx) * (1.0 - ty) * (1.0 - tz) * c000.intensity
                     + (1.0 - tx) * (1.0 - ty) * tz * c001.intensity
                     + (1.0 - tx) * ty * (1.0 - tz) * c010.intensity
                     + (1.0 - tx) * ty * tz * c011.intensity
@@ -286,9 +283,7 @@ impl LightProbeGrid {
 
                 Some(result)
             }
-            ProbeBlendMode::Tetrahedral => {
-                self.probe_at(x0, y0, z0).cloned()
-            }
+            ProbeBlendMode::Tetrahedral => self.probe_at(x0, y0, z0).cloned(),
         }
     }
 }

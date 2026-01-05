@@ -14,7 +14,7 @@ use std::sync::Arc;
 pub enum ScriptEvent {
     /// Script file was modified
     Modified(PathBuf),
-    
+
     /// Script file was removed
     Removed(PathBuf),
 }
@@ -31,9 +31,9 @@ impl HotReloadWatcher {
     pub fn new(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         info!("Setting up hot-reload watcher for {:?}", path);
-        
+
         let (tx, rx) = channel();
-        
+
         let mut watcher = RecommendedWatcher::new(
             move |res| {
                 if tx.send(res).is_err() {
@@ -43,30 +43,30 @@ impl HotReloadWatcher {
             Config::default(),
         )
         .map_err(|e| praxis_utils::eyre::eyre!("Failed to create watcher: {}", e))?;
-        
+
         watcher
             .watch(path, RecursiveMode::Recursive)
             .map_err(|e| praxis_utils::eyre::eyre!("Failed to watch path: {}", e))?;
-        
+
         Ok(Self {
             _watcher: watcher,
             receiver: Arc::new(Mutex::new(rx)),
             events: Vec::new(),
         })
     }
-    
+
     /// Polls for new file system events and returns any script events.
     pub fn poll_events(&mut self) -> Vec<ScriptEvent> {
         let events_to_process = {
             let receiver = self.receiver.lock();
             let mut temp_events = Vec::new();
-            
+
             while let Ok(result) = receiver.try_recv() {
                 temp_events.push(result);
             }
             temp_events
         };
-        
+
         for result in events_to_process {
             match result {
                 Ok(event) => {
@@ -77,10 +77,10 @@ impl HotReloadWatcher {
                 }
             }
         }
-        
+
         std::mem::take(&mut self.events)
     }
-    
+
     fn process_event(&mut self, event: Event) {
         match event.kind {
             EventKind::Modify(_) => {
@@ -118,51 +118,51 @@ mod tests {
     use std::thread;
     use std::time::Duration;
     use tempfile::TempDir;
-    
+
     #[test]
     fn test_create_watcher() {
         let temp_dir = TempDir::new().unwrap();
         let watcher = HotReloadWatcher::new(temp_dir.path());
         assert!(watcher.is_ok());
     }
-    
+
     #[test]
     fn test_detect_file_modification() {
         let temp_dir = TempDir::new().unwrap();
         let script_path = temp_dir.path().join("test.lua");
-        
+
         fs::write(&script_path, "-- test").unwrap();
-        
+
         let mut watcher = HotReloadWatcher::new(temp_dir.path()).unwrap();
-        
+
         thread::sleep(Duration::from_millis(100));
-        
+
         fs::write(&script_path, "-- modified").unwrap();
-        
+
         thread::sleep(Duration::from_millis(200));
-        
+
         let events = watcher.poll_events();
         assert!(!events.is_empty());
-        
+
         let has_modified = events.iter().any(|e| matches!(e, ScriptEvent::Modified(_)));
         assert!(has_modified);
     }
-    
+
     #[test]
     fn test_ignore_non_lua_files() {
         let temp_dir = TempDir::new().unwrap();
         let txt_path = temp_dir.path().join("test.txt");
-        
+
         fs::write(&txt_path, "test").unwrap();
-        
+
         let mut watcher = HotReloadWatcher::new(temp_dir.path()).unwrap();
-        
+
         thread::sleep(Duration::from_millis(100));
-        
+
         fs::write(&txt_path, "modified").unwrap();
-        
+
         thread::sleep(Duration::from_millis(200));
-        
+
         let events = watcher.poll_events();
         assert!(events.is_empty());
     }

@@ -51,10 +51,7 @@ fn test_hierarchy_panel_entity_tree_operations() {
     assert!(world.inner().get_entity(child_entity).is_ok());
 
     // Verify names
-    assert_eq!(
-        world.get::<Name>(parent_entity).unwrap().as_str(),
-        "Parent"
-    );
+    assert_eq!(world.get::<Name>(parent_entity).unwrap().as_str(), "Parent");
     assert_eq!(world.get::<Name>(child_entity).unwrap().as_str(), "Child");
 
     // Verify expansion state tracking
@@ -107,11 +104,7 @@ fn test_hierarchy_panel_reparenting() {
 
     // Verify parent-child relationship
     assert_eq!(world.get::<Parent>(child).unwrap().0, parent1);
-    assert!(world
-        .get::<Children>(parent1)
-        .unwrap()
-        .0
-        .contains(&child));
+    assert!(world.get::<Children>(parent1).unwrap().0.contains(&child));
 
     // Reparent to parent2 by updating Parent component
     world.entity_mut(child).insert(Parent(parent2));
@@ -134,11 +127,7 @@ fn test_hierarchy_panel_reparenting() {
 
     // Verify new parent-child relationship
     assert_eq!(world.get::<Parent>(child).unwrap().0, parent2);
-    assert!(world
-        .get::<Children>(parent2)
-        .unwrap()
-        .0
-        .contains(&child));
+    assert!(world.get::<Children>(parent2).unwrap().0.contains(&child));
     assert!(!world
         .get::<Children>(parent1)
         .map(|c| c.0.contains(&child))
@@ -265,8 +254,14 @@ fn test_inspector_panel_multiple_components() {
     assert!(world.get::<Mass>(entity).is_some());
 
     // Verify component values
-    assert_eq!(world.get::<Name>(entity).unwrap().as_str(), "Multi-Component Entity");
-    assert_eq!(world.get::<Transform>(entity).unwrap().translation, Vec3::new(1.0, 2.0, 3.0));
+    assert_eq!(
+        world.get::<Name>(entity).unwrap().as_str(),
+        "Multi-Component Entity"
+    );
+    assert_eq!(
+        world.get::<Transform>(entity).unwrap().translation,
+        Vec3::new(1.0, 2.0, 3.0)
+    );
     assert_eq!(world.get::<MeshHandle>(entity).unwrap().id(), "cube");
     assert!(world.get::<RigidBody>(entity).unwrap().is_dynamic());
     assert_eq!(world.get::<Mass>(entity).unwrap().mass, 1.0);
@@ -551,7 +546,10 @@ fn test_drag_drop_asset_instantiation() {
         .start_drag(payload.clone());
 
     // Verify drag is active
-    assert!(world.get_resource::<DragDropSystem>().unwrap().is_dragging());
+    assert!(world
+        .get_resource::<DragDropSystem>()
+        .unwrap()
+        .is_dragging());
 
     // Complete drop
     let dropped = world
@@ -591,7 +589,10 @@ fn test_drag_drop_entity_hierarchy() {
         .start_drag(payload);
 
     // Verify drag state
-    assert!(world.get_resource::<DragDropSystem>().unwrap().is_dragging());
+    assert!(world
+        .get_resource::<DragDropSystem>()
+        .unwrap()
+        .is_dragging());
 
     // Peek at payload
     let current = world
@@ -623,7 +624,10 @@ fn test_drag_drop_cancellation() {
         .unwrap()
         .start_drag(payload);
 
-    assert!(world.get_resource::<DragDropSystem>().unwrap().is_dragging());
+    assert!(world
+        .get_resource::<DragDropSystem>()
+        .unwrap()
+        .is_dragging());
 
     // Cancel drag
     world
@@ -631,7 +635,10 @@ fn test_drag_drop_cancellation() {
         .unwrap()
         .cancel_drag();
 
-    assert!(!world.get_resource::<DragDropSystem>().unwrap().is_dragging());
+    assert!(!world
+        .get_resource::<DragDropSystem>()
+        .unwrap()
+        .is_dragging());
     assert!(world
         .get_resource::<DragDropSystem>()
         .unwrap()
@@ -1099,9 +1106,6 @@ fn test_undo_redo_integration() {
     undo_system.redo(&mut world).expect("Failed to redo");
     // Note: After redo, entity might have different ID, so we check by name
     let mut query = world.query::<&Name>();
-    let names: Vec<_> = query
-        .iter(world.inner())
-        .map(|n| n.as_str())
-        .collect();
+    let names: Vec<_> = query.iter(world.inner()).map(|n| n.as_str()).collect();
     assert!(names.contains(&"Test Entity"));
 }

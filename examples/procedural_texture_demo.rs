@@ -12,8 +12,8 @@ use praxis_graphics::{
 };
 use praxis_math::{Mat4, Quat, Vec2, Vec3};
 use praxis_procedural::{
-    BlendMode, ColorRamp, ColorStop, NoiseType, TextureGenerationParams, TextureGraph,
-    TextureNode, TransformParams,
+    BlendMode, ColorRamp, ColorStop, NoiseType, TextureGenerationParams, TextureGraph, TextureNode,
+    TransformParams,
 };
 use praxis_utils::Result;
 use praxis_window::WindowManager;
@@ -206,10 +206,12 @@ async fn main() -> Result<()> {
         render_context.graphics_queue.clone(),
         render_context.memory_allocator().clone(),
         render_context.command_buffer_allocator().clone(),
-        Arc::new(vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator::new(
-            render_context.device.clone(),
-            Default::default(),
-        )),
+        Arc::new(
+            vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator::new(
+                render_context.device.clone(),
+                Default::default(),
+            ),
+        ),
     );
 
     render_context
@@ -264,76 +266,69 @@ async fn main() -> Result<()> {
     let camera_distance = 8.0;
     let mut angle = 0.0f32;
 
-    event_loop.run(move |event, elwt| {
-        match event {
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => {
-                elwt.exit();
-            }
-            Event::WindowEvent {
-                event: WindowEvent::Resized(size),
-                ..
-            } => {
-                render_context.configure_surface(size.width, size.height);
-            }
-            Event::AboutToWait => {
-                window.request_redraw();
-            }
-            Event::WindowEvent {
-                event: WindowEvent::RedrawRequested,
-                ..
-            } => {
-                angle += 0.01;
-
-                let eye = Vec3::new(
-                    angle.cos() * camera_distance,
-                    4.0,
-                    angle.sin() * camera_distance,
-                );
-                let target = Vec3::ZERO;
-                let up = Vec3::Y;
-
-                let view = Mat4::look_at_rh(eye, target, up);
-                let proj = Mat4::perspective_rh(
-                    45.0_f32.to_radians(),
-                    1280.0 / 720.0,
-                    0.1,
-                    100.0,
-                );
-
-                let textures = ["perlin", "worley", "marble", "wood", "cloud"];
-                let mut draw_commands = Vec::new();
-
-                for (i, texture_name) in textures.iter().enumerate() {
-                    let x = (i as f32 - 2.0) * 2.5;
-                    let model = Mat4::from_rotation_translation(
-                        Quat::from_rotation_y(angle),
-                        Vec3::new(x, 0.0, 0.0),
-                    );
-
-                    draw_commands.push(DrawCommand {
-                        mesh_id: "cube".to_string(),
-                        model,
-                        texture_name: Some(texture_name.to_string()),
-                        material_properties: None,
-                    });
-                }
-
-                let cmds = RenderCommands {
-                    view,
-                    proj,
-                    draw_commands: &draw_commands,
-                    lighting: None,
-                };
-
-                if let Err(e) = render_context.render(&cmds) {
-                    eprintln!("Render error: {}", e);
-                }
-            }
-            _ => {}
+    event_loop.run(move |event, elwt| match event {
+        Event::WindowEvent {
+            event: WindowEvent::CloseRequested,
+            ..
+        } => {
+            elwt.exit();
         }
+        Event::WindowEvent {
+            event: WindowEvent::Resized(size),
+            ..
+        } => {
+            render_context.configure_surface(size.width, size.height);
+        }
+        Event::AboutToWait => {
+            window.request_redraw();
+        }
+        Event::WindowEvent {
+            event: WindowEvent::RedrawRequested,
+            ..
+        } => {
+            angle += 0.01;
+
+            let eye = Vec3::new(
+                angle.cos() * camera_distance,
+                4.0,
+                angle.sin() * camera_distance,
+            );
+            let target = Vec3::ZERO;
+            let up = Vec3::Y;
+
+            let view = Mat4::look_at_rh(eye, target, up);
+            let proj = Mat4::perspective_rh(45.0_f32.to_radians(), 1280.0 / 720.0, 0.1, 100.0);
+
+            let textures = ["perlin", "worley", "marble", "wood", "cloud"];
+            let mut draw_commands = Vec::new();
+
+            for (i, texture_name) in textures.iter().enumerate() {
+                let x = (i as f32 - 2.0) * 2.5;
+                let model = Mat4::from_rotation_translation(
+                    Quat::from_rotation_y(angle),
+                    Vec3::new(x, 0.0, 0.0),
+                );
+
+                draw_commands.push(DrawCommand {
+                    mesh_id: "cube".to_string(),
+                    model,
+                    texture_name: Some(texture_name.to_string()),
+                    material_properties: None,
+                });
+            }
+
+            let cmds = RenderCommands {
+                view,
+                proj,
+                draw_commands: &draw_commands,
+                lighting: None,
+            };
+
+            if let Err(e) = render_context.render(&cmds) {
+                eprintln!("Render error: {}", e);
+            }
+        }
+        _ => {}
     })?;
 
     Ok(())

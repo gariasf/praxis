@@ -232,7 +232,11 @@ impl ProceduralTextureManager {
         )
         .map_err(|e| praxis_utils::eyre::eyre!("Failed to create sampler: {}", e))?;
 
-        trace!("Successfully created procedural texture {}x{}", width, height);
+        trace!(
+            "Successfully created procedural texture {}x{}",
+            width,
+            height
+        );
 
         Ok(Texture {
             image,

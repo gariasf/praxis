@@ -70,12 +70,7 @@ impl AllocationTracker {
     /// Records a memory allocation.
     ///
     /// Returns an allocation ID that should be used for deallocation.
-    pub fn track_allocation(
-        &self,
-        size: usize,
-        location: String,
-        category: String,
-    ) -> usize {
+    pub fn track_allocation(&self, size: usize, location: String, category: String) -> usize {
         if !self.enabled {
             return 0;
         }
@@ -105,7 +100,10 @@ impl AllocationTracker {
             stats.peak_allocated = stats.current_allocated;
         }
 
-        *stats.allocations_by_category.entry(category.clone()).or_insert(0) += 1;
+        *stats
+            .allocations_by_category
+            .entry(category.clone())
+            .or_insert(0) += 1;
         *stats.bytes_by_category.entry(category).or_insert(0) += size;
 
         id
@@ -255,7 +253,12 @@ pub struct AllocationGuard {
 impl AllocationGuard {
     /// Creates a new allocation guard.
     #[allow(dead_code)]
-    pub fn new(tracker: Arc<AllocationTracker>, size: usize, location: String, category: String) -> Self {
+    pub fn new(
+        tracker: Arc<AllocationTracker>,
+        size: usize,
+        location: String,
+        category: String,
+    ) -> Self {
         let id = tracker.track_allocation(size, location, category);
         Self { tracker, id }
     }

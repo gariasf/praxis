@@ -102,7 +102,7 @@ impl Profiler {
         let mut memory_tracker = AllocationTracker::new();
         memory_tracker.set_enabled(config.enable_memory);
         let memory_tracker = Arc::new(memory_tracker);
-        
+
         let leak_detector = Arc::new(LeakDetector::new(memory_tracker.clone()));
         let system_profiler = Arc::new(SystemProfiler::new(config.bottleneck_threshold));
 

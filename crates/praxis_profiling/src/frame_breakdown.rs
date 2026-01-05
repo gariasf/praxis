@@ -189,10 +189,7 @@ impl FrameStatistics {
 
         // Update phase averages
         for (phase, duration) in &breakdown.phase_times {
-            let avg = self
-                .avg_phase_times
-                .entry(*phase)
-                .or_insert(Duration::ZERO);
+            let avg = self.avg_phase_times.entry(*phase).or_insert(Duration::ZERO);
 
             if self.frame_count == 1 {
                 *avg = *duration;

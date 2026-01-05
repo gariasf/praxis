@@ -18,31 +18,31 @@ use praxis_math::Vec3;
 pub struct HingeJoint {
     /// The other entity this joint connects to.
     pub connected_entity: Entity,
-    
+
     /// Local anchor point on this body.
     pub local_anchor1: Vec3,
-    
+
     /// Local anchor point on the connected body.
     pub local_anchor2: Vec3,
-    
+
     /// Rotation axis in local space of the first body.
     pub local_axis1: Vec3,
-    
+
     /// Rotation axis in local space of the second body.
     pub local_axis2: Vec3,
-    
+
     /// Whether the joint has rotation limits.
     pub limits_enabled: bool,
-    
+
     /// Minimum rotation angle in radians (if limits enabled).
     pub min_angle: f32,
-    
+
     /// Maximum rotation angle in radians (if limits enabled).
     pub max_angle: f32,
-    
+
     /// Motor target velocity in radians per second.
     pub motor_velocity: f32,
-    
+
     /// Maximum motor force/torque.
     pub motor_max_force: f32,
 }
@@ -64,7 +64,7 @@ impl HingeJoint {
             motor_max_force: 0.0,
         }
     }
-    
+
     /// Sets the rotation axis for both bodies.
     #[must_use]
     pub fn with_axis(mut self, axis1: Vec3, axis2: Vec3) -> Self {
@@ -72,7 +72,7 @@ impl HingeJoint {
         self.local_axis2 = axis2;
         self
     }
-    
+
     /// Sets rotation limits for the hinge.
     #[must_use]
     pub fn with_limits(mut self, min_angle: f32, max_angle: f32) -> Self {
@@ -81,7 +81,7 @@ impl HingeJoint {
         self.max_angle = max_angle;
         self
     }
-    
+
     /// Sets a motor for the hinge joint.
     #[must_use]
     pub fn with_motor(mut self, velocity: f32, max_force: f32) -> Self {
@@ -99,10 +99,10 @@ impl HingeJoint {
 pub struct BallJoint {
     /// The other entity this joint connects to.
     pub connected_entity: Entity,
-    
+
     /// Local anchor point on this body.
     pub local_anchor1: Vec3,
-    
+
     /// Local anchor point on the connected body.
     pub local_anchor2: Vec3,
 }
@@ -128,31 +128,31 @@ impl BallJoint {
 pub struct SliderJoint {
     /// The other entity this joint connects to.
     pub connected_entity: Entity,
-    
+
     /// Local anchor point on this body.
     pub local_anchor1: Vec3,
-    
+
     /// Local anchor point on the connected body.
     pub local_anchor2: Vec3,
-    
+
     /// Slide axis in local space of the first body.
     pub local_axis1: Vec3,
-    
+
     /// Slide axis in local space of the second body.
     pub local_axis2: Vec3,
-    
+
     /// Whether the joint has translation limits.
     pub limits_enabled: bool,
-    
+
     /// Minimum translation distance along axis (if limits enabled).
     pub min_distance: f32,
-    
+
     /// Maximum translation distance along axis (if limits enabled).
     pub max_distance: f32,
-    
+
     /// Motor target velocity along the axis.
     pub motor_velocity: f32,
-    
+
     /// Maximum motor force.
     pub motor_max_force: f32,
 }
@@ -174,7 +174,7 @@ impl SliderJoint {
             motor_max_force: 0.0,
         }
     }
-    
+
     /// Sets the slide axis for both bodies.
     #[must_use]
     pub fn with_axis(mut self, axis1: Vec3, axis2: Vec3) -> Self {
@@ -182,7 +182,7 @@ impl SliderJoint {
         self.local_axis2 = axis2;
         self
     }
-    
+
     /// Sets translation limits for the slider.
     #[must_use]
     pub fn with_limits(mut self, min_distance: f32, max_distance: f32) -> Self {
@@ -191,7 +191,7 @@ impl SliderJoint {
         self.max_distance = max_distance;
         self
     }
-    
+
     /// Sets a motor for the slider joint.
     #[must_use]
     pub fn with_motor(mut self, velocity: f32, max_force: f32) -> Self {
@@ -209,19 +209,19 @@ impl SliderJoint {
 pub struct SpringJoint {
     /// The other entity this joint connects to.
     pub connected_entity: Entity,
-    
+
     /// Local anchor point on this body.
     pub local_anchor1: Vec3,
-    
+
     /// Local anchor point on the connected body.
     pub local_anchor2: Vec3,
-    
+
     /// Rest length of the spring (target distance).
     pub rest_length: f32,
-    
+
     /// Spring stiffness coefficient (higher = stiffer).
     pub stiffness: f32,
-    
+
     /// Damping coefficient (higher = more damping).
     pub damping: f32,
 }
@@ -244,14 +244,14 @@ impl SpringJoint {
             damping: 5.0,
         }
     }
-    
+
     /// Sets the spring stiffness.
     #[must_use]
     pub const fn with_stiffness(mut self, stiffness: f32) -> Self {
         self.stiffness = stiffness;
         self
     }
-    
+
     /// Sets the spring damping.
     #[must_use]
     pub const fn with_damping(mut self, damping: f32) -> Self {
@@ -268,10 +268,10 @@ impl SpringJoint {
 pub struct FixedJoint {
     /// The other entity this joint connects to.
     pub connected_entity: Entity,
-    
+
     /// Local anchor point on this body.
     pub local_anchor1: Vec3,
-    
+
     /// Local anchor point on the connected body.
     pub local_anchor2: Vec3,
 }

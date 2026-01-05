@@ -119,9 +119,9 @@ impl ChromeTraceEvent {
 
     /// Adds an argument to this event.
     pub fn with_arg(mut self, key: String, value: serde_json::Value) -> Self {
-        let args = self.args.get_or_insert_with(|| {
-            serde_json::Value::Object(serde_json::Map::new())
-        });
+        let args = self
+            .args
+            .get_or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
 
         if let Some(map) = args.as_object_mut() {
             map.insert(key, value);
@@ -208,25 +208,13 @@ impl ChromeTraceExporter {
         let timestamp = start_time.duration_since(self.start_time);
         let tid = thread_id_to_u64(thread_id);
 
-        let event = ChromeTraceEvent::duration(
-            name,
-            category,
-            timestamp,
-            duration,
-            self.pid,
-            tid,
-        );
+        let event = ChromeTraceEvent::duration(name, category, timestamp, duration, self.pid, tid);
 
         self.trace.add_event(event);
     }
 
     /// Adds a GPU timing to the trace.
-    pub fn add_gpu_timing(
-        &mut self,
-        name: String,
-        start_ns: u64,
-        duration_ns: u64,
-    ) {
+    pub fn add_gpu_timing(&mut self, name: String, start_ns: u64, duration_ns: u64) {
         let timestamp = Duration::from_nanos(start_ns);
         let duration = Duration::from_nanos(duration_ns);
 
@@ -243,12 +231,7 @@ impl ChromeTraceExporter {
     }
 
     /// Adds a memory counter to the trace.
-    pub fn add_memory_counter(
-        &mut self,
-        name: String,
-        timestamp: Instant,
-        bytes: usize,
-    ) {
+    pub fn add_memory_counter(&mut self, name: String, timestamp: Instant, bytes: usize) {
         let timestamp = timestamp.duration_since(self.start_time);
 
         let event = ChromeTraceEvent::counter(
@@ -322,6 +305,8 @@ fn thread_id_to_u64(thread_id: std::thread::ThreadId) -> u64 {
     // This is a bit of a hack, but ThreadId doesn't expose its inner value
     // We use the debug format which includes the numeric ID
     let debug_str = format!("{thread_id:?}");
-    let id_str = debug_str.trim_start_matches("ThreadId(").trim_end_matches(')');
+    let id_str = debug_str
+        .trim_start_matches("ThreadId(")
+        .trim_end_matches(')');
     id_str.parse().unwrap_or(0)
 }

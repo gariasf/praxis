@@ -6,7 +6,7 @@
 use crate::{
     aabb::Aabb,
     frustum::FrustumCuller,
-    lod::{SpatialLodManager, LodSelection},
+    lod::{LodSelection, SpatialLodManager},
 };
 use bevy_ecs::entity::Entity;
 use praxis_math::{Mat4, Vec3};

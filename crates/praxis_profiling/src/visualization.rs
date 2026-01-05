@@ -216,12 +216,7 @@ impl MemoryGraph {
 
     /// Returns the maximum memory usage.
     pub fn max_mb(&self) -> f32 {
-        self.memory_usage
-            .iter()
-            .max()
-            .copied()
-            .unwrap_or(0) as f32
-            / (1024.0 * 1024.0)
+        self.memory_usage.iter().max().copied().unwrap_or(0) as f32 / (1024.0 * 1024.0)
     }
 
     /// Returns the current memory usage.

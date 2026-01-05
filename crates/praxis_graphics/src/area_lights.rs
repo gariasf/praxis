@@ -33,10 +33,10 @@
 //! # }
 //! ```
 
+use bytemuck::Zeroable;
 use praxis_math::{Mat4, Vec3};
 use praxis_utils::{eyre, Result};
 use std::sync::Arc;
-use bytemuck::Zeroable;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     device::Device,

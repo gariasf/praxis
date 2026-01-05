@@ -7,8 +7,8 @@
 //! - Export to Chrome tracing format
 
 use praxis_profiling::{
-    AllocationTracker, FramePhase, GpuProfiler, LeakDetector, Profiler, ProfilerConfig,
-    ProfileScope, SystemProfiler,
+    AllocationTracker, FramePhase, GpuProfiler, LeakDetector, ProfileScope, Profiler,
+    ProfilerConfig, SystemProfiler,
 };
 use std::sync::Arc;
 use std::thread;
@@ -156,11 +156,9 @@ fn simulate_work(duration: Duration) {
 fn print_profiler_stats(profiler: &Profiler) {
     let stats = profiler.statistics();
 
-    println!("Frame {}: {:.1} FPS, {:.2}ms CPU, {} bytes allocated",
-        stats.frame_number,
-        stats.avg_fps,
-        stats.cpu_time_ms,
-        stats.memory_allocated
+    println!(
+        "Frame {}: {:.1} FPS, {:.2}ms CPU, {} bytes allocated",
+        stats.frame_number, stats.avg_fps, stats.cpu_time_ms, stats.memory_allocated
     );
 
     // Print frame breakdown
@@ -198,15 +196,22 @@ fn print_final_stats(profiler: &Profiler) {
     println!();
 
     println!("Memory:");
-    println!("  Current allocated: {:.2} MB", stats.memory_allocated as f64 / (1024.0 * 1024.0));
-    println!("  Peak allocated: {:.2} MB", stats.memory_peak as f64 / (1024.0 * 1024.0));
+    println!(
+        "  Current allocated: {:.2} MB",
+        stats.memory_allocated as f64 / (1024.0 * 1024.0)
+    );
+    println!(
+        "  Peak allocated: {:.2} MB",
+        stats.memory_peak as f64 / (1024.0 * 1024.0)
+    );
     println!();
 
     // Print system statistics
     println!("System Performance:");
     let system_stats = profiler.system_profiler().system_statistics();
     for stat in system_stats.iter().take(5) {
-        println!("  {:<20} avg: {:>7.2}ms ({:>5.1}%)",
+        println!(
+            "  {:<20} avg: {:>7.2}ms ({:>5.1}%)",
             stat.name,
             stat.avg_time.as_secs_f64() * 1000.0,
             stat.frame_percentage
@@ -220,7 +225,8 @@ fn print_final_stats(profiler: &Profiler) {
         println!("⚠ Bottlenecks Detected:");
         for bottleneck in bottlenecks {
             println!("  {} ({:?})", bottleneck.name, bottleneck.bottleneck_type);
-            println!("    Time: {:.2}ms ({:.1}%)",
+            println!(
+                "    Time: {:.2}ms ({:.1}%)",
                 bottleneck.avg_time.as_secs_f64() * 1000.0,
                 bottleneck.percentage
             );
@@ -242,16 +248,10 @@ fn demonstrate_leak_detection(profiler: &Profiler) {
     println!("Created memory checkpoint");
 
     // Allocate some memory
-    let alloc1 = memory_tracker.track_allocation(
-        1024,
-        "test_leak_1".to_string(),
-        "Test".to_string(),
-    );
-    let alloc2 = memory_tracker.track_allocation(
-        2048,
-        "test_leak_2".to_string(),
-        "Test".to_string(),
-    );
+    let alloc1 =
+        memory_tracker.track_allocation(1024, "test_leak_1".to_string(), "Test".to_string());
+    let alloc2 =
+        memory_tracker.track_allocation(2048, "test_leak_2".to_string(), "Test".to_string());
 
     thread::sleep(Duration::from_millis(100));
 
@@ -263,11 +263,9 @@ fn demonstrate_leak_detection(profiler: &Profiler) {
     println!("Detected {} potential leak(s)", leaks.len());
 
     for (id, alloc) in leaks {
-        println!("  Allocation {} at {}: {} bytes (category: {})",
-            id,
-            alloc.location,
-            alloc.size,
-            alloc.category
+        println!(
+            "  Allocation {} at {}: {} bytes (category: {})",
+            id, alloc.location, alloc.size, alloc.category
         );
     }
 

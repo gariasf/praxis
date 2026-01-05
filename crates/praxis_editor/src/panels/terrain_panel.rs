@@ -76,9 +76,21 @@ impl EditorPanel for TerrainPanel {
 
         ui.horizontal(|ui| {
             ui.label("Operation:");
-            ui.selectable_value(&mut self.tool.operation, TerrainEditOperation::Raise, "Raise");
-            ui.selectable_value(&mut self.tool.operation, TerrainEditOperation::Lower, "Lower");
-            ui.selectable_value(&mut self.tool.operation, TerrainEditOperation::Smooth, "Smooth");
+            ui.selectable_value(
+                &mut self.tool.operation,
+                TerrainEditOperation::Raise,
+                "Raise",
+            );
+            ui.selectable_value(
+                &mut self.tool.operation,
+                TerrainEditOperation::Lower,
+                "Lower",
+            );
+            ui.selectable_value(
+                &mut self.tool.operation,
+                TerrainEditOperation::Smooth,
+                "Smooth",
+            );
             ui.selectable_value(
                 &mut self.tool.operation,
                 TerrainEditOperation::Flatten,
@@ -174,7 +186,14 @@ impl EditorPanel for TerrainPanel {
         ui.add_space(20.0);
         ui.separator();
 
-        if ui.button(if self.tool.is_active { "✓ Tool Active" } else { "Activate Tool" }).clicked() {
+        if ui
+            .button(if self.tool.is_active {
+                "✓ Tool Active"
+            } else {
+                "Activate Tool"
+            })
+            .clicked()
+        {
             if self.tool.is_active {
                 self.tool.deactivate();
             } else {

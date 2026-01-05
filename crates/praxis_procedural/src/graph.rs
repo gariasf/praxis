@@ -330,7 +330,9 @@ impl TextureGraph {
             let inputs = self.get_node_inputs(node);
             for input in inputs {
                 if !self.nodes.contains_key(&input) {
-                    return Err(format!("Node {id:?} references non-existent input {input:?}"));
+                    return Err(format!(
+                        "Node {id:?} references non-existent input {input:?}"
+                    ));
                 }
             }
         }
@@ -350,7 +352,9 @@ impl TextureGraph {
             | TextureNode::Threshold { input, .. }
             | TextureNode::Contrast { input, .. }
             | TextureNode::Brightness { input, .. } => vec![*input],
-            TextureNode::Blend { input_a, input_b, .. } => vec![*input_a, *input_b],
+            TextureNode::Blend {
+                input_a, input_b, ..
+            } => vec![*input_a, *input_b],
             _ => vec![],
         }
     }

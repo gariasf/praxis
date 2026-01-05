@@ -3,9 +3,7 @@
 //! This module provides a system for creating material instances that share
 //! texture data but allow per-object property overrides without full duplication.
 
-use crate::material::{
-    ExtendedPbrProperties, Material, MaterialProperties, ParallaxProperties,
-};
+use crate::material::{ExtendedPbrProperties, Material, MaterialProperties, ParallaxProperties};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -108,9 +106,7 @@ impl MaterialInstanceManager {
         let instance_id = instance_id.into();
         let instance = MaterialInstance::new(base_material);
         self.instances.insert(instance_id.clone(), instance);
-        self.instances
-            .get_mut(&instance_id)
-            .expect("Just inserted")
+        self.instances.get_mut(&instance_id).expect("Just inserted")
     }
 
     /// Gets a material instance.

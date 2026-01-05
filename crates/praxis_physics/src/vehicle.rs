@@ -15,22 +15,22 @@ use praxis_math::Vec3;
 pub struct Vehicle {
     /// Current steering angle in radians (-1.0 to 1.0, normalized).
     pub steering: f32,
-    
+
     /// Current throttle input (0.0 to 1.0).
     pub throttle: f32,
-    
+
     /// Current brake input (0.0 to 1.0).
     pub brake: f32,
-    
+
     /// Maximum steering angle in radians.
     pub max_steering_angle: f32,
-    
+
     /// Engine torque in Newton-meters.
     pub engine_torque: f32,
-    
+
     /// Brake force in Newtons.
     pub brake_force: f32,
-    
+
     /// Center of mass offset from the vehicle's transform origin.
     pub center_of_mass: Vec3,
 }
@@ -49,17 +49,17 @@ impl Vehicle {
             center_of_mass: Vec3::new(0.0, -0.5, 0.0),
         }
     }
-    
+
     /// Sets the steering input (-1.0 to 1.0).
     pub fn set_steering(&mut self, steering: f32) {
         self.steering = steering.clamp(-1.0, 1.0);
     }
-    
+
     /// Sets the throttle input (0.0 to 1.0).
     pub fn set_throttle(&mut self, throttle: f32) {
         self.throttle = throttle.clamp(0.0, 1.0);
     }
-    
+
     /// Sets the brake input (0.0 to 1.0).
     pub fn set_brake(&mut self, brake: f32) {
         self.brake = brake.clamp(0.0, 1.0);
@@ -79,40 +79,40 @@ impl Default for Vehicle {
 pub struct WheelCollider {
     /// Wheel radius in meters.
     pub radius: f32,
-    
+
     /// Wheel width in meters (for collision detection).
     pub width: f32,
-    
+
     /// Mass of the wheel in kilograms.
     pub mass: f32,
-    
+
     /// Local position of the wheel relative to the vehicle chassis.
     pub local_position: Vec3,
-    
+
     /// Whether this wheel receives steering input.
     pub steerable: bool,
-    
+
     /// Whether this wheel receives engine torque.
     pub powered: bool,
-    
+
     /// Suspension configuration.
     pub suspension: WheelSuspension,
-    
+
     /// Current suspension compression (0.0 = fully extended, 1.0 = fully compressed).
     pub suspension_compression: f32,
-    
+
     /// Current wheel rotation angle in radians.
     pub rotation_angle: f32,
-    
+
     /// Current wheel angular velocity in radians per second.
     pub angular_velocity: f32,
-    
+
     /// Whether the wheel is currently grounded.
     pub is_grounded: bool,
-    
+
     /// Ground contact normal (if grounded).
     pub ground_normal: Vec3,
-    
+
     /// Ground contact point in world space (if grounded).
     pub ground_point: Vec3,
 }
@@ -137,35 +137,35 @@ impl WheelCollider {
             ground_point: Vec3::ZERO,
         }
     }
-    
+
     /// Marks this wheel as steerable (receives steering input).
     #[must_use]
     pub const fn steerable(mut self) -> Self {
         self.steerable = true;
         self
     }
-    
+
     /// Marks this wheel as powered (receives engine torque).
     #[must_use]
     pub const fn powered(mut self) -> Self {
         self.powered = true;
         self
     }
-    
+
     /// Sets the wheel width.
     #[must_use]
     pub const fn with_width(mut self, width: f32) -> Self {
         self.width = width;
         self
     }
-    
+
     /// Sets the wheel mass.
     #[must_use]
     pub const fn with_mass(mut self, mass: f32) -> Self {
         self.mass = mass;
         self
     }
-    
+
     /// Sets the suspension configuration.
     #[must_use]
     pub const fn with_suspension(mut self, suspension: WheelSuspension) -> Self {
@@ -181,13 +181,13 @@ impl WheelCollider {
 pub struct WheelSuspension {
     /// Maximum suspension travel distance in meters.
     pub travel: f32,
-    
+
     /// Spring stiffness in Newtons per meter.
     pub spring_stiffness: f32,
-    
+
     /// Damping coefficient in Newton-seconds per meter.
     pub damping: f32,
-    
+
     /// Rest position of the suspension (0.0 = fully extended, 1.0 = fully compressed).
     pub rest_position: f32,
 }
@@ -223,13 +223,13 @@ impl Default for WheelSuspension {
 pub struct WheelFriction {
     /// Forward friction coefficient (for acceleration/braking).
     pub forward_grip: f32,
-    
+
     /// Sideways friction coefficient (for cornering).
     pub sideways_grip: f32,
-    
+
     /// Forward slip stiffness (how quickly grip is applied).
     pub forward_stiffness: f32,
-    
+
     /// Sideways slip stiffness.
     pub sideways_stiffness: f32,
 }
@@ -245,7 +245,7 @@ impl WheelFriction {
             sideways_stiffness: 2.0,
         }
     }
-    
+
     /// Creates friction settings for dirt/gravel.
     #[must_use]
     pub const fn dirt() -> Self {
@@ -256,7 +256,7 @@ impl WheelFriction {
             sideways_stiffness: 1.5,
         }
     }
-    
+
     /// Creates friction settings for ice.
     #[must_use]
     pub const fn ice() -> Self {

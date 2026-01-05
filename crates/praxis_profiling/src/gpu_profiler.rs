@@ -140,7 +140,7 @@ impl GpuProfiler {
         self.current_pool_index = (self.current_pool_index + 1) % self.query_pools.len();
         self.next_query_index = 0;
         self.active_queries.clear();
-        
+
         // Note: Query pool reset needs to be done on the GPU timeline
         // This is typically done at the start of command buffer recording
     }
@@ -153,7 +153,7 @@ impl GpuProfiler {
         builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
     ) -> Result<()> {
         let pool = self.query_pools[self.current_pool_index].clone();
-        
+
         unsafe {
             builder
                 .reset_query_pool(pool.clone(), 0..self.queries_per_pool)
@@ -241,7 +241,8 @@ impl GpuProfiler {
 
                     if start_ts > 0 && end_ts > 0 && end_ts >= start_ts {
                         let duration_raw = end_ts - start_ts;
-                        let duration_ns = (duration_raw as f64 * self.timestamp_period as f64) as u64;
+                        let duration_ns =
+                            (duration_raw as f64 * self.timestamp_period as f64) as u64;
 
                         results.push(GpuTimestamp {
                             name: format!("Query_{}", i / 2),

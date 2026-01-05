@@ -50,11 +50,7 @@ impl VegetationInstance {
 
     /// Computes the model matrix for this instance.
     pub fn model_matrix(&self) -> Mat4 {
-        Mat4::from_scale_rotation_translation(
-            Vec3::splat(self.scale),
-            self.rotation,
-            self.position,
-        )
+        Mat4::from_scale_rotation_translation(Vec3::splat(self.scale), self.rotation, self.position)
     }
 }
 
@@ -243,13 +239,11 @@ impl VegetationDistributor {
 
             let position = Vec3::new(x, y, z);
 
-            let too_close = instances
-                .iter()
-                .any(|inst: &VegetationInstance| {
-                    let dx = inst.position.x - position.x;
-                    let dz = inst.position.z - position.z;
-                    (dx * dx + dz * dz) < min_distance * min_distance
-                });
+            let too_close = instances.iter().any(|inst: &VegetationInstance| {
+                let dx = inst.position.x - position.x;
+                let dz = inst.position.z - position.z;
+                (dx * dx + dz * dz) < min_distance * min_distance
+            });
 
             if too_close {
                 continue;

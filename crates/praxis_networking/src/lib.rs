@@ -48,30 +48,24 @@ mod replication;
 mod server;
 mod transport;
 
-pub use client::{NetworkClient, ClientState, ConnectionError};
+pub use client::{ClientState, ConnectionError, NetworkClient};
 pub use components::{
-    NetworkId, NetworkOwner, Replicated, ReplicatedTransform, ReplicatedVelocity,
-    NetworkInterpolation, NetworkExtrapolation, ClientPredicted, ServerAuthoritative,
+    ClientPredicted, NetworkExtrapolation, NetworkId, NetworkInterpolation, NetworkOwner,
+    Replicated, ReplicatedTransform, ReplicatedVelocity, ServerAuthoritative,
 };
 pub use interpolation::{
-    InterpolationBuffer, InterpolationSystem, ExtrapolationSystem, SnapshotBuffer,
+    ExtrapolationSystem, InterpolationBuffer, InterpolationSystem, SnapshotBuffer,
 };
 pub use lag_compensation::{
-    LagCompensation, LagCompensationSystem, HistoryBuffer, ClientStateHistory,
+    ClientStateHistory, HistoryBuffer, LagCompensation, LagCompensationSystem,
 };
-pub use message::{
-    NetworkMessage, MessageType, EntitySnapshot, ComponentData, ReplicationMessage,
-};
-pub use profiler::{
-    NetworkProfiler, BandwidthMetrics, LatencyMetrics, ProfilerStats,
-};
+pub use message::{ComponentData, EntitySnapshot, MessageType, NetworkMessage, ReplicationMessage};
+pub use profiler::{BandwidthMetrics, LatencyMetrics, NetworkProfiler, ProfilerStats};
 pub use replication::{
-    ReplicationRegistry, ReplicationSystem, EntityReplicator, ComponentSerializer,
+    ComponentSerializer, EntityReplicator, ReplicationRegistry, ReplicationSystem,
 };
-pub use server::{NetworkServer, ServerState, ClientConnection};
-pub use transport::{
-    NetworkTransport, TcpTransport, UdpTransport, TransportConfig, SocketAddr,
-};
+pub use server::{ClientConnection, NetworkServer, ServerState};
+pub use transport::{NetworkTransport, SocketAddr, TcpTransport, TransportConfig, UdpTransport};
 
 use praxis_utils::Result;
 
@@ -80,31 +74,31 @@ use praxis_utils::Result;
 pub struct NetworkConfig {
     /// Server bind address (e.g., "0.0.0.0:7777")
     pub bind_addr: String,
-    
+
     /// Maximum number of connected clients
     pub max_clients: usize,
-    
+
     /// Network tick rate in Hz
     pub tick_rate: u32,
-    
+
     /// Enable interpolation for remote entities
     pub enable_interpolation: bool,
-    
+
     /// Enable extrapolation for remote entities
     pub enable_extrapolation: bool,
-    
+
     /// Interpolation delay in milliseconds
     pub interpolation_delay_ms: u32,
-    
+
     /// Enable lag compensation
     pub enable_lag_compensation: bool,
-    
+
     /// Maximum lag compensation history in milliseconds
     pub lag_compensation_history_ms: u32,
-    
+
     /// Maximum packet size in bytes
     pub max_packet_size: usize,
-    
+
     /// Enable network profiling
     pub enable_profiling: bool,
 }

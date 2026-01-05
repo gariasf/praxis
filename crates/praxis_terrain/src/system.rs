@@ -237,14 +237,14 @@ impl TerrainSystem {
             self.create_chunk(chunk_id);
         }
 
-        self.chunks
-            .retain(|id, _| id.distance_to(camera_pos, self.config.chunk_size) < view_distance * 1.5);
+        self.chunks.retain(|id, _| {
+            id.distance_to(camera_pos, self.config.chunk_size) < view_distance * 1.5
+        });
     }
 
     /// Creates a new terrain chunk.
     fn create_chunk(&mut self, chunk_id: TerrainChunkId) {
-        let mut chunk =
-            TerrainChunk::new(chunk_id, self.config.chunk_size, self.config.lod_levels);
+        let mut chunk = TerrainChunk::new(chunk_id, self.config.chunk_size, self.config.lod_levels);
         chunk.update_bounds(&self.heightmap, self.config.chunk_size);
 
         if let Some(memory_allocator) = &self.memory_allocator {
@@ -261,11 +261,7 @@ impl TerrainSystem {
     }
 
     /// Generates mesh data for a chunk at a specific LOD level.
-    fn generate_chunk_mesh(
-        &self,
-        chunk_id: TerrainChunkId,
-        lod_level: usize,
-    ) -> Result<MeshData> {
+    fn generate_chunk_mesh(&self, chunk_id: TerrainChunkId, lod_level: usize) -> Result<MeshData> {
         let vertices_per_side = self
             .lod_manager
             .get_vertex_count(self.config.vertices_per_chunk, lod_level);
@@ -286,42 +282,46 @@ impl TerrainSystem {
         mesh_data: &MeshData,
         memory_allocator: &Arc<StandardMemoryAllocator>,
     ) -> Result<GpuMesh> {
-        mesh_data.upload(memory_allocator.clone())
+        mesh_data
+            .upload(memory_allocator.clone())
             .map_err(|e| eyre::eyre!("Failed to upload terrain mesh to GPU: {}", e))
     }
 
     /// Generates vegetation for the entire terrain using parallel processing.
     pub fn generate_vegetation(&mut self) -> Result<()> {
-        info!("Generating vegetation for {} layers...", self.vegetation_layers.len());
-        
+        info!(
+            "Generating vegetation for {} layers...",
+            self.vegetation_layers.len()
+        );
+
         let bounds_min = Vec3::ZERO;
         let bounds_max = Vec3::new(self.config.world_size, 0.0, self.config.world_size);
 
-        self.vegetation_layers
-            .par_iter_mut()
-            .for_each(|layer| {
-                layer.clear_instances();
+        self.vegetation_layers.par_iter_mut().for_each(|layer| {
+            layer.clear_instances();
 
-                let height_fn = |x: f32, z: f32| {
-                    self.heightmap
-                        .get_height_at(x, z, self.config.world_size)
-                };
+            let height_fn =
+                |x: f32, z: f32| self.heightmap.get_height_at(x, z, self.config.world_size);
 
-                let normal_fn = |x: f32, z: f32| {
-                    let grid_x = (x / self.config.world_size * self.heightmap.width as f32) as u32;
-                    let grid_z = (z / self.config.world_size * self.heightmap.height as f32) as u32;
-                    self.heightmap
-                        .calculate_normal(grid_x, grid_z, self.config.world_scale)
-                };
+            let normal_fn = |x: f32, z: f32| {
+                let grid_x = (x / self.config.world_size * self.heightmap.width as f32) as u32;
+                let grid_z = (z / self.config.world_size * self.heightmap.height as f32) as u32;
+                self.heightmap
+                    .calculate_normal(grid_x, grid_z, self.config.world_scale)
+            };
 
-                if let Ok(instances) =
-                    VegetationDistributor::distribute(layer, bounds_min, bounds_max, height_fn, normal_fn)
-                {
-                    layer.instances = instances;
-                }
-            });
+            if let Ok(instances) = VegetationDistributor::distribute(
+                layer, bounds_min, bounds_max, height_fn, normal_fn,
+            ) {
+                layer.instances = instances;
+            }
+        });
 
-        let total_instances: usize = self.vegetation_layers.iter().map(|l| l.instances.len()).sum();
+        let total_instances: usize = self
+            .vegetation_layers
+            .iter()
+            .map(|l| l.instances.len())
+            .sum();
         info!("Generated {} total vegetation instances", total_instances);
 
         Ok(())
@@ -343,10 +343,7 @@ impl TerrainSystem {
         let bounds_min = Vec3::new(center.x - radius, 0.0, center.z - radius);
         let bounds_max = Vec3::new(center.x + radius, 0.0, center.z + radius);
 
-        let height_fn = |x: f32, z: f32| {
-            self.heightmap
-                .get_height_at(x, z, self.config.world_size)
-        };
+        let height_fn = |x: f32, z: f32| self.heightmap.get_height_at(x, z, self.config.world_size);
 
         let normal_fn = |x: f32, z: f32| {
             let grid_x = (x / self.config.world_size * self.heightmap.width as f32) as u32;

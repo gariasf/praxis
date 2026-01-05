@@ -29,12 +29,20 @@ mod hot_reload;
 mod performance;
 mod sandbox;
 mod script_component;
+mod systems;
 
-pub use context::{ScriptingContext, ScriptingConfig};
+pub use context::{ScriptingConfig, ScriptingContext};
 pub use hot_reload::{HotReloadWatcher, ScriptEvent};
 pub use performance::{ScriptPerformanceMonitor, ScriptStats};
 pub use sandbox::{SandboxConfig, SandboxLevel};
 pub use script_component::{ScriptComponent, ScriptInstance};
+pub use systems::{
+    script_hot_reload_system, script_initialization_system, script_start_system,
+    script_update_system, ScriptingResource,
+};
+
+// Re-export mlua types for use in examples and user code
+pub use mlua;
 
 use praxis_utils::{info, Result};
 

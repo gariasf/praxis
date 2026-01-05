@@ -17,16 +17,16 @@ use praxis_math::Vec3;
 pub struct Ragdoll {
     /// Whether the ragdoll is currently active (physics-driven).
     pub active: bool,
-    
+
     /// Bone entities that make up this ragdoll.
     pub bones: Vec<RagdollBone>,
-    
+
     /// Blend factor between animated and physics-driven poses (0.0 = animation, 1.0 = physics).
     pub physics_blend: f32,
-    
+
     /// Time until ragdoll becomes fully active after activation.
     pub activation_time: f32,
-    
+
     /// Current activation timer.
     pub activation_timer: f32,
 }
@@ -43,20 +43,20 @@ impl Ragdoll {
             activation_timer: 0.0,
         }
     }
-    
+
     /// Activates the ragdoll physics.
     pub fn activate(&mut self) {
         self.active = true;
         self.activation_timer = 0.0;
     }
-    
+
     /// Deactivates the ragdoll physics.
     pub fn deactivate(&mut self) {
         self.active = false;
         self.physics_blend = 0.0;
         self.activation_timer = 0.0;
     }
-    
+
     /// Adds a bone to the ragdoll.
     pub fn add_bone(&mut self, bone: RagdollBone) {
         self.bones.push(bone);
@@ -74,16 +74,16 @@ impl Default for Ragdoll {
 pub struct RagdollBone {
     /// Entity representing this bone's rigid body.
     pub entity: Entity,
-    
+
     /// Bone name/identifier.
     pub name: String,
-    
+
     /// Parent bone index (None for root bone).
     pub parent: Option<usize>,
-    
+
     /// Local offset from parent bone.
     pub local_offset: Vec3,
-    
+
     /// Bone configuration.
     pub config: RagdollBoneConfig,
 }
@@ -100,21 +100,21 @@ impl RagdollBone {
             config: RagdollBoneConfig::default(),
         }
     }
-    
+
     /// Sets the parent bone.
     #[must_use]
     pub const fn with_parent(mut self, parent: usize) -> Self {
         self.parent = Some(parent);
         self
     }
-    
+
     /// Sets the local offset.
     #[must_use]
     pub const fn with_offset(mut self, offset: Vec3) -> Self {
         self.local_offset = offset;
         self
     }
-    
+
     /// Sets the bone configuration.
     #[must_use]
     pub const fn with_config(mut self, config: RagdollBoneConfig) -> Self {
@@ -128,13 +128,13 @@ impl RagdollBone {
 pub struct RagdollBoneConfig {
     /// Mass of the bone in kilograms.
     pub mass: f32,
-    
+
     /// Angular damping (resistance to rotation).
     pub angular_damping: f32,
-    
+
     /// Linear damping (resistance to translation).
     pub linear_damping: f32,
-    
+
     /// Collision group for this bone.
     pub collision_group: u32,
 }
@@ -150,7 +150,7 @@ impl RagdollBoneConfig {
             collision_group: 1,
         }
     }
-    
+
     /// Creates configuration for a torso/chest bone.
     #[must_use]
     pub const fn torso() -> Self {
@@ -161,7 +161,7 @@ impl RagdollBoneConfig {
             collision_group: 1,
         }
     }
-    
+
     /// Creates configuration for an upper arm bone.
     #[must_use]
     pub const fn upper_arm() -> Self {
@@ -172,7 +172,7 @@ impl RagdollBoneConfig {
             collision_group: 2,
         }
     }
-    
+
     /// Creates configuration for a lower arm bone.
     #[must_use]
     pub const fn lower_arm() -> Self {
@@ -183,7 +183,7 @@ impl RagdollBoneConfig {
             collision_group: 2,
         }
     }
-    
+
     /// Creates configuration for an upper leg bone.
     #[must_use]
     pub const fn upper_leg() -> Self {
@@ -194,7 +194,7 @@ impl RagdollBoneConfig {
             collision_group: 3,
         }
     }
-    
+
     /// Creates configuration for a lower leg bone.
     #[must_use]
     pub const fn lower_leg() -> Self {
@@ -223,16 +223,16 @@ impl Default for RagdollBoneConfig {
 pub struct RagdollJoint {
     /// Entity of the connected bone.
     pub connected_bone: Entity,
-    
+
     /// Type of joint.
     pub joint_type: RagdollJointType,
-    
+
     /// Local anchor on this bone.
     pub local_anchor: Vec3,
-    
+
     /// Local anchor on the connected bone.
     pub connected_anchor: Vec3,
-    
+
     /// Joint limits.
     pub limits: RagdollJointLimits,
 }
@@ -254,7 +254,7 @@ impl RagdollJoint {
             limits: RagdollJointLimits::default(),
         }
     }
-    
+
     /// Sets the joint limits.
     #[must_use]
     pub const fn with_limits(mut self, limits: RagdollJointLimits) -> Self {
@@ -279,19 +279,19 @@ pub enum RagdollJointType {
 pub struct RagdollJointLimits {
     /// Minimum angle/twist in radians.
     pub min_angle: f32,
-    
+
     /// Maximum angle/twist in radians.
     pub max_angle: f32,
-    
+
     /// Swing1 limit for ball joints (radians).
     pub swing1_limit: f32,
-    
+
     /// Swing2 limit for ball joints (radians).
     pub swing2_limit: f32,
-    
+
     /// Joint stiffness (0.0 to 1.0).
     pub stiffness: f32,
-    
+
     /// Joint damping.
     pub damping: f32,
 }
@@ -309,7 +309,7 @@ impl RagdollJointLimits {
             damping: 0.1,
         }
     }
-    
+
     /// Creates elbow joint limits (hinge with limited range).
     #[must_use]
     pub const fn elbow() -> Self {
@@ -322,7 +322,7 @@ impl RagdollJointLimits {
             damping: 0.05,
         }
     }
-    
+
     /// Creates hip joint limits.
     #[must_use]
     pub const fn hip() -> Self {
@@ -335,7 +335,7 @@ impl RagdollJointLimits {
             damping: 0.1,
         }
     }
-    
+
     /// Creates knee joint limits.
     #[must_use]
     pub const fn knee() -> Self {
@@ -348,7 +348,7 @@ impl RagdollJointLimits {
             damping: 0.05,
         }
     }
-    
+
     /// Creates neck joint limits.
     #[must_use]
     pub const fn neck() -> Self {
@@ -391,14 +391,14 @@ impl RagdollBuilder {
             scale: 1.0,
         }
     }
-    
+
     /// Sets the scale factor for the ragdoll.
     #[must_use]
     pub const fn with_scale(mut self, scale: f32) -> Self {
         self.scale = scale;
         self
     }
-    
+
     /// Builds the ragdoll component.
     #[must_use]
     pub fn build(self) -> Ragdoll {
@@ -419,10 +419,10 @@ impl Default for RagdollBuilder {
 pub struct RagdollMotor {
     /// Target angle or position for the motor.
     pub target: f32,
-    
+
     /// Maximum force/torque the motor can apply.
     pub max_force: f32,
-    
+
     /// Whether the motor is active.
     pub enabled: bool,
 }
@@ -437,7 +437,7 @@ impl RagdollMotor {
             enabled: true,
         }
     }
-    
+
     /// Disables the motor.
     #[must_use]
     pub const fn disabled() -> Self {

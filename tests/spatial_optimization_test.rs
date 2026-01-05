@@ -9,7 +9,8 @@
 use praxis_ecs::{BoundingBox, World};
 use praxis_math::{Mat4, Vec3};
 use praxis_spatial::{
-    Aabb, Bvh, CullReason, FrustumCuller, LodGroup, LodLevel, SpatialLodManager, Octree, VisibilitySystem,
+    Aabb, Bvh, CullReason, FrustumCuller, LodGroup, LodLevel, Octree, SpatialLodManager,
+    VisibilitySystem,
 };
 
 #[test]
@@ -617,9 +618,9 @@ fn test_lod_manager_batch_selection() {
     manager.assign_entity(entity3, "tree");
 
     let entities = vec![
-        (entity1, Vec3::new(20.0, 0.0, 0.0)),  // Close - high detail
-        (entity2, Vec3::new(75.0, 0.0, 0.0)),  // Far - low detail
-        (entity3, Vec3::new(30.0, 0.0, 0.0)),  // Close - high detail
+        (entity1, Vec3::new(20.0, 0.0, 0.0)), // Close - high detail
+        (entity2, Vec3::new(75.0, 0.0, 0.0)), // Far - low detail
+        (entity3, Vec3::new(30.0, 0.0, 0.0)), // Close - high detail
     ];
 
     let selections = manager.select_lods(&entities, Vec3::ZERO);
@@ -636,10 +637,7 @@ fn test_lod_distance_calculation_accuracy() {
 
     manager.register_lod_levels(
         "test",
-        vec![
-            LodLevel::new(10.0, "lod0"),
-            LodLevel::new(20.0, "lod1"),
-        ],
+        vec![LodLevel::new(10.0, "lod0"), LodLevel::new(20.0, "lod1")],
     );
 
     let entity = bevy_ecs::entity::Entity::from_raw(1);

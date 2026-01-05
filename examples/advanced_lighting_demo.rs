@@ -6,9 +6,8 @@
 //! - Light linking for selective illumination
 
 use praxis_graphics::{
-    LightProbeManager, LightProbeGrid, VolumetricFog, VolumetricFogConfig, FogDensityFunction,
-    GodRays, GodRaysConfig, AreaLightManager,
-    LightLinkingManager,
+    AreaLightManager, FogDensityFunction, GodRays, GodRaysConfig, LightLinkingManager,
+    LightProbeGrid, LightProbeManager, VolumetricFog, VolumetricFogConfig,
 };
 use praxis_math::Vec3;
 use praxis_utils::Result;
@@ -137,7 +136,8 @@ impl AdvancedLightingDemo {
         println!("Volumetric fog: enabled");
         println!("God rays: enabled");
         println!("Area lights: 3 configured");
-        println!("Light linking: {} objects, {} lights",
+        println!(
+            "Light linking: {} objects, {} lights",
             self.light_linking_manager.list_objects().len(),
             self.light_linking_manager.list_lights().len()
         );
@@ -150,15 +150,18 @@ impl AdvancedLightingDemo {
 
     fn demonstrate_light_linking(&self) {
         println!("\n=== Light Linking Demonstration ===");
-        
+
         let objects = ["hero_character", "background_prop", "highlighted_item"];
         let lights = ["key_light", "ambient_light", "rim_light"];
-        
+
         for obj in &objects {
             println!("\nObject: {}", obj);
             for light in &lights {
-                let can_affect = self.light_linking_manager.can_light_affect_object(light, obj);
-                println!("  {} {} affect this object",
+                let can_affect = self
+                    .light_linking_manager
+                    .can_light_affect_object(light, obj);
+                println!(
+                    "  {} {} affect this object",
                     light,
                     if can_affect { "CAN" } else { "CANNOT" }
                 );

@@ -94,10 +94,10 @@ async fn run(window_config: WindowConfig) -> Result<()> {
 
         // Create LOD group with 4 levels
         let lod_group = LodGroup::new(vec![
-            LodLevel::new("sphere_high", 0.0, 15.0),        // 0-15 units
-            LodLevel::new("sphere_medium", 15.0, 35.0),     // 15-35 units
-            LodLevel::new("sphere_low", 35.0, 70.0),        // 35-70 units
-            LodLevel::new("sphere_very_low", 70.0, 150.0),  // 70-150 units
+            LodLevel::new("sphere_high", 0.0, 15.0),       // 0-15 units
+            LodLevel::new("sphere_medium", 15.0, 35.0),    // 15-35 units
+            LodLevel::new("sphere_low", 35.0, 70.0),       // 35-70 units
+            LodLevel::new("sphere_very_low", 70.0, 150.0), // 70-150 units
         ]);
 
         world.spawn((
@@ -157,18 +157,21 @@ async fn run(window_config: WindowConfig) -> Result<()> {
         // Update LOD system
         update_lod_system(
             world.query::<(&mut LodGroupComponent, &crate::praxis_ecs::GlobalTransform)>(),
-            world.query::<(&crate::praxis_ecs::Camera, &crate::praxis_ecs::GlobalTransform)>(),
+            world.query::<(
+                &crate::praxis_ecs::Camera,
+                &crate::praxis_ecs::GlobalTransform,
+            )>(),
             Some(world.resource::<DeltaTime>().copied()),
         );
 
         // Collect draw commands based on active LOD levels
         let mut draw_commands = Vec::new();
-        
+
         let lod_query = world.query::<(&LodGroupComponent, &Transform)>();
         for (lod_group, transform) in lod_query.iter(&world) {
             // Get meshes to render (may be multiple during transition)
             let render_meshes = lod_group.get_render_meshes();
-            
+
             for (mesh_id, alpha) in render_meshes {
                 draw_commands.push(DrawCommand {
                     mesh_id: mesh_id.to_string(),
@@ -180,11 +183,7 @@ async fn run(window_config: WindowConfig) -> Result<()> {
         }
 
         // Setup view and projection matrices
-        let view = Mat4::look_at_rh(
-            camera_pos,
-            camera_pos + Vec3::new(0.0, 0.0, -1.0),
-            Vec3::Y,
-        );
+        let view = Mat4::look_at_rh(camera_pos, camera_pos + Vec3::new(0.0, 0.0, -1.0), Vec3::Y);
         let proj = Mat4::perspective_rh(70.0_f32.to_radians(), 1280.0 / 720.0, 0.1, 1000.0);
 
         // Render

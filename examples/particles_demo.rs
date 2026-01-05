@@ -142,12 +142,7 @@ impl Default for ParticlesDemoApp {
 impl ParticlesDemoApp {
     async fn setup_scene(
         window: Arc<Window>,
-    ) -> Result<(
-        World,
-        RenderContext,
-        ParticleSystem,
-        praxis_ecs::Entity,
-    )> {
+    ) -> Result<(World, RenderContext, ParticleSystem, praxis_ecs::Entity)> {
         info!("Setting up particle demo scene");
 
         let mut render_context = RenderContext::new(window.clone()).await?;
@@ -372,7 +367,8 @@ impl ParticlesDemoApp {
             });
 
             // Add ground collision plane
-            let ground_plane = CollisionPlane::new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
+            let ground_plane =
+                CollisionPlane::new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
             particle_system.add_collision_plane(ground_plane);
 
             info!("Particle emitters configured successfully");
@@ -593,13 +589,12 @@ impl ParticlesDemoApp {
             if let Some(transform) = inner.get::<Transform>(camera_entity) {
                 let pos = transform.translation;
                 let rot = transform.rotation;
-                
-                if let Some(projection) = inner.get::<praxis_ecs::PerspectiveProjection>(camera_entity) {
-                    let view = praxis_math::Mat4::look_at_rh(
-                        pos,
-                        pos + (rot * Vec3::NEG_Z),
-                        Vec3::Y,
-                    );
+
+                if let Some(projection) =
+                    inner.get::<praxis_ecs::PerspectiveProjection>(camera_entity)
+                {
+                    let view =
+                        praxis_math::Mat4::look_at_rh(pos, pos + (rot * Vec3::NEG_Z), Vec3::Y);
                     let proj_matrix = projection.compute_matrix();
                     (Some(pos), Some((view, proj_matrix)))
                 } else {
@@ -847,7 +842,10 @@ impl ApplicationHandler for ParticlesDemoApp {
                 ..
             } => {
                 self.fire_enabled = !self.fire_enabled;
-                println!("Fire emitter: {}", if self.fire_enabled { "ON" } else { "OFF" });
+                println!(
+                    "Fire emitter: {}",
+                    if self.fire_enabled { "ON" } else { "OFF" }
+                );
             }
             WindowEvent::KeyboardInput {
                 event:
@@ -859,7 +857,10 @@ impl ApplicationHandler for ParticlesDemoApp {
                 ..
             } => {
                 self.smoke_enabled = !self.smoke_enabled;
-                println!("Smoke emitter: {}", if self.smoke_enabled { "ON" } else { "OFF" });
+                println!(
+                    "Smoke emitter: {}",
+                    if self.smoke_enabled { "ON" } else { "OFF" }
+                );
             }
             WindowEvent::KeyboardInput {
                 event:

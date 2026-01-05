@@ -8,7 +8,7 @@
 //! - Visualization data generation
 
 use praxis_profiling::{
-    FramePhase, Profiler, ProfilerConfig, ProfileScope, ProfilingVisualization,
+    FramePhase, ProfileScope, Profiler, ProfilerConfig, ProfilingVisualization,
 };
 use std::thread;
 use std::time::Duration;
@@ -225,23 +225,31 @@ fn print_advanced_report(profiler: &Profiler, visualization: &ProfilingVisualiza
     println!("=== Frame {} Report ===", frame);
 
     let stats = profiler.statistics();
-    println!("  FPS: {:.1} (avg), {:.1} (min), {:.1} (max)",
+    println!(
+        "  FPS: {:.1} (avg), {:.1} (min), {:.1} (max)",
         stats.avg_fps, stats.min_fps, stats.max_fps
     );
     println!("  CPU: {:.2}ms", stats.cpu_time_ms);
-    println!("  Memory: {:.2} MB", stats.memory_allocated as f64 / (1024.0 * 1024.0));
+    println!(
+        "  Memory: {:.2} MB",
+        stats.memory_allocated as f64 / (1024.0 * 1024.0)
+    );
 
     // Frame time statistics
     let ft_graph = &visualization.frame_time_graph;
-    println!("  Frame times: {:.2}ms avg, {:.2}ms min, {:.2}ms max",
-        ft_graph.average(), ft_graph.min(), ft_graph.max()
+    println!(
+        "  Frame times: {:.2}ms avg, {:.2}ms min, {:.2}ms max",
+        ft_graph.average(),
+        ft_graph.min(),
+        ft_graph.max()
     );
 
     // Top systems
     let top_systems = profiler.system_profiler().top_slowest_systems(3);
     println!("  Top systems:");
     for system in top_systems {
-        println!("    {}: {:.2}ms ({:.1}%)",
+        println!(
+            "    {}: {:.2}ms ({:.1}%)",
             system.name,
             system.avg_time.as_secs_f64() * 1000.0,
             system.frame_percentage
@@ -259,7 +267,8 @@ fn print_final_analysis(profiler: &Profiler, visualization: &ProfilingVisualizat
     // Overall performance
     println!("Overall Performance:");
     println!("  Average FPS: {:.1}", stats.avg_fps);
-    println!("  Frame time: {:.2}ms (avg), {:.2}ms (min), {:.2}ms (max)",
+    println!(
+        "  Frame time: {:.2}ms (avg), {:.2}ms (min), {:.2}ms (max)",
         visualization.frame_time_graph.average(),
         visualization.frame_time_graph.min(),
         visualization.frame_time_graph.max()
@@ -279,7 +288,8 @@ fn print_final_analysis(profiler: &Profiler, visualization: &ProfilingVisualizat
     println!("System Performance (Top 5):");
     let system_stats = profiler.system_profiler().system_statistics();
     for stat in system_stats.iter().take(5) {
-        println!("  {:<25} {:>7.2}ms ({:>5.1}%)",
+        println!(
+            "  {:<25} {:>7.2}ms ({:>5.1}%)",
             stat.name,
             stat.avg_time.as_secs_f64() * 1000.0,
             stat.frame_percentage
@@ -290,16 +300,32 @@ fn print_final_analysis(profiler: &Profiler, visualization: &ProfilingVisualizat
     // Memory analysis
     let mem_stats = profiler.memory_tracker().statistics();
     println!("Memory Usage:");
-    println!("  Current: {:.2} MB", mem_stats.current_allocated as f64 / (1024.0 * 1024.0));
-    println!("  Peak: {:.2} MB", mem_stats.peak_allocated as f64 / (1024.0 * 1024.0));
-    println!("  Total allocated: {:.2} MB", mem_stats.total_allocated as f64 / (1024.0 * 1024.0));
-    println!("  Total deallocated: {:.2} MB", mem_stats.total_deallocated as f64 / (1024.0 * 1024.0));
+    println!(
+        "  Current: {:.2} MB",
+        mem_stats.current_allocated as f64 / (1024.0 * 1024.0)
+    );
+    println!(
+        "  Peak: {:.2} MB",
+        mem_stats.peak_allocated as f64 / (1024.0 * 1024.0)
+    );
+    println!(
+        "  Total allocated: {:.2} MB",
+        mem_stats.total_allocated as f64 / (1024.0 * 1024.0)
+    );
+    println!(
+        "  Total deallocated: {:.2} MB",
+        mem_stats.total_deallocated as f64 / (1024.0 * 1024.0)
+    );
     println!("  Active allocations: {}", mem_stats.allocation_count);
     println!();
 
     println!("Memory by Category:");
     for (category, bytes) in &mem_stats.bytes_by_category {
-        println!("  {:<15} {:>7.2} MB", category, *bytes as f64 / (1024.0 * 1024.0));
+        println!(
+            "  {:<15} {:>7.2} MB",
+            category,
+            *bytes as f64 / (1024.0 * 1024.0)
+        );
     }
     println!();
 
@@ -309,7 +335,8 @@ fn print_final_analysis(profiler: &Profiler, visualization: &ProfilingVisualizat
         println!("⚠ Performance Bottlenecks:");
         for bottleneck in bottlenecks {
             println!("  {} ({:?})", bottleneck.name, bottleneck.bottleneck_type);
-            println!("    Time: {:.2}ms ({:.1}%)",
+            println!(
+                "    Time: {:.2}ms ({:.1}%)",
                 bottleneck.avg_time.as_secs_f64() * 1000.0,
                 bottleneck.percentage
             );
@@ -338,7 +365,11 @@ fn generate_performance_report(profiler: &Profiler) -> std::io::Result<()> {
     writeln!(file, "  Min FPS: {:.1}", stats.min_fps)?;
     writeln!(file, "  Max FPS: {:.1}", stats.max_fps)?;
     writeln!(file, "  Average CPU time: {:.2}ms", stats.cpu_time_ms)?;
-    writeln!(file, "  Peak memory: {:.2} MB\n", stats.memory_peak as f64 / (1024.0 * 1024.0))?;
+    writeln!(
+        file,
+        "  Peak memory: {:.2} MB\n",
+        stats.memory_peak as f64 / (1024.0 * 1024.0)
+    )?;
 
     writeln!(file, "System Performance:")?;
     let system_stats = profiler.system_profiler().system_statistics();
@@ -360,7 +391,9 @@ fn generate_performance_report(profiler: &Profiler) -> std::io::Result<()> {
         writeln!(file, "  None detected")?;
     } else {
         for bottleneck in bottlenecks {
-            writeln!(file, "  {}: {:.2}ms ({:.1}%)",
+            writeln!(
+                file,
+                "  {}: {:.2}ms ({:.1}%)",
                 bottleneck.name,
                 bottleneck.avg_time.as_secs_f64() * 1000.0,
                 bottleneck.percentage

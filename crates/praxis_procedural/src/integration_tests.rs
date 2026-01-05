@@ -4,8 +4,8 @@
 mod tests {
     use crate::{
         cache::{ProceduralTextureCache, TextureCacheKey},
-        graph::{BlendMode, ColorRamp, ColorStop, NoiseType, TextureGraph, TextureNode},
         generator::TextureGenerationParams,
+        graph::{BlendMode, ColorRamp, ColorStop, NoiseType, TextureGraph, TextureNode},
     };
 
     #[test]
@@ -78,10 +78,7 @@ mod tests {
             },
         ]);
 
-        let ramp_node = graph.add_node(TextureNode::ColorRamp {
-            input: noise,
-            ramp,
-        });
+        let ramp_node = graph.add_node(TextureNode::ColorRamp { input: noise, ramp });
 
         graph.set_output(ramp_node);
 

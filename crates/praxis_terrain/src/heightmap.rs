@@ -67,13 +67,7 @@ impl TerrainHeightmap {
     }
 
     /// Creates a heightmap using procedural noise.
-    pub fn from_noise(
-        width: u32,
-        height: u32,
-        max_height: f32,
-        scale: f64,
-        octaves: u32,
-    ) -> Self {
+    pub fn from_noise(width: u32, height: u32, max_height: f32, scale: f64, octaves: u32) -> Self {
         use noise::{NoiseFn, Perlin};
 
         let perlin = Perlin::new(42);
@@ -130,7 +124,8 @@ impl TerrainHeightmap {
     /// Gets interpolated height at world position (bilinear interpolation).
     pub fn get_height_at(&self, world_x: f32, world_z: f32, world_size: f32) -> f32 {
         let grid_x = (world_x / world_size * self.width as f32).clamp(0.0, self.width as f32 - 1.0);
-        let grid_z = (world_z / world_size * self.height as f32).clamp(0.0, self.height as f32 - 1.0);
+        let grid_z =
+            (world_z / world_size * self.height as f32).clamp(0.0, self.height as f32 - 1.0);
 
         let x0 = grid_x.floor() as u32;
         let z0 = grid_z.floor() as u32;

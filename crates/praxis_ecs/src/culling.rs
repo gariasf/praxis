@@ -42,7 +42,6 @@ pub fn is_entity_visible(world: &bevy_ecs::world::World, entity: Entity) -> bool
 
 #[cfg(test)]
 mod tests {
-    
 
     #[test]
     fn test_count_visible_compiles() {

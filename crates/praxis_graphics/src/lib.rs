@@ -441,8 +441,8 @@ pub mod mesh;
 pub mod particles;
 mod pipeline;
 pub mod post_process;
-pub mod procedural_texture;
 mod primitives;
+pub mod procedural_texture;
 mod shaders;
 pub mod shadow;
 pub mod skybox;
@@ -1622,14 +1622,25 @@ impl RenderContext {
 }
 
 // Public re-exports
+pub use area_lights::{
+    AreaLight, AreaLightData, AreaLightManager, AreaLightType, LtcMatrixData, MAX_AREA_LIGHTS,
+};
 pub use deferred::{DeferredRenderer, GBuffer};
 pub use environment_probe::{
     EnvironmentProbe, EnvironmentProbeCapture, EnvironmentProbeConfig, EnvironmentProbeManager,
     IblData, IblUniforms, ProbeUpdateMode, MAX_ENVIRONMENT_PROBES, SPECULAR_MIP_LEVELS,
 };
+pub use god_rays::{GodRays, GodRaysConfig, GodRaysRenderer, RadialBlurPass};
 pub use hdr::{
     calculate_luminance, ExposureCalculator, ExposureMode, HdrRenderTarget,
     ToneMapPass as HdrToneMapPass, ToneMapper, ToneMappingOperator,
+};
+pub use light_linking::{
+    LightChannel, LightLinkingManager, LightLinkingMask, DEFAULT_LIGHT_CHANNEL,
+};
+pub use light_probe::{
+    LightProbe, LightProbeData, LightProbeGrid, LightProbeManager, ProbeBlendMode,
+    MAX_LIGHT_PROBES, PROBE_IRRADIANCE_COEFFS,
 };
 pub use lighting::{
     DirectionalLightData, LightingUniformBuffer, LightingUniforms, PointLightData,
@@ -1640,8 +1651,8 @@ pub use lod::{
     LodGroup, LodLevel, LodManager, LodStatistics, DEFAULT_TRANSITION_DURATION, MAX_LOD_LEVELS,
 };
 pub use material::{
-    BlendMode, ExtendedPbrProperties, Material, MaterialLayer, MaterialManager,
-    MaterialProperties, ParallaxProperties,
+    BlendMode, ExtendedPbrProperties, Material, MaterialLayer, MaterialManager, MaterialProperties,
+    ParallaxProperties,
 };
 pub use material_instancing::{InstancingStats, MaterialInstance, MaterialInstanceManager};
 pub use material_layers::{
@@ -1655,11 +1666,11 @@ pub use particles::{
 };
 pub use post_process::{
     BloomConfig, BloomEffect, BrightnessExtractionPass, ChromaticAberrationConfig,
-    ChromaticAberrationPass, CopyPass, DepthOfFieldPass, DofConfig, FilmGrainConfig,
-    FilmGrainPass, FullScreenQuad, GaussianBlurHorizontalPass, GaussianBlurVerticalPass,
-    GrayscalePass, MotionBlurConfig, MotionBlurPass, PostProcessChain, PostProcessContext,
-    PostProcessPass, QuadVertex, RenderTarget, RenderTargetPool, ToneMapPass, VelocityUniforms,
-    VignetteConfig, VignettePass,
+    ChromaticAberrationPass, CopyPass, DepthOfFieldPass, DofConfig, FilmGrainConfig, FilmGrainPass,
+    FullScreenQuad, GaussianBlurHorizontalPass, GaussianBlurVerticalPass, GrayscalePass,
+    MotionBlurConfig, MotionBlurPass, PostProcessChain, PostProcessContext, PostProcessPass,
+    QuadVertex, RenderTarget, RenderTargetPool, ToneMapPass, VelocityUniforms, VignetteConfig,
+    VignettePass,
 };
 pub use primitives::{
     colored_cube_mesh, pyramid_mesh, quad_mesh, solid_cube_mesh, sphere_mesh, textured_cube_mesh,
@@ -1677,31 +1688,17 @@ pub use visual_feedback::{
     create_axis_indicator, create_bounding_box, create_grid, create_selection_outline,
     AxisIndicatorConfig, GridConfig,
 };
-pub use light_probe::{
-    LightProbe, LightProbeGrid, LightProbeManager, LightProbeData, ProbeBlendMode,
-    MAX_LIGHT_PROBES, PROBE_IRRADIANCE_COEFFS,
-};
 pub use volumetric_fog::{
-    VolumetricFog, VolumetricFogConfig, VolumetricFogRenderer, FogDensityFunction,
+    FogDensityFunction, VolumetricFog, VolumetricFogConfig, VolumetricFogRenderer,
     MAX_RAYMARCH_STEPS,
 };
-pub use god_rays::{
-    GodRays, GodRaysConfig, GodRaysRenderer, RadialBlurPass,
-};
-pub use area_lights::{
-    AreaLight, AreaLightType, AreaLightData, AreaLightManager, LtcMatrixData,
-    MAX_AREA_LIGHTS,
-};
-pub use light_linking::{
-    LightLinkingMask, LightLinkingManager, LightChannel, DEFAULT_LIGHT_CHANNEL,
-};
 
+pub mod area_lights;
 pub mod environment_probe;
+pub mod god_rays;
+pub mod light_linking;
 pub mod light_probe;
 pub mod volumetric_fog;
-pub mod god_rays;
-pub mod area_lights;
-pub mod light_linking;
 
 #[cfg(test)]
 mod advanced_lighting_tests;

@@ -42,6 +42,5 @@ pub use profiler::{Profiler, ProfilerConfig, ProfilerStats};
 pub use scope::{ProfileScope, ScopeId};
 pub use system_profiler::{BottleneckInfo, BottleneckType, SystemProfiler, SystemStats};
 pub use visualization::{
-    FrameTimeGraph, MemoryGraph, PhaseColor, PhasePieChart, ProfilingVisualization,
-    SystemBarChart,
+    FrameTimeGraph, MemoryGraph, PhaseColor, PhasePieChart, ProfilingVisualization, SystemBarChart,
 };

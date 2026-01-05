@@ -18,9 +18,7 @@ use vulkano::{
     },
     device::Device,
     format::Format,
-    image::{
-        view::ImageView, Image, ImageCreateInfo, ImageType, ImageUsage,
-    },
+    image::{view::ImageView, Image, ImageCreateInfo, ImageType, ImageUsage},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
     pipeline::{
         graphics::{
@@ -110,7 +108,10 @@ pub struct VelocityBufferRenderer {
 
 impl VelocityBufferRenderer {
     /// Creates a new velocity buffer renderer.
-    pub fn new(device: Arc<Device>, memory_allocator: Arc<StandardMemoryAllocator>) -> Result<Self> {
+    pub fn new(
+        device: Arc<Device>,
+        memory_allocator: Arc<StandardMemoryAllocator>,
+    ) -> Result<Self> {
         info!("Creating velocity buffer renderer");
 
         let render_pass = Self::create_render_pass(device.clone())?;
@@ -233,7 +234,8 @@ impl VelocityBufferRenderer {
     ) -> Result<()> {
         debug!("Rendering velocity buffer");
 
-        let velocity_uniforms = crate::post_process::VelocityUniforms::new(current_mvp, previous_mvp);
+        let velocity_uniforms =
+            crate::post_process::VelocityUniforms::new(current_mvp, previous_mvp);
 
         let uniforms_buffer = Buffer::from_data(
             self.memory_allocator.clone(),

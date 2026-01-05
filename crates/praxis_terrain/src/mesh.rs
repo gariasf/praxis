@@ -203,10 +203,7 @@ impl TerrainMesh {
     }
 
     /// Generates a flat terrain mesh for testing.
-    pub fn generate_flat_plane(
-        size: f32,
-        subdivisions: u32,
-    ) -> Result<MeshData> {
+    pub fn generate_flat_plane(size: f32, subdivisions: u32) -> Result<MeshData> {
         let vertices_per_side = subdivisions + 1;
         let step = size / subdivisions as f32;
 
@@ -222,7 +219,10 @@ impl TerrainMesh {
 
                 positions.push([world_x, 0.0, world_z]);
                 normals.push([0.0, 1.0, 0.0]);
-                uvs.push([x as f32 / subdivisions as f32, z as f32 / subdivisions as f32]);
+                uvs.push([
+                    x as f32 / subdivisions as f32,
+                    z as f32 / subdivisions as f32,
+                ]);
                 colors.push([1.0, 1.0, 1.0]);
             }
         }
@@ -251,7 +251,7 @@ impl TerrainMesh {
             normals: Some(normals),
             uvs: Some(uvs),
             tangents: None,
-        indices,
+            indices,
         };
 
         Self::calculate_tangents(&mut mesh_data);

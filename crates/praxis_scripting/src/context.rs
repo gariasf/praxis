@@ -16,13 +16,13 @@ use std::sync::Arc;
 pub struct ScriptingConfig {
     /// Sandbox configuration for security
     pub sandbox: SandboxConfig,
-    
+
     /// Whether to enable performance monitoring
     pub enable_performance_monitoring: bool,
-    
+
     /// Maximum script execution time in milliseconds before warning
     pub max_execution_time_ms: u64,
-    
+
     /// Memory limit for Lua VM in bytes (0 = unlimited)
     pub memory_limit: usize,
 }
@@ -56,15 +56,17 @@ impl ScriptingContext {
     /// Creates a new scripting context with the given configuration.
     pub fn new(config: ScriptingConfig) -> Result<Self> {
         info!("Creating scripting context");
-        
+
         let lua = Lua::new();
-        
+
         let performance_monitor = if config.enable_performance_monitoring {
-            Some(Arc::new(ScriptPerformanceMonitor::new(config.max_execution_time_ms)))
+            Some(Arc::new(ScriptPerformanceMonitor::new(
+                config.max_execution_time_ms,
+            )))
         } else {
             None
         };
-        
+
         let mut context = Self {
             #[allow(clippy::arc_with_non_send_sync)]
             lua: Arc::new(lua),
@@ -73,67 +75,75 @@ impl ScriptingContext {
             hot_reload_watcher: None,
             performance_monitor,
         };
-        
+
         context.setup_environment()?;
-        
+
         Ok(context)
     }
-    
+
     fn setup_environment(&mut self) -> Result<()> {
         debug!("Setting up Lua environment");
-        
+
         bindings::register_math_api(&self.lua)?;
         bindings::register_engine_api(&self.lua)?;
-        
+
         crate::sandbox::apply_sandbox(&self.lua, &self.config.sandbox)?;
-        
+
         Ok(())
     }
-    
+
     /// Loads a Lua script from a file.
     pub fn load_script(&mut self, name: &str, path: impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
         info!("Loading script '{}' from {:?}", name, path);
-        
+
         let source = std::fs::read_to_string(path)
             .map_err(|e| praxis_utils::eyre::eyre!("Failed to read script file: {}", e))?;
-        
+
         self.lua
             .load(&source)
             .set_name(name)
             .exec()
             .map_err(|e| praxis_utils::eyre::eyre!("Failed to execute script: {}", e))?;
-        
-        self.loaded_scripts.insert(name.to_string(), path.to_path_buf());
-        
+
+        self.loaded_scripts
+            .insert(name.to_string(), path.to_path_buf());
+
         Ok(())
     }
-    
+
     /// Loads Lua code from a string.
     pub fn load_string(&mut self, name: &str, source: &str) -> Result<()> {
         debug!("Loading script '{}' from string", name);
-        
+
         self.lua
             .load(source)
             .set_name(name)
             .exec()
             .map_err(|e| praxis_utils::eyre::eyre!("Failed to execute script: {}", e))?;
-        
+
         Ok(())
     }
-    
+
     /// Reloads a previously loaded script.
     pub fn reload_script(&mut self, name: &str) -> Result<()> {
-        let path = self.loaded_scripts.get(name)
+        let path = self
+            .loaded_scripts
+            .get(name)
             .ok_or_else(|| praxis_utils::eyre::eyre!("Script '{}' not found", name))?
             .clone();
-        
+
         info!("Reloading script '{}'", name);
         self.load_script(name, path)
     }
-    
+
     /// Calls a global Lua function.
-    pub fn call_function<'a, A, R>(&'a self, script_name: &str, function_name: &str, args: A) -> Result<R>
+    pub fn call_function<'a, A, R>(
+        &'a self,
+        script_name: &str,
+        function_name: &str,
+        args: A,
+    ) -> Result<R>
     where
         A: mlua::IntoLuaMulti<'a>,
         R: mlua::FromLuaMulti<'a>,
@@ -143,24 +153,24 @@ impl ScriptingContext {
         } else {
             None
         };
-        
+
         let globals = self.lua.globals();
-        let function: mlua::Function = globals
-            .get(function_name)
-            .map_err(|e| praxis_utils::eyre::eyre!("Function '{}' not found: {}", function_name, e))?;
-        
-        let result = function
-            .call(args)
-            .map_err(|e| praxis_utils::eyre::eyre!("Error calling function '{}': {}", function_name, e))?;
-        
+        let function: mlua::Function = globals.get(function_name).map_err(|e| {
+            praxis_utils::eyre::eyre!("Function '{}' not found: {}", function_name, e)
+        })?;
+
+        let result = function.call(args).map_err(|e| {
+            praxis_utils::eyre::eyre!("Error calling function '{}': {}", function_name, e)
+        })?;
+
         if let (Some(start), Some(ref monitor)) = (start, &self.performance_monitor) {
             let elapsed = start.elapsed();
             monitor.record_execution(script_name, function_name, elapsed);
         }
-        
+
         Ok(result)
     }
-    
+
     /// Sets a global variable in the Lua environment.
     pub fn set_global<'a, V>(&'a self, name: &str, value: V) -> Result<()>
     where
@@ -172,7 +182,7 @@ impl ScriptingContext {
             .map_err(|e| praxis_utils::eyre::eyre!("Failed to set global '{}': {}", name, e))?;
         Ok(())
     }
-    
+
     /// Gets a global variable from the Lua environment.
     pub fn get_global<'a, V>(&'a self, name: &str) -> Result<V>
     where
@@ -183,22 +193,22 @@ impl ScriptingContext {
             .get(name)
             .map_err(|e| praxis_utils::eyre::eyre!("Failed to get global '{}': {}", name, e))
     }
-    
+
     /// Gets a reference to the Lua VM for direct access.
     pub fn lua(&self) -> &Lua {
         &self.lua
     }
-    
+
     /// Enables hot-reload for scripts in the given directory.
     pub fn enable_hot_reload(&mut self, watch_path: impl AsRef<Path>) -> Result<()> {
         info!("Enabling hot-reload for {:?}", watch_path.as_ref());
-        
+
         let watcher = HotReloadWatcher::new(watch_path)?;
         self.hot_reload_watcher = Some(Arc::new(RwLock::new(watcher)));
-        
+
         Ok(())
     }
-    
+
     /// Processes any pending hot-reload events.
     pub fn process_hot_reload(&mut self) -> Result<()> {
         if let Some(ref watcher) = self.hot_reload_watcher {
@@ -206,7 +216,7 @@ impl ScriptingContext {
                 let mut w = watcher.write();
                 w.poll_events()
             };
-            
+
             for event in events {
                 match event {
                     crate::hot_reload::ScriptEvent::Modified(path) => {
@@ -218,13 +228,13 @@ impl ScriptingContext {
                 }
             }
         }
-        
+
         Ok(())
     }
-    
+
     fn handle_script_modified(&mut self, path: &Path) -> Result<()> {
         info!("Script modified: {:?}", path);
-        
+
         for (name, script_path) in &self.loaded_scripts.clone() {
             if script_path == path {
                 if let Err(e) = self.reload_script(name) {
@@ -234,72 +244,107 @@ impl ScriptingContext {
                 }
             }
         }
-        
+
         Ok(())
     }
-    
+
     fn handle_script_removed(&mut self, path: &Path) -> Result<()> {
         warn!("Script removed: {:?}", path);
-        
-        let names: Vec<String> = self.loaded_scripts
+
+        let names: Vec<String> = self
+            .loaded_scripts
             .iter()
             .filter(|(_, p)| *p == path)
             .map(|(n, _)| n.clone())
             .collect();
-        
+
         for name in names {
             self.loaded_scripts.remove(&name);
             warn!("Unloaded script '{}'", name);
         }
-        
+
         Ok(())
     }
-    
+
     /// Gets the performance monitor if enabled.
     pub fn performance_monitor(&self) -> Option<&ScriptPerformanceMonitor> {
         self.performance_monitor.as_ref().map(|m| m.as_ref())
+    }
+
+    /// Executes a closure with the ECS World context set up for Lua scripts.
+    ///
+    /// This allows scripts to access the world via the `world` global table.
+    ///
+    /// # Arguments
+    ///
+    /// * `world` - Mutable reference to the ECS World
+    /// * `f` - Closure that takes the Lua VM and returns a Result
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use praxis_scripting::{ScriptingContext, ScriptingConfig};
+    /// # use praxis_ecs::World;
+    /// # let mut context = ScriptingContext::new(ScriptingConfig::default()).unwrap();
+    /// # let mut world = World::new();
+    /// context.with_world(&mut world, |lua| {
+    ///     lua.globals().get::<_, mlua::Function>("on_update")?
+    ///         .call::<_, ()>(0.016)?;
+    ///     Ok(())
+    /// }).unwrap();
+    /// ```
+    pub fn with_world<F, R>(&self, world: &mut praxis_ecs::World, f: F) -> Result<R>
+    where
+        F: FnOnce(&Lua) -> Result<R>,
+    {
+        crate::bindings::ecs_api::set_world_context(&self.lua, world)?;
+        let result = f(&self.lua);
+        crate::bindings::ecs_api::clear_world_context(&self.lua)?;
+        result
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_create_context() {
         let config = ScriptingConfig::default();
         let context = ScriptingContext::new(config);
         assert!(context.is_ok());
     }
-    
+
     #[test]
     fn test_load_string() {
         let config = ScriptingConfig::default();
         let mut context = ScriptingContext::new(config).unwrap();
-        
+
         let result = context.load_string("test", "x = 42");
         assert!(result.is_ok());
-        
+
         let value: i32 = context.get_global("x").unwrap();
         assert_eq!(value, 42);
     }
-    
+
     #[test]
     fn test_call_function() {
         let config = ScriptingConfig::default();
         let mut context = ScriptingContext::new(config).unwrap();
-        
-        context.load_string("test", "function add(a, b) return a + b end").unwrap();
-        
+
+        context
+            .load_string("test", "function add(a, b) return a + b end")
+            .unwrap();
+
         let result: i32 = context.call_function("test", "add", (5, 3)).unwrap();
         assert_eq!(result, 8);
     }
-    
+
     #[test]
     fn test_set_and_get_global() {
         let config = ScriptingConfig::default();
         let context = ScriptingContext::new(config).unwrap();
-        
+
         context.set_global("test_value", 123).unwrap();
         let value: i32 = context.get_global("test_value").unwrap();
         assert_eq!(value, 123);

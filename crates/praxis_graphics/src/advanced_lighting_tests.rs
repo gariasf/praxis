@@ -1,8 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::{
-        light_probe::*, volumetric_fog::*, god_rays::*, area_lights::*, light_linking::*,
-    };
+    use crate::{area_lights::*, god_rays::*, light_linking::*, light_probe::*, volumetric_fog::*};
     use praxis_math::Vec3;
 
     #[test]
@@ -31,10 +29,10 @@ mod tests {
             Vec3::new(10.0, 5.0, 10.0),
             [3, 2, 3],
         );
-        
+
         let probe = grid.probe_at(1, 1, 1);
         assert!(probe.is_some());
-        
+
         let probe = grid.probe_at(5, 5, 5);
         assert!(probe.is_none());
     }
@@ -56,8 +54,14 @@ mod tests {
         };
 
         assert!(matches!(uniform, FogDensityFunction::Uniform));
-        assert!(matches!(exponential, FogDensityFunction::Exponential { .. }));
-        assert!(matches!(height_based, FogDensityFunction::HeightBased { .. }));
+        assert!(matches!(
+            exponential,
+            FogDensityFunction::Exponential { .. }
+        ));
+        assert!(matches!(
+            height_based,
+            FogDensityFunction::HeightBased { .. }
+        ));
     }
 
     #[test]
@@ -80,7 +84,10 @@ mod tests {
         let light = AreaLight::new_rectangle(Vec3::ZERO, 2.0, 1.0);
         assert!(matches!(
             light.light_type,
-            AreaLightType::Rectangle { width: 2.0, height: 1.0 }
+            AreaLightType::Rectangle {
+                width: 2.0,
+                height: 1.0
+            }
         ));
         assert_eq!(light.position, Vec3::ZERO);
     }
@@ -147,16 +154,16 @@ mod tests {
     #[test]
     fn test_light_linking_mask_operations() {
         let mut mask = LightLinkingMask::new(0b0001);
-        
+
         mask.add_channel(2);
         assert_eq!(mask.mask, 0b0101);
-        
+
         mask.remove_channel(0);
         assert_eq!(mask.mask, 0b0100);
-        
+
         mask.toggle_channel(1);
         assert_eq!(mask.mask, 0b0110);
-        
+
         mask.toggle_channel(1);
         assert_eq!(mask.mask, 0b0100);
     }
@@ -174,22 +181,22 @@ mod tests {
     #[test]
     fn test_light_linking_manager_basic() {
         let mut manager = LightLinkingManager::new();
-        
+
         manager.set_object_mask("obj1", 0b0001).unwrap();
         manager.set_light_channel("light1", 0).unwrap();
-        
+
         assert!(manager.can_light_affect_object("light1", "obj1"));
     }
 
     #[test]
     fn test_light_linking_manager_multiple() {
         let mut manager = LightLinkingManager::new();
-        
+
         manager.set_object_mask("obj1", 0b0011).unwrap();
         manager.set_light_channel("light1", 0).unwrap();
         manager.set_light_channel("light2", 1).unwrap();
         manager.set_light_channel("light3", 2).unwrap();
-        
+
         assert!(manager.can_light_affect_object("light1", "obj1"));
         assert!(manager.can_light_affect_object("light2", "obj1"));
         assert!(!manager.can_light_affect_object("light3", "obj1"));
@@ -198,10 +205,10 @@ mod tests {
     #[test]
     fn test_light_linking_channel_names() {
         let mut manager = LightLinkingManager::new();
-        
+
         manager.register_channel(0, "hero".to_string());
         manager.register_channel(1, "environment".to_string());
-        
+
         assert_eq!(manager.get_channel_by_name("hero"), Some(0));
         assert_eq!(manager.get_channel_by_name("environment"), Some(1));
         assert_eq!(manager.get_channel_by_name("unknown"), None);
@@ -214,10 +221,10 @@ mod tests {
             Vec3::new(10.0, 10.0, 10.0),
             [3, 3, 3],
         );
-        
+
         grid.blend_mode = ProbeBlendMode::Nearest;
         assert_eq!(grid.blend_mode, ProbeBlendMode::Nearest);
-        
+
         grid.blend_mode = ProbeBlendMode::Trilinear;
         assert_eq!(grid.blend_mode, ProbeBlendMode::Trilinear);
     }
@@ -226,13 +233,13 @@ mod tests {
     fn test_volumetric_fog_component() {
         let fog = VolumetricFog::default();
         assert!(fog.enabled);
-        
+
         let mut fog = VolumetricFog::new(VolumetricFogConfig::default());
         assert!(fog.enabled);
-        
+
         fog.disable();
         assert!(!fog.enabled);
-        
+
         fog.enable();
         assert!(fog.enabled);
     }
@@ -242,9 +249,8 @@ mod tests {
         let god_rays = GodRays::default();
         assert!(god_rays.enabled);
         assert_eq!(god_rays.intensity, 1.0);
-        
-        let god_rays = GodRays::new(GodRaysConfig::default())
-            .with_intensity(0.5);
+
+        let god_rays = GodRays::new(GodRaysConfig::default()).with_intensity(0.5);
         assert_eq!(god_rays.intensity, 0.5);
     }
 
@@ -252,9 +258,15 @@ mod tests {
     fn test_area_light_transform() {
         let light = AreaLight::new_rectangle(Vec3::new(0.0, 5.0, 0.0), 2.0, 1.0)
             .with_direction(Vec3::new(0.0, -1.0, 0.0));
-        
+
         let transform = light.compute_transform();
-        assert!(transform.col(3).truncate().distance(Vec3::new(0.0, 5.0, 0.0)) < 0.001);
+        assert!(
+            transform
+                .col(3)
+                .truncate()
+                .distance(Vec3::new(0.0, 5.0, 0.0))
+                < 0.001
+        );
     }
 
     #[test]
@@ -262,7 +274,7 @@ mod tests {
         let probe = LightProbe::new(Vec3::new(1.0, 2.0, 3.0))
             .with_intensity(1.5)
             .with_radius(15.0);
-        
+
         let data = LightProbeData::from(&probe);
         assert_eq!(data.position[0], 1.0);
         assert_eq!(data.position[1], 2.0);
@@ -276,7 +288,7 @@ mod tests {
         let light = AreaLight::new_rectangle(Vec3::ZERO, 2.0, 1.0)
             .with_color(Vec3::new(1.0, 0.5, 0.0))
             .with_intensity(10.0);
-        
+
         let data = AreaLightData::from(&light);
         assert_eq!(data.color[0], 1.0);
         assert_eq!(data.color[1], 0.5);

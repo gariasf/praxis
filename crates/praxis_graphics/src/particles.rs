@@ -85,12 +85,12 @@ use vulkano::{
     },
     device::{Device, Queue},
     memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
+    pipeline::graphics::vertex_input::Vertex,
     pipeline::{
         compute::ComputePipelineCreateInfo, layout::PipelineDescriptorSetLayoutCreateInfo,
         ComputePipeline, Pipeline, PipelineBindPoint, PipelineLayout,
         PipelineShaderStageCreateInfo,
     },
-    pipeline::graphics::vertex_input::Vertex,
     sync::GpuFuture,
 };
 
@@ -200,10 +200,9 @@ impl SpatialHash {
         let y = (position.y / self.cell_size).floor() as i32;
         let z = (position.z / self.cell_size).floor() as i32;
 
-        let hash = ((x.wrapping_mul(73856093))
-            ^ (y.wrapping_mul(19349663))
-            ^ (z.wrapping_mul(83492791)))
-            .unsigned_abs() as usize;
+        let hash =
+            ((x.wrapping_mul(73856093)) ^ (y.wrapping_mul(19349663)) ^ (z.wrapping_mul(83492791)))
+                .unsigned_abs() as usize;
 
         hash % SPATIAL_HASH_TABLE_SIZE
     }
@@ -861,8 +860,10 @@ impl ParticleSystem {
         .map_err(|e| eyre::eyre!("Failed to create particle quad index buffer: {}", e))?;
 
         let device = queue.device().clone();
-        let descriptor_set_allocator =
-            Arc::new(StandardDescriptorSetAllocator::new(device.clone(), Default::default()));
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            device.clone(),
+            Default::default(),
+        ));
 
         let sort_pipeline = Self::create_sort_pipeline(&device)?;
 
@@ -896,9 +897,9 @@ impl ParticleSystem {
         let cs_module = cs::load(device.clone())
             .map_err(|e| eyre::eyre!("Failed to load particle sort shader: {}", e))?;
 
-        let cs_entry_point = cs_module.entry_point("main").ok_or_else(|| {
-            eyre::eyre!("Particle sort shader missing main entry point")
-        })?;
+        let cs_entry_point = cs_module
+            .entry_point("main")
+            .ok_or_else(|| eyre::eyre!("Particle sort shader missing main entry point"))?;
 
         let stage = PipelineShaderStageCreateInfo::new(cs_entry_point);
         let layout = PipelineLayout::new(
@@ -1002,7 +1003,9 @@ impl ParticleSystem {
             all_instances.sort_by(|a, b| {
                 let dist_a = (Vec3::from(a.position) - self.camera_position).length_squared();
                 let dist_b = (Vec3::from(b.position) - self.camera_position).length_squared();
-                dist_b.partial_cmp(&dist_a).unwrap_or(std::cmp::Ordering::Equal)
+                dist_b
+                    .partial_cmp(&dist_a)
+                    .unwrap_or(std::cmp::Ordering::Equal)
             });
         }
 
@@ -1133,7 +1136,9 @@ impl ParticleSystem {
             .wait(None)
             .map_err(|e| eyre::eyre!("Failed to wait: {}", e))?;
 
-        let sorted_data = gpu_buffer.read().map_err(|e| eyre::eyre!("Failed to read GPU buffer: {}", e))?;
+        let sorted_data = gpu_buffer
+            .read()
+            .map_err(|e| eyre::eyre!("Failed to read GPU buffer: {}", e))?;
 
         for (i, gpu_particle) in sorted_data.iter().take(count).enumerate() {
             instances[i].position = gpu_particle.position;

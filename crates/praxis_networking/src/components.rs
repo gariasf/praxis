@@ -1,8 +1,8 @@
 //! Network-specific ECS components.
 
 use bevy_ecs::prelude::*;
+use praxis_math::{Quat, Vec3};
 use serde::{Deserialize, Serialize};
-use praxis_math::{Vec3, Quat};
 
 /// Unique network identifier for entities.
 ///
@@ -16,7 +16,7 @@ impl NetworkId {
     pub fn new(id: u64) -> Self {
         Self(id)
     }
-    
+
     /// Gets the underlying ID value.
     pub fn get(&self) -> u64 {
         self.0
@@ -35,22 +35,22 @@ impl NetworkOwner {
     pub fn server() -> Self {
         Self(None)
     }
-    
+
     /// Creates a client-owned entity marker.
     pub fn client(client_id: u64) -> Self {
         Self(Some(client_id))
     }
-    
+
     /// Returns true if this entity is owned by the server.
     pub fn is_server(&self) -> bool {
         self.0.is_none()
     }
-    
+
     /// Returns true if this entity is owned by a client.
     pub fn is_client(&self) -> bool {
         self.0.is_some()
     }
-    
+
     /// Gets the client ID if this entity is client-owned.
     pub fn client_id(&self) -> Option<u64> {
         self.0
@@ -65,10 +65,10 @@ impl NetworkOwner {
 pub struct Replicated {
     /// Whether this entity should be replicated
     pub enabled: bool,
-    
+
     /// Priority for bandwidth management (higher = more important)
     pub priority: u8,
-    
+
     /// Replication rate divisor (1 = every tick, 2 = every other tick, etc.)
     pub rate_divisor: u8,
 }
@@ -82,13 +82,13 @@ impl Replicated {
             rate_divisor: 1,
         }
     }
-    
+
     /// Sets the replication priority.
     pub fn with_priority(mut self, priority: u8) -> Self {
         self.priority = priority;
         self
     }
-    
+
     /// Sets the replication rate divisor.
     pub fn with_rate_divisor(mut self, rate_divisor: u8) -> Self {
         self.rate_divisor = rate_divisor;
@@ -103,10 +103,10 @@ impl Replicated {
 pub struct ReplicatedTransform {
     /// Position in world space
     pub translation: Vec3,
-    
+
     /// Rotation as a quaternion
     pub rotation: Quat,
-    
+
     /// Scale
     pub scale: Vec3,
 }
@@ -120,7 +120,7 @@ impl ReplicatedTransform {
             scale,
         }
     }
-    
+
     /// Creates from a Transform component.
     pub fn from_transform(transform: &praxis_ecs::Transform) -> Self {
         Self {
@@ -129,7 +129,7 @@ impl ReplicatedTransform {
             scale: transform.scale,
         }
     }
-    
+
     /// Converts to a Transform component.
     pub fn to_transform(&self) -> praxis_ecs::Transform {
         praxis_ecs::Transform {
@@ -147,7 +147,7 @@ impl ReplicatedTransform {
 pub struct ReplicatedVelocity {
     /// Linear velocity
     pub linear: Vec3,
-    
+
     /// Angular velocity (axis-angle representation)
     pub angular: Vec3,
 }
@@ -157,7 +157,7 @@ impl ReplicatedVelocity {
     pub fn new(linear: Vec3, angular: Vec3) -> Self {
         Self { linear, angular }
     }
-    
+
     /// Creates a zero velocity.
     pub fn zero() -> Self {
         Self {
@@ -180,10 +180,10 @@ impl Default for ReplicatedVelocity {
 pub struct NetworkInterpolation {
     /// Whether interpolation is enabled for this entity
     pub enabled: bool,
-    
+
     /// Target interpolation delay in milliseconds
     pub delay_ms: f32,
-    
+
     /// Current interpolation time
     pub current_time: f32,
 }
@@ -212,10 +212,10 @@ impl Default for NetworkInterpolation {
 pub struct NetworkExtrapolation {
     /// Whether extrapolation is enabled for this entity
     pub enabled: bool,
-    
+
     /// Maximum extrapolation time before freezing in milliseconds
     pub max_time_ms: f32,
-    
+
     /// Time since last update
     pub time_since_update: f32,
 }
@@ -245,7 +245,7 @@ impl Default for NetworkExtrapolation {
 pub struct ClientPredicted {
     /// Last acknowledged server tick
     pub last_ack_tick: u64,
-    
+
     /// Number of pending commands
     pub pending_commands: u32,
 }
@@ -292,10 +292,8 @@ mod tests {
 
     #[test]
     fn test_replicated() {
-        let replicated = Replicated::new()
-            .with_priority(255)
-            .with_rate_divisor(2);
-        
+        let replicated = Replicated::new().with_priority(255).with_rate_divisor(2);
+
         assert!(replicated.enabled);
         assert_eq!(replicated.priority, 255);
         assert_eq!(replicated.rate_divisor, 2);
@@ -308,10 +306,10 @@ mod tests {
             rotation: Quat::IDENTITY,
             scale: Vec3::ONE,
         };
-        
+
         let replicated = ReplicatedTransform::from_transform(&transform);
         assert_eq!(replicated.translation, Vec3::new(1.0, 2.0, 3.0));
-        
+
         let back = replicated.to_transform();
         assert_eq!(back.translation, transform.translation);
     }
@@ -320,7 +318,7 @@ mod tests {
     fn test_replicated_velocity() {
         let vel = ReplicatedVelocity::new(Vec3::new(1.0, 0.0, 0.0), Vec3::ZERO);
         assert_eq!(vel.linear, Vec3::new(1.0, 0.0, 0.0));
-        
+
         let zero = ReplicatedVelocity::zero();
         assert_eq!(zero.linear, Vec3::ZERO);
     }
@@ -330,7 +328,7 @@ mod tests {
         let mut predicted = ClientPredicted::new();
         assert_eq!(predicted.last_ack_tick, 0);
         assert_eq!(predicted.pending_commands, 0);
-        
+
         predicted.last_ack_tick = 100;
         predicted.pending_commands = 5;
         assert_eq!(predicted.last_ack_tick, 100);

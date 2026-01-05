@@ -1129,11 +1129,7 @@ mod tests {
         player.play("Weighted");
         player.set_weight("Weighted", 0.5);
 
-        let weights: Vec<f32> = player
-            .playing_clips
-            .values()
-            .map(|p| p.weight)
-            .collect();
+        let weights: Vec<f32> = player.playing_clips.values().map(|p| p.weight).collect();
 
         assert_eq!(weights.len(), 1);
         assert!((weights[0] - 0.5).abs() < 0.001);
@@ -1354,11 +1350,7 @@ mod tests {
 
     #[test]
     fn test_cross_fade_transition_creation() {
-        let transition = CrossFadeTransition::new(
-            "Idle".to_string(),
-            "Walk".to_string(),
-            0.5,
-        );
+        let transition = CrossFadeTransition::new("Idle".to_string(), "Walk".to_string(), 0.5);
 
         assert_eq!(transition.from_clip, "Idle");
         assert_eq!(transition.to_clip, "Walk");
@@ -1369,11 +1361,7 @@ mod tests {
 
     #[test]
     fn test_cross_fade_blend_weight() {
-        let mut transition = CrossFadeTransition::new(
-            "A".to_string(),
-            "B".to_string(),
-            1.0,
-        );
+        let mut transition = CrossFadeTransition::new("A".to_string(), "B".to_string(), 1.0);
 
         assert_eq!(transition.blend_weight(), 0.0);
 
@@ -1390,22 +1378,14 @@ mod tests {
 
     #[test]
     fn test_cross_fade_zero_duration() {
-        let transition = CrossFadeTransition::new(
-            "A".to_string(),
-            "B".to_string(),
-            0.0,
-        );
+        let transition = CrossFadeTransition::new("A".to_string(), "B".to_string(), 0.0);
 
         assert_eq!(transition.blend_weight(), 1.0);
     }
 
     #[test]
     fn test_cross_fade_update() {
-        let mut transition = CrossFadeTransition::new(
-            "A".to_string(),
-            "B".to_string(),
-            1.0,
-        );
+        let mut transition = CrossFadeTransition::new("A".to_string(), "B".to_string(), 1.0);
 
         transition.update(0.3);
         assert_eq!(transition.elapsed, 0.3);
@@ -1643,11 +1623,11 @@ mod tests {
     #[test]
     fn test_bone_mask_enable_disable() {
         let mut mask = BoneMask::with_bone_count(3);
-        
+
         assert!(!mask.is_bone_enabled(0));
         mask.enable_bone(0);
         assert!(mask.is_bone_enabled(0));
-        
+
         mask.disable_bone(0);
         assert!(!mask.is_bone_enabled(0));
     }
@@ -1655,9 +1635,9 @@ mod tests {
     #[test]
     fn test_bone_mask_bone_weight() {
         let mut mask = BoneMask::with_bone_count(3);
-        
+
         assert_eq!(mask.bone_weight(0), 0.0);
-        
+
         mask.enable_bone(0);
         assert_eq!(mask.bone_weight(0), 1.0);
     }
@@ -1665,7 +1645,7 @@ mod tests {
     #[test]
     fn test_bone_mask_auto_resize() {
         let mut mask = BoneMask::new();
-        
+
         mask.enable_bone(5);
         assert!(mask.is_bone_enabled(5));
         assert_eq!(mask.enabled_bones.len(), 6);
@@ -1680,10 +1660,10 @@ mod tests {
             Bone::new("GrandChild".to_string(), Some(1)),
         ];
         let skeleton = Skeleton::new(bones);
-        
+
         let mut mask = BoneMask::with_bone_count(skeleton.bone_count());
         mask.enable_bone_and_children_with_skeleton(1, &skeleton);
-        
+
         assert!(!mask.is_bone_enabled(0));
         assert!(mask.is_bone_enabled(1));
         assert!(!mask.is_bone_enabled(2));
@@ -1701,13 +1681,13 @@ mod tests {
     #[test]
     fn test_animation_layer_play_stop() {
         let mut layer = AnimationLayer::new(1.0);
-        
+
         assert!(layer.current_clip().is_none());
-        
+
         layer.play("Wave");
         assert_eq!(layer.current_clip(), Some("Wave"));
         assert_eq!(layer.time(), 0.0);
-        
+
         layer.stop();
         assert!(layer.current_clip().is_none());
     }
@@ -1716,10 +1696,10 @@ mod tests {
     fn test_animation_layer_update() {
         let mut layer = AnimationLayer::new(1.0);
         layer.play("Test");
-        
+
         layer.update(0.5, 2.0);
         assert_eq!(layer.time(), 0.5);
-        
+
         layer.update(0.5, 2.0);
         assert_eq!(layer.time(), 1.0);
     }
@@ -1729,7 +1709,7 @@ mod tests {
         let mut layer = AnimationLayer::new(1.0);
         layer.play("Loop");
         layer.set_looping(true);
-        
+
         layer.update(2.5, 1.0);
         assert!((layer.time() - 0.5).abs() < 0.001);
         assert!(layer.current_clip().is_some());
@@ -1740,7 +1720,7 @@ mod tests {
         let mut layer = AnimationLayer::new(1.0);
         layer.play("Once");
         layer.set_looping(false);
-        
+
         layer.update(2.0, 1.0);
         assert_eq!(layer.time(), 1.0);
         assert!(layer.current_clip().is_none());
@@ -1751,7 +1731,7 @@ mod tests {
         let mut layer = AnimationLayer::new(1.0);
         layer.play("Fast");
         layer.set_speed(2.0);
-        
+
         layer.update(0.5, 2.0);
         assert_eq!(layer.time(), 1.0);
     }
@@ -1762,9 +1742,9 @@ mod tests {
         let mut mask = BoneMask::with_bone_count(5);
         mask.enable_bone(0);
         mask.enable_bone(2);
-        
+
         layer.set_mask(mask);
-        
+
         let layer_mask = layer.mask().unwrap();
         assert!(layer_mask.is_bone_enabled(0));
         assert!(!layer_mask.is_bone_enabled(1));
@@ -1783,7 +1763,7 @@ mod tests {
     fn test_animation_blender_add_clip() {
         let mut blender = AnimationBlender::new();
         let clip = AnimationClip::new("Test".to_string(), 1.0);
-        
+
         blender.add_clip("Test", clip);
         assert!(blender.clip("Test").is_some());
     }
@@ -1793,7 +1773,7 @@ mod tests {
         let mut blender = AnimationBlender::new();
         let clip = AnimationClip::new("Walk".to_string(), 1.0);
         blender.add_clip("Walk", clip);
-        
+
         blender.play("Walk");
         assert_eq!(blender.current_clip(), Some("Walk"));
         assert_eq!(blender.current_time(), 0.0);
@@ -1806,10 +1786,10 @@ mod tests {
         let clip2 = AnimationClip::new("Walk".to_string(), 1.0);
         blender.add_clip("Idle", clip1);
         blender.add_clip("Walk", clip2);
-        
+
         blender.play("Idle");
         blender.cross_fade("Idle", "Walk", 0.5);
-        
+
         assert!(blender.is_cross_fading());
         assert_eq!(blender.current_clip(), Some("Idle"));
     }
@@ -1821,15 +1801,15 @@ mod tests {
         let clip2 = AnimationClip::new("Walk".to_string(), 2.0);
         blender.add_clip("Idle", clip1);
         blender.add_clip("Walk", clip2);
-        
+
         blender.play("Idle");
         blender.update(0.5);
         blender.cross_fade("Idle", "Walk", 0.5);
-        
+
         assert!(blender.is_cross_fading());
-        
+
         blender.update(0.6);
-        
+
         assert!(!blender.is_cross_fading());
         assert_eq!(blender.current_clip(), Some("Walk"));
     }
@@ -1839,10 +1819,10 @@ mod tests {
         let mut blender = AnimationBlender::new();
         let layer1 = AnimationLayer::new(1.0);
         let layer2 = AnimationLayer::new(0.5);
-        
+
         blender.add_layer(layer1);
         blender.add_layer(layer2);
-        
+
         assert_eq!(blender.layer_count(), 2);
         assert_eq!(blender.layer(0).unwrap().weight(), 1.0);
         assert_eq!(blender.layer(1).unwrap().weight(), 0.5);
@@ -1853,12 +1833,12 @@ mod tests {
         let mut blender = AnimationBlender::new();
         let clip = AnimationClip::new("Wave".to_string(), 1.0);
         blender.add_clip("Wave", clip);
-        
+
         let layer = AnimationLayer::new(1.0);
         blender.add_layer(layer);
-        
+
         blender.play_on_layer(0, "Wave");
-        
+
         assert_eq!(blender.layer(0).unwrap().current_clip(), Some("Wave"));
     }
 
@@ -1867,10 +1847,10 @@ mod tests {
         let mut blender = AnimationBlender::new();
         let clip = AnimationClip::new("Test".to_string(), 2.0);
         blender.add_clip("Test", clip);
-        
+
         blender.play("Test");
         blender.update(0.5);
-        
+
         assert_eq!(blender.current_time(), 0.5);
     }
 
@@ -1879,11 +1859,11 @@ mod tests {
         let mut blender = AnimationBlender::new();
         let clip = AnimationClip::new("Loop".to_string(), 1.0);
         blender.add_clip("Loop", clip);
-        
+
         blender.play("Loop");
         blender.set_looping(true);
         blender.update(1.5);
-        
+
         assert!((blender.current_time() - 0.5).abs() < 0.001);
     }
 
@@ -1892,11 +1872,11 @@ mod tests {
         let mut blender = AnimationBlender::new();
         let clip = AnimationClip::new("Once".to_string(), 1.0);
         blender.add_clip("Once", clip);
-        
+
         blender.play("Once");
         blender.set_looping(false);
         blender.update(2.0);
-        
+
         assert_eq!(blender.current_time(), 1.0);
         assert!(blender.current_clip().is_none());
     }
@@ -1906,11 +1886,11 @@ mod tests {
         let mut blender = AnimationBlender::new();
         let clip = AnimationClip::new("Fast".to_string(), 2.0);
         blender.add_clip("Fast", clip);
-        
+
         blender.play("Fast");
         blender.set_speed(2.0);
         blender.update(0.5);
-        
+
         assert_eq!(blender.current_time(), 1.0);
     }
 
@@ -1921,15 +1901,15 @@ mod tests {
         let clip2 = AnimationClip::new("Walk".to_string(), 1.0);
         blender.add_clip("Idle", clip1);
         blender.add_clip("Walk", clip2);
-        
+
         let mut blend_1d = BlendNode1D::new();
         blend_1d.add_clip("Idle", 0.0);
         blend_1d.add_clip("Walk", 1.0);
         blend_1d.set_parameter(0.5);
-        
+
         blender.add_blend_tree("Movement", BlendNode::Blend1D(blend_1d));
         blender.activate_blend_tree("Movement");
-        
+
         assert_eq!(blender.active_blend_tree(), Some("Movement"));
     }
 
@@ -1939,10 +1919,10 @@ mod tests {
         let mut blend_1d = BlendNode1D::new();
         blend_1d.add_clip("Idle", 0.0);
         blend_1d.add_clip("Walk", 1.0);
-        
+
         blender.add_blend_tree("Movement", BlendNode::Blend1D(blend_1d));
         blender.set_blend_parameter("Movement", 0.75);
-        
+
         if let Some(BlendNode::Blend1D(node)) = blender.blend_trees.get("Movement") {
             assert_eq!(node.parameter(), 0.75);
         } else {
@@ -1955,10 +1935,10 @@ mod tests {
         let mut blender = AnimationBlender::new();
         let mut blend_2d = BlendNode2D::new();
         blend_2d.add_clip("Forward", 0.0, 1.0);
-        
+
         blender.add_blend_tree("Movement", BlendNode::Blend2D(blend_2d));
         blender.set_blend_parameters_2d("Movement", 0.5, 0.8);
-        
+
         if let Some(BlendNode::Blend2D(node)) = blender.blend_trees.get("Movement") {
             assert_eq!(node.parameters(), (0.5, 0.8));
         } else {
@@ -3038,10 +3018,10 @@ pub fn update_animation_blenders(
 pub enum IkConstraintType {
     /// Two-bone IK (e.g., arm, leg).
     TwoBone,
-    
+
     /// Chain IK for multiple bones (e.g., spine, tail).
     Chain,
-    
+
     /// Look-at IK for orienting a bone toward a target.
     LookAt,
 }
@@ -3054,22 +3034,22 @@ pub enum IkConstraintType {
 pub struct IkConstraint {
     /// Type of IK constraint.
     constraint_type: IkConstraintType,
-    
+
     /// End effector bone index (the bone that should reach the target).
     end_effector_bone: usize,
-    
+
     /// Target position in world space.
     target_position: Vec3,
-    
+
     /// Optional pole target for controlling the bend direction.
     pole_target: Option<Vec3>,
-    
+
     /// Weight of the IK constraint (0.0 to 1.0).
     weight: f32,
-    
+
     /// Maximum number of iterations for iterative solvers.
     max_iterations: u32,
-    
+
     /// Tolerance for convergence (distance threshold).
     tolerance: f32,
 }
@@ -3087,7 +3067,7 @@ impl IkConstraint {
             tolerance: 0.001,
         }
     }
-    
+
     /// Creates a new chain IK constraint.
     pub fn new_chain(end_effector_bone: usize, target_position: Vec3, max_iterations: u32) -> Self {
         Self {
@@ -3100,7 +3080,7 @@ impl IkConstraint {
             tolerance: 0.001,
         }
     }
-    
+
     /// Creates a new look-at IK constraint.
     pub fn new_look_at(bone: usize, target_position: Vec3) -> Self {
         Self {
@@ -3113,39 +3093,39 @@ impl IkConstraint {
             tolerance: 0.001,
         }
     }
-    
+
     /// Sets the pole target for controlling bend direction.
     pub fn with_pole_target(mut self, pole_target: Vec3) -> Self {
         self.pole_target = Some(pole_target);
         self
     }
-    
+
     /// Sets the constraint weight.
     pub fn with_weight(mut self, weight: f32) -> Self {
         self.weight = weight.clamp(0.0, 1.0);
         self
     }
-    
+
     /// Sets the target position.
     pub fn set_target(&mut self, target: Vec3) {
         self.target_position = target;
     }
-    
+
     /// Sets the pole target.
     pub fn set_pole_target(&mut self, pole: Vec3) {
         self.pole_target = Some(pole);
     }
-    
+
     /// Sets the weight.
     pub fn set_weight(&mut self, weight: f32) {
         self.weight = weight.clamp(0.0, 1.0);
     }
-    
+
     /// Gets the target position.
     pub fn target(&self) -> Vec3 {
         self.target_position
     }
-    
+
     /// Gets the weight.
     pub fn weight(&self) -> f32 {
         self.weight
@@ -3162,61 +3142,72 @@ impl IkSolver {
     /// - Root bone (shoulder/hip)
     /// - Middle bone (elbow/knee)
     /// - End effector (hand/foot)
-    pub fn solve_two_bone(
-        constraint: &IkConstraint,
-        pose: &mut AnimatedPose,
-        skeleton: &Skeleton,
-    ) {
+    pub fn solve_two_bone(constraint: &IkConstraint, pose: &mut AnimatedPose, skeleton: &Skeleton) {
         let end_bone_idx = constraint.end_effector_bone;
-        
-        let Some(end_bone) = skeleton.bone(end_bone_idx) else { return };
-        
-        let Some(middle_bone_idx) = end_bone.parent_index else { return };
-        
-        let Some(middle_bone) = skeleton.bone(middle_bone_idx) else { return };
-        
-        let Some(root_bone_idx) = middle_bone.parent_index else { return };
-        
-        let root_pos = pose.world_transform(root_bone_idx)
+
+        let Some(end_bone) = skeleton.bone(end_bone_idx) else {
+            return;
+        };
+
+        let Some(middle_bone_idx) = end_bone.parent_index else {
+            return;
+        };
+
+        let Some(middle_bone) = skeleton.bone(middle_bone_idx) else {
+            return;
+        };
+
+        let Some(root_bone_idx) = middle_bone.parent_index else {
+            return;
+        };
+
+        let root_pos = pose
+            .world_transform(root_bone_idx)
             .map_or(Vec3::ZERO, |m| m.col(3).truncate());
-        let middle_pos = pose.world_transform(middle_bone_idx)
+        let middle_pos = pose
+            .world_transform(middle_bone_idx)
             .map_or(Vec3::ZERO, |m| m.col(3).truncate());
-        let end_pos = pose.world_transform(end_bone_idx)
+        let end_pos = pose
+            .world_transform(end_bone_idx)
             .map_or(Vec3::ZERO, |m| m.col(3).truncate());
-        
+
         let upper_length = (middle_pos - root_pos).length();
         let lower_length = (end_pos - middle_pos).length();
-        
+
         let target = constraint.target_position;
         let target_dir = (target - root_pos).normalize_or_zero();
         let target_dist = (target - root_pos).length();
-        
+
         let chain_length = upper_length + lower_length;
         let clamped_dist = target_dist.min(chain_length - 0.001);
-        
-        let cos_angle = (clamped_dist.mul_add(-clamped_dist, upper_length.mul_add(upper_length, lower_length * lower_length))
-            / (2.0 * upper_length * lower_length))
+
+        let cos_angle = (clamped_dist.mul_add(
+            -clamped_dist,
+            upper_length.mul_add(upper_length, lower_length * lower_length),
+        ) / (2.0 * upper_length * lower_length))
             .clamp(-1.0, 1.0);
         let elbow_angle = std::f32::consts::PI - cos_angle.acos();
-        
-        let cos_root_angle = (lower_length.mul_add(-lower_length, upper_length.mul_add(upper_length, clamped_dist * clamped_dist))
-            / (2.0 * upper_length * clamped_dist))
+
+        let cos_root_angle = (lower_length.mul_add(
+            -lower_length,
+            upper_length.mul_add(upper_length, clamped_dist * clamped_dist),
+        ) / (2.0 * upper_length * clamped_dist))
             .clamp(-1.0, 1.0);
         let root_angle = cos_root_angle.acos();
-        
+
         let pole_dir = constraint.pole_target.map_or(Vec3::Y, |pole| {
             let to_pole = (pole - root_pos).normalize_or_zero();
             let perp = to_pole - target_dir * target_dir.dot(to_pole);
             perp.normalize_or_zero()
         });
-        
+
         let bend_axis = target_dir.cross(pole_dir).normalize_or_zero();
-        
+
         let root_rot = Quat::from_axis_angle(bend_axis, -root_angle);
         let root_final = Quat::from_rotation_arc(Vec3::X, target_dir) * root_rot;
-        
+
         let middle_rot = Quat::from_axis_angle(bend_axis, elbow_angle);
-        
+
         if let Some(current_root) = pose.local_transform(root_bone_idx) {
             let root_trans = current_root.col(3).truncate();
             let root_scale = Vec3::new(
@@ -3224,14 +3215,14 @@ impl IkSolver {
                 current_root.col(1).truncate().length(),
                 current_root.col(2).truncate().length(),
             );
-            
+
             let blended_rot = Quat::from_mat4(&current_root).slerp(root_final, constraint.weight);
             pose.set_local_transform(
                 root_bone_idx,
                 Mat4::from_scale_rotation_translation(root_scale, blended_rot, root_trans),
             );
         }
-        
+
         if let Some(current_middle) = pose.local_transform(middle_bone_idx) {
             let middle_trans = current_middle.col(3).truncate();
             let middle_scale = Vec3::new(
@@ -3239,7 +3230,7 @@ impl IkSolver {
                 current_middle.col(1).truncate().length(),
                 current_middle.col(2).truncate().length(),
             );
-            
+
             let current_middle_rot = Quat::from_mat4(&current_middle);
             let blended_rot = current_middle_rot.slerp(middle_rot, constraint.weight);
             pose.set_local_transform(
@@ -3247,21 +3238,17 @@ impl IkSolver {
                 Mat4::from_scale_rotation_translation(middle_scale, blended_rot, middle_trans),
             );
         }
-        
+
         pose.update_world_transforms(skeleton);
     }
-    
+
     /// Solves a chain IK using FABRIK (Forward And Backward Reaching Inverse Kinematics).
-    pub fn solve_chain(
-        constraint: &IkConstraint,
-        pose: &mut AnimatedPose,
-        skeleton: &Skeleton,
-    ) {
+    pub fn solve_chain(constraint: &IkConstraint, pose: &mut AnimatedPose, skeleton: &Skeleton) {
         let end_bone_idx = constraint.end_effector_bone;
-        
+
         let mut chain = Vec::new();
         let mut current_idx = end_bone_idx;
-        
+
         while let Some(bone) = skeleton.bone(current_idx) {
             chain.push(current_idx);
             if let Some(parent) = bone.parent_index {
@@ -3271,11 +3258,11 @@ impl IkSolver {
             }
         }
         chain.reverse();
-        
+
         if chain.len() < 2 {
             return;
         }
-        
+
         let mut positions: Vec<Vec3> = chain
             .iter()
             .map(|&idx| {
@@ -3283,39 +3270,39 @@ impl IkSolver {
                     .map_or(Vec3::ZERO, |m| m.col(3).truncate())
             })
             .collect();
-        
+
         let bone_lengths: Vec<f32> = (0..chain.len() - 1)
             .map(|i| (positions[i + 1] - positions[i]).length())
             .collect();
-        
+
         let root_pos = positions[0];
         let target = constraint.target_position;
-        
+
         for _ in 0..constraint.max_iterations {
             positions[chain.len() - 1] = target;
-            
+
             for i in (1..chain.len()).rev() {
                 let dir = (positions[i - 1] - positions[i]).normalize_or_zero();
                 positions[i - 1] = positions[i] + dir * bone_lengths[i - 1];
             }
-            
+
             positions[0] = root_pos;
-            
+
             for i in 0..chain.len() - 1 {
                 let dir = (positions[i + 1] - positions[i]).normalize_or_zero();
                 positions[i + 1] = positions[i] + dir * bone_lengths[i];
             }
-            
+
             let end_dist = (positions[chain.len() - 1] - target).length();
             if end_dist < constraint.tolerance {
                 break;
             }
         }
-        
+
         for i in 0..chain.len() - 1 {
             let bone_idx = chain[i];
             let next_idx = chain[i + 1];
-            
+
             let original_dir = pose
                 .world_transform(next_idx)
                 .and_then(|next| {
@@ -3324,10 +3311,10 @@ impl IkSolver {
                     })
                 })
                 .unwrap_or(Vec3::X);
-            
+
             let new_dir = (positions[i + 1] - positions[i]).normalize_or_zero();
             let rotation = Quat::from_rotation_arc(original_dir, new_dir);
-            
+
             if let Some(current) = pose.local_transform(bone_idx) {
                 let trans = current.col(3).truncate();
                 let scale = Vec3::new(
@@ -3336,7 +3323,7 @@ impl IkSolver {
                     current.col(2).truncate().length(),
                 );
                 let current_rot = Quat::from_mat4(&current);
-                
+
                 let blended_rot = current_rot.slerp(rotation * current_rot, constraint.weight);
                 pose.set_local_transform(
                     bone_idx,
@@ -3344,27 +3331,23 @@ impl IkSolver {
                 );
             }
         }
-        
+
         pose.update_world_transforms(skeleton);
     }
-    
+
     /// Solves look-at IK to orient a bone toward a target.
-    pub fn solve_look_at(
-        constraint: &IkConstraint,
-        pose: &mut AnimatedPose,
-        skeleton: &Skeleton,
-    ) {
+    pub fn solve_look_at(constraint: &IkConstraint, pose: &mut AnimatedPose, skeleton: &Skeleton) {
         let bone_idx = constraint.end_effector_bone;
-        
+
         let bone_pos = pose
             .world_transform(bone_idx)
             .map_or(Vec3::ZERO, |m| m.col(3).truncate());
-        
+
         let target = constraint.target_position;
         let direction = (target - bone_pos).normalize_or_zero();
-        
+
         let rotation = Quat::from_rotation_arc(Vec3::Z, direction);
-        
+
         if let Some(current) = pose.local_transform(bone_idx) {
             let trans = current.col(3).truncate();
             let scale = Vec3::new(
@@ -3373,17 +3356,17 @@ impl IkSolver {
                 current.col(2).truncate().length(),
             );
             let current_rot = Quat::from_mat4(&current);
-            
+
             let blended_rot = current_rot.slerp(rotation, constraint.weight);
             pose.set_local_transform(
                 bone_idx,
                 Mat4::from_scale_rotation_translation(scale, blended_rot, trans),
             );
         }
-        
+
         pose.update_world_transforms(skeleton);
     }
-    
+
     /// Applies an IK constraint to a pose.
     pub fn apply_constraint(
         constraint: &IkConstraint,
@@ -3412,27 +3395,27 @@ impl IkController {
             constraints: Vec::new(),
         }
     }
-    
+
     /// Adds an IK constraint.
     pub fn add_constraint(&mut self, constraint: IkConstraint) {
         self.constraints.push(constraint);
     }
-    
+
     /// Removes all constraints.
     pub fn clear_constraints(&mut self) {
         self.constraints.clear();
     }
-    
+
     /// Gets all constraints.
     pub fn constraints(&self) -> &[IkConstraint] {
         &self.constraints
     }
-    
+
     /// Gets a mutable reference to a constraint.
     pub fn constraint_mut(&mut self, index: usize) -> Option<&mut IkConstraint> {
         self.constraints.get_mut(index)
     }
-    
+
     /// Applies all IK constraints to a pose.
     pub fn apply(&self, pose: &mut AnimatedPose, skeleton: &Skeleton) {
         for constraint in &self.constraints {
@@ -3450,9 +3433,7 @@ impl Default for IkController {
 }
 
 /// System to apply IK constraints after animation evaluation.
-pub fn apply_ik_constraints(
-    query: &mut Query<(&Skeleton, &IkController, &mut AnimatedPose)>,
-) {
+pub fn apply_ik_constraints(query: &mut Query<(&Skeleton, &IkController, &mut AnimatedPose)>) {
     for (skeleton, ik_controller, mut pose) in query.iter_mut() {
         ik_controller.apply(&mut pose, skeleton);
         pose.update_skinning_matrices(skeleton);
@@ -3470,7 +3451,7 @@ pub fn apply_ik_constraints(
 pub struct BoneMapping {
     /// Maps source bone index to target bone index.
     source_to_target: HashMap<usize, usize>,
-    
+
     /// Maps bone names from source to target.
     name_mapping: HashMap<String, String>,
 }
@@ -3483,37 +3464,37 @@ impl BoneMapping {
             name_mapping: HashMap::new(),
         }
     }
-    
+
     /// Adds a bone mapping by index.
     pub fn map_bones(&mut self, source_idx: usize, target_idx: usize) {
         self.source_to_target.insert(source_idx, target_idx);
     }
-    
+
     /// Adds a bone mapping by name.
     pub fn map_bone_names(&mut self, source_name: String, target_name: String) {
         self.name_mapping.insert(source_name, target_name);
     }
-    
+
     /// Gets the target bone index for a source bone.
     pub fn get_target_bone(&self, source_idx: usize) -> Option<usize> {
         self.source_to_target.get(&source_idx).copied()
     }
-    
+
     /// Creates an automatic bone mapping based on bone names.
     ///
     /// Attempts to match bones with identical or similar names between skeletons.
     pub fn auto_map(source_skeleton: &Skeleton, target_skeleton: &Skeleton) -> Self {
         let mut mapping = Self::new();
-        
+
         for source_idx in 0..source_skeleton.bone_count() {
             if let Some(source_bone) = source_skeleton.bone(source_idx) {
                 let source_name = &source_bone.name;
-                
+
                 if let Some(target_idx) = target_skeleton.find_bone(source_name) {
                     mapping.map_bones(source_idx, target_idx);
                     continue;
                 }
-                
+
                 let source_lower = source_name.to_lowercase();
                 for target_idx in 0..target_skeleton.bone_count() {
                     if let Some(target_bone) = target_skeleton.bone(target_idx) {
@@ -3529,7 +3510,7 @@ impl BoneMapping {
                 }
             }
         }
-        
+
         mapping
     }
 }
@@ -3551,14 +3532,14 @@ impl AnimationRetargeter {
     pub fn new(bone_mapping: BoneMapping) -> Self {
         Self { bone_mapping }
     }
-    
+
     /// Creates a retargeter with automatic bone mapping.
     pub fn auto(source_skeleton: &Skeleton, target_skeleton: &Skeleton) -> Self {
         Self {
             bone_mapping: BoneMapping::auto_map(source_skeleton, target_skeleton),
         }
     }
-    
+
     /// Retargets an animation clip from source to target skeleton.
     pub fn retarget_clip(
         &self,
@@ -3569,32 +3550,34 @@ impl AnimationRetargeter {
             format!("{}_retargeted", source_clip.name()),
             source_clip.duration(),
         );
-        
+
         for (source_bone_idx, source_track) in source_clip.bone_tracks() {
             if let Some(target_bone_idx) = self.bone_mapping.get_target_bone(*source_bone_idx) {
                 let mut target_track = BoneTrack::new();
-                
+
                 for keyframe in &source_track.translation_keyframes {
                     target_track.add_translation_keyframe(keyframe.time, keyframe.value);
                 }
-                
+
                 for keyframe in &source_track.rotation_keyframes {
                     target_track.add_rotation_keyframe(keyframe.time, keyframe.value);
                 }
-                
+
                 for keyframe in &source_track.scale_keyframes {
                     target_track.add_scale_keyframe(keyframe.time, keyframe.value);
                 }
-                
+
                 if target_track.has_keyframes() {
-                    target_clip.bone_tracks.insert(target_bone_idx, target_track);
+                    target_clip
+                        .bone_tracks
+                        .insert(target_bone_idx, target_track);
                 }
             }
         }
-        
+
         target_clip
     }
-    
+
     /// Retargets a pose from source to target skeleton.
     pub fn retarget_pose(
         &self,
@@ -3602,25 +3585,25 @@ impl AnimationRetargeter {
         target_skeleton: &Skeleton,
     ) -> AnimatedPose {
         let mut target_pose = AnimatedPose::new(target_skeleton.bone_count());
-        
+
         for i in 0..target_skeleton.bone_count() {
             if let Some(bone) = target_skeleton.bone(i) {
                 target_pose.set_local_transform(i, bone.bind_pose_matrix());
             }
         }
-        
+
         for (source_idx, target_idx) in &self.bone_mapping.source_to_target {
             if let Some(transform) = source_pose.local_transform(*source_idx) {
                 target_pose.set_local_transform(*target_idx, transform);
             }
         }
-        
+
         target_pose.update_world_transforms(target_skeleton);
         target_pose.update_skinning_matrices(target_skeleton);
-        
+
         target_pose
     }
-    
+
     /// Gets the bone mapping.
     pub fn bone_mapping(&self) -> &BoneMapping {
         &self.bone_mapping
@@ -3636,7 +3619,7 @@ impl AnimationRetargeter {
 pub enum AdditiveMode {
     /// Local space additive (adds to local transforms).
     Local,
-    
+
     /// World space additive (adds to world transforms).
     World,
 }
@@ -3647,17 +3630,17 @@ pub struct AdditiveAnimation {
     /// Name of the base animation clip.
     #[allow(dead_code)]
     base_clip_name: String,
-    
+
     /// Name of the additive animation clip.
     #[allow(dead_code)]
     additive_clip_name: String,
-    
+
     /// Reference pose for computing deltas (usually bind pose).
     reference_pose: Option<AnimatedPose>,
-    
+
     /// Weight of the additive animation.
     weight: f32,
-    
+
     /// Additive mode (local or world space).
     mode: AdditiveMode,
 }
@@ -3673,25 +3656,25 @@ impl AdditiveAnimation {
             mode: AdditiveMode::Local,
         }
     }
-    
+
     /// Sets the reference pose.
     pub fn with_reference_pose(mut self, reference: AnimatedPose) -> Self {
         self.reference_pose = Some(reference);
         self
     }
-    
+
     /// Sets the weight.
     pub fn with_weight(mut self, weight: f32) -> Self {
         self.weight = weight.clamp(0.0, 1.0);
         self
     }
-    
+
     /// Sets the additive mode.
     pub fn with_mode(mut self, mode: AdditiveMode) -> Self {
         self.mode = mode;
         self
     }
-    
+
     /// Computes the reference pose from a skeleton (bind pose).
     pub fn compute_reference_from_skeleton(&mut self, skeleton: &Skeleton) {
         let mut reference = AnimatedPose::new(skeleton.bone_count());
@@ -3703,7 +3686,7 @@ impl AdditiveAnimation {
         reference.update_world_transforms(skeleton);
         self.reference_pose = Some(reference);
     }
-    
+
     /// Applies additive blending to a pose.
     pub fn apply(
         &self,
@@ -3712,8 +3695,10 @@ impl AdditiveAnimation {
         additive_time: f32,
         skeleton: &Skeleton,
     ) {
-        let Some(reference) = &self.reference_pose else { return };
-        
+        let Some(reference) = &self.reference_pose else {
+            return;
+        };
+
         for (bone_idx, track) in additive_clip.bone_tracks() {
             if let Some(bone) = skeleton.bone(*bone_idx) {
                 let additive_trans = track
@@ -3725,27 +3710,28 @@ impl AdditiveAnimation {
                 let additive_scale = track
                     .sample_scale(additive_time)
                     .unwrap_or(bone.bind_pose_scale);
-                
+
                 let ref_trans = reference
                     .local_transform(*bone_idx)
                     .map_or(bone.bind_pose_translation, |m| m.col(3).truncate());
                 let ref_rot = reference
                     .local_transform(*bone_idx)
                     .map_or(bone.bind_pose_rotation, |m| Quat::from_mat4(&m));
-                let ref_scale = reference
-                    .local_transform(*bone_idx)
-                    .map_or(bone.bind_pose_scale, |m| {
-                        Vec3::new(
-                            m.col(0).truncate().length(),
-                            m.col(1).truncate().length(),
-                            m.col(2).truncate().length(),
-                        )
-                    });
-                
+                let ref_scale =
+                    reference
+                        .local_transform(*bone_idx)
+                        .map_or(bone.bind_pose_scale, |m| {
+                            Vec3::new(
+                                m.col(0).truncate().length(),
+                                m.col(1).truncate().length(),
+                                m.col(2).truncate().length(),
+                            )
+                        });
+
                 let delta_trans = additive_trans - ref_trans;
                 let delta_rot = ref_rot.inverse() * additive_rot;
                 let delta_scale = additive_scale / ref_scale;
-                
+
                 if let Some(current) = base_pose.local_transform(*bone_idx) {
                     let current_trans = current.col(3).truncate();
                     let current_rot = Quat::from_mat4(&current);
@@ -3754,12 +3740,11 @@ impl AdditiveAnimation {
                         current.col(1).truncate().length(),
                         current.col(2).truncate().length(),
                     );
-                    
+
                     let final_trans = current_trans + delta_trans * self.weight;
-                    let final_rot = current_rot
-                        * Quat::IDENTITY.slerp(delta_rot, self.weight);
+                    let final_rot = current_rot * Quat::IDENTITY.slerp(delta_rot, self.weight);
                     let final_scale = current_scale * Vec3::ONE.lerp(delta_scale, self.weight);
-                    
+
                     base_pose.set_local_transform(
                         *bone_idx,
                         Mat4::from_scale_rotation_translation(final_scale, final_rot, final_trans),
@@ -3767,7 +3752,7 @@ impl AdditiveAnimation {
                 }
             }
         }
-        
+
         base_pose.update_world_transforms(skeleton);
     }
 }
@@ -3781,10 +3766,10 @@ impl AdditiveAnimation {
 pub struct RootMotion {
     /// Translation delta.
     pub translation: Vec3,
-    
+
     /// Rotation delta.
     pub rotation: Quat,
-    
+
     /// Whether this root motion has been consumed.
     pub consumed: bool,
 }
@@ -3798,7 +3783,7 @@ impl RootMotion {
             consumed: false,
         }
     }
-    
+
     /// Creates an identity root motion (no movement).
     pub fn identity() -> Self {
         Self {
@@ -3807,12 +3792,12 @@ impl RootMotion {
             consumed: false,
         }
     }
-    
+
     /// Marks this root motion as consumed.
     pub fn consume(&mut self) {
         self.consumed = true;
     }
-    
+
     /// Resets the consumed flag.
     pub fn reset(&mut self) {
         self.consumed = false;
@@ -3830,22 +3815,22 @@ impl Default for RootMotion {
 pub struct RootMotionExtractor {
     /// Index of the root bone to extract motion from.
     root_bone_index: usize,
-    
+
     /// Whether to extract translation.
     extract_translation: bool,
-    
+
     /// Whether to extract rotation.
     extract_rotation: bool,
-    
+
     /// Previous root bone position (for computing deltas).
     previous_position: Vec3,
-    
+
     /// Previous root bone rotation (for computing deltas).
     previous_rotation: Quat,
-    
+
     /// Extracted root motion for this frame.
     current_motion: RootMotion,
-    
+
     /// Whether to apply motion to the entity's transform.
     apply_to_transform: bool,
 }
@@ -3863,58 +3848,58 @@ impl RootMotionExtractor {
             apply_to_transform: true,
         }
     }
-    
+
     /// Enables or disables translation extraction.
     pub fn with_translation(mut self, enabled: bool) -> Self {
         self.extract_translation = enabled;
         self
     }
-    
+
     /// Enables or disables rotation extraction.
     pub fn with_rotation(mut self, enabled: bool) -> Self {
         self.extract_rotation = enabled;
         self
     }
-    
+
     /// Enables or disables automatic transform application.
     pub fn with_auto_apply(mut self, enabled: bool) -> Self {
         self.apply_to_transform = enabled;
         self
     }
-    
+
     /// Extracts root motion from a pose.
     pub fn extract(&mut self, pose: &mut AnimatedPose, skeleton: &Skeleton) {
         let Some(root_transform) = pose.local_transform(self.root_bone_index) else {
             self.current_motion = RootMotion::identity();
             return;
         };
-        
+
         let position = root_transform.col(3).truncate();
         let rotation = Quat::from_mat4(&root_transform);
-        
+
         let translation_delta = if self.extract_translation {
             position - self.previous_position
         } else {
             Vec3::ZERO
         };
-        
+
         let rotation_delta = if self.extract_rotation {
             self.previous_rotation.inverse() * rotation
         } else {
             Quat::IDENTITY
         };
-        
+
         self.current_motion = RootMotion::new(translation_delta, rotation_delta);
-        
+
         self.previous_position = position;
         self.previous_rotation = rotation;
-        
+
         if self.extract_translation {
             let zero_translation =
                 Mat4::from_scale_rotation_translation(Vec3::ONE, rotation, Vec3::ZERO);
             pose.set_local_transform(self.root_bone_index, zero_translation);
         }
-        
+
         if self.extract_rotation {
             let zero_rotation = Mat4::from_scale_rotation_translation(
                 Vec3::ONE,
@@ -3927,20 +3912,20 @@ impl RootMotionExtractor {
             );
             pose.set_local_transform(self.root_bone_index, zero_rotation);
         }
-        
+
         pose.update_world_transforms(skeleton);
     }
-    
+
     /// Gets the current root motion.
     pub fn motion(&self) -> &RootMotion {
         &self.current_motion
     }
-    
+
     /// Gets a mutable reference to the current root motion.
     pub fn motion_mut(&mut self) -> &mut RootMotion {
         &mut self.current_motion
     }
-    
+
     /// Resets the extractor state.
     pub fn reset(&mut self) {
         self.previous_position = Vec3::ZERO;

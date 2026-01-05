@@ -71,20 +71,28 @@ impl ProceduralTextureGenerator {
     /// Generates a texture from a texture graph.
     ///
     /// The graph is evaluated on the CPU and returns a RGBA8 image.
-    pub fn generate(&self, graph: &TextureGraph, params: TextureGenerationParams) -> Result<Vec<u8>> {
-        graph.validate().map_err(|e| eyre::eyre!("Invalid texture graph: {}", e))?;
+    pub fn generate(
+        &self,
+        graph: &TextureGraph,
+        params: TextureGenerationParams,
+    ) -> Result<Vec<u8>> {
+        graph
+            .validate()
+            .map_err(|e| eyre::eyre!("Invalid texture graph: {}", e))?;
 
-        let output_id = graph.output().ok_or_else(|| eyre::eyre!("No output node"))?;
-        
+        let output_id = graph
+            .output()
+            .ok_or_else(|| eyre::eyre!("No output node"))?;
+
         let mut data = Vec::with_capacity((params.width * params.height * 4) as usize);
-        
+
         for y in 0..params.height {
             for x in 0..params.width {
                 let uv_x = x as f32 / params.width as f32;
                 let uv_y = y as f32 / params.height as f32;
-                
+
                 let color = Self::evaluate_node(graph, output_id, uv_x, uv_y, params.seed)?;
-                
+
                 data.push((color[0].clamp(0.0, 1.0) * 255.0) as u8);
                 data.push((color[1].clamp(0.0, 1.0) * 255.0) as u8);
                 data.push((color[2].clamp(0.0, 1.0) * 255.0) as u8);
@@ -103,55 +111,93 @@ impl ProceduralTextureGenerator {
         seed: u32,
     ) -> Result<[f32; 4]> {
         use crate::noise::{fbm_noise, perlin_noise, simplex_noise, worley_noise};
-        
-        let node = graph.get_node(node_id).ok_or_else(|| eyre::eyre!("Node not found"))?;
-        
+
+        let node = graph
+            .get_node(node_id)
+            .ok_or_else(|| eyre::eyre!("Node not found"))?;
+
         match node {
-            TextureNode::Noise { noise_type, scale, octaves, persistence, lacunarity } => {
+            TextureNode::Noise {
+                noise_type,
+                scale,
+                octaves,
+                persistence,
+                lacunarity,
+            } => {
                 let value = match noise_type {
-                    NoiseType::Perlin => {
-                        fbm_noise(uv_x * scale, uv_y * scale, seed, *octaves, *persistence, *lacunarity, perlin_noise)
-                    }
-                    NoiseType::Simplex => {
-                        fbm_noise(uv_x * scale, uv_y * scale, seed, *octaves, *persistence, *lacunarity, simplex_noise)
-                    }
-                    NoiseType::Worley => {
-                        fbm_noise(uv_x * scale, uv_y * scale, seed, *octaves, *persistence, *lacunarity, 
-                            |x, y, s| worley_noise(x, y, s, 1.0))
-                    }
+                    NoiseType::Perlin => fbm_noise(
+                        uv_x * scale,
+                        uv_y * scale,
+                        seed,
+                        *octaves,
+                        *persistence,
+                        *lacunarity,
+                        perlin_noise,
+                    ),
+                    NoiseType::Simplex => fbm_noise(
+                        uv_x * scale,
+                        uv_y * scale,
+                        seed,
+                        *octaves,
+                        *persistence,
+                        *lacunarity,
+                        simplex_noise,
+                    ),
+                    NoiseType::Worley => fbm_noise(
+                        uv_x * scale,
+                        uv_y * scale,
+                        seed,
+                        *octaves,
+                        *persistence,
+                        *lacunarity,
+                        |x, y, s| worley_noise(x, y, s, 1.0),
+                    ),
                 };
                 let normalized = value * 0.5 + 0.5;
                 Ok([normalized, normalized, normalized, 1.0])
             }
-            TextureNode::Constant { color } => {
-                Ok(*color)
-            }
+            TextureNode::Constant { color } => Ok(*color),
             TextureNode::Transform { input, params } => {
                 let mut transformed_x = uv_x - 0.5;
                 let mut transformed_y = uv_y - 0.5;
-                
+
                 let cos_r = params.rotation.cos();
                 let sin_r = params.rotation.sin();
                 let rotated_x = transformed_x * cos_r - transformed_y * sin_r;
                 let rotated_y = transformed_x * sin_r + transformed_y * cos_r;
-                
+
                 transformed_x = rotated_x / params.scale.x;
                 transformed_y = rotated_y / params.scale.y;
-                
+
                 transformed_x += 0.5 + params.offset.x;
                 transformed_y += 0.5 + params.offset.y;
-                
+
                 Self::evaluate_node(graph, *input, transformed_x, transformed_y, seed)
             }
-            TextureNode::Blend { input_a, input_b, mode, factor } => {
+            TextureNode::Blend {
+                input_a,
+                input_b,
+                mode,
+                factor,
+            } => {
                 let a = Self::evaluate_node(graph, *input_a, uv_x, uv_y, seed)?;
                 let b = Self::evaluate_node(graph, *input_b, uv_x, uv_y, seed)?;
-                
+
                 let blended = match mode {
                     BlendMode::Add => [a[0] + b[0], a[1] + b[1], a[2] + b[2], a[3] + b[3]],
                     BlendMode::Multiply => [a[0] * b[0], a[1] * b[1], a[2] * b[2], a[3] * b[3]],
-                    BlendMode::Min => [a[0].min(b[0]), a[1].min(b[1]), a[2].min(b[2]), a[3].min(b[3])],
-                    BlendMode::Max => [a[0].max(b[0]), a[1].max(b[1]), a[2].max(b[2]), a[3].max(b[3])],
+                    BlendMode::Min => [
+                        a[0].min(b[0]),
+                        a[1].min(b[1]),
+                        a[2].min(b[2]),
+                        a[3].min(b[3]),
+                    ],
+                    BlendMode::Max => [
+                        a[0].max(b[0]),
+                        a[1].max(b[1]),
+                        a[2].max(b[2]),
+                        a[3].max(b[3]),
+                    ],
                     BlendMode::Mix => [
                         a[0] + (b[0] - a[0]) * factor,
                         a[1] + (b[1] - a[1]) * factor,
@@ -172,11 +218,16 @@ impl ProceduralTextureGenerator {
                                 1.0 - 2.0 * (1.0 - a) * (1.0 - b)
                             }
                         };
-                        [overlay(a[0], b[0]), overlay(a[1], b[1]), overlay(a[2], b[2]), overlay(a[3], b[3])]
-                    },
+                        [
+                            overlay(a[0], b[0]),
+                            overlay(a[1], b[1]),
+                            overlay(a[2], b[2]),
+                            overlay(a[3], b[3]),
+                        ]
+                    }
                     BlendMode::Subtract => [a[0] - b[0], a[1] - b[1], a[2] - b[2], a[3] - b[3]],
                 };
-                
+
                 Ok(blended)
             }
             TextureNode::ColorRamp { input, ramp } => {
@@ -230,16 +281,24 @@ impl ProceduralTextureGenerator {
             }
         }
     }
-    
+
     #[allow(dead_code)]
-    fn compile_graph_to_shader(&self, graph: &TextureGraph, params: TextureGenerationParams) -> Result<String> {
-        let output_id = graph.output().ok_or_else(|| eyre::eyre!("No output node"))?;
+    fn compile_graph_to_shader(
+        &self,
+        graph: &TextureGraph,
+        params: TextureGenerationParams,
+    ) -> Result<String> {
+        let output_id = graph
+            .output()
+            .ok_or_else(|| eyre::eyre!("No output node"))?;
 
         let mut shader = String::new();
         shader.push_str("#version 450\n\n");
         shader.push_str("layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;\n\n");
-        shader.push_str("layout(set = 0, binding = 0, rgba8) uniform writeonly image2D outputImage;\n\n");
-        
+        shader.push_str(
+            "layout(set = 0, binding = 0, rgba8) uniform writeonly image2D outputImage;\n\n",
+        );
+
         shader.push_str(&format!("const uint SEED = {}u;\n", params.seed));
         shader.push_str(&format!("const uint WIDTH = {}u;\n", params.width));
         shader.push_str(&format!("const uint HEIGHT = {}u;\n\n", params.height));
@@ -254,7 +313,10 @@ impl ProceduralTextureGenerator {
         shader.push_str("    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);\n");
         shader.push_str("    if (pixel.x >= WIDTH || pixel.y >= HEIGHT) return;\n\n");
         shader.push_str("    vec2 uv = vec2(pixel) / vec2(WIDTH, HEIGHT);\n");
-        shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", output_id.0));
+        shader.push_str(&format!(
+            "    vec4 color = eval_node_{}(uv);\n",
+            output_id.0
+        ));
         shader.push_str("    imageStore(outputImage, pixel, color);\n");
         shader.push_str("}\n");
 
@@ -273,15 +335,20 @@ impl ProceduralTextureGenerator {
             return Ok(());
         }
 
-        let node = graph.get_node(node_id).ok_or_else(|| eyre::eyre!("Node not found"))?;
+        let node = graph
+            .get_node(node_id)
+            .ok_or_else(|| eyre::eyre!("Node not found"))?;
 
         match node {
-            TextureNode::Noise { noise_type, scale, octaves, persistence, lacunarity } => {
-                shader.push_str(&format!(
-                    "vec4 eval_node_{}(vec2 uv) {{\n",
-                    node_id.0
-                ));
-                
+            TextureNode::Noise {
+                noise_type,
+                scale,
+                octaves,
+                persistence,
+                lacunarity,
+            } => {
+                shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
+
                 let noise_fn = match noise_type {
                     NoiseType::Perlin => "perlin_noise",
                     NoiseType::Simplex => "simplex_noise",
@@ -308,19 +375,28 @@ impl ProceduralTextureGenerator {
                 shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
                 shader.push_str(&format!(
                     "    vec2 transformed = transform_uv(uv, vec2({}, {}), {}, vec2({}, {}));\n",
-                    params.offset.x, params.offset.y, params.rotation, params.scale.x, params.scale.y
+                    params.offset.x,
+                    params.offset.y,
+                    params.rotation,
+                    params.scale.x,
+                    params.scale.y
                 ));
                 shader.push_str(&format!("    return eval_node_{}(transformed);\n", input.0));
                 shader.push_str("}\n\n");
             }
-            TextureNode::Blend { input_a, input_b, mode, factor } => {
+            TextureNode::Blend {
+                input_a,
+                input_b,
+                mode,
+                factor,
+            } => {
                 self.generate_node_function(graph, *input_a, generated, shader)?;
                 self.generate_node_function(graph, *input_b, generated, shader)?;
-                
+
                 shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
                 shader.push_str(&format!("    vec4 a = eval_node_{}(uv);\n", input_a.0));
                 shader.push_str(&format!("    vec4 b = eval_node_{}(uv);\n", input_b.0));
-                
+
                 let blend_expr = match mode {
                     BlendMode::Add => "a + b",
                     BlendMode::Multiply => "a * b",
@@ -328,10 +404,12 @@ impl ProceduralTextureGenerator {
                     BlendMode::Max => "max(a, b)",
                     BlendMode::Mix => &format!("mix(a, b, {factor})"),
                     BlendMode::Screen => "1.0 - (1.0 - a) * (1.0 - b)",
-                    BlendMode::Overlay => "mix(2.0 * a * b, 1.0 - 2.0 * (1.0 - a) * (1.0 - b), step(0.5, a))",
+                    BlendMode::Overlay => {
+                        "mix(2.0 * a * b, 1.0 - 2.0 * (1.0 - a) * (1.0 - b), step(0.5, a))"
+                    }
                     BlendMode::Subtract => "a - b",
                 };
-                
+
                 shader.push_str(&format!("    return {blend_expr};\n"));
                 shader.push_str("}\n\n");
             }
@@ -339,18 +417,18 @@ impl ProceduralTextureGenerator {
                 self.generate_node_function(graph, *input, generated, shader)?;
                 shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
                 shader.push_str(&format!("    float t = eval_node_{}(uv).r;\n", input.0));
-                
+
                 if ramp.stops.len() >= 2 {
                     for i in 0..ramp.stops.len() - 1 {
                         let stop1 = &ramp.stops[i];
                         let stop2 = &ramp.stops[i + 1];
-                        
+
                         let condition = if i == 0 {
                             format!("if (t <= {})", stop2.position)
                         } else {
                             format!("else if (t <= {})", stop2.position)
                         };
-                        
+
                         shader.push_str(&format!("    {condition} {{\n"));
                         shader.push_str(&format!(
                             "        float factor = (t - {}) / ({} - {});\n",
@@ -377,7 +455,7 @@ impl ProceduralTextureGenerator {
                 } else {
                     shader.push_str("    return vec4(0.0, 0.0, 0.0, 1.0);\n");
                 }
-                
+
                 shader.push_str("}\n\n");
             }
             TextureNode::Invert { input } => {
@@ -398,7 +476,9 @@ impl ProceduralTextureGenerator {
                 self.generate_node_function(graph, *input, generated, shader)?;
                 shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
                 shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
-                shader.push_str(&format!("    return vec4(pow(color.rgb, vec3({exponent})), color.a);\n"));
+                shader.push_str(&format!(
+                    "    return vec4(pow(color.rgb, vec3({exponent})), color.a);\n"
+                ));
                 shader.push_str("}\n\n");
             }
             TextureNode::Threshold { input, threshold } => {
@@ -413,7 +493,9 @@ impl ProceduralTextureGenerator {
                 self.generate_node_function(graph, *input, generated, shader)?;
                 shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
                 shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
-                shader.push_str(&format!("    vec3 adjusted = (color.rgb - 0.5) * (1.0 + {amount}) + 0.5;\n"));
+                shader.push_str(&format!(
+                    "    vec3 adjusted = (color.rgb - 0.5) * (1.0 + {amount}) + 0.5;\n"
+                ));
                 shader.push_str("    return vec4(adjusted, color.a);\n");
                 shader.push_str("}\n\n");
             }
@@ -421,7 +503,9 @@ impl ProceduralTextureGenerator {
                 self.generate_node_function(graph, *input, generated, shader)?;
                 shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
                 shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
-                shader.push_str(&format!("    return vec4(color.rgb + {amount}, color.a);\n"));
+                shader.push_str(&format!(
+                    "    return vec4(color.rgb + {amount}, color.a);\n"
+                ));
                 shader.push_str("}\n\n");
             }
         }
@@ -448,8 +532,7 @@ vec2 transform_uv(vec2 uv, vec2 offset, float rotation, vec2 scale) {
     return uv;
 }
 
-"#.to_string()
+"#
+        .to_string()
     }
-
-
 }

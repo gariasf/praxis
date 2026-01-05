@@ -55,7 +55,7 @@
 //! # fn example() -> praxis_utils::Result<()> {
 //! // Create terrain from procedural noise
 //! let heightmap = TerrainHeightmap::from_noise(512, 512, 100.0, 4.0, 6);
-//! 
+//!
 //! // Configure terrain system
 //! let config = TerrainConfig {
 //!     chunk_size: 64.0,
@@ -129,7 +129,9 @@ pub use heightmap::TerrainHeightmap;
 pub use lod::{ChunkLod, TerrainLodManager};
 pub use material::{TerrainMaterial, TerrainMaterialLayer};
 pub use mesh::TerrainMesh;
-pub use renderer::{TerrainRenderer, VegetationInstanceData, VegetationPushConstants, VegetationRenderer};
+pub use renderer::{
+    TerrainRenderer, VegetationInstanceData, VegetationPushConstants, VegetationRenderer,
+};
 pub use splatmap::SplatMap;
 pub use system::{TerrainConfig, TerrainSystem};
 pub use vegetation::{VegetationDistributor, VegetationInstance, VegetationLayer};

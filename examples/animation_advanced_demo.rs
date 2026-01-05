@@ -147,11 +147,12 @@ fn demo_animation_retargeting() {
 
     let retargeted_clip = retargeter.retarget_clip(&walk_animation, &target_skeleton);
 
-    println!(
-        "  ✓ Automatically mapped bones by name (case-insensitive)"
-    );
+    println!("  ✓ Automatically mapped bones by name (case-insensitive)");
     println!("  ✓ Retargeted 'Walk' animation to target skeleton");
-    println!("  ✓ Retargeted clip duration: {:.2}s", retargeted_clip.duration());
+    println!(
+        "  ✓ Retargeted clip duration: {:.2}s",
+        retargeted_clip.duration()
+    );
     println!(
         "  ✓ Bone tracks in retargeted clip: {}",
         retargeted_clip.track_count()
@@ -198,20 +199,12 @@ fn demo_additive_blending() {
 
     let mut walk_clip = AnimationClip::new("Walk".to_string(), 1.0);
     walk_clip.add_rotation_keyframe(1, 0.0, Quat::IDENTITY);
-    walk_clip.add_rotation_keyframe(
-        1,
-        0.5,
-        Quat::from_rotation_y(std::f32::consts::FRAC_PI_6),
-    );
+    walk_clip.add_rotation_keyframe(1, 0.5, Quat::from_rotation_y(std::f32::consts::FRAC_PI_6));
     walk_clip.add_rotation_keyframe(1, 1.0, Quat::IDENTITY);
 
     let mut recoil_clip = AnimationClip::new("Recoil".to_string(), 0.5);
     recoil_clip.add_rotation_keyframe(2, 0.0, Quat::IDENTITY);
-    recoil_clip.add_rotation_keyframe(
-        2,
-        0.25,
-        Quat::from_rotation_x(-std::f32::consts::FRAC_PI_8),
-    );
+    recoil_clip.add_rotation_keyframe(2, 0.25, Quat::from_rotation_x(-std::f32::consts::FRAC_PI_8));
     recoil_clip.add_rotation_keyframe(2, 0.5, Quat::IDENTITY);
 
     let mut additive = AdditiveAnimation::new("Walk".to_string(), "Recoil".to_string())

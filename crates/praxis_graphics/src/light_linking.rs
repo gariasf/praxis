@@ -160,19 +160,12 @@ impl LightLinkingManager {
     }
 
     pub fn add_object_channel(&mut self, object_id: &str, channel: LightChannel) -> Result<()> {
-        let mask = self
-            .object_masks
-            .entry(object_id.to_string())
-            .or_default();
+        let mask = self.object_masks.entry(object_id.to_string()).or_default();
         mask.add_channel(channel);
         Ok(())
     }
 
-    pub fn remove_object_channel(
-        &mut self,
-        object_id: &str,
-        channel: LightChannel,
-    ) -> Result<()> {
+    pub fn remove_object_channel(&mut self, object_id: &str, channel: LightChannel) -> Result<()> {
         if let Some(mask) = self.object_masks.get_mut(object_id) {
             mask.remove_channel(channel);
         }
@@ -363,10 +356,7 @@ mod tests {
         assert_eq!(manager.get_object_mask("obj1"), LightLinkingMask::all());
 
         manager.clear_light("light1");
-        assert_eq!(
-            manager.get_light_channel("light1"),
-            DEFAULT_LIGHT_CHANNEL
-        );
+        assert_eq!(manager.get_light_channel("light1"), DEFAULT_LIGHT_CHANNEL);
     }
 
     #[test]

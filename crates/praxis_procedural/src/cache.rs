@@ -3,8 +3,8 @@
 //! This module provides a caching layer to avoid redundant texture generation.
 //! Textures are cached based on their generation parameters and graph structure.
 
-use crate::graph::TextureGraph;
 use crate::generator::TextureGenerationParams;
+use crate::graph::TextureGraph;
 use praxis_utils::{debug, info, trace};
 use std::collections::HashMap;
 
@@ -50,7 +50,7 @@ impl TextureCacheKey {
 
         for (id, node) in nodes {
             id.hash(&mut hasher);
-            
+
             let node_bytes = format!("{node:?}");
             node_bytes.hash(&mut hasher);
         }

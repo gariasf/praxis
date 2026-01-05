@@ -108,7 +108,8 @@ impl SplatMap {
     /// Gets interpolated weights at a world position.
     pub fn get_weights_at(&self, world_x: f32, world_z: f32, world_size: f32) -> [f32; 4] {
         let grid_x = (world_x / world_size * self.width as f32).clamp(0.0, self.width as f32 - 1.0);
-        let grid_z = (world_z / world_size * self.height as f32).clamp(0.0, self.height as f32 - 1.0);
+        let grid_z =
+            (world_z / world_size * self.height as f32).clamp(0.0, self.height as f32 - 1.0);
 
         let x0 = grid_x.floor() as u32;
         let z0 = grid_z.floor() as u32;
