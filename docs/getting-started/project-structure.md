@@ -69,5 +69,5 @@ cargo run --example deferred_demo
 
 ## See Also
 
-- [Architecture](../ARCHITECTURE.md) - Detailed design decisions
-- [Beginners Guide](../BEGINNERS_GUIDE.md) - Hands-on learning
+- [Architecture](../architecture.md) - Detailed design decisions
+- [Beginners Guide](../beginners-guide.md) - Hands-on learning

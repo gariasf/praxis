@@ -173,9 +173,9 @@ fn load_skeleton() -> Skeleton {
 ## Next Steps
 
 ### Learn More
-- [Full Documentation](animation_advanced_features.md)
-- [Quick Reference](quick_reference_advanced_animation.md)
-- [Integration Guide](guides/advanced_animation_integration.md)
+- [Full Documentation](animation-advanced-features.md)
+- [Quick Reference](quick-reference-advanced-animation.md)
+- [Integration Guide](guides/advanced-animation-integration.md)
 
 ### Try Examples
 ```bash
@@ -247,9 +247,9 @@ transform.translation += motion.translation;
 
 ## Help & Resources
 
-- 📖 [Full Documentation](animation_advanced_features.md)
+- 📖 [Full Documentation](animation-advanced-features.md)
 - 💡 [Code Examples](../examples/animation_advanced_demo.rs)
-- 🔍 [Quick Reference](quick_reference_advanced_animation.md)
-- 🚀 [Integration Guide](guides/advanced_animation_integration.md)
+- 🔍 [Quick Reference](quick-reference-advanced-animation.md)
+- 🚀 [Integration Guide](guides/advanced-animation-integration.md)
 
 **Happy Animating!** 🎮

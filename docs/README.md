@@ -5,7 +5,7 @@ Welcome to the Praxis game engine documentation.
 ## Quick Start
 
 - **[Getting Started](getting-started/README.md)** - Installation, setup, and first steps
-- **[Beginners Guide](BEGINNERS_GUIDE.md)** - Learn Praxis concepts through hands-on examples
+- **[Beginners Guide](beginners-guide.md)** - Learn Praxis concepts through hands-on examples
 
 ## Documentation Sections
 
@@ -32,7 +32,7 @@ For comprehensive particle system documentation, see [crates/praxis_graphics/PAR
 
 ### [Concepts](concepts/README.md)
 Educational explanations of engine design:
-- [Architecture](ARCHITECTURE.md) - Overall engine design and crate organization
+- [Architecture](architecture.md) - Overall engine design and crate organization
 - [ECS Architecture](concepts/ecs-architecture.md) - Entity-Component-System patterns
 - [Vulkan Rendering](concepts/vulkan-rendering.md) - Graphics pipeline fundamentals
 - [Transform Hierarchy](concepts/transform-hierarchy.md) - Scene graphs and spatial relationships
@@ -45,10 +45,10 @@ Educational explanations of engine design:
 
 ### [Reference](reference/README.md)
 API documentation and specifications:
-- [Input System](input_system.md) - Keyboard, mouse, gamepad handling
-- [Camera System](camera_system.md) - Camera types and controllers
-- [Mesh System](mesh_system.md) - Geometry loading and management
-- [Testing](TESTING.md) - Test organization and running tests
+- [Input System](input-system.md) - Keyboard, mouse, gamepad handling
+- [Camera System](camera-system.md) - Camera types and controllers
+- [Mesh System](mesh-system.md) - Geometry loading and management
+- [Testing](testing.md) - Test organization and running tests
 
 ### [Editor](editor/README.md)
 Editor tools and workflows:
@@ -58,7 +58,7 @@ Editor tools and workflows:
 - [Menu Bar](editor/menu-bar.md) - Menu system with keyboard shortcuts
 - [Hierarchy Panel](editor/hierarchy-panel.md) - Entity tree with drag-and-drop reparenting
 - [Undo/Redo](editor/undo-redo.md) - Command history system
-- [Editor Overview](editor_system.md) - Panels and editor architecture
+- [Editor Overview](editor-system.md) - Panels and editor architecture
 
 ## Examples
 
@@ -122,5 +122,5 @@ cargo run --example menu_bar_demo             # Menu bar UI
 
 ## Development
 
-- [Strategic Analysis](STRATEGIC_ANALYSIS_2026.md) - Project roadmap and priorities
+- [Strategic Analysis](strategic-analysis-2026.md) - Project roadmap and priorities
 - [Benchmarking](benchmarking.md) - Performance testing

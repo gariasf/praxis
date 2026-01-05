@@ -155,4 +155,4 @@ praxis_editor ─┬── praxis_ecs
 ## See Also
 
 - [Project Structure](../getting-started/project-structure.md)
-- [Architecture](../ARCHITECTURE.md)
+- [Architecture](../architecture.md)

@@ -89,6 +89,6 @@ cargo run --example gui_demo
 
 ## See Also
 
-- [Engine Architecture](../../docs/ARCHITECTURE.md)
+- [Engine Architecture](../../docs/architecture.md)
 - [Getting Started Guide](../../docs/getting-started/README.md)
 - [Main Documentation](../../docs/README.md)

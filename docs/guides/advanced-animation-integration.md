@@ -639,4 +639,4 @@ This integration guide provides a complete foundation for advanced character ani
 - Animation events
 - Motion matching
 
-See the [Advanced Animation Features](../animation_advanced_features.md) documentation for more details on individual systems.
+See the [Advanced Animation Features](../animation-advanced-features.md) documentation for more details on individual systems.

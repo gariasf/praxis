@@ -275,7 +275,7 @@ cargo run --example comprehensive_scene_demo
 
 ## See Also
 
-- [Mesh System Documentation](../../docs/mesh_system.md)
-- [OBJ Loading Details](../../docs/obj_loading.md)
+- [Mesh System Documentation](../../docs/mesh-system.md)
+- [OBJ Loading Details](../../docs/obj-loading.md)
 - [Scene System](../praxis_scene/README.md)
-- [Animation System](../../docs/animation_system.md)
+- [Animation System](../../docs/animation-system.md)

@@ -1321,7 +1321,7 @@ The system is designed to handle everything from simple character animations to 
 
 ## Advanced Animation Features
 
-For more sophisticated animation techniques, see [Advanced Animation Features](animation_advanced_features.md):
+For more sophisticated animation techniques, see [Advanced Animation Features](animation-advanced-features.md):
 
 - **Inverse Kinematics (IK)**: Procedural limb positioning for hands reaching objects, feet on terrain, head tracking, etc.
   - Two-bone IK for arms/legs

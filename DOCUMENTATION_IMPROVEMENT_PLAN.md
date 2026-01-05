@@ -74,12 +74,12 @@ VISUAL_FEEDBACK_SYSTEMS.md
 
 **Problem:** Animation system is documented across **7+ separate files**:
 
-1. `docs/animation_system.md` (42 KB)
-2. `docs/animation_advanced_features.md` (16 KB)
-3. `docs/quick_reference_advanced_animation.md` (9 KB)
-4. `docs/QUICK_START_ADVANCED_ANIMATION.md` (6 KB)
+1. `docs/animation-system.md` (42 KB)
+2. `docs/animation-advanced-features.md` (16 KB)
+3. `docs/quick-reference-advanced-animation.md` (9 KB)
+4. `docs/quick-start-advanced-animation.md` (6 KB)
 5. `docs/guides/animation.md` (13 KB)
-6. `docs/guides/advanced_animation_integration.md` (18 KB)
+6. `docs/guides/advanced-animation-integration.md` (18 KB)
 7. `docs/concepts/animation.md` (4 KB)
 8. `dev-notes/archived/ANIMATION_BLENDING_IMPLEMENTATION.md` (10 KB)
 9. `dev-notes/archived/SKELETAL_ANIMATION_IMPLEMENTATION.md` (10 KB)
@@ -122,10 +122,10 @@ VISUAL_FEEDBACK_SYSTEMS.md
 
 | Convention | Examples |
 |------------|----------|
-| UPPERCASE | BEGINNERS_GUIDE.md, ARCHITECTURE.md, SKYBOX.md |
-| lowercase_snake | animation_system.md, audio_system.md |
+| UPPERCASE | beginners-guide.md, architecture.md, skybox.md |
+| lowercase-kebab | animation-system.md, audio-system.md |
 | lowercase-kebab | pbr-materials.md, ecs-architecture.md |
-| Mixed | QUICK_START_ADVANCED_ANIMATION.md |
+| Mixed | quick-start-advanced-animation.md |
 
 **Recommendation:** Standardize on `lowercase-kebab-case` for all user documentation.
 
@@ -243,12 +243,12 @@ docs/
 
 | Current Location | New Location | Action |
 |------------------|--------------|--------|
-| BEGINNERS_GUIDE.md | docs/architecture/README.md | Rename as "Deep Dive" |
-| animation_system.md | docs/guides/animation/ | Split into sub-guides |
-| audio_system.md | docs/guides/simulation/audio.md | Move |
-| deferred_rendering.md | docs/guides/rendering/deferred-rendering.md | Move |
-| SKYBOX.md | docs/guides/rendering/skybox.md | Rename |
-| TERRAIN_SYSTEM.md | docs/guides/procedural/terrain.md | Move |
+| beginners-guide.md | docs/architecture/README.md | Rename as "Deep Dive" |
+| animation-system.md | docs/guides/animation/ | Split into sub-guides |
+| audio-system.md | docs/guides/simulation/audio.md | Move |
+| deferred-rendering-old.md | docs/guides/rendering/deferred-rendering.md | Move |
+| skybox.md | docs/guides/rendering/skybox.md | Rename |
+| terrain-system.md | docs/guides/procedural/terrain.md | Move |
 | archived/*.md (10 files) | docs/guides/ or docs/editor/ | Promote |
 | Root IMPLEMENTATION files | Remove or docs/internals/ | Clean up |
 
@@ -349,26 +349,26 @@ Example code: [`cargo run --example material_demo`](../../examples/material_demo
 
 | Target | Sources to Merge |
 |--------|-----------------|
-| docs/guides/animation/blending.md | animation_advanced_features.md, ANIMATION_BLENDING_IMPLEMENTATION.md |
-| docs/guides/rendering/hdr-tonemapping.md | HDR_RENDERING.md, HDR_IMPLEMENTATION_SUMMARY.md, bloom_effect.md |
+| docs/guides/animation/blending.md | animation-advanced-features.md, ANIMATION_BLENDING_IMPLEMENTATION.md |
+| docs/guides/rendering/hdr-tonemapping.md | HDR_RENDERING.md, HDR_IMPLEMENTATION_SUMMARY.md, bloom-effect.md |
 | docs/editor/tools/selection.md | SELECTION_SYSTEM.md, SELECTION_SYSTEM_IMPLEMENTATION.md |
 
 ### Files to Rename (Standardize)
 
 | Current | New |
 |---------|-----|
-| BEGINNERS_GUIDE.md | beginners-guide.md |
-| ARCHITECTURE.md | architecture.md |
-| SKYBOX.md | skybox.md |
-| TERRAIN_SYSTEM.md | terrain-system.md |
-| QUICK_START_ADVANCED_ANIMATION.md | quick-start-animation.md |
+| beginners-guide.md | beginners-guide.md |
+| architecture.md | architecture.md |
+| skybox.md | skybox.md |
+| terrain-system.md | terrain-system.md |
+| quick-start-advanced-animation.md | quick-start-animation.md |
 
 ### Files to Archive/Remove
 
 | File | Action | Reason |
 |------|--------|--------|
-| DOCUMENTATION_RESTRUCTURE_PLAN.md | Archive | Meta-documentation |
-| STRATEGIC_ANALYSIS_2026.md | Archive | Planning document |
+| documentation-restructure-plan.md | Archive | Meta-documentation |
+| strategic-analysis-2026.md | Archive | Planning document |
 | IMPLEMENTATION_CHECKLIST.md | Archive | Status tracking |
 | dev-notes/archived/HDR_IMPLEMENTATION_CHECKLIST.md | Keep archived | Pure checklist |
 | dev-notes/archived/CODEBASE_REVIEW_PLAN.md | Keep archived | Historical |
@@ -473,44 +473,44 @@ Example code: [`cargo run --example material_demo`](../../examples/material_demo
 <summary>Click to expand</summary>
 
 - README.md
-- ARCHITECTURE.md
-- BEGINNERS_GUIDE.md
-- DOCUMENTATION_RESTRUCTURE_PLAN.md
-- ENVIRONMENT_PROBES.md
-- MATERIAL_INSTANCING.md
-- QUICK_START_ADVANCED_ANIMATION.md
-- RENDERING_EXPLAINED.md
-- SKYBOX.md
-- STRATEGIC_ANALYSIS_2026.md
-- TERRAIN_SYSTEM.md
-- TESTING.md
-- advanced_lighting.md
-- advanced_materials.md
-- advanced_rendering.md
-- animation_advanced_features.md
-- animation_system.md
-- audio_system.md
+- architecture.md
+- beginners-guide.md
+- documentation-restructure-plan.md
+- environment-probes-old.md
+- material-instancing.md
+- quick-start-advanced-animation.md
+- rendering-explained.md
+- skybox.md
+- strategic-analysis-2026.md
+- terrain-system.md
+- testing.md
+- advanced-lighting.md
+- advanced-materials.md
+- advanced-rendering.md
+- animation-advanced-features.md
+- animation-system.md
+- audio-system.md
 - benchmarking.md
-- bloom_effect.md
-- camera_system.md
-- cinematic_post_processing.md
-- deferred_rendering.md
-- editor_system.md
-- frustum_culling.md
-- gltf_loading.md
-- gui_system.md
-- input_system.md
-- lod_system.md
+- bloom-effect.md
+- camera-system.md
+- cinematic-post-processing.md
+- deferred-rendering-old.md
+- editor-system.md
+- frustum-culling.md
+- gltf-loading.md
+- gui-system.md
+- input-system.md
+- lod-system.md
 - logging.md
-- mesh_system.md
-- obj_loading.md
-- particle_system.md
-- post_processing_system.md
-- procedural_textures.md
+- mesh-system.md
+- obj-loading.md
+- particle-system.md
+- post-processing-system.md
+- procedural-textures.md
 - profiling.md
-- quick_reference_advanced_animation.md
-- scene_format_v2.md
-- shadow_mapping.md
+- quick-reference-advanced-animation.md
+- scene-format-v2.md
+- shadow-mapping.md
 </details>
 
 ### Crate Documentation (52 files)

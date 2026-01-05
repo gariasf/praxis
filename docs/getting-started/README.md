@@ -29,5 +29,5 @@ cargo run --example comprehensive_scene_demo
 
 After installation:
 1. Run a few [examples](../../examples/README.md) to see the engine in action
-2. Read the [Beginner's Guide](../BEGINNERS_GUIDE.md) for core concepts
+2. Read the [Beginner's Guide](../beginners-guide.md) for core concepts
 3. Explore [Guides](../guides/README.md) for specific features

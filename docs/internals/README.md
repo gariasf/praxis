@@ -13,21 +13,21 @@ Internal documentation serves to:
 ## Documents
 
 ### Animation System
-- **[ANIMATION_ENHANCEMENTS_CHANGELOG.md](ANIMATION_ENHANCEMENTS_CHANGELOG.md)** - Changelog for advanced animation features including IK, retargeting, additive blending, and root motion
-- **[IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md)** - Comprehensive checklist for advanced animation features implementation
-- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Summary of animation system enhancements implementation
+- **[animation-enhancements-changelog.md](animation-enhancements-changelog.md)** - Changelog for advanced animation features including IK, retargeting, additive blending, and root motion
+- **[implementation-checklist.md](implementation-checklist.md)** - Comprehensive checklist for advanced animation features implementation
+- **[implementation-summary.md](implementation-summary.md)** - Summary of animation system enhancements implementation
 
 ### Graphics & Rendering
-- **[ADVANCED_LIGHTING_IMPLEMENTATION.md](ADVANCED_LIGHTING_IMPLEMENTATION.md)** - Implementation details for light probes, volumetric fog, and advanced lighting features
-- **[VISUAL_FEEDBACK_SYSTEMS.md](VISUAL_FEEDBACK_SYSTEMS.md)** - Line rendering system, grid renderer, and selection highlighting implementation
+- **[advanced-lighting-implementation.md](advanced-lighting-implementation.md)** - Implementation details for light probes, volumetric fog, and advanced lighting features
+- **[visual-feedback-systems.md](visual-feedback-systems.md)** - Line rendering system, grid renderer, and selection highlighting implementation
 
 ### Editor
-- **[DRAG_DROP_IMPLEMENTATION.md](DRAG_DROP_IMPLEMENTATION.md)** - Drag-and-drop asset instantiation system implementation
-- **[VIEWPORT_INTEGRATION.md](VIEWPORT_INTEGRATION.md)** - Viewport panel integration with render context, gizmos, and raycasting
+- **[drag-drop-implementation.md](drag-drop-implementation.md)** - Drag-and-drop asset instantiation system implementation
+- **[viewport-integration.md](viewport-integration.md)** - Viewport panel integration with render context, gizmos, and raycasting
 
 ### Performance & Optimization
-- **[PROFILING_IMPLEMENTATION.md](PROFILING_IMPLEMENTATION.md)** - Profiling system implementation including CPU, GPU, memory tracking, and Chrome tracing
-- **[SPATIAL_IMPLEMENTATION_SUMMARY.md](SPATIAL_IMPLEMENTATION_SUMMARY.md)** - Spatial partitioning implementation (Octree, BVH) with ECS integration
+- **[profiling-implementation.md](profiling-implementation.md)** - Profiling system implementation including CPU, GPU, memory tracking, and Chrome tracing
+- **[spatial-implementation-summary.md](spatial-implementation-summary.md)** - Spatial partitioning implementation (Octree, BVH) with ECS integration
 
 ## Difference from User-Facing Documentation
 

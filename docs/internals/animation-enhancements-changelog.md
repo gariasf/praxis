@@ -67,7 +67,7 @@
 ### Documentation Added
 
 #### Comprehensive Guides
-- **animation_advanced_features.md** (600+ lines)
+- **animation-advanced-features.md** (600+ lines)
   - Complete feature documentation
   - Usage examples for each system
   - Performance considerations
@@ -88,7 +88,7 @@
   - Best practices
 
 #### Updated Documentation
-- **animation_system.md**
+- **animation-system.md**
   - Added section linking to advanced features
   - Updated feature list in summary
 
@@ -267,10 +267,10 @@ Implemented for the Praxis game engine animation system.
 
 ### References
 
-- [Animation System Documentation](docs/animation_system.md)
-- [Advanced Features Guide](docs/animation_advanced_features.md)
-- [Quick Reference](docs/quick_reference_advanced_animation.md)
-- [Integration Guide](docs/guides/advanced_animation_integration.md)
+- [Animation System Documentation](docs/animation-system.md)
+- [Advanced Features Guide](docs/animation-advanced-features.md)
+- [Quick Reference](docs/quick-reference-advanced-animation.md)
+- [Integration Guide](docs/guides/advanced-animation-integration.md)
 - [Example Code](examples/animation_advanced_demo.rs)
 
 ---

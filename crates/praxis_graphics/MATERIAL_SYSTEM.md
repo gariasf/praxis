@@ -171,5 +171,5 @@ Memory Savings: 3 instances × 8MB textures = 8MB (not 24MB)
 
 ## See Also
 
-- [Advanced Materials Documentation](../../docs/advanced_materials.md)
+- [Advanced Materials Documentation](../../docs/advanced-materials.md)
 - [Examples](../../examples/advanced_material_demo.rs)

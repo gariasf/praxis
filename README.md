@@ -154,9 +154,9 @@ cargo doc --workspace --no-deps --open
 
 The codebase is heavily documented. Start with:
 
-- `docs/ARCHITECTURE.md` — High-level system design
-- `docs/BEGINNERS_GUIDE.md` — Step-by-step introduction
-- `docs/RENDERING_EXPLAINED.md` — Deep dive into the renderer
+- `docs/architecture.md` — High-level system design
+- `docs/beginners-guide.md` — Step-by-step introduction
+- `docs/rendering-explained.md` — Deep dive into the renderer
 - Shader files in `crates/praxis_graphics/src/shaders/` — Extensive educational comments
 
 ## Goals

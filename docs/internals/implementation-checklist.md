@@ -182,20 +182,20 @@
 - [x] No new dependencies in Cargo.toml
 
 ### Documentation Files
-- [x] docs/animation_advanced_features.md
-- [x] docs/quick_reference_advanced_animation.md
-- [x] docs/guides/advanced_animation_integration.md
-- [x] docs/QUICK_START_ADVANCED_ANIMATION.md
-- [x] docs/animation_system.md (updated)
+- [x] docs/animation-advanced-features.md
+- [x] docs/quick-reference-advanced-animation.md
+- [x] docs/guides/advanced-animation-integration.md
+- [x] docs/quick-start-advanced-animation.md
+- [x] docs/animation-system.md (updated)
 
 ### Example Files
 - [x] examples/animation_advanced_demo.rs
 - [x] examples/README.md (updated)
 
 ### Project Files
-- [x] IMPLEMENTATION_SUMMARY.md
-- [x] ANIMATION_ENHANCEMENTS_CHANGELOG.md
-- [x] IMPLEMENTATION_CHECKLIST.md (this file)
+- [x] implementation-summary.md
+- [x] animation-enhancements-changelog.md
+- [x] implementation-checklist.md (this file)
 
 ## Validation
 

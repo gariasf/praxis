@@ -386,4 +386,4 @@ impl AnimatedCharacter {
 
 ---
 
-See [animation_advanced_features.md](animation_advanced_features.md) for complete documentation.
+See [animation-advanced-features.md](animation-advanced-features.md) for complete documentation.

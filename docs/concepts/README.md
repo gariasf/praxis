@@ -29,6 +29,6 @@ These documents explain *why* systems are designed the way they are, not just *h
 
 ## Related
 
-- [Beginner's Guide](../BEGINNERS_GUIDE.md) - Comprehensive walkthrough of all systems
+- [Beginner's Guide](../beginners-guide.md) - Comprehensive walkthrough of all systems
 - [Guides](../guides/README.md) - Practical how-to guides
-- [Architecture](../ARCHITECTURE.md) - High-level system design
+- [Architecture](../architecture.md) - High-level system design

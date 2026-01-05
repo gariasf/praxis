@@ -84,7 +84,7 @@ cargo doc --workspace --no-deps --open
 | `praxis_editor` | Editor tools |
 | `praxis_utils` | Logging, errors, timing |
 
-**Details**: `docs/reference/crates.md`, `docs/ARCHITECTURE.md`
+**Details**: `docs/reference/crates.md`, `docs/architecture.md`
 
 ## Key Patterns
 
@@ -241,7 +241,7 @@ All public items require rustdoc comments.
 ```
 docs/
 ├── README.md              # Main index
-├── BEGINNERS_GUIDE.md     # Learning resource
+├── beginners-guide.md     # Learning resource
 ├── getting-started/       # Installation, setup
 ├── guides/                # How-to guides
 ├── concepts/              # Theory explanations

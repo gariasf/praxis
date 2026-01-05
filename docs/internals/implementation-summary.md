@@ -96,10 +96,10 @@ This document summarizes the implementation of advanced animation system feature
 - Updated `examples/README.md` - Added entry for new example
 
 ### Documentation
-- `docs/animation_advanced_features.md` - Complete feature documentation (600+ lines)
-- `docs/quick_reference_advanced_animation.md` - Quick reference guide
-- `docs/guides/advanced_animation_integration.md` - Integration guide with complete examples
-- Updated `docs/animation_system.md` - Added references to new features
+- `docs/animation-advanced-features.md` - Complete feature documentation (600+ lines)
+- `docs/quick-reference-advanced-animation.md` - Quick reference guide
+- `docs/guides/advanced-animation-integration.md` - Integration guide with complete examples
+- Updated `docs/animation-system.md` - Added references to new features
 
 ## Code Quality
 

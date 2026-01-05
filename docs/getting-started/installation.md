@@ -49,4 +49,4 @@ cargo test --workspace
 ## Next Steps
 
 - [Project Structure](project-structure.md) - Understand the workspace layout
-- [Beginners Guide](../BEGINNERS_GUIDE.md) - Learn Praxis through examples
+- [Beginners Guide](../beginners-guide.md) - Learn Praxis through examples

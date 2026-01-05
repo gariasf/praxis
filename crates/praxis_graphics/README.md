@@ -217,7 +217,7 @@ The implementation automatically queries and uses the device's `minUniformBuffer
 
 ## See Also
 
-- [Mesh System Documentation](../../docs/mesh_system.md)
+- [Mesh System Documentation](../../docs/mesh-system.md)
 - [Rendering Guide](../../docs/guides/rendering.md)
 - [HDR and Tonemapping](../../docs/guides/hdr-and-tonemapping.md)
 - [Material System](../../docs/guides/materials.md)

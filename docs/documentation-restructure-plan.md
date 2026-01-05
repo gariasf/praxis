@@ -91,7 +91,7 @@ docs/
 ## Files to Archive
 
 Move to `dev-notes/archived/` (historical reference):
-- IMPLEMENTATION_SUMMARY.md
+- implementation-summary.md
 - IMPLEMENTATION_COMPLETE.md
 - All *_IMPLEMENTATION.md files
 - CODEBASE_REVIEW_PLAN.md
