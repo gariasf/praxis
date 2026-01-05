@@ -10,6 +10,7 @@ Lua scripting system integration for the Praxis game engine.
 - **Performance Monitoring**: Track execution time to detect expensive operations
 - **Math API**: Vector and math operations
 - **Engine API**: Logging and utility functions
+- **ECS Access**: Query and modify entities and components from scripts (future)
 
 ## Quick Start
 
@@ -204,17 +205,22 @@ pub struct SandboxConfig {
 
 ## Examples
 
-Run the demo:
+Run the scripting demos:
 
 ```bash
+# Basic scripting demo
 cargo run --example scripting_demo
+
+# Advanced scripting features
+cargo run --example scripting_advanced_demo
 ```
 
-## Documentation
+## Dependencies
 
-- See `docs/guides/scripting.md` for comprehensive guide
-- Run `cargo doc --open` for API documentation
-- Check `examples/` for more examples
+- `mlua`: Lua 5.4 bindings
+- `notify`: File watching for hot-reload
+- `praxis_utils`: Error handling and logging
+- `praxis_math`: Math types for Lua API
 
 ## Future Enhancements
 
@@ -223,3 +229,9 @@ cargo run --example scripting_demo
 - [ ] Physics system API  
 - [ ] Audio system API
 - [ ] Visual scripting integration
+
+## See Also
+
+- [Scripting Guide](../../docs/guides/scripting.md)
+- [Lua Documentation](https://www.lua.org/manual/5.4/)
+- [mlua Documentation](https://docs.rs/mlua)

@@ -1,4 +1,4 @@
-# praxis_audio
+# Praxis Audio
 
 Audio system for the Praxis game engine, providing sound playback and spatial audio capabilities with doppler effect.
 
@@ -24,7 +24,8 @@ The audio system consists of three main parts:
 ### Basic Setup
 
 ```rust
-use praxis_audio::{AudioManager, AudioSource, AudioListener, play_sound_system, update_listener_system};
+use praxis_audio::{AudioManager, AudioSource, AudioListener};
+use praxis_audio::{play_sound_system, update_listener_system};
 use praxis_ecs::{World, Schedule, Transform, IntoSystemConfigs};
 
 // Initialize the audio manager
@@ -218,9 +219,19 @@ Or use just the main system for simplicity:
 schedule.add_systems(play_sound_system);
 ```
 
-## Example
+## Examples
 
-See `examples/audio_demo.rs` for a complete demonstration of:
+See the audio demos for complete demonstrations:
+
+```bash
+# Simple audio demo
+cargo run --example audio_simple
+
+# Comprehensive demo with spatial audio and doppler
+cargo run --example audio_demo
+```
+
+These demonstrate:
 - 3D spatial audio with distance attenuation
 - Stereo panning based on position
 - Doppler effect with moving audio sources
@@ -229,7 +240,14 @@ See `examples/audio_demo.rs` for a complete demonstration of:
 
 ## Dependencies
 
-- `kira`: Audio playback backend with pitch/pan/volume control
-- `praxis_ecs`: ECS integration (World, Query, Components, Systems)
+- `kira` 0.9: Audio playback backend with pitch/pan/volume control
+- `bevy_ecs` 0.14: ECS integration
+- `praxis_ecs`: World, Query, Components, Systems
 - `praxis_math`: Math utilities for spatial calculations (Vec3, distance, dot product)
 - `praxis_utils`: Error handling and logging
+
+## See Also
+
+- [Audio Guide](../../docs/guides/audio.md)
+- [Spatial Audio Concepts](../../docs/concepts/spatial-audio.md)
+- [Kira Documentation](https://docs.rs/kira)

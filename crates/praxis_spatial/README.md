@@ -460,6 +460,22 @@ Tests cover:
 - LOD distance thresholds and selection
 - Visibility system integration
 
+## Dependencies
+
+- `bevy_ecs` 0.14: ECS integration
+- `praxis_ecs`: Entity and component systems
+- `praxis_math`: Math types (Vec3, Mat4, Aabb)
+- `praxis_utils`: Error handling
+- `vulkano`: Vulkan occlusion queries (optional)
+
 ## License
 
 MIT
+
+## See Also
+
+- [Spatial Optimization Guide](../../docs/guides/spatial-optimization.md)
+- [SPATIAL_PARTITIONING.md](SPATIAL_PARTITIONING.md)
+- [QUICK_REFERENCE.md](QUICK_REFERENCE.md)
+- [Spatial Partitioning Demo](../../examples/spatial_partitioning_demo.rs)
+- [Spatial Optimization Demo](../../examples/spatial_optimization_demo.rs)

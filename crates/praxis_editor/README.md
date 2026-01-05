@@ -130,32 +130,6 @@ let ron = history.to_ron().unwrap();
 std::fs::write("history.ron", ron).unwrap();
 ```
 
-## Examples
-
-Run the undo/redo system demo (complete feature showcase):
-
-```bash
-cargo run --example undo_redo_system_demo
-```
-
-Run the command system demo:
-
-```bash
-cargo run --example command_system_demo
-```
-
-Run the command serialization demo:
-
-```bash
-cargo run --example command_serialization_demo
-```
-
-Run the selection system demo:
-
-```bash
-cargo run --example selection_demo
-```
-
 ## Architecture
 
 ### Panel System
@@ -231,6 +205,30 @@ use praxis_editor::update_selection_system;
 schedule.add_systems(update_selection_system);
 ```
 
+## Examples
+
+Run the editor demos:
+
+```bash
+# Complete undo/redo system demo
+cargo run --example undo_redo_system_demo
+
+# Command system demo
+cargo run --example command_system_demo
+
+# Command serialization demo
+cargo run --example command_serialization_demo
+
+# Selection system demo
+cargo run --example selection_demo
+
+# Full editor demo
+cargo run --example editor_demo
+
+# Editor camera demo
+cargo run --example editor_camera_demo
+```
+
 ## Documentation
 
 - [Undo/Redo System](UNDO_REDO_SYSTEM.md) - Complete undo/redo documentation
@@ -241,12 +239,17 @@ schedule.add_systems(update_selection_system);
 
 ## Dependencies
 
-- `bevy_ecs`: Entity-Component-System
-- `egui`: Immediate mode GUI
+- `bevy_ecs` 0.14: Entity-Component-System
+- `egui` 0.29: Immediate mode GUI
 - `egui_dock`: Dockable panels
 - `serde`: Serialization
 - `ron`: Rusty Object Notation
+- `praxis_ecs`: ECS integration
+- `praxis_math`: Math types
+- `praxis_utils`: Error handling
 
-## License
+## See Also
 
-MIT
+- [Editor Guide](../../docs/editor/README.md)
+- [GUI System](../praxis_gui/README.md)
+- [ECS System](../praxis_ecs/README.md)

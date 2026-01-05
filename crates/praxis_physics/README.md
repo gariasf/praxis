@@ -1,4 +1,4 @@
-# praxis_physics
+# Praxis Physics
 
 Physics integration for the Praxis game engine using Rapier3D.
 
@@ -182,7 +182,28 @@ Planned features include:
 - Trigger volumes
 - Continuous collision detection options
 
+## Examples
+
+See the physics system in action:
+
+```bash
+cargo run --example comprehensive_scene_demo
+```
+
+## Dependencies
+
+- `rapier3d` 0.22: Physics engine
+- `bevy_ecs` 0.14: ECS integration
+- `praxis_ecs`: Transform components and systems
+- `praxis_math`: Math types (Vec3, Quat)
+- `praxis_utils`: Error handling
+
 ## References
 
 - [Rapier3D Documentation](https://rapier.rs/)
 - [Rapier3D User Guide](https://rapier.rs/docs/user_guides/rust/getting_started)
+
+## See Also
+
+- [Physics Guide](../../docs/guides/physics.md)
+- [ECS System](../praxis_ecs/README.md)

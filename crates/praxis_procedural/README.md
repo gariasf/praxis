@@ -313,8 +313,23 @@ Potential future additions:
 - **Animated Noise**: Time-varying noise for effects
 - **GPU Shader Caching**: Cache compiled compute pipelines
 
+## Dependencies
+
+- `vulkano` 0.35.1: Vulkan compute shader execution
+- `vulkano-shaders`: GLSL shader compilation
+- `praxis_math`: Math types (Vec2, Vec3, Vec4)
+- `praxis_graphics`: Texture management and rendering
+- `praxis_utils`: Error handling
+- `noise`: Noise generation algorithms (Perlin, Simplex, Worley)
+
+## Testing
+
+```bash
+cargo test -p praxis_procedural
+```
+
 ## See Also
 
+- [Procedural Texture Demo](../../examples/procedural_texture_demo.rs)
 - [Praxis Graphics System](../praxis_graphics/README.md)
-- [Texture Management](../praxis_graphics/src/texture.rs)
-- [Example Demo](../../examples/procedural_texture_demo.rs)
+- [Texture Guide](../../docs/guides/textures.md)

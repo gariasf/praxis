@@ -1,4 +1,4 @@
-# praxis_input
+# Praxis Input
 
 Input handling system for the Praxis game engine, providing keyboard, mouse, and gamepad input tracking with action mapping support for rebindable controls.
 
@@ -117,18 +117,6 @@ loop {
 }
 ```
 
-## Examples
-
-Run the examples to see the input system in action:
-
-```bash
-# Basic demonstration
-cargo run --example input_demo
-
-# Full integration with winit and ECS
-cargo run --example input_integration
-```
-
 ## Architecture
 
 ### InputState
@@ -157,6 +145,75 @@ Logical game actions that abstract physical inputs:
 - Can be bound to multiple physical inputs
 - Enables control remapping without changing game logic
 
-## License
+## Common Input Patterns
 
-MIT
+### Movement
+
+```rust
+fn movement_system(
+    input: Res<InputState>,
+    mut query: Query<&mut Transform>,
+) {
+    for mut transform in query.iter_mut() {
+        let mut movement = Vec3::ZERO;
+        
+        if input.is_key_pressed(KeyCode::KeyW) {
+            movement.z -= 1.0;
+        }
+        if input.is_key_pressed(KeyCode::KeyS) {
+            movement.z += 1.0;
+        }
+        if input.is_key_pressed(KeyCode::KeyA) {
+            movement.x -= 1.0;
+        }
+        if input.is_key_pressed(KeyCode::KeyD) {
+            movement.x += 1.0;
+        }
+        
+        transform.translation += movement.normalize_or_zero() * speed * delta_time;
+    }
+}
+```
+
+### Camera Control
+
+```rust
+fn camera_system(
+    input: Res<InputState>,
+    mut query: Query<&mut Transform, With<Camera>>,
+) {
+    for mut transform in query.iter_mut() {
+        let mouse_delta = input.mouse_delta();
+        
+        // Rotate camera based on mouse movement
+        let yaw = mouse_delta.x * sensitivity;
+        let pitch = mouse_delta.y * sensitivity;
+        
+        transform.rotate_y(yaw);
+        transform.rotate_local_x(pitch);
+    }
+}
+```
+
+## Examples
+
+Run the examples to see the input system in action:
+
+```bash
+# Basic input demonstration
+cargo run --example input_integration
+
+# FPS camera controller
+cargo run --example fps_camera_controller
+```
+
+## Dependencies
+
+- `winit` 0.30.11: Window and input events
+- `praxis_utils`: Error handling
+
+## See Also
+
+- [Input Guide](../../docs/guides/input.md)
+- [Camera Controller Example](../../examples/fps_camera_controller.rs)
+- [winit Documentation](https://docs.rs/winit)

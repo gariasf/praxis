@@ -10,6 +10,8 @@ Scene management system for the Praxis game engine.
 - **Scene Management**: Track and manage multiple loaded scene instances
 - **Scene Graph Traversal**: Utilities for traversing and querying the scene hierarchy
 - **Entity Finding**: Find entities by name in the scene graph
+- **Animation Support**: Skeletal animation and animation clip loading
+- **Scene Serialization**: Save and load scenes to/from RON format
 
 ## Scene Definition Format (RON)
 
@@ -152,22 +154,45 @@ The scene system supports the following components from `praxis_ecs`:
 - **Active**: Active/Inactive state
 - **Hierarchical relationships**: Parent-child relationships via `Parent` and `Children` components
 
-## Examples
+## Animation Support
 
-Run the scene demo to see the system in action:
+The scene system includes support for skeletal animation:
 
-```bash
-cargo run --example scene_demo
+```rust
+use praxis_scene::{Skeleton, AnimationClip, AnimationPlayer};
+
+// Load skeleton and animations from GLTF
+let skeleton = Skeleton::from_gltf(&gltf_asset)?;
+let animation = AnimationClip::from_gltf(&gltf_asset, 0)?;
+
+// Create animation player
+let mut player = AnimationPlayer::new(skeleton);
+player.play_animation(animation);
+
+// Update animation each frame
+player.update(delta_time);
 ```
 
-This demonstrates:
-- Creating scenes programmatically
-- Loading scenes from RON files
-- Spawning and querying entities
-- Scene graph traversal
-- Finding entities by name
-- Saving scenes to RON format
-- Unloading scenes
+## Examples
+
+Run the scene demos:
+
+```bash
+# Basic scene demo
+cargo run --example scene_demo
+
+# Comprehensive scene with all features
+cargo run --example comprehensive_scene_demo
+
+# Scene serialization
+cargo run --example scene_serialization_demo
+
+# Animation demos
+cargo run --example animation_demo
+cargo run --example skeletal_animation_demo
+cargo run --example animation_blending_demo
+cargo run --example gltf_animation_loader_demo
+```
 
 ## Architecture
 
@@ -176,3 +201,23 @@ This demonstrates:
 - **`loader.rs`**: Scene loading from/to RON files
 - **`manager.rs`**: Scene spawning, tracking, and unloading
 - **`traversal.rs`**: Scene graph traversal and query utilities
+- **`animation.rs`**: Animation system for skeletal animation
+- **`skeleton.rs`**: Skeleton and bone hierarchy
+- **`clip.rs`**: Animation clip data structures
+
+## Dependencies
+
+- `ron`: Rusty Object Notation for scene serialization
+- `serde`: Serialization framework
+- `bevy_ecs` 0.14: ECS integration
+- `praxis_ecs`: Transform and component systems
+- `praxis_math`: Math types (Vec3, Quat, Mat4)
+- `praxis_assets`: Asset loading for GLTF animations
+- `praxis_utils`: Error handling
+
+## See Also
+
+- [Scene System Guide](../../docs/guides/scenes.md)
+- [Animation System](../../docs/animation_system.md)
+- [GLTF Assets](../praxis_assets/README.md)
+- [ECS System](../praxis_ecs/README.md)

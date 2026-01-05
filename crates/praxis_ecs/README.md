@@ -284,48 +284,7 @@ fn propagate_recursive(
 - Sibling branches are independent and don't affect each other
 - Deep hierarchies handled efficiently with iterative approach
 
-### Common Patterns
-
-**Creating hierarchies:**
-```rust
-let parent = world.spawn(TransformBundle::from_xyz(10.0, 0.0, 0.0));
-let child = world.spawn((
-    TransformBundle::from_xyz(5.0, 0.0, 0.0),
-    Parent(parent),
-));
-```
-
-**Reparenting entities:**
-```rust
-if let Some(mut parent_component) = world.get_mut::<Parent>(child) {
-    *parent_component = Parent(new_parent);
-}
-```
-
-**Removing from hierarchy:**
-```rust
-world.entity_mut(child).remove::<Parent>();
-```
-
-### Integration with Rendering
-
-The rendering system uses `GlobalTransform` to position entities in world space:
-
-```rust
-for (global_transform, mesh_handle) in query.iter() {
-    let model_matrix = global_transform.compute_matrix();
-    // Use model_matrix for rendering
-}
-```
-
-### Debugging Tips
-
-1. **Use Name component**: Add descriptive names to entities for easier debugging
-2. **Check parent validity**: Ensure parent entities exist before adding `Parent` component
-3. **Avoid circular references**: Don't create circular parent-child relationships
-4. **Keep hierarchies shallow**: Performance is best with <10-15 levels
-
-### Testing
+## Testing
 
 The system includes comprehensive tests covering:
 - Basic parent-child propagation
@@ -343,8 +302,21 @@ cargo test -p praxis_ecs
 
 ## Examples
 
-See `examples/transform_propagation_demo.rs` for a comprehensive demonstration of the transform propagation system.
+See the transform propagation demo:
 
 ```bash
 cargo run --example transform_propagation_demo
 ```
+
+## Dependencies
+
+- `bevy_ecs` 0.14: Core Entity-Component-System
+- `praxis_math`: Math types (Vec3, Quat, Mat4)
+- `praxis_utils`: Error handling
+
+## See Also
+
+- [Transform Propagation Demo](../../examples/transform_propagation_demo.rs)
+- [ECS Integration Example](../../examples/ecs_integration.rs)
+- [Mesh System Documentation](../../docs/mesh_system.md)
+- [bevy_ecs Documentation](https://docs.rs/bevy_ecs)

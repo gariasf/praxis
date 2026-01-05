@@ -8,6 +8,8 @@ GUI system for the Praxis game engine, providing debug UI, entity inspection, an
 - **Performance Metrics**: Detailed frame timing and statistics
 - **Entity Inspector**: Browse and edit ECS component data at runtime
 - **Transform Gizmos**: Interactive scene editing tools for translation, rotation, and scaling
+- **ImGui Integration**: Immediate mode GUI via egui
+- **Vulkan Rendering**: Direct integration with Vulkan rendering pipeline
 
 ## Integration
 
@@ -102,6 +104,55 @@ gui_state.transform_gizmos.apply_scale(&mut world, entity, scale);
 - `R`: Switch to rotate mode
 - `S`: Switch to scale mode
 
+## Usage Examples
+
+### Debug Overlay
+
+```rust
+use praxis_gui::DebugUI;
+
+let mut debug_ui = DebugUI::new();
+debug_ui.show_fps = true;
+debug_ui.show_performance = true;
+
+// In render loop
+debug_ui.update(delta_time, frame_time_ms);
+debug_ui.render(&egui_context);
+```
+
+### Entity Inspection
+
+```rust
+use praxis_gui::EntityInspector;
+use praxis_ecs::World;
+
+let mut inspector = EntityInspector::new();
+inspector.select_entity(player_entity);
+
+// In GUI render
+inspector.render(&egui_context, &mut world);
+```
+
+### Custom GUI Panels
+
+```rust
+use egui::Context;
+
+fn render_custom_panel(ctx: &Context) {
+    egui::Window::new("Settings")
+        .show(ctx, |ui| {
+            ui.label("Game Settings");
+            ui.separator();
+            
+            ui.checkbox(&mut settings.vsync, "VSync");
+            ui.checkbox(&mut settings.fullscreen, "Fullscreen");
+            
+            ui.add(egui::Slider::new(&mut settings.volume, 0.0..=1.0)
+                .text("Volume"));
+        });
+}
+```
+
 ## Requirements
 
 - `egui` 0.29
@@ -116,3 +167,33 @@ The GUI system is designed to have minimal performance impact:
 - Efficient Vulkan integration
 - Minimal draw calls
 - Optional visibility controls for all components
+
+## Examples
+
+Run the GUI demo:
+
+```bash
+cargo run --example gui_demo
+```
+
+This demonstrates:
+- Debug UI with FPS counter
+- Entity inspector with component editing
+- Transform gizmos
+- Custom GUI panels
+- Keyboard shortcuts
+
+## Dependencies
+
+- `egui` 0.29: Immediate mode GUI framework
+- `egui-winit` 0.29: winit integration for egui
+- `egui_vulkano` 0.6: Vulkan rendering backend for egui
+- `praxis_ecs`: ECS integration
+- `praxis_math`: Math types
+- `praxis_utils`: Error handling
+
+## See Also
+
+- [Editor System](../praxis_editor/README.md)
+- [GUI Demo](../../examples/gui_demo.rs)
+- [egui Documentation](https://docs.rs/egui)

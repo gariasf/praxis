@@ -262,3 +262,26 @@ let config = NetworkConfig {
 - Automatic client migration for server handoff
 - Voice chat integration
 - NAT traversal support
+
+## Examples
+
+Run the networking demo:
+
+```bash
+cargo run --example networking_demo
+```
+
+## Dependencies
+
+- `tokio` 1.40: Async runtime
+- `bincode`: Binary serialization
+- `serde`: Serialization framework
+- `bevy_ecs` 0.14: ECS integration
+- `praxis_ecs`: Transform and component systems
+- `praxis_math`: Math types
+- `praxis_utils`: Error handling
+
+## See Also
+
+- [Networking Guide](../../docs/guides/networking.md)
+- [Multiplayer Concepts](../../docs/concepts/multiplayer.md)

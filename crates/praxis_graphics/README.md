@@ -10,6 +10,10 @@ Graphics system for the Praxis game engine, providing Vulkan-based rendering via
 - **Per-Mesh Buffers**: Dedicated vertex and index buffers for each mesh
 - **Dynamic Uniform Buffers**: Efficient per-object uniform data with ring buffer
 - **Transform System**: Model-view-projection matrix pipeline
+- **Material System**: PBR materials with textures and properties
+- **Lighting**: Point lights, directional lights, and ambient lighting
+- **Texture Management**: Texture loading and binding
+- **Deferred Rendering**: Optional deferred rendering pipeline
 
 ## Mesh System
 
@@ -136,7 +140,59 @@ Adjust based on your needs:
    - Bind descriptor set with offset
    - Draw
 
-### Performance Characteristics
+## Vertex Format
+
+The current vertex format (`Vertex3D`) supports:
+- Position (3D coordinates)
+- Color (RGB)
+- Normal (for lighting)
+- UV coordinates (for textures)
+
+## Architecture
+
+The graphics system is organized into modules:
+
+- **`device`**: Vulkan instance and device management
+- **`vertex`**: Vertex data structures
+- **`pipeline`**: Graphics pipeline configuration
+- **`shaders`**: GLSL shader compilation
+- **`mesh`**: Mesh data structures and asset management
+- **`primitives`**: Built-in primitive mesh generators
+- **`uniform_buffer`**: Dynamic uniform buffer management
+- **`texture`**: Texture loading and management
+- **`material`**: Material system with PBR properties
+- **`lighting`**: Lighting system
+
+## Examples
+
+Run the graphics demos:
+
+```bash
+# Multiple mesh rendering
+cargo run --example multi_mesh_demo
+
+# Material demonstration
+cargo run --example material_demo
+
+# Advanced material features
+cargo run --example advanced_material_demo
+
+# Advanced lighting
+cargo run --example advanced_lighting_demo
+
+# Environment probes
+cargo run --example environment_probe_demo
+```
+
+## Dependencies
+
+- `vulkano` 0.35.1: Vulkan bindings and abstractions
+- `vulkano-shaders`: Shader compilation
+- `praxis_utils`: Error handling, logging
+- `praxis_math`: Matrix and vector math
+- `praxis_ecs`: ECS integration for rendering
+
+## Performance Characteristics
 
 **Memory Usage:**
 ```
@@ -151,7 +207,7 @@ With default settings (3 frames, 1024 max objects): ~3 MB properly aligned
 
 The new approach eliminates allocation overhead entirely.
 
-### Device Compatibility
+## Device Compatibility
 
 The implementation automatically queries and uses the device's `minUniformBufferOffsetAlignment` limit, ensuring compatibility across different GPUs. Typical values:
 - NVIDIA: 256 bytes
@@ -159,27 +215,10 @@ The implementation automatically queries and uses the device's `minUniformBuffer
 - Intel: 256 bytes
 - Mobile: 16-64 bytes
 
-## Vertex Format
-
-The current vertex format (`Vertex3D`) supports:
-- Position (3D coordinates)
-- Color (RGB)
-
-Future versions will add support for normals, UVs, and other attributes.
-
-## Architecture
-
-The graphics system is organized into modules:
-
-- **`device`**: Vulkan instance and device management
-- **`vertex`**: Vertex data structures
-- **`pipeline`**: Graphics pipeline configuration
-- **`shaders`**: GLSL shader compilation
-- **`mesh`**: Mesh data structures and asset management
-- **`primitives`**: Built-in primitive mesh generators
-- **`uniform_buffer`**: Dynamic uniform buffer management
-
 ## See Also
 
-- [Mesh System Documentation](../../docs/mesh_system.md) - Complete mesh system guide
-- [examples/multi_mesh_demo.rs](../../examples/multi_mesh_demo.rs) - Working example with multiple meshes
+- [Mesh System Documentation](../../docs/mesh_system.md)
+- [Rendering Guide](../../docs/guides/rendering.md)
+- [HDR and Tonemapping](../../docs/guides/hdr-and-tonemapping.md)
+- [Material System](../../docs/guides/materials.md)
+- [Multi-mesh Demo](../../examples/multi_mesh_demo.rs)

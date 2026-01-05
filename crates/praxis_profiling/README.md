@@ -244,17 +244,32 @@ fn my_system(profiler: Res<SystemProfiler>) {
 }
 ```
 
-## Example
+## Examples
 
-See `examples/profiling_demo.rs` for a complete example demonstrating all features.
+Run the profiling demos:
 
 ```bash
+# Basic profiling demo
 cargo run --example profiling_demo
+
+# Advanced profiling features
+cargo run --example profiling_advanced_demo
 ```
 
-This will:
-- Profile 10 simulated frames
+These will:
+- Profile simulated frames
 - Track memory allocations
 - Identify bottlenecks
-- Export a Chrome trace to `profiling_trace.json`
+- Export Chrome traces
 - Demonstrate leak detection
+
+## Dependencies
+
+- `tracing`: Structured logging
+- `praxis_utils`: Error handling
+- `vulkano`: GPU profiling (optional)
+
+## See Also
+
+- [Performance Guide](../../docs/guides/performance.md)
+- [Profiling Best Practices](../../docs/guides/profiling.md)

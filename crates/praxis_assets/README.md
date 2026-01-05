@@ -80,115 +80,6 @@ mesh_manager.load_mesh("model_id", mesh_data)?;
 - Multiple objects per file (only first is loaded)
 - Vertex colors (not in OBJ spec)
 
-## File Format Requirements
-
-1. **Positions**: Must be present (required)
-2. **Triangulation**: All faces must be triangles or use automatic triangulation
-3. **Vertex Count**: Must be ≤ 65,535 (u16 index limit)
-
-### Example OBJ File
-
-```obj
-# Simple triangle
-v 0.0 1.0 0.0
-v -1.0 -1.0 0.0
-v 1.0 -1.0 0.0
-
-vn 0.0 0.0 1.0
-
-vt 0.5 1.0
-vt 0.0 0.0
-vt 1.0 0.0
-
-f 1/1/1 2/2/1 3/3/1
-```
-
-## AssetLoader Trait
-
-The `AssetLoader<T>` trait provides a generic interface for loading any asset type:
-
-```rust
-pub trait AssetLoader<T> {
-    fn load(&self, path: impl AsRef<Path>) -> Result<T>;
-    fn supported_extensions(&self) -> &[&str];
-}
-```
-
-This trait can be implemented for textures, audio, configurations, and other asset types.
-
-## Error Handling
-
-All loading functions return `Result<T>` with descriptive errors:
-
-```rust
-// File not found
-Err("Failed to load OBJ file 'path.obj': No such file or directory")
-
-// Empty file
-Err("OBJ file 'path.obj' contains no models")
-
-// Too many vertices
-Err("Mesh has too many vertices for u16 indices")
-```
-
-## Implementation Details
-
-### Index Conversion
-
-OBJ files use `u32` indices, but the engine uses `u16`. The loader validates that no index exceeds `u16::MAX`:
-
-```rust
-let indices: Vec<u16> = mesh.indices
-    .iter()
-    .map(|&i| {
-        if i > u16::MAX as u32 {
-            Err(eyre::eyre!("Mesh has too many vertices"))
-        } else {
-            Ok(i as u16)
-        }
-    })
-    .collect::<Result<Vec<_>>>()?;
-```
-
-### Color Handling
-
-OBJ files don't support per-vertex colors. Loaded meshes use default white color `[1.0, 1.0, 1.0]` for all vertices.
-
-### tobj Configuration
-
-```rust
-tobj::LoadOptions {
-    triangulate: true,      // Convert quads/polygons to triangles
-    single_index: true,     // Use single index buffer
-    ..Default::default()
-}
-```
-
-## Performance Considerations
-
-- **Loading**: File I/O is synchronous; consider background threads for large files (>10MB)
-- **GPU Upload**: Meshes are uploaded immediately when `load_mesh()` is called
-- **Memory**: Mesh data is duplicated during upload (CPU + GPU copy)
-- **Batching**: Load multiple meshes before entering render loop for best performance
-
-## Examples
-
-See `examples/obj_loader_demo.rs` for a comprehensive demonstration:
-
-```bash
-cargo run --example obj_loader_demo
-```
-
-## Testing
-
-```bash
-# Unit tests
-cargo test -p praxis_assets
-
-# Integration test
-cargo run --example obj_loader_demo
-```
-
 ## GLTF File Loading
 
 ### Quick Start
@@ -246,7 +137,7 @@ let asset = manager.load("assets/models/scene.gltf")?;
 
 #### ❌ Not Supported
 
-- Animations
+- Animations (use `praxis_scene` for animations)
 - Skins/skeletal animation
 - Morph targets
 - Cameras (data loaded but not interpreted)
@@ -284,15 +175,6 @@ asset.traverse_depth_first(|node_index, node, depth| {
 });
 ```
 
-#### Extracting Transforms
-
-```rust
-for node in &asset.nodes {
-    let (translation, rotation, scale) = node.decompose_transform();
-    // Use these to create Transform components in your ECS
-}
-```
-
 #### Using Materials
 
 ```rust
@@ -307,42 +189,74 @@ for material in &asset.materials {
 }
 ```
 
-### GLTF Asset Manager
+## AssetLoader Trait
 
-The `GltfAssetManager` provides caching to avoid reloading the same file:
+The `AssetLoader<T>` trait provides a generic interface for loading any asset type:
 
 ```rust
-let mut manager = GltfAssetManager::new();
-
-// First load: reads from disk
-let asset1 = manager.load("model.gltf")?;
-
-// Second load: returns cached version
-let asset2 = manager.load("model.gltf")?;
-
-// Check if loaded
-if manager.is_loaded("model.gltf") {
-    println!("Asset is cached");
+pub trait AssetLoader<T> {
+    fn load(&self, path: impl AsRef<Path>) -> Result<T>;
+    fn supported_extensions(&self) -> &[&str];
 }
-
-// Unload when done
-manager.unload("model.gltf");
 ```
 
-### File Format Support
+This trait can be implemented for textures, audio, configurations, and other asset types.
 
-- **GLTF** (`.gltf`): JSON format with external binary buffers and images
-- **GLB** (`.glb`): Binary format with embedded data
+## Error Handling
 
-Both formats are fully supported by the loader.
+All loading functions return `Result<T>` with descriptive errors:
+
+```rust
+// File not found
+Err("Failed to load OBJ file 'path.obj': No such file or directory")
+
+// Empty file
+Err("OBJ file 'path.obj' contains no models")
+
+// Too many vertices
+Err("Mesh has too many vertices for u16 indices")
+```
+
+## Performance Considerations
+
+- **Loading**: File I/O is synchronous; consider background threads for large files (>10MB)
+- **GPU Upload**: Meshes are uploaded immediately when `load_mesh()` is called
+- **Memory**: Mesh data is duplicated during upload (CPU + GPU copy)
+- **Batching**: Load multiple meshes before entering render loop for best performance
+
+## Examples
+
+Run the asset loading demos:
+
+```bash
+# OBJ loading
+cargo run --example obj_loader_demo
+
+# GLTF loading
+cargo run --example gltf_loader_demo
+
+# Animation loading from GLTF
+cargo run --example gltf_animation_loader_demo
+```
+
+## Testing
+
+```bash
+# Unit tests
+cargo test -p praxis_assets
+
+# Integration tests with examples
+cargo run --example comprehensive_scene_demo
+```
 
 ## Dependencies
 
-- `tobj 4.0` - OBJ/MTL parsing
-- `gltf 1.4` - GLTF 2.0 parsing with image loading
-- `praxis_utils` - Error handling, logging
-- `praxis_graphics` - MeshData, MeshAssetManager integration
-- `praxis_math` - Matrix and vector math (Mat4, Vec3, Quat)
+- `tobj` 4.0: OBJ/MTL parsing
+- `gltf` 1.4: GLTF 2.0 parsing with image loading
+- `praxis_utils`: Error handling, logging
+- `praxis_graphics`: MeshData, MeshAssetManager integration
+- `praxis_math`: Matrix and vector math (Mat4, Vec3, Quat)
+- `praxis_scene`: Scene hierarchy and animation support
 
 ## Future Enhancements
 
@@ -352,7 +266,7 @@ Both formats are fully supported by the loader.
 - Vertex deduplication optimization
 
 ### GLTF Loader
-- Animation support
+- Animation support (in progress via `praxis_scene`)
 - Skeletal animation/skinning
 - Morph targets
 - KHR extensions support
@@ -363,4 +277,5 @@ Both formats are fully supported by the loader.
 
 - [Mesh System Documentation](../../docs/mesh_system.md)
 - [OBJ Loading Details](../../docs/obj_loading.md)
-- [tobj crate documentation](https://docs.rs/tobj)
+- [Scene System](../praxis_scene/README.md)
+- [Animation System](../../docs/animation_system.md)

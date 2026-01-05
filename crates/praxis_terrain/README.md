@@ -396,6 +396,32 @@ use praxis_profiling::profile_scope;
 - Reduce vegetation instance count
 - Use texture compression
 
+## Dependencies
+
+- `bevy_ecs` 0.14: ECS integration
+- `rayon`: Parallel processing for chunk generation
+- `noise`: Procedural noise generation
+- `image`: Heightmap loading from images
+- `praxis_ecs`: Transform and component systems
+- `praxis_math`: Math types (Vec3, Vec2, Mat4)
+- `praxis_graphics`: Mesh generation and rendering
+- `praxis_utils`: Error handling
+- `praxis_spatial`: Frustum culling and LOD
+- `vulkano`: Vulkan rendering
+
+## Testing
+
+```bash
+cargo test -p praxis_terrain
+```
+
 ## License
 
 MIT License - See LICENSE file for details.
+
+## See Also
+
+- [Terrain Demo](../../examples/terrain_demo.rs)
+- [Graphics System](../praxis_graphics/README.md)
+- [Spatial System](../praxis_spatial/README.md)
+- [Procedural Textures](../praxis_procedural/README.md)
