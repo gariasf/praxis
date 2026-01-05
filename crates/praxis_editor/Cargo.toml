@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
+[features]
+default = []
+terrain = ["praxis_terrain"]
+
 [dependencies]
 praxis_ecs = { path = "../praxis_ecs" }
 praxis_math = { path = "../praxis_math" }
@@ -15,7 +19,7 @@ praxis_input = { path = "../praxis_input" }
 praxis_graphics = { path = "../praxis_graphics" }
 praxis_physics = { path = "../praxis_physics" }
 praxis_audio = { path = "../praxis_audio" }
-praxis_terrain = { path = "../praxis_terrain" }
+praxis_terrain = { path = "../praxis_terrain", optional = true }
 bevy_ecs = "0.14"
 egui = "0.29"
 egui_dock = "0.14"

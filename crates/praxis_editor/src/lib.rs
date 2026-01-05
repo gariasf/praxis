@@ -261,8 +261,10 @@ pub use menu_bar::{
 pub use panels::{
     AssetEntry, AssetImportConfig, AssetType, AssetsPanel, AssetsPanelExt, ConsoleLayer,
     ConsolePanel, EditorPanel, HierarchyPanel, InspectorPanel, LogBuffer, LogLevel, LogMessage,
-    SceneViewPanel, SceneViewPanelExt, TerrainPanel, TerrainPanelExt, ViewportPanel,
+    SceneViewPanel, SceneViewPanelExt, ViewportPanel,
 };
+#[cfg(feature = "terrain")]
+pub use panels::{TerrainPanel, TerrainPanelExt};
 pub use play_mode::{PlayModeState, PlayModeSystem, SceneSnapshot, SnapshotMetadata};
 pub use scene_operations::{
     capture_scene_from_world, load_scene_into_world, show_unsaved_changes_dialog,

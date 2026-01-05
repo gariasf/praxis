@@ -10,7 +10,7 @@ default = []
 editor = ["praxis_editor"]
 networking = ["praxis_networking"]
 scripting = ["praxis_scripting"]
-terrain = ["praxis_terrain"]
+terrain = ["praxis_terrain", "praxis_editor?/terrain"]
 
 [workspace]
 resolver = "2"

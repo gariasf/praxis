@@ -5,6 +5,7 @@ mod console_panel;
 mod hierarchy_panel;
 mod inspector_panel;
 mod scene_view_panel;
+#[cfg(feature = "terrain")]
 mod terrain_panel;
 pub mod viewport_panel;
 
@@ -13,6 +14,7 @@ pub use console_panel::{ConsoleLayer, ConsolePanel, LogBuffer, LogLevel, LogMess
 pub use hierarchy_panel::HierarchyPanel;
 pub use inspector_panel::InspectorPanel;
 pub use scene_view_panel::{SceneViewPanel, SceneViewPanelExt};
+#[cfg(feature = "terrain")]
 pub use terrain_panel::{TerrainPanel, TerrainPanelExt};
 pub use viewport_panel::ViewportPanel;
 
