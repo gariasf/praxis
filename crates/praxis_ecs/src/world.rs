@@ -13,6 +13,7 @@ use bevy_ecs::{
     world::World as BevyWorld,
 };
 use praxis_utils::{debug, error, eyre, info, trace, Result};
+use std::ops::{Deref, DerefMut};
 
 /// The main ECS world container.
 ///
@@ -529,6 +530,20 @@ impl World {
 impl Default for World {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Deref for World {
+    type Target = BevyWorld;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for World {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }
 
