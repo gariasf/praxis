@@ -112,3 +112,5 @@ performance_report.txt
 *.luac
 .luacheckrc
 lua_modules/
+
+.claude
