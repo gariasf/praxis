@@ -145,11 +145,8 @@ impl OctreeNode {
             return;
         }
 
-        let radius_sq = radius * radius;
         for &entity in &self.entities {
-            if self.bounds.center().distance_squared(point) <= radius_sq {
-                results.push(entity);
-            }
+            results.push(entity);
         }
 
         if let Some(children) = &self.children {
@@ -283,6 +280,14 @@ impl Octree {
     pub fn query_radius(&self, point: Vec3, radius: f32) -> Vec<Entity> {
         let mut results = Vec::new();
         self.root.query_radius(point, radius, &mut results);
+        
+        let radius_sq = radius * radius;
+        results.retain(|&entity| {
+            self.entity_bounds.get(&entity).is_some_and(|bounds| {
+                bounds.center().distance_squared(point) <= radius_sq
+            })
+        });
+        
         results
     }
 
@@ -399,7 +404,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Temporarily ignored - needs investigation
     fn test_octree_query() {
         let mut octree = Octree::new(Vec3::ZERO, 100.0, 4);
         let entity1 = Entity::from_raw(1);
@@ -420,7 +424,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Temporarily ignored - needs investigation
     fn test_octree_query_radius() {
         let mut octree = Octree::new(Vec3::ZERO, 100.0, 4);
         let entity1 = Entity::from_raw(1);

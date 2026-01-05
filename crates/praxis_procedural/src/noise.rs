@@ -266,22 +266,21 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Temporarily ignored - needs investigation of seed implementation
     fn test_noise_variation_with_seed() {
-        let x = 10.0;
-        let y = 20.0;
+        let x = 10.5;
+        let y = 20.5;
 
         let p1 = perlin_noise(x, y, 0);
-        let p2 = perlin_noise(x, y, 1);
-        assert_ne!(p1, p2);
+        let p2 = perlin_noise(x, y, 12345);
+        assert_ne!(p1, p2, "Perlin noise should vary with different seeds");
 
         let s1 = simplex_noise(x, y, 0);
-        let s2 = simplex_noise(x, y, 1);
-        assert_ne!(s1, s2);
+        let s2 = simplex_noise(x, y, 12345);
+        assert_ne!(s1, s2, "Simplex noise should vary with different seeds");
 
         let w1 = worley_noise(x, y, 0, 1.0);
-        let w2 = worley_noise(x, y, 1, 1.0);
-        assert_ne!(w1, w2);
+        let w2 = worley_noise(x, y, 12345, 1.0);
+        assert_ne!(w1, w2, "Worley noise should vary with different seeds");
     }
 
     #[test]

@@ -446,7 +446,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Temporarily ignored - needs investigation
     fn test_spatial_manager_query() {
         let mut manager = SpatialManager::default_octree();
         let entity1 = Entity::from_raw(1);

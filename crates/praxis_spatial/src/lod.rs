@@ -55,8 +55,8 @@ impl LodGroup {
 
     /// Selects the appropriate mesh ID for the given distance.
     pub fn select_lod(&self, distance: f32) -> Option<&str> {
-        for level in &self.levels {
-            if distance < level.distance {
+        for (i, level) in self.levels.iter().enumerate() {
+            if i == self.levels.len() - 1 || distance < self.levels[i + 1].distance {
                 return Some(&level.mesh_id);
             }
         }
@@ -213,7 +213,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Temporarily ignored - needs investigation
     fn test_lod_group_selection() {
         let levels = vec![
             LodLevel::new(0.0, "tree_high"),
@@ -257,7 +256,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Temporarily ignored - needs investigation
     fn test_lod_manager_selection() {
         let mut manager = SpatialLodManager::new();
         let entity = Entity::from_raw(1);
@@ -281,7 +279,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Temporarily ignored - needs investigation
     fn test_lod_manager_batch_selection() {
         let mut manager = SpatialLodManager::new();
 
