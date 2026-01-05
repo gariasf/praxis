@@ -20,6 +20,11 @@ Task-oriented guides for implementing features with Praxis.
 - [Physics](physics.md) - Rigid body dynamics with Rapier3D
 - [Audio](audio.md) - Spatial audio with Kira
 
+## Scripting & Networking
+
+- [Scripting](scripting.md) - Lua scripting integration
+- [Networking](systems/networking.md) - Multiplayer client-server architecture
+
 ## Input & Assets
 
 - [Input](input.md) - Keyboard, mouse, and gamepad handling
