@@ -198,33 +198,49 @@ impl Aabb {
     /// Returns true if the ray intersects within `max_distance`.
     /// Uses the slab method for efficient ray-box intersection.
     pub fn intersects_ray(&self, origin: Vec3, direction: Vec3, max_distance: f32) -> bool {
-        let inv_dir = Vec3::new(
-            if direction.x == 0.0 {
-                f32::INFINITY
-            } else {
-                1.0 / direction.x
-            },
-            if direction.y == 0.0 {
-                f32::INFINITY
-            } else {
-                1.0 / direction.y
-            },
-            if direction.z == 0.0 {
-                f32::INFINITY
-            } else {
-                1.0 / direction.z
-            },
-        );
+        // Handle each axis separately to avoid NaN issues when direction component is 0
+        let mut tmin = f32::NEG_INFINITY;
+        let mut tmax = f32::INFINITY;
 
-        let t1 = (self.min.x - origin.x) * inv_dir.x;
-        let t2 = (self.max.x - origin.x) * inv_dir.x;
-        let t3 = (self.min.y - origin.y) * inv_dir.y;
-        let t4 = (self.max.y - origin.y) * inv_dir.y;
-        let t5 = (self.min.z - origin.z) * inv_dir.z;
-        let t6 = (self.max.z - origin.z) * inv_dir.z;
+        // X axis
+        if direction.x == 0.0 {
+            // Ray is parallel to X slabs - origin must be within X range
+            if origin.x < self.min.x || origin.x > self.max.x {
+                return false;
+            }
+        } else {
+            let inv_d = 1.0 / direction.x;
+            let t1 = (self.min.x - origin.x) * inv_d;
+            let t2 = (self.max.x - origin.x) * inv_d;
+            tmin = tmin.max(t1.min(t2));
+            tmax = tmax.min(t1.max(t2));
+        }
 
-        let tmin = t1.min(t2).max(t3.min(t4)).max(t5.min(t6));
-        let tmax = t1.max(t2).min(t3.max(t4)).min(t5.max(t6));
+        // Y axis
+        if direction.y == 0.0 {
+            if origin.y < self.min.y || origin.y > self.max.y {
+                return false;
+            }
+        } else {
+            let inv_d = 1.0 / direction.y;
+            let t1 = (self.min.y - origin.y) * inv_d;
+            let t2 = (self.max.y - origin.y) * inv_d;
+            tmin = tmin.max(t1.min(t2));
+            tmax = tmax.min(t1.max(t2));
+        }
+
+        // Z axis
+        if direction.z == 0.0 {
+            if origin.z < self.min.z || origin.z > self.max.z {
+                return false;
+            }
+        } else {
+            let inv_d = 1.0 / direction.z;
+            let t1 = (self.min.z - origin.z) * inv_d;
+            let t2 = (self.max.z - origin.z) * inv_d;
+            tmin = tmin.max(t1.min(t2));
+            tmax = tmax.min(t1.max(t2));
+        }
 
         tmax >= 0.0 && tmin <= tmax && tmin <= max_distance
     }
@@ -238,33 +254,48 @@ impl Aabb {
         direction: Vec3,
         max_distance: f32,
     ) -> Option<f32> {
-        let inv_dir = Vec3::new(
-            if direction.x == 0.0 {
-                f32::INFINITY
-            } else {
-                1.0 / direction.x
-            },
-            if direction.y == 0.0 {
-                f32::INFINITY
-            } else {
-                1.0 / direction.y
-            },
-            if direction.z == 0.0 {
-                f32::INFINITY
-            } else {
-                1.0 / direction.z
-            },
-        );
+        // Handle each axis separately to avoid NaN issues when direction component is 0
+        let mut tmin = f32::NEG_INFINITY;
+        let mut tmax = f32::INFINITY;
 
-        let t1 = (self.min.x - origin.x) * inv_dir.x;
-        let t2 = (self.max.x - origin.x) * inv_dir.x;
-        let t3 = (self.min.y - origin.y) * inv_dir.y;
-        let t4 = (self.max.y - origin.y) * inv_dir.y;
-        let t5 = (self.min.z - origin.z) * inv_dir.z;
-        let t6 = (self.max.z - origin.z) * inv_dir.z;
+        // X axis
+        if direction.x == 0.0 {
+            if origin.x < self.min.x || origin.x > self.max.x {
+                return None;
+            }
+        } else {
+            let inv_d = 1.0 / direction.x;
+            let t1 = (self.min.x - origin.x) * inv_d;
+            let t2 = (self.max.x - origin.x) * inv_d;
+            tmin = tmin.max(t1.min(t2));
+            tmax = tmax.min(t1.max(t2));
+        }
 
-        let tmin = t1.min(t2).max(t3.min(t4)).max(t5.min(t6));
-        let tmax = t1.max(t2).min(t3.max(t4)).min(t5.max(t6));
+        // Y axis
+        if direction.y == 0.0 {
+            if origin.y < self.min.y || origin.y > self.max.y {
+                return None;
+            }
+        } else {
+            let inv_d = 1.0 / direction.y;
+            let t1 = (self.min.y - origin.y) * inv_d;
+            let t2 = (self.max.y - origin.y) * inv_d;
+            tmin = tmin.max(t1.min(t2));
+            tmax = tmax.min(t1.max(t2));
+        }
+
+        // Z axis
+        if direction.z == 0.0 {
+            if origin.z < self.min.z || origin.z > self.max.z {
+                return None;
+            }
+        } else {
+            let inv_d = 1.0 / direction.z;
+            let t1 = (self.min.z - origin.z) * inv_d;
+            let t2 = (self.max.z - origin.z) * inv_d;
+            tmin = tmin.max(t1.min(t2));
+            tmax = tmax.min(t1.max(t2));
+        }
 
         if tmax >= 0.0 && tmin <= tmax && tmin <= max_distance {
             Some(tmin.max(0.0))

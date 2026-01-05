@@ -525,37 +525,35 @@ impl SelectionSystem {
     ///
     /// # Example
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use praxis_editor::{SelectionSystem, Selectable};
     /// use praxis_ecs::{World, Query, With, GlobalTransform, BoundingBox, Mesh, Transform, CameraMatrices};
     /// use praxis_math::Vec2;
     ///
-    /// # fn example(
-    /// #     world: &World,
-    /// #     selection: &SelectionSystem,
-    /// #     camera_transform: &Transform,
-    /// #     camera_matrices: &CameraMatrices,
-    /// # ) {
-    /// // Prepare queries
-    /// let selectable_query: Query<(praxis_ecs::Entity, &GlobalTransform), With<Selectable>> = world.query_filtered();
-    /// let bounds_query: Query<&BoundingBox> = world.query();
-    /// let mesh_query: Query<&Mesh> = world.query();
-    ///
-    /// // Perform picking
-    /// let screen_pos = Vec2::new(400.0, 300.0);
-    /// let viewport_size = Vec2::new(800.0, 600.0);
-    /// if let Some(entity) = selection.raycast_pick(
-    ///     screen_pos,
-    ///     viewport_size,
-    ///     camera_transform,
-    ///     camera_matrices,
-    ///     &selectable_query,
-    ///     &bounds_query,
-    ///     &mesh_query,
+    /// // This function demonstrates how to use raycast_pick within a system
+    /// fn picking_system(
+    ///     selection: Res<SelectionSystem>,
+    ///     selectable_query: Query<(Entity, &GlobalTransform), With<Selectable>>,
+    ///     bounds_query: Query<&BoundingBox>,
+    ///     mesh_query: Query<&Mesh>,
+    ///     camera_query: Query<(&Transform, &CameraMatrices)>,
     /// ) {
-    ///     println!("Picked entity: {:?}", entity);
+    ///     if let Ok((camera_transform, camera_matrices)) = camera_query.get_single() {
+    ///         let screen_pos = Vec2::new(400.0, 300.0);
+    ///         let viewport_size = Vec2::new(800.0, 600.0);
+    ///         if let Some(entity) = selection.raycast_pick(
+    ///             screen_pos,
+    ///             viewport_size,
+    ///             camera_transform,
+    ///             camera_matrices,
+    ///             &selectable_query,
+    ///             &bounds_query,
+    ///             &mesh_query,
+    ///         ) {
+    ///             println!("Picked entity: {:?}", entity);
+    ///         }
+    ///     }
     /// }
-    /// # }
     /// ```
     #[allow(clippy::too_many_arguments)]
     pub fn raycast_pick(

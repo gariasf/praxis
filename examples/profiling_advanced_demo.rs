@@ -104,7 +104,7 @@ fn simulate_frame_advanced(profiler: &Profiler, frame: u64) {
         let _scope = ProfileScope::new("physics_update");
         system_profiler.begin_system("physics_update");
 
-        let alloc_size = (512 * 1024.0 * complexity_factor) as usize;
+        let alloc_size = (512.0 * 1024.0 * complexity_factor) as usize;
         let _alloc = memory_tracker.track_allocation(
             alloc_size,
             format!("frame_{}_physics", frame),

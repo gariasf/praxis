@@ -6,7 +6,7 @@
 //! - LOD distance selection logic
 //! - Occlusion query integration
 
-use praxis_ecs::{BoundingBox, World};
+use praxis_ecs::World;
 use praxis_math::{Mat4, Vec3};
 use praxis_spatial::{
     Aabb, Bvh, CullReason, FrustumCuller, LodGroup, LodLevel, Octree, SpatialLodManager,
@@ -862,7 +862,7 @@ fn test_octree_bvh_query_consistency() {
 fn test_integrated_culling_pipeline() {
     // Test complete culling pipeline with multiple systems
     let mut world = World::new();
-    let mut visibility_system = VisibilitySystem::with_max_distance(200.0);
+    let mut visibility_system = VisibilitySystem::with_max_distance(500.0);
 
     // Set up LOD groups
     visibility_system.lod_manager_mut().register_lod_levels(
@@ -874,14 +874,22 @@ fn test_integrated_culling_pipeline() {
         ],
     );
 
-    // Create test entities
+    // Create test entities - some in front of the camera, some behind
+    // Camera will look along +Z axis, so objects with negative Z will be culled
     let mut test_entities = Vec::new();
     for i in 0..30 {
         let entity = world.spawn(());
 
-        let angle = (i as f32) * 2.0 * std::f32::consts::PI / 30.0;
-        let radius = ((i / 10) as f32 + 1.0) * 40.0;
-        let pos = Vec3::new(angle.cos() * radius, 0.0, angle.sin() * radius);
+        // Place objects along Z axis: some with positive Z (visible), some with negative Z (culled)
+        // First 15 objects: Z = 20 to 160 (in front of camera - visible)
+        // Last 15 objects: Z = -20 to -160 (behind camera - culled)
+        let z = if i < 15 {
+            20.0 + (i as f32) * 10.0
+        } else {
+            -20.0 - ((i - 15) as f32) * 10.0
+        };
+        let x = ((i % 5) as f32 - 2.0) * 10.0; // Spread across X axis
+        let pos = Vec3::new(x, 0.0, z);
         let bounds = Aabb::from_center_half_extents(pos, Vec3::splat(2.0));
 
         visibility_system
@@ -891,10 +899,11 @@ fn test_integrated_culling_pipeline() {
         test_entities.push((entity, bounds, pos));
     }
 
-    // Set up camera
-    let camera_pos = Vec3::new(0.0, 10.0, 0.0);
-    let view = Mat4::look_at_rh(camera_pos, Vec3::ZERO, Vec3::Z);
-    let proj = Mat4::perspective_rh(75.0_f32.to_radians(), 16.0 / 9.0, 1.0, 300.0);
+    // Set up camera at origin looking along +Z axis
+    // Objects with negative Z (behind camera) will be culled by frustum
+    let camera_pos = Vec3::new(0.0, 0.0, 0.0);
+    let view = Mat4::look_at_rh(camera_pos, Vec3::new(0.0, 0.0, 1.0), Vec3::Y);
+    let proj = Mat4::perspective_rh(60.0_f32.to_radians(), 16.0 / 9.0, 1.0, 500.0);
     let view_proj = proj * view;
 
     visibility_system.update_frustum(view_proj);

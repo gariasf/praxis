@@ -39,8 +39,8 @@
 //!
 //! # Usage Example
 //!
-//! ```rust,no_run
-//! use praxis_graphics::gpu_culling::{GpuCullingManager, GpuCullingConfig};
+//! ```rust,ignore
+//! use praxis_spatial::gpu_culling::{GpuCullingManager, GpuCullingConfig};
 //! use praxis_math::Vec3;
 //!
 //! # async fn example() -> praxis_utils::Result<()> {

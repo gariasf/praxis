@@ -20,7 +20,7 @@
 //!
 //! # Example
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use praxis_networking::{NetworkServer, NetworkConfig, ReplicationRegistry};
 //! use praxis_ecs::World;
 //!

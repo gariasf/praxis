@@ -27,11 +27,9 @@ cargo run --example comprehensive_scene_demo
 | `comprehensive_scene_demo` | Complete asset pipeline with OBJ loading, procedural textures, and FPS camera |
 | `scene_demo` | Scene loading and saving with basic rendering |
 | `multi_mesh_demo` | Multiple meshes with transforms |
-| `material_demo` | Material system demonstration |
-| `advanced_material_demo` | Material instancing, layers, parallax mapping, extended PBR |
+| `material_demo` | Material system demonstration with PBR properties and post-processing |
 | `environment_probe_demo` | Environment map reflections |
 | `particles_demo` | GPU-accelerated particle system |
-| `procedural_texture_demo` | Procedural texture generation with noise nodes and color ramps |
 | `terrain_demo` | Heightmap terrain with LOD, texture splatting, and vegetation |
 
 ### Animation Demos
@@ -89,7 +87,6 @@ cargo run --example comprehensive_scene_demo
 
 | Example | Description |
 |---------|-------------|
-| `lod_demo` | Level of Detail system with distance-based mesh switching |
 | `spatial_partitioning_demo` | Octree and BVH spatial partitioning |
 | `spatial_optimization_demo` | Frustum culling, octree, BVH queries, LOD system |
 | `profiling_demo` | CPU/GPU profiling, memory tracking, Chrome trace export |

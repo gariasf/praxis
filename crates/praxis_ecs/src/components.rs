@@ -203,7 +203,10 @@ impl Transform {
     /// ```
     pub fn look_at(mut self, target: Vec3, up: Vec3) -> Self {
         let forward = (target - self.translation).normalize();
-        self.rotation = Quat::from_mat4(&Mat4::look_to_rh(self.translation, forward, up));
+        // look_to_rh returns a view matrix, so we need to invert the rotation
+        // to get the object's world rotation
+        let view_rotation = Quat::from_mat4(&Mat4::look_to_rh(Vec3::ZERO, forward, up));
+        self.rotation = view_rotation.inverse();
         self
     }
 }

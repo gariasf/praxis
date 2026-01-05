@@ -933,11 +933,8 @@ cargo run --example animation_demo
 # Profiling and optimization
 cargo run --example profiling_demo
 
-# Spatial partitioning
+# Spatial partitioning and LOD
 cargo run --example spatial_optimization_demo
-
-# Level of detail
-cargo run --example lod_demo
 ```
 
 ---

@@ -145,14 +145,6 @@ name = "spatial_partitioning_demo"
 path = "examples/spatial_partitioning_demo.rs"
 
 [[example]]
-name = "lod_demo"
-path = "examples/lod_demo.rs"
-
-[[example]]
-name = "procedural_texture_demo"
-path = "examples/procedural_texture_demo.rs"
-
-[[example]]
 name = "profiling_demo"
 path = "examples/profiling_demo.rs"
 

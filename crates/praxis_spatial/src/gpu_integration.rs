@@ -122,7 +122,7 @@ pub mod conversion {
     /// Simple hash function to convert mesh names to IDs.
     ///
     /// In production, this should use a proper string interning system.
-    fn hash_mesh_name(name: &str) -> u32 {
+    pub(crate) fn hash_mesh_name(name: &str) -> u32 {
         let mut hash: u32 = 0;
         for byte in name.bytes() {
             hash = hash.wrapping_mul(31).wrapping_add(u32::from(byte));

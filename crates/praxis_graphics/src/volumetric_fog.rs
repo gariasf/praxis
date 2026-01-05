@@ -28,6 +28,8 @@
 //!     max_distance: 100.0,
 //!     num_steps: 64,
 //!     light_scattering: 0.3,
+//!     anisotropy: 0.0,
+//!     shadow_influence: 0.5,
 //! };
 //!
 //! // let renderer = VolumetricFogRenderer::new(device, allocator, render_pass, extent)?;

@@ -90,7 +90,7 @@ Each learning path is structured as:
 4. [Shaders Reference](reference/shaders.md) - Shader conventions
 
 **Examples**:
-- `cargo run --example advanced_material_demo`
+- `cargo run --example material_demo`
 - `cargo run --example advanced_rendering_demo`
 
 **Learning Outcomes**:
@@ -511,7 +511,6 @@ These topics apply across multiple subsystems:
 - `cargo run --example profiling_demo`
 - `cargo run --example profiling_advanced_demo`
 - `cargo run --example spatial_optimization_demo`
-- `cargo run --example lod_demo`
 
 ### Architecture and Design
 
@@ -530,7 +529,7 @@ These topics apply across multiple subsystems:
 
 **Examples**:
 - `cargo run --example comprehensive_scene_demo`
-- `cargo run --example procedural_texture_demo`
+- `cargo run --example terrain_demo`
 
 ---
 

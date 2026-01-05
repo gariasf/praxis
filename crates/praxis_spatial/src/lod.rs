@@ -54,13 +54,17 @@ impl LodGroup {
     }
 
     /// Selects the appropriate mesh ID for the given distance.
+    ///
+    /// Each LOD level's `distance` is the maximum distance at which that level is used.
+    /// Returns the first level whose threshold exceeds the given distance,
+    /// or the last level if distance exceeds all thresholds.
     pub fn select_lod(&self, distance: f32) -> Option<&str> {
-        for (i, level) in self.levels.iter().enumerate() {
-            if i == self.levels.len() - 1 || distance < self.levels[i + 1].distance {
+        for level in &self.levels {
+            if distance < level.distance {
                 return Some(&level.mesh_id);
             }
         }
-
+        // Beyond all thresholds, use the last level
         self.levels.last().map(|l| l.mesh_id.as_str())
     }
 
@@ -204,9 +208,9 @@ mod tests {
     #[test]
     fn test_lod_group_creation() {
         let levels = vec![
-            LodLevel::new(0.0, "tree_high"),
-            LodLevel::new(50.0, "tree_medium"),
-            LodLevel::new(100.0, "tree_low"),
+            LodLevel::new(50.0, "tree_high"),
+            LodLevel::new(100.0, "tree_medium"),
+            LodLevel::new(150.0, "tree_low"),
         ];
         let group = LodGroup::new("tree", levels);
         assert_eq!(group.level_count(), 3);
@@ -214,10 +218,14 @@ mod tests {
 
     #[test]
     fn test_lod_group_selection() {
+        // LOD levels are sorted by distance (max threshold for each level)
+        // tree_high: used for distance < 50
+        // tree_medium: used for 50 <= distance < 100
+        // tree_low: used for distance >= 100
         let levels = vec![
-            LodLevel::new(0.0, "tree_high"),
-            LodLevel::new(50.0, "tree_medium"),
-            LodLevel::new(100.0, "tree_low"),
+            LodLevel::new(50.0, "tree_high"),
+            LodLevel::new(100.0, "tree_medium"),
+            LodLevel::new(150.0, "tree_low"),
         ];
         let group = LodGroup::new("tree", levels);
 
@@ -230,8 +238,8 @@ mod tests {
     fn test_lod_manager_registration() {
         let mut manager = SpatialLodManager::new();
         let levels = vec![
-            LodLevel::new(0.0, "rock_high"),
-            LodLevel::new(30.0, "rock_low"),
+            LodLevel::new(30.0, "rock_high"),
+            LodLevel::new(60.0, "rock_low"),
         ];
         manager.register_lod_levels("rock", levels);
 
@@ -246,8 +254,8 @@ mod tests {
         manager.register_lod_levels(
             "tree",
             vec![
-                LodLevel::new(0.0, "tree_high"),
-                LodLevel::new(50.0, "tree_low"),
+                LodLevel::new(50.0, "tree_high"),
+                LodLevel::new(100.0, "tree_low"),
             ],
         );
 
@@ -260,18 +268,20 @@ mod tests {
         let mut manager = SpatialLodManager::new();
         let entity = Entity::from_raw(1);
 
+        // tree_high: used for distance < 50
+        // tree_low: used for distance >= 50
         manager.register_lod_levels(
             "tree",
             vec![
-                LodLevel::new(0.0, "tree_high"),
-                LodLevel::new(50.0, "tree_low"),
+                LodLevel::new(50.0, "tree_high"),
+                LodLevel::new(100.0, "tree_low"),
             ],
         );
 
         manager.assign_entity(entity, "tree");
 
         let camera_pos = Vec3::ZERO;
-        let entity_pos = Vec3::new(30.0, 0.0, 0.0);
+        let entity_pos = Vec3::new(30.0, 0.0, 0.0); // Distance = 30, < 50, should use tree_high
 
         let selection = manager.select_lod(entity, camera_pos, entity_pos);
         assert!(selection.is_some());
@@ -282,11 +292,13 @@ mod tests {
     fn test_lod_manager_batch_selection() {
         let mut manager = SpatialLodManager::new();
 
+        // tree_high: used for distance < 50
+        // tree_low: used for distance >= 50
         manager.register_lod_levels(
             "tree",
             vec![
-                LodLevel::new(0.0, "tree_high"),
-                LodLevel::new(50.0, "tree_low"),
+                LodLevel::new(50.0, "tree_high"),
+                LodLevel::new(100.0, "tree_low"),
             ],
         );
 
@@ -297,8 +309,8 @@ mod tests {
         manager.assign_entity(entity2, "tree");
 
         let entities = vec![
-            (entity1, Vec3::new(20.0, 0.0, 0.0)),
-            (entity2, Vec3::new(60.0, 0.0, 0.0)),
+            (entity1, Vec3::new(20.0, 0.0, 0.0)), // Distance = 20, < 50, tree_high
+            (entity2, Vec3::new(60.0, 0.0, 0.0)), // Distance = 60, >= 50, tree_low
         ];
 
         let selections = manager.select_lods(&entities, Vec3::ZERO);

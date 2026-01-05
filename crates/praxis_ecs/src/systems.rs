@@ -2263,7 +2263,7 @@ impl Default for CameraFrustum {
 /// # Example
 ///
 /// ```rust,no_run
-/// use praxis_ecs::{World, Schedule};
+/// use praxis_ecs::{World, Schedule, IntoSystemConfigs};
 /// use praxis_ecs::systems::{update_frustum_from_camera, frustum_culling_system};
 ///
 /// let mut world = World::new();
@@ -2316,7 +2316,7 @@ pub fn update_frustum_from_camera(
 /// # Example
 ///
 /// ```rust,no_run
-/// use praxis_ecs::{World, Schedule, BoundingBox, Transform, GlobalTransform};
+/// use praxis_ecs::{World, Schedule, BoundingBox, Transform, GlobalTransform, IntoSystemConfigs};
 /// use praxis_ecs::systems::{update_frustum_from_camera, frustum_culling_system};
 /// use praxis_math::Vec3;
 ///

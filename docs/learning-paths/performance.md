@@ -143,7 +143,6 @@ fn lod_system(
 
 **Run Example**:
 ```bash
-cargo run --example lod_demo
 cargo run --example spatial_optimization_demo
 ```
 
@@ -407,7 +406,6 @@ strip = true
 # Profile examples
 cargo run --release --example profiling_advanced_demo
 cargo run --release --example spatial_optimization_demo
-cargo run --release --example lod_demo
 ```
 
 **External Tools**:

@@ -416,16 +416,7 @@ Advanced (2-3 weeks)
    cargo run --example particles_demo
    ```
 
-**Option B: Procedural Generation**
-1. Read [Procedural Textures](../procedural-textures.md)
-2. Implement runtime texture generation
-3. Create texture graphs
-4. Run example:
-   ```bash
-   cargo run --example procedural_texture_demo
-   ```
-
-**Option C: Terrain Rendering**
+**Option B: Terrain Rendering**
 1. Read [Terrain System](../terrain-system.md)
 2. Implement heightmap-based terrain
 3. Add terrain LOD
@@ -486,7 +477,7 @@ cargo run --example advanced_lighting_demo
 cargo run --example environment_probe_demo
 
 # Advanced
-cargo run --example advanced_material_demo
+cargo run --example material_demo
 cargo run --example advanced_rendering_demo
 cargo run --example particles_demo
 cargo run --example procedural_texture_demo

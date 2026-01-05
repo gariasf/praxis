@@ -113,9 +113,7 @@ praxis/
 | `environment_probe_demo` | IBL reflections with environment probes |
 | `editor_demo` | Full editor interface with undo/redo |
 | `particles_demo` | GPU-accelerated particle system |
-| `spatial_optimization_demo` | Octree and frustum culling |
-| `lod_demo` | Level of Detail system |
-| `procedural_texture_demo` | Procedural texture generation |
+| `spatial_optimization_demo` | Octree and frustum culling with LOD |
 | `scripting_demo` | Lua scripting integration |
 | `networking_demo` | Multiplayer and entity replication |
 

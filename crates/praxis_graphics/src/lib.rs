@@ -2544,21 +2544,17 @@ mod tests {
     #[test]
     fn test_material_key_equality() {
         // Test that MaterialKey correctly identifies identical materials
-        let props1 = MaterialProperties {
-            base_color: [1.0, 1.0, 1.0, 1.0],
-            metallic: 0.5,
-            roughness: 0.5,
-            emissive_strength: 0.0,
-            _padding: 0.0,
-        };
+        let props1 = MaterialProperties::new()
+            .with_base_color([1.0, 1.0, 1.0, 1.0])
+            .with_metallic(0.5)
+            .with_roughness(0.5)
+            .with_emissive_strength(0.0);
 
-        let props2 = MaterialProperties {
-            base_color: [1.0, 1.0, 1.0, 1.0],
-            metallic: 0.5,
-            roughness: 0.5,
-            emissive_strength: 0.0,
-            _padding: 0.0,
-        };
+        let props2 = MaterialProperties::new()
+            .with_base_color([1.0, 1.0, 1.0, 1.0])
+            .with_metallic(0.5)
+            .with_roughness(0.5)
+            .with_emissive_strength(0.0);
 
         let key1 = MaterialKey::new("texture1".to_string(), &props1);
         let key2 = MaterialKey::new("texture1".to_string(), &props2);

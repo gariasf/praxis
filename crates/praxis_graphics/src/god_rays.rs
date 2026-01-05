@@ -25,6 +25,7 @@
 //!     weight: 0.3,
 //!     decay: 0.95,
 //!     exposure: 0.8,
+//!     threshold: 0.8,
 //! };
 //!
 //! // let renderer = GodRaysRenderer::new(device, allocator, extent)?;

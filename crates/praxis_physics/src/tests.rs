@@ -1062,11 +1062,15 @@ fn test_raycast_all_multiple_hits() {
     ));
 
     let mut schedule = Schedule::default();
-    schedule.add_systems((
-        cleanup_physics_entities,
-        sync_physics_transforms_system,
-        physics_step_system,
-    ));
+    schedule.add_systems(
+        (
+            cleanup_physics_entities,
+            sync_physics_transforms_system,
+            sync_colliders,
+            physics_step_system,
+        )
+            .chain(),
+    );
 
     let mut physics_time = world.inner_mut().resource_mut::<PhysicsTime>();
     physics_time.add(1.0 / 60.0);

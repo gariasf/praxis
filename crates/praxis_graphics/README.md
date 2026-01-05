@@ -171,11 +171,8 @@ Run the graphics demos:
 # Multiple mesh rendering
 cargo run --example multi_mesh_demo
 
-# Material demonstration
+# Material demonstration (includes PBR and post-processing)
 cargo run --example material_demo
-
-# Advanced material features
-cargo run --example advanced_material_demo
 
 # Advanced lighting
 cargo run --example advanced_lighting_demo

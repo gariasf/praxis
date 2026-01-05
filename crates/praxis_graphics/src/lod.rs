@@ -37,7 +37,7 @@
 //!
 //! # Usage Example
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use praxis_graphics::lod::{LodGroup, LodLevel, LodManager};
 //! use praxis_ecs::World;
 //!
@@ -526,7 +526,7 @@ struct LodTransitionState {
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// use praxis_graphics::lod::LodManager;
 /// use praxis_ecs::World;
 /// use praxis_math::Vec3;

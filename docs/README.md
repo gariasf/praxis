@@ -103,7 +103,6 @@ cargo run --example undo_redo_system_demo     # Undo/redo system
 cargo run --example particles_demo            # Particle system effects
 cargo run --example spatial_optimization_demo # Frustum culling and LOD
 cargo run --example spatial_partitioning_demo # Spatial partitioning
-cargo run --example lod_demo                  # Level of detail
 cargo run --example environment_probe_demo    # IBL reflections
 cargo run --example advanced_lighting_demo    # Advanced lighting
 
@@ -111,7 +110,6 @@ cargo run --example advanced_lighting_demo    # Advanced lighting
 cargo run --example gui_demo                  # GUI system
 cargo run --example console_demo              # Debug console
 cargo run --example material_demo             # Material system
-cargo run --example procedural_texture_demo   # Procedural textures
 cargo run --example terrain_demo              # Terrain rendering
 cargo run --example scripting_demo            # Lua scripting
 cargo run --example scripting_advanced_demo   # Advanced scripting

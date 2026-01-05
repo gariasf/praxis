@@ -273,6 +273,14 @@ impl Octree {
     pub fn query(&self, bounds: &Aabb) -> Vec<Entity> {
         let mut results = Vec::new();
         self.root.query(bounds, &mut results);
+
+        // Filter to only include entities whose actual bounds intersect the query bounds
+        results.retain(|&entity| {
+            self.entity_bounds
+                .get(&entity)
+                .is_some_and(|entity_bounds| entity_bounds.intersects(bounds))
+        });
+
         results
     }
 
@@ -321,6 +329,14 @@ impl Octree {
         let mut results = Vec::new();
         self.root
             .query_ray(origin, direction, max_distance, &mut results);
+
+        // Filter to only include entities whose actual bounds intersect the ray
+        results.retain(|&entity| {
+            self.entity_bounds
+                .get(&entity)
+                .is_some_and(|bounds| bounds.intersects_ray(origin, direction, max_distance))
+        });
+
         results
     }
 
