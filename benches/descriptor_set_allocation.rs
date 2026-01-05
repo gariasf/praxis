@@ -110,9 +110,7 @@ fn create_test_context() -> TestContext {
                     0,
                     DescriptorSetLayoutBinding {
                         stages: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
-                        ..DescriptorSetLayoutBinding::descriptor_type(
-                            DescriptorType::UniformBuffer,
-                        )
+                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::UniformBuffer)
                     },
                 ),
                 (
@@ -376,9 +374,7 @@ fn bench_allocator_configurations(c: &mut Criterion) {
                     0,
                     DescriptorSetLayoutBinding {
                         stages: ShaderStages::VERTEX,
-                        ..DescriptorSetLayoutBinding::descriptor_type(
-                            DescriptorType::UniformBuffer,
-                        )
+                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::UniformBuffer)
                     },
                 )]
                 .into_iter()

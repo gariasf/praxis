@@ -728,7 +728,7 @@ impl ViewportPanel {
 
         let gizmo_system = world.get_resource::<GizmoSystem>()?;
         let gizmo = gizmo_system.active_gizmo()?;
-        
+
         let lines = gizmo.get_lines(gizmo_system.mode(), gizmo_system.space());
         Some(praxis_graphics::visual_feedback::create_gizmo_lines(lines))
     }

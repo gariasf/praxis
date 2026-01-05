@@ -100,9 +100,7 @@ impl GraphicsContext {
                     0,
                     DescriptorSetLayoutBinding {
                         stages: ShaderStages::FRAGMENT,
-                        ..DescriptorSetLayoutBinding::descriptor_type(
-                            DescriptorType::UniformBuffer,
-                        )
+                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::UniformBuffer)
                     },
                 )]
                 .into_iter()
@@ -368,7 +366,8 @@ fn bench_dynamic_uniform_buffer_pattern(c: &mut Criterion) {
                     .as_devicesize() as usize;
 
                 let object_size = 64; // Size of a 4x4 matrix
-                let aligned_size = ((object_size + min_alignment - 1) / min_alignment) * min_alignment;
+                let aligned_size =
+                    ((object_size + min_alignment - 1) / min_alignment) * min_alignment;
 
                 // Create a large buffer for all objects
                 let total_size = aligned_size * object_count;
@@ -380,7 +379,8 @@ fn bench_dynamic_uniform_buffer_pattern(c: &mut Criterion) {
                         let mut write_lock = dynamic_buffer.write().expect("Failed to lock buffer");
                         for i in 0..object_count {
                             let offset = i * aligned_size;
-                            let matrix_data: Vec<u8> = (0..64).map(|j| ((i + j) % 256) as u8).collect();
+                            let matrix_data: Vec<u8> =
+                                (0..64).map(|j| ((i + j) % 256) as u8).collect();
                             write_lock[offset..offset + 64].copy_from_slice(&matrix_data);
                         }
                     }

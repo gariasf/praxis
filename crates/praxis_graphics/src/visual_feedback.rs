@@ -327,7 +327,8 @@ where
 ///
 /// A vector of individual `Line` objects
 pub fn batch_to_lines(batch: &LineBatch) -> Vec<crate::line_renderer::Line> {
-    batch.to_vertices()
+    batch
+        .to_vertices()
         .chunks_exact(2)
         .map(|chunk| {
             crate::line_renderer::Line::new(
@@ -468,7 +469,7 @@ mod tests {
         let start = Vec3::new(1.0, 2.0, 3.0);
         let end = Vec3::new(4.0, 5.0, 6.0);
         let color = Vec3::new(1.0, 0.5, 0.0);
-        
+
         batch.add(start, end, color);
 
         let lines = batch_to_lines(&batch);

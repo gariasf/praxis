@@ -298,8 +298,10 @@ impl GpuCullingManager {
         );
 
         let compute_pipeline = Self::create_compute_pipeline(&device)?;
-        let descriptor_set_allocator =
-            Arc::new(StandardDescriptorSetAllocator::new(device.clone(), Default::default()));
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            device.clone(),
+            Default::default(),
+        ));
 
         let object_buffer = Buffer::new_slice::<GpuObjectData>(
             allocator.clone(),
@@ -384,9 +386,9 @@ impl GpuCullingManager {
         let shader = gpu_cull_cs::load(device.clone())
             .map_err(|e| eyre::eyre!("Failed to load compute shader: {}", e))?;
 
-        let cs = shader.entry_point("main").ok_or_else(|| {
-            eyre::eyre!("Compute shader entry point 'main' not found")
-        })?;
+        let cs = shader
+            .entry_point("main")
+            .ok_or_else(|| eyre::eyre!("Compute shader entry point 'main' not found"))?;
 
         let stage = PipelineShaderStageCreateInfo::new(cs);
         let layout = PipelineLayout::new(
@@ -501,8 +503,16 @@ impl GpuCullingManager {
             frustum_planes,
             max_distance: self.config.max_distance,
             object_count: self.current_object_count as u32,
-            enable_lod: if self.config.enable_lod_selection { 1 } else { 0 },
-            enable_distance_culling: if self.config.enable_distance_culling { 1 } else { 0 },
+            enable_lod: if self.config.enable_lod_selection {
+                1
+            } else {
+                0
+            },
+            enable_distance_culling: if self.config.enable_distance_culling {
+                1
+            } else {
+                0
+            },
         };
 
         let descriptor_set = self.create_descriptor_set()?;
@@ -524,16 +534,11 @@ impl GpuCullingManager {
                 descriptor_set,
             )
             .map_err(|e| eyre::eyre!("Failed to bind descriptor sets: {}", e))?
-            .push_constants(
-                self.compute_pipeline.layout().clone(),
-                0,
-                push_constants,
-            )
+            .push_constants(self.compute_pipeline.layout().clone(), 0, push_constants)
             .map_err(|e| eyre::eyre!("Failed to push constants: {}", e))?;
 
         let workgroup_size = 256;
-        let workgroup_count =
-            (self.current_object_count + workgroup_size - 1) / workgroup_size;
+        let workgroup_count = (self.current_object_count + workgroup_size - 1) / workgroup_size;
 
         unsafe {
             builder
@@ -587,10 +592,7 @@ impl GpuCullingManager {
         let m = view_proj.to_cols_array_2d();
 
         let normalize_plane = |plane: [f32; 4]| -> [f32; 4] {
-            let length = (plane[0] * plane[0]
-                + plane[1] * plane[1]
-                + plane[2] * plane[2])
-                .sqrt();
+            let length = (plane[0] * plane[0] + plane[1] * plane[1] + plane[2] * plane[2]).sqrt();
             [
                 plane[0] / length,
                 plane[1] / length,
@@ -744,11 +746,7 @@ pub mod conversions {
     }
 
     /// Creates a GPU LOD level structure.
-    pub fn create_gpu_lod_level(
-        mesh_id: u32,
-        min_distance: f32,
-        max_distance: f32,
-    ) -> GpuLodLevel {
+    pub fn create_gpu_lod_level(mesh_id: u32, min_distance: f32, max_distance: f32) -> GpuLodLevel {
         GpuLodLevel {
             mesh_id,
             min_distance_squared: min_distance * min_distance,
@@ -758,15 +756,16 @@ pub mod conversions {
     }
 
     /// Creates a GPU LOD group structure.
-    pub fn create_gpu_lod_group(
-        levels: &[(u32, f32, f32)],
-        lod_bias: f32,
-    ) -> GpuLodGroup {
+    pub fn create_gpu_lod_group(levels: &[(u32, f32, f32)], lod_bias: f32) -> GpuLodGroup {
         let mut gpu_group = GpuLodGroup::default();
         gpu_group.level_count = levels.len().min(super::MAX_LOD_LEVELS_PER_GROUP) as u32;
         gpu_group.lod_bias = lod_bias;
 
-        for (i, &(mesh_id, min_dist, max_dist)) in levels.iter().take(super::MAX_LOD_LEVELS_PER_GROUP).enumerate() {
+        for (i, &(mesh_id, min_dist, max_dist)) in levels
+            .iter()
+            .take(super::MAX_LOD_LEVELS_PER_GROUP)
+            .enumerate()
+        {
             gpu_group.levels[i] = create_gpu_lod_level(mesh_id, min_dist, max_dist);
         }
 
@@ -789,10 +788,7 @@ mod tests {
 
     #[test]
     fn test_gpu_object_data_size() {
-        assert_eq!(
-            std::mem::size_of::<GpuObjectData>(),
-            16 + 16 + 16 + 16
-        );
+        assert_eq!(std::mem::size_of::<GpuObjectData>(), 16 + 16 + 16 + 16);
     }
 
     #[test]

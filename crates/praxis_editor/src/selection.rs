@@ -624,7 +624,9 @@ impl SelectionSystem {
             };
 
             // Test ray-AABB intersection
-            if let Some(distance) = aabb.ray_intersection_distance(ray_origin, ray_dir, closest_distance) {
+            if let Some(distance) =
+                aabb.ray_intersection_distance(ray_origin, ray_dir, closest_distance)
+            {
                 if distance < closest_distance {
                     closest_distance = distance;
                     closest_entity = Some(entity);

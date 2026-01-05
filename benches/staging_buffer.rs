@@ -70,8 +70,10 @@ fn create_test_context() -> TestContext {
 
     let queue = queues.next().unwrap();
     let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
-    let command_buffer_allocator =
-        Arc::new(StandardCommandBufferAllocator::new(device.clone(), Default::default()));
+    let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
+        device.clone(),
+        Default::default(),
+    ));
 
     TestContext {
         device,
@@ -317,9 +319,7 @@ fn bench_batch_staging_upload(c: &mut Criterion) {
                     .expect("Failed to create command buffer");
 
                     // Batch all copies into a single command buffer
-                    for (staging, device_buf) in
-                        staging_buffers.iter().zip(device_buffers.iter())
-                    {
+                    for (staging, device_buf) in staging_buffers.iter().zip(device_buffers.iter()) {
                         builder
                             .copy_buffer(CopyBufferInfo::buffers(
                                 staging.clone(),
