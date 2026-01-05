@@ -1119,6 +1119,887 @@ mod tests {
         let time = player.current_time("Fast").unwrap();
         assert!((time - 1.0).abs() < 0.001);
     }
+
+    #[test]
+    fn test_animation_player_weight() {
+        let mut player = AnimationPlayer::new();
+        let clip = AnimationClip::new("Weighted".to_string(), 1.0);
+        player.add_clip("Weighted".to_string(), clip);
+
+        player.play("Weighted");
+        player.set_weight("Weighted", 0.5);
+
+        let weights: Vec<f32> = player
+            .playing_clips
+            .values()
+            .map(|p| p.weight)
+            .collect();
+
+        assert_eq!(weights.len(), 1);
+        assert!((weights[0] - 0.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_animation_player_weight_clamping() {
+        let mut player = AnimationPlayer::new();
+        let clip = AnimationClip::new("Test".to_string(), 1.0);
+        player.add_clip("Test".to_string(), clip);
+
+        player.play("Test");
+        player.set_weight("Test", -0.5);
+        assert_eq!(player.playing_clips.get("Test").unwrap().weight, 0.0);
+
+        player.set_weight("Test", 1.5);
+        assert_eq!(player.playing_clips.get("Test").unwrap().weight, 1.0);
+    }
+
+    #[test]
+    fn test_animation_player_set_time() {
+        let mut player = AnimationPlayer::new();
+        let clip = AnimationClip::new("Test".to_string(), 2.0);
+        player.add_clip("Test".to_string(), clip);
+
+        player.play("Test");
+        player.set_time("Test", 1.5);
+
+        assert_eq!(player.current_time("Test"), Some(1.5));
+    }
+
+    #[test]
+    fn test_animation_player_non_looping_stops() {
+        let mut player = AnimationPlayer::new();
+        let clip = AnimationClip::new("Once".to_string(), 1.0);
+        player.add_clip("Once".to_string(), clip);
+
+        player.play("Once");
+        player.set_looping("Once", false);
+
+        player.update(1.5);
+
+        assert!(!player.is_playing("Once"));
+        assert_eq!(player.playing_clips().len(), 0);
+    }
+
+    #[test]
+    fn test_animation_player_multiple_clips() {
+        let mut player = AnimationPlayer::new();
+        let clip1 = AnimationClip::new("Walk".to_string(), 1.0);
+        let clip2 = AnimationClip::new("Run".to_string(), 0.8);
+        player.add_clip("Walk".to_string(), clip1);
+        player.add_clip("Run".to_string(), clip2);
+
+        player.play("Walk");
+        player.play("Run");
+
+        assert!(player.is_playing("Walk"));
+        assert!(player.is_playing("Run"));
+        assert_eq!(player.playing_clips().len(), 2);
+    }
+
+    #[test]
+    fn test_animation_player_evaluate_with_skeleton() {
+        let bones = vec![
+            Bone::with_bind_pose(
+                "Root".to_string(),
+                None,
+                Vec3::ZERO,
+                Quat::IDENTITY,
+                Vec3::ONE,
+            ),
+            Bone::with_bind_pose(
+                "Child".to_string(),
+                Some(0),
+                Vec3::new(0.0, 1.0, 0.0),
+                Quat::IDENTITY,
+                Vec3::ONE,
+            ),
+        ];
+        let skeleton = Skeleton::new(bones);
+
+        let mut clip = AnimationClip::new("Test".to_string(), 1.0);
+        clip.add_translation_keyframe(0, 0.0, Vec3::ZERO);
+        clip.add_translation_keyframe(0, 1.0, Vec3::new(1.0, 0.0, 0.0));
+
+        let mut player = AnimationPlayer::new();
+        player.add_clip("Test".to_string(), clip);
+        player.play("Test");
+
+        player.update(0.5);
+        let pose = player.evaluate(&skeleton);
+
+        assert_eq!(pose.local_transforms().len(), 2);
+        assert!(pose.world_transform(0).is_some());
+        assert!(pose.world_transform(1).is_some());
+    }
+
+    #[test]
+    fn test_skeleton_hierarchy_propagation() {
+        let bones = vec![
+            Bone::with_bind_pose(
+                "Root".to_string(),
+                None,
+                Vec3::ZERO,
+                Quat::IDENTITY,
+                Vec3::ONE,
+            ),
+            Bone::with_bind_pose(
+                "Child1".to_string(),
+                Some(0),
+                Vec3::new(1.0, 0.0, 0.0),
+                Quat::IDENTITY,
+                Vec3::ONE,
+            ),
+            Bone::with_bind_pose(
+                "Child2".to_string(),
+                Some(1),
+                Vec3::new(1.0, 0.0, 0.0),
+                Quat::IDENTITY,
+                Vec3::ONE,
+            ),
+        ];
+        let skeleton = Skeleton::new(bones);
+        let mut pose = AnimatedPose::new(skeleton.bone_count());
+
+        for i in 0..skeleton.bone_count() {
+            if let Some(bone) = skeleton.bone(i) {
+                pose.set_local_transform(i, bone.bind_pose_matrix());
+            }
+        }
+
+        pose.update_world_transforms(&skeleton);
+
+        let root_world = pose.world_transform(0).unwrap();
+        let child1_world = pose.world_transform(1).unwrap();
+        let child2_world = pose.world_transform(2).unwrap();
+
+        let root_pos = root_world.col(3).truncate();
+        let child1_pos = child1_world.col(3).truncate();
+        let child2_pos = child2_world.col(3).truncate();
+
+        assert_eq!(root_pos, Vec3::ZERO);
+        assert_eq!(child1_pos, Vec3::new(1.0, 0.0, 0.0));
+        assert_eq!(child2_pos, Vec3::new(2.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_skeleton_hierarchy_with_rotation() {
+        let bones = vec![
+            Bone::with_bind_pose(
+                "Root".to_string(),
+                None,
+                Vec3::ZERO,
+                Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
+                Vec3::ONE,
+            ),
+            Bone::with_bind_pose(
+                "Child".to_string(),
+                Some(0),
+                Vec3::new(1.0, 0.0, 0.0),
+                Quat::IDENTITY,
+                Vec3::ONE,
+            ),
+        ];
+        let skeleton = Skeleton::new(bones);
+        let mut pose = AnimatedPose::new(skeleton.bone_count());
+
+        for i in 0..skeleton.bone_count() {
+            if let Some(bone) = skeleton.bone(i) {
+                pose.set_local_transform(i, bone.bind_pose_matrix());
+            }
+        }
+
+        pose.update_world_transforms(&skeleton);
+
+        let child_world = pose.world_transform(1).unwrap();
+        let child_pos = child_world.col(3).truncate();
+
+        assert!((child_pos.x - 0.0).abs() < 0.001);
+        assert!((child_pos.z + 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_skeleton_hierarchy_with_scale() {
+        let bones = vec![
+            Bone::with_bind_pose(
+                "Root".to_string(),
+                None,
+                Vec3::ZERO,
+                Quat::IDENTITY,
+                Vec3::splat(2.0),
+            ),
+            Bone::with_bind_pose(
+                "Child".to_string(),
+                Some(0),
+                Vec3::new(1.0, 0.0, 0.0),
+                Quat::IDENTITY,
+                Vec3::ONE,
+            ),
+        ];
+        let skeleton = Skeleton::new(bones);
+        let mut pose = AnimatedPose::new(skeleton.bone_count());
+
+        for i in 0..skeleton.bone_count() {
+            if let Some(bone) = skeleton.bone(i) {
+                pose.set_local_transform(i, bone.bind_pose_matrix());
+            }
+        }
+
+        pose.update_world_transforms(&skeleton);
+
+        let child_world = pose.world_transform(1).unwrap();
+        let child_pos = child_world.col(3).truncate();
+
+        assert!((child_pos.x - 2.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_cross_fade_transition_creation() {
+        let transition = CrossFadeTransition::new(
+            "Idle".to_string(),
+            "Walk".to_string(),
+            0.5,
+        );
+
+        assert_eq!(transition.from_clip, "Idle");
+        assert_eq!(transition.to_clip, "Walk");
+        assert_eq!(transition.duration, 0.5);
+        assert_eq!(transition.elapsed, 0.0);
+        assert!(!transition.is_complete());
+    }
+
+    #[test]
+    fn test_cross_fade_blend_weight() {
+        let mut transition = CrossFadeTransition::new(
+            "A".to_string(),
+            "B".to_string(),
+            1.0,
+        );
+
+        assert_eq!(transition.blend_weight(), 0.0);
+
+        transition.elapsed = 0.5;
+        assert_eq!(transition.blend_weight(), 0.5);
+
+        transition.elapsed = 1.0;
+        assert_eq!(transition.blend_weight(), 1.0);
+        assert!(transition.is_complete());
+
+        transition.elapsed = 1.5;
+        assert_eq!(transition.blend_weight(), 1.0);
+    }
+
+    #[test]
+    fn test_cross_fade_zero_duration() {
+        let transition = CrossFadeTransition::new(
+            "A".to_string(),
+            "B".to_string(),
+            0.0,
+        );
+
+        assert_eq!(transition.blend_weight(), 1.0);
+    }
+
+    #[test]
+    fn test_cross_fade_update() {
+        let mut transition = CrossFadeTransition::new(
+            "A".to_string(),
+            "B".to_string(),
+            1.0,
+        );
+
+        transition.update(0.3);
+        assert_eq!(transition.elapsed, 0.3);
+        assert!(!transition.is_complete());
+
+        transition.update(0.5);
+        assert_eq!(transition.elapsed, 0.8);
+        assert!(!transition.is_complete());
+
+        transition.update(0.5);
+        assert_eq!(transition.elapsed, 1.3);
+        assert!(transition.is_complete());
+    }
+
+    #[test]
+    fn test_blend_node_1d_creation() {
+        let node = BlendNode1D::new();
+        assert_eq!(node.clips.len(), 0);
+        assert_eq!(node.parameter, 0.0);
+    }
+
+    #[test]
+    fn test_blend_node_1d_add_clips() {
+        let mut node = BlendNode1D::new();
+        node.add_clip("Idle", 0.0);
+        node.add_clip("Walk", 1.0);
+        node.add_clip("Run", 2.0);
+
+        assert_eq!(node.clips.len(), 3);
+    }
+
+    #[test]
+    fn test_blend_node_1d_single_clip() {
+        let mut node = BlendNode1D::new();
+        node.add_clip("Idle", 0.0);
+
+        let weights = node.compute_weights();
+        assert_eq!(weights.len(), 1);
+        assert_eq!(weights[0].0, "Idle");
+        assert_eq!(weights[0].1, 1.0);
+    }
+
+    #[test]
+    fn test_blend_node_1d_interpolation() {
+        let mut node = BlendNode1D::new();
+        node.add_clip("Idle", 0.0);
+        node.add_clip("Walk", 1.0);
+        node.add_clip("Run", 2.0);
+
+        node.set_parameter(0.5);
+        let weights = node.compute_weights();
+
+        assert_eq!(weights.len(), 2);
+        assert_eq!(weights[0].0, "Idle");
+        assert_eq!(weights[1].0, "Walk");
+        assert!((weights[0].1 - 0.5).abs() < 0.001);
+        assert!((weights[1].1 - 0.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_blend_node_1d_exact_match() {
+        let mut node = BlendNode1D::new();
+        node.add_clip("Idle", 0.0);
+        node.add_clip("Walk", 1.0);
+        node.add_clip("Run", 2.0);
+
+        node.set_parameter(1.0);
+        let weights = node.compute_weights();
+
+        assert_eq!(weights.len(), 1);
+        assert_eq!(weights[0].0, "Walk");
+        assert_eq!(weights[0].1, 1.0);
+    }
+
+    #[test]
+    fn test_blend_node_1d_below_range() {
+        let mut node = BlendNode1D::new();
+        node.add_clip("Idle", 0.0);
+        node.add_clip("Walk", 1.0);
+
+        node.set_parameter(-0.5);
+        let weights = node.compute_weights();
+
+        assert_eq!(weights.len(), 1);
+        assert_eq!(weights[0].0, "Idle");
+        assert_eq!(weights[0].1, 1.0);
+    }
+
+    #[test]
+    fn test_blend_node_1d_above_range() {
+        let mut node = BlendNode1D::new();
+        node.add_clip("Walk", 1.0);
+        node.add_clip("Run", 2.0);
+
+        node.set_parameter(3.0);
+        let weights = node.compute_weights();
+
+        assert_eq!(weights.len(), 1);
+        assert_eq!(weights[0].0, "Run");
+        assert_eq!(weights[0].1, 1.0);
+    }
+
+    #[test]
+    fn test_blend_node_1d_three_clips_middle() {
+        let mut node = BlendNode1D::new();
+        node.add_clip("Idle", 0.0);
+        node.add_clip("Walk", 1.0);
+        node.add_clip("Run", 2.0);
+
+        node.set_parameter(1.5);
+        let weights = node.compute_weights();
+
+        assert_eq!(weights.len(), 2);
+        assert_eq!(weights[0].0, "Walk");
+        assert_eq!(weights[1].0, "Run");
+        assert!((weights[0].1 - 0.5).abs() < 0.001);
+        assert!((weights[1].1 - 0.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_blend_node_2d_creation() {
+        let node = BlendNode2D::new();
+        assert_eq!(node.clips.len(), 0);
+        assert_eq!(node.parameter_x, 0.0);
+        assert_eq!(node.parameter_y, 0.0);
+    }
+
+    #[test]
+    fn test_blend_node_2d_add_clips() {
+        let mut node = BlendNode2D::new();
+        node.add_clip("Forward", 0.0, 1.0);
+        node.add_clip("Backward", 0.0, -1.0);
+        node.add_clip("Left", -1.0, 0.0);
+        node.add_clip("Right", 1.0, 0.0);
+
+        assert_eq!(node.clips.len(), 4);
+    }
+
+    #[test]
+    fn test_blend_node_2d_single_clip() {
+        let mut node = BlendNode2D::new();
+        node.add_clip("Idle", 0.0, 0.0);
+
+        let weights = node.compute_weights();
+        assert_eq!(weights.len(), 1);
+        assert_eq!(weights[0].0, "Idle");
+        assert_eq!(weights[0].1, 1.0);
+    }
+
+    #[test]
+    fn test_blend_node_2d_exact_match() {
+        let mut node = BlendNode2D::new();
+        node.add_clip("Forward", 0.0, 1.0);
+        node.add_clip("Backward", 0.0, -1.0);
+
+        node.set_parameters(0.0, 1.0);
+        let weights = node.compute_weights();
+
+        assert_eq!(weights.len(), 1);
+        assert_eq!(weights[0].0, "Forward");
+        assert!((weights[0].1 - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_blend_node_2d_distance_weighting() {
+        let mut node = BlendNode2D::new();
+        node.add_clip("NE", 1.0, 1.0);
+        node.add_clip("NW", -1.0, 1.0);
+        node.add_clip("SE", 1.0, -1.0);
+        node.add_clip("SW", -1.0, -1.0);
+
+        node.set_parameters(0.5, 0.5);
+        let weights = node.compute_weights();
+
+        let total_weight: f32 = weights.iter().map(|(_, w)| w).sum();
+        assert!((total_weight - 1.0).abs() < 0.001);
+
+        let ne_weight = weights.iter().find(|(n, _)| n == "NE").map(|(_, w)| w);
+        assert!(ne_weight.is_some());
+    }
+
+    #[test]
+    fn test_blend_node_2d_filters_low_weights() {
+        let mut node = BlendNode2D::new();
+        node.add_clip("Close", 0.0, 0.0);
+        node.add_clip("Far", 10.0, 10.0);
+
+        node.set_parameters(0.1, 0.1);
+        let weights = node.compute_weights();
+
+        let has_far = weights.iter().any(|(n, _)| n == "Far");
+        assert!(!has_far);
+    }
+
+    #[test]
+    fn test_additive_blend_node() {
+        let mut node = AdditiveBlendNode::new();
+        node.set_base("Walk");
+        node.set_additive("HeadNod");
+        node.set_weight(0.7);
+
+        let (base, additive, weight) = node.get_clips();
+        assert_eq!(base, Some("Walk".to_string()));
+        assert_eq!(additive, Some("HeadNod".to_string()));
+        assert!((weight - 0.7).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_additive_blend_node_weight_clamping() {
+        let mut node = AdditiveBlendNode::new();
+        node.set_weight(-0.5);
+        let (_, _, weight) = node.get_clips();
+        assert_eq!(weight, 0.0);
+
+        node.set_weight(1.5);
+        let (_, _, weight) = node.get_clips();
+        assert_eq!(weight, 1.0);
+    }
+
+    #[test]
+    fn test_bone_mask_creation() {
+        let mask = BoneMask::with_bone_count(5);
+        assert_eq!(mask.enabled_bones.len(), 5);
+        assert!(!mask.is_bone_enabled(0));
+    }
+
+    #[test]
+    fn test_bone_mask_all_enabled() {
+        let mask = BoneMask::all_enabled(3);
+        assert!(mask.is_bone_enabled(0));
+        assert!(mask.is_bone_enabled(1));
+        assert!(mask.is_bone_enabled(2));
+    }
+
+    #[test]
+    fn test_bone_mask_enable_disable() {
+        let mut mask = BoneMask::with_bone_count(3);
+        
+        assert!(!mask.is_bone_enabled(0));
+        mask.enable_bone(0);
+        assert!(mask.is_bone_enabled(0));
+        
+        mask.disable_bone(0);
+        assert!(!mask.is_bone_enabled(0));
+    }
+
+    #[test]
+    fn test_bone_mask_bone_weight() {
+        let mut mask = BoneMask::with_bone_count(3);
+        
+        assert_eq!(mask.bone_weight(0), 0.0);
+        
+        mask.enable_bone(0);
+        assert_eq!(mask.bone_weight(0), 1.0);
+    }
+
+    #[test]
+    fn test_bone_mask_auto_resize() {
+        let mut mask = BoneMask::new();
+        
+        mask.enable_bone(5);
+        assert!(mask.is_bone_enabled(5));
+        assert_eq!(mask.enabled_bones.len(), 6);
+    }
+
+    #[test]
+    fn test_bone_mask_with_skeleton() {
+        let bones = vec![
+            Bone::new("Root".to_string(), None),
+            Bone::new("Child1".to_string(), Some(0)),
+            Bone::new("Child2".to_string(), Some(0)),
+            Bone::new("GrandChild".to_string(), Some(1)),
+        ];
+        let skeleton = Skeleton::new(bones);
+        
+        let mut mask = BoneMask::with_bone_count(skeleton.bone_count());
+        mask.enable_bone_and_children_with_skeleton(1, &skeleton);
+        
+        assert!(!mask.is_bone_enabled(0));
+        assert!(mask.is_bone_enabled(1));
+        assert!(!mask.is_bone_enabled(2));
+        assert!(mask.is_bone_enabled(3));
+    }
+
+    #[test]
+    fn test_animation_layer_creation() {
+        let layer = AnimationLayer::new(0.5);
+        assert_eq!(layer.weight(), 0.5);
+        assert_eq!(layer.blend_mode(), LayerBlendMode::Override);
+        assert!(layer.current_clip().is_none());
+    }
+
+    #[test]
+    fn test_animation_layer_play_stop() {
+        let mut layer = AnimationLayer::new(1.0);
+        
+        assert!(layer.current_clip().is_none());
+        
+        layer.play("Wave");
+        assert_eq!(layer.current_clip(), Some("Wave"));
+        assert_eq!(layer.time(), 0.0);
+        
+        layer.stop();
+        assert!(layer.current_clip().is_none());
+    }
+
+    #[test]
+    fn test_animation_layer_update() {
+        let mut layer = AnimationLayer::new(1.0);
+        layer.play("Test");
+        
+        layer.update(0.5, 2.0);
+        assert_eq!(layer.time(), 0.5);
+        
+        layer.update(0.5, 2.0);
+        assert_eq!(layer.time(), 1.0);
+    }
+
+    #[test]
+    fn test_animation_layer_looping() {
+        let mut layer = AnimationLayer::new(1.0);
+        layer.play("Loop");
+        layer.set_looping(true);
+        
+        layer.update(2.5, 1.0);
+        assert!((layer.time() - 0.5).abs() < 0.001);
+        assert!(layer.current_clip().is_some());
+    }
+
+    #[test]
+    fn test_animation_layer_non_looping() {
+        let mut layer = AnimationLayer::new(1.0);
+        layer.play("Once");
+        layer.set_looping(false);
+        
+        layer.update(2.0, 1.0);
+        assert_eq!(layer.time(), 1.0);
+        assert!(layer.current_clip().is_none());
+    }
+
+    #[test]
+    fn test_animation_layer_speed() {
+        let mut layer = AnimationLayer::new(1.0);
+        layer.play("Fast");
+        layer.set_speed(2.0);
+        
+        layer.update(0.5, 2.0);
+        assert_eq!(layer.time(), 1.0);
+    }
+
+    #[test]
+    fn test_animation_layer_with_mask() {
+        let mut layer = AnimationLayer::new(1.0);
+        let mut mask = BoneMask::with_bone_count(5);
+        mask.enable_bone(0);
+        mask.enable_bone(2);
+        
+        layer.set_mask(mask);
+        
+        let layer_mask = layer.mask().unwrap();
+        assert!(layer_mask.is_bone_enabled(0));
+        assert!(!layer_mask.is_bone_enabled(1));
+        assert!(layer_mask.is_bone_enabled(2));
+    }
+
+    #[test]
+    fn test_animation_blender_creation() {
+        let blender = AnimationBlender::new();
+        assert_eq!(blender.clips.len(), 0);
+        assert!(blender.current_clip().is_none());
+        assert!(!blender.is_cross_fading());
+    }
+
+    #[test]
+    fn test_animation_blender_add_clip() {
+        let mut blender = AnimationBlender::new();
+        let clip = AnimationClip::new("Test".to_string(), 1.0);
+        
+        blender.add_clip("Test", clip);
+        assert!(blender.clip("Test").is_some());
+    }
+
+    #[test]
+    fn test_animation_blender_play() {
+        let mut blender = AnimationBlender::new();
+        let clip = AnimationClip::new("Walk".to_string(), 1.0);
+        blender.add_clip("Walk", clip);
+        
+        blender.play("Walk");
+        assert_eq!(blender.current_clip(), Some("Walk"));
+        assert_eq!(blender.current_time(), 0.0);
+    }
+
+    #[test]
+    fn test_animation_blender_cross_fade() {
+        let mut blender = AnimationBlender::new();
+        let clip1 = AnimationClip::new("Idle".to_string(), 1.0);
+        let clip2 = AnimationClip::new("Walk".to_string(), 1.0);
+        blender.add_clip("Idle", clip1);
+        blender.add_clip("Walk", clip2);
+        
+        blender.play("Idle");
+        blender.cross_fade("Idle", "Walk", 0.5);
+        
+        assert!(blender.is_cross_fading());
+        assert_eq!(blender.current_clip(), Some("Idle"));
+    }
+
+    #[test]
+    fn test_animation_blender_cross_fade_completion() {
+        let mut blender = AnimationBlender::new();
+        let clip1 = AnimationClip::new("Idle".to_string(), 2.0);
+        let clip2 = AnimationClip::new("Walk".to_string(), 2.0);
+        blender.add_clip("Idle", clip1);
+        blender.add_clip("Walk", clip2);
+        
+        blender.play("Idle");
+        blender.update(0.5);
+        blender.cross_fade("Idle", "Walk", 0.5);
+        
+        assert!(blender.is_cross_fading());
+        
+        blender.update(0.6);
+        
+        assert!(!blender.is_cross_fading());
+        assert_eq!(blender.current_clip(), Some("Walk"));
+    }
+
+    #[test]
+    fn test_animation_blender_layers() {
+        let mut blender = AnimationBlender::new();
+        let layer1 = AnimationLayer::new(1.0);
+        let layer2 = AnimationLayer::new(0.5);
+        
+        blender.add_layer(layer1);
+        blender.add_layer(layer2);
+        
+        assert_eq!(blender.layer_count(), 2);
+        assert_eq!(blender.layer(0).unwrap().weight(), 1.0);
+        assert_eq!(blender.layer(1).unwrap().weight(), 0.5);
+    }
+
+    #[test]
+    fn test_animation_blender_play_on_layer() {
+        let mut blender = AnimationBlender::new();
+        let clip = AnimationClip::new("Wave".to_string(), 1.0);
+        blender.add_clip("Wave", clip);
+        
+        let layer = AnimationLayer::new(1.0);
+        blender.add_layer(layer);
+        
+        blender.play_on_layer(0, "Wave");
+        
+        assert_eq!(blender.layer(0).unwrap().current_clip(), Some("Wave"));
+    }
+
+    #[test]
+    fn test_animation_blender_update_base_layer() {
+        let mut blender = AnimationBlender::new();
+        let clip = AnimationClip::new("Test".to_string(), 2.0);
+        blender.add_clip("Test", clip);
+        
+        blender.play("Test");
+        blender.update(0.5);
+        
+        assert_eq!(blender.current_time(), 0.5);
+    }
+
+    #[test]
+    fn test_animation_blender_looping() {
+        let mut blender = AnimationBlender::new();
+        let clip = AnimationClip::new("Loop".to_string(), 1.0);
+        blender.add_clip("Loop", clip);
+        
+        blender.play("Loop");
+        blender.set_looping(true);
+        blender.update(1.5);
+        
+        assert!((blender.current_time() - 0.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_animation_blender_non_looping() {
+        let mut blender = AnimationBlender::new();
+        let clip = AnimationClip::new("Once".to_string(), 1.0);
+        blender.add_clip("Once", clip);
+        
+        blender.play("Once");
+        blender.set_looping(false);
+        blender.update(2.0);
+        
+        assert_eq!(blender.current_time(), 1.0);
+        assert!(blender.current_clip().is_none());
+    }
+
+    #[test]
+    fn test_animation_blender_speed() {
+        let mut blender = AnimationBlender::new();
+        let clip = AnimationClip::new("Fast".to_string(), 2.0);
+        blender.add_clip("Fast", clip);
+        
+        blender.play("Fast");
+        blender.set_speed(2.0);
+        blender.update(0.5);
+        
+        assert_eq!(blender.current_time(), 1.0);
+    }
+
+    #[test]
+    fn test_animation_blender_blend_tree_1d() {
+        let mut blender = AnimationBlender::new();
+        let clip1 = AnimationClip::new("Idle".to_string(), 1.0);
+        let clip2 = AnimationClip::new("Walk".to_string(), 1.0);
+        blender.add_clip("Idle", clip1);
+        blender.add_clip("Walk", clip2);
+        
+        let mut blend_1d = BlendNode1D::new();
+        blend_1d.add_clip("Idle", 0.0);
+        blend_1d.add_clip("Walk", 1.0);
+        blend_1d.set_parameter(0.5);
+        
+        blender.add_blend_tree("Movement", BlendNode::Blend1D(blend_1d));
+        blender.activate_blend_tree("Movement");
+        
+        assert_eq!(blender.active_blend_tree(), Some("Movement"));
+    }
+
+    #[test]
+    fn test_animation_blender_set_blend_parameter() {
+        let mut blender = AnimationBlender::new();
+        let mut blend_1d = BlendNode1D::new();
+        blend_1d.add_clip("Idle", 0.0);
+        blend_1d.add_clip("Walk", 1.0);
+        
+        blender.add_blend_tree("Movement", BlendNode::Blend1D(blend_1d));
+        blender.set_blend_parameter("Movement", 0.75);
+        
+        if let Some(BlendNode::Blend1D(node)) = blender.blend_trees.get("Movement") {
+            assert_eq!(node.parameter(), 0.75);
+        } else {
+            panic!("Expected Blend1D node");
+        }
+    }
+
+    #[test]
+    fn test_animation_blender_set_blend_parameters_2d() {
+        let mut blender = AnimationBlender::new();
+        let mut blend_2d = BlendNode2D::new();
+        blend_2d.add_clip("Forward", 0.0, 1.0);
+        
+        blender.add_blend_tree("Movement", BlendNode::Blend2D(blend_2d));
+        blender.set_blend_parameters_2d("Movement", 0.5, 0.8);
+        
+        if let Some(BlendNode::Blend2D(node)) = blender.blend_trees.get("Movement") {
+            assert_eq!(node.parameters(), (0.5, 0.8));
+        } else {
+            panic!("Expected Blend2D node");
+        }
+    }
+
+    #[test]
+    fn test_animated_pose_skinning_matrices() {
+        let bones = vec![
+            Bone::with_bind_pose(
+                "Root".to_string(),
+                None,
+                Vec3::ZERO,
+                Quat::IDENTITY,
+                Vec3::ONE,
+            ),
+            Bone::with_bind_pose(
+                "Child".to_string(),
+                Some(0),
+                Vec3::new(1.0, 0.0, 0.0),
+                Quat::IDENTITY,
+                Vec3::ONE,
+            ),
+        ];
+        let skeleton = Skeleton::new(bones);
+        let mut pose = AnimatedPose::new(skeleton.bone_count());
+
+        for i in 0..skeleton.bone_count() {
+            if let Some(bone) = skeleton.bone(i) {
+                pose.set_local_transform(i, bone.bind_pose_matrix());
+            }
+        }
+
+        pose.update_world_transforms(&skeleton);
+        pose.update_skinning_matrices(&skeleton);
+
+        assert_eq!(pose.skinning_matrices().len(), 2);
+        assert!(pose.skinning_matrices()[0] != Mat4::ZERO);
+        assert!(pose.skinning_matrices()[1] != Mat4::ZERO);
+    }
 }
 
 // ============================================================================
