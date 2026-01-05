@@ -86,14 +86,14 @@ pub struct LodSelection {
 /// LOD management system.
 ///
 /// Manages LOD groups and provides distance-based mesh selection.
-pub struct LodManager {
+pub struct SpatialLodManager {
     /// Registered LOD groups.
     groups: HashMap<String, LodGroup>,
     /// Map from entity to its LOD group name.
     entity_lod_groups: HashMap<Entity, String>,
 }
 
-impl LodManager {
+impl SpatialLodManager {
     /// Creates a new LOD manager.
     pub fn new() -> Self {
         Self {
@@ -184,7 +184,7 @@ impl LodManager {
     }
 }
 
-impl Default for LodManager {
+impl Default for SpatialLodManager {
     fn default() -> Self {
         Self::new()
     }
@@ -229,7 +229,7 @@ mod tests {
 
     #[test]
     fn test_lod_manager_registration() {
-        let mut manager = LodManager::new();
+        let mut manager = SpatialLodManager::new();
         let levels = vec![
             LodLevel::new(0.0, "rock_high"),
             LodLevel::new(30.0, "rock_low"),
@@ -241,7 +241,7 @@ mod tests {
 
     #[test]
     fn test_lod_manager_entity_assignment() {
-        let mut manager = LodManager::new();
+        let mut manager = SpatialLodManager::new();
         let entity = Entity::from_raw(1);
 
         manager.register_lod_levels(
@@ -259,7 +259,7 @@ mod tests {
     #[test]
     #[ignore] // Temporarily ignored - needs investigation
     fn test_lod_manager_selection() {
-        let mut manager = LodManager::new();
+        let mut manager = SpatialLodManager::new();
         let entity = Entity::from_raw(1);
 
         manager.register_lod_levels(
@@ -283,7 +283,7 @@ mod tests {
     #[test]
     #[ignore] // Temporarily ignored - needs investigation
     fn test_lod_manager_batch_selection() {
-        let mut manager = LodManager::new();
+        let mut manager = SpatialLodManager::new();
 
         manager.register_lod_levels(
             "tree",

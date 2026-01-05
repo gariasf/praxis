@@ -9,7 +9,7 @@
 use praxis_ecs::{BoundingBox, World};
 use praxis_math::{Mat4, Vec3};
 use praxis_spatial::{
-    Aabb, Bvh, CullReason, FrustumCuller, LodGroup, LodLevel, LodManager, Octree, VisibilitySystem,
+    Aabb, Bvh, CullReason, FrustumCuller, LodGroup, LodLevel, SpatialLodManager, Octree, VisibilitySystem,
 };
 
 #[test]
@@ -511,7 +511,7 @@ fn test_lod_group_boundary_cases() {
 
 #[test]
 fn test_lod_manager_registration() {
-    let mut manager = LodManager::new();
+    let mut manager = SpatialLodManager::new();
 
     let levels = vec![
         LodLevel::new(30.0, "rock_high"),
@@ -528,7 +528,7 @@ fn test_lod_manager_registration() {
 
 #[test]
 fn test_lod_manager_entity_assignment() {
-    let mut manager = LodManager::new();
+    let mut manager = SpatialLodManager::new();
 
     let entity1 = bevy_ecs::entity::Entity::from_raw(1);
     let entity2 = bevy_ecs::entity::Entity::from_raw(2);
@@ -553,7 +553,7 @@ fn test_lod_manager_entity_assignment() {
 
 #[test]
 fn test_lod_manager_selection() {
-    let mut manager = LodManager::new();
+    let mut manager = SpatialLodManager::new();
 
     let entity = bevy_ecs::entity::Entity::from_raw(1);
 
@@ -598,7 +598,7 @@ fn test_lod_manager_selection() {
 
 #[test]
 fn test_lod_manager_batch_selection() {
-    let mut manager = LodManager::new();
+    let mut manager = SpatialLodManager::new();
 
     manager.register_lod_levels(
         "tree",
@@ -632,7 +632,7 @@ fn test_lod_manager_batch_selection() {
 
 #[test]
 fn test_lod_distance_calculation_accuracy() {
-    let mut manager = LodManager::new();
+    let mut manager = SpatialLodManager::new();
 
     manager.register_lod_levels(
         "test",
@@ -966,7 +966,7 @@ fn test_spatial_structures_with_moving_objects() {
 
 #[test]
 fn test_lod_selection_with_camera_movement() {
-    let mut manager = LodManager::new();
+    let mut manager = SpatialLodManager::new();
 
     manager.register_lod_levels(
         "building",

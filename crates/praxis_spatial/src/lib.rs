@@ -24,7 +24,7 @@
 //!
 //! ```rust,no_run
 //! use praxis_spatial::{
-//!     FrustumCuller, Octree, LodManager, OcclusionCuller,
+//!     FrustumCuller, Octree, SpatialLodManager, OcclusionCuller,
 //!     Aabb, BoundingVolume, LodLevel
 //! };
 //! use praxis_ecs::World;
@@ -35,7 +35,7 @@
 //!
 //! // Create spatial optimization systems
 //! let mut octree = Octree::new(Vec3::ZERO, 1000.0, 4);
-//! let mut lod_manager = LodManager::new();
+//! let mut lod_manager = SpatialLodManager::new();
 //! // let mut occlusion_culler = OcclusionCuller::new(&device, &allocator)?;
 //!
 //! // Add objects to octree
@@ -70,7 +70,7 @@ pub use aabb::{Aabb, BoundingVolume};
 pub use bvh::{Bvh, BvhNode};
 pub use culling::{CullReason, CullingResult, CullingStats, VisibilitySystem};
 pub use frustum::{Frustum, FrustumCuller, Plane};
-pub use lod::{LodGroup, LodLevel, LodManager, LodSelection};
+pub use lod::{LodGroup, LodLevel, SpatialLodManager, LodSelection};
 pub use occlusion::{
     OcclusionCuller, OcclusionCullerStats, OcclusionQuery, OcclusionQueryPool, OcclusionQueryResult,
 };

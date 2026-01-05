@@ -6,7 +6,7 @@
 use crate::{
     aabb::Aabb,
     frustum::FrustumCuller,
-    lod::{LodManager, LodSelection},
+    lod::{SpatialLodManager, LodSelection},
 };
 use bevy_ecs::entity::Entity;
 use praxis_math::{Mat4, Vec3};
@@ -73,7 +73,7 @@ pub struct VisibilitySystem {
     /// Frustum culler.
     frustum_culler: FrustumCuller,
     /// LOD manager.
-    lod_manager: LodManager,
+    lod_manager: SpatialLodManager,
     /// Maximum rendering distance.
     max_distance: f32,
 }
@@ -83,7 +83,7 @@ impl VisibilitySystem {
     pub fn new() -> Self {
         Self {
             frustum_culler: FrustumCuller::new(),
-            lod_manager: LodManager::new(),
+            lod_manager: SpatialLodManager::new(),
             max_distance: 1000.0,
         }
     }
@@ -92,7 +92,7 @@ impl VisibilitySystem {
     pub fn with_max_distance(max_distance: f32) -> Self {
         Self {
             frustum_culler: FrustumCuller::new(),
-            lod_manager: LodManager::new(),
+            lod_manager: SpatialLodManager::new(),
             max_distance,
         }
     }
@@ -103,12 +103,12 @@ impl VisibilitySystem {
     }
 
     /// Returns a reference to the LOD manager.
-    pub fn lod_manager(&self) -> &LodManager {
+    pub fn lod_manager(&self) -> &SpatialLodManager {
         &self.lod_manager
     }
 
     /// Returns a mutable reference to the LOD manager.
-    pub fn lod_manager_mut(&mut self) -> &mut LodManager {
+    pub fn lod_manager_mut(&mut self) -> &mut SpatialLodManager {
         &mut self.lod_manager
     }
 

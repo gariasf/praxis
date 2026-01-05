@@ -18,7 +18,7 @@
 use praxis_ecs::{BoundingBox, LodComponent, MeshHandle, Transform, World};
 use praxis_math::{Mat4, Quat, Vec3};
 use praxis_spatial::{
-    Aabb, Bvh, CullingStats, FrustumCuller, LodGroup, LodLevel, LodManager, Octree,
+    Aabb, Bvh, CullingStats, FrustumCuller, LodGroup, LodLevel, SpatialLodManager, Octree,
     VisibilitySystem,
 };
 use praxis_utils::info;
@@ -30,7 +30,7 @@ fn main() -> praxis_utils::Result<()> {
     let mut world = World::new();
     let mut octree = Octree::new(Vec3::ZERO, 1000.0, 8);
     let mut bvh = Bvh::new();
-    let mut lod_manager = LodManager::new();
+    let mut lod_manager = SpatialLodManager::new();
     let mut visibility_system = VisibilitySystem::with_max_distance(500.0);
 
     // Configure LOD groups
@@ -97,7 +97,7 @@ fn main() -> praxis_utils::Result<()> {
     Ok(())
 }
 
-fn setup_lod_groups(lod_manager: &mut LodManager) {
+fn setup_lod_groups(lod_manager: &mut SpatialLodManager) {
     // Tree LOD group
     lod_manager.register_lod_group(LodGroup::new(
         "tree",
