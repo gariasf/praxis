@@ -2,6 +2,100 @@
 //!
 //! This module provides efficient batched rendering of colored lines in 3D space,
 //! useful for debug visualization, gizmo rendering, grid overlays, and selection boxes.
+//!
+//! # Overview
+//!
+//! The line rendering system consists of three main components:
+//!
+//! - **`LineVertex`**: Vertex format with position and color
+//! - **`Line`**: A single line segment defined by two endpoints
+//! - **`LineBatch`**: Collection of lines for efficient batch rendering
+//! - **`LineRenderer`**: GPU renderer with depth testing support
+//!
+//! # Integration with RenderContext
+//!
+//! To use line rendering in your application:
+//!
+//! 1. Create a render pass with depth support using `create_render_pass_with_depth()`
+//! 2. Initialize the line renderer with `initialize_line_renderer()`
+//! 3. Update camera matrices each frame with `update_view_projection()`
+//! 4. Create line batches and render them within your render pass
+//!
+//! # Example: Basic Line Rendering
+//!
+//! ```rust,no_run
+//! use praxis_graphics::{RenderContext, LineBatch};
+//! use praxis_math::Vec3;
+//!
+//! # async fn example(mut render_context: RenderContext) -> praxis_utils::Result<()> {
+//! // 1. Initialize line renderer
+//! let render_pass = render_context.create_render_pass_with_depth(
+//!     vulkano::format::Format::R8G8B8A8_UNORM
+//! )?;
+//! render_context.initialize_line_renderer(render_pass, [800, 600])?;
+//!
+//! // 2. Create a line batch
+//! let mut batch = LineBatch::new();
+//! batch.add(
+//!     Vec3::new(0.0, 0.0, 0.0),
+//!     Vec3::new(1.0, 1.0, 1.0),
+//!     Vec3::new(1.0, 0.0, 0.0), // Red
+//! );
+//!
+//! // 3. Update view/projection and render
+//! // (This would be done in your render loop with a command buffer)
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Example: Grid Floor and Axis Indicators
+//!
+//! Use the `visual_feedback` module for common visualization patterns:
+//!
+//! ```rust,no_run
+//! use praxis_graphics::{create_grid, create_axis_indicator, GridConfig, AxisIndicatorConfig};
+//! use praxis_math::Vec3;
+//!
+//! // Create a grid floor
+//! let grid_config = GridConfig {
+//!     size: 20.0,
+//!     divisions: 20,
+//!     line_color: Vec3::new(0.3, 0.3, 0.3),
+//!     axis_color: Vec3::new(0.5, 0.5, 0.5),
+//!     height: 0.0,
+//! };
+//! let grid_batch = create_grid(&grid_config);
+//!
+//! // Create axis indicators
+//! let axis_config = AxisIndicatorConfig {
+//!     length: 1.0,
+//!     position: Vec3::ZERO,
+//!     show_labels: false,
+//! };
+//! let axis_batch = create_axis_indicator(&axis_config);
+//! ```
+//!
+//! # Performance Considerations
+//!
+//! - **Batching**: Group lines into `LineBatch` for fewer draw calls
+//! - **Dynamic Updates**: Create batches per-frame for animated visualizations
+//! - **Depth Testing**: Lines respect depth buffer for proper z-ordering
+//! - **Memory**: Vertex buffers are created per-batch each frame (HOST_VISIBLE)
+//!
+//! # Render Order
+//!
+//! Lines are typically rendered after solid geometry to ensure proper depth testing:
+//!
+//! 1. Clear color and depth buffers
+//! 2. Render opaque 3D meshes (write depth)
+//! 3. Render lines (test depth, write depth)
+//! 4. Render transparent objects (optional)
+//!
+//! # See Also
+//!
+//! - `visual_feedback` module for helper functions
+//! - `create_grid()`, `create_axis_indicator()`, `create_bounding_box()`
+//! - Line rendering example: `examples/line_rendering_demo.rs`
 
 use crate::uniform_buffer::ViewProjectionUniforms;
 use praxis_math::{Mat4, Vec3};

@@ -14,6 +14,8 @@
 //! - `texture`: Texture loading and management
 //! - `material`: Material system with texture support and descriptor set management
 //! - `lighting`: Lighting uniforms and buffer management
+//! - `line_renderer`: Line primitive rendering for debug visualization and gizmos
+//! - `visual_feedback`: Helper utilities for grids, axes, bounding boxes, and outlines
 //! - `deferred`: Deferred rendering with G-buffer passes
 //! - `hdr`: High Dynamic Range rendering with tone mapping
 //! - `ssao`: Screen-space ambient occlusion for realistic shadowing
@@ -269,6 +271,78 @@
 //! to darken occluded areas, providing more realistic ambient lighting.
 //!
 //! See the `ssao` module documentation for usage details.
+//!
+//! # Line Rendering System
+//!
+//! The line rendering system provides efficient rendering of colored line primitives
+//! for debug visualization, gizmo drawing, and editor tools:
+//!
+//! - **`LineVertex`**: Vertex format with position and color
+//! - **`Line`**: Single line segment with start point, end point, and color
+//! - **`LineBatch`**: Collection of lines for efficient batch rendering
+//! - **`LineRenderer`**: GPU renderer with depth testing for proper z-ordering
+//!
+//! Line rendering is typically used for:
+//! - Debug visualization (collision shapes, rays, paths)
+//! - Editor gizmos (transform handles, selection boxes)
+//! - Grid floors and axis indicators
+//! - Bounding boxes and outlines
+//!
+//! ## Basic Usage
+//!
+//! ```rust,no_run
+//! use praxis_graphics::{RenderContext, LineBatch};
+//! use praxis_math::Vec3;
+//!
+//! # async fn example(mut render_context: RenderContext) -> praxis_utils::Result<()> {
+//! // Initialize line renderer with depth support
+//! let render_pass = render_context.create_render_pass_with_depth(
+//!     vulkano::format::Format::R8G8B8A8_UNORM
+//! )?;
+//! render_context.initialize_line_renderer(render_pass, [800, 600])?;
+//!
+//! // Create line batch
+//! let mut batch = LineBatch::new();
+//! batch.add(
+//!     Vec3::new(0.0, 0.0, 0.0),
+//!     Vec3::new(1.0, 1.0, 1.0),
+//!     Vec3::new(1.0, 0.0, 0.0), // Red color
+//! );
+//!
+//! // Render lines within render pass
+//! // (Command buffer recording shown in full examples)
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Visual Feedback Utilities
+//!
+//! The `visual_feedback` module provides helper functions for common patterns:
+//!
+//! ```rust,no_run
+//! use praxis_graphics::{create_grid, create_axis_indicator, GridConfig, AxisIndicatorConfig};
+//! use praxis_math::Vec3;
+//!
+//! // Grid floor
+//! let grid = create_grid(&GridConfig {
+//!     size: 20.0,
+//!     divisions: 20,
+//!     line_color: Vec3::new(0.3, 0.3, 0.3),
+//!     axis_color: Vec3::new(0.5, 0.5, 0.5),
+//!     height: 0.0,
+//! });
+//!
+//! // XYZ axis indicators
+//! let axes = create_axis_indicator(&AxisIndicatorConfig {
+//!     length: 1.0,
+//!     position: Vec3::ZERO,
+//!     show_labels: false,
+//! });
+//! ```
+//!
+//! See the `line_renderer` and `visual_feedback` module documentation for complete
+//! details on line rendering integration, performance considerations, and render
+//! order requirements.
 //!
 //! # Environment Probe System
 //!
@@ -712,6 +786,9 @@ pub struct RenderContext {
 
     /// Buffer for per-frame view/projection uniforms.
     view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
+
+    /// Line renderer for debug visualization and gizmos.
+    line_renderer: Option<line_renderer::LineRenderer>,
 }
 
 impl RenderContext {
@@ -927,6 +1004,9 @@ impl RenderContext {
 
             // View/projection data
             view_proj_buffer,
+
+            // Line renderer
+            line_renderer: None,
         })
     }
 
@@ -1000,6 +1080,48 @@ impl RenderContext {
         &self.command_buffer_allocator
     }
 
+    /// Initializes the line renderer for debug visualization and gizmo rendering.
+    ///
+    /// This must be called before using line rendering features. It creates a line renderer
+    /// with depth testing enabled for proper z-ordering with 3D geometry.
+    ///
+    /// # Arguments
+    ///
+    /// * `render_pass` - The render pass to use for line rendering
+    /// * `extent` - The viewport dimensions
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if line renderer initialization fails.
+    pub fn initialize_line_renderer(
+        &mut self,
+        render_pass: Arc<RenderPass>,
+        extent: [u32; 2],
+    ) -> Result<()> {
+        let line_renderer = line_renderer::LineRenderer::new(
+            self.device.clone(),
+            render_pass,
+            self.memory_allocator.clone(),
+            extent,
+        )?;
+        self.line_renderer = Some(line_renderer);
+        Ok(())
+    }
+
+    /// Gets a reference to the line renderer if initialized.
+    ///
+    /// Returns `None` if `initialize_line_renderer` has not been called.
+    pub fn line_renderer(&self) -> Option<&line_renderer::LineRenderer> {
+        self.line_renderer.as_ref()
+    }
+
+    /// Gets a mutable reference to the line renderer if initialized.
+    ///
+    /// Returns `None` if `initialize_line_renderer` has not been called.
+    pub fn line_renderer_mut(&mut self) -> Option<&mut line_renderer::LineRenderer> {
+        self.line_renderer.as_mut()
+    }
+
     /// Marks the swapchain for recreation on the next frame.
     ///
     /// This should be called when the window is resized. The actual recreation
@@ -1029,6 +1151,50 @@ impl RenderContext {
     /// Returns an error if render pass creation fails.
     pub fn create_post_process_render_pass(&self) -> Result<Arc<RenderPass>> {
         Self::create_render_pass(&self.device, vulkano::format::Format::R8G8B8A8_UNORM)
+    }
+
+    /// Creates a render pass with depth buffer support for 3D rendering with lines.
+    ///
+    /// This render pass includes both a color attachment and a depth attachment,
+    /// enabling proper depth testing for 3D line rendering alongside regular meshes.
+    ///
+    /// # Arguments
+    ///
+    /// * `format` - The color attachment format
+    ///
+    /// # Returns
+    ///
+    /// A render pass configured for 3D rendering with depth testing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if render pass creation fails.
+    pub fn create_render_pass_with_depth(
+        &self,
+        format: vulkano::format::Format,
+    ) -> Result<Arc<RenderPass>> {
+        vulkano::single_pass_renderpass!(
+            self.device.clone(),
+            attachments: {
+                color: {
+                    format: format,
+                    samples: 1,
+                    load_op: Clear,
+                    store_op: Store,
+                },
+                depth: {
+                    format: vulkano::format::Format::D32_SFLOAT,
+                    samples: 1,
+                    load_op: Clear,
+                    store_op: DontCare,
+                }
+            },
+            pass: {
+                color: [color],
+                depth_stencil: {depth}
+            }
+        )
+        .map_err(|e| eyre::eyre!("Failed to create render pass with depth: {}", e))
     }
 
     /// Creates a render pass suitable for HDR rendering.
@@ -1720,8 +1886,8 @@ pub use uniform_buffer::{DynamicUniformBuffer, ModelUniforms, ViewProjectionUnif
 pub use velocity_buffer::{VelocityBuffer, VelocityBufferRenderer};
 pub use vertex::Vertex3D;
 pub use visual_feedback::{
-    create_axis_indicator, create_bounding_box, create_grid, create_selection_outline,
-    AxisIndicatorConfig, GridConfig,
+    batch_to_lines, create_axis_indicator, create_bounding_box, create_gizmo_lines, create_grid,
+    create_selection_outline, AxisIndicatorConfig, GridConfig,
 };
 pub use volumetric_fog::{
     FogDensityFunction, VolumetricFog, VolumetricFogConfig, VolumetricFogRenderer,
@@ -1995,6 +2161,77 @@ mod tests {
 
         assert_eq!(viewport.offset, [0.0, 0.0]);
         assert_eq!(viewport.extent, [1920.0, 1080.0]);
+    }
+
+    #[test]
+    fn test_line_batch_creation() {
+        let mut batch = LineBatch::new();
+        assert!(batch.is_empty());
+        assert_eq!(batch.len(), 0);
+
+        batch.add(Vec3::ZERO, Vec3::X, Vec3::new(1.0, 0.0, 0.0));
+        assert_eq!(batch.len(), 1);
+        assert!(!batch.is_empty());
+    }
+
+    #[test]
+    fn test_line_batch_with_capacity() {
+        let batch = LineBatch::with_capacity(100);
+        assert!(batch.is_empty());
+        // Capacity is internal, but batch should still work
+    }
+
+    #[test]
+    fn test_line_creation() {
+        let start = Vec3::new(1.0, 2.0, 3.0);
+        let end = Vec3::new(4.0, 5.0, 6.0);
+        let color = Vec3::new(1.0, 0.0, 0.0);
+
+        let line = Line::new(start, end, color);
+        assert_eq!(line.start, start);
+        assert_eq!(line.end, end);
+        assert_eq!(line.color, color);
+    }
+
+    #[test]
+    fn test_line_to_vertices() {
+        let line = Line::new(
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(1.0, 1.0, 1.0),
+            Vec3::new(1.0, 0.0, 0.0),
+        );
+
+        let vertices = line.to_vertices();
+        assert_eq!(vertices.len(), 2);
+        assert_eq!(vertices[0].position, [0.0, 0.0, 0.0]);
+        assert_eq!(vertices[1].position, [1.0, 1.0, 1.0]);
+        assert_eq!(vertices[0].color, [1.0, 0.0, 0.0]);
+        assert_eq!(vertices[1].color, [1.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn test_line_batch_clear() {
+        let mut batch = LineBatch::new();
+        batch.add(Vec3::ZERO, Vec3::X, Vec3::new(1.0, 0.0, 0.0));
+        batch.add(Vec3::ZERO, Vec3::Y, Vec3::new(0.0, 1.0, 0.0));
+        assert_eq!(batch.len(), 2);
+
+        batch.clear();
+        assert_eq!(batch.len(), 0);
+        assert!(batch.is_empty());
+    }
+
+    #[test]
+    fn test_line_batch_add_multiple() {
+        let mut batch = LineBatch::new();
+        let lines = vec![
+            Line::new(Vec3::ZERO, Vec3::X, Vec3::new(1.0, 0.0, 0.0)),
+            Line::new(Vec3::ZERO, Vec3::Y, Vec3::new(0.0, 1.0, 0.0)),
+            Line::new(Vec3::ZERO, Vec3::Z, Vec3::new(0.0, 0.0, 1.0)),
+        ];
+
+        batch.add_lines(lines);
+        assert_eq!(batch.len(), 3);
     }
 
     #[test]

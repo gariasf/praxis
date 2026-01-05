@@ -315,6 +315,30 @@ where
     batch
 }
 
+/// Converts a `LineBatch` to individual `Line` objects for iteration.
+///
+/// This is useful when you need to process or filter individual lines from a batch.
+///
+/// # Arguments
+///
+/// * `batch` - The line batch to convert
+///
+/// # Returns
+///
+/// A vector of individual `Line` objects
+pub fn batch_to_lines(batch: &LineBatch) -> Vec<crate::line_renderer::Line> {
+    batch.to_vertices()
+        .chunks_exact(2)
+        .map(|chunk| {
+            crate::line_renderer::Line::new(
+                Vec3::from(chunk[0].position),
+                Vec3::from(chunk[1].position),
+                Vec3::from(chunk[0].color),
+            )
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -425,5 +449,39 @@ mod tests {
 
         let batch = create_selection_outline(&translation, size, color);
         assert_eq!(batch.len(), 12);
+    }
+
+    #[test]
+    fn test_batch_to_lines_conversion() {
+        let mut batch = LineBatch::new();
+        batch.add(Vec3::ZERO, Vec3::X, Vec3::new(1.0, 0.0, 0.0));
+        batch.add(Vec3::ZERO, Vec3::Y, Vec3::new(0.0, 1.0, 0.0));
+        batch.add(Vec3::ZERO, Vec3::Z, Vec3::new(0.0, 0.0, 1.0));
+
+        let lines = batch_to_lines(&batch);
+        assert_eq!(lines.len(), 3);
+    }
+
+    #[test]
+    fn test_batch_to_lines_preserves_endpoints() {
+        let mut batch = LineBatch::new();
+        let start = Vec3::new(1.0, 2.0, 3.0);
+        let end = Vec3::new(4.0, 5.0, 6.0);
+        let color = Vec3::new(1.0, 0.5, 0.0);
+        
+        batch.add(start, end, color);
+
+        let lines = batch_to_lines(&batch);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0].start, start);
+        assert_eq!(lines[0].end, end);
+        assert_eq!(lines[0].color, color);
+    }
+
+    #[test]
+    fn test_batch_to_lines_empty() {
+        let batch = LineBatch::new();
+        let lines = batch_to_lines(&batch);
+        assert_eq!(lines.len(), 0);
     }
 }

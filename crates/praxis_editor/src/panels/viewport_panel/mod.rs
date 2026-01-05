@@ -697,25 +697,40 @@ impl ViewportPanel {
     }
 
     /// Builds draw commands for gizmo rendering.
+    ///
+    /// Note: Gizmo lines should be rendered using the line renderer for proper
+    /// visualization. This method is kept for compatibility but returns an empty
+    /// vector. Use `get_gizmo_lines()` instead to get line batches for rendering.
     fn build_gizmo_draw_commands(
         &self,
-        gizmo: &Gizmo,
-        gizmo_system: &GizmoSystem,
+        _gizmo: &Gizmo,
+        _gizmo_system: &GizmoSystem,
     ) -> Vec<DrawCommand> {
-        let draw_commands = Vec::new();
+        Vec::new()
+    }
 
-        // Get gizmo lines
-        let lines = gizmo.get_lines(gizmo_system.mode(), gizmo_system.space());
-
-        // For each line, we would create a mesh and draw command
-        // This is a placeholder - actual implementation would need
-        // line rendering support in the graphics system
-        for (_start, _end, _color) in lines {
-            // TODO: Create line mesh and add draw command
-            // This requires line rendering primitive support
+    /// Gets gizmo lines as a line batch for rendering with the line renderer.
+    ///
+    /// This creates a `LineBatch` from the active gizmo's lines, ready to be
+    /// rendered with the line renderer for proper debug visualization.
+    ///
+    /// # Arguments
+    ///
+    /// * `world` - The ECS world containing the gizmo system
+    ///
+    /// # Returns
+    ///
+    /// An optional `LineBatch` containing all gizmo lines if a gizmo is active
+    pub fn get_gizmo_lines(&self, world: &World) -> Option<praxis_graphics::LineBatch> {
+        if !self.show_gizmos {
+            return None;
         }
 
-        draw_commands
+        let gizmo_system = world.get_resource::<GizmoSystem>()?;
+        let gizmo = gizmo_system.active_gizmo()?;
+        
+        let lines = gizmo.get_lines(gizmo_system.mode(), gizmo_system.space());
+        Some(praxis_graphics::visual_feedback::create_gizmo_lines(lines))
     }
 
     /// Registers the viewport texture with egui.
