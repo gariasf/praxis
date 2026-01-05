@@ -20,6 +20,7 @@ Praxis is an educational yet capable game engine that prioritizes:
 - Automatic and manual exposure control
 - Skybox and environment rendering with IBL support
 - Environment probes for physically-based reflections
+- GPU-accelerated particle system with emission, forces, and collision
 
 ### Animation
 - Skeletal animation with keyframe interpolation
@@ -32,6 +33,12 @@ Praxis is an educational yet capable game engine that prioritizes:
 - Rigid bodies (dynamic, static, kinematic)
 - Collision detection and events
 - Raycasting and spatial queries
+
+### Spatial Optimization
+- Octree-based spatial partitioning
+- Frustum culling for efficient rendering
+- LOD (Level of Detail) system
+- Broad-phase optimization for physics and rendering
 
 ### Audio
 - 3D spatial audio with distance attenuation
@@ -79,6 +86,13 @@ praxis/
 │   ├── praxis_gui        # Debug UI (egui)
 │   ├── praxis_window     # Window management (winit)
 │   ├── praxis_math       # Math utilities (glam)
+│   ├── praxis_spatial    # Spatial partitioning and optimization
+│   ├── praxis_editor     # Editor tools and GUI
+│   ├── praxis_procedural # Procedural generation (textures, terrain)
+│   ├── praxis_profiling  # Performance profiling and monitoring
+│   ├── praxis_scripting  # Lua scripting integration
+│   ├── praxis_networking # Networking and multiplayer
+│   ├── praxis_terrain    # Terrain generation and rendering
 │   └── praxis_utils      # Logging, timing, error handling
 ├── examples/             # Runnable demos
 ├── assets/               # Models, textures, sounds
@@ -99,6 +113,11 @@ praxis/
 | `environment_probe_demo` | IBL reflections with environment probes |
 | `editor_demo` | Full editor interface with undo/redo |
 | `particles_demo` | GPU-accelerated particle system |
+| `spatial_optimization_demo` | Octree and frustum culling |
+| `lod_demo` | Level of Detail system |
+| `procedural_texture_demo` | Procedural texture generation |
+| `scripting_demo` | Lua scripting integration |
+| `networking_demo` | Multiplayer and entity replication |
 
 ### Planned Examples
 The following examples are planned for future implementation:
