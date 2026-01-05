@@ -21,29 +21,45 @@
 //! ## Other
 //! - **Escape**: Exit
 
+#[cfg(feature = "editor")]
 use praxis_ecs::World;
+#[cfg(feature = "editor")]
 use praxis_editor::{init_with_console, EditorState, LogBuffer, UndoRedoSystem};
+#[cfg(feature = "editor")]
 use praxis_gui::EguiContext;
+#[cfg(feature = "editor")]
 use praxis_input::InputState;
+#[cfg(feature = "editor")]
 use praxis_utils::{error, info, Result};
+#[cfg(feature = "editor")]
 use std::sync::Arc;
+#[cfg(feature = "editor")]
 use winit::application::ApplicationHandler;
+#[cfg(feature = "editor")]
 use winit::dpi::PhysicalSize;
+#[cfg(feature = "editor")]
 use winit::event::WindowEvent;
+#[cfg(feature = "editor")]
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+#[cfg(feature = "editor")]
 use winit::keyboard::KeyCode;
+#[cfg(feature = "editor")]
 use winit::window::{Window, WindowId};
 
+#[cfg(feature = "editor")]
 const WINDOW_WIDTH: u32 = 1920;
+#[cfg(feature = "editor")]
 const WINDOW_HEIGHT: u32 = 1080;
 
 /// Main application state.
+#[cfg(feature = "editor")]
 struct App {
     window: Option<Arc<Window>>,
     world: Option<World>,
     editor_state: Option<EditorState>,
 }
 
+#[cfg(feature = "editor")]
 impl Default for App {
     fn default() -> Self {
         Self {
@@ -54,6 +70,7 @@ impl Default for App {
     }
 }
 
+#[cfg(feature = "editor")]
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_some() {
@@ -175,6 +192,7 @@ impl ApplicationHandler for App {
     }
 }
 
+#[cfg(feature = "editor")]
 fn main() -> Result<()> {
     // Initialize engine systems
     praxis_utils::init()?;
@@ -199,4 +217,11 @@ fn main() -> Result<()> {
         .map_err(|e| praxis_utils::eyre::eyre!("Event loop error: {}", e))?;
 
     Ok(())
+}
+
+#[cfg(not(feature = "editor"))]
+fn main() {
+    eprintln!("This example requires the 'editor' feature to be enabled.");
+    eprintln!("Run with: cargo run --example editor_demo --features editor");
+    std::process::exit(1);
 }

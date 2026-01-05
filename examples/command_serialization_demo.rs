@@ -6,13 +6,17 @@
 //! - Saving and loading entire command histories
 //! - Round-trip serialization testing
 
+#[cfg(feature = "editor")]
 use bevy_ecs::world::World;
+#[cfg(feature = "editor")]
 use praxis_ecs::Transform;
+#[cfg(feature = "editor")]
 use praxis_editor::{
     CommandHistory, ComponentData, CompositeCommand, CreateEntityCommand, EditorCommand,
     SerializableCommand, TransformEditCommand,
 };
 
+#[cfg(feature = "editor")]
 fn main() {
     println!("=== Command Serialization Demo ===\n");
 
@@ -26,6 +30,7 @@ fn main() {
     println!("\n=== Demo Complete ===");
 }
 
+#[cfg(feature = "editor")]
 fn demo_single_command_serialization(world: &mut World) {
     println!("--- Single Command Serialization ---");
 
@@ -60,6 +65,7 @@ fn demo_single_command_serialization(world: &mut World) {
     }
 }
 
+#[cfg(feature = "editor")]
 fn demo_composite_serialization(world: &mut World) {
     println!("\n--- Composite Command Serialization ---");
 
@@ -99,6 +105,7 @@ fn demo_composite_serialization(world: &mut World) {
     );
 }
 
+#[cfg(feature = "editor")]
 fn demo_history_serialization(world: &mut World) {
     println!("\n--- Command History Serialization ---");
 
@@ -148,6 +155,7 @@ fn demo_history_serialization(world: &mut World) {
     */
 }
 
+#[cfg(feature = "editor")]
 fn demo_round_trip(world: &mut World) {
     println!("\n--- Round-Trip Serialization Test ---");
 
@@ -196,4 +204,11 @@ fn demo_round_trip(world: &mut World) {
     }
 
     println!("\nAll round-trip tests passed!");
+}
+
+#[cfg(not(feature = "editor"))]
+fn main() {
+    eprintln!("This example requires the 'editor' feature to be enabled.");
+    eprintln!("Run with: cargo run --example command_serialization_demo --features editor");
+    std::process::exit(1);
 }

@@ -8,18 +8,28 @@
 //! - Real-time LOD updates based on camera position
 //! - Terrain editing tools integration
 
+#[cfg(feature = "terrain")]
 use praxis_ecs::{Camera, PerspectiveProjection, Transform, World};
+#[cfg(feature = "terrain")]
 use praxis_math::{Quat, Vec3};
+#[cfg(feature = "terrain")]
 use praxis_terrain::{
     TerrainConfig, TerrainHeightmap, TerrainMaterialLayer, TerrainSystem, VegetationLayer,
 };
+#[cfg(feature = "terrain")]
 use praxis_utils::{info, Result};
+#[cfg(feature = "terrain")]
 use std::sync::Arc;
+#[cfg(feature = "terrain")]
 use std::time::Instant;
+#[cfg(feature = "terrain")]
 use winit::event::{Event, WindowEvent};
+#[cfg(feature = "terrain")]
 use winit::event_loop::{ControlFlow, EventLoop};
+#[cfg(feature = "terrain")]
 use winit::window::WindowAttributes;
 
+#[cfg(feature = "terrain")]
 fn main() -> Result<()> {
     praxis_utils::init_tracing()?;
 
@@ -239,4 +249,11 @@ fn main() -> Result<()> {
     })?;
 
     Ok(())
+}
+
+#[cfg(not(feature = "terrain"))]
+fn main() {
+    eprintln!("This example requires the 'terrain' feature to be enabled.");
+    eprintln!("Run with: cargo run --example terrain_demo --features terrain");
+    std::process::exit(1);
 }

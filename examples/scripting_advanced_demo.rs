@@ -6,9 +6,12 @@
 //! - Complex Lua logic with state management
 //! - Script interaction with ECS World and engine APIs
 
+#[cfg(feature = "scripting")]
 use praxis_ecs::{Entity, Name, Transform, World};
+#[cfg(feature = "scripting")]
 use praxis_scripting::{mlua, SandboxConfig, SandboxLevel, ScriptingConfig, ScriptingContext};
 
+#[cfg(feature = "scripting")]
 fn main() -> praxis_utils::Result<()> {
     praxis_utils::init()?;
     praxis_scripting::init()?;
@@ -53,6 +56,7 @@ fn main() -> praxis_utils::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "scripting")]
 fn setup_scripting_context() -> praxis_utils::Result<ScriptingContext> {
     let config = ScriptingConfig {
         sandbox: SandboxConfig {
@@ -77,6 +81,7 @@ fn setup_scripting_context() -> praxis_utils::Result<ScriptingContext> {
     Ok(context)
 }
 
+#[cfg(feature = "scripting")]
 fn setup_test_entities(world: &mut World) {
     println!("Creating test entities...\n");
 
@@ -89,6 +94,7 @@ fn setup_test_entities(world: &mut World) {
     println!();
 }
 
+#[cfg(feature = "scripting")]
 fn load_movement_script(context: &mut ScriptingContext) -> praxis_utils::Result<()> {
     context.load_string(
         "movement_script",
@@ -128,6 +134,7 @@ fn load_movement_script(context: &mut ScriptingContext) -> praxis_utils::Result<
     Ok(())
 }
 
+#[cfg(feature = "scripting")]
 fn print_entity_positions(world: &mut World) {
     let mut query = world.inner_mut().query::<(Entity, &Name, &Transform)>();
 
@@ -145,6 +152,7 @@ fn print_entity_positions(world: &mut World) {
     println!();
 }
 
+#[cfg(feature = "scripting")]
 fn print_performance_stats(context: &ScriptingContext) {
     if let Some(monitor) = context.performance_monitor() {
         println!("\n=== Performance Statistics ===");
@@ -178,4 +186,11 @@ fn print_performance_stats(context: &ScriptingContext) {
             }
         }
     }
+}
+
+#[cfg(not(feature = "scripting"))]
+fn main() {
+    eprintln!("This example requires the 'scripting' feature to be enabled.");
+    eprintln!("Run with: cargo run --example scripting_advanced_demo --features scripting");
+    std::process::exit(1);
 }

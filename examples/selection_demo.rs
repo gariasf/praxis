@@ -13,6 +13,7 @@
 //! - Keyboard shortcuts (Ctrl+A, Ctrl+D)
 //! - Visual feedback for selected entities
 
+#[cfg(feature = "editor")]
 fn main() {
     println!("=== Selection System Demo (Placeholder) ===\n");
     println!("This example is currently a placeholder.");
@@ -22,4 +23,11 @@ fn main() {
     println!();
     println!("To test selection functionality, use the unit tests:");
     println!("  cargo test -p praxis_editor selection");
+}
+
+#[cfg(not(feature = "editor"))]
+fn main() {
+    eprintln!("This example requires the 'editor' feature to be enabled.");
+    eprintln!("Run with: cargo run --example selection_demo --features editor");
+    std::process::exit(1);
 }
