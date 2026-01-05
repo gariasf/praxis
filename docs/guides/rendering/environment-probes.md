@@ -439,6 +439,52 @@ cargo run --example environment_probe_demo
 cargo run --example advanced_lighting_demo
 ```
 
+## Technical Details
+
+### PBR Integration
+
+Environment probes use the split-sum approximation for the specular integral:
+
+```
+L_specular = ∫ L(l) * f(l, v) * cos(θ) dl
+           ≈ (∫ L(l) * cos(θ) dl) * (∫ f(l, v) * cos(θ) dl)
+           = prefiltered_color * (F0 * brdf.x + brdf.y)
+```
+
+### GGX Distribution
+
+Importance sampling uses the GGX (Trowbridge-Reitz) distribution:
+
+```
+D(h) = α² / (π * ((n·h)² * (α² - 1) + 1)²)
+
+where α = roughness²
+```
+
+### Memory Layout Per Probe
+
+- **Environment map**: resolution² × 6 × 4 channels × 2 bytes (FP16)
+- **Irradiance map**: 32² × 6 × 4 × 2 = ~25 KB
+- **Prefiltered map**: resolution² × 6 × 4 × 2 × 1.33 (mipmaps)
+- **BRDF LUT**: 512² × 2 = ~512 KB (shared across all probes)
+
+Example for 512×512 probe:
+- Environment: 6 MB
+- Irradiance: 25 KB
+- Prefiltered: 8 MB
+- **Total**: ~14 MB per probe
+
+## Future Enhancements
+
+Potential improvements for the environment probe system:
+
+1. **Parallax Correction**: Box-projected cubemaps for better indoor reflections
+2. **Temporal Filtering**: Smooth updates over multiple frames to reduce flicker
+3. **Probe Arrays**: Volumetric light probes for improved spatial resolution
+4. **Compression**: Use BC6H compression for HDR cubemaps to reduce memory
+5. **Streaming**: Load/unload probes based on camera position
+6. **Automatic Placement**: Tools to automatically place probes optimally
+
 ## See Also
 
 - [Forward Rendering](forward-rendering.md) - Basic rendering pipeline
@@ -451,3 +497,4 @@ cargo run --example advanced_lighting_demo
 - [Lagarde, Sébastien (2014). "Moving Frostbite to PBR"](https://seblagarde.files.wordpress.com/2015/07/course_notes_moving_frostbite_to_pbr_v32.pdf)
 - [Learn OpenGL - IBL](https://learnopengl.com/PBR/IBL/Diffuse-irradiance)
 - [Real-Time Rendering, 4th Edition](http://www.realtimerendering.com/) - Chapter 11: Image-Based Effects
+- [Moving Frostbite to PBR](https://www.gdcvault.com/play/1023512/Physically-Based-Shading-in-Unity) - EA DICE

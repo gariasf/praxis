@@ -383,6 +383,27 @@ vec3 reconstruct_position(vec2 uv, float depth) {
 
 **Alternative**: Store world position in G-buffer (expensive, requires additional 16-byte buffer).
 
+### SSAO Integration (Optional)
+
+Screen-space ambient occlusion can be integrated into the lighting pass:
+
+```glsl
+// SSAO texture (optional)
+layout(set = 0, binding = 6) uniform sampler2D u_ssao;
+
+void main() {
+    // ... sample G-buffer ...
+    
+    // Sample SSAO (1.0 = no occlusion, 0.0 = full occlusion)
+    float ao = texture(u_ssao, v_uv).r;
+    
+    // Apply to ambient lighting
+    vec3 ambient = lighting.ambient_color.rgb * albedo * ao;
+    
+    // ... rest of lighting ...
+}
+```
+
 ## PBR Lighting Model
 
 Praxis uses the Cook-Torrance BRDF (same as forward rendering):
@@ -397,7 +418,53 @@ where:
   f_cook_torrance = (D * F * G) / (4 * (n·l) * (n·v))
 ```
 
-See [forward-rendering.md](forward-rendering.md) for complete PBR function implementations.
+### PBR Functions
+
+#### Distribution (GGX)
+
+```glsl
+float distribution_ggx(vec3 N, vec3 H, float roughness) {
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float n_dot_h = max(dot(N, H), 0.0);
+    float n_dot_h2 = n_dot_h * n_dot_h;
+    
+    float numerator = a2;
+    float denominator = (n_dot_h2 * (a2 - 1.0) + 1.0);
+    denominator = PI * denominator * denominator;
+    
+    return numerator / denominator;
+}
+```
+
+#### Geometry (Smith)
+
+```glsl
+float geometry_smith(vec3 N, vec3 V, vec3 L, float roughness) {
+    float n_dot_v = max(dot(N, V), 0.0);
+    float n_dot_l = max(dot(N, L), 0.0);
+    float ggx_v = geometry_schlick_ggx(n_dot_v, roughness);
+    float ggx_l = geometry_schlick_ggx(n_dot_l, roughness);
+    return ggx_v * ggx_l;
+}
+
+float geometry_schlick_ggx(float n_dot_v, float roughness) {
+    float r = roughness + 1.0;
+    float k = (r * r) / 8.0;
+    return n_dot_v / (n_dot_v * (1.0 - k) + k);
+}
+```
+
+#### Fresnel (Schlick)
+
+```glsl
+vec3 fresnel_schlick(float cos_theta, vec3 albedo, float metallic) {
+    vec3 F0 = mix(vec3(0.04), albedo, metallic);
+    return F0 + (1.0 - F0) * pow(1.0 - cos_theta, 5.0);
+}
+```
+
+See [forward-rendering.md](forward-rendering.md) for additional PBR implementation details.
 
 ## Usage Example
 
@@ -539,6 +606,20 @@ Use compute shaders for lighting:
 - Shared memory for G-buffer data
 - Flexible work group sizes
 
+### 5. Bandwidth Concerns
+
+Deferred rendering has significant bandwidth requirements:
+
+```
+1920×1080 × 60 fps × 20 bytes × 2 (read + write) = ~4.7 GB/s
+```
+
+**Mitigation Strategies**:
+- Tile-based rendering (mobile GPUs handle this automatically)
+- Lower G-buffer resolution for some render targets
+- Compute-based deferred with Local Data Share (LDS)
+- Use lower precision formats where appropriate
+
 ## Integration with Other Systems
 
 ### SSAO (Screen-Space Ambient Occlusion)
@@ -575,6 +656,32 @@ tone_mapper.apply(builder, &hdr_framebuffer, swapchain_framebuffer, ...)?;
 
 See [hdr-tonemapping.md](hdr-tonemapping.md) for details.
 
+## Debugging G-Buffer
+
+Visualize individual G-buffer components for debugging:
+
+```glsl
+// Albedo visualization
+o_color = vec4(albedo, 1.0);
+
+// Normal visualization (remap from [-1,1] to [0,1])
+o_color = vec4(normal * 0.5 + 0.5, 1.0);
+
+// Metallic visualization
+o_color = vec4(vec3(metallic), 1.0);
+
+// Roughness visualization
+o_color = vec4(vec3(roughness), 1.0);
+
+// Depth visualization (non-linear)
+float depth_vis = 1.0 - depth;
+o_color = vec4(vec3(depth_vis), 1.0);
+
+// Linearized depth visualization
+float linear_depth = linearize_depth(depth);
+o_color = vec4(vec3(linear_depth), 1.0);
+```
+
 ## Hybrid Rendering
 
 Combine deferred and forward for optimal results:
@@ -606,7 +713,8 @@ cargo run --example advanced_lighting_demo
 
 ## References
 
-- Shishkovtsov, Oles (2005). "Deferred Shading in S.T.A.L.K.E.R."
+- **Real-Time Rendering, 4th Edition** - Chapter 20: Efficient Shading
+- **GPU Gems 2** - Chapter 9: Deferred Shading in S.T.A.L.K.E.R.
 - [GPU Gems 2 - Chapter 9: Deferred Shading](https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-9-deferred-shading-stalker)
 - [Learn OpenGL - Deferred Shading](https://learnopengl.com/Advanced-Lighting/Deferred-Shading)
-- [Real-Time Rendering, 4th Edition](http://www.realtimerendering.com/) - Chapter 20: Efficient Shading
+- [OurMachinery - High-Performance Deferred Shading](https://ourmachinery.com/post/high-performance-deferred-shading/)
