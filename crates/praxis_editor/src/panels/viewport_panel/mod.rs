@@ -253,9 +253,7 @@ impl ViewportPanel {
     /// Computes the camera transform from orbit parameters.
     pub fn compute_camera_transform(&self) -> Transform {
         let position = self.compute_camera_position();
-        let mut transform = Transform::from_translation(position);
-        transform.look_at(self.camera_target, Vec3::Y);
-        transform
+        Transform::from_translation(position).look_at(self.camera_target, Vec3::Y)
     }
 
     /// Computes camera matrices (view and projection).

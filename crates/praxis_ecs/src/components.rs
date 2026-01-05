@@ -183,9 +183,28 @@ impl Transform {
     }
 
     /// Looks at a target position with the given up vector.
-    pub fn look_at(&mut self, target: Vec3, up: Vec3) {
+    ///
+    /// This method modifies the transform's rotation to face the target position.
+    /// It returns `Self` to allow method chaining in builder patterns.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use praxis_ecs::Transform;
+    /// use praxis_math::Vec3;
+    ///
+    /// // Builder pattern usage
+    /// let transform = Transform::from_xyz(0.0, 10.0, 20.0)
+    ///     .look_at(Vec3::ZERO, Vec3::Y);
+    ///
+    /// // Mutation usage
+    /// let mut transform = Transform::from_xyz(5.0, 5.0, 5.0);
+    /// transform.look_at(Vec3::new(10.0, 0.0, 0.0), Vec3::Y);
+    /// ```
+    pub fn look_at(mut self, target: Vec3, up: Vec3) -> Self {
         let forward = (target - self.translation).normalize();
         self.rotation = Quat::from_mat4(&Mat4::look_to_rh(self.translation, forward, up));
+        self
     }
 }
 
@@ -1685,6 +1704,34 @@ mod tests {
         assert!(transformed.x.abs() < 0.001);
         assert!(transformed.y.abs() < 0.001);
         assert!((transformed.z.abs() - 2.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_transform_look_at_builder_pattern() {
+        // Test builder pattern chaining
+        let transform = Transform::from_xyz(0.0, 5.0, 10.0)
+            .look_at(Vec3::ZERO, Vec3::Y);
+        
+        // The camera should be looking at the origin from above
+        let forward = transform.rotation * Vec3::NEG_Z;
+        let expected_forward = (Vec3::ZERO - transform.translation).normalize();
+        
+        // Check that forward direction is approximately correct
+        assert!((forward.dot(expected_forward) - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_transform_look_at_mutation() {
+        // Test mutation pattern
+        let mut transform = Transform::from_xyz(5.0, 0.0, 0.0);
+        transform = transform.look_at(Vec3::new(10.0, 0.0, 0.0), Vec3::Y);
+        
+        // The camera should be looking at (10, 0, 0) from (5, 0, 0)
+        let forward = transform.rotation * Vec3::NEG_Z;
+        let expected_forward = Vec3::new(1.0, 0.0, 0.0);
+        
+        // Check that forward direction is approximately correct
+        assert!((forward.dot(expected_forward) - 1.0).abs() < 0.01);
     }
 
     #[test]

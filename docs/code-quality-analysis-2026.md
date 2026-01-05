@@ -121,7 +121,7 @@ error[E0308]: arguments to this method are incorrect
 | P0 | Fix World type mismatch in editor tests | `tests/editor_integration_test.rs` |
 | P0 | Update examples to use current winit API | `examples/terrain_demo.rs`, `examples/advanced_lighting_demo.rs` |
 | P1 | Investigate and fix ignored tests | `praxis_spatial/src/*.rs` |
-| P1 | Add missing method `look_at()` to Transform or update examples | `praxis_ecs/src/components.rs` |
+| ~~P1~~ | ~~Add missing method `look_at()` to Transform or update examples~~ | **RESOLVED: Updated `Transform::look_at()` to return `Self` for builder pattern support** |
 | P2 | Export missing scripting systems or update demo | `praxis_scripting/src/lib.rs` |
 | P2 | Add inner() accessor tests for World wrapper | `praxis_ecs/src/world.rs` |
 
@@ -401,11 +401,11 @@ impl World {
 
 | Method | Referenced In | Status |
 |--------|--------------|--------|
-| `Transform::looking_at()` | `terrain_demo.rs` | Not implemented |
+| ~~`Transform::looking_at()`~~ | `terrain_demo.rs` | **RESOLVED: `Transform::look_at()` now supports builder pattern** |
 | `GlobalTransform::from_translation()` | `editor_integration_test.rs` | Not implemented |
 
 **Available alternatives:**
-- `Transform::look_at()` exists (different signature)
+- `Transform::look_at()` **now fully supports builder pattern (returns `Self`)**
 - `GlobalTransform::from_scale_rotation_translation()` exists
 
 ---
