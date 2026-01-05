@@ -1018,7 +1018,7 @@ fn test_point_outside() {
 }
 
 #[test]
-fn test_raycast_all_returns_empty() {
+fn test_raycast_all_no_hits() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
 
@@ -1030,8 +1030,73 @@ fn test_raycast_all_returns_empty() {
         false,
     );
 
-    // raycast_all is a placeholder implementation that returns empty
+    // Should return empty when there are no objects
     assert!(results.is_empty());
+}
+
+#[test]
+fn test_raycast_all_multiple_hits() {
+    let mut world = World::new();
+    world.insert_resource(PhysicsWorld::new());
+    world.insert_resource(PhysicsConfig::default());
+    world.insert_resource(PhysicsTime::new());
+    world.insert_resource(ContactEvents::new());
+
+    // Create three boxes in a line
+    let box1 = world.spawn((
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        RigidBody::Static,
+        Collider::cuboid(1.0, 1.0, 1.0),
+    ));
+
+    let box2 = world.spawn((
+        Transform::from_xyz(5.0, 0.0, 0.0),
+        RigidBody::Static,
+        Collider::cuboid(1.0, 1.0, 1.0),
+    ));
+
+    let box3 = world.spawn((
+        Transform::from_xyz(10.0, 0.0, 0.0),
+        RigidBody::Static,
+        Collider::cuboid(1.0, 1.0, 1.0),
+    ));
+
+    let mut schedule = Schedule::default();
+    schedule.add_systems((
+        cleanup_physics_entities,
+        sync_physics_transforms_system,
+        physics_step_system,
+    ));
+
+    let mut physics_time = world.inner_mut().resource_mut::<PhysicsTime>();
+    physics_time.add(1.0 / 60.0);
+    drop(physics_time);
+
+    schedule.run(world.inner_mut());
+
+    // Raycast through all three boxes
+    let physics_world = world.inner_mut().resource::<PhysicsWorld>();
+    let results = physics_world.raycast_all(
+        Vec3::new(-5.0, 0.0, 0.0),
+        Vec3::new(1.0, 0.0, 0.0),
+        20.0,
+        false,
+    );
+
+    // Should hit all three boxes
+    assert_eq!(results.len(), 3, "Should hit all three boxes");
+    
+    // Results should be sorted by distance
+    assert!(
+        results[0].1 < results[1].1 && results[1].1 < results[2].1,
+        "Results should be sorted by distance"
+    );
+    
+    // Verify we hit the correct entities
+    let hit_entities: Vec<_> = results.iter().map(|(e, _)| *e).collect();
+    assert!(hit_entities.contains(&box1));
+    assert!(hit_entities.contains(&box2));
+    assert!(hit_entities.contains(&box3));
 }
 
 // ============================================================================

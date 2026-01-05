@@ -492,20 +492,30 @@ impl PhysicsWorld {
 
         let filter = QueryFilter::default();
 
-        let hits = Vec::new();
+        let mut hits = Vec::new();
 
-        self.query_pipeline.cast_ray_and_get_normal(
+        self.query_pipeline.intersections_with_ray(
             &self.rigid_body_set,
             &self.collider_set,
             &ray,
             max_distance,
             solid,
             filter,
+            |handle, intersection| {
+                if let Some(collider) = self.collider_set.get(handle) {
+                    if let Some(body_handle) = collider.parent() {
+                        if let Some(entity) = self.body_to_entity.get(&body_handle) {
+                            hits.push((*entity, intersection.time_of_impact));
+                        }
+                    }
+                }
+                true // Continue collecting all hits
+            },
         );
 
-        // Note: Rapier's raycast_all API is complex and would require custom handling
-        // For now, we provide the single-hit version. A full implementation would require
-        // iterating through all potential hits and filtering appropriately.
+        // Sort hits by distance
+        hits.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
         hits
     }
 

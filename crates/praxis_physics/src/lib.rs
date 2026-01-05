@@ -152,8 +152,8 @@
 //! The `PhysicsWorld` resource provides query helpers for spatial operations:
 //!
 //! - **`raycast`**: Cast a ray and return the first hit
-//! - **`raycast_all`**: Cast a ray and return all hits (placeholder)
-//! - **`shape_cast`**: Sweep a shape and return the first hit (placeholder)
+//! - **`raycast_all`**: Cast a ray and return all hits
+//! - **`shape_cast`**: Sweep a shape and return the first hit
 //! - **`point_inside`**: Check if a point is inside any collider
 //!
 //! These queries use the physics world's spatial acceleration structures for efficient
