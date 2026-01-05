@@ -46,8 +46,11 @@ schedule.add_systems((
 The audio listener represents the position from which sounds are heard. Typically attached to the camera:
 
 ```rust
+use praxis_ecs::{Transform, GlobalTransform};
+
 world.spawn((
     Transform::from_xyz(0.0, 1.8, 0.0),
+    GlobalTransform::default(),
     AudioListener,
 ));
 ```
@@ -65,8 +68,11 @@ world.spawn(AudioSource::new("assets/sounds/music.ogg")
 #### Spatial Audio
 
 ```rust
+use praxis_ecs::{Transform, GlobalTransform};
+
 world.spawn((
     Transform::from_xyz(10.0, 0.0, 5.0),
+    GlobalTransform::default(),
     AudioSource::new("assets/sounds/ambient.ogg")
         .with_volume(0.7)
         .with_spatial(true)
@@ -79,8 +85,11 @@ world.spawn((
 #### Spatial Audio with Doppler Effect
 
 ```rust
+use praxis_ecs::{Transform, GlobalTransform};
+
 world.spawn((
     Transform::from_xyz(10.0, 0.0, 5.0),
+    GlobalTransform::default(),
     AudioSource::new("assets/sounds/vehicle.ogg")
         .with_volume(0.8)
         .with_spatial(true)

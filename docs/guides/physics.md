@@ -34,12 +34,13 @@ schedule.add_systems((
 
 ```rust
 use praxis_physics::{RigidBody, Collider};
-use praxis_ecs::Transform;
+use praxis_ecs::{Transform, GlobalTransform};
 use praxis_math::Vec3;
 
 // Dynamic ball (affected by physics)
 world.spawn((
     Transform::from_xyz(0.0, 10.0, 0.0),
+    GlobalTransform::default(),
     RigidBody::Dynamic,
     Collider::sphere(1.0),
 ));
@@ -47,6 +48,7 @@ world.spawn((
 // Static ground (never moves)
 world.spawn((
     Transform::from_xyz(0.0, 0.0, 0.0),
+    GlobalTransform::default(),
     RigidBody::Static,
     Collider::cuboid(50.0, 0.5, 50.0),
 ));
@@ -59,8 +61,11 @@ world.spawn((
 Affected by forces, gravity, and collisions:
 
 ```rust
+use praxis_ecs::{Transform, GlobalTransform};
+
 world.spawn((
     Transform::from_xyz(0.0, 5.0, 0.0),
+    GlobalTransform::default(),
     RigidBody::Dynamic,
     Collider::sphere(1.0),
     Velocity::default(),
@@ -73,9 +78,12 @@ world.spawn((
 Never move, have infinite mass:
 
 ```rust
+use praxis_ecs::{Transform, GlobalTransform};
+
 // Walls, floors, terrain
 world.spawn((
     Transform::from_xyz(0.0, 0.0, 0.0),
+    GlobalTransform::default(),
     RigidBody::Static,
     Collider::cuboid(10.0, 10.0, 0.5),
 ));
@@ -86,11 +94,18 @@ world.spawn((
 Moved by code, affect dynamic bodies but aren't affected themselves:
 
 ```rust
+use praxis_ecs::{Transform, GlobalTransform, Query, With, Component};
+
+#[derive(Component)]
+struct MovingPlatform;
+
 // Moving platforms, doors
 world.spawn((
     Transform::from_xyz(0.0, 0.0, 0.0),
+    GlobalTransform::default(),
     RigidBody::Kinematic,
     Collider::cuboid(5.0, 0.5, 5.0),
+    MovingPlatform,
 ));
 
 fn move_platform(mut query: Query<&mut Transform, With<MovingPlatform>>) {

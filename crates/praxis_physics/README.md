@@ -68,6 +68,7 @@ Collider shapes are defined through components rather than requiring manual shap
 // Simple box collider
 world.spawn((
     Transform::from_xyz(0.0, 5.0, 0.0),
+    GlobalTransform::default(),
     RigidBody::Dynamic,
     Collider::cuboid(1.0, 1.0, 1.0),
 ));
@@ -127,7 +128,7 @@ use praxis_physics::{
     RigidBody, Collider, Velocity, Restitution,
     step_physics_simulation, sync_transforms_from_physics, sync_transforms_to_physics,
 };
-use praxis_ecs::{World, Schedule, IntoSystemConfigs, Transform};
+use praxis_ecs::{World, Schedule, IntoSystemConfigs, Transform, GlobalTransform};
 use praxis_math::Vec3;
 
 // Setup
@@ -145,6 +146,7 @@ schedule.add_systems((
 // Create a ground plane
 world.spawn((
     Transform::from_xyz(0.0, 0.0, 0.0),
+    GlobalTransform::default(),
     RigidBody::Static,
     Collider::cuboid(50.0, 0.5, 50.0),
 ));
@@ -152,6 +154,7 @@ world.spawn((
 // Create a dynamic bouncing ball
 world.spawn((
     Transform::from_xyz(0.0, 10.0, 0.0),
+    GlobalTransform::default(),
     RigidBody::Dynamic,
     Collider::sphere(1.0),
     Velocity::default(),
@@ -159,7 +162,7 @@ world.spawn((
 ));
 
 // Run simulation
-world.inner_mut().run_schedule(&mut schedule);
+schedule.run(world.inner_mut());
 ```
 
 ## Integration with Praxis Scene Graph

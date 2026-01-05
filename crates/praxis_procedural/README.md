@@ -84,13 +84,14 @@ let params = TextureGenerationParams {
     seed: 42,
 };
 
-let texture_data = generator.generate(&graph, params)?;
+// Note: Requires ProceduralTextureManager instance
+// let texture_data = generator.generate(&graph, params)?;
 ```
 
 ### Marble Texture with Color Ramp
 
 ```rust
-use praxis_procedural::{ColorRamp, ColorStop};
+use praxis_procedural::{TextureGraph, TextureNode, NoiseType, ColorRamp, ColorStop};
 
 let mut graph = TextureGraph::new();
 
@@ -128,6 +129,8 @@ graph.set_output(ramp_id);
 ### Blending Multiple Noise Layers
 
 ```rust
+use praxis_procedural::{TextureGraph, TextureNode, NoiseType, BlendMode};
+
 let mut graph = TextureGraph::new();
 
 // Large-scale noise
@@ -191,22 +194,23 @@ graph.set_output(transform_id);
 ### Using with Graphics System
 
 ```rust
-use praxis_graphics::ProceduralTextureManager;
+use praxis_graphics::{ProceduralTextureManager, DrawCommand};
+use praxis_math::Mat4;
 
-// Create manager
-let mut manager = ProceduralTextureManager::new(
-    device,
-    queue,
-    memory_allocator,
-    command_buffer_allocator,
-    descriptor_set_allocator,
-);
+// Create manager (requires Vulkan device, queue, and allocators)
+// let mut manager = ProceduralTextureManager::new(
+//     device,
+//     queue,
+//     memory_allocator,
+//     command_buffer_allocator,
+//     descriptor_set_allocator,
+// );
 
 // Generate texture (with caching)
-let texture = manager.generate_texture(&graph, params)?;
+// let texture = manager.generate_texture(&graph, params)?;
 
 // Add to texture manager for rendering
-render_context.texture_manager_mut().add_texture("my_procedural", texture);
+// render_context.texture_manager_mut().add_texture("my_procedural", texture);
 
 // Use in rendering
 let draw_cmd = DrawCommand {

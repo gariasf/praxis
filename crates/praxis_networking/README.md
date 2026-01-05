@@ -113,7 +113,7 @@ async fn main() -> Result<()> {
 
 ```rust
 use praxis_networking::{NetworkId, Replicated, ReplicatedTransform};
-use praxis_ecs::{World, Transform};
+use praxis_ecs::{World, Transform, GlobalTransform};
 use praxis_math::{Vec3, Quat};
 
 let mut world = World::new();
@@ -125,6 +125,7 @@ let entity = world.spawn((
         .with_priority(255)
         .with_rate_divisor(1),
     Transform::from_xyz(0.0, 0.0, 0.0),
+    GlobalTransform::default(),
     ReplicatedTransform::new(Vec3::ZERO, Quat::IDENTITY, Vec3::ONE),
 ));
 ```
@@ -198,7 +199,7 @@ Register custom components for replication:
 
 ```rust
 use serde::{Serialize, Deserialize};
-use bevy_ecs::prelude::*;
+use praxis_ecs::Component;
 
 #[derive(Component, Serialize, Deserialize, Clone)]
 struct Health {

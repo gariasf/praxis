@@ -9,7 +9,7 @@ Practical guide to using the skeletal animation system in Praxis for character a
 ```rust
 use praxis_scene::{Skeleton, AnimationPlayer, AnimatedPose, Bone};
 use praxis_math::{Vec3, Quat};
-use praxis_ecs::World;
+use praxis_ecs::{World, Transform, GlobalTransform};
 
 // Create skeleton
 let bones = vec![
@@ -26,7 +26,14 @@ let mut player = AnimationPlayer::new();
 let pose = AnimatedPose::new(skeleton.bone_count());
 
 // Spawn animated entity
-world.spawn((skeleton, player, pose));
+let mut world = World::new();
+world.spawn((
+    Transform::default(),
+    GlobalTransform::default(),
+    skeleton,
+    player,
+    pose,
+));
 ```
 
 ## Loading Animations from GLTF
@@ -53,7 +60,13 @@ for animation in &asset.animations {
 
 // Spawn entity
 let pose = AnimatedPose::new(skeleton.bone_count());
-world.spawn((skeleton, player, pose));
+world.spawn((
+    Transform::default(),
+    GlobalTransform::default(),
+    skeleton,
+    player,
+    pose,
+));
 ```
 
 ### Play an Animation
@@ -372,17 +385,19 @@ fn on_weapon_fire(mut query: Query<&mut AnimationBlender>) {
 ### Optimize Animation Updates
 
 ```rust
+use praxis_ecs::{Query, Visibility, Transform, Changed};
+
 // Only update visible characters
 fn update_visible_animations(
     mut query: Query<(&mut AnimationPlayer, &Visibility), Changed<Transform>>,
-    delta_time: Res<Time>,
 ) {
     for (mut player, visibility) in query.iter_mut() {
-        if !visibility.is_visible {
+        if !visibility.is_visible() {
             continue;  // Skip hidden entities
         }
         
-        player.update(delta_time.delta_seconds());
+        // Animation update happens in update_animations system
+        // This is just an example of visibility-based optimization
     }
 }
 ```
@@ -390,14 +405,19 @@ fn update_visible_animations(
 ### Distance-Based LOD
 
 ```rust
+use praxis_ecs::{Query, Transform, Camera, With};
+
 fn animation_lod(
-    mut query: Query<(&Transform, &mut AnimationPlayer)>,
-    camera: Query<&Transform, With<Camera>>,
+    mut query: Query<(&GlobalTransform, &mut AnimationPlayer)>,
+    camera: Query<&GlobalTransform, With<Camera>>,
 ) {
-    let camera_pos = camera.single().translation;
+    let Ok(camera_transform) = camera.get_single() else {
+        return;
+    };
+    let camera_pos = camera_transform.translation();
     
     for (transform, mut player) in query.iter_mut() {
-        let distance = transform.translation.distance(camera_pos);
+        let distance = transform.translation().distance(camera_pos);
         
         // Reduce update rate for distant characters
         if distance > 50.0 {

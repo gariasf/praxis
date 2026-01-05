@@ -165,7 +165,7 @@ use praxis_math::Vec3;
 
 // Update terrain LOD based on camera position (call every frame)
 let camera_pos = Vec3::new(100.0, 50.0, 200.0);
-terrain.update(camera_pos);
+terrain.update(camera_pos)?;
 
 // Regenerate chunks after height editing
 terrain.mark_all_chunks_dirty();

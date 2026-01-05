@@ -335,6 +335,9 @@ Descriptor Set Architecture
 In the current implementation, Praxis uses a unified rendering API with `DrawCommand` and `RenderCommands`:
 
 ```rust
+use praxis_graphics::{DrawCommand, RenderCommands};
+use praxis_math::Mat4;
+
 // From RenderContext::render()
 let draw_commands = vec![
     DrawCommand {
@@ -582,7 +585,8 @@ ECS to GPU Data Flow
 Praxis uses `bevy_ecs`'s `Component` derive macro to mark structs as components:
 
 ```rust
-use bevy_ecs::component::Component;
+use praxis_ecs::Component;
+use praxis_math::{Vec3, Quat};
 
 #[derive(Component)]
 pub struct Transform {
@@ -1663,6 +1667,9 @@ pub struct DirectionalLight {
 
 **Example usage**:
 ```rust
+use praxis_ecs::{DirectionalLight, Transform, GlobalTransform};
+use praxis_math::{Vec3, Quat};
+
 // Create a sun-like light
 world.spawn(DirectionalLight::new(
     Vec3::new(0.3, -0.8, 0.5).normalize(),  // Direction
@@ -1672,8 +1679,9 @@ world.spawn(DirectionalLight::new(
 
 // Can be rotated with a Transform
 world.spawn((
-    DirectionalLight::new(/* ... */),
-    Transform::from_rotation(Quat::from_rotation_y(angle)),
+    DirectionalLight::new(Vec3::new(0.0, -1.0, 0.0), Vec3::ONE, 1.0),
+    Transform::from_rotation(Quat::from_rotation_y(0.0)),
+    GlobalTransform::default(),
 ));
 ```
 
@@ -1703,9 +1711,13 @@ pub struct PointLight {
 
 **Example usage**:
 ```rust
+use praxis_ecs::{Transform, GlobalTransform, PointLight};
+use praxis_math::Vec3;
+
 // Create a point light at a specific location
 world.spawn((
     Transform::from_xyz(0.0, 5.0, 0.0),     // Position
+    GlobalTransform::default(),
     PointLight::new(
         Vec3::new(1.0, 0.8, 0.6),            // Warm color
         25.0,                                 // High intensity
