@@ -1,7 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::sync::Arc;
 use vulkano::{
-    buffer::{Buffer, BufferCreateInfo, BufferUsage},
+    buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
         allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage,
         CopyBufferInfo,
@@ -83,7 +83,7 @@ fn create_test_context() -> TestContext {
     }
 }
 
-fn create_staging_buffer(ctx: &TestContext, size: u64) -> Arc<Buffer> {
+fn create_staging_buffer(ctx: &TestContext, size: u64) -> Subbuffer<[u8]> {
     Buffer::new_slice::<u8>(
         ctx.memory_allocator.clone(),
         BufferCreateInfo {
@@ -100,7 +100,7 @@ fn create_staging_buffer(ctx: &TestContext, size: u64) -> Arc<Buffer> {
     .expect("Failed to create staging buffer")
 }
 
-fn create_device_buffer(ctx: &TestContext, size: u64) -> Arc<Buffer> {
+fn create_device_buffer(ctx: &TestContext, size: u64) -> Subbuffer<[u8]> {
     Buffer::new_slice::<u8>(
         ctx.memory_allocator.clone(),
         BufferCreateInfo {

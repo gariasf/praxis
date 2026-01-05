@@ -1,12 +1,9 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::sync::Arc;
 use vulkano::{
-    buffer::{Buffer, BufferCreateInfo, BufferUsage},
+    buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     descriptor_set::{
-        allocator::{
-            DescriptorSetAllocator, StandardDescriptorSetAllocator,
-            StandardDescriptorSetAllocatorCreateInfo,
-        },
+        allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo},
         layout::{
             DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateInfo,
             DescriptorType,
@@ -151,7 +148,7 @@ fn create_test_context() -> TestContext {
 fn create_uniform_buffer(
     memory_allocator: Arc<StandardMemoryAllocator>,
     size: usize,
-) -> Arc<Buffer> {
+) -> Subbuffer<[u8]> {
     Buffer::new_slice::<u8>(
         memory_allocator,
         BufferCreateInfo {

@@ -6,11 +6,10 @@
 //! - Enhanced additive animation blending
 //! - Root motion extraction for character movement
 
-use praxis_ecs::{Query, World};
 use praxis_math::{Quat, Vec3};
 use praxis_scene::{
     AdditiveAnimation, AdditiveMode, AnimatedPose, AnimationClip, AnimationRetargeter, Bone,
-    BoneMapping, IkConstraint, IkController, RootMotion, RootMotionExtractor, Skeleton,
+    BoneMapping, IkConstraint, IkController, RootMotionExtractor, Skeleton,
 };
 
 fn main() {

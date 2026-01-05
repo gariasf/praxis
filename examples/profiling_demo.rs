@@ -7,10 +7,9 @@
 //! - Export to Chrome tracing format
 
 use praxis_profiling::{
-    AllocationTracker, FramePhase, GpuProfiler, LeakDetector, ProfileScope, Profiler,
-    ProfilerConfig, SystemProfiler,
+    FramePhase, ProfileScope, Profiler,
+    ProfilerConfig,
 };
-use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 

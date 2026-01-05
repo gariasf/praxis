@@ -1,7 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::sync::Arc;
 use vulkano::{
-    buffer::{Buffer, BufferCreateInfo, BufferUsage},
+    buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
         allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage,
         CopyBufferInfo,
@@ -141,7 +141,7 @@ impl GraphicsContext {
         }
     }
 
-    fn create_uniform_buffer(&self, size: u64) -> Arc<Buffer> {
+    fn create_uniform_buffer(&self, size: u64) -> Subbuffer<[u8]> {
         Buffer::new_slice::<u8>(
             self.memory_allocator.clone(),
             BufferCreateInfo {
@@ -158,7 +158,7 @@ impl GraphicsContext {
         .expect("Failed to create uniform buffer")
     }
 
-    fn create_staging_buffer(&self, size: u64) -> Arc<Buffer> {
+    fn create_staging_buffer(&self, size: u64) -> Subbuffer<[u8]> {
         Buffer::new_slice::<u8>(
             self.memory_allocator.clone(),
             BufferCreateInfo {
@@ -175,7 +175,7 @@ impl GraphicsContext {
         .expect("Failed to create staging buffer")
     }
 
-    fn create_device_buffer(&self, size: u64) -> Arc<Buffer> {
+    fn create_device_buffer(&self, size: u64) -> Subbuffer<[u8]> {
         Buffer::new_slice::<u8>(
             self.memory_allocator.clone(),
             BufferCreateInfo {
@@ -205,7 +205,7 @@ fn bench_complete_frame_render_pattern(c: &mut Criterion) {
             |b, &object_count| {
                 b.iter(|| {
                     // Phase 1: Upload per-object data via staging buffer
-                    let staging = ctx.create_staging_buffer(object_count * 256);
+                    let staging = ctx.create_staging_buffer((object_count * 256) as u64);
                     {
                         let mut write_lock = staging.write().expect("Failed to lock staging");
                         for i in 0..object_count {
@@ -215,7 +215,7 @@ fn bench_complete_frame_render_pattern(c: &mut Criterion) {
                         }
                     }
 
-                    let device_buffer = ctx.create_device_buffer(object_count * 256);
+                    let device_buffer = ctx.create_device_buffer((object_count * 256) as u64);
 
                     // Phase 2: Copy staging to device
                     let mut builder = AutoCommandBufferBuilder::primary(
@@ -638,14 +638,14 @@ fn bench_integrated_optimization_scenarios(c: &mut Criterion) {
                 .collect();
 
             // Staging buffer pooling: single large staging buffer
-            let staging = ctx.create_staging_buffer(object_count * 1024);
-            let device_buf = ctx.create_device_buffer(object_count * 1024);
+            let staging = ctx.create_staging_buffer((object_count * 1024) as u64);
+            let device_buf = ctx.create_device_buffer((object_count * 1024) as u64);
 
             {
                 let mut write_lock = staging.write().expect("Failed to lock");
                 for i in 0..object_count {
                     let offset = i * 1024;
-                    let data: Vec<u8> = (0..1024).map(|j| ((i + j) % 256) as u8).collect();
+                    let data: Vec<u8> = (0..1024usize).map(|j| ((i + j) % 256) as u8).collect();
                     write_lock[offset..offset + 1024].copy_from_slice(&data);
                 }
             }

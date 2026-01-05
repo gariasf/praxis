@@ -163,7 +163,7 @@ fn demo_spatial_manager() {
     for i in 0..20 {
         let entity = Entity::from_raw(2000 + i);
         let x = (i as f32 * 8.0) - 76.0;
-        let y = ((i as f32 * 3.0).sin() * 10.0);
+        let y = (i as f32 * 3.0).sin() * 10.0;
         let bounds = Aabb::from_center_half_extents(Vec3::new(x, y, 0.0), Vec3::splat(2.0));
         manager.insert(entity, bounds);
     }
@@ -229,7 +229,7 @@ fn demo_ecs_integration() {
 
     for i in 0..15 {
         let x = (i as f32 * 12.0) - 84.0;
-        let z = ((i as f32 * 0.5).sin() * 20.0);
+        let z = (i as f32 * 0.5).sin() * 20.0;
         let bounds = Aabb::from_center_half_extents(Vec3::new(x, 0.0, z), Vec3::splat(3.0));
 
         world.spawn(SpatialBundle::new(bounds));

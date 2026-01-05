@@ -1,7 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use praxis_scene::{
-    CameraDef, DirectionalLightDef, EditorCamera, EditorData, EntityDefinition, GizmoMode,
-    SceneDefinition, SceneLoader, TransformDef, ViewportSettings,
+    EditorCamera, EditorData, EntityDefinition, GizmoMode, SceneDefinition, SceneLoader,
+    TransformDef, ViewportSettings,
 };
 
 fn create_simple_entity(name: &str, x: f32, y: f32, z: f32) -> EntityDefinition {
@@ -12,21 +12,11 @@ fn create_simple_entity(name: &str, x: f32, y: f32, z: f32) -> EntityDefinition 
 }
 
 fn create_camera_entity(name: &str, x: f32, y: f32, z: f32) -> EntityDefinition {
-    EntityDefinition::new()
-        .with_name(name)
-        .with_transform(TransformDef::from_translation(x, y, z))
-        .with_camera(CameraDef::perspective(1.0472, 1.77))
+    EntityDefinition::perspective_camera(name, (x, y, z), 1.0472, 1.77)
 }
 
-fn create_light_entity(name: &str, x: f32, y: f32, z: f32) -> EntityDefinition {
-    EntityDefinition::new()
-        .with_name(name)
-        .with_transform(TransformDef::from_translation(x, y, z))
-        .with_directional_light(DirectionalLightDef::new(
-            (0.0, -1.0, 0.0),
-            (1.0, 1.0, 1.0),
-            1.0,
-        ))
+fn create_light_entity(name: &str, _x: f32, _y: f32, _z: f32) -> EntityDefinition {
+    EntityDefinition::directional_light(name, (0.0, -1.0, 0.0), (1.0, 1.0, 1.0), 1.0)
 }
 
 fn create_hierarchy_entity(name: &str, depth: usize, children_per_node: usize) -> EntityDefinition {

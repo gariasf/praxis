@@ -16,9 +16,9 @@
 //! - L: Toggle LOD level display
 
 use praxis_ecs::{BoundingBox, LodComponent, MeshHandle, Transform, World};
-use praxis_math::{Mat4, Quat, Vec3};
+use praxis_math::{Mat4, Vec3};
 use praxis_spatial::{
-    Aabb, Bvh, CullingStats, FrustumCuller, LodGroup, LodLevel, Octree, SpatialLodManager,
+    Aabb, Bvh, FrustumCuller, LodGroup, LodLevel, Octree, SpatialLodManager,
     VisibilitySystem,
 };
 use praxis_utils::info;
