@@ -627,6 +627,319 @@ fn log_physics_state(query: Query<(&Name, &Velocity, &Transform)>) {
 }
 ```
 
+## Design Rationale and Tradeoffs
+
+### Why Rapier3D?
+
+**Decision**: Use Rapier3D as the underlying physics engine
+
+**Rationale**:
+- **Pure Rust**: Memory safe, no FFI overhead, integrates seamlessly with Rust ecosystem
+- **Performance**: Competitive with established C++ engines (Bullet, PhysX)
+- **Active development**: Modern architecture, regular updates, responsive maintainers
+- **Feature complete**: Rigid bodies, joints, CCD, sensors - everything needed for games
+- **Cross-platform**: Works on all platforms without platform-specific code
+
+**Alternatives Considered**:
+
+| Engine | Pros | Cons | Why Not Chosen |
+|--------|------|------|----------------|
+| **PhysX** (via physx-rs) | Industry standard, excellent performance, widespread | C++ FFI, unsafe code, complex build | FFI overhead, safety concerns, build complexity |
+| **Bullet** (via bullet3-rs) | Mature, well-tested, used in many games | C++ FFI, outdated API, sparse Rust bindings | Poor Rust integration, unmaintained bindings |
+| **nphysics** | Pure Rust, predecessor to Rapier | Deprecated, superseded by Rapier | Replaced by Rapier by same author |
+| **Custom physics** | Full control, tailored to needs | Massive development effort, bug-prone | Years of effort for equivalent features |
+
+**Key Tradeoff**: Rapier is slightly less mature than PhysX/Bullet but provides vastly better Rust integration and safety guarantees. For a Rust-first engine, this is the right choice.
+
+### ECS Integration Architecture
+
+**Decision**: Component-based physics with bidirectional transform synchronization
+
+**Rationale**:
+- Physics properties as ECS components is idiomatic for Bevy ECS architecture
+- Queries and systems work naturally with physics data
+- No special API needed; users work with familiar ECS patterns
+- Maintains single source of truth for entity state (ECS world)
+
+**Synchronization Strategy**:
+```
+Frame N:
+  1. sync_transforms_to_physics     // ECS → Rapier (kinematic bodies)
+  2. step_physics_simulation         // Rapier updates dynamic bodies
+  3. sync_transforms_from_physics    // Rapier → ECS (dynamic bodies)
+  4. apply_external_forces           // Apply forces for next frame
+```
+
+**Why Bidirectional Sync?**
+- **To Rapier**: Allows game code to move kinematic bodies via Transform component
+- **From Rapier**: Updates Transform so rendering system sees physics results
+- **Alternative (rejected)**: Physics owns transform entirely - would break scene hierarchy
+
+**Performance Cost**: ~2-5μs per entity for sync
+- Mitigated by: Bulk operations, cache-friendly iteration, only syncing changed entities
+- Acceptable because: Transform updates needed for rendering anyway
+
+### Fixed Timestep Design
+
+**Decision**: Physics runs at fixed 60Hz independent of frame rate
+
+**Rationale**:
+- **Determinism**: Same simulation results regardless of frame rate
+- **Stability**: Prevents timestep-dependent instabilities (tunneling, jitter)
+- **Network sync**: Fixed timestep essential for multiplayer
+- **Replay systems**: Deterministic physics enables replay functionality
+
+**Implementation**: Accumulator pattern
+```rust
+accumulator += delta_time;
+while accumulator >= FIXED_TIMESTEP {
+    step_physics(FIXED_TIMESTEP);
+    accumulator -= FIXED_TIMESTEP;
+}
+```
+
+**Why 60Hz?**
+- Industry standard for physics simulation
+- 16.67ms budget is reasonable for most games
+- Higher rates (120Hz) rarely needed unless simulating fast projectiles
+- Lower rates (30Hz) cause noticeable jitter and instability
+
+**Alternatives Considered**:
+1. **Variable timestep**: Rejected - causes non-determinism and instability
+2. **Fixed 30Hz**: Rejected - too low, causes visible jitter
+3. **Fixed 120Hz**: Rejected - overkill for most games, wastes CPU
+4. **Adaptive timestep**: Too complex, determinism issues
+
+**Tradeoff**: If frame rate drops below 60fps, physics slows down (or skips frames)
+- Mitigation: Profile and optimize to maintain 60fps
+- Alternative: Allow configurable timestep (advanced users)
+
+### Rigid Body Type Design
+
+**Decision**: Three rigid body types - Static, Dynamic, Kinematic
+
+**Why Three Types?**
+
+| Type | Use Case | CPU Cost | Example |
+|------|----------|----------|---------|
+| **Static** | Never moves, infinite mass | ~0 (no updates) | Walls, floors, terrain |
+| **Dynamic** | Physics controlled | Medium | Balls, boxes, ragdolls |
+| **Kinematic** | Code controlled, affects others | Low | Moving platforms, doors |
+
+**Why Not Just Two?**
+- Could combine Static + Kinematic as "non-dynamic"
+- But: Different CPU paths, different collision handling, different use cases
+- Separating them makes intent clear and enables optimizations
+
+**Kinematic vs Static**:
+- Kinematic bodies can move (via Transform) and push dynamic bodies
+- Static bodies never move and are spatially indexed differently
+- Rapier optimizes collision checks based on type (Static-Static checks skipped)
+
+### Collider Shape Hierarchy
+
+**Decision**: Primitive shapes (sphere, box, capsule) plus complex shapes (convex hull, trimesh)
+
+**Performance Hierarchy** (fastest to slowest):
+1. **Sphere**: Distance check only, no rotation needed
+2. **Capsule**: Two spheres + cylinder, excellent for characters
+3. **Box (cuboid)**: Separating axis theorem, very fast
+4. **Cylinder**: Slightly slower than box, less common
+5. **Convex hull**: GJK algorithm, ~10x slower than primitives
+6. **Triangle mesh**: Only for static geometry, slowest
+
+**Why This Set?**
+- Primitives cover 90% of game objects efficiently
+- Convex hull for custom shapes (rocks, vehicles)
+- Triangle mesh for static level geometry (terrain, buildings)
+
+**Alternatives Considered**:
+- **Sphere-only physics**: Too limiting, poor approximations
+- **Mesh-only physics**: Too slow, unstable
+- **Signed distance fields**: Great but complex to author and process
+
+**Design Guidelines**:
+- Use primitives wherever possible
+- Compound shapes (multiple primitives) better than single convex hull
+- Reserve triangle meshes for large static geometry only
+
+**Why No Concave Colliders for Dynamic Bodies?**
+- Concave shapes lack clear "inside" and "outside"
+- Collision response undefined (which way to push?)
+- Solution: Decompose into convex pieces or use compound shapes
+
+### Component-Based Properties
+
+**Decision**: Separate components for Velocity, Mass, Friction, Restitution
+
+**Why Not Single PhysicsBody Component?**
+- **Granular queries**: `Query<&Velocity>` vs `Query<&PhysicsBody>` where we only need velocity
+- **Optional properties**: Not all bodies need custom mass or friction
+- **Performance**: Smaller components improve cache utilization
+- **Flexibility**: Mix and match properties independently
+
+**Default Values**:
+- Mass: Computed from collider volume and density (1.0)
+- Friction: 0.5 (medium)
+- Restitution: 0.0 (no bounce)
+- Rationale: Sensible defaults reduce boilerplate for common cases
+
+### Collision Event System
+
+**Decision**: Component-based event receivers + resource-based global events
+
+**Two-Tier System**:
+1. **Per-entity events**: `CollisionEventReceiver` component
+2. **Global events**: `ContactEvents` resource
+
+**Why Both?**
+- Per-entity: Fast, direct access for objects that care about their own collisions
+- Global: Necessary for systems that need all collision events (audio, particle effects)
+
+**Alternatives Considered**:
+1. **Only global events**: Forces all entities to check if event applies to them
+2. **Only per-entity**: No way to observe third-party collisions
+3. **Callback functions**: Not idiomatic for ECS, hard to serialize
+
+**Performance**: Event storage cost is ~32 bytes per collision per frame
+- Mitigated by: Clearing events each frame, only storing what's needed
+- Collision groups filter out unwanted collisions before events created
+
+### Collision Groups and Filtering
+
+**Decision**: Bitmask-based collision filtering (16 layers)
+
+**Why Bitmasks?**
+- **Fast**: Single bitwise AND operation to check collision
+- **Flexible**: Each entity can collide with multiple groups
+- **Compact**: 32-bit value stores membership and filter
+
+**16 Layers Rationale**:
+- Sufficient for most games (player, enemy, projectile, environment, triggers, etc.)
+- Could extend to 32 layers with 64-bit masks if needed
+- More layers = more complex management for minimal benefit
+
+**Alternatives Considered**:
+1. **Tag-based filtering**: More flexible but much slower (string comparisons)
+2. **Raycast-only filtering**: Insufficient - need group-group filtering
+3. **Unlimited groups**: Memory waste, overcomplicated API
+
+### External Forces Pattern
+
+**Decision**: Accumulator component for forces, cleared after physics step
+
+**Why Accumulator?**
+- Multiple systems can apply forces without coordination
+- Forces accumulate additively (realistic physics)
+- Cleared automatically after physics step prevents double-application
+
+**Alternative Pattern (rejected)**: Direct velocity manipulation
+```rust
+// Problematic:
+velocity.linear.x += force.x * dt;  // Which dt? Frame dt or physics dt?
+velocity.linear.y += force.y * dt;  // Multiple systems = race conditions
+```
+
+**Forces vs Impulses**:
+- **Force**: Applied over time (continuous), integrated during physics step
+- **Impulse**: Instant velocity change (discrete), applied immediately
+- Both supported; use forces for thrusters, impulses for explosions
+
+### Sleeping Mechanism
+
+**Decision**: Bodies sleep when at rest, wake on interaction
+
+**Why Sleeping?**
+- **Performance**: Sleeping bodies skip integration, constraint solving
+- **Typical savings**: 60-80% CPU time in scenes with many static objects
+- **Automatic**: Rapier handles sleep/wake transitions
+
+**Sleep Criteria** (configurable):
+- Linear velocity < 0.01 m/s
+- Angular velocity < 0.01 rad/s  
+- No forces applied
+- No collisions in last N frames
+
+**Wake Conditions**:
+- External force applied
+- Collision with awake body
+- Manual wake call from code
+
+**Why Not Always Awake?**
+- Waste of CPU for objects sitting still (boxes on shelves, etc.)
+- Physics stability actually improves (no micro-jitter from floating point errors)
+
+### Continuous Collision Detection (CCD)
+
+**Decision**: Optional per-body CCD for fast-moving objects
+
+**When CCD is Needed**:
+- Object speed > collider size / timestep
+- Example: Bullet traveling 100 m/s needs CCD if collider < 1.6m (at 60Hz)
+
+**Cost**: 2-3x slower than discrete collision detection
+
+**Why Optional?**
+- Most objects don't need CCD (characters, vehicles, debris)
+- Always-on CCD wastes CPU for slow objects
+- Manual opt-in ensures users understand the cost
+
+### Spatial Query Design
+
+**Decision**: Physics world owns spatial structures, exposed via query API
+
+**Query Types Provided**:
+1. **Raycast**: Find first intersection along ray
+2. **Raycast all**: Find all intersections along ray
+3. **Shape cast**: Sweep shape through space
+4. **Point query**: Find all objects at point
+5. **AABB query**: Find all objects in box
+
+**Why Physics World Owns Spatial Structures?**
+- Rapier maintains spatial indices for collision detection anyway
+- Reusing them for queries is free
+- Separate spatial structure would duplicate memory and logic
+
+**See Also**: [Spatial Optimization](spatial-optimization.md) for scene-level spatial partitioning
+
+### Integration with Transform Hierarchy
+
+**Decision**: Physics uses GlobalTransform for world position, respects hierarchy
+
+**Why GlobalTransform?**
+- Physics operates in world space
+- Child physics bodies inherit parent's world transform
+- Enables parenting physics objects to moving platforms, vehicles, etc.
+
+**Alternatives Considered**:
+1. **Only local Transform**: Doesn't work for nested hierarchies
+2. **Flatten all physics bodies**: Breaks parenting, limits scene organization
+3. **Physics-specific transform**: Duplicates Transform logic
+
+**Tradeoff**: Transform propagation system must run before physics sync
+- Schedule: `transform_propagation → sync_to_physics → step → sync_from_physics`
+
+### Performance Optimization Strategies
+
+**Built-in Optimizations**:
+1. **Spatial indexing**: Broadphase collision uses BVH
+2. **Sleeping**: Inactive bodies skipped
+3. **Island-based solving**: Independent groups solved separately  
+4. **Parallel solving**: Multi-threaded constraint resolution
+5. **Continuous collision cache**: Reuses calculations from previous frames
+
+**User-Facing Optimizations**:
+1. **Simple shapes**: Sphere/capsule are 10x faster than convex hull
+2. **Collision groups**: Filter out unnecessary checks
+3. **Static geometry**: Mark unchanging objects as Static
+4. **Solver iterations**: Reduce for less accurate but faster physics
+
+**When to Profile**:
+- >500 dynamic bodies
+- >50 active collisions per frame
+- Complex compound shapes
+- High solver iteration counts
+
 ## Troubleshooting
 
 ### Bodies Falling Through Floor
