@@ -47,8 +47,8 @@ fn test_hierarchy_panel_entity_tree_operations() {
         .expect("Failed to create child entity");
 
     // Verify entities exist
-    assert!(world.get_entity(parent_entity).is_some());
-    assert!(world.get_entity(child_entity).is_some());
+    assert!(world.inner().get_entity(parent_entity).is_ok());
+    assert!(world.inner().get_entity(child_entity).is_ok());
 
     // Verify names
     assert_eq!(
@@ -64,10 +64,10 @@ fn test_hierarchy_panel_entity_tree_operations() {
     // Test entity deletion
     let result = entity_ops.delete_entities(&mut world, &mut undo_system, vec![child_entity]);
     assert!(result.is_ok());
-    assert!(world.get_entity(child_entity).is_none());
+    assert!(world.inner().get_entity(child_entity).is_err());
 
     // Parent should still exist
-    assert!(world.get_entity(parent_entity).is_some());
+    assert!(world.inner().get_entity(parent_entity).is_ok());
 }
 
 /// Test hierarchy panel drag-and-drop reparenting operations.
@@ -97,11 +97,11 @@ fn test_hierarchy_panel_reparenting() {
     world.entity_mut(child).insert(Parent(parent1));
 
     // Add child to parent1's children
-    if let Some(mut parent_entity) = world.get_entity_mut(parent1) {
+    if let Ok(parent_entity) = world.inner_mut().get_entity_mut(parent1) {
         if let Some(mut children) = parent_entity.get_mut::<Children>() {
             children.0.push(child);
         } else {
-            parent_entity.insert(Children(vec![child]));
+            world.entity_mut(parent1).insert(Children(vec![child]));
         }
     }
 
@@ -117,18 +117,18 @@ fn test_hierarchy_panel_reparenting() {
     world.entity_mut(child).insert(Parent(parent2));
 
     // Update parent1's children list
-    if let Some(mut parent_entity) = world.get_entity_mut(parent1) {
+    if let Ok(parent_entity) = world.inner_mut().get_entity_mut(parent1) {
         if let Some(mut children) = parent_entity.get_mut::<Children>() {
             children.0.retain(|&e| e != child);
         }
     }
 
     // Add to parent2's children list
-    if let Some(mut parent_entity) = world.get_entity_mut(parent2) {
+    if let Ok(parent_entity) = world.inner_mut().get_entity_mut(parent2) {
         if let Some(mut children) = parent_entity.get_mut::<Children>() {
             children.0.push(child);
         } else {
-            parent_entity.insert(Children(vec![child]));
+            world.entity_mut(parent2).insert(Children(vec![child]));
         }
     }
 
@@ -869,7 +869,7 @@ fn test_complete_editor_workflow() {
         .expect("Failed to create entity");
 
     // Verify entity exists
-    assert!(world.get_entity(entity).is_some());
+    assert!(world.inner().get_entity(entity).is_ok());
 
     // Select entity
     world
@@ -896,7 +896,7 @@ fn test_complete_editor_workflow() {
     entity_ops
         .delete_entities(&mut world, &mut undo_system, vec![entity])
         .expect("Failed to delete entity");
-    assert!(world.get_entity(entity).is_none());
+    assert!(world.inner().get_entity(entity).is_err());
 }
 
 /// Test multi-panel interaction: hierarchy selection affects inspector.
@@ -1057,7 +1057,7 @@ fn test_asset_drag_to_viewport_instantiation() {
         ));
 
         // Verify entity was created
-        assert!(world.get_entity(entity).is_some());
+        assert!(world.inner().get_entity(entity).is_ok());
         assert!(world.get::<MeshHandle>(entity).is_some());
 
         // Select newly created entity
@@ -1089,11 +1089,11 @@ fn test_undo_redo_integration() {
         .expect("Failed to create entity");
 
     // Verify entity exists
-    assert!(world.get_entity(entity).is_some());
+    assert!(world.inner().get_entity(entity).is_ok());
 
     // Undo creation
     undo_system.undo(&mut world).expect("Failed to undo");
-    assert!(world.get_entity(entity).is_none());
+    assert!(world.inner().get_entity(entity).is_err());
 
     // Redo creation
     undo_system.redo(&mut world).expect("Failed to redo");
