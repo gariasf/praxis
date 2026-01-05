@@ -225,6 +225,13 @@ impl GlobalTransform {
         Self { matrix }
     }
 
+    /// Creates a global transform from a translation vector.
+    pub fn from_translation(translation: Vec3) -> Self {
+        Self {
+            matrix: Mat4::from_translation(translation),
+        }
+    }
+
     /// Creates a global transform from translation, rotation, and scale.
     pub fn from_scale_rotation_translation(scale: Vec3, rotation: Quat, translation: Vec3) -> Self {
         Self {
@@ -1687,6 +1694,18 @@ mod tests {
 
         let translation = global_transform.translation();
         assert_eq!(translation, Vec3::new(5.0, 10.0, 15.0));
+    }
+
+    #[test]
+    fn test_global_transform_from_translation() {
+        let translation = Vec3::new(5.0, 10.0, 15.0);
+        let global_transform = GlobalTransform::from_translation(translation);
+
+        assert_eq!(global_transform.translation(), translation);
+        let scale = global_transform.scale();
+        assert!((scale.x - 1.0).abs() < 0.001);
+        assert!((scale.y - 1.0).abs() < 0.001);
+        assert!((scale.z - 1.0).abs() < 0.001);
     }
 
     #[test]
