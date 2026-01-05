@@ -143,7 +143,7 @@ let texture = manager.generate_texture(&graph, params)?;
 - `Skeleton`, `AnimationClip`, `AnimationPlayer`
 - Blend trees, layered animation, cross-fading
 
-**Details**: `docs/animation_system.md`
+**Details**: `docs/guides/animation/` (skeletal-basics.md, blending.md, advanced-features.md)
 
 ### Scripting
 - **Lua 5.4** integration via `mlua`

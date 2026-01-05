@@ -13,7 +13,11 @@ Task-oriented guides for implementing features with Praxis.
 
 ## Animation
 
-- [Animation](animation.md) - Skeletal animation and blending
+- [Animation Overview](animation.md) - Quick start and practical examples
+- [Animation Guides](animation/) - Comprehensive animation documentation:
+  - [Skeletal Basics](animation/skeletal-basics.md) - Core architecture and fundamentals
+  - [Blending](animation/blending.md) - Cross-fades, blend trees, and layered animation
+  - [Advanced Features](animation/advanced-features.md) - IK, retargeting, additive blending, and root motion
 
 ## Simulation
 

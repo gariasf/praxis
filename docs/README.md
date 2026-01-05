@@ -17,7 +17,10 @@ Task-oriented tutorials for implementing features:
 - [Post-Processing](guides/post-processing.md) - Bloom, color grading, effects
 - [Particles](guides/particles.md) - Practical particle effect examples
 - [Spatial Optimization](guides/spatial-optimization.md) - Frustum culling, LOD, and occlusion culling
-- [Animation](guides/animation.md) - Skeletal animation and blending
+- [Animation](guides/animation.md) - Quick start guide
+  - [Skeletal Basics](guides/animation/skeletal-basics.md) - Core architecture and fundamentals
+  - [Blending](guides/animation/blending.md) - Cross-fades, blend trees, and layered animation
+  - [Advanced Features](guides/animation/advanced-features.md) - IK, retargeting, root motion
 - [Audio](guides/audio.md) - Spatial audio with Kira
 - [Input](guides/input.md) - Keyboard, mouse, and gamepad handling
 - [Profiling](profiling.md) - Performance analysis and optimization

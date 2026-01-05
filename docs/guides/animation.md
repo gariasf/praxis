@@ -530,7 +530,9 @@ cargo run --example skeletal_animation_demo
 
 ## See Also
 
+- **Comprehensive Animation Documentation:**
+  - [Skeletal Basics](animation/skeletal-basics.md) - Core architecture, data structures, and GLTF workflow
+  - [Blending](animation/blending.md) - Cross-fades, blend trees, layered animation, and additive blending
+  - [Advanced Features](animation/advanced-features.md) - IK, retargeting, additive blending, and root motion
 - [Animation Concepts](../concepts/animation.md) - Theory and architecture
-- [Animation System Deep Dive](../animation_system.md) - Detailed implementation
-- [Advanced Animation Features](../animation_advanced_features.md) - IK, retargeting
 - [praxis_scene README](../../crates/praxis_scene/README.md) - API documentation
