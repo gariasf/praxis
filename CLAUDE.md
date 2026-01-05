@@ -24,8 +24,35 @@ cargo clippy --all -- -D warnings  # Lint (must pass)
 # Run Examples
 cargo run --example comprehensive_scene_demo
 cargo run --example skeletal_animation_demo
+cargo run --example animation_demo
+cargo run --example animation_blending_demo
+cargo run --example animation_advanced_demo
 cargo run --example audio_demo
+cargo run --example audio_simple
 cargo run --example editor_demo
+cargo run --example editor_camera_demo
+cargo run --example gui_demo
+cargo run --example scripting_demo
+cargo run --example scripting_advanced_demo
+cargo run --example networking_demo
+cargo run --example procedural_texture_demo
+cargo run --example terrain_demo
+cargo run --example spatial_partitioning_demo
+cargo run --example spatial_optimization_demo
+cargo run --example scene_demo
+cargo run --example scene_serialization_demo
+cargo run --example material_demo
+cargo run --example advanced_material_demo
+cargo run --example advanced_lighting_demo
+cargo run --example environment_probe_demo
+cargo run --example particles_demo
+cargo run --example profiling_demo
+cargo run --example profiling_advanced_demo
+cargo run --example lod_demo
+cargo run --example selection_demo
+cargo run --example command_system_demo
+cargo run --example undo_redo_system_demo
+cargo run --example transform_propagation_demo
 
 # Documentation
 cargo doc --workspace --no-deps --open
@@ -33,7 +60,7 @@ cargo doc --workspace --no-deps --open
 
 ## Architecture
 
-15-crate workspace organized by subsystem:
+19-crate workspace organized by subsystem:
 
 | Crate | Purpose |
 |-------|---------|
@@ -43,12 +70,14 @@ cargo doc --workspace --no-deps --open
 | `praxis_ecs` | ECS (bevy_ecs) |
 | `praxis_math` | Math (glam) |
 | `praxis_scene` | Transform hierarchy, animation |
+| `praxis_spatial` | Spatial data structures (octree, BVH) |
 | `praxis_assets` | Asset loading (OBJ, GLTF) |
 | `praxis_input` | Keyboard, mouse, gamepad |
 | `praxis_gui` | Editor GUI (egui) |
 | `praxis_physics` | Physics (Rapier3D) |
 | `praxis_audio` | Audio (Kira) |
 | `praxis_procedural` | Procedural textures |
+| `praxis_terrain` | Terrain generation and LOD |
 | `praxis_profiling` | Performance profiling |
 | `praxis_scripting` | Lua scripting integration |
 | `praxis_networking` | Networking and multiplayer |
