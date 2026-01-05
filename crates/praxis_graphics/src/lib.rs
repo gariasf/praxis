@@ -113,7 +113,13 @@
 //! graph.set_output(noise_id);
 //!
 //! // Generate texture
-//! // let mut manager = ProceduralTextureManager::new(device, queue, mem_alloc, cmd_alloc, desc_alloc);
+//! // let mut manager = ProceduralTextureManager::new(
+//! //     device,
+//! //     queue,
+//! //     memory_allocator,
+//! //     command_buffer_allocator,
+//! //     descriptor_set_allocator,
+//! // );
 //! // let params = TextureGenerationParams { width: 512, height: 512, seed: 0 };
 //! // let texture = manager.generate_texture(&graph, params)?;
 //! # Ok(())
