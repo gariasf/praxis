@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
-use winit::window::WindowBuilder;
+use winit::window::WindowAttributes;
 
 fn main() -> Result<()> {
     praxis_utils::init_tracing()?;
@@ -27,16 +27,17 @@ fn main() -> Result<()> {
 
     let event_loop = EventLoop::new()?;
     let window = Arc::new(
-        WindowBuilder::new()
-            .with_title("Praxis Engine - Terrain System Demo")
-            .with_inner_size(winit::dpi::LogicalSize::new(1920, 1080))
-            .build(&event_loop)?,
+        event_loop.create_window(
+            WindowAttributes::default()
+                .with_title("Praxis Engine - Terrain System Demo")
+                .with_inner_size(winit::dpi::LogicalSize::new(1920, 1080)),
+        )?,
     );
 
     let mut world = World::new();
 
     world.spawn((
-        Transform::from_xyz(0.0, 50.0, 100.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
+        Transform::from_xyz(0.0, 50.0, 100.0).look_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
         Camera::default(),
         PerspectiveProjection {
             fov: 70.0_f32.to_radians(),
