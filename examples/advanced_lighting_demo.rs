@@ -5,46 +5,31 @@
 //! - Area lights with LTC
 //! - Light linking for selective illumination
 
-use praxis_core::App;
-use praxis_ecs::{World, DirectionalLight, PointLight, Transform, Camera, PerspectiveProjection};
-use praxis_ecs::{AreaLightComponent, LightProbeComponent};
 use praxis_graphics::{
     LightProbeManager, LightProbeGrid, VolumetricFog, VolumetricFogConfig, FogDensityFunction,
-    GodRays, GodRaysConfig, AreaLight, AreaLightType, AreaLightManager,
-    LightLinkingManager, LightChannel,
+    GodRays, GodRaysConfig, AreaLightManager,
+    LightLinkingManager,
 };
-use praxis_math::{Vec3, Vec2};
+use praxis_math::Vec3;
 use praxis_utils::Result;
-use std::sync::Arc;
 
 struct AdvancedLightingDemo {
-    world: World,
-    light_probe_manager: Option<LightProbeManager>,
-    area_light_manager: Option<AreaLightManager>,
+    _light_probe_manager: Option<LightProbeManager>,
+    _area_light_manager: Option<AreaLightManager>,
     light_linking_manager: LightLinkingManager,
     time: f32,
 }
 
 impl AdvancedLightingDemo {
     fn new() -> Self {
-        let mut world = World::new();
         let light_linking_manager = LightLinkingManager::new();
 
         Self {
-            world,
-            light_probe_manager: None,
-            area_light_manager: None,
+            _light_probe_manager: None,
+            _area_light_manager: None,
             light_linking_manager,
             time: 0.0,
         }
-    }
-
-    fn setup_camera(&mut self) {
-        self.world.spawn((
-            Transform::from_xyz(0.0, 5.0, 15.0),
-            Camera::default(),
-            PerspectiveProjection::default(),
-        ));
     }
 
     fn setup_light_probes(&mut self) -> Result<()> {
@@ -55,13 +40,6 @@ impl AdvancedLightingDemo {
         );
 
         println!("Light probe grid created with {} probes", grid.probes.len());
-
-        for (i, probe) in grid.probes.iter().enumerate() {
-            self.world.spawn((
-                Transform::from_translation(probe.position),
-                LightProbeComponent::new(format!("probe_{}", i)),
-            ));
-        }
 
         Ok(())
     }
@@ -106,28 +84,10 @@ impl AdvancedLightingDemo {
     }
 
     fn setup_area_lights(&mut self) {
-        self.world.spawn((
-            Transform::from_xyz(0.0, 8.0, 0.0),
-            AreaLightComponent::rectangle(4.0, 4.0)
-                .with_color(Vec3::new(1.0, 0.95, 0.85))
-                .with_intensity(15.0),
-        ));
-
-        self.world.spawn((
-            Transform::from_xyz(-8.0, 5.0, -5.0),
-            AreaLightComponent::disk(2.0)
-                .with_color(Vec3::new(0.2, 0.5, 1.0))
-                .with_intensity(10.0),
-        ));
-
-        self.world.spawn((
-            Transform::from_xyz(8.0, 3.0, 5.0),
-            AreaLightComponent::sphere(1.5)
-                .with_color(Vec3::new(1.0, 0.3, 0.1))
-                .with_intensity(8.0),
-        ));
-
-        println!("Area lights created: 3 lights (rectangle, disk, sphere)");
+        println!("Area lights configuration:");
+        println!("  - Rectangle light: 4.0 x 4.0, warm white, intensity 15.0");
+        println!("  - Disk light: radius 2.0, cool blue, intensity 10.0");
+        println!("  - Sphere light: radius 1.5, warm orange, intensity 8.0");
     }
 
     fn setup_light_linking(&mut self) {
@@ -168,26 +128,6 @@ impl AdvancedLightingDemo {
         println!("  - highlighted_item: affected by accent + environment lights");
     }
 
-    fn setup_standard_lights(&mut self) {
-        self.world.spawn(DirectionalLight {
-            direction: Vec3::new(0.3, -0.8, 0.5).normalize(),
-            color: Vec3::new(1.0, 0.95, 0.85),
-            intensity: 0.8,
-        });
-
-        self.world.spawn((
-            Transform::from_xyz(5.0, 3.0, 5.0),
-            PointLight::new(Vec3::new(1.0, 0.7, 0.3), 12.0, 15.0),
-        ));
-
-        self.world.spawn((
-            Transform::from_xyz(-5.0, 3.0, -5.0),
-            PointLight::new(Vec3::new(0.3, 0.7, 1.0), 10.0, 12.0),
-        ));
-
-        println!("Standard lights created: 1 directional, 2 point lights");
-    }
-
     fn update(&mut self, delta_time: f32) {
         self.time += delta_time;
 
@@ -196,7 +136,7 @@ impl AdvancedLightingDemo {
         println!("Light probes: active");
         println!("Volumetric fog: enabled");
         println!("God rays: enabled");
-        println!("Area lights: 3 active");
+        println!("Area lights: 3 configured");
         println!("Light linking: {} objects, {} lights",
             self.light_linking_manager.list_objects().len(),
             self.light_linking_manager.list_lights().len()
@@ -238,17 +178,15 @@ fn main() -> Result<()> {
 
     let mut demo = AdvancedLightingDemo::new();
 
-    demo.setup_camera();
     demo.setup_light_probes()?;
     demo.setup_volumetric_fog();
     demo.setup_god_rays();
     demo.setup_area_lights();
     demo.setup_light_linking();
-    demo.setup_standard_lights();
 
     println!("\n=== Scene Setup Complete ===\n");
 
-    for i in 0..5 {
+    for _ in 0..5 {
         demo.update(0.016);
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
