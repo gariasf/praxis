@@ -12,12 +12,15 @@ Welcome to the Praxis game engine documentation.
 ### [Guides](guides/README.md)
 Task-oriented tutorials for implementing features:
 - [Rendering](guides/rendering.md) - Forward and deferred pipelines
+- [Deferred Rendering](guides/deferred-rendering.md) - Multi-pass rendering with G-buffer
+- [Environment Probes](guides/environment-probes.md) - Image-based lighting and reflections
 - [HDR and Tone Mapping](guides/hdr-and-tonemapping.md) - High dynamic range rendering
 - [Shadows](guides/shadows.md) - Cascaded shadow maps with PCF
 - [Post-Processing](guides/post-processing.md) - Bloom, color grading, effects
 - [Particles](guides/particles.md) - Practical particle effect examples
 - [Spatial Optimization](guides/spatial-optimization.md) - Frustum culling, LOD, and occlusion culling
 - [Animation](guides/animation.md) - Quick start guide
+  - [Skeletal Animation](guides/animation/skeletal-animation.md) - Complete skeletal animation system
   - [Skeletal Basics](guides/animation/skeletal-basics.md) - Core architecture and fundamentals
   - [Blending](guides/animation/blending.md) - Cross-fades, blend trees, and layered animation
   - [Advanced Features](guides/animation/advanced-features.md) - IK, retargeting, root motion
@@ -49,7 +52,11 @@ API documentation and specifications:
 
 ### [Editor](editor/README.md)
 Editor tools and workflows:
-- [Selection](editor/selection.md) - Multi-entity selection and picking
+- [Selection System](editor/selection-system.md) - Multi-entity selection and raycast picking
+- [Asset Browser](editor/asset-browser.md) - Asset management with drag-and-drop
+- [Editor Camera](editor/editor-camera.md) - Orbit camera controls and focus
+- [Menu Bar](editor/menu-bar.md) - Menu system with keyboard shortcuts
+- [Hierarchy Panel](editor/hierarchy-panel.md) - Entity tree with drag-and-drop reparenting
 - [Undo/Redo](editor/undo-redo.md) - Command history system
 - [Editor Overview](editor_system.md) - Panels and editor architecture
 

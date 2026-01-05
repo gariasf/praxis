@@ -5,6 +5,8 @@ Task-oriented guides for implementing features with Praxis.
 ## Rendering
 
 - [Rendering](rendering.md) - Forward and deferred rendering pipelines
+- [Deferred Rendering](deferred-rendering.md) - Multi-pass rendering with G-buffer architecture
+- [Environment Probes](environment-probes.md) - Image-based lighting and PBR reflections
 - [HDR and Tone Mapping](hdr-and-tonemapping.md) - High dynamic range rendering
 - [Shadows](shadows.md) - Cascaded shadow mapping with PCF
 - [Post-Processing](post-processing.md) - Bloom, color grading, effects
@@ -15,6 +17,7 @@ Task-oriented guides for implementing features with Praxis.
 
 - [Animation Overview](animation.md) - Quick start and practical examples
 - [Animation Guides](animation/) - Comprehensive animation documentation:
+  - [Skeletal Animation](animation/skeletal-animation.md) - Complete skeletal animation system guide
   - [Skeletal Basics](animation/skeletal-basics.md) - Core architecture and fundamentals
   - [Blending](animation/blending.md) - Cross-fades, blend trees, and layered animation
   - [Advanced Features](animation/advanced-features.md) - IK, retargeting, additive blending, and root motion

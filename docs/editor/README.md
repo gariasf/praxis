@@ -4,11 +4,21 @@ Documentation for the Praxis editor system (`praxis_editor` crate).
 
 ## Contents
 
-- [Panels](panels.md) - Hierarchy, Inspector, Assets, Console, Viewport
-- [Selection](selection.md) - Multi-entity selection, raycast picking, marquee selection
+### Core Systems
+- [Selection System](selection-system.md) - Multi-entity selection, raycast picking, marquee selection
 - [Undo/Redo](undo-redo.md) - Command history and state management
+
+### Panels
+- [Hierarchy Panel](hierarchy-panel.md) - Entity tree with drag-and-drop reparenting
+- [Asset Browser](asset-browser.md) - Asset management with thumbnails and drag-and-drop
+- [Inspector](inspector.md) - Component editing and properties
+- [Console](panels.md#console) - Debug output and commands
+- [Scene View](panels.md#scene-view) - 3D viewport
+
+### Interface
+- [Menu Bar](menu-bar.md) - File, Edit, Entity, View, Help menus with shortcuts
+- [Editor Camera](editor-camera.md) - Orbit camera controls and focus-on-selection
 - [Gizmos](gizmos.md) - Transform manipulation tools
-- [Camera](camera.md) - Editor camera controller
 
 ## Overview
 
