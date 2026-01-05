@@ -11,7 +11,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
+    command_buffer::{
+        allocator::CommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage,
+        CopyBufferInfo,
+    },
+    device::Queue,
     memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
+    sync::{self, GpuFuture},
 };
 
 /// GPU-side mesh data containing vertex and index buffers.
@@ -34,7 +40,13 @@ pub struct GpuMesh {
 }
 
 impl GpuMesh {
-    /// Creates a new GPU mesh from vertex and index data.
+    /// Creates a new GPU mesh from vertex and index data using staging buffers.
+    ///
+    /// This method uses a staging buffer approach for optimal performance:
+    /// 1. Creates host-visible staging buffers for CPU-side data
+    /// 2. Creates device-local GPU buffers for optimal rendering performance
+    /// 3. Uses a transfer command buffer to copy data from staging to device buffers
+    /// 4. Synchronizes with a fence to ensure the transfer completes
     ///
     /// # Arguments
     ///
@@ -91,6 +103,160 @@ impl GpuMesh {
             index_buffer,
             index_count: indices.len() as u32,
             vertex_count: vertices.len() as u32,
+        })
+    }
+
+    /// Creates a new GPU mesh with asynchronous transfer using staging buffers.
+    ///
+    /// This method implements efficient GPU upload using a multi-stage approach:
+    /// 1. Creates host-visible staging buffers (CPU accessible, fast write)
+    /// 2. Creates device-local destination buffers (GPU only, optimal for rendering)
+    /// 3. Records a transfer command buffer to copy from staging to device buffers
+    /// 4. Submits to the transfer queue with fence synchronization
+    /// 5. Returns immediately - caller can wait on the fence for completion
+    ///
+    /// # Performance Benefits
+    ///
+    /// - Staging buffers allow fast CPU writes without GPU memory mapping overhead
+    /// - Device-local buffers provide maximum GPU access performance
+    /// - Transfer queue can operate asynchronously with graphics operations
+    /// - Fence synchronization allows overlapping CPU work with GPU transfers
+    ///
+    /// # Arguments
+    ///
+    /// * `allocator` - Memory allocator for creating buffers
+    /// * `command_buffer_allocator` - Allocator for command buffers
+    /// * `transfer_queue` - Queue for transfer operations
+    /// * `vertices` - Vertex data to upload
+    /// * `indices` - Index data to upload
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if buffer creation, command recording, or submission fails.
+    pub fn new_async(
+        allocator: Arc<dyn MemoryAllocator>,
+        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+        transfer_queue: Arc<Queue>,
+        vertices: Vec<Vertex3D>,
+        indices: Vec<u16>,
+    ) -> Result<Self> {
+        trace!(
+            "Creating GPU mesh asynchronously with {} vertices, {} indices",
+            vertices.len(),
+            indices.len()
+        );
+
+        let vertex_count = vertices.len() as u32;
+        let index_count = indices.len() as u32;
+
+        // Create staging buffers (host-visible, for CPU writes)
+        let vertex_staging_buffer = Buffer::from_iter(
+            allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::TRANSFER_SRC,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            vertices.iter().copied(),
+        )
+        .map_err(|e| eyre::eyre!("Failed to create vertex staging buffer: {}", e))?;
+
+        let index_staging_buffer = Buffer::from_iter(
+            allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::TRANSFER_SRC,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            indices.iter().copied(),
+        )
+        .map_err(|e| eyre::eyre!("Failed to create index staging buffer: {}", e))?;
+
+        // Create device-local buffers (GPU only, optimal performance)
+        let vertex_buffer = Buffer::new_slice::<Vertex3D>(
+            allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::VERTEX_BUFFER | BufferUsage::TRANSFER_DST,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                ..Default::default()
+            },
+            vertex_count as u64,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create vertex buffer: {}", e))?;
+
+        let index_buffer = Buffer::new_slice::<u16>(
+            allocator,
+            BufferCreateInfo {
+                usage: BufferUsage::INDEX_BUFFER | BufferUsage::TRANSFER_DST,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                ..Default::default()
+            },
+            index_count as u64,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create index buffer: {}", e))?;
+
+        // Build transfer command buffer
+        let mut builder = AutoCommandBufferBuilder::primary(
+            command_buffer_allocator,
+            transfer_queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create command buffer builder: {}", e))?;
+
+        // Copy vertex data from staging to device buffer
+        builder
+            .copy_buffer(CopyBufferInfo::buffers(
+                vertex_staging_buffer.clone(),
+                vertex_buffer.clone(),
+            ))
+            .map_err(|e| eyre::eyre!("Failed to record vertex buffer copy: {}", e))?;
+
+        // Copy index data from staging to device buffer
+        builder
+            .copy_buffer(CopyBufferInfo::buffers(
+                index_staging_buffer.clone(),
+                index_buffer.clone(),
+            ))
+            .map_err(|e| eyre::eyre!("Failed to record index buffer copy: {}", e))?;
+
+        let command_buffer = builder
+            .build()
+            .map_err(|e| eyre::eyre!("Failed to build transfer command buffer: {}", e))?;
+
+        // Submit to transfer queue with fence synchronization
+        trace!("Submitting mesh transfer command buffer");
+        let future = sync::now(transfer_queue.device().clone())
+            .then_execute(transfer_queue.clone(), command_buffer)
+            .map_err(|e| eyre::eyre!("Failed to execute transfer command: {}", e))?
+            .then_signal_fence_and_flush()
+            .map_err(|e| eyre::eyre!("Failed to signal fence and flush: {}", e))?;
+
+        // Wait for transfer to complete
+        future
+            .wait(None)
+            .map_err(|e| eyre::eyre!("Failed to wait for mesh transfer: {}", e))?;
+
+        trace!("Mesh transfer complete");
+
+        Ok(Self {
+            vertex_buffer,
+            index_buffer,
+            index_count,
+            vertex_count,
         })
     }
 }
