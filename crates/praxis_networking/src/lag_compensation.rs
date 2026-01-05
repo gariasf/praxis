@@ -367,6 +367,11 @@ pub struct LagCompensationSystem;
 
 impl LagCompensationSystem {
     /// Updates lag compensation history.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the system time is before the UNIX epoch. This should never happen
+    /// on systems with correctly configured clocks.
     pub fn update(
         lag_comp: &mut LagCompensation,
         client_id: u64,

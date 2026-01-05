@@ -84,6 +84,11 @@ impl ColorRamp {
     /// Creates a new color ramp with the given stops.
     ///
     /// Stops will be sorted by position automatically.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any color stop position is NaN. All positions must be valid
+    /// floating-point numbers for proper ordering.
     pub fn new(mut stops: Vec<ColorStop>) -> Self {
         stops.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
         Self { stops }
@@ -104,6 +109,11 @@ impl ColorRamp {
     }
 
     /// Evaluates the color ramp at a given position.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the color stops vector is empty when accessing the first element.
+    /// This is prevented by the early return check, so it should never happen.
     pub fn evaluate(&self, t: f32) -> [f32; 4] {
         if self.stops.is_empty() {
             return [0.0, 0.0, 0.0, 1.0];

@@ -92,6 +92,11 @@ impl TerrainRenderer {
     }
 
     /// Creates a descriptor set for terrain rendering with splat map and material layers.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the terrain pipeline has not been set via `set_pipeline()`.
+    /// The pipeline must be initialized before creating descriptor sets.
     pub fn create_terrain_descriptor_set(
         &self,
         splat_map_view: Arc<ImageView>,

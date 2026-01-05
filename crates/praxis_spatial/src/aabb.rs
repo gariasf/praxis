@@ -32,6 +32,11 @@ impl Aabb {
     }
 
     /// Creates an AABB that contains all the given points.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the points slice is empty when accessing the first element.
+    /// This is prevented by the early return check, so it should never happen.
     pub fn from_points(points: &[Vec3]) -> Option<Self> {
         if points.is_empty() {
             return None;

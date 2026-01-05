@@ -191,6 +191,11 @@ impl ReplicationSystem {
     }
 
     /// Creates a replication message for all replicated entities.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the system time is before the UNIX epoch. This should never happen
+    /// on systems with correctly configured clocks.
     pub fn create_replication_message(
         &mut self,
         world: &mut bevy_ecs::world::World,

@@ -248,6 +248,11 @@ impl NetworkClient {
     }
 
     /// Handles pong response.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the system time is before the UNIX epoch. This should never happen
+    /// on systems with correctly configured clocks.
     fn handle_pong(&self, timestamp: u64) -> Result<()> {
         // Calculate RTT
         let now = std::time::SystemTime::now()
@@ -317,6 +322,11 @@ impl NetworkClient {
     }
 
     /// Sends a ping to measure latency.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the system time is before the UNIX epoch. This should never happen
+    /// on systems with correctly configured clocks.
     pub fn send_ping(&self) -> Result<()> {
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

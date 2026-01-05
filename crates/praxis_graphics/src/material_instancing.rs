@@ -98,6 +98,11 @@ impl MaterialInstanceManager {
     }
 
     /// Creates a material instance.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the instance cannot be retrieved after insertion. This should never happen
+    /// under normal circumstances as the instance is immediately retrieved after insertion.
     pub fn create_instance(
         &mut self,
         instance_id: impl Into<String>,

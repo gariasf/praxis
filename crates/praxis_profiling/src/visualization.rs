@@ -71,6 +71,11 @@ impl FrameTimeGraph {
     }
 
     /// Returns the minimum frame time in the graph.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any frame time value is NaN. Frame times should always be valid
+    /// floating-point numbers representing milliseconds.
     pub fn min(&self) -> f32 {
         self.frame_times
             .iter()
@@ -80,6 +85,11 @@ impl FrameTimeGraph {
     }
 
     /// Returns the maximum frame time in the graph.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any frame time value is NaN. Frame times should always be valid
+    /// floating-point numbers representing milliseconds.
     pub fn max(&self) -> f32 {
         self.frame_times
             .iter()
@@ -117,6 +127,11 @@ pub struct PhasePieChart {
 
 impl PhasePieChart {
     /// Creates a pie chart from a frame breakdown.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any percentage value is NaN during sorting. Percentages should always
+    /// be valid floating-point numbers.
     pub fn from_breakdown(breakdown: &FrameBreakdown) -> Self {
         let total = breakdown.total_duration.as_secs_f32();
         if total == 0.0 {

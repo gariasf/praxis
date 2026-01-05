@@ -29,6 +29,11 @@ use tracing_subscriber::{
 /// RUST_LOG=debug  # Set global level to debug
 /// RUST_LOG=praxis_graphics=trace,praxis_core=debug  # Different levels per module
 /// ```
+///
+/// # Panics
+///
+/// Panics if the log directives "winit=info" or "vulkano=debug" cannot be parsed.
+/// This should never happen under normal circumstances as these are valid directives.
 pub fn init_tracing() -> Result<()> {
     color_eyre::install()?;
 
@@ -69,6 +74,11 @@ pub fn init_tracing() -> Result<()> {
 /// let console_layer = ConsoleLayer::new(log_buffer);
 /// init_tracing_with_layer(Some(console_layer))?;
 /// ```
+///
+/// # Panics
+///
+/// Panics if the log directives "winit=info" or "vulkano=debug" cannot be parsed.
+/// This should never happen under normal circumstances as these are valid directives.
 pub fn init_tracing_with_layer<L>(custom_layer: Option<L>) -> Result<()>
 where
     L: Layer<tracing_subscriber::layer::Layered<EnvFilter, tracing_subscriber::Registry>>
