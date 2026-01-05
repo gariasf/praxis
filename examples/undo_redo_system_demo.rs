@@ -8,10 +8,14 @@
 //! - Integration with editor operations
 //! - Visual feedback for command state
 
+#[cfg(feature = "editor")]
 use bevy_ecs::world::World;
+#[cfg(feature = "editor")]
 use praxis_ecs::Transform;
+#[cfg(feature = "editor")]
 use praxis_editor::{CommandHistory, CreateEntityCommand, TransformEditCommand, UndoRedoSystem};
 
+#[cfg(feature = "editor")]
 fn main() {
     println!("=== UndoRedoSystem Complete Demo ===\n");
 
@@ -25,6 +29,7 @@ fn main() {
     println!("\n=== Demo Complete ===");
 }
 
+#[cfg(feature = "editor")]
 fn demo_max_history_limit(world: &mut World) {
     println!("--- Demo 1: Maximum History Size (100 entries) ---");
 
@@ -59,6 +64,7 @@ fn demo_max_history_limit(world: &mut World) {
     assert_eq!(undo_count, 100);
 }
 
+#[cfg(feature = "editor")]
 fn demo_dirty_state_tracking(world: &mut World) {
     println!("\n--- Demo 2: Dirty State Tracking for Unsaved Changes ---");
 
@@ -113,6 +119,7 @@ fn demo_dirty_state_tracking(world: &mut World) {
     println!("✓ Dirty state tracking working correctly");
 }
 
+#[cfg(feature = "editor")]
 fn demo_command_integration(world: &mut World) {
     println!("\n--- Demo 3: Integration with Editor Operations ---");
 
@@ -180,6 +187,7 @@ fn demo_command_integration(world: &mut World) {
     println!("✓ Command integration working correctly");
 }
 
+#[cfg(feature = "editor")]
 fn demo_history_management() {
     println!("\n--- Demo 4: History Management Features ---");
 
@@ -231,6 +239,7 @@ fn demo_history_management() {
 }
 
 /// Simulates keyboard shortcut handling
+#[cfg(feature = "editor")]
 #[allow(dead_code)]
 fn simulate_keyboard_shortcuts() {
     println!("\n--- Keyboard Shortcuts ---");
@@ -243,6 +252,7 @@ fn simulate_keyboard_shortcuts() {
 }
 
 /// Simulates menu bar integration
+#[cfg(feature = "editor")]
 #[allow(dead_code)]
 fn simulate_menu_bar_integration() {
     println!("\n--- Menu Bar Integration ---");
@@ -253,4 +263,11 @@ fn simulate_menu_bar_integration() {
     println!("  File > Save Scene: Shows '*' when dirty");
     println!("  Status Bar: Shows 'Unsaved' indicator when dirty");
     println!("\nSee EditorState::render_menu_bar for implementation");
+}
+
+#[cfg(not(feature = "editor"))]
+fn main() {
+    eprintln!("This example requires the 'editor' feature to be enabled.");
+    eprintln!("Run with: cargo run --example undo_redo_system_demo --features editor");
+    std::process::exit(1);
 }

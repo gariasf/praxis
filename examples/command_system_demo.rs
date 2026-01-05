@@ -11,13 +11,17 @@
 //! the editor commands are designed to work with bevy_ecs World.
 //! See also: `undo_redo_system_demo.rs` for a simpler example.
 
+#[cfg(feature = "editor")]
 use bevy_ecs::world::World;
+#[cfg(feature = "editor")]
 use praxis_ecs::{Name, Transform};
+#[cfg(feature = "editor")]
 use praxis_editor::{
     AddComponentCommand, CommandHistory, ComponentData, CompositeCommand, CreateEntityCommand,
     EditorCommand, SerializableCommand, TransformEditCommand,
 };
 
+#[cfg(feature = "editor")]
 fn main() {
     println!("=== Command System Demo ===\n");
 
@@ -52,6 +56,7 @@ fn main() {
     println!("\n=== Demo Complete ===");
 }
 
+#[cfg(feature = "editor")]
 fn demo_transform_editing(world: &mut World, history: &mut CommandHistory) {
     // Create an entity
     let entity = world.spawn(Transform::default()).id();
@@ -91,6 +96,7 @@ fn demo_transform_editing(world: &mut World, history: &mut CommandHistory) {
     );
 }
 
+#[cfg(feature = "editor")]
 fn demo_entity_creation(world: &mut World, history: &mut CommandHistory) {
     let initial_count = world.iter_entities().count();
     println!("Initial entity count: {}", initial_count);
@@ -117,6 +123,7 @@ fn demo_entity_creation(world: &mut World, history: &mut CommandHistory) {
     println!("After redo create: {} entities", after_redo);
 }
 
+#[cfg(feature = "editor")]
 fn demo_component_management(world: &mut World, history: &mut CommandHistory) {
     let entity = world.spawn(Transform::default()).id();
     println!("Created entity without Name: {:?}", entity);
@@ -147,6 +154,7 @@ fn demo_component_management(world: &mut World, history: &mut CommandHistory) {
     }
 }
 
+#[cfg(feature = "editor")]
 fn demo_composite_commands(world: &mut World, history: &mut CommandHistory) {
     let initial_count = world.iter_entities().count();
     println!("Initial entity count: {}", initial_count);
@@ -183,6 +191,7 @@ fn demo_composite_commands(world: &mut World, history: &mut CommandHistory) {
     println!("After redo composite: {} entities", after_redo);
 }
 
+#[cfg(feature = "editor")]
 fn demo_serialization(world: &mut World, _history: &mut CommandHistory) {
     let entity = world.spawn(Transform::default()).id();
 
@@ -214,6 +223,7 @@ fn demo_serialization(world: &mut World, _history: &mut CommandHistory) {
     );
 }
 
+#[cfg(feature = "editor")]
 fn demo_history_management(world: &mut World, history: &mut CommandHistory) {
     // Clear history first
     history.clear();
@@ -250,4 +260,11 @@ fn demo_history_management(world: &mut World, history: &mut CommandHistory) {
     if let Some(desc) = history.redo_description() {
         println!("  Next redo: {}", desc);
     }
+}
+
+#[cfg(not(feature = "editor"))]
+fn main() {
+    eprintln!("This example requires the 'editor' feature to be enabled.");
+    eprintln!("Run with: cargo run --example command_system_demo --features editor");
+    std::process::exit(1);
 }

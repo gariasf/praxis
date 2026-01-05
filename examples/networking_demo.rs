@@ -1,17 +1,22 @@
 //! Networking demonstration showing client-server architecture,
 //! entity replication, interpolation, and network profiling.
 
+#[cfg(feature = "networking")]
 use praxis_ecs::{Schedule, Transform, World};
+#[cfg(feature = "networking")]
 use praxis_math::{Quat, Vec3};
+#[cfg(feature = "networking")]
 use praxis_networking::{
     ExtrapolationSystem, InterpolationBuffer, InterpolationSystem, LagCompensation,
     LagCompensationSystem, NetworkClient, NetworkConfig, NetworkExtrapolation, NetworkId,
     NetworkInterpolation, NetworkProfiler, NetworkServer, Replicated, ReplicatedTransform,
     ReplicatedVelocity, ReplicationRegistry,
 };
+#[cfg(feature = "networking")]
 use std::time::{Duration, Instant};
 
 /// Demonstrates server setup and entity replication.
+#[cfg(feature = "networking")]
 async fn run_server() -> color_eyre::Result<()> {
     println!("=== Starting Network Server ===\n");
 
@@ -117,6 +122,7 @@ async fn run_server() -> color_eyre::Result<()> {
 }
 
 /// Demonstrates client setup and connection.
+#[cfg(feature = "networking")]
 async fn run_client() -> color_eyre::Result<()> {
     println!("=== Starting Network Client ===\n");
 
@@ -205,6 +211,7 @@ async fn run_client() -> color_eyre::Result<()> {
 }
 
 /// Demonstrates network profiler usage.
+#[cfg(feature = "networking")]
 fn demonstrate_profiler() {
     println!("\n=== Network Profiler Demo ===\n");
 
@@ -261,6 +268,7 @@ fn demonstrate_profiler() {
 }
 
 /// Demonstrates interpolation system.
+#[cfg(feature = "networking")]
 fn demonstrate_interpolation() {
     println!("\n=== Interpolation Demo ===\n");
 
@@ -291,6 +299,7 @@ fn demonstrate_interpolation() {
 }
 
 /// Demonstrates lag compensation.
+#[cfg(feature = "networking")]
 fn demonstrate_lag_compensation() {
     println!("\n=== Lag Compensation Demo ===\n");
 
@@ -352,6 +361,7 @@ fn demonstrate_lag_compensation() {
     println!();
 }
 
+#[cfg(feature = "networking")]
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     // Initialize error handling
@@ -397,4 +407,11 @@ async fn main() -> color_eyre::Result<()> {
     println!("Demo complete!");
 
     Ok(())
+}
+
+#[cfg(not(feature = "networking"))]
+fn main() {
+    eprintln!("This example requires the 'networking' feature to be enabled.");
+    eprintln!("Run with: cargo run --example networking_demo --features networking");
+    std::process::exit(1);
 }

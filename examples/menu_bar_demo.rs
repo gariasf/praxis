@@ -14,6 +14,7 @@
 //! - Help menu (About, Documentation)
 //! - Standard keyboard shortcuts
 
+#[cfg(feature = "editor")]
 fn main() {
     println!("=== Menu Bar Demo (Placeholder) ===\n");
     println!("This example is currently a placeholder.");
@@ -42,4 +43,11 @@ fn main() {
     println!();
     println!("  Help Menu:");
     println!("    F1: Documentation");
+}
+
+#[cfg(not(feature = "editor"))]
+fn main() {
+    eprintln!("This example requires the 'editor' feature to be enabled.");
+    eprintln!("Run with: cargo run --example menu_bar_demo --features editor");
+    std::process::exit(1);
 }

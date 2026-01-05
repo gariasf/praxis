@@ -10,7 +10,7 @@ default = []
 editor = ["praxis_editor"]
 networking = ["praxis_networking"]
 scripting = ["praxis_scripting"]
-terrain = ["praxis_terrain"]
+terrain = ["praxis_terrain", "praxis_editor?/terrain"]
 
 [workspace]
 resolver = "2"
@@ -115,18 +115,22 @@ path = "examples/environment_probe_demo.rs"
 [[example]]
 name = "command_system_demo"
 path = "examples/command_system_demo.rs"
+required-features = ["editor"]
 
 [[example]]
 name = "command_serialization_demo"
 path = "examples/command_serialization_demo.rs"
+required-features = ["editor"]
 
 [[example]]
 name = "undo_redo_system_demo"
 path = "examples/undo_redo_system_demo.rs"
+required-features = ["editor"]
 
 [[example]]
 name = "editor_demo"
 path = "examples/editor_demo.rs"
+required-features = ["editor"]
 
 [[example]]
 name = "particles_demo"
@@ -159,18 +163,22 @@ path = "examples/profiling_advanced_demo.rs"
 [[example]]
 name = "scripting_demo"
 path = "examples/scripting_demo.rs"
+required-features = ["scripting"]
 
 [[example]]
 name = "scripting_advanced_demo"
 path = "examples/scripting_advanced_demo.rs"
+required-features = ["scripting"]
 
 [[example]]
 name = "networking_demo"
 path = "examples/networking_demo.rs"
+required-features = ["networking"]
 
 [[example]]
 name = "terrain_demo"
 path = "examples/terrain_demo.rs"
+required-features = ["terrain"]
 
 [[example]]
 name = "animation_demo"
@@ -195,6 +203,7 @@ path = "examples/material_demo.rs"
 [[example]]
 name = "console_demo"
 path = "examples/console_demo.rs"
+required-features = ["editor"]
 
 [[example]]
 name = "scene_serialization_demo"
@@ -203,14 +212,17 @@ path = "examples/scene_serialization_demo.rs"
 [[example]]
 name = "menu_bar_demo"
 path = "examples/menu_bar_demo.rs"
+required-features = ["editor"]
 
 [[example]]
 name = "editor_camera_demo"
 path = "examples/editor_camera_demo.rs"
+required-features = ["editor"]
 
 [[example]]
 name = "selection_demo"
 path = "examples/selection_demo.rs"
+required-features = ["editor"]
 
 [[example]]
 name = "advanced_lighting_demo"

@@ -20,11 +20,16 @@
 //! cargo run --example console_demo
 //! ```
 
+#[cfg(feature = "editor")]
 use praxis_editor::{init_with_console, LogBuffer, LogLevel};
+#[cfg(feature = "editor")]
 use praxis_utils::{debug, error, info, trace, warn, Result};
+#[cfg(feature = "editor")]
 use std::thread;
+#[cfg(feature = "editor")]
 use std::time::Duration;
 
+#[cfg(feature = "editor")]
 fn main() -> Result<()> {
     // Create a shared log buffer
     let log_buffer = LogBuffer::new();
@@ -134,4 +139,11 @@ fn main() -> Result<()> {
     info!("Console demo completed successfully");
 
     Ok(())
+}
+
+#[cfg(not(feature = "editor"))]
+fn main() {
+    eprintln!("This example requires the 'editor' feature to be enabled.");
+    eprintln!("Run with: cargo run --example console_demo --features editor");
+    std::process::exit(1);
 }

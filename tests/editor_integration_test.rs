@@ -4,6 +4,8 @@
 //! including hierarchy panel operations, inspector component editing, viewport rendering,
 //! drag-and-drop asset instantiation, and editor camera controls.
 
+#![cfg(feature = "editor")]
+
 use praxis_audio::AudioSource;
 use praxis_ecs::{
     Children, GlobalTransform, MaterialHandle, MeshHandle, Name, Parent, PerspectiveProjection,

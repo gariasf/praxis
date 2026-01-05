@@ -1709,13 +1709,12 @@ mod tests {
     #[test]
     fn test_transform_look_at_builder_pattern() {
         // Test builder pattern chaining
-        let transform = Transform::from_xyz(0.0, 5.0, 10.0)
-            .look_at(Vec3::ZERO, Vec3::Y);
-        
+        let transform = Transform::from_xyz(0.0, 5.0, 10.0).look_at(Vec3::ZERO, Vec3::Y);
+
         // The camera should be looking at the origin from above
         let forward = transform.rotation * Vec3::NEG_Z;
         let expected_forward = (Vec3::ZERO - transform.translation).normalize();
-        
+
         // Check that forward direction is approximately correct
         assert!((forward.dot(expected_forward) - 1.0).abs() < 0.01);
     }
@@ -1725,11 +1724,11 @@ mod tests {
         // Test mutation pattern
         let mut transform = Transform::from_xyz(5.0, 0.0, 0.0);
         transform = transform.look_at(Vec3::new(10.0, 0.0, 0.0), Vec3::Y);
-        
+
         // The camera should be looking at (10, 0, 0) from (5, 0, 0)
         let forward = transform.rotation * Vec3::NEG_Z;
         let expected_forward = Vec3::new(1.0, 0.0, 0.0);
-        
+
         // Check that forward direction is approximately correct
         assert!((forward.dot(expected_forward) - 1.0).abs() < 0.01);
     }
@@ -2192,10 +2191,10 @@ pub struct AreaLightComponent {
 pub enum AreaLightType {
     /// Rectangular area light with width and height.
     Rectangle { width: f32, height: f32 },
-    
+
     /// Circular disk area light with radius.
     Disk { radius: f32 },
-    
+
     /// Spherical area light with radius (emits in all directions).
     Sphere { radius: f32 },
 }

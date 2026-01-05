@@ -7,23 +7,37 @@
 //! - Focus on selection (F key)
 //! - Smooth interpolated movement
 
+#[cfg(feature = "editor")]
 use praxis_ecs::{GlobalTransform, PerspectiveCameraBundle, Schedule, Transform, World};
+#[cfg(feature = "editor")]
 use praxis_editor::{
     update_editor_camera_system, EditorCamera, EditorCameraController, Selectable, SelectionSystem,
 };
+#[cfg(feature = "editor")]
 use praxis_input::InputState;
+#[cfg(feature = "editor")]
 use praxis_math::Vec3;
+#[cfg(feature = "editor")]
 use praxis_utils::Result;
+#[cfg(feature = "editor")]
 use winit::application::ApplicationHandler;
+#[cfg(feature = "editor")]
 use winit::dpi::PhysicalSize;
+#[cfg(feature = "editor")]
 use winit::event::WindowEvent;
+#[cfg(feature = "editor")]
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+#[cfg(feature = "editor")]
 use winit::keyboard::KeyCode;
+#[cfg(feature = "editor")]
 use winit::window::{Window, WindowId};
 
+#[cfg(feature = "editor")]
 const WINDOW_WIDTH: u32 = 1280;
+#[cfg(feature = "editor")]
 const WINDOW_HEIGHT: u32 = 720;
 
+#[cfg(feature = "editor")]
 fn main() -> Result<()> {
     praxis_utils::init()?;
     praxis_input::init()?;
@@ -43,6 +57,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "editor")]
 #[derive(Default)]
 struct App {
     window: Option<Window>,
@@ -50,6 +65,7 @@ struct App {
     schedule: Option<Schedule>,
 }
 
+#[cfg(feature = "editor")]
 impl App {
     fn setup_world() -> (World, Schedule) {
         let mut world = World::new();
@@ -103,6 +119,7 @@ impl App {
     }
 }
 
+#[cfg(feature = "editor")]
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_some() {
@@ -262,4 +279,11 @@ impl ApplicationHandler for App {
             window.request_redraw();
         }
     }
+}
+
+#[cfg(not(feature = "editor"))]
+fn main() {
+    eprintln!("This example requires the 'editor' feature to be enabled.");
+    eprintln!("Run with: cargo run --example editor_camera_demo --features editor");
+    std::process::exit(1);
 }

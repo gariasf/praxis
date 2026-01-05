@@ -22,6 +22,7 @@ cargo fmt --all                # Format code
 cargo clippy --all -- -D warnings  # Lint (must pass)
 
 # Run Examples
+cargo run --example hello_triangle
 cargo run --example comprehensive_scene_demo
 cargo run --example skeletal_animation_demo
 cargo run --example animation_demo

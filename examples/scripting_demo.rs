@@ -6,8 +6,10 @@
 //! - Performance monitoring
 //! - Sandboxing for security
 
+#[cfg(feature = "scripting")]
 use praxis_scripting::{SandboxConfig, SandboxLevel, ScriptingConfig, ScriptingContext};
 
+#[cfg(feature = "scripting")]
 fn main() -> praxis_utils::Result<()> {
     praxis_utils::init()?;
     praxis_scripting::init()?;
@@ -37,6 +39,7 @@ fn main() -> praxis_utils::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "scripting")]
 fn demo_basic_scripting(context: &mut ScriptingContext) -> praxis_utils::Result<()> {
     println!("--- Basic Scripting ---");
 
@@ -62,6 +65,7 @@ fn demo_basic_scripting(context: &mut ScriptingContext) -> praxis_utils::Result<
     Ok(())
 }
 
+#[cfg(feature = "scripting")]
 fn demo_math_api(context: &mut ScriptingContext) -> praxis_utils::Result<()> {
     println!("\n--- Math API ---");
 
@@ -95,6 +99,7 @@ fn demo_math_api(context: &mut ScriptingContext) -> praxis_utils::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "scripting")]
 fn demo_performance_monitoring(context: &ScriptingContext) -> praxis_utils::Result<()> {
     println!("\n--- Performance Monitoring ---");
 
@@ -159,4 +164,11 @@ fn demo_performance_monitoring(context: &ScriptingContext) -> praxis_utils::Resu
     }
 
     Ok(())
+}
+
+#[cfg(not(feature = "scripting"))]
+fn main() {
+    eprintln!("This example requires the 'scripting' feature to be enabled.");
+    eprintln!("Run with: cargo run --example scripting_demo --features scripting");
+    std::process::exit(1);
 }
