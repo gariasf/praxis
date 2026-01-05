@@ -48,5 +48,7 @@ cargo test --workspace
 
 ## Next Steps
 
+- [Core Features](core-features.md) - Understand what's included by default
+- [Feature Flags](feature-flags.md) - Enable optional systems (editor, scripting, networking, terrain)
 - [Project Structure](project-structure.md) - Understand the workspace layout
 - [Beginners Guide](../beginners-guide.md) - Learn Praxis through examples
