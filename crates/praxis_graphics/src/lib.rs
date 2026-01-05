@@ -660,11 +660,11 @@ impl MaterialKey {
     fn new(texture_name: String, properties: &material::MaterialProperties) -> Self {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         bytemuck::bytes_of(properties).hash(&mut hasher);
         let properties_hash = hasher.finish();
-        
+
         Self {
             texture_name,
             properties_hash,
@@ -700,14 +700,20 @@ impl MaterialKey {
 /// ```
 struct DescriptorSetPool {
     /// Cached material descriptor sets indexed by material key
-    material_sets: HashMap<MaterialKey, (Arc<DescriptorSet>, vulkano::buffer::Subbuffer<material::MaterialProperties>)>,
-    
+    material_sets: HashMap<
+        MaterialKey,
+        (
+            Arc<DescriptorSet>,
+            vulkano::buffer::Subbuffer<material::MaterialProperties>,
+        ),
+    >,
+
     /// Descriptor set allocator for creating new sets
     descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,
-    
+
     /// Memory allocator for creating material buffers
     memory_allocator: Arc<StandardMemoryAllocator>,
-    
+
     /// Layout for material descriptor sets
     material_descriptor_set_layout: Arc<vulkano::descriptor_set::layout::DescriptorSetLayout>,
 }
@@ -726,7 +732,7 @@ impl DescriptorSetPool {
             material_descriptor_set_layout,
         }
     }
-    
+
     /// Gets or creates a material descriptor set for the given properties.
     ///
     /// If a descriptor set already exists for this material, returns the cached version.
@@ -750,14 +756,14 @@ impl DescriptorSetPool {
         material_props: material::MaterialProperties,
     ) -> Result<Arc<DescriptorSet>> {
         let key = MaterialKey::new(texture_name, &material_props);
-        
+
         if let Some((descriptor_set, _)) = self.material_sets.get(&key) {
             trace!("Reusing cached material descriptor set");
             return Ok(descriptor_set.clone());
         }
-        
+
         trace!("Creating new material descriptor set");
-        
+
         // Create material properties buffer
         let material_buffer = Buffer::from_data(
             self.memory_allocator.clone(),
@@ -773,7 +779,7 @@ impl DescriptorSetPool {
             material_props,
         )
         .map_err(|e| eyre::eyre!("Failed to create material properties buffer: {}", e))?;
-        
+
         // Create descriptor set
         let descriptor_set = DescriptorSet::new(
             self.descriptor_set_allocator.clone(),
@@ -782,14 +788,14 @@ impl DescriptorSetPool {
             [],
         )
         .map_err(|e| eyre::eyre!("Failed to create material descriptor set: {}", e))?;
-        
+
         // Cache the descriptor set and buffer for reuse
         self.material_sets
             .insert(key, (descriptor_set.clone(), material_buffer));
-        
+
         Ok(descriptor_set)
     }
-    
+
     /// Clears all cached descriptor sets.
     ///
     /// This should be called when materials or textures are modified to ensure
@@ -801,7 +807,7 @@ impl DescriptorSetPool {
         );
         self.material_sets.clear();
     }
-    
+
     /// Returns the number of cached descriptor sets.
     fn len(&self) -> usize {
         self.material_sets.len()
@@ -2352,7 +2358,7 @@ mod tests {
     #[test]
     fn test_descriptor_set_pool_benefits() {
         // Demonstrate the performance benefits of descriptor set pooling
-        
+
         // Scenario: 1000 objects with 10 unique materials (100 objects per material)
         let total_objects = 1000;
         let unique_materials = 10;
@@ -2360,7 +2366,7 @@ mod tests {
 
         // Without pooling: Create descriptor set per object
         let without_pooling_allocations = total_objects;
-        
+
         // With pooling: Create descriptor set per unique material
         let with_pooling_allocations = unique_materials;
 
@@ -2371,8 +2377,11 @@ mod tests {
         assert_eq!(with_pooling_allocations, 10);
         assert_eq!(reduction_factor, 100);
         assert_eq!(objects_per_material, 100);
-        
+
         // Pooling provides a 100x reduction in descriptor set allocations
-        assert!(reduction_factor >= 10, "Pooling should provide at least 10x reduction");
+        assert!(
+            reduction_factor >= 10,
+            "Pooling should provide at least 10x reduction"
+        );
     }
 }

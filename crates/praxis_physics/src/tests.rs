@@ -1085,13 +1085,13 @@ fn test_raycast_all_multiple_hits() {
 
     // Should hit all three boxes
     assert_eq!(results.len(), 3, "Should hit all three boxes");
-    
+
     // Results should be sorted by distance
     assert!(
         results[0].1 < results[1].1 && results[1].1 < results[2].1,
         "Results should be sorted by distance"
     );
-    
+
     // Verify we hit the correct entities
     let hit_entities: Vec<_> = results.iter().map(|(e, _)| *e).collect();
     assert!(hit_entities.contains(&box1));

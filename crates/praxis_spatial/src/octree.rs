@@ -280,14 +280,14 @@ impl Octree {
     pub fn query_radius(&self, point: Vec3, radius: f32) -> Vec<Entity> {
         let mut results = Vec::new();
         self.root.query_radius(point, radius, &mut results);
-        
+
         let radius_sq = radius * radius;
         results.retain(|&entity| {
-            self.entity_bounds.get(&entity).is_some_and(|bounds| {
-                bounds.center().distance_squared(point) <= radius_sq
-            })
+            self.entity_bounds
+                .get(&entity)
+                .is_some_and(|bounds| bounds.center().distance_squared(point) <= radius_sq)
         });
-        
+
         results
     }
 

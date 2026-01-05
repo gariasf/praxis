@@ -14,6 +14,12 @@ cargo run --example comprehensive_scene_demo
 
 ## Examples by Category
 
+### Beginner Examples
+
+| Example | Description |
+|---------|-------------|
+| `hello_triangle` | **START HERE** - Minimal example showing basic rendering (200 lines) |
+
 ### Scene & Rendering Demos
 
 | Example | Description |
@@ -103,6 +109,22 @@ cargo run --example comprehensive_scene_demo
 | `networking_demo` | Client-server architecture, entity replication, interpolation |
 
 ## Featured Examples
+
+### Hello Triangle ⭐ NEW
+
+The absolute minimal example for learning Praxis - just ~280 lines of code:
+- Window creation and Vulkan setup
+- Simple triangle mesh with vertex colors
+- Basic camera setup
+- Single render call
+
+Perfect starting point before exploring advanced features.
+
+```bash
+cargo run --example hello_triangle
+```
+
+**Controls:** ESC (exit)
 
 ### Comprehensive Scene Demo ★
 
