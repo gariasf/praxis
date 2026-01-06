@@ -12,15 +12,21 @@ cargo build --examples
 cargo run --example comprehensive_scene_demo
 ```
 
-## Examples by Category
+## Examples by Type
 
-### Beginner Examples
+Examples are categorized by whether they spawn rendering windows or run console-only demonstrations:
+
+### 🎨 Visual Demos (Spawn Rendering Windows)
+
+Interactive examples with graphical output and user controls.
+
+#### Beginner Examples
 
 | Example | Description |
 |---------|-------------|
 | `hello_triangle` | **START HERE** - Minimal example showing basic rendering (200 lines) |
 
-### Scene & Rendering Demos
+#### Scene & Rendering Demos
 
 | Example | Description |
 |---------|-------------|
@@ -31,8 +37,10 @@ cargo run --example comprehensive_scene_demo
 | `environment_probe_demo` | Environment map reflections |
 | `particles_demo` | GPU-accelerated particle system |
 | `terrain_demo` | Heightmap terrain with LOD, texture splatting, and vegetation |
+| `advanced_lighting_demo` | Advanced lighting techniques and effects |
+| `procedural_texture_demo` | Real-time procedural texture generation |
 
-### Animation Demos
+#### Animation Demos
 
 | Example | Description |
 |---------|-------------|
@@ -42,14 +50,14 @@ cargo run --example comprehensive_scene_demo
 | `animation_advanced_demo` | IK, retargeting, additive blending, root motion |
 | `gltf_animation_loader_demo` | Loading animations from GLTF files |
 
-### Audio Demos
+#### Audio Demos
 
 | Example | Description |
 |---------|-------------|
 | `audio_demo` | Spatial audio, distance attenuation, doppler |
 | `audio_simple` | Basic audio system setup demonstration |
 
-### Editor Demos
+#### Editor Demos
 
 | Example | Description |
 |---------|-------------|
@@ -59,51 +67,62 @@ cargo run --example comprehensive_scene_demo
 | `gui_demo` | Basic egui integration |
 | `console_demo` | Console panel with log filtering and search |
 | `menu_bar_demo` | Menu bar placeholder (design spec) |
+| `scripting_console_demo` | Lua scripting with interactive console window |
 
-### Editor Systems
-
-| Example | Description |
-|---------|-------------|
-| `command_system_demo` | Undo/redo command pattern |
-| `command_serialization_demo` | Command history serialization |
-| `undo_redo_system_demo` | Complete undo/redo system with history limits |
-| `scene_serialization_demo` | Scene serialization with versioning and editor data |
-
-### Input Demos
+#### Input Demos
 
 | Example | Description |
 |---------|-------------|
 | `input_integration` | Keyboard, mouse, gamepad input |
 | `fps_camera_controller` | First-person camera controls |
 
-### Core ECS & Transform Demos
+#### ECS & Transform Demos
 
 | Example | Description |
 |---------|-------------|
-| `ecs_integration` | ECS basics with Praxis |
-| `transform_propagation_demo` | Parent-child transform hierarchy |
+| `ecs_integration` | ECS basics with Praxis and rendering integration |
 
-### Optimization & Performance Demos
+#### Optimization & Performance Demos
 
 | Example | Description |
 |---------|-------------|
-| `spatial_partitioning_demo` | Octree and BVH spatial partitioning |
 | `spatial_optimization_demo` | Frustum culling, octree, BVH queries, LOD system |
 | `profiling_demo` | CPU/GPU profiling, memory tracking, Chrome trace export |
 | `profiling_advanced_demo` | Advanced profiling with visualization data generation |
+| `gpu_culling_demo` | GPU-based culling techniques |
 
-### Scripting Demos
-
-| Example | Description |
-|---------|-------------|
-| `scripting_demo` | Lua scripting with hot-reload and sandboxing |
-| `scripting_advanced_demo` | Scripting with ECS systems and performance profiling |
-
-### Networking Demos
+#### Networking Demos
 
 | Example | Description |
 |---------|-------------|
 | `networking_demo` | Client-server architecture, entity replication, interpolation |
+
+### 📋 System Demos (Console-Only)
+
+Console output demonstrations for data structures, patterns, and systems without graphical windows.
+
+#### Core System Patterns
+
+| Example | Description |
+|---------|-------------|
+| `transform_propagation_demo` | Parent-child transform hierarchy (console output) |
+| `spatial_partitioning_demo` | Octree and BVH spatial partitioning (console output) |
+
+#### Editor System Patterns
+
+| Example | Description |
+|---------|-------------|
+| `command_system_demo` | Undo/redo command pattern (console output) |
+| `command_serialization_demo` | Command history serialization (console output) |
+| `undo_redo_system_demo` | Complete undo/redo system with history limits (console output) |
+| `scene_serialization_demo` | Scene serialization with versioning and editor data (console output) |
+
+#### Scripting Demos
+
+| Example | Description |
+|---------|-------------|
+| `scripting_demo` | Lua scripting with hot-reload and sandboxing (console output) |
+| `scripting_advanced_demo` | Scripting with ECS systems and performance profiling (console output) |
 
 ## Featured Examples
 
