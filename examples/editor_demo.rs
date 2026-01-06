@@ -192,7 +192,7 @@ impl ApplicationHandler for App {
     }
 }
 
-#[cfg(feature = "editor")]
+#[cfg(all(feature = "editor", not(feature = "headless")))]
 fn main() -> Result<()> {
     // Initialize engine systems
     praxis_utils::init()?;
@@ -219,7 +219,13 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(feature = "editor"))]
+#[cfg(feature = "headless")]
+fn main() -> Result<()> {
+    println!("editor_demo example requires graphics support and cannot run in headless mode");
+    Ok(())
+}
+
+#[cfg(all(not(feature = "editor"), not(feature = "headless")))]
 fn main() {
     eprintln!("This example requires the 'editor' feature to be enabled.");
     eprintln!("Run with: cargo run --example editor_demo --features editor");

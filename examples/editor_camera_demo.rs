@@ -37,7 +37,7 @@ const WINDOW_WIDTH: u32 = 1280;
 #[cfg(feature = "editor")]
 const WINDOW_HEIGHT: u32 = 720;
 
-#[cfg(feature = "editor")]
+#[cfg(all(feature = "editor", not(feature = "headless")))]
 fn main() -> Result<()> {
     praxis_utils::init()?;
     praxis_input::init()?;
@@ -281,7 +281,13 @@ impl ApplicationHandler for App {
     }
 }
 
-#[cfg(not(feature = "editor"))]
+#[cfg(feature = "headless")]
+fn main() -> Result<()> {
+    println!("editor_camera_demo example requires graphics support and cannot run in headless mode");
+    Ok(())
+}
+
+#[cfg(all(not(feature = "editor"), not(feature = "headless")))]
 fn main() {
     eprintln!("This example requires the 'editor' feature to be enabled.");
     eprintln!("Run with: cargo run --example editor_camera_demo --features editor");

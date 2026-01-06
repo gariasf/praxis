@@ -28,6 +28,7 @@ use winit::window::{CursorGrabMode, Window, WindowId};
 const WINDOW_WIDTH: u32 = 1280;
 const WINDOW_HEIGHT: u32 = 720;
 
+#[cfg(not(feature = "headless"))]
 fn main() -> Result<()> {
     praxis_utils::init()?;
     praxis_input::init()?;
@@ -43,6 +44,12 @@ fn main() -> Result<()> {
         .run_app(&mut app)
         .map_err(|e| praxis_utils::eyre::eyre!("Event loop error: {}", e))?;
 
+    Ok(())
+}
+
+#[cfg(feature = "headless")]
+fn main() -> Result<()> {
+    println!("fps_camera_controller example requires graphics support and cannot run in headless mode");
     Ok(())
 }
 

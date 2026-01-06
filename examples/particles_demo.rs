@@ -908,6 +908,7 @@ impl ApplicationHandler for ParticlesDemoApp {
     }
 }
 
+#[cfg(not(feature = "headless"))]
 fn main() -> Result<()> {
     praxis_utils::init()?;
     praxis_input::init()?;
@@ -925,5 +926,11 @@ fn main() -> Result<()> {
         .run_app(&mut app)
         .map_err(|e| praxis_utils::eyre::eyre!("Event loop error: {}", e))?;
 
+    Ok(())
+}
+
+#[cfg(feature = "headless")]
+fn main() -> Result<()> {
+    println!("particles_demo example requires graphics support and cannot run in headless mode");
     Ok(())
 }

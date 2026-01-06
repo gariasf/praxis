@@ -373,6 +373,13 @@ pub fn run() -> Result<()> {
     Ok(())
 }
 
+#[cfg(not(feature = "headless"))]
 fn main() -> Result<()> {
     run()
+}
+
+#[cfg(feature = "headless")]
+fn main() -> Result<()> {
+    println!("multi_mesh_demo example requires graphics support and cannot run in headless mode");
+    Ok(())
 }

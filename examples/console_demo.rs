@@ -267,6 +267,7 @@ fn register_custom_commands(console: &ConsolePanel, world: &World) {
     });
 }
 
+#[cfg(not(feature = "headless"))]
 fn main() -> Result<()> {
     praxis_utils::init()?;
     praxis_gui::init()?;
@@ -279,5 +280,11 @@ fn main() -> Result<()> {
     let demo = ConsoleDemo::new()?;
     demo.run()?;
 
+    Ok(())
+}
+
+#[cfg(feature = "headless")]
+fn main() -> Result<()> {
+    println!("console_demo example requires graphics support and cannot run in headless mode");
     Ok(())
 }

@@ -364,6 +364,7 @@ impl ApplicationHandler for App {
     }
 }
 
+#[cfg(not(feature = "headless"))]
 fn main() -> Result<()> {
     // Initialize engine subsystems
     praxis_utils::init()?;
@@ -385,5 +386,11 @@ fn main() -> Result<()> {
         .map_err(|e| praxis_utils::eyre::eyre!("Event loop error: {}", e))?;
 
     info!("Application shutdown complete");
+    Ok(())
+}
+
+#[cfg(feature = "headless")]
+fn main() -> Result<()> {
+    println!("ecs_integration example requires graphics support and cannot run in headless mode");
     Ok(())
 }

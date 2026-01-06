@@ -11,6 +11,7 @@ editor = ["praxis_editor"]
 networking = ["praxis_networking"]
 scripting = ["praxis_scripting"]
 terrain = ["praxis_terrain", "praxis_editor?/terrain"]
+headless = []
 
 [workspace]
 resolver = "2"

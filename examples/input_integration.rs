@@ -13,6 +13,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key, KeyCode, NamedKey};
 use winit::window::{Window, WindowId};
 
+#[cfg(not(feature = "headless"))]
 fn main() -> Result<()> {
     praxis_utils::init()?;
     praxis_input::init()?;
@@ -27,6 +28,12 @@ fn main() -> Result<()> {
         .run_app(&mut app)
         .map_err(|e| praxis_utils::eyre::eyre!("Event loop error: {}", e))?;
 
+    Ok(())
+}
+
+#[cfg(feature = "headless")]
+fn main() -> Result<()> {
+    println!("input_integration example requires graphics support and cannot run in headless mode");
     Ok(())
 }
 

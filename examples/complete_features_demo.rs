@@ -480,6 +480,7 @@ fn print_welcome_banner() {
     println!();
 }
 
+#[cfg(not(feature = "headless"))]
 fn main() -> Result<()> {
     praxis_utils::init_tracing()?;
 
@@ -672,5 +673,11 @@ fn main() -> Result<()> {
         }
     })?;
 
+    Ok(())
+}
+
+#[cfg(feature = "headless")]
+fn main() -> Result<()> {
+    println!("complete_features_demo example requires graphics support and cannot run in headless mode");
     Ok(())
 }

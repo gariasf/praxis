@@ -580,6 +580,7 @@ impl ApplicationHandler for ProceduralTextureDemo {
     }
 }
 
+#[cfg(not(feature = "headless"))]
 fn main() -> Result<()> {
     praxis_utils::init_logging();
 
@@ -594,5 +595,11 @@ fn main() -> Result<()> {
         .run_app(&mut app)
         .expect("Failed to run event loop");
 
+    Ok(())
+}
+
+#[cfg(feature = "headless")]
+fn main() -> Result<()> {
+    println!("procedural_texture_demo example requires graphics support and cannot run in headless mode");
     Ok(())
 }

@@ -28,6 +28,7 @@ use winit::{
     window::WindowBuilder,
 };
 
+#[cfg(not(feature = "headless"))]
 #[pollster::main]
 async fn main() -> Result<()> {
     praxis_utils::init_logging()?;
@@ -181,6 +182,12 @@ async fn main() -> Result<()> {
         }
     })?;
 
+    Ok(())
+}
+
+#[cfg(feature = "headless")]
+fn main() -> Result<()> {
+    println!("gpu_culling_demo example requires graphics support and cannot run in headless mode");
     Ok(())
 }
 

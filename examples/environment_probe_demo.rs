@@ -340,6 +340,7 @@ impl ApplicationHandler for App {
     }
 }
 
+#[cfg(not(feature = "headless"))]
 fn main() -> Result<()> {
     praxis_utils::init()?;
 
@@ -349,5 +350,11 @@ fn main() -> Result<()> {
     let mut app = App::default();
     event_loop.run_app(&mut app)?;
 
+    Ok(())
+}
+
+#[cfg(feature = "headless")]
+fn main() -> Result<()> {
+    println!("environment_probe_demo example requires graphics support and cannot run in headless mode");
     Ok(())
 }

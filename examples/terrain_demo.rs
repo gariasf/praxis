@@ -29,7 +29,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 #[cfg(feature = "terrain")]
 use winit::window::WindowAttributes;
 
-#[cfg(feature = "terrain")]
+#[cfg(all(feature = "terrain", not(feature = "headless")))]
 fn main() -> Result<()> {
     praxis_utils::init_tracing()?;
 
@@ -251,7 +251,13 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(feature = "terrain"))]
+#[cfg(feature = "headless")]
+fn main() -> Result<()> {
+    println!("terrain_demo example requires graphics support and cannot run in headless mode");
+    Ok(())
+}
+
+#[cfg(all(not(feature = "terrain"), not(feature = "headless")))]
 fn main() {
     eprintln!("This example requires the 'terrain' feature to be enabled.");
     eprintln!("Run with: cargo run --example terrain_demo --features terrain");
