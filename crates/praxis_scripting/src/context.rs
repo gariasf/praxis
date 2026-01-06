@@ -86,6 +86,7 @@ impl ScriptingContext {
 
         bindings::register_math_api(&self.lua)?;
         bindings::register_engine_api(&self.lua)?;
+        bindings::register_console_commands(&self.lua)?;
 
         crate::sandbox::apply_sandbox(&self.lua, &self.config.sandbox)?;
 
@@ -302,6 +303,136 @@ impl ScriptingContext {
         crate::bindings::ecs_api::clear_world_context(&self.lua)?;
         result
     }
+
+    /// Evaluates Lua code interactively (REPL mode).
+    ///
+    /// This method is designed for console/REPL usage and provides:
+    /// - Automatic return value printing
+    /// - Expression evaluation (if statement fails, tries as expression)
+    /// - Multi-value return support
+    ///
+    /// # Arguments
+    ///
+    /// * `code` - Lua code string to evaluate
+    ///
+    /// # Returns
+    ///
+    /// A formatted string with the evaluation result or error message.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use praxis_scripting::{ScriptingContext, ScriptingConfig};
+    /// # let context = ScriptingContext::new(ScriptingConfig::default()).unwrap();
+    /// let result = context.eval_interactive("2 + 2").unwrap();
+    /// assert_eq!(result, "4");
+    ///
+    /// let result = context.eval_interactive("x = 5").unwrap();
+    /// assert!(result.is_empty()); // Statements don't return values
+    /// ```
+    pub fn eval_interactive(&self, code: &str) -> Result<String> {
+        let start = if self.performance_monitor.is_some() {
+            Some(std::time::Instant::now())
+        } else {
+            None
+        };
+
+        // Try to evaluate as a statement first
+        let result = self.lua.load(code).eval::<mlua::MultiValue>();
+
+        let output = match result {
+            Ok(values) => {
+                // Format the return values
+                if values.is_empty() {
+                    String::new()
+                } else {
+                    let formatted: Vec<String> = values
+                        .iter()
+                        .map(|v| format_lua_value(v))
+                        .collect();
+                    formatted.join(", ")
+                }
+            }
+            Err(err) => {
+                // If it failed as a statement, try as an expression by wrapping with "return"
+                let expr_code = format!("return {code}");
+                match self.lua.load(&expr_code).eval::<mlua::MultiValue>() {
+                    Ok(values) => {
+                        if values.is_empty() {
+                            String::new()
+                        } else {
+                            let formatted: Vec<String> = values
+                                .iter()
+                                .map(|v| format_lua_value(v))
+                                .collect();
+                            formatted.join(", ")
+                        }
+                    }
+                    Err(_) => {
+                        // Return the original error if both attempts failed
+                        return Err(praxis_utils::eyre::eyre!("Lua error: {}", err));
+                    }
+                }
+            }
+        };
+
+        if let (Some(start), Some(ref monitor)) = (start, &self.performance_monitor) {
+            let elapsed = start.elapsed();
+            monitor.record_execution("interactive", "eval", elapsed);
+        }
+
+        Ok(output)
+    }
+
+    /// Evaluates Lua code interactively with ECS World context.
+    ///
+    /// Similar to `eval_interactive`, but provides access to the ECS World
+    /// through the `world` global table.
+    ///
+    /// # Arguments
+    ///
+    /// * `code` - Lua code string to evaluate
+    /// * `world` - Mutable reference to the ECS World
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use praxis_scripting::{ScriptingContext, ScriptingConfig};
+    /// # use praxis_ecs::World;
+    /// # let context = ScriptingContext::new(ScriptingConfig::default()).unwrap();
+    /// # let mut world = World::new();
+    /// let result = context.eval_interactive_with_world("world.spawn()", &mut world).unwrap();
+    /// ```
+    pub fn eval_interactive_with_world(&self, code: &str, world: &mut praxis_ecs::World) -> Result<String> {
+        self.with_world(world, |_| self.eval_interactive(code))
+    }
+}
+
+/// Formats a Lua value for display in the REPL.
+fn format_lua_value(value: &mlua::Value) -> String {
+    match value {
+        mlua::Value::Nil => "nil".to_string(),
+        mlua::Value::Boolean(b) => b.to_string(),
+        mlua::Value::Integer(i) => i.to_string(),
+        mlua::Value::Number(n) => {
+            // Format numbers nicely
+            if n.fract() == 0.0 && n.abs() < 1e10 {
+                format!("{n:.0}")
+            } else {
+                format!("{n}")
+            }
+        }
+        mlua::Value::String(s) => {
+            // Show strings with quotes for clarity
+            format!("\"{}\"", s.to_str().unwrap_or("<invalid utf8>"))
+        }
+        mlua::Value::Table(_) => "table".to_string(),
+        mlua::Value::Function(_) => "function".to_string(),
+        mlua::Value::Thread(_) => "thread".to_string(),
+        mlua::Value::UserData(_) => "userdata".to_string(),
+        mlua::Value::LightUserData(_) => "lightuserdata".to_string(),
+        mlua::Value::Error(e) => format!("error: {e}"),
+    }
 }
 
 #[cfg(test)]
@@ -348,5 +479,73 @@ mod tests {
         context.set_global("test_value", 123).unwrap();
         let value: i32 = context.get_global("test_value").unwrap();
         assert_eq!(value, 123);
+    }
+
+    #[test]
+    fn test_eval_interactive_expression() {
+        let config = ScriptingConfig::default();
+        let context = ScriptingContext::new(config).unwrap();
+
+        // Test simple expression
+        let result = context.eval_interactive("2 + 2").unwrap();
+        assert_eq!(result, "4");
+
+        // Test with decimal
+        let result = context.eval_interactive("math.sqrt(16)").unwrap();
+        assert_eq!(result, "4");
+    }
+
+    #[test]
+    fn test_eval_interactive_statement() {
+        let config = ScriptingConfig::default();
+        let context = ScriptingContext::new(config).unwrap();
+
+        // Test assignment statement (no return value)
+        let result = context.eval_interactive("x = 42").unwrap();
+        assert_eq!(result, "");
+
+        // Verify the value was set
+        let value: i32 = context.get_global("x").unwrap();
+        assert_eq!(value, 42);
+    }
+
+    #[test]
+    fn test_eval_interactive_with_world() {
+        let config = ScriptingConfig::default();
+        let context = ScriptingContext::new(config).unwrap();
+        let mut world = praxis_ecs::World::new();
+
+        // Spawn some entities
+        world.spawn((
+            praxis_ecs::Name::new("TestEntity"),
+            praxis_ecs::Transform::default(),
+            praxis_ecs::GlobalTransform::default(),
+        ));
+
+        // Test console command with world context
+        let result = context
+            .eval_interactive_with_world("console.entity_count()", &mut world)
+            .unwrap();
+        assert_eq!(result, "1");
+    }
+
+    #[test]
+    fn test_eval_interactive_error() {
+        let config = ScriptingConfig::default();
+        let context = ScriptingContext::new(config).unwrap();
+
+        // Test invalid syntax
+        let result = context.eval_interactive("invalid lua syntax )))");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_eval_interactive_multi_value() {
+        let config = ScriptingConfig::default();
+        let context = ScriptingContext::new(config).unwrap();
+
+        // Test multiple return values
+        let result = context.eval_interactive("return 1, 2, 3").unwrap();
+        assert_eq!(result, "1, 2, 3");
     }
 }

@@ -274,6 +274,9 @@ pub struct ConsolePanel {
     /// Lua scripting context (optional)
     #[cfg(feature = "scripting")]
     lua_context: Option<Arc<RwLock<ScriptingContext>>>,
+    /// ECS World pointer for Lua commands (optional)
+    #[cfg(feature = "scripting")]
+    world_ptr: Option<*mut praxis_ecs::World>,
     /// Whether to focus input on next frame
     focus_input: bool,
     /// Autocomplete suggestions
@@ -304,6 +307,8 @@ impl ConsolePanel {
             command_registry: Arc::new(RwLock::new(CommandRegistry::new())),
             #[cfg(feature = "scripting")]
             lua_context: None,
+            #[cfg(feature = "scripting")]
+            world_ptr: None,
             focus_input: false,
             autocomplete_suggestions: Vec::new(),
             autocomplete_index: None,
@@ -314,6 +319,20 @@ impl ConsolePanel {
     #[cfg(feature = "scripting")]
     pub fn set_lua_context(&mut self, context: Arc<RwLock<ScriptingContext>>) {
         self.lua_context = Some(context);
+    }
+
+    /// Sets the ECS World for Lua console commands.
+    ///
+    /// This should be called each frame with the current world to enable
+    /// console commands like `console.list_entities()` to work.
+    ///
+    /// # Safety
+    ///
+    /// The world pointer must remain valid for the lifetime of console command execution.
+    /// Callers should ensure this is called each frame with a valid world reference.
+    #[cfg(feature = "scripting")]
+    pub fn set_world(&mut self, world: &mut praxis_ecs::World) {
+        self.world_ptr = Some(world as *mut praxis_ecs::World);
     }
 
     /// Gets a reference to the command registry
@@ -745,17 +764,33 @@ impl ConsolePanel {
     #[cfg(feature = "scripting")]
     fn execute_lua(&mut self, code: &str, lua_context: &Arc<RwLock<ScriptingContext>>) {
         let context = lua_context.read();
-        let lua = context.lua();
 
-        match lua.load(code).eval::<mlua::MultiValue>() {
-            Ok(values) => {
-                if !values.is_empty() {
-                    let results: Vec<String> = values.iter().map(|v| format!("{:?}", v)).collect();
-                    self.log(results.join(", "), LogLevel::Success);
+        // If we have a world pointer, use eval_interactive_with_world for full ECS access
+        if let Some(world_ptr) = self.world_ptr {
+            #[allow(unsafe_code)]
+            let world = unsafe { &mut *world_ptr };
+
+            match context.eval_interactive_with_world(code, world) {
+                Ok(output) => {
+                    if !output.is_empty() {
+                        self.log(output, LogLevel::Success);
+                    }
+                }
+                Err(error) => {
+                    self.log(format!("{}", error), LogLevel::Error);
                 }
             }
-            Err(error) => {
-                self.log(format!("Lua error: {}", error), LogLevel::Error);
+        } else {
+            // Fall back to basic eval without world access
+            match context.eval_interactive(code) {
+                Ok(output) => {
+                    if !output.is_empty() {
+                        self.log(output, LogLevel::Success);
+                    }
+                }
+                Err(error) => {
+                    self.log(format!("{}", error), LogLevel::Error);
+                }
             }
         }
     }

@@ -41,6 +41,21 @@ fn with_world<F, R>(f: F) -> mlua::Result<R>
 where
     F: FnOnce(&mut World) -> mlua::Result<R>,
 {
+    with_world_raw(f)
+}
+
+/// Accesses the current ECS World context from thread-local storage.
+///
+/// This is exposed for use by other modules (like console_commands) that need
+/// to query/modify the world from Lua functions.
+///
+/// # Safety
+///
+/// The world pointer must be valid and set via `set_world_context` before calling.
+pub(super) fn with_world_raw<F, R>(f: F) -> mlua::Result<R>
+where
+    F: FnOnce(&mut World) -> mlua::Result<R>,
+{
     WORLD_CONTEXT.with(|ctx| {
         let world_ptr = ctx
             .borrow()

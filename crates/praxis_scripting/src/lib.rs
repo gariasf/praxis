@@ -10,6 +10,8 @@
 //! - **Sandboxing**: Restrict access to dangerous operations for security
 //! - **Performance Monitoring**: Track script execution time to detect expensive operations
 //! - **Type-Safe Bindings**: Expose Rust APIs to Lua with type safety
+//! - **REPL Support**: Interactive console with automatic expression evaluation
+//! - **Console Commands**: Built-in commands for ECS introspection and runtime modification
 //!
 //! # Example
 //!
@@ -22,6 +24,24 @@
 //! context.load_script("game_logic", "scripts/game.lua").unwrap();
 //! context.call_function::<_, ()>("game_logic", "update", 0.016).unwrap();
 //! ```
+//!
+//! # Interactive REPL
+//!
+//! ```rust,no_run
+//! use praxis_scripting::ScriptingContext;
+//! # let context = ScriptingContext::new(Default::default()).unwrap();
+//!
+//! // Evaluate expressions interactively
+//! let result = context.eval_interactive("2 + 2").unwrap();
+//! assert_eq!(result, "4");
+//!
+//! // With ECS World access
+//! # let mut world = praxis_ecs::World::new();
+//! let result = context.eval_interactive_with_world(
+//!     "console.list_entities()",
+//!     &mut world
+//! ).unwrap();
+//! ```
 
 mod bindings;
 mod context;
@@ -31,6 +51,7 @@ mod sandbox;
 mod script_component;
 mod systems;
 
+pub use bindings::console_commands;
 pub use context::{ScriptingConfig, ScriptingContext};
 pub use hot_reload::{HotReloadWatcher, ScriptEvent};
 pub use performance::{ScriptPerformanceMonitor, ScriptStats};

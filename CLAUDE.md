@@ -35,6 +35,7 @@ cargo run --example editor_camera_demo
 cargo run --example gui_demo
 cargo run --example scripting_demo
 cargo run --example scripting_advanced_demo
+cargo run --example scripting_console_demo
 cargo run --example networking_demo
 cargo run --example terrain_demo
 cargo run --example spatial_partitioning_demo

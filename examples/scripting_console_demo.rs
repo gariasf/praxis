@@ -1,12 +1,11 @@
-//! Console panel demonstration with command history, Lua REPL, and custom commands.
+//! Advanced console demo showcasing scripting integration with ECS introspection.
 //!
-//! This example demonstrates the Praxis console panel with:
-//! - Command history navigation (up/down arrows)
-//! - Lua REPL integration for executing Lua code
-//! - Custom debug command registration
-//! - Autocomplete for commands (Tab key)
-//! - Log filtering by level and text search
-//! - Auto-scroll toggle
+//! This example demonstrates the full power of the Praxis console with Lua scripting:
+//! - Interactive REPL with automatic expression evaluation
+//! - Full ECS World access via console commands
+//! - Entity queries, inspection, and runtime modification
+//! - Live entity spawning and despawning
+//! - Transform manipulation from the console
 //!
 //! Controls:
 //! - ~ or F1: Toggle console visibility
@@ -14,12 +13,39 @@
 //! - Tab: Cycle through autocomplete suggestions
 //! - Enter: Execute command or Lua code
 //! - Escape: Close autocomplete
+//!
+//! Try these commands:
+//! ```lua
+//! -- Basic Lua expressions
+//! 2 + 2
+//! math.sqrt(16)
+//! 
+//! -- Entity introspection
+//! console.list_entities()
+//! console.entity_count()
+//! 
+//! -- Find and inspect entities
+//! local id = console.find_entity("Player")
+//! console.inspect(id)
+//! 
+//! -- Modify transforms
+//! console.set_transform(id, 10, 5, 0)
+//! console.get_transform(id)
+//! 
+//! -- Spawn and despawn entities
+//! console.spawn("DynamicEntity")
+//! console.list_entities()
+//! 
+//! -- Query by component
+//! console.query_with_transform()
+//! console.query_with_name()
+//! ```
 
 use praxis_core::{App, AppConfig};
 use praxis_ecs::{GlobalTransform, Name, Transform, World};
 use praxis_graphics::RenderContext;
-use praxis_gui::{CommandRegistry, ConsolePanel, EguiContext, EguiIntegration};
-use praxis_math::{Quat, Vec3};
+use praxis_gui::{ConsolePanel, EguiIntegration};
+use praxis_math::Vec3;
 use praxis_scripting::{ScriptingConfig, ScriptingContext};
 use praxis_utils::{info, Result};
 use praxis_window::{Window, WindowConfig};
@@ -27,20 +53,21 @@ use std::sync::Arc;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::keyboard::{Key, NamedKey};
 
-struct ConsoleDemo {
+struct ScriptingConsoleDemo {
     window: Window,
     render_context: RenderContext,
     egui_integration: EguiIntegration,
     console: ConsolePanel,
     world: World,
+    frame_count: u64,
 }
 
-impl ConsoleDemo {
+impl ScriptingConsoleDemo {
     fn new() -> Result<Self> {
-        info!("Initializing Console Demo");
+        info!("Initializing Scripting Console Demo");
 
         let window = Window::new(WindowConfig {
-            title: "Console Demo - Press ~ or F1 to toggle console".to_string(),
+            title: "Scripting Console Demo - Press ~ or F1 to toggle console".to_string(),
             width: 1280,
             height: 720,
             ..Default::default()
@@ -50,7 +77,7 @@ impl ConsoleDemo {
             window.inner(),
             window.width(),
             window.height(),
-            "Console Demo",
+            "Scripting Console Demo",
         )?;
 
         let egui_integration = EguiIntegration::new(
@@ -61,13 +88,19 @@ impl ConsoleDemo {
         );
 
         let mut world = World::new();
-        setup_test_entities(&mut world);
+        setup_demo_entities(&mut world);
 
         let mut console = ConsolePanel::new();
         console.show();
-        console.log_info("Console Demo initialized. Press ~ or F1 to toggle visibility.");
-        console.log_info("Type 'help' for available commands, or enter Lua code directly.");
-        console.log_info("ECS introspection available via 'console.*' commands.");
+        console.log_success("=== Scripting Console Demo ===");
+        console.log_info("Full Lua REPL with ECS introspection enabled!");
+        console.log_info("");
+        console.log_info("Quick Start:");
+        console.log_info("  Type 'help' for built-in commands");
+        console.log_info("  Try: console.list_entities()");
+        console.log_info("  Try: 2 + 2");
+        console.log_info("  Try: math.sqrt(16)");
+        console.log_info("");
 
         let scripting_config = ScriptingConfig::default();
         let scripting_context = Arc::new(parking_lot::RwLock::new(ScriptingContext::new(
@@ -76,14 +109,13 @@ impl ConsoleDemo {
 
         console.set_lua_context(Arc::clone(&scripting_context));
 
-        register_custom_commands(&console, &world);
-
         Ok(Self {
             window,
             render_context,
             egui_integration,
             console,
             world,
+            frame_count: 0,
         })
     }
 
@@ -117,8 +149,18 @@ impl ConsoleDemo {
     }
 
     fn update(&mut self) {
-        // Update world reference for console commands
+        self.frame_count += 1;
+
+        // Set world reference for console commands
         self.console.set_world(&mut self.world);
+
+        // Animate entities slightly for visual feedback
+        if self.frame_count % 60 == 0 {
+            let entity_count = self.world.inner().entities().len();
+            if entity_count > 0 {
+                self.console.log_debug(format!("Frame {}: {} entities active", self.frame_count, entity_count));
+            }
+        }
     }
 
     fn render(&mut self) -> Result<()> {
@@ -128,34 +170,47 @@ impl ConsoleDemo {
 
         self.console.render(egui_ctx);
 
-        egui::Window::new("Info")
+        egui::Window::new("Scripting Console Demo")
             .default_pos(egui::pos2(10.0, 10.0))
-            .default_size(egui::vec2(300.0, 200.0))
+            .default_size(egui::vec2(400.0, 350.0))
             .resizable(false)
             .show(egui_ctx, |ui| {
-                ui.heading("Console Demo");
+                ui.heading("Interactive Lua REPL with ECS");
                 ui.separator();
+                
                 ui.label("Controls:");
                 ui.label("  ~ or F1: Toggle console");
                 ui.label("  Up/Down: Command history");
                 ui.label("  Tab: Autocomplete");
-                ui.label("  Enter: Execute");
                 ui.separator();
-                ui.label("Try these commands:");
-                ui.label("  help");
-                ui.label("  echo Hello World");
-                ui.separator();
-                ui.label("Or enter Lua code:");
+                
+                ui.label("Lua Expressions:");
                 ui.label("  2 + 2");
                 ui.label("  math.sqrt(16)");
-                ui.label("  print('Hello from Lua')");
+                ui.label("  print('Hello')");
                 ui.separator();
-                ui.label("ECS introspection:");
+                
+                ui.label("ECS Introspection:");
                 ui.label("  console.list_entities()");
                 ui.label("  console.entity_count()");
-                ui.label("  console.find_entity('TestEntity_0')");
-                ui.label("  console.inspect(0)");
-                ui.label("  console.spawn('MyEntity')");
+                ui.label("  console.query_with_name()");
+                ui.label("  console.query_with_transform()");
+                ui.separator();
+                
+                ui.label("Entity Operations:");
+                ui.label("  id = console.find_entity('Player')");
+                ui.label("  console.inspect(id)");
+                ui.label("  console.get_transform(id)");
+                ui.label("  console.set_transform(id, 10, 5, 0)");
+                ui.separator();
+                
+                ui.label("Spawn/Despawn:");
+                ui.label("  console.spawn('NewEntity')");
+                ui.label("  console.despawn(id)");
+                ui.separator();
+                
+                ui.label(format!("Frame: {}", self.frame_count));
+                ui.label(format!("Entities: {}", self.world.inner().entities().len()));
             });
 
         let shapes = self.egui_integration.end_frame(self.window.inner());
@@ -178,7 +233,7 @@ impl ConsoleDemo {
     }
 
     fn run(mut self) -> Result<()> {
-        info!("Starting Console Demo");
+        info!("Starting Scripting Console Demo");
 
         self.window.run(move |event, elwt| {
             if let Some(event) = event {
@@ -209,74 +264,50 @@ impl ConsoleDemo {
     }
 }
 
-fn setup_test_entities(world: &mut World) {
-    for i in 0..5 {
-        world.spawn((
-            Name::new(format!("TestEntity_{}", i)),
-            Transform::from_xyz(i as f32 * 2.0, 0.0, 0.0),
-            GlobalTransform::default(),
-        ));
-    }
-}
+fn setup_demo_entities(world: &mut World) {
+    // Spawn various entities for demonstration
+    world.spawn((
+        Name::new("Player"),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        GlobalTransform::default(),
+    ));
 
-fn register_custom_commands(console: &ConsolePanel, world: &World) {
-    let registry = console.command_registry();
-    let mut registry = registry.write();
+    world.spawn((
+        Name::new("Enemy_1"),
+        Transform::from_xyz(5.0, 0.0, 0.0),
+        GlobalTransform::default(),
+    ));
 
-    registry.register(
-        "list_entities",
-        "List all entities in the world",
-        "list_entities",
-        move |_args| {
-            let count = 5;
-            Ok(format!("World contains {} entities", count))
-        },
-    );
+    world.spawn((
+        Name::new("Enemy_2"),
+        Transform::from_xyz(-5.0, 0.0, 0.0),
+        GlobalTransform::default(),
+    ));
 
-    registry.register(
-        "spawn_entity",
-        "Spawn a new entity with a name",
-        "spawn_entity <name>",
-        move |args| {
-            if args.is_empty() {
-                return Err("Usage: spawn_entity <name>".to_string());
-            }
-            let name = args.join(" ");
-            Ok(format!("Created entity: {}", name))
-        },
-    );
+    world.spawn((
+        Name::new("Pickup"),
+        Transform::from_xyz(0.0, 2.0, 0.0),
+        GlobalTransform::default(),
+    ));
 
-    registry.register("fps", "Display current FPS", "fps", |_args| {
-        Ok("FPS: 60.0".to_string())
-    });
+    world.spawn((
+        Name::new("Camera"),
+        Transform::from_xyz(0.0, 5.0, 10.0),
+        GlobalTransform::default(),
+    ));
 
-    registry.register("mem", "Display memory usage", "mem", |_args| {
-        Ok("Memory: 142 MB / 16 GB".to_string())
-    });
-
-    registry.register("version", "Display engine version", "version", |_args| {
-        Ok("Praxis Engine v0.1.0".to_string())
-    });
-
-    registry.register("time", "Display current time", "time", |_args| {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        Ok(format!("Unix timestamp: {}", now))
-    });
+    // Spawn some unnamed entities for testing
+    world.spawn((
+        Transform::from_xyz(10.0, 0.0, 0.0),
+        GlobalTransform::default(),
+    ));
 }
 
 fn main() -> Result<()> {
     praxis_utils::init()?;
     praxis_gui::init()?;
 
-    let app_config = AppConfig {
-        title: "Console Demo".to_string(),
-        ..Default::default()
-    };
-
-    let demo = ConsoleDemo::new()?;
+    let demo = ScriptingConsoleDemo::new()?;
     demo.run()?;
 
     Ok(())
