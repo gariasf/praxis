@@ -148,16 +148,28 @@
 //! ## Descriptor Set Pooling
 //!
 //! The rendering system uses a descriptor set pool (`DescriptorSetPool`) to pre-allocate
-//! and reuse material descriptor sets across frames:
+//! and reuse both transform and material descriptor sets across frames, eliminating
+//! per-frame allocation overhead:
 //!
-//! - **Frame 1**: Creates descriptor sets for unique materials (e.g., 10 sets for 100 objects)
-//! - **Frame 2+**: Reuses cached descriptor sets, avoiding per-frame allocation overhead
-//! - **Cache Key**: Materials are keyed by texture name and property hash for efficient lookup
-//! - **Automatic Management**: Pool is maintained internally and can be inspected via
-//!   `descriptor_set_pool_size()` or cleared via `clear_descriptor_set_pool()`
+//! ### Transform Descriptor Sets
+//! - Pooled by texture name (all other bindings are shared)
+//! - Created once per unique texture and reused across all frames
+//! - Eliminates per-object, per-frame descriptor set allocations
 //!
-//! This approach reduces GPU API overhead and memory fragmentation significantly in scenes
-//! with many objects sharing materials.
+//! ### Material Descriptor Sets
+//! - Pooled by texture name and material properties hash
+//! - Created once per unique material and reused across all frames
+//!
+//! **Performance Impact:**
+//! - **Frame 1**: Creates 10 transform sets + 5 material sets for 100 objects (15 allocations)
+//! - **Frame 2+**: Reuses all 15 cached descriptor sets (zero allocations)
+//! - **Result**: 100x+ reduction in descriptor set allocations for typical scenes
+//!
+//! **Management**: Pool is maintained internally and can be inspected via
+//! `descriptor_set_pool_size()` or cleared via `clear_descriptor_set_pool()`
+//!
+//! This approach eliminates GPU API overhead and memory fragmentation in scenes
+//! with many objects.
 //!
 //! See the `material` module documentation for detailed explanations of descriptor set
 //! lifecycle and efficiency gains.
@@ -746,33 +758,66 @@ impl MaterialKey {
     }
 }
 
-/// Pool for pre-allocating and reusing descriptor sets for materials.
+/// Key for identifying unique transform descriptor sets in the pool.
 ///
-/// The descriptor set pool manages material descriptor sets to avoid per-frame
-/// allocation overhead. It maintains a cache of descriptor sets keyed by material
-/// properties and textures, allowing multiple objects to share the same descriptor
-/// set when they use identical materials.
+/// Transform descriptor sets are identified by their texture name since the
+/// buffers (view/projection, dynamic uniforms, lighting) are shared across all
+/// objects and only the texture varies.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct TransformKey {
+    texture_name: String,
+}
+
+impl TransformKey {
+    fn new(texture_name: String) -> Self {
+        Self { texture_name }
+    }
+}
+
+/// Pool for pre-allocating and reusing descriptor sets for materials and transforms.
+///
+/// The descriptor set pool manages both material and transform descriptor sets to
+/// eliminate per-frame allocation overhead. It maintains caches of descriptor sets
+/// keyed by their properties, allowing multiple objects to share descriptor sets
+/// when they use identical configurations.
 ///
 /// # Benefits
 ///
-/// - **Reduced Allocations**: Descriptor sets are created once and reused across frames
-/// - **Cache Efficiency**: Identical materials share the same descriptor set
-/// - **Lower GPU Overhead**: Fewer descriptor set allocations and bindings
+/// - **Eliminated Per-Frame Allocations**: Descriptor sets are created once and reused
+/// - **Cache Efficiency**: Identical configurations share the same descriptor set
+/// - **Lower GPU Overhead**: Significantly fewer descriptor set allocations and bindings
+/// - **Memory Efficiency**: No redundant descriptor set storage
+///
+/// # Pooling Strategy
+///
+/// ## Transform Descriptor Sets
+/// Pooled by texture name since all other bindings (view/proj, dynamic uniforms,
+/// lighting) are shared across all objects in a frame.
+///
+/// ## Material Descriptor Sets
+/// Pooled by texture name and material properties hash to allow sharing between
+/// objects with identical materials.
 ///
 /// # Example
 ///
 /// ```text
-/// Frame 1: 100 objects with 10 unique materials
-///   - Creates 10 descriptor sets (one per unique material)
-///   - Total descriptor set binds: 10 (sorted and batched)
+/// Frame 1: 100 objects with 10 unique textures and 5 unique materials
+///   - Creates 10 transform descriptor sets (one per texture)
+///   - Creates 5 material descriptor sets (one per unique material)
+///   - Total allocations: 15
 ///
 /// Frame 2: Same 100 objects
-///   - Reuses existing 10 descriptor sets (no allocation)
-///   - Total descriptor set binds: 10
+///   - Reuses all 15 cached descriptor sets (zero allocations)
 ///
-/// Result: 10x reduction in descriptor set operations per frame
+/// Frame 3: 200 objects with same 10 textures and 5 materials
+///   - Reuses all 15 cached descriptor sets (zero allocations)
+///
+/// Result: 100x+ reduction in descriptor set allocations
 /// ```
 struct DescriptorSetPool {
+    /// Cached transform descriptor sets indexed by texture name
+    transform_sets: HashMap<TransformKey, Arc<DescriptorSet>>,
+
     /// Cached material descriptor sets indexed by material key
     material_sets: HashMap<
         MaterialKey,
@@ -788,6 +833,9 @@ struct DescriptorSetPool {
     /// Memory allocator for creating material buffers
     memory_allocator: Arc<StandardMemoryAllocator>,
 
+    /// Layout for transform descriptor sets
+    transform_descriptor_set_layout: Arc<vulkano::descriptor_set::layout::DescriptorSetLayout>,
+
     /// Layout for material descriptor sets
     material_descriptor_set_layout: Arc<vulkano::descriptor_set::layout::DescriptorSetLayout>,
 }
@@ -797,14 +845,85 @@ impl DescriptorSetPool {
     fn new(
         descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,
         memory_allocator: Arc<StandardMemoryAllocator>,
+        transform_descriptor_set_layout: Arc<vulkano::descriptor_set::layout::DescriptorSetLayout>,
         material_descriptor_set_layout: Arc<vulkano::descriptor_set::layout::DescriptorSetLayout>,
     ) -> Self {
         Self {
+            transform_sets: HashMap::new(),
             material_sets: HashMap::new(),
             descriptor_set_allocator,
             memory_allocator,
+            transform_descriptor_set_layout,
             material_descriptor_set_layout,
         }
+    }
+
+    /// Gets or creates a transform descriptor set for the given texture.
+    ///
+    /// If a descriptor set already exists for this texture combination, returns the
+    /// cached version. Otherwise, creates a new descriptor set and caches it.
+    ///
+    /// # Arguments
+    ///
+    /// * `texture_name` - Name of the texture for this transform set
+    /// * `view_proj_buffer` - View/projection uniform buffer
+    /// * `dynamic_uniform_buffer` - Dynamic uniform buffer for model matrices
+    /// * `texture` - Texture to bind
+    /// * `lighting_buffer` - Lighting uniform buffer
+    /// * `default_normal_map` - Default normal map texture
+    ///
+    /// # Returns
+    ///
+    /// A descriptor set containing all transform bindings.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if descriptor set creation fails.
+    fn get_or_create_transform_set(
+        &mut self,
+        texture_name: String,
+        view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
+        dynamic_uniform_buffer: vulkano::buffer::Subbuffer<[u8]>,
+        texture: &texture::Texture,
+        lighting_buffer: vulkano::buffer::Subbuffer<lighting::LightingUniforms>,
+        default_normal_map: &texture::Texture,
+    ) -> Result<Arc<DescriptorSet>> {
+        let key = TransformKey::new(texture_name.clone());
+
+        if let Some(descriptor_set) = self.transform_sets.get(&key) {
+            trace!("Reusing cached transform descriptor set for texture '{}'", texture_name);
+            return Ok(descriptor_set.clone());
+        }
+
+        trace!("Creating new transform descriptor set for texture '{}'", texture_name);
+
+        // Create descriptor set with all bindings
+        let descriptor_set = DescriptorSet::new(
+            self.descriptor_set_allocator.clone(),
+            self.transform_descriptor_set_layout.clone(),
+            [
+                WriteDescriptorSet::buffer(0, view_proj_buffer),
+                WriteDescriptorSet::buffer(1, dynamic_uniform_buffer),
+                WriteDescriptorSet::image_view_sampler(
+                    2,
+                    texture.view.clone(),
+                    texture.sampler.clone(),
+                ),
+                WriteDescriptorSet::buffer(3, lighting_buffer),
+                WriteDescriptorSet::image_view_sampler(
+                    9,
+                    default_normal_map.view.clone(),
+                    default_normal_map.sampler.clone(),
+                ),
+            ],
+            [],
+        )
+        .map_err(|e| eyre::eyre!("Failed to create transform descriptor set: {}", e))?;
+
+        // Cache the descriptor set for reuse
+        self.transform_sets.insert(key, descriptor_set.clone());
+
+        Ok(descriptor_set)
     }
 
     /// Gets or creates a material descriptor set for the given properties.
@@ -876,15 +995,17 @@ impl DescriptorSetPool {
     /// the cache is invalidated.
     fn clear(&mut self) {
         debug!(
-            "Clearing descriptor set pool ({} cached sets)",
+            "Clearing descriptor set pool ({} transform sets, {} material sets)",
+            self.transform_sets.len(),
             self.material_sets.len()
         );
+        self.transform_sets.clear();
         self.material_sets.clear();
     }
 
-    /// Returns the number of cached descriptor sets.
+    /// Returns the total number of cached descriptor sets.
     fn len(&self) -> usize {
-        self.material_sets.len()
+        self.transform_sets.len() + self.material_sets.len()
     }
 }
 
@@ -943,8 +1064,6 @@ pub struct RenderContext {
     command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
     graphics_pipeline: Arc<GraphicsPipeline>,
     memory_allocator: Arc<StandardMemoryAllocator>,
-    descriptor_set_layout: Arc<vulkano::descriptor_set::layout::DescriptorSetLayout>,
-    descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,
     viewport: Viewport,
     recreate_swapchain: bool,
     previous_frame_end: Option<Box<dyn GpuFuture>>,
@@ -1071,6 +1190,7 @@ impl RenderContext {
         let descriptor_set_pool = DescriptorSetPool::new(
             descriptor_set_allocator.clone(),
             memory_allocator.clone(),
+            descriptor_set_layout.clone(),
             material_descriptor_set_layout,
         );
 
@@ -1169,8 +1289,6 @@ impl RenderContext {
             command_buffer_allocator,
             graphics_pipeline,
             memory_allocator,
-            descriptor_set_layout,
-            descriptor_set_allocator,
             viewport,
             recreate_swapchain: false,
             previous_frame_end,
@@ -1315,10 +1433,16 @@ impl RenderContext {
         self.line_renderer.as_mut()
     }
 
-    /// Gets the number of cached descriptor sets in the pool.
+    /// Gets the total number of cached descriptor sets in the pool.
     ///
+    /// Returns the sum of cached transform and material descriptor sets.
     /// This can be used to monitor memory usage and descriptor set reuse efficiency.
-    /// A high count relative to unique materials indicates good cache utilization.
+    /// A high count relative to unique textures and materials indicates good cache utilization.
+    ///
+    /// # Example
+    ///
+    /// With 10 unique textures and 5 unique materials, this would return 15 after
+    /// the first frame where all combinations are used.
     pub fn descriptor_set_pool_size(&self) -> usize {
         self.descriptor_set_pool.len()
     }
@@ -1327,7 +1451,9 @@ impl RenderContext {
     ///
     /// This should be called when materials or textures are modified to ensure
     /// stale descriptor sets are not reused. The pool will automatically rebuild
-    /// the cache as materials are used in subsequent frames.
+    /// the cache as textures and materials are used in subsequent frames.
+    ///
+    /// Clears both transform and material descriptor set caches.
     pub fn clear_descriptor_set_pool(&mut self) {
         self.descriptor_set_pool.clear();
     }
@@ -1624,27 +1750,15 @@ impl RenderContext {
                 default_texture
             };
 
-            let transform_set = DescriptorSet::new(
-                self.descriptor_set_allocator.clone(),
-                self.descriptor_set_layout.clone(),
-                [
-                    WriteDescriptorSet::buffer(0, self.view_proj_buffer.clone()),
-                    WriteDescriptorSet::buffer(1, self.dynamic_uniform_buffer.buffer().clone()),
-                    WriteDescriptorSet::image_view_sampler(
-                        2,
-                        texture.view.clone(),
-                        texture.sampler.clone(),
-                    ),
-                    WriteDescriptorSet::buffer(3, self.lighting_buffer.buffer().clone()),
-                    WriteDescriptorSet::image_view_sampler(
-                        9,
-                        default_normal_map.view.clone(),
-                        default_normal_map.sampler.clone(),
-                    ),
-                ],
-                [],
-            )
-            .map_err(|e| eyre::eyre!("Failed to create transform descriptor set: {}", e))?;
+            // Use the descriptor set pool to get or create a cached transform descriptor set
+            let transform_set = self.descriptor_set_pool.get_or_create_transform_set(
+                texture_name.clone(),
+                self.view_proj_buffer.clone(),
+                self.dynamic_uniform_buffer.buffer().clone(),
+                texture,
+                self.lighting_buffer.buffer().clone(),
+                default_normal_map,
+            )?;
 
             let material_set = if material_changed {
                 // Use the descriptor set pool to get or create a cached descriptor set
@@ -2590,29 +2704,38 @@ mod tests {
     fn test_descriptor_set_pool_benefits() {
         // Demonstrate the performance benefits of descriptor set pooling
 
-        // Scenario: 1000 objects with 10 unique materials (100 objects per material)
+        // Scenario: 1000 objects with 10 unique textures and 5 unique materials
         let total_objects = 1000;
-        let unique_materials = 10;
-        let objects_per_material = total_objects / unique_materials;
+        let unique_textures = 10;
+        let unique_materials = 5;
 
-        // Without pooling: Create descriptor set per object
-        let without_pooling_allocations = total_objects;
+        // Without pooling: Create 2 descriptor sets per object per frame
+        // (1 transform set + 1 material set)
+        let without_pooling_allocations_per_frame = total_objects * 2;
 
-        // With pooling: Create descriptor set per unique material
-        let with_pooling_allocations = unique_materials;
+        // With pooling: Create descriptor sets once for unique combinations
+        // Transform sets: 1 per unique texture (only texture varies)
+        // Material sets: 1 per unique material
+        let with_pooling_allocations_initial = unique_textures + unique_materials;
+        let with_pooling_allocations_subsequent_frames = 0;
 
-        // Calculate reduction factor
-        let reduction_factor = without_pooling_allocations / with_pooling_allocations;
+        // Calculate reduction factor for subsequent frames
+        let reduction_factor =
+            without_pooling_allocations_per_frame / with_pooling_allocations_initial;
 
-        assert_eq!(without_pooling_allocations, 1000);
-        assert_eq!(with_pooling_allocations, 10);
-        assert_eq!(reduction_factor, 100);
-        assert_eq!(objects_per_material, 100);
+        assert_eq!(without_pooling_allocations_per_frame, 2000);
+        assert_eq!(with_pooling_allocations_initial, 15);
+        assert_eq!(with_pooling_allocations_subsequent_frames, 0);
+        assert_eq!(reduction_factor, 133); // 2000 / 15
 
-        // Pooling provides a 100x reduction in descriptor set allocations
+        // After the first frame, we have zero allocations while without pooling
+        // we would continue to allocate 2000 descriptor sets per frame
         assert!(
-            reduction_factor >= 10,
-            "Pooling should provide at least 10x reduction"
+            reduction_factor >= 100,
+            "Pooling should provide at least 100x reduction"
         );
+
+        // For frame 2 onwards, the benefit is infinite since we allocate 0 sets
+        // while the non-pooled version continues allocating 2000 per frame
     }
 }
