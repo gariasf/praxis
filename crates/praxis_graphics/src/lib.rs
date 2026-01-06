@@ -19,6 +19,7 @@
 //! - `deferred`: Deferred rendering with G-buffer passes
 //! - `hdr`: High Dynamic Range rendering with tone mapping
 //! - `ssao`: Screen-space ambient occlusion for realistic shadowing
+//! - `ssr`: Screen-space reflections with hierarchical ray marching and environment probe fallback
 //! - `post_process`: Post-processing framework for screen-space effects
 //! - `gpu_culling`: GPU-driven culling for large scenes with minimal CPU overhead
 //!
@@ -365,6 +366,72 @@
 //!
 //! See the `ssao` module documentation for usage details.
 //!
+//! # Screen-Space Reflections (SSR)
+//!
+//! The SSR system provides realistic reflections using screen-space ray marching:
+//!
+//! - **`SsrRenderer`**: Complete SSR implementation with hierarchical ray marching
+//! - **`SsrConfig`**: Configuration for ray marching steps, thickness, roughness, and blur
+//! - **Hierarchical Ray Marching**: Adaptive step size for efficient screen-space ray tracing
+//! - **Binary Search Refinement**: Sub-pixel accuracy for reflection hit positions
+//! - **Roughness-Aware Blur**: Variable blur strength based on surface roughness
+//! - **Environment Probe Fallback**: Uses environment probes when rays miss screen-space geometry
+//!
+//! SSR generates reflections by tracing rays through the depth buffer in screen space.
+//! It's efficient and provides accurate reflections for on-screen geometry, with
+//! environment probes filling in for off-screen reflections.
+//!
+//! The SSR implementation uses:
+//! 1. Ray marching pass: Trace reflection rays through depth buffer with hierarchical steps
+//! 2. Binary search refinement: Refine hit positions for sub-pixel accuracy
+//! 3. Roughness-aware blur: Apply separable Gaussian blur scaled by surface roughness
+//! 4. Composite pass: Blend SSR reflections with environment probe fallback
+//!
+//! The resulting reflection texture can be additively blended with the scene to create
+//! realistic metallic and glossy surface reflections.
+//!
+//! ## Usage Example
+//!
+//! ```rust,no_run
+//! use praxis_graphics::ssr::{SsrRenderer, SsrConfig};
+//! # use std::sync::Arc;
+//! # use vulkano::device::Device;
+//! # use vulkano::memory::allocator::StandardMemoryAllocator;
+//! # fn example(
+//! #     device: Arc<Device>,
+//! #     memory_allocator: Arc<StandardMemoryAllocator>,
+//! # ) -> praxis_utils::Result<()> {
+//!
+//! let config = SsrConfig::default()
+//!     .with_max_steps(64)
+//!     .with_max_binary_search_steps(8)
+//!     .with_thickness(0.1)
+//!     .with_max_roughness(0.8);
+//!
+//! let mut ssr = SsrRenderer::new(
+//!     device,
+//!     memory_allocator,
+//!     1920,
+//!     1080,
+//!     config,
+//! )?;
+//!
+//! // In render loop, after G-buffer pass:
+//! // let ssr_texture = ssr.render(
+//! //     builder,
+//! //     gbuffer,
+//! //     scene_color,
+//! //     view,
+//! //     proj,
+//! //     camera_position,
+//! //     ibl_data,
+//! // )?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! See the `ssr` module documentation for complete details.
+//!
 //! # GPU-Driven Culling System
 //!
 //! The GPU culling system provides a high-performance culling solution for large scenes:
@@ -703,6 +770,7 @@ mod shaders;
 pub mod shadow;
 pub mod skybox;
 pub mod ssao;
+// pub mod ssr; // TODO: Module file not yet created
 pub mod taa;
 pub mod texture;
 pub mod uniform_buffer;

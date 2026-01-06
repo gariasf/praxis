@@ -322,6 +322,54 @@ pub mod gpu_culling_comp {
     }
 }
 
+/// Compiled vertex shader for SSR ray marching pass.
+pub mod ssr_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/shaders/ssr.vert"
+    }
+}
+
+/// Compiled fragment shader for SSR ray marching pass.
+pub mod ssr_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/ssr.frag"
+    }
+}
+
+/// Compiled vertex shader for SSR blur pass.
+pub mod ssr_blur_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/shaders/ssr_blur.vert"
+    }
+}
+
+/// Compiled fragment shader for SSR blur pass.
+pub mod ssr_blur_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/ssr_blur.frag"
+    }
+}
+
+/// Compiled vertex shader for SSR composite pass.
+pub mod ssr_composite_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/shaders/ssr_composite.vert"
+    }
+}
+
+/// Compiled fragment shader for SSR composite pass.
+pub mod ssr_composite_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/ssr_composite.frag"
+    }
+}
+
 use std::sync::Arc;
 use vulkano::device::Device;
 
