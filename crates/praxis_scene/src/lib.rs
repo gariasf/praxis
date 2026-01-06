@@ -6,6 +6,7 @@
 //! - Scene loading and unloading
 //! - Entity spawning from scene definitions
 //! - Scene graph traversal utilities
+//! - Full game state save/load system
 //!
 //! # Scene Structure
 //!
@@ -14,7 +15,7 @@
 //! - Hierarchical parent-child relationships
 //! - Custom metadata
 //!
-//! # Example
+//! # Scene Loading Example
 //!
 //! ```rust,no_run
 //! use praxis_scene::{SceneManager, SceneLoader};
@@ -32,6 +33,32 @@
 //!
 //! // Later, unload the scene
 //! scene_manager.unload_scene(&mut world, &scene_handle);
+//! ```
+//!
+//! # Save/Load System Example
+//!
+//! ```rust,no_run
+//! use praxis_scene::{SaveManager, SaveMetadata};
+//! use praxis_ecs::World;
+//!
+//! let mut world = World::new();
+//! let mut save_manager = SaveManager::new();
+//!
+//! // Create save metadata
+//! let metadata = SaveMetadata::new("Chapter 1 - Forest")
+//!     .with_description("Player at the forest entrance")
+//!     .with_playtime(3600)
+//!     .with_tag("autosave");
+//!
+//! // Save the complete game state
+//! save_manager.save_to_file(&world, "saves/slot1.ron", metadata).unwrap();
+//!
+//! // Load the game state
+//! save_manager.load_from_file(&mut world, "saves/slot1.ron").unwrap();
+//!
+//! // Read metadata without loading the full save
+//! let metadata = save_manager.read_metadata("saves/slot1.ron").unwrap();
+//! println!("Save: {} - {}", metadata.name, metadata.timestamp);
 //! ```
 //!
 //! # Scene Definition Format (RON)
@@ -76,6 +103,7 @@ mod definition;
 mod loader;
 mod manager;
 mod migration;
+mod save;
 mod traversal;
 
 // Temporarily disabled due to private field access issues
@@ -88,6 +116,7 @@ pub use definition::*;
 pub use loader::*;
 pub use manager::*;
 pub use migration::*;
+pub use save::*;
 pub use traversal::*;
 
 use praxis_utils::{info, Result};

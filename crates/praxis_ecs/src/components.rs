@@ -535,7 +535,7 @@ impl From<String> for MeshHandle {
 ///     TextureHandle::new("brick"),
 /// ));
 /// ```
-#[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Component, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TextureHandle {
     /// Unique identifier for the texture.
     pub id: String,
