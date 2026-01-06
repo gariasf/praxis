@@ -67,6 +67,7 @@ fn create_triangle_mesh() -> MeshData {
     }
 }
 
+#[derive(Default)]
 struct App {
     window: Option<Arc<Window>>,
     world: Option<World>,
@@ -74,16 +75,6 @@ struct App {
     camera_entity: Option<praxis_ecs::Entity>,
 }
 
-impl Default for App {
-    fn default() -> Self {
-        Self {
-            window: None,
-            world: None,
-            render_context: None,
-            camera_entity: None,
-        }
-    }
-}
 
 impl App {
     async fn setup_scene(

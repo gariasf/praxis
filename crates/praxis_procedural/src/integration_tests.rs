@@ -260,8 +260,7 @@ mod tests {
 
             assert!(
                 graph.validate().is_ok(),
-                "Failed to validate graph with blend mode {:?}",
-                mode
+                "Failed to validate graph with blend mode {mode:?}"
             );
         }
     }
@@ -285,8 +284,7 @@ mod tests {
 
             assert!(
                 graph.validate().is_ok(),
-                "Failed to validate graph with noise type {:?}",
-                noise_type
+                "Failed to validate graph with noise type {noise_type:?}"
             );
         }
     }

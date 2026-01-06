@@ -26,7 +26,7 @@ fn create_hierarchy_entity(name: &str, depth: usize, children_per_node: usize) -
 
     if depth > 0 {
         for i in 0..children_per_node {
-            let child_name = format!("{}_{}", name, i);
+            let child_name = format!("{name}_{i}");
             let child = create_hierarchy_entity(&child_name, depth - 1, children_per_node);
             entity = entity.with_child(child);
         }
@@ -36,7 +36,7 @@ fn create_hierarchy_entity(name: &str, depth: usize, children_per_node: usize) -
 }
 
 fn create_scene_with_entities(entity_count: usize) -> SceneDefinition {
-    let mut scene = SceneDefinition::new(&format!("Benchmark Scene {}", entity_count));
+    let mut scene = SceneDefinition::new(format!("Benchmark Scene {entity_count}"));
 
     scene.metadata.description = Some("Benchmark scene for performance testing".to_string());
     scene.metadata.author = Some("Benchmark Suite".to_string());
@@ -50,7 +50,7 @@ fn create_scene_with_entities(entity_count: usize) -> SceneDefinition {
         let x = (i % 10) as f32 * 2.0;
         let y = 0.0;
         let z = (i / 10) as f32 * 2.0;
-        let name = format!("Entity_{}", i);
+        let name = format!("Entity_{i}");
         scene.add_entity(create_simple_entity(&name, x, y, z));
     }
 
@@ -87,7 +87,7 @@ fn create_scene_with_editor_data(entity_count: usize) -> SceneDefinition {
     viewport.grid_spacing = 1.0;
 
     let selected: Vec<String> = (0..entity_count.min(10))
-        .map(|i| format!("Entity_{}", i))
+        .map(|i| format!("Entity_{i}"))
         .collect();
 
     let editor_data = EditorData::new()
@@ -183,7 +183,7 @@ fn bench_scene_with_hierarchy_serialization(c: &mut Criterion) {
 
         group.throughput(Throughput::Elements(total_entities as u64));
         group.bench_with_input(
-            BenchmarkId::new("depth_children", format!("{}_{}", depth, children)),
+            BenchmarkId::new("depth_children", format!("{depth}_{children}")),
             &scene,
             |b, scene| {
                 b.iter(|| {
@@ -208,7 +208,7 @@ fn bench_scene_with_hierarchy_deserialization(c: &mut Criterion) {
 
         group.throughput(Throughput::Elements(total_entities as u64));
         group.bench_with_input(
-            BenchmarkId::new("depth_children", format!("{}_{}", depth, children)),
+            BenchmarkId::new("depth_children", format!("{depth}_{children}")),
             &ron_string,
             |b, ron| {
                 b.iter(|| {
@@ -266,11 +266,11 @@ fn bench_scene_metadata_serialization(c: &mut Criterion) {
     scene.metadata.description = Some("A".repeat(1000));
     scene.metadata.author = Some("Test Author".to_string());
     scene.metadata.version = Some("1.0.0".to_string());
-    scene.metadata.tags = (0..100).map(|i| format!("tag_{}", i)).collect();
+    scene.metadata.tags = (0..100).map(|i| format!("tag_{i}")).collect();
 
     for i in 0..50 {
         scene.add_entity(create_simple_entity(
-            &format!("Entity_{}", i),
+            &format!("Entity_{i}"),
             0.0,
             0.0,
             0.0,
@@ -326,9 +326,9 @@ fn bench_complex_scene_with_all_features(c: &mut Criterion) {
     scene.add_entity(create_light_entity("Moon", 0.0, -10.0, 0.0));
 
     for i in 0..50 {
-        let mut entity = create_simple_entity(&format!("Entity_{}", i), i as f32, 0.0, 0.0);
+        let mut entity = create_simple_entity(&format!("Entity_{i}"), i as f32, 0.0, 0.0);
         for j in 0..3 {
-            let child = create_simple_entity(&format!("Child_{}_{}", i, j), j as f32, 0.0, 0.0);
+            let child = create_simple_entity(&format!("Child_{i}_{j}"), j as f32, 0.0, 0.0);
             entity = entity.with_child(child);
         }
         scene.add_entity(entity);

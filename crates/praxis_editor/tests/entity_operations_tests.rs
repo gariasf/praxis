@@ -80,7 +80,7 @@ fn test_create_multiple_entities() {
         let result = entity_ops.create_entity_with_components(
             &mut world,
             &mut undo_system,
-            format!("Entity {}", i),
+            format!("Entity {i}"),
             Transform::from_xyz(i as f32, 0.0, 0.0),
         );
         assert!(result.is_ok());
@@ -91,7 +91,7 @@ fn test_create_multiple_entities() {
 
     for (i, entity) in entities.iter().enumerate() {
         let name = world.get::<Name>(*entity).unwrap();
-        assert_eq!(name.0, format!("Entity {}", i));
+        assert_eq!(name.0, format!("Entity {i}"));
     }
 }
 
@@ -434,7 +434,7 @@ fn test_batch_create_entities() {
         let result = entity_ops.create_entity_with_components(
             &mut world,
             &mut undo_system,
-            format!("Entity {}", i),
+            format!("Entity {i}"),
             Transform::from_xyz(i as f32, 0.0, 0.0),
         );
         assert!(result.is_ok());
@@ -626,7 +626,7 @@ fn test_create_hierarchy_batch() {
             .create_entity_with_components(
                 &mut world,
                 &mut undo_system,
-                format!("Child {}", i),
+                format!("Child {i}"),
                 Transform::from_xyz(i as f32, 0.0, 0.0),
             )
             .unwrap();

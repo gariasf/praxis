@@ -107,7 +107,7 @@ fn simulate_frame_advanced(profiler: &Profiler, frame: u64) {
         let alloc_size = (512.0 * 1024.0 * complexity_factor) as usize;
         let _alloc = memory_tracker.track_allocation(
             alloc_size,
-            format!("frame_{}_physics", frame),
+            format!("frame_{frame}_physics"),
             "Physics".to_string(),
         );
 
@@ -133,7 +133,7 @@ fn simulate_frame_advanced(profiler: &Profiler, frame: u64) {
 
         let _alloc = memory_tracker.track_allocation(
             256 * 1024,
-            format!("frame_{}_particles", frame),
+            format!("frame_{frame}_particles"),
             "Particles".to_string(),
         );
 
@@ -158,7 +158,7 @@ fn simulate_frame_advanced(profiler: &Profiler, frame: u64) {
             let _scope = ProfileScope::new("buffer_updates");
             let _alloc = memory_tracker.track_allocation(
                 1024 * 1024,
-                format!("frame_{}_uniform_buffer", frame),
+                format!("frame_{frame}_uniform_buffer"),
                 "Rendering".to_string(),
             );
             simulate_work(Duration::from_micros(400));
@@ -222,7 +222,7 @@ fn simulate_work(duration: Duration) {
 }
 
 fn print_advanced_report(profiler: &Profiler, visualization: &ProfilingVisualization, frame: u64) {
-    println!("=== Frame {} Report ===", frame);
+    println!("=== Frame {frame} Report ===");
 
     let stats = profiler.statistics();
     println!(

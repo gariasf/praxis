@@ -35,7 +35,7 @@ fn demo_octree_basic() {
 
     let mut octree = Octree::new(Vec3::ZERO, 100.0, 4);
 
-    let entities: Vec<Entity> = (0..10).map(|i| Entity::from_raw(i)).collect();
+    let entities: Vec<Entity> = (0..10).map(Entity::from_raw).collect();
 
     for (i, &entity) in entities.iter().enumerate() {
         let x = (i as f32 * 10.0) - 45.0;
@@ -101,7 +101,7 @@ fn demo_ray_queries() {
     let sorted_results = octree.query_ray_sorted(origin, direction, max_distance);
     println!("  Sorted by distance:");
     for (entity, distance) in sorted_results.iter().take(3) {
-        println!("    Entity {:?} at distance {:.2}", entity, distance);
+        println!("    Entity {entity:?} at distance {distance:.2}");
     }
 
     let mut bvh = Bvh::new();
@@ -137,7 +137,7 @@ fn demo_dynamic_updates() {
         let new_pos = Vec3::new(i as f32 * 5.0, 0.0, 0.0);
         let new_bounds = Aabb::from_center_half_extents(new_pos, Vec3::splat(1.0));
         octree.update(entity, new_bounds);
-        println!("  Updated to position: {:?}", new_pos);
+        println!("  Updated to position: {new_pos:?}");
     }
 
     octree.remove(entity);
@@ -176,7 +176,7 @@ fn demo_spatial_manager() {
         let new_bounds = Aabb::from_center_half_extents(new_pos, Vec3::splat(2.0));
         let updated = manager.update(entity, new_bounds);
         if updated {
-            println!("  Updated entity at step {}", step);
+            println!("  Updated entity at step {step}");
         }
     }
 

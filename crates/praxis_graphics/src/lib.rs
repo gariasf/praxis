@@ -2478,8 +2478,8 @@ mod tests {
     fn test_hybrid_rendering_approach() {
         // Test hybrid rendering concept: deferred for opaque, forward for transparent
 
-        let opaque_objects = vec!["cube1", "cube2", "sphere1"];
-        let transparent_objects = vec!["glass1", "water1"];
+        let opaque_objects = ["cube1", "cube2", "sphere1"];
+        let transparent_objects = ["glass1", "water1"];
 
         // In hybrid rendering:
         // 1. Render opaque objects to G-buffer (deferred)

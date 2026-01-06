@@ -239,9 +239,7 @@ mod tests {
 
         assert!(
             fast_delta > slow_delta,
-            "Fast adaptation ({}) should change more than slow ({})",
-            fast_delta,
-            slow_delta
+            "Fast adaptation ({fast_delta}) should change more than slow ({slow_delta})"
         );
     }
 
@@ -258,8 +256,7 @@ mod tests {
         let final_exposure = calculator.current_exposure();
         assert!(
             (final_exposure - 0.36).abs() < 0.05,
-            "Final exposure {} should be close to 0.36",
-            final_exposure
+            "Final exposure {final_exposure} should be close to 0.36"
         );
     }
 

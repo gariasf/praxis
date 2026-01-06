@@ -209,7 +209,7 @@ fn test_extension_verification() {
     let loader = MeshLoader::new();
     let extensions = loader.supported_extensions();
 
-    assert!(extensions.iter().any(|&ext| ext == "obj"));
+    assert!(extensions.contains(&"obj"));
 }
 
 /// Test loader reusability.
@@ -226,11 +226,11 @@ f 1 2 3
     let loader = MeshLoader::new();
 
     for i in 0..10 {
-        let test_file = temp_dir.join(format!("reuse_{}.obj", i));
+        let test_file = temp_dir.join(format!("reuse_{i}.obj"));
         fs::write(&test_file, obj_content).expect("Failed to write test file");
 
         let result = loader.load(&test_file);
-        assert!(result.is_ok(), "Iteration {} should succeed", i);
+        assert!(result.is_ok(), "Iteration {i} should succeed");
 
         fs::remove_file(&test_file).ok();
     }
@@ -286,7 +286,7 @@ f 1 2 3
 
     let paths: Vec<_> = (0..5)
         .map(|i| {
-            let path = temp_dir.join(format!("collection_{}.obj", i));
+            let path = temp_dir.join(format!("collection_{i}.obj"));
             fs::write(&path, obj_content).expect("Failed to write file");
             path
         })

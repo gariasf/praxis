@@ -194,7 +194,7 @@ f 1 2 3
 
     let files: Vec<_> = (0..5)
         .map(|i| {
-            let file = temp_dir.join(format!("asset_lifecycle_{}.obj", i));
+            let file = temp_dir.join(format!("asset_lifecycle_{i}.obj"));
             fs::write(&file, obj_content).expect("Failed to write test file");
             file
         })
@@ -241,7 +241,7 @@ fn test_world_clear_all() {
                 y: i as f32 * 2.0,
             },
             Name {
-                value: format!("Entity_{}", i),
+                value: format!("Entity_{i}"),
             },
         ));
     }
@@ -297,7 +297,7 @@ f 1 2 3
 "#;
 
     let test_files: Vec<_> = (0..10)
-        .map(|i| temp_dir.join(format!("temp_cleanup_{}.obj", i)))
+        .map(|i| temp_dir.join(format!("temp_cleanup_{i}.obj")))
         .collect();
 
     for file in &test_files {

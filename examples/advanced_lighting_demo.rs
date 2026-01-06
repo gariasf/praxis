@@ -144,7 +144,7 @@ impl AdvancedLightingDemo {
     }
 
     fn query_light_probe(&self, position: Vec3) {
-        println!("\nQuerying light probe at position: {:?}", position);
+        println!("\nQuerying light probe at position: {position:?}");
         println!("  (Light probe data would be interpolated from nearby probes)");
     }
 
@@ -155,7 +155,7 @@ impl AdvancedLightingDemo {
         let lights = ["key_light", "ambient_light", "rim_light"];
 
         for obj in &objects {
-            println!("\nObject: {}", obj);
+            println!("\nObject: {obj}");
             for light in &lights {
                 let can_affect = self
                     .light_linking_manager

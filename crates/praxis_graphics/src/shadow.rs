@@ -646,7 +646,7 @@ mod tests {
             for (j, other) in corners.iter().enumerate() {
                 if i != j {
                     let distance = corner.distance(*other);
-                    assert!(distance > 0.0001, "Corners {} and {} are too close", i, j);
+                    assert!(distance > 0.0001, "Corners {i} and {j} are too close");
                 }
             }
         }
@@ -744,8 +744,7 @@ mod tests {
             assert_eq!(
                 size.count_ones(),
                 1,
-                "Shadow map size {} should be a power of two",
-                size
+                "Shadow map size {size} should be a power of two"
             );
             assert!(config.shadow_map_size >= 512 && config.shadow_map_size <= 8192);
         }

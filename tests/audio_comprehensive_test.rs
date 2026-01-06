@@ -26,7 +26,7 @@ fn test_playback_settings_configuration() {
         .with_panning(0.5);
 
     assert_eq!(settings.volume, 0.8);
-    assert_eq!(settings.looping, true);
+    assert!(settings.looping);
     assert_eq!(settings.panning, 0.5);
 }
 
@@ -43,11 +43,11 @@ fn test_audio_source_configuration() {
 
     assert_eq!(source.path, "test.ogg");
     assert_eq!(source.volume, 0.6);
-    assert_eq!(source.spatial, true);
-    assert_eq!(source.looping, false);
+    assert!(source.spatial);
+    assert!(!source.looping);
     assert_eq!(source.max_distance, 75.0);
     assert_eq!(source.reference_distance, 7.5);
-    assert_eq!(source.doppler_enabled, true);
+    assert!(source.doppler_enabled);
     assert_eq!(source.doppler_scale, 1.2);
 }
 
@@ -89,7 +89,7 @@ fn test_multiple_audio_sources_management() {
     let mut sources = Vec::new();
 
     for i in 0..10 {
-        let source = AudioSource::new(format!("sound_{}.ogg", i))
+        let source = AudioSource::new(format!("sound_{i}.ogg"))
             .with_volume(0.5 + (i as f32 * 0.05))
             .with_spatial(i % 2 == 0);
         sources.push(source);
@@ -99,7 +99,7 @@ fn test_multiple_audio_sources_management() {
 
     // Verify each source has correct properties
     for (i, source) in sources.iter().enumerate() {
-        assert_eq!(source.path, format!("sound_{}.ogg", i));
+        assert_eq!(source.path, format!("sound_{i}.ogg"));
         assert_eq!(source.spatial, i % 2 == 0);
     }
 }
@@ -122,7 +122,7 @@ fn test_doppler_configuration() {
         .with_doppler(true)
         .with_doppler_scale(1.5);
 
-    assert_eq!(source.doppler_enabled, true);
+    assert!(source.doppler_enabled);
     assert_eq!(source.doppler_scale, 1.5);
 }
 

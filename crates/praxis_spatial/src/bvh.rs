@@ -443,7 +443,7 @@ mod tests {
 
         for i in 0..5 {
             let entity = Entity::from_raw(i);
-            let x = (i as f32 * 10.0) + 5.0;
+            let x = (i as f32).mul_add(10.0, 5.0);
             let bounds = Aabb::from_center_half_extents(Vec3::new(x, 0.0, 0.0), Vec3::splat(2.0));
             bvh.insert(entity, bounds);
         }

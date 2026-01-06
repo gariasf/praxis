@@ -651,7 +651,7 @@ mod tests {
         // Add multiple entities
         for i in 0..5 {
             world.spawn((
-                Name::new(format!("Entity{}", i)),
+                Name::new(format!("Entity{i}")),
                 Transform::default(),
                 GlobalTransform::default(),
             ));

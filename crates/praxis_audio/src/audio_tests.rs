@@ -16,8 +16,8 @@ mod tests {
 
         assert_eq!(source.path, "test.ogg");
         assert_eq!(source.volume, 1.0);
-        assert_eq!(source.spatial, false);
-        assert_eq!(source.looping, false);
+        assert!(!source.spatial);
+        assert!(!source.looping);
         assert!(matches!(source.state, AudioState::Stopped));
         assert!(source.sound_handle.is_none());
     }
@@ -35,11 +35,11 @@ mod tests {
 
         assert_eq!(source.path, "test.ogg");
         assert_eq!(source.volume, 0.5);
-        assert_eq!(source.spatial, true);
-        assert_eq!(source.looping, true);
+        assert!(source.spatial);
+        assert!(source.looping);
         assert_eq!(source.max_distance, 50.0);
         assert_eq!(source.reference_distance, 5.0);
-        assert_eq!(source.doppler_enabled, true);
+        assert!(source.doppler_enabled);
         assert_eq!(source.doppler_scale, 1.5);
     }
 
@@ -95,7 +95,7 @@ mod tests {
         let settings = PlaybackSettings::default();
 
         assert_eq!(settings.volume, 1.0);
-        assert_eq!(settings.looping, false);
+        assert!(!settings.looping);
         assert_eq!(settings.panning, 0.0);
     }
 
@@ -107,7 +107,7 @@ mod tests {
             .with_panning(0.5);
 
         assert_eq!(settings.volume, 0.7);
-        assert_eq!(settings.looping, true);
+        assert!(settings.looping);
         assert_eq!(settings.panning, 0.5);
     }
 
@@ -430,7 +430,7 @@ mod tests {
             calculate_spatial_params(source_pos, listener_pos, reference_distance, max_distance);
 
         // Distance is sqrt(15^2 + 5^2) ≈ 15.81
-        let distance = (15.0_f32.powi(2) + 5.0_f32.powi(2)).sqrt();
+        let distance = 15.0_f32.hypot(5.0_f32);
         let expected_attenuation = (reference_distance / distance).powi(2);
 
         assert!((params.attenuation - expected_attenuation).abs() < 0.01);

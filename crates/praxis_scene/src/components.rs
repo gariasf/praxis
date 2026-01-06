@@ -16,7 +16,7 @@ mod tests {
     #[test]
     fn test_scene_component_clone() {
         let handle = SceneHandle::new("test_scene");
-        let scene1 = Scene::new(handle.clone());
+        let scene1 = Scene::new(handle);
         let scene2 = scene1.clone();
         assert_eq!(scene1, scene2);
     }

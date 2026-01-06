@@ -37,7 +37,7 @@ fn test_scene_serialization_roundtrip() {
     assert_eq!(loaded_scene.entities[0].name, scene.entities[0].name);
     assert_eq!(
         loaded_scene.entities[0].mesh.as_deref(),
-        Some("cube".as_ref())
+        Some("cube")
     );
 }
 
@@ -60,7 +60,7 @@ fn test_scene_with_multiple_entities_roundtrip() {
     for i in 0..5 {
         scene.add_entity(
             EntityDefinition::new()
-                .with_name(format!("Entity{}", i))
+                .with_name(format!("Entity{i}"))
                 .with_transform(TransformDef::from_translation(
                     i as f32,
                     i as f32 * 2.0,
@@ -78,7 +78,7 @@ fn test_scene_with_multiple_entities_roundtrip() {
     for i in 0..5 {
         assert_eq!(
             loaded_scene.entities[i].name.as_deref(),
-            Some(format!("Entity{}", i).as_str())
+            Some(format!("Entity{i}").as_str())
         );
     }
 }
@@ -170,7 +170,7 @@ fn test_deep_hierarchy_roundtrip() {
 
     for i in (0..9).rev() {
         current = EntityDefinition::new()
-            .with_name(format!("Entity{}", i))
+            .with_name(format!("Entity{i}"))
             .with_transform(TransformDef::from_translation(i as f32, 0.0, 0.0))
             .with_child(current);
     }
@@ -614,7 +614,7 @@ fn test_large_scene_roundtrip() {
     for i in 0..100 {
         scene.add_entity(
             EntityDefinition::new()
-                .with_name(format!("Entity{}", i))
+                .with_name(format!("Entity{i}"))
                 .with_transform(TransformDef::from_translation(
                     i as f32,
                     i as f32 / 2.0,
@@ -633,7 +633,7 @@ fn test_large_scene_roundtrip() {
     for i in 0..100 {
         assert_eq!(
             loaded_scene.entities[i].name.as_deref(),
-            Some(format!("Entity{}", i).as_str())
+            Some(format!("Entity{i}").as_str())
         );
     }
 }

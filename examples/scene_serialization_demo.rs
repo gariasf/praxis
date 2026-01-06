@@ -149,7 +149,7 @@ fn save_scene(scene: &SceneDefinition) -> Result<(), Box<dyn std::error::Error>>
     // For demo purposes, we'll just print a preview
     let preview: String = ron_string.lines().take(20).collect::<Vec<_>>().join("\n");
     println!("\n--- RON Preview (first 20 lines) ---");
-    println!("{}", preview);
+    println!("{preview}");
     println!("...\n--- End Preview ---");
 
     Ok(())
@@ -245,10 +245,10 @@ fn display_scene_info(scene: &SceneDefinition) {
 
     // Display metadata
     if let Some(ref desc) = scene.metadata.description {
-        println!("Description: {}", desc);
+        println!("Description: {desc}");
     }
     if let Some(ref author) = scene.metadata.author {
-        println!("Author: {}", author);
+        println!("Author: {author}");
     }
     if !scene.metadata.tags.is_empty() {
         println!("Tags: {}", scene.metadata.tags.join(", "));

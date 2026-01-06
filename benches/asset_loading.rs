@@ -11,7 +11,7 @@ fn generate_obj_mesh(vertex_count: usize) -> String {
         let x = t * 10.0;
         let y = (t * std::f32::consts::TAU).sin();
         let z = (t * std::f32::consts::TAU).cos();
-        obj_content.push_str(&format!("v {} {} {}\n", x, y, z));
+        obj_content.push_str(&format!("v {x} {y} {z}\n"));
     }
 
     // Generate normals
@@ -22,7 +22,7 @@ fn generate_obj_mesh(vertex_count: usize) -> String {
     // Generate texture coordinates
     for i in 0..vertex_count {
         let t = i as f32 / vertex_count as f32;
-        obj_content.push_str(&format!("vt {} {}\n", t, t));
+        obj_content.push_str(&format!("vt {t} {t}\n"));
     }
 
     // Generate faces (triangles)
@@ -31,8 +31,7 @@ fn generate_obj_mesh(vertex_count: usize) -> String {
         let idx2 = i + 2;
         let idx3 = i + 3;
         obj_content.push_str(&format!(
-            "f {}//{} {}//{} {}//{}\n",
-            idx1, idx1, idx2, idx2, idx3, idx3
+            "f {idx1}//{idx1} {idx2}//{idx2} {idx3}//{idx3}\n"
         ));
     }
 
@@ -157,7 +156,7 @@ fn bench_obj_parsing(c: &mut Criterion) {
     for vertex_count in [100, 500, 1000, 5000, 10000] {
         let obj_content = generate_obj_mesh(vertex_count);
         let temp_dir = std::env::temp_dir();
-        let test_file = temp_dir.join(format!("bench_obj_{}.obj", vertex_count));
+        let test_file = temp_dir.join(format!("bench_obj_{vertex_count}.obj"));
         fs::write(&test_file, &obj_content).expect("Failed to write test file");
 
         group.throughput(Throughput::Elements(vertex_count as u64));
@@ -201,7 +200,7 @@ fn bench_gltf_parsing(c: &mut Criterion) {
     for vertex_count in [100, 500, 1000, 5000] {
         let gltf_content = generate_gltf_mesh(vertex_count);
         let temp_dir = std::env::temp_dir();
-        let test_file = temp_dir.join(format!("bench_gltf_{}.gltf", vertex_count));
+        let test_file = temp_dir.join(format!("bench_gltf_{vertex_count}.gltf"));
         fs::write(&test_file, &gltf_content).expect("Failed to write test file");
 
         group.throughput(Throughput::Elements(vertex_count as u64));

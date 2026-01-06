@@ -15,11 +15,10 @@ fn test_tracing_initialization() {
     let result = init();
     // Either success or an error about already being initialized is OK
     if let Err(e) = &result {
-        let error_str = format!("{:?}", e);
+        let error_str = format!("{e:?}");
         assert!(
             error_str.contains("already") || error_str.contains("set"),
-            "Unexpected initialization error: {:?}",
-            e
+            "Unexpected initialization error: {e:?}"
         );
     }
 }
@@ -262,7 +261,7 @@ f 1 2 3
     let temp_dir = std::env::temp_dir();
 
     for i in 0..5 {
-        let test_file = temp_dir.join(format!("reuse_test_{}.obj", i));
+        let test_file = temp_dir.join(format!("reuse_test_{i}.obj"));
         fs::write(&test_file, obj_content).expect("Failed to write test file");
 
         let result = loader.load(&test_file);

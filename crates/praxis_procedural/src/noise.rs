@@ -222,7 +222,7 @@ mod tests {
             let x = rand::random::<f32>() * 100.0;
             let y = rand::random::<f32>() * 100.0;
             let value = perlin_noise(x, y, 0);
-            assert!(value >= -1.0 && value <= 1.0);
+            assert!((-1.0..=1.0).contains(&value));
         }
     }
 
@@ -232,7 +232,7 @@ mod tests {
             let x = rand::random::<f32>() * 100.0;
             let y = rand::random::<f32>() * 100.0;
             let value = simplex_noise(x, y, 0);
-            assert!(value >= -1.5 && value <= 1.5);
+            assert!((-1.5..=1.5).contains(&value));
         }
     }
 
@@ -242,7 +242,7 @@ mod tests {
             let x = rand::random::<f32>() * 100.0;
             let y = rand::random::<f32>() * 100.0;
             let value = worley_noise(x, y, 0, 1.0);
-            assert!(value >= 0.0 && value <= 1.0);
+            assert!((0.0..=1.0).contains(&value));
         }
     }
 
@@ -286,7 +286,7 @@ mod tests {
     #[test]
     fn test_fbm_noise() {
         let value = fbm_noise(5.0, 5.0, 0, 4, 0.5, 2.0, perlin_noise);
-        assert!(value >= -1.0 && value <= 1.0);
+        assert!((-1.0..=1.0).contains(&value));
 
         let value2 = fbm_noise(5.0, 5.0, 0, 1, 0.5, 2.0, perlin_noise);
         let single = perlin_noise(5.0, 5.0, 0);

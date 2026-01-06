@@ -637,7 +637,7 @@ impl ParticlesDemoApp {
 
             // Prepare particles for rendering
             if let Err(e) = particle_system.prepare_render() {
-                eprintln!("Failed to prepare particle rendering: {}", e);
+                eprintln!("Failed to prepare particle rendering: {e}");
             }
         }
     }
@@ -759,7 +759,7 @@ impl ApplicationHandler for ParticlesDemoApp {
                 }
 
                 if let Err(e) = self.render_scene() {
-                    eprintln!("Render error: {}", e);
+                    eprintln!("Render error: {e}");
                 }
 
                 if let Some(window) = &self.window {

@@ -1176,8 +1176,8 @@ mod tests {
             // 16-bit float precision simulation (±65504, ~3-4 decimal digits)
             let pack_and_unpack = |value: f32| -> f32 {
                 // Simulated 16-bit float quantization
-                let quantized = (value * 1000.0).round() / 1000.0;
-                quantized
+                
+                (value * 1000.0).round() / 1000.0
             };
 
             let unpacked = Vec3::new(

@@ -781,7 +781,7 @@ mod tests {
         let mut query = world
             .inner_mut()
             .query_filtered::<Entity, Changed<Position>>();
-        let changed_entities: Vec<Entity> = query.iter(&world.inner()).collect();
+        let changed_entities: Vec<Entity> = query.iter(world.inner()).collect();
 
         assert!(changed_entities.contains(&entity1));
         assert!(changed_entities.contains(&entity2));

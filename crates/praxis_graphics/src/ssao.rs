@@ -970,8 +970,7 @@ mod tests {
         for sample in kernel.iter() {
             assert!(
                 sample.z >= 0.0,
-                "Sample should be in upper hemisphere: {:?}",
-                sample
+                "Sample should be in upper hemisphere: {sample:?}"
             );
         }
     }
@@ -997,9 +996,7 @@ mod tests {
         // This is approximate due to randomness, but should hold statistically
         assert!(
             near_samples > far_samples / 2,
-            "Expected more near samples ({}) than far samples ({})",
-            near_samples,
-            far_samples
+            "Expected more near samples ({near_samples}) than far samples ({far_samples})"
         );
     }
 
@@ -1136,12 +1133,10 @@ mod tests {
                 } else {
                     1
                 }
+            } else if sample.y >= 0.0 {
+                2
             } else {
-                if sample.y >= 0.0 {
-                    2
-                } else {
-                    3
-                }
+                3
             };
             octant_counts[octant] += 1;
         }

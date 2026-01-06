@@ -97,7 +97,7 @@ f 1 2 3
     assert!(result.is_ok(), "Should load from nested directory");
 
     fs::remove_file(&test_file).ok();
-    fs::remove_dir_all(&temp_dir.join("nested")).ok();
+    fs::remove_dir_all(temp_dir.join("nested")).ok();
 }
 
 /// Test multiple files in same directory.
@@ -115,7 +115,7 @@ f 1 2 3
 
     let files: Vec<_> = (0..5)
         .map(|i| {
-            let file = test_dir.join(format!("mesh_{}.obj", i));
+            let file = test_dir.join(format!("mesh_{i}.obj"));
             fs::write(&file, obj_content).expect("Failed to write test file");
             file
         })
@@ -123,7 +123,7 @@ f 1 2 3
 
     for file in &files {
         let result = praxis_assets::load_obj(file);
-        assert!(result.is_ok(), "Should load file: {:?}", file);
+        assert!(result.is_ok(), "Should load file: {file:?}");
     }
 
     for file in files {
@@ -210,7 +210,7 @@ f 1 2 3
     let temp_dir = std::env::temp_dir();
     let files: Vec<_> = (0..10)
         .map(|i| {
-            let file = temp_dir.join(format!("concurrent_{}.obj", i));
+            let file = temp_dir.join(format!("concurrent_{i}.obj"));
             fs::write(&file, obj_content).expect("Failed to write test file");
             file
         })
@@ -241,7 +241,7 @@ f 1 2 3
 
     for i in 0..10 {
         let result = praxis_assets::load_obj(&test_file);
-        assert!(result.is_ok(), "Reload {} should succeed", i);
+        assert!(result.is_ok(), "Reload {i} should succeed");
     }
 
     fs::remove_file(&test_file).ok();
@@ -270,7 +270,7 @@ f 1 2 3
         fs::write(&test_file, obj_content).expect("Failed to write test file");
 
         let result = praxis_assets::load_obj(&test_file);
-        assert!(result.is_ok(), "Should load file: {}", filename);
+        assert!(result.is_ok(), "Should load file: {filename}");
 
         fs::remove_file(&test_file).ok();
     }

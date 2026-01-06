@@ -824,8 +824,7 @@ mod tests {
             for j in (i + 1)..6 {
                 assert_ne!(
                     views[i], views[j],
-                    "Face {} and {} should be different",
-                    i, j
+                    "Face {i} and {j} should be different"
                 );
             }
         }
@@ -868,8 +867,8 @@ mod tests {
             let (u, v) = hammersley(i, samples);
 
             // Both components should be in [0, 1]
-            assert!(u >= 0.0 && u <= 1.0);
-            assert!(v >= 0.0 && v <= 1.0);
+            assert!((0.0..=1.0).contains(&u));
+            assert!((0.0..=1.0).contains(&v));
         }
     }
 
@@ -939,7 +938,7 @@ mod tests {
         let g = geometry_schlick_ggx(ndotv, roughness);
 
         // Result should be in [0, 1]
-        assert!(g >= 0.0 && g <= 1.0);
+        assert!((0.0..=1.0).contains(&g));
 
         // Higher ndotv should give higher value (less occlusion)
         let g_high = geometry_schlick_ggx(0.9, roughness);
@@ -968,7 +967,7 @@ mod tests {
         let g = geometry_smith(n, v, l, roughness);
 
         // Result should be in [0, 1]
-        assert!(g >= 0.0 && g <= 1.0);
+        assert!((0.0..=1.0).contains(&g));
     }
 
     #[test]
@@ -994,8 +993,8 @@ mod tests {
             let (scale, bias) = EnvironmentProbeManager::integrate_brdf(*ndotv, roughness);
 
             // Scale and bias should be in reasonable ranges [0, 1]
-            assert!(scale >= 0.0 && scale <= 1.0, "Scale should be in [0,1]");
-            assert!(bias >= 0.0 && bias <= 1.0, "Bias should be in [0,1]");
+            assert!((0.0..=1.0).contains(&scale), "Scale should be in [0,1]");
+            assert!((0.0..=1.0).contains(&bias), "Bias should be in [0,1]");
         }
     }
 
@@ -1008,8 +1007,8 @@ mod tests {
         for roughness in test_roughness.iter() {
             let (scale, bias) = EnvironmentProbeManager::integrate_brdf(ndotv, *roughness);
 
-            assert!(scale >= 0.0 && scale <= 1.0);
-            assert!(bias >= 0.0 && bias <= 1.0);
+            assert!((0.0..=1.0).contains(&scale));
+            assert!((0.0..=1.0).contains(&bias));
         }
     }
 
@@ -1078,8 +1077,7 @@ mod tests {
 
             assert_ne!(
                 view1, view2,
-                "Face {} views should differ for different positions",
-                i
+                "Face {i} views should differ for different positions"
             );
         }
     }

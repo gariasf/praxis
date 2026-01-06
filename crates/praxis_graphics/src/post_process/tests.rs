@@ -612,7 +612,7 @@ mod post_process_tests {
         let exposures = [-2.0, -1.0, 0.0, 1.0, 2.0, 3.0];
 
         for exposure in exposures {
-            assert!(exposure >= -5.0 && exposure <= 5.0);
+            assert!((-5.0..=5.0).contains(&exposure));
         }
     }
 

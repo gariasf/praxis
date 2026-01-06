@@ -243,7 +243,7 @@ fn test_large_mesh_loading() {
         let i1 = i * 3 + 1;
         let i2 = i * 3 + 2;
         let i3 = i * 3 + 3;
-        obj_content.push_str(&format!("f {} {} {}\n", i1, i2, i3));
+        obj_content.push_str(&format!("f {i1} {i2} {i3}\n"));
     }
 
     fs::write(&test_file, obj_content).expect("Failed to write large mesh");
@@ -425,7 +425,7 @@ f 1 2 3
 
     let mut files = Vec::new();
     for i in 0..10 {
-        let file = temp_dir.join(format!("cleanup_test_{}.obj", i));
+        let file = temp_dir.join(format!("cleanup_test_{i}.obj"));
         fs::write(&file, obj_content).expect("Failed to write test file");
         files.push(file);
     }

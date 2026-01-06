@@ -354,7 +354,7 @@ mod tests {
     #[test]
     fn test_validate_scene_empty_name() {
         let mut scene = SceneDefinition::new("");
-        scene.name = "".to_string();
+        scene.name = String::new();
 
         let result = validate_scene(&scene);
         assert!(result.is_err());

@@ -92,7 +92,7 @@ fn bench_transform_propagation_hierarchical(c: &mut Criterion) {
         let entity_count: usize = (1..=depth).fold(1, |acc, d| acc + breadth.pow(d as u32));
 
         group.bench_with_input(
-            BenchmarkId::new(format!("depth{}_breadth{}", depth, breadth), entity_count),
+            BenchmarkId::new(format!("depth{depth}_breadth{breadth}"), entity_count),
             &(depth, breadth),
             |b, &(depth, breadth)| {
                 let mut world = World::new();

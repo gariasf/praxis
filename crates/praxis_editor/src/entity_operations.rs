@@ -1111,7 +1111,7 @@ mod tests {
                 .create_entity_with_components(
                     &mut world,
                     &mut undo_system,
-                    format!("Entity {}", i),
+                    format!("Entity {i}"),
                     Transform::from_xyz(i as f32, 0.0, 0.0),
                 )
                 .unwrap();

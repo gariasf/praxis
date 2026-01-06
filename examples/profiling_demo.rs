@@ -74,7 +74,7 @@ fn simulate_frame(profiler: &Profiler, frame: u64) {
         // Track some memory allocations
         let _alloc1 = memory_tracker.track_allocation(
             1024 * 1024,
-            format!("frame_{}_physics_buffer", frame),
+            format!("frame_{frame}_physics_buffer"),
             "Physics".to_string(),
         );
 
@@ -101,7 +101,7 @@ fn simulate_frame(profiler: &Profiler, frame: u64) {
         // Track GPU-related allocations
         let _alloc2 = memory_tracker.track_allocation(
             2 * 1024 * 1024,
-            format!("frame_{}_vertex_buffer", frame),
+            format!("frame_{frame}_vertex_buffer"),
             "Rendering".to_string(),
         );
 

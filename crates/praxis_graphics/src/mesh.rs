@@ -1046,9 +1046,7 @@ mod tests {
             let dot = t[0] * n[0] + t[1] * n[1] + t[2] * n[2];
             assert!(
                 dot.abs() < 0.01,
-                "Tangent and normal should be orthogonal, dot={} at vertex {}",
-                dot,
-                i
+                "Tangent and normal should be orthogonal, dot={dot} at vertex {i}"
             );
         }
     }
@@ -1079,9 +1077,7 @@ mod tests {
                     .sqrt();
             assert!(
                 (length - 1.0).abs() < 0.01,
-                "Tangent at vertex {} should be normalized, length={}",
-                i,
-                length
+                "Tangent at vertex {i} should be normalized, length={length}"
             );
         }
     }
@@ -1110,9 +1106,7 @@ mod tests {
             let w = tangent[3];
             assert!(
                 (w - 1.0).abs() < 0.01 || (w + 1.0).abs() < 0.01,
-                "Tangent handedness at vertex {} should be +1 or -1, got {}",
-                i,
-                w
+                "Tangent handedness at vertex {i} should be +1 or -1, got {w}"
             );
         }
     }
