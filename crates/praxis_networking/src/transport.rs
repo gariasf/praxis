@@ -4,7 +4,10 @@ use crossbeam_channel::{Receiver, Sender};
 use parking_lot::RwLock;
 use praxis_utils::Result;
 use std::sync::Arc;
-use tokio::net::{TcpListener, TcpStream, UdpSocket};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, UdpSocket};
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::sync::Mutex as TokioMutex;
 
 pub use std::net::SocketAddr;
 
@@ -47,12 +50,17 @@ pub trait NetworkTransport: Send + Sync {
     fn receive(&self) -> Option<(SocketAddr, Vec<u8>)>;
 }
 
+/// Type alias for TCP connection write half.
+type TcpWriteHalf = Arc<TokioMutex<OwnedWriteHalf>>;
+
+/// Type alias for connection storage.
+type ConnectionMap = Arc<RwLock<Vec<(SocketAddr, TcpWriteHalf)>>>;
+
 /// TCP transport for reliable messages.
 pub struct TcpTransport {
     listener: Arc<RwLock<Option<TcpListener>>>,
-    connections: Arc<RwLock<Vec<(SocketAddr, TcpStream)>>>,
+    connections: ConnectionMap,
     rx: Receiver<(SocketAddr, Vec<u8>)>,
-    #[allow(dead_code)]
     tx: Sender<(SocketAddr, Vec<u8>)>,
 }
 
@@ -72,7 +80,7 @@ impl TcpTransport {
         })
     }
 
-    /// Accepts incoming connections.
+    /// Accepts incoming connections and spawns receive loops for each.
     #[allow(clippy::await_holding_lock)]
     pub async fn accept_connections(&self) -> Result<()> {
         let listener = self.listener.read();
@@ -80,8 +88,21 @@ impl TcpTransport {
             match listener.accept().await {
                 Ok((stream, addr)) => {
                     tracing::info!("Accepted TCP connection from {addr}");
+                    
+                    // Split stream into read and write halves
+                    let (read_half, write_half) = stream.into_split();
+                    
+                    // Store write half for sending
                     let mut connections = self.connections.write();
-                    connections.push((addr, stream));
+                    connections.push((addr, Arc::new(TokioMutex::new(write_half))));
+                    
+                    // Spawn receive loop for read half
+                    let tx = self.tx.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = Self::connection_receive_loop(read_half, addr, tx).await {
+                            tracing::error!("TCP receive loop error for {}: {}", addr, e);
+                        }
+                    });
                 }
                 Err(e) => {
                     tracing::error!("Error accepting TCP connection: {e}");
@@ -90,13 +111,95 @@ impl TcpTransport {
         }
         Ok(())
     }
+
+    /// Receive loop for a single TCP connection (length-prefixed messages).
+    async fn connection_receive_loop(
+        mut read_half: OwnedReadHalf,
+        addr: SocketAddr,
+        tx: Sender<(SocketAddr, Vec<u8>)>,
+    ) -> Result<()> {
+        loop {
+            // Read 4-byte length prefix
+            let length = match read_half.read_u32().await {
+                Ok(len) => len as usize,
+                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                    tracing::info!("TCP connection closed by {}", addr);
+                    break;
+                }
+                Err(e) => {
+                    tracing::error!("Error reading length prefix from {}: {}", addr, e);
+                    break;
+                }
+            };
+
+            // Validate message length
+            if length == 0 || length > 10_000_000 {
+                // 10MB max to prevent DoS
+                tracing::error!("Invalid message length {} from {}", length, addr);
+                break;
+            }
+
+            // Read message data
+            let mut buffer = vec![0u8; length];
+            match read_half.read_exact(&mut buffer).await {
+                Ok(_) => {
+                    if tx.send((addr, buffer)).is_err() {
+                        tracing::warn!("Failed to send received message to channel");
+                        break;
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Error reading message data from {}: {}", addr, e);
+                    break;
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl NetworkTransport for TcpTransport {
     fn send_reliable(&self, addr: SocketAddr, data: &[u8]) -> Result<()> {
-        // In a real implementation, this would write to the TCP stream asynchronously
-        // For now, this is a simplified synchronous version
-        tracing::trace!("TCP send to {}: {} bytes", addr, data.len());
+        // Find the connection for this address
+        let connections = self.connections.read();
+        let connection = connections
+            .iter()
+            .find(|(conn_addr, _)| *conn_addr == addr)
+            .map(|(_, stream)| stream.clone());
+
+        if let Some(write_half) = connection {
+            let data = data.to_vec();
+            let length = data.len() as u32;
+
+            // Spawn async task to write length-prefixed message
+            tokio::spawn(async move {
+                // Acquire lock and await it
+                let mut write_guard = write_half.lock().await;
+                
+                // Write 4-byte length prefix
+                if let Err(e) = write_guard.write_u32(length).await {
+                    tracing::error!("TCP send error (length) to {}: {}", addr, e);
+                    return;
+                }
+
+                // Write message data
+                if let Err(e) = write_guard.write_all(&data).await {
+                    tracing::error!("TCP send error (data) to {}: {}", addr, e);
+                    return;
+                }
+
+                // Flush to ensure data is sent
+                if let Err(e) = write_guard.flush().await {
+                    tracing::error!("TCP flush error for {}: {}", addr, e);
+                }
+            });
+
+            tracing::trace!("TCP send to {}: {} bytes", addr, length);
+        } else {
+            tracing::warn!("No TCP connection found for {}", addr);
+        }
+
         Ok(())
     }
 
