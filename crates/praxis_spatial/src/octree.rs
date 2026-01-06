@@ -215,6 +215,27 @@ impl OctreeNode {
 
         false
     }
+
+    /// Queries entities using a custom predicate for bounds testing.
+    fn query_with_predicate<F>(&self, predicate: &F, results: &mut Vec<Entity>)
+    where
+        F: Fn(&Aabb) -> bool,
+    {
+        // Test node bounds first (hierarchical culling)
+        if !predicate(&self.bounds) {
+            return;
+        }
+
+        // Add all entities in this node
+        results.extend(&self.entities);
+
+        // Recursively query children
+        if let Some(children) = &self.children {
+            for child in children.iter() {
+                child.query_with_predicate(predicate, results);
+            }
+        }
+    }
 }
 
 /// Octree spatial partitioning structure.
@@ -397,6 +418,32 @@ impl Octree {
 
         actual_nodes / total.max(1) as f32
     }
+
+    /// Queries entities using a custom predicate for bounds testing.
+    ///
+    /// This enables hierarchical culling by testing node bounds against
+    /// arbitrary predicates (e.g., frustum intersection) before descending.
+    pub fn query_with_predicate<F>(&self, predicate: &F) -> Vec<Entity>
+    where
+        F: Fn(&Aabb) -> bool,
+    {
+        let mut results = Vec::new();
+        self.root.query_with_predicate(predicate, &mut results);
+        
+        // Filter to only include entities whose actual bounds match the predicate
+        results.retain(|&entity| {
+            self.entity_bounds
+                .get(&entity)
+                .is_some_and(predicate)
+        });
+        
+        results
+    }
+
+    /// Returns a reference to the root node.
+    pub fn root(&self) -> &OctreeNode {
+        &self.root
+    }
 }
 
 #[cfg(test)]
@@ -545,5 +592,48 @@ mod tests {
         }
 
         let _ = octree.needs_rebalancing();
+    }
+
+    #[test]
+    fn test_octree_query_with_predicate() {
+        let mut octree = Octree::new(Vec3::ZERO, 100.0, 4);
+
+        let entity1 = Entity::from_raw(1);
+        let entity2 = Entity::from_raw(2);
+        let entity3 = Entity::from_raw(3);
+
+        octree.insert(entity1, Aabb::from_min_max(Vec3::ZERO, Vec3::ONE));
+        octree.insert(
+            entity2,
+            Aabb::from_min_max(Vec3::new(10.0, 0.0, 0.0), Vec3::new(11.0, 1.0, 1.0)),
+        );
+        octree.insert(
+            entity3,
+            Aabb::from_min_max(Vec3::new(-10.0, 0.0, 0.0), Vec3::new(-9.0, 1.0, 1.0)),
+        );
+
+        let query_bounds = Aabb::from_min_max(Vec3::new(-5.0, -5.0, -5.0), Vec3::new(5.0, 5.0, 5.0));
+        let results = octree.query_with_predicate(&|bounds| query_bounds.intersects(bounds));
+
+        assert!(results.contains(&entity1));
+        assert!(!results.contains(&entity2));
+    }
+
+    #[test]
+    fn test_octree_hierarchical_culling() {
+        let mut octree = Octree::new(Vec3::ZERO, 200.0, 4);
+
+        for i in 0..100 {
+            let entity = Entity::from_raw(i);
+            let x = (i as f32).mul_add(3.0, -150.0);
+            let bounds = Aabb::from_center_half_extents(Vec3::new(x, 0.0, 0.0), Vec3::splat(0.5));
+            octree.insert(entity, bounds);
+        }
+
+        let query_bounds = Aabb::from_min_max(Vec3::new(-10.0, -10.0, -10.0), Vec3::new(10.0, 10.0, 10.0));
+        let results = octree.query_with_predicate(&|bounds| query_bounds.intersects(bounds));
+
+        assert!(!results.is_empty());
+        assert!(results.len() < 100);
     }
 }

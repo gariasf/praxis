@@ -311,6 +311,47 @@ impl Bvh {
     pub fn get_bounds(&self, entity: Entity) -> Option<&Aabb> {
         self.entity_bounds.get(&entity)
     }
+
+    /// Queries entities using a custom predicate for bounds testing.
+    ///
+    /// This enables hierarchical culling by testing node bounds against
+    /// arbitrary predicates (e.g., frustum intersection) before descending.
+    pub fn query_with_predicate<F>(&self, predicate: &F) -> Vec<Entity>
+    where
+        F: Fn(&Aabb) -> bool,
+    {
+        let mut results = Vec::new();
+        if let Some(root) = &self.root {
+            Self::query_node_with_predicate(root, predicate, &mut results);
+        }
+        results
+    }
+
+    /// Recursively queries a node with a predicate.
+    fn query_node_with_predicate<F>(node: &BvhNode, predicate: &F, results: &mut Vec<Entity>)
+    where
+        F: Fn(&Aabb) -> bool,
+    {
+        // Test node bounds first (hierarchical culling)
+        if !predicate(node.bounds()) {
+            return;
+        }
+
+        match node {
+            BvhNode::Leaf { entity, .. } => {
+                results.push(*entity);
+            }
+            BvhNode::Internal { left, right, .. } => {
+                Self::query_node_with_predicate(left, predicate, results);
+                Self::query_node_with_predicate(right, predicate, results);
+            }
+        }
+    }
+
+    /// Returns a reference to the root node if available.
+    pub fn root(&self) -> Option<&BvhNode> {
+        self.root.as_ref()
+    }
 }
 
 impl Default for Bvh {
@@ -497,5 +538,48 @@ mod tests {
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().min, Vec3::ZERO);
         assert_eq!(retrieved.unwrap().max, Vec3::ONE);
+    }
+
+    #[test]
+    fn test_bvh_query_with_predicate() {
+        let mut bvh = Bvh::new();
+
+        let entity1 = Entity::from_raw(1);
+        let entity2 = Entity::from_raw(2);
+        let entity3 = Entity::from_raw(3);
+
+        bvh.insert(entity1, Aabb::from_min_max(Vec3::ZERO, Vec3::ONE));
+        bvh.insert(
+            entity2,
+            Aabb::from_min_max(Vec3::new(10.0, 0.0, 0.0), Vec3::new(11.0, 1.0, 1.0)),
+        );
+        bvh.insert(
+            entity3,
+            Aabb::from_min_max(Vec3::new(-10.0, 0.0, 0.0), Vec3::new(-9.0, 1.0, 1.0)),
+        );
+
+        let query_bounds = Aabb::from_min_max(Vec3::new(-5.0, -5.0, -5.0), Vec3::new(5.0, 5.0, 5.0));
+        let results = bvh.query_with_predicate(&|bounds| query_bounds.intersects(bounds));
+
+        assert!(results.contains(&entity1));
+        assert!(!results.contains(&entity2));
+    }
+
+    #[test]
+    fn test_bvh_hierarchical_culling() {
+        let mut bvh = Bvh::new();
+
+        for i in 0..100 {
+            let entity = Entity::from_raw(i);
+            let x = (i as f32).mul_add(2.0, -100.0);
+            let bounds = Aabb::from_center_half_extents(Vec3::new(x, 0.0, 0.0), Vec3::splat(0.5));
+            bvh.insert(entity, bounds);
+        }
+
+        let query_bounds = Aabb::from_min_max(Vec3::new(-10.0, -10.0, -10.0), Vec3::new(10.0, 10.0, 10.0));
+        let results = bvh.query_with_predicate(&|bounds| query_bounds.intersects(bounds));
+
+        assert!(!results.is_empty());
+        assert!(results.len() < 100);
     }
 }

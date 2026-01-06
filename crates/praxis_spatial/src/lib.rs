@@ -70,7 +70,7 @@ pub mod spatial_systems;
 
 pub use aabb::{Aabb, BoundingVolume};
 pub use bvh::{Bvh, BvhNode};
-pub use culling::{CullReason, CullingResult, CullingStats, VisibilitySystem};
+pub use culling::{CullReason, CullingResult, CullingStats, HierarchicalCullingMode, VisibilitySystem};
 pub use frustum::{Frustum, FrustumCuller, Plane};
 pub use gpu_culling::{
     GpuCullingConfig, GpuCullingManager, GpuCullingResult, GpuCullingStats, GpuLodGroup,
