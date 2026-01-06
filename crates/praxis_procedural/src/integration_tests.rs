@@ -8,6 +8,8 @@ mod tests {
         graph::{BlendMode, ColorRamp, ColorStop, NoiseType, TextureGraph, TextureNode},
     };
 
+    // Note: GPU tests are in a separate module that requires Vulkan initialization
+
     #[test]
     fn test_simple_perlin_graph() {
         let mut graph = TextureGraph::new();

@@ -3684,6 +3684,7 @@ dependencies = [
  "praxis_utils",
  "rand 0.8.5",
  "seahash",
+ "shaderc",
  "vulkano",
  "vulkano-shaders",
 ]

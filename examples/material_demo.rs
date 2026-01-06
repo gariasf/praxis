@@ -4,6 +4,7 @@
 //! - **PBR Material Properties**: Metallic, roughness, emissive, and base color
 //! - **Material Variations**: Gallery of different material types and combinations
 //! - **Normal-Like Surface Detail**: Enhanced textures simulating surface complexity
+//! - **Procedural Textures**: GPU-generated textures using compute shaders
 //! - **Multiple Post-Processing Effects**:
 //!   - Bloom effect for emissive materials
 //!   - Tone mapping for HDR rendering

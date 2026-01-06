@@ -1,8 +1,8 @@
 //! Procedural texture generation integration for the graphics system.
 //!
-//! This module provides integration between the procedural texture generation
-//! system and the graphics rendering system. It allows generated textures to
-//! be used directly in rendering.
+//! This module provides integration between the GPU-based procedural texture generation
+//! system and the graphics rendering system. Textures are generated using compute shaders
+//! compiled at runtime and can be used directly in rendering with automatic caching.
 
 use crate::texture::Texture;
 use praxis_procedural::{

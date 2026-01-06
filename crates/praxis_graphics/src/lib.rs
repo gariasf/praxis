@@ -1274,6 +1274,9 @@ pub struct RenderContext {
     /// Texture asset manager for loading and managing textures.
     texture_manager: texture::TextureManager,
 
+    /// Procedural texture manager for GPU-based texture generation.
+    procedural_texture_manager: procedural_texture::ProceduralTextureManager,
+
     /// Material asset manager for loading and managing materials.
     material_manager: material::MaterialManager,
 
@@ -1438,6 +1441,16 @@ impl RenderContext {
             .create_default_flat_normal()
             .map_err(|e| eyre::eyre!("Failed to create default flat normal texture: {}", e))?;
 
+        // Initialize procedural texture manager
+        debug!("Creating procedural texture manager");
+        let procedural_texture_manager = procedural_texture::ProceduralTextureManager::new(
+            device.clone(),
+            graphics_queue.clone(),
+            memory_allocator.clone(),
+            command_buffer_allocator.clone(),
+            descriptor_set_allocator.clone(),
+        );
+
         // Initialize material manager
         debug!("Creating material manager");
         let material_manager = material::MaterialManager::new();
@@ -1510,6 +1523,9 @@ impl RenderContext {
             // Texture management
             texture_manager,
 
+            // Procedural texture generation
+            procedural_texture_manager,
+
             // Material management
             material_manager,
 
@@ -1559,6 +1575,22 @@ impl RenderContext {
     /// Use this to load or modify texture assets.
     pub fn texture_manager_mut(&mut self) -> &mut texture::TextureManager {
         &mut self.texture_manager
+    }
+
+    /// Gets a reference to the procedural texture manager.
+    ///
+    /// Use this to generate procedural textures using GPU compute shaders.
+    pub fn procedural_texture_manager(&self) -> &procedural_texture::ProceduralTextureManager {
+        &self.procedural_texture_manager
+    }
+
+    /// Gets a mutable reference to the procedural texture manager.
+    ///
+    /// Use this to generate or manage procedural textures.
+    pub fn procedural_texture_manager_mut(
+        &mut self,
+    ) -> &mut procedural_texture::ProceduralTextureManager {
+        &mut self.procedural_texture_manager
     }
 
     /// Gets a reference to the material asset manager.
