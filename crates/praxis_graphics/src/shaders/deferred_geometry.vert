@@ -13,6 +13,8 @@ layout(location = 0) out vec3 v_world_pos;
 layout(location = 1) out vec3 v_normal;
 layout(location = 2) out vec3 v_color;
 layout(location = 3) out vec2 v_uv;
+layout(location = 4) out vec4 v_current_pos;
+layout(location = 5) out vec4 v_previous_pos;
 
 layout(set = 0, binding = 0, std140) uniform ViewProjection {
     mat4 view;
@@ -25,6 +27,15 @@ layout(set = 0, binding = 1, std140) uniform Model {
     mat4 model;
 } model_ubo;
 
+layout(set = 0, binding = 2, std140) uniform PreviousViewProjection {
+    mat4 previous_view;
+    mat4 previous_proj;
+} prev_view_proj;
+
+layout(set = 0, binding = 3, std140) uniform PreviousModel {
+    mat4 previous_model;
+} prev_model_ubo;
+
 void main() {
     vec4 world_pos = model_ubo.model * vec4(position, 1.0);
     gl_Position = view_proj.proj * view_proj.view * world_pos;
@@ -33,4 +44,11 @@ void main() {
     v_normal = mat3(model_ubo.model) * normal;
     v_color = color;
     v_uv = uv;
+    
+    // Current frame clip space position
+    v_current_pos = gl_Position;
+    
+    // Previous frame clip space position
+    vec4 prev_world_pos = prev_model_ubo.previous_model * vec4(position, 1.0);
+    v_previous_pos = prev_view_proj.previous_proj * prev_view_proj.previous_view * prev_world_pos;
 }

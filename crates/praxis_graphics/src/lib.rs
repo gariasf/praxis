@@ -580,6 +580,7 @@ mod shaders;
 pub mod shadow;
 pub mod skybox;
 pub mod ssao;
+pub mod taa;
 pub mod texture;
 pub mod uniform_buffer;
 pub mod velocity_buffer;

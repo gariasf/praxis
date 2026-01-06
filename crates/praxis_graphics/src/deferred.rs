@@ -75,6 +75,7 @@ use vulkano::{
 /// - Albedo: Base color of the surface
 /// - Normal: World-space normal vector
 /// - Metallic-Roughness: PBR material properties
+/// - Velocity: Screen-space motion vectors (RG)
 /// - Depth: Standard depth buffer
 pub struct GBuffer {
     /// Albedo texture (RGB) + unused (A)
@@ -83,6 +84,8 @@ pub struct GBuffer {
     pub normal: Arc<ImageView>,
     /// Metallic (R), Roughness (G), Emissive (B), unused (A)
     pub metallic_roughness: Arc<ImageView>,
+    /// Velocity texture (RG) for motion vectors
+    pub velocity: Arc<ImageView>,
     /// Depth texture
     pub depth: Arc<ImageView>,
     /// Framebuffer for geometry pass
@@ -125,6 +128,7 @@ impl GBuffer {
         let albedo = create_attachment(Format::R8G8B8A8_UNORM, usage)?;
         let normal = create_attachment(Format::R16G16B16A16_SFLOAT, usage)?;
         let metallic_roughness = create_attachment(Format::R8G8B8A8_UNORM, usage)?;
+        let velocity = create_attachment(Format::R16G16_SFLOAT, usage)?;
 
         let depth = {
             let image = Image::new(
@@ -151,6 +155,7 @@ impl GBuffer {
                     albedo.clone(),
                     normal.clone(),
                     metallic_roughness.clone(),
+                    velocity.clone(),
                     depth.clone(),
                 ],
                 ..Default::default()
@@ -164,6 +169,7 @@ impl GBuffer {
             albedo,
             normal,
             metallic_roughness,
+            velocity,
             depth,
             framebuffer,
         })
@@ -287,6 +293,12 @@ impl DeferredRenderer {
                     load_op: Clear,
                     store_op: Store,
                 },
+                velocity: {
+                    format: Format::R16G16_SFLOAT,
+                    samples: 1,
+                    load_op: Clear,
+                    store_op: Store,
+                },
                 depth: {
                     format: Format::D32_SFLOAT,
                     samples: 1,
@@ -296,7 +308,7 @@ impl DeferredRenderer {
             },
             passes: [
                 {
-                    color: [albedo, normal, metallic_roughness],
+                    color: [albedo, normal, metallic_roughness, velocity],
                     depth_stencil: {depth},
                     input: []
                 }
@@ -684,10 +696,11 @@ impl DeferredRenderer {
             .begin_render_pass(
                 RenderPassBeginInfo {
                     clear_values: vec![
-                        Some([0.0, 0.0, 0.0, 1.0].into()),
-                        Some([0.0, 0.0, 0.0, 1.0].into()),
-                        Some([0.0, 0.0, 0.0, 1.0].into()),
-                        Some(1.0.into()),
+                        Some([0.0, 0.0, 0.0, 1.0].into()),  // albedo
+                        Some([0.0, 0.0, 0.0, 1.0].into()),  // normal
+                        Some([0.0, 0.0, 0.0, 1.0].into()),  // metallic_roughness
+                        Some([0.0, 0.0, 0.0, 0.0].into()),  // velocity
+                        Some(1.0.into()),                    // depth
                     ],
                     ..RenderPassBeginInfo::framebuffer(gbuffer.framebuffer.clone())
                 },

@@ -297,3 +297,19 @@ pub mod equirect_to_cube_fs {
         path: "src/shaders/equirect_to_cube.frag"
     }
 }
+
+/// Compiled vertex shader for TAA (Temporal Anti-Aliasing).
+pub mod taa_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/shaders/taa.vert"
+    }
+}
+
+/// Compiled fragment shader for TAA (Temporal Anti-Aliasing).
+pub mod taa_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/taa.frag"
+    }
+}
