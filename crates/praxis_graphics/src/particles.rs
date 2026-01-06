@@ -37,12 +37,12 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use praxis_graphics::particles::{ParticleSystem, ParticleEmitterConfig, EmitterShape};
+//! use praxis_graphics::particles::{ParticleRenderer, ParticleEmitterConfig, EmitterShape};
 //! use praxis_math::Vec3;
 //!
 //! # async fn example() -> praxis_utils::Result<()> {
-//! // Create particle system
-//! // let mut particle_system = ParticleSystem::new(allocator, command_allocator, queue)?;
+//! // Create particle renderer
+//! // let mut particle_renderer = ParticleRenderer::new(allocator, command_allocator, queue)?;
 //!
 //! // Configure an emitter
 //! let config = ParticleEmitterConfig {
@@ -63,8 +63,8 @@
 //!     ..Default::default()
 //! };
 //!
-//! // Add emitter to system
-//! // particle_system.add_emitter("fire", config);
+//! // Add emitter to renderer
+//! // particle_renderer.add_emitter("fire", config);
 //! # Ok(())
 //! # }
 //! ```
@@ -790,8 +790,8 @@ impl ParticleEmitter {
     }
 }
 
-/// GPU particle system managing multiple emitters.
-pub struct ParticleSystem {
+/// GPU particle renderer managing multiple emitters.
+pub struct ParticleRenderer {
     emitters: HashMap<String, ParticleEmitter>,
     instance_buffer: Option<Subbuffer<[ParticleInstance]>>,
     quad_vertices: Subbuffer<[Vertex3D]>,
@@ -811,14 +811,14 @@ pub struct ParticleSystem {
     soft_particle_config: SoftParticleConfig,
 }
 
-impl ParticleSystem {
-    /// Creates a new particle system.
+impl ParticleRenderer {
+    /// Creates a new particle renderer.
     pub fn new(
         memory_allocator: Arc<dyn MemoryAllocator>,
         command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
         queue: Arc<Queue>,
     ) -> Result<Self> {
-        debug!("Creating particle system");
+        debug!("Creating particle renderer");
 
         let quad_vertices = vec![
             Vertex3D::with_uv([-0.5, -0.5, 0.0], [1.0, 1.0, 1.0], [0.0, 0.0]),
@@ -1178,6 +1178,16 @@ impl ParticleSystem {
         &self.quad_indices
     }
 }
+
+/// Deprecated type alias for backward compatibility.
+///
+/// Use [`ParticleRenderer`] instead, which better reflects the type's responsibility
+/// as a GPU renderer rather than a game system.
+#[deprecated(
+    since = "0.1.0",
+    note = "Use `ParticleRenderer` instead. This alias will be removed in a future version."
+)]
+pub type ParticleSystem = ParticleRenderer;
 
 /// Linear interpolation between two colors.
 fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {

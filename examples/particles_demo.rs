@@ -1,6 +1,6 @@
-//! Comprehensive Particle System Demo
+//! Comprehensive Particle Renderer Demo
 //!
-//! This example showcases a complete particle system implementation with:
+//! This example showcases a complete particle renderer implementation with:
 //! - Fire particles with upward velocity and color gradients
 //! - Smoke particles with slow drift and expanding size
 //! - Explosion particles with radial forces
@@ -37,7 +37,7 @@ use common::CameraController;
 use praxis_ecs::{Name, PerspectiveCameraBundle, Transform, World};
 use praxis_graphics::{
     colored_cube_mesh, textured_quad_mesh, CollisionPlane, DrawCommand, EmitterShape,
-    ParticleEmitterConfig, ParticleForce, ParticleSystem, RenderCommands, RenderContext,
+    ParticleEmitterConfig, ParticleForce, ParticleRenderer, RenderCommands, RenderContext,
     SoftParticleConfig,
 };
 use praxis_input::{Action, InputMap, InputState};
@@ -60,7 +60,7 @@ struct ParticlesDemoApp {
     window: Option<Arc<Window>>,
     world: Option<World>,
     render_context: Option<RenderContext>,
-    particle_system: Option<ParticleSystem>,
+    particle_renderer: Option<ParticleRenderer>,
     cursor_locked: bool,
     last_frame_time: Option<Instant>,
     frame_timer: FrameTimer,
@@ -108,7 +108,7 @@ impl Default for ParticlesDemoApp {
             window: None,
             world: None,
             render_context: None,
-            particle_system: None,
+            particle_renderer: None,
             cursor_locked: false,
             last_frame_time: None,
             frame_timer: FrameTimer::new_with_global(),
@@ -142,7 +142,7 @@ impl Default for ParticlesDemoApp {
 impl ParticlesDemoApp {
     async fn setup_scene(
         window: Arc<Window>,
-    ) -> Result<(World, RenderContext, ParticleSystem, praxis_ecs::Entity)> {
+    ) -> Result<(World, RenderContext, ParticleRenderer, praxis_ecs::Entity)> {
         info!("Setting up particle demo scene");
 
         let mut render_context = RenderContext::new(window.clone()).await?;
@@ -173,8 +173,8 @@ impl ParticlesDemoApp {
             },
         )?;
 
-        // Initialize particle system
-        let particle_system = ParticleSystem::new(
+        // Initialize particle renderer
+        let particle_renderer = ParticleRenderer::new(
             render_context.memory_allocator().clone(),
             render_context.command_buffer_allocator().clone(),
             render_context.graphics_queue.clone(),
@@ -202,7 +202,7 @@ impl ParticlesDemoApp {
         ));
         info!("Created camera entity: {:?}", camera_entity);
 
-        Ok((world, render_context, particle_system, camera_entity))
+        Ok((world, render_context, particle_renderer, camera_entity))
     }
 
     fn create_procedural_texture<F>(
@@ -228,7 +228,7 @@ impl ParticlesDemoApp {
     }
 
     fn setup_particle_emitters(&mut self) {
-        if let Some(particle_system) = &mut self.particle_system {
+        if let Some(particle_renderer) = &mut self.particle_renderer {
             // Configure fire emitter
             let fire_config = ParticleEmitterConfig {
                 shape: EmitterShape::Sphere { radius: 0.5 },
@@ -265,7 +265,7 @@ impl ParticlesDemoApp {
                 enable_collisions: false,
                 ..Default::default()
             };
-            particle_system.add_emitter("fire", fire_config);
+            particle_renderer.add_emitter("fire", fire_config);
 
             // Configure smoke emitter
             let smoke_config = ParticleEmitterConfig {
@@ -299,7 +299,7 @@ impl ParticlesDemoApp {
                 looping: true,
                 ..Default::default()
             };
-            particle_system.add_emitter("smoke", smoke_config);
+            particle_renderer.add_emitter("smoke", smoke_config);
 
             // Configure explosion emitter
             let explosion_config = ParticleEmitterConfig {
@@ -338,30 +338,30 @@ impl ParticlesDemoApp {
                 friction: 0.2,
                 ..Default::default()
             };
-            particle_system.add_emitter("explosion", explosion_config);
+            particle_renderer.add_emitter("explosion", explosion_config);
 
             // Position emitters
-            if let Some(fire_emitter) = particle_system.get_emitter_mut("fire") {
+            if let Some(fire_emitter) = particle_renderer.get_emitter_mut("fire") {
                 fire_emitter.set_position(Vec3::new(-4.0, 0.5, 0.0));
                 if !self.fire_enabled {
                     fire_emitter.deactivate();
                 }
             }
-            if let Some(smoke_emitter) = particle_system.get_emitter_mut("smoke") {
+            if let Some(smoke_emitter) = particle_renderer.get_emitter_mut("smoke") {
                 smoke_emitter.set_position(Vec3::new(-4.0, 2.5, 0.0));
                 if !self.smoke_enabled {
                     smoke_emitter.deactivate();
                 }
             }
-            if let Some(explosion_emitter) = particle_system.get_emitter_mut("explosion") {
+            if let Some(explosion_emitter) = particle_renderer.get_emitter_mut("explosion") {
                 explosion_emitter.set_position(Vec3::new(4.0, 1.0, 0.0));
                 explosion_emitter.deactivate(); // Start inactive
             }
 
-            // Set up particle system features
-            particle_system.set_camera_position(Vec3::new(0.0, 3.0, 12.0));
-            particle_system.set_gpu_sorting_enabled(true);
-            particle_system.set_soft_particle_config(SoftParticleConfig {
+            // Set up particle renderer features
+            particle_renderer.set_camera_position(Vec3::new(0.0, 3.0, 12.0));
+            particle_renderer.set_gpu_sorting_enabled(true);
+            particle_renderer.set_soft_particle_config(SoftParticleConfig {
                 fade_distance: 0.5,
                 fade_power: 2.0,
             });
@@ -369,16 +369,16 @@ impl ParticlesDemoApp {
             // Add ground collision plane
             let ground_plane =
                 CollisionPlane::new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
-            particle_system.add_collision_plane(ground_plane);
+            particle_renderer.add_collision_plane(ground_plane);
 
             info!("Particle emitters configured successfully");
         }
     }
 
     fn update_emitter_parameters(&mut self) {
-        if let Some(particle_system) = &mut self.particle_system {
+        if let Some(particle_renderer) = &mut self.particle_renderer {
             // Update fire emitter
-            if let Some(fire_emitter) = particle_system.get_emitter_mut("fire") {
+            if let Some(fire_emitter) = particle_renderer.get_emitter_mut("fire") {
                 // We can't modify the config directly, so we recreate if parameters changed
                 // For this demo, we'll handle enable/disable state
                 if self.fire_enabled {
@@ -389,7 +389,7 @@ impl ParticlesDemoApp {
             }
 
             // Update smoke emitter
-            if let Some(smoke_emitter) = particle_system.get_emitter_mut("smoke") {
+            if let Some(smoke_emitter) = particle_renderer.get_emitter_mut("smoke") {
                 if self.smoke_enabled {
                     smoke_emitter.activate();
                 } else {
@@ -398,7 +398,7 @@ impl ParticlesDemoApp {
             }
 
             // Update explosion emitter
-            if let Some(explosion_emitter) = particle_system.get_emitter_mut("explosion") {
+            if let Some(explosion_emitter) = particle_renderer.get_emitter_mut("explosion") {
                 if self.explosion_enabled {
                     explosion_emitter.activate();
                 } else {
@@ -427,8 +427,8 @@ impl ParticlesDemoApp {
     }
 
     fn trigger_explosion(&mut self) {
-        if let Some(particle_system) = &mut self.particle_system {
-            if let Some(explosion_emitter) = particle_system.get_emitter_mut("explosion") {
+        if let Some(particle_renderer) = &mut self.particle_renderer {
+            if let Some(explosion_emitter) = particle_renderer.get_emitter_mut("explosion") {
                 explosion_emitter.reset();
                 explosion_emitter.activate();
                 info!("Explosion triggered!");
@@ -440,8 +440,8 @@ impl ParticlesDemoApp {
         self.fps = self.frame_timer.fps();
         self.frame_time_ms = 1000.0 / self.fps;
 
-        if let Some(particle_system) = &self.particle_system {
-            self.total_particles = particle_system.total_active_particles();
+        if let Some(particle_renderer) = &self.particle_renderer {
+            self.total_particles = particle_renderer.total_active_particles();
         }
     }
 
@@ -452,8 +452,8 @@ impl ParticlesDemoApp {
                 self.fps,
                 self.frame_time_ms,
                 self.total_particles,
-                if let Some(ps) = &self.particle_system {
-                    ps.emitter_count()
+                if let Some(pr) = &self.particle_renderer {
+                    pr.emitter_count()
                 } else {
                     0
                 }
@@ -501,7 +501,7 @@ impl ParticlesDemoApp {
 
         // TODO: Render particles
         // In a full implementation, particles would be rendered here
-        // using particle_system.instance_buffer(), particle_system.quad_vertex_buffer(), etc.
+        // using particle_renderer.instance_buffer(), particle_renderer.quad_vertex_buffer(), etc.
         // This would require integrating with the rendering pipeline
 
         Ok(())
@@ -615,9 +615,10 @@ impl ParticlesDemoApp {
             }
         }
 
-        // Update particle system camera position
-        if let (Some(particle_system), Some(pos)) = (&mut self.particle_system, camera_position) {
-            particle_system.set_camera_position(pos);
+        // Update particle renderer camera position
+        if let (Some(particle_renderer), Some(pos)) = (&mut self.particle_renderer, camera_position)
+        {
+            particle_renderer.set_camera_position(pos);
         }
     }
 
@@ -631,12 +632,12 @@ impl ParticlesDemoApp {
             }
         }
 
-        // Update particle system
-        if let Some(particle_system) = &mut self.particle_system {
-            particle_system.update(delta_time);
+        // Update particle renderer
+        if let Some(particle_renderer) = &mut self.particle_renderer {
+            particle_renderer.update(delta_time);
 
             // Prepare particles for rendering
-            if let Err(e) = particle_system.prepare_render() {
+            if let Err(e) = particle_renderer.prepare_render() {
                 eprintln!("Failed to prepare particle rendering: {e}");
             }
         }
@@ -665,7 +666,7 @@ impl ApplicationHandler for ParticlesDemoApp {
             }
         };
 
-        let (world, render_context, particle_system, camera_entity) =
+        let (world, render_context, particle_renderer, camera_entity) =
             match pollster::block_on(Self::setup_scene(window.clone())) {
                 Ok(result) => result,
                 Err(e) => {
@@ -679,14 +680,14 @@ impl ApplicationHandler for ParticlesDemoApp {
         self.window = Some(window);
         self.world = Some(world);
         self.render_context = Some(render_context);
-        self.particle_system = Some(particle_system);
+        self.particle_renderer = Some(particle_renderer);
         self.last_frame_time = Some(Instant::now());
 
         // Setup particle emitters
         self.setup_particle_emitters();
 
-        println!("\n=== Praxis Particle System Demo ===");
-        println!("Comprehensive particle system demonstration with:");
+        println!("\n=== Praxis Particle Renderer Demo ===");
+        println!("Comprehensive particle renderer demonstration with:");
         println!("  • Fire particles with color gradients and turbulence");
         println!("  • Smoke particles with expanding size over lifetime");
         println!("  • Explosion particles with radial forces");
