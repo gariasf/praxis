@@ -1,4 +1,5 @@
 #version 450
+#extension GL_EXT_nonuniform_qualifier : require
 
 // ============================================================================
 // Fragment Shader for 3D Textured Rendering with Blinn-Phong Lighting
@@ -154,118 +155,42 @@ layout(set = 0, binding = 2) uniform sampler2D albedo_texture;
 layout(set = 0, binding = 9) uniform sampler2D normal_map;
 
 // ============================================================================
-// Material Properties Uniform Buffer
+// Bindless Textures and Materials (Set 2)
+// ============================================================================
+// Bindless rendering support using VK_EXT_descriptor_indexing.
+// When bindless mode is enabled, textures are accessed via a large array
+// and materials are indexed via push constants, eliminating per-material
+// descriptor set binds.
+
+// Bindless texture array (up to 4096 textures)
+layout(set = 2, binding = 0) uniform sampler2D bindless_textures[];
+
+// Bindless material data structure
+struct BindlessMaterial {
+    vec4 base_color;
+    uint albedo_texture_index;
+    uint normal_texture_index;
+    float metallic;
+    float roughness;
+    float emissive_strength;
+    float _padding[3];
+};
+
+// Bindless material data buffer
+layout(set = 2, binding = 1, std140) uniform BindlessMaterialData {
+    BindlessMaterial materials[4096];
+} bindless_materials;
+
+// Push constant for material index (used in bindless mode)
+layout(push_constant) uniform PushConstants {
+    uint material_index;
+} push;
+
+// ============================================================================
+// Material Properties Uniform Buffer (Traditional Mode)
 // ============================================================================
 // This uniform buffer at set 1, binding 0 contains material-specific properties
-// that control how the surface responds to light (PBR-style parameters).
-//
-// Data Flow:
-//   1. CPU: Application sets material properties in MaterialProperties struct
-//   2. CPU: Properties written to host-visible uniform buffer per draw call
-//   3. GPU: Bound to descriptor set at set 1, binding 0
-//   4. GPU: Read by fragment shader to control lighting behavior
-//
-// Memory layout (std140, 32 bytes):
-//   Offset 0:  vec4 base_color (16 bytes) - rgba tint multiplier
-//   Offset 16: float metallic (4 bytes) - metallic factor [0,1]
-//   Offset 20: float roughness (4 bytes) - roughness factor [0,1]
-//   Offset 24: float emissive_strength (4 bytes) - emissive intensity
-//   Offset 28: float _padding (4 bytes) - alignment padding
-//
-// # PBR Material Properties Explained
-//
-// ## Metallic [0.0, 1.0]
-// Controls whether the surface behaves like a metal or a dielectric (non-metal).
-//
-// - **Metallic = 0.0** (Dielectric): Surface like wood, plastic, stone, cloth
-//   * Reflects only a small amount of light (4-8%)
-//   * Keeps most of its base color in diffuse reflection
-//   * Specular highlights are white/gray (reflect light color, not surface color)
-//   * Subsurface scattering can occur (light penetrates slightly)
-//
-// - **Metallic = 1.0** (Metal): Surface like iron, gold, copper, chrome
-//   * Reflects most light (60-90%+)
-//   * No diffuse reflection (metals don't scatter light internally)
-//   * Specular highlights are colored (reflect surface color tinted by light)
-//   * No subsurface scattering (light doesn't penetrate)
-//
-// - **In-between values** (0.0 < metallic < 1.0): Blend between behaviors
-//   * Can simulate oxidized metals, metal dust, or layered materials
-//   * Most real materials are either fully metallic (1.0) or fully dielectric (0.0)
-//
-// **How it affects lighting in this shader:**
-// - High metallic reduces diffuse contribution (metals don't scatter light)
-// - High metallic tints specular highlights with base_color (colored reflections)
-// - Low metallic keeps diffuse high and specular white/neutral
-//
-// ## Roughness [0.0, 1.0]
-// Controls how rough or smooth the surface appears, affecting reflection sharpness.
-//
-// - **Roughness = 0.0** (Smooth/Glossy): Mirror-like, polished surface
-//   * Tight, sharp specular highlights
-//   * Clear reflections (in a full PBR model with environment mapping)
-//   * High specular intensity concentrated in small area
-//   * Examples: polished metal, glass, water, glossy plastic
-//
-// - **Roughness = 1.0** (Rough/Matte): Diffuse, rough surface
-//   * Wide, soft specular highlights (or none at all)
-//   * Blurry reflections scattered over larger area
-//   * Lower specular intensity spread across wide area
-//   * Examples: rough stone, unpolished wood, rubber, cloth
-//
-// - **In-between values**: Varying degrees of polish
-//   * Most real-world materials fall in 0.3-0.7 range
-//   * Worn surfaces might have varying roughness across the surface
-//
-// **How it affects lighting in this shader:**
-// - Low roughness = high shininess power (tight, sharp highlights)
-// - High roughness = low shininess power (soft, spread highlights)
-// - Roughness modulates specular intensity and spread
-//
-// ## Emissive Strength [0.0, ∞]
-// Controls how much the surface glows (emits light) independent of external lighting.
-//
-// - **Emissive = 0.0**: No self-illumination (most surfaces)
-//   * Surface only visible due to external lights
-//   * Completely black in darkness
-//
-// - **Emissive > 0.0**: Surface emits light
-//   * base_color * emissive_strength added to final color
-//   * Independent of lighting - always visible even in darkness
-//   * Doesn't actually illuminate other surfaces (not a real light source)
-//   * Examples: LEDs, screens, neon signs, hot metals, magic effects
-//
-// - **Emissive > 1.0**: Very bright emission
-//   * Can exceed typical color range (HDR effect)
-//   * Creates "bloom" effect if post-processing is enabled
-//   * Useful for light sources, fire, lasers, etc.
-//
-// **How it affects lighting in this shader:**
-// - Added directly to final color (after all lighting calculations)
-// - Multiplied by base_color to tint the emission
-// - Not affected by external lights (constant addition)
-//
-// # PBR (Physically Based Rendering) Concepts
-//
-// PBR aims to model light-matter interaction based on physical principles:
-//
-// 1. **Energy Conservation**: Reflected light ≤ incoming light
-//    - As metallic increases, diffuse must decrease
-//    - Total reflection cannot exceed 100%
-//
-// 2. **Fresnel Effect**: Reflectivity increases at grazing angles
-//    - Looking at water head-on: see through (little reflection)
-//    - Looking at water at shallow angle: mirror-like (high reflection)
-//    - This shader uses simplified Blinn-Phong; full PBR would model this
-//
-// 3. **Microfacet Theory**: Rough surfaces have tiny random-oriented facets
-//    - Smooth surface: all facets aligned, sharp reflection
-//    - Rough surface: facets random, scattered reflection
-//    - Roughness controls statistical distribution of facet orientations
-//
-// This shader uses a **simplified Blinn-Phong approximation** of PBR concepts
-// rather than full physically-based BRDF (Cook-Torrance, GGX, etc.). It's fast
-// and artist-friendly while capturing the essential behavior of metallic/roughness.
+// for traditional (non-bindless) rendering.
 //
 layout(set = 1, binding = 0, std140) uniform MaterialProperties {
     vec4 base_color;         // Base color tint (rgba) - multiplied with texture
@@ -618,24 +543,61 @@ void main() {
     // Step 1: Sample Texture and Compute Base Albedo
     // ========================================================================
     
-    // Sample the texture at the interpolated UV coordinates
-    // This gives us the base color (albedo) before lighting is applied
-    vec4 tex_color = texture(albedo_texture, v_uv);
+    // Determine if using bindless mode based on push constant material index
+    // If material_index is 0xFFFFFFFF, use traditional mode
+    bool use_bindless = (push.material_index != 0xFFFFFFFF);
+    
+    vec4 tex_color;
+    vec3 tangent_normal;
+    vec4 mat_base_color;
+    float mat_metallic;
+    float mat_roughness;
+    float mat_emissive_strength;
+    
+    if (use_bindless) {
+        // ========================================================================
+        // Bindless Mode: Sample from texture array using material data
+        // ========================================================================
+        
+        // Get material data from bindless buffer
+        BindlessMaterial mat = bindless_materials.materials[push.material_index];
+        
+        // Sample textures from bindless texture array
+        // nonuniformEXT qualifier allows dynamic indexing
+        tex_color = texture(bindless_textures[nonuniformEXT(mat.albedo_texture_index)], v_uv);
+        tangent_normal = texture(bindless_textures[nonuniformEXT(mat.normal_texture_index)], v_uv).rgb;
+        
+        // Get material properties from bindless data
+        mat_base_color = mat.base_color;
+        mat_metallic = mat.metallic;
+        mat_roughness = mat.roughness;
+        mat_emissive_strength = mat.emissive_strength;
+    } else {
+        // ========================================================================
+        // Traditional Mode: Sample from bound textures
+        // ========================================================================
+        
+        // Sample the texture at the interpolated UV coordinates
+        tex_color = texture(albedo_texture, v_uv);
+        tangent_normal = texture(normal_map, v_uv).rgb;
+        
+        // Get material properties from uniform buffer
+        mat_base_color = material.base_color;
+        mat_metallic = material.metallic;
+        mat_roughness = material.roughness;
+        mat_emissive_strength = material.emissive_strength;
+    }
     
     // Combine vertex color with texture color and material base color
     // This allows triple modulation: vertex color * texture color * material tint
-    // Material base_color.rgb provides per-material tinting
-    // Material base_color.a provides opacity control
-    vec3 albedo = v_color * tex_color.rgb * material.base_color.rgb;
-    float alpha = tex_color.a * material.base_color.a;
+    vec3 albedo = v_color * tex_color.rgb * mat_base_color.rgb;
+    float alpha = tex_color.a * mat_base_color.a;
     
     // ========================================================================
     // Step 2: Prepare Lighting Inputs with Normal Mapping
     // ========================================================================
     
-    // Sample the normal map to get the tangent-space normal
     // Normal maps store normals as RGB [0,1] which we need to map to [-1,1]
-    vec3 tangent_normal = texture(normal_map, v_uv).rgb;
     tangent_normal = tangent_normal * 2.0 - 1.0;  // Map from [0,1] to [-1,1]
     
     // Construct TBN (Tangent-Bitangent-Normal) matrix to transform from tangent space to world space
@@ -665,7 +627,7 @@ void main() {
     // Roughness 0.0 (smooth) → high shininess (tight highlights)
     // Roughness 1.0 (rough) → low shininess (wide highlights)
     // We use an exponential mapping for more perceptually-linear control
-    float shininess = mix(MAX_SHININESS, MIN_SHININESS, material.roughness);
+    float shininess = mix(MAX_SHININESS, MIN_SHININESS, mat_roughness);
     
     // Compute diffuse factor based on metallic property
     // Metals have little to no diffuse reflection (light doesn't penetrate surface)
@@ -673,7 +635,7 @@ void main() {
     // Formula: diffuse_factor = 1.0 - metallic
     //   metallic = 0.0 → diffuse_factor = 1.0 (full diffuse, typical materials)
     //   metallic = 1.0 → diffuse_factor = 0.0 (no diffuse, pure metal)
-    float diffuse_factor = 1.0 - material.metallic;
+    float diffuse_factor = 1.0 - mat_metallic;
     
     // Compute specular color based on metallic property
     // Dielectrics: specular is white/neutral (reflects light color only)
@@ -681,7 +643,7 @@ void main() {
     // Formula: lerp between white and albedo based on metallic
     //   metallic = 0.0 → specular_color = vec3(1.0) (white highlights)
     //   metallic = 1.0 → specular_color = albedo (colored highlights)
-    vec3 specular_color = mix(vec3(1.0), albedo, material.metallic);
+    vec3 specular_color = mix(vec3(1.0), albedo, mat_metallic);
     
     // ========================================================================
     // Step 3: Initialize with Ambient Lighting
@@ -799,7 +761,7 @@ void main() {
     // It's multiplied by base_color to provide colored emission
     // This is added AFTER lighting calculations, so it's unaffected by lights
     // Examples: LEDs, screens, hot metals, neon signs, magic effects
-    vec3 emissive = material.base_color.rgb * material.emissive_strength;
+    vec3 emissive = mat_base_color.rgb * mat_emissive_strength;
     
     // Combine lit color with emissive
     // Emissive is additive - increases brightness regardless of lighting

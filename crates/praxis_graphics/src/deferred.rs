@@ -696,11 +696,11 @@ impl DeferredRenderer {
             .begin_render_pass(
                 RenderPassBeginInfo {
                     clear_values: vec![
-                        Some([0.0, 0.0, 0.0, 1.0].into()),  // albedo
-                        Some([0.0, 0.0, 0.0, 1.0].into()),  // normal
-                        Some([0.0, 0.0, 0.0, 1.0].into()),  // metallic_roughness
-                        Some([0.0, 0.0, 0.0, 0.0].into()),  // velocity
-                        Some(1.0.into()),                    // depth
+                        Some([0.0, 0.0, 0.0, 1.0].into()), // albedo
+                        Some([0.0, 0.0, 0.0, 1.0].into()), // normal
+                        Some([0.0, 0.0, 0.0, 1.0].into()), // metallic_roughness
+                        Some([0.0, 0.0, 0.0, 0.0].into()), // velocity
+                        Some(1.0.into()),                  // depth
                     ],
                     ..RenderPassBeginInfo::framebuffer(gbuffer.framebuffer.clone())
                 },

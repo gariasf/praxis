@@ -9,7 +9,8 @@ use std::sync::Arc;
 use vulkano::{
     device::{
         physical::{PhysicalDevice, PhysicalDeviceType},
-        Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags,
+        Device, DeviceCreateInfo, DeviceExtensions, DeviceFeatures, Queue, QueueCreateInfo,
+        QueueFlags,
     },
     instance::{Instance, InstanceCreateInfo},
     swapchain::Surface,
@@ -122,6 +123,7 @@ impl VulkanDevice {
 
         let device_extensions = DeviceExtensions {
             khr_swapchain: true,
+            ext_descriptor_indexing: true,
             ..DeviceExtensions::empty()
         };
 
@@ -324,11 +326,20 @@ impl VulkanDevice {
         );
 
         let device_create_start = std::time::Instant::now();
+
+        // Enable descriptor indexing features for bindless rendering
+        let mut descriptor_indexing_features = DeviceFeatures::empty();
+        descriptor_indexing_features.descriptor_binding_partially_bound = true;
+        descriptor_indexing_features.runtime_descriptor_array = true;
+        descriptor_indexing_features.descriptor_binding_variable_descriptor_count = true;
+        descriptor_indexing_features.shader_sampled_image_array_non_uniform_indexing = true;
+
         let (device, mut queues) = Device::new(
             physical_device,
             DeviceCreateInfo {
                 queue_create_infos,
                 enabled_extensions,
+                enabled_features: descriptor_indexing_features,
                 ..Default::default()
             },
         )

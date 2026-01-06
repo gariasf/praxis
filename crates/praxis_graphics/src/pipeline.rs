@@ -293,6 +293,8 @@ fn load_shaders(
 /// This function automatically derives the layout from shader reflection,
 /// then modifies binding 1 in set 0 to use `DescriptorType::UniformBufferDynamic`
 /// for the model matrix, enabling dynamic offsets for efficient batching.
+///
+/// Also configures push constants for bindless material indices.
 fn create_pipeline_layout(
     device: &Arc<Device>,
     stages: &[PipelineShaderStageCreateInfo],
@@ -322,19 +324,34 @@ fn create_pipeline_layout(
         error!("Set 0 not found in descriptor set layout create infos");
     }
 
-    let layout_create_infos = descriptor_set_layout_create_infos
+    // Configure bindless texture array in set 2, binding 0 to be partially bound
+    // This allows the descriptor set to be valid even if not all textures are bound
+    if let Some(set_2) = descriptor_set_layout_create_infos.set_layouts.get_mut(2) {
+        if set_2.bindings.contains_key(&0) {
+            trace!("Configuring set 2 binding 0 for bindless (partially bound)");
+            // Mark as partially bound to allow sparse binding
+            set_2.flags = vulkano::descriptor_set::layout::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL;
+        }
+    }
+
+    let mut layout_create_infos = descriptor_set_layout_create_infos
         .into_pipeline_layout_create_info(device.clone())
         .map_err(|e| {
             error!("Failed to create pipeline layout info: {}", e);
             eyre::eyre!("Failed to create pipeline layout info: {}", e)
         })?;
 
+    // Add push constant range for bindless material index
+    // Push constants provide fast, low-latency data transfer to shaders
+    layout_create_infos.push_constant_ranges =
+        vec![crate::bindless::BindlessTextureManager::push_constant_range()];
+
     let layout = PipelineLayout::new(device.clone(), layout_create_infos).map_err(|e| {
         error!("Failed to create pipeline layout: {}", e);
         eyre::eyre!("Failed to create pipeline layout: {}", e)
     })?;
 
-    trace!("Created pipeline layout successfully with dynamic uniform buffer at binding 1");
+    trace!("Created pipeline layout successfully with dynamic uniform buffer and push constants");
 
     Ok(layout)
 }

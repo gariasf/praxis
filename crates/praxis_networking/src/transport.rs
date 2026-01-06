@@ -5,8 +5,8 @@ use parking_lot::RwLock;
 use praxis_utils::Result;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, UdpSocket};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::net::{TcpListener, UdpSocket};
 use tokio::sync::Mutex as TokioMutex;
 
 pub use std::net::SocketAddr;
@@ -88,14 +88,14 @@ impl TcpTransport {
             match listener.accept().await {
                 Ok((stream, addr)) => {
                     tracing::info!("Accepted TCP connection from {addr}");
-                    
+
                     // Split stream into read and write halves
                     let (read_half, write_half) = stream.into_split();
-                    
+
                     // Store write half for sending
                     let mut connections = self.connections.write();
                     connections.push((addr, Arc::new(TokioMutex::new(write_half))));
-                    
+
                     // Spawn receive loop for read half
                     let tx = self.tx.clone();
                     tokio::spawn(async move {
@@ -176,7 +176,7 @@ impl NetworkTransport for TcpTransport {
             tokio::spawn(async move {
                 // Acquire lock and await it
                 let mut write_guard = write_half.lock().await;
-                
+
                 // Write 4-byte length prefix
                 if let Err(e) = write_guard.write_u32(length).await {
                     tracing::error!("TCP send error (length) to {}: {}", addr, e);

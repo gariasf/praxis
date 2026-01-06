@@ -86,9 +86,7 @@ pub struct ScriptInitialized;
 /// is first loaded. Scripts can query for entities by name or other criteria.
 pub fn script_start_system(world: &mut praxis_ecs::World) {
     // Extract the scripting resource temporarily
-    let scripting_resource = world
-        .inner_mut()
-        .remove_resource::<ScriptingResource>();
+    let scripting_resource = world.inner_mut().remove_resource::<ScriptingResource>();
 
     let Some(mut scripting) = scripting_resource else {
         return;
@@ -113,7 +111,8 @@ pub fn script_start_system(world: &mut praxis_ecs::World) {
                 let globals = lua.globals();
                 if let Ok(on_start) = globals.get::<_, crate::mlua::Function>("on_start") {
                     // Call on_start with no arguments (scripts manage their own state)
-                    on_start.call::<_, ()>(())
+                    on_start
+                        .call::<_, ()>(())
                         .map_err(|e| praxis_utils::eyre::eyre!("Error calling on_start: {}", e))?;
                     debug!("Successfully called on_start for script '{}'", script_name);
                 } else {
@@ -153,22 +152,23 @@ pub struct ScriptStarted;
 /// Scripts receive delta_time as an argument and can query for entities as needed.
 pub fn script_update_system(world: &mut praxis_ecs::World) {
     // Get delta time
-    let delta_time = world.inner()
+    let delta_time = world
+        .inner()
         .get_resource::<praxis_ecs::DeltaTime>()
         .map(|dt| dt.0)
         .unwrap_or(0.016);
 
     // Extract the scripting resource temporarily
-    let scripting_resource = world
-        .inner_mut()
-        .remove_resource::<ScriptingResource>();
+    let scripting_resource = world.inner_mut().remove_resource::<ScriptingResource>();
 
     let Some(scripting) = scripting_resource else {
         return;
     };
 
     // Query for unique scripts that have been started
-    let mut query = world.inner_mut().query_filtered::<&ScriptComponent, With<ScriptStarted>>();
+    let mut query = world
+        .inner_mut()
+        .query_filtered::<&ScriptComponent, With<ScriptStarted>>();
     let mut unique_scripts = HashSet::new();
     for script in query.iter(world.inner()) {
         unique_scripts.insert(script.name.clone());
@@ -181,14 +181,18 @@ pub fn script_update_system(world: &mut praxis_ecs::World) {
             let globals = lua.globals();
             if let Ok(on_update) = globals.get::<_, crate::mlua::Function>("on_update") {
                 // Call on_update with delta_time
-                on_update.call::<_, ()>(delta_time)
+                on_update
+                    .call::<_, ()>(delta_time)
                     .map_err(|e| praxis_utils::eyre::eyre!("Error calling on_update: {}", e))?;
             }
             Ok(())
         });
 
         if let Err(e) = result {
-            error!("Error calling on_update for script '{}': {}", script_name, e);
+            error!(
+                "Error calling on_update for script '{}': {}",
+                script_name, e
+            );
         }
     }
 

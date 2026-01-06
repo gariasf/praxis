@@ -558,7 +558,8 @@ mod tests {
             Aabb::from_min_max(Vec3::new(-10.0, 0.0, 0.0), Vec3::new(-9.0, 1.0, 1.0)),
         );
 
-        let query_bounds = Aabb::from_min_max(Vec3::new(-5.0, -5.0, -5.0), Vec3::new(5.0, 5.0, 5.0));
+        let query_bounds =
+            Aabb::from_min_max(Vec3::new(-5.0, -5.0, -5.0), Vec3::new(5.0, 5.0, 5.0));
         let results = bvh.query_with_predicate(&|bounds| query_bounds.intersects(bounds));
 
         assert!(results.contains(&entity1));
@@ -576,7 +577,8 @@ mod tests {
             bvh.insert(entity, bounds);
         }
 
-        let query_bounds = Aabb::from_min_max(Vec3::new(-10.0, -10.0, -10.0), Vec3::new(10.0, 10.0, 10.0));
+        let query_bounds =
+            Aabb::from_min_max(Vec3::new(-10.0, -10.0, -10.0), Vec3::new(10.0, 10.0, 10.0));
         let results = bvh.query_with_predicate(&|bounds| query_bounds.intersects(bounds));
 
         assert!(!results.is_empty());

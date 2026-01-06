@@ -10,7 +10,9 @@ use praxis_utils::Result;
 use std::sync::Arc;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::command_buffer::allocator::CommandBufferAllocator;
-use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer};
+use vulkano::command_buffer::{
+    AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer,
+};
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
 use vulkano::device::Device;
@@ -90,7 +92,15 @@ impl TerrainRenderer {
 
         for chunk in chunks {
             if let Some(mesh) = &chunk.meshes[chunk.lod.current_level] {
-                self.render_chunk(builder, chunk, mesh, material, splatmap, view_matrix, proj_matrix)?;
+                self.render_chunk(
+                    builder,
+                    chunk,
+                    mesh,
+                    material,
+                    splatmap,
+                    view_matrix,
+                    proj_matrix,
+                )?;
             }
         }
 
@@ -136,11 +146,7 @@ impl TerrainRenderer {
 
         unsafe {
             builder
-                .push_constants(
-                    pipeline.layout().clone(),
-                    0,
-                    push_constants,
-                )
+                .push_constants(pipeline.layout().clone(), 0, push_constants)
                 .map_err(|e| praxis_utils::eyre::eyre!("Failed to push constants: {}", e))?;
 
             builder

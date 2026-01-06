@@ -31,7 +31,9 @@ use praxis_utils::{debug, eyre, info, trace, Result};
 use std::sync::Arc;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage},
-    command_buffer::{AutoCommandBufferBuilder, RenderPassBeginInfo, SubpassBeginInfo, SubpassEndInfo},
+    command_buffer::{
+        AutoCommandBufferBuilder, RenderPassBeginInfo, SubpassBeginInfo, SubpassEndInfo,
+    },
     descriptor_set::{
         allocator::StandardDescriptorSetAllocator, DescriptorSet, WriteDescriptorSet,
     },
@@ -131,7 +133,9 @@ impl TaaRenderTarget {
                     image_type: ImageType::Dim2d,
                     format: Format::R16G16B16A16_SFLOAT,
                     extent: [width, height, 1],
-                    usage: ImageUsage::COLOR_ATTACHMENT | ImageUsage::SAMPLED | ImageUsage::TRANSFER_DST,
+                    usage: ImageUsage::COLOR_ATTACHMENT
+                        | ImageUsage::SAMPLED
+                        | ImageUsage::TRANSFER_DST,
                     ..Default::default()
                 },
                 AllocationCreateInfo::default(),
@@ -391,7 +395,9 @@ impl TaaRenderer {
     #[allow(clippy::too_many_arguments)]
     pub fn apply(
         &self,
-        builder: &mut AutoCommandBufferBuilder<impl vulkano::command_buffer::allocator::CommandBufferAllocator>,
+        builder: &mut AutoCommandBufferBuilder<
+            impl vulkano::command_buffer::allocator::CommandBufferAllocator,
+        >,
         taa_target: &TaaRenderTarget,
         current_frame: Arc<ImageView>,
         velocity_buffer: Arc<ImageView>,
@@ -421,7 +427,11 @@ impl TaaRenderer {
             self.pipeline.layout().set_layouts()[0].clone(),
             [
                 WriteDescriptorSet::image_view_sampler(0, current_frame, self.sampler.clone()),
-                WriteDescriptorSet::image_view_sampler(1, taa_target.history_view.clone(), self.sampler.clone()),
+                WriteDescriptorSet::image_view_sampler(
+                    1,
+                    taa_target.history_view.clone(),
+                    self.sampler.clone(),
+                ),
                 WriteDescriptorSet::image_view_sampler(2, velocity_buffer, self.sampler.clone()),
                 WriteDescriptorSet::image_view_sampler(3, depth_buffer, self.sampler.clone()),
                 WriteDescriptorSet::buffer(4, config_buffer),

@@ -684,9 +684,7 @@ mod tests {
     async fn test_async_mesh_load_nonexistent() {
         let loader = AsyncMeshLoader::new();
 
-        let result = loader
-            .load_async("nonexistent_async_file_99999.obj")
-            .await;
+        let result = loader.load_async("nonexistent_async_file_99999.obj").await;
 
         assert!(result.is_err());
     }
@@ -802,9 +800,7 @@ mod tests {
     async fn test_async_gltf_load_nonexistent() {
         let loader = AsyncGltfLoader::new();
 
-        let result = loader
-            .load_async("nonexistent_async_file_99999.gltf")
-            .await;
+        let result = loader.load_async("nonexistent_async_file_99999.gltf").await;
 
         assert!(result.is_err());
     }

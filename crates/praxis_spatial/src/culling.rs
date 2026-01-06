@@ -397,7 +397,13 @@ impl VisibilitySystem {
         match self.hierarchical_mode {
             HierarchicalCullingMode::Octree => {
                 if let Some(octree) = &self.octree {
-                    self.cull_with_octree(octree, frustum, camera_position, &mut results, &mut stats);
+                    self.cull_with_octree(
+                        octree,
+                        frustum,
+                        camera_position,
+                        &mut results,
+                        &mut stats,
+                    );
                 }
             }
             HierarchicalCullingMode::Bvh => {
@@ -412,7 +418,7 @@ impl VisibilitySystem {
                         Some(b) => *b,
                         None => continue,
                     };
-                    
+
                     self.test_entity_visibility(
                         entity,
                         bounds,
@@ -448,9 +454,8 @@ impl VisibilitySystem {
         // This tests each octree node's bounds against the frustum before descending,
         // enabling efficient early rejection of entire subtrees
         let frustum_clone = frustum.clone();
-        let candidates = octree.query_with_predicate(&|bounds: &Aabb| {
-            frustum_clone.intersects_aabb(bounds)
-        });
+        let candidates =
+            octree.query_with_predicate(&|bounds: &Aabb| frustum_clone.intersects_aabb(bounds));
 
         for entity in candidates {
             if let Some(&bounds) = octree.get_bounds(entity) {
@@ -494,9 +499,8 @@ impl VisibilitySystem {
         // This tests each BVH node's bounds against the frustum before descending,
         // enabling efficient early rejection of entire subtrees
         let frustum_clone = frustum.clone();
-        let candidates = bvh.query_with_predicate(&|bounds: &Aabb| {
-            frustum_clone.intersects_aabb(bounds)
-        });
+        let candidates =
+            bvh.query_with_predicate(&|bounds: &Aabb| frustum_clone.intersects_aabb(bounds));
 
         for entity in candidates {
             if let Some(&bounds) = bvh.get_bounds(entity) {
@@ -565,7 +569,7 @@ impl VisibilitySystem {
     fn _compute_frustum_aabb(&self, _frustum: &Frustum, camera_position: Vec3) -> Aabb {
         // Compute frustum corners at max distance
         let max_dist = self.max_distance;
-        
+
         // Extract frustum planes to compute approximate bounds
         // For simplicity, we create a large AABB that encompasses the visible area
         let half_size = Vec3::splat(max_dist);
@@ -578,9 +582,7 @@ impl VisibilitySystem {
             HierarchicalCullingMode::Octree => {
                 self.octree.as_ref().and_then(|o| o.get_bounds(entity))
             }
-            HierarchicalCullingMode::Bvh => {
-                self.bvh.as_ref().and_then(|b| b.get_bounds(entity))
-            }
+            HierarchicalCullingMode::Bvh => self.bvh.as_ref().and_then(|b| b.get_bounds(entity)),
             HierarchicalCullingMode::None => None,
         }
     }
@@ -643,9 +645,8 @@ impl VisibilitySystem {
         // Use predicate-based query for true hierarchical culling
         // This tests each BVH node's bounds against the frustum before descending
         let frustum_clone = frustum.clone();
-        let candidates = bvh.query_with_predicate(&|bounds: &Aabb| {
-            frustum_clone.intersects_aabb(bounds)
-        });
+        let candidates =
+            bvh.query_with_predicate(&|bounds: &Aabb| frustum_clone.intersects_aabb(bounds));
 
         for entity in candidates {
             if let Some(&bounds) = bvh.get_bounds(entity) {
@@ -677,7 +678,13 @@ impl VisibilitySystem {
 
         if let Some(octree) = &self.octree {
             let frustum = self.frustum_culler.frustum();
-            self.traverse_octree_hierarchy(octree, frustum, camera_position, &mut results, &mut stats);
+            self.traverse_octree_hierarchy(
+                octree,
+                frustum,
+                camera_position,
+                &mut results,
+                &mut stats,
+            );
         }
 
         stats.total_objects = self.entity_positions.len();
@@ -701,9 +708,8 @@ impl VisibilitySystem {
         // Use predicate-based query for true hierarchical culling
         // This tests each octree node's bounds against the frustum before descending
         let frustum_clone = frustum.clone();
-        let candidates = octree.query_with_predicate(&|bounds: &Aabb| {
-            frustum_clone.intersects_aabb(bounds)
-        });
+        let candidates =
+            octree.query_with_predicate(&|bounds: &Aabb| frustum_clone.intersects_aabb(bounds));
 
         for entity in candidates {
             if let Some(&bounds) = octree.get_bounds(entity) {
@@ -809,7 +815,7 @@ mod tests {
     #[test]
     fn test_visibility_system_with_octree() {
         let mut system = VisibilitySystem::with_octree(Vec3::ZERO, 1000.0, 8);
-        
+
         let entity1 = Entity::from_raw(1);
         let entity2 = Entity::from_raw(2);
         let bounds1 = Aabb::from_min_max(Vec3::ZERO, Vec3::ONE);
@@ -825,7 +831,7 @@ mod tests {
     #[test]
     fn test_visibility_system_with_bvh() {
         let mut system = VisibilitySystem::with_bvh();
-        
+
         let entity1 = Entity::from_raw(1);
         let entity2 = Entity::from_raw(2);
         let bounds1 = Aabb::from_min_max(Vec3::ZERO, Vec3::ONE);
@@ -886,13 +892,15 @@ mod tests {
         let (results, stats) = system.cull_entities_hierarchical(Vec3::new(0.0, 0.0, 10.0));
 
         assert_eq!(stats.total_objects, 2);
-        assert!(results.iter().any(|r| r.entity == entity1 || r.entity == entity2));
+        assert!(results
+            .iter()
+            .any(|r| r.entity == entity1 || r.entity == entity2));
     }
 
     #[test]
     fn test_remove_entity_from_spatial_structure() {
         let mut system = VisibilitySystem::with_octree(Vec3::ZERO, 1000.0, 8);
-        
+
         let entity = Entity::from_raw(1);
         let bounds = Aabb::from_min_max(Vec3::ZERO, Vec3::ONE);
 
@@ -906,7 +914,7 @@ mod tests {
     #[test]
     fn test_clear_spatial_structure() {
         let mut system = VisibilitySystem::with_bvh();
-        
+
         for i in 0..10 {
             let entity = Entity::from_raw(i);
             let bounds = Aabb::from_min_max(
@@ -939,7 +947,7 @@ mod tests {
     #[test]
     fn test_rebuild_spatial_structure() {
         let mut system = VisibilitySystem::with_octree(Vec3::ZERO, 1000.0, 8);
-        
+
         for i in 0..5 {
             let entity = Entity::from_raw(i);
             let bounds = Aabb::from_min_max(

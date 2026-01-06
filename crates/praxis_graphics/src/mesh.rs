@@ -520,7 +520,7 @@ impl MeshData {
         if self.positions.is_empty() {
             return ([0.0, 0.0, 0.0], 0.0);
         }
-        
+
         // Calculate centroid
         let mut center = [0.0f32, 0.0, 0.0];
         for pos in &self.positions {
@@ -532,7 +532,7 @@ impl MeshData {
         center[0] /= count;
         center[1] /= count;
         center[2] /= count;
-        
+
         // Find maximum distance from center
         let mut max_dist_sq = 0.0f32;
         for pos in &self.positions {
@@ -544,7 +544,7 @@ impl MeshData {
                 max_dist_sq = dist_sq;
             }
         }
-        
+
         let radius = max_dist_sq.sqrt();
         (center, radius)
     }
@@ -1568,12 +1568,12 @@ mod tests {
         ];
         let mesh = MeshData::new(positions, vec![]);
         let (center, radius) = mesh.calculate_bounding_sphere();
-        
+
         // Center should be at origin
         assert!((center[0]).abs() < 0.01);
         assert!((center[1]).abs() < 0.01);
         assert!((center[2]).abs() < 0.01);
-        
+
         // Radius should be sqrt(3) for unit cube
         let expected_radius = (3.0f32).sqrt();
         assert!((radius - expected_radius).abs() < 0.01);
@@ -1589,12 +1589,12 @@ mod tests {
         ];
         let mesh = MeshData::new(positions, vec![]);
         let (center, radius) = mesh.calculate_bounding_sphere();
-        
+
         // Center should be at (6, 6, 5)
         assert!((center[0] - 6.0).abs() < 0.01);
         assert!((center[1] - 6.0).abs() < 0.01);
         assert!((center[2] - 5.0).abs() < 0.01);
-        
+
         // Radius should be sqrt(2) for this square
         let expected_radius = (2.0f32).sqrt();
         assert!((radius - expected_radius).abs() < 0.01);
@@ -1602,18 +1602,15 @@ mod tests {
 
     #[test]
     fn test_calculate_bounding_sphere_line() {
-        let positions = vec![
-            [0.0, 0.0, 0.0],
-            [10.0, 0.0, 0.0],
-        ];
+        let positions = vec![[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]];
         let mesh = MeshData::new(positions, vec![]);
         let (center, radius) = mesh.calculate_bounding_sphere();
-        
+
         // Center should be at midpoint
         assert!((center[0] - 5.0).abs() < 0.01);
         assert!((center[1]).abs() < 0.01);
         assert!((center[2]).abs() < 0.01);
-        
+
         // Radius should be 5.0
         assert!((radius - 5.0).abs() < 0.01);
     }

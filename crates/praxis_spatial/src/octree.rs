@@ -429,14 +429,10 @@ impl Octree {
     {
         let mut results = Vec::new();
         self.root.query_with_predicate(predicate, &mut results);
-        
+
         // Filter to only include entities whose actual bounds match the predicate
-        results.retain(|&entity| {
-            self.entity_bounds
-                .get(&entity)
-                .is_some_and(predicate)
-        });
-        
+        results.retain(|&entity| self.entity_bounds.get(&entity).is_some_and(predicate));
+
         results
     }
 
@@ -612,7 +608,8 @@ mod tests {
             Aabb::from_min_max(Vec3::new(-10.0, 0.0, 0.0), Vec3::new(-9.0, 1.0, 1.0)),
         );
 
-        let query_bounds = Aabb::from_min_max(Vec3::new(-5.0, -5.0, -5.0), Vec3::new(5.0, 5.0, 5.0));
+        let query_bounds =
+            Aabb::from_min_max(Vec3::new(-5.0, -5.0, -5.0), Vec3::new(5.0, 5.0, 5.0));
         let results = octree.query_with_predicate(&|bounds| query_bounds.intersects(bounds));
 
         assert!(results.contains(&entity1));
@@ -630,7 +627,8 @@ mod tests {
             octree.insert(entity, bounds);
         }
 
-        let query_bounds = Aabb::from_min_max(Vec3::new(-10.0, -10.0, -10.0), Vec3::new(10.0, 10.0, 10.0));
+        let query_bounds =
+            Aabb::from_min_max(Vec3::new(-10.0, -10.0, -10.0), Vec3::new(10.0, 10.0, 10.0));
         let results = octree.query_with_predicate(&|bounds| query_bounds.intersects(bounds));
 
         assert!(!results.is_empty());
