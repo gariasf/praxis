@@ -2,16 +2,23 @@ use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criteri
 use praxis_graphics::mesh::MeshData;
 use std::sync::Arc;
 use vulkano::{
+    command_buffer::allocator::StandardCommandBufferAllocator,
     device::{
-        physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, QueueCreateInfo,
-        QueueFlags,
+        physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, Queue,
+        QueueCreateInfo, QueueFlags,
     },
     instance::{Instance, InstanceCreateInfo},
     memory::allocator::StandardMemoryAllocator,
     VulkanLibrary,
 };
 
-fn create_test_allocator() -> Arc<StandardMemoryAllocator> {
+struct TestContext {
+    allocator: Arc<StandardMemoryAllocator>,
+    command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+    queue: Arc<Queue>,
+}
+
+fn create_test_context() -> TestContext {
     let library = VulkanLibrary::new().expect("Failed to load Vulkan library");
     let instance = Instance::new(
         library,
@@ -39,7 +46,7 @@ fn create_test_allocator() -> Arc<StandardMemoryAllocator> {
         .position(|q| q.queue_flags.contains(QueueFlags::GRAPHICS))
         .expect("Failed to find graphics queue family") as u32;
 
-    let (device, _queues) = Device::new(
+    let (device, mut queues) = Device::new(
         physical_device,
         DeviceCreateInfo {
             queue_create_infos: vec![QueueCreateInfo {
@@ -55,7 +62,18 @@ fn create_test_allocator() -> Arc<StandardMemoryAllocator> {
     )
     .expect("Failed to create device");
 
-    Arc::new(StandardMemoryAllocator::new_default(device))
+    let queue = queues.next().expect("Failed to get queue");
+    let allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
+    let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
+        device,
+        Default::default(),
+    ));
+
+    TestContext {
+        allocator,
+        command_buffer_allocator,
+        queue,
+    }
 }
 
 fn create_mesh_data(vertex_count: usize) -> MeshData {
@@ -94,7 +112,7 @@ fn create_mesh_data(vertex_count: usize) -> MeshData {
 }
 
 fn bench_mesh_upload(c: &mut Criterion) {
-    let allocator = create_test_allocator();
+    let ctx = create_test_context();
 
     let mut group = c.benchmark_group("mesh_upload");
 
@@ -108,7 +126,11 @@ fn bench_mesh_upload(c: &mut Criterion) {
             |b, mesh_data| {
                 b.iter(|| {
                     let _gpu_mesh = mesh_data
-                        .upload(allocator.clone())
+                        .upload(
+                            ctx.allocator.clone(),
+                            ctx.command_buffer_allocator.clone(),
+                            ctx.queue.clone(),
+                        )
                         .expect("Failed to upload mesh");
                     black_box(_gpu_mesh);
                 });
@@ -120,7 +142,7 @@ fn bench_mesh_upload(c: &mut Criterion) {
 }
 
 fn bench_mesh_upload_with_textures(c: &mut Criterion) {
-    let allocator = create_test_allocator();
+    let ctx = create_test_context();
 
     let mut group = c.benchmark_group("mesh_upload_textured");
 
@@ -134,7 +156,11 @@ fn bench_mesh_upload_with_textures(c: &mut Criterion) {
             |b, mesh_data| {
                 b.iter(|| {
                     let _gpu_mesh = mesh_data
-                        .upload(allocator.clone())
+                        .upload(
+                            ctx.allocator.clone(),
+                            ctx.command_buffer_allocator.clone(),
+                            ctx.queue.clone(),
+                        )
                         .expect("Failed to upload mesh");
                     black_box(_gpu_mesh);
                 });
@@ -146,7 +172,7 @@ fn bench_mesh_upload_with_textures(c: &mut Criterion) {
 }
 
 fn bench_primitive_generation_and_upload(c: &mut Criterion) {
-    let allocator = create_test_allocator();
+    let ctx = create_test_context();
 
     c.bench_function("simple_triangle_generation_and_upload", |b| {
         b.iter(|| {
@@ -154,7 +180,11 @@ fn bench_primitive_generation_and_upload(c: &mut Criterion) {
             let indices = vec![0, 1, 2];
             let mesh_data = MeshData::new(positions, indices);
             let _gpu_mesh = mesh_data
-                .upload(allocator.clone())
+                .upload(
+                    ctx.allocator.clone(),
+                    ctx.command_buffer_allocator.clone(),
+                    ctx.queue.clone(),
+                )
                 .expect("Failed to upload mesh");
             black_box(_gpu_mesh);
         });
@@ -171,7 +201,11 @@ fn bench_primitive_generation_and_upload(c: &mut Criterion) {
             let indices = vec![0, 1, 2, 0, 2, 3];
             let mesh_data = MeshData::new(positions, indices);
             let _gpu_mesh = mesh_data
-                .upload(allocator.clone())
+                .upload(
+                    ctx.allocator.clone(),
+                    ctx.command_buffer_allocator.clone(),
+                    ctx.queue.clone(),
+                )
                 .expect("Failed to upload mesh");
             black_box(_gpu_mesh);
         });

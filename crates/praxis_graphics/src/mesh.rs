@@ -48,79 +48,8 @@ impl GpuMesh {
     /// 3. Uses a transfer command buffer to copy data from staging to device buffers
     /// 4. Synchronizes with a fence to ensure the transfer completes
     ///
-    /// # Arguments
-    ///
-    /// * `allocator` - Memory allocator for creating buffers
-    /// * `vertices` - Vertex data to upload
-    /// * `indices` - Index data to upload
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if buffer creation fails.
-    pub fn new(
-        allocator: Arc<dyn MemoryAllocator>,
-        vertices: Vec<Vertex3D>,
-        indices: Vec<u16>,
-    ) -> Result<Self> {
-        trace!(
-            "Creating GPU mesh with {} vertices, {} indices",
-            vertices.len(),
-            indices.len()
-        );
-
-        let vertex_buffer = Buffer::from_iter(
-            allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::VERTEX_BUFFER,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            vertices.iter().copied(),
-        )
-        .map_err(|e| eyre::eyre!("Failed to create vertex buffer: {}", e))?;
-
-        let index_buffer = Buffer::from_iter(
-            allocator,
-            BufferCreateInfo {
-                usage: BufferUsage::INDEX_BUFFER,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            indices.iter().copied(),
-        )
-        .map_err(|e| eyre::eyre!("Failed to create index buffer: {}", e))?;
-
-        Ok(Self {
-            vertex_buffer,
-            index_buffer,
-            index_count: indices.len() as u32,
-            vertex_count: vertices.len() as u32,
-        })
-    }
-
-    /// Creates a new GPU mesh with asynchronous transfer using staging buffers.
-    ///
-    /// This method implements efficient GPU upload using a multi-stage approach:
-    /// 1. Creates host-visible staging buffers (CPU accessible, fast write)
-    /// 2. Creates device-local destination buffers (GPU only, optimal for rendering)
-    /// 3. Records a transfer command buffer to copy from staging to device buffers
-    /// 4. Submits to the transfer queue with fence synchronization
-    /// 5. Returns immediately - caller can wait on the fence for completion
-    ///
-    /// # Performance Benefits
-    ///
-    /// - Staging buffers allow fast CPU writes without GPU memory mapping overhead
-    /// - Device-local buffers provide maximum GPU access performance
-    /// - Transfer queue can operate asynchronously with graphics operations
-    /// - Fence synchronization allows overlapping CPU work with GPU transfers
+    /// This is the synchronous version that blocks until the transfer completes.
+    /// For async uploads, use `new_async` which returns a future.
     ///
     /// # Arguments
     ///
@@ -133,13 +62,192 @@ impl GpuMesh {
     /// # Errors
     ///
     /// Returns an error if buffer creation, command recording, or submission fails.
-    pub fn new_async(
+    pub fn new(
         allocator: Arc<dyn MemoryAllocator>,
         command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
         transfer_queue: Arc<Queue>,
         vertices: Vec<Vertex3D>,
         indices: Vec<u16>,
     ) -> Result<Self> {
+        trace!(
+            "Creating GPU mesh with {} vertices, {} indices",
+            vertices.len(),
+            indices.len()
+        );
+
+        let vertex_count = vertices.len() as u32;
+        let index_count = indices.len() as u32;
+
+        // Create staging buffers (host-visible, for CPU writes)
+        let vertex_staging_buffer = Buffer::from_iter(
+            allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::TRANSFER_SRC,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            vertices.iter().copied(),
+        )
+        .map_err(|e| eyre::eyre!("Failed to create vertex staging buffer: {}", e))?;
+
+        let index_staging_buffer = Buffer::from_iter(
+            allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::TRANSFER_SRC,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            indices.iter().copied(),
+        )
+        .map_err(|e| eyre::eyre!("Failed to create index staging buffer: {}", e))?;
+
+        // Create device-local buffers (GPU only, optimal performance)
+        let vertex_buffer = Buffer::new_slice::<Vertex3D>(
+            allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::VERTEX_BUFFER | BufferUsage::TRANSFER_DST,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                ..Default::default()
+            },
+            vertex_count as u64,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create vertex buffer: {}", e))?;
+
+        let index_buffer = Buffer::new_slice::<u16>(
+            allocator,
+            BufferCreateInfo {
+                usage: BufferUsage::INDEX_BUFFER | BufferUsage::TRANSFER_DST,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                ..Default::default()
+            },
+            index_count as u64,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create index buffer: {}", e))?;
+
+        // Build transfer command buffer
+        let mut builder = AutoCommandBufferBuilder::primary(
+            command_buffer_allocator,
+            transfer_queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create command buffer builder: {}", e))?;
+
+        // Copy vertex data from staging to device buffer
+        builder
+            .copy_buffer(CopyBufferInfo::buffers(
+                vertex_staging_buffer.clone(),
+                vertex_buffer.clone(),
+            ))
+            .map_err(|e| eyre::eyre!("Failed to record vertex buffer copy: {}", e))?;
+
+        // Copy index data from staging to device buffer
+        builder
+            .copy_buffer(CopyBufferInfo::buffers(
+                index_staging_buffer.clone(),
+                index_buffer.clone(),
+            ))
+            .map_err(|e| eyre::eyre!("Failed to record index buffer copy: {}", e))?;
+
+        let command_buffer = builder
+            .build()
+            .map_err(|e| eyre::eyre!("Failed to build transfer command buffer: {}", e))?;
+
+        // Submit to transfer queue with fence synchronization and wait for completion
+        trace!("Submitting mesh transfer command buffer");
+        let future = sync::now(transfer_queue.device().clone())
+            .then_execute(transfer_queue.clone(), command_buffer)
+            .map_err(|e| eyre::eyre!("Failed to execute transfer command: {}", e))?
+            .then_signal_fence_and_flush()
+            .map_err(|e| eyre::eyre!("Failed to signal fence and flush: {}", e))?;
+
+        // Wait for transfer to complete
+        future
+            .wait(None)
+            .map_err(|e| eyre::eyre!("Failed to wait for mesh transfer: {}", e))?;
+
+        trace!("Mesh transfer complete");
+
+        Ok(Self {
+            vertex_buffer,
+            index_buffer,
+            index_count,
+            vertex_count,
+        })
+    }
+
+    /// Creates a new GPU mesh with asynchronous transfer using staging buffers.
+    ///
+    /// This method implements efficient GPU upload using a multi-stage approach:
+    /// 1. Creates host-visible staging buffers (CPU accessible, fast write)
+    /// 2. Creates device-local destination buffers (GPU only, optimal for rendering)
+    /// 3. Records a transfer command buffer to copy from staging to device buffers
+    /// 4. Submits to the transfer queue with fence synchronization
+    /// 5. Returns immediately with a future - caller can wait on it for completion
+    ///
+    /// # Performance Benefits
+    ///
+    /// - Staging buffers allow fast CPU writes without GPU memory mapping overhead
+    /// - Device-local buffers provide maximum GPU access performance
+    /// - Transfer queue can operate asynchronously with graphics operations
+    /// - Fence synchronization allows overlapping CPU work with GPU transfers
+    /// - Non-blocking: caller can continue work and wait on the future later
+    ///
+    /// # Usage Example
+    ///
+    /// ```rust,ignore
+    /// let (mesh, future) = GpuMesh::new_async(
+    ///     allocator,
+    ///     cmd_allocator,
+    ///     transfer_queue,
+    ///     vertices,
+    ///     indices
+    /// )?;
+    ///
+    /// // Do other work here while GPU transfer happens
+    /// do_other_work();
+    ///
+    /// // Wait for transfer to complete when needed
+    /// future.wait(None)?;
+    /// ```
+    ///
+    /// # Arguments
+    ///
+    /// * `allocator` - Memory allocator for creating buffers
+    /// * `command_buffer_allocator` - Allocator for command buffers
+    /// * `transfer_queue` - Queue for transfer operations
+    /// * `vertices` - Vertex data to upload
+    /// * `indices` - Index data to upload
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing:
+    /// - The GPU mesh with device-local buffers
+    /// - A future that completes when the transfer finishes
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if buffer creation, command recording, or submission fails.
+    pub fn new_async(
+        allocator: Arc<dyn MemoryAllocator>,
+        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+        transfer_queue: Arc<Queue>,
+        vertices: Vec<Vertex3D>,
+        indices: Vec<u16>,
+    ) -> Result<(Self, Box<dyn GpuFuture>)> {
         trace!(
             "Creating GPU mesh asynchronously with {} vertices, {} indices",
             vertices.len(),
@@ -237,27 +345,24 @@ impl GpuMesh {
             .build()
             .map_err(|e| eyre::eyre!("Failed to build transfer command buffer: {}", e))?;
 
-        // Submit to transfer queue with fence synchronization
-        trace!("Submitting mesh transfer command buffer");
+        // Submit to transfer queue with fence synchronization (non-blocking)
+        trace!("Submitting async mesh transfer command buffer");
         let future = sync::now(transfer_queue.device().clone())
             .then_execute(transfer_queue.clone(), command_buffer)
             .map_err(|e| eyre::eyre!("Failed to execute transfer command: {}", e))?
             .then_signal_fence_and_flush()
             .map_err(|e| eyre::eyre!("Failed to signal fence and flush: {}", e))?;
 
-        // Wait for transfer to complete
-        future
-            .wait(None)
-            .map_err(|e| eyre::eyre!("Failed to wait for mesh transfer: {}", e))?;
+        trace!("Mesh transfer submitted asynchronously");
 
-        trace!("Mesh transfer complete");
-
-        Ok(Self {
+        let mesh = Self {
             vertex_buffer,
             index_buffer,
             index_count,
             vertex_count,
-        })
+        };
+
+        Ok((mesh, Box::new(future)))
     }
 }
 
@@ -523,18 +628,69 @@ impl MeshData {
         Ok(())
     }
 
-    /// Uploads this mesh data to the GPU.
+    /// Uploads this mesh data to the GPU using staging buffers.
+    ///
+    /// This is a synchronous operation that blocks until the transfer completes.
     ///
     /// # Arguments
     ///
     /// * `allocator` - Memory allocator for creating GPU buffers
+    /// * `command_buffer_allocator` - Allocator for command buffers
+    /// * `transfer_queue` - Queue for transfer operations
     ///
     /// # Errors
     ///
-    /// Returns an error if buffer creation fails.
-    pub fn upload(&self, allocator: Arc<dyn MemoryAllocator>) -> Result<GpuMesh> {
+    /// Returns an error if buffer creation or upload fails.
+    pub fn upload(
+        &self,
+        allocator: Arc<dyn MemoryAllocator>,
+        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+        transfer_queue: Arc<Queue>,
+    ) -> Result<GpuMesh> {
         let vertices = self.to_vertices();
-        GpuMesh::new(allocator, vertices, self.indices.clone())
+        GpuMesh::new(
+            allocator,
+            command_buffer_allocator,
+            transfer_queue,
+            vertices,
+            self.indices.clone(),
+        )
+    }
+
+    /// Uploads this mesh data to the GPU asynchronously using staging buffers.
+    ///
+    /// This is a non-blocking operation that returns immediately with a future.
+    /// The caller can wait on the future when the transfer needs to complete.
+    ///
+    /// # Arguments
+    ///
+    /// * `allocator` - Memory allocator for creating GPU buffers
+    /// * `command_buffer_allocator` - Allocator for command buffers
+    /// * `transfer_queue` - Queue for transfer operations
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing:
+    /// - The GPU mesh with device-local buffers
+    /// - A future that completes when the transfer finishes
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if buffer creation or upload fails.
+    pub fn upload_async(
+        &self,
+        allocator: Arc<dyn MemoryAllocator>,
+        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+        transfer_queue: Arc<Queue>,
+    ) -> Result<(GpuMesh, Box<dyn GpuFuture>)> {
+        let vertices = self.to_vertices();
+        GpuMesh::new_async(
+            allocator,
+            command_buffer_allocator,
+            transfer_queue,
+            vertices,
+            self.indices.clone(),
+        )
     }
 }
 
@@ -551,6 +707,12 @@ pub struct MeshAssetManager {
 
     /// Memory allocator for creating GPU buffers.
     allocator: Arc<dyn MemoryAllocator>,
+
+    /// Command buffer allocator for transfer operations.
+    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+
+    /// Queue for transfer operations.
+    transfer_queue: Arc<Queue>,
 }
 
 impl MeshAssetManager {
@@ -559,17 +721,26 @@ impl MeshAssetManager {
     /// # Arguments
     ///
     /// * `allocator` - Memory allocator for creating GPU buffers
-    pub fn new(allocator: Arc<dyn MemoryAllocator>) -> Self {
+    /// * `command_buffer_allocator` - Allocator for command buffers
+    /// * `transfer_queue` - Queue for transfer operations
+    pub fn new(
+        allocator: Arc<dyn MemoryAllocator>,
+        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+        transfer_queue: Arc<Queue>,
+    ) -> Self {
         Self {
             meshes: HashMap::new(),
             path_to_id: HashMap::new(),
             allocator,
+            command_buffer_allocator,
+            transfer_queue,
         }
     }
 
     /// Loads a mesh from mesh data.
     ///
     /// If a mesh with the same ID already exists, it will be replaced.
+    /// Uses staging buffers for optimal GPU upload performance.
     ///
     /// # Arguments
     ///
@@ -588,11 +759,57 @@ impl MeshAssetManager {
             mesh_data.indices.len()
         );
 
-        let gpu_mesh = mesh_data.upload(self.allocator.clone())?;
+        let gpu_mesh = mesh_data.upload(
+            self.allocator.clone(),
+            self.command_buffer_allocator.clone(),
+            self.transfer_queue.clone(),
+        )?;
         self.meshes.insert(id.clone(), gpu_mesh);
 
         trace!("Mesh '{}' loaded successfully", id);
         Ok(())
+    }
+
+    /// Loads a mesh from mesh data asynchronously.
+    ///
+    /// If a mesh with the same ID already exists, it will be replaced.
+    /// Returns a future that completes when the transfer finishes.
+    /// The mesh is immediately available but should not be used until the future completes.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique identifier for the mesh
+    /// * `mesh_data` - Mesh data to upload
+    ///
+    /// # Returns
+    ///
+    /// A future that completes when the GPU transfer finishes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if GPU buffer creation fails.
+    pub fn load_mesh_async(
+        &mut self,
+        id: impl Into<String>,
+        mesh_data: MeshData,
+    ) -> Result<Box<dyn GpuFuture>> {
+        let id = id.into();
+        debug!(
+            "Loading mesh '{}' asynchronously ({} vertices, {} indices)",
+            id,
+            mesh_data.positions.len(),
+            mesh_data.indices.len()
+        );
+
+        let (gpu_mesh, future) = mesh_data.upload_async(
+            self.allocator.clone(),
+            self.command_buffer_allocator.clone(),
+            self.transfer_queue.clone(),
+        )?;
+        self.meshes.insert(id.clone(), gpu_mesh);
+
+        trace!("Mesh '{}' submitted for async loading", id);
+        Ok(future)
     }
 
     /// Gets a mesh by its ID.
@@ -637,6 +854,16 @@ impl MeshAssetManager {
         &self.allocator
     }
 
+    /// Gets a reference to the command buffer allocator.
+    pub fn command_buffer_allocator(&self) -> &Arc<dyn CommandBufferAllocator> {
+        &self.command_buffer_allocator
+    }
+
+    /// Gets a reference to the transfer queue.
+    pub fn transfer_queue(&self) -> &Arc<Queue> {
+        &self.transfer_queue
+    }
+
     /// Loads a mesh from mesh data with a file path association.
     ///
     /// This method loads mesh data and associates it with a file path for hot-reload support.
@@ -662,7 +889,11 @@ impl MeshAssetManager {
 
         debug!("Loading mesh '{}' from file '{}'", id, path.display());
 
-        let gpu_mesh = mesh_data.upload(self.allocator.clone())?;
+        let gpu_mesh = mesh_data.upload(
+            self.allocator.clone(),
+            self.command_buffer_allocator.clone(),
+            self.transfer_queue.clone(),
+        )?;
 
         self.meshes.insert(id.clone(), gpu_mesh);
         self.path_to_id.insert(path.to_path_buf(), id.clone());
@@ -697,7 +928,11 @@ impl MeshAssetManager {
         if let Some(id) = self.path_to_id.get(path).cloned() {
             debug!("Reloading mesh '{}' from '{}'", id, path.display());
 
-            let gpu_mesh = mesh_data.upload(self.allocator.clone())?;
+            let gpu_mesh = mesh_data.upload(
+                self.allocator.clone(),
+                self.command_buffer_allocator.clone(),
+                self.transfer_queue.clone(),
+            )?;
 
             self.meshes.insert(id.clone(), gpu_mesh);
             praxis_utils::info!("Mesh '{}' reloaded successfully", id);

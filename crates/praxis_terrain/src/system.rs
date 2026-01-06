@@ -15,7 +15,7 @@ use rayon::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 use vulkano::command_buffer::allocator::CommandBufferAllocator;
-use vulkano::device::Device;
+use vulkano::device::{Device, Queue};
 use vulkano::memory::allocator::StandardMemoryAllocator;
 
 /// Configuration for the terrain system.
@@ -97,6 +97,12 @@ pub struct TerrainSystem {
     /// Memory allocator for GPU resources.
     memory_allocator: Option<Arc<StandardMemoryAllocator>>,
 
+    /// Command buffer allocator for GPU operations.
+    command_buffer_allocator: Option<Arc<dyn CommandBufferAllocator>>,
+
+    /// Transfer queue for GPU operations.
+    transfer_queue: Option<Arc<Queue>>,
+
     /// Chunks pending mesh generation.
     pending_chunks: Vec<TerrainChunkId>,
 
@@ -127,6 +133,8 @@ impl TerrainSystem {
             terrain_renderer: None,
             vegetation_renderer: None,
             memory_allocator: None,
+            command_buffer_allocator: None,
+            transfer_queue: None,
             pending_chunks: Vec::new(),
             max_chunks_per_frame: 8,
         })
@@ -138,6 +146,7 @@ impl TerrainSystem {
         device: Arc<Device>,
         memory_allocator: Arc<StandardMemoryAllocator>,
         command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+        transfer_queue: Arc<Queue>,
     ) {
         self.terrain_renderer = Some(TerrainRenderer::new(
             device.clone(),
@@ -148,10 +157,12 @@ impl TerrainSystem {
         self.vegetation_renderer = Some(VegetationRenderer::new(
             device,
             memory_allocator.clone(),
-            command_buffer_allocator,
+            command_buffer_allocator.clone(),
         ));
 
         self.memory_allocator = Some(memory_allocator);
+        self.command_buffer_allocator = Some(command_buffer_allocator);
+        self.transfer_queue = Some(transfer_queue);
         info!("Terrain rendering initialized");
     }
 
@@ -247,10 +258,19 @@ impl TerrainSystem {
         let mut chunk = TerrainChunk::new(chunk_id, self.config.chunk_size, self.config.lod_levels);
         chunk.update_bounds(&self.heightmap, self.config.chunk_size);
 
-        if let Some(memory_allocator) = &self.memory_allocator {
+        if let (Some(memory_allocator), Some(command_buffer_allocator), Some(transfer_queue)) = (
+            &self.memory_allocator,
+            &self.command_buffer_allocator,
+            &self.transfer_queue,
+        ) {
             for lod_level in 0..self.config.lod_levels {
                 if let Ok(mesh_data) = self.generate_chunk_mesh(chunk_id, lod_level) {
-                    if let Ok(gpu_mesh) = self.upload_mesh_to_gpu(&mesh_data, memory_allocator) {
+                    if let Ok(gpu_mesh) = self.upload_mesh_to_gpu(
+                        &mesh_data,
+                        memory_allocator,
+                        command_buffer_allocator,
+                        transfer_queue,
+                    ) {
                         chunk.meshes[lod_level] = Some(gpu_mesh);
                     }
                 }
@@ -281,9 +301,15 @@ impl TerrainSystem {
         &self,
         mesh_data: &MeshData,
         memory_allocator: &Arc<StandardMemoryAllocator>,
+        command_buffer_allocator: &Arc<dyn CommandBufferAllocator>,
+        transfer_queue: &Arc<Queue>,
     ) -> Result<GpuMesh> {
         mesh_data
-            .upload(memory_allocator.clone())
+            .upload(
+                memory_allocator.clone(),
+                command_buffer_allocator.clone(),
+                transfer_queue.clone(),
+            )
             .map_err(|e| eyre::eyre!("Failed to upload terrain mesh to GPU: {}", e))
     }
 
@@ -413,11 +439,16 @@ impl TerrainSystem {
 
     /// Regenerates meshes for dirty chunks using parallel processing.
     pub fn regenerate_dirty_chunks(&mut self) -> Result<()> {
-        if self.memory_allocator.is_none() {
+        if self.memory_allocator.is_none()
+            || self.command_buffer_allocator.is_none()
+            || self.transfer_queue.is_none()
+        {
             return Ok(());
         }
 
         let memory_allocator = self.memory_allocator.as_ref().unwrap();
+        let command_buffer_allocator = self.command_buffer_allocator.as_ref().unwrap();
+        let transfer_queue = self.transfer_queue.as_ref().unwrap();
 
         let dirty_chunks: Vec<TerrainChunkId> = self
             .chunks
@@ -435,7 +466,12 @@ impl TerrainSystem {
         for chunk_id in dirty_chunks {
             for lod_level in 0..self.config.lod_levels {
                 if let Ok(mesh_data) = self.generate_chunk_mesh(chunk_id, lod_level) {
-                    if let Ok(gpu_mesh) = self.upload_mesh_to_gpu(&mesh_data, memory_allocator) {
+                    if let Ok(gpu_mesh) = self.upload_mesh_to_gpu(
+                        &mesh_data,
+                        memory_allocator,
+                        command_buffer_allocator,
+                        transfer_queue,
+                    ) {
                         if let Some(chunk) = self.chunks.get_mut(&chunk_id) {
                             chunk.meshes[lod_level] = Some(gpu_mesh);
                         }

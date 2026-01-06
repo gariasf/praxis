@@ -1209,7 +1209,11 @@ impl RenderContext {
         let previous_frame_end = Some(sync::now(device.clone()).boxed());
 
         // Initialize mesh manager
-        let mesh_manager = mesh::MeshAssetManager::new(memory_allocator.clone());
+        let mesh_manager = mesh::MeshAssetManager::new(
+            memory_allocator.clone(),
+            command_buffer_allocator.clone(),
+            graphics_queue.clone(),
+        );
 
         // Initialize texture manager
         let mut texture_manager = texture::TextureManager::new(
