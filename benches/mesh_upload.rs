@@ -23,7 +23,8 @@ fn create_test_allocator() -> Arc<StandardMemoryAllocator> {
 
     let physical_device = instance
         .enumerate_physical_devices()
-        .expect("Failed to enumerate devices").find(|p| p.properties().device_type == PhysicalDeviceType::DiscreteGpu)
+        .expect("Failed to enumerate devices")
+        .find(|p| p.properties().device_type == PhysicalDeviceType::DiscreteGpu)
         .or_else(|| {
             instance
                 .enumerate_physical_devices()

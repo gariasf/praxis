@@ -75,7 +75,6 @@ struct App {
     camera_entity: Option<praxis_ecs::Entity>,
 }
 
-
 impl App {
     async fn setup_scene(
         window: Arc<Window>,

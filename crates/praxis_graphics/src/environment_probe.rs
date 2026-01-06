@@ -822,10 +822,7 @@ mod tests {
 
         for i in 0..6 {
             for j in (i + 1)..6 {
-                assert_ne!(
-                    views[i], views[j],
-                    "Face {i} and {j} should be different"
-                );
+                assert_ne!(views[i], views[j], "Face {i} and {j} should be different");
             }
         }
     }

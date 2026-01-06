@@ -30,9 +30,7 @@ fn generate_obj_mesh(vertex_count: usize) -> String {
         let idx1 = i + 1;
         let idx2 = i + 2;
         let idx3 = i + 3;
-        obj_content.push_str(&format!(
-            "f {idx1}//{idx1} {idx2}//{idx2} {idx3}//{idx3}\n"
-        ));
+        obj_content.push_str(&format!("f {idx1}//{idx1} {idx2}//{idx2} {idx3}//{idx3}\n"));
     }
 
     obj_content

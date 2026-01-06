@@ -35,10 +35,7 @@ fn test_scene_serialization_roundtrip() {
     assert_eq!(loaded_scene.name, scene.name);
     assert_eq!(loaded_scene.entity_count(), scene.entity_count());
     assert_eq!(loaded_scene.entities[0].name, scene.entities[0].name);
-    assert_eq!(
-        loaded_scene.entities[0].mesh.as_deref(),
-        Some("cube")
-    );
+    assert_eq!(loaded_scene.entities[0].mesh.as_deref(), Some("cube"));
 }
 
 #[test]

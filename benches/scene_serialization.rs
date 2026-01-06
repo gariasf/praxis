@@ -269,12 +269,7 @@ fn bench_scene_metadata_serialization(c: &mut Criterion) {
     scene.metadata.tags = (0..100).map(|i| format!("tag_{i}")).collect();
 
     for i in 0..50 {
-        scene.add_entity(create_simple_entity(
-            &format!("Entity_{i}"),
-            0.0,
-            0.0,
-            0.0,
-        ));
+        scene.add_entity(create_simple_entity(&format!("Entity_{i}"), 0.0, 0.0, 0.0));
     }
 
     let loader = SceneLoader::new();
