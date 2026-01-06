@@ -30,13 +30,13 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Cargo Check
-        run: cargo check --all
+        run: cargo check --all --features headless
 
       - name: Cargo Format Check
         run: cargo fmt --all -- --check
 
       - name: Cargo Clippy
-        run: cargo clippy --all -- -D warnings
+        run: cargo clippy --all --features headless -- -D warnings
 
   test:
     name: Run Tests
@@ -56,4 +56,24 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run Tests
-        run: cargo test --workspace
+        run: cargo test --workspace --features headless
+
+  build_examples:
+    name: Build Examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libudev-dev pkg-config
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build Examples
+        run: cargo build --examples --features headless
