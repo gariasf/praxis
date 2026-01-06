@@ -10,6 +10,7 @@ Educational explanations of the theory and design behind Praxis systems.
 
 ### Rendering
 - [Vulkan Rendering](vulkan-rendering.md) - Graphics pipeline fundamentals
+- [Rendering Pipeline](rendering-pipeline.md) - Detailed rendering architecture
 - [PBR Materials](pbr-materials.md) - Physically-based rendering theory
 - [Lighting](lighting.md) - Directional and point light systems
 

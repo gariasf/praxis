@@ -2,6 +2,12 @@
 
 Practical guide to loading and managing meshes, textures, and other assets in Praxis using OBJ and GLTF formats.
 
+## In This Section
+
+- **[GLTF Loading](gltf.md)** - Comprehensive GLTF format support
+- **[OBJ Loading](obj.md)** - Simple OBJ mesh loading
+- **[Procedural Textures](procedural-textures.md)** - Runtime texture generation
+
 ## Quick Start
 
 ### Load an OBJ Mesh

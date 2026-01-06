@@ -39,6 +39,25 @@ Master animation blending techniques:
 
 Explore advanced animation capabilities:
 
+### [Advanced Integration](advanced-integration.md)
+
+Integration with other engine systems:
+
+- Physics-animation integration
+- Scripting-animation integration
+- Complete character controller examples
+
+### Quick References
+
+- **[Quick Start](quick-start.md)** - Get up and running quickly
+- **[Quick Reference](quick-reference.md)** - Common patterns cheat sheet
+
+### [Skeletal Animation](skeletal-animation.md)
+
+Complete skeletal animation system guide:
+
+
+
 - **Inverse Kinematics (IK)**: Procedural limb positioning for adaptive interaction
   - Two-bone IK for arms and legs
   - Chain IK for spines and tails

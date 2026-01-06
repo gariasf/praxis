@@ -4,6 +4,8 @@ Documentation for the Praxis editor system (`praxis_editor` crate).
 
 ## Contents
 
+- **[Editor Overview](editor-overview.md)** - Architecture, panels, and editor components
+
 ### Core Systems
 - [Selection System](selection-system.md) - Multi-entity selection, raycast picking, marquee selection
 - [Undo/Redo](undo-redo.md) - Command history and state management

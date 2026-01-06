@@ -6,28 +6,52 @@ Welcome to the Praxis game engine documentation.
 
 - **[Getting Started](getting-started/README.md)** - Installation, setup, and first steps
 - **[Beginners Guide](beginners-guide.md)** - Learn Praxis concepts through hands-on examples
-- **[Learning Paths](learning-paths.md)** - Structured progressions from beginner to advanced ([Overview](LEARNING-PATHS-OVERVIEW.md))
+- **[Learning Paths](learning-paths/)** - Structured progressions from beginner to advanced
 
 ## Documentation Sections
 
 ### [Guides](guides/README.md)
 Task-oriented tutorials for implementing features:
-- [Rendering](guides/rendering.md) - Forward and deferred pipelines
-- [Deferred Rendering](guides/deferred-rendering.md) - Multi-pass rendering with G-buffer
-- [Environment Probes](guides/environment-probes.md) - Image-based lighting and reflections
-- [HDR and Tone Mapping](guides/hdr-and-tonemapping.md) - High dynamic range rendering
-- [Shadows](guides/shadows.md) - Cascaded shadow maps with PCF
-- [Post-Processing](guides/post-processing.md) - Bloom, color grading, effects
-- [Particles](guides/particles.md) - Practical particle effect examples
+
+**Rendering**
+- [Rendering Overview](guides/rendering.md) - Forward and deferred pipelines
+- [Rendering Guides](guides/rendering/) - Comprehensive rendering documentation:
+  - [Forward Rendering](guides/rendering/forward-rendering.md) - Basic forward rendering pipeline
+  - [Deferred Rendering](guides/rendering/deferred-rendering.md) - Multi-pass rendering with G-buffer
+  - [HDR and Tone Mapping](guides/rendering/hdr-tonemapping.md) - High dynamic range rendering
+  - [Shadows](guides/rendering/shadows.md) - Cascaded shadow maps with PCF
+  - [Post-Processing](guides/rendering/post-processing.md) - Bloom, color grading, effects
+  - [Environment Probes](guides/rendering/environment-probes.md) - Image-based lighting and reflections
+  - [Particles](guides/rendering/particles.md) - Particle effect examples
+  - [Advanced Lighting](guides/rendering/advanced-lighting.md) - Light probes and volumetric effects
+  - [Advanced Materials](guides/rendering/advanced-materials.md) - PBR and material techniques
+  - [LOD System](guides/rendering/lod.md) - Level of detail management
+  - [GPU Culling](guides/rendering/gpu-culling.md) - GPU-driven culling techniques
 - [Spatial Optimization](guides/spatial-optimization.md) - Frustum culling, LOD, and occlusion culling
-- [Animation](guides/animation.md) - Quick start guide
-  - [Skeletal Animation](guides/animation/skeletal-animation.md) - Complete skeletal animation system
+
+**Animation**
+- [Animation Overview](guides/animation.md) - Quick start guide
+- [Animation Guides](guides/animation/) - Comprehensive animation documentation:
   - [Skeletal Basics](guides/animation/skeletal-basics.md) - Core architecture and fundamentals
+  - [Skeletal Animation](guides/animation/skeletal-animation.md) - Complete skeletal animation system
   - [Blending](guides/animation/blending.md) - Cross-fades, blend trees, and layered animation
   - [Advanced Features](guides/animation/advanced-features.md) - IK, retargeting, root motion
+  - [Advanced Integration](guides/animation/advanced-integration.md) - Physics and scripting integration
+
+**Assets**
+- [Assets Guides](guides/assets/) - Asset pipeline documentation:
+  - [Assets Overview](guides/assets/README.md) - Asset loading and management
+  - [GLTF Loading](guides/assets/gltf.md) - GLTF format support
+  - [OBJ Loading](guides/assets/obj.md) - OBJ format support
+  - [Procedural Textures](guides/assets/procedural-textures.md) - Runtime texture generation
+
+**Systems**
 - [Audio](guides/audio.md) - Spatial audio with Kira
+- [Physics](guides/physics.md) - Rigid body dynamics with Rapier3D
 - [Input](guides/input.md) - Keyboard, mouse, and gamepad handling
-- [Profiling](profiling.md) - Performance analysis and optimization
+- [Scripting](guides/scripting.md) - Lua scripting integration
+- [Terrain](guides/terrain.md) - Terrain generation and rendering
+- [Networking](guides/systems/networking.md) - Multiplayer client-server architecture
 
 For comprehensive particle system documentation, see [crates/praxis_graphics/PARTICLES.md](../crates/praxis_graphics/PARTICLES.md).
 
@@ -36,6 +60,7 @@ Educational explanations of engine design:
 - [Architecture](architecture.md) - Overall engine design and crate organization
 - [ECS Architecture](concepts/ecs-architecture.md) - Entity-Component-System patterns
 - [Vulkan Rendering](concepts/vulkan-rendering.md) - Graphics pipeline fundamentals
+- [Rendering Pipeline](concepts/rendering-pipeline.md) - Detailed rendering explanation
 - [Transform Hierarchy](concepts/transform-hierarchy.md) - Scene graphs and spatial relationships
 - [PBR Materials](concepts/pbr-materials.md) - Physically-based rendering theory
 - [Lighting](concepts/lighting.md) - Directional and point light systems
@@ -46,10 +71,17 @@ Educational explanations of engine design:
 
 ### [Reference](reference/README.md)
 API documentation and specifications:
-- [Input System](input-system.md) - Keyboard, mouse, gamepad handling
-- [Camera System](camera-system.md) - Camera types and controllers
-- [Mesh System](mesh-system.md) - Geometry loading and management
-- [Testing](testing.md) - Test organization and running tests
+- [Components](reference/components.md) - ECS component reference
+- [Crates](reference/crates.md) - Workspace crate overview
+- [Shaders](reference/shaders.md) - Shader reference
+- [Configuration](reference/configuration.md) - Engine configuration
+- [Scene Format](reference/scene-format.md) - Scene file specification
+- [Animation API](reference/animation-api.md) - Animation system reference
+- [Audio API](reference/audio-api.md) - Audio system reference
+- [Camera API](reference/camera-api.md) - Camera system reference
+- [GUI API](reference/gui-api.md) - GUI system reference
+- [Input API](reference/input-api.md) - Input system reference
+- [Mesh API](reference/mesh-api.md) - Mesh system reference
 
 ### [Learning Paths](learning-paths/)
 Structured progressions for mastering Praxis subsystems:
@@ -61,18 +93,25 @@ Each path provides:
 - Clear prerequisites and learning outcomes
 - Beginner → Intermediate → Advanced progression
 - Hands-on exercises and examples
-- Time estimates and checkpoints
 - Cross-references to related systems
 
 ### [Editor](editor/README.md)
 Editor tools and workflows:
+- [Editor Overview](editor/editor-overview.md) - Panels and editor architecture
 - [Selection System](editor/selection-system.md) - Multi-entity selection and raycast picking
 - [Asset Browser](editor/asset-browser.md) - Asset management with drag-and-drop
 - [Editor Camera](editor/editor-camera.md) - Orbit camera controls and focus
 - [Menu Bar](editor/menu-bar.md) - Menu system with keyboard shortcuts
 - [Hierarchy Panel](editor/hierarchy-panel.md) - Entity tree with drag-and-drop reparenting
+- [Gizmos](editor/gizmos.md) - Transform manipulation gizmos
+- [Inspector](editor/inspector.md) - Component property editing
 - [Undo/Redo](editor/undo-redo.md) - Command history system
-- [Editor Overview](editor-system.md) - Panels and editor architecture
+
+### [Audit](audit/)
+Technical audits and analysis for each crate - useful for understanding implementation details and improvement opportunities.
+
+### [Internals](internals/)
+Implementation documentation for engine developers and contributors.
 
 ## Examples
 
@@ -87,7 +126,7 @@ cargo run --example multi_mesh_demo           # Multiple mesh rendering
 cargo run --example skeletal_animation_demo   # Skeletal animation
 cargo run --example animation_demo            # Basic animation
 cargo run --example animation_blending_demo   # Animation blending
-cargo run --example gltf_animation_loader_demo # GLTF animation loading
+cargo run --example animation_advanced_demo   # IK, retargeting, root motion
 
 # Audio
 cargo run --example audio_demo                # Spatial audio
@@ -108,7 +147,6 @@ cargo run --example advanced_lighting_demo    # Advanced lighting
 
 # Systems
 cargo run --example gui_demo                  # GUI system
-cargo run --example console_demo              # Debug console
 cargo run --example material_demo             # Material system
 cargo run --example terrain_demo              # Terrain rendering
 cargo run --example scripting_demo            # Lua scripting
@@ -118,21 +156,11 @@ cargo run --example networking_demo           # Networking features
 # Performance & Tools
 cargo run --example profiling_demo            # Performance profiling
 cargo run --example profiling_advanced_demo   # Advanced profiling
-
-# Input & Camera
-cargo run --example input_integration         # Input handling
-cargo run --example fps_camera_controller     # FPS camera
-
-# Low-level
-cargo run --example ecs_integration           # ECS integration
-cargo run --example transform_propagation_demo # Transform hierarchy
-cargo run --example command_system_demo       # Command system
-cargo run --example command_serialization_demo # Command serialization
-cargo run --example scene_serialization_demo  # Scene serialization
-cargo run --example menu_bar_demo             # Menu bar UI
 ```
 
 ## Development
 
-- [Strategic Analysis](strategic-analysis-2026.md) - Project roadmap and priorities
+- [Testing](testing.md) - Test organization and running tests
 - [Benchmarking](benchmarking.md) - Performance testing
+- [Profiling](profiling.md) - Performance analysis and optimization
+- [Logging](logging.md) - Logging configuration
