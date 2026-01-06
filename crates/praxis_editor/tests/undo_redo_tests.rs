@@ -366,7 +366,6 @@ fn test_composite_command_execute() {
 }
 
 #[test]
-#[ignore = "Known issue: composite command undo fails after execute"]
 fn test_composite_command_undo() {
     let mut world = World::new();
     let mut composite = CompositeCommand::new("Create and Delete".to_string());

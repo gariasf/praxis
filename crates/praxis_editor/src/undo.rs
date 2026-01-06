@@ -1355,17 +1355,37 @@ impl CompositeCommand {
 impl EditorCommand for CompositeCommand {
     fn execute(&mut self, world: &mut World) -> Result<()> {
         for command in &mut self.commands {
-            let mut cmd = command.clone().to_trait_object();
-            cmd.execute(world)?;
+            // Execute directly on the SerializableCommand variant to preserve state
+            match command {
+                SerializableCommand::TransformEdit(cmd) => cmd.execute(world)?,
+                SerializableCommand::CreateEntity(cmd) => cmd.execute(world)?,
+                SerializableCommand::DeleteEntity(cmd) => cmd.execute(world)?,
+                SerializableCommand::AddComponent(cmd) => cmd.execute(world)?,
+                SerializableCommand::RemoveComponent(cmd) => cmd.execute(world)?,
+                SerializableCommand::SetParent(cmd) => cmd.execute(world)?,
+                SerializableCommand::Composite(cmd) => cmd.execute(world)?,
+                SerializableCommand::CopyEntity(cmd) => cmd.execute(world)?,
+                SerializableCommand::PasteEntity(cmd) => cmd.execute(world)?,
+            }
         }
         self.executed = true;
         Ok(())
     }
 
     fn undo(&mut self, world: &mut World) -> Result<()> {
+        // Undo commands in reverse order
         for command in self.commands.iter_mut().rev() {
-            let mut cmd = command.clone().to_trait_object();
-            cmd.undo(world)?;
+            match command {
+                SerializableCommand::TransformEdit(cmd) => cmd.undo(world)?,
+                SerializableCommand::CreateEntity(cmd) => cmd.undo(world)?,
+                SerializableCommand::DeleteEntity(cmd) => cmd.undo(world)?,
+                SerializableCommand::AddComponent(cmd) => cmd.undo(world)?,
+                SerializableCommand::RemoveComponent(cmd) => cmd.undo(world)?,
+                SerializableCommand::SetParent(cmd) => cmd.undo(world)?,
+                SerializableCommand::Composite(cmd) => cmd.undo(world)?,
+                SerializableCommand::CopyEntity(cmd) => cmd.undo(world)?,
+                SerializableCommand::PasteEntity(cmd) => cmd.undo(world)?,
+            }
         }
         self.executed = false;
         Ok(())
