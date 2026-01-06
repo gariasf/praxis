@@ -1,199 +1,174 @@
 # Praxis GUI
 
-GUI system for the Praxis game engine, providing debug UI, entity inspection, and transform gizmos using egui.
+GUI system for the Praxis engine using egui.
 
 ## Features
 
-- **FPS Counter**: Real-time performance monitoring overlay
-- **Performance Metrics**: Detailed frame timing and statistics
-- **Entity Inspector**: Browse and edit ECS component data at runtime
-- **Transform Gizmos**: Interactive scene editing tools for translation, rotation, and scaling
-- **ImGui Integration**: Immediate mode GUI via egui
-- **Vulkan Rendering**: Direct integration with Vulkan rendering pipeline
+- **Debug UI**: Performance metrics, frame timing, and system information
+- **Entity Inspector**: View and edit entity components
+- **Hierarchy Panel**: Scene graph visualization and manipulation
+- **Inspector Panel**: Component property editing
+- **Transform Gizmos**: Interactive 3D manipulation tools
+- **Console Panel**: In-game console with command history and Lua REPL
 
-## Integration
+## Console Panel
 
-The GUI system integrates with the engine through `GuiState`, which manages all GUI components:
+The `ConsolePanel` provides a comprehensive in-game console with the following features:
+
+### Features
+
+- **Command History**: Navigate previous commands with Up/Down arrow keys
+- **Lua REPL Integration**: Execute Lua code directly in the console
+- **Custom Command Registration**: Register debug commands with custom handlers
+- **Autocomplete**: Tab completion for registered commands
+- **Log Filtering**: Filter messages by log level and search text
+- **Auto-scroll**: Automatic scrolling to new messages
+
+### Basic Usage
 
 ```rust
-use praxis_gui::GuiState;
-use praxis_ecs::World;
+use praxis_gui::ConsolePanel;
+use praxis_scripting::{ScriptingContext, ScriptingConfig};
+use std::sync::Arc;
+use parking_lot::RwLock;
 
-// Initialize GUI state
-let mut gui_state = GuiState::new(
-    event_loop,
-    window.clone(),
-    graphics_queue.clone(),
-    swapchain_format,
-);
+// Create the console
+let mut console = ConsolePanel::new();
 
-// Handle events
-gui_state.handle_event(&window, &event);
+// Optional: Set up Lua REPL integration
+let scripting_context = Arc::new(RwLock::new(
+    ScriptingContext::new(ScriptingConfig::default())?
+));
+console.set_lua_context(scripting_context);
 
-// Render GUI
-gui_state.render(
-    &window,
-    &mut world,
-    swapchain_image_view.clone(),
-    render_pass.clone(),
-)?;
+// Log messages
+console.log_info("Console initialized");
+console.log_warning("This is a warning");
+console.log_error("This is an error");
+
+// Render the console
+console.render(&egui_ctx);
 ```
 
-## Components
+### Registering Custom Commands
+
+```rust
+use praxis_gui::{ConsolePanel, CommandRegistry};
+
+let console = ConsolePanel::new();
+let registry = console.command_registry();
+let mut registry = registry.write();
+
+// Register a simple command
+registry.register(
+    "hello",
+    "Prints a greeting",
+    "hello [name]",
+    |args| {
+        let name = args.get(0).unwrap_or(&"World");
+        Ok(format!("Hello, {}!", name))
+    },
+);
+
+// Register a command with error handling
+registry.register(
+    "divide",
+    "Divides two numbers",
+    "divide <a> <b>",
+    |args| {
+        if args.len() != 2 {
+            return Err("Usage: divide <a> <b>".to_string());
+        }
+        
+        let a: f32 = args[0].parse()
+            .map_err(|_| "Invalid number for a")?;
+        let b: f32 = args[1].parse()
+            .map_err(|_| "Invalid number for b")?;
+        
+        if b == 0.0 {
+            return Err("Cannot divide by zero".to_string());
+        }
+        
+        Ok(format!("{} / {} = {}", a, b, a / b))
+    },
+);
+```
+
+### Console Controls
+
+- **~ (Tilde) or F1**: Toggle console visibility
+- **Up/Down Arrow**: Navigate command history
+- **Tab**: Cycle through autocomplete suggestions
+- **Enter**: Execute command or Lua code
+- **Escape**: Close autocomplete suggestions
+
+### Log Levels
+
+The console supports five log levels:
+
+- `Info`: General informational messages (light gray)
+- `Warning`: Warning messages (yellow)
+- `Error`: Error messages (red)
+- `Success`: Success/completion messages (green)
+- `Debug`: Debug messages (light blue)
+
+### Lua REPL
+
+When a Lua scripting context is attached, the console can execute Lua code:
+
+```lua
+-- Simple expressions
+> 2 + 2
+4
+
+-- Function calls
+> math.sqrt(16)
+4.0
+
+-- Print statements
+> print("Hello from Lua")
+Hello from Lua
+
+-- Multiple return values
+> return 1, 2, 3
+1, 2, 3
+```
+
+### Example
+
+See `examples/console_demo.rs` for a complete example demonstrating:
+- Command registration
+- Lua REPL integration
+- Console toggling
+- Log filtering
+- Command history
+
+Run the example:
+```bash
+cargo run --example console_demo
+```
+
+## Other Components
 
 ### Debug UI
 
-Displays FPS counter and performance metrics:
-
-```rust
-// Toggle visibility
-gui_state.debug_ui.toggle();
-
-// Configure what to show
-gui_state.debug_ui.show_fps = true;
-gui_state.debug_ui.show_performance = true;
-```
+Displays performance metrics and frame timing information.
 
 ### Entity Inspector
 
-Browse and edit entity components:
+Browse and edit entity components in the ECS world.
 
-```rust
-// Select an entity
-gui_state.entity_inspector.select_entity(entity);
+### Hierarchy Panel
 
-// Toggle visibility
-gui_state.entity_inspector.toggle();
-```
-
-Supports editing:
-- Transform (translation, rotation, scale)
-- Name
-- Camera settings
-- Light properties
-- Hierarchy information
+Visualize and manipulate the scene graph with drag-and-drop reparenting.
 
 ### Transform Gizmos
 
-Interactive transform tools for scene editing:
-
-```rust
-// Add gizmo to entity
-gui_state.transform_gizmos.add_gizmo(entity);
-
-// Set mode
-gui_state.transform_gizmos.set_mode(GizmoMode::Translate);
-gui_state.transform_gizmos.set_mode(GizmoMode::Rotate);
-gui_state.transform_gizmos.set_mode(GizmoMode::Scale);
-
-// Cycle through modes
-gui_state.transform_gizmos.cycle_mode();
-
-// Apply transformations
-gui_state.transform_gizmos.apply_translation(&mut world, entity, delta);
-gui_state.transform_gizmos.apply_rotation(&mut world, entity, quat);
-gui_state.transform_gizmos.apply_scale(&mut world, entity, scale);
-```
-
-## Keyboard Shortcuts
-
-- `F1`: Toggle debug UI
-- `F2`: Toggle entity inspector
-- `F3`: Toggle transform gizmos
-- `T`: Switch to translate mode
-- `R`: Switch to rotate mode
-- `S`: Switch to scale mode
-
-## Usage Examples
-
-### Debug Overlay
-
-```rust
-use praxis_gui::DebugUI;
-
-let mut debug_ui = DebugUI::new();
-debug_ui.show_fps = true;
-debug_ui.show_performance = true;
-
-// In render loop
-debug_ui.update(delta_time, frame_time_ms);
-debug_ui.render(&egui_context);
-```
-
-### Entity Inspection
-
-```rust
-use praxis_gui::EntityInspector;
-use praxis_ecs::World;
-
-let mut inspector = EntityInspector::new();
-inspector.select_entity(player_entity);
-
-// In GUI render
-inspector.render(&egui_context, &mut world);
-```
-
-### Custom GUI Panels
-
-```rust
-use egui::Context;
-
-fn render_custom_panel(ctx: &Context) {
-    egui::Window::new("Settings")
-        .show(ctx, |ui| {
-            ui.label("Game Settings");
-            ui.separator();
-            
-            ui.checkbox(&mut settings.vsync, "VSync");
-            ui.checkbox(&mut settings.fullscreen, "Fullscreen");
-            
-            ui.add(egui::Slider::new(&mut settings.volume, 0.0..=1.0)
-                .text("Volume"));
-        });
-}
-```
-
-## Requirements
-
-- `egui` 0.29
-- `egui-winit` 0.29
-- `egui_vulkano` 0.6
-- Vulkan-compatible graphics device
-
-## Performance
-
-The GUI system is designed to have minimal performance impact:
-- Immediate mode rendering (egui)
-- Efficient Vulkan integration
-- Minimal draw calls
-- Optional visibility controls for all components
-
-## Examples
-
-Run the GUI demo:
-
-```bash
-cargo run --example gui_demo
-```
-
-This demonstrates:
-- Debug UI with FPS counter
-- Entity inspector with component editing
-- Transform gizmos
-- Custom GUI panels
-- Keyboard shortcuts
+Interactive 3D gizmos for translating, rotating, and scaling entities.
 
 ## Dependencies
 
-- `egui` 0.29: Immediate mode GUI framework
-- `egui-winit` 0.29: winit integration for egui
-- `egui_vulkano` 0.6: Vulkan rendering backend for egui
-- `praxis_ecs`: ECS integration
-- `praxis_math`: Math types
-- `praxis_utils`: Error handling
-
-## See Also
-
-- [Editor System](../praxis_editor/README.md)
-- [GUI Demo](../../examples/gui_demo.rs)
-- [egui Documentation](https://docs.rs/egui)
+- `egui`: Immediate mode GUI framework
+- `praxis_ecs`: Entity component system
+- `praxis_scripting`: Lua scripting integration (optional for console)
+- `parking_lot`: Efficient synchronization primitives

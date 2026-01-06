@@ -46,8 +46,10 @@ use std::any::TypeId;
 use std::collections::HashMap;
 
 type InsertComponentFn = Box<dyn FnOnce(&mut bevy_ecs::world::EntityWorldMut)>;
-type SerializeFn = Box<dyn Fn(&BevyWorld, Entity) -> Result<Option<(String, String)>> + Send + Sync>;
-type DeserializeFn = Box<dyn Fn(&str, Entity, &DeserializeContext) -> Result<InsertComponentFn> + Send + Sync>;
+type SerializeFn =
+    Box<dyn Fn(&BevyWorld, Entity) -> Result<Option<(String, String)>> + Send + Sync>;
+type DeserializeFn =
+    Box<dyn Fn(&str, Entity, &DeserializeContext) -> Result<InsertComponentFn> + Send + Sync>;
 type EntityCallbacks = Vec<(Entity, Vec<InsertComponentFn>)>;
 
 /// Trait for components that can be serialized.
@@ -470,8 +472,7 @@ impl Default for ComponentRegistry {
 mod impls {
     use super::*;
     use crate::{
-        Children, GlobalTransform, MaterialHandle, MeshHandle, Name, Parent, Transform,
-        Visibility,
+        Children, GlobalTransform, MaterialHandle, MeshHandle, Name, Parent, Transform, Visibility,
     };
 
     impl SerializableComponent for Name {
@@ -577,14 +578,12 @@ mod impls {
             Self: Sized + 'static,
         {
             let serializable: SerializableParent = ron::from_str(data)?;
-            let parent_entity = context
-                .get_entity(serializable.entity_id)
-                .ok_or_else(|| {
-                    praxis_utils::eyre::eyre!(
-                        "Parent entity {} not found in deserialization context",
-                        serializable.entity_id
-                    )
-                })?;
+            let parent_entity = context.get_entity(serializable.entity_id).ok_or_else(|| {
+                praxis_utils::eyre::eyre!(
+                    "Parent entity {} not found in deserialization context",
+                    serializable.entity_id
+                )
+            })?;
 
             Ok(Box::new(move |entity_mut| {
                 entity_mut.insert(Parent(parent_entity));
@@ -822,7 +821,9 @@ mod tests {
         assert!(ron_string.contains("entities"));
 
         let mut new_world = World::new();
-        registry.deserialize_world(&ron_string, &mut new_world).unwrap();
+        registry
+            .deserialize_world(&ron_string, &mut new_world)
+            .unwrap();
 
         let mut name_query = new_world.inner_mut().query::<&Name>();
         let names: Vec<String> = name_query
@@ -865,7 +866,9 @@ mod tests {
         let ron_string = registry.serialize_world(&world).unwrap();
 
         let mut new_world = World::new();
-        registry.deserialize_world(&ron_string, &mut new_world).unwrap();
+        registry
+            .deserialize_world(&ron_string, &mut new_world)
+            .unwrap();
 
         let mut parent_query = new_world.inner_mut().query::<(&Name, &Children)>();
         let parents: Vec<_> = parent_query.iter(new_world.inner()).collect();
@@ -915,11 +918,7 @@ mod tests {
 
         world.spawn((Name::new("Saved"), Transform::default()));
 
-        world.spawn((
-            Name::new("NotSaved"),
-            Transform::default(),
-            NoSave,
-        ));
+        world.spawn((Name::new("NotSaved"), Transform::default(), NoSave));
 
         let mut registry = ComponentRegistry::new();
         registry.register::<Name>();
@@ -928,7 +927,9 @@ mod tests {
         let ron_string = registry.serialize_world(&world).unwrap();
 
         let mut new_world = World::new();
-        registry.deserialize_world(&ron_string, &mut new_world).unwrap();
+        registry
+            .deserialize_world(&ron_string, &mut new_world)
+            .unwrap();
 
         let mut name_query = new_world.inner_mut().query::<&Name>();
         let names: Vec<String> = name_query
@@ -1005,7 +1006,9 @@ mod tests {
         let ron_string = registry.serialize_world(&world).unwrap();
 
         let mut new_world = World::new();
-        registry.deserialize_world(&ron_string, &mut new_world).unwrap();
+        registry
+            .deserialize_world(&ron_string, &mut new_world)
+            .unwrap();
 
         let mut name_query = new_world.inner_mut().query::<&Name>();
         let names: Vec<_> = name_query
@@ -1042,7 +1045,9 @@ mod tests {
         assert!(ron_string.contains("entities"));
 
         let mut new_world = World::new();
-        registry.deserialize_world(&ron_string, &mut new_world).unwrap();
+        registry
+            .deserialize_world(&ron_string, &mut new_world)
+            .unwrap();
 
         assert_eq!(new_world.entity_count(), 0);
     }

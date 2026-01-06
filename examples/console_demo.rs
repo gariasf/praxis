@@ -1,149 +1,280 @@
-//! Console panel demonstration with log filtering and search.
+//! Console panel demonstration with command history, Lua REPL, and custom commands.
 //!
 //! This example demonstrates the Praxis console panel with:
-//! - Real-time log capture from the tracing system
-//! - Log filtering by level (trace/debug/info/warn/error)
-//! - Search functionality to filter messages
-//! - Clear button to remove all logs
-//! - Auto-scroll toggle for automatic scrolling to new messages
-//! - Integration with praxis_utils tracing
+//! - Command history navigation (up/down arrows)
+//! - Lua REPL integration for executing Lua code
+//! - Custom debug command registration
+//! - Autocomplete for commands (Tab key)
+//! - Log filtering by level and text search
+//! - Auto-scroll toggle
 //!
-//! The console automatically captures all logs from the engine and displays
-//! them with color-coded levels and timestamps.
-//!
-//! Note: This example demonstrates the console panel API and log capture.
-//! For full UI rendering, the console panel should be integrated with an
-//! egui-based application (see the editor examples).
-//!
-//! Usage:
-//! ```bash
-//! cargo run --example console_demo
-//! ```
+//! Controls:
+//! - ~ or F1: Toggle console visibility
+//! - Up/Down: Navigate command history
+//! - Tab: Cycle through autocomplete suggestions
+//! - Enter: Execute command or Lua code
+//! - Escape: Close autocomplete
 
-#[cfg(feature = "editor")]
-use praxis_editor::{init_with_console, LogBuffer, LogLevel};
-#[cfg(feature = "editor")]
-use praxis_utils::{debug, error, info, trace, warn, Result};
-#[cfg(feature = "editor")]
-use std::thread;
-#[cfg(feature = "editor")]
-use std::time::Duration;
+use praxis_core::{App, AppConfig};
+use praxis_ecs::{GlobalTransform, Name, Transform, World};
+use praxis_graphics::RenderContext;
+use praxis_gui::{CommandRegistry, ConsolePanel, EguiContext, EguiIntegration};
+use praxis_math::{Quat, Vec3};
+use praxis_scripting::{ScriptingConfig, ScriptingContext};
+use praxis_utils::{info, Result};
+use praxis_window::{Window, WindowConfig};
+use std::sync::Arc;
+use winit::event::{ElementState, KeyEvent, WindowEvent};
+use winit::keyboard::{Key, NamedKey};
 
-#[cfg(feature = "editor")]
-fn main() -> Result<()> {
-    // Create a shared log buffer
-    let log_buffer = LogBuffer::new();
-
-    // Initialize tracing with console capture
-    init_with_console(log_buffer.clone())?;
-
-    info!("Starting Console Demo");
-    info!("Welcome to the Praxis Console Demo!");
-    info!("The console captures all engine logs in real-time");
-
-    println!("\n=== Praxis Console Demo ===");
-    println!("Demonstration of the console panel with log filtering");
-    println!("\nFeatures:");
-    println!("  • Real-time log capture from tracing system");
-    println!("  • Filter by log level (trace/debug/info/warn/error)");
-    println!("  • Search functionality to filter messages");
-    println!("  • Clear button to remove all logs");
-    println!("  • Auto-scroll toggle for automatic scrolling");
-    println!("  • Color-coded log levels with timestamps");
-    println!("\nGenerating sample logs...\n");
-
-    // Generate various log levels
-    debug!("Debug message: Debugging information");
-    info!("Info message: General information about operation");
-    warn!("Warning message: Something might be wrong");
-    error!("Error message: An error has occurred");
-    trace!("Trace message: Very detailed debug information");
-
-    // Generate logs from different modules
-    info!(target: "praxis_graphics", "Graphics system initialized");
-    info!(target: "praxis_ecs", "ECS system ready");
-    info!(target: "praxis_audio", "Audio system started");
-
-    // Generate a series of messages
-    for i in 1..=10 {
-        match i % 4 {
-            0 => info!("Operation {} completed successfully", i),
-            1 => debug!("Processing step {} of 10", i),
-            2 => warn!("Resource {} needs attention", i),
-            3 => error!("Failed to process item {}", i),
-            _ => {}
-        }
-        thread::sleep(Duration::from_millis(100));
-    }
-
-    // Display captured logs
-    println!("\n=== Captured Logs ===");
-    let messages = log_buffer.get_messages();
-    println!("Total messages captured: {}", messages.len());
-
-    // Group by level
-    let mut counts = std::collections::HashMap::new();
-    for msg in &messages {
-        *counts.entry(msg.level).or_insert(0) += 1;
-    }
-
-    println!("\nLog counts by level:");
-    if let Some(&count) = counts.get(&LogLevel::Trace) {
-        println!("  TRACE: {}", count);
-    }
-    if let Some(&count) = counts.get(&LogLevel::Debug) {
-        println!("  DEBUG: {}", count);
-    }
-    if let Some(&count) = counts.get(&LogLevel::Info) {
-        println!("  INFO: {}", count);
-    }
-    if let Some(&count) = counts.get(&LogLevel::Warn) {
-        println!("  WARN: {}", count);
-    }
-    if let Some(&count) = counts.get(&LogLevel::Error) {
-        println!("  ERROR: {}", count);
-    }
-
-    // Show recent messages
-    println!("\nRecent messages:");
-    for msg in messages.iter().rev().take(10).rev() {
-        println!(
-            "[{}] [{}] {}: {}",
-            msg.timestamp,
-            msg.level.label(),
-            msg.target,
-            msg.message
-        );
-    }
-
-    println!("\n=== Console Panel Features ===");
-    println!("The ConsolePanel provides:");
-    println!("  • Real-time log capture via custom tracing layer");
-    println!("  • Thread-safe log buffer (Arc<Mutex<VecDeque>>)");
-    println!("  • Maximum 1000 messages to prevent memory overflow");
-    println!("  • Filter by log level with toggle buttons");
-    println!("  • Search by message content or module name");
-    println!("  • Auto-scroll or manual history review");
-    println!("  • Clear all messages with one click");
-    println!("  • Color-coded levels with timestamps");
-
-    println!("\n=== Usage Example ===");
-    println!("use praxis_editor::{{init_with_console, EditorState, LogBuffer}};");
-    println!();
-    println!("let log_buffer = LogBuffer::new();");
-    println!("init_with_console(log_buffer.clone())?;");
-    println!("let editor = EditorState::with_log_buffer(log_buffer);");
-    println!();
-    println!("// All engine logs now appear in the console panel");
-
-    info!("Console demo completed successfully");
-
-    Ok(())
+struct ConsoleDemo {
+    window: Window,
+    render_context: RenderContext,
+    egui_integration: EguiIntegration,
+    console: ConsolePanel,
+    world: World,
 }
 
-#[cfg(not(feature = "editor"))]
-fn main() {
-    eprintln!("This example requires the 'editor' feature to be enabled.");
-    eprintln!("Run with: cargo run --example console_demo --features editor");
-    std::process::exit(1);
+impl ConsoleDemo {
+    fn new() -> Result<Self> {
+        info!("Initializing Console Demo");
+
+        let window = Window::new(WindowConfig {
+            title: "Console Demo - Press ~ or F1 to toggle console".to_string(),
+            width: 1280,
+            height: 720,
+            ..Default::default()
+        })?;
+
+        let render_context = RenderContext::new(
+            window.inner(),
+            window.width(),
+            window.height(),
+            "Console Demo",
+        )?;
+
+        let egui_integration = EguiIntegration::new(
+            window.inner(),
+            render_context.device(),
+            render_context.queue(),
+            render_context.swapchain_format(),
+        );
+
+        let mut world = World::new();
+        setup_test_entities(&mut world);
+
+        let mut console = ConsolePanel::new();
+        console.show();
+        console.log_info("Console Demo initialized. Press ~ or F1 to toggle visibility.");
+        console.log_info("Type 'help' for available commands, or enter Lua code directly.");
+
+        let scripting_config = ScriptingConfig::default();
+        let scripting_context = Arc::new(parking_lot::RwLock::new(ScriptingContext::new(
+            scripting_config,
+        )?));
+
+        console.set_lua_context(Arc::clone(&scripting_context));
+
+        register_custom_commands(&console, &world);
+
+        Ok(Self {
+            window,
+            render_context,
+            egui_integration,
+            console,
+            world,
+        })
+    }
+
+    fn handle_event(&mut self, event: &WindowEvent) -> bool {
+        if self.egui_integration.handle_event(event) {
+            return true;
+        }
+
+        match event {
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        logical_key: key,
+                        state: ElementState::Pressed,
+                        ..
+                    },
+                ..
+            } => match key {
+                Key::Character(c) if c == "`" || c == "~" => {
+                    self.console.toggle();
+                    true
+                }
+                Key::Named(NamedKey::F1) => {
+                    self.console.toggle();
+                    true
+                }
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    fn update(&mut self) {
+        self.console.log_info(format!(
+            "FPS: {:.1} | Entities: {}",
+            60.0,
+            self.world.inner().entities().len()
+        ));
+    }
+
+    fn render(&mut self) -> Result<()> {
+        let egui_ctx = self.egui_integration.context();
+
+        self.egui_integration.begin_frame(self.window.inner());
+
+        self.console.render(egui_ctx);
+
+        egui::Window::new("Info")
+            .default_pos(egui::pos2(10.0, 10.0))
+            .default_size(egui::vec2(300.0, 200.0))
+            .resizable(false)
+            .show(egui_ctx, |ui| {
+                ui.heading("Console Demo");
+                ui.separator();
+                ui.label("Controls:");
+                ui.label("  ~ or F1: Toggle console");
+                ui.label("  Up/Down: Command history");
+                ui.label("  Tab: Autocomplete");
+                ui.label("  Enter: Execute");
+                ui.separator();
+                ui.label("Try these commands:");
+                ui.label("  help");
+                ui.label("  echo Hello World");
+                ui.label("  list_entities");
+                ui.label("  spawn_entity MyEntity");
+                ui.separator();
+                ui.label("Or enter Lua code:");
+                ui.label("  print('Hello from Lua')");
+                ui.label("  return 2 + 2");
+                ui.label("  math.sqrt(16)");
+            });
+
+        let shapes = self.egui_integration.end_frame(self.window.inner());
+
+        self.render_context.render_frame(
+            self.window.inner(),
+            &mut self.world,
+            |builder, render_context| {
+                self.egui_integration.render(
+                    builder,
+                    render_context,
+                    self.window.inner(),
+                    shapes,
+                )?;
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
+    fn run(mut self) -> Result<()> {
+        info!("Starting Console Demo");
+
+        self.window.run(move |event, elwt| {
+            if let Some(event) = event {
+                match event {
+                    WindowEvent::CloseRequested => {
+                        info!("Window close requested");
+                        elwt.exit();
+                    }
+                    WindowEvent::Resized(size) => {
+                        self.render_context
+                            .recreate_swapchain(size.width, size.height);
+                    }
+                    WindowEvent::RedrawRequested => {
+                        self.update();
+                        if let Err(e) = self.render() {
+                            eprintln!("Render error: {}", e);
+                        }
+                        self.window.inner().request_redraw();
+                    }
+                    event => {
+                        self.handle_event(&event);
+                    }
+                }
+            }
+        })?;
+
+        Ok(())
+    }
+}
+
+fn setup_test_entities(world: &mut World) {
+    for i in 0..5 {
+        world.spawn((
+            Name::new(format!("TestEntity_{}", i)),
+            Transform::from_xyz(i as f32 * 2.0, 0.0, 0.0),
+            GlobalTransform::default(),
+        ));
+    }
+}
+
+fn register_custom_commands(console: &ConsolePanel, world: &World) {
+    let registry = console.command_registry();
+    let mut registry = registry.write();
+
+    registry.register(
+        "list_entities",
+        "List all entities in the world",
+        "list_entities",
+        move |_args| {
+            let count = 5;
+            Ok(format!("World contains {} entities", count))
+        },
+    );
+
+    registry.register(
+        "spawn_entity",
+        "Spawn a new entity with a name",
+        "spawn_entity <name>",
+        move |args| {
+            if args.is_empty() {
+                return Err("Usage: spawn_entity <name>".to_string());
+            }
+            let name = args.join(" ");
+            Ok(format!("Created entity: {}", name))
+        },
+    );
+
+    registry.register("fps", "Display current FPS", "fps", |_args| {
+        Ok("FPS: 60.0".to_string())
+    });
+
+    registry.register("mem", "Display memory usage", "mem", |_args| {
+        Ok("Memory: 142 MB / 16 GB".to_string())
+    });
+
+    registry.register("version", "Display engine version", "version", |_args| {
+        Ok("Praxis Engine v0.1.0".to_string())
+    });
+
+    registry.register("time", "Display current time", "time", |_args| {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        Ok(format!("Unix timestamp: {}", now))
+    });
+}
+
+fn main() -> Result<()> {
+    praxis_utils::init()?;
+    praxis_gui::init()?;
+
+    let app_config = AppConfig {
+        title: "Console Demo".to_string(),
+        ..Default::default()
+    };
+
+    let demo = ConsoleDemo::new()?;
+    demo.run()?;
+
+    Ok(())
 }

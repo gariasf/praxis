@@ -10,8 +10,15 @@ praxis_math = { path = "../praxis_math" }
 praxis_utils = { path = "../praxis_utils" }
 praxis_physics = { path = "../praxis_physics" }
 praxis_audio = { path = "../praxis_audio" }
+praxis_scripting = { path = "../praxis_scripting", optional = true }
 egui = "0.29"
 egui-winit = "0.29"
 egui_winit_vulkano = "0.28"
 winit = "0.30.11"
 vulkano = "0.35.1"
+parking_lot = "0.12"
+mlua = { version = "0.9", optional = true }
+
+[features]
+default = []
+scripting = ["praxis_scripting", "mlua"]

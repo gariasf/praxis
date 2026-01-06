@@ -127,18 +127,16 @@ fn create_demo_world() -> World {
         NoSave, // This entity will be excluded from saves
     ));
 
-    println!("Created demo world with {} entities", 
-        world.query::<&Name>().iter(&world).count());
+    println!(
+        "Created demo world with {} entities",
+        world.query::<&Name>().iter(&world).count()
+    );
 
     world
 }
 
 /// Demonstrates basic save functionality
-fn demo_basic_save(
-    save_manager: &mut SaveManager,
-    world: &World,
-    path: &PathBuf,
-) -> Result<()> {
+fn demo_basic_save(save_manager: &mut SaveManager, world: &World, path: &PathBuf) -> Result<()> {
     let metadata = SaveMetadata::new("Demo Save");
 
     save_manager.save_to_file(world, path, metadata)?;
@@ -239,9 +237,11 @@ fn demo_read_metadata(save_manager: &SaveManager, path: &PathBuf) -> Result<()> 
     println!("Save file metadata:");
     println!("  Name: {}", metadata.name);
     println!("  Timestamp: {}", metadata.timestamp);
-    println!("  Playtime: {}s ({:.1} min)", 
+    println!(
+        "  Playtime: {}s ({:.1} min)",
         metadata.playtime_seconds,
-        metadata.playtime_seconds as f64 / 60.0);
+        metadata.playtime_seconds as f64 / 60.0
+    );
 
     if let Some(desc) = &metadata.description {
         println!("  Description: {}", desc);
@@ -307,10 +307,10 @@ fn demo_multiple_slots(
     for (filename, _) in &slots {
         let path = save_dir.join(filename);
         if let Ok(metadata) = save_manager.read_metadata(&path) {
-            println!("  {} - {} ({}s)", 
-                filename, 
-                metadata.name, 
-                metadata.playtime_seconds);
+            println!(
+                "  {} - {} ({}s)",
+                filename, metadata.name, metadata.playtime_seconds
+            );
         }
     }
 

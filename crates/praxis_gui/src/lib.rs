@@ -2,6 +2,7 @@
 //!
 //! This crate provides functionality for creating and managing GUI elements using egui.
 
+mod console_panel;
 mod debug_ui;
 mod egui_integration;
 mod entity_inspector;
@@ -10,6 +11,7 @@ mod gui_state;
 mod hierarchy_panel;
 mod inspector_panel;
 
+pub use console_panel::{CommandRegistry, ConsolePanel, LogEntry, LogLevel};
 pub use debug_ui::DebugUi;
 pub use egui_integration::EguiIntegration;
 pub use entity_inspector::EntityInspector;

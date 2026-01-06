@@ -35,11 +35,9 @@
 //! save_manager.load_from_file(&mut world, Path::new("saves/slot1.ron")).unwrap();
 //! ```
 
-use crate::{
-    definition::{
-        CameraDef, CameraType, DirectionalLightDef, EntityDefinition, PointLightDef,
-        SceneDefinition, SceneMetadata, TransformDef, CURRENT_SCENE_VERSION,
-    },
+use crate::definition::{
+    CameraDef, CameraType, DirectionalLightDef, EntityDefinition, PointLightDef, SceneDefinition,
+    SceneMetadata, TransformDef, CURRENT_SCENE_VERSION,
 };
 use bevy_ecs::entity::Entity;
 use praxis_ecs::{
@@ -359,13 +357,15 @@ impl SaveManager {
             ron::ser::PrettyConfig::default().compact_arrays(true)
         };
 
-        let serialized = ron::ser::to_string_pretty(&save_file, ron_config)
-            .map_err(|e| praxis_utils::Report::msg(format!("Failed to serialize save file: {e}")))?;
+        let serialized = ron::ser::to_string_pretty(&save_file, ron_config).map_err(|e| {
+            praxis_utils::Report::msg(format!("Failed to serialize save file: {e}"))
+        })?;
 
         // Ensure parent directory exists
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| praxis_utils::Report::msg(format!("Failed to create save directory: {e}")))?;
+            fs::create_dir_all(parent).map_err(|e| {
+                praxis_utils::Report::msg(format!("Failed to create save directory: {e}"))
+            })?;
         }
 
         // Write to file
@@ -418,8 +418,9 @@ impl SaveManager {
             .map_err(|e| praxis_utils::Report::msg(format!("Failed to read save file: {e}")))?;
 
         // Deserialize
-        let mut save_file: SaveFile = ron::from_str(&contents)
-            .map_err(|e| praxis_utils::Report::msg(format!("Failed to deserialize save file: {e}")))?;
+        let mut save_file: SaveFile = ron::from_str(&contents).map_err(|e| {
+            praxis_utils::Report::msg(format!("Failed to deserialize save file: {e}"))
+        })?;
 
         // Validate
         save_file.validate()?;
@@ -856,7 +857,10 @@ impl SaveManager {
 
     /// Clears all entities from the world.
     fn clear_world(world: &mut World) {
-        let entities: Vec<Entity> = world.query::<bevy_ecs::entity::Entity>().iter(world).collect();
+        let entities: Vec<Entity> = world
+            .query::<bevy_ecs::entity::Entity>()
+            .iter(world)
+            .collect();
 
         for entity in entities {
             let _ = world.despawn(entity);
@@ -956,7 +960,10 @@ mod tests {
 
         assert_eq!(metadata.game_version, Some("1.0.0".to_string()));
         assert_eq!(metadata.screenshot_path, Some("screenshot.png".to_string()));
-        assert_eq!(metadata.custom_data.get("level"), Some(&"forest".to_string()));
+        assert_eq!(
+            metadata.custom_data.get("level"),
+            Some(&"forest".to_string())
+        );
         assert_eq!(metadata.custom_data.get("chapter"), Some(&"1".to_string()));
     }
 
@@ -1063,7 +1070,7 @@ mod tests {
         manager.load_from_file(&mut new_world, &save_path).unwrap();
 
         // Verify entity exists with correct components
-        let query = new_world.query::<(&Name, &Transform, &MeshHandle)>();
+        let mut query = new_world.query::<(&Name, &Transform, &MeshHandle)>();
         let mut count = 0;
         for (name, transform, mesh) in query.iter(&new_world) {
             assert_eq!(name.0, "TestEntity");

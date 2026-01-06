@@ -44,8 +44,8 @@ use praxis_graphics::{
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::{Mat4, Quat, Vec2, Vec3};
 use praxis_procedural::{
-    BlendMode, ColorRamp, ColorStop, NoiseType, TextureGenerationParams, TextureGraph,
-    TextureNode, TransformParams,
+    BlendMode, ColorRamp, ColorStop, NoiseType, TextureGenerationParams, TextureGraph, TextureNode,
+    TransformParams,
 };
 use praxis_utils::{info, Result};
 use std::sync::Arc;
@@ -143,7 +143,10 @@ impl ProceduralTextureDemo {
             seed: self.current_seed,
         };
 
-        info!("Generating procedural textures with seed {}", self.current_seed);
+        info!(
+            "Generating procedural textures with seed {}",
+            self.current_seed
+        );
 
         // 1. Simple Perlin Noise
         {
@@ -158,7 +161,9 @@ impl ProceduralTextureDemo {
             graph.set_output(noise_id);
 
             let texture = procedural_manager.generate_texture(&graph, params)?;
-            render_context.texture_manager_mut().add_texture("perlin_noise", texture);
+            render_context
+                .texture_manager_mut()
+                .add_texture("perlin_noise", texture);
             self.texture_names.push("perlin_noise".to_string());
             info!("Generated Perlin noise texture");
         }
@@ -176,7 +181,9 @@ impl ProceduralTextureDemo {
             graph.set_output(noise_id);
 
             let texture = procedural_manager.generate_texture(&graph, params)?;
-            render_context.texture_manager_mut().add_texture("simplex_noise", texture);
+            render_context
+                .texture_manager_mut()
+                .add_texture("simplex_noise", texture);
             self.texture_names.push("simplex_noise".to_string());
             info!("Generated Simplex noise texture");
         }
@@ -194,7 +201,9 @@ impl ProceduralTextureDemo {
             graph.set_output(noise_id);
 
             let texture = procedural_manager.generate_texture(&graph, params)?;
-            render_context.texture_manager_mut().add_texture("worley_noise", texture);
+            render_context
+                .texture_manager_mut()
+                .add_texture("worley_noise", texture);
             self.texture_names.push("worley_noise".to_string());
             info!("Generated Worley noise texture");
         }
@@ -243,7 +252,9 @@ impl ProceduralTextureDemo {
             graph.set_output(ramp_id);
 
             let texture = procedural_manager.generate_texture(&graph, params)?;
-            render_context.texture_manager_mut().add_texture("marble", texture);
+            render_context
+                .texture_manager_mut()
+                .add_texture("marble", texture);
             self.texture_names.push("marble".to_string());
             info!("Generated marble texture");
         }
@@ -292,7 +303,9 @@ impl ProceduralTextureDemo {
             graph.set_output(ramp_id);
 
             let texture = procedural_manager.generate_texture(&graph, params)?;
-            render_context.texture_manager_mut().add_texture("wood_grain", texture);
+            render_context
+                .texture_manager_mut()
+                .add_texture("wood_grain", texture);
             self.texture_names.push("wood_grain".to_string());
             info!("Generated wood grain texture");
         }
@@ -332,14 +345,18 @@ impl ProceduralTextureDemo {
             graph.set_output(brightness_id);
 
             let texture = procedural_manager.generate_texture(&graph, params)?;
-            render_context.texture_manager_mut().add_texture("clouds", texture);
+            render_context
+                .texture_manager_mut()
+                .add_texture("clouds", texture);
             self.texture_names.push("clouds".to_string());
             info!("Generated cloud texture");
         }
 
         let stats = procedural_manager.cache_statistics();
-        info!("Cache statistics: hits={}, misses={}, evictions={}", 
-              stats.hits, stats.misses, stats.evictions);
+        info!(
+            "Cache statistics: hits={}, misses={}, evictions={}",
+            stats.hits, stats.misses, stats.evictions
+        );
 
         Ok(())
     }
@@ -378,7 +395,7 @@ impl ProceduralTextureDemo {
                 info!("  Evictions: {}", stats.evictions);
                 info!("  Cached textures: {}", manager.cached_texture_count());
                 info!("  Memory usage: {} bytes", manager.cache_memory_usage());
-                
+
                 manager.clear_cache();
                 manager.reset_cache_statistics();
                 info!("Cache cleared!");
@@ -403,9 +420,8 @@ impl ProceduralTextureDemo {
         let spacing = 2.5;
         for (i, texture_name) in self.texture_names.iter().enumerate() {
             let x = (i as f32 - 2.5) * spacing;
-            let y_offset = ((self.last_frame_time.elapsed().as_secs_f32() + i as f32 * 0.5).sin()
-                * 0.3)
-                .abs();
+            let y_offset =
+                ((self.last_frame_time.elapsed().as_secs_f32() + i as f32 * 0.5).sin() * 0.3).abs();
 
             let model = Mat4::from_scale_rotation_translation(
                 Vec3::ONE,
@@ -479,7 +495,8 @@ impl ApplicationHandler for ProceduralTextureDemo {
                 .expect("Failed to create window"),
         );
 
-        let render_context = RenderContext::new(window.clone()).expect("Failed to create render context");
+        let render_context =
+            RenderContext::new(window.clone()).expect("Failed to create render context");
 
         self.window = Some(window.clone());
         self.render_context = Some(render_context);
@@ -573,7 +590,9 @@ fn main() -> Result<()> {
 
     let mut app = ProceduralTextureDemo::new();
 
-    event_loop.run_app(&mut app).expect("Failed to run event loop");
+    event_loop
+        .run_app(&mut app)
+        .expect("Failed to run event loop");
 
     Ok(())
 }
