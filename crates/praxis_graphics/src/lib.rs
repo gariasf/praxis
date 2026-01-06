@@ -1635,6 +1635,36 @@ impl RenderContext {
         &self.command_buffer_allocator
     }
 
+    /// Gets a reference to the render pass.
+    ///
+    /// Use this for creating additional pipelines or renderers.
+    pub fn render_pass(&self) -> &Arc<RenderPass> {
+        &self.render_pass
+    }
+
+    /// Gets a reference to the swapchain.
+    ///
+    /// Use this for acquiring images and presenting.
+    pub fn swapchain(&self) -> &Arc<Swapchain> {
+        &self.swapchain
+    }
+
+    /// Gets a reference to a framebuffer by index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index is out of bounds.
+    pub fn framebuffer(&self, index: usize) -> &Arc<Framebuffer> {
+        &self.framebuffers[index]
+    }
+
+    /// Gets a reference to the viewport.
+    ///
+    /// Use this for setting viewport state in command buffers.
+    pub fn viewport(&self) -> &Viewport {
+        &self.viewport
+    }
+
     /// Initializes the line renderer for debug visualization and gizmo rendering.
     ///
     /// This must be called before using line rendering features. It creates a line renderer
