@@ -41,6 +41,7 @@
 use bevy_ecs::component::Component;
 use bevy_ecs::system::Resource;
 use praxis_math::{Mat4, Quat, Vec3};
+use serde::{Deserialize, Serialize};
 
 /// A name component for debugging and identification.
 ///
@@ -54,7 +55,7 @@ use praxis_math::{Mat4, Quat, Vec3};
 /// let mut world = World::new();
 /// world.spawn(Name("Player".to_string()));
 /// ```
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Serialize, Deserialize)]
 pub struct Name(pub String);
 
 impl Name {
@@ -105,7 +106,7 @@ impl From<String> for Name {
 ///     scale: Vec3::new(2.0, 2.0, 2.0),
 /// });
 /// ```
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Transform {
     /// The position in world space.
     pub translation: Vec3,
@@ -235,7 +236,7 @@ impl Default for Transform {
 ///     GlobalTransform::default(),
 /// ));
 /// ```
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct GlobalTransform {
     /// The world-space transformation matrix.
     pub matrix: Mat4,
@@ -319,7 +320,7 @@ impl From<Transform> for GlobalTransform {
 ///     Parent(parent),
 /// ));
 /// ```
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Parent(pub bevy_ecs::entity::Entity);
 
 /// Children component containing a list of child entities.
@@ -339,7 +340,7 @@ pub struct Parent(pub bevy_ecs::entity::Entity);
 ///     Children::default(),
 /// ));
 /// ```
-#[derive(Component, Debug, Clone, Default)]
+#[derive(Component, Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Children(pub Vec<bevy_ecs::entity::Entity>);
 
 impl Children {
@@ -399,7 +400,7 @@ impl Children {
 /// // Spawn a hidden entity
 /// world.spawn(Visibility::Hidden);
 /// ```
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Visibility {
     /// The entity is visible and should be rendered.
     Visible,
@@ -486,7 +487,7 @@ pub struct EngineManaged;
 ///     MeshHandle::new("cube"),
 /// ));
 /// ```
-#[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Component, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MeshHandle {
     /// Unique identifier for the mesh.
     pub id: String,
@@ -586,7 +587,7 @@ impl From<String> for TextureHandle {
 ///     MaterialHandle::new("brick"),
 /// ));
 /// ```
-#[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Component, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MaterialHandle {
     /// Unique identifier for the material.
     pub id: String,

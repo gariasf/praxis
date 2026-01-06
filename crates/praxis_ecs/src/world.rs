@@ -525,6 +525,68 @@ impl World {
     pub fn iter_entities(&self) -> impl Iterator<Item = bevy_ecs::world::EntityRef> {
         self.inner.iter_entities()
     }
+
+    /// Serializes the world to a RON string using the provided component registry.
+    ///
+    /// This is a convenience method that wraps `ComponentRegistry::serialize_world`.
+    ///
+    /// # Arguments
+    ///
+    /// * `registry` - The component registry with registered component types
+    ///
+    /// # Returns
+    ///
+    /// A RON-formatted string representing the world state.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use praxis_ecs::{World, ComponentRegistry, Transform};
+    ///
+    /// let mut world = World::new();
+    /// world.spawn(Transform::default());
+    ///
+    /// let mut registry = ComponentRegistry::new();
+    /// registry.register::<Transform>();
+    ///
+    /// let ron_string = world.serialize(&registry).unwrap();
+    /// ```
+    pub fn serialize(&self, registry: &crate::serialization::ComponentRegistry) -> Result<String> {
+        registry.serialize_world(self)
+    }
+
+    /// Deserializes world state from a RON string using the provided component registry.
+    ///
+    /// This is a convenience method that wraps `ComponentRegistry::deserialize_world`.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - RON-formatted string containing the world state
+    /// * `registry` - The component registry with registered component types
+    ///
+    /// # Returns
+    ///
+    /// Ok(()) if deserialization succeeded, Err otherwise.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use praxis_ecs::{World, ComponentRegistry, Transform};
+    ///
+    /// let mut world = World::new();
+    /// let mut registry = ComponentRegistry::new();
+    /// registry.register::<Transform>();
+    ///
+    /// let ron_string = "(entities: [])";
+    /// world.deserialize(ron_string, &registry).unwrap();
+    /// ```
+    pub fn deserialize(
+        &mut self,
+        data: &str,
+        registry: &crate::serialization::ComponentRegistry,
+    ) -> Result<()> {
+        registry.deserialize_world(data, self)
+    }
 }
 
 impl Default for World {

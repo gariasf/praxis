@@ -113,5 +113,11 @@ performance_report.txt
 .luacheckrc
 lua_modules/
 
+# Serialization test outputs
+*.ron
+!assets/**/*.ron
+test_world.ron
+world_snapshot.ron
+
 .claude
 nul

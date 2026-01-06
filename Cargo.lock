@@ -516,6 +516,7 @@ dependencies = [
  "fixedbitset 0.5.7",
  "nonmax",
  "petgraph",
+ "serde",
  "thiserror 1.0.69",
 ]
 
@@ -3560,6 +3561,8 @@ dependencies = [
  "praxis_graphics",
  "praxis_math",
  "praxis_utils",
+ "ron",
+ "serde",
 ]
 
 [[package]]

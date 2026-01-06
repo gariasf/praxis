@@ -258,6 +258,33 @@
 //! }
 //! ```
 //!
+//! # Serialization
+//!
+//! The ECS provides a powerful serialization system that can save and load world state
+//! to and from RON format:
+//!
+//! ```rust,no_run
+//! use praxis_ecs::{World, ComponentRegistry, Transform, Name};
+//!
+//! // Create a world and spawn entities
+//! let mut world = World::new();
+//! world.spawn((
+//!     Name::new("Player"),
+//!     Transform::from_xyz(10.0, 0.0, 5.0),
+//! ));
+//!
+//! // Create a registry and register component types
+//! let mut registry = ComponentRegistry::new();
+//! registry.register_common_types(); // Registers Name, Transform, etc.
+//!
+//! // Serialize the world to RON
+//! let ron_string = world.serialize(&registry).unwrap();
+//!
+//! // Deserialize into a new world
+//! let mut new_world = World::new();
+//! new_world.deserialize(&ron_string, &registry).unwrap();
+//! ```
+//!
 //! # Basic Example
 //!
 //! ```rust,no_run
@@ -280,6 +307,7 @@
 
 mod components;
 pub mod culling;
+pub mod serialization;
 pub mod systems;
 mod world;
 
@@ -290,6 +318,9 @@ pub use components::{
     MaterialPropertiesComponent, Mesh, MeshHandle, Name, NoSave, OrthographicProjection, Parent,
     ParticleEmitter, PerspectiveProjection, PointLight, PointLightInfo, Skybox, TextureHandle,
     Transform, Visibility, Visible,
+};
+pub use serialization::{
+    ComponentRegistry, DeserializeContext, EntityData, SerializableComponent, WorldSnapshot,
 };
 pub use systems::{
     cleanup_removed_parents, frustum_culling_system, gather_lighting_system, propagate_transforms,
