@@ -75,6 +75,30 @@ impl MaterialProperties {
         self.emissive_strength = strength;
         self
     }
+
+    /// Gets the base color tint.
+    #[must_use]
+    pub const fn base_color(&self) -> [f32; 4] {
+        self.base_color
+    }
+
+    /// Gets the metallic factor.
+    #[must_use]
+    pub const fn metallic(&self) -> f32 {
+        self.metallic
+    }
+
+    /// Gets the roughness factor.
+    #[must_use]
+    pub const fn roughness(&self) -> f32 {
+        self.roughness
+    }
+
+    /// Gets the emissive strength.
+    #[must_use]
+    pub const fn emissive_strength(&self) -> f32 {
+        self.emissive_strength
+    }
 }
 
 /// Extended PBR properties for advanced material features.

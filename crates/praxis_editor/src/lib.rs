@@ -277,12 +277,12 @@ pub use toolbar::{
     handle_toolbar_action, render_toolbar, CameraPreset, SnapSettings, ToolbarAction, ToolbarState,
 };
 pub use undo::{
-    AddComponentCommand, CommandHistory, ComponentData, CompositeCommand, CreateEntityCommand,
-    DeleteEntityCommand, EditorCommand, RemoveComponentCommand, SerializableAudioSource,
-    SerializableCollider, SerializableCommand, SerializableEntity, SerializableMass,
-    SerializableMaterialProperties, SerializablePerspectiveProjection, SerializablePhysicsVelocity,
-    SerializableRigidBody, SerializableTransform, SetParentCommand, TransformEditCommand,
-    UndoRedoSystem,
+    AddComponentCommand, CommandHistory, ComponentData, CompositeCommand, CopyEntityCommand,
+    CreateEntityCommand, DeleteEntityCommand, EditorCommand, PasteEntityCommand,
+    RemoveComponentCommand, SerializableAudioSource, SerializableCollider, SerializableCommand,
+    SerializableEntity, SerializableMass, SerializableMaterialProperties,
+    SerializablePerspectiveProjection, SerializablePhysicsVelocity, SerializableRigidBody,
+    SerializableTransform, SetParentCommand, TransformEditCommand, UndoRedoSystem,
 };
 
 use praxis_utils::{info, init_tracing_with_layer, Result};

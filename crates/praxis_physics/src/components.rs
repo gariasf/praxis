@@ -596,6 +596,18 @@ impl Mass {
             angular_inertia,
         }
     }
+
+    /// Gets the mass value.
+    #[must_use]
+    pub const fn mass(&self) -> f32 {
+        self.mass
+    }
+
+    /// Gets the angular inertia value.
+    #[must_use]
+    pub const fn angular_inertia(&self) -> f32 {
+        self.angular_inertia
+    }
 }
 
 impl Default for Mass {

@@ -193,8 +193,9 @@
 //! ```
 
 use crate::undo::{
-    AddComponentCommand, ComponentData, CompositeCommand, CreateEntityCommand, DeleteEntityCommand,
-    EditorCommand, RemoveComponentCommand, SerializableCommand, UndoRedoSystem,
+    AddComponentCommand, ComponentData, CompositeCommand, CopyEntityCommand, CreateEntityCommand,
+    DeleteEntityCommand, EditorCommand, PasteEntityCommand, RemoveComponentCommand,
+    SerializableCommand, UndoRedoSystem,
 };
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
@@ -251,6 +252,8 @@ impl std::error::Error for EntityOperationsError {}
 pub struct EntityOperations {
     /// Optional batch operation state.
     batch_operation: Option<BatchOperation>,
+    /// Clipboard for copy/paste operations.
+    clipboard: Option<CopyEntityCommand>,
 }
 
 /// Batch operation state for grouping multiple commands.
@@ -270,6 +273,7 @@ impl EntityOperations {
     pub fn new() -> Self {
         Self {
             batch_operation: None,
+            clipboard: None,
         }
     }
 
@@ -643,6 +647,149 @@ impl EntityOperations {
     }
 
     // ============================================================================
+    // Copy/Paste Operations
+    // ============================================================================
+
+    /// Copies an entity to the clipboard.
+    ///
+    /// Captures all supported components for later pasting.
+    ///
+    /// # Arguments
+    ///
+    /// * `entity` - The entity to copy
+    ///
+    /// # Errors
+    ///
+    /// Returns error if entity doesn't exist or capture fails.
+    pub fn copy_entity(
+        &mut self,
+        world: &mut World,
+        undo_system: &mut UndoRedoSystem,
+        entity: Entity,
+    ) -> Result<()> {
+        let command = CopyEntityCommand::from_world(entity, world)
+            .map_err(EntityOperationsError::CommandExecutionFailed)?;
+
+        self.clipboard = Some(command.clone());
+
+        self.execute_command(world, undo_system, command)
+    }
+
+    /// Copies multiple entities to the clipboard.
+    ///
+    /// Only the first entity is stored in the clipboard for pasting.
+    ///
+    /// # Arguments
+    ///
+    /// * `entities` - Vector of entities to copy
+    ///
+    /// # Errors
+    ///
+    /// Returns error if any entity doesn't exist or capture fails.
+    pub fn copy_entities(
+        &mut self,
+        world: &mut World,
+        undo_system: &mut UndoRedoSystem,
+        entities: Vec<Entity>,
+    ) -> Result<()> {
+        if entities.is_empty() {
+            return Ok(());
+        }
+
+        if entities.len() == 1 {
+            return self.copy_entity(world, undo_system, entities[0]);
+        }
+
+        let mut composite = CompositeCommand::new(format!("Copy {} Entities", entities.len()));
+
+        for entity in &entities {
+            let copy_cmd = CopyEntityCommand::from_world(*entity, world)
+                .map_err(EntityOperationsError::CommandExecutionFailed)?;
+
+            if self.clipboard.is_none() {
+                self.clipboard = Some(copy_cmd.clone());
+            }
+
+            composite.add_command(SerializableCommand::CopyEntity(copy_cmd));
+        }
+
+        self.execute_command(world, undo_system, composite)
+    }
+
+    /// Pastes the clipboard entity at the same position.
+    ///
+    /// # Returns
+    ///
+    /// The newly created entity ID, or None if clipboard is empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if paste operation fails.
+    pub fn paste_entity(
+        &mut self,
+        world: &mut World,
+        undo_system: &mut UndoRedoSystem,
+    ) -> Result<Option<Entity>> {
+        self.paste_entity_with_offset(world, undo_system, None)
+    }
+
+    /// Pastes the clipboard entity with a position offset.
+    ///
+    /// # Arguments
+    ///
+    /// * `offset` - Position offset for the pasted entity
+    ///
+    /// # Returns
+    ///
+    /// The newly created entity ID, or None if clipboard is empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if paste operation fails.
+    pub fn paste_entity_with_offset(
+        &mut self,
+        world: &mut World,
+        undo_system: &mut UndoRedoSystem,
+        offset: Option<Vec3>,
+    ) -> Result<Option<Entity>> {
+        let clipboard = match &self.clipboard {
+            Some(copy_cmd) => copy_cmd,
+            None => return Ok(None),
+        };
+
+        let mut paste_cmd = PasteEntityCommand::from_copy(clipboard, offset);
+
+        paste_cmd
+            .execute(world)
+            .map_err(|e| EntityOperationsError::CommandExecutionFailed(e.to_string()))?;
+
+        let created_entity = paste_cmd
+            .created_entity
+            .map(|se| se.into())
+            .ok_or_else(|| {
+                EntityOperationsError::CommandExecutionFailed(
+                    "Failed to retrieve pasted entity".to_string(),
+                )
+            })?;
+
+        undo_system
+            .execute_command(world, Box::new(paste_cmd))
+            .map_err(EntityOperationsError::CommandExecutionFailed)?;
+
+        Ok(Some(created_entity))
+    }
+
+    /// Checks if the clipboard has an entity to paste.
+    pub fn has_clipboard(&self) -> bool {
+        self.clipboard.is_some()
+    }
+
+    /// Clears the clipboard.
+    pub fn clear_clipboard(&mut self) {
+        self.clipboard = None;
+    }
+
+    // ============================================================================
     // Component Removal
     // ============================================================================
 
@@ -920,6 +1067,18 @@ impl From<CompositeCommand> for SerializableCommand {
     }
 }
 
+impl From<CopyEntityCommand> for SerializableCommand {
+    fn from(cmd: CopyEntityCommand) -> Self {
+        SerializableCommand::CopyEntity(cmd)
+    }
+}
+
+impl From<PasteEntityCommand> for SerializableCommand {
+    fn from(cmd: PasteEntityCommand) -> Self {
+        SerializableCommand::PasteEntity(cmd)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1171,5 +1330,108 @@ mod tests {
 
         entity_ops.cancel_batch();
         assert!(!entity_ops.is_batch_in_progress());
+    }
+
+    #[test]
+    fn test_copy_entity() {
+        let mut world = World::new();
+        let mut undo_system = UndoRedoSystem::new();
+        let mut entity_ops = EntityOperations::new();
+
+        let original = world
+            .spawn((Transform::from_xyz(10.0, 5.0, 0.0), Name::new("Test Entity")))
+            .id();
+
+        assert!(!entity_ops.has_clipboard());
+
+        entity_ops
+            .copy_entity(&mut world, &mut undo_system, original)
+            .unwrap();
+
+        assert!(entity_ops.has_clipboard());
+    }
+
+    #[test]
+    fn test_paste_entity() {
+        let mut world = World::new();
+        let mut undo_system = UndoRedoSystem::new();
+        let mut entity_ops = EntityOperations::new();
+
+        let original = world
+            .spawn((Transform::from_xyz(10.0, 5.0, 0.0), Name::new("Test Entity")))
+            .id();
+
+        entity_ops
+            .copy_entity(&mut world, &mut undo_system, original)
+            .unwrap();
+
+        let pasted = entity_ops
+            .paste_entity(&mut world, &mut undo_system)
+            .unwrap();
+
+        assert!(pasted.is_some());
+        let pasted = pasted.unwrap();
+        assert_ne!(original, pasted);
+
+        let pasted_transform = world.get::<Transform>(pasted).unwrap();
+        assert_eq!(pasted_transform.translation.x, 10.0);
+
+        let pasted_name = world.get::<Name>(pasted).unwrap();
+        assert_eq!(pasted_name.0, "Test Entity Copy");
+    }
+
+    #[test]
+    fn test_paste_entity_with_offset() {
+        let mut world = World::new();
+        let mut undo_system = UndoRedoSystem::new();
+        let mut entity_ops = EntityOperations::new();
+
+        let original = world.spawn(Transform::from_xyz(10.0, 0.0, 0.0)).id();
+
+        entity_ops
+            .copy_entity(&mut world, &mut undo_system, original)
+            .unwrap();
+
+        let pasted = entity_ops
+            .paste_entity_with_offset(
+                &mut world,
+                &mut undo_system,
+                Some(Vec3::new(5.0, 0.0, 0.0)),
+            )
+            .unwrap()
+            .unwrap();
+
+        let pasted_transform = world.get::<Transform>(pasted).unwrap();
+        assert_eq!(pasted_transform.translation.x, 15.0);
+    }
+
+    #[test]
+    fn test_clipboard_management() {
+        let mut entity_ops = EntityOperations::new();
+
+        assert!(!entity_ops.has_clipboard());
+
+        let mut world = World::new();
+        let mut undo_system = UndoRedoSystem::new();
+        let entity = world.spawn(Transform::default()).id();
+
+        entity_ops
+            .copy_entity(&mut world, &mut undo_system, entity)
+            .unwrap();
+        assert!(entity_ops.has_clipboard());
+
+        entity_ops.clear_clipboard();
+        assert!(!entity_ops.has_clipboard());
+    }
+
+    #[test]
+    fn test_paste_without_clipboard() {
+        let mut world = World::new();
+        let mut undo_system = UndoRedoSystem::new();
+        let mut entity_ops = EntityOperations::new();
+
+        let result = entity_ops.paste_entity(&mut world, &mut undo_system);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
     }
 }

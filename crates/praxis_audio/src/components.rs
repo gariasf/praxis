@@ -197,6 +197,42 @@ impl AudioSource {
     pub const fn is_stopped(&self) -> bool {
         matches!(self.state, AudioState::Stopped)
     }
+
+    /// Gets the audio file path.
+    #[must_use]
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    /// Gets the volume level.
+    #[must_use]
+    pub const fn volume(&self) -> f32 {
+        self.volume
+    }
+
+    /// Returns whether spatial audio is enabled.
+    #[must_use]
+    pub const fn is_spatial(&self) -> bool {
+        self.spatial
+    }
+
+    /// Returns whether the audio is looping.
+    #[must_use]
+    pub const fn is_looping(&self) -> bool {
+        self.looping
+    }
+
+    /// Gets the maximum audible distance.
+    #[must_use]
+    pub const fn max_distance(&self) -> f32 {
+        self.max_distance
+    }
+
+    /// Gets the reference distance for attenuation.
+    #[must_use]
+    pub const fn reference_distance(&self) -> f32 {
+        self.reference_distance
+    }
 }
 
 /// Playback state of an audio source.

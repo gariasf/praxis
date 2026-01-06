@@ -190,6 +190,8 @@ pub enum SerializableCommand {
     RemoveComponent(RemoveComponentCommand),
     SetParent(SetParentCommand),
     Composite(CompositeCommand),
+    CopyEntity(CopyEntityCommand),
+    PasteEntity(PasteEntityCommand),
 }
 
 impl SerializableCommand {
@@ -208,6 +210,8 @@ impl SerializableCommand {
             SerializableCommand::RemoveComponent(cmd) => Box::new(cmd),
             SerializableCommand::SetParent(cmd) => Box::new(cmd),
             SerializableCommand::Composite(cmd) => Box::new(cmd),
+            SerializableCommand::CopyEntity(cmd) => Box::new(cmd),
+            SerializableCommand::PasteEntity(cmd) => Box::new(cmd),
         }
     }
 }
@@ -1389,6 +1393,422 @@ impl EditorCommand for CompositeCommand {
     }
 }
 
+/// Command for copying an entity to clipboard.
+///
+/// This command captures the entity's state including all components and hierarchy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CopyEntityCommand {
+    /// Entity to copy.
+    pub entity: SerializableEntity,
+    /// Captured components from the entity.
+    pub components: Vec<ComponentData>,
+    /// Parent entity if the entity had one.
+    pub parent: Option<SerializableEntity>,
+    /// Children entities if the entity had any.
+    pub children: Vec<SerializableEntity>,
+    /// Whether the command has been executed.
+    #[serde(skip)]
+    executed: bool,
+}
+
+impl CopyEntityCommand {
+    /// Creates a copy command by capturing entity state from the world.
+    pub fn from_world(entity: Entity, world: &World) -> Result<Self> {
+        use praxis_audio::AudioSource;
+        use praxis_ecs::{
+            MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection,
+        };
+        use praxis_physics::{Collider, Mass, PhysicsVelocity, RigidBody};
+
+        let mut components = Vec::new();
+
+        if let Some(entity_ref) = world.get_entity(entity) {
+            // Capture Transform
+            if let Some(transform) = entity_ref.get::<Transform>() {
+                components.push(ComponentData::Transform((*transform).into()));
+            }
+
+            // Capture Name
+            if let Some(name) = entity_ref.get::<Name>() {
+                components.push(ComponentData::Name(name.0.clone()));
+            }
+
+            // Capture Parent
+            let parent = entity_ref.get::<Parent>().map(|p| p.0.into());
+
+            // Capture Children
+            let children = entity_ref
+                .get::<Children>()
+                .map(|c| c.0.iter().map(|e| (*e).into()).collect())
+                .unwrap_or_default();
+
+            // Capture MeshHandle
+            if let Some(mesh_handle) = entity_ref.get::<MeshHandle>() {
+                components.push(ComponentData::MeshHandle(mesh_handle.id().to_string()));
+            }
+
+            // Capture MaterialHandle
+            if let Some(material_handle) = entity_ref.get::<MaterialHandle>() {
+                components.push(ComponentData::MaterialHandle(
+                    material_handle.id().to_string(),
+                ));
+            }
+
+            // Capture MaterialProperties
+            if let Some(material_props) = entity_ref.get::<MaterialPropertiesComponent>() {
+                let props = &material_props.0;
+                components.push(ComponentData::MaterialProperties(
+                    SerializableMaterialProperties {
+                        base_color: props.base_color(),
+                        metallic: props.metallic(),
+                        roughness: props.roughness(),
+                        emissive_strength: props.emissive_strength(),
+                    },
+                ));
+            }
+
+            // Capture RigidBody
+            if let Some(rigid_body) = entity_ref.get::<RigidBody>() {
+                let rb_serializable = match rigid_body {
+                    RigidBody::Dynamic => SerializableRigidBody::Dynamic,
+                    RigidBody::Static => SerializableRigidBody::Static,
+                    RigidBody::Kinematic => SerializableRigidBody::Kinematic,
+                };
+                components.push(ComponentData::RigidBody(rb_serializable));
+            }
+
+            // Capture Collider
+            if let Some(collider) = entity_ref.get::<Collider>() {
+                let serializable = match collider {
+                    Collider::Cuboid { hx, hy, hz } => SerializableCollider::Cuboid {
+                        hx: *hx,
+                        hy: *hy,
+                        hz: *hz,
+                    },
+                    Collider::Sphere { radius } => SerializableCollider::Sphere { radius: *radius },
+                    Collider::CapsuleY {
+                        half_height,
+                        radius,
+                    } => SerializableCollider::CapsuleY {
+                        half_height: *half_height,
+                        radius: *radius,
+                    },
+                    Collider::CapsuleX {
+                        half_height,
+                        radius,
+                    } => SerializableCollider::CapsuleX {
+                        half_height: *half_height,
+                        radius: *radius,
+                    },
+                    Collider::CapsuleZ {
+                        half_height,
+                        radius,
+                    } => SerializableCollider::CapsuleZ {
+                        half_height: *half_height,
+                        radius: *radius,
+                    },
+                    Collider::CylinderY {
+                        half_height,
+                        radius,
+                    } => SerializableCollider::CylinderY {
+                        half_height: *half_height,
+                        radius: *radius,
+                    },
+                };
+                components.push(ComponentData::Collider(serializable));
+            }
+
+            // Capture PhysicsVelocity
+            if let Some(velocity) = entity_ref.get::<PhysicsVelocity>() {
+                components.push(ComponentData::PhysicsVelocity(
+                    SerializablePhysicsVelocity {
+                        linear: velocity.linear.to_array(),
+                        angular: velocity.angular.to_array(),
+                    },
+                ));
+            }
+
+            // Capture Mass
+            if let Some(mass) = entity_ref.get::<Mass>() {
+                components.push(ComponentData::Mass(SerializableMass {
+                    mass: mass.mass(),
+                    angular_inertia: mass.angular_inertia(),
+                }));
+            }
+
+            // Capture AudioSource
+            if let Some(audio_source) = entity_ref.get::<AudioSource>() {
+                components.push(ComponentData::AudioSource(SerializableAudioSource {
+                    path: audio_source.path().to_string(),
+                    volume: audio_source.volume(),
+                    spatial: audio_source.is_spatial(),
+                    looping: audio_source.is_looping(),
+                    max_distance: audio_source.max_distance(),
+                    reference_distance: audio_source.reference_distance(),
+                }));
+            }
+
+            // Capture PerspectiveProjection
+            if let Some(projection) = entity_ref.get::<PerspectiveProjection>() {
+                components.push(ComponentData::PerspectiveProjection(
+                    SerializablePerspectiveProjection {
+                        fov: projection.fov(),
+                        aspect_ratio: projection.aspect_ratio(),
+                        near: projection.near(),
+                        far: projection.far(),
+                    },
+                ));
+            }
+
+            Ok(Self {
+                entity: entity.into(),
+                components,
+                parent,
+                children,
+                executed: false,
+            })
+        } else {
+            Err("Entity not found".to_string())
+        }
+    }
+}
+
+impl EditorCommand for CopyEntityCommand {
+    fn execute(&mut self, _world: &mut World) -> Result<()> {
+        self.executed = true;
+        Ok(())
+    }
+
+    fn undo(&mut self, _world: &mut World) -> Result<()> {
+        self.executed = false;
+        Ok(())
+    }
+
+    fn description(&self) -> String {
+        let entity: Entity = self.entity.into();
+        format!("Copy Entity {entity:?}")
+    }
+
+    fn to_ron(&self) -> Result<String> {
+        let serializable = SerializableCommand::CopyEntity(self.clone());
+        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {e}"))
+    }
+
+    fn type_id(&self) -> &'static str {
+        "CopyEntity"
+    }
+}
+
+/// Command for pasting a copied entity.
+///
+/// This command creates a new entity with the same components and hierarchy as the copied entity.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PasteEntityCommand {
+    /// Components to add to the new entity.
+    pub components: Vec<ComponentData>,
+    /// Parent entity for the pasted entity (if any).
+    pub parent: Option<SerializableEntity>,
+    /// The entity that was created during paste.
+    pub created_entity: Option<SerializableEntity>,
+    /// Position offset to apply to the pasted entity.
+    pub offset: Option<[f32; 3]>,
+    /// Whether the command has been executed.
+    #[serde(skip)]
+    executed: bool,
+}
+
+impl PasteEntityCommand {
+    /// Creates a new paste command from a copy command.
+    pub fn from_copy(copy_cmd: &CopyEntityCommand, offset: Option<Vec3>) -> Self {
+        let mut components = copy_cmd.components.clone();
+
+        // Apply offset to transform if provided
+        if let Some(offset_vec) = offset {
+            if let Some(transform_idx) = components
+                .iter()
+                .position(|c| matches!(c, ComponentData::Transform(_)))
+            {
+                if let ComponentData::Transform(ref mut transform) = components[transform_idx] {
+                    transform.translation[0] += offset_vec.x;
+                    transform.translation[1] += offset_vec.y;
+                    transform.translation[2] += offset_vec.z;
+                }
+            }
+        }
+
+        // Update name to add " Copy" suffix
+        if let Some(name_idx) = components
+            .iter()
+            .position(|c| matches!(c, ComponentData::Name(_)))
+        {
+            if let ComponentData::Name(ref mut name) = components[name_idx] {
+                *name = format!("{name} Copy");
+            }
+        }
+
+        Self {
+            components,
+            parent: copy_cmd.parent,
+            created_entity: None,
+            offset: offset.map(|v| v.to_array()),
+            executed: false,
+        }
+    }
+
+    /// Creates a paste command with specific components and optional parent.
+    pub fn new(
+        components: Vec<ComponentData>,
+        parent: Option<SerializableEntity>,
+        offset: Option<Vec3>,
+    ) -> Self {
+        Self {
+            components,
+            parent,
+            created_entity: None,
+            offset: offset.map(|v| v.to_array()),
+            executed: false,
+        }
+    }
+}
+
+impl EditorCommand for PasteEntityCommand {
+    fn execute(&mut self, world: &mut World) -> Result<()> {
+        use praxis_audio::AudioSource;
+        use praxis_ecs::{
+            MaterialHandle, MaterialPropertiesComponent, MeshHandle, PerspectiveProjection,
+        };
+        use praxis_graphics::MaterialProperties;
+        use praxis_physics::{Collider, Mass, PhysicsVelocity, RigidBody};
+
+        let mut entity_mut = world.spawn_empty();
+        let entity = entity_mut.id();
+
+        for component in &self.components {
+            match component {
+                ComponentData::Transform(t) => {
+                    entity_mut.insert(Transform::from(*t));
+                }
+                ComponentData::Name(name) => {
+                    entity_mut.insert(Name::new(name.clone()));
+                }
+                ComponentData::Parent(parent) => {
+                    let parent_entity: Entity = (*parent).into();
+                    entity_mut.insert(Parent(parent_entity));
+                }
+                ComponentData::MeshHandle(id) => {
+                    entity_mut.insert(MeshHandle::new(id.clone()));
+                }
+                ComponentData::MaterialHandle(id) => {
+                    entity_mut.insert(MaterialHandle::new(id.clone()));
+                }
+                ComponentData::MaterialProperties(props) => {
+                    entity_mut.insert(MaterialPropertiesComponent(
+                        MaterialProperties::new()
+                            .with_base_color(props.base_color)
+                            .with_metallic(props.metallic)
+                            .with_roughness(props.roughness)
+                            .with_emissive_strength(props.emissive_strength),
+                    ));
+                }
+                ComponentData::RigidBody(rb) => {
+                    entity_mut.insert(match rb {
+                        SerializableRigidBody::Dynamic => RigidBody::Dynamic,
+                        SerializableRigidBody::Static => RigidBody::Static,
+                        SerializableRigidBody::Kinematic => RigidBody::Kinematic,
+                    });
+                }
+                ComponentData::Collider(col) => {
+                    entity_mut.insert(match col {
+                        SerializableCollider::Cuboid { hx, hy, hz } => {
+                            Collider::cuboid(*hx, *hy, *hz)
+                        }
+                        SerializableCollider::Sphere { radius } => Collider::sphere(*radius),
+                        SerializableCollider::CapsuleY {
+                            half_height,
+                            radius,
+                        } => Collider::capsule_y(*half_height, *radius),
+                        SerializableCollider::CapsuleX {
+                            half_height,
+                            radius,
+                        } => Collider::capsule_x(*half_height, *radius),
+                        SerializableCollider::CapsuleZ {
+                            half_height,
+                            radius,
+                        } => Collider::capsule_z(*half_height, *radius),
+                        SerializableCollider::CylinderY {
+                            half_height,
+                            radius,
+                        } => Collider::cylinder_y(*half_height, *radius),
+                    });
+                }
+                ComponentData::PhysicsVelocity(vel) => {
+                    entity_mut.insert(PhysicsVelocity::new(
+                        Vec3::from_array(vel.linear),
+                        Vec3::from_array(vel.angular),
+                    ));
+                }
+                ComponentData::Mass(mass) => {
+                    entity_mut.insert(Mass::with_inertia(mass.mass, mass.angular_inertia));
+                }
+                ComponentData::AudioSource(audio) => {
+                    entity_mut.insert(
+                        AudioSource::new(audio.path.clone())
+                            .with_volume(audio.volume)
+                            .with_spatial(audio.spatial)
+                            .with_looping(audio.looping)
+                            .with_max_distance(audio.max_distance)
+                            .with_reference_distance(audio.reference_distance),
+                    );
+                }
+                ComponentData::PerspectiveProjection(cam) => {
+                    entity_mut.insert(PerspectiveProjection::new(
+                        cam.fov,
+                        cam.aspect_ratio,
+                        cam.near,
+                        cam.far,
+                    ));
+                }
+            }
+        }
+
+        if let Some(parent) = self.parent {
+            let parent_entity: Entity = parent.into();
+            entity_mut.insert(Parent(parent_entity));
+        }
+
+        self.created_entity = Some(entity.into());
+        self.executed = true;
+        Ok(())
+    }
+
+    fn undo(&mut self, world: &mut World) -> Result<()> {
+        if let Some(serializable_entity) = self.created_entity {
+            let entity: Entity = serializable_entity.into();
+            if world.despawn(entity) {
+                self.executed = false;
+                Ok(())
+            } else {
+                Err("Failed to despawn entity".to_string())
+            }
+        } else {
+            Err("Entity not found".to_string())
+        }
+    }
+
+    fn description(&self) -> String {
+        "Paste Entity".to_string()
+    }
+
+    fn to_ron(&self) -> Result<String> {
+        let serializable = SerializableCommand::PasteEntity(self.clone());
+        ron::to_string(&serializable).map_err(|e| format!("Failed to serialize command: {e}"))
+    }
+
+    fn type_id(&self) -> &'static str {
+        "PasteEntity"
+    }
+}
+
 /// Command history system managing undo/redo stacks.
 ///
 /// Maintains two stacks:
@@ -1904,5 +2324,58 @@ mod tests {
         // Verify max history size is 100
         assert_eq!(history.max_history_size, MAX_HISTORY_SIZE);
         assert_eq!(MAX_HISTORY_SIZE, 100);
+    }
+
+    #[test]
+    fn test_copy_entity_command() {
+        let mut world = World::new();
+        let entity = world
+            .spawn((Transform::from_xyz(5.0, 10.0, 15.0), Name::new("Test")))
+            .id();
+
+        let command = CopyEntityCommand::from_world(entity, &world);
+        assert!(command.is_ok());
+
+        let command = command.unwrap();
+        assert_eq!(command.components.len(), 2);
+    }
+
+    #[test]
+    fn test_paste_entity_command() {
+        let mut world = World::new();
+        let original = world
+            .spawn((Transform::from_xyz(10.0, 0.0, 0.0), Name::new("Original")))
+            .id();
+
+        let copy_cmd = CopyEntityCommand::from_world(original, &world).unwrap();
+        let mut paste_cmd = PasteEntityCommand::from_copy(&copy_cmd, Some(Vec3::new(5.0, 0.0, 0.0)));
+
+        assert!(paste_cmd.execute(&mut world).is_ok());
+        assert!(paste_cmd.created_entity.is_some());
+
+        let pasted: Entity = paste_cmd.created_entity.unwrap().into();
+        let pasted_transform = world.get::<Transform>(pasted).unwrap();
+        assert_eq!(pasted_transform.translation.x, 15.0);
+
+        let pasted_name = world.get::<Name>(pasted).unwrap();
+        assert_eq!(pasted_name.0, "Original Copy");
+    }
+
+    #[test]
+    fn test_paste_entity_undo() {
+        let mut world = World::new();
+        let original = world
+            .spawn((Transform::default(), Name::new("Original")))
+            .id();
+
+        let copy_cmd = CopyEntityCommand::from_world(original, &world).unwrap();
+        let mut paste_cmd = PasteEntityCommand::from_copy(&copy_cmd, None);
+
+        paste_cmd.execute(&mut world).unwrap();
+        let pasted: Entity = paste_cmd.created_entity.unwrap().into();
+        assert!(world.get_entity(pasted).is_some());
+
+        paste_cmd.undo(&mut world).unwrap();
+        assert!(world.get_entity(pasted).is_none());
     }
 }

@@ -910,6 +910,30 @@ impl PerspectiveProjection {
     pub fn set_aspect_ratio(&mut self, aspect_ratio: f32) {
         self.aspect_ratio = aspect_ratio;
     }
+
+    /// Gets the field of view in radians.
+    #[must_use]
+    pub const fn fov(&self) -> f32 {
+        self.fov
+    }
+
+    /// Gets the aspect ratio.
+    #[must_use]
+    pub const fn aspect_ratio(&self) -> f32 {
+        self.aspect_ratio
+    }
+
+    /// Gets the near clipping plane distance.
+    #[must_use]
+    pub const fn near(&self) -> f32 {
+        self.near
+    }
+
+    /// Gets the far clipping plane distance.
+    #[must_use]
+    pub const fn far(&self) -> f32 {
+        self.far
+    }
 }
 
 impl Default for PerspectiveProjection {
