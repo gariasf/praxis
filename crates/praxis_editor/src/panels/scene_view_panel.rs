@@ -137,7 +137,9 @@ impl SceneViewPanel {
                         world,
                         undo,
                         entity,
-                        crate::undo::ComponentData::MeshHandle(mesh_handle.id.clone()),
+                        crate::undo::ComponentData::MeshHandle {
+                            id: mesh_handle.id.clone(),
+                        },
                     ) {
                         Ok(()) => {
                             info!("Created mesh entity {:?} at {:?}", entity, spawn_position);
@@ -260,8 +262,8 @@ impl SceneViewPanel {
                         world,
                         undo,
                         entity,
-                        crate::undo::ComponentData::AudioSource(
-                            crate::undo::SerializableAudioSource {
+                        crate::undo::ComponentData::AudioSource {
+                            data: crate::undo::SerializableAudioSource {
                                 path: audio_source.path.clone(),
                                 volume: audio_source.volume,
                                 spatial: audio_source.spatial,
@@ -269,7 +271,7 @@ impl SceneViewPanel {
                                 max_distance: audio_source.max_distance,
                                 reference_distance: audio_source.reference_distance,
                             },
-                        ),
+                        },
                     ) {
                         Ok(()) => {
                             info!("Created audio entity {:?} at {:?}", entity, spawn_position);

@@ -348,8 +348,12 @@ impl EntityOperations {
         transform: Transform,
     ) -> Result<Entity> {
         let components = vec![
-            ComponentData::Transform(transform.into()),
-            ComponentData::Name(name.into()),
+            ComponentData::Transform {
+                data: transform.into(),
+            },
+            ComponentData::Name {
+                data: name.into(),
+            },
         ];
         let mut command = CreateEntityCommand::new(components);
         self.execute_create_command(world, undo_system, &mut command)?;
@@ -485,18 +489,22 @@ impl EntityOperations {
         if let Some(transform) = entity_ref.get::<Transform>() {
             let mut new_transform = *transform;
             new_transform.translation += offset;
-            components.push(ComponentData::Transform(new_transform.into()));
+            components.push(ComponentData::Transform {
+                data: new_transform.into(),
+            });
         }
 
         // Capture name with " Copy" suffix
         if let Some(name) = entity_ref.get::<Name>() {
             let new_name = format!("{} Copy", name.0);
-            components.push(ComponentData::Name(new_name));
+            components.push(ComponentData::Name { data: new_name });
         }
 
         // Capture parent if exists
         if let Some(parent) = entity_ref.get::<Parent>() {
-            components.push(ComponentData::Parent(parent.0.into()));
+            components.push(ComponentData::Parent {
+                entity: parent.0.into(),
+            });
         }
 
         // Create the duplicate
@@ -597,7 +605,9 @@ impl EntityOperations {
             world,
             undo_system,
             entity,
-            ComponentData::Transform(transform.into()),
+            ComponentData::Transform {
+                data: transform.into(),
+            },
         )
     }
 
@@ -614,7 +624,14 @@ impl EntityOperations {
         entity: Entity,
         name: impl Into<String>,
     ) -> Result<()> {
-        self.add_component(world, undo_system, entity, ComponentData::Name(name.into()))
+        self.add_component(
+            world,
+            undo_system,
+            entity,
+            ComponentData::Name {
+                data: name.into(),
+            },
+        )
     }
 
     /// Adds a Parent component to an entity.
@@ -642,7 +659,9 @@ impl EntityOperations {
             world,
             undo_system,
             entity,
-            ComponentData::Parent(parent.into()),
+            ComponentData::Parent {
+                entity: parent.into(),
+            },
         )
     }
 
@@ -852,7 +871,9 @@ impl EntityOperations {
             world,
             undo_system,
             entity,
-            ComponentData::Transform(transform.into()),
+            ComponentData::Transform {
+                data: transform.into(),
+            },
         )
     }
 
@@ -883,7 +904,12 @@ impl EntityOperations {
                 component: "Name".to_string(),
             })?;
 
-        self.remove_component(world, undo_system, entity, ComponentData::Name(name))
+        self.remove_component(
+            world,
+            undo_system,
+            entity,
+            ComponentData::Name { data: name },
+        )
     }
 
     /// Removes a Parent component from an entity.
@@ -917,7 +943,9 @@ impl EntityOperations {
             world,
             undo_system,
             entity,
-            ComponentData::Parent(parent.into()),
+            ComponentData::Parent {
+                entity: parent.into(),
+            },
         )
     }
 

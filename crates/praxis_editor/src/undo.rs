@@ -348,19 +348,20 @@ impl EditorCommand for TransformEditCommand {
 
 /// Component data stored for entity creation/deletion.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum ComponentData {
-    Transform(SerializableTransform),
-    Name(String),
-    Parent(SerializableEntity),
-    MeshHandle(String),
-    MaterialHandle(String),
-    MaterialProperties(SerializableMaterialProperties),
-    RigidBody(SerializableRigidBody),
-    Collider(SerializableCollider),
-    PhysicsVelocity(SerializablePhysicsVelocity),
-    Mass(SerializableMass),
-    AudioSource(SerializableAudioSource),
-    PerspectiveProjection(SerializablePerspectiveProjection),
+    Transform { data: SerializableTransform },
+    Name { data: String },
+    Parent { entity: SerializableEntity },
+    MeshHandle { id: String },
+    MaterialHandle { id: String },
+    MaterialProperties { data: SerializableMaterialProperties },
+    RigidBody { data: SerializableRigidBody },
+    Collider { data: SerializableCollider },
+    PhysicsVelocity { data: SerializablePhysicsVelocity },
+    Mass { data: SerializableMass },
+    AudioSource { data: SerializableAudioSource },
+    PerspectiveProjection { data: SerializablePerspectiveProjection },
 }
 
 /// Serializable material properties.
@@ -450,7 +451,9 @@ impl CreateEntityCommand {
 
     /// Creates a command for a simple entity with transform.
     pub fn with_transform(transform: Transform) -> Self {
-        Self::new(vec![ComponentData::Transform(transform.into())])
+        Self::new(vec![ComponentData::Transform {
+            data: transform.into(),
+        }])
     }
 }
 
@@ -468,23 +471,23 @@ impl EditorCommand for CreateEntityCommand {
 
         for component in &self.components {
             match component {
-                ComponentData::Transform(t) => {
+                ComponentData::Transform { data: t } => {
                     entity_mut.insert(Transform::from(*t));
                 }
-                ComponentData::Name(name) => {
+                ComponentData::Name { data: name } => {
                     entity_mut.insert(Name::new(name.clone()));
                 }
-                ComponentData::Parent(parent) => {
+                ComponentData::Parent { entity: parent } => {
                     let parent_entity: Entity = (*parent).into();
                     entity_mut.insert(Parent(parent_entity));
                 }
-                ComponentData::MeshHandle(id) => {
+                ComponentData::MeshHandle { id } => {
                     entity_mut.insert(MeshHandle::new(id.clone()));
                 }
-                ComponentData::MaterialHandle(id) => {
+                ComponentData::MaterialHandle { id } => {
                     entity_mut.insert(MaterialHandle::new(id.clone()));
                 }
-                ComponentData::MaterialProperties(props) => {
+                ComponentData::MaterialProperties { data: props } => {
                     entity_mut.insert(MaterialPropertiesComponent(
                         MaterialProperties::new()
                             .with_base_color(props.base_color)
@@ -493,14 +496,14 @@ impl EditorCommand for CreateEntityCommand {
                             .with_emissive_strength(props.emissive_strength),
                     ));
                 }
-                ComponentData::RigidBody(rb) => {
+                ComponentData::RigidBody { data: rb } => {
                     entity_mut.insert(match rb {
                         SerializableRigidBody::Dynamic => RigidBody::Dynamic,
                         SerializableRigidBody::Static => RigidBody::Static,
                         SerializableRigidBody::Kinematic => RigidBody::Kinematic,
                     });
                 }
-                ComponentData::Collider(col) => {
+                ComponentData::Collider { data: col } => {
                     entity_mut.insert(match col {
                         SerializableCollider::Cuboid { hx, hy, hz } => {
                             Collider::cuboid(*hx, *hy, *hz)
@@ -524,16 +527,16 @@ impl EditorCommand for CreateEntityCommand {
                         } => Collider::cylinder_y(*half_height, *radius),
                     });
                 }
-                ComponentData::PhysicsVelocity(vel) => {
+                ComponentData::PhysicsVelocity { data: vel } => {
                     entity_mut.insert(PhysicsVelocity::new(
                         Vec3::from_array(vel.linear),
                         Vec3::from_array(vel.angular),
                     ));
                 }
-                ComponentData::Mass(mass) => {
+                ComponentData::Mass { data: mass } => {
                     entity_mut.insert(Mass::with_inertia(mass.mass, mass.angular_inertia));
                 }
-                ComponentData::AudioSource(audio) => {
+                ComponentData::AudioSource { data: audio } => {
                     entity_mut.insert(
                         AudioSource::new(audio.path.clone())
                             .with_volume(audio.volume)
@@ -543,7 +546,7 @@ impl EditorCommand for CreateEntityCommand {
                             .with_reference_distance(audio.reference_distance),
                     );
                 }
-                ComponentData::PerspectiveProjection(cam) => {
+                ComponentData::PerspectiveProjection { data: cam } => {
                     entity_mut.insert(PerspectiveProjection::new(
                         cam.fov,
                         cam.aspect_ratio,
@@ -628,10 +631,14 @@ impl DeleteEntityCommand {
 
         if let Some(entity_ref) = world.get_entity(entity) {
             if let Some(transform) = entity_ref.get::<Transform>() {
-                stored_components.push(ComponentData::Transform((*transform).into()));
+                stored_components.push(ComponentData::Transform {
+                    data: (*transform).into(),
+                });
             }
             if let Some(name) = entity_ref.get::<Name>() {
-                stored_components.push(ComponentData::Name(name.0.clone()));
+                stored_components.push(ComponentData::Name {
+                    data: name.0.clone(),
+                });
             }
 
             let parent = entity_ref.get::<Parent>().map(|p| p.0.into());
@@ -676,23 +683,23 @@ impl EditorCommand for DeleteEntityCommand {
 
         for component in &self.stored_components {
             match component {
-                ComponentData::Transform(t) => {
+                ComponentData::Transform { data: t } => {
                     entity_mut.insert(Transform::from(*t));
                 }
-                ComponentData::Name(name) => {
+                ComponentData::Name { data: name } => {
                     entity_mut.insert(Name::new(name.clone()));
                 }
-                ComponentData::Parent(parent) => {
+                ComponentData::Parent { entity: parent } => {
                     let parent_entity: Entity = (*parent).into();
                     entity_mut.insert(Parent(parent_entity));
                 }
-                ComponentData::MeshHandle(id) => {
+                ComponentData::MeshHandle { id } => {
                     entity_mut.insert(MeshHandle::new(id.clone()));
                 }
-                ComponentData::MaterialHandle(id) => {
+                ComponentData::MaterialHandle { id } => {
                     entity_mut.insert(MaterialHandle::new(id.clone()));
                 }
-                ComponentData::MaterialProperties(props) => {
+                ComponentData::MaterialProperties { data: props } => {
                     entity_mut.insert(MaterialPropertiesComponent(
                         MaterialProperties::new()
                             .with_base_color(props.base_color)
@@ -701,14 +708,14 @@ impl EditorCommand for DeleteEntityCommand {
                             .with_emissive_strength(props.emissive_strength),
                     ));
                 }
-                ComponentData::RigidBody(rb) => {
+                ComponentData::RigidBody { data: rb } => {
                     entity_mut.insert(match rb {
                         SerializableRigidBody::Dynamic => RigidBody::Dynamic,
                         SerializableRigidBody::Static => RigidBody::Static,
                         SerializableRigidBody::Kinematic => RigidBody::Kinematic,
                     });
                 }
-                ComponentData::Collider(col) => {
+                ComponentData::Collider { data: col } => {
                     entity_mut.insert(match col {
                         SerializableCollider::Cuboid { hx, hy, hz } => {
                             Collider::cuboid(*hx, *hy, *hz)
@@ -732,16 +739,16 @@ impl EditorCommand for DeleteEntityCommand {
                         } => Collider::cylinder_y(*half_height, *radius),
                     });
                 }
-                ComponentData::PhysicsVelocity(vel) => {
+                ComponentData::PhysicsVelocity { data: vel } => {
                     entity_mut.insert(PhysicsVelocity::new(
                         Vec3::from_array(vel.linear),
                         Vec3::from_array(vel.angular),
                     ));
                 }
-                ComponentData::Mass(mass) => {
+                ComponentData::Mass { data: mass } => {
                     entity_mut.insert(Mass::with_inertia(mass.mass, mass.angular_inertia));
                 }
-                ComponentData::AudioSource(audio) => {
+                ComponentData::AudioSource { data: audio } => {
                     entity_mut.insert(
                         AudioSource::new(audio.path.clone())
                             .with_volume(audio.volume)
@@ -751,7 +758,7 @@ impl EditorCommand for DeleteEntityCommand {
                             .with_reference_distance(audio.reference_distance),
                     );
                 }
-                ComponentData::PerspectiveProjection(cam) => {
+                ComponentData::PerspectiveProjection { data: cam } => {
                     entity_mut.insert(PerspectiveProjection::new(
                         cam.fov,
                         cam.aspect_ratio,
@@ -827,23 +834,23 @@ impl EditorCommand for AddComponentCommand {
         let entity: Entity = self.entity.into();
         if let Some(mut entity_mut) = world.get_entity_mut(entity) {
             match &self.component {
-                ComponentData::Transform(t) => {
+                ComponentData::Transform { data: t } => {
                     entity_mut.insert(Transform::from(*t));
                 }
-                ComponentData::Name(name) => {
+                ComponentData::Name { data: name } => {
                     entity_mut.insert(Name::new(name.clone()));
                 }
-                ComponentData::Parent(parent) => {
+                ComponentData::Parent { entity: parent } => {
                     let parent_entity: Entity = (*parent).into();
                     entity_mut.insert(Parent(parent_entity));
                 }
-                ComponentData::MeshHandle(id) => {
+                ComponentData::MeshHandle { id } => {
                     entity_mut.insert(MeshHandle::new(id.clone()));
                 }
-                ComponentData::MaterialHandle(id) => {
+                ComponentData::MaterialHandle { id } => {
                     entity_mut.insert(MaterialHandle::new(id.clone()));
                 }
-                ComponentData::MaterialProperties(props) => {
+                ComponentData::MaterialProperties { data: props } => {
                     entity_mut.insert(MaterialPropertiesComponent(
                         MaterialProperties::new()
                             .with_base_color(props.base_color)
@@ -852,14 +859,14 @@ impl EditorCommand for AddComponentCommand {
                             .with_emissive_strength(props.emissive_strength),
                     ));
                 }
-                ComponentData::RigidBody(rb) => {
+                ComponentData::RigidBody { data: rb } => {
                     entity_mut.insert(match rb {
                         SerializableRigidBody::Dynamic => RigidBody::Dynamic,
                         SerializableRigidBody::Static => RigidBody::Static,
                         SerializableRigidBody::Kinematic => RigidBody::Kinematic,
                     });
                 }
-                ComponentData::Collider(col) => {
+                ComponentData::Collider { data: col } => {
                     entity_mut.insert(match col {
                         SerializableCollider::Cuboid { hx, hy, hz } => {
                             Collider::cuboid(*hx, *hy, *hz)
@@ -883,16 +890,16 @@ impl EditorCommand for AddComponentCommand {
                         } => Collider::cylinder_y(*half_height, *radius),
                     });
                 }
-                ComponentData::PhysicsVelocity(vel) => {
+                ComponentData::PhysicsVelocity { data: vel } => {
                     entity_mut.insert(PhysicsVelocity::new(
                         Vec3::from_array(vel.linear),
                         Vec3::from_array(vel.angular),
                     ));
                 }
-                ComponentData::Mass(mass) => {
+                ComponentData::Mass { data: mass } => {
                     entity_mut.insert(Mass::with_inertia(mass.mass, mass.angular_inertia));
                 }
-                ComponentData::AudioSource(audio) => {
+                ComponentData::AudioSource { data: audio } => {
                     entity_mut.insert(
                         AudioSource::new(audio.path.clone())
                             .with_volume(audio.volume)
@@ -902,7 +909,7 @@ impl EditorCommand for AddComponentCommand {
                             .with_reference_distance(audio.reference_distance),
                     );
                 }
-                ComponentData::PerspectiveProjection(cam) => {
+                ComponentData::PerspectiveProjection { data: cam } => {
                     entity_mut.insert(PerspectiveProjection::new(
                         cam.fov,
                         cam.aspect_ratio,
@@ -928,40 +935,40 @@ impl EditorCommand for AddComponentCommand {
         let entity: Entity = self.entity.into();
         if let Some(mut entity_mut) = world.get_entity_mut(entity) {
             match &self.component {
-                ComponentData::Transform(_) => {
+                ComponentData::Transform { .. } => {
                     entity_mut.remove::<Transform>();
                 }
-                ComponentData::Name(_) => {
+                ComponentData::Name { .. } => {
                     entity_mut.remove::<Name>();
                 }
-                ComponentData::Parent(_) => {
+                ComponentData::Parent { .. } => {
                     entity_mut.remove::<Parent>();
                 }
-                ComponentData::MeshHandle(_) => {
+                ComponentData::MeshHandle { .. } => {
                     entity_mut.remove::<MeshHandle>();
                 }
-                ComponentData::MaterialHandle(_) => {
+                ComponentData::MaterialHandle { .. } => {
                     entity_mut.remove::<MaterialHandle>();
                 }
-                ComponentData::MaterialProperties(_) => {
+                ComponentData::MaterialProperties { .. } => {
                     entity_mut.remove::<MaterialPropertiesComponent>();
                 }
-                ComponentData::RigidBody(_) => {
+                ComponentData::RigidBody { .. } => {
                     entity_mut.remove::<RigidBody>();
                 }
-                ComponentData::Collider(_) => {
+                ComponentData::Collider { .. } => {
                     entity_mut.remove::<Collider>();
                 }
-                ComponentData::PhysicsVelocity(_) => {
+                ComponentData::PhysicsVelocity { .. } => {
                     entity_mut.remove::<PhysicsVelocity>();
                 }
-                ComponentData::Mass(_) => {
+                ComponentData::Mass { .. } => {
                     entity_mut.remove::<Mass>();
                 }
-                ComponentData::AudioSource(_) => {
+                ComponentData::AudioSource { .. } => {
                     entity_mut.remove::<AudioSource>();
                 }
-                ComponentData::PerspectiveProjection(_) => {
+                ComponentData::PerspectiveProjection { .. } => {
                     entity_mut.remove::<PerspectiveProjection>();
                 }
             }
@@ -975,18 +982,18 @@ impl EditorCommand for AddComponentCommand {
     fn description(&self) -> String {
         let entity: Entity = self.entity.into();
         let component_name = match &self.component {
-            ComponentData::Transform(_) => "Transform",
-            ComponentData::Name(_) => "Name",
-            ComponentData::Parent(_) => "Parent",
-            ComponentData::MeshHandle(_) => "MeshHandle",
-            ComponentData::MaterialHandle(_) => "MaterialHandle",
-            ComponentData::MaterialProperties(_) => "MaterialProperties",
-            ComponentData::RigidBody(_) => "RigidBody",
-            ComponentData::Collider(_) => "Collider",
-            ComponentData::PhysicsVelocity(_) => "PhysicsVelocity",
-            ComponentData::Mass(_) => "Mass",
-            ComponentData::AudioSource(_) => "AudioSource",
-            ComponentData::PerspectiveProjection(_) => "PerspectiveProjection",
+            ComponentData::Transform { .. } => "Transform",
+            ComponentData::Name { .. } => "Name",
+            ComponentData::Parent { .. } => "Parent",
+            ComponentData::MeshHandle { .. } => "MeshHandle",
+            ComponentData::MaterialHandle { .. } => "MaterialHandle",
+            ComponentData::MaterialProperties { .. } => "MaterialProperties",
+            ComponentData::RigidBody { .. } => "RigidBody",
+            ComponentData::Collider { .. } => "Collider",
+            ComponentData::PhysicsVelocity { .. } => "PhysicsVelocity",
+            ComponentData::Mass { .. } => "Mass",
+            ComponentData::AudioSource { .. } => "AudioSource",
+            ComponentData::PerspectiveProjection { .. } => "PerspectiveProjection",
         };
         format!("Add {component_name} to {entity:?}")
     }
@@ -1037,40 +1044,40 @@ impl EditorCommand for RemoveComponentCommand {
         let entity: Entity = self.entity.into();
         if let Some(mut entity_mut) = world.get_entity_mut(entity) {
             match &self.component {
-                ComponentData::Transform(_) => {
+                ComponentData::Transform { .. } => {
                     entity_mut.remove::<Transform>();
                 }
-                ComponentData::Name(_) => {
+                ComponentData::Name { .. } => {
                     entity_mut.remove::<Name>();
                 }
-                ComponentData::Parent(_) => {
+                ComponentData::Parent { .. } => {
                     entity_mut.remove::<Parent>();
                 }
-                ComponentData::MeshHandle(_) => {
+                ComponentData::MeshHandle { .. } => {
                     entity_mut.remove::<MeshHandle>();
                 }
-                ComponentData::MaterialHandle(_) => {
+                ComponentData::MaterialHandle { .. } => {
                     entity_mut.remove::<MaterialHandle>();
                 }
-                ComponentData::MaterialProperties(_) => {
+                ComponentData::MaterialProperties { .. } => {
                     entity_mut.remove::<MaterialPropertiesComponent>();
                 }
-                ComponentData::RigidBody(_) => {
+                ComponentData::RigidBody { .. } => {
                     entity_mut.remove::<RigidBody>();
                 }
-                ComponentData::Collider(_) => {
+                ComponentData::Collider { .. } => {
                     entity_mut.remove::<Collider>();
                 }
-                ComponentData::PhysicsVelocity(_) => {
+                ComponentData::PhysicsVelocity { .. } => {
                     entity_mut.remove::<PhysicsVelocity>();
                 }
-                ComponentData::Mass(_) => {
+                ComponentData::Mass { .. } => {
                     entity_mut.remove::<Mass>();
                 }
-                ComponentData::AudioSource(_) => {
+                ComponentData::AudioSource { .. } => {
                     entity_mut.remove::<AudioSource>();
                 }
-                ComponentData::PerspectiveProjection(_) => {
+                ComponentData::PerspectiveProjection { .. } => {
                     entity_mut.remove::<PerspectiveProjection>();
                 }
             }
@@ -1092,23 +1099,23 @@ impl EditorCommand for RemoveComponentCommand {
         let entity: Entity = self.entity.into();
         if let Some(mut entity_mut) = world.get_entity_mut(entity) {
             match &self.component {
-                ComponentData::Transform(t) => {
+                ComponentData::Transform { data: t } => {
                     entity_mut.insert(Transform::from(*t));
                 }
-                ComponentData::Name(name) => {
+                ComponentData::Name { data: name } => {
                     entity_mut.insert(Name::new(name.clone()));
                 }
-                ComponentData::Parent(parent) => {
+                ComponentData::Parent { entity: parent } => {
                     let parent_entity: Entity = (*parent).into();
                     entity_mut.insert(Parent(parent_entity));
                 }
-                ComponentData::MeshHandle(id) => {
+                ComponentData::MeshHandle { id } => {
                     entity_mut.insert(MeshHandle::new(id.clone()));
                 }
-                ComponentData::MaterialHandle(id) => {
+                ComponentData::MaterialHandle { id } => {
                     entity_mut.insert(MaterialHandle::new(id.clone()));
                 }
-                ComponentData::MaterialProperties(props) => {
+                ComponentData::MaterialProperties { data: props } => {
                     entity_mut.insert(MaterialPropertiesComponent(
                         MaterialProperties::new()
                             .with_base_color(props.base_color)
@@ -1117,14 +1124,14 @@ impl EditorCommand for RemoveComponentCommand {
                             .with_emissive_strength(props.emissive_strength),
                     ));
                 }
-                ComponentData::RigidBody(rb) => {
+                ComponentData::RigidBody { data: rb } => {
                     entity_mut.insert(match rb {
                         SerializableRigidBody::Dynamic => RigidBody::Dynamic,
                         SerializableRigidBody::Static => RigidBody::Static,
                         SerializableRigidBody::Kinematic => RigidBody::Kinematic,
                     });
                 }
-                ComponentData::Collider(col) => {
+                ComponentData::Collider { data: col } => {
                     entity_mut.insert(match col {
                         SerializableCollider::Cuboid { hx, hy, hz } => {
                             Collider::cuboid(*hx, *hy, *hz)
@@ -1148,16 +1155,16 @@ impl EditorCommand for RemoveComponentCommand {
                         } => Collider::cylinder_y(*half_height, *radius),
                     });
                 }
-                ComponentData::PhysicsVelocity(vel) => {
+                ComponentData::PhysicsVelocity { data: vel } => {
                     entity_mut.insert(PhysicsVelocity::new(
                         Vec3::from_array(vel.linear),
                         Vec3::from_array(vel.angular),
                     ));
                 }
-                ComponentData::Mass(mass) => {
+                ComponentData::Mass { data: mass } => {
                     entity_mut.insert(Mass::with_inertia(mass.mass, mass.angular_inertia));
                 }
-                ComponentData::AudioSource(audio) => {
+                ComponentData::AudioSource { data: audio } => {
                     entity_mut.insert(
                         AudioSource::new(audio.path.clone())
                             .with_volume(audio.volume)
@@ -1167,7 +1174,7 @@ impl EditorCommand for RemoveComponentCommand {
                             .with_reference_distance(audio.reference_distance),
                     );
                 }
-                ComponentData::PerspectiveProjection(cam) => {
+                ComponentData::PerspectiveProjection { data: cam } => {
                     entity_mut.insert(PerspectiveProjection::new(
                         cam.fov,
                         cam.aspect_ratio,
@@ -1186,18 +1193,18 @@ impl EditorCommand for RemoveComponentCommand {
     fn description(&self) -> String {
         let entity: Entity = self.entity.into();
         let component_name = match &self.component {
-            ComponentData::Transform(_) => "Transform",
-            ComponentData::Name(_) => "Name",
-            ComponentData::Parent(_) => "Parent",
-            ComponentData::MeshHandle(_) => "MeshHandle",
-            ComponentData::MaterialHandle(_) => "MaterialHandle",
-            ComponentData::MaterialProperties(_) => "MaterialProperties",
-            ComponentData::RigidBody(_) => "RigidBody",
-            ComponentData::Collider(_) => "Collider",
-            ComponentData::PhysicsVelocity(_) => "PhysicsVelocity",
-            ComponentData::Mass(_) => "Mass",
-            ComponentData::AudioSource(_) => "AudioSource",
-            ComponentData::PerspectiveProjection(_) => "PerspectiveProjection",
+            ComponentData::Transform { .. } => "Transform",
+            ComponentData::Name { .. } => "Name",
+            ComponentData::Parent { .. } => "Parent",
+            ComponentData::MeshHandle { .. } => "MeshHandle",
+            ComponentData::MaterialHandle { .. } => "MaterialHandle",
+            ComponentData::MaterialProperties { .. } => "MaterialProperties",
+            ComponentData::RigidBody { .. } => "RigidBody",
+            ComponentData::Collider { .. } => "Collider",
+            ComponentData::PhysicsVelocity { .. } => "PhysicsVelocity",
+            ComponentData::Mass { .. } => "Mass",
+            ComponentData::AudioSource { .. } => "AudioSource",
+            ComponentData::PerspectiveProjection { .. } => "PerspectiveProjection",
         };
         format!("Remove {component_name} from {entity:?}")
     }
@@ -1445,12 +1452,16 @@ impl CopyEntityCommand {
         if let Some(entity_ref) = world.get_entity(entity) {
             // Capture Transform
             if let Some(transform) = entity_ref.get::<Transform>() {
-                components.push(ComponentData::Transform((*transform).into()));
+                components.push(ComponentData::Transform {
+                    data: (*transform).into(),
+                });
             }
 
             // Capture Name
             if let Some(name) = entity_ref.get::<Name>() {
-                components.push(ComponentData::Name(name.0.clone()));
+                components.push(ComponentData::Name {
+                    data: name.0.clone(),
+                });
             }
 
             // Capture Parent
@@ -1464,27 +1475,29 @@ impl CopyEntityCommand {
 
             // Capture MeshHandle
             if let Some(mesh_handle) = entity_ref.get::<MeshHandle>() {
-                components.push(ComponentData::MeshHandle(mesh_handle.id().to_string()));
+                components.push(ComponentData::MeshHandle {
+                    id: mesh_handle.id().to_string(),
+                });
             }
 
             // Capture MaterialHandle
             if let Some(material_handle) = entity_ref.get::<MaterialHandle>() {
-                components.push(ComponentData::MaterialHandle(
-                    material_handle.id().to_string(),
-                ));
+                components.push(ComponentData::MaterialHandle {
+                    id: material_handle.id().to_string(),
+                });
             }
 
             // Capture MaterialProperties
             if let Some(material_props) = entity_ref.get::<MaterialPropertiesComponent>() {
                 let props = &material_props.0;
-                components.push(ComponentData::MaterialProperties(
-                    SerializableMaterialProperties {
+                components.push(ComponentData::MaterialProperties {
+                    data: SerializableMaterialProperties {
                         base_color: props.base_color(),
                         metallic: props.metallic(),
                         roughness: props.roughness(),
                         emissive_strength: props.emissive_strength(),
                     },
-                ));
+                });
             }
 
             // Capture RigidBody
@@ -1494,7 +1507,9 @@ impl CopyEntityCommand {
                     RigidBody::Static => SerializableRigidBody::Static,
                     RigidBody::Kinematic => SerializableRigidBody::Kinematic,
                 };
-                components.push(ComponentData::RigidBody(rb_serializable));
+                components.push(ComponentData::RigidBody {
+                    data: rb_serializable,
+                });
             }
 
             // Capture Collider
@@ -1535,49 +1550,53 @@ impl CopyEntityCommand {
                         radius: *radius,
                     },
                 };
-                components.push(ComponentData::Collider(serializable));
+                components.push(ComponentData::Collider { data: serializable });
             }
 
             // Capture PhysicsVelocity
             if let Some(velocity) = entity_ref.get::<PhysicsVelocity>() {
-                components.push(ComponentData::PhysicsVelocity(
-                    SerializablePhysicsVelocity {
+                components.push(ComponentData::PhysicsVelocity {
+                    data: SerializablePhysicsVelocity {
                         linear: velocity.linear.to_array(),
                         angular: velocity.angular.to_array(),
                     },
-                ));
+                });
             }
 
             // Capture Mass
             if let Some(mass) = entity_ref.get::<Mass>() {
-                components.push(ComponentData::Mass(SerializableMass {
-                    mass: mass.mass(),
-                    angular_inertia: mass.angular_inertia(),
-                }));
+                components.push(ComponentData::Mass {
+                    data: SerializableMass {
+                        mass: mass.mass(),
+                        angular_inertia: mass.angular_inertia(),
+                    },
+                });
             }
 
             // Capture AudioSource
             if let Some(audio_source) = entity_ref.get::<AudioSource>() {
-                components.push(ComponentData::AudioSource(SerializableAudioSource {
-                    path: audio_source.path().to_string(),
-                    volume: audio_source.volume(),
-                    spatial: audio_source.is_spatial(),
-                    looping: audio_source.is_looping(),
-                    max_distance: audio_source.max_distance(),
-                    reference_distance: audio_source.reference_distance(),
-                }));
+                components.push(ComponentData::AudioSource {
+                    data: SerializableAudioSource {
+                        path: audio_source.path().to_string(),
+                        volume: audio_source.volume(),
+                        spatial: audio_source.is_spatial(),
+                        looping: audio_source.is_looping(),
+                        max_distance: audio_source.max_distance(),
+                        reference_distance: audio_source.reference_distance(),
+                    },
+                });
             }
 
             // Capture PerspectiveProjection
             if let Some(projection) = entity_ref.get::<PerspectiveProjection>() {
-                components.push(ComponentData::PerspectiveProjection(
-                    SerializablePerspectiveProjection {
+                components.push(ComponentData::PerspectiveProjection {
+                    data: SerializablePerspectiveProjection {
                         fov: projection.fov(),
                         aspect_ratio: projection.aspect_ratio(),
                         near: projection.near(),
                         far: projection.far(),
                     },
-                ));
+                });
             }
 
             Ok(Self {
@@ -1646,9 +1665,9 @@ impl PasteEntityCommand {
         if let Some(offset_vec) = offset {
             if let Some(transform_idx) = components
                 .iter()
-                .position(|c| matches!(c, ComponentData::Transform(_)))
+                .position(|c| matches!(c, ComponentData::Transform { .. }))
             {
-                if let ComponentData::Transform(ref mut transform) = components[transform_idx] {
+                if let ComponentData::Transform { data: ref mut transform } = components[transform_idx] {
                     transform.translation[0] += offset_vec.x;
                     transform.translation[1] += offset_vec.y;
                     transform.translation[2] += offset_vec.z;
@@ -1659,9 +1678,9 @@ impl PasteEntityCommand {
         // Update name to add " Copy" suffix
         if let Some(name_idx) = components
             .iter()
-            .position(|c| matches!(c, ComponentData::Name(_)))
+            .position(|c| matches!(c, ComponentData::Name { .. }))
         {
-            if let ComponentData::Name(ref mut name) = components[name_idx] {
+            if let ComponentData::Name { data: ref mut name } = components[name_idx] {
                 *name = format!("{name} Copy");
             }
         }
@@ -1705,23 +1724,23 @@ impl EditorCommand for PasteEntityCommand {
 
         for component in &self.components {
             match component {
-                ComponentData::Transform(t) => {
+                ComponentData::Transform { data: t } => {
                     entity_mut.insert(Transform::from(*t));
                 }
-                ComponentData::Name(name) => {
+                ComponentData::Name { data: name } => {
                     entity_mut.insert(Name::new(name.clone()));
                 }
-                ComponentData::Parent(parent) => {
+                ComponentData::Parent { entity: parent } => {
                     let parent_entity: Entity = (*parent).into();
                     entity_mut.insert(Parent(parent_entity));
                 }
-                ComponentData::MeshHandle(id) => {
+                ComponentData::MeshHandle { id } => {
                     entity_mut.insert(MeshHandle::new(id.clone()));
                 }
-                ComponentData::MaterialHandle(id) => {
+                ComponentData::MaterialHandle { id } => {
                     entity_mut.insert(MaterialHandle::new(id.clone()));
                 }
-                ComponentData::MaterialProperties(props) => {
+                ComponentData::MaterialProperties { data: props } => {
                     entity_mut.insert(MaterialPropertiesComponent(
                         MaterialProperties::new()
                             .with_base_color(props.base_color)
@@ -1730,14 +1749,14 @@ impl EditorCommand for PasteEntityCommand {
                             .with_emissive_strength(props.emissive_strength),
                     ));
                 }
-                ComponentData::RigidBody(rb) => {
+                ComponentData::RigidBody { data: rb } => {
                     entity_mut.insert(match rb {
                         SerializableRigidBody::Dynamic => RigidBody::Dynamic,
                         SerializableRigidBody::Static => RigidBody::Static,
                         SerializableRigidBody::Kinematic => RigidBody::Kinematic,
                     });
                 }
-                ComponentData::Collider(col) => {
+                ComponentData::Collider { data: col } => {
                     entity_mut.insert(match col {
                         SerializableCollider::Cuboid { hx, hy, hz } => {
                             Collider::cuboid(*hx, *hy, *hz)
@@ -1761,16 +1780,16 @@ impl EditorCommand for PasteEntityCommand {
                         } => Collider::cylinder_y(*half_height, *radius),
                     });
                 }
-                ComponentData::PhysicsVelocity(vel) => {
+                ComponentData::PhysicsVelocity { data: vel } => {
                     entity_mut.insert(PhysicsVelocity::new(
                         Vec3::from_array(vel.linear),
                         Vec3::from_array(vel.angular),
                     ));
                 }
-                ComponentData::Mass(mass) => {
+                ComponentData::Mass { data: mass } => {
                     entity_mut.insert(Mass::with_inertia(mass.mass, mass.angular_inertia));
                 }
-                ComponentData::AudioSource(audio) => {
+                ComponentData::AudioSource { data: audio } => {
                     entity_mut.insert(
                         AudioSource::new(audio.path.clone())
                             .with_volume(audio.volume)
@@ -1780,7 +1799,7 @@ impl EditorCommand for PasteEntityCommand {
                             .with_reference_distance(audio.reference_distance),
                     );
                 }
-                ComponentData::PerspectiveProjection(cam) => {
+                ComponentData::PerspectiveProjection { data: cam } => {
                     entity_mut.insert(PerspectiveProjection::new(
                         cam.fov,
                         cam.aspect_ratio,
@@ -2206,8 +2225,12 @@ mod tests {
         let mut world = World::new();
         let entity = world.spawn_empty().id();
 
-        let mut command =
-            AddComponentCommand::new(entity, ComponentData::Name("TestEntity".to_string()));
+        let mut command = AddComponentCommand::new(
+            entity,
+            ComponentData::Name {
+                data: "TestEntity".to_string(),
+            },
+        );
 
         assert!(command.execute(&mut world).is_ok());
         assert!(world.get::<Name>(entity).is_some());

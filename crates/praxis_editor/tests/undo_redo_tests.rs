@@ -143,8 +143,12 @@ fn test_create_entity_command_redo() {
 fn test_create_entity_command_with_components() {
     let mut world = World::new();
     let components = vec![
-        ComponentData::Transform(Transform::from_xyz(1.0, 2.0, 3.0).into()),
-        ComponentData::Name("TestEntity".to_string()),
+        ComponentData::Transform {
+            data: Transform::from_xyz(1.0, 2.0, 3.0).into(),
+        },
+        ComponentData::Name {
+            data: "TestEntity".to_string(),
+        },
     ];
 
     let mut command = CreateEntityCommand::new(components);
@@ -224,8 +228,12 @@ fn test_add_component_command_execute() {
     let mut world = World::new();
     let entity = world.spawn_empty().id();
 
-    let mut command =
-        AddComponentCommand::new(entity, ComponentData::Name("TestEntity".to_string()));
+    let mut command = AddComponentCommand::new(
+        entity,
+        ComponentData::Name {
+            data: "TestEntity".to_string(),
+        },
+    );
 
     assert!(command.execute(&mut world).is_ok());
     assert!(world.get::<Name>(entity).is_some());
@@ -239,8 +247,12 @@ fn test_add_component_command_undo() {
     let mut world = World::new();
     let entity = world.spawn_empty().id();
 
-    let mut command =
-        AddComponentCommand::new(entity, ComponentData::Name("TestEntity".to_string()));
+    let mut command = AddComponentCommand::new(
+        entity,
+        ComponentData::Name {
+            data: "TestEntity".to_string(),
+        },
+    );
 
     command.execute(&mut world).unwrap();
     assert!(command.undo(&mut world).is_ok());
@@ -254,7 +266,12 @@ fn test_add_component_command_transform() {
     let entity = world.spawn_empty().id();
 
     let transform = Transform::from_xyz(5.0, 10.0, 15.0);
-    let mut command = AddComponentCommand::new(entity, ComponentData::Transform(transform.into()));
+    let mut command = AddComponentCommand::new(
+        entity,
+        ComponentData::Transform {
+            data: transform.into(),
+        },
+    );
 
     command.execute(&mut world).unwrap();
 
@@ -272,7 +289,10 @@ fn test_remove_component_command_execute() {
     let entity = world.spawn(Name::new("TestEntity")).id();
 
     let name = world.get::<Name>(entity).unwrap().0.clone();
-    let mut command = RemoveComponentCommand::new(entity, ComponentData::Name(name));
+    let mut command = RemoveComponentCommand::new(
+        entity,
+        ComponentData::Name { data: name },
+    );
 
     assert!(command.execute(&mut world).is_ok());
     assert!(world.get::<Name>(entity).is_none());
@@ -284,7 +304,10 @@ fn test_remove_component_command_undo() {
     let entity = world.spawn(Name::new("TestEntity")).id();
 
     let name = world.get::<Name>(entity).unwrap().0.clone();
-    let mut command = RemoveComponentCommand::new(entity, ComponentData::Name(name));
+    let mut command = RemoveComponentCommand::new(
+        entity,
+        ComponentData::Name { data: name },
+    );
 
     command.execute(&mut world).unwrap();
     command.undo(&mut world).unwrap();
@@ -760,7 +783,6 @@ fn test_command_serialization_transform_edit() {
 }
 
 #[test]
-#[ignore = "Known issue: CreateEntityCommand serialization/deserialization fails"]
 fn test_command_serialization_create_entity() {
     let command = CreateEntityCommand::with_transform(Transform::from_xyz(5.0, 10.0, 15.0));
 
