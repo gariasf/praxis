@@ -746,6 +746,25 @@
 //! - **Encapsulation**: Implementation details remain hidden
 //! - **Stable API**: Public surface is clearly defined via re-exports
 //! - **Flexibility**: Internal organization can change without breaking users
+//!
+//! # Testing and Mocking
+//!
+//! For headless testing without GPU initialization, use `MockRenderContext`:
+//!
+//! ```rust,no_run
+//! # #[cfg(test)]
+//! # {
+//! use praxis_graphics::MockRenderContext;
+//!
+//! let mut ctx = MockRenderContext::new();
+//! // All rendering operations are no-ops
+//! // Suitable for testing game logic without graphics hardware
+//! # }
+//! ```
+//!
+//! The mock provides the same API surface as `RenderContext` but with all
+//! operations as no-ops, allowing tests to run in CI environments without
+//! GPU access.
 
 pub mod bindless;
 pub mod deferred;
@@ -3091,5 +3110,233 @@ mod tests {
 
         // For frame 2 onwards, the benefit is infinite since we allocate 0 sets
         // while the non-pooled version continues allocating 2000 per frame
+    }
+}
+
+/// Mock render context for headless testing.
+///
+/// This is a no-op implementation that allows tests to run without actual GPU/window initialization.
+/// All rendering operations are no-ops, and all query methods return empty or default values.
+///
+/// # Example
+///
+/// ```rust
+/// use praxis_graphics::MockRenderContext;
+///
+/// let mut ctx = MockRenderContext::new();
+/// // All operations are no-ops, suitable for testing game logic without graphics
+/// ```
+#[cfg(test)]
+pub struct MockRenderContext {
+    mesh_count: usize,
+    texture_count: usize,
+    material_count: usize,
+}
+
+#[cfg(test)]
+impl MockRenderContext {
+    /// Creates a new mock render context.
+    ///
+    /// All internal state is initialized to empty/default values.
+    pub fn new() -> Self {
+        Self {
+            mesh_count: 0,
+            texture_count: 0,
+            material_count: 0,
+        }
+    }
+
+    /// No-op render method that accepts render commands but performs no actual rendering.
+    ///
+    /// # Arguments
+    ///
+    /// * `_cmds` - Render commands (ignored)
+    ///
+    /// # Returns
+    ///
+    /// Always returns `Ok(())`.
+    pub fn render(&mut self, _cmds: &RenderCommands) -> Result<()> {
+        Ok(())
+    }
+
+    /// Mock mesh loading that increments an internal counter.
+    ///
+    /// # Arguments
+    ///
+    /// * `_name` - Mesh name (ignored)
+    /// * `_data` - Mesh data (ignored)
+    ///
+    /// # Returns
+    ///
+    /// Always returns `Ok(())`.
+    pub fn load_mesh(&mut self, _name: &str, _data: MeshData) -> Result<()> {
+        self.mesh_count += 1;
+        Ok(())
+    }
+
+    /// Mock texture loading that increments an internal counter.
+    ///
+    /// # Arguments
+    ///
+    /// * `_name` - Texture name (ignored)
+    /// * `_path` - Texture path (ignored)
+    ///
+    /// # Returns
+    ///
+    /// Always returns `Ok(())`.
+    pub fn load_texture(&mut self, _name: &str, _path: &std::path::Path) -> Result<()> {
+        self.texture_count += 1;
+        Ok(())
+    }
+
+    /// Mock material loading that increments an internal counter.
+    ///
+    /// # Arguments
+    ///
+    /// * `_name` - Material name (ignored)
+    /// * `_properties` - Material properties (ignored)
+    ///
+    /// # Returns
+    ///
+    /// Always returns `Ok(())`.
+    pub fn load_material(
+        &mut self,
+        _name: &str,
+        _properties: MaterialProperties,
+    ) -> Result<()> {
+        self.material_count += 1;
+        Ok(())
+    }
+
+    /// Returns the number of loaded meshes (mock counter).
+    pub fn mesh_count(&self) -> usize {
+        self.mesh_count
+    }
+
+    /// Returns the number of loaded textures (mock counter).
+    pub fn texture_count(&self) -> usize {
+        self.texture_count
+    }
+
+    /// Returns the number of loaded materials (mock counter).
+    pub fn material_count(&self) -> usize {
+        self.material_count
+    }
+
+    /// No-op surface configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `_width` - Width (ignored)
+    /// * `_height` - Height (ignored)
+    pub fn configure_surface(&mut self, _width: u32, _height: u32) {
+        // No-op
+    }
+}
+
+#[cfg(test)]
+impl Default for MockRenderContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod mock_tests {
+    use super::*;
+
+    #[test]
+    fn test_mock_render_context_creation() {
+        let ctx = MockRenderContext::new();
+        assert_eq!(ctx.mesh_count(), 0);
+        assert_eq!(ctx.texture_count(), 0);
+        assert_eq!(ctx.material_count(), 0);
+    }
+
+    #[test]
+    fn test_mock_render_context_load_mesh() {
+        let mut ctx = MockRenderContext::new();
+        let mesh_data = MeshData::new();
+
+        ctx.load_mesh("test_mesh", mesh_data).unwrap();
+        assert_eq!(ctx.mesh_count(), 1);
+    }
+
+    #[test]
+    fn test_mock_render_context_load_texture() {
+        let mut ctx = MockRenderContext::new();
+
+        ctx.load_texture("test_texture", std::path::Path::new("test.png"))
+            .unwrap();
+        assert_eq!(ctx.texture_count(), 1);
+    }
+
+    #[test]
+    fn test_mock_render_context_load_material() {
+        let mut ctx = MockRenderContext::new();
+        let props = MaterialProperties::default();
+
+        ctx.load_material("test_material", props).unwrap();
+        assert_eq!(ctx.material_count(), 1);
+    }
+
+    #[test]
+    fn test_mock_render_context_render() {
+        let mut ctx = MockRenderContext::new();
+        let cmds = RenderCommands {
+            view: Mat4::IDENTITY,
+            proj: Mat4::IDENTITY,
+            draw_commands: &[],
+            lighting: None,
+        };
+
+        // Should not panic or error
+        ctx.render(&cmds).unwrap();
+    }
+
+    #[test]
+    fn test_mock_render_context_configure_surface() {
+        let mut ctx = MockRenderContext::new();
+        // Should not panic
+        ctx.configure_surface(1920, 1080);
+    }
+
+    #[test]
+    fn test_mock_render_context_default() {
+        let ctx = MockRenderContext::default();
+        assert_eq!(ctx.mesh_count(), 0);
+    }
+
+    #[test]
+    fn test_mock_render_context_integration() {
+        // Simulate a game loop that loads resources and renders frames
+        let mut ctx = MockRenderContext::new();
+
+        // Load game assets
+        ctx.load_mesh("player", MeshData::new()).unwrap();
+        ctx.load_mesh("enemy", MeshData::new()).unwrap();
+        ctx.load_texture("player_texture", std::path::Path::new("player.png"))
+            .unwrap();
+        ctx.load_material("player_material", MaterialProperties::default())
+            .unwrap();
+
+        // Verify resources loaded
+        assert_eq!(ctx.mesh_count(), 2);
+        assert_eq!(ctx.texture_count(), 1);
+        assert_eq!(ctx.material_count(), 1);
+
+        // Simulate game loop
+        for _ in 0..10 {
+            let cmds = RenderCommands {
+                view: Mat4::IDENTITY,
+                proj: Mat4::IDENTITY,
+                draw_commands: &[],
+                lighting: None,
+            };
+            ctx.render(&cmds).unwrap();
+        }
+
+        // All operations should succeed without errors
+        ctx.configure_surface(1920, 1080);
     }
 }

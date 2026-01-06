@@ -478,4 +478,95 @@ mod tests {
         assert_eq!(source2.path, "sound2.ogg");
         assert_eq!(source3.path, "sound3.ogg");
     }
+
+    // ============================================================================
+    // Mock Audio Manager Tests
+    // ============================================================================
+
+    #[test]
+    fn test_mock_audio_manager_for_headless_testing() {
+        use crate::MockAudioManager;
+
+        // Create a mock audio manager for testing without audio backend
+        let mut manager = MockAudioManager::new();
+
+        // Load sounds (no-op, just increments counter)
+        manager.load_sound("sound1.ogg").unwrap();
+        manager.load_sound("sound2.ogg").unwrap();
+        assert_eq!(manager.loaded_sound_count(), 2);
+
+        // Play sounds (no-op, returns incrementing IDs)
+        let settings = PlaybackSettings::default();
+        let id1 = manager.play_sound("sound1.ogg", settings).unwrap();
+        let id2 = manager.play_sound("sound2.ogg", settings).unwrap();
+        assert_eq!(id1, 0);
+        assert_eq!(id2, 1);
+
+        // All control operations succeed without errors
+        manager.stop_sound(id1).unwrap();
+        manager.pause_sound(id2).unwrap();
+        manager.resume_sound(id2).unwrap();
+        manager.set_sound_volume(id2, 0.5).unwrap();
+    }
+
+    #[test]
+    fn test_mock_audio_manager_integration() {
+        use crate::MockAudioManager;
+
+        // Simulate a game loop with audio
+        let mut manager = MockAudioManager::new();
+
+        // Load game audio assets
+        manager.load_sound("background_music.ogg").unwrap();
+        manager.load_sound("footstep.ogg").unwrap();
+        manager.load_sound("jump.ogg").unwrap();
+        manager.load_sound("explosion.ogg").unwrap();
+        assert_eq!(manager.loaded_sound_count(), 4);
+
+        // Start playing background music
+        let music_id = manager
+            .play_sound(
+                "background_music.ogg",
+                PlaybackSettings::new().with_volume(0.5).with_looping(true),
+            )
+            .unwrap();
+        assert_eq!(music_id, 0);
+
+        // Play sound effects during gameplay
+        let mut sound_ids = Vec::new();
+        for i in 0..5 {
+            let id = manager
+                .play_sound(
+                    "footstep.ogg",
+                    PlaybackSettings::new().with_volume(0.3),
+                )
+                .unwrap();
+            sound_ids.push(id);
+            assert_eq!(id, (i + 1) as u64);
+        }
+
+        // Adjust music volume
+        manager.set_sound_volume(music_id, 0.3).unwrap();
+
+        // Play explosion with panning
+        let explosion_id = manager
+            .play_sound(
+                "explosion.ogg",
+                PlaybackSettings::new()
+                    .with_volume(0.8)
+                    .with_panning(0.5),
+            )
+            .unwrap();
+        manager.set_sound_panning(explosion_id, -0.5).unwrap();
+
+        // Pause and resume music
+        manager.pause_sound(music_id).unwrap();
+        manager.resume_sound(music_id).unwrap();
+
+        // Cleanup
+        manager.cleanup_finished_sounds();
+
+        // Stop music at game end
+        manager.stop_sound(music_id).unwrap();
+    }
 }

@@ -212,6 +212,30 @@ The implementation automatically queries and uses the device's `minUniformBuffer
 - Intel: 256 bytes
 - Mobile: 16-64 bytes
 
+## Testing
+
+For headless testing without GPU initialization, use `MockRenderContext`:
+
+```rust
+#[cfg(test)]
+use praxis_graphics::MockRenderContext;
+
+#[test]
+fn test_game_logic() {
+    let mut ctx = MockRenderContext::new();
+    
+    // All rendering operations are no-ops
+    ctx.load_mesh("player", mesh_data).unwrap();
+    ctx.load_texture("player_tex", path).unwrap();
+    ctx.render(&commands).unwrap();
+    
+    // Suitable for testing game logic without graphics hardware
+    assert_eq!(ctx.mesh_count(), 1);
+}
+```
+
+The mock provides the same API surface as `RenderContext` but with all operations as no-ops, allowing tests to run in CI environments without GPU access.
+
 ## See Also
 
 - [Mesh System Documentation](../../docs/mesh-system.md)

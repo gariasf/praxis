@@ -321,3 +321,229 @@ impl PlaybackSettings {
         self
     }
 }
+
+/// Mock audio manager for headless testing.
+///
+/// This is a no-op implementation that allows tests to run without actual audio backend initialization.
+/// All audio operations are no-ops, and all query methods return empty or default values.
+///
+/// # Example
+///
+/// ```rust
+/// use praxis_audio::MockAudioManager;
+///
+/// let mut manager = MockAudioManager::new();
+/// // All operations are no-ops, suitable for testing game logic without audio
+/// ```
+#[cfg(test)]
+#[derive(Default)]
+pub struct MockAudioManager {
+    loaded_sound_count: usize,
+    next_sound_id: u64,
+}
+
+#[cfg(test)]
+impl MockAudioManager {
+    /// Creates a new mock audio manager.
+    ///
+    /// All internal state is initialized to empty/default values.
+    pub fn new() -> Self {
+        Self {
+            loaded_sound_count: 0,
+            next_sound_id: 0,
+        }
+    }
+
+    /// Mock sound loading that increments an internal counter.
+    ///
+    /// # Arguments
+    ///
+    /// * `_path` - Path to the audio file (ignored)
+    ///
+    /// # Returns
+    ///
+    /// Always returns `Ok(())`.
+    pub fn load_sound(&mut self, _path: impl AsRef<Path>) -> Result<()> {
+        self.loaded_sound_count += 1;
+        Ok(())
+    }
+
+    /// Mock sound playback that returns a unique sound ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `_path` - Path to the audio file (ignored)
+    /// * `_settings` - Playback settings (ignored)
+    ///
+    /// # Returns
+    ///
+    /// Returns a unique sound ID (incrementing counter).
+    pub fn play_sound(
+        &mut self,
+        _path: impl AsRef<Path>,
+        _settings: PlaybackSettings,
+    ) -> Result<u64> {
+        let sound_id = self.next_sound_id;
+        self.next_sound_id += 1;
+        Ok(sound_id)
+    }
+
+    /// Mock sound stopping (no-op).
+    ///
+    /// # Arguments
+    ///
+    /// * `_sound_id` - Sound ID (ignored)
+    ///
+    /// # Returns
+    ///
+    /// Always returns `Ok(())`.
+    pub fn stop_sound(&mut self, _sound_id: u64) -> Result<()> {
+        Ok(())
+    }
+
+    /// Mock sound pausing (no-op).
+    ///
+    /// # Arguments
+    ///
+    /// * `_sound_id` - Sound ID (ignored)
+    ///
+    /// # Returns
+    ///
+    /// Always returns `Ok(())`.
+    pub fn pause_sound(&mut self, _sound_id: u64) -> Result<()> {
+        Ok(())
+    }
+
+    /// Mock sound resuming (no-op).
+    ///
+    /// # Arguments
+    ///
+    /// * `_sound_id` - Sound ID (ignored)
+    ///
+    /// # Returns
+    ///
+    /// Always returns `Ok(())`.
+    pub fn resume_sound(&mut self, _sound_id: u64) -> Result<()> {
+        Ok(())
+    }
+
+    /// Mock volume setting (no-op).
+    ///
+    /// # Arguments
+    ///
+    /// * `_sound_id` - Sound ID (ignored)
+    /// * `_volume` - Volume level (ignored)
+    ///
+    /// # Returns
+    ///
+    /// Always returns `Ok(())`.
+    pub fn set_sound_volume(&mut self, _sound_id: u64, _volume: f32) -> Result<()> {
+        Ok(())
+    }
+
+    /// Mock playback rate setting (no-op).
+    ///
+    /// # Arguments
+    ///
+    /// * `_sound_id` - Sound ID (ignored)
+    /// * `_rate` - Playback rate (ignored)
+    ///
+    /// # Returns
+    ///
+    /// Always returns `Ok(())`.
+    pub fn set_sound_playback_rate(&mut self, _sound_id: u64, _rate: f32) -> Result<()> {
+        Ok(())
+    }
+
+    /// Mock panning setting (no-op).
+    ///
+    /// # Arguments
+    ///
+    /// * `_sound_id` - Sound ID (ignored)
+    /// * `_panning` - Panning value (ignored)
+    ///
+    /// # Returns
+    ///
+    /// Always returns `Ok(())`.
+    pub fn set_sound_panning(&mut self, _sound_id: u64, _panning: f32) -> Result<()> {
+        Ok(())
+    }
+
+    /// Mock cleanup (no-op).
+    pub fn cleanup_finished_sounds(&mut self) {
+        // No-op
+    }
+
+    /// Returns the number of loaded sounds (mock counter).
+    pub fn loaded_sound_count(&self) -> usize {
+        self.loaded_sound_count
+    }
+
+    /// Returns the number of playing sounds (always 0 in mock).
+    pub fn playing_sound_count(&self) -> usize {
+        0
+    }
+}
+
+#[cfg(test)]
+mod mock_tests {
+    use super::*;
+
+    #[test]
+    fn test_mock_audio_manager_creation() {
+        let manager = MockAudioManager::new();
+        assert_eq!(manager.loaded_sound_count(), 0);
+        assert_eq!(manager.playing_sound_count(), 0);
+    }
+
+    #[test]
+    fn test_mock_audio_manager_load_sound() {
+        let mut manager = MockAudioManager::new();
+
+        manager.load_sound("test.ogg").unwrap();
+        assert_eq!(manager.loaded_sound_count(), 1);
+
+        manager.load_sound("test2.ogg").unwrap();
+        assert_eq!(manager.loaded_sound_count(), 2);
+    }
+
+    #[test]
+    fn test_mock_audio_manager_play_sound() {
+        let mut manager = MockAudioManager::new();
+        let settings = PlaybackSettings::default();
+
+        let id1 = manager.play_sound("test.ogg", settings).unwrap();
+        assert_eq!(id1, 0);
+
+        let id2 = manager.play_sound("test2.ogg", settings).unwrap();
+        assert_eq!(id2, 1);
+    }
+
+    #[test]
+    fn test_mock_audio_manager_control_operations() {
+        let mut manager = MockAudioManager::new();
+        let settings = PlaybackSettings::default();
+        let sound_id = manager.play_sound("test.ogg", settings).unwrap();
+
+        // All operations should succeed without errors
+        manager.stop_sound(sound_id).unwrap();
+        manager.pause_sound(sound_id).unwrap();
+        manager.resume_sound(sound_id).unwrap();
+        manager.set_sound_volume(sound_id, 0.5).unwrap();
+        manager.set_sound_playback_rate(sound_id, 1.5).unwrap();
+        manager.set_sound_panning(sound_id, 0.5).unwrap();
+    }
+
+    #[test]
+    fn test_mock_audio_manager_cleanup() {
+        let mut manager = MockAudioManager::new();
+        // Should not panic
+        manager.cleanup_finished_sounds();
+    }
+
+    #[test]
+    fn test_mock_audio_manager_default() {
+        let manager = MockAudioManager::default();
+        assert_eq!(manager.loaded_sound_count(), 0);
+    }
+}

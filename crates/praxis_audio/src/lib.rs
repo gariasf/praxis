@@ -62,6 +62,27 @@
 //! - FLAC
 //!
 //! Sounds are cached by path to avoid redundant loading.
+//!
+//! # Testing and Mocking
+//!
+//! For headless testing without audio backend initialization, use `MockAudioManager`:
+//!
+//! ```rust,no_run
+//! # #[cfg(test)]
+//! # {
+//! use praxis_audio::MockAudioManager;
+//!
+//! let mut manager = MockAudioManager::new();
+//! // All audio operations are no-ops
+//! // Suitable for testing game logic without audio hardware
+//! manager.load_sound("test.ogg").unwrap();
+//! let id = manager.play_sound("test.ogg", Default::default()).unwrap();
+//! # }
+//! ```
+//!
+//! The mock provides the same API surface as `AudioManager` but with all
+//! operations as no-ops, allowing tests to run in CI environments without
+//! audio hardware.
 
 mod components;
 mod manager;
@@ -73,6 +94,9 @@ mod audio_tests;
 pub use components::*;
 pub use manager::*;
 pub use systems::*;
+
+#[cfg(test)]
+pub use manager::MockAudioManager;
 
 use praxis_utils::{info, Result};
 

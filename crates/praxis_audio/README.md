@@ -255,6 +255,30 @@ These demonstrate:
 - `praxis_math`: Math utilities for spatial calculations (Vec3, distance, dot product)
 - `praxis_utils`: Error handling and logging
 
+## Testing
+
+For headless testing without audio backend initialization, use `MockAudioManager`:
+
+```rust
+#[cfg(test)]
+use praxis_audio::MockAudioManager;
+
+#[test]
+fn test_game_audio() {
+    let mut manager = MockAudioManager::new();
+    
+    // All audio operations are no-ops
+    manager.load_sound("test.ogg").unwrap();
+    let id = manager.play_sound("test.ogg", Default::default()).unwrap();
+    manager.set_sound_volume(id, 0.5).unwrap();
+    
+    // Suitable for testing game logic without audio hardware
+    assert_eq!(manager.loaded_sound_count(), 1);
+}
+```
+
+The mock provides the same API surface as `AudioManager` but with all operations as no-ops, allowing tests to run in CI environments without audio hardware.
+
 ## See Also
 
 - [Audio Guide](../../docs/guides/audio.md)
