@@ -64,10 +64,11 @@ fn setup_scripting_context() -> praxis_utils::Result<ScriptingContext> {
             allow_file_io: false,
             allow_network: false,
             allow_os_access: false,
+            instruction_limit: 1_000_000, // 1 million instructions
+            memory_limit: 100 * 1024 * 1024, // 100 MB
         },
         enable_performance_monitoring: true,
         max_execution_time_ms: 16,
-        memory_limit: 100 * 1024 * 1024,
     };
 
     let context = ScriptingContext::new(config)?;
@@ -76,6 +77,8 @@ fn setup_scripting_context() -> praxis_utils::Result<ScriptingContext> {
     println!("  - Sandbox: Moderate");
     println!("  - Performance monitoring: Enabled");
     println!("  - Max execution time: 16ms");
+    println!("  - Instruction limit: 1,000,000");
+    println!("  - Memory limit: 100 MB");
     println!();
 
     Ok(context)

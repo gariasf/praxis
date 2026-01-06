@@ -135,9 +135,26 @@ let config = ScriptingConfig {
         allow_file_io: false,
         allow_network: false,
         allow_os_access: false,
+        instruction_limit: 1_000_000,      // Prevent infinite loops
+        memory_limit: 100 * 1024 * 1024,   // 100 MB memory limit
     },
     ..Default::default()
 };
+```
+
+### Resource Limits
+
+The sandbox provides two key protections against malicious or buggy scripts:
+
+- **Instruction Limit**: Scripts are interrupted after executing a certain number of instructions, preventing infinite loops and long-running scripts. Set to 0 to disable.
+- **Memory Limit**: Scripts cannot allocate more than the specified amount of memory, preventing memory exhaustion attacks. Set to 0 to disable.
+
+```rust
+use praxis_scripting::{reset_instruction_counter, SandboxConfig, ScriptingContext};
+
+// Reset the instruction counter between script executions
+let lua = context.lua();
+reset_instruction_counter(lua, &config.sandbox)?;
 ```
 
 ## Performance Monitoring

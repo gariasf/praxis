@@ -55,7 +55,7 @@ pub use bindings::console_commands;
 pub use context::{ScriptingConfig, ScriptingContext};
 pub use hot_reload::{HotReloadWatcher, ScriptEvent};
 pub use performance::{ScriptPerformanceMonitor, ScriptStats};
-pub use sandbox::{SandboxConfig, SandboxLevel};
+pub use sandbox::{reset_instruction_counter, SandboxConfig, SandboxLevel};
 pub use script_component::{ScriptComponent, ScriptInstance};
 pub use systems::{
     script_hot_reload_system, script_initialization_system, script_start_system,

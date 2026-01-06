@@ -3,7 +3,7 @@
 use crate::bindings;
 use crate::hot_reload::HotReloadWatcher;
 use crate::performance::ScriptPerformanceMonitor;
-use crate::sandbox::{SandboxConfig, SandboxLevel};
+use crate::sandbox::SandboxConfig;
 use mlua::Lua;
 use parking_lot::RwLock;
 use praxis_utils::{debug, error, info, warn, Result};
@@ -22,23 +22,14 @@ pub struct ScriptingConfig {
 
     /// Maximum script execution time in milliseconds before warning
     pub max_execution_time_ms: u64,
-
-    /// Memory limit for Lua VM in bytes (0 = unlimited)
-    pub memory_limit: usize,
 }
 
 impl Default for ScriptingConfig {
     fn default() -> Self {
         Self {
-            sandbox: SandboxConfig {
-                level: SandboxLevel::Moderate,
-                allow_file_io: false,
-                allow_network: false,
-                allow_os_access: false,
-            },
+            sandbox: SandboxConfig::default(),
             enable_performance_monitoring: true,
             max_execution_time_ms: 16,
-            memory_limit: 100 * 1024 * 1024,
         }
     }
 }

@@ -22,17 +22,18 @@ fn main() -> praxis_utils::Result<()> {
             allow_file_io: false,
             allow_network: false,
             allow_os_access: false,
+            instruction_limit: 1_000_000, // 1 million instructions
+            memory_limit: 100 * 1024 * 1024, // 100 MB
         },
         enable_performance_monitoring: true,
         max_execution_time_ms: 16,
-        memory_limit: 100 * 1024 * 1024,
     };
 
     let mut context = ScriptingContext::new(config)?;
 
     demo_basic_scripting(&mut context)?;
     demo_math_api(&mut context)?;
-    demo_performance_monitoring(&context)?;
+    demo_performance_monitoring(&mut context)?;
 
     println!("\n=== Demo Complete ===");
 
@@ -100,7 +101,7 @@ fn demo_math_api(context: &mut ScriptingContext) -> praxis_utils::Result<()> {
 }
 
 #[cfg(feature = "scripting")]
-fn demo_performance_monitoring(context: &ScriptingContext) -> praxis_utils::Result<()> {
+fn demo_performance_monitoring(context: &mut ScriptingContext) -> praxis_utils::Result<()> {
     println!("\n--- Performance Monitoring ---");
 
     context.load_string(
