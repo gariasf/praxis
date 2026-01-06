@@ -10,6 +10,10 @@
 //! - **`MeshLoader`**: OBJ file loader implementation
 //! - **`GltfLoader`**: GLTF/GLB file loader implementation
 //! - **`GltfAssetManager`**: Caching manager for GLTF assets
+//! - **`AsyncAssetLoader`**: Trait for non-blocking async loading with tokio
+//! - **`AsyncMeshLoader`**: Async OBJ loader with channel-based completion
+//! - **`AsyncGltfLoader`**: Async GLTF/GLB loader with channel-based completion
+//! - **`AsyncBatchLoader`**: Batch manager for multiple concurrent loads
 //! - Integration with `praxis_graphics::MeshAssetManager` for GPU upload
 //!
 //! # OBJ File Loading
@@ -96,7 +100,38 @@
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! # Async Asset Loading
+//!
+//! For non-blocking asset loading with completion notification:
+//!
+//! ```rust,no_run
+//! use praxis_assets::async_loader::{AsyncAssetLoader, AsyncMeshLoader};
+//!
+//! # async fn example() -> praxis_utils::Result<()> {
+//! // Create async loader
+//! let loader = AsyncMeshLoader::new();
+//!
+//! // Start loading asynchronously
+//! let (handle, receiver) = loader.load_async("assets/models/cube.obj").await?;
+//!
+//! // Do other work...
+//!
+//! // Check for completion (non-blocking)
+//! if let Ok(result) = receiver.try_recv() {
+//!     match result {
+//!         Ok(mesh_data) => println!("Loaded {} vertices", mesh_data.positions.len()),
+//!         Err(e) => eprintln!("Load failed: {}", e),
+//!     }
+//! }
+//!
+//! // Or wait for completion
+//! let mesh_data = receiver.recv().unwrap()?;
+//! # Ok(())
+//! # }
+//! ```
 
+pub mod async_loader;
 pub mod gltf_manager;
 pub mod loader;
 
@@ -105,6 +140,9 @@ use praxis_graphics::MeshData;
 use praxis_utils::Result;
 use std::path::Path;
 
+pub use async_loader::{
+    AsyncAssetLoader, AsyncBatchLoader, AsyncGltfLoader, AsyncMeshLoader, LoadHandle,
+};
 pub use gltf_manager::GltfAssetManager;
 pub use loader::{
     AssetLoader, GltfAnimation, GltfAsset, GltfLoader, GltfMaterial, GltfNode, GltfSkin,

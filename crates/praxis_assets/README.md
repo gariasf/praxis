@@ -6,8 +6,10 @@ Asset loading, management, and caching for the Praxis game engine.
 
 - **OBJ File Loading**: Load Wavefront OBJ mesh files with automatic triangulation
 - **GLTF/GLB File Loading**: Load GLTF 2.0 files with meshes, materials, textures, and node hierarchies
+- **Async Asset Loading**: Non-blocking loading with tokio and channel-based completion notification
 - **Asset Loader Trait**: Extensible trait-based architecture for any asset type
 - **Asset Caching**: `GltfAssetManager` provides caching for GLTF assets
+- **Batch Loading**: Load multiple assets concurrently with progress tracking
 - **Seamless Integration**: Direct integration with MeshAssetManager for GPU upload
 - **Error Handling**: Comprehensive error reporting for file I/O and parsing
 
@@ -189,6 +191,123 @@ for material in &asset.materials {
 }
 ```
 
+## Async Asset Loading
+
+For non-blocking asset loading that doesn't block the main thread:
+
+### Basic Async Loading
+
+```rust
+use praxis_assets::async_loader::{AsyncAssetLoader, AsyncMeshLoader};
+
+async fn load_async() -> praxis_utils::Result<()> {
+    let loader = AsyncMeshLoader::new();
+    
+    // Start loading asynchronously
+    let (handle, receiver) = loader.load_async("assets/models/cube.obj").await?;
+    
+    // Do other work while loading...
+    println!("Loading in background...");
+    
+    // Wait for completion
+    let mesh_data = receiver.recv().unwrap()?;
+    println!("Loaded {} vertices", mesh_data.positions.len());
+    
+    Ok(())
+}
+```
+
+### Non-Blocking Check
+
+```rust
+use praxis_assets::async_loader::{AsyncAssetLoader, AsyncMeshLoader};
+
+async fn load_with_check() -> praxis_utils::Result<()> {
+    let loader = AsyncMeshLoader::new();
+    let (handle, receiver) = loader.load_async("assets/models/cube.obj").await?;
+    
+    // Check if ready (non-blocking)
+    loop {
+        match receiver.try_recv() {
+            Ok(result) => {
+                let mesh_data = result?;
+                println!("Ready! Loaded {} vertices", mesh_data.positions.len());
+                break;
+            }
+            Err(_) => {
+                println!("Still loading...");
+                // Do other work
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
+        }
+    }
+    
+    Ok(())
+}
+```
+
+### Batch Loading
+
+Load multiple assets concurrently:
+
+```rust
+use praxis_assets::async_loader::{AsyncBatchLoader, AsyncMeshLoader};
+
+async fn batch_load() -> praxis_utils::Result<()> {
+    let loader = AsyncMeshLoader::new();
+    let mut batch = AsyncBatchLoader::new();
+    
+    // Queue multiple loads
+    batch.add(loader.load_async("cube.obj").await?);
+    batch.add(loader.load_async("sphere.obj").await?);
+    batch.add(loader.load_async("cylinder.obj").await?);
+    
+    // Check progress
+    println!("Loading: {}/{}", 
+        batch.completed_count(), 
+        batch.total_count());
+    
+    // Wait for all
+    let results = batch.wait_all();
+    println!("Loaded {} assets", results.len());
+    
+    Ok(())
+}
+```
+
+### Async GLTF Loading
+
+```rust
+use praxis_assets::async_loader::{AsyncAssetLoader, AsyncGltfLoader};
+
+async fn load_gltf_async() -> praxis_utils::Result<()> {
+    let loader = AsyncGltfLoader::new();
+    let (handle, receiver) = loader.load_async("assets/models/scene.gltf").await?;
+    
+    let asset = receiver.recv().unwrap()?;
+    println!("Loaded {} meshes", asset.meshes.len());
+    
+    Ok(())
+}
+```
+
+### Load Handle Operations
+
+```rust
+let (handle, receiver) = loader.load_async("model.obj").await?;
+
+// Check if finished
+if handle.is_finished() {
+    println!("Loading complete!");
+}
+
+// Get path
+println!("Loading: {}", handle.path().display());
+
+// Cancel (best effort)
+handle.cancel();
+```
+
 ## AssetLoader Trait
 
 The `AssetLoader<T>` trait provides a generic interface for loading any asset type:
@@ -200,7 +319,24 @@ pub trait AssetLoader<T> {
 }
 ```
 
-This trait can be implemented for textures, audio, configurations, and other asset types.
+The `AsyncAssetLoader<T>` trait provides async loading:
+
+```rust
+#[async_trait::async_trait]
+pub trait AsyncAssetLoader<T>: Send + Sync {
+    async fn load_async(
+        &self,
+        path: impl AsRef<Path> + Send,
+    ) -> Result<(LoadHandle, Receiver<Result<T>>)>;
+    
+    async fn load_many_async(
+        &self,
+        paths: impl IntoIterator<Item = impl AsRef<Path> + Send> + Send,
+    ) -> Result<Vec<(LoadHandle, Receiver<Result<T>>)>>;
+}
+```
+
+These traits can be implemented for textures, audio, configurations, and other asset types.
 
 ## Error Handling
 
@@ -219,10 +355,12 @@ Err("Mesh has too many vertices for u16 indices")
 
 ## Performance Considerations
 
-- **Loading**: File I/O is synchronous; consider background threads for large files (>10MB)
+- **Synchronous Loading**: File I/O blocks the calling thread
+- **Async Loading**: Uses tokio runtime and background threads for non-blocking I/O
 - **GPU Upload**: Meshes are uploaded immediately when `load_mesh()` is called
 - **Memory**: Mesh data is duplicated during upload (CPU + GPU copy)
 - **Batching**: Load multiple meshes before entering render loop for best performance
+- **Concurrent Loading**: `AsyncBatchLoader` can load multiple assets in parallel
 
 ## Examples
 
@@ -253,6 +391,9 @@ cargo run --example comprehensive_scene_demo
 
 - `tobj` 4.0: OBJ/MTL parsing
 - `gltf` 1.4: GLTF 2.0 parsing with image loading
+- `tokio` 1.40: Async runtime for non-blocking I/O
+- `crossbeam-channel` 0.5: Thread-safe channels for completion notification
+- `async-trait` 0.1: Async trait support
 - `praxis_utils`: Error handling, logging
 - `praxis_graphics`: MeshData, MeshAssetManager integration
 - `praxis_math`: Matrix and vector math (Mat4, Vec3, Quat)
@@ -261,9 +402,9 @@ cargo run --example comprehensive_scene_demo
 ## Future Enhancements
 
 ### OBJ Loader
-- Async/background loading
 - Material (`.mtl`) support
 - Vertex deduplication optimization
+- Streaming large files
 
 ### GLTF Loader
 - Animation support (in progress via `praxis_scene`)
@@ -271,7 +412,13 @@ cargo run --example comprehensive_scene_demo
 - Morph targets
 - KHR extensions support
 - Sparse accessor support
-- Background/async loading
+- Streaming large files
+
+### Async Loading
+- Progress reporting with percentage
+- Priority queues for load ordering
+- Resource pools for limiting concurrent loads
+- Hot-reloading/watch mode
 
 ## See Also
 

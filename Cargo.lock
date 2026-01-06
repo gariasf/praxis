@@ -3518,12 +3518,15 @@ dependencies = [
 name = "praxis_assets"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "crossbeam-channel",
  "gltf",
  "praxis_graphics",
  "praxis_math",
  "praxis_scene",
  "praxis_utils",
  "tobj",
+ "tokio",
 ]
 
 [[package]]
