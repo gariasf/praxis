@@ -10,9 +10,7 @@ use praxis_utils::Result;
 use std::sync::Arc;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::command_buffer::allocator::CommandBufferAllocator;
-use vulkano::command_buffer::{
-    AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer,
-};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer};
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
 use vulkano::device::Device;
@@ -60,34 +58,96 @@ impl TerrainRenderer {
     }
 
     /// Renders terrain chunks with texture splatting.
+    ///
+    /// This method records draw commands for all provided chunks into the given command buffer builder.
+    /// The builder must be within an active render pass before calling this method.
+    ///
+    /// # Arguments
+    ///
+    /// * `builder` - Command buffer builder within an active render pass
+    /// * `chunks` - Terrain chunks to render
+    /// * `material` - Terrain material configuration
+    /// * `splatmap` - Splat map for texture blending
+    /// * `view_matrix` - Camera view matrix
+    /// * `proj_matrix` - Camera projection matrix
     pub fn render_chunks(
         &self,
+        builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
         chunks: &[&TerrainChunk],
         material: &TerrainMaterial,
         splatmap: &SplatMap,
         view_matrix: Mat4,
         proj_matrix: Mat4,
     ) -> Result<()> {
+        let pipeline = self
+            .terrain_pipeline
+            .as_ref()
+            .ok_or_else(|| praxis_utils::eyre::eyre!("Terrain pipeline not set"))?;
+
+        builder
+            .bind_pipeline_graphics(pipeline.clone())
+            .map_err(|e| praxis_utils::eyre::eyre!("Failed to bind terrain pipeline: {}", e))?;
+
         for chunk in chunks {
             if let Some(mesh) = &chunk.meshes[chunk.lod.current_level] {
-                self.render_chunk(chunk, mesh, material, splatmap, view_matrix, proj_matrix)?;
+                self.render_chunk(builder, chunk, mesh, material, splatmap, view_matrix, proj_matrix)?;
             }
         }
 
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_chunk(
         &self,
+        builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
         chunk: &TerrainChunk,
         mesh: &GpuMesh,
         _material: &TerrainMaterial,
         _splatmap: &SplatMap,
-        _view_matrix: Mat4,
-        _proj_matrix: Mat4,
+        view_matrix: Mat4,
+        proj_matrix: Mat4,
     ) -> Result<()> {
-        let _model_matrix = Mat4::from_translation(chunk.id.world_position(64.0));
-        let _ = mesh;
+        let pipeline = self
+            .terrain_pipeline
+            .as_ref()
+            .ok_or_else(|| praxis_utils::eyre::eyre!("Terrain pipeline not set"))?;
+
+        let model_matrix = Mat4::from_translation(chunk.id.world_position(64.0));
+        let model_view_proj = proj_matrix * view_matrix * model_matrix;
+
+        #[repr(C)]
+        #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+        struct ModelPushConstants {
+            model: [[f32; 4]; 4],
+            model_view_proj: [[f32; 4]; 4],
+        }
+
+        let push_constants = ModelPushConstants {
+            model: model_matrix.to_cols_array_2d(),
+            model_view_proj: model_view_proj.to_cols_array_2d(),
+        };
+
+        builder
+            .bind_vertex_buffers(0, mesh.vertex_buffer.clone())
+            .map_err(|e| praxis_utils::eyre::eyre!("Failed to bind vertex buffer: {}", e))?
+            .bind_index_buffer(mesh.index_buffer.clone())
+            .map_err(|e| praxis_utils::eyre::eyre!("Failed to bind index buffer: {}", e))?;
+
+        unsafe {
+            builder
+                .push_constants(
+                    pipeline.layout().clone(),
+                    0,
+                    push_constants,
+                )
+                .map_err(|e| praxis_utils::eyre::eyre!("Failed to push constants: {}", e))?;
+
+            builder
+                .draw_indexed(mesh.index_count, 1, 0, 0, 0)
+                .map_err(|e| praxis_utils::eyre::eyre!("Failed to draw indexed: {}", e))?;
+        }
+
         Ok(())
     }
 
