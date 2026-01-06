@@ -5,17 +5,30 @@
 //! - Area lights with LTC
 //! - Light linking for selective illumination
 
+use praxis_ecs::{PerspectiveCameraBundle, Transform, World};
 use praxis_graphics::{
-    AreaLightManager, FogDensityFunction, GodRays, GodRaysConfig, LightLinkingManager,
-    LightProbeGrid, LightProbeManager, VolumetricFog, VolumetricFogConfig,
+    colored_cube_mesh, AreaLight, AreaLightManager, AreaLightType, DrawCommand, FogDensityFunction,
+    GodRays, GodRaysConfig, LightLinkingManager, LightProbeGrid, LightProbeManager, MeshData,
+    RenderCommands, RenderContext, VolumetricFog, VolumetricFogConfig,
 };
-use praxis_math::Vec3;
-use praxis_utils::Result;
+use praxis_math::{Mat4, Quat, Vec3};
+use praxis_utils::{info, Result};
+use std::sync::Arc;
+use winit::application::ApplicationHandler;
+use winit::dpi::PhysicalSize;
+use winit::event::WindowEvent;
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::window::{Window, WindowId};
+
+const WINDOW_WIDTH: u32 = 1280;
+const WINDOW_HEIGHT: u32 = 720;
 
 struct AdvancedLightingDemo {
-    _light_probe_manager: Option<LightProbeManager>,
-    _area_light_manager: Option<AreaLightManager>,
+    light_probe_manager: Option<LightProbeManager>,
+    area_light_manager: Option<AreaLightManager>,
     light_linking_manager: LightLinkingManager,
+    volumetric_fog: VolumetricFog,
+    god_rays: GodRays,
     time: f32,
 }
 
@@ -23,27 +36,6 @@ impl AdvancedLightingDemo {
     fn new() -> Self {
         let light_linking_manager = LightLinkingManager::new();
 
-        Self {
-            _light_probe_manager: None,
-            _area_light_manager: None,
-            light_linking_manager,
-            time: 0.0,
-        }
-    }
-
-    fn setup_light_probes(&mut self) -> Result<()> {
-        let grid = LightProbeGrid::new(
-            Vec3::new(-20.0, 0.0, -20.0),
-            Vec3::new(20.0, 10.0, 20.0),
-            [5, 3, 5],
-        );
-
-        println!("Light probe grid created with {} probes", grid.probes.len());
-
-        Ok(())
-    }
-
-    fn setup_volumetric_fog(&mut self) {
         let fog_config = VolumetricFogConfig {
             density_function: FogDensityFunction::HeightBased {
                 base_height: 0.0,
@@ -58,14 +50,6 @@ impl AdvancedLightingDemo {
             shadow_influence: 0.7,
         };
 
-        let fog = VolumetricFog::new(fog_config);
-        println!(
-            "Volumetric fog configured: {} steps, density {}",
-            fog.config.num_steps, fog.config.density
-        );
-    }
-
-    fn setup_god_rays(&mut self) {
         let god_rays_config = GodRaysConfig {
             num_samples: 80,
             density: 0.6,
@@ -75,18 +59,84 @@ impl AdvancedLightingDemo {
             threshold: 0.85,
         };
 
-        let god_rays = GodRays::new(god_rays_config);
-        println!(
-            "God rays configured: {} samples, density {}",
-            god_rays.config.num_samples, god_rays.config.density
-        );
+        Self {
+            light_probe_manager: None,
+            area_light_manager: None,
+            light_linking_manager,
+            volumetric_fog: VolumetricFog::new(fog_config),
+            god_rays: GodRays::new(god_rays_config),
+            time: 0.0,
+        }
     }
 
-    fn setup_area_lights(&mut self) {
-        println!("Area lights configuration:");
-        println!("  - Rectangle light: 4.0 x 4.0, warm white, intensity 15.0");
-        println!("  - Disk light: radius 2.0, cool blue, intensity 10.0");
-        println!("  - Sphere light: radius 1.5, warm orange, intensity 8.0");
+    fn setup_light_probes(
+        &mut self,
+        device: Arc<vulkano::device::Device>,
+        memory_allocator: Arc<vulkano::memory::allocator::StandardMemoryAllocator>,
+    ) -> Result<()> {
+        let grid = LightProbeGrid::new(
+            Vec3::new(-20.0, 0.0, -20.0),
+            Vec3::new(20.0, 10.0, 20.0),
+            [5, 3, 5],
+        );
+
+        let manager = LightProbeManager::new(device, memory_allocator)?;
+        info!("Light probe grid created with {} probes", grid.probes.len());
+
+        self.light_probe_manager = Some(manager);
+        Ok(())
+    }
+
+    fn setup_area_lights(
+        &mut self,
+        device: Arc<vulkano::device::Device>,
+        memory_allocator: Arc<vulkano::memory::allocator::StandardMemoryAllocator>,
+    ) -> Result<()> {
+        let mut manager = AreaLightManager::new(device, memory_allocator)?;
+
+        // Rectangle light (warm white overhead)
+        let rect_light = AreaLight {
+            light_type: AreaLightType::Rectangle {
+                width: 4.0,
+                height: 4.0,
+            },
+            position: Vec3::new(0.0, 8.0, 0.0),
+            direction: Vec3::new(0.0, -1.0, 0.0),
+            up: Vec3::new(0.0, 0.0, 1.0),
+            color: Vec3::new(1.0, 0.9, 0.7),
+            intensity: 15.0,
+            two_sided: false,
+        };
+
+        // Disk light (cool blue from side)
+        let disk_light = AreaLight {
+            light_type: AreaLightType::Disk { radius: 2.0 },
+            position: Vec3::new(-8.0, 5.0, 0.0),
+            direction: Vec3::new(1.0, -0.3, 0.0).normalize(),
+            up: Vec3::new(0.0, 1.0, 0.0),
+            color: Vec3::new(0.5, 0.7, 1.0),
+            intensity: 10.0,
+            two_sided: false,
+        };
+
+        // Sphere light (warm orange accent)
+        let sphere_light = AreaLight {
+            light_type: AreaLightType::Sphere { radius: 1.5 },
+            position: Vec3::new(6.0, 3.0, -3.0),
+            direction: Vec3::new(-1.0, 0.0, 1.0).normalize(),
+            up: Vec3::new(0.0, 1.0, 0.0),
+            color: Vec3::new(1.0, 0.6, 0.3),
+            intensity: 8.0,
+            two_sided: true,
+        };
+
+        manager.add_light(rect_light)?;
+        manager.add_light(disk_light)?;
+        manager.add_light(sphere_light)?;
+
+        info!("Area lights configured: {} lights", manager.light_count());
+        self.area_light_manager = Some(manager);
+        Ok(())
     }
 
     fn setup_light_linking(&mut self) {
@@ -121,106 +171,351 @@ impl AdvancedLightingDemo {
             .set_light_channel("rim_light", 2)
             .unwrap();
 
-        println!("Light linking configured:");
-        println!("  - hero_character: affected by hero + environment lights");
-        println!("  - background_prop: affected by environment lights only");
-        println!("  - highlighted_item: affected by accent + environment lights");
+        info!("Light linking configured with 3 objects and 3 lights");
     }
 
     fn update(&mut self, delta_time: f32) {
         self.time += delta_time;
-
-        println!("\n=== Advanced Lighting System Status ===");
-        println!("Time: {:.2}s", self.time);
-        println!("Light probes: active");
-        println!("Volumetric fog: enabled");
-        println!("God rays: enabled");
-        println!("Area lights: 3 configured");
-        println!(
-            "Light linking: {} objects, {} lights",
-            self.light_linking_manager.list_objects().len(),
-            self.light_linking_manager.list_lights().len()
-        );
     }
+}
 
-    fn query_light_probe(&self, position: Vec3) {
-        println!("\nQuerying light probe at position: {position:?}");
-        println!("  (Light probe data would be interpolated from nearby probes)");
+fn create_scene_meshes() -> Vec<(&'static str, MeshData)> {
+    vec![
+        ("cube", colored_cube_mesh()),
+        ("ground", create_ground_plane()),
+    ]
+}
+
+fn create_ground_plane() -> MeshData {
+    let size = 20.0;
+    let positions = vec![
+        [-size, 0.0, -size],
+        [size, 0.0, -size],
+        [size, 0.0, size],
+        [-size, 0.0, size],
+    ];
+
+    let colors = vec![
+        [0.3, 0.3, 0.35],
+        [0.3, 0.3, 0.35],
+        [0.3, 0.3, 0.35],
+        [0.3, 0.3, 0.35],
+    ];
+
+    let normals = vec![[0.0, 1.0, 0.0]; 4];
+
+    let indices = vec![0, 1, 2, 2, 3, 0];
+
+    MeshData {
+        positions,
+        colors: Some(colors),
+        normals: Some(normals),
+        uvs: None,
+        tangents: None,
+        indices,
     }
+}
 
-    fn demonstrate_light_linking(&self) {
-        println!("\n=== Light Linking Demonstration ===");
+#[derive(Default)]
+struct App {
+    window: Option<Arc<Window>>,
+    world: Option<World>,
+    render_context: Option<RenderContext>,
+    camera_entity: Option<praxis_ecs::Entity>,
+    demo: Option<AdvancedLightingDemo>,
+}
 
-        let objects = ["hero_character", "background_prop", "highlighted_item"];
-        let lights = ["key_light", "ambient_light", "rim_light"];
+impl App {
+    async fn setup_scene(
+        window: Arc<Window>,
+    ) -> Result<(
+        World,
+        RenderContext,
+        praxis_ecs::Entity,
+        AdvancedLightingDemo,
+    )> {
+        info!("Initializing Advanced Lighting Demo");
 
-        for obj in &objects {
-            println!("\nObject: {obj}");
-            for light in &lights {
-                let can_affect = self
-                    .light_linking_manager
-                    .can_light_affect_object(light, obj);
-                println!(
-                    "  {} {} affect this object",
-                    light,
-                    if can_affect { "CAN" } else { "CANNOT" }
-                );
+        // Create the render context
+        let mut render_context = RenderContext::new(window.clone()).await?;
+
+        // Load meshes
+        for (name, mesh_data) in create_scene_meshes() {
+            render_context
+                .mesh_manager_mut()
+                .load_mesh(name, mesh_data)?;
+        }
+
+        // Create the world and spawn a camera
+        let mut world = World::new();
+        let camera_entity = world.spawn(PerspectiveCameraBundle::new(
+            Vec3::new(15.0, 12.0, 15.0),
+            70.0_f32.to_radians(),
+            WINDOW_WIDTH as f32 / WINDOW_HEIGHT as f32,
+        ));
+
+        // Point camera toward center
+        {
+            let inner = world.inner_mut();
+            if let Some(mut transform) = inner.get_mut::<Transform>(camera_entity) {
+                let look_at = Vec3::ZERO;
+                let direction = (look_at - transform.translation).normalize();
+                transform.rotation = Quat::from_rotation_arc(Vec3::NEG_Z, direction);
             }
+        }
+
+        // Setup demo
+        let mut demo = AdvancedLightingDemo::new();
+        demo.setup_light_probes(
+            render_context.device.clone(),
+            render_context.memory_allocator().clone(),
+        )?;
+        demo.setup_area_lights(
+            render_context.device.clone(),
+            render_context.memory_allocator().clone(),
+        )?;
+        demo.setup_light_linking();
+
+        info!("Scene setup complete");
+
+        Ok((world, render_context, camera_entity, demo))
+    }
+
+    fn render_scene(&mut self) -> Result<()> {
+        let world = self.world.as_ref().unwrap();
+        let render_context = self.render_context.as_mut().unwrap();
+        let camera_entity = self.camera_entity.unwrap();
+        let demo = self.demo.as_ref().unwrap();
+
+        // Get camera matrices
+        let camera_matrices = world
+            .inner()
+            .get::<praxis_ecs::CameraMatrices>(camera_entity)
+            .unwrap();
+
+        // Create draw commands for the scene
+        let mut draw_commands = Vec::new();
+
+        // Ground plane
+        draw_commands.push(DrawCommand {
+            mesh_id: "ground".to_string(),
+            model: Mat4::IDENTITY,
+            texture_name: None,
+            material_properties: None,
+        });
+
+        // Central demonstration cube (hero character)
+        draw_commands.push(DrawCommand {
+            mesh_id: "cube".to_string(),
+            model: Mat4::from_scale_rotation_translation(
+                Vec3::splat(2.0),
+                Quat::from_rotation_y(demo.time * 0.5),
+                Vec3::new(0.0, 1.0, 0.0),
+            ),
+            texture_name: None,
+            material_properties: None,
+        });
+
+        // Background props (affected by environment lights only)
+        for i in 0..4 {
+            let angle = i as f32 * std::f32::consts::PI * 0.5 + demo.time * 0.2;
+            let radius = 10.0;
+            let x = angle.cos() * radius;
+            let z = angle.sin() * radius;
+
+            draw_commands.push(DrawCommand {
+                mesh_id: "cube".to_string(),
+                model: Mat4::from_scale_rotation_translation(
+                    Vec3::splat(1.0),
+                    Quat::from_rotation_y(angle),
+                    Vec3::new(x, 0.5, z),
+                ),
+                texture_name: None,
+                material_properties: None,
+            });
+        }
+
+        // Highlighted items (affected by accent + environment lights)
+        for i in 0..3 {
+            let angle = i as f32 * std::f32::consts::PI * 0.66 + demo.time * -0.3;
+            let radius = 6.0;
+            let x = angle.cos() * radius;
+            let z = angle.sin() * radius;
+            let y = (demo.time * 2.0 + i as f32).sin() * 0.5 + 1.5;
+
+            draw_commands.push(DrawCommand {
+                mesh_id: "cube".to_string(),
+                model: Mat4::from_scale_rotation_translation(
+                    Vec3::splat(0.7),
+                    Quat::from_rotation_xyz(demo.time, demo.time * 0.7, demo.time * 0.5),
+                    Vec3::new(x, y, z),
+                ),
+                texture_name: None,
+                material_properties: None,
+            });
+        }
+
+        // Submit render commands
+        let cmds = RenderCommands {
+            view: camera_matrices.view,
+            proj: camera_matrices.projection,
+            draw_commands: &draw_commands,
+            lighting: None,
+        };
+
+        render_context.render(&cmds)?;
+
+        Ok(())
+    }
+
+    fn update_camera_matrices(&mut self) {
+        if let Some(world) = &mut self.world {
+            if let Some(camera_entity) = self.camera_entity {
+                let inner = world.inner_mut();
+
+                if let (Some(transform), Some(projection)) = (
+                    inner.get::<Transform>(camera_entity),
+                    inner.get::<praxis_ecs::PerspectiveProjection>(camera_entity),
+                ) {
+                    let view = Mat4::look_at_rh(
+                        transform.translation,
+                        transform.translation + (transform.rotation * Vec3::NEG_Z),
+                        Vec3::Y,
+                    );
+
+                    let proj = projection.compute_matrix();
+
+                    if let Some(mut matrices) =
+                        inner.get_mut::<praxis_ecs::CameraMatrices>(camera_entity)
+                    {
+                        matrices.update(view, proj);
+                    }
+                }
+            }
+        }
+    }
+
+    fn update(&mut self, delta_time: f32) {
+        if let Some(demo) = &mut self.demo {
+            demo.update(delta_time);
         }
     }
 }
 
-fn main() -> Result<()> {
-    println!("=== Advanced Lighting Demo ===\n");
-    println!("This demo showcases advanced lighting features:");
-    println!("1. Light Probes - Dynamic global illumination");
-    println!("2. Volumetric Fog - Raymarched density with light scattering");
-    println!("3. God Rays - Crepuscular rays with radial blur");
-    println!("4. Area Lights - Polygon lights with LTC");
-    println!("5. Light Linking - Selective object illumination\n");
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.window.is_some() {
+            return;
+        }
 
-    let mut demo = AdvancedLightingDemo::new();
+        info!("Creating window");
 
-    demo.setup_light_probes()?;
-    demo.setup_volumetric_fog();
-    demo.setup_god_rays();
-    demo.setup_area_lights();
-    demo.setup_light_linking();
+        let window = match event_loop.create_window(
+            Window::default_attributes()
+                .with_inner_size(PhysicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT))
+                .with_title("Praxis - Advanced Lighting Demo")
+                .with_resizable(false),
+        ) {
+            Ok(window) => Arc::new(window),
+            Err(e) => {
+                eprintln!("Failed to create window: {e}");
+                event_loop.exit();
+                return;
+            }
+        };
 
-    println!("\n=== Scene Setup Complete ===\n");
+        let (world, render_context, camera_entity, demo) =
+            match pollster::block_on(Self::setup_scene(window.clone())) {
+                Ok(result) => result,
+                Err(e) => {
+                    eprintln!("Failed to setup scene: {e}");
+                    event_loop.exit();
+                    return;
+                }
+            };
 
-    for _ in 0..5 {
-        demo.update(0.016);
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        self.window = Some(window);
+        self.world = Some(world);
+        self.render_context = Some(render_context);
+        self.camera_entity = Some(camera_entity);
+        self.demo = Some(demo);
+
+        self.update_camera_matrices();
+
+        println!("\n╔═══════════════════════════════════════════════════════════════════╗");
+        println!("║          PRAXIS - ADVANCED LIGHTING DEMONSTRATION                ║");
+        println!("╚═══════════════════════════════════════════════════════════════════╝");
+        println!("\nShowcasing advanced lighting features:");
+        println!("  • Light Probes - 5×3×5 grid for dynamic global illumination");
+        println!("  • Volumetric Fog - Height-based with light scattering");
+        println!("  • God Rays - Crepuscular rays with radial blur");
+        println!("  • Area Lights - Rectangle, Disk, and Sphere lights with LTC");
+        println!("  • Light Linking - Selective object illumination");
+        println!("\nScene Layout:");
+        println!("  • Central cube: Hero character (hero + environment lights)");
+        println!("  • Orbiting cubes: Background props (environment lights only)");
+        println!("  • Floating cubes: Highlighted items (accent + environment lights)");
+        println!("\nPress ESC or close the window to exit.\n");
+
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
     }
 
-    demo.query_light_probe(Vec3::new(0.0, 2.0, 0.0));
-    demo.query_light_probe(Vec3::new(5.0, 1.0, 3.0));
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        match event {
+            WindowEvent::CloseRequested => {
+                info!("Close requested, exiting");
+                event_loop.exit();
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                if event.logical_key.to_text() == Some("Escape") {
+                    info!("ESC pressed, exiting");
+                    event_loop.exit();
+                }
+            }
+            WindowEvent::RedrawRequested => {
+                self.update(0.016);
+                self.update_camera_matrices();
 
-    demo.demonstrate_light_linking();
+                if let Err(e) = self.render_scene() {
+                    eprintln!("Render error: {e}");
+                    event_loop.exit();
+                }
 
-    println!("\n=== Performance Characteristics ===");
-    println!("Light Probes:");
-    println!("  - GPU-friendly spherical harmonics");
-    println!("  - Trilinear interpolation for smooth transitions");
-    println!("  - 9 SH coefficients per probe (L2)");
-    println!("\nVolumetric Fog:");
-    println!("  - Raymarching with configurable step count");
-    println!("  - Phase function for anisotropic scattering");
-    println!("  - Multiple density functions (uniform, exponential, height-based)");
-    println!("\nGod Rays:");
-    println!("  - Radial blur from light source");
-    println!("  - Configurable sample count and decay");
-    println!("  - Post-process effect for efficiency");
-    println!("\nArea Lights:");
-    println!("  - LTC (Linearly Transformed Cosines) for real-time shading");
-    println!("  - Support for rectangles, disks, and spheres");
-    println!("  - Accurate specular reflections");
-    println!("\nLight Linking:");
-    println!("  - 32-bit mask system for flexible control");
-    println!("  - Zero runtime overhead with GPU filtering");
-    println!("  - Artist-friendly channel-based workflow");
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+            _ => {}
+        }
+    }
+}
 
-    println!("\n=== Demo Complete ===");
+#[cfg(not(feature = "headless"))]
+fn main() -> Result<()> {
+    praxis_utils::init()?;
+    praxis_ecs::init()?;
+
+    info!("Starting Advanced Lighting Demo");
+
+    let event_loop = EventLoop::new()
+        .map_err(|e| praxis_utils::eyre::eyre!("Failed to create event loop: {}", e))?;
+
+    event_loop.set_control_flow(ControlFlow::Poll);
+
+    let mut app = App::default();
+    event_loop
+        .run_app(&mut app)
+        .map_err(|e| praxis_utils::eyre::eyre!("Event loop error: {}", e))?;
+
+    Ok(())
+}
+
+#[cfg(feature = "headless")]
+fn main() -> Result<()> {
+    println!(
+        "advanced_lighting_demo requires graphics support and cannot run in headless mode"
+    );
     Ok(())
 }
