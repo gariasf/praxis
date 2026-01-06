@@ -20,6 +20,7 @@
 //! - `hdr`: High Dynamic Range rendering with tone mapping
 //! - `ssao`: Screen-space ambient occlusion for realistic shadowing
 //! - `post_process`: Post-processing framework for screen-space effects
+//! - `gpu_culling`: GPU-driven culling for large scenes with minimal CPU overhead
 //!
 //! # Unified Rendering API
 //!
@@ -298,6 +299,60 @@
 //!
 //! See the `ssao` module documentation for usage details.
 //!
+//! # GPU-Driven Culling System
+//!
+//! The GPU culling system provides a high-performance culling solution for large scenes:
+//!
+//! - **`GpuCullingManager`**: Manages compute shader dispatch for frustum and occlusion culling
+//! - **`GpuDrawCommand`**: Draw command structure with bounding sphere for culling
+//! - **`IndirectDrawCommand`**: Vulkan indirect draw command for GPU-driven rendering
+//! - **Frustum Culling**: Tests bounding spheres against view frustum planes on GPU
+//! - **Occlusion Culling**: Optional hierarchical Z-buffer culling using depth pyramid
+//! - **Indirect Draw Buffer**: GPU generates draw commands directly for `vkCmdDrawIndexedIndirect`
+//!
+//! The GPU culling implementation uses a compute shader that processes draw commands in parallel,
+//! testing each object's bounding sphere against the view frustum. Visible objects are atomically
+//! added to an indirect draw buffer, which can then be used for multi-draw indirect rendering.
+//!
+//! This approach dramatically reduces CPU overhead for large scenes by:
+//! - Eliminating per-object CPU culling tests
+//! - Avoiding CPU-GPU synchronization for draw counts
+//! - Enabling single multi-draw indirect call for all visible objects
+//! - Scaling efficiently to tens of thousands of objects
+//!
+//! ## Example
+//!
+//! ```rust,no_run
+//! use praxis_graphics::gpu_culling::{GpuCullingManager, GpuDrawCommand, GpuMeshData};
+//! use praxis_math::{Mat4, Vec4};
+//!
+//! # async fn example() -> praxis_utils::Result<()> {
+//! // Create culling manager
+//! // let mut culling_manager = GpuCullingManager::new(
+//! //     device.clone(),
+//! //     memory_allocator.clone(),
+//! //     descriptor_set_allocator.clone(),
+//! // )?;
+//!
+//! // Prepare draw commands with bounding spheres
+//! // let draw_commands: Vec<GpuDrawCommand> = objects.iter().map(|obj| {
+//! //     GpuDrawCommand::new(
+//! //         obj.transform,
+//! //         Vec4::new(0.0, 0.0, 0.0, 1.0), // bounding sphere
+//! //         obj.mesh_id,
+//! //         obj.material_id,
+//! //     )
+//! // }).collect();
+//!
+//! // Dispatch culling and render
+//! // culling_manager.prepare_frame(&draw_commands, &mesh_data)?;
+//! // culling_manager.dispatch_culling(cmd_builder, view_proj, frustum_planes, camera_pos)?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! See the `gpu_culling` module documentation for complete details.
+//!
 //! # Line Rendering System
 //!
 //! The line rendering system provides efficient rendering of colored line primitives
@@ -561,6 +616,7 @@
 
 pub mod deferred;
 mod device;
+pub mod gpu_culling;
 pub mod hdr;
 pub mod lighting;
 pub mod line_renderer;

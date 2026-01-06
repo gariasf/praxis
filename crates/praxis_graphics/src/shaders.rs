@@ -313,3 +313,21 @@ pub mod taa_fs {
         path: "src/shaders/taa.frag"
     }
 }
+
+/// Compiled compute shader for GPU-driven culling.
+pub mod gpu_culling_comp {
+    vulkano_shaders::shader! {
+        ty: "compute",
+        path: "src/shaders/gpu_culling.comp"
+    }
+}
+
+use std::sync::Arc;
+use vulkano::device::Device;
+
+/// Loads the GPU culling compute shader.
+pub fn load_gpu_culling_comp(
+    device: Arc<Device>,
+) -> Result<Arc<vulkano::shader::ShaderModule>, vulkano::Validated<vulkano::VulkanError>> {
+    gpu_culling_comp::load(device)
+}

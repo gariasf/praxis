@@ -1,0 +1,184 @@
+#version 450
+
+// GPU-driven culling compute shader
+// Performs frustum and optional occlusion culling on the GPU to generate indirect draw buffers
+
+// Work group size - process 64 draw commands per work group
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+// Input: Draw command data
+struct DrawCommand {
+    mat4 model;              // Model matrix (64 bytes)
+    vec4 bounding_sphere;    // xyz = center, w = radius (16 bytes)
+    uint mesh_id;            // Index into mesh data (4 bytes)
+    uint material_id;        // Index into material data (4 bytes)
+    uint padding1;           // Padding (4 bytes)
+    uint padding2;           // Padding (4 bytes)
+    // Total: 96 bytes
+};
+
+// Output: Indirect draw command (VkDrawIndexedIndirectCommand)
+struct IndirectDrawCommand {
+    uint index_count;        // Number of indices to draw
+    uint instance_count;     // Number of instances (1 for non-instanced)
+    uint first_index;        // First index in index buffer
+    int vertex_offset;       // Offset added to vertex index
+    uint first_instance;     // First instance ID
+    // Total: 20 bytes
+};
+
+// Culling uniforms
+layout(set = 0, binding = 0, std140) uniform CullingUniforms {
+    mat4 view_proj;          // View-projection matrix for frustum culling
+    vec4 frustum_planes[6];  // Frustum planes in world space (xyz = normal, w = distance)
+    vec3 camera_position;    // Camera position for distance-based culling
+    float _padding1;
+    uint enable_frustum_culling;
+    uint enable_occlusion_culling;
+    uint draw_command_count; // Number of draw commands to process
+    uint _padding2;
+} culling;
+
+// Input buffer: Draw commands
+layout(set = 0, binding = 1, std430) readonly buffer DrawCommands {
+    DrawCommand commands[];
+} draw_commands;
+
+// Input buffer: Mesh data (index counts, vertex offsets)
+struct MeshData {
+    uint index_count;
+    uint first_index;
+    int vertex_offset;
+    uint _padding;
+};
+
+layout(set = 0, binding = 2, std430) readonly buffer MeshDataBuffer {
+    MeshData meshes[];
+} mesh_data;
+
+// Output buffer: Indirect draw commands
+layout(set = 0, binding = 3, std430) writeonly buffer IndirectDrawBuffer {
+    IndirectDrawCommand draws[];
+} indirect_draws;
+
+// Output buffer: Visible draw command indices
+layout(set = 0, binding = 4, std430) writeonly buffer VisibleIndices {
+    uint indices[];
+} visible_indices;
+
+// Output buffer: Draw count (atomic counter)
+layout(set = 0, binding = 5, std430) buffer DrawCount {
+    uint count;
+} draw_count;
+
+// Optional: Occlusion depth pyramid for hierarchical Z-buffer culling
+layout(set = 0, binding = 6) uniform sampler2D depth_pyramid;
+
+// Frustum culling: Test bounding sphere against view frustum planes
+bool is_sphere_in_frustum(vec3 center, float radius) {
+    // Test sphere against all 6 frustum planes
+    for (int i = 0; i < 6; i++) {
+        vec4 plane = culling.frustum_planes[i];
+        float distance = dot(plane.xyz, center) + plane.w;
+        
+        // If sphere is completely outside any plane, it's not visible
+        if (distance < -radius) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Occlusion culling: Test bounding sphere against depth pyramid
+bool is_sphere_occluded(vec3 center, float radius) {
+    if (culling.enable_occlusion_culling == 0) {
+        return false;
+    }
+    
+    // Transform center to clip space
+    vec4 clip_pos = culling.view_proj * vec4(center, 1.0);
+    
+    // Perspective division
+    if (clip_pos.w <= 0.0) {
+        // Behind camera
+        return false;
+    }
+    
+    vec3 ndc = clip_pos.xyz / clip_pos.w;
+    
+    // Check if in NDC space
+    if (abs(ndc.x) > 1.0 || abs(ndc.y) > 1.0 || ndc.z < 0.0 || ndc.z > 1.0) {
+        return false;
+    }
+    
+    // Convert to UV space [0, 1]
+    vec2 uv = ndc.xy * 0.5 + 0.5;
+    
+    // Calculate screen-space radius
+    vec4 right_pos = culling.view_proj * vec4(center + vec3(radius, 0, 0), 1.0);
+    vec3 right_ndc = right_pos.xyz / right_pos.w;
+    float screen_radius = length(right_ndc.xy - ndc.xy);
+    
+    // Select appropriate mip level based on screen-space size
+    float mip_level = max(0.0, log2(screen_radius * 1024.0));
+    mip_level = min(mip_level, 10.0); // Max 10 mip levels
+    
+    // Sample depth pyramid at calculated mip level
+    float depth_sample = textureLod(depth_pyramid, uv, mip_level).r;
+    
+    // Conservative test: if any part of sphere could be visible, don't cull
+    float sphere_depth = ndc.z - screen_radius;
+    
+    return sphere_depth > depth_sample;
+}
+
+void main() {
+    uint draw_index = gl_GlobalInvocationID.x;
+    
+    // Early out if beyond command count
+    if (draw_index >= culling.draw_command_count) {
+        return;
+    }
+    
+    // Load draw command
+    DrawCommand cmd = draw_commands.commands[draw_index];
+    
+    // Transform bounding sphere center to world space
+    vec4 world_center = cmd.model * vec4(cmd.bounding_sphere.xyz, 1.0);
+    float world_radius = cmd.bounding_sphere.w * length(vec3(cmd.model[0][0], cmd.model[1][1], cmd.model[2][2]));
+    
+    bool is_visible = true;
+    
+    // Frustum culling
+    if (culling.enable_frustum_culling != 0) {
+        if (!is_sphere_in_frustum(world_center.xyz, world_radius)) {
+            is_visible = false;
+        }
+    }
+    
+    // Occlusion culling
+    if (is_visible && culling.enable_occlusion_culling != 0) {
+        if (is_sphere_occluded(world_center.xyz, world_radius)) {
+            is_visible = false;
+        }
+    }
+    
+    // If visible, add to output buffer
+    if (is_visible) {
+        // Atomically increment draw count and get index
+        uint output_index = atomicAdd(draw_count.count, 1);
+        
+        // Get mesh data
+        MeshData mesh = mesh_data.meshes[cmd.mesh_id];
+        
+        // Write indirect draw command
+        indirect_draws.draws[output_index].index_count = mesh.index_count;
+        indirect_draws.draws[output_index].instance_count = 1;
+        indirect_draws.draws[output_index].first_index = mesh.first_index;
+        indirect_draws.draws[output_index].vertex_offset = mesh.vertex_offset;
+        indirect_draws.draws[output_index].first_instance = draw_index;
+        
+        // Write visible index for material/transform lookup
+        visible_indices.indices[output_index] = draw_index;
+    }
+}

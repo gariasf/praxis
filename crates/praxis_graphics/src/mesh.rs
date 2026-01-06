@@ -505,6 +505,50 @@ impl MeshData {
             .collect()
     }
 
+    /// Calculates a bounding sphere that encompasses all vertices in the mesh.
+    ///
+    /// The bounding sphere is computed using Ritter's algorithm:
+    /// 1. Find the centroid of all vertices
+    /// 2. Find the farthest vertex from the centroid
+    /// 3. Set radius as distance from centroid to farthest vertex
+    ///
+    /// # Returns
+    ///
+    /// Returns (center, radius) of the bounding sphere in model space.
+    /// Returns ((0,0,0), 0) if the mesh has no vertices.
+    pub fn calculate_bounding_sphere(&self) -> ([f32; 3], f32) {
+        if self.positions.is_empty() {
+            return ([0.0, 0.0, 0.0], 0.0);
+        }
+        
+        // Calculate centroid
+        let mut center = [0.0f32, 0.0, 0.0];
+        for pos in &self.positions {
+            center[0] += pos[0];
+            center[1] += pos[1];
+            center[2] += pos[2];
+        }
+        let count = self.positions.len() as f32;
+        center[0] /= count;
+        center[1] /= count;
+        center[2] /= count;
+        
+        // Find maximum distance from center
+        let mut max_dist_sq = 0.0f32;
+        for pos in &self.positions {
+            let dx = pos[0] - center[0];
+            let dy = pos[1] - center[1];
+            let dz = pos[2] - center[2];
+            let dist_sq = dx * dx + dy * dy + dz * dz;
+            if dist_sq > max_dist_sq {
+                max_dist_sq = dist_sq;
+            }
+        }
+        
+        let radius = max_dist_sq.sqrt();
+        (center, radius)
+    }
+
     /// Calculates tangent vectors for normal mapping using the method described by
     /// Lengyel's "Mathematics for 3D Game Programming and Computer Graphics".
     ///
@@ -1491,6 +1535,87 @@ mod tests {
 
         assert_eq!(vertices.len(), 1);
         assert_eq!(vertices[0].tangent, [1.0, 0.0, 0.0, 1.0]);
+    }
+
+    #[test]
+    fn test_calculate_bounding_sphere_empty() {
+        let mesh = MeshData::new(vec![], vec![]);
+        let (center, radius) = mesh.calculate_bounding_sphere();
+        assert_eq!(center, [0.0, 0.0, 0.0]);
+        assert_eq!(radius, 0.0);
+    }
+
+    #[test]
+    fn test_calculate_bounding_sphere_single_point() {
+        let positions = vec![[1.0, 2.0, 3.0]];
+        let mesh = MeshData::new(positions, vec![0]);
+        let (center, radius) = mesh.calculate_bounding_sphere();
+        assert_eq!(center, [1.0, 2.0, 3.0]);
+        assert_eq!(radius, 0.0);
+    }
+
+    #[test]
+    fn test_calculate_bounding_sphere_unit_cube() {
+        let positions = vec![
+            [-1.0, -1.0, -1.0],
+            [1.0, -1.0, -1.0],
+            [1.0, 1.0, -1.0],
+            [-1.0, 1.0, -1.0],
+            [-1.0, -1.0, 1.0],
+            [1.0, -1.0, 1.0],
+            [1.0, 1.0, 1.0],
+            [-1.0, 1.0, 1.0],
+        ];
+        let mesh = MeshData::new(positions, vec![]);
+        let (center, radius) = mesh.calculate_bounding_sphere();
+        
+        // Center should be at origin
+        assert!((center[0]).abs() < 0.01);
+        assert!((center[1]).abs() < 0.01);
+        assert!((center[2]).abs() < 0.01);
+        
+        // Radius should be sqrt(3) for unit cube
+        let expected_radius = (3.0f32).sqrt();
+        assert!((radius - expected_radius).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_calculate_bounding_sphere_offset() {
+        let positions = vec![
+            [5.0, 5.0, 5.0],
+            [7.0, 5.0, 5.0],
+            [7.0, 7.0, 5.0],
+            [5.0, 7.0, 5.0],
+        ];
+        let mesh = MeshData::new(positions, vec![]);
+        let (center, radius) = mesh.calculate_bounding_sphere();
+        
+        // Center should be at (6, 6, 5)
+        assert!((center[0] - 6.0).abs() < 0.01);
+        assert!((center[1] - 6.0).abs() < 0.01);
+        assert!((center[2] - 5.0).abs() < 0.01);
+        
+        // Radius should be sqrt(2) for this square
+        let expected_radius = (2.0f32).sqrt();
+        assert!((radius - expected_radius).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_calculate_bounding_sphere_line() {
+        let positions = vec![
+            [0.0, 0.0, 0.0],
+            [10.0, 0.0, 0.0],
+        ];
+        let mesh = MeshData::new(positions, vec![]);
+        let (center, radius) = mesh.calculate_bounding_sphere();
+        
+        // Center should be at midpoint
+        assert!((center[0] - 5.0).abs() < 0.01);
+        assert!((center[1]).abs() < 0.01);
+        assert!((center[2]).abs() < 0.01);
+        
+        // Radius should be 5.0
+        assert!((radius - 5.0).abs() < 0.01);
     }
 
     #[test]
