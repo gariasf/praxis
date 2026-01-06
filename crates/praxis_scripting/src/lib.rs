@@ -38,7 +38,7 @@ pub use sandbox::{SandboxConfig, SandboxLevel};
 pub use script_component::{ScriptComponent, ScriptInstance};
 pub use systems::{
     script_hot_reload_system, script_initialization_system, script_start_system,
-    script_update_system, ScriptingResource,
+    script_update_system, ScriptInitialized, ScriptStarted, ScriptingResource,
 };
 
 // Re-export mlua types for use in examples and user code
