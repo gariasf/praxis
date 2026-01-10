@@ -14,6 +14,131 @@ use praxis_ecs::{IntoSystemConfigs, Schedule, Transform, World};
 use praxis_math::Vec3;
 
 // ============================================================================
+// TEST RESOURCE CLEANUP
+// ============================================================================
+
+/// Wrapper around `World` that tracks spawned entities and ensures proper
+/// cleanup of physics resources after tests.
+///
+/// This prevents handle leaks between tests by automatically running
+/// `cleanup_physics_entities` when the wrapper is dropped.
+///
+/// # Example
+///
+/// ```rust
+/// # use super::*;
+/// let mut test_world = TestWorld::new();
+/// let entity = test_world.spawn((
+///     Transform::default(),
+///     RigidBody::Dynamic,
+///     Collider::sphere(1.0),
+/// ));
+/// // ... test code ...
+/// // Cleanup happens automatically when test_world is dropped
+/// ```
+pub struct TestWorld {
+    world: World,
+    spawned_entities: Vec<praxis_ecs::Entity>,
+}
+
+impl TestWorld {
+    /// Creates a new test world with physics resources initialized.
+    pub fn new() -> Self {
+        let mut world = World::new();
+        world.insert_resource(PhysicsWorld::new());
+        world.insert_resource(PhysicsConfig::default());
+        world.insert_resource(PhysicsTime::new());
+        world.insert_resource(ContactEvents::new());
+
+        Self {
+            world,
+            spawned_entities: Vec::new(),
+        }
+    }
+
+    /// Creates a new test world without physics resources.
+    /// Useful for tests that only need entity tracking.
+    pub fn new_minimal() -> Self {
+        Self {
+            world: World::new(),
+            spawned_entities: Vec::new(),
+        }
+    }
+
+    /// Spawns an entity and tracks it for cleanup.
+    pub fn spawn(&mut self, bundle: impl praxis_ecs::Bundle) -> praxis_ecs::Entity {
+        let entity = self.world.spawn(bundle);
+        self.spawned_entities.push(entity);
+        entity
+    }
+
+    /// Gets immutable access to the underlying world.
+    pub fn world(&self) -> &World {
+        &self.world
+    }
+
+    /// Gets mutable access to the underlying world.
+    pub fn world_mut(&mut self) -> &mut World {
+        &mut self.world
+    }
+
+    /// Gets mutable access to the inner bevy_ecs World.
+    pub fn inner_mut(&mut self) -> &mut bevy_ecs::world::World {
+        self.world.inner_mut()
+    }
+
+    /// Gets a component reference from an entity.
+    pub fn get<T: praxis_ecs::Component>(&self, entity: praxis_ecs::Entity) -> Option<&T> {
+        self.world.get::<T>(entity)
+    }
+
+    /// Gets a mutable component reference from an entity.
+    pub fn get_mut<T: praxis_ecs::Component>(
+        &mut self,
+        entity: praxis_ecs::Entity,
+    ) -> Option<bevy_ecs::world::Mut<T>> {
+        self.world.inner_mut().get_mut::<T>(entity)
+    }
+
+    /// Despawns an entity.
+    pub fn despawn(&mut self, entity: praxis_ecs::Entity) -> Result<(), bevy_ecs::error::EntityNotFound> {
+        self.world.despawn(entity)
+    }
+
+    /// Manually runs cleanup to verify proper resource deallocation.
+    pub fn cleanup(&mut self) {
+        let mut schedule = Schedule::default();
+        schedule.add_systems(cleanup_physics_entities);
+        schedule.run(self.world.inner_mut());
+    }
+
+    /// Returns the number of tracked entities.
+    pub fn tracked_entity_count(&self) -> usize {
+        self.spawned_entities.len()
+    }
+}
+
+impl Default for TestWorld {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Drop for TestWorld {
+    fn drop(&mut self) {
+        // Despawn all tracked entities
+        for entity in self.spawned_entities.drain(..) {
+            let _ = self.world.despawn(entity);
+        }
+
+        // Run cleanup system to ensure physics handles are properly released
+        let mut schedule = Schedule::default();
+        schedule.add_systems(cleanup_physics_entities);
+        schedule.run(self.world.inner_mut());
+    }
+}
+
+// ============================================================================
 // COMPONENT CREATION TESTS
 // ============================================================================
 
