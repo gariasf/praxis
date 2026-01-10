@@ -2,16 +2,23 @@
 
 use praxis_audio::{AudioListener, AudioManager, AudioSource, PlaybackSettings};
 
+/// Helper macro to conditionally skip tests when audio backend is unavailable
+macro_rules! skip_if_no_audio_backend {
+    ($manager_result:expr) => {
+        if $manager_result.is_err() {
+            eprintln!("Audio backend not available, skipping test");
+            return;
+        }
+    };
+}
+
 #[test]
 fn test_audio_manager_creation() {
     let result = AudioManager::new();
 
     // Audio manager creation may fail if no audio backend is available
     // This is expected in CI environments
-    if result.is_err() {
-        eprintln!("Audio backend not available, skipping test");
-        return;
-    }
+    skip_if_no_audio_backend!(result);
 
     let manager = result.unwrap();
     assert_eq!(manager.loaded_sound_count(), 0);
@@ -194,4 +201,30 @@ fn test_audio_system_integration_setup() {
     let _ = source1;
     let _ = source2;
     let _ = settings;
+}
+
+// Tests that require actual audio device interaction
+// These are skipped on Windows where audio device availability may vary
+
+#[test]
+#[cfg(not(target_os = "windows"))]
+fn test_audio_manager_with_device() {
+    let result = AudioManager::new();
+    skip_if_no_audio_backend!(result);
+
+    let manager = result.unwrap();
+    
+    // Verify manager starts with clean state
+    assert_eq!(manager.loaded_sound_count(), 0);
+    assert_eq!(manager.playing_sound_count(), 0);
+}
+
+#[test]
+#[cfg(not(target_os = "windows"))]
+fn test_audio_backend_initialization() {
+    let result = AudioManager::new();
+    skip_if_no_audio_backend!(result);
+
+    // If we reach here, the audio backend was successfully initialized
+    let _manager = result.unwrap();
 }
