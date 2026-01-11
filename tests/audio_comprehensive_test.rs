@@ -1,6 +1,7 @@
 //! Comprehensive integration tests for audio system functionality.
 
 use praxis_audio::{AudioListener, AudioManager, AudioSource, PlaybackSettings};
+use serial_test::serial;
 
 /// Helper macro to conditionally skip tests when audio backend is unavailable
 macro_rules! skip_if_no_audio_backend {
@@ -13,6 +14,7 @@ macro_rules! skip_if_no_audio_backend {
 }
 
 #[test]
+#[serial]
 fn test_audio_manager_creation() {
     let result = AudioManager::new();
 
@@ -207,6 +209,7 @@ fn test_audio_system_integration_setup() {
 // These are skipped on Windows where audio device availability may vary
 
 #[test]
+#[serial]
 #[cfg(not(target_os = "windows"))]
 fn test_audio_manager_with_device() {
     let result = AudioManager::new();
@@ -220,6 +223,7 @@ fn test_audio_manager_with_device() {
 }
 
 #[test]
+#[serial]
 #[cfg(not(target_os = "windows"))]
 fn test_audio_backend_initialization() {
     let result = AudioManager::new();

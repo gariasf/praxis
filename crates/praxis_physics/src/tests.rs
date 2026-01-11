@@ -12,6 +12,7 @@
 use super::*;
 use praxis_ecs::{IntoSystemConfigs, Schedule, Transform, World};
 use praxis_math::Vec3;
+use serial_test::serial;
 
 // ============================================================================
 // TEST RESOURCE CLEANUP
@@ -550,6 +551,7 @@ fn test_contact_events() {
 // ============================================================================
 
 #[test]
+#[serial]
 fn test_rigid_body_creation_dynamic() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -572,6 +574,7 @@ fn test_rigid_body_creation_dynamic() {
 }
 
 #[test]
+#[serial]
 fn test_rigid_body_creation_static() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -594,6 +597,7 @@ fn test_rigid_body_creation_static() {
 }
 
 #[test]
+#[serial]
 fn test_rigid_body_creation_kinematic() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -616,6 +620,7 @@ fn test_rigid_body_creation_kinematic() {
 }
 
 #[test]
+#[serial]
 fn test_kinematic_body_position_update() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -646,6 +651,7 @@ fn test_kinematic_body_position_update() {
 }
 
 #[test]
+#[serial]
 fn test_dynamic_body_physics_updates_transform() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -688,6 +694,7 @@ fn test_dynamic_body_physics_updates_transform() {
 }
 
 #[test]
+#[serial]
 fn test_velocity_component_updates_physics() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -715,6 +722,7 @@ fn test_velocity_component_updates_physics() {
 }
 
 #[test]
+#[serial]
 fn test_collider_synchronization() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -736,6 +744,7 @@ fn test_collider_synchronization() {
 }
 
 #[test]
+#[serial]
 fn test_friction_and_restitution_sync() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -772,6 +781,7 @@ fn test_friction_and_restitution_sync() {
 // ============================================================================
 
 #[test]
+#[serial]
 fn test_collision_event_receiver_system() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -838,6 +848,7 @@ fn test_collision_event_types() {
 }
 
 #[test]
+#[serial]
 fn test_collision_stopped_event() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -874,6 +885,7 @@ fn test_collision_stopped_event() {
 }
 
 #[test]
+#[serial]
 fn test_entity_without_receiver_ignored() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -909,6 +921,7 @@ fn test_entity_without_receiver_ignored() {
 }
 
 #[test]
+#[serial]
 fn test_sensor_collider() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -936,6 +949,7 @@ fn test_sensor_collider() {
 // ============================================================================
 
 #[test]
+#[serial]
 fn test_raycast_basic() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -985,6 +999,7 @@ fn test_raycast_basic() {
 }
 
 #[test]
+#[serial]
 fn test_raycast_miss() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -1028,6 +1043,7 @@ fn test_raycast_miss() {
 }
 
 #[test]
+#[serial]
 fn test_raycast_max_distance() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -1073,6 +1089,7 @@ fn test_raycast_max_distance() {
 }
 
 #[test]
+#[serial]
 fn test_point_inside_basic() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -1110,6 +1127,7 @@ fn test_point_inside_basic() {
 }
 
 #[test]
+#[serial]
 fn test_point_outside() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -1146,6 +1164,7 @@ fn test_point_outside() {
 }
 
 #[test]
+#[serial]
 fn test_raycast_all_no_hits() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -1163,6 +1182,7 @@ fn test_raycast_all_no_hits() {
 }
 
 #[test]
+#[serial]
 fn test_raycast_all_multiple_hits() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -1236,6 +1256,7 @@ fn test_raycast_all_multiple_hits() {
 // ============================================================================
 
 #[test]
+#[serial]
 fn test_fixed_timestep_no_step() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -1254,6 +1275,7 @@ fn test_fixed_timestep_no_step() {
 }
 
 #[test]
+#[serial]
 fn test_fixed_timestep_single_step() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -1277,6 +1299,7 @@ fn test_fixed_timestep_single_step() {
 }
 
 #[test]
+#[serial]
 fn test_fixed_timestep_multiple_steps() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -1305,6 +1328,7 @@ fn test_fixed_timestep_multiple_steps() {
 }
 
 #[test]
+#[serial]
 fn test_fixed_timestep_partial_accumulation() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -1328,6 +1352,7 @@ fn test_fixed_timestep_partial_accumulation() {
 }
 
 #[test]
+#[serial]
 fn test_fixed_timestep_accumulation_over_frames() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -1366,6 +1391,7 @@ fn test_fixed_timestep_accumulation_over_frames() {
 }
 
 #[test]
+#[serial]
 fn test_fixed_timestep_with_simulation() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -1435,6 +1461,7 @@ fn test_physics_time_should_step() {
 // ============================================================================
 
 #[test]
+#[serial]
 fn test_cleanup_physics_entities() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -1474,6 +1501,7 @@ fn test_cleanup_physics_entities() {
 // ============================================================================
 
 #[test]
+#[serial]
 fn test_complete_physics_pipeline() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -1528,6 +1556,7 @@ fn test_complete_physics_pipeline() {
 }
 
 #[test]
+#[serial]
 fn test_multiple_dynamic_bodies() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -1581,6 +1610,7 @@ fn test_multiple_dynamic_bodies() {
 }
 
 #[test]
+#[serial]
 fn test_external_forces_application() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());
@@ -1608,6 +1638,7 @@ fn test_external_forces_application() {
 }
 
 #[test]
+#[serial]
 fn test_static_body_does_not_move() {
     let mut world = World::new();
     world.insert_resource(PhysicsWorld::new());

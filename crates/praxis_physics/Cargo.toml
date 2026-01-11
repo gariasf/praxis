@@ -17,5 +17,8 @@ ron = { version = "0.8", optional = true }
 default = ["serialization"]
 serialization = ["serde", "ron"]
 
+[dev-dependencies]
+serial_test = "3.0"
+
 [lints]
 workspace = true

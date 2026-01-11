@@ -4,6 +4,7 @@
 //! different subsystems and cleaned up correctly.
 
 use praxis_ecs::{Component, Resource};
+use serial_test::serial;
 use std::fs;
 
 /// Test ECS entity lifecycle with multiple component types.
@@ -36,6 +37,7 @@ fn test_entity_lifecycle_with_multiple_components() {
 
 /// Test physics resource cleanup.
 #[test]
+#[serial]
 fn test_physics_resource_cleanup() {
     use praxis_ecs::World;
     use praxis_physics::{Collider, PhysicsWorld, RigidBody};
@@ -257,6 +259,7 @@ fn test_world_clear_all() {
 
 /// Test cleanup of entities with physics components.
 #[test]
+#[serial]
 fn test_physics_entity_cleanup() {
     use praxis_ecs::World;
     use praxis_physics::{Collider, ExternalForces, PhysicsVelocity, RigidBody};

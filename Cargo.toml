@@ -228,6 +228,7 @@ bevy_ecs = "0.14"
 tokio = { version = "1.40", features = ["full"] }
 tracing-subscriber = "0.3"
 base64 = "0.22"
+serial_test = "3.0"
 
 [[bench]]
 name = "mesh_upload"

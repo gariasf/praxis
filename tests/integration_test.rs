@@ -3,6 +3,7 @@
 //! These tests verify that different crates work together correctly,
 //! focusing on initialization flows, cross-crate interactions, and resource cleanup.
 
+use serial_test::serial;
 use std::sync::Once;
 
 // Global state for one-time initialization of tracing
@@ -227,6 +228,7 @@ fn test_input_state_cleanup() {
 
 /// Test physics world creation and cleanup.
 #[test]
+#[serial]
 fn test_physics_world_cleanup() {
     use praxis_ecs::World;
     use praxis_physics::{Collider, PhysicsWorld, RigidBody};
@@ -353,6 +355,7 @@ f 1 2 3
 
 /// Test cross-crate type compatibility (Transform with Physics).
 #[test]
+#[serial]
 fn test_transform_physics_compatibility() {
     use praxis_ecs::{GlobalTransform, Transform, World};
     use praxis_math::Vec3;
