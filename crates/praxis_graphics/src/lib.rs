@@ -2724,7 +2724,7 @@ pub use area_lights::{
 pub use bindless::{
     BindlessMaterialData, BindlessTextureManager, MAX_BINDLESS_MATERIALS, MAX_BINDLESS_TEXTURES,
 };
-pub use deferred::{DeferredRenderer, GBuffer};
+pub use deferred::{DeferredRenderParams, DeferredRenderer, GBuffer};
 pub use environment_probe::{
     EnvironmentProbe, EnvironmentProbeCapture, EnvironmentProbeConfig, EnvironmentProbeManager,
     IblData, IblUniforms, ProbeUpdateMode, MAX_ENVIRONMENT_PROBES, SPECULAR_MIP_LEVELS,

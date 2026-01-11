@@ -550,21 +550,16 @@ impl TaaRenderer {
     }
 
     /// Applies TAA to the current frame.
-    #[allow(clippy::too_many_arguments)]
     pub fn apply(
         &self,
         builder: &mut AutoCommandBufferBuilder<
             impl vulkano::command_buffer::allocator::CommandBufferAllocator,
         >,
-        taa_target: &TaaRenderTarget,
-        current_frame: Arc<ImageView>,
-        velocity_buffer: Arc<ImageView>,
-        depth_buffer: Arc<ImageView>,
-        config: TaaConfig,
+        params: &TaaApplyParams,
     ) -> Result<()> {
         trace!("Applying TAA");
 
-        let config_uniforms = TaaUniforms::from(config);
+        let config_uniforms = TaaUniforms::from(params.config);
         let config_buffer = Buffer::from_data(
             self.memory_allocator.clone(),
             BufferCreateInfo {
@@ -584,14 +579,14 @@ impl TaaRenderer {
             self.descriptor_set_allocator.clone(),
             self.pipeline.layout().set_layouts()[0].clone(),
             [
-                WriteDescriptorSet::image_view_sampler(0, current_frame, self.sampler.clone()),
+                WriteDescriptorSet::image_view_sampler(0, params.current_frame.clone(), self.sampler.clone()),
                 WriteDescriptorSet::image_view_sampler(
                     1,
-                    taa_target.history_view.clone(),
+                    params.taa_target.history_view.clone(),
                     self.sampler.clone(),
                 ),
-                WriteDescriptorSet::image_view_sampler(2, velocity_buffer, self.sampler.clone()),
-                WriteDescriptorSet::image_view_sampler(3, depth_buffer, self.sampler.clone()),
+                WriteDescriptorSet::image_view_sampler(2, params.velocity_buffer.clone(), self.sampler.clone()),
+                WriteDescriptorSet::image_view_sampler(3, params.depth_buffer.clone(), self.sampler.clone()),
                 WriteDescriptorSet::buffer(4, config_buffer),
             ],
             [],
@@ -602,7 +597,7 @@ impl TaaRenderer {
             .begin_render_pass(
                 RenderPassBeginInfo {
                     clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into())],
-                    ..RenderPassBeginInfo::framebuffer(taa_target.framebuffer.clone())
+                    ..RenderPassBeginInfo::framebuffer(params.taa_target.framebuffer.clone())
                 },
                 SubpassBeginInfo {
                     contents: vulkano::command_buffer::SubpassContents::Inline,
@@ -613,7 +608,7 @@ impl TaaRenderer {
 
         let viewport = Viewport {
             offset: [0.0, 0.0],
-            extent: [taa_target.width as f32, taa_target.height as f32],
+            extent: [params.taa_target.width as f32, params.taa_target.height as f32],
             depth_range: 0.0..=1.0,
         };
 
@@ -652,6 +647,20 @@ impl TaaRenderer {
 
         Ok(())
     }
+}
+
+/// Parameters for TAA apply operation.
+pub struct TaaApplyParams<'a> {
+    /// TAA render target
+    pub taa_target: &'a TaaRenderTarget,
+    /// Current frame color texture
+    pub current_frame: Arc<ImageView>,
+    /// Velocity buffer texture
+    pub velocity_buffer: Arc<ImageView>,
+    /// Depth buffer texture
+    pub depth_buffer: Arc<ImageView>,
+    /// TAA configuration
+    pub config: TaaConfig,
 }
 
 /// Halton sequence generator for temporal jitter patterns.

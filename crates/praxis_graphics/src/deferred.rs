@@ -206,6 +206,46 @@ use vulkano::{
     render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass},
 };
 
+/// Parameters for deferred rendering.
+pub struct DeferredRenderParams<'a> {
+    /// Output framebuffer for final rendering
+    pub output_framebuffer: Arc<Framebuffer>,
+    /// Viewport for rendering
+    pub viewport: Viewport,
+    /// Draw commands for scene objects
+    pub draw_commands: &'a [DrawCommand],
+    /// View-projection uniform buffer
+    pub view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
+    /// Dynamic uniform buffer for per-object transforms
+    pub dynamic_uniform_buffer: &'a crate::uniform_buffer::DynamicUniformBuffer,
+    /// Mesh asset manager
+    pub mesh_manager: &'a mesh::MeshAssetManager,
+    /// Texture manager
+    pub texture_manager: &'a crate::texture::TextureManager,
+    /// Lighting uniforms buffer
+    pub lighting_buffer: vulkano::buffer::Subbuffer<lighting::LightingUniforms>,
+}
+
+/// Parameters for geometry pass rendering.
+struct GeometryPassParams<'a> {
+    gbuffer: &'a GBuffer,
+    viewport: Viewport,
+    draw_commands: &'a [DrawCommand],
+    view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
+    dynamic_uniform_buffer: &'a crate::uniform_buffer::DynamicUniformBuffer,
+    mesh_manager: &'a mesh::MeshAssetManager,
+    texture_manager: &'a crate::texture::TextureManager,
+}
+
+/// Parameters for lighting pass rendering.
+struct LightingPassParams {
+    output_framebuffer: Arc<Framebuffer>,
+    viewport: Viewport,
+    view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
+    lighting_buffer: vulkano::buffer::Subbuffer<lighting::LightingUniforms>,
+    ssao_texture: Option<Arc<ImageView>>,
+}
+
 /// G-Buffer render targets storing geometry data.
 ///
 /// The G-buffer contains multiple textures that store per-pixel geometry information:
@@ -718,20 +758,12 @@ impl DeferredRenderer {
     /// This performs two passes:
     /// 1. Geometry pass: Renders meshes to G-buffer
     /// 2. Lighting pass: Accumulates lighting from G-buffer to output framebuffer
-    #[allow(clippy::too_many_arguments)]
     pub fn render(
         &self,
         builder: &mut AutoCommandBufferBuilder<
             impl vulkano::command_buffer::allocator::CommandBufferAllocator,
         >,
-        output_framebuffer: Arc<Framebuffer>,
-        viewport: Viewport,
-        draw_commands: &[DrawCommand],
-        view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
-        dynamic_uniform_buffer: &crate::uniform_buffer::DynamicUniformBuffer,
-        mesh_manager: &mesh::MeshAssetManager,
-        texture_manager: &crate::texture::TextureManager,
-        lighting_buffer: vulkano::buffer::Subbuffer<lighting::LightingUniforms>,
+        params: &DeferredRenderParams,
     ) -> Result<()> {
         let gbuffer = self
             .gbuffer
@@ -740,23 +772,27 @@ impl DeferredRenderer {
 
         self.geometry_pass_render(
             builder,
-            gbuffer,
-            viewport.clone(),
-            draw_commands,
-            view_proj_buffer.clone(),
-            dynamic_uniform_buffer,
-            mesh_manager,
-            texture_manager,
+            &GeometryPassParams {
+                gbuffer,
+                viewport: params.viewport.clone(),
+                draw_commands: params.draw_commands,
+                view_proj_buffer: params.view_proj_buffer.clone(),
+                dynamic_uniform_buffer: params.dynamic_uniform_buffer,
+                mesh_manager: params.mesh_manager,
+                texture_manager: params.texture_manager,
+            },
         )?;
 
         self.lighting_pass_render(
             builder,
-            output_framebuffer,
-            viewport,
             gbuffer,
-            view_proj_buffer,
-            lighting_buffer,
-            None, // SSAO texture - can be provided via render_with_ssao
+            &LightingPassParams {
+                output_framebuffer: params.output_framebuffer.clone(),
+                viewport: params.viewport.clone(),
+                view_proj_buffer: params.view_proj_buffer.clone(),
+                lighting_buffer: params.lighting_buffer.clone(),
+                ssao_texture: None,
+            },
         )?;
 
         Ok(())
@@ -767,20 +803,12 @@ impl DeferredRenderer {
     /// This performs two passes:
     /// 1. Geometry pass: Renders meshes to G-buffer
     /// 2. Lighting pass: Accumulates lighting from G-buffer to output framebuffer, with SSAO applied to ambient
-    #[allow(clippy::too_many_arguments)]
     pub fn render_with_ssao(
         &self,
         builder: &mut AutoCommandBufferBuilder<
             impl vulkano::command_buffer::allocator::CommandBufferAllocator,
         >,
-        output_framebuffer: Arc<Framebuffer>,
-        viewport: Viewport,
-        draw_commands: &[DrawCommand],
-        view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
-        dynamic_uniform_buffer: &crate::uniform_buffer::DynamicUniformBuffer,
-        mesh_manager: &mesh::MeshAssetManager,
-        texture_manager: &crate::texture::TextureManager,
-        lighting_buffer: vulkano::buffer::Subbuffer<lighting::LightingUniforms>,
+        params: &DeferredRenderParams,
         ssao_texture: Arc<ImageView>,
     ) -> Result<()> {
         let gbuffer = self
@@ -790,42 +818,39 @@ impl DeferredRenderer {
 
         self.geometry_pass_render(
             builder,
-            gbuffer,
-            viewport.clone(),
-            draw_commands,
-            view_proj_buffer.clone(),
-            dynamic_uniform_buffer,
-            mesh_manager,
-            texture_manager,
+            &GeometryPassParams {
+                gbuffer,
+                viewport: params.viewport.clone(),
+                draw_commands: params.draw_commands,
+                view_proj_buffer: params.view_proj_buffer.clone(),
+                dynamic_uniform_buffer: params.dynamic_uniform_buffer,
+                mesh_manager: params.mesh_manager,
+                texture_manager: params.texture_manager,
+            },
         )?;
 
         self.lighting_pass_render(
             builder,
-            output_framebuffer,
-            viewport,
             gbuffer,
-            view_proj_buffer,
-            lighting_buffer,
-            Some(ssao_texture),
+            &LightingPassParams {
+                output_framebuffer: params.output_framebuffer.clone(),
+                viewport: params.viewport.clone(),
+                view_proj_buffer: params.view_proj_buffer.clone(),
+                lighting_buffer: params.lighting_buffer.clone(),
+                ssao_texture: Some(ssao_texture),
+            },
         )?;
 
         Ok(())
     }
 
     /// Executes the geometry pass, rendering meshes to the G-buffer.
-    #[allow(clippy::too_many_arguments)]
     fn geometry_pass_render(
         &self,
         builder: &mut AutoCommandBufferBuilder<
             impl vulkano::command_buffer::allocator::CommandBufferAllocator,
         >,
-        gbuffer: &GBuffer,
-        viewport: Viewport,
-        draw_commands: &[DrawCommand],
-        view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
-        dynamic_uniform_buffer: &crate::uniform_buffer::DynamicUniformBuffer,
-        mesh_manager: &mesh::MeshAssetManager,
-        texture_manager: &crate::texture::TextureManager,
+        params: &GeometryPassParams,
     ) -> Result<()> {
         trace!("Beginning geometry pass");
 
@@ -839,7 +864,7 @@ impl DeferredRenderer {
                         Some([0.0, 0.0, 0.0, 0.0].into()), // velocity
                         Some(1.0.into()),                  // depth
                     ],
-                    ..RenderPassBeginInfo::framebuffer(gbuffer.framebuffer.clone())
+                    ..RenderPassBeginInfo::framebuffer(params.gbuffer.framebuffer.clone())
                 },
                 SubpassBeginInfo {
                     contents: vulkano::command_buffer::SubpassContents::Inline,
@@ -853,20 +878,20 @@ impl DeferredRenderer {
             .map_err(|e| eyre::eyre!("Failed to bind geometry pipeline: {}", e))?;
 
         builder
-            .set_viewport(0, [viewport].into_iter().collect())
+            .set_viewport(0, [params.viewport.clone()].into_iter().collect())
             .map_err(|e| eyre::eyre!("Failed to set viewport: {}", e))?;
 
-        let default_texture = texture_manager
+        let default_texture = params.texture_manager
             .get_texture("_default_white")
             .ok_or_else(|| eyre::eyre!("Default white texture not found"))?;
 
-        for (object_index, draw_cmd) in draw_commands.iter().enumerate() {
-            let mesh = mesh_manager
+        for (object_index, draw_cmd) in params.draw_commands.iter().enumerate() {
+            let mesh = params.mesh_manager
                 .get_mesh(&draw_cmd.mesh_id)
                 .ok_or_else(|| eyre::eyre!("Mesh '{}' not found", draw_cmd.mesh_id))?;
 
             let texture = if let Some(ref tex_name) = draw_cmd.texture_name {
-                texture_manager
+                params.texture_manager
                     .get_texture(tex_name)
                     .ok_or_else(|| eyre::eyre!("Texture '{}' not found", tex_name))?
             } else {
@@ -896,8 +921,8 @@ impl DeferredRenderer {
                 self.descriptor_set_allocator.clone(),
                 self.geometry_pipeline.layout().set_layouts()[0].clone(),
                 [
-                    WriteDescriptorSet::buffer(0, view_proj_buffer.clone()),
-                    WriteDescriptorSet::buffer(1, dynamic_uniform_buffer.buffer().clone()),
+                    WriteDescriptorSet::buffer(0, params.view_proj_buffer.clone()),
+                    WriteDescriptorSet::buffer(1, params.dynamic_uniform_buffer.buffer().clone()),
                     WriteDescriptorSet::image_view_sampler(
                         2,
                         texture.view.clone(),
@@ -922,7 +947,7 @@ impl DeferredRenderer {
                 .bind_index_buffer(mesh.index_buffer.clone())
                 .map_err(|e| eyre::eyre!("Failed to bind index buffer: {}", e))?;
 
-            let dynamic_offset = dynamic_uniform_buffer.get_dynamic_offset(object_index);
+            let dynamic_offset = params.dynamic_uniform_buffer.get_dynamic_offset(object_index);
 
             unsafe {
                 let set_with_offsets = vulkano::descriptor_set::DescriptorSetWithOffsets::new(
@@ -962,18 +987,13 @@ impl DeferredRenderer {
     }
 
     /// Executes the lighting pass, accumulating lighting from G-buffer to output.
-    #[allow(clippy::too_many_arguments)]
     fn lighting_pass_render(
         &self,
         builder: &mut AutoCommandBufferBuilder<
             impl vulkano::command_buffer::allocator::CommandBufferAllocator,
         >,
-        output_framebuffer: Arc<Framebuffer>,
-        viewport: Viewport,
         gbuffer: &GBuffer,
-        view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
-        lighting_buffer: vulkano::buffer::Subbuffer<lighting::LightingUniforms>,
-        ssao_texture: Option<Arc<ImageView>>,
+        params: &LightingPassParams,
     ) -> Result<()> {
         trace!("Beginning lighting pass");
 
@@ -981,7 +1001,7 @@ impl DeferredRenderer {
             .begin_render_pass(
                 RenderPassBeginInfo {
                     clear_values: vec![Some([0.1, 0.2, 0.3, 1.0].into())],
-                    ..RenderPassBeginInfo::framebuffer(output_framebuffer)
+                    ..RenderPassBeginInfo::framebuffer(params.output_framebuffer.clone())
                 },
                 SubpassBeginInfo {
                     contents: vulkano::command_buffer::SubpassContents::Inline,
@@ -995,7 +1015,7 @@ impl DeferredRenderer {
             .map_err(|e| eyre::eyre!("Failed to bind lighting pipeline: {}", e))?;
 
         builder
-            .set_viewport(0, [viewport].into_iter().collect())
+            .set_viewport(0, [params.viewport.clone()].into_iter().collect())
             .map_err(|e| eyre::eyre!("Failed to set viewport: {}", e))?;
 
         let sampler = Sampler::new(
@@ -1009,7 +1029,7 @@ impl DeferredRenderer {
         .map_err(|e| eyre::eyre!("Failed to create G-buffer sampler: {}", e))?;
 
         // Create default white SSAO texture if not provided (1.0 = no occlusion)
-        let default_ssao_texture = if ssao_texture.is_none() {
+        let default_ssao_texture = if params.ssao_texture.is_none() {
             use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
             use vulkano::memory::allocator::AllocationCreateInfo;
 
@@ -1038,7 +1058,7 @@ impl DeferredRenderer {
             None
         };
 
-        let ssao_view = ssao_texture
+        let ssao_view = params.ssao_texture
             .as_ref()
             .or(default_ssao_texture.as_ref())
             .unwrap();
@@ -1055,8 +1075,8 @@ impl DeferredRenderer {
                     sampler.clone(),
                 ),
                 WriteDescriptorSet::image_view_sampler(3, gbuffer.depth.clone(), sampler.clone()),
-                WriteDescriptorSet::buffer(4, view_proj_buffer),
-                WriteDescriptorSet::buffer(5, lighting_buffer),
+                WriteDescriptorSet::buffer(4, params.view_proj_buffer.clone()),
+                WriteDescriptorSet::buffer(5, params.lighting_buffer.clone()),
                 WriteDescriptorSet::image_view_sampler(6, ssao_view.clone(), sampler),
             ],
             [],

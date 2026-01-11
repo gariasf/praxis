@@ -1,5 +1,17 @@
 //! Terrain and vegetation rendering systems.
 
+/// Parameters for rendering a terrain chunk.
+struct RenderChunkParams<'a> {
+    chunk: &'a TerrainChunk,
+    mesh: &'a GpuMesh,
+    #[allow(dead_code)]
+    material: &'a TerrainMaterial,
+    #[allow(dead_code)]
+    splatmap: &'a SplatMap,
+    view_matrix: Mat4,
+    proj_matrix: Mat4,
+}
+
 use crate::chunk::TerrainChunk;
 use crate::material::TerrainMaterial;
 use crate::splatmap::SplatMap;
@@ -119,12 +131,14 @@ impl TerrainRenderer {
             if let Some(mesh) = &chunk.meshes[chunk.lod.current_level] {
                 self.render_chunk(
                     builder,
-                    chunk,
-                    mesh,
-                    material,
-                    splatmap,
-                    view_matrix,
-                    proj_matrix,
+                    &RenderChunkParams {
+                        chunk,
+                        mesh,
+                        material,
+                        splatmap,
+                        view_matrix,
+                        proj_matrix,
+                    },
                 )?;
             }
         }
@@ -132,16 +146,10 @@ impl TerrainRenderer {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn render_chunk(
         &self,
         builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
-        chunk: &TerrainChunk,
-        mesh: &GpuMesh,
-        _material: &TerrainMaterial,
-        _splatmap: &SplatMap,
-        view_matrix: Mat4,
-        proj_matrix: Mat4,
+        params: &RenderChunkParams,
     ) -> Result<()> {
         let pipeline = self
             .terrain_pipeline
@@ -150,11 +158,11 @@ impl TerrainRenderer {
 
         // Calculate chunk's world-space position from its grid coordinates
         // Each chunk is positioned at (chunk_x * chunk_size, 0, chunk_z * chunk_size)
-        let model_matrix = Mat4::from_translation(chunk.id.world_position(64.0));
+        let model_matrix = Mat4::from_translation(params.chunk.id.world_position(64.0));
 
         // Compute Model-View-Projection matrix for vertex transformation in shader
         // Matrix multiplication order: projection * view * model (right-to-left application)
-        let model_view_proj = proj_matrix * view_matrix * model_matrix;
+        let model_view_proj = params.proj_matrix * params.view_matrix * model_matrix;
 
         // Push constants provide per-draw data directly to the GPU without descriptor sets
         // This is faster than uniform buffers for small, frequently-changing data
@@ -172,9 +180,9 @@ impl TerrainRenderer {
 
         // Bind vertex buffer containing terrain mesh vertices (position, normal, UV, etc.)
         builder
-            .bind_vertex_buffers(0, mesh.vertex_buffer.clone())
+            .bind_vertex_buffers(0, params.mesh.vertex_buffer.clone())
             .map_err(|e| praxis_utils::eyre::eyre!("Failed to bind vertex buffer: {}", e))?
-            .bind_index_buffer(mesh.index_buffer.clone())
+            .bind_index_buffer(params.mesh.index_buffer.clone())
             .map_err(|e| praxis_utils::eyre::eyre!("Failed to bind index buffer: {}", e))?;
 
         unsafe {
@@ -186,7 +194,7 @@ impl TerrainRenderer {
             // Issue indexed draw call: GPU renders mesh using indices to reference vertices
             // Parameters: (index_count, instance_count, first_index, vertex_offset, first_instance)
             builder
-                .draw_indexed(mesh.index_count, 1, 0, 0, 0)
+                .draw_indexed(params.mesh.index_count, 1, 0, 0, 0)
                 .map_err(|e| praxis_utils::eyre::eyre!("Failed to draw indexed: {}", e))?;
         }
 

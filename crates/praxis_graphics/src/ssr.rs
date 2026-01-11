@@ -387,6 +387,22 @@ impl SsrConfig {
     }
 }
 
+/// Parameters for SSR rendering.
+pub struct SsrRenderParams<'a> {
+    /// G-buffer data
+    pub gbuffer: &'a GBuffer,
+    /// Scene color texture
+    pub scene_color: Arc<ImageView>,
+    /// Projection matrix
+    pub projection: Mat4,
+    /// View matrix
+    pub view: Mat4,
+    /// Camera position
+    pub camera_position: Vec3,
+    /// Optional IBL data for environment probe fallback
+    pub ibl_data: Option<&'a IblData>,
+}
+
 /// SSR uniform data matching shader layout.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -964,28 +980,22 @@ impl SsrRenderer {
     }
 
     /// Renders SSR effect using G-buffer data.
-    #[allow(clippy::too_many_arguments)]
     pub fn render(
         &self,
         builder: &mut AutoCommandBufferBuilder<impl CommandBufferAllocator>,
-        gbuffer: &GBuffer,
-        scene_color: Arc<ImageView>,
-        projection: Mat4,
-        view: Mat4,
-        camera_position: Vec3,
-        ibl_data: Option<&IblData>,
+        params: &SsrRenderParams<'_>,
     ) -> Result<Arc<ImageView>> {
         trace!("Rendering SSR");
 
-        let inv_projection = projection.inverse();
-        let inv_view = view.inverse();
+        let inv_projection = params.projection.inverse();
+        let inv_view = params.view.inverse();
 
         let ssr_uniforms = SsrUniforms {
-            projection: projection.to_cols_array_2d(),
-            view: view.to_cols_array_2d(),
+            projection: params.projection.to_cols_array_2d(),
+            view: params.view.to_cols_array_2d(),
             inv_projection: inv_projection.to_cols_array_2d(),
             inv_view: inv_view.to_cols_array_2d(),
-            camera_position: [camera_position.x, camera_position.y, camera_position.z],
+            camera_position: [params.camera_position.x, params.camera_position.y, params.camera_position.z],
             max_steps: self.config.max_steps,
             max_binary_search_steps: self.config.max_binary_search_steps,
             step_size: self.config.step_size,
@@ -1031,20 +1041,20 @@ impl SsrRenderer {
                 [
                     WriteDescriptorSet::image_view_sampler(
                         0,
-                        gbuffer.normal.clone(),
+                        params.gbuffer.normal.clone(),
                         sampler.clone(),
                     ),
                     WriteDescriptorSet::image_view_sampler(
                         1,
-                        gbuffer.depth.clone(),
+                        params.gbuffer.depth.clone(),
                         sampler.clone(),
                     ),
                     WriteDescriptorSet::image_view_sampler(
                         2,
-                        gbuffer.metallic_roughness.clone(),
+                        params.gbuffer.metallic_roughness.clone(),
                         sampler.clone(),
                     ),
-                    WriteDescriptorSet::image_view_sampler(3, scene_color, sampler.clone()),
+                    WriteDescriptorSet::image_view_sampler(3, params.scene_color.clone(), sampler.clone()),
                     WriteDescriptorSet::buffer(4, ssr_uniform_buffer),
                 ],
                 [],
@@ -1129,7 +1139,7 @@ impl SsrRenderer {
                     WriteDescriptorSet::image_view_sampler(0, current_input, blur_sampler.clone()),
                     WriteDescriptorSet::image_view_sampler(
                         1,
-                        gbuffer.metallic_roughness.clone(),
+                        params.gbuffer.metallic_roughness.clone(),
                         blur_sampler,
                     ),
                 ],
@@ -1206,7 +1216,7 @@ impl SsrRenderer {
         }
 
         // Composite pass (blend SSR with environment probe fallback)
-        if let Some(ibl) = ibl_data {
+        if let Some(ibl) = params.ibl_data {
             let composite_sampler = Sampler::new(
                 self.device.clone(),
                 SamplerCreateInfo {
@@ -1233,12 +1243,12 @@ impl SsrRenderer {
                     ),
                     WriteDescriptorSet::image_view_sampler(
                         2,
-                        gbuffer.normal.clone(),
+                        params.gbuffer.normal.clone(),
                         composite_sampler.clone(),
                     ),
                     WriteDescriptorSet::image_view_sampler(
                         3,
-                        gbuffer.metallic_roughness.clone(),
+                        params.gbuffer.metallic_roughness.clone(),
                         composite_sampler,
                     ),
                 ],
