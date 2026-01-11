@@ -120,6 +120,7 @@ impl App {
             model: Mat4::IDENTITY,     // Identity matrix (no transformation)
             texture_name: None,        // No texture (will use vertex colors)
             material_properties: None, // No material properties
+            bone_matrices: None,       // No skeletal animation
         }];
 
         // Submit render commands

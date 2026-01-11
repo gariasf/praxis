@@ -944,6 +944,7 @@ use winit::window::Window;
 /// - Different mesh types per object
 /// - Optional custom textures (defaults to white texture if not specified)
 /// - Optional PBR material properties (defaults to standard properties if not specified)
+/// - Optional bone matrices for skeletal animation
 ///
 /// # Examples
 ///
@@ -956,6 +957,7 @@ use winit::window::Window;
 ///     model: Mat4::IDENTITY,
 ///     texture_name: None,
 ///     material_properties: None,
+///     bone_matrices: None,
 /// }
 /// # ;
 /// ```
@@ -969,6 +971,7 @@ use winit::window::Window;
 ///     model: Mat4::IDENTITY,
 ///     texture_name: Some("brick".to_string()),
 ///     material_properties: None,
+///     bone_matrices: None,
 /// }
 /// # ;
 /// ```
@@ -984,6 +987,21 @@ use winit::window::Window;
 ///     material_properties: Some(MaterialProperties::new()
 ///         .with_metallic(0.9)
 ///         .with_roughness(0.2)),
+///     bone_matrices: None,
+/// }
+/// # ;
+/// ```
+///
+/// Animated mesh with skeletal animation:
+/// ```rust,no_run
+/// # use praxis_graphics::DrawCommand;
+/// # use praxis_math::Mat4;
+/// DrawCommand {
+///     mesh_id: "character".to_string(),
+///     model: Mat4::IDENTITY,
+///     texture_name: Some("skin".to_string()),
+///     material_properties: None,
+///     bone_matrices: Some(vec![Mat4::IDENTITY; 10]), // Actual bone transforms
 /// }
 /// # ;
 /// ```
@@ -998,6 +1016,11 @@ pub struct DrawCommand {
     /// Optional material properties for this object.
     /// If None, uses default material properties (white, non-metallic, medium roughness).
     pub material_properties: Option<material::MaterialProperties>,
+    /// Optional bone matrices for skeletal animation (up to 256 bones).
+    /// If None, uses identity matrices (no skeletal animation).
+    /// For animated meshes, provide the final skinning matrices computed from
+    /// the animated pose.
+    pub bone_matrices: Option<Vec<Mat4>>,
 }
 
 /// Unified render commands supporting all rendering features.
@@ -2300,6 +2323,30 @@ impl RenderContext {
             .texture_manager
             .get_texture("_default_flat_normal")
             .ok_or_else(|| eyre::eyre!("Default flat normal texture not found"))?;
+
+        // Update bone matrices buffer if any draw command has bone matrices
+        // Note: Currently only supports one animated object per frame (the last one with bone matrices)
+        // For multiple animated objects, a dynamic bone matrices buffer would be needed
+        for draw_cmd in cmds.draw_commands.iter() {
+            if let Some(ref bone_matrices) = draw_cmd.bone_matrices {
+                trace!(
+                    "Uploading {} bone matrices for skeletal animation",
+                    bone_matrices.len()
+                );
+                
+                let bone_uniforms = uniform_buffer::BoneMatricesUniforms::from_matrices(bone_matrices);
+                
+                {
+                    let mut write_lock = self.bone_matrices_buffer.write().map_err(|e| {
+                        eyre::eyre!("Failed to lock bone matrices buffer for writing: {}", e)
+                    })?;
+                    *write_lock = bone_uniforms;
+                }
+                
+                // Break after first animated object (current limitation)
+                break;
+            }
+        }
 
         let mut draw_list: Vec<(
             Arc<DescriptorSet>,
