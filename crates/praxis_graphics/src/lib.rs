@@ -1473,6 +1473,10 @@ pub struct RenderContext {
     /// Bindless texture manager for zero-cost material switches.
     bindless_manager: Option<bindless::BindlessTextureManager>,
 
+    /// Dummy bindless descriptor set for when bindless is not enabled.
+    /// This is required because Set 2 is declared in the shader and must be bound.
+    dummy_bindless_descriptor_set: Option<Arc<DescriptorSet>>,
+
     /// Whether to use bindless rendering mode.
     use_bindless: bool,
 }
@@ -1742,6 +1746,15 @@ impl RenderContext {
         )
         .map_err(|e| eyre::eyre!("Failed to create shadow sampler: {}", e))?;
 
+        // Create dummy bindless descriptor set for Set 2
+        // This is required because the shader declares Set 2 even when not using bindless
+        debug!("Creating dummy bindless descriptor set");
+        let dummy_bindless_descriptor_set = Self::create_dummy_bindless_descriptor_set(
+            device.clone(),
+            memory_allocator.clone(),
+            &graphics_pipeline,
+        )?;
+
         info!(
             "Graphics context initialization complete in {:?}",
             init_start.elapsed()
@@ -1808,8 +1821,102 @@ impl RenderContext {
 
             // Bindless rendering (disabled by default)
             bindless_manager: None,
+            dummy_bindless_descriptor_set: Some(dummy_bindless_descriptor_set),
             use_bindless: false,
         })
+    }
+
+    /// Creates a dummy bindless descriptor set for Set 2.
+    ///
+    /// This is required because the shader declares Set 2 (bindless resources) but we need
+    /// a valid descriptor set bound even when not using bindless mode. The descriptor set
+    /// contains a single white texture and a default material to satisfy validation.
+    fn create_dummy_bindless_descriptor_set(
+        device: Arc<Device>,
+        memory_allocator: Arc<StandardMemoryAllocator>,
+        pipeline: &Arc<GraphicsPipeline>,
+    ) -> Result<Arc<DescriptorSet>> {
+        // Get the descriptor set layout for Set 2
+        let set_layout = pipeline.layout().set_layouts().get(2).ok_or_else(|| {
+            eyre::eyre!("Set 2 not found in pipeline layout")
+        })?;
+
+        // Create a single white pixel texture for the bindless array
+        let image = Image::new(
+            memory_allocator.clone(),
+            vulkano::image::ImageCreateInfo {
+                image_type: vulkano::image::ImageType::Dim2d,
+                format: vulkano::format::Format::R8G8B8A8_UNORM,
+                extent: [1, 1, 1],
+                usage: ImageUsage::SAMPLED | ImageUsage::TRANSFER_DST,
+                ..Default::default()
+            },
+            AllocationCreateInfo::default(),
+        )
+        .map_err(|e| eyre::eyre!("Failed to create dummy texture image: {}", e))?;
+
+        let image_view = ImageView::new_default(image)
+            .map_err(|e| eyre::eyre!("Failed to create dummy texture image view: {}", e))?;
+
+        // Create sampler
+        use vulkano::image::sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo};
+        let sampler = Sampler::new(
+            device.clone(),
+            SamplerCreateInfo {
+                mag_filter: Filter::Linear,
+                min_filter: Filter::Linear,
+                address_mode: [SamplerAddressMode::Repeat; 3],
+                ..Default::default()
+            },
+        )
+        .map_err(|e| eyre::eyre!("Failed to create dummy sampler: {}", e))?;
+
+        // Create a dummy material buffer with default values
+        let dummy_material = bindless::BindlessMaterialData {
+            base_color: [1.0, 1.0, 1.0, 1.0],
+            albedo_texture_index: 0,
+            normal_texture_index: 0,
+            metallic: 0.0,
+            roughness: 0.5,
+            emissive_strength: 0.0,
+            _padding: [0.0; 3],
+        };
+
+        let material_buffer = Buffer::from_data(
+            memory_allocator,
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            dummy_material,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create dummy material buffer: {}", e))?;
+
+        // Create descriptor set with dummy resources
+        let descriptor_set_allocator = Arc::new(
+            vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator::new(
+                device,
+                Default::default(),
+            ),
+        );
+
+        let descriptor_set = DescriptorSet::new(
+            descriptor_set_allocator,
+            set_layout.clone(),
+            [
+                WriteDescriptorSet::image_view_sampler(0, image_view, sampler),
+                WriteDescriptorSet::buffer(1, material_buffer),
+            ],
+            [],
+        )
+        .map_err(|e| eyre::eyre!("Failed to create dummy bindless descriptor set: {}", e))?;
+
+        Ok(descriptor_set)
     }
 
     /// Gets a reference to the mesh asset manager.
@@ -2493,6 +2600,30 @@ impl RenderContext {
         command_buffer_builder
             .set_viewport(0, [self.viewport.clone()].into_iter().collect())
             .map_err(|e| eyre::eyre!("Failed to set viewport: {}", e))?;
+
+        // Set push constant for material index (0xFFFFFFFF = traditional mode, not using bindless)
+        // The shader checks this value to determine whether to use bindless or traditional rendering
+        let material_index: u32 = 0xFFFF_FFFF;
+        command_buffer_builder
+            .push_constants(
+                self.graphics_pipeline.layout().clone(),
+                0,
+                material_index,
+            )
+            .map_err(|e| eyre::eyre!("Failed to set push constants: {}", e))?;
+
+        // Bind dummy bindless descriptor set (Set 2) to satisfy shader requirements
+        // Even though we're not using bindless mode, the shader declares Set 2 and it must be bound
+        if let Some(ref dummy_bindless_set) = self.dummy_bindless_descriptor_set {
+            command_buffer_builder
+                .bind_descriptor_sets(
+                    PipelineBindPoint::Graphics,
+                    self.graphics_pipeline.layout().clone(),
+                    2,
+                    dummy_bindless_set.clone(),
+                )
+                .map_err(|e| eyre::eyre!("Failed to bind dummy bindless descriptor set: {}", e))?;
+        }
 
         let mut last_material_set: Option<Arc<DescriptorSet>> = None;
 

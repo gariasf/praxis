@@ -155,12 +155,25 @@ layout(set = 0, binding = 2) uniform sampler2D albedo_texture;
 layout(set = 0, binding = 9) uniform sampler2D normal_map;
 
 // ============================================================================
+// Push Constants
+// ============================================================================
+// Push constant for material index (used in bindless mode)
+// When material_index is 0xFFFFFFFF, use traditional mode with bound descriptors
+layout(push_constant) uniform PushConstants {
+    uint material_index;
+} push;
+
+// ============================================================================
 // Bindless Textures and Materials (Set 2)
 // ============================================================================
 // Bindless rendering support using VK_EXT_descriptor_indexing.
 // When bindless mode is enabled, textures are accessed via a large array
 // and materials are indexed via push constants, eliminating per-material
 // descriptor set binds.
+//
+// NOTE: These bindings are only accessed when push.material_index != 0xFFFFFFFF
+// The shader checks this condition before accessing bindless resources.
+// The descriptor sets must still be bound (even if unused) to satisfy validation.
 
 // Bindless texture array (up to 4096 textures)
 layout(set = 2, binding = 0) uniform sampler2D bindless_textures[];
@@ -180,11 +193,6 @@ struct BindlessMaterial {
 layout(set = 2, binding = 1, std140) uniform BindlessMaterialData {
     BindlessMaterial materials[4096];
 } bindless_materials;
-
-// Push constant for material index (used in bindless mode)
-layout(push_constant) uniform PushConstants {
-    uint material_index;
-} push;
 
 // ============================================================================
 // Material Properties Uniform Buffer (Traditional Mode)
@@ -543,16 +551,16 @@ void main() {
     // Step 1: Sample Texture and Compute Base Albedo
     // ========================================================================
     
-    // Determine if using bindless mode based on push constant material index
-    // If material_index is 0xFFFFFFFF, use traditional mode
-    bool use_bindless = (push.material_index != 0xFFFFFFFF);
-    
     vec4 tex_color;
     vec3 tangent_normal;
     vec4 mat_base_color;
     float mat_metallic;
     float mat_roughness;
     float mat_emissive_strength;
+    
+    // Determine if using bindless mode based on push constant material index
+    // If material_index is 0xFFFFFFFF, use traditional mode
+    bool use_bindless = (push.material_index != 0xFFFFFFFF);
     
     if (use_bindless) {
         // ========================================================================
