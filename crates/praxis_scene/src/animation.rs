@@ -3185,7 +3185,12 @@ impl IkSolver {
         let target_dist = (target - root_pos).length();
 
         let chain_length = upper_length + lower_length;
-        let clamped_dist = target_dist.min(chain_length - 0.001);
+        let clamped_dist = target_dist.min(chain_length - 0.001).max(0.001);
+
+        // Validate bone lengths to avoid division by zero or NaN
+        if upper_length < 0.001 || lower_length < 0.001 {
+            return;
+        }
 
         let cos_angle = (clamped_dist.mul_add(
             -clamped_dist,
@@ -3208,6 +3213,11 @@ impl IkSolver {
         });
 
         let bend_axis = target_dir.cross(pole_dir).normalize_or_zero();
+
+        // Validate bend axis - if it's zero, we can't compute a valid rotation
+        if bend_axis.length_squared() < 0.001 {
+            return;
+        }
 
         let root_rot = Quat::from_axis_angle(bend_axis, -root_angle);
         let root_final = Quat::from_rotation_arc(Vec3::X, target_dir) * root_rot;
@@ -3319,6 +3329,12 @@ impl IkSolver {
                 .unwrap_or(Vec3::X);
 
             let new_dir = (positions[i + 1] - positions[i]).normalize_or_zero();
+            
+            // Skip if directions are invalid (zero length)
+            if new_dir.length_squared() < 0.001 || original_dir.length_squared() < 0.001 {
+                continue;
+            }
+            
             let rotation = Quat::from_rotation_arc(original_dir, new_dir);
 
             if let Some(current) = pose.local_transform(bone_idx) {
@@ -3351,6 +3367,11 @@ impl IkSolver {
 
         let target = constraint.target_position;
         let direction = (target - bone_pos).normalize_or_zero();
+
+        // Skip if direction is invalid (zero length)
+        if direction.length_squared() < 0.001 {
+            return;
+        }
 
         let rotation = Quat::from_rotation_arc(Vec3::Z, direction);
 
@@ -3736,7 +3757,13 @@ impl AdditiveAnimation {
 
                 let delta_trans = additive_trans - ref_trans;
                 let delta_rot = ref_rot.inverse() * additive_rot;
-                let delta_scale = additive_scale / ref_scale;
+                
+                // Safely compute delta scale, avoiding division by zero
+                let delta_scale = Vec3::new(
+                    if ref_scale.x.abs() > 0.001 { additive_scale.x / ref_scale.x } else { 1.0 },
+                    if ref_scale.y.abs() > 0.001 { additive_scale.y / ref_scale.y } else { 1.0 },
+                    if ref_scale.z.abs() > 0.001 { additive_scale.z / ref_scale.z } else { 1.0 },
+                );
 
                 if let Some(current) = base_pose.local_transform(*bone_idx) {
                     let current_trans = current.col(3).truncate();

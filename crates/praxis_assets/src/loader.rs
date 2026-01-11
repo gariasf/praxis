@@ -1397,7 +1397,7 @@ impl GltfLoader {
         for skin in document.skins() {
             // SKIN LOADING: Extract skeleton structure and bind pose
             // See load_skin() for details on bone hierarchy construction
-            let gltf_skin = Self::load_skin(&skin, &buffers, &node_map)?;
+            let gltf_skin = Self::load_skin(&skin, &buffers, &node_map, &document)?;
             skins.push(gltf_skin);
         }
 
@@ -1444,6 +1444,7 @@ impl GltfLoader {
         skin: &gltf::Skin,
         buffers: &[gltf::buffer::Data],
         node_map: &HashMap<usize, usize>,
+        document: &gltf::Document,
     ) -> Result<GltfSkin> {
         let reader = skin.reader(|buffer| Some(&buffers[buffer.index()]));
 
@@ -1476,12 +1477,20 @@ impl GltfLoader {
         let joints: Vec<gltf::Node> = skin.joints().collect();
         let mut parent_relationships: Vec<Option<usize>> = vec![None; joints.len()];
 
-        // Build a map of all nodes to their parents by traversing the scene
+        // Build a complete map of all GLTF nodes to their parents by traversing the entire scene
         let mut node_parents: HashMap<usize, usize> = HashMap::new();
-        for joint in &joints {
-            for child in joint.children() {
-                node_parents.insert(child.index(), joint.index());
+        
+        // Helper function to recursively build parent map
+        fn build_parent_map(node: &gltf::Node, parent_map: &mut HashMap<usize, usize>) {
+            for child in node.children() {
+                parent_map.insert(child.index(), node.index());
+                build_parent_map(&child, parent_map);
             }
+        }
+        
+        // Traverse all nodes in the document to build complete parent map
+        for node in document.nodes() {
+            build_parent_map(&node, &mut node_parents);
         }
 
         // Determine parent bone index for each joint

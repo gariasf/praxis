@@ -507,6 +507,10 @@ impl App {
                 // Apply IK
                 let ik_controller = create_ik_controller(Vec3::new(target_x, target_y, 0.0));
                 ik_controller.apply(&mut pose, &skeleton);
+                
+                // Update world transforms and skinning matrices after IK
+                pose.update_world_transforms(&skeleton);
+                pose.update_skinning_matrices(&skeleton);
 
                 // Update entity
                 if let Some(mut entity_pose) = world.inner_mut().get_mut::<AnimatedPose>(ik_entity)
@@ -558,6 +562,7 @@ impl App {
                 }
 
                 pose.update_world_transforms(&target_skeleton);
+                pose.update_skinning_matrices(&target_skeleton);
 
                 // Update entity
                 if let Some(mut entity_pose) =
@@ -617,6 +622,7 @@ impl App {
                 additive.apply(&mut pose, &recoil_clip, recoil_time, &skeleton);
 
                 pose.update_world_transforms(&skeleton);
+                pose.update_skinning_matrices(&skeleton);
 
                 // Update entity
                 if let Some(mut entity_pose) =
