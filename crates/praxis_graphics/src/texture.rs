@@ -85,6 +85,27 @@ impl Texture {
             data.len()
         );
 
+        // Validate dimensions
+        if width == 0 || height == 0 {
+            return Err(eyre::eyre!(
+                "Invalid texture dimensions: {}x{} (must be non-zero)",
+                width,
+                height
+            ));
+        }
+
+        // Validate data size (RGBA = 4 bytes per pixel)
+        let expected_size = (width * height * 4) as usize;
+        if data.len() != expected_size {
+            return Err(eyre::eyre!(
+                "Invalid texture data size: expected {} bytes for {}x{} RGBA8 texture, got {} bytes",
+                expected_size,
+                width,
+                height,
+                data.len()
+            ));
+        }
+
         // Create the GPU image
         let image = Image::new(
             allocator.clone(),

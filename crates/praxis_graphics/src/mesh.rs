@@ -75,6 +75,14 @@ impl GpuMesh {
             indices.len()
         );
 
+        // Validate mesh data
+        if vertices.is_empty() {
+            return Err(eyre::eyre!("Cannot create GPU mesh with empty vertex data"));
+        }
+        if indices.is_empty() {
+            return Err(eyre::eyre!("Cannot create GPU mesh with empty index data"));
+        }
+
         let vertex_count = vertices.len() as u32;
         let index_count = indices.len() as u32;
 
@@ -253,6 +261,14 @@ impl GpuMesh {
             vertices.len(),
             indices.len()
         );
+
+        // Validate mesh data
+        if vertices.is_empty() {
+            return Err(eyre::eyre!("Cannot create GPU mesh with empty vertex data"));
+        }
+        if indices.is_empty() {
+            return Err(eyre::eyre!("Cannot create GPU mesh with empty index data"));
+        }
 
         let vertex_count = vertices.len() as u32;
         let index_count = indices.len() as u32;
@@ -454,7 +470,16 @@ impl MeshData {
     /// If normals are not provided, vertices will use up direction (0.0, 1.0, 0.0).
     /// If UVs are not provided, vertices will use (0.0, 0.0).
     /// If tangents are not provided, vertices will use (1.0, 0.0, 0.0, 1.0).
+    ///
+    /// # Panics
+    ///
+    /// Panics if positions are empty. Mesh data must have at least one vertex.
     pub fn to_vertices(&self) -> Vec<Vertex3D> {
+        assert!(
+            !self.positions.is_empty(),
+            "MeshData must have at least one position"
+        );
+
         let default_color = [1.0, 1.0, 1.0];
         let default_normal = [0.0, 1.0, 0.0];
         let default_uv = [0.0, 0.0];

@@ -100,6 +100,27 @@ impl App {
         ));
         info!("Created camera entity: {:?}", camera_entity);
 
+        // Initialize camera matrices for the first frame
+        let inner = world.inner_mut();
+        if let Some(transform) = inner.get::<Transform>(camera_entity) {
+            if let Some(projection) =
+                inner.get::<praxis_ecs::PerspectiveProjection>(camera_entity)
+            {
+                let view = praxis_math::Mat4::look_at_rh(
+                    transform.translation,
+                    transform.translation + (transform.rotation * praxis_math::Vec3::NEG_Z),
+                    praxis_math::Vec3::Y,
+                );
+                let proj_matrix = projection.compute_matrix();
+
+                if let Some(mut matrices) =
+                    inner.get_mut::<praxis_ecs::CameraMatrices>(camera_entity)
+                {
+                    matrices.update(view, proj_matrix);
+                }
+            }
+        }
+
         Ok((world, render_context, camera_entity))
     }
 
