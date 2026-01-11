@@ -27,7 +27,7 @@ This guide provides comprehensive explanations of the core concepts and architec
 
 ## Rendering Pipeline Flow
 
-The rendering pipeline in Praxis follows a predictable flow from application initialization to frame presentation.
+The rendering pipeline in Praxis follows a predictable flow from application initialization to frame presentation. This section covers the basic rendering flow, as well as advanced techniques like Temporal Anti-Aliasing (TAA) and Screen-Space Reflections (SSR).
 
 ### High-Level Flow
 
@@ -4081,6 +4081,1190 @@ pool.release(output);
 ```
 
 For detailed information, see [Post-Processing System Documentation](post_processing_system.md).
+
+---
+
+## Temporal Anti-Aliasing (TAA)
+
+Temporal Anti-Aliasing (TAA) is an advanced rendering technique that uses information from previous frames to reduce aliasing artifacts and produce a temporally stable image. It's more efficient than traditional MSAA and produces higher quality results.
+
+### How TAA Works
+
+TAA leverages temporal information to achieve sub-pixel detail:
+
+```text
+TAA Process Flow
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Frame N-1:                Frame N:                  Output:
+┌──────────┐             ┌──────────┐              ┌──────────┐
+│ Previous │             │ Current  │              │ Blended  │
+│  Frame   │──────┬──────│  Frame   │──────────────│  Result  │
+│  (Jitter │      │      │ (Jitter  │              │ (Smooth) │
+│   0.2)   │      │      │   0.3)   │              │          │
+└──────────┘      │      └──────────┘              └──────────┘
+                  │            │
+                  │            │
+                  ▼            ▼
+            ┌────────────────────────┐
+            │  Velocity Buffer       │
+            │  (Motion Vectors)      │
+            │  - Per-pixel motion    │
+            │  - Used for reprojection│
+            └────────────────────────┘
+                     │
+                     ▼
+            ┌────────────────────────┐
+            │  Temporal Reprojection │
+            │  - Find corresponding  │
+            │    pixel in history    │
+            │  - Use velocity buffer │
+            └────────────────────────┘
+                     │
+                     ▼
+            ┌────────────────────────┐
+            │  Neighborhood Clamping │
+            │  - Reject ghosting     │
+            │  - Clamp history color │
+            │    to local variance   │
+            └────────────────────────┘
+                     │
+                     ▼
+            ┌────────────────────────┐
+            │  Blending              │
+            │  - Mix current + history│
+            │  - Typical: 90% history│
+            │              10% current│
+            └────────────────────────┘
+```
+
+### Key Components
+
+#### 1. Camera Jitter
+
+TAA uses sub-pixel camera jitter to sample different positions each frame:
+
+```text
+Halton Sequence Jitter Pattern
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Pixel Grid (zoomed in):
+┌─────┬─────┬─────┬─────┐
+│     │     │     │     │
+│  1● │   ● │  ●  │     │  ● = Sample positions
+│     │  3  │  5  │  7  │     across 16 frames
+├─────┼─────┼─────┼─────┤
+│     │     │     │     │
+│   ● │  2● │     │   ● │
+│  9  │     │ 11  │ 13  │
+├─────┼─────┼─────┼─────┤
+│     │     │     │     │
+│     │   ● │  ●  │     │
+│ 15  │  4  │  6  │  8  │
+└─────┴─────┴─────┴─────┘
+
+Halton(2,3) sequence provides low-discrepancy sampling
+Result: Better sub-pixel coverage over time
+```
+
+#### 2. Velocity Buffer
+
+Motion vectors track per-pixel movement between frames:
+
+```rust
+// Motion vectors encode screen-space movement
+// Generated during geometry pass
+let velocity = (current_screen_pos - previous_screen_pos) / dt;
+// Stored in velocity buffer (RG16F format)
+```
+
+#### 3. History Rejection
+
+Neighborhood clamping prevents ghosting artifacts:
+
+```text
+Neighborhood Clamping
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Current Frame Neighborhood:
+┌─────┬─────┬─────┐
+│ 0.2 │ 0.3 │ 0.2 │  Compute local color variance
+├─────┼─────┼─────┤
+│ 0.3 │ 0.5 │ 0.3 │  Min = 0.2, Max = 0.5
+├─────┼─────┼─────┤
+│ 0.2 │ 0.3 │ 0.2 │
+└─────┴─────┴─────┘
+
+History Sample: 0.9  ← Too different!
+
+Clamped History: 0.5  ← Clamped to local max
+
+Result: Prevents ghosting from disoccluded regions
+```
+
+### Using TAA in Praxis
+
+```rust
+use praxis_graphics::taa::{TaaRenderer, TaaConfig, HaltonSequence};
+
+// Create TAA renderer
+let taa_renderer = TaaRenderer::new(
+    device.clone(),
+    memory_allocator.clone(),
+)?;
+
+// Create render target with history buffer
+let mut taa_target = taa_renderer.create_render_target(1920, 1080)?;
+
+// Set up jitter sequence
+let mut halton = HaltonSequence::new();
+
+// Each frame:
+loop {
+    // Get jitter offset for this frame
+    let jitter = halton.next_jitter();
+    
+    // Apply jitter to projection matrix
+    let jittered_proj = apply_jitter_to_projection(
+        camera_proj,
+        jitter,
+        1920,
+        1080,
+    );
+    
+    // Render scene with jittered projection
+    // render_scene(jittered_proj, ...);
+    
+    // Apply TAA
+    let config = TaaConfig {
+        jitter_offset: jitter,
+        blend_factor: 0.1,  // 90% history, 10% current
+    };
+    
+    taa_renderer.apply(
+        &mut builder,
+        &taa_target,
+        current_frame,
+        velocity_buffer,
+        depth_buffer,
+        config,
+    )?;
+    
+    // Swap buffers for next frame
+    taa_target.swap_buffers();
+}
+```
+
+### Configuration Options
+
+```text
+TAA Configuration Trade-offs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+blend_factor (current frame weight):
+  0.05 (5%):  More stable, more ghosting
+  0.10 (10%): Balanced (default)
+  0.20 (20%): Less ghosting, less stable
+  
+Jitter Pattern:
+  8 samples:  Faster to converge, lower quality
+  16 samples: Balanced (default)
+  32 samples: Slower to converge, higher quality
+
+Performance Cost:
+  ~0.5-1.0ms @ 1080p
+  Scales with resolution
+  Needs velocity buffer generation (~0.3ms)
+```
+
+### Benefits and Limitations
+
+**Benefits**:
+- Effectively eliminates temporal aliasing (shimmering edges)
+- Works well with camera motion
+- Lower performance cost than MSAA
+- Produces sub-pixel detail through jitter
+- Temporally stable image
+
+**Limitations**:
+- Can introduce ghosting on fast-moving objects
+- Requires velocity buffer generation
+- Needs history buffer storage (2x memory)
+- Not suitable for VR (causes discomfort)
+
+---
+
+## Screen-Space Reflections (SSR)
+
+Screen-Space Reflections (SSR) is a technique that generates realistic reflections by ray marching through the depth buffer. It's efficient because it only considers visible geometry, producing high-quality reflections for smooth surfaces.
+
+### How SSR Works
+
+SSR uses hierarchical ray marching to find reflection intersections:
+
+```text
+SSR Algorithm Overview
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Ray Marching Pass
+   ┌────────────────────────────────────────────┐
+   │ For each pixel:                            │
+   │   1. Reconstruct world position from depth │
+   │   2. Calculate reflection ray:             │
+   │      R = reflect(V, N)                     │
+   │      V = view direction                    │
+   │      N = surface normal                    │
+   │   3. March ray through depth buffer        │
+   │   4. If hit: store hit UV + confidence     │
+   │      If miss: mark for environment fallback│
+   └────────────────────────────────────────────┘
+                      │
+                      ▼
+2. Roughness-Aware Blur Pass
+   ┌────────────────────────────────────────────┐
+   │ Apply variable blur based on roughness:    │
+   │   - Smooth surfaces: No blur               │
+   │   - Rough surfaces: Heavy blur             │
+   │   - Uses 2-pass separable Gaussian        │
+   └────────────────────────────────────────────┘
+                      │
+                      ▼
+3. Environment Probe Fallback
+   ┌────────────────────────────────────────────┐
+   │ For pixels with no screen-space hit:       │
+   │   - Sample environment probe               │
+   │   - Blend with SSR based on confidence     │
+   └────────────────────────────────────────────┘
+
+Visual Example:
+       Camera
+         │
+         │ View Ray (V)
+         ▼
+    ┌────────┐
+    │Surface │ ← Normal (N)
+    └────────┘
+         │ Reflection Ray (R)
+         │ reflected across normal
+         ▼
+    ┌────────┐
+    │ Object │ ← Hit! Sample color here
+    └────────┘
+```
+
+### Hierarchical Ray Marching
+
+SSR uses a depth buffer mipmap pyramid for efficient ray tracing:
+
+```text
+Hierarchical Ray Marching
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Depth Buffer Mipmap Chain:
+Level 0 (1920×1080):  Full resolution
+Level 1 (960×540):    Half resolution
+Level 2 (480×270):    Quarter resolution
+Level 3 (240×135):    Eighth resolution
+
+Ray Marching Strategy:
+1. Start at high mip level (coarse steps)
+   ┌─────────────────────────────────┐
+   │ ████████████░░░░░░░░░░░░░░░░    │ Large steps
+   └─────────────────────────────────┘
+   
+2. Step through mip levels (adaptive)
+   ┌─────────────────────────────────┐
+   │ ████████████████░░░░░░░░░░░     │ Medium steps
+   └─────────────────────────────────┘
+   
+3. Refine at low mip (fine steps)
+   ┌─────────────────────────────────┐
+   │ ████████████████████░░░░░       │ Small steps
+   └─────────────────────────────────┘
+
+Benefits:
+- Fewer samples needed (64 vs 256+)
+- Faster convergence
+- Adaptive step size
+```
+
+### Using SSR in Praxis
+
+```rust
+use praxis_graphics::ssr::{SsrRenderer, SsrConfig};
+
+// Configure SSR
+let config = SsrConfig::default()
+    .with_max_steps(64)                 // Ray marching steps
+    .with_max_binary_search_steps(8)    // Refinement steps
+    .with_thickness(0.1)                // Surface thickness
+    .with_max_roughness(0.8)            // Max roughness for reflections
+    .with_edge_fade_factor(0.1)         // Fade near screen edges
+    .with_blur_passes(2);               // Roughness blur passes
+
+// Create SSR renderer
+let mut ssr = SsrRenderer::new(
+    device.clone(),
+    memory_allocator.clone(),
+    1920,
+    1080,
+    config,
+)?;
+
+// Each frame, after G-buffer pass:
+let reflection_texture = ssr.render(
+    &mut builder,
+    &gbuffer,                           // G-buffer (normals, depth, roughness)
+    scene_color,                        // Current frame color
+    camera_proj,                        // Projection matrix
+    camera_view,                        // View matrix
+    camera_position,                    // Camera world position
+    Some(&ibl_data),                    // Environment probe (optional)
+)?;
+
+// reflection_texture now contains the SSR result
+// Blend it with the main scene in your composite pass
+```
+
+### Configuration Options
+
+```text
+SSR Configuration Trade-offs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+max_steps (ray marching steps):
+  32:  Fast, low quality, may miss intersections
+  64:  Balanced (default), good quality
+  128: Slow, high quality, accurate
+
+max_roughness (reflection cutoff):
+  0.5: Only mirror-like surfaces reflect
+  0.8: Most surfaces reflect (default)
+  1.0: All surfaces reflect (expensive)
+
+thickness (surface detection):
+  0.05: Thin surfaces, may miss hits
+  0.1:  Balanced (default)
+  0.2:  Thick surfaces, more false positives
+
+blur_passes (roughness blur):
+  0:  No blur, sharp reflections only
+  2:  Balanced (default)
+  4:  Heavy blur, smooth falloff
+
+Performance:
+  Ray march:  ~1.5ms @ 1080p
+  Blur:       ~0.5ms per pass
+  Composite:  ~0.2ms
+  Total:      ~2.7ms @ 1080p (default config)
+```
+
+### Limitations and Solutions
+
+```text
+SSR Limitations
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Problem: Can't reflect off-screen objects
+         ┌────────────────────┐
+         │   Screen Space     │
+         │  ┌─────┐           │
+         │  │ Obj │           │ ← Visible
+         │  └─────┘           │
+         │         \          │
+         │          \ Ray     │
+         │           \        │
+         └────────────\───────┘
+                       \
+                        \ ← Miss! Object not on screen
+                         
+Solution: Environment probe fallback
+         SSR miss → Sample environment map
+
+Problem: Screen-edge fade artifacts
+         Reflections cut off at screen edges
+         
+Solution: Edge fade factor (0.1)
+         Smoothly fade reflections near edges
+
+Problem: Depth discontinuities
+         Ray steps over thin objects
+         
+Solution: Binary search refinement
+         Refine hit position with 8 steps
+
+Problem: Rough surface reflections too sharp
+         
+Solution: Roughness-aware blur
+         Blur strength = roughness^2
+```
+
+### Integration with Deferred Rendering
+
+SSR works seamlessly with deferred rendering:
+
+```text
+SSR + Deferred Pipeline
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+G-Buffer Pass:
+  ┌─────────────────────────────────────┐
+  │ Albedo    │ Normal   │ Depth        │
+  │ [RGB]     │ [RGB]    │ [R32F]       │
+  ├───────────┼──────────┼──────────────┤
+  │ Metallic  │Roughness │ Velocity     │
+  │ [R]       │ [G]      │ [RG16F]      │
+  └─────────────────────────────────────┘
+             │
+             ▼
+Lighting Pass:
+  Compute base lighting (diffuse + specular)
+             │
+             ▼
+SSR Pass:
+  Read: Normal, Depth, Metallic/Roughness
+  Compute: Screen-space reflections
+  Output: Reflection color + confidence
+             │
+             ▼
+Composite Pass:
+  final_color = base_lighting + ssr_reflection * metallic
+```
+
+For more details on SSR implementation and examples, see `examples/complete_features_demo.rs`.
+
+---
+
+## Scene Serialization and Save System
+
+Praxis provides a comprehensive save/load system for persisting complete game state, including entity hierarchies, components, asset references, and scene metadata. The `SaveManager` makes it easy to implement save games, checkpoints, and level persistence.
+
+### SaveManager Overview
+
+The `SaveManager` handles:
+- **Full Entity Serialization**: Captures all components, hierarchies, and relationships
+- **Asset References**: Properly tracks meshes, textures, and materials
+- **Versioning**: Scene format versioning with migration support
+- **Metadata**: Timestamps, playtime, screenshots, and custom data
+- **Selective Persistence**: Mark entities with `NoSave` to exclude them
+
+```text
+Save/Load Data Flow
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SAVING:
+┌─────────────────────────────────────────────────────────────┐
+│                    ECS World State                           │
+│  Entity 0: Transform, MeshHandle, Name, Parent              │
+│  Entity 1: Transform, Camera, Children                       │
+│  Entity 2: DirectionalLight, Transform                       │
+│  ...                                                         │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ SaveManager::save_to_file()
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   SceneDefinition                            │
+│  - version: 1                                                │
+│  - metadata: name, description, timestamp                    │
+│  - entities: Vec<EntityDefinition>                           │
+│    └─► EntityDefinition:                                     │
+│         - transform: position, rotation, scale               │
+│         - components: mesh_id, material, etc.                │
+│         - hierarchy: parent/children relationships           │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ Serialize to RON
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    SaveFile (RON)                            │
+│  (                                                           │
+│    version: 1,                                               │
+│    metadata: (                                               │
+│      name: "Save Slot 1",                                    │
+│      timestamp: "2024-01-15T14:30:00Z",                      │
+│      playtime_seconds: 3600,                                 │
+│    ),                                                        │
+│    scene: (                                                  │
+│      entities: [                                             │
+│        (transform: (0, 0, 0), mesh: "cube", ...),            │
+│        ...                                                   │
+│      ]                                                       │
+│    )                                                         │
+│  )                                                           │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ Write to disk
+                           │
+                           ▼
+                  saves/slot1.ron
+
+LOADING:
+  Reverse process: Read RON → Deserialize → Restore ECS World
+```
+
+### Basic Usage
+
+```rust
+use praxis_scene::{SaveManager, SaveMetadata};
+use praxis_ecs::World;
+use std::path::Path;
+
+// Initialize
+let mut world = World::new();
+let mut save_manager = SaveManager::new();
+
+// Saving
+// ------
+
+// Create metadata
+let metadata = SaveMetadata::new("Chapter 1 - Forest Entrance")
+    .with_description("Player at the forest entrance, full health")
+    .with_playtime(3600)                    // 1 hour playtime
+    .with_game_version("1.0.0")
+    .with_screenshot("screenshots/slot1.png")
+    .with_tag("checkpoint")
+    .with_tag("autosave")
+    .with_custom_data("level", "forest_01")
+    .with_custom_data("player_hp", "100");
+
+// Save complete world state
+save_manager.save_to_file(
+    &mut world,
+    Path::new("saves/slot1.ron"),
+    metadata,
+)?;
+
+// Check statistics
+if let Some(stats) = save_manager.last_stats() {
+    println!("Saved {} entities in {:.2}ms", 
+        stats.entity_count, 
+        stats.duration_ms
+    );
+}
+
+// Loading
+// -------
+
+// Load world state (replaces current world)
+save_manager.load_from_file(
+    &mut world,
+    Path::new("saves/slot1.ron"),
+)?;
+
+// Preview metadata without loading
+let metadata = save_manager.read_metadata(Path::new("saves/slot1.ron"))?;
+println!("Save: {} ({})", metadata.name, metadata.timestamp);
+```
+
+### Selective Persistence
+
+Use the `NoSave` component to exclude entities from saves:
+
+```rust
+use praxis_ecs::{NoSave, Transform, MeshHandle};
+
+// Temporary particle effect - don't save
+world.spawn((
+    Transform::from_xyz(0.0, 5.0, 0.0),
+    MeshHandle::new("particle"),
+    NoSave,  // ← This entity won't be saved
+));
+
+// Persistent character - will be saved
+world.spawn((
+    Transform::from_xyz(0.0, 0.0, 0.0),
+    MeshHandle::new("player"),
+    // No NoSave component = will be saved
+));
+```
+
+### Save File Format
+
+Save files use RON (Rusty Object Notation) for human-readable serialization:
+
+```ron
+(
+  version: 1,
+  metadata: (
+    name: "Chapter 1 - Forest",
+    description: Some("Player at forest entrance"),
+    timestamp: "2024-01-15T14:30:00Z",
+    playtime_seconds: 3600,
+    game_version: Some("1.0.0"),
+    screenshot_path: Some("screenshots/slot1.png"),
+    tags: ["checkpoint", "autosave"],
+    custom_data: {
+      "level": "forest_01",
+      "player_hp": "100",
+    },
+  ),
+  scene: (
+    version: 1,
+    name: "SavedGame",
+    metadata: (
+      description: Some("Auto-saved scene"),
+      author: None,
+      created_at: "2024-01-15T14:30:00Z",
+    ),
+    entities: [
+      (
+        name: Some("Player"),
+        transform: Some((
+          translation: (0.0, 0.0, 0.0),
+          rotation: (0.0, 0.0, 0.0, 1.0),
+          scale: (1.0, 1.0, 1.0),
+        )),
+        mesh: Some("character"),
+        material: Some("player_mat"),
+        parent: None,
+        children: [1, 2],  // Child entity indices
+        active: true,
+        visibility: Inherited,
+      ),
+      // ... more entities
+    ],
+  ),
+)
+```
+
+### Configuration Options
+
+```rust
+use praxis_scene::{SaveManager, SaveConfig};
+
+let config = SaveConfig {
+    compress: false,                 // Future: compress save files
+    include_editor_data: false,      // Save editor-specific data
+    validate_after_save: true,       // Validate save structure
+    pretty_print: true,              // Human-readable RON output
+};
+
+let mut save_manager = SaveManager::with_config(config);
+```
+
+### Save Statistics
+
+Track performance and data about save/load operations:
+
+```rust
+// After saving or loading
+if let Some(stats) = save_manager.last_stats() {
+    println!("Operation Statistics:");
+    println!("  Entities: {}", stats.entity_count);
+    println!("  Components: {}", stats.component_count);
+    println!("  Duration: {:.2}ms", stats.duration_ms);
+    
+    if let Some(size) = stats.file_size_bytes {
+        println!("  File Size: {:.2} KB", size as f64 / 1024.0);
+    }
+}
+```
+
+### Common Patterns
+
+#### Auto-Save System
+
+```rust
+use std::time::Duration;
+
+struct AutoSaveSystem {
+    save_manager: SaveManager,
+    interval: Duration,
+    last_save: std::time::Instant,
+    slot: usize,
+}
+
+impl AutoSaveSystem {
+    fn update(&mut self, world: &mut World) -> Result<()> {
+        if self.last_save.elapsed() >= self.interval {
+            let metadata = SaveMetadata::new(
+                format!("Auto-save {}", self.slot)
+            )
+            .with_tag("autosave");
+            
+            self.save_manager.save_to_file(
+                world,
+                format!("saves/autosave_{}.ron", self.slot),
+                metadata,
+            )?;
+            
+            self.last_save = std::time::Instant::now();
+            self.slot = (self.slot + 1) % 3;  // Rotate 3 slots
+        }
+        Ok(())
+    }
+}
+```
+
+#### Save Slot Management
+
+```rust
+use std::fs;
+
+struct SaveSlotManager {
+    save_manager: SaveManager,
+}
+
+impl SaveSlotManager {
+    fn list_saves(&self) -> Result<Vec<(String, SaveMetadata)>> {
+        let mut saves = Vec::new();
+        
+        for entry in fs::read_dir("saves")? {
+            let entry = entry?;
+            let path = entry.path();
+            
+            if path.extension().and_then(|s| s.to_str()) == Some("ron") {
+                if let Ok(metadata) = self.save_manager.read_metadata(&path) {
+                    let name = path.file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("Unknown")
+                        .to_string();
+                    saves.push((name, metadata));
+                }
+            }
+        }
+        
+        // Sort by timestamp (newest first)
+        saves.sort_by(|a, b| b.1.timestamp.cmp(&a.1.timestamp));
+        
+        Ok(saves)
+    }
+    
+    fn delete_save(&self, slot_name: &str) -> Result<()> {
+        fs::remove_file(format!("saves/{}.ron", slot_name))?;
+        Ok(())
+    }
+}
+```
+
+### Migration Support
+
+The save system supports versioning for backwards compatibility:
+
+```rust
+// The system automatically migrates old save formats
+// Current save version: CURRENT_SAVE_VERSION
+// Current scene version: CURRENT_SCENE_VERSION
+
+// When loading:
+if save_file.version < CURRENT_SAVE_VERSION {
+    // Migration logic applied automatically
+    info!("Migrating save from v{} to v{}", 
+        save_file.version, 
+        CURRENT_SAVE_VERSION
+    );
+}
+```
+
+For complete examples, see `examples/save_load_demo.rs`.
+
+---
+
+## Editor System
+
+The Praxis editor provides powerful tools for debugging and development, including entity inspection, gizmo manipulation, and an integrated console panel for runtime debugging and Lua scripting.
+
+### Console Panel for Debugging
+
+The `ConsolePanel` is an in-game debugging interface that provides:
+- **Command History**: Navigate previous commands with Up/Down arrows
+- **Lua REPL**: Execute Lua code at runtime for debugging
+- **Custom Commands**: Register your own debug commands
+- **Log Filtering**: Filter messages by level and text search
+- **Autocomplete**: Tab completion for registered commands
+
+```text
+Console Panel Architecture
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────────────┐
+│                      Console Panel                           │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ Filter: [___________]  Level: [All ▼]    [Clear]     │  │
+│  ├───────────────────────────────────────────────────────┤  │
+│  │ [INFO]  Engine initialized                            │  │
+│  │ [WARN]  Texture 'missing.png' not found               │  │
+│  │ [SUCCESS] Level loaded successfully                   │  │
+│  │ > print("Hello from Lua")                             │  │
+│  │ Hello from Lua                                        │  │
+│  │ > console.list_entities()                             │  │
+│  │ Entity 0: Player (Transform, MeshHandle)              │  │
+│  │ Entity 1: Camera (Transform, Camera)                  │  │
+│  │ ...                                                   │  │
+│  ├───────────────────────────────────────────────────────┤  │
+│  │ > [_______________________________________]  [Submit]  │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                                                              │
+│  Components:                                                 │
+│  ├─► CommandRegistry: Built-in + custom commands            │
+│  ├─► LogHistory: Stores messages with timestamps            │
+│  ├─► LuaContext: Optional scripting integration             │
+│  └─► CommandHistory: Recall previous commands               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Basic Console Setup
+
+```rust
+use praxis_gui::ConsolePanel;
+use praxis_ecs::World;
+
+// Create console
+let mut console = ConsolePanel::new();
+
+// Log messages
+console.log_info("Engine initialized");
+console.log_warning("Low memory warning");
+console.log_error("Failed to load texture");
+console.log_success("Level loaded successfully");
+console.log_debug("Frame time: 16.7ms");
+
+// Toggle visibility (typically bound to ~ or F1 key)
+if input.key_just_pressed(KeyCode::Grave) {
+    console.toggle();
+}
+
+// Render in your UI update
+if console.visible {
+    console.render(&egui_ctx);
+}
+```
+
+### Lua REPL Integration
+
+The console can integrate with the Lua scripting system for runtime debugging:
+
+```rust
+use praxis_scripting::{ScriptingContext, ScriptingConfig};
+use std::sync::Arc;
+use parking_lot::RwLock;
+
+// Create scripting context
+let lua_context = Arc::new(RwLock::new(
+    ScriptingContext::new(ScriptingConfig::default())?
+));
+
+// Enable Lua REPL in console
+console.set_lua_context(Arc::clone(&lua_context));
+
+// Each frame, provide world access for Lua commands
+console.set_world(&mut world);
+
+// Now you can run Lua code from the console:
+// > print("Hello from Lua!")
+// > console.list_entities()
+// > console.get_entity_info(0)
+```
+
+### Built-in Console Commands
+
+The console comes with several built-in commands:
+
+```text
+Built-in Commands
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+help [command]
+  Display help for commands
+  Example: > help echo
+
+clear
+  Clear console history
+  Example: > clear
+
+echo <text>
+  Echo text to console
+  Example: > echo Hello World
+  Output: Hello World
+
+When Lua is enabled:
+  Any Lua expression can be executed directly
+  Example: > 2 + 2
+  Output: 4
+```
+
+### Custom Command Registration
+
+Register your own debug commands:
+
+```rust
+// Get command registry
+let registry = console.command_registry();
+let mut registry = registry.write();
+
+// Register a custom command
+registry.register(
+    "spawn_enemy",
+    "Spawn an enemy at the player's location",
+    "spawn_enemy <enemy_type>",
+    |args| {
+        if args.is_empty() {
+            return Err("Usage: spawn_enemy <enemy_type>".to_string());
+        }
+        
+        let enemy_type = args[0];
+        // Spawn enemy logic here...
+        Ok(format!("Spawned {} at player location", enemy_type))
+    }
+);
+
+// Register a teleport command
+registry.register(
+    "tp",
+    "Teleport player to coordinates",
+    "tp <x> <y> <z>",
+    |args| {
+        if args.len() != 3 {
+            return Err("Usage: tp <x> <y> <z>".to_string());
+        }
+        
+        let x: f32 = args[0].parse()
+            .map_err(|_| "Invalid X coordinate".to_string())?;
+        let y: f32 = args[1].parse()
+            .map_err(|_| "Invalid Y coordinate".to_string())?;
+        let z: f32 = args[2].parse()
+            .map_err(|_| "Invalid Z coordinate".to_string())?;
+        
+        // Teleport player logic here...
+        Ok(format!("Teleported to ({}, {}, {})", x, y, z))
+    }
+);
+
+// Use the commands
+// > spawn_enemy goblin
+// > tp 10.0 0.0 5.0
+```
+
+### Lua Console Commands
+
+When Lua scripting is enabled, the console provides special Lua commands for ECS inspection:
+
+```lua
+-- List all entities in the world
+console.list_entities()
+-- Output:
+-- Entity 0: Player (Transform, MeshHandle, Camera)
+-- Entity 1: Enemy (Transform, MeshHandle, RigidBody)
+-- ...
+
+-- Get detailed info about an entity
+console.get_entity_info(0)
+-- Output:
+-- Entity 0 (Player):
+--   Transform: pos=(0, 0, 0), rot=(0, 0, 0, 1)
+--   MeshHandle: "player_mesh"
+--   Camera: fov=60.0
+
+-- Find entities by name
+console.find_entities_by_name("Enemy")
+-- Output: [1, 5, 8, 12]
+
+-- Query entities with specific components
+console.query_entities("Transform", "RigidBody")
+-- Output: [1, 5, 8]
+```
+
+### Log Filtering
+
+Filter console output for easier debugging:
+
+```text
+Log Filtering
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Text Filter:
+  Type in filter box: "texture"
+  Result: Only shows messages containing "texture"
+
+Level Filter:
+  All:     Show all messages
+  Info:    Only informational messages
+  Warning: Only warnings
+  Error:   Only errors
+  Success: Only success messages
+  Debug:   Only debug messages
+
+Combined:
+  Text: "load"
+  Level: Error
+  Result: Only error messages containing "load"
+```
+
+### Command History Navigation
+
+Navigate through previously executed commands:
+
+```text
+Command History
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Type commands:
+  > echo first
+  > echo second
+  > echo third
+
+Press Up Arrow:
+  > echo third    ← Most recent
+  
+Press Up Arrow again:
+  > echo second
+  
+Press Up Arrow again:
+  > echo first
+  
+Press Down Arrow:
+  > echo second
+  
+Editing a historical command:
+  - Type new characters to start fresh buffer
+  - Historical command is saved in temp buffer
+  - Up/Down continues from where you left off
+```
+
+### Autocomplete
+
+Press Tab to autocomplete commands:
+
+```text
+Autocomplete
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Type partial command:
+  > sp[Tab]
+
+If single match:
+  > spawn_enemy    ← Completed!
+
+If multiple matches:
+  Shows suggestions:
+  > sp
+  Suggestions: spawn_enemy, spawn_particle, spawn_projectile
+
+Continue typing:
+  > spawn_e[Tab]
+  > spawn_enemy    ← Now unique, completed!
+```
+
+### Console Integration Patterns
+
+#### FPS Counter with Console Command
+
+```rust
+struct FpsCounter {
+    frame_times: VecDeque<f32>,
+}
+
+impl FpsCounter {
+    fn register_commands(&self, console: &mut ConsolePanel) {
+        let registry = console.command_registry();
+        let mut registry = registry.write();
+        
+        registry.register(
+            "fps",
+            "Show current FPS",
+            "fps",
+            |_| {
+                // Calculate FPS...
+                Ok(format!("Current FPS: 60.0"))
+            }
+        );
+    }
+}
+```
+
+#### Debug Visualization Toggle
+
+```rust
+struct DebugRenderState {
+    show_colliders: bool,
+    show_normals: bool,
+    show_wireframe: bool,
+}
+
+impl DebugRenderState {
+    fn register_commands(&self, console: &mut ConsolePanel) {
+        let registry = console.command_registry();
+        let mut registry = registry.write();
+        
+        registry.register(
+            "debug_colliders",
+            "Toggle collider visualization",
+            "debug_colliders [on|off]",
+            |args| {
+                match args.get(0).map(|s| s.as_ref()) {
+                    Some("on") => {
+                        // Enable collider rendering
+                        Ok("Collider visualization enabled".to_string())
+                    }
+                    Some("off") => {
+                        // Disable collider rendering
+                        Ok("Collider visualization disabled".to_string())
+                    }
+                    _ => Err("Usage: debug_colliders [on|off]".to_string()),
+                }
+            }
+        );
+    }
+}
+```
+
+#### Performance Profiling Commands
+
+```rust
+registry.register(
+    "profile_start",
+    "Start performance profiling",
+    "profile_start [duration_seconds]",
+    |args| {
+        let duration = args.get(0)
+            .and_then(|s| s.parse::<f32>().ok())
+            .unwrap_or(10.0);
+        
+        // Start profiling...
+        Ok(format!("Profiling started for {:.1}s", duration))
+    }
+);
+
+registry.register(
+    "profile_stop",
+    "Stop profiling and show results",
+    "profile_stop",
+    |_| {
+        // Stop profiling and generate report...
+        Ok("Profiling stopped. Results:\n  Average frame: 16.7ms\n  ...".to_string())
+    }
+);
+```
+
+### Console Best Practices
+
+1. **Command Naming**: Use clear, consistent naming (e.g., `spawn_`, `debug_`, `set_`)
+2. **Error Messages**: Provide helpful usage examples in error messages
+3. **Feedback**: Always return success/failure messages
+4. **State Access**: Use Arc<RwLock<T>> for shared state access in commands
+5. **Safety**: Validate all command arguments before execution
+6. **Documentation**: Include description and usage for every command
+
+### Keyboard Shortcuts
+
+The console supports standard shortcuts:
+
+```text
+Console Keyboard Shortcuts
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+~  or  F1:        Toggle console visibility
+↑  (Up Arrow):    Previous command in history
+↓  (Down Arrow):  Next command in history
+Tab:              Autocomplete command
+Enter:            Execute command
+Escape:           Hide console
+Ctrl+C:           Copy selected text
+Ctrl+V:           Paste text
+Ctrl+A:           Select all input
+```
+
+For complete console examples, see `examples/console_demo.rs` and `examples/scripting_console_demo.rs`.
 
 ---
 
