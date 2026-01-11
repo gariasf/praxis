@@ -3723,6 +3723,7 @@ dependencies = [
  "praxis_ecs",
  "praxis_math",
  "praxis_utils",
+ "rand 0.8.5",
  "ron",
  "serde",
 ]
