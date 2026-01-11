@@ -2,6 +2,116 @@
 //!
 //! This crate provides functionality for rendering and managing graphics using Vulkan via vulkano.
 //!
+//! # Educational Overview: Modern 3D Rendering Architecture
+//!
+//! This graphics system demonstrates modern GPU rendering techniques used in production game engines.
+//! Understanding this architecture provides insight into how AAA games and real-time 3D applications work.
+//!
+//! ## Core Rendering Concepts
+//!
+//! ### 1. Vulkan vs OpenGL
+//! Vulkan is a low-level graphics API that gives explicit control over:
+//! - **Memory management**: We decide when and where GPU memory is allocated
+//! - **Synchronization**: We manually manage when GPU work starts/finishes
+//! - **Command recording**: We build command buffers that the GPU executes
+//! - **Resource lifetimes**: We must ensure resources exist while GPU uses them
+//!
+//! This explicitness enables better performance but requires more careful programming.
+//! OpenGL hides these details, making it simpler but less optimal.
+//!
+//! ### 2. Render Pipeline Overview
+//! ```text
+//! CPU Side                          GPU Side
+//! ┌──────────────┐                 ┌──────────────┐
+//! │ Application  │                 │ Vertex       │
+//! │ Logic        │                 │ Shader       │
+//! └──────┬───────┘                 └──────┬───────┘
+//!        │                                │
+//!        ▼                                ▼
+//! ┌──────────────┐                 ┌──────────────┐
+//! │ Build Draw   │                 │ Rasterizer   │
+//! │ Commands     │                 │ (triangles)  │
+//! └──────┬───────┘                 └──────┬───────┘
+//!        │                                │
+//!        ▼                                ▼
+//! ┌──────────────┐                 ┌──────────────┐
+//! │ Submit to    │───────────────►│ Fragment     │
+//! │ GPU Queue    │                 │ Shader       │
+//! └──────────────┘                 └──────┬───────┘
+//!                                         │
+//!                                         ▼
+//!                                  ┌──────────────┐
+//!                                  │ Framebuffer  │
+//!                                  │ (final image)│
+//!                                  └──────────────┘
+//! ```
+//!
+//! ### 3. Forward vs Deferred Rendering
+//!
+//! **Forward Rendering** (traditional):
+//! - For each object: shade it with all lights
+//! - Cost: O(objects × lights)
+//! - Good for: Few lights, transparent objects
+//!
+//! **Deferred Rendering** (modern):
+//! - Pass 1: Render all objects to G-buffer (geometry data)
+//! - Pass 2: For each screen pixel: apply all lights
+//! - Cost: O(objects) + O(pixels × lights)
+//! - Good for: Many lights, complex lighting
+//!
+//! ### 4. Descriptor Sets (Vulkan's Resource Binding)
+//!
+//! Descriptor sets are how shaders access resources (textures, buffers):
+//! ```text
+//! Set 0 (Per-Frame):
+//!   - Camera matrices (updated once per frame)
+//!   - Lighting data (updated once per frame)
+//!
+//! Set 1 (Per-Material):
+//!   - Textures (albedo, normal, etc.)
+//!   - Material properties (metallic, roughness)
+//!
+//! Set 2 (Per-Object):
+//!   - Model matrix (updated for each object)
+//! ```
+//!
+//! Grouping by update frequency minimizes GPU state changes.
+//!
+//! ### 5. Bindless Rendering (Advanced)
+//!
+//! Traditional: Bind new descriptor set for each material (expensive)
+//! Bindless: All textures in one giant array, index via push constant (fast)
+//!
+//! Example:
+//! ```text
+//! Traditional (100 materials):
+//!   for material in materials:
+//!     bind_descriptor_set(material)  ← 100 GPU state changes
+//!     for obj in objects_with_material:
+//!       draw(obj)
+//!
+//! Bindless (100 materials):
+//!   bind_descriptor_set(texture_array)  ← 1 GPU state change
+//!   for obj in all_objects:
+//!     push_constant(material_index)    ← fast CPU-side write
+//!     draw(obj)
+//! ```
+//!
+//! ### 6. GPU Culling (Modern Optimization)
+//!
+//! **CPU Culling** (traditional):
+//! - CPU tests each object against frustum
+//! - CPU builds list of visible objects
+//! - CPU submits draw commands
+//!
+//! **GPU Culling** (modern):
+//! - CPU uploads all objects to GPU
+//! - GPU compute shader tests visibility in parallel
+//! - GPU builds indirect draw buffer
+//! - Single indirect draw call renders all visible objects
+//!
+//! Benefits: Massively parallel, no CPU-GPU sync, scales to 10,000+ objects
+//!
 //! # Architecture
 //!
 //! The graphics system is organized into several modules:

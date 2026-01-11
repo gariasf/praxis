@@ -3,6 +3,285 @@
 //! This module provides a bindless texture system that eliminates per-material
 //! descriptor set binds by using large texture arrays and material indices.
 //!
+//! # Educational: Descriptor Indexing and Bindless Rendering
+//!
+//! ## The Material Binding Problem
+//!
+//! ### Traditional Rendering (Bind Per Material)
+//!
+//! ```text
+//! For each unique material:
+//!   1. Bind descriptor set containing:
+//!      - Albedo texture
+//!      - Normal map
+//!      - Material properties
+//!   2. For each object using this material:
+//!      - Draw object
+//! ```
+//!
+//! **Problem with 1000 materials**:
+//! ```text
+//! - 1000 vkCmdBindDescriptorSets calls
+//! - Each bind: ~50-100ns CPU time
+//! - Total: ~50-100μs just binding descriptors
+//! - GPU stalls waiting for CPU
+//! ```
+//!
+//! ## What Are Descriptors?
+//!
+//! Descriptors tell shaders where to find resources (textures, buffers):
+//!
+//! ```glsl
+//! // Traditional shader:
+//! layout(set = 1, binding = 0) uniform sampler2D albedo_texture;
+//! layout(set = 1, binding = 1) uniform sampler2D normal_texture;
+//!
+//! vec4 color = texture(albedo_texture, uv);  // Must be bound before draw
+//! ```
+//!
+//! **Descriptor Set** = Collection of descriptors bound together
+//! **Binding** = Assigning actual GPU resources to descriptor slots
+//!
+//! ### Why Binding Is Expensive
+//!
+//! 1. **CPU-side work**: Update driver state
+//! 2. **GPU-side work**: Update hardware registers
+//! 3. **Validation**: Check resources are compatible
+//! 4. **Synchronization**: Ensure previous commands see old bindings
+//!
+//! Each bind flushes pipeline state → expensive!
+//!
+//! ## Bindless Solution: Texture Arrays
+//!
+//! Instead of binding textures individually, bind ALL textures at once:
+//!
+//! ```glsl
+//! // Bindless shader:
+//! layout(set = 2, binding = 0) uniform sampler2D textures[4096];  // Array of all textures!
+//!
+//! layout(push_constant) uniform PushConstants {
+//!     uint material_id;
+//! };
+//!
+//! // Material data stored in buffer
+//! struct MaterialData {
+//!     uint albedo_index;    // Index into textures array
+//!     uint normal_index;
+//!     float metallic;
+//!     float roughness;
+//! };
+//! layout(set = 2, binding = 1) uniform MaterialBuffer {
+//!     MaterialData materials[4096];
+//! };
+//!
+//! void main() {
+//!     MaterialData mat = materials[material_id];
+//!     vec4 albedo = texture(textures[mat.albedo_index], uv);
+//!     vec3 normal = texture(textures[mat.normal_index], uv).rgb;
+//! }
+//! ```
+//!
+//! ## How It Works
+//!
+//! ### Setup Phase (Once at startup):
+//!
+//! ```text
+//! 1. Create texture array descriptor:
+//!    - Allocate array of 4096 sampler slots
+//!    - Register each texture at an index
+//!
+//! 2. Create material buffer:
+//!    - Store material data for each material
+//!    - Each material references texture indices
+//!
+//! 3. Bind descriptor set ONCE
+//! ```
+//!
+//! ### Render Phase (Every frame):
+//!
+//! ```text
+//! NO descriptor set binds!
+//!
+//! For each object:
+//!   1. Push material index (4 bytes via push constant)
+//!   2. Draw
+//!
+//! Shader:
+//!   - Reads material_id from push constant
+//!   - Looks up material data: materials[material_id]
+//!   - Looks up textures: textures[material.albedo_index]
+//! ```
+//!
+//! ## VK_EXT_descriptor_indexing Extension
+//!
+//! This Vulkan extension enables bindless rendering:
+//!
+//! ### Key Features:
+//!
+//! 1. **Variable Descriptor Count**:
+//!    ```text
+//!    // Can have arrays of varying size
+//!    sampler2D textures[4096];  // Or any size up to limit
+//!    ```
+//!
+//! 2. **Runtime Array Size**:
+//!    ```text
+//!    // Size doesn't need to be compile-time constant
+//!    sampler2D textures[];  // Unbounded array
+//!    ```
+//!
+//! 3. **Non-Uniform Indexing**:
+//!    ```text
+//!    // Index can vary per-pixel (not uniform across draw)
+//!    uint tex_idx = material_data[material_id].texture_index;
+//!    texture(textures[tex_idx], uv);  // Different pixels use different textures
+//!    ```
+//!
+//! 4. **Partially Bound Descriptors**:
+//!    ```text
+//!    // Not all array slots need valid textures
+//!    // Useful for sparse texture arrays
+//!    ```
+//!
+//! ## Performance Comparison
+//!
+//! ### Scene: 10,000 objects with 500 unique materials
+//!
+//! **Traditional (bind per material)**:
+//! ```text
+//! CPU overhead:
+//!   - 500 descriptor set binds @ 100ns = 50μs
+//!   - 10,000 draw calls @ 1μs = 10,000μs
+//!   Total: 10,050μs = 10ms
+//!
+//! GPU stalls:
+//!   - Frequent state changes
+//!   - Pipeline flushes
+//! ```
+//!
+//! **Bindless**:
+//! ```text
+//! CPU overhead:
+//!   - 1 descriptor set bind @ 100ns = 0.1μs (once per frame)
+//!   - 10,000 push constants @ 10ns = 100μs
+//!   - 10,000 draw calls @ 1μs = 10,000μs
+//!   Total: 10,100μs = 10.1ms
+//!
+//! But: No GPU stalls from binding
+//! Result: 10-20% overall performance gain
+//! ```
+//!
+//! For scenes with more materials, the benefit is even larger!
+//!
+//! ## Push Constants
+//!
+//! Push constants are a fast way to pass small amounts of data to shaders:
+//!
+//! ### Why Push Constants?
+//!
+//! - **Fast**: Direct CPU → GPU without indirection
+//! - **Small**: Limited to 128-256 bytes (vendor dependent)
+//! - **Per-draw**: Different value for each draw call
+//! - **No binding**: Just write and go
+//!
+//! Perfect for material indices!
+//!
+//! ```rust
+//! // CPU side:
+//! command_buffer.push_constants(
+//!     pipeline_layout,
+//!     0,  // offset
+//!     material_index  // u32
+//! );
+//! command_buffer.draw_indexed(...);
+//! ```
+//!
+//! ## Material Deduplication
+//!
+//! Many objects share the same material:
+//! ```text
+//! 10,000 objects might only use 500 unique materials
+//! ```
+//!
+//! We deduplicate by hashing material properties:
+//! ```rust
+//! let material_hash = hash(material_data);
+//! if let Some(index) = material_to_index.get(&material_hash) {
+//!     return index;  // Reuse existing material
+//! }
+//! // Otherwise, create new material entry
+//! ```
+//!
+//! **Benefit**: Saves memory and improves cache locality
+//!
+//! ## Texture Registration
+//!
+//! Textures are registered by name and assigned an index:
+//!
+//! ```rust
+//! let brick_idx = bindless.register_texture("brick", brick_texture)?;
+//! let metal_idx = bindless.register_texture("metal", metal_texture)?;
+//!
+//! // Now shaders can use:
+//! // textures[brick_idx] or textures[metal_idx]
+//! ```
+//!
+//! The manager maintains:
+//! - `HashMap<String, u32>`: texture name → index
+//! - `Vec<Arc<ImageView>>`: array of texture views
+//! - `Vec<Arc<Sampler>>`: array of samplers
+//!
+//! ## Memory Layout
+//!
+//! ### GPU Memory Structure:
+//!
+//! ```text
+//! Descriptor Set 2:
+//!   Binding 0: Texture Array
+//!     [0] → white texture
+//!     [1] → brick texture
+//!     [2] → metal texture
+//!     [3] → wood texture
+//!     ...
+//!     [4095] → last texture
+//!
+//!   Binding 1: Material Buffer
+//!     struct MaterialData {
+//!       base_color: vec4,         // 16 bytes
+//!       albedo_texture_index: u32,// 4 bytes
+//!       normal_texture_index: u32,// 4 bytes
+//!       metallic: f32,            // 4 bytes
+//!       roughness: f32,           // 4 bytes
+//!       emissive_strength: f32,   // 4 bytes
+//!       _padding: [f32; 3],       // 12 bytes (alignment)
+//!     }  // Total: 48 bytes per material
+//!
+//!     [0] → MaterialData { albedo: 1, ... }
+//!     [1] → MaterialData { albedo: 2, ... }
+//!     ...
+//! ```
+//!
+//! ## Limitations and Considerations
+//!
+//! ### Maximum Texture Count
+//! - Typically 4096-16384 textures (hardware dependent)
+//! - Check `maxPerStageDescriptorSamplers` limit
+//!
+//! ### Memory Usage
+//! - Each descriptor slot: ~8 bytes
+//! - 4096 textures = ~32 KB descriptor memory
+//! - Plus actual texture memory
+//!
+//! ### Validation
+//! - Must ensure texture indices are valid
+//! - Out-of-bounds access = undefined behavior
+//! - Use debug assertions in dev builds
+//!
+//! ### Hardware Support
+//! - Requires VK_EXT_descriptor_indexing
+//! - Requires Vulkan 1.2 or extension
+//! - Check device features before enabling
+//!
 //! # Overview
 //!
 //! Traditional rendering requires binding a descriptor set for each material:

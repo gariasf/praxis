@@ -6,6 +6,213 @@
 //! - Fallback to environment probes for rays that miss screen-space geometry
 //! - Integration with deferred rendering G-buffer
 //!
+//! # Educational: Screen-Space Ray Marching
+//!
+//! ## The Reflection Problem
+//!
+//! Reflections are expensive to compute accurately:
+//! - **Ray tracing**: Trace rays through 3D scene → Accurate but slow
+//! - **Cubemaps**: Pre-render environment → Fast but static
+//! - **Planar reflections**: Render scene mirrored → Limited to flat surfaces
+//!
+//! ## Screen-Space Reflections (SSR)
+//!
+//! SSR uses a clever trick: "Ray march through the depth buffer"
+//!
+//! ### Key Insight
+//!
+//! We already have depth information for all visible pixels. By marching along
+//! a reflection ray and checking depth, we can find intersection points!
+//!
+//! ```text
+//! Side view:
+//!
+//! Ray
+//!  ╱
+//! ╱   Surface
+//! ───────┐    ← Depth buffer tells us surface is here
+//!        │
+//!        └─── Wall
+//!
+//! Top-down (screen space):
+//!
+//! [Pixel]─────→[Hit]
+//!  Start         Reflection found!
+//! ```
+//!
+//! ## Ray Marching Algorithm
+//!
+//! ### Step 1: Setup
+//! ```text
+//! 1. Read G-buffer data for current pixel:
+//!    - World position (reconstructed from depth)
+//!    - Surface normal
+//!    - Roughness
+//!
+//! 2. Calculate reflection ray:
+//!    view_dir = normalize(camera_pos - world_pos)
+//!    reflect_dir = reflect(-view_dir, normal)
+//! ```
+//!
+//! ### Step 2: Ray Marching (The Core Algorithm)
+//!
+//! ```text
+//! Initialize:
+//!   ray_pos = world_pos           // Start at surface
+//!   ray_dir = reflect_dir          // Reflection direction
+//!   step_size = initial_step       // How far to march each step
+//!
+//! For each step (up to max_steps):
+//!   1. March forward:
+//!      ray_pos += ray_dir * step_size
+//!
+//!   2. Project to screen space:
+//!      screen_pos = project(ray_pos)  // World → Screen UV
+//!
+//!   3. Read depth at this screen position:
+//!      scene_depth = depth_buffer[screen_pos]
+//!
+//!   4. Compare depths:
+//!      ray_depth = depth_of(ray_pos)
+//!      
+//!      if ray_depth > scene_depth:  // Ray is behind surface
+//!         → Intersection found!
+//!         return screen_pos
+//! ```
+//!
+//! ### Step 3: Binary Search Refinement
+//!
+//! Problem: Step size might skip over thin geometry or be inaccurate.
+//! Solution: Binary search for exact hit point.
+//!
+//! ```text
+//! Once we overshoot:
+//!   lo = previous_pos    // Before hit
+//!   hi = current_pos     // After hit
+//!
+//!   For 8-16 iterations:
+//!     mid = (lo + hi) / 2
+//!     if mid depth > scene depth:
+//!       hi = mid  // Overshoot, search earlier
+//!     else:
+//!       lo = mid  // Undershoot, search later
+//!
+//!   return mid  // Sub-pixel accurate hit!
+//! ```
+//!
+//! ## Hierarchical Ray Marching (Optimization)
+//!
+//! ### Problem
+//! Fixed step size is inefficient:
+//! - Too large: Miss small details
+//! - Too small: Too many steps, slow
+//!
+//! ### Solution: Adaptive Step Size
+//!
+//! Use a mipmap chain of the depth buffer:
+//! ```text
+//! Mip 0: 1920×1080 (full resolution)
+//! Mip 1: 960×540   (half resolution)
+//! Mip 2: 480×270   (quarter resolution)
+//! Mip 3: 240×135   (eighth resolution)
+//! ```
+//!
+//! Algorithm:
+//! ```text
+//! Start at coarse mip level (mip 3):
+//!   - Large steps through scene
+//!   - Fast, covers long distances
+//!
+//! When approaching surface:
+//!   - Drop to finer mip (mip 2, then 1, then 0)
+//!   - Smaller steps for accuracy
+//!
+//! When very close:
+//!   - Binary search at mip 0 for sub-pixel precision
+//! ```
+//!
+//! **Result**: 2-3× faster than fixed step size with same quality!
+//!
+//! ## Handling Edge Cases
+//!
+//! ### Problem 1: Ray Leaves Screen
+//! ```text
+//! [Screen]
+//!  │
+//!  │  Ray ──→ (goes off-screen)
+//!  │
+//! ```
+//! Solution: Fade out reflection strength near edges.
+//!
+//! ### Problem 2: No Hit Found
+//! ```text
+//! Ray travels max_steps without hitting anything.
+//! Maybe reflecting sky or off-screen object.
+//! ```
+//! Solution: Fall back to environment probe cubemap.
+//!
+//! ### Problem 3: Self-Intersection
+//! ```text
+//! Ray immediately hits its own surface.
+//! ```
+//! Solution: Start ray slightly offset from surface (thickness parameter).
+//!
+//! ## Roughness-Aware Blur
+//!
+//! Smooth surfaces (roughness=0.0) → Sharp reflections
+//! Rough surfaces (roughness=1.0) → Blurry reflections
+//!
+//! ```text
+//! Blur amount = roughness * max_blur_radius
+//!
+//! Smooth mirror (roughness=0.1):  blur_radius = 1 pixel
+//! Rough metal (roughness=0.5):    blur_radius = 8 pixels
+//! Very rough (roughness=1.0):     blur_radius = 16 pixels
+//! ```
+//!
+//! Implementation: Separable Gaussian blur (horizontal then vertical passes).
+//!
+//! ## Environment Probe Fallback
+//!
+//! When SSR fails (no hit, off-screen, low confidence):
+//! ```text
+//! 1. Calculate reflection direction in world space
+//! 2. Sample environment cubemap in that direction
+//! 3. Blend based on SSR confidence:
+//!    
+//!    final_color = mix(environment_color, ssr_color, ssr_confidence)
+//! ```
+//!
+//! This ensures we always have *some* reflection, never black holes.
+//!
+//! ## Performance Characteristics
+//!
+//! ### Costs (1080p)
+//! - Ray marching: 2-4ms (depends on max_steps)
+//! - Blur passes: 1-2ms (depends on roughness)
+//! - Composite: 0.5ms
+//!
+//! **Total**: 3.5-6.5ms per frame
+//!
+//! ### Quality Factors
+//! - max_steps: More steps = better accuracy, slower
+//! - step_size: Smaller steps = fewer misses, slower
+//! - binary_search_steps: More steps = sub-pixel accuracy, minimal cost
+//!
+//! ### Typical Settings
+//! - max_steps: 32-64 (balanced)
+//! - binary_search_steps: 8-16 (cheap, huge quality gain)
+//! - thickness: 0.05-0.2 (scene-dependent)
+//!
+//! ## Limitations
+//!
+//! 1. **Screen-space only**: Can't reflect off-screen objects
+//! 2. **Backface issues**: Can't see back of objects
+//! 3. **Thin geometry**: Small objects might be missed
+//! 4. **Cost**: Expensive for rough surfaces (lots of blur)
+//!
+//! These are mitigated by environment probe fallback and smart parameter tuning.
+//!
 //! # SSR Overview
 //!
 //! SSR is a screen-space technique that generates reflections by ray marching through

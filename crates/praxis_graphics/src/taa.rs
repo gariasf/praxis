@@ -3,6 +3,164 @@
 //! This module provides temporal anti-aliasing using velocity buffers for reprojection
 //! and neighborhood clamping for history rejection.
 //!
+//! # Educational: Understanding Temporal Anti-Aliasing
+//!
+//! ## The Aliasing Problem
+//!
+//! Aliasing (jagged edges) occurs because:
+//! ```text
+//! Screen pixels are discrete:    Real geometry is continuous:
+//!
+//! ████                           ╱╲
+//! █  █                          ╱  ╲
+//! █   █                        ╱    ╲
+//! █    █                      ╱______╲
+//! ```
+//! When a triangle edge cuts through a pixel, we must choose: inside or outside?
+//! This binary choice creates stair-stepping ("jaggies").
+//!
+//! ## Traditional Solutions
+//!
+//! ### MSAA (Multi-Sample Anti-Aliasing)
+//! - Sample each pixel multiple times (2×, 4×, 8×)
+//! - Average samples to get final color
+//! - **Cost**: 2-8× more fragments shaded
+//! - **Quality**: Good, but expensive
+//!
+//! ### FXAA (Fast Approximate Anti-Aliasing)
+//! - Post-process filter detecting edges
+//! - Blur edges to smooth them
+//! - **Cost**: Very cheap (single pass)
+//! - **Quality**: Blurry, loses detail
+//!
+//! ## TAA: The Temporal Solution
+//!
+//! TAA uses information from previous frames to improve quality:
+//!
+//! ### Key Insight
+//! If we jitter (slightly move) the camera each frame, different sub-pixel locations
+//! are sampled over time. By accumulating these samples, we effectively supersample
+//! for free!
+//!
+//! ```text
+//! Frame 1: Camera jittered +0.25 pixels → Sample A
+//! Frame 2: Camera jittered -0.25 pixels → Sample B
+//! Frame 3: Camera jittered +0.40 pixels → Sample C
+//! Frame 4: Camera jittered -0.40 pixels → Sample D
+//!
+//! Result = blend(A, B, C, D) → Effectively 4× supersampling!
+//! ```
+//!
+//! ### The Motion Problem
+//!
+//! Challenge: Objects move between frames!
+//! ```text
+//! Frame N:        Frame N+1:
+//!   █              █     Car moved right
+//!   █  Car          █    
+//! ```
+//!
+//! If we blindly blend frames, we get ghosting. We need to **reproject** history.
+//!
+//! ## Temporal Reprojection Explained
+//!
+//! ### Velocity Buffers (Motion Vectors)
+//!
+//! During rendering, we calculate how each pixel moved:
+//! ```glsl
+//! // In vertex shader:
+//! vec4 current_pos = projection * view * model * position;
+//! vec4 previous_pos = prev_projection * prev_view * prev_model * position;
+//!
+//! // In fragment shader:
+//! vec2 current_ndc = current_pos.xy / current_pos.w;
+//! vec2 previous_ndc = previous_pos.xy / previous_pos.w;
+//! vec2 velocity = current_ndc - previous_ndc;  // Screen-space motion vector
+//! ```
+//!
+//! ### Reprojection Process
+//!
+//! ```text
+//! 1. Read current pixel's velocity: vel = velocity_buffer[uv]
+//! 2. Calculate history UV: history_uv = uv - vel
+//! 3. Sample previous frame: history_color = history_texture[history_uv]
+//! 4. Blend: result = mix(current_color, history_color, blend_factor)
+//! ```
+//!
+//! ### Why It Works
+//!
+//! If a pixel had value A last frame and moved to position (x,y),
+//! we can find A by looking backwards along the motion vector.
+//!
+//! ## Neighborhood Clamping (Preventing Ghosting)
+//!
+//! ### The Ghosting Problem
+//!
+//! What if history is invalid (object newly appeared, disocclusion)?
+//! Blending with invalid history creates ghosting.
+//!
+//! ### Solution: AABB Clamping
+//!
+//! ```text
+//! 1. Sample 3×3 neighborhood around current pixel:
+//!    
+//!    [A] [B] [C]
+//!    [D] [E] [F]    E = current pixel
+//!    [G] [H] [I]
+//!
+//! 2. Calculate min/max color in neighborhood:
+//!    color_min = min(A, B, C, D, E, F, G, H, I)
+//!    color_max = max(A, B, C, D, E, F, G, H, I)
+//!
+//! 3. Clamp history to this range:
+//!    history_color = clamp(history_color, color_min, color_max)
+//! ```
+//!
+//! **Why?** If history doesn't match nearby pixels, it's probably invalid.
+//! Clamping rejects bad history while keeping good history.
+//!
+//! ### YCoCg Color Space
+//!
+//! For better clamping, we convert RGB to YCoCg:
+//! - Y = luminance (brightness)
+//! - Co = orange-cyan
+//! - Cg = green-magenta
+//!
+//! **Why?** Clamping in YCoCg better preserves perceived color than RGB.
+//! Edges are cleaner and artifacts are less noticeable.
+//!
+//! ## Adaptive Blending
+//!
+//! Blend factor varies based on motion:
+//! ```text
+//! Static pixels:    blend_factor = 0.05 (95% history, 5% current)
+//!                   → More temporal accumulation → Better quality
+//!
+//! Fast-moving:      blend_factor = 0.5  (50% history, 50% current)
+//!                   → Less history dependence → Avoid ghosting
+//! ```
+//!
+//! ## Jitter Pattern (Halton Sequence)
+//!
+//! Camera jitter follows a low-discrepancy sequence for optimal sub-pixel coverage:
+//! ```text
+//! Frame 0: (+0.000, +0.000)
+//! Frame 1: (+0.500, +0.333)
+//! Frame 2: (+0.250, +0.667)
+//! Frame 3: (+0.750, +0.111)
+//! ...
+//! ```
+//!
+//! Halton(2,3) provides even distribution over 16 frames, ensuring all sub-pixel
+//! locations are sampled without clustering.
+//!
+//! ## Performance Characteristics
+//!
+//! - **Cost**: ~2-3ms per frame at 1080p (cheap!)
+//! - **Quality**: Comparable to 4-8× MSAA
+//! - **Trade-off**: Slight lag on fast motion, ghosting on disocclusion
+//! - **Result**: Excellent quality-to-performance ratio
+//!
 //! # Overview
 //!
 //! TAA works by blending the current frame with the previous frame(s) to reduce aliasing:

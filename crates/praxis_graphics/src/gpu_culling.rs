@@ -3,6 +3,260 @@
 //! This module provides a GPU-based culling system that performs frustum and occlusion
 //! culling using compute shaders, generating indirect draw buffers to minimize CPU overhead.
 //!
+//! # Educational: Compute Shader Culling
+//!
+//! ## The Visibility Problem
+//!
+//! In a large scene (10,000+ objects), most objects aren't visible:
+//! - **Outside camera frustum**: 70-90% typically
+//! - **Occluded by other objects**: 10-40% of what's left
+//! - **Actually visible**: Often only 5-20% of total objects
+//!
+//! Drawing invisible objects wastes GPU time!
+//!
+//! ## Traditional CPU Culling
+//!
+//! ```text
+//! For each object:
+//!   1. Test bounding volume against frustum planes (6 plane tests)
+//!   2. If visible, add to draw list
+//!
+//! Problems:
+//! - Sequential: CPU tests one object at a time
+//! - Synchronization: CPU waits for GPU to finish previous frame
+//! - Overhead: Building draw lists, submitting draw calls
+//! - Scalability: 10,000 objects = 10,000 CPU tests per frame
+//! ```
+//!
+//! ## GPU Compute Shader Culling
+//!
+//! Move all culling to GPU:
+//! ```text
+//! CPU:
+//!   1. Upload ALL objects to GPU (once)
+//!   2. Dispatch compute shader (one call)
+//!   3. Issue indirect draw (one call)
+//!
+//! GPU Compute Shader (parallel):
+//!   Each thread processes one object:
+//!     1. Read object data (transform, bounds)
+//!     2. Test against frustum
+//!     3. If visible: atomically append to draw buffer
+//!
+//! GPU Graphics:
+//!   Execute indirect draw buffer
+//!   (All visible objects in one call)
+//! ```
+//!
+//! ## Frustum Culling Algorithm
+//!
+//! ### Frustum Representation
+//!
+//! A view frustum is defined by 6 planes:
+//! ```text
+//!      Near
+//!       ┌─┐
+//!      ╱   ╲
+//!  L  ╱  F  ╲  R   L = Left, R = Right
+//!    ╱   a   ╲     T = Top, B = Bottom
+//!   ╱    r    ╲    N = Near, F = Far
+//!  └─────────── Far
+//!       T
+//!       B
+//! ```
+//!
+//! Each plane is a vec4(nx, ny, nz, d):
+//! - (nx, ny, nz) = outward-facing normal
+//! - d = distance from origin
+//!
+//! ### Plane Extraction from View-Projection Matrix
+//!
+//! Frustum planes can be extracted directly from the view-projection matrix:
+//! ```text
+//! Let M = view_projection matrix
+//!
+//! Left   = row3 + row0
+//! Right  = row3 - row0
+//! Bottom = row3 + row1
+//! Top    = row3 - row1
+//! Near   = row3 + row2
+//! Far    = row3 - row2
+//! ```
+//!
+//! **Why?** The view-projection matrix implicitly encodes frustum planes.
+//! This is derived from how clip-space coordinates work in graphics hardware.
+//!
+//! ### Sphere-Frustum Test
+//!
+//! We use bounding spheres (faster than boxes):
+//! ```text
+//! For each frustum plane:
+//!   distance = dot(plane.normal, sphere.center) + plane.d
+//!   
+//!   if distance < -sphere.radius:
+//!     return OUTSIDE  // Sphere is completely outside this plane
+//!
+//! return INSIDE  // Sphere is inside all planes
+//! ```
+//!
+//! **Why spheres?** 
+//! - Only 4 floats (center xyz + radius)
+//! - Rotation invariant (no need to transform with orientation)
+//! - Fast test (6 dot products + comparisons)
+//!
+//! **Why not boxes?**
+//! - Oriented bounding boxes require transform → slower
+//! - Axis-aligned boxes don't rotate with object → inaccurate
+//!
+//! ## Indirect Draw Buffers
+//!
+//! ### Problem with Regular Draw Calls
+//!
+//! ```text
+//! Traditional:
+//!   for each visible object:
+//!     vkCmdDrawIndexed(...)  // One draw call per object
+//!
+//! With 1000 visible objects = 1000 draw calls = high CPU overhead
+//! ```
+//!
+//! ### Solution: Indirect Draw
+//!
+//! ```text
+//! Indirect:
+//!   vkCmdDrawIndexedIndirect(buffer, 1000)  // ONE draw call for all objects!
+//!
+//! The GPU reads draw parameters from a buffer:
+//!   struct IndirectCommand {
+//!     index_count: u32,
+//!     instance_count: u32,
+//!     first_index: u32,
+//!     vertex_offset: i32,
+//!     first_instance: u32,
+//!   }
+//! ```
+//!
+//! ### How GPU Culling Builds the Buffer
+//!
+//! ```glsl
+//! // In compute shader (each thread = one object)
+//! layout(local_size_x = 64) in;  // 64 threads per workgroup
+//!
+//! void main() {
+//!     uint object_id = gl_GlobalInvocationID.x;
+//!     
+//!     // Load object data
+//!     DrawCommand cmd = draw_commands[object_id];
+//!     vec4 bounding_sphere = cmd.bounding_sphere;
+//!     mat4 model = cmd.model_matrix;
+//!     
+//!     // Transform bounding sphere to world space
+//!     vec3 world_center = (model * vec4(bounding_sphere.xyz, 1.0)).xyz;
+//!     float world_radius = length(model[0].xyz) * bounding_sphere.w;
+//!     
+//!     // Test against frustum
+//!     bool visible = true;
+//!     for (int i = 0; i < 6; i++) {
+//!         float distance = dot(frustum_planes[i].xyz, world_center) + frustum_planes[i].w;
+//!         if (distance < -world_radius) {
+//!             visible = false;
+//!             break;
+//!         }
+//!     }
+//!     
+//!     // If visible, add to indirect buffer
+//!     if (visible) {
+//!         uint index = atomicAdd(visible_count, 1);  // Thread-safe counter
+//!         indirect_buffer[index] = create_draw_command(cmd);
+//!     }
+//! }
+//! ```
+//!
+//! ## Atomic Operations
+//!
+//! ### The Concurrent Write Problem
+//!
+//! Multiple threads might find visible objects simultaneously:
+//! ```text
+//! Thread 1: Found visible object! → Write to index 0
+//! Thread 2: Found visible object! → Write to index 0 (collision!)
+//! ```
+//!
+//! ### Solution: Atomic Counter
+//!
+//! ```text
+//! atomicAdd(counter, 1) guarantees:
+//!   1. Read current value
+//!   2. Increment by 1
+//!   3. Return OLD value
+//!   4. All in ONE atomic operation (no race conditions)
+//!
+//! Thread 1: atomicAdd() returns 0 → writes at index 0
+//! Thread 2: atomicAdd() returns 1 → writes at index 1
+//! Thread 3: atomicAdd() returns 2 → writes at index 2
+//! ```
+//!
+//! ## Performance Analysis
+//!
+//! ### CPU Culling (10,000 objects):
+//! ```text
+//! - 10,000 frustum tests @ ~5ns each = 50μs
+//! - Build draw command list = ~100μs
+//! - Submit 1,000 draw calls @ ~1μs each = 1,000μs
+//! Total: ~1.15ms CPU time
+//! ```
+//!
+//! ### GPU Culling (10,000 objects):
+//! ```text
+//! - Upload culling data = ~50μs (once)
+//! - Dispatch compute = ~10μs
+//! - 10,000 tests in parallel on GPU = ~100μs
+//! - One indirect draw = ~10μs
+//! Total: ~170μs CPU time, ~100μs GPU time
+//! ```
+//!
+//! **Result**: 6-7× faster CPU time, scales linearly with object count!
+//!
+//! ## Work Group Sizing
+//!
+//! ### Why 64 threads per work group?
+//!
+//! GPUs execute threads in groups (warps/wavefronts):
+//! - NVIDIA: 32 threads per warp
+//! - AMD: 64 threads per wavefront
+//!
+//! Using 64 threads per work group:
+//! - Matches AMD hardware perfectly
+//! - Uses 2 warps on NVIDIA (still efficient)
+//! - Good balance of occupancy and resource usage
+//!
+//! ### Calculating Work Groups
+//!
+//! ```text
+//! For 10,000 objects with 64 threads per group:
+//!   work_groups = ceil(10000 / 64) = 157 work groups
+//!
+//! GPU schedules these across compute units:
+//!   - All 157 work groups execute in parallel (if hardware allows)
+//!   - Otherwise, scheduled in batches
+//! ```
+//!
+//! ## Occlusion Culling (Advanced)
+//!
+//! Beyond frustum culling, we can also cull objects hidden behind others:
+//!
+//! ### Hierarchical Z-Buffer (Hi-Z)
+//! ```text
+//! 1. Build mipmap pyramid of depth buffer
+//! 2. For each object:
+//!    - Project bounding sphere to screen
+//!    - Sample appropriate Hi-Z mip level
+//!    - If object depth > Hi-Z depth: occluded
+//! ```
+//!
+//! **Benefit**: Can cull 30-50% more objects in dense scenes
+//! **Cost**: Additional compute, depth pyramid generation
+//!
 //! # Overview
 //!
 //! Traditional CPU-based culling requires:

@@ -3,6 +3,143 @@
 //! This module provides a complete deferred rendering pipeline that separates
 //! geometry rendering from lighting calculations, enabling efficient many-light scenarios.
 //!
+//! # Educational: Why Deferred Rendering?
+//!
+//! ## The Lighting Problem
+//!
+//! In forward rendering, every object must be lit by every light during its draw call:
+//! ```text
+//! for each object:
+//!   for each light:
+//!     calculate lighting
+//!   draw object
+//! ```
+//!
+//! **Problem**: With 100 objects and 50 lights = 5,000 lighting calculations
+//! Many of these calculations are wasted on objects that end up hidden by other objects!
+//!
+//! ## The Deferred Solution
+//!
+//! Deferred rendering decouples geometry from lighting:
+//! ```text
+//! Pass 1 - Geometry: Write all visible surface data to screen-sized textures (G-buffer)
+//! Pass 2 - Lighting: For each screen pixel, calculate lighting once
+//! ```
+//!
+//! **Benefit**: Only lit pixels that are actually visible = no wasted work!
+//!
+//! ## G-Buffer Layout (How We Store Surface Data)
+//!
+//! The G-buffer is a collection of textures storing per-pixel surface information:
+//!
+//! ### Texture 0: Albedo (RGBA8)
+//! ```text
+//! R, G, B = Base color of the surface (diffuse color)
+//! A = Unused (could store occlusion or other data)
+//! ```
+//! Why 8-bit? Colors don't need high precision, and it saves memory bandwidth.
+//!
+//! ### Texture 1: Normal (RGBA16F)
+//! ```text
+//! R, G, B = World-space normal vector (xyz)
+//! A = Unused
+//! ```
+//! Why 16-bit float? Normals need precision for smooth lighting.
+//! Why world-space? Makes lighting calculations simpler (no need to transform).
+//!
+//! ### Texture 2: Metallic-Roughness-Emissive (RGBA8)
+//! ```text
+//! R = Metallic factor [0=dielectric, 1=metal]
+//! G = Roughness factor [0=smooth/glossy, 1=rough/matte]
+//! B = Emissive strength (how much light the surface emits)
+//! A = Unused
+//! ```
+//! Why pack together? Saves memory and bandwidth. These values are uncorrelated
+//! so packing doesn't hurt quality.
+//!
+//! ### Texture 3: Velocity (RG16F)
+//! ```text
+//! R, G = Screen-space motion vector (for TAA and motion blur)
+//! ```
+//! Why 2D? We only care about motion in screen space, not depth.
+//! Why 16-bit float? Sub-pixel motion needs fractional precision.
+//!
+//! ### Texture 4: Depth (D32F)
+//! ```text
+//! Standard depth buffer [0=near, 1=far]
+//! ```
+//! Why 32-bit? Prevents z-fighting artifacts in large scenes.
+//!
+//! ## Memory Analysis
+//!
+//! For a 1920×1080 screen:
+//! - Albedo: 1920 × 1080 × 4 bytes = 8.3 MB
+//! - Normal: 1920 × 1080 × 8 bytes = 16.6 MB
+//! - Metallic-Roughness: 1920 × 1080 × 4 bytes = 8.3 MB
+//! - Velocity: 1920 × 1080 × 4 bytes = 8.3 MB
+//! - Depth: 1920 × 1080 × 4 bytes = 8.3 MB
+//!
+//! **Total: ~50 MB**
+//!
+//! This is acceptable for modern GPUs (4-16 GB VRAM) and the performance benefit is worth it.
+//!
+//! # Deferred Rendering Architecture
+//!
+//! ## Pass 1: Geometry Pass (Write G-Buffer)
+//! ```text
+//! Input: 3D meshes with vertices, normals, UVs, materials
+//! Output: G-buffer textures (albedo, normal, material, depth)
+//!
+//! For each mesh:
+//!   1. Vertex Shader:
+//!      - Transform vertices to clip space
+//!      - Transform normals to world space
+//!      - Pass through UVs and material properties
+//!
+//!   2. Fragment Shader:
+//!      - Sample textures (albedo, normal map)
+//!      - Write albedo to RT0
+//!      - Write world-space normal to RT1
+//!      - Write material properties to RT2
+//!      - Write velocity to RT3
+//!      - Depth written automatically
+//! ```
+//!
+//! ## Pass 2: Lighting Pass (Read G-Buffer)
+//! ```text
+//! Input: G-buffer textures, light data
+//! Output: Final lit color
+//!
+//! Draw full-screen quad:
+//!   1. Vertex Shader:
+//!      - Generate full-screen triangle/quad
+//!      - Pass UV coordinates for G-buffer sampling
+//!
+//!   2. Fragment Shader:
+//!      - Sample G-buffer at current pixel
+//!      - Reconstruct world position from depth
+//!      - For each light:
+//!          - Calculate light contribution (diffuse + specular)
+//!          - Apply attenuation and shadows
+//!      - Sum all light contributions
+//!      - Apply ambient + emissive
+//!      - Output final color
+//! ```
+//!
+//! ## Position Reconstruction
+//!
+//! We don't store world position in G-buffer (saves memory). Instead, we reconstruct it:
+//! ```text
+//! 1. Read depth from G-buffer
+//! 2. Use UV coordinates to get NDC position: ndc.xy = uv * 2 - 1
+//! 3. Set ndc.z = depth, ndc.w = 1
+//! 4. Multiply by inverse projection: view_pos = inv_proj * ndc
+//! 5. Perspective divide: view_pos /= view_pos.w
+//! 6. Transform to world space: world_pos = inv_view * view_pos
+//! ```
+//!
+//! This is fast (4 matrix multiplies) and saves 12-16 bytes per pixel!
+//!
 //! # Deferred Rendering Overview
 //!
 //! Deferred rendering uses a two-pass approach:
