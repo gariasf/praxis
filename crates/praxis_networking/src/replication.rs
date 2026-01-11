@@ -1,4 +1,141 @@
 //! Entity replication system.
+//!
+//! # Entity Replication Overview
+//!
+//! Entity replication synchronizes game objects across the network. When entities
+//! move, change state, or perform actions, those changes need to be communicated
+//! to all clients so everyone sees the same game world.
+//!
+//! # How Replication Works
+//!
+//! ## Server-Side (Authority)
+//!
+//! 1. **Mark entities for replication**: Add `Replicated` component
+//! 2. **Register components**: Tell system which components to sync
+//! 3. **Create snapshots**: Serialize entity state each frame
+//! 4. **Send to clients**: Broadcast state updates via network
+//!
+//! ```text
+//! Entity { Transform, Health, NetworkId }
+//!         ↓
+//! Snapshot { network_id: 42, components: { Transform, Health } }
+//!         ↓
+//! Network Message → All Clients
+//! ```
+//!
+//! ## Client-Side (Receiver)
+//!
+//! 1. **Receive snapshot**: Get entity state from server
+//! 2. **Find/spawn entity**: Look up by NetworkId or create new
+//! 3. **Apply components**: Deserialize and update components
+//! 4. **Render**: ECS systems render updated state
+//!
+//! # Component Registration
+//!
+//! Not all components need to be replicated. Common replicated components:
+//! - **Transform**: Position, rotation, scale
+//! - **Velocity**: Movement speed and direction
+//! - **Health**: Current health points
+//! - **Animation state**: Current animation and frame
+//!
+//! Non-replicated (local-only) components:
+//! - **Rendering**: Mesh, materials (loaded from assets)
+//! - **Input**: Player input state (only on owning client)
+//! - **AI state**: Server-only game logic
+//!
+//! ## Registration Example
+//!
+//! ```rust,ignore
+//! let mut registry = ReplicationRegistry::new();
+//!
+//! // Register built-in components
+//! registry.register_transform();
+//! registry.register_velocity();
+//!
+//! // Register custom component
+//! registry.register::<Health>("Health");
+//! ```
+//!
+//! # Serialization Flow
+//!
+//! Components must implement `Serialize` and `Deserialize`:
+//!
+//! ```text
+//! Server:
+//! Component → Serialize → Bytes → Network
+//!
+//! Client:
+//! Network → Bytes → Deserialize → Component
+//! ```
+//!
+//! The `ComponentSerializer` trait handles this automatically for types
+//! that implement serde's traits.
+//!
+//! # NetworkId: Tracking Entities Across the Network
+//!
+//! Each replicated entity has a unique `NetworkId`:
+//! - **Server assigns** on entity spawn
+//! - **Clients use** to match snapshots to entities
+//! - **Stable across** entity creation/destruction
+//!
+//! Example:
+//! ```text
+//! Server spawns entity with NetworkId(42)
+//! Server sends snapshot { network_id: 42, transform: ... }
+//! Client receives, finds or creates entity with NetworkId(42)
+//! Client applies transform to that entity
+//! ```
+//!
+//! # Replication Rate Control
+//!
+//! Not all entities need to be replicated every frame:
+//!
+//! - **rate_divisor**: Replicate every Nth tick
+//!   - `rate_divisor = 1`: Every frame (default, high bandwidth)
+//!   - `rate_divisor = 2`: Every other frame (50% bandwidth)
+//!   - `rate_divisor = 4`: Every 4th frame (25% bandwidth)
+//!
+//! Use higher rate divisors for:
+//! - Far away entities (less noticeable updates)
+//! - Slow-moving objects (don't need frequent updates)
+//! - Lower priority entities (background props)
+//!
+//! Use low rate divisors (1-2) for:
+//! - Nearby players (need smooth movement)
+//! - Fast-moving projectiles
+//! - Important gameplay objects
+//!
+//! # Bandwidth Optimization
+//!
+//! Replication can consume significant bandwidth. Optimizations:
+//!
+//! 1. **Delta compression**: Only send changed components (not implemented yet)
+//! 2. **Interest management**: Only replicate visible entities (not implemented yet)
+//! 3. **Rate limiting**: Reduce update frequency for less important entities
+//! 4. **Quantization**: Reduce precision for positions (e.g., 2 decimals instead of 6)
+//!
+//! # Example: Full Replication Flow
+//!
+//! ```rust,ignore
+//! // Server setup
+//! let mut world = World::new();
+//! let mut system = ReplicationSystem::new();
+//! system.registry().register_transform();
+//!
+//! // Spawn replicated entity
+//! world.spawn((
+//!     NetworkId::new(1),
+//!     Replicated::new(),
+//!     ReplicatedTransform::new(Vec3::ZERO, Quat::IDENTITY, Vec3::ONE),
+//! ));
+//!
+//! // Each frame: create and send snapshot
+//! let message = system.create_replication_message(&mut world);
+//! server.broadcast(&message);
+//!
+//! // Client receives and applies
+//! system.apply_replication_message(&mut world, &message);
+//! ```
 
 use crate::{
     ComponentData, EntitySnapshot, NetworkId, Replicated, ReplicatedTransform, ReplicatedVelocity,

@@ -1,4 +1,115 @@
 //! Network transport layer.
+//!
+//! # Transport Layer Fundamentals
+//!
+//! The transport layer provides low-level socket communication between clients and servers.
+//! This module implements both TCP and UDP transports, each suited for different types
+//! of network traffic.
+//!
+//! # Architecture
+//!
+//! The transport layer uses Rust's async/await with Tokio for efficient I/O:
+//! - **Async operations**: Non-blocking I/O prevents threads from stalling
+//! - **Message channels**: Crossbeam channels decouple socket I/O from game logic
+//! - **Background tasks**: Tokio tasks handle receiving in the background
+//!
+//! # TCP Transport Details
+//!
+//! ## Connection-Oriented Communication
+//!
+//! TCP establishes a persistent connection between client and server:
+//! 1. **Three-way handshake**: SYN → SYN-ACK → ACK to establish connection
+//! 2. **Bidirectional stream**: Data flows both ways over the same connection
+//! 3. **Graceful close**: FIN handshake to cleanly terminate connection
+//!
+//! ## Message Framing
+//!
+//! TCP is a **byte stream** with no message boundaries. We must frame messages ourselves:
+//!
+//! ```text
+//! [4-byte length][message data][4-byte length][message data]...
+//! ```
+//!
+//! Each message is prefixed with its length in bytes (u32). This allows the receiver
+//! to know exactly how many bytes to read for each complete message.
+//!
+//! ## Reliability Guarantees
+//!
+//! - **Sequence numbers**: Every byte has a sequence number
+//! - **Acknowledgments**: Receiver confirms receipt of data
+//! - **Retransmission**: Lost packets are automatically resent
+//! - **In-order delivery**: Packets arrive in the exact order sent
+//!
+//! ## Flow Control
+//!
+//! TCP prevents fast senders from overwhelming slow receivers:
+//! - **Receive window**: Advertises how much buffer space is available
+//! - **Sliding window**: Only sends data receiver can handle
+//! - **Backpressure**: Automatically slows down if receiver can't keep up
+//!
+//! # UDP Transport Details
+//!
+//! ## Connectionless Communication
+//!
+//! UDP sends independent datagrams without establishing a connection:
+//! - **Fire-and-forget**: Send packet and hope it arrives
+//! - **No handshake**: Start sending immediately
+//! - **No state tracking**: Server doesn't track "connections"
+//!
+//! ## Datagram Boundaries
+//!
+//! Unlike TCP, UDP preserves message boundaries:
+//! ```text
+//! send_to([A, B, C])  →  recv_from() returns [A, B, C]
+//! ```
+//!
+//! Each `send_to` creates one datagram, and each `recv_from` receives
+//! exactly one complete datagram. No framing needed!
+//!
+//! ## Unreliability Characteristics
+//!
+//! - **Packet loss**: 0.1-10% of packets may not arrive (worse on poor connections)
+//! - **Duplication**: Same packet may arrive multiple times
+//! - **Reordering**: Packets may arrive out of order
+//! - **No notification**: Sender doesn't know if packet was lost
+//!
+//! ## Why Use UDP Despite Unreliability?
+//!
+//! For real-time games, **freshness > reliability**:
+//! - Position at frame N+1 makes position at frame N irrelevant
+//! - Better to show current (imperfect) state than wait for old data
+//! - Player sees smoother movement despite occasional packet loss
+//!
+//! # Choosing Between TCP and UDP
+//!
+//! ## Use TCP for:
+//! - Player authentication
+//! - Chat messages  
+//! - Spawn/destroy entity events
+//! - Game state changes (score, inventory)
+//! - Any data that must be reliable
+//!
+//! ## Use UDP for:
+//! - Player position updates (every frame)
+//! - Animation states
+//! - Input commands
+//! - Ping/pong measurements
+//! - Any high-frequency, time-sensitive data
+//!
+//! # Implementation Notes
+//!
+//! ## Thread Safety
+//!
+//! Both transports are `Send + Sync` and can be safely shared across threads:
+//! - `Arc<RwLock<...>>` for shared mutable state
+//! - `crossbeam_channel` for thread-safe message passing
+//! - Tokio async runtime for concurrent I/O
+//!
+//! ## Performance Optimizations
+//!
+//! - **Buffer pooling**: Reuse receive buffers to reduce allocations
+//! - **Batch sending**: Send multiple messages in one syscall when possible
+//! - **Backpressure handling**: Drop old unreliable messages if queue fills up
 
 use crossbeam_channel::{Receiver, Sender};
 use parking_lot::RwLock;
@@ -39,14 +150,26 @@ impl Default for TransportConfig {
 }
 
 /// Network transport abstraction.
+///
+/// Provides a unified interface for both TCP and UDP communication.
+/// Implementations handle the low-level socket details.
 pub trait NetworkTransport: Send + Sync {
-    /// Sends data reliably.
+    /// Sends data reliably (TCP).
+    ///
+    /// Guarantees delivery and in-order arrival. Use for important data
+    /// that must not be lost (e.g., chat messages, entity spawn events).
     fn send_reliable(&self, addr: SocketAddr, data: &[u8]) -> Result<()>;
 
-    /// Sends data unreliably (may be lost or arrive out of order).
+    /// Sends data unreliably (UDP).
+    ///
+    /// May be lost or arrive out of order. Use for time-sensitive data
+    /// where freshness matters more than reliability (e.g., position updates).
     fn send_unreliable(&self, addr: SocketAddr, data: &[u8]) -> Result<()>;
 
     /// Receives next message.
+    ///
+    /// Returns `Some((addr, data))` if a message is available, `None` otherwise.
+    /// Non-blocking - returns immediately even if no messages are available.
     fn receive(&self) -> Option<(SocketAddr, Vec<u8>)>;
 }
 
@@ -57,6 +180,22 @@ type TcpWriteHalf = Arc<TokioMutex<OwnedWriteHalf>>;
 type ConnectionMap = Arc<RwLock<Vec<(SocketAddr, TcpWriteHalf)>>>;
 
 /// TCP transport for reliable messages.
+///
+/// # Message Framing
+///
+/// TCP is a byte stream, so we need to frame messages:
+/// 1. Send 4-byte length prefix (u32 in network byte order)
+/// 2. Send message data
+/// 3. Receiver reads length, then reads exactly that many bytes
+///
+/// This prevents messages from being concatenated or split.
+///
+/// # Connection Management
+///
+/// - Accepts incoming connections on a listener socket
+/// - Stores write halves for sending to each client
+/// - Spawns async tasks for receiving from each client
+/// - Length-prefixed messages prevent corruption
 pub struct TcpTransport {
     listener: Arc<RwLock<Option<TcpListener>>>,
     connections: ConnectionMap,
@@ -81,6 +220,13 @@ impl TcpTransport {
     }
 
     /// Accepts incoming connections and spawns receive loops for each.
+    ///
+    /// # Connection Flow
+    ///
+    /// 1. Accept new TCP connection
+    /// 2. Split into read and write halves
+    /// 3. Store write half for sending
+    /// 4. Spawn task to receive from read half
     #[allow(clippy::await_holding_lock)]
     pub async fn accept_connections(&self) -> Result<()> {
         let listener = self.listener.read();
@@ -113,6 +259,21 @@ impl TcpTransport {
     }
 
     /// Receive loop for a single TCP connection (length-prefixed messages).
+    ///
+    /// # Message Format
+    ///
+    /// ```text
+    /// [4 bytes: length N][N bytes: message data]
+    /// ```
+    ///
+    /// Reads length first, then reads exactly that many bytes for the message.
+    /// This ensures message boundaries are preserved over the byte stream.
+    ///
+    /// # Error Handling
+    ///
+    /// - `UnexpectedEof`: Connection closed cleanly
+    /// - Invalid length: Potential corruption or attack, close connection
+    /// - Read errors: Network issue, close connection
     async fn connection_receive_loop(
         mut read_half: OwnedReadHalf,
         addr: SocketAddr,
@@ -214,6 +375,39 @@ impl NetworkTransport for TcpTransport {
 }
 
 /// UDP transport for unreliable messages.
+///
+/// # Datagram-Based Communication
+///
+/// UDP sends discrete datagrams:
+/// - Each `send_to` sends one complete datagram
+/// - Each `recv_from` receives one complete datagram
+/// - No message framing needed (unlike TCP)
+///
+/// # Packet Loss Handling
+///
+/// UDP provides no reliability guarantees:
+/// - Packets may be lost (never arrive)
+/// - Packets may be duplicated (arrive multiple times)
+/// - Packets may be reordered (arrive in different order)
+///
+/// For game networking, this is often acceptable:
+/// - Position updates are sent every frame (old data becomes irrelevant)
+/// - Occasional loss causes brief glitches, but game continues
+/// - Fresher data is more valuable than guaranteed delivery
+///
+/// # When to Use UDP
+///
+/// Perfect for high-frequency, time-sensitive data:
+/// - Player position/rotation updates (every frame)
+/// - Animation state changes
+/// - Input commands
+/// - Voice chat packets
+/// - Particle effects
+///
+/// Avoid for critical data:
+/// - Chat messages (use TCP)
+/// - Entity spawn/destroy (use TCP)
+/// - Score/inventory changes (use TCP)
 pub struct UdpTransport {
     socket: Arc<UdpSocket>,
     rx: Receiver<(SocketAddr, Vec<u8>)>,
@@ -236,6 +430,9 @@ impl UdpTransport {
     }
 
     /// Receives UDP packets in a background task.
+    ///
+    /// Spawns an async task that continuously receives datagrams
+    /// and forwards them through a channel.
     pub async fn receive_loop(&self, buffer_size: usize) -> Result<()> {
         let mut buffer = vec![0u8; buffer_size];
         let tx = self.tx.clone();

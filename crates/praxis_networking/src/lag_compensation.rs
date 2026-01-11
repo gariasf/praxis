@@ -1,4 +1,217 @@
 //! Lag compensation for fair gameplay.
+//!
+//! # The Problem: Latency Causes Unfairness
+//!
+//! In multiplayer games, network latency creates timing mismatches between
+//! what players see and what actually happened:
+//!
+//! ```text
+//! Player A fires at Player B's position
+//!     ↓ (200ms latency)
+//! Server receives shot
+//!     But Player B moved 200ms ago!
+//!     Server says "Miss" even though shot looked perfect
+//! ```
+//!
+//! This is **frustrating**: You aim perfectly, but the server says you missed
+//! because of network delay outside your control.
+//!
+//! # Solution: Lag Compensation (Time Rewinding)
+//!
+//! **Lag compensation** makes the server validate hits from the shooter's
+//! perspective by "rewinding time" to when they fired.
+//!
+//! ## How It Works
+//!
+//! 1. **Record history**: Server stores entity positions every frame
+//! 2. **Client timestamps actions**: "I shot at tick 1000"
+//! 3. **Server rewinds**: Restore world to state at tick 1000
+//! 4. **Hit detection**: Check if shot hit from that perspective
+//! 5. **Restore**: Return world to current state
+//!
+//! ```text
+//! Current time:      Player B at position X
+//!                           ↑
+//! Server rewinds 200ms:  Player B at position Y
+//!                           ↑
+//! Check hit at Y:    Did shot from A hit B at Y? YES!
+//!                           ↑
+//! Apply damage:      Damage Player B (at current position X)
+//! ```
+//!
+//! # Example Scenario
+//!
+//! ## Without Lag Compensation (Unfair)
+//!
+//! ```text
+//! T=0ms (Client):   Player A sees enemy at (10, 0), shoots
+//! T=100ms (Server): Shot arrives, enemy at (15, 0)
+//!                   Hit check at (10, 0) → MISS
+//!                   Player A frustrated: "But I hit them!"
+//! ```
+//!
+//! ## With Lag Compensation (Fair)
+//!
+//! ```text
+//! T=0ms (Client):   Player A sees enemy at (10, 0), shoots
+//! T=100ms (Server): Shot arrives with timestamp T=0
+//!                   Rewind: Set enemy to position at T=0 → (10, 0)
+//!                   Hit check at (10, 0) → HIT!
+//!                   Restore: Return enemy to current position (15, 0)
+//!                   Apply damage
+//! ```
+//!
+//! # Benefits
+//!
+//! - **Fair for shooters**: Hit what you see (shooting feels responsive)
+//! - **No client-side hit detection**: Server still authoritative (anti-cheat)
+//! - **Compensates for lag**: High-ping players aren't disadvantaged
+//!
+//! # Trade-offs
+//!
+//! - **"Getting shot behind cover"**: Target may have moved behind cover on their screen
+//!   but still get hit (because they were visible to shooter 100ms ago)
+//! - **Favor the shooter**: Philosophy decision (better than favoring high-ping players)
+//! - **History storage**: Need to keep position history (memory cost)
+//! - **Computation cost**: Rewinding and restoring world state
+//!
+//! # Why "Favor the Shooter"?
+//!
+//! Alternative: Don't compensate, require shooter to "lead" their target
+//! based on their own latency.
+//!
+//! Problems:
+//! - Players must guess their own latency
+//! - Impossible for hitscan weapons (instant bullets)
+//! - Feels terrible and unfair
+//!
+//! Better: Lag compensation makes shooting feel instant and accurate,
+//! accepting that targets may occasionally be hit "after" taking cover.
+//!
+//! # Implementation Details
+//!
+//! ## History Buffer
+//!
+//! Store entity positions with timestamps:
+//! ```rust,ignore
+//! history.add_state(HistoricalState {
+//!     timestamp: 1000,
+//!     transform: current_transform,
+//! });
+//! ```
+//!
+//! Keep history for ~1000ms (covers most latencies).
+//!
+//! ## Rewind Process
+//!
+//! 1. **Store current state**: Save original positions
+//! 2. **Look up historical state**: Find positions at timestamp
+//! 3. **Apply historical state**: Update all entities to past positions
+//! 4. **Perform action**: Run hit detection, physics, etc.
+//! 5. **Restore state**: Put entities back to current positions
+//!
+//! ## Interpolation
+//!
+//! Exact timestamp may not exist, so interpolate between two snapshots:
+//! ```rust,ignore
+//! let state_at_1050ms = interpolate(
+//!     state_at_1000ms,
+//!     state_at_1100ms,
+//!     t = 0.5
+//! );
+//! ```
+//!
+//! # Common Use Cases
+//!
+//! ## Hitscan Weapons (Instant Bullets)
+//!
+//! ```rust,ignore
+//! // Client fires at tick 1000
+//! client.send_shoot_command(target_id, tick: 1000);
+//!
+//! // Server processes
+//! let rewind = lag_comp.rewind_to_client_time(client_id, tick_1000, world);
+//! let hit = raycast(gun_pos, aim_dir);
+//! lag_comp.restore_state(rewind, world);
+//!
+//! if hit { apply_damage(hit.entity); }
+//! ```
+//!
+//! ## Projectile Weapons
+//!
+//! For projectiles (rockets, arrows), less critical because:
+//! - They have travel time anyway
+//! - Can use server-side physics instead
+//!
+//! But still useful for spawn position validation.
+//!
+//! ## Melee Attacks
+//!
+//! ```rust,ignore
+//! // Check if sword swing hit at time player swung
+//! let rewind = lag_comp.rewind_to_client_time(client_id, swing_time, world);
+//! let hits = find_entities_in_sword_arc(player_pos, sword_reach);
+//! lag_comp.restore_state(rewind, world);
+//! ```
+//!
+//! # Limits and Abuse Prevention
+//!
+//! ## Maximum Compensation Time
+//!
+//! Don't compensate for excessive lag:
+//! - Limit to 200-500ms
+//! - Prevents abuse by artificially increasing latency
+//! - Beyond this, player is just lagging too much
+//!
+//! ## Timestamp Validation
+//!
+//! Ensure timestamps are reasonable:
+//! - Not in the future
+//! - Not too far in the past
+//! - Within expected latency range
+//!
+//! ## Anti-Cheat Considerations
+//!
+//! - Don't trust client timestamps blindly
+//! - Track average latency per client
+//! - Flag suspicious timing patterns
+//!
+//! # Alternative: Client-Side Hit Detection
+//!
+//! Some games (mostly cooperative) let clients detect hits:
+//!
+//! **Pros**: Zero perceived latency for shooter
+//! **Cons**: Vulnerable to cheating, unfair for targets
+//!
+//! Only viable for non-competitive games where cheating doesn't matter.
+//!
+//! # Real-World Examples
+//!
+//! Games using lag compensation:
+//! - **Counter-Strike**: Pioneered the technique
+//! - **Call of Duty**: Heavy lag compensation (sometimes too much)
+//! - **Overwatch**: Tuned for ~200ms latency
+//! - **Valorant**: Lower tolerance, favors low-ping players
+//!
+//! # Visual Timeline
+//!
+//! ```text
+//! Time:         T0      T1      T2      T3 (current)
+//! Enemy:        [A]--->[B]--->[C]--->[D]
+//! Your view:    [A]--->[B]  (T1, due to latency)
+//!
+//! You shoot at what you see: Position B
+//!
+//! Server receives at T3:
+//! - Rewinds to T1
+//! - Enemy was at B
+//! - Checks hit at B → YES
+//! - Applies damage at T3
+//!
+//! Enemy (at T3): "I was at D and took cover!"
+//! You (at T3): "But I shot when they were at B!"
+//! Server: "Hit confirmed at shooter's perspective"
+//! ```
 
 use crate::{NetworkId, ReplicatedTransform};
 use bevy_ecs::prelude::*;

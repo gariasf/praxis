@@ -1,4 +1,66 @@
 //! Network client implementation.
+//!
+//! # Client Architecture
+//!
+//! The network client is responsible for:
+//! - **Connecting** to a remote server
+//! - **Sending inputs** and commands to the server
+//! - **Receiving state updates** from the server
+//! - **Maintaining connection state** and handling disconnection
+//!
+//! # Client-Server Model
+//!
+//! In a client-server architecture:
+//! - **Clients** are "thin" - they mainly render and send inputs
+//! - **Server** is "thick" - it runs all game logic and validates actions
+//! - Clients cannot directly modify game state (prevents cheating)
+//! - Server is the authoritative source of truth
+//!
+//! ## Data Flow
+//!
+//! ```text
+//! Client                          Server
+//!   |                               |
+//!   |------ Input (move forward)--->|
+//!   |                               | (validates and processes)
+//!   |<--- State Update (position)---|
+//!   | (renders new position)        |
+//! ```
+//!
+//! # Connection Lifecycle
+//!
+//! 1. **Disconnected**: Initial state, no connection
+//! 2. **Connecting**: Connection request sent, waiting for acceptance
+//! 3. **Connected**: Connection established, can send/receive data
+//! 4. **Disconnecting**: Graceful disconnect in progress
+//! 5. **Disconnected**: Connection closed
+//!
+//! # Reliable vs Unreliable Messages
+//!
+//! The client uses both TCP and UDP for different types of data:
+//!
+//! ## TCP (Reliable)
+//! - Connection handshake
+//! - Chat messages
+//! - Important events (player died, item pickup)
+//! - Anything that cannot be lost
+//!
+//! ## UDP (Unreliable)
+//! - Player inputs (sent every frame)
+//! - Ping/pong for latency measurement
+//! - Position updates from server
+//! - High-frequency data where freshness > reliability
+//!
+//! # Tick Synchronization
+//!
+//! Both client and server maintain tick counters:
+//! - **Client tick**: Local frame counter
+//! - **Server tick**: Last known server frame counter
+//!
+//! Tick synchronization helps with:
+//! - **Input timestamping**: "I pressed jump at tick 100"
+//! - **Lag compensation**: "Rewind to tick 95 for hit detection"
+//! - **Prediction reconciliation**: "My prediction at tick 100 vs server state at tick 100"
 
 use crate::{
     NetworkConfig, NetworkMessage, NetworkProfiler, NetworkTransport, TcpTransport,

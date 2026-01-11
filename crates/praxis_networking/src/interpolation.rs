@@ -1,4 +1,167 @@
 //! Interpolation and extrapolation for smooth remote entity movement.
+//!
+//! # The Problem: Jittery Movement
+//!
+//! Network updates arrive at discrete intervals (e.g., 20 times per second), but
+//! games render at 60+ FPS. Without smoothing, entities would "teleport" between
+//! positions, creating jittery, unnatural movement.
+//!
+//! ```text
+//! Without smoothing (60 FPS render, 20 Hz updates):
+//! Frame 1-3: Position A (looks frozen)
+//! Frame 4-6: Position B (sudden jump!)
+//! Frame 7-9: Position C (another jump!)
+//! Result: Choppy, jarring movement
+//! ```
+//!
+//! # Solution 1: Interpolation (Most Common)
+//!
+//! **Interpolation** renders entities *slightly in the past*, smoothly blending
+//! between received snapshots.
+//!
+//! ## How It Works
+//!
+//! 1. **Buffer snapshots**: Store last few position updates
+//! 2. **Delay rendering**: Render 100-200ms in the past
+//! 3. **Blend positions**: Smoothly transition between snapshots
+//!
+//! ```text
+//! Time:     0ms    100ms   200ms   300ms   (server time)
+//! Server:   [S1]   [S2]    [S3]    [S4]
+//!            ↓      ↓       ↓       ↓
+//! Client:   recv   recv    recv    recv
+//! Render:          [S1-S2] [S2-S3] [S3-S4]  (interpolating between)
+//! ```
+//!
+//! ## Advantages
+//!
+//! - **Perfectly smooth**: Always have two snapshots to blend
+//! - **No guessing**: Only render known, authoritative data
+//! - **No corrections**: Server data is always correct
+//!
+//! ## Trade-offs
+//!
+//! - **Added latency**: Entities rendered 100-200ms behind reality
+//! - **Not for local player**: Local player needs instant feedback
+//! - **Buffer required**: Need memory for snapshot history
+//!
+//! ## When to Use
+//!
+//! Perfect for **remote entities** (other players, NPCs, vehicles):
+//! - Their 100ms delay isn't noticeable
+//! - Smoothness is more important than instant response
+//! - They're not controlled by you, so latency doesn't affect input
+//!
+//! # Solution 2: Extrapolation (Riskier)
+//!
+//! **Extrapolation** predicts where entities *will be* based on velocity,
+//! rendering them ahead of the last known position.
+//!
+//! ## How It Works
+//!
+//! 1. **Receive position + velocity**: Server sends both
+//! 2. **Predict forward**: Use velocity to estimate future position
+//! 3. **Correct when wrong**: Snap to real position when update arrives
+//!
+//! ```text
+//! Last update at 0ms: Position (10, 0), Velocity (1, 0)
+//!
+//! Frame at 16ms: Predict (10 + 1*0.016, 0) = (10.016, 0)
+//! Frame at 33ms: Predict (10 + 1*0.033, 0) = (10.033, 0)
+//!
+//! Update arrives at 100ms: Actual position is (10.1, 0.5)
+//!                          Snap to correct position
+//! ```
+//!
+//! ## Advantages
+//!
+//! - **Zero added latency**: Render at current time
+//! - **Good for constant velocity**: Works great for moving vehicles
+//! - **Responsive feel**: Entities appear up-to-date
+//!
+//! ## Trade-offs
+//!
+//! - **Prediction errors**: Movement changes cause visible snapping
+//! - **Worse for erratic movement**: Player strafing/jumping hard to predict
+//! - **Visual artifacts**: Occasional "rubber-banding" when predictions wrong
+//!
+//! ## When to Use
+//!
+//! Best for **predictable movement**:
+//! - Physics objects (falling, sliding)
+//! - Vehicles moving in straight lines
+//! - Projectiles with constant velocity
+//!
+//! Avoid for:
+//! - Player-controlled characters (too erratic)
+//! - Entities that frequently change direction
+//!
+//! # Hybrid Approach (Best of Both Worlds)
+//!
+//! Many games use **both**:
+//! - **Interpolation** as default (smooth, safe)
+//! - **Extrapolation** when packets late (prevent freezing)
+//!
+//! ```text
+//! Normal: Interpolate between S1 and S2
+//! Packet loss: No S3? Extrapolate from S2 using velocity
+//! Packet arrives: Snap back to S3, resume interpolation
+//! ```
+//!
+//! # Implementation Details
+//!
+//! ## Snapshot Buffer
+//!
+//! Stores historical positions with timestamps:
+//! ```rust,ignore
+//! buffer.add_snapshot(Snapshot {
+//!     timestamp: 1000.0,
+//!     transform: current_transform,
+//!     velocity: Some(current_velocity),
+//! });
+//! ```
+//!
+//! ## Interpolation Math
+//!
+//! Linear interpolation (lerp) between two positions:
+//! ```rust,ignore
+//! let t = (target_time - prev.time) / (next.time - prev.time);
+//! let pos = prev.pos.lerp(next.pos, t);
+//! let rot = prev.rot.slerp(next.rot, t); // Spherical lerp for rotations
+//! ```
+//!
+//! ## Extrapolation Math
+//!
+//! Simple physics prediction:
+//! ```rust,ignore
+//! let dt = time_since_last_update;
+//! let predicted_pos = last_pos + velocity * dt;
+//! ```
+//!
+//! # Choosing Delay Amount
+//!
+//! Typical interpolation delays:
+//! - **100ms**: Good balance (default)
+//! - **50ms**: Lower latency, riskier (might not have next snapshot)
+//! - **150-200ms**: Very smooth, but noticeable lag
+//!
+//! Formula: `delay ≥ update_interval + jitter`
+//! - Update interval: Time between server updates (e.g., 50ms for 20 Hz)
+//! - Jitter: Network timing variation (e.g., ±50ms)
+//!
+//! # Visual Example
+//!
+//! ```text
+//! Server sends updates:  A---B---C---D---E
+//!                       0ms 50  100 150 200
+//!
+//! Client interpolates with 100ms delay:
+//! Time 100ms: Interpolate between A and B
+//! Time 150ms: Interpolate between B and C
+//! Time 200ms: Interpolate between C and D
+//!
+//! Result: Smooth movement, but 100ms behind server
+//! ```
 
 use crate::{NetworkExtrapolation, NetworkInterpolation, ReplicatedTransform, ReplicatedVelocity};
 use bevy_ecs::prelude::*;
