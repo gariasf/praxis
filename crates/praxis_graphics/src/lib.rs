@@ -1209,8 +1209,10 @@ impl DescriptorSetPool {
         texture: &texture::Texture,
         lighting_buffer: vulkano::buffer::Subbuffer<lighting::LightingUniforms>,
         default_normal_map: &texture::Texture,
+        bone_matrices_buffer: vulkano::buffer::Subbuffer<uniform_buffer::BoneMatricesUniforms>,
         shadow_buffer: vulkano::buffer::Subbuffer<shadow::ShadowUniforms>,
-        shadow_texture: &texture::Texture,
+        dummy_shadow_map: Arc<ImageView>,
+        shadow_sampler: Arc<vulkano::image::sampler::Sampler>,
     ) -> Result<Arc<DescriptorSet>> {
         let key = TransformKey::new(texture_name.clone());
 
@@ -1240,34 +1242,17 @@ impl DescriptorSetPool {
                     texture.sampler.clone(),
                 ),
                 WriteDescriptorSet::buffer(3, lighting_buffer),
-                // Shadow data uniform buffer (binding 4)
                 WriteDescriptorSet::buffer(4, shadow_buffer),
-                // Shadow map samplers (bindings 5-8 for 4 cascades)
-                WriteDescriptorSet::image_view_sampler(
-                    5,
-                    shadow_texture.view.clone(),
-                    shadow_texture.sampler.clone(),
-                ),
-                WriteDescriptorSet::image_view_sampler(
-                    6,
-                    shadow_texture.view.clone(),
-                    shadow_texture.sampler.clone(),
-                ),
-                WriteDescriptorSet::image_view_sampler(
-                    7,
-                    shadow_texture.view.clone(),
-                    shadow_texture.sampler.clone(),
-                ),
-                WriteDescriptorSet::image_view_sampler(
-                    8,
-                    shadow_texture.view.clone(),
-                    shadow_texture.sampler.clone(),
-                ),
+                WriteDescriptorSet::image_view_sampler(5, dummy_shadow_map.clone(), shadow_sampler.clone()),
+                WriteDescriptorSet::image_view_sampler(6, dummy_shadow_map.clone(), shadow_sampler.clone()),
+                WriteDescriptorSet::image_view_sampler(7, dummy_shadow_map.clone(), shadow_sampler.clone()),
+                WriteDescriptorSet::image_view_sampler(8, dummy_shadow_map.clone(), shadow_sampler.clone()),
                 WriteDescriptorSet::image_view_sampler(
                     9,
                     default_normal_map.view.clone(),
                     default_normal_map.sampler.clone(),
                 ),
+                WriteDescriptorSet::buffer(10, bone_matrices_buffer),
             ],
             [],
         )
@@ -1412,7 +1397,7 @@ pub struct RenderContext {
     swapchain: Arc<Swapchain>,
     swapchain_images: Vec<Arc<Image>>,
     swapchain_image_views: Vec<Arc<ImageView>>,
-    depth_image_view: Arc<ImageView>,
+    depth_images: Vec<Arc<ImageView>>,
     render_pass: Arc<RenderPass>,
     framebuffers: Vec<Arc<Framebuffer>>,
     command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
@@ -1445,6 +1430,18 @@ pub struct RenderContext {
     /// Buffer for per-frame view/projection uniforms.
     view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
 
+    /// Buffer for bone matrices (skeletal animation).
+    bone_matrices_buffer: vulkano::buffer::Subbuffer<uniform_buffer::BoneMatricesUniforms>,
+
+    /// Buffer for shadow uniforms (disabled by default with cascade_count = 0).
+    shadow_buffer: vulkano::buffer::Subbuffer<shadow::ShadowUniforms>,
+
+    /// Dummy depth image for shadow map binding (when shadows are disabled).
+    dummy_shadow_map: Arc<ImageView>,
+
+    /// Sampler for shadow maps (depth comparison sampler).
+    shadow_sampler: Arc<vulkano::image::sampler::Sampler>,
+
     /// Line renderer for debug visualization and gizmos.
     line_renderer: Option<line_renderer::LineRenderer>,
     /// Descriptor set pool for efficient material descriptor set reuse.
@@ -1455,16 +1452,6 @@ pub struct RenderContext {
 
     /// Whether to use bindless rendering mode.
     use_bindless: bool,
-
-    /// Default shadow uniform buffer (shadows disabled).
-    default_shadow_buffer: vulkano::buffer::Subbuffer<shadow::ShadowUniforms>,
-
-    /// Default shadow map texture (1x1 white depth texture).
-    default_shadow_texture: texture::Texture,
-
-    /// Dummy bindless descriptor set for when bindless rendering is disabled.
-    /// This is needed because the pipeline layout expects set 2 to be bound.
-    dummy_bindless_set: Arc<DescriptorSet>,
 }
 
 impl RenderContext {
@@ -1535,15 +1522,18 @@ impl RenderContext {
         trace!("Creating memory allocator");
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
 
+        debug!("Creating {} depth images", swapchain_images.len());
+        let depth_images = Self::create_depth_images(
+            &memory_allocator,
+            swapchain.image_extent(),
+            swapchain_images.len(),
+        )?;
+
         debug!("Creating render pass");
         let render_pass = Self::create_render_pass(&device, swapchain.image_format())?;
 
-        debug!("Creating depth buffer");
-        let depth_image_view = Self::create_depth_buffer(&memory_allocator, swapchain.image_extent())?;
-
         debug!("Creating {} framebuffers", swapchain_image_views.len());
-        let framebuffers =
-            Self::create_framebuffers(&swapchain_image_views, &depth_image_view, &render_pass)?;
+        let framebuffers = Self::create_framebuffers(&swapchain_image_views, &depth_images, &render_pass)?;
 
         trace!("Creating command buffer allocator");
         let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
@@ -1658,9 +1648,10 @@ impl RenderContext {
         )
         .map_err(|e| eyre::eyre!("Failed to create view/projection buffer: {}", e))?;
 
-        // Create default shadow uniform buffer (shadows disabled)
-        debug!("Creating default shadow buffer");
-        let default_shadow_buffer = Buffer::from_data(
+        // Create bone matrices buffer with identity matrices (for non-animated meshes)
+        debug!("Creating bone matrices buffer");
+        let initial_bone_matrices = uniform_buffer::BoneMatricesUniforms::identity();
+        let bone_matrices_buffer = Buffer::from_data(
             memory_allocator.clone(),
             BufferCreateInfo {
                 usage: BufferUsage::UNIFORM_BUFFER,
@@ -1671,15 +1662,62 @@ impl RenderContext {
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
-            shadow::ShadowUniforms::default(),
+            initial_bone_matrices,
         )
-        .map_err(|e| eyre::eyre!("Failed to create default shadow buffer: {}", e))?;
+        .map_err(|e| eyre::eyre!("Failed to create bone matrices buffer: {}", e))?;
 
-        // Create default shadow texture (1x1 depth texture for shadow map samplers)
-        debug!("Creating default shadow texture");
-        let default_shadow_texture = texture_manager
-            .create_default_shadow_texture()
-            .map_err(|e| eyre::eyre!("Failed to create default shadow texture: {}", e))?;
+        // Create shadow buffer with disabled shadows (cascade_count = 0)
+        debug!("Creating shadow uniform buffer");
+        let initial_shadow_uniforms = shadow::ShadowUniforms::default();
+        let shadow_buffer = Buffer::from_data(
+            memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            initial_shadow_uniforms,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create shadow uniform buffer: {}", e))?;
+
+        // Create dummy shadow map (1x1 depth image for binding when shadows are disabled)
+        debug!("Creating dummy shadow map");
+        use vulkano::format::Format;
+        let dummy_shadow_image = Image::new(
+            memory_allocator.clone(),
+            vulkano::image::ImageCreateInfo {
+                image_type: vulkano::image::ImageType::Dim2d,
+                format: Format::D32_SFLOAT,
+                extent: [1, 1, 1],
+                usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::SAMPLED,
+                ..Default::default()
+            },
+            AllocationCreateInfo::default(),
+        )
+        .map_err(|e| eyre::eyre!("Failed to create dummy shadow image: {}", e))?;
+        
+        let dummy_shadow_map = ImageView::new_default(dummy_shadow_image)
+            .map_err(|e| eyre::eyre!("Failed to create dummy shadow image view: {}", e))?;
+
+        // Create shadow sampler (depth comparison sampler)
+        debug!("Creating shadow sampler");
+        use vulkano::image::sampler::{Sampler, SamplerCreateInfo, Filter, SamplerAddressMode};
+        use vulkano::pipeline::graphics::depth_stencil::CompareOp;
+        let shadow_sampler = Sampler::new(
+            device.clone(),
+            SamplerCreateInfo {
+                mag_filter: Filter::Linear,
+                min_filter: Filter::Linear,
+                address_mode: [SamplerAddressMode::ClampToEdge; 3],
+                compare: Some(CompareOp::LessOrEqual),
+                ..Default::default()
+            },
+        )
+        .map_err(|e| eyre::eyre!("Failed to create shadow sampler: {}", e))?;
 
         info!(
             "Graphics context initialization complete in {:?}",
@@ -1698,7 +1736,7 @@ impl RenderContext {
             swapchain,
             swapchain_images,
             swapchain_image_views,
-            depth_image_view,
+            depth_images,
             render_pass,
             framebuffers,
             command_buffer_allocator,
@@ -1732,6 +1770,14 @@ impl RenderContext {
             // View/projection data
             view_proj_buffer,
 
+            // Bone matrices for skeletal animation
+            bone_matrices_buffer,
+
+            // Shadow uniforms and dummy shadow map
+            shadow_buffer,
+            dummy_shadow_map,
+            shadow_sampler,
+
             // Line renderer
             line_renderer: None,
             // Descriptor set pool
@@ -1740,10 +1786,6 @@ impl RenderContext {
             // Bindless rendering (disabled by default)
             bindless_manager: None,
             use_bindless: false,
-
-            // Default shadow resources (shadows disabled)
-            default_shadow_buffer,
-            default_shadow_texture,
         })
     }
 
@@ -2305,8 +2347,10 @@ impl RenderContext {
                 texture,
                 self.lighting_buffer.buffer().clone(),
                 default_normal_map,
-                self.default_shadow_buffer.clone(),
-                &self.default_shadow_texture,
+                self.bone_matrices_buffer.clone(),
+                self.shadow_buffer.clone(),
+                self.dummy_shadow_map.clone(),
+                self.shadow_sampler.clone(),
             )?;
 
             let material_set = if material_changed {
@@ -2358,8 +2402,8 @@ impl RenderContext {
             .begin_render_pass(
                 RenderPassBeginInfo {
                     clear_values: vec![
-                        Some([0.1, 0.2, 0.3, 1.0].into()), // Color attachment
-                        Some(1.0.into()),                  // Depth attachment (1.0 = far)
+                        Some([0.1, 0.2, 0.3, 1.0].into()),  // Color attachment clear value
+                        Some(1.0.into()),                     // Depth attachment clear value
                     ],
                     ..RenderPassBeginInfo::framebuffer(
                         self.framebuffers[image_index as usize].clone(),
@@ -2555,9 +2599,10 @@ impl RenderContext {
     /// - How they're used in subpasses
     /// - Dependencies between subpasses
     ///
-    /// Our simple render pass has:
+    /// Our render pass has:
     /// - One color attachment (the swapchain image)
-    /// - One subpass that clears and then renders to it
+    /// - One depth attachment for depth testing
+    /// - One subpass that clears and then renders to both
     fn create_render_pass(
         device: &Arc<Device>,
         format: vulkano::format::Format,
@@ -2586,44 +2631,56 @@ impl RenderContext {
         .map_err(|e| eyre::eyre!("Failed to create render pass: {}", e))
     }
 
-    /// Creates a depth buffer image view for the given dimensions.
-    fn create_depth_buffer(
+    /// Creates depth images for the swapchain.
+    ///
+    /// Each swapchain image needs a corresponding depth image for depth testing.
+    /// Depth images store per-pixel depth values that enable proper z-ordering.
+    fn create_depth_images(
         memory_allocator: &Arc<StandardMemoryAllocator>,
         extent: [u32; 2],
-    ) -> Result<Arc<ImageView>> {
-        let depth_image = Image::new(
-            memory_allocator.clone(),
-            vulkano::image::ImageCreateInfo {
-                image_type: vulkano::image::ImageType::Dim2d,
-                format: vulkano::format::Format::D32_SFLOAT,
-                extent: [extent[0], extent[1], 1],
-                usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT,
-                ..Default::default()
-            },
-            AllocationCreateInfo::default(),
-        )
-        .map_err(|e| eyre::eyre!("Failed to create depth image: {}", e))?;
-
-        ImageView::new_default(depth_image)
-            .map_err(|e| eyre::eyre!("Failed to create depth image view: {}", e))
+        image_count: usize,
+    ) -> Result<Vec<Arc<ImageView>>> {
+        use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
+        use vulkano::format::Format;
+        
+        (0..image_count)
+            .map(|_| {
+                let depth_image = Image::new(
+                    memory_allocator.clone(),
+                    ImageCreateInfo {
+                        image_type: ImageType::Dim2d,
+                        format: Format::D32_SFLOAT,
+                        extent: [extent[0], extent[1], 1],
+                        usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT,
+                        ..Default::default()
+                    },
+                    AllocationCreateInfo::default(),
+                )
+                .map_err(|e| eyre::eyre!("Failed to create depth image: {}", e))?;
+                
+                ImageView::new_default(depth_image)
+                    .map_err(|e| eyre::eyre!("Failed to create depth image view: {}", e))
+            })
+            .collect()
     }
 
-    /// Creates framebuffers for each swapchain image.
+    /// Creates framebuffers for each swapchain image with depth attachments.
     ///
     /// A framebuffer binds specific images to the attachments defined in a render pass.
-    /// We need one framebuffer per swapchain image, each with color and depth attachments.
+    /// We need one framebuffer per swapchain image, each with its own depth image.
     fn create_framebuffers(
         image_views: &[Arc<ImageView>],
-        depth_image_view: &Arc<ImageView>,
+        depth_views: &[Arc<ImageView>],
         render_pass: &Arc<RenderPass>,
     ) -> Result<Vec<Arc<Framebuffer>>> {
         image_views
             .iter()
-            .map(|image_view| {
+            .zip(depth_views.iter())
+            .map(|(image_view, depth_view)| {
                 Framebuffer::new(
                     render_pass.clone(),
                     FramebufferCreateInfo {
-                        attachments: vec![image_view.clone(), depth_image_view.clone()],
+                        attachments: vec![image_view.clone(), depth_view.clone()],
                         ..Default::default()
                     },
                 )
@@ -2688,14 +2745,13 @@ impl RenderContext {
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| eyre::eyre!("Failed to create new image views: {}", e))?;
 
-        // Recreate depth buffer for new size
-        let new_depth_image_view = Self::create_depth_buffer(
+        let new_depth_images = Self::create_depth_images(
             &self.memory_allocator,
             [window_size.width, window_size.height],
+            new_images.len(),
         )?;
 
-        let new_framebuffers =
-            Self::create_framebuffers(&new_image_views, &new_depth_image_view, &self.render_pass)?;
+        let new_framebuffers = Self::create_framebuffers(&new_image_views, &new_depth_images, &self.render_pass)?;
 
         // Update viewport
         self.viewport.extent = [window_size.width as f32, window_size.height as f32];
@@ -2703,7 +2759,7 @@ impl RenderContext {
         self.swapchain = new_swapchain;
         self.swapchain_images = new_images;
         self.swapchain_image_views = new_image_views;
-        self.depth_image_view = new_depth_image_view;
+        self.depth_images = new_depth_images;
         self.framebuffers = new_framebuffers;
 
         info!(
@@ -2724,7 +2780,7 @@ pub use area_lights::{
 pub use bindless::{
     BindlessMaterialData, BindlessTextureManager, MAX_BINDLESS_MATERIALS, MAX_BINDLESS_TEXTURES,
 };
-pub use deferred::{DeferredRenderParams, DeferredRenderer, GBuffer};
+pub use deferred::{DeferredRenderer, GBuffer};
 pub use environment_probe::{
     EnvironmentProbe, EnvironmentProbeCapture, EnvironmentProbeConfig, EnvironmentProbeManager,
     IblData, IblUniforms, ProbeUpdateMode, MAX_ENVIRONMENT_PROBES, SPECULAR_MIP_LEVELS,
