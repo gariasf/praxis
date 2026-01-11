@@ -541,6 +541,7 @@ impl PlaybackSettings {
 /// // All operations are no-ops, suitable for testing game logic without audio
 /// ```
 #[cfg(test)]
+#[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 #[derive(Default)]
 pub struct MockAudioManager {
     loaded_sound_count: usize,
@@ -548,6 +549,7 @@ pub struct MockAudioManager {
 }
 
 #[cfg(test)]
+#[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 impl MockAudioManager {
     /// Creates a new mock audio manager.
     ///

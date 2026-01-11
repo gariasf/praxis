@@ -203,7 +203,7 @@ impl App {
                 Transform::from_xyz(0.0, 0.0, 0.0),
                 praxis_ecs::MeshHandle::new("sphere"),
                 praxis_ecs::TextureHandle::new("white"),
-                praxis_ecs::Name::new(format!("Bone Marker {}", i)),
+                praxis_ecs::Name::new(format!("Bone Marker {i}")),
             ));
         }
 

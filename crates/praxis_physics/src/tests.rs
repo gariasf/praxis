@@ -102,10 +102,7 @@ impl TestWorld {
     }
 
     /// Despawns an entity.
-    pub fn despawn(
-        &mut self,
-        entity: praxis_ecs::Entity,
-    ) -> Result<(), bevy_ecs::error::EntityNotFound> {
+    pub fn despawn(&mut self, entity: praxis_ecs::Entity) -> praxis_utils::Result<()> {
         self.world.despawn(entity)
     }
 
@@ -349,6 +346,7 @@ fn test_restitution_component() {
 }
 
 #[test]
+#[allow(clippy::similar_names)]
 fn test_collision_groups_component() {
     // Test 1: Create collision groups with specific memberships and filters
     let groups = CollisionGroups::new(0b0001, 0b1110);

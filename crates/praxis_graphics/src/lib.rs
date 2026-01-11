@@ -3360,7 +3360,7 @@ mod mock_tests {
     #[test]
     fn test_mock_render_context_load_mesh() {
         let mut ctx = MockRenderContext::new();
-        let mesh_data = MeshData::new();
+        let mesh_data = MeshData::new(vec![], vec![]);
 
         ctx.load_mesh("test_mesh", mesh_data).unwrap();
         assert_eq!(ctx.mesh_count(), 1);
@@ -3417,8 +3417,10 @@ mod mock_tests {
         let mut ctx = MockRenderContext::new();
 
         // Load game assets
-        ctx.load_mesh("player", MeshData::new()).unwrap();
-        ctx.load_mesh("enemy", MeshData::new()).unwrap();
+        ctx.load_mesh("player", MeshData::new(vec![], vec![]))
+            .unwrap();
+        ctx.load_mesh("enemy", MeshData::new(vec![], vec![]))
+            .unwrap();
         ctx.load_texture("player_texture", std::path::Path::new("player.png"))
             .unwrap();
         ctx.load_material("player_material", MaterialProperties::default())

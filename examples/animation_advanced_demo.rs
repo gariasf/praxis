@@ -29,7 +29,7 @@ use praxis_input::{Action, InputMap, InputState};
 use praxis_math::{Mat4, Quat, Vec3};
 use praxis_scene::{
     AdditiveAnimation, AdditiveMode, AnimatedPose, AnimationClip, AnimationRetargeter, Bone,
-    BoneMapping, IkConstraint, IkController, Skeleton,
+    IkConstraint, IkController, Skeleton,
 };
 use praxis_utils::{info, Result};
 use std::sync::Arc;

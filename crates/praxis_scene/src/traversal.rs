@@ -923,6 +923,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::similar_names)]
     fn test_get_root_entities_multiple() {
         let mut world = World::new();
 

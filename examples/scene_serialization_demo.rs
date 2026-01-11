@@ -51,7 +51,12 @@ fn create_sample_scene() -> SceneDefinition {
     scene.metadata.tags = vec!["demo".to_string(), "example".to_string()];
 
     // Add camera entity
-    let camera = EntityDefinition::perspective_camera("MainCamera", (0.0, 5.0, 10.0), 1.0472, 1.77);
+    let camera = EntityDefinition::perspective_camera(
+        "MainCamera",
+        (0.0, 5.0, 10.0),
+        std::f32::consts::FRAC_PI_3,
+        1.77,
+    );
     scene.add_entity(camera);
 
     // Add directional light

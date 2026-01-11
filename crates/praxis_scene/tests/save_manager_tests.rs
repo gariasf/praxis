@@ -1,13 +1,19 @@
-//! Integration tests for SaveManager.
+//! Integration tests for `SaveManager`.
 //!
 //! These tests cover full scene save/load cycles including:
 //! - Entity hierarchies with parent-child relationships
 //! - All component types (transforms, meshes, cameras, lights, etc.)
 //! - Version migration
 //! - Save metadata
-//! - NoSave marker behavior
+//! - `NoSave` marker behavior
 //! - Editor data preservation
 //! - Statistics tracking
+
+#![allow(
+    clippy::float_cmp,
+    clippy::redundant_clone,
+    clippy::uninlined_format_args
+)]
 
 use praxis_ecs::{
     Active, Camera, Children, DirectionalLight, GlobalTransform, MaterialHandle, MeshHandle, Name,
@@ -161,23 +167,19 @@ fn test_save_and_load_parent_child_hierarchy() {
     let save_path = test_dir.join("hierarchy.ron");
 
     // Create parent-child hierarchy
-    let parent = world
-        .spawn((
-            Name("Parent".to_string()),
-            Transform::from_xyz(0.0, 0.0, 0.0),
-            GlobalTransform::default(),
-            Active,
-        ))
-        .id();
+    let parent = world.spawn((
+        Name("Parent".to_string()),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        GlobalTransform::default(),
+        Active,
+    ));
 
-    let child = world
-        .spawn((
-            Name("Child".to_string()),
-            Transform::from_xyz(5.0, 0.0, 0.0),
-            GlobalTransform::default(),
-            Parent(parent),
-        ))
-        .id();
+    let child = world.spawn((
+        Name("Child".to_string()),
+        Transform::from_xyz(5.0, 0.0, 0.0),
+        GlobalTransform::default(),
+        Parent(parent),
+    ));
 
     // Add Children component to parent
     world.entity_mut(parent).insert(Children(vec![child]));
@@ -227,40 +229,32 @@ fn test_save_and_load_deep_hierarchy() {
     let save_path = test_dir.join("deep_hierarchy.ron");
 
     // Create a 3-level hierarchy: Root -> Parent -> Child -> Grandchild
-    let root = world
-        .spawn((
-            Name("Root".to_string()),
-            Transform::from_xyz(0.0, 0.0, 0.0),
-            GlobalTransform::default(),
-        ))
-        .id();
+    let root = world.spawn((
+        Name("Root".to_string()),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        GlobalTransform::default(),
+    ));
 
-    let parent = world
-        .spawn((
-            Name("Parent".to_string()),
-            Transform::from_xyz(1.0, 0.0, 0.0),
-            GlobalTransform::default(),
-            Parent(root),
-        ))
-        .id();
+    let parent = world.spawn((
+        Name("Parent".to_string()),
+        Transform::from_xyz(1.0, 0.0, 0.0),
+        GlobalTransform::default(),
+        Parent(root),
+    ));
 
-    let child = world
-        .spawn((
-            Name("Child".to_string()),
-            Transform::from_xyz(2.0, 0.0, 0.0),
-            GlobalTransform::default(),
-            Parent(parent),
-        ))
-        .id();
+    let child = world.spawn((
+        Name("Child".to_string()),
+        Transform::from_xyz(2.0, 0.0, 0.0),
+        GlobalTransform::default(),
+        Parent(parent),
+    ));
 
-    let grandchild = world
-        .spawn((
-            Name("Grandchild".to_string()),
-            Transform::from_xyz(3.0, 0.0, 0.0),
-            GlobalTransform::default(),
-            Parent(child),
-        ))
-        .id();
+    let grandchild = world.spawn((
+        Name("Grandchild".to_string()),
+        Transform::from_xyz(3.0, 0.0, 0.0),
+        GlobalTransform::default(),
+        Parent(child),
+    ));
 
     // Setup Children components
     world.entity_mut(root).insert(Children(vec![parent]));
@@ -303,40 +297,32 @@ fn test_save_and_load_multiple_children() {
     let save_path = test_dir.join("multiple_children.ron");
 
     // Create parent with multiple children
-    let parent = world
-        .spawn((
-            Name("Parent".to_string()),
-            Transform::from_xyz(0.0, 0.0, 0.0),
-            GlobalTransform::default(),
-        ))
-        .id();
+    let parent = world.spawn((
+        Name("Parent".to_string()),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        GlobalTransform::default(),
+    ));
 
-    let child1 = world
-        .spawn((
-            Name("Child1".to_string()),
-            Transform::from_xyz(1.0, 0.0, 0.0),
-            GlobalTransform::default(),
-            Parent(parent),
-        ))
-        .id();
+    let child1 = world.spawn((
+        Name("Child1".to_string()),
+        Transform::from_xyz(1.0, 0.0, 0.0),
+        GlobalTransform::default(),
+        Parent(parent),
+    ));
 
-    let child2 = world
-        .spawn((
-            Name("Child2".to_string()),
-            Transform::from_xyz(2.0, 0.0, 0.0),
-            GlobalTransform::default(),
-            Parent(parent),
-        ))
-        .id();
+    let child2 = world.spawn((
+        Name("Child2".to_string()),
+        Transform::from_xyz(2.0, 0.0, 0.0),
+        GlobalTransform::default(),
+        Parent(parent),
+    ));
 
-    let child3 = world
-        .spawn((
-            Name("Child3".to_string()),
-            Transform::from_xyz(3.0, 0.0, 0.0),
-            GlobalTransform::default(),
-            Parent(parent),
-        ))
-        .id();
+    let child3 = world.spawn((
+        Name("Child3".to_string()),
+        Transform::from_xyz(3.0, 0.0, 0.0),
+        GlobalTransform::default(),
+        Parent(parent),
+    ));
 
     world
         .entity_mut(parent)
@@ -936,29 +922,25 @@ fn test_complex_scene_round_trip() {
     ));
 
     // Mesh entity with hierarchy
-    let parent = world
-        .spawn((
-            Name("MeshParent".to_string()),
-            Transform::from_xyz(0.0, 0.0, 0.0),
-            GlobalTransform::default(),
-            MeshHandle::new("cube"),
-            TextureHandle::new("wood"),
-            MaterialHandle::new("pbr"),
-            Visibility::Visible,
-            Active,
-        ))
-        .id();
+    let parent = world.spawn((
+        Name("MeshParent".to_string()),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        GlobalTransform::default(),
+        MeshHandle::new("cube"),
+        TextureHandle::new("wood"),
+        MaterialHandle::new("pbr"),
+        Visibility::Visible,
+        Active,
+    ));
 
-    let child = world
-        .spawn((
-            Name("MeshChild".to_string()),
-            Transform::from_xyz(2.0, 0.0, 0.0),
-            GlobalTransform::default(),
-            MeshHandle::new("sphere"),
-            Parent(parent),
-            Visibility::Visible,
-        ))
-        .id();
+    let child = world.spawn((
+        Name("MeshChild".to_string()),
+        Transform::from_xyz(2.0, 0.0, 0.0),
+        GlobalTransform::default(),
+        MeshHandle::new("sphere"),
+        Parent(parent),
+        Visibility::Visible,
+    ));
 
     world.entity_mut(parent).insert(Children(vec![child]));
 

@@ -543,15 +543,16 @@ mod tests {
     use super::*;
     use crate::chunk::{TerrainChunk, TerrainChunkId};
     use crate::lod::ChunkLod;
-    use praxis_graphics::vertex::Vertex3D;
+    use praxis_graphics::Vertex3D;
     use praxis_math::{Mat4, Vec3};
     use std::sync::Arc;
     use vulkano::{
-        buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
-        memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
+        buffer::{Buffer, BufferCreateInfo, BufferUsage},
+        memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
     };
 
     /// Helper to create a mock GpuMesh for testing.
+    #[allow(dead_code)]
     fn create_mock_gpu_mesh(
         allocator: Arc<dyn MemoryAllocator>,
         vertex_count: u32,
@@ -795,7 +796,7 @@ mod tests {
         // Verify that render_chunks returns error when pipeline not set
         // This tests the error path that render_chunk would also follow
         let error_message = "Terrain pipeline not set";
-        assert!(error_message.len() > 0);
+        assert!(!error_message.is_empty());
     }
 
     #[test]

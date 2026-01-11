@@ -11,7 +11,7 @@ use praxis_graphics::{
     GodRays, GodRaysConfig, LightLinkingManager, LightProbeGrid, LightProbeManager, MeshData,
     RenderCommands, RenderContext, VolumetricFog, VolumetricFogConfig,
 };
-use praxis_math::{Mat4, Quat, Vec3};
+use praxis_math::{EulerRot, Mat4, Quat, Vec3};
 use praxis_utils::{info, Result};
 use std::sync::Arc;
 use winit::application::ApplicationHandler;
@@ -23,6 +23,7 @@ use winit::window::{Window, WindowId};
 const WINDOW_WIDTH: u32 = 1280;
 const WINDOW_HEIGHT: u32 = 720;
 
+#[allow(dead_code)]
 struct AdvancedLightingDemo {
     light_probe_manager: Option<LightProbeManager>,
     area_light_manager: Option<AreaLightManager>,
@@ -347,7 +348,7 @@ impl App {
                 mesh_id: "cube".to_string(),
                 model: Mat4::from_scale_rotation_translation(
                     Vec3::splat(0.7),
-                    Quat::from_rotation_xyz(demo.time, demo.time * 0.7, demo.time * 0.5),
+                    Quat::from_euler(EulerRot::XYZ, demo.time, demo.time * 0.7, demo.time * 0.5),
                     Vec3::new(x, y, z),
                 ),
                 texture_name: None,

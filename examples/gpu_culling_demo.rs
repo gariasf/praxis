@@ -25,25 +25,26 @@ use std::sync::Arc;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
+    window::WindowAttributes,
 };
 
 #[cfg(not(feature = "headless"))]
-#[pollster::main]
-async fn main() -> Result<()> {
-    praxis_utils::init_logging()?;
+#[allow(deprecated, unused_assignments)]
+fn main() -> Result<()> {
+    praxis_utils::init_tracing()?;
 
     info!("Starting GPU culling demo");
 
     let event_loop = EventLoop::new()?;
     let window = Arc::new(
-        WindowBuilder::new()
-            .with_title("GPU Culling Demo - Praxis Engine")
-            .with_inner_size(winit::dpi::LogicalSize::new(1280, 720))
-            .build(&event_loop)?,
+        event_loop.create_window(
+            WindowAttributes::default()
+                .with_title("GPU Culling Demo - Praxis Engine")
+                .with_inner_size(winit::dpi::LogicalSize::new(1280, 720)),
+        )?,
     );
 
-    let mut render_context = RenderContext::new(window.clone()).await?;
+    let mut render_context = pollster::block_on(RenderContext::new(window.clone()))?;
 
     // Create a simple cube mesh for instancing
     let cube_mesh = create_cube_mesh();
@@ -155,11 +156,11 @@ async fn main() -> Result<()> {
                 let view_proj = projection * view;
 
                 // Extract frustum planes for culling
-                let frustum_planes = extract_frustum_planes(view_proj);
+                let _frustum_planes = extract_frustum_planes(view_proj);
 
                 // Prepare GPU culling
                 if let Err(e) = gpu_culling.prepare_frame(&draw_commands, &mesh_data) {
-                    eprintln!("Failed to prepare GPU culling: {}", e);
+                    eprintln!("Failed to prepare GPU culling: {e}");
                     return;
                 }
 

@@ -3,7 +3,7 @@
 //! These tests verify that Lua scripts can spawn/despawn entities and modify
 //! components through the `script_start_system` and `script_update_system`.
 
-use praxis_ecs::{DeltaTime, GlobalTransform, Name, Transform, World};
+use praxis_ecs::{DeltaTime, GlobalTransform, Name, Schedule, Transform, World};
 use praxis_scripting::{
     script_initialization_system, script_start_system, script_update_system, ScriptComponent,
     ScriptingConfig, ScriptingContext, ScriptingResource,
@@ -54,13 +54,10 @@ end
         ScriptComponent::new("spawn_test", script_path),
     ));
 
-    // Run initialization system
-    script_initialization_system(
-        world.inner_mut().resource_mut::<ScriptingResource>(),
-        world.inner_mut().query_filtered(),
-        world.inner_mut().commands(),
-    );
-    world.inner_mut().flush();
+    // Run initialization system via schedule
+    let mut init_schedule = Schedule::default();
+    init_schedule.add_systems(script_initialization_system);
+    init_schedule.run(world.inner_mut());
 
     // Run start system
     script_start_system(&mut world);
@@ -109,12 +106,9 @@ end
     ));
 
     // Run initialization and start systems
-    script_initialization_system(
-        world.inner_mut().resource_mut::<ScriptingResource>(),
-        world.inner_mut().query_filtered(),
-        world.inner_mut().commands(),
-    );
-    world.inner_mut().flush();
+    let mut init_schedule = Schedule::default();
+    init_schedule.add_systems(script_initialization_system);
+    init_schedule.run(world.inner_mut());
     script_start_system(&mut world);
 
     // Run update system
@@ -166,12 +160,9 @@ end
     assert!(world.inner().get_entity(target_entity).is_some());
 
     // Run systems
-    script_initialization_system(
-        world.inner_mut().resource_mut::<ScriptingResource>(),
-        world.inner_mut().query_filtered(),
-        world.inner_mut().commands(),
-    );
-    world.inner_mut().flush();
+    let mut init_schedule = Schedule::default();
+    init_schedule.add_systems(script_initialization_system);
+    init_schedule.run(world.inner_mut());
     script_start_system(&mut world);
 
     // Verify entity was despawned
@@ -213,12 +204,9 @@ end
     ));
 
     // Run systems
-    script_initialization_system(
-        world.inner_mut().resource_mut::<ScriptingResource>(),
-        world.inner_mut().query_filtered(),
-        world.inner_mut().commands(),
-    );
-    world.inner_mut().flush();
+    let mut init_schedule = Schedule::default();
+    init_schedule.add_systems(script_initialization_system);
+    init_schedule.run(world.inner_mut());
     script_start_system(&mut world);
 
     // Get initial transform
@@ -279,12 +267,9 @@ end
     ));
 
     // Run systems
-    script_initialization_system(
-        world.inner_mut().resource_mut::<ScriptingResource>(),
-        world.inner_mut().query_filtered(),
-        world.inner_mut().commands(),
-    );
-    world.inner_mut().flush();
+    let mut init_schedule = Schedule::default();
+    init_schedule.add_systems(script_initialization_system);
+    init_schedule.run(world.inner_mut());
     script_start_system(&mut world);
 
     // Verify all entities were spawned
@@ -352,12 +337,9 @@ end
     ));
 
     // Run systems
-    script_initialization_system(
-        world.inner_mut().resource_mut::<ScriptingResource>(),
-        world.inner_mut().query_filtered(),
-        world.inner_mut().commands(),
-    );
-    world.inner_mut().flush();
+    let mut init_schedule = Schedule::default();
+    init_schedule.add_systems(script_initialization_system);
+    init_schedule.run(world.inner_mut());
     script_start_system(&mut world);
 
     // Run update system
@@ -412,12 +394,9 @@ end
     assert!(initial_transform.is_none());
 
     // Run systems
-    script_initialization_system(
-        world.inner_mut().resource_mut::<ScriptingResource>(),
-        world.inner_mut().query_filtered(),
-        world.inner_mut().commands(),
-    );
-    world.inner_mut().flush();
+    let mut init_schedule = Schedule::default();
+    init_schedule.add_systems(script_initialization_system);
+    init_schedule.run(world.inner_mut());
     script_start_system(&mut world);
 
     // Verify transform was added
@@ -471,12 +450,9 @@ end
     ));
 
     // Run systems
-    script_initialization_system(
-        world.inner_mut().resource_mut::<ScriptingResource>(),
-        world.inner_mut().query_filtered(),
-        world.inner_mut().commands(),
-    );
-    world.inner_mut().flush();
+    let mut init_schedule = Schedule::default();
+    init_schedule.add_systems(script_initialization_system);
+    init_schedule.run(world.inner_mut());
     script_start_system(&mut world);
 
     // Verify entities from both scripts were spawned
@@ -546,12 +522,9 @@ end
     ));
 
     // Run systems
-    script_initialization_system(
-        world.inner_mut().resource_mut::<ScriptingResource>(),
-        world.inner_mut().query_filtered(),
-        world.inner_mut().commands(),
-    );
-    world.inner_mut().flush();
+    let mut init_schedule = Schedule::default();
+    init_schedule.add_systems(script_initialization_system);
+    init_schedule.run(world.inner_mut());
     script_start_system(&mut world);
 
     // First update: spawn
@@ -635,13 +608,12 @@ end
         .count();
     assert_eq!(old_count, 1);
 
-    // Run systems
-    script_initialization_system(
-        world.inner_mut().resource_mut::<ScriptingResource>(),
-        world.inner_mut().query_filtered(),
-        world.inner_mut().commands(),
-    );
-    world.inner_mut().flush();
+    // Run initialization system via schedule
+    let mut init_schedule = Schedule::default();
+    init_schedule.add_systems(script_initialization_system);
+    init_schedule.run(world.inner_mut());
+
+    // Run start system
     script_start_system(&mut world);
 
     // Verify old name is gone and new name exists
@@ -690,13 +662,12 @@ end
         ScriptComponent::new("continuous_test", script_path),
     ));
 
-    // Run systems
-    script_initialization_system(
-        world.inner_mut().resource_mut::<ScriptingResource>(),
-        world.inner_mut().query_filtered(),
-        world.inner_mut().commands(),
-    );
-    world.inner_mut().flush();
+    // Run initialization system via schedule
+    let mut init_schedule = Schedule::default();
+    init_schedule.add_systems(script_initialization_system);
+    init_schedule.run(world.inner_mut());
+
+    // Run start system
     script_start_system(&mut world);
 
     // Run update system 10 times

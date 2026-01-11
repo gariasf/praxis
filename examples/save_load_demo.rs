@@ -15,7 +15,7 @@ use praxis_math::Vec3;
 use praxis_scene::{SaveConfig, SaveManager, SaveMetadata};
 use praxis_utils::Result;
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn main() -> Result<()> {
     println!("=== Save/Load System Demo ===\n");
@@ -42,11 +42,11 @@ fn main() -> Result<()> {
 
     // Demo 1: Basic save
     println!("=== Demo 1: Basic Save ===");
-    demo_basic_save(&mut save_manager, &world, &save_path)?;
+    demo_basic_save(&mut save_manager, &mut world, &save_path)?;
 
     // Demo 2: Save with metadata
     println!("\n=== Demo 2: Save with Rich Metadata ===");
-    demo_save_with_metadata(&mut save_manager, &world, &save_path)?;
+    demo_save_with_metadata(&mut save_manager, &mut world, &save_path)?;
 
     // Demo 3: Load and verify
     println!("\n=== Demo 3: Load and Verify ===");
@@ -58,7 +58,7 @@ fn main() -> Result<()> {
 
     // Demo 5: Multiple save slots
     println!("\n=== Demo 5: Multiple Save Slots ===");
-    demo_multiple_slots(&mut save_manager, &world, &temp_dir)?;
+    demo_multiple_slots(&mut save_manager, &mut world, &temp_dir)?;
 
     // Cleanup
     println!("\n=== Cleanup ===");
@@ -136,7 +136,11 @@ fn create_demo_world() -> World {
 }
 
 /// Demonstrates basic save functionality
-fn demo_basic_save(save_manager: &mut SaveManager, world: &World, path: &PathBuf) -> Result<()> {
+fn demo_basic_save(
+    save_manager: &mut SaveManager,
+    world: &mut World,
+    path: &PathBuf,
+) -> Result<()> {
     let metadata = SaveMetadata::new("Demo Save");
 
     save_manager.save_to_file(world, path, metadata)?;
@@ -156,7 +160,7 @@ fn demo_basic_save(save_manager: &mut SaveManager, world: &World, path: &PathBuf
 /// Demonstrates saving with rich metadata
 fn demo_save_with_metadata(
     save_manager: &mut SaveManager,
-    world: &World,
+    world: &mut World,
     path: &PathBuf,
 ) -> Result<()> {
     let metadata = SaveMetadata::new("Chapter 1 - The Forest")
@@ -210,9 +214,9 @@ fn demo_load_and_verify(save_manager: &mut SaveManager, path: &PathBuf) -> Resul
     }
 
     println!("\nLoaded entity summary:");
-    println!("  Cameras: {}", camera_count);
-    println!("  Lights: {}", light_count);
-    println!("  Mesh objects: {}", mesh_count);
+    println!("  Cameras: {camera_count}");
+    println!("  Lights: {light_count}");
+    println!("  Mesh objects: {mesh_count}");
 
     // Verify NoSave entities were excluded
     let debug_marker_count = new_world
@@ -244,11 +248,11 @@ fn demo_read_metadata(save_manager: &SaveManager, path: &PathBuf) -> Result<()> 
     );
 
     if let Some(desc) = &metadata.description {
-        println!("  Description: {}", desc);
+        println!("  Description: {desc}");
     }
 
     if let Some(version) = &metadata.game_version {
-        println!("  Game version: {}", version);
+        println!("  Game version: {version}");
     }
 
     if !metadata.tags.is_empty() {
@@ -258,7 +262,7 @@ fn demo_read_metadata(save_manager: &SaveManager, path: &PathBuf) -> Result<()> 
     if !metadata.custom_data.is_empty() {
         println!("  Custom data:");
         for (key, value) in &metadata.custom_data {
-            println!("    {}: {}", key, value);
+            println!("    {key}: {value}");
         }
     }
 
@@ -268,8 +272,8 @@ fn demo_read_metadata(save_manager: &SaveManager, path: &PathBuf) -> Result<()> 
 /// Demonstrates managing multiple save slots
 fn demo_multiple_slots(
     save_manager: &mut SaveManager,
-    world: &World,
-    save_dir: &PathBuf,
+    world: &mut World,
+    save_dir: &Path,
 ) -> Result<()> {
     // Create three different save slots
     let slots = [
@@ -300,7 +304,7 @@ fn demo_multiple_slots(
     for (filename, metadata) in &slots {
         let path = save_dir.join(filename);
         save_manager.save_to_file(world, &path, metadata.clone())?;
-        println!("  ✓ Created {}", filename);
+        println!("  ✓ Created {filename}");
     }
 
     println!("\nSave slot listing:");

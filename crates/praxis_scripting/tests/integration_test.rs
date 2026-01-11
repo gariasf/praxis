@@ -64,6 +64,8 @@ fn test_sandbox_moderate() {
             allow_file_io: false,
             allow_network: false,
             allow_os_access: false,
+            instruction_limit: 1_000_000,
+            memory_limit: 100 * 1024 * 1024,
         },
         ..Default::default()
     };
@@ -83,6 +85,8 @@ fn test_sandbox_strict() {
             allow_file_io: false,
             allow_network: false,
             allow_os_access: false,
+            instruction_limit: 1_000_000,
+            memory_limit: 100 * 1024 * 1024,
         },
         ..Default::default()
     };

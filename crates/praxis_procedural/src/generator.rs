@@ -975,9 +975,12 @@ fn compile_shader_to_spirv(source: &str) -> Result<Vec<u8>> {
 }
 
 #[cfg(test)]
+#[allow(clippy::uninlined_format_args, clippy::expect_fun_call)]
 mod tests {
     use super::*;
     use crate::graph::{BlendMode, ColorRamp, ColorStop, NoiseType, TextureGraph, TextureNode};
+    use crate::TransformParams;
+    use praxis_math::Vec2;
 
     #[test]
     fn test_texture_generation_params_default() {
@@ -1124,9 +1127,9 @@ void not_main() {
 
     #[test]
     fn test_compute_dispatch_dimensions_exact_multiple() {
-        let workgroup_size = 16;
-        let width = 512;
-        let height = 512;
+        let workgroup_size: u32 = 16;
+        let width: u32 = 512;
+        let height: u32 = 512;
 
         let dispatch_x = width.div_ceil(workgroup_size);
         let dispatch_y = height.div_ceil(workgroup_size);
@@ -1140,9 +1143,9 @@ void not_main() {
 
     #[test]
     fn test_compute_dispatch_dimensions_non_multiple() {
-        let workgroup_size = 16;
-        let width = 500;
-        let height = 300;
+        let workgroup_size: u32 = 16;
+        let width: u32 = 500;
+        let height: u32 = 300;
 
         let dispatch_x = width.div_ceil(workgroup_size);
         let dispatch_y = height.div_ceil(workgroup_size);
@@ -1156,9 +1159,9 @@ void not_main() {
 
     #[test]
     fn test_compute_dispatch_dimensions_small_texture() {
-        let workgroup_size = 16;
-        let width = 8;
-        let height = 8;
+        let workgroup_size: u32 = 16;
+        let width: u32 = 8;
+        let height: u32 = 8;
 
         let dispatch_x = width.div_ceil(workgroup_size);
         let dispatch_y = height.div_ceil(workgroup_size);
@@ -1172,9 +1175,9 @@ void not_main() {
 
     #[test]
     fn test_compute_dispatch_dimensions_large_texture() {
-        let workgroup_size = 16;
-        let width = 4096;
-        let height = 4096;
+        let workgroup_size: u32 = 16;
+        let width: u32 = 4096;
+        let height: u32 = 4096;
 
         let dispatch_x = width.div_ceil(workgroup_size);
         let dispatch_y = height.div_ceil(workgroup_size);
@@ -1185,9 +1188,9 @@ void not_main() {
 
     #[test]
     fn test_compute_dispatch_dimensions_edge_cases() {
-        let workgroup_size = 16;
+        let workgroup_size: u32 = 16;
 
-        let test_cases = [
+        let test_cases: [(u32, u32, u32, u32); 7] = [
             (1, 1, 1, 1),
             (15, 15, 1, 1),
             (16, 16, 1, 1),

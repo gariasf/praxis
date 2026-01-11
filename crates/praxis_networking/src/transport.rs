@@ -744,6 +744,7 @@ mod tests {
             buffer_size: 65536,
             timeout_seconds: 30,
         };
+        let buffer_size = config.buffer_size;
 
         let transport = UdpTransport::new(config).await.unwrap();
         let server_addr = transport.socket.local_addr().unwrap();
@@ -753,7 +754,7 @@ mod tests {
         let client_addr = client.local_addr().unwrap();
 
         // Start receive loop
-        transport.receive_loop(config.buffer_size).await.unwrap();
+        transport.receive_loop(buffer_size).await.unwrap();
 
         // Send from client to server
         let test_data = b"Hello, UDP!";
@@ -808,6 +809,7 @@ mod tests {
             buffer_size: 65536,
             timeout_seconds: 30,
         };
+        let buffer_size = config.buffer_size;
 
         let transport = UdpTransport::new(config).await.unwrap();
         let server_addr = transport.socket.local_addr().unwrap();
@@ -815,7 +817,7 @@ mod tests {
         let client = UdpSocket::bind("127.0.0.1:0").await.unwrap();
         let client_addr = client.local_addr().unwrap();
 
-        transport.receive_loop(config.buffer_size).await.unwrap();
+        transport.receive_loop(buffer_size).await.unwrap();
 
         // Send multiple datagrams
         let messages = vec![
@@ -1170,13 +1172,14 @@ mod tests {
             buffer_size: 65536,
             timeout_seconds: 30,
         };
+        let buffer_size = config.buffer_size;
 
         let transport = UdpTransport::new(config).await.unwrap();
         let server_addr = transport.socket.local_addr().unwrap();
 
         let client = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
-        transport.receive_loop(config.buffer_size).await.unwrap();
+        transport.receive_loop(buffer_size).await.unwrap();
 
         // Send many datagrams rapidly
         let num_messages = 50;
@@ -1218,6 +1221,7 @@ mod tests {
             buffer_size: 65536,
             timeout_seconds: 30,
         };
+        let udp_buffer_size = udp_config.buffer_size;
 
         let tcp_transport = TcpTransport::new(tcp_config).await.unwrap();
         let udp_transport = UdpTransport::new(udp_config).await.unwrap();
@@ -1236,10 +1240,7 @@ mod tests {
 
         // Setup UDP client
         let udp_client = UdpSocket::bind("127.0.0.1:0").await.unwrap();
-        udp_transport
-            .receive_loop(udp_config.buffer_size)
-            .await
-            .unwrap();
+        udp_transport.receive_loop(udp_buffer_size).await.unwrap();
 
         // Send on both transports
         let tcp_msg = b"TCP message";

@@ -1,6 +1,11 @@
 //! Comprehensive tests for audio system.
 
 #[cfg(test)]
+#[allow(
+    clippy::float_cmp,
+    clippy::collection_is_never_read,
+    clippy::cast_sign_loss
+)]
 mod tests {
     use crate::systems::{calculate_doppler_factor, calculate_spatial_params};
     use crate::*;

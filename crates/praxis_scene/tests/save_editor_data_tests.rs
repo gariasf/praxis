@@ -1,13 +1,14 @@
-//! Integration tests for SaveManager editor data preservation.
+//! Integration tests for `SaveManager` editor data preservation.
 //!
 //! These tests verify that editor-specific data (camera state, selections,
 //! viewport settings, preferences) is correctly saved and loaded when configured.
 
-use praxis_ecs::{Active, Name, Transform, World};
+#![allow(clippy::float_cmp)]
+
+use praxis_ecs::{Active, Name, World};
 use praxis_scene::{
     CameraMode, EditorCamera, EditorData, EditorPreferences, EntityDefinition, GizmoMode,
     SaveConfig, SaveFile, SaveManager, SaveMetadata, SceneDefinition, ViewportSettings,
-    CURRENT_SAVE_VERSION, CURRENT_SCENE_VERSION,
 };
 use std::fs;
 use std::path::PathBuf;

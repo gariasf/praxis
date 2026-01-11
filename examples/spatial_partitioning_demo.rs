@@ -272,7 +272,7 @@ fn demo_ecs_integration() {
         );
     }
 
-    world.despawn(test_entity);
+    let _ = world.despawn(test_entity);
     schedule.run(world.inner_mut());
 
     let spatial = world.inner().resource::<SpatialResource>();

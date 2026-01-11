@@ -29,8 +29,8 @@ use praxis_utils::{info, Result};
 use std::sync::Arc;
 use vulkano::{
     command_buffer::{
-        AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer,
-        RenderPassBeginInfo, SubpassBeginInfo, SubpassEndInfo,
+        AutoCommandBufferBuilder, CommandBufferUsage, RenderPassBeginInfo, SubpassBeginInfo,
+        SubpassEndInfo,
     },
     swapchain::{self, SwapchainPresentInfo},
     sync::{self, GpuFuture},
@@ -196,7 +196,7 @@ impl App {
                 // Mouse look
                 if self.cursor_locked {
                     let rotation = Quat::from_euler(
-                        glam::EulerRot::YXZ,
+                        praxis_math::EulerRot::YXZ,
                         self.camera_yaw,
                         self.camera_pitch,
                         0.0,
@@ -300,18 +300,18 @@ impl App {
                 };
 
                 // Count statistics
-                let mut visible_count = 0;
-                let mut culled_count = 0;
+                let mut _visible_count = 0;
+                let mut _culled_count = 0;
                 let mut lod_counts = [0; 4];
 
                 // Visualize entity bounds and LOD levels
-                for (entity, aabb) in &self.entities_with_bounds {
+                for (_entity, aabb) in &self.entities_with_bounds {
                     let is_visible = frustum_culler.is_visible(aabb);
 
                     if is_visible {
-                        visible_count += 1;
+                        _visible_count += 1;
                     } else {
-                        culled_count += 1;
+                        _culled_count += 1;
                     }
 
                     // Show octree bounds in white (if enabled)
@@ -419,8 +419,6 @@ impl App {
 
     fn render_scene(&mut self) -> Result<()> {
         let world = self.world.as_ref().unwrap();
-        let render_context = self.render_context.as_mut().unwrap();
-        let line_renderer = self.line_renderer.as_mut().unwrap();
         let camera_entity = self.camera_entity.unwrap();
 
         // Get camera matrices and position
@@ -432,6 +430,12 @@ impl App {
             let transform = inner.get::<Transform>(camera_entity).unwrap();
             (*matrices, transform.translation)
         };
+
+        // Create debug visualization before borrowing render_context mutably
+        let debug_batch = self.create_debug_visualization();
+
+        let render_context = self.render_context.as_mut().unwrap();
+        let line_renderer = self.line_renderer.as_mut().unwrap();
 
         // Clean up previous frame
         let mut previous_frame_end = self.previous_frame_end.take().unwrap();
@@ -459,9 +463,6 @@ impl App {
             camera_matrices.projection,
             camera_position,
         )?;
-
-        // Create debug visualization
-        let debug_batch = self.create_debug_visualization();
 
         // Build command buffer
         let mut builder = AutoCommandBufferBuilder::primary(

@@ -1069,6 +1069,7 @@ impl Default for VisibilitySystem {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
 
@@ -1199,7 +1200,7 @@ mod tests {
         system.insert_entity(entity2, bounds2, Vec3::new(50.5, 0.5, 0.5));
         system.insert_entity(entity3, bounds3, Vec3::new(200.5, 0.5, 0.5));
 
-        let (results, stats) = system.cull_entities_hierarchical(Vec3::new(0.0, 0.0, 10.0));
+        let (_results, stats) = system.cull_entities_hierarchical(Vec3::new(0.0, 0.0, 10.0));
 
         assert_eq!(stats.total_objects, 3);
         assert!(stats.visible_objects > 0 || stats.frustum_culled > 0 || stats.distance_culled > 0);

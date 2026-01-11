@@ -453,7 +453,7 @@ mod tests {
     #[tokio::test]
     async fn test_client_state_transitions_disconnected_to_connecting() {
         let config = NetworkConfig::default();
-        let mut client = NetworkClient::new(config).await.unwrap();
+        let client = NetworkClient::new(config).await.unwrap();
 
         assert_eq!(client.state(), ClientState::Disconnected);
 

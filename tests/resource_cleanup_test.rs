@@ -149,11 +149,13 @@ fn test_multiple_resource_cleanup() {
     use praxis_physics::PhysicsWorld;
 
     #[derive(Resource)]
+    #[allow(dead_code)]
     struct GameState {
         level: u32,
     }
 
     #[derive(Resource)]
+    #[allow(dead_code)]
     struct AudioManager {
         volume: f32,
     }
@@ -224,12 +226,14 @@ fn test_world_clear_all() {
     use praxis_ecs::World;
 
     #[derive(Component)]
+    #[allow(dead_code)]
     struct Position {
         x: f32,
         y: f32,
     }
 
     #[derive(Component)]
+    #[allow(dead_code)]
     struct Name {
         value: String,
     }
@@ -324,6 +328,7 @@ fn test_batch_entity_operations() {
     use praxis_ecs::World;
 
     #[derive(Component)]
+    #[allow(dead_code)]
     struct BatchId {
         id: usize,
     }
@@ -422,11 +427,13 @@ fn test_game_loop_cleanup_pattern() {
     use praxis_ecs::World;
 
     #[derive(Component)]
+    #[allow(dead_code)]
     struct Enemy {
         health: f32,
     }
 
     #[derive(Resource)]
+    #[allow(dead_code)]
     struct FrameCount {
         count: u32,
     }

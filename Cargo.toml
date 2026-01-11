@@ -235,10 +235,6 @@ name = "save_load_demo"
 path = "examples/save_load_demo.rs"
 
 [[example]]
-name = "procedural_texture_demo"
-path = "examples/procedural_texture_demo.rs"
-
-[[example]]
 name = "scripting_console_demo"
 path = "examples/scripting_console_demo.rs"
 required-features = ["scripting", "editor"]
