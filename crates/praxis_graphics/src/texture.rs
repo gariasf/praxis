@@ -17,11 +17,12 @@ use vulkano::{
     device::Queue,
     format::Format,
     image::{
-        sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo},
+        sampler::{BorderColor, Filter, Sampler, SamplerAddressMode, SamplerCreateInfo},
         view::{ImageView, ImageViewCreateInfo, ImageViewType},
         Image, ImageAspects, ImageCreateInfo, ImageSubresourceRange, ImageType, ImageUsage,
     },
     memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
+    pipeline::graphics::depth_stencil::CompareOp,
     sync::{self, GpuFuture},
 };
 
@@ -263,6 +264,69 @@ impl Texture {
             vec![128, 128, 255, 255],
         )
     }
+
+    /// Creates a 1x1 depth texture for shadow map samplers.
+    ///
+    /// This texture is used as a default when shadow mapping is not enabled.
+    /// The sampler uses comparison mode for `sampler2DShadow` in shaders.
+    /// The depth value is 1.0 (maximum depth) so all shadow tests pass.
+    pub fn shadow_depth(allocator: Arc<dyn MemoryAllocator>) -> Result<Self> {
+        trace!("Creating default shadow depth texture");
+
+        let device = allocator.device().clone();
+
+        // Create a 1x1 depth image
+        let image = Image::new(
+            allocator.clone(),
+            ImageCreateInfo {
+                image_type: ImageType::Dim2d,
+                format: Format::D32_SFLOAT,
+                extent: [1, 1, 1],
+                usage: ImageUsage::SAMPLED | ImageUsage::DEPTH_STENCIL_ATTACHMENT,
+                ..Default::default()
+            },
+            AllocationCreateInfo::default(),
+        )
+        .map_err(|e| eyre::eyre!("Failed to create shadow depth image: {}", e))?;
+
+        // Create image view with depth aspect
+        let view = ImageView::new(
+            image.clone(),
+            ImageViewCreateInfo {
+                view_type: ImageViewType::Dim2d,
+                format: Format::D32_SFLOAT,
+                subresource_range: ImageSubresourceRange {
+                    aspects: ImageAspects::DEPTH,
+                    mip_levels: 0..1,
+                    array_layers: 0..1,
+                },
+                ..Default::default()
+            },
+        )
+        .map_err(|e| eyre::eyre!("Failed to create shadow depth image view: {}", e))?;
+
+        // Create comparison sampler for sampler2DShadow
+        let sampler = Sampler::new(
+            device,
+            SamplerCreateInfo {
+                mag_filter: Filter::Linear,
+                min_filter: Filter::Linear,
+                address_mode: [SamplerAddressMode::ClampToBorder; 3],
+                border_color: BorderColor::FloatOpaqueWhite,
+                compare: Some(CompareOp::LessOrEqual),
+                ..Default::default()
+            },
+        )
+        .map_err(|e| eyre::eyre!("Failed to create shadow comparison sampler: {}", e))?;
+
+        Ok(Self {
+            image,
+            view,
+            sampler,
+            width: 1,
+            height: 1,
+        })
+    }
 }
 
 /// Texture asset manager that caches loaded textures.
@@ -457,6 +521,15 @@ impl TextureManager {
         )?;
         self.add_texture("_default_flat_normal", texture);
         Ok(())
+    }
+
+    /// Creates a default shadow texture for use when shadows are disabled.
+    ///
+    /// This creates a depth texture with a comparison sampler that can be bound
+    /// to shadow map samplers when actual shadow maps are not available.
+    /// Returns the texture without adding it to the cache (caller owns it).
+    pub fn create_default_shadow_texture(&self) -> Result<Texture> {
+        Texture::shadow_depth(self.allocator.clone())
     }
 
     /// Reloads a texture from disk by its file path.

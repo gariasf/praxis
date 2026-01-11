@@ -4,7 +4,7 @@
 //! and queue creation. It provides a simplified interface for setting up the
 //! Vulkan backend while handling the complexity of device enumeration and selection.
 
-use praxis_utils::{debug, error, eyre, info, trace, Result};
+use praxis_utils::{debug, error, eyre, info, trace, warn, Result};
 use std::sync::Arc;
 use vulkano::{
     device::{
@@ -12,7 +12,13 @@ use vulkano::{
         Device, DeviceCreateInfo, DeviceExtensions, DeviceFeatures, Queue, QueueCreateInfo,
         QueueFlags,
     },
-    instance::{Instance, InstanceCreateInfo},
+    instance::{
+        debug::{
+            DebugUtilsMessageSeverity, DebugUtilsMessageType, DebugUtilsMessenger,
+            DebugUtilsMessengerCallback, DebugUtilsMessengerCreateInfo,
+        },
+        Instance, InstanceCreateFlags, InstanceCreateInfo,
+    },
     swapchain::Surface,
     VulkanLibrary,
 };
@@ -57,6 +63,11 @@ pub struct VulkanDevice {
 
     /// Queue for presenting images to the surface (may be the same as graphics_queue).
     pub present_queue: Arc<Queue>,
+
+    /// Debug messenger for Vulkan validation layer messages (only in debug builds).
+    /// Must be kept alive for the duration of the instance to receive validation messages.
+    #[allow(dead_code)]
+    _debug_messenger: Option<DebugUtilsMessenger>,
 }
 
 impl VulkanDevice {
@@ -87,14 +98,20 @@ impl VulkanDevice {
         let library = VulkanLibrary::new()
             .map_err(|e| eyre::eyre!("Failed to load Vulkan library: {}", e))?;
 
-        let required_extensions = Surface::required_extensions(window).unwrap();
+        let mut required_extensions = Surface::required_extensions(window).unwrap();
         trace!("Required instance extensions: {:?}", required_extensions);
 
         let enable_validation_layers = cfg!(debug_assertions);
 
+        // Enable debug utils extension for validation message capture
+        if enable_validation_layers {
+            required_extensions.ext_debug_utils = true;
+        }
+
         let instance = Instance::new(
             library,
             InstanceCreateInfo {
+                flags: InstanceCreateFlags::ENUMERATE_PORTABILITY,
                 enabled_extensions: required_extensions,
                 enabled_layers: if enable_validation_layers {
                     vec![String::from("VK_LAYER_KHRONOS_validation")]
@@ -108,11 +125,70 @@ impl VulkanDevice {
 
         trace!("Created Vulkan instance");
 
+        // Set up debug messenger to capture validation layer messages
+        let debug_messenger = if enable_validation_layers {
+            unsafe {
+                Some(
+                    DebugUtilsMessenger::new(
+                        instance.clone(),
+                        DebugUtilsMessengerCreateInfo {
+                            message_severity: DebugUtilsMessageSeverity::ERROR
+                                | DebugUtilsMessageSeverity::WARNING
+                                | DebugUtilsMessageSeverity::INFO
+                                | DebugUtilsMessageSeverity::VERBOSE,
+                            message_type: DebugUtilsMessageType::GENERAL
+                                | DebugUtilsMessageType::VALIDATION
+                                | DebugUtilsMessageType::PERFORMANCE,
+                            ..DebugUtilsMessengerCreateInfo::user_callback(
+                                DebugUtilsMessengerCallback::new(
+                                    |severity, message_type, callback_data| {
+                                        let type_str = if message_type
+                                            .intersects(DebugUtilsMessageType::VALIDATION)
+                                        {
+                                            "VALIDATION"
+                                        } else if message_type
+                                            .intersects(DebugUtilsMessageType::PERFORMANCE)
+                                        {
+                                            "PERFORMANCE"
+                                        } else {
+                                            "GENERAL"
+                                        };
+
+                                        let message = callback_data.message;
+
+                                        if severity.intersects(DebugUtilsMessageSeverity::ERROR) {
+                                            error!(target: "vulkan", "[{}] {}", type_str, message);
+                                        } else if severity
+                                            .intersects(DebugUtilsMessageSeverity::WARNING)
+                                        {
+                                            warn!(target: "vulkan", "[{}] {}", type_str, message);
+                                        } else if severity
+                                            .intersects(DebugUtilsMessageSeverity::INFO)
+                                        {
+                                            info!(target: "vulkan", "[{}] {}", type_str, message);
+                                        } else {
+                                            trace!(target: "vulkan", "[{}] {}", type_str, message);
+                                        }
+                                    },
+                                ),
+                            )
+                        },
+                    )
+                    .map_err(|e| eyre::eyre!("Failed to create debug messenger: {}", e))?,
+                )
+            }
+        } else {
+            None
+        };
+
         let layers = instance.enabled_layers();
         if layers.is_empty() {
             info!("Vulkan validation layers: disabled");
         } else {
             info!("Vulkan validation layers enabled: {:?}", layers);
+            if debug_messenger.is_some() {
+                debug!("Vulkan debug messenger active - validation messages will be logged");
+            }
         }
 
         trace!("Creating window surface");
@@ -155,6 +231,7 @@ impl VulkanDevice {
                 device,
                 graphics_queue,
                 present_queue,
+                _debug_messenger: debug_messenger,
             },
             surface,
         ))

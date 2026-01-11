@@ -229,8 +229,8 @@ where
         create_info,
     )
     .map_err(|e| {
-        error!("Failed to create graphics pipeline: {}", e);
-        eyre::eyre!("Failed to create graphics pipeline: {}", e)
+        error!("Failed to create graphics pipeline: {:?}", e);
+        eyre::eyre!("Failed to create graphics pipeline: {:?}", e)
     })?;
 
     info!(
@@ -324,13 +324,12 @@ fn create_pipeline_layout(
         error!("Set 0 not found in descriptor set layout create infos");
     }
 
-    // Configure bindless texture array in set 2, binding 0 to be partially bound
-    // This allows the descriptor set to be valid even if not all textures are bound
+    // Configure bindless texture array in set 2, binding 0
+    // Set descriptor count for bindless array (shader uses runtime array which defaults to 0)
     if let Some(set_2) = descriptor_set_layout_create_infos.set_layouts.get_mut(2) {
-        if set_2.bindings.contains_key(&0) {
-            trace!("Configuring set 2 binding 0 for bindless (partially bound)");
-            // Mark as partially bound to allow sparse binding
-            set_2.flags = vulkano::descriptor_set::layout::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL;
+        if let Some(binding_0) = set_2.bindings.get_mut(&0) {
+            trace!("Configuring set 2 binding 0 for bindless textures");
+            binding_0.descriptor_count = crate::bindless::MAX_BINDLESS_TEXTURES;
         }
     }
 

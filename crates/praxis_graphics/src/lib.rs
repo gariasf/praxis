@@ -1200,6 +1200,7 @@ impl DescriptorSetPool {
     /// # Errors
     ///
     /// Returns an error if descriptor set creation fails.
+    #[allow(clippy::too_many_arguments)]
     fn get_or_create_transform_set(
         &mut self,
         texture_name: String,
@@ -1208,6 +1209,8 @@ impl DescriptorSetPool {
         texture: &texture::Texture,
         lighting_buffer: vulkano::buffer::Subbuffer<lighting::LightingUniforms>,
         default_normal_map: &texture::Texture,
+        shadow_buffer: vulkano::buffer::Subbuffer<shadow::ShadowUniforms>,
+        shadow_texture: &texture::Texture,
     ) -> Result<Arc<DescriptorSet>> {
         let key = TransformKey::new(texture_name.clone());
 
@@ -1237,6 +1240,29 @@ impl DescriptorSetPool {
                     texture.sampler.clone(),
                 ),
                 WriteDescriptorSet::buffer(3, lighting_buffer),
+                // Shadow data uniform buffer (binding 4)
+                WriteDescriptorSet::buffer(4, shadow_buffer),
+                // Shadow map samplers (bindings 5-8 for 4 cascades)
+                WriteDescriptorSet::image_view_sampler(
+                    5,
+                    shadow_texture.view.clone(),
+                    shadow_texture.sampler.clone(),
+                ),
+                WriteDescriptorSet::image_view_sampler(
+                    6,
+                    shadow_texture.view.clone(),
+                    shadow_texture.sampler.clone(),
+                ),
+                WriteDescriptorSet::image_view_sampler(
+                    7,
+                    shadow_texture.view.clone(),
+                    shadow_texture.sampler.clone(),
+                ),
+                WriteDescriptorSet::image_view_sampler(
+                    8,
+                    shadow_texture.view.clone(),
+                    shadow_texture.sampler.clone(),
+                ),
                 WriteDescriptorSet::image_view_sampler(
                     9,
                     default_normal_map.view.clone(),
@@ -1386,6 +1412,7 @@ pub struct RenderContext {
     swapchain: Arc<Swapchain>,
     swapchain_images: Vec<Arc<Image>>,
     swapchain_image_views: Vec<Arc<ImageView>>,
+    depth_image_view: Arc<ImageView>,
     render_pass: Arc<RenderPass>,
     framebuffers: Vec<Arc<Framebuffer>>,
     command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
@@ -1428,6 +1455,16 @@ pub struct RenderContext {
 
     /// Whether to use bindless rendering mode.
     use_bindless: bool,
+
+    /// Default shadow uniform buffer (shadows disabled).
+    default_shadow_buffer: vulkano::buffer::Subbuffer<shadow::ShadowUniforms>,
+
+    /// Default shadow map texture (1x1 white depth texture).
+    default_shadow_texture: texture::Texture,
+
+    /// Dummy bindless descriptor set for when bindless rendering is disabled.
+    /// This is needed because the pipeline layout expects set 2 to be bound.
+    dummy_bindless_set: Arc<DescriptorSet>,
 }
 
 impl RenderContext {
@@ -1495,20 +1532,24 @@ impl RenderContext {
             .map_err(|e| eyre::eyre!("Failed to create image views: {}", e))?;
         trace!("Created swapchain image views");
 
+        trace!("Creating memory allocator");
+        let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
+
         debug!("Creating render pass");
         let render_pass = Self::create_render_pass(&device, swapchain.image_format())?;
 
+        debug!("Creating depth buffer");
+        let depth_image_view = Self::create_depth_buffer(&memory_allocator, swapchain.image_extent())?;
+
         debug!("Creating {} framebuffers", swapchain_image_views.len());
-        let framebuffers = Self::create_framebuffers(&swapchain_image_views, &render_pass)?;
+        let framebuffers =
+            Self::create_framebuffers(&swapchain_image_views, &depth_image_view, &render_pass)?;
 
         trace!("Creating command buffer allocator");
         let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
             device.clone(),
             Default::default(),
         ));
-
-        trace!("Creating memory allocator");
-        let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
 
         let graphics_pipeline =
             create_simple_pipeline_3d(&device, &render_pass, swapchain.image_extent())?;
@@ -1617,6 +1658,29 @@ impl RenderContext {
         )
         .map_err(|e| eyre::eyre!("Failed to create view/projection buffer: {}", e))?;
 
+        // Create default shadow uniform buffer (shadows disabled)
+        debug!("Creating default shadow buffer");
+        let default_shadow_buffer = Buffer::from_data(
+            memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            shadow::ShadowUniforms::default(),
+        )
+        .map_err(|e| eyre::eyre!("Failed to create default shadow buffer: {}", e))?;
+
+        // Create default shadow texture (1x1 depth texture for shadow map samplers)
+        debug!("Creating default shadow texture");
+        let default_shadow_texture = texture_manager
+            .create_default_shadow_texture()
+            .map_err(|e| eyre::eyre!("Failed to create default shadow texture: {}", e))?;
+
         info!(
             "Graphics context initialization complete in {:?}",
             init_start.elapsed()
@@ -1634,6 +1698,7 @@ impl RenderContext {
             swapchain,
             swapchain_images,
             swapchain_image_views,
+            depth_image_view,
             render_pass,
             framebuffers,
             command_buffer_allocator,
@@ -1675,6 +1740,10 @@ impl RenderContext {
             // Bindless rendering (disabled by default)
             bindless_manager: None,
             use_bindless: false,
+
+            // Default shadow resources (shadows disabled)
+            default_shadow_buffer,
+            default_shadow_texture,
         })
     }
 
@@ -2236,6 +2305,8 @@ impl RenderContext {
                 texture,
                 self.lighting_buffer.buffer().clone(),
                 default_normal_map,
+                self.default_shadow_buffer.clone(),
+                &self.default_shadow_texture,
             )?;
 
             let material_set = if material_changed {
@@ -2286,7 +2357,10 @@ impl RenderContext {
         command_buffer_builder
             .begin_render_pass(
                 RenderPassBeginInfo {
-                    clear_values: vec![Some([0.1, 0.2, 0.3, 1.0].into())],
+                    clear_values: vec![
+                        Some([0.1, 0.2, 0.3, 1.0].into()), // Color attachment
+                        Some(1.0.into()),                  // Depth attachment (1.0 = far)
+                    ],
                     ..RenderPassBeginInfo::framebuffer(
                         self.framebuffers[image_index as usize].clone(),
                     )
@@ -2496,22 +2570,51 @@ impl RenderContext {
                     samples: 1,
                     load_op: Clear,
                     store_op: Store,
+                },
+                depth: {
+                    format: vulkano::format::Format::D32_SFLOAT,
+                    samples: 1,
+                    load_op: Clear,
+                    store_op: DontCare,
                 }
             },
             pass: {
                 color: [color],
-                depth_stencil: {}
+                depth_stencil: {depth}
             }
         )
         .map_err(|e| eyre::eyre!("Failed to create render pass: {}", e))
     }
 
+    /// Creates a depth buffer image view for the given dimensions.
+    fn create_depth_buffer(
+        memory_allocator: &Arc<StandardMemoryAllocator>,
+        extent: [u32; 2],
+    ) -> Result<Arc<ImageView>> {
+        let depth_image = Image::new(
+            memory_allocator.clone(),
+            vulkano::image::ImageCreateInfo {
+                image_type: vulkano::image::ImageType::Dim2d,
+                format: vulkano::format::Format::D32_SFLOAT,
+                extent: [extent[0], extent[1], 1],
+                usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT,
+                ..Default::default()
+            },
+            AllocationCreateInfo::default(),
+        )
+        .map_err(|e| eyre::eyre!("Failed to create depth image: {}", e))?;
+
+        ImageView::new_default(depth_image)
+            .map_err(|e| eyre::eyre!("Failed to create depth image view: {}", e))
+    }
+
     /// Creates framebuffers for each swapchain image.
     ///
     /// A framebuffer binds specific images to the attachments defined in a render pass.
-    /// We need one framebuffer per swapchain image.
+    /// We need one framebuffer per swapchain image, each with color and depth attachments.
     fn create_framebuffers(
         image_views: &[Arc<ImageView>],
+        depth_image_view: &Arc<ImageView>,
         render_pass: &Arc<RenderPass>,
     ) -> Result<Vec<Arc<Framebuffer>>> {
         image_views
@@ -2520,7 +2623,7 @@ impl RenderContext {
                 Framebuffer::new(
                     render_pass.clone(),
                     FramebufferCreateInfo {
-                        attachments: vec![image_view.clone()],
+                        attachments: vec![image_view.clone(), depth_image_view.clone()],
                         ..Default::default()
                     },
                 )
@@ -2585,7 +2688,14 @@ impl RenderContext {
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| eyre::eyre!("Failed to create new image views: {}", e))?;
 
-        let new_framebuffers = Self::create_framebuffers(&new_image_views, &self.render_pass)?;
+        // Recreate depth buffer for new size
+        let new_depth_image_view = Self::create_depth_buffer(
+            &self.memory_allocator,
+            [window_size.width, window_size.height],
+        )?;
+
+        let new_framebuffers =
+            Self::create_framebuffers(&new_image_views, &new_depth_image_view, &self.render_pass)?;
 
         // Update viewport
         self.viewport.extent = [window_size.width as f32, window_size.height as f32];
@@ -2593,6 +2703,7 @@ impl RenderContext {
         self.swapchain = new_swapchain;
         self.swapchain_images = new_images;
         self.swapchain_image_views = new_image_views;
+        self.depth_image_view = new_depth_image_view;
         self.framebuffers = new_framebuffers;
 
         info!(
