@@ -1,4 +1,52 @@
 //! Scripting context that manages the Lua VM and script execution.
+//!
+//! # Core Architecture
+//!
+//! ## Lua VM Management
+//! The [`ScriptingContext`] owns a Lua VM (via `Arc<Lua>`) and manages its lifecycle.
+//! Each context has its own isolated Lua environment with:
+//! - Global environment (variables, functions)
+//! - Registered APIs (math, engine, console, ECS)
+//! - Sandbox restrictions (if configured)
+//! - Performance monitoring hooks
+//!
+//! ## ECS World Access Pattern
+//!
+//! The ECS World requires **exclusive mutable access** (`&mut World`) for component
+//! manipulation. This conflicts with Lua's ownership model where the VM must own
+//! all data or use Lua-managed references. Our solution uses a **thread-local
+//! pointer pattern**:
+//!
+//! 1. **Temporary injection**: The World is NOT stored in the Lua VM or context
+//! 2. **Scoped access**: `with_world()` temporarily sets a thread-local pointer
+//! 3. **Function closures**: Lua functions created with `lua.create_function()` can
+//!    access the World via `with_world_raw()` which dereferences the pointer
+//! 4. **Cleanup**: The pointer is cleared after script execution completes
+//!
+//! ### Why Not Store World in Lua?
+//! - Lua's GC would not understand Rust's borrow checker rules
+//! - Multiple Lua values could hold World references, violating exclusivity
+//! - Lua userdata cannot hold mutable references safely across yields/resumes
+//!
+//! ### Safety Invariants
+//! - The World pointer is only valid during `with_world()` execution
+//! - Scripts must not store World references in global variables
+//! - All World access must go through the API, not direct pointer access
+//!
+//! ## Hot-Reload Implementation
+//!
+//! Hot-reload watches script files and automatically reloads them on changes:
+//!
+//! 1. **File watching**: Uses `notify` crate to monitor filesystem events
+//! 2. **Event polling**: `process_hot_reload()` checks for file modifications
+//! 3. **Script reloading**: Modified scripts are re-executed in the same Lua VM
+//! 4. **State preservation**: Global variables persist unless overwritten
+//!
+//! ### Hot-Reload Caveats
+//! - Functions defined in reloaded scripts replace old versions
+//! - Closures capturing old values may still reference stale data
+//! - Active coroutines/threads may behave unpredictably after reload
+//! - Best practice: Keep scripts stateless or reinitialize after reload
 
 use crate::bindings;
 use crate::hot_reload::HotReloadWatcher;
@@ -29,27 +77,50 @@ impl Default for ScriptingConfig {
         Self {
             sandbox: SandboxConfig::default(),
             enable_performance_monitoring: true,
-            max_execution_time_ms: 16,
+            max_execution_time_ms: 16, // One frame at 60 FPS
         }
     }
 }
 
 /// Main scripting context that manages the Lua VM and script execution.
+///
+/// # Thread Safety
+/// The Lua VM is NOT thread-safe (mlua::Lua is !Send + !Sync). Each context
+/// must be used from a single thread. Use `Arc<Lua>` to share VM handles
+/// across async tasks on the same thread.
 pub struct ScriptingContext {
+    /// The Lua VM instance. Arc is used for sharing with closures and performance monitor.
+    /// Note: Lua is !Send + !Sync, so this can only be used on one thread.
     lua: Arc<Lua>,
+    
+    /// Configuration including sandbox settings
     config: ScriptingConfig,
+    
+    /// Map of script names to their file paths for hot-reload tracking
     loaded_scripts: HashMap<String, PathBuf>,
+    
+    /// Optional hot-reload watcher for automatic script reloading
     hot_reload_watcher: Option<Arc<RwLock<HotReloadWatcher>>>,
+    
+    /// Optional performance monitor for tracking execution time
     performance_monitor: Option<Arc<ScriptPerformanceMonitor>>,
 }
 
 impl ScriptingContext {
     /// Creates a new scripting context with the given configuration.
+    ///
+    /// This initializes the Lua VM and sets up:
+    /// - Standard libraries (math, string, table, etc.)
+    /// - Engine-specific APIs (math helpers, console commands)
+    /// - Sandbox restrictions (if enabled)
+    /// - Performance monitoring hooks (if enabled)
     pub fn new(config: ScriptingConfig) -> Result<Self> {
         info!("Creating scripting context");
 
+        // Create a new Lua VM with standard libraries
         let lua = Lua::new();
 
+        // Set up performance monitoring before any scripts run
         let performance_monitor = if config.enable_performance_monitoring {
             Some(Arc::new(ScriptPerformanceMonitor::new(
                 config.max_execution_time_ms,
@@ -59,6 +130,8 @@ impl ScriptingContext {
         };
 
         let mut context = Self {
+            // Arc is used to share Lua with closures, but Lua is !Send so this
+            // context cannot be moved across threads
             #[allow(clippy::arc_with_non_send_sync)]
             lua: Arc::new(lua),
             config,
@@ -67,24 +140,45 @@ impl ScriptingContext {
             performance_monitor,
         };
 
+        // Register all engine APIs and apply security restrictions
         context.setup_environment()?;
 
         Ok(context)
     }
 
+    /// Sets up the Lua environment with engine APIs and security restrictions.
+    ///
+    /// This is called during initialization and must be done before any scripts
+    /// are loaded. The order matters:
+    /// 1. Register APIs (adds functions to globals)
+    /// 2. Apply sandbox (removes dangerous functions)
     fn setup_environment(&mut self) -> Result<()> {
         debug!("Setting up Lua environment");
 
+        // Register custom math utilities (Vec3, etc.)
         bindings::register_math_api(&self.lua)?;
+        
+        // Register engine-specific APIs (logging, timing, etc.)
         bindings::register_engine_api(&self.lua)?;
+        
+        // Register console commands for REPL/debugging
         bindings::register_console_commands(&self.lua)?;
 
+        // Apply sandbox restrictions last (removes dangerous globals)
         crate::sandbox::apply_sandbox(&self.lua, &self.config.sandbox)?;
 
         Ok(())
     }
 
     /// Loads a Lua script from a file.
+    ///
+    /// The script is executed immediately in the context's Lua VM. Any global
+    /// variables or functions defined in the script become available for future
+    /// calls to `call_function()`.
+    ///
+    /// # Arguments
+    /// - `name`: Identifier for this script (used for hot-reload tracking)
+    /// - `path`: Filesystem path to the .lua file
     pub fn load_script(&mut self, name: &str, path: impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
         info!("Loading script '{}' from {:?}", name, path);
@@ -92,12 +186,14 @@ impl ScriptingContext {
         let source = std::fs::read_to_string(path)
             .map_err(|e| praxis_utils::eyre::eyre!("Failed to read script file: {}", e))?;
 
+        // Execute the script in the Lua VM with the given name (for error messages)
         self.lua
             .load(&source)
             .set_name(name)
             .exec()
             .map_err(|e| praxis_utils::eyre::eyre!("Failed to execute script: {}", e))?;
 
+        // Track the script for hot-reload
         self.loaded_scripts
             .insert(name.to_string(), path.to_path_buf());
 
@@ -105,6 +201,9 @@ impl ScriptingContext {
     }
 
     /// Loads Lua code from a string.
+    ///
+    /// Useful for executing dynamically generated code or inline scripts
+    /// without requiring a file on disk.
     pub fn load_string(&mut self, name: &str, source: &str) -> Result<()> {
         debug!("Loading script '{}' from string", name);
 
@@ -118,6 +217,9 @@ impl ScriptingContext {
     }
 
     /// Reloads a previously loaded script.
+    ///
+    /// This re-reads the script file and re-executes it in the same Lua VM.
+    /// Global variables from the old version persist unless overwritten.
     pub fn reload_script(&mut self, name: &str) -> Result<()> {
         let path = self
             .loaded_scripts
@@ -130,6 +232,14 @@ impl ScriptingContext {
     }
 
     /// Calls a global Lua function.
+    ///
+    /// # Type Parameters
+    /// - `A`: Argument types (automatically converted to Lua values)
+    /// - `R`: Return type (automatically converted from Lua values)
+    ///
+    /// # Performance Tracking
+    /// If performance monitoring is enabled, execution time is recorded
+    /// and warnings are logged for slow functions.
     pub fn call_function<'a, A, R>(
         &'a self,
         script_name: &str,
@@ -146,15 +256,18 @@ impl ScriptingContext {
             None
         };
 
+        // Get the function from global scope
         let globals = self.lua.globals();
         let function: mlua::Function = globals.get(function_name).map_err(|e| {
             praxis_utils::eyre::eyre!("Function '{}' not found: {}", function_name, e)
         })?;
 
+        // Call the function with automatic argument/return type conversion
         let result = function.call(args).map_err(|e| {
             praxis_utils::eyre::eyre!("Error calling function '{}': {}", function_name, e)
         })?;
 
+        // Record performance metrics
         if let (Some(start), Some(ref monitor)) = (start, &self.performance_monitor) {
             let elapsed = start.elapsed();
             monitor.record_execution(script_name, function_name, elapsed);
@@ -187,11 +300,25 @@ impl ScriptingContext {
     }
 
     /// Gets a reference to the Lua VM for direct access.
+    ///
+    /// Use this for advanced scenarios where you need to directly interact
+    /// with the Lua VM API.
     pub fn lua(&self) -> &Lua {
         &self.lua
     }
 
     /// Enables hot-reload for scripts in the given directory.
+    ///
+    /// This starts a filesystem watcher that monitors the directory for changes.
+    /// Call `process_hot_reload()` regularly (e.g., each frame) to apply changes.
+    ///
+    /// # Hot-Reload Workflow
+    /// 1. Developer modifies a .lua file
+    /// 2. Filesystem watcher detects the change
+    /// 3. Event is queued in the watcher
+    /// 4. `process_hot_reload()` processes the event
+    /// 5. Script is reloaded via `reload_script()`
+    /// 6. New code is active immediately
     pub fn enable_hot_reload(&mut self, watch_path: impl AsRef<Path>) -> Result<()> {
         info!("Enabling hot-reload for {:?}", watch_path.as_ref());
 
@@ -202,6 +329,9 @@ impl ScriptingContext {
     }
 
     /// Processes any pending hot-reload events.
+    ///
+    /// Call this regularly (e.g., once per frame) to apply script changes.
+    /// This is a non-blocking poll - if no events are pending, it returns immediately.
     pub fn process_hot_reload(&mut self) -> Result<()> {
         if let Some(ref watcher) = self.hot_reload_watcher {
             let events = {
@@ -227,6 +357,7 @@ impl ScriptingContext {
     fn handle_script_modified(&mut self, path: &Path) -> Result<()> {
         info!("Script modified: {:?}", path);
 
+        // Find all scripts that match this path and reload them
         for (name, script_path) in &self.loaded_scripts.clone() {
             if script_path == path {
                 if let Err(e) = self.reload_script(name) {
@@ -243,6 +374,8 @@ impl ScriptingContext {
     fn handle_script_removed(&mut self, path: &Path) -> Result<()> {
         warn!("Script removed: {:?}", path);
 
+        // Untrack removed scripts but keep their code in the Lua VM
+        // (functions may still be referenced)
         let names: Vec<String> = self
             .loaded_scripts
             .iter()
@@ -265,7 +398,24 @@ impl ScriptingContext {
 
     /// Executes a closure with the ECS World context set up for Lua scripts.
     ///
-    /// This allows scripts to access the world via the `world` global table.
+    /// # Exclusive World Access Pattern
+    ///
+    /// This method is the gateway for ECS integration. It:
+    /// 1. Stores a raw pointer to the World in thread-local storage
+    /// 2. Executes the provided closure (which may run Lua code)
+    /// 3. Clears the pointer when done
+    ///
+    /// During step 2, Lua functions can access the World via `with_world_raw()`,
+    /// which dereferences the thread-local pointer. This allows Lua code to
+    /// query and modify ECS components as if it had direct World access.
+    ///
+    /// # Safety
+    /// This uses unsafe code internally to dereference the World pointer.
+    /// Safety is guaranteed by:
+    /// - The pointer is set immediately before use and cleared after
+    /// - Only one script can execute at a time (single-threaded Lua VM)
+    /// - The World reference is valid for the duration of the closure
+    /// - Scripts cannot store the World reference in Lua globals
     ///
     /// # Arguments
     ///
@@ -289,18 +439,44 @@ impl ScriptingContext {
     where
         F: FnOnce(&Lua) -> Result<R>,
     {
+        // Set the world pointer in thread-local storage
         crate::bindings::ecs_api::set_world_context(&self.lua, world)?;
+        
+        // Execute the closure (may call Lua functions that access the world)
         let result = f(&self.lua);
+        
+        // Always clear the world pointer, even if an error occurred
         crate::bindings::ecs_api::clear_world_context(&self.lua)?;
+        
         result
     }
 
     /// Evaluates Lua code interactively (REPL mode).
     ///
-    /// This method is designed for console/REPL usage and provides:
-    /// - Automatic return value printing
-    /// - Expression evaluation (if statement fails, tries as expression)
-    /// - Multi-value return support
+    /// # REPL Evaluation Pattern
+    ///
+    /// This method implements a common REPL pattern used by interactive Lua shells:
+    ///
+    /// 1. **Try as statement**: First, execute the code as-is
+    ///    - Handles variable assignments: `x = 5`
+    ///    - Handles function calls: `print("hello")`
+    ///    - Returns empty string if no value is returned
+    ///
+    /// 2. **Try as expression**: If the statement fails, wrap with `return`
+    ///    - Handles expressions: `2 + 2` becomes `return 2 + 2`
+    ///    - Handles function calls that return values: `math.sqrt(16)`
+    ///    - Returns the formatted result value
+    ///
+    /// 3. **Error handling**: If both fail, return the original error
+    ///    - Syntax errors are reported from the statement attempt
+    ///    - Runtime errors are propagated to the caller
+    ///
+    /// This two-phase approach allows the REPL to "do what you mean" for both
+    /// statements (which don't return values) and expressions (which do).
+    ///
+    /// # Multi-Value Returns
+    /// Lua functions can return multiple values. These are collected and formatted
+    /// as a comma-separated string: `1, 2, 3`
     ///
     /// # Arguments
     ///
@@ -328,7 +504,7 @@ impl ScriptingContext {
             None
         };
 
-        // Try to evaluate as a statement first
+        // Phase 1: Try to evaluate as a statement first
         let result = self.lua.load(code).eval::<mlua::MultiValue>();
 
         let output = match result {
@@ -343,7 +519,7 @@ impl ScriptingContext {
                 }
             }
             Err(err) => {
-                // If it failed as a statement, try as an expression by wrapping with "return"
+                // Phase 2: If it failed as a statement, try as an expression by wrapping with "return"
                 let expr_code = format!("return {code}");
                 match self.lua.load(&expr_code).eval::<mlua::MultiValue>() {
                     Ok(values) => {
@@ -374,7 +550,10 @@ impl ScriptingContext {
     /// Evaluates Lua code interactively with ECS World context.
     ///
     /// Similar to `eval_interactive`, but provides access to the ECS World
-    /// through the `world` global table.
+    /// through the `world` global table and console commands.
+    ///
+    /// This is the primary method for REPL/console usage in the editor or
+    /// during gameplay debugging.
     ///
     /// # Arguments
     ///
@@ -400,6 +579,12 @@ impl ScriptingContext {
 }
 
 /// Formats a Lua value for display in the REPL.
+///
+/// This provides human-readable representations of Lua values with
+/// special handling for:
+/// - Numbers: Clean formatting (no unnecessary decimals)
+/// - Strings: Quoted for clarity
+/// - Complex types: Type name only (table, function, etc.)
 fn format_lua_value(value: &mlua::Value) -> String {
     match value {
         mlua::Value::Nil => "nil".to_string(),

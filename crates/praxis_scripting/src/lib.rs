@@ -13,6 +13,38 @@
 //! - **REPL Support**: Interactive console with automatic expression evaluation
 //! - **Console Commands**: Built-in commands for ECS introspection and runtime modification
 //!
+//! # Lua-Rust FFI Architecture
+//!
+//! This crate uses the `mlua` library to provide a safe Rust-Lua FFI layer. Key patterns:
+//!
+//! ## 1. UserData for Complex Types
+//! Rust types are exposed to Lua through the [`UserData`](mlua::UserData) trait, which provides:
+//! - **Type safety**: Rust types retain their identity and can be type-checked
+//! - **Memory safety**: References are validated, preventing use-after-free
+//! - **Method exposure**: Rust methods can be called from Lua with automatic marshalling
+//!
+//! Example: `LuaEntity` wraps `Entity` and exposes it to Lua scripts.
+//!
+//! ## 2. Function Closures
+//! Lua functions are created from Rust closures using `lua.create_function()`:
+//! - Closures can capture Rust context (via `move` semantics)
+//! - Arguments are automatically converted from Lua types to Rust types
+//! - Return values are automatically converted back to Lua
+//! - Errors are propagated as Lua runtime errors
+//!
+//! ## 3. Thread-Local World Access
+//! The ECS World cannot be safely shared across threads or stored in Lua's GC'd memory.
+//! Instead, we use a **thread-local raw pointer** pattern:
+//! - `WORLD_CONTEXT: RefCell<Option<*mut World>>` stores the current world pointer
+//! - `set_world_context()` establishes the world for the current script execution
+//! - `with_world()` provides safe access to the world within Lua functions
+//! - `clear_world_context()` removes the world reference after execution
+//!
+//! This ensures:
+//! - **Exclusive access**: Only one script can access the World at a time
+//! - **Memory safety**: The pointer is cleared after use, preventing dangling references
+//! - **No GC issues**: The World is not owned by Lua's garbage collector
+//!
 //! # Example
 //!
 //! ```rust,no_run
@@ -42,6 +74,18 @@
 //!     &mut world
 //! ).unwrap();
 //! ```
+//!
+//! # Security Considerations
+//!
+//! Scripts can be sandboxed to prevent malicious or buggy code from:
+//! - Accessing the filesystem (file I/O operations)
+//! - Making network requests
+//! - Executing OS commands
+//! - Loading arbitrary code dynamically
+//! - Consuming excessive CPU (instruction limits)
+//! - Consuming excessive memory (memory limits)
+//!
+//! See [`SandboxConfig`] and [`SandboxLevel`] for configuration options.
 
 mod bindings;
 mod context;
