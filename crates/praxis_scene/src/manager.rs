@@ -1,4 +1,15 @@
 //! Scene manager for spawning and managing scene instances.
+//!
+//! # Parent-Child Relationships
+//!
+//! The scene manager properly maintains bidirectional parent-child relationships when
+//! spawning entities from scene definitions:
+//!
+//! - **Parent Component**: Added to child entities referencing their parent
+//! - **Children Component**: Added to parent entities containing all their children
+//!
+//! This ensures the ECS hierarchy is properly established for transform propagation
+//! and scene graph traversal.
 
 use crate::{
     components::{Scene, SceneHandle},
@@ -90,16 +101,33 @@ impl SceneManager {
     }
 
     /// Spawns an entity and its children recursively.
+    ///
+    /// This method properly maintains the parent-child hierarchy by:
+    /// 1. Spawning the entity with a Parent component (if it has a parent)
+    /// 2. Recursively spawning all children
+    /// 3. Adding a Children component to this entity with all spawned children
+    ///
+    /// This ensures bidirectional parent-child relationships are properly established.
     fn spawn_entity_recursive(
         world: &mut World,
         entity_def: &EntityDefinition,
         scene_handle: &SceneHandle,
         parent: Option<Entity>,
     ) -> Result<Entity> {
+        // Spawn this entity (with Parent component if it has a parent)
         let entity = Self::spawn_entity(world, entity_def, scene_handle, parent);
 
-        for child_def in &entity_def.children {
-            Self::spawn_entity_recursive(world, child_def, scene_handle, Some(entity))?;
+        // Spawn all children and collect their entity IDs
+        if !entity_def.children.is_empty() {
+            let mut child_entities = Vec::with_capacity(entity_def.children.len());
+            for child_def in &entity_def.children {
+                let child_entity = Self::spawn_entity_recursive(world, child_def, scene_handle, Some(entity))?;
+                child_entities.push(child_entity);
+            }
+
+            // Add Children component to this entity with all spawned children
+            // This completes the bidirectional parent-child relationship
+            world.insert_component(entity, Children::with_children(child_entities))?;
         }
 
         Ok(entity)

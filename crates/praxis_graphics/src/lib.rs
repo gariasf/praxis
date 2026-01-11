@@ -2437,37 +2437,41 @@ impl RenderContext {
                 .dynamic_uniform_buffer
                 .get_dynamic_offset(*object_index);
 
-            unsafe {
-                let set_with_offsets = vulkano::descriptor_set::DescriptorSetWithOffsets::new(
-                    transform_set.clone(),
-                    [dynamic_offset],
-                );
+            // Bind transform descriptor set with dynamic offset (set 0)
+            let set_with_offsets = vulkano::descriptor_set::DescriptorSetWithOffsets::new(
+                transform_set.clone(),
+                [dynamic_offset],
+            );
 
+            // Bind material descriptor set only when material changes (set 1)
+            let material_changed = last_material_set
+                .as_ref()
+                .is_none_or(|last| !Arc::ptr_eq(last, material_set));
+
+            if material_changed {
+                command_buffer_builder
+                    .bind_descriptor_sets(
+                        PipelineBindPoint::Graphics,
+                        self.graphics_pipeline.layout().clone(),
+                        1,
+                        material_set.clone(),
+                    )
+                    .map_err(|e| {
+                        eyre::eyre!("Failed to bind material descriptor set: {}", e)
+                    })?;
+
+                last_material_set = Some(material_set.clone());
+            }
+
+            // SAFETY: We ensure the dynamic offset is within bounds via the dynamic uniform buffer
+            // and the draw parameters are valid for the bound mesh
+            unsafe {
                 command_buffer_builder.bind_descriptor_sets_unchecked(
                     PipelineBindPoint::Graphics,
                     self.graphics_pipeline.layout().clone(),
                     0,
                     set_with_offsets,
                 );
-
-                let material_changed = last_material_set
-                    .as_ref()
-                    .is_none_or(|last| !Arc::ptr_eq(last, material_set));
-
-                if material_changed {
-                    command_buffer_builder
-                        .bind_descriptor_sets(
-                            PipelineBindPoint::Graphics,
-                            self.graphics_pipeline.layout().clone(),
-                            1,
-                            material_set.clone(),
-                        )
-                        .map_err(|e| {
-                            eyre::eyre!("Failed to bind material descriptor set: {}", e)
-                        })?;
-
-                    last_material_set = Some(material_set.clone());
-                }
 
                 command_buffer_builder
                     .draw_indexed(mesh.index_count, 1, 0, 0, 0)
