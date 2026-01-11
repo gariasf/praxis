@@ -1035,8 +1035,8 @@ impl ConsolePanel {
         } else {
             // Command not found - try Lua REPL as fallback
             #[cfg(feature = "scripting")]
-            if let Some(ref lua_context) = self.lua_context {
-                self.execute_lua(&input, lua_context);
+            if let Some(lua_context) = self.lua_context.clone() {
+                self.execute_lua(&input, &lua_context);
             } else {
                 self.log(
                     format!("Unknown command: {command}. Use 'help' for available commands."),

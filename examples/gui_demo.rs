@@ -41,6 +41,7 @@ use praxis_graphics::{
     colored_cube_mesh, textured_cube_mesh, textured_quad_mesh, DrawCommand, RenderCommands,
     RenderContext,
 };
+use praxis_gui::{DebugUi, EguiIntegration};
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::{Quat, Vec3};
 use praxis_utils::timing::FrameTimer;
@@ -61,6 +62,8 @@ struct GuiDemoApp {
     window: Option<Arc<Window>>,
     world: Option<World>,
     render_context: Option<RenderContext>,
+    egui_integration: Option<EguiIntegration>,
+    debug_ui: Option<DebugUi>,
     cursor_locked: bool,
     last_frame_time: Option<Instant>,
     frame_timer: FrameTimer,
@@ -89,6 +92,8 @@ impl Default for GuiDemoApp {
             window: None,
             world: None,
             render_context: None,
+            egui_integration: None,
+            debug_ui: None,
             cursor_locked: false,
             last_frame_time: None,
             frame_timer: FrameTimer::new_with_global(),
@@ -435,6 +440,7 @@ impl GuiDemoApp {
                 model: transform.compute_matrix(),
                 texture_name: Some(texture_handle.id.clone()),
                 material_properties: None,
+                bone_matrices: None,
             });
         }
 
@@ -579,13 +585,22 @@ impl ApplicationHandler for GuiDemoApp {
                 }
             };
 
+        let egui_integration = EguiIntegration::new(
+            event_loop,
+            render_context.surface(),
+            render_context.queue(),
+            render_context.swapchain_format(),
+        );
+
+        let debug_ui = DebugUi::new();
+
         self.camera_controller.camera_entity = Some(camera_entity);
         self.rotating_entities = rotating_entities;
 
         println!("\n=== Praxis GUI Demo ===");
         println!("Comprehensive demonstration of Praxis GUI capabilities");
         println!("\nFeatures:");
-        println!("  • Real-time performance monitoring (via logs)");
+        println!("  • Real-time performance monitoring");
         println!("  • Entity inspection and component editing");
         println!("  • Scene statistics and hierarchy");
         println!("  • Asset management demonstration");
@@ -602,14 +617,13 @@ impl ApplicationHandler for GuiDemoApp {
         println!("  F3 - Toggle scene rotation");
         println!("  F4 - Increase animation speed");
         println!("  F5 - Decrease animation speed");
-        println!("\nNote: This demo showcases GUI system architecture.");
-        println!("Full egui rendering integration is demonstrated in the");
-        println!("praxis_gui crate components (DebugUi, EntityInspector, etc.)");
         println!();
 
-        self.window = Some(window);
+        self.window = Some(window.clone());
         self.world = Some(world);
         self.render_context = Some(render_context);
+        self.egui_integration = Some(egui_integration);
+        self.debug_ui = Some(debug_ui);
         self.last_frame_time = Some(Instant::now());
 
         self.lock_cursor();
@@ -620,6 +634,22 @@ impl ApplicationHandler for GuiDemoApp {
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        // Clone the window Arc early to avoid borrow conflicts
+        let window = match self.window.as_ref() {
+            Some(w) => w.clone(),
+            None => return,
+        };
+
+        // Let egui handle the event if cursor is unlocked
+        if !self.cursor_locked {
+            if let Some(egui_integration) = &mut self.egui_integration {
+                if egui_integration.handle_event(&window, &event) {
+                    window.request_redraw();
+                    return;
+                }
+            }
+        }
+
         match event {
             WindowEvent::CloseRequested => {
                 info!("Close requested, exiting...");
@@ -660,13 +690,26 @@ impl ApplicationHandler for GuiDemoApp {
                     }
                 }
 
+                // Render GUI overlays
+                if !self.cursor_locked {
+                    if let (Some(egui_integration), Some(debug_ui)) = (
+                        &mut self.egui_integration,
+                        &mut self.debug_ui,
+                    ) {
+                        egui_integration.begin_frame(&window);
+
+                        let ctx = egui_integration.context();
+                        debug_ui.render(ctx);
+
+                        let (_full_output, _clipped_primitives) = egui_integration.end_frame(&window);
+                    }
+                }
+
                 if let Err(e) = self.render_scene() {
                     warn!("Render error: {}", e);
                 }
 
-                if let Some(window) = &self.window {
-                    window.request_redraw();
-                }
+                window.request_redraw();
             }
             WindowEvent::KeyboardInput {
                 event:
@@ -769,9 +812,7 @@ impl ApplicationHandler for GuiDemoApp {
             }
         }
 
-        if let Some(window) = &self.window {
-            window.request_redraw();
-        }
+        window.request_redraw();
     }
 
     fn device_event(
@@ -796,6 +837,7 @@ fn main() -> Result<()> {
     praxis_utils::init()?;
     praxis_input::init()?;
     praxis_ecs::init()?;
+    praxis_gui::init()?;
 
     info!("Starting GUI Demo");
 

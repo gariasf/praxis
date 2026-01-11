@@ -3500,6 +3500,8 @@ dependencies = [
  "base64 0.22.1",
  "bevy_ecs",
  "criterion",
+ "egui 0.29.1",
+ "parking_lot",
  "pollster",
  "praxis_assets",
  "praxis_audio",

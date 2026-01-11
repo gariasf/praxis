@@ -9,7 +9,7 @@ authors = ["Guillem Arias <hello@gariasf.com>"]
 default = []
 editor = ["praxis_editor"]
 networking = ["praxis_networking"]
-scripting = ["praxis_scripting"]
+scripting = ["praxis_scripting", "praxis_gui/scripting"]
 terrain = ["praxis_terrain", "praxis_editor?/terrain"]
 headless = []
 
@@ -60,7 +60,7 @@ praxis_scene = { path = "crates/praxis_scene", version = "0.1.0" }
 praxis_networking = { path = "crates/praxis_networking", version = "0.1.0", optional = true }
 praxis_physics = { path = "crates/praxis_physics", version = "0.1.0" }
 praxis_audio = { path = "crates/praxis_audio", version = "0.1.0" }
-praxis_gui = { path = "crates/praxis_gui", version = "0.1.0" }
+praxis_gui = { path = "crates/praxis_gui", version = "0.1.0", features = [] }
 praxis_spatial = { path = "crates/praxis_spatial", version = "0.1.0" }
 praxis_procedural = { path = "crates/praxis_procedural", version = "0.1.0" }
 praxis_profiling = { path = "crates/praxis_profiling", version = "0.1.0" }
@@ -68,6 +68,8 @@ praxis_scripting = { path = "crates/praxis_scripting", version = "0.1.0", option
 praxis_terrain = { path = "crates/praxis_terrain", version = "0.1.0", optional = true }
 winit = { version = "0.30.11", features = ["rwh_05"] }
 pollster = "0.4"
+egui = "0.29"
+parking_lot = "0.12"
 
 [[example]]
 name = "ecs_integration"
@@ -196,7 +198,7 @@ path = "examples/material_demo.rs"
 [[example]]
 name = "console_demo"
 path = "examples/console_demo.rs"
-required-features = ["editor"]
+required-features = ["scripting"]
 
 [[example]]
 name = "scene_serialization_demo"
