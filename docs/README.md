@@ -53,7 +53,7 @@ Task-oriented tutorials for implementing features:
 - [Terrain](guides/terrain.md) - Terrain generation and rendering
 - [Networking](guides/systems/networking.md) - Multiplayer client-server architecture
 
-For comprehensive particle system documentation, see [crates/praxis_graphics/PARTICLES.md](../crates/praxis_graphics/PARTICLES.md).
+For comprehensive particle rendering documentation, see [crates/praxis_graphics/PARTICLES.md](../crates/praxis_graphics/PARTICLES.md).
 
 ### [Concepts](concepts/README.md)
 Educational explanations of engine design:
@@ -139,7 +139,7 @@ cargo run --example selection_demo            # Entity selection
 cargo run --example undo_redo_system_demo     # Undo/redo system
 
 # Effects & Optimization
-cargo run --example particles_demo            # Particle system effects
+cargo run --example particles_demo            # Particle rendering effects
 cargo run --example spatial_optimization_demo # Frustum culling and LOD
 cargo run --example spatial_partitioning_demo # Spatial partitioning
 cargo run --example environment_probe_demo    # IBL reflections

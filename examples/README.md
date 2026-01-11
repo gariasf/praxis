@@ -35,7 +35,7 @@ Interactive examples with graphical output and user controls.
 | `multi_mesh_demo` | Multiple meshes with transforms |
 | `material_demo` | Material system demonstration with PBR properties and post-processing |
 | `environment_probe_demo` | Environment map reflections |
-| `particles_demo` | GPU-accelerated particle system |
+| `particles_demo` | GPU-accelerated particle rendering |
 | `terrain_demo` | Heightmap terrain with LOD, texture splatting, and vegetation |
 | `advanced_lighting_demo` | Advanced lighting techniques and effects |
 | `procedural_texture_demo` | Real-time procedural texture generation |

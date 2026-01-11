@@ -10,15 +10,13 @@ This document tracks types that need renaming to follow the established conventi
 
 ## Types Requiring Standardization
 
-### High Priority (Public API Impact)
+### Completed Standardizations
 
-#### ParticleSystem → ParticleRenderer
-- **Location**: `crates/praxis_graphics/src/particles.rs:794`
-- **Current**: `pub struct ParticleSystem`
-- **Issue**: Named `System` but encapsulates rendering logic (GPU pipelines, draw calls)
-- **Target**: `ParticleRenderer`
-- **Breaking**: Yes (public API)
-- **Impact**: Examples and user code will need updates
+#### ParticleRenderer (✅ Complete)
+- **Location**: `crates/praxis_graphics/src/particles.rs`
+- **Status**: Renamed from previous inconsistent naming
+- **Current**: `pub struct ParticleRenderer`
+- **Result**: Now correctly follows conventions for GPU rendering types
 
 ### Medium Priority (Internal Inconsistencies)
 
@@ -50,11 +48,12 @@ These types should be audited to confirm they follow conventions:
 For breaking changes, introduce type aliases to maintain compatibility:
 
 ```rust
+// Example pattern for future renames:
 // Old name kept as deprecated alias
-#[deprecated(since = "0.x.0", note = "Use `ParticleRenderer` instead")]
-pub type ParticleSystem = ParticleRenderer;
+#[deprecated(since = "0.x.0", note = "Use `NewName` instead")]
+pub type OldName = NewName;
 
-pub struct ParticleRenderer {
+pub struct NewName {
     // ...
 }
 ```
@@ -87,7 +86,11 @@ When in doubt, ask: "What is this type's primary responsibility?"
 ### 2025-01-XX: Initial Conventions Established
 - Defined Manager/Renderer/System suffixes
 - Created tracking document
-- Identified `ParticleSystem` as primary inconsistency
+
+### 2025-01-XX: ParticleRenderer Standardization Complete
+- Renamed to `ParticleRenderer` to follow rendering type conventions
+- Updated all documentation references
+- Type now correctly reflects its GPU rendering responsibility
 
 ### Future Decisions
 Document any decisions to keep existing names or approve exceptions here.

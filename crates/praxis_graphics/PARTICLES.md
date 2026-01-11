@@ -5,10 +5,10 @@ The Praxis particle system provides GPU-accelerated particle rendering with adva
 ## Quick Start
 
 ```rust
-use praxis_graphics::{ParticleSystem, ParticleEmitterConfig, EmitterShape};
+use praxis_graphics::{ParticleRenderer, ParticleEmitterConfig, EmitterShape};
 use praxis_math::Vec3;
 
-let mut particle_system = ParticleSystem::new(
+let mut particle_renderer = ParticleRenderer::new(
     memory_allocator,
     command_buffer_allocator,
     queue,
@@ -22,11 +22,11 @@ let config = ParticleEmitterConfig {
     ..Default::default()
 };
 
-particle_system.add_emitter("fire", config);
+particle_renderer.add_emitter("fire", config);
 
 // In game loop
-particle_system.update(delta_time);
-particle_system.prepare_render()?;
+particle_renderer.update(delta_time);
+particle_renderer.prepare_render()?;
 ```
 
 ## Core Features
@@ -69,7 +69,7 @@ let ground = CollisionPlane::new(
     Vec3::new(0.0, 0.0, 0.0),  // Point on plane
     Vec3::new(0.0, 1.0, 0.0)    // Normal vector
 );
-particle_system.add_collision_plane(ground);
+particle_renderer.add_collision_plane(ground);
 ```
 
 ### GPU-Based Particle Sorting
@@ -78,10 +78,10 @@ Particles are sorted on the GPU using bitonic sort for correct alpha blending:
 
 ```rust
 // Enable GPU sorting (enabled by default)
-particle_system.set_gpu_sorting_enabled(true);
+particle_renderer.set_gpu_sorting_enabled(true);
 
 // Set camera position for depth sorting
-particle_system.set_camera_position(camera_pos);
+particle_renderer.set_camera_position(camera_pos);
 ```
 
 **How it works:**
@@ -95,7 +95,7 @@ particle_system.set_camera_position(camera_pos);
 Particles fade smoothly near geometry using depth buffer comparison:
 
 ```rust
-particle_system.set_soft_particle_config(SoftParticleConfig {
+particle_renderer.set_soft_particle_config(SoftParticleConfig {
     fade_distance: 1.0,  // Distance over which to fade
     fade_power: 2.0,     // Power for fade curve (higher = sharper)
 });
@@ -161,12 +161,12 @@ When a particle hits a plane:
 
 ```rust
 use praxis_graphics::{
-    ParticleSystem, ParticleEmitterConfig, EmitterShape,
+    ParticleRenderer, ParticleEmitterConfig, EmitterShape,
     CollisionPlane, SoftParticleConfig,
 };
 
-// Create system
-let mut particle_system = ParticleSystem::new(
+// Create renderer
+let mut particle_renderer = ParticleRenderer::new(
     memory_allocator,
     command_buffer_allocator,
     queue,
@@ -192,26 +192,26 @@ let config = ParticleEmitterConfig {
     ..Default::default()
 };
 
-particle_system.add_emitter("bouncing", config);
+particle_renderer.add_emitter("bouncing", config);
 
 // Add ground plane
 let ground = CollisionPlane::new(
     Vec3::ZERO,
     Vec3::new(0.0, 1.0, 0.0)
 );
-particle_system.add_collision_plane(ground);
+particle_renderer.add_collision_plane(ground);
 
 // Enable soft particles
-particle_system.set_soft_particle_config(SoftParticleConfig {
+particle_renderer.set_soft_particle_config(SoftParticleConfig {
     fade_distance: 0.5,
     fade_power: 2.0,
 });
 
 // Update loop
 loop {
-    particle_system.set_camera_position(camera_pos);
-    particle_system.update(delta_time);
-    particle_system.prepare_render()?;
+    particle_renderer.set_camera_position(camera_pos);
+    particle_renderer.update(delta_time);
+    particle_renderer.prepare_render()?;
 }
 ```
 

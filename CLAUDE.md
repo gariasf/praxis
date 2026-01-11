@@ -212,7 +212,7 @@ Use these suffixes consistently to clarify responsibility:
 **Functions** that act as systems use `_system` suffix (e.g., `physics_step_system`, `frustum_culling_system`).
 
 **Anti-patterns to avoid**:
-- Using `System` for non-ECS types (e.g., `ParticleSystem` that's actually a renderer)
+- Using `System` for non-ECS types (should use `Renderer` or `Manager` instead)
 - Using `Manager` for types that only render (should be `Renderer`)
 - Using `Context` inconsistently (prefer `Manager` for resource management)
 

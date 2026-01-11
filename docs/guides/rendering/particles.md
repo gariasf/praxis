@@ -5,11 +5,11 @@ This guide provides practical examples for creating common particle effects in P
 ## Basic Setup
 
 ```rust
-use praxis_graphics::{ParticleSystem, ParticleEmitterConfig, EmitterShape, ParticleForce};
+use praxis_graphics::{ParticleRenderer, ParticleEmitterConfig, EmitterShape, ParticleForce};
 use praxis_math::Vec3;
 
-// Create particle system
-let mut particle_system = ParticleSystem::new(
+// Create particle renderer
+let mut particle_renderer = ParticleRenderer::new(
     memory_allocator,
     command_buffer_allocator,
     queue,
@@ -24,11 +24,11 @@ let config = ParticleEmitterConfig {
     ..Default::default()
 };
 
-particle_system.add_emitter("effect_name", config);
+particle_renderer.add_emitter("effect_name", config);
 
 // Update each frame
-particle_system.update(delta_time);
-particle_system.prepare_render()?;
+particle_renderer.update(delta_time);
+particle_renderer.prepare_render()?;
 ```
 
 ## Common Effects

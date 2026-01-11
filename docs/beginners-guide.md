@@ -19,7 +19,7 @@ This guide provides comprehensive explanations of the core concepts and architec
 13. [Shadow Mapping System](#shadow-mapping-system)
 14. [Normal Mapping](#normal-mapping)
 15. [Post-Processing Pipeline](#post-processing-pipeline)
-16. [Particle System](#particle-system)
+16. [Particle Rendering](#particle-rendering)
 17. [Spatial Optimization](#spatial-optimization)
 18. [Editor System](#editor-system)
 
