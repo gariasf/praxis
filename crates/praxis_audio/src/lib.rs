@@ -40,8 +40,12 @@
 //! use praxis_math::Vec3;
 //!
 //! let mut world = World::new();
-//! let audio_manager = AudioManager::new().expect("Failed to initialize audio");
-//! world.insert_resource(audio_manager);
+//! 
+//! // AudioManager initialization may fail in headless environments
+//! // The audio systems will gracefully handle the absence of AudioManager
+//! if let Ok(audio_manager) = AudioManager::new() {
+//!     world.insert_resource(audio_manager);
+//! }
 //!
 //! let mut schedule = Schedule::default();
 //! schedule.add_systems(play_sound_system);

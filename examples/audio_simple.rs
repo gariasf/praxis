@@ -17,7 +17,22 @@ fn main() -> Result<()> {
     let mut world = World::new();
 
     info!("Creating audio manager...");
-    let audio_manager = AudioManager::new()?;
+    // Try to create audio manager, but gracefully handle failure
+    // (e.g., in CI environments or systems without audio output)
+    let audio_manager = match AudioManager::new() {
+        Ok(manager) => {
+            info!("Audio manager initialized successfully");
+            manager
+        }
+        Err(e) => {
+            info!("Failed to initialize audio manager: {}", e);
+            info!("This is expected in environments without audio output (e.g., CI)");
+            info!("The demo will continue to show the structure, but audio won't play.");
+            // Return early since we can't proceed without audio manager
+            return Ok(());
+        }
+    };
+    
     world.insert_resource(audio_manager);
 
     info!("Setting up audio scene...");
@@ -49,6 +64,9 @@ fn main() -> Result<()> {
 
     let mut schedule = Schedule::default();
     schedule.add_systems(play_sound_system);
+
+    info!("Running audio system once to verify integration...");
+    schedule.run(world.inner_mut());
 
     info!("Audio system setup complete!");
     info!("Note: Audio files would need to exist at the specified paths to actually play sounds.");

@@ -108,7 +108,7 @@ use std::path::Path;
 pub struct AudioManager {
     /// Kira's audio manager - handles audio thread and mixing.
     /// Uses `DefaultBackend` which automatically selects the system's audio driver.
-    manager: KiraAudioManager,
+    manager: KiraAudioManager<DefaultBackend>,
 
     /// Cache of loaded sound data keyed by file path.
     /// Prevents redundant disk I/O and decoding for frequently played sounds.
@@ -507,7 +507,8 @@ impl PlaybackSettings {
 
     /// Sets the volume level.
     #[must_use]
-    pub const fn with_volume(mut self, volume: f32) -> Self {
+    #[allow(clippy::missing_const_for_fn)] // clamp is not const in stable Rust
+    pub fn with_volume(mut self, volume: f32) -> Self {
         self.volume = volume.clamp(0.0, 1.0);
         self
     }
@@ -521,7 +522,8 @@ impl PlaybackSettings {
 
     /// Sets the panning.
     #[must_use]
-    pub const fn with_panning(mut self, panning: f32) -> Self {
+    #[allow(clippy::missing_const_for_fn)] // clamp is not const in stable Rust
+    pub fn with_panning(mut self, panning: f32) -> Self {
         self.panning = panning.clamp(-1.0, 1.0);
         self
     }

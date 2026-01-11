@@ -285,7 +285,12 @@ fn update_listener_position(
     }
 }
 
-fn start_audio_sources(mut audio_sources: Query<&mut AudioSource>) {
+fn start_audio_sources(_audio_manager: Option<ResMut<AudioManager>>, mut audio_sources: Query<&mut AudioSource>) {
+    // Early return if no audio manager available
+    if _audio_manager.is_none() {
+        return;
+    }
+
     for mut source in audio_sources.iter_mut() {
         if source.is_stopped() {
             source.play();
@@ -422,7 +427,18 @@ fn main() -> Result<()> {
     let mut world = World::new();
 
     // Initialize resources
-    let audio_manager = AudioManager::new()?;
+    let audio_manager = match AudioManager::new() {
+        Ok(manager) => {
+            info!("Audio manager initialized successfully");
+            manager
+        }
+        Err(e) => {
+            info!("Failed to initialize audio manager: {}", e);
+            info!("This is expected in environments without audio output (e.g., CI)");
+            info!("Exiting demo gracefully.");
+            return Ok(());
+        }
+    };
     world.insert_resource(audio_manager);
 
     let input_state = InputState::new();

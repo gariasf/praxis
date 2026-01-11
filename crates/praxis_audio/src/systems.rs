@@ -63,6 +63,15 @@ const SPEED_OF_SOUND: f32 = 343.0;
 /// - Stops sounds when requested
 /// - Cleans up finished sounds
 ///
+/// # Graceful Degradation
+///
+/// The system accepts `Option<ResMut<AudioManager>>` instead of `ResMut<AudioManager>`,
+/// which means it will gracefully skip processing if no `AudioManager` resource is present.
+/// This allows:
+/// - Running in headless/CI environments without audio hardware
+/// - Conditional audio system initialization
+/// - Better error handling when audio backend fails to initialize
+///
 /// # Processing Logic
 ///
 /// For each `AudioSource`:
@@ -94,10 +103,17 @@ const SPEED_OF_SOUND: f32 = 343.0;
 /// ```
 #[allow(clippy::needless_pass_by_value)] // Query must be passed by value for ECS systems
 pub fn play_sound_system(
-    mut audio_manager: ResMut<AudioManager>,
+    audio_manager: Option<ResMut<AudioManager>>,
     mut audio_sources: Query<(&mut AudioSource, Option<&Transform>)>,
     listener_query: Query<&Transform, With<AudioListener>>,
 ) {
+    // Early return if no audio manager is available
+    // This allows the system to run without panicking in environments
+    // where audio initialization failed (e.g., headless CI)
+    let Some(mut audio_manager) = audio_manager else {
+        return;
+    };
+
     // Find the listener (camera) position
     // If multiple listeners exist, only the first is used
     // If no listener exists, spatial audio won't have positioning
@@ -214,6 +230,11 @@ pub fn play_sound_system(
 /// transforms have changed, or when the listener transform changes, avoiding
 /// unnecessary calculations.
 ///
+/// # Graceful Degradation
+///
+/// Like `play_sound_system`, this system accepts `Option<ResMut<AudioManager>>`
+/// and will gracefully skip processing if the audio manager is not available.
+///
 /// # Change Detection
 ///
 /// Uses ECS change tracking (`Changed<Transform>`) to detect movement:
@@ -247,10 +268,15 @@ pub fn play_sound_system(
 /// ```
 #[allow(clippy::needless_pass_by_value)] // Query must be passed by value for ECS systems
 pub fn update_spatial_audio_system(
-    mut audio_manager: ResMut<AudioManager>,
+    audio_manager: Option<ResMut<AudioManager>>,
     mut audio_sources: Query<(&mut AudioSource, &Transform), Changed<Transform>>,
     listener_query: Query<&Transform, With<AudioListener>>,
 ) {
+    // Early return if no audio manager is available
+    let Some(mut audio_manager) = audio_manager else {
+        return;
+    };
+
     let listener_transform = listener_query.iter().next();
 
     if let Some(listener_trans) = listener_transform {
@@ -298,6 +324,11 @@ pub fn update_spatial_audio_system(
 /// spatial audio sources accordingly. This is important for maintaining
 /// correct audio positioning relative to the listener.
 ///
+/// # Graceful Degradation
+///
+/// Like other audio systems, this accepts `Option<ResMut<AudioManager>>`
+/// and will gracefully skip processing if the audio manager is not available.
+///
 /// # Listener Movement Handling
 ///
 /// When the camera moves:
@@ -335,10 +366,15 @@ pub fn update_spatial_audio_system(
 /// ```
 #[allow(clippy::needless_pass_by_value)] // Query must be passed by value for ECS systems
 pub fn update_listener_system(
-    mut audio_manager: ResMut<AudioManager>,
+    audio_manager: Option<ResMut<AudioManager>>,
     mut audio_sources: Query<(&mut AudioSource, &Transform)>,
     listener_query: Query<&Transform, (With<AudioListener>, Changed<Transform>)>,
 ) {
+    // Early return if no audio manager is available
+    let Some(mut audio_manager) = audio_manager else {
+        return;
+    };
+
     // Only update if listener transform changed this frame
     if let Some(listener_trans) = listener_query.iter().next() {
         // Update all spatial audio sources relative to new listener position
