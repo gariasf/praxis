@@ -932,7 +932,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_async_batch_loader_try_receive() {
         let loader = AsyncMeshLoader::new();
         let mut batch = AsyncBatchLoader::new();
@@ -947,11 +947,20 @@ mod tests {
 
         batch.add(loader.load_async(&test_file).await.unwrap());
 
-        // Give it some time to complete
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // Poll with timeout until completion instead of sleeping
+        let timeout = std::time::Duration::from_secs(5);
+        let start = std::time::Instant::now();
+        let mut completed = Vec::new();
+        
+        while batch.total_count() > 0 && start.elapsed() < timeout {
+            let mut batch_completed = batch.try_receive_completed();
+            completed.append(&mut batch_completed);
+            if completed.is_empty() {
+                tokio::task::yield_now().await;
+            }
+        }
 
-        let completed = batch.try_receive_completed();
-        assert_eq!(completed.len(), 1);
+        assert_eq!(completed.len(), 1, "Expected 1 completed load");
         assert!(completed[0].is_ok());
         assert_eq!(batch.total_count(), 0);
 
@@ -1290,8 +1299,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    #[ignore = "FIXME: Flaky async test - timing dependent"]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_concurrent_loads_different_loaders() {
         let mesh_loader = AsyncMeshLoader::new();
         let temp_dir = std::env::temp_dir();
@@ -1305,10 +1313,23 @@ mod tests {
         let (h2, r2) = mesh_loader.load_async(&mesh_file).await.unwrap();
         let (h3, r3) = mesh_loader.load_async(&mesh_file).await.unwrap();
 
-        // All should complete
-        assert!(r1.recv().unwrap().is_ok());
-        assert!(r2.recv().unwrap().is_ok());
-        assert!(r3.recv().unwrap().is_ok());
+        // Use timeout to prevent hanging
+        let timeout_duration = std::time::Duration::from_secs(5);
+
+        // All should complete within timeout
+        let result1 = tokio::time::timeout(timeout_duration, async { r1.recv().unwrap() })
+            .await
+            .expect("Test timed out waiting for r1");
+        let result2 = tokio::time::timeout(timeout_duration, async { r2.recv().unwrap() })
+            .await
+            .expect("Test timed out waiting for r2");
+        let result3 = tokio::time::timeout(timeout_duration, async { r3.recv().unwrap() })
+            .await
+            .expect("Test timed out waiting for r3");
+
+        assert!(result1.is_ok());
+        assert!(result2.is_ok());
+        assert!(result3.is_ok());
 
         assert!(h1.is_finished());
         assert!(h2.is_finished());
@@ -1339,8 +1360,7 @@ mod tests {
         std::fs::remove_file(&test_file).ok();
     }
 
-    #[tokio::test]
-    #[ignore = "FIXME: Flaky async test - channel timing issues"]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_early_cancellation() {
         let loader = AsyncMeshLoader::new();
         let temp_dir = std::env::temp_dir();
@@ -1354,10 +1374,15 @@ mod tests {
         // Cancel immediately
         handle.cancel();
 
-        // The result might be an error or success depending on timing,
-        // but we should get a result
-        let result = receiver.recv();
-        assert!(result.is_ok()); // Channel should receive something
+        // Use timeout to prevent hanging - the result might be an error or success depending on timing,
+        // but we should get a result within a reasonable time
+        let timeout_duration = std::time::Duration::from_secs(5);
+        let result = tokio::time::timeout(timeout_duration, async { receiver.recv() })
+            .await
+            .expect("Test timed out waiting for cancellation result");
+
+        // Channel should receive something (either success or cancellation error)
+        assert!(result.is_ok(), "Channel should receive a result");
 
         std::fs::remove_file(&test_file).ok();
     }
@@ -1454,7 +1479,7 @@ mod tests {
     // Batch loader tests
     // ============================================================================
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_batch_completed_count_updates() {
         let loader = AsyncMeshLoader::new();
         let mut batch = AsyncBatchLoader::new();
@@ -1475,20 +1500,25 @@ mod tests {
 
         assert_eq!(batch.total_count(), 3);
 
-        // Wait for completion
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // Poll until all complete with timeout
+        let timeout = std::time::Duration::from_secs(5);
+        let start = std::time::Instant::now();
+        
+        while !batch.is_complete() && start.elapsed() < timeout {
+            tokio::task::yield_now().await;
+        }
 
         // Should all be complete
+        assert!(batch.is_complete(), "Batch did not complete within timeout");
         assert_eq!(batch.completed_count(), 3);
         assert_eq!(batch.pending_count(), 0);
-        assert!(batch.is_complete());
 
         for path in &paths {
             std::fs::remove_file(path).ok();
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_batch_try_receive_completed_partial() {
         let loader = AsyncMeshLoader::new();
         let mut batch = AsyncBatchLoader::new();
@@ -1507,24 +1537,21 @@ mod tests {
             batch.add(loader.load_async(path).await.unwrap());
         }
 
-        // Try receiving immediately (likely nothing ready yet)
-        let completed_early = batch.try_receive_completed();
+        // Poll with timeout to collect all completed items
+        let timeout = std::time::Duration::from_secs(5);
+        let start = std::time::Instant::now();
+        let mut all_completed = Vec::new();
 
-        // Wait a bit
-        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-
-        // Try receiving again (some might be ready)
-        let completed_mid = batch.try_receive_completed();
-
-        // Wait for all to complete
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-        // Try receiving final batch
-        let completed_final = batch.try_receive_completed();
+        while batch.total_count() > 0 && start.elapsed() < timeout {
+            let mut completed = batch.try_receive_completed();
+            all_completed.append(&mut completed);
+            if batch.total_count() > 0 {
+                tokio::task::yield_now().await;
+            }
+        }
 
         // Total completed should equal original count
-        let total_completed = completed_early.len() + completed_mid.len() + completed_final.len();
-        assert_eq!(total_completed, 5);
+        assert_eq!(all_completed.len(), 5, "Expected 5 completed loads");
 
         // Batch should now be empty
         assert_eq!(batch.total_count(), 0);
@@ -1534,7 +1561,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_batch_is_complete() {
         let loader = AsyncMeshLoader::new();
         let mut batch = AsyncBatchLoader::new();
@@ -1549,10 +1576,15 @@ mod tests {
 
         batch.add(loader.load_async(&test_file).await.unwrap());
 
-        // May or may not be complete immediately (timing dependent)
-        // But after waiting, should be complete
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        assert!(batch.is_complete());
+        // Poll until complete with timeout
+        let timeout = std::time::Duration::from_secs(5);
+        let start = std::time::Instant::now();
+        
+        while !batch.is_complete() && start.elapsed() < timeout {
+            tokio::task::yield_now().await;
+        }
+        
+        assert!(batch.is_complete(), "Batch did not complete within timeout");
 
         std::fs::remove_file(&test_file).ok();
     }
@@ -1723,14 +1755,20 @@ mod tests {
             batch.add(loader.load_async(path).await.unwrap());
         }
 
-        // Simulate game loop checking for loading progress
+        // Simulate game loop checking for loading progress with timeout
+        let timeout = std::time::Duration::from_secs(5);
+        let start = std::time::Instant::now();
         let mut loaded_count = 0;
-        while !batch.is_complete() {
-            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        
+        while !batch.is_complete() && start.elapsed() < timeout {
             let completed = batch.try_receive_completed();
             loaded_count += completed.len();
+            if !batch.is_complete() {
+                tokio::task::yield_now().await;
+            }
         }
 
+        assert!(start.elapsed() < timeout, "Test timed out");
         assert_eq!(loaded_count, 5);
 
         for path in &paths {
