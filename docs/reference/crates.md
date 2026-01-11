@@ -39,7 +39,7 @@ Vulkan rendering via `vulkano`.
 
 **Documentation:**
 - [Rendering Guide](../guides/rendering.md)
-- [HDR Guide](../guides/hdr-and-tonemapping.md)
+- [HDR Guide](../guides/rendering/hdr-tonemapping.md)
 
 ### praxis_window
 Window management via `winit`.

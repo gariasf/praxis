@@ -246,7 +246,7 @@ Praxis provides both forward and deferred rendering because no single approach i
 - **Variance shadow maps**: Require 16-bit textures, light bleeding artifacts
 - **Ray-traced shadows**: GPU compute requirements too high for target hardware
 
-**See**: [Shadows Guide](shadows.md) for detailed shadow implementation
+**See**: [Shadows Guide](rendering/shadows.md) for detailed shadow implementation
 
 ### HDR and Tone Mapping Integration
 
@@ -257,7 +257,7 @@ Praxis provides both forward and deferred rendering because no single approach i
 - Tone mapping is essential for displaying HDR on LDR displays
 - Multiple operators (ACES, Reinhard, etc.) suit different art styles
 
-**See**: [HDR and Tone Mapping](hdr-and-tonemapping.md) for detailed rationale
+**See**: [HDR and Tone Mapping](rendering/hdr-tonemapping.md) for detailed rationale
 
 ### Hybrid Rendering Strategy
 
@@ -324,8 +324,8 @@ cargo run --example comprehensive_scene_demo  # Forward with materials
 
 ## See Also
 
-- [HDR and Tone Mapping](hdr-and-tonemapping.md) - High dynamic range
-- [Shadows](shadows.md) - Cascaded shadow maps
-- [Post-Processing](post-processing.md) - Screen-space effects
-- [docs/deferred_rendering.md](../deferred_rendering.md) - Detailed G-buffer docs
-- [docs/RENDERING_EXPLAINED.md](../RENDERING_EXPLAINED.md) - Pipeline deep dive
+- [HDR and Tone Mapping](rendering/hdr-tonemapping.md) - High dynamic range
+- [Shadows](rendering/shadows.md) - Cascaded shadow maps
+- [Post-Processing](rendering/post-processing.md) - Screen-space effects
+- [Deferred Rendering](rendering/deferred-rendering.md) - Detailed G-buffer docs
+- [Advanced Rendering](rendering/advanced-rendering.md) - Pipeline deep dive

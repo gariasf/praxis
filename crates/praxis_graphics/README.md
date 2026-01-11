@@ -238,8 +238,8 @@ The mock provides the same API surface as `RenderContext` but with all operation
 
 ## See Also
 
-- [Mesh System Documentation](../../docs/mesh-system.md)
 - [Rendering Guide](../../docs/guides/rendering.md)
-- [HDR and Tonemapping](../../docs/guides/hdr-and-tonemapping.md)
-- [Material System](../../docs/guides/materials.md)
+- [HDR and Tonemapping](../../docs/guides/rendering/hdr-tonemapping.md)
+- [Advanced Materials](../../docs/guides/rendering/advanced-materials.md)
+- [PBR Materials Concept](../../docs/concepts/pbr-materials.md)
 - [Multi-mesh Demo](../../examples/multi_mesh_demo.rs)

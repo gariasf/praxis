@@ -217,7 +217,8 @@ cargo run --example gltf_animation_loader_demo
 
 ## See Also
 
-- [Scene System Guide](../../docs/guides/scenes.md)
-- [Animation System](../../docs/animation-system.md)
+- [Animation Guides](../../docs/guides/animation/)
+- [Animation Concepts](../../docs/concepts/animation.md)
+- [Serialization Guide](../../docs/guides/serialization.md)
 - [GLTF Assets](../praxis_assets/README.md)
 - [ECS System](../praxis_ecs/README.md)

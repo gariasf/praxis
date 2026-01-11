@@ -342,5 +342,5 @@ cargo test -p praxis_procedural
 ## See Also
 
 - [Procedural Texture Demo](../../examples/procedural_texture_demo.rs)
+- [Procedural Textures Guide](../../docs/guides/assets/procedural-textures.md)
 - [Praxis Graphics System](../praxis_graphics/README.md)
-- [Texture Guide](../../docs/guides/textures.md)

@@ -422,7 +422,9 @@ cargo run --example comprehensive_scene_demo
 
 ## See Also
 
-- [Mesh System Documentation](../../docs/mesh-system.md)
-- [OBJ Loading Details](../../docs/obj-loading.md)
+- [Assets Guide](../../docs/guides/assets/README.md)
+- [GLTF Loading Guide](../../docs/guides/assets/gltf.md)
+- [OBJ Loading Guide](../../docs/guides/assets/obj.md)
+- [Async Assets Guide](../../docs/guides/async-assets.md)
 - [Scene System](../praxis_scene/README.md)
-- [Animation System](../../docs/animation-system.md)
+- [Mesh API Reference](../../docs/reference/mesh-api.md)

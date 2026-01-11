@@ -704,7 +704,8 @@ cargo run --example obj_loader_demo
 
 ## See Also
 
-- [praxis_assets README](../../crates/praxis_assets/README.md) - API documentation
-- [Mesh System Documentation](../mesh_system.md) - Mesh architecture
+- [praxis_assets README](../../../crates/praxis_assets/README.md) - API documentation
+- [Mesh API Reference](../../reference/mesh-api.md) - Mesh architecture
+- [Animation Guide](../animation.md) - Loading animated GLTF files
 - [OBJ Format Specification](http://www.martinreddy.net/gfx/3d/OBJ.spec) - OBJ format details
 - [GLTF Specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html) - GLTF format

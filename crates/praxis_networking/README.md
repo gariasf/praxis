@@ -284,5 +284,5 @@ cargo run --example networking_demo
 
 ## See Also
 
-- [Networking Guide](../../docs/guides/networking.md)
-- [Multiplayer Concepts](../../docs/concepts/multiplayer.md)
+- [Networking Guide](../../docs/guides/systems/networking.md)
+- [Networking Learning Path](../../docs/learning-paths/networking.md)
