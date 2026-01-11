@@ -300,7 +300,7 @@ impl GBuffer {
                 .map_err(|e| eyre::eyre!("Failed to create G-buffer image view: {}", e))
         };
 
-        let usage = ImageUsage::COLOR_ATTACHMENT | ImageUsage::SAMPLED;
+        let usage = ImageUsage::COLOR_ATTACHMENT | ImageUsage::SAMPLED | ImageUsage::TRANSFER_SRC;
 
         let albedo = create_attachment(Format::R8G8B8A8_UNORM, usage)?;
         let normal = create_attachment(Format::R16G16B16A16_SFLOAT, usage)?;
@@ -314,15 +314,27 @@ impl GBuffer {
                     image_type: ImageType::Dim2d,
                     format: Format::D32_SFLOAT,
                     extent,
-                    usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::SAMPLED,
+                    usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::SAMPLED | ImageUsage::TRANSFER_SRC,
                     ..Default::default()
                 },
                 AllocationCreateInfo::default(),
             )
             .map_err(|e| eyre::eyre!("Failed to create depth image: {}", e))?;
 
-            ImageView::new_default(image)
-                .map_err(|e| eyre::eyre!("Failed to create depth image view: {}", e))?
+            // Create depth image view with proper depth aspect
+            use vulkano::image::{view::ImageViewCreateInfo, ImageAspects, ImageSubresourceRange};
+            ImageView::new(
+                image.clone(),
+                ImageViewCreateInfo {
+                    subresource_range: ImageSubresourceRange {
+                        aspects: ImageAspects::DEPTH,
+                        mip_levels: 0..1,
+                        array_layers: 0..1,
+                    },
+                    ..ImageViewCreateInfo::from_image(&image)
+                },
+            )
+            .map_err(|e| eyre::eyre!("Failed to create depth image view: {}", e))?
         };
 
         let framebuffer = Framebuffer::new(
@@ -1023,6 +1035,7 @@ impl DeferredRenderer {
             SamplerCreateInfo {
                 mag_filter: Filter::Nearest,
                 min_filter: Filter::Nearest,
+                address_mode: [vulkano::image::sampler::SamplerAddressMode::ClampToEdge; 3],
                 ..Default::default()
             },
         )
@@ -1030,7 +1043,9 @@ impl DeferredRenderer {
 
         // Create default white SSAO texture if not provided (1.0 = no occlusion)
         let default_ssao_texture = if params.ssao_texture.is_none() {
-            use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
+            use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage};
+            use vulkano::command_buffer::{CopyBufferToImageInfo, BufferImageCopy};
+            use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage, ImageAspects, ImageSubresourceLayers};
             use vulkano::memory::allocator::AllocationCreateInfo;
 
             let image = Image::new(
@@ -1039,7 +1054,21 @@ impl DeferredRenderer {
                     image_type: ImageType::Dim2d,
                     format: vulkano::format::Format::R32_SFLOAT,
                     extent: [1, 1, 1],
-                    usage: ImageUsage::SAMPLED,
+                    usage: ImageUsage::SAMPLED | ImageUsage::TRANSFER_DST,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                    ..Default::default()
+                },
+            )
+            .map_err(|e| eyre::eyre!("Failed to create default SSAO texture: {}", e))?;
+
+            // Upload white pixel data (1.0 = no occlusion)
+            let staging_buffer = Buffer::from_iter(
+                self.memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::TRANSFER_SRC,
                     ..Default::default()
                 },
                 AllocationCreateInfo {
@@ -1047,8 +1076,29 @@ impl DeferredRenderer {
                         | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                     ..Default::default()
                 },
+                [1.0f32],
             )
-            .map_err(|e| eyre::eyre!("Failed to create default SSAO texture: {}", e))?;
+            .map_err(|e| eyre::eyre!("Failed to create staging buffer: {}", e))?;
+
+            builder
+                .copy_buffer_to_image(CopyBufferToImageInfo {
+                    regions: [BufferImageCopy {
+                        buffer_offset: 0,
+                        buffer_row_length: 0,
+                        buffer_image_height: 0,
+                        image_subresource: ImageSubresourceLayers {
+                            aspects: ImageAspects::COLOR,
+                            mip_level: 0,
+                            array_layers: 0..1,
+                        },
+                        image_offset: [0, 0, 0],
+                        image_extent: [1, 1, 1],
+                        ..Default::default()
+                    }]
+                    .into(),
+                    ..CopyBufferToImageInfo::buffer_image(staging_buffer, image.clone())
+                })
+                .map_err(|e| eyre::eyre!("Failed to upload default SSAO data: {}", e))?;
 
             Some(
                 ImageView::new_default(image)

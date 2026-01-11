@@ -672,6 +672,8 @@ impl Cubemap {
             face_size
         );
 
+        use vulkano::image::ImageCreateFlags;
+        
         let image = Image::new(
             allocator.clone(),
             ImageCreateInfo {
@@ -679,6 +681,7 @@ impl Cubemap {
                 format: Format::R8G8B8A8_SRGB,
                 extent: [face_size, face_size, 1],
                 array_layers: 6,
+                flags: ImageCreateFlags::CUBE_COMPATIBLE,
                 usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
                 ..Default::default()
             },

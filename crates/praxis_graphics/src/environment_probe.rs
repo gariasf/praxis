@@ -416,6 +416,8 @@ impl EnvironmentProbeManager {
         resolution: u32,
         format: Format,
     ) -> Result<Cubemap> {
+        use vulkano::image::ImageCreateFlags;
+        
         let image = Image::new(
             allocator.clone(),
             ImageCreateInfo {
@@ -423,9 +425,11 @@ impl EnvironmentProbeManager {
                 format,
                 extent: [resolution, resolution, 1],
                 array_layers: 6,
+                flags: ImageCreateFlags::CUBE_COMPATIBLE,
                 usage: ImageUsage::SAMPLED
                     | ImageUsage::COLOR_ATTACHMENT
-                    | ImageUsage::TRANSFER_DST,
+                    | ImageUsage::TRANSFER_DST
+                    | ImageUsage::TRANSFER_SRC,
                 ..Default::default()
             },
             AllocationCreateInfo {
@@ -478,6 +482,8 @@ impl EnvironmentProbeManager {
         format: Format,
         mip_levels: u32,
     ) -> Result<Cubemap> {
+        use vulkano::image::ImageCreateFlags;
+        
         let image = Image::new(
             allocator.clone(),
             ImageCreateInfo {
@@ -486,9 +492,11 @@ impl EnvironmentProbeManager {
                 extent: [resolution, resolution, 1],
                 array_layers: 6,
                 mip_levels,
+                flags: ImageCreateFlags::CUBE_COMPATIBLE,
                 usage: ImageUsage::SAMPLED
                     | ImageUsage::COLOR_ATTACHMENT
-                    | ImageUsage::TRANSFER_DST,
+                    | ImageUsage::TRANSFER_DST
+                    | ImageUsage::TRANSFER_SRC,
                 ..Default::default()
             },
             AllocationCreateInfo {

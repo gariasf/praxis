@@ -53,7 +53,8 @@ impl HdrRenderTarget {
                 extent: [extent[0], extent[1], 1],
                 usage: ImageUsage::COLOR_ATTACHMENT
                     | ImageUsage::SAMPLED
-                    | ImageUsage::TRANSFER_SRC,
+                    | ImageUsage::TRANSFER_SRC
+                    | ImageUsage::TRANSFER_DST,
                 ..Default::default()
             },
             AllocationCreateInfo::default(),
