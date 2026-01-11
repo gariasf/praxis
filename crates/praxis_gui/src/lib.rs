@@ -1,6 +1,83 @@
 //! GUI system for the Praxis engine.
 //!
 //! This crate provides functionality for creating and managing GUI elements using egui.
+//!
+//! # Architecture Overview
+//!
+//! ## Immediate-Mode UI (egui)
+//!
+//! Unlike traditional retained-mode GUI frameworks (Qt, GTK, WPF), egui uses an
+//! **immediate-mode** approach where UI code runs every frame:
+//!
+//! ```text
+//! Traditional (Retained):           Immediate-Mode (egui):
+//! ┌────────────────────┐           ┌────────────────────┐
+//! │ Create widgets     │           │ Each frame:         │
+//! │ Set properties     │           │   if button() {     │
+//! │ Connect callbacks  │           │     // handle click │
+//! │                    │           │   }                 │
+//! │ Event loop runs    │           │                     │
+//! │ Forever            │           │ No state to manage  │
+//! └────────────────────┘           └────────────────────┘
+//! ```
+//!
+//! Benefits:
+//! - **Simple mental model**: UI state = application state, no synchronization bugs
+//! - **Easy to compose**: UI functions call other UI functions naturally
+//! - **Dynamic UI**: Conditionally render elements without widget tree manipulation
+//! - **No callbacks**: Logic is inline with UI code
+//!
+//! ## egui + Vulkan Integration
+//!
+//! egui is rendering-backend agnostic. This crate integrates it with Vulkan via:
+//!
+//! 1. **`EguiIntegration`**: Manages the egui→Vulkan bridge
+//!    - Handles input events from winit
+//!    - Converts egui's `ClippedPrimitive` output into Vulkan draw calls
+//!    - Manages font/texture uploads to GPU memory
+//!
+//! 2. **`EguiContext`**: ECS resource wrapping `egui::Context`
+//!    - Allows systems to render UI by accessing `Res<EguiContext>`
+//!    - The context tracks layout, input state, and widget IDs between frames
+//!
+//! 3. **Render flow each frame**:
+//!    ```text
+//!    ┌──────────────────────────────────────────────────────┐
+//!    │ 1. begin_frame()                                      │
+//!    │    - Collect input events (mouse, keyboard)          │
+//!    │    - Start new egui frame                            │
+//!    ├──────────────────────────────────────────────────────┤
+//!    │ 2. UI systems run (your game code)                   │
+//!    │    - Call egui::Window::show()                       │
+//!    │    - Add buttons, sliders, text, etc.                │
+//!    │    - egui builds internal mesh/command list          │
+//!    ├──────────────────────────────────────────────────────┤
+//!    │ 3. end_frame()                                        │
+//!    │    - egui finalizes ClippedPrimitives                │
+//!    │    - Convert to Vulkan vertex/index buffers          │
+//!    ├──────────────────────────────────────────────────────┤
+//!    │ 4. Render pass                                        │
+//!    │    - Upload buffers to GPU                           │
+//!    │    - Draw GUI on top of 3D scene                     │
+//!    │    - Use alpha blending for transparency             │
+//!    └──────────────────────────────────────────────────────┘
+//!    ```
+//!
+//! 4. **Memory management**:
+//!    - egui allocates shapes/vertices on CPU each frame (cheap, ~1ms)
+//!    - `egui_vulkano` caches GPU textures for fonts/images (LRU eviction)
+//!    - Vertex/index buffers are dynamically sized and reused
+//!
+//! ## Module Organization
+//!
+//! - **`console_panel`**: Debug console with command registry & Lua REPL
+//! - **`egui_integration`**: Low-level Vulkan rendering integration
+//! - **`entity_inspector`**: ECS entity/component editor
+//! - **`hierarchy_panel`**: Scene hierarchy tree view
+//! - **`inspector_panel`**: Properties panel for selected entities
+//! - **`gizmos`**: 3D transform manipulation widgets
+//! - **`debug_ui`**: Performance metrics and debug overlays
+//! - **`gui_state`**: Shared GUI state (selections, tool modes, etc.)
 
 mod console_panel;
 mod debug_ui;
