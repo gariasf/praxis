@@ -1,28 +1,65 @@
-//! Selection system for editor entity selection.
+//! Selection system for editor entity selection with raycast picking.
 //!
-//! This module provides a comprehensive selection system with support for:
-//! - Multi-entity selection with add/remove/toggle modes
-//! - Click-to-select with raycast picking in viewport using accurate bounding box tests
-//! - Marquee (box) selection in viewport
-//! - Keyboard shortcuts (Ctrl+A for select all, Ctrl+D for deselect all)
-//! - Selection changed events for UI updates
+//! This module provides a comprehensive selection system implementing multiple interaction patterns:
+//! - **Click selection** via 3D raycast picking with accurate bounding box tests
+//! - **Marquee selection** via 2D rectangle dragging in viewport
+//! - **Multi-entity selection** with add/remove/toggle modes
+//! - **Keyboard shortcuts** (Ctrl+A for select all, Ctrl+D for deselect all)
+//! - **Selection events** for reactive UI updates
 //!
 //! # Architecture
 //!
-//! The selection system uses ECS resources and components:
-//! - **`SelectionSystem`**: Resource managing selected entities and selection state
+//! The selection system uses ECS resources and components following the **Observer Pattern**:
+//! - **`SelectionSystem`**: Resource managing selected entities and firing events (Subject)
 //! - **`Selectable`**: Component marking entities that can be selected
 //! - **`Selected`**: Component marking entities that are currently selected
-//! - **`SelectionEvent`**: Events fired when selection changes
+//! - **`SelectionEvent`**: Events fired when selection changes (Notifications)
+//! - **UI Panels**: Observers that react to selection events
 //!
-//! # Raycast Picking
+//! # Raycast Picking Algorithm
 //!
-//! The `raycast_pick` method uses actual mesh bounding boxes for precise 3D picking:
-//! 1. Entities with `BoundingBox` component: Uses the bounding box transformed to world space
-//! 2. Entities with `Mesh` component: Computes bounds from mesh vertices, transformed to world space
-//! 3. Fallback: Simple sphere test with 1.0 radius for entities without bounds
+//! Click-to-select uses 3D ray casting from the mouse cursor into the scene.
+//! The `raycast_pick` method implements a multi-tier picking strategy:
 //!
-//! This provides accurate selection even for complex meshes with non-uniform scales and rotations.
+//! ## Algorithm Steps
+//!
+//! 1. **Screen to World Ray**: Convert 2D mouse position to 3D ray
+//!    - Transform screen coordinates to NDC (Normalized Device Coordinates)
+//!    - Unproject through inverse view-projection matrix
+//!    - Compute ray origin (camera position) and direction
+//!
+//! 2. **Ray-Entity Intersection Testing** (for each selectable entity):
+//!    - **Tier 1**: Entities with `BoundingBox` component
+//!      * Use pre-computed AABB (Axis-Aligned Bounding Box)
+//!      * Transform to world space using entity's global transform
+//!      * Test ray-AABB intersection with Slabs method
+//!    - **Tier 2**: Entities with `Mesh` component
+//!      * Compute AABB from mesh vertices at runtime
+//!      * Transform to world space
+//!      * Test ray-AABB intersection
+//!    - **Tier 3**: Fallback for entities without bounds
+//!      * Use sphere test with default 1.0 radius
+//!      * Project ray onto entity position
+//!
+//! 3. **Closest Hit Selection**:
+//!    - Track minimum distance along ray
+//!    - Return entity with closest intersection
+//!    - Ensures foreground entities selected over background
+//!
+//! ## Accuracy Benefits
+//!
+//! Using actual mesh bounds (not hard-coded radii) provides accurate selection for:
+//! - Complex meshes with irregular shapes
+//! - Entities with non-uniform scales (stretched or squashed)
+//! - Rotated entities (bounds rotate with entity)
+//! - Large vs. small entities (bounds scale appropriately)
+//!
+//! ## Performance Considerations
+//!
+//! - BoundingBox components: O(1) lookup, pre-computed bounds
+//! - Mesh vertex iteration: O(N) per vertex, computed on-demand
+//! - Ray-AABB test: O(1) intersection test using Slabs method
+//! - Overall: O(E) where E is number of selectable entities in scene
 //!
 //! # Usage
 //!

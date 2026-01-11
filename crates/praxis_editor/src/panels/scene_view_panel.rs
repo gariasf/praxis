@@ -1,4 +1,96 @@
 //! Scene view panel for rendering and interacting with the 3D scene.
+//!
+//! This module implements the **Viewport Panel**, the main 3D scene visualization and interaction
+//! area in the editor. It integrates multiple systems:
+//! - 3D rendering (scene, gizmos, selection highlights)
+//! - Input handling (mouse picking, gizmo manipulation)
+//! - Drag-and-drop asset instantiation
+//! - Visual mode indicators (play/pause/edit)
+//!
+//! # Viewport Architecture
+//!
+//! The viewport acts as a **mediator** between various editor subsystems:
+//!
+//! ```text
+//!                    ┌─────────────────┐
+//!                    │  SceneViewPanel │
+//!                    │   (Viewport)    │
+//!                    └────────┬────────┘
+//!                             │
+//!          ┌──────────────────┼──────────────────┐
+//!          │                  │                  │
+//!    ┌─────▼─────┐    ┌──────▼──────┐    ┌─────▼─────┐
+//!    │  Render   │    │  Selection  │    │  Gizmo    │
+//!    │  System   │    │  System     │    │  System   │
+//!    └───────────┘    └─────────────┘    └───────────┘
+//!          │                  │                  │
+//!          └──────────────────┼──────────────────┘
+//!                             │
+//!                      ┌──────▼──────┐
+//!                      │  ECS World  │
+//!                      └─────────────┘
+//! ```
+//!
+//! # Input Handling Flow
+//!
+//! ## Mouse Click (Selection)
+//! 1. User clicks in viewport
+//! 2. Check if gizmo is under cursor (priority)
+//! 3. If not gizmo, perform raycast picking
+//! 4. Find entity under cursor using ray-AABB tests
+//! 5. Update selection based on modifier keys (Ctrl/Shift)
+//! 6. Fire selection events for UI updates
+//!
+//! ## Mouse Drag (Gizmo Manipulation)
+//! 1. User clicks on gizmo axis
+//! 2. Start gizmo interaction (capture initial transforms)
+//! 3. Track mouse movement, compute axis-aligned delta
+//! 4. Apply real-time transform updates (preview)
+//! 5. On release, create TransformEditCommand for undo
+//!
+//! ## Mouse Drag (Marquee Selection)
+//! 1. User clicks and drags in empty space
+//! 2. Draw selection rectangle overlay
+//! 3. On release, test which entities are within rectangle
+//! 4. Update selection with entities in rectangle
+//!
+//! # Drag-and-Drop Integration
+//!
+//! The viewport accepts drag-and-drop from the Assets Panel to instantiate entities:
+//!
+//! ## Asset Drop Flow
+//! 1. User drags asset from Assets Panel
+//! 2. Viewport highlights when hovering (visual feedback)
+//! 3. On drop:
+//!    - **Models (.obj/.gltf)**: Spawn entity with MeshHandle at origin
+//!    - **Textures (.png/.jpg)**: Apply to selected entity's material
+//!    - **Audio (.wav/.ogg)**: Spawn entity with AudioSource at origin
+//! 4. Create undo command for operation
+//! 5. Select newly created entity
+//!
+//! ## Undo Integration
+//! All asset drop operations create commands:
+//! - Model drop → CreateEntityCommand + AddComponentCommand
+//! - Texture application → TransformEditCommand (material change)
+//! - Audio drop → CreateEntityCommand + AddComponentCommand
+//!
+//! # Visual Mode Indicators
+//!
+//! The viewport provides visual feedback for editor modes using border colors:
+//! - **Edit Mode**: Dark gray border (RGB: 76, 76, 89)
+//! - **Play Mode**: Green border (indicates game is running)
+//! - **Paused Mode**: Orange border (game paused but not editing)
+//!
+//! This immediate visual feedback helps users understand the current editor state.
+//!
+//! # Rendering Pipeline Integration
+//!
+//! The viewport coordinates with the rendering system:
+//! 1. Scene rendering: Normal 3D scene with entities
+//! 2. Gizmo overlay: Transform gizmos for selected entities
+//! 3. Selection highlights: Outline or tint for selected entities
+//! 4. Grid rendering: Optional world grid for alignment
+//! 5. UI overlay: egui elements (mode indicators, stats)
 
 use super::{AssetEntry, AssetType, EditorPanel};
 use crate::drag_drop::DragDropSystem;

@@ -1,18 +1,94 @@
 //! Editor camera controller with orbit controls.
 //!
-//! This module provides an orbit camera controller specifically designed for the editor,
-//! separate from game cameras. It supports:
-//! - Orbit rotation (Alt+LMB)
-//! - Pan movement (Alt+MMB)
-//! - Zoom (scroll wheel)
-//! - Focus on selection (F key)
-//! - Smooth interpolated movement
+//! This module implements an **Orbit Camera Controller** specifically designed for the editor,
+//! providing intuitive 3D scene navigation separate from game cameras. The controller follows
+//! common 3D modeling software conventions (Maya, Blender, etc.).
+//!
+//! # Orbit Camera Pattern
+//!
+//! The orbit camera maintains these key properties:
+//! - **Target Point**: The 3D point the camera orbits around (default: origin)
+//! - **Distance**: How far the camera is from the target
+//! - **Yaw/Pitch**: Spherical coordinates defining camera orientation around target
+//!
+//! ## Spherical Coordinate System
+//!
+//! The camera position is computed using spherical coordinates:
+//! ```text
+//! position = target + rotation * Vec3(0, 0, distance)
+//! where rotation = Quat::from_rotation_y(yaw) * Quat::from_rotation_x(pitch)
+//! ```
+//!
+//! This ensures the camera always faces the target while allowing free rotation.
+//!
+//! # Input Controls
+//!
+//! ## Orbit (Alt+LMB)
+//! - **Action**: Rotate camera around target point
+//! - **Implementation**: Modify yaw and pitch angles based on mouse delta
+//! - **Constraints**: Pitch clamped to prevent camera flipping (±89 degrees)
+//! - **Use case**: Inspect objects from all angles
+//!
+//! ## Pan (Alt+MMB)
+//! - **Action**: Move camera and target together in screen space
+//! - **Implementation**:
+//!   1. Calculate camera right and up vectors from rotation
+//!   2. Offset target by (right * mouse_x + up * mouse_y)
+//!   3. Scale offset by distance (farther = faster pan)
+//! - **Use case**: Center different objects in view
+//!
+//! ## Zoom (Scroll Wheel)
+//! - **Action**: Move camera closer or farther from target
+//! - **Implementation**: Adjust distance along view direction
+//! - **Constraints**: Clamped between min_distance and max_distance
+//! - **Use case**: Get close-up or overview of scene
+//!
+//! ## Focus (F Key)
+//! - **Action**: Frame selected entities in view
+//! - **Implementation**:
+//!   1. Compute bounding box of all selected entities
+//!   2. Calculate center point
+//!   3. Estimate viewing distance from bounding box size
+//!   4. Smoothly interpolate to new target/distance
+//! - **Use case**: Quickly navigate to selection
+//!
+//! # Smooth Interpolation
+//!
+//! All camera movements use **exponential smoothing** (ease-out):
+//! ```text
+//! current_value = current_value + (desired_value - current_value) * smoothness * dt
+//! ```
+//!
+//! Benefits:
+//! - **Natural feel**: Gradual acceleration and deceleration
+//! - **Responsive**: Quickly approaches target (not linear interpolation)
+//! - **Frame-rate independent**: Uses delta time for consistent behavior
+//! - **Tunable**: `smoothness` parameter controls responsiveness
+//!
+//! ## Interpolated Properties
+//! - Target position (pan, focus)
+//! - Distance (zoom, focus)
+//! - Yaw angle (orbit)
+//! - Pitch angle (orbit)
+//!
+//! # Separation from Game Cameras
+//!
+//! The editor camera is distinguished from game cameras using:
+//! - **`EditorCamera` marker component**: Only this camera is controlled
+//! - **Independent resource**: `EditorCameraController` doesn't affect game camera systems
+//! - **Separate schedule**: Updated in editor schedule, not game schedule
+//!
+//! This allows:
+//! - Game cameras to exist and be configured without interference
+//! - Editor camera to persist across play mode transitions
+//! - Preview of game camera views while editing
 //!
 //! # Architecture
 //!
 //! The editor camera is managed through:
 //! - **`EditorCameraController`**: Resource managing camera state and movement
-//! - **`update_editor_camera_system`**: ECS system that applies camera updates
+//! - **`EditorCamera`**: Marker component identifying the editor camera entity
+//! - **`update_editor_camera_system`**: ECS system that applies camera updates each frame
 //!
 //! # Usage
 //!

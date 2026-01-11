@@ -172,25 +172,91 @@
 //!
 //! # Command System and Undo/Redo
 //!
-//! The editor provides a comprehensive undo/redo system with full integration:
-//! - **EditorCommand trait**: Base interface for all undoable operations
-//! - **CommandHistory**: Manages undo/redo stacks with 100 entry maximum
-//! - **UndoRedoSystem**: ECS resource wrapper with dirty state tracking
-//! - **Concrete commands**: Transform edits, entity creation/deletion, component management, hierarchy changes
-//! - **Composite commands**: Group multiple operations into a single undoable action
-//! - **RON serialization**: Save and load command history for session recovery or replay
-//! - **Dirty state tracking**: Automatically tracks unsaved changes
-//! - **Menu bar integration**: Undo/Redo actions with descriptions and enabled state
+//! The editor provides a comprehensive undo/redo system based on the **Command Pattern**.
+//! This design pattern encapsulates each editor operation as a command object that knows
+//! how to execute, undo, and redo itself. This provides several benefits:
 //!
-//! **Keyboard shortcuts:**
-//! - Ctrl+Z: Undo last command
-//! - Ctrl+Y or Ctrl+Shift+Z: Redo last undone command
+//! ## Command Pattern Implementation
 //!
-//! **Menu bar features:**
+//! The command pattern in Praxis follows this structure:
+//! 1. **Command Interface** (`EditorCommand` trait): Defines execute(), undo(), and redo() methods
+//! 2. **Concrete Commands**: Specific implementations for different operations
+//! 3. **Invoker** (`CommandHistory`): Manages command execution and history stacks
+//! 4. **Receiver**: The ECS World that commands operate on
+//!
+//! ### Key Components
+//!
+//! - **`EditorCommand` trait**: Base interface for all undoable operations. Each command
+//!   encapsulates both the action and the information needed to reverse it.
+//! - **`CommandHistory`**: The invoker that manages undo/redo stacks with 100 entry maximum.
+//!   Uses two VecDeques: one for undo (commands executed), one for redo (commands undone).
+//! - **`UndoRedoSystem`**: ECS resource wrapper providing dirty state tracking and event system.
+//!   Tracks whether there are unsaved changes by monitoring the clean state marker.
+//! - **Concrete commands**: Individual command implementations:
+//!   - `TransformEditCommand`: Stores old and new transform states
+//!   - `CreateEntityCommand`: Stores entity ID after creation for undo
+//!   - `DeleteEntityCommand`: Captures all components before deletion for restoration
+//!   - Component commands: Store previous values for reliable undo
+//!   - Hierarchy commands: Track parent-child relationships
+//!
+//! ### Composite Commands
+//!
+//! **Composite commands** allow grouping multiple operations into a single undoable action:
+//! - Uses the Composite pattern to treat groups of commands as single commands
+//! - Execute: Runs all child commands in sequence
+//! - Undo: Reverses all child commands in *reverse* order (LIFO)
+//! - Use case: Multi-entity deletion, batch transforms, entity duplication with components
+//!
+//! ### Command Execution Tracking
+//!
+//! Each command tracks its execution state to support proper undo/redo:
+//! - `executed: bool` flag indicates whether command has been applied
+//! - State changes: unexecuted -> executed -> undone -> executed (redo)
+//! - Entity IDs captured during execute() for operations that create entities
+//! - Component data captured before execute() for operations that delete/modify
+//!
+//! ### Serialization
+//!
+//! - **RON serialization**: Commands implement Serialize/Deserialize for persistence
+//! - Save/load command history for session recovery or replay functionality
+//! - `SerializableCommand` enum wraps all concrete command types
+//! - Entity IDs stored as (index, generation) pairs, may need remapping on load
+//!
+//! ### Dirty State Tracking
+//!
+//! - Automatically tracks unsaved changes via clean state marker
+//! - Clean state set when: file saved, new scene created
+//! - Becomes dirty when: commands executed, scene modified
+//! - Used for "unsaved changes" warnings and save indicators
+//!
+//! ### Menu Bar Integration
+//!
 //! - Edit > Undo/Redo: Shows command descriptions and keyboard shortcuts
 //! - File > Save: Shows asterisk (*) when there are unsaved changes
 //! - Status bar: Displays unsaved indicator when dirty
 //! - History info: Shows undo/redo stack counts
+//!
+//! **Keyboard shortcuts:**
+//! - Ctrl+Z: Undo last command (pops from undo stack, pushes to redo stack)
+//! - Ctrl+Y or Ctrl+Shift+Z: Redo last undone command (pops from redo, pushes to undo)
+//!
+//! **Implementation Pattern:**
+//! ```rust,ignore
+//! // 1. Create command with necessary state
+//! let command = TransformEditCommand::new(entity, old_transform, new_transform);
+//!
+//! // 2. Execute through CommandHistory (not directly)
+//! command_history.execute(world, Box::new(command))?;
+//! // This calls command.execute(world) AND adds to undo stack
+//!
+//! // 3. Undo reverses the operation
+//! command_history.undo(world)?;
+//! // Calls command.undo(world), moves command from undo to redo stack
+//!
+//! // 4. Redo reapplies the operation
+//! command_history.redo(world)?;
+//! // Calls command.redo(world), moves command back to undo stack
+//! ```
 //!
 //! See `COMMAND_SYSTEM.md` for detailed documentation and examples.
 //!

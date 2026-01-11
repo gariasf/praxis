@@ -1,7 +1,25 @@
 //! Command pattern implementation for editor operations with undo/redo support.
 //!
-//! This module provides a comprehensive command-based undo/redo system for editor operations.
-//! Commands can be executed, undone, redone, and serialized/deserialized for save/load functionality.
+//! This module implements the **Command Pattern**, a behavioral design pattern that encapsulates
+//! operations as objects. Each command object contains all the information needed to perform an
+//! action and reverse it, enabling powerful undo/redo functionality.
+//!
+//! # The Command Pattern
+//!
+//! The command pattern consists of:
+//! - **Command interface** (EditorCommand trait): Common interface for all commands
+//! - **Concrete commands**: Specific command implementations (TransformEdit, CreateEntity, etc.)
+//! - **Invoker** (CommandHistory): Manages command execution and maintains history stacks
+//! - **Receiver** (ECS World): The object being operated on
+//! - **Client** (Editor/EntityOperations): Creates and configures commands
+//!
+//! ## Benefits
+//!
+//! 1. **Undo/Redo**: Commands know how to reverse themselves
+//! 2. **Command Queue**: Operations can be queued and executed later
+//! 3. **Macro Commands**: Group operations into composite commands
+//! 4. **Serialization**: Commands can be saved/loaded for replay or persistence
+//! 5. **Decoupling**: Command logic separated from invoker and receiver
 //!
 //! # Architecture
 //!
@@ -218,16 +236,42 @@ impl SerializableCommand {
 
 /// Command for editing entity transforms.
 ///
-/// Stores the old and new transform states to enable undo/redo.
+/// This is a concrete command implementing the Command Pattern for transform operations.
+/// It stores both the old and new transform states to enable bidirectional state transitions.
+///
+/// # Command Pattern Implementation
+///
+/// - **Memento Pattern**: Stores previous state (old_transform) for restoration
+/// - **Execute**: Applies new_transform to the entity
+/// - **Undo**: Restores old_transform to the entity
+/// - **Redo**: Re-applies new_transform (same as execute)
+///
+/// # State Tracking
+///
+/// The `executed` flag tracks whether the command has been applied. This is important for:
+/// - Preventing double-execution
+/// - Validation during undo (can only undo executed commands)
+/// - Debugging command history state
+///
+/// # Example Flow
+///
+/// ```text
+/// Initial State: entity.transform = T1
+/// 1. Create command: old=T1, new=T2, executed=false
+/// 2. Execute: entity.transform = T2, executed=true
+/// 3. Undo: entity.transform = T1, executed=false
+/// 4. Redo: entity.transform = T2, executed=true
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransformEditCommand {
     /// Entity whose transform is being edited.
     pub entity: SerializableEntity,
-    /// Transform state before the edit.
+    /// Transform state before the edit (for undo).
     pub old_transform: SerializableTransform,
-    /// Transform state after the edit.
+    /// Transform state after the edit (for execute/redo).
     pub new_transform: SerializableTransform,
     /// Whether the command has been executed.
+    /// Used to track command state and prevent double-execution.
     #[serde(skip)]
     executed: bool,
 }
@@ -1345,12 +1389,59 @@ impl EditorCommand for SetParentCommand {
 
 /// Command that groups multiple commands together.
 ///
-/// Executes all child commands in order, and undoes them in reverse order.
+/// This implements the **Composite Pattern**, treating a group of commands as a single command.
+/// This is essential for operations that logically group together, such as:
+/// - Deleting multiple selected entities
+/// - Duplicating an entity with all its components
+/// - Batch transform operations
+///
+/// # Composite Pattern Implementation
+///
+/// The composite pattern allows clients to treat individual commands and compositions uniformly:
+/// - Both implement the same `EditorCommand` interface
+/// - Composite delegates to child commands
+/// - Tree structure: composites can contain other composites
+///
+/// # Execution Order
+///
+/// **Execute**: Commands run in **forward** order (index 0 to N)
+/// ```text
+/// Execute: [Cmd1, Cmd2, Cmd3] -> Cmd1.execute(), Cmd2.execute(), Cmd3.execute()
+/// ```
+///
+/// **Undo**: Commands run in **reverse** order (index N to 0)
+/// ```text
+/// Undo: [Cmd1, Cmd2, Cmd3] -> Cmd3.undo(), Cmd2.undo(), Cmd1.undo()
+/// ```
+///
+/// This reverse order is crucial for maintaining consistency. For example, if Cmd2 depends
+/// on Cmd1's results, we must undo Cmd2 before undoing Cmd1.
+///
+/// # Example Use Cases
+///
+/// **Multi-entity deletion**:
+/// ```text
+/// CompositeCommand("Delete 3 Entities") {
+///   DeleteEntityCommand(entity1),
+///   DeleteEntityCommand(entity2),
+///   DeleteEntityCommand(entity3)
+/// }
+/// ```
+///
+/// **Entity duplication with components**:
+/// ```text
+/// CompositeCommand("Duplicate Entity") {
+///   CreateEntityCommand(new_entity),
+///   AddComponentCommand(new_entity, Transform),
+///   AddComponentCommand(new_entity, MeshHandle),
+///   AddComponentCommand(new_entity, Name)
+/// }
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompositeCommand {
-    /// Child commands to execute.
+    /// Child commands to execute (in order).
     pub commands: Vec<SerializableCommand>,
-    /// Description for the composite command.
+    /// Human-readable description for the composite command.
     pub description: String,
     /// Whether the command has been executed.
     #[serde(skip)]
@@ -1384,9 +1475,25 @@ impl CompositeCommand {
 }
 
 impl EditorCommand for CompositeCommand {
+    /// Executes all child commands in forward order.
+    ///
+    /// Iterates through the command list from start to end, executing each command.
+    /// If any command fails, execution stops and an error is returned.
+    /// The `executed` flag is set true only after ALL commands succeed.
+    ///
+    /// # Execution Flow
+    ///
+    /// ```text
+    /// commands = [Cmd1, Cmd2, Cmd3]
+    /// 1. Execute Cmd1 -> modifies World
+    /// 2. Execute Cmd2 -> modifies World (may depend on Cmd1's changes)
+    /// 3. Execute Cmd3 -> modifies World (may depend on Cmd1 and Cmd2)
+    /// 4. Set executed = true
+    /// ```
     fn execute(&mut self, world: &mut World) -> Result<()> {
         for command in &mut self.commands {
             // Execute directly on the SerializableCommand variant to preserve state
+            // (entity IDs, execution flags, etc. are mutated during execution)
             match command {
                 SerializableCommand::TransformEdit(cmd) => cmd.execute(world)?,
                 SerializableCommand::CreateEntity(cmd) => cmd.execute(world)?,
@@ -1403,8 +1510,34 @@ impl EditorCommand for CompositeCommand {
         Ok(())
     }
 
+    /// Undoes all child commands in REVERSE order.
+    ///
+    /// This is critical for maintaining consistency. Commands are undone in reverse
+    /// because later commands may depend on earlier commands. For example:
+    /// - Cmd1 creates entity E
+    /// - Cmd2 adds component to E
+    /// - Cmd3 modifies component on E
+    ///
+    /// To undo correctly:
+    /// 1. Undo Cmd3 (modify component) first
+    /// 2. Undo Cmd2 (remove component) second
+    /// 3. Undo Cmd1 (delete entity) last
+    ///
+    /// If we undid in forward order, Cmd1 would delete E before Cmd2 and Cmd3 could
+    /// remove/modify its components, causing errors.
+    ///
+    /// # Undo Flow
+    ///
+    /// ```text
+    /// commands = [Cmd1, Cmd2, Cmd3]
+    /// executed state: [T1', T2', T3'] (modified by commands)
+    /// 1. Undo Cmd3 -> reverts to [T1', T2', T3]
+    /// 2. Undo Cmd2 -> reverts to [T1', T2, T3]
+    /// 3. Undo Cmd1 -> reverts to [T1, T2, T3] (original state)
+    /// 4. Set executed = false
+    /// ```
     fn undo(&mut self, world: &mut World) -> Result<()> {
-        // Undo commands in reverse order
+        // Undo commands in reverse order (LIFO - Last In, First Out)
         for command in self.commands.iter_mut().rev() {
             match command {
                 SerializableCommand::TransformEdit(cmd) => cmd.undo(world)?,

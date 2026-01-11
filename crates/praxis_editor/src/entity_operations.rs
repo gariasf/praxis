@@ -1,8 +1,30 @@
 //! Entity and component operations with full undo/redo support and ECS synchronization.
 //!
-//! This module provides a comprehensive API for entity and component management in the editor.
-//! All operations are integrated with the command system for undo/redo support and ensure
-//! proper synchronization with the ECS World.
+//! This module provides a high-level **Facade** over the command system, simplifying common
+//! entity operations while ensuring proper undo/redo integration and ECS synchronization.
+//!
+//! # Architecture Pattern: Facade
+//!
+//! `EntityOperations` implements the **Facade Pattern**, providing a simplified interface to
+//! the complex command system. Instead of manually creating commands, managing execution state,
+//! and handling batch operations, clients can use simple methods like `create_entity()` or
+//! `delete_entities()`.
+//!
+//! ## Benefits of the Facade
+//!
+//! 1. **Simplified API**: Single method calls instead of command construction
+//! 2. **Automatic Undo Integration**: All operations automatically create and execute commands
+//! 3. **Batch Operation Support**: Transparent grouping of operations into composite commands
+//! 4. **Error Handling**: Consistent error types and propagation
+//! 5. **State Management**: Automatic clipboard and batch state management
+//!
+//! # Integration with Command Pattern
+//!
+//! EntityOperations acts as the **Client** in the Command Pattern:
+//! - Creates appropriate command objects
+//! - Configures commands with necessary parameters
+//! - Passes commands to the Invoker (UndoRedoSystem/CommandHistory)
+//! - Never directly modifies the World (all changes via commands)
 //!
 //! # Core Features
 //!
@@ -952,15 +974,40 @@ impl EntityOperations {
     /// Begins a batch operation.
     ///
     /// All operations between `begin_batch` and `end_batch` will be grouped
-    /// into a single undo command.
+    /// into a single undo command using the **Composite Pattern**.
+    ///
+    /// # Batch Operation Pattern
+    ///
+    /// When a batch is active:
+    /// 1. Operations create commands normally
+    /// 2. Instead of executing immediately, commands are stored in `batch.commands`
+    /// 3. On `end_batch()`, all commands are wrapped in a `CompositeCommand`
+    /// 4. The composite command is executed, triggering all child commands
+    /// 5. A single undo operation will reverse all batched changes
+    ///
+    /// # Benefits
+    ///
+    /// - **Atomic undo**: Undo all operations with a single Ctrl+Z
+    /// - **Performance**: Reduce undo history size for bulk operations
+    /// - **User experience**: Logical grouping of related operations
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// entity_ops.begin_batch("Create 100 Cubes");
+    /// for i in 0..100 {
+    ///     entity_ops.create_entity_with_transform(...)?;
+    /// }
+    /// entity_ops.end_batch(...)?; // All 100 entities as ONE undo operation
+    /// ```
     ///
     /// # Arguments
     ///
-    /// * `description` - Description for the batch operation
+    /// * `description` - Description for the batch operation (shown in undo menu)
     ///
     /// # Panics
     ///
-    /// Panics if a batch is already in progress.
+    /// Panics if a batch is already in progress (no nested batches).
     pub fn begin_batch(&mut self, description: impl Into<String>) {
         if self.batch_operation.is_some() {
             panic!("Batch operation already in progress");
@@ -974,6 +1021,18 @@ impl EntityOperations {
 
     /// Ends the current batch operation and executes it as a composite command.
     ///
+    /// Creates a `CompositeCommand` containing all batched operations and executes it
+    /// through the undo system. This adds a single entry to the undo history representing
+    /// all batched operations.
+    ///
+    /// # Error Handling
+    ///
+    /// If any command in the batch fails during execution:
+    /// - Execution stops at the failing command
+    /// - Previous commands in the batch have already been applied
+    /// - The composite command is NOT added to undo history
+    /// - The batch is cleared (not recoverable)
+    ///
     /// # Errors
     ///
     /// Returns error if no batch is in progress or command execution fails.
@@ -985,15 +1044,18 @@ impl EntityOperations {
                 "No batch operation in progress".to_string(),
             ))?;
 
+        // Empty batch is OK, just don't add to history
         if batch.commands.is_empty() {
             return Ok(());
         }
 
+        // Wrap all batched commands in a composite
         let mut composite = CompositeCommand::new(batch.description);
         for command in batch.commands {
             composite.add_command(command);
         }
 
+        // Execute the composite (which executes all child commands)
         undo_system
             .execute_command(world, Box::new(composite))
             .map_err(EntityOperationsError::CommandExecutionFailed)

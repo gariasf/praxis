@@ -1,8 +1,82 @@
 //! Transform gizmo system for visual 3D manipulation of entities.
 //!
-//! This module provides visual gizmos for transforming entities in the editor viewport.
-//! Gizmos render as colored lines and cones, allowing intuitive manipulation via ray-based
-//! interaction with axis-constrained movement, rotation, and scaling.
+//! This module implements interactive 3D gizmos for transforming entities in the editor viewport.
+//! Gizmos are visual tools that allow direct manipulation of transforms through mouse interaction,
+//! implementing the **Manipulator Pattern** common in 3D editors.
+//!
+//! # Gizmo Interaction Pattern
+//!
+//! The gizmo system follows a three-phase interaction model:
+//!
+//! ## 1. Hover Phase
+//! - Mouse moves over gizmo
+//! - Raycast tests determine which axis is under cursor
+//! - Hovered axis highlights with brighter color
+//! - Visual feedback: red/green/blue → lighter red/green/blue
+//!
+//! ## 2. Drag Phase (Active Interaction)
+//! - User clicks and drags on a highlighted axis
+//! - `GizmoInteraction` object captures initial state:
+//!   * Selected axis (X, Y, or Z)
+//!   * Start screen position
+//!   * Initial transforms of all affected entities
+//!   * Start gizmo position
+//! - Mouse movement converted to axis-aligned transform delta
+//! - Transform updates applied in real-time
+//!
+//! ## 3. Release Phase (Commit)
+//! - Mouse button released
+//! - Final transforms captured
+//! - `TransformEditCommand` created for undo system
+//! - Interaction state cleared
+//!
+//! # Ray-Based Picking
+//!
+//! Gizmo axes are selected using 3D ray-line distance calculation:
+//!
+//! ```text
+//! 1. Convert screen position to 3D ray (origin + direction)
+//! 2. For each axis (X, Y, Z):
+//!    a. Define axis as line segment (gizmo_pos → gizmo_pos + axis_dir * length)
+//!    b. Calculate closest point on ray to closest point on axis
+//!    c. Compute distance between these points
+//! 3. If distance < pick_threshold: axis is hovered
+//! 4. Return closest axis (minimum distance)
+//! ```
+//!
+//! # Axis Constraint
+//!
+//! Once an axis is selected, all transformations are constrained to that axis:
+//! - **Translate**: Movement projected onto axis direction vector
+//! - **Rotate**: Rotation around axis direction vector
+//! - **Scale**: Scale factor applied only to axis component
+//!
+//! # Coordinate Spaces
+//!
+//! ## World Space
+//! - Gizmo axes aligned with world X, Y, Z axes
+//! - Rotation: Quat::IDENTITY
+//! - Use case: Aligning objects with world grid
+//!
+//! ## Local Space
+//! - Gizmo axes aligned with entity's rotation
+//! - Rotation: entity.rotation
+//! - Use case: Moving objects in their own coordinate frame
+//!
+//! # Gizmo Rendering
+//!
+//! Gizmos are rendered as colored line primitives:
+//! - **Axes**: Lines from center to axis endpoints
+//! - **Colors**: X=red (1,0,0), Y=green (0,1,0), Z=blue (0,0,1)
+//! - **Arrowheads**: For translate mode, 4 lines forming cone at axis end
+//! - **Highlight**: Hovered/active axes render with lighter color
+//!
+//! # Multi-Entity Gizmo
+//!
+//! When multiple entities are selected:
+//! - Gizmo positioned at selection center (average of all positions)
+//! - Single rotation used (first entity's rotation in local mode)
+//! - All entities transformed together maintaining relative positions
 //!
 //! # Features
 //!
@@ -11,7 +85,7 @@
 //! - **Axis Constraints**: Operations constrained to the selected axis
 //! - **Local/World Space**: Toggle between local and world space transformation
 //! - **Three Modes**: Translate, rotate, and scale
-//! - **Undo/Redo**: All operations are undoable
+//! - **Undo/Redo**: All operations are undoable via command system integration
 //!
 //! # Usage
 //!
