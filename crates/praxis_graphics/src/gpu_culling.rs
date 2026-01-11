@@ -698,6 +698,9 @@ pub fn extract_frustum_planes(view_proj: Mat4) -> [Vec4; 6] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use praxis_math::{Quat, Vec3};
+
+    // ===== Structure Size and Alignment Tests =====
 
     #[test]
     fn test_gpu_draw_command_size() {
@@ -721,5 +724,821 @@ mod tests {
     fn test_culling_uniforms_alignment() {
         // Should be 16-byte aligned for std140
         assert_eq!(std::mem::align_of::<CullingUniforms>(), 16);
+    }
+
+    #[test]
+    fn test_culling_uniforms_size() {
+        // View-proj (64) + frustum_planes (96) + camera_position (16) + flags (16) = 192 bytes
+        let size = std::mem::size_of::<CullingUniforms>();
+        assert_eq!(size, 192);
+    }
+
+    // ===== GpuDrawCommand Tests =====
+
+    #[test]
+    fn test_gpu_draw_command_creation() {
+        let model = Mat4::from_translation(Vec3::new(10.0, 20.0, 30.0));
+        let bounding_sphere = Vec4::new(1.0, 2.0, 3.0, 5.0);
+        let mesh_id = 42;
+        let material_id = 7;
+
+        let cmd = GpuDrawCommand::new(model, bounding_sphere, mesh_id, material_id);
+
+        assert_eq!(cmd.model, model.to_cols_array_2d());
+        assert_eq!(cmd.bounding_sphere, [1.0, 2.0, 3.0, 5.0]);
+        assert_eq!(cmd.mesh_id, 42);
+        assert_eq!(cmd.material_id, 7);
+        assert_eq!(cmd.padding1, 0);
+        assert_eq!(cmd.padding2, 0);
+    }
+
+    #[test]
+    fn test_gpu_draw_command_bytemuck_pod() {
+        // Test that we can cast to bytes safely
+        let cmd = GpuDrawCommand::new(
+            Mat4::IDENTITY,
+            Vec4::ZERO,
+            0,
+            0,
+        );
+        let _bytes: &[u8] = bytemuck::bytes_of(&cmd);
+    }
+
+    // ===== GpuMeshData Tests =====
+
+    #[test]
+    fn test_gpu_mesh_data_creation() {
+        let mesh_data = GpuMeshData {
+            index_count: 1024,
+            first_index: 512,
+            vertex_offset: -100,
+            _padding: 0,
+        };
+
+        assert_eq!(mesh_data.index_count, 1024);
+        assert_eq!(mesh_data.first_index, 512);
+        assert_eq!(mesh_data.vertex_offset, -100);
+    }
+
+    #[test]
+    fn test_gpu_mesh_data_bytemuck_pod() {
+        let mesh_data = GpuMeshData {
+            index_count: 100,
+            first_index: 0,
+            vertex_offset: 0,
+            _padding: 0,
+        };
+        let _bytes: &[u8] = bytemuck::bytes_of(&mesh_data);
+    }
+
+    // ===== IndirectDrawCommand Tests =====
+
+    #[test]
+    fn test_indirect_draw_command_default() {
+        let cmd = IndirectDrawCommand::default();
+        assert_eq!(cmd.index_count, 0);
+        assert_eq!(cmd.instance_count, 0);
+        assert_eq!(cmd.first_index, 0);
+        assert_eq!(cmd.vertex_offset, 0);
+        assert_eq!(cmd.first_instance, 0);
+    }
+
+    #[test]
+    fn test_indirect_draw_command_creation() {
+        let cmd = IndirectDrawCommand {
+            index_count: 36,
+            instance_count: 1,
+            first_index: 100,
+            vertex_offset: 50,
+            first_instance: 0,
+        };
+
+        assert_eq!(cmd.index_count, 36);
+        assert_eq!(cmd.instance_count, 1);
+        assert_eq!(cmd.first_index, 100);
+        assert_eq!(cmd.vertex_offset, 50);
+        assert_eq!(cmd.first_instance, 0);
+    }
+
+    #[test]
+    fn test_indirect_draw_command_bytemuck_pod() {
+        let cmd = IndirectDrawCommand::default();
+        let _bytes: &[u8] = bytemuck::bytes_of(&cmd);
+    }
+
+    // ===== CullingUniforms Tests =====
+
+    #[test]
+    fn test_culling_uniforms_creation() {
+        let view_proj = Mat4::IDENTITY;
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 1.0),  // left
+            Vec4::new(-1.0, 0.0, 0.0, 1.0), // right
+            Vec4::new(0.0, 1.0, 0.0, 1.0),  // bottom
+            Vec4::new(0.0, -1.0, 0.0, 1.0), // top
+            Vec4::new(0.0, 0.0, 1.0, 0.1),  // near
+            Vec4::new(0.0, 0.0, -1.0, 100.0), // far
+        ];
+        let camera_position = Vec3::new(5.0, 10.0, 15.0);
+        let draw_command_count = 1000;
+
+        let uniforms = CullingUniforms::new(
+            view_proj,
+            frustum_planes,
+            camera_position,
+            draw_command_count,
+        );
+
+        assert_eq!(uniforms.view_proj, view_proj.to_cols_array_2d());
+        assert_eq!(uniforms.frustum_planes[0], frustum_planes[0].to_array());
+        assert_eq!(uniforms.frustum_planes[5], frustum_planes[5].to_array());
+        assert_eq!(uniforms.camera_position, [5.0, 10.0, 15.0]);
+        assert_eq!(uniforms.enable_frustum_culling, 1);
+        assert_eq!(uniforms.enable_occlusion_culling, 0);
+        assert_eq!(uniforms.draw_command_count, 1000);
+    }
+
+    #[test]
+    fn test_culling_uniforms_frustum_disabled() {
+        let mut uniforms = CullingUniforms::new(
+            Mat4::IDENTITY,
+            [Vec4::ZERO; 6],
+            Vec3::ZERO,
+            0,
+        );
+
+        uniforms.enable_frustum_culling = 0;
+        assert_eq!(uniforms.enable_frustum_culling, 0);
+    }
+
+    #[test]
+    fn test_culling_uniforms_occlusion_enabled() {
+        let mut uniforms = CullingUniforms::new(
+            Mat4::IDENTITY,
+            [Vec4::ZERO; 6],
+            Vec3::ZERO,
+            0,
+        );
+
+        uniforms.enable_occlusion_culling = 1;
+        assert_eq!(uniforms.enable_occlusion_culling, 1);
+    }
+
+    #[test]
+    fn test_culling_uniforms_bytemuck_pod() {
+        let uniforms = CullingUniforms::new(
+            Mat4::IDENTITY,
+            [Vec4::ZERO; 6],
+            Vec3::ZERO,
+            100,
+        );
+        let _bytes: &[u8] = bytemuck::bytes_of(&uniforms);
+    }
+
+    // ===== Frustum Plane Extraction Tests =====
+
+    #[test]
+    fn test_extract_frustum_planes_identity() {
+        let view_proj = Mat4::IDENTITY;
+        let planes = extract_frustum_planes(view_proj);
+
+        // All planes should be normalized
+        for plane in &planes {
+            let length = (plane.x * plane.x + plane.y * plane.y + plane.z * plane.z).sqrt();
+            assert!((length - 1.0).abs() < 0.001, "Plane not normalized: {}", length);
+        }
+    }
+
+    #[test]
+    fn test_extract_frustum_planes_perspective() {
+        // Create a perspective projection matrix
+        let fov = std::f32::consts::PI / 4.0; // 45 degrees
+        let aspect = 16.0 / 9.0;
+        let near = 0.1;
+        let far = 100.0;
+        
+        let projection = Mat4::perspective_rh(fov, aspect, near, far);
+        
+        // Simple view matrix looking down -Z
+        let view = Mat4::look_at_rh(
+            Vec3::new(0.0, 0.0, 10.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(0.0, 1.0, 0.0),
+        );
+        
+        let view_proj = projection * view;
+        let planes = extract_frustum_planes(view_proj);
+
+        // Verify all planes are normalized
+        for (i, plane) in planes.iter().enumerate() {
+            let length = (plane.x * plane.x + plane.y * plane.y + plane.z * plane.z).sqrt();
+            assert!(
+                (length - 1.0).abs() < 0.001,
+                "Plane {} not normalized: length = {}",
+                i,
+                length
+            );
+        }
+    }
+
+    #[test]
+    fn test_extract_frustum_planes_orthographic() {
+        // Orthographic projection
+        let left = -10.0;
+        let right = 10.0;
+        let bottom = -10.0;
+        let top = 10.0;
+        let near = 0.1;
+        let far = 100.0;
+
+        let projection = Mat4::orthographic_rh(left, right, bottom, top, near, far);
+        let view = Mat4::IDENTITY;
+        let view_proj = projection * view;
+
+        let planes = extract_frustum_planes(view_proj);
+
+        // All planes should be normalized
+        for plane in &planes {
+            let length = (plane.x * plane.x + plane.y * plane.y + plane.z * plane.z).sqrt();
+            assert!((length - 1.0).abs() < 0.001);
+        }
+    }
+
+    // ===== CPU-side Frustum Culling Logic Tests =====
+
+    /// Test helper: checks if a sphere is inside the frustum using CPU logic
+    /// This mirrors the GPU shader logic for verification purposes
+    fn is_sphere_in_frustum_cpu(center: Vec3, radius: f32, frustum_planes: &[Vec4; 6]) -> bool {
+        for plane in frustum_planes {
+            let distance = plane.x * center.x + plane.y * center.y + plane.z * center.z + plane.w;
+            if distance < -radius {
+                return false;
+            }
+        }
+        true
+    }
+
+    #[test]
+    fn test_frustum_culling_sphere_inside() {
+        // Simple axis-aligned frustum
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),   // left: x > -10
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),  // right: x < 10
+            Vec4::new(0.0, 1.0, 0.0, 10.0),   // bottom: y > -10
+            Vec4::new(0.0, -1.0, 0.0, 10.0),  // top: y < 10
+            Vec4::new(0.0, 0.0, 1.0, 1.0),    // near: z > -1
+            Vec4::new(0.0, 0.0, -1.0, 100.0), // far: z < 100
+        ];
+
+        // Sphere at origin with radius 1 should be inside
+        let center = Vec3::new(0.0, 0.0, 0.0);
+        let radius = 1.0;
+        assert!(is_sphere_in_frustum_cpu(center, radius, &frustum_planes));
+    }
+
+    #[test]
+    fn test_frustum_culling_sphere_outside_left() {
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),   // left
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),  // right
+            Vec4::new(0.0, 1.0, 0.0, 10.0),   // bottom
+            Vec4::new(0.0, -1.0, 0.0, 10.0),  // top
+            Vec4::new(0.0, 0.0, 1.0, 1.0),    // near
+            Vec4::new(0.0, 0.0, -1.0, 100.0), // far
+        ];
+
+        // Sphere far to the left should be culled
+        let center = Vec3::new(-15.0, 0.0, 0.0);
+        let radius = 1.0;
+        assert!(!is_sphere_in_frustum_cpu(center, radius, &frustum_planes));
+    }
+
+    #[test]
+    fn test_frustum_culling_sphere_outside_right() {
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),
+            Vec4::new(0.0, 1.0, 0.0, 10.0),
+            Vec4::new(0.0, -1.0, 0.0, 10.0),
+            Vec4::new(0.0, 0.0, 1.0, 1.0),
+            Vec4::new(0.0, 0.0, -1.0, 100.0),
+        ];
+
+        let center = Vec3::new(15.0, 0.0, 0.0);
+        let radius = 1.0;
+        assert!(!is_sphere_in_frustum_cpu(center, radius, &frustum_planes));
+    }
+
+    #[test]
+    fn test_frustum_culling_sphere_outside_top() {
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),
+            Vec4::new(0.0, 1.0, 0.0, 10.0),
+            Vec4::new(0.0, -1.0, 0.0, 10.0),
+            Vec4::new(0.0, 0.0, 1.0, 1.0),
+            Vec4::new(0.0, 0.0, -1.0, 100.0),
+        ];
+
+        let center = Vec3::new(0.0, 15.0, 0.0);
+        let radius = 1.0;
+        assert!(!is_sphere_in_frustum_cpu(center, radius, &frustum_planes));
+    }
+
+    #[test]
+    fn test_frustum_culling_sphere_outside_bottom() {
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),
+            Vec4::new(0.0, 1.0, 0.0, 10.0),
+            Vec4::new(0.0, -1.0, 0.0, 10.0),
+            Vec4::new(0.0, 0.0, 1.0, 1.0),
+            Vec4::new(0.0, 0.0, -1.0, 100.0),
+        ];
+
+        let center = Vec3::new(0.0, -15.0, 0.0);
+        let radius = 1.0;
+        assert!(!is_sphere_in_frustum_cpu(center, radius, &frustum_planes));
+    }
+
+    #[test]
+    fn test_frustum_culling_sphere_outside_near() {
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),
+            Vec4::new(0.0, 1.0, 0.0, 10.0),
+            Vec4::new(0.0, -1.0, 0.0, 10.0),
+            Vec4::new(0.0, 0.0, 1.0, 1.0),    // near plane at z = -1
+            Vec4::new(0.0, 0.0, -1.0, 100.0),
+        ];
+
+        // Sphere behind the near plane
+        let center = Vec3::new(0.0, 0.0, -5.0);
+        let radius = 1.0;
+        assert!(!is_sphere_in_frustum_cpu(center, radius, &frustum_planes));
+    }
+
+    #[test]
+    fn test_frustum_culling_sphere_outside_far() {
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),
+            Vec4::new(0.0, 1.0, 0.0, 10.0),
+            Vec4::new(0.0, -1.0, 0.0, 10.0),
+            Vec4::new(0.0, 0.0, 1.0, 1.0),
+            Vec4::new(0.0, 0.0, -1.0, 100.0), // far plane at z = 100
+        ];
+
+        // Sphere beyond the far plane
+        let center = Vec3::new(0.0, 0.0, 150.0);
+        let radius = 1.0;
+        assert!(!is_sphere_in_frustum_cpu(center, radius, &frustum_planes));
+    }
+
+    #[test]
+    fn test_frustum_culling_sphere_on_boundary() {
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),
+            Vec4::new(0.0, 1.0, 0.0, 10.0),
+            Vec4::new(0.0, -1.0, 0.0, 10.0),
+            Vec4::new(0.0, 0.0, 1.0, 1.0),
+            Vec4::new(0.0, 0.0, -1.0, 100.0),
+        ];
+
+        // Sphere touching the right boundary (at x = 10, radius = 1)
+        // Distance to plane = -1 * 10 + 10 = 0, which is >= -radius, so visible
+        let center = Vec3::new(10.0, 0.0, 0.0);
+        let radius = 1.0;
+        assert!(is_sphere_in_frustum_cpu(center, radius, &frustum_planes));
+    }
+
+    #[test]
+    fn test_frustum_culling_large_sphere_partially_outside() {
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),
+            Vec4::new(0.0, 1.0, 0.0, 10.0),
+            Vec4::new(0.0, -1.0, 0.0, 10.0),
+            Vec4::new(0.0, 0.0, 1.0, 1.0),
+            Vec4::new(0.0, 0.0, -1.0, 100.0),
+        ];
+
+        // Large sphere with center outside but radius overlapping
+        let center = Vec3::new(12.0, 0.0, 0.0);
+        let radius = 5.0; // Reaches back to x = 7, which is inside
+        assert!(is_sphere_in_frustum_cpu(center, radius, &frustum_planes));
+    }
+
+    // ===== Expected Culling Results Tests =====
+
+    #[test]
+    fn test_expected_culling_all_visible() {
+        // Setup where all objects should be visible
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 50.0),   // left
+            Vec4::new(-1.0, 0.0, 0.0, 50.0),  // right
+            Vec4::new(0.0, 1.0, 0.0, 50.0),   // bottom
+            Vec4::new(0.0, -1.0, 0.0, 50.0),  // top
+            Vec4::new(0.0, 0.0, 1.0, 1.0),    // near
+            Vec4::new(0.0, 0.0, -1.0, 100.0), // far
+        ];
+
+        // Create 10 objects all inside frustum
+        let mut visible_count = 0;
+        for i in 0..10 {
+            let center = Vec3::new((i as f32) * 2.0, 0.0, 10.0);
+            let radius = 1.0;
+            if is_sphere_in_frustum_cpu(center, radius, &frustum_planes) {
+                visible_count += 1;
+            }
+        }
+
+        assert_eq!(visible_count, 10, "All objects should be visible");
+    }
+
+    #[test]
+    fn test_expected_culling_half_visible() {
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),   // left: x > -10
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),  // right: x < 10
+            Vec4::new(0.0, 1.0, 0.0, 10.0),   // bottom
+            Vec4::new(0.0, -1.0, 0.0, 10.0),  // top
+            Vec4::new(0.0, 0.0, 1.0, 1.0),    // near
+            Vec4::new(0.0, 0.0, -1.0, 100.0), // far
+        ];
+
+        // Half inside (x: -5 to 5), half outside (x: 15 to 25)
+        let mut visible_count = 0;
+        for i in 0..10 {
+            let x = if i < 5 { (i as f32) - 2.5 } else { 15.0 + (i as f32) };
+            let center = Vec3::new(x, 0.0, 10.0);
+            let radius = 0.5;
+            if is_sphere_in_frustum_cpu(center, radius, &frustum_planes) {
+                visible_count += 1;
+            }
+        }
+
+        assert_eq!(visible_count, 5, "Half of objects should be visible");
+    }
+
+    #[test]
+    fn test_expected_culling_none_visible() {
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),
+            Vec4::new(0.0, 1.0, 0.0, 10.0),
+            Vec4::new(0.0, -1.0, 0.0, 10.0),
+            Vec4::new(0.0, 0.0, 1.0, 1.0),
+            Vec4::new(0.0, 0.0, -1.0, 100.0),
+        ];
+
+        // All objects far outside frustum
+        let mut visible_count = 0;
+        for i in 0..10 {
+            let center = Vec3::new(100.0 + (i as f32) * 5.0, 0.0, 10.0);
+            let radius = 1.0;
+            if is_sphere_in_frustum_cpu(center, radius, &frustum_planes) {
+                visible_count += 1;
+            }
+        }
+
+        assert_eq!(visible_count, 0, "No objects should be visible");
+    }
+
+    // ===== Bounding Sphere Transformation Tests =====
+
+    #[test]
+    fn test_bounding_sphere_transformation_identity() {
+        let model = Mat4::IDENTITY;
+        let bounding_sphere = Vec4::new(1.0, 2.0, 3.0, 5.0);
+
+        let cmd = GpuDrawCommand::new(model, bounding_sphere, 0, 0);
+
+        // With identity transform, center should be unchanged
+        let model_mat = Mat4::from_cols_array_2d(&cmd.model);
+        let world_center = model_mat.transform_point3(Vec3::new(
+            cmd.bounding_sphere[0],
+            cmd.bounding_sphere[1],
+            cmd.bounding_sphere[2],
+        ));
+
+        assert!((world_center.x - 1.0).abs() < 0.001);
+        assert!((world_center.y - 2.0).abs() < 0.001);
+        assert!((world_center.z - 3.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_bounding_sphere_transformation_translation() {
+        let model = Mat4::from_translation(Vec3::new(10.0, 20.0, 30.0));
+        let bounding_sphere = Vec4::new(0.0, 0.0, 0.0, 5.0);
+
+        let cmd = GpuDrawCommand::new(model, bounding_sphere, 0, 0);
+
+        let model_mat = Mat4::from_cols_array_2d(&cmd.model);
+        let world_center = model_mat.transform_point3(Vec3::new(
+            cmd.bounding_sphere[0],
+            cmd.bounding_sphere[1],
+            cmd.bounding_sphere[2],
+        ));
+
+        assert!((world_center.x - 10.0).abs() < 0.001);
+        assert!((world_center.y - 20.0).abs() < 0.001);
+        assert!((world_center.z - 30.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_bounding_sphere_transformation_scale() {
+        let scale = Vec3::new(2.0, 2.0, 2.0);
+        let model = Mat4::from_scale(scale);
+        let bounding_sphere = Vec4::new(0.0, 0.0, 0.0, 5.0); // radius = 5
+
+        let cmd = GpuDrawCommand::new(model, bounding_sphere, 0, 0);
+
+        // Radius should scale with the transform
+        // In shader: length(vec3(model[0][0], model[1][1], model[2][2])) * radius
+        let scale_factor = (2.0_f32 * 2.0 + 2.0 * 2.0 + 2.0 * 2.0).sqrt();
+        let expected_radius = 5.0 * scale_factor;
+
+        // For uniform scale of 2.0, scale_factor should be sqrt(12) ≈ 3.464
+        assert!((scale_factor - 3.464).abs() < 0.01);
+        assert!((expected_radius - 17.32).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_bounding_sphere_transformation_rotation() {
+        let rotation = Quat::from_rotation_y(std::f32::consts::PI / 2.0);
+        let model = Mat4::from_quat(rotation);
+        let bounding_sphere = Vec4::new(5.0, 0.0, 0.0, 2.0);
+
+        let cmd = GpuDrawCommand::new(model, bounding_sphere, 0, 0);
+
+        let model_mat = Mat4::from_cols_array_2d(&cmd.model);
+        let world_center = model_mat.transform_point3(Vec3::new(
+            cmd.bounding_sphere[0],
+            cmd.bounding_sphere[1],
+            cmd.bounding_sphere[2],
+        ));
+
+        // After 90° rotation around Y, (5, 0, 0) becomes approximately (0, 0, -5)
+        assert!(world_center.x.abs() < 0.001, "x should be near 0, got {}", world_center.x);
+        assert!(world_center.y.abs() < 0.001, "y should be near 0, got {}", world_center.y);
+        assert!((world_center.z + 5.0).abs() < 0.001, "z should be near -5, got {}", world_center.z);
+    }
+
+    // ===== Indirect Draw Buffer Generation Tests =====
+
+    #[test]
+    fn test_indirect_draw_command_fields() {
+        // Verify that indirect draw command has correct fields for VkDrawIndexedIndirectCommand
+        let mesh = GpuMeshData {
+            index_count: 36,
+            first_index: 100,
+            vertex_offset: 50,
+            _padding: 0,
+        };
+
+        let indirect = IndirectDrawCommand {
+            index_count: mesh.index_count,
+            instance_count: 1,
+            first_index: mesh.first_index,
+            vertex_offset: mesh.vertex_offset,
+            first_instance: 42,
+        };
+
+        assert_eq!(indirect.index_count, 36);
+        assert_eq!(indirect.instance_count, 1);
+        assert_eq!(indirect.first_index, 100);
+        assert_eq!(indirect.vertex_offset, 50);
+        assert_eq!(indirect.first_instance, 42);
+    }
+
+    #[test]
+    fn test_indirect_draw_multiple_meshes() {
+        // Simulate creating indirect commands for multiple visible meshes
+        let meshes = vec![
+            GpuMeshData { index_count: 36, first_index: 0, vertex_offset: 0, _padding: 0 },
+            GpuMeshData { index_count: 24, first_index: 36, vertex_offset: 0, _padding: 0 },
+            GpuMeshData { index_count: 48, first_index: 60, vertex_offset: 0, _padding: 0 },
+        ];
+
+        let mut indirect_commands = Vec::new();
+        for (i, mesh) in meshes.iter().enumerate() {
+            indirect_commands.push(IndirectDrawCommand {
+                index_count: mesh.index_count,
+                instance_count: 1,
+                first_index: mesh.first_index,
+                vertex_offset: mesh.vertex_offset,
+                first_instance: i as u32,
+            });
+        }
+
+        assert_eq!(indirect_commands.len(), 3);
+        assert_eq!(indirect_commands[0].index_count, 36);
+        assert_eq!(indirect_commands[1].index_count, 24);
+        assert_eq!(indirect_commands[2].index_count, 48);
+    }
+
+    // ===== Edge Cases and Boundary Conditions =====
+
+    #[test]
+    fn test_zero_radius_sphere() {
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),
+            Vec4::new(0.0, 1.0, 0.0, 10.0),
+            Vec4::new(0.0, -1.0, 0.0, 10.0),
+            Vec4::new(0.0, 0.0, 1.0, 1.0),
+            Vec4::new(0.0, 0.0, -1.0, 100.0),
+        ];
+
+        // Zero-radius sphere at origin (point) should be visible
+        let center = Vec3::new(0.0, 0.0, 0.0);
+        let radius = 0.0;
+        assert!(is_sphere_in_frustum_cpu(center, radius, &frustum_planes));
+    }
+
+    #[test]
+    fn test_very_large_sphere() {
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),
+            Vec4::new(0.0, 1.0, 0.0, 10.0),
+            Vec4::new(0.0, -1.0, 0.0, 10.0),
+            Vec4::new(0.0, 0.0, 1.0, 1.0),
+            Vec4::new(0.0, 0.0, -1.0, 100.0),
+        ];
+
+        // Very large sphere that encompasses the entire frustum
+        let center = Vec3::new(0.0, 0.0, 50.0);
+        let radius = 1000.0;
+        assert!(is_sphere_in_frustum_cpu(center, radius, &frustum_planes));
+    }
+
+    #[test]
+    fn test_negative_radius_handling() {
+        // Negative radius doesn't make physical sense, but test the math
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),
+            Vec4::new(0.0, 1.0, 0.0, 10.0),
+            Vec4::new(0.0, -1.0, 0.0, 10.0),
+            Vec4::new(0.0, 0.0, 1.0, 1.0),
+            Vec4::new(0.0, 0.0, -1.0, 100.0),
+        ];
+
+        let center = Vec3::new(0.0, 0.0, 0.0);
+        let radius = -1.0; // Invalid, but mathematically testable
+        
+        // With negative radius, the test becomes distance < 1.0 instead of distance < -1.0
+        // This would make everything visible if center is inside
+        assert!(is_sphere_in_frustum_cpu(center, radius, &frustum_planes));
+    }
+
+    #[test]
+    fn test_draw_command_count_zero() {
+        let uniforms = CullingUniforms::new(
+            Mat4::IDENTITY,
+            [Vec4::ZERO; 6],
+            Vec3::ZERO,
+            0,
+        );
+
+        assert_eq!(uniforms.draw_command_count, 0);
+    }
+
+    #[test]
+    fn test_draw_command_count_large() {
+        let uniforms = CullingUniforms::new(
+            Mat4::IDENTITY,
+            [Vec4::ZERO; 6],
+            Vec3::ZERO,
+            100_000,
+        );
+
+        assert_eq!(uniforms.draw_command_count, 100_000);
+    }
+
+    // ===== Multiple Objects Visibility Tests =====
+
+    #[test]
+    fn test_grid_of_objects_culling() {
+        // Create a perspective view frustum
+        let fov = std::f32::consts::PI / 4.0;
+        let aspect = 16.0 / 9.0;
+        let near = 0.1;
+        let far = 100.0;
+        
+        let projection = Mat4::perspective_rh(fov, aspect, near, far);
+        let view = Mat4::look_at_rh(
+            Vec3::new(0.0, 0.0, 10.0), // camera at z=10
+            Vec3::new(0.0, 0.0, 0.0),   // looking at origin
+            Vec3::new(0.0, 1.0, 0.0),
+        );
+        
+        let view_proj = projection * view;
+        let frustum_planes = extract_frustum_planes(view_proj);
+
+        // Create a 5x5 grid of objects
+        let mut visible_count = 0;
+        let grid_size = 5;
+        let spacing = 2.0;
+        
+        for x in 0..grid_size {
+            for y in 0..grid_size {
+                let pos_x = (x as f32 - 2.0) * spacing;
+                let pos_y = (y as f32 - 2.0) * spacing;
+                let center = Vec3::new(pos_x, pos_y, 0.0); // Objects at z=0
+                let radius = 0.5;
+                
+                if is_sphere_in_frustum_cpu(center, radius, &frustum_planes) {
+                    visible_count += 1;
+                }
+            }
+        }
+
+        // Some objects should be visible, not all (due to frustum shape)
+        assert!(visible_count > 0, "At least some objects should be visible");
+        assert!(visible_count <= 25, "Visible count should not exceed total");
+    }
+
+    #[test]
+    fn test_objects_at_varying_depths() {
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),
+            Vec4::new(0.0, 1.0, 0.0, 10.0),
+            Vec4::new(0.0, -1.0, 0.0, 10.0),
+            Vec4::new(0.0, 0.0, 1.0, 1.0),    // near at z=-1
+            Vec4::new(0.0, 0.0, -1.0, 50.0),  // far at z=50
+        ];
+
+        let test_depths = vec![
+            (-5.0, false),  // behind near plane
+            (0.0, true),    // at near plane
+            (25.0, true),   // middle of frustum
+            (49.0, true),   // near far plane
+            (55.0, false),  // beyond far plane
+        ];
+
+        for (depth, expected_visible) in test_depths {
+            let center = Vec3::new(0.0, 0.0, depth);
+            let radius = 0.5;
+            let is_visible = is_sphere_in_frustum_cpu(center, radius, &frustum_planes);
+            
+            assert_eq!(
+                is_visible, expected_visible,
+                "Object at depth {} should be {}",
+                depth,
+                if expected_visible { "visible" } else { "culled" }
+            );
+        }
+    }
+
+    // ===== Performance and Work Group Tests =====
+
+    #[test]
+    fn test_work_group_calculation() {
+        // Work group size is 64 threads
+        let work_group_size = 64;
+
+        let test_cases = vec![
+            (0, 0),      // 0 commands -> 0 work groups
+            (1, 1),      // 1 command -> 1 work group
+            (63, 1),     // 63 commands -> 1 work group
+            (64, 1),     // 64 commands -> 1 work group
+            (65, 2),     // 65 commands -> 2 work groups
+            (128, 2),    // 128 commands -> 2 work groups
+            (129, 3),    // 129 commands -> 3 work groups
+            (1000, 16),  // 1000 commands -> 16 work groups (1000/64 = 15.625, ceil = 16)
+        ];
+
+        for (command_count, expected_groups) in test_cases {
+            let work_groups = if command_count == 0 {
+                0
+            } else {
+                (command_count + work_group_size - 1) / work_group_size
+            };
+            
+            assert_eq!(
+                work_groups, expected_groups,
+                "Command count {} should require {} work groups",
+                command_count, expected_groups
+            );
+        }
+    }
+
+    #[test]
+    fn test_max_draw_commands_limit() {
+        // Test that we can handle large numbers of draw commands
+        let max_commands = 100_000;
+        let work_group_size = 64;
+        let work_groups = (max_commands + work_group_size - 1) / work_group_size;
+
+        assert_eq!(work_groups, 1563); // ceil(100000 / 64) = 1563
+        
+        // Verify work group calculation matches div_ceil used in actual code
+        let work_groups_div_ceil = max_commands.div_ceil(work_group_size);
+        assert_eq!(work_groups, work_groups_div_ceil);
     }
 }
