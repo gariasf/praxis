@@ -966,6 +966,8 @@ pub fn update_animations(
 mod tests {
     use super::*;
 
+    const EPSILON: f32 = 0.001;
+
     #[test]
     fn test_bone_creation() {
         let bone = Bone::new("Root".to_string(), None);
@@ -1018,7 +1020,7 @@ mod tests {
     fn test_animation_clip() {
         let mut clip = AnimationClip::new("Test".to_string(), 2.0);
         assert_eq!(clip.name(), "Test");
-        assert_eq!(clip.duration(), 2.0);
+        assert!((clip.duration() - 2.0).abs() < EPSILON);
 
         clip.add_translation_keyframe(0, 0.0, Vec3::ZERO);
         clip.add_translation_keyframe(0, 1.0, Vec3::new(1.0, 0.0, 0.0));
@@ -1083,7 +1085,8 @@ mod tests {
         player.add_clip("Test".to_string(), clip);
 
         player.play("Test");
-        assert_eq!(player.current_time("Test"), Some(0.0));
+        let time = player.current_time("Test").unwrap();
+        assert!((time - 0.0).abs() < EPSILON);
 
         player.update(0.5);
         let time = player.current_time("Test").unwrap();
@@ -1143,10 +1146,10 @@ mod tests {
 
         player.play("Test");
         player.set_weight("Test", -0.5);
-        assert_eq!(player.playing_clips.get("Test").unwrap().weight, 0.0);
+        assert!((player.playing_clips.get("Test").unwrap().weight - 0.0).abs() < EPSILON);
 
         player.set_weight("Test", 1.5);
-        assert_eq!(player.playing_clips.get("Test").unwrap().weight, 1.0);
+        assert!((player.playing_clips.get("Test").unwrap().weight - 1.0).abs() < EPSILON);
     }
 
     #[test]
@@ -1158,7 +1161,8 @@ mod tests {
         player.play("Test");
         player.set_time("Test", 1.5);
 
-        assert_eq!(player.current_time("Test"), Some(1.5));
+        let time = player.current_time("Test").unwrap();
+        assert!((time - 1.5).abs() < EPSILON);
     }
 
     #[test]
@@ -1354,8 +1358,8 @@ mod tests {
 
         assert_eq!(transition.from_clip, "Idle");
         assert_eq!(transition.to_clip, "Walk");
-        assert_eq!(transition.duration, 0.5);
-        assert_eq!(transition.elapsed, 0.0);
+        assert!((transition.duration - 0.5).abs() < EPSILON);
+        assert!((transition.elapsed - 0.0).abs() < EPSILON);
         assert!(!transition.is_complete());
     }
 
@@ -1363,24 +1367,24 @@ mod tests {
     fn test_cross_fade_blend_weight() {
         let mut transition = CrossFadeTransition::new("A".to_string(), "B".to_string(), 1.0);
 
-        assert_eq!(transition.blend_weight(), 0.0);
+        assert!((transition.blend_weight() - 0.0).abs() < EPSILON);
 
         transition.elapsed = 0.5;
-        assert_eq!(transition.blend_weight(), 0.5);
+        assert!((transition.blend_weight() - 0.5).abs() < EPSILON);
 
         transition.elapsed = 1.0;
-        assert_eq!(transition.blend_weight(), 1.0);
+        assert!((transition.blend_weight() - 1.0).abs() < EPSILON);
         assert!(transition.is_complete());
 
         transition.elapsed = 1.5;
-        assert_eq!(transition.blend_weight(), 1.0);
+        assert!((transition.blend_weight() - 1.0).abs() < EPSILON);
     }
 
     #[test]
     fn test_cross_fade_zero_duration() {
         let transition = CrossFadeTransition::new("A".to_string(), "B".to_string(), 0.0);
 
-        assert_eq!(transition.blend_weight(), 1.0);
+        assert!((transition.blend_weight() - 1.0).abs() < EPSILON);
     }
 
     #[test]
@@ -1388,15 +1392,15 @@ mod tests {
         let mut transition = CrossFadeTransition::new("A".to_string(), "B".to_string(), 1.0);
 
         transition.update(0.3);
-        assert_eq!(transition.elapsed, 0.3);
+        assert!((transition.elapsed - 0.3).abs() < EPSILON);
         assert!(!transition.is_complete());
 
         transition.update(0.5);
-        assert_eq!(transition.elapsed, 0.8);
+        assert!((transition.elapsed - 0.8).abs() < EPSILON);
         assert!(!transition.is_complete());
 
         transition.update(0.5);
-        assert_eq!(transition.elapsed, 1.3);
+        assert!((transition.elapsed - 1.3).abs() < EPSILON);
         assert!(transition.is_complete());
     }
 
@@ -1404,7 +1408,7 @@ mod tests {
     fn test_blend_node_1d_creation() {
         let node = BlendNode1D::new();
         assert_eq!(node.clips.len(), 0);
-        assert_eq!(node.parameter, 0.0);
+        assert!((node.parameter - 0.0).abs() < EPSILON);
     }
 
     #[test]
@@ -1425,7 +1429,7 @@ mod tests {
         let weights = node.compute_weights();
         assert_eq!(weights.len(), 1);
         assert_eq!(weights[0].0, "Idle");
-        assert_eq!(weights[0].1, 1.0);
+        assert!((weights[0].1 - 1.0).abs() < EPSILON);
     }
 
     #[test]
@@ -1457,7 +1461,7 @@ mod tests {
 
         assert_eq!(weights.len(), 1);
         assert_eq!(weights[0].0, "Walk");
-        assert_eq!(weights[0].1, 1.0);
+        assert!((weights[0].1 - 1.0).abs() < EPSILON);
     }
 
     #[test]
@@ -1471,7 +1475,7 @@ mod tests {
 
         assert_eq!(weights.len(), 1);
         assert_eq!(weights[0].0, "Idle");
-        assert_eq!(weights[0].1, 1.0);
+        assert!((weights[0].1 - 1.0).abs() < EPSILON);
     }
 
     #[test]
@@ -1485,7 +1489,7 @@ mod tests {
 
         assert_eq!(weights.len(), 1);
         assert_eq!(weights[0].0, "Run");
-        assert_eq!(weights[0].1, 1.0);
+        assert!((weights[0].1 - 1.0).abs() < EPSILON);
     }
 
     #[test]
@@ -1509,8 +1513,8 @@ mod tests {
     fn test_blend_node_2d_creation() {
         let node = BlendNode2D::new();
         assert_eq!(node.clips.len(), 0);
-        assert_eq!(node.parameter_x, 0.0);
-        assert_eq!(node.parameter_y, 0.0);
+        assert!((node.parameter_x - 0.0).abs() < EPSILON);
+        assert!((node.parameter_y - 0.0).abs() < EPSILON);
     }
 
     #[test]
@@ -1532,7 +1536,7 @@ mod tests {
         let weights = node.compute_weights();
         assert_eq!(weights.len(), 1);
         assert_eq!(weights[0].0, "Idle");
-        assert_eq!(weights[0].1, 1.0);
+        assert!((weights[0].1 - 1.0).abs() < EPSILON);
     }
 
     #[test]
@@ -1598,11 +1602,11 @@ mod tests {
         let mut node = AdditiveBlendNode::new();
         node.set_weight(-0.5);
         let (_, _, weight) = node.get_clips();
-        assert_eq!(weight, 0.0);
+        assert!((weight - 0.0).abs() < EPSILON);
 
         node.set_weight(1.5);
         let (_, _, weight) = node.get_clips();
-        assert_eq!(weight, 1.0);
+        assert!((weight - 1.0).abs() < EPSILON);
     }
 
     #[test]
@@ -1636,10 +1640,10 @@ mod tests {
     fn test_bone_mask_bone_weight() {
         let mut mask = BoneMask::with_bone_count(3);
 
-        assert_eq!(mask.bone_weight(0), 0.0);
+        assert!((mask.bone_weight(0) - 0.0).abs() < EPSILON);
 
         mask.enable_bone(0);
-        assert_eq!(mask.bone_weight(0), 1.0);
+        assert!((mask.bone_weight(0) - 1.0).abs() < EPSILON);
     }
 
     #[test]
@@ -1673,7 +1677,7 @@ mod tests {
     #[test]
     fn test_animation_layer_creation() {
         let layer = AnimationLayer::new(0.5);
-        assert_eq!(layer.weight(), 0.5);
+        assert!((layer.weight() - 0.5).abs() < EPSILON);
         assert_eq!(layer.blend_mode(), LayerBlendMode::Override);
         assert!(layer.current_clip().is_none());
     }
@@ -1686,7 +1690,7 @@ mod tests {
 
         layer.play("Wave");
         assert_eq!(layer.current_clip(), Some("Wave"));
-        assert_eq!(layer.time(), 0.0);
+        assert!((layer.time() - 0.0).abs() < EPSILON);
 
         layer.stop();
         assert!(layer.current_clip().is_none());
@@ -1698,10 +1702,10 @@ mod tests {
         layer.play("Test");
 
         layer.update(0.5, 2.0);
-        assert_eq!(layer.time(), 0.5);
+        assert!((layer.time() - 0.5).abs() < EPSILON);
 
         layer.update(0.5, 2.0);
-        assert_eq!(layer.time(), 1.0);
+        assert!((layer.time() - 1.0).abs() < EPSILON);
     }
 
     #[test]
@@ -1733,7 +1737,7 @@ mod tests {
         layer.set_speed(2.0);
 
         layer.update(0.5, 2.0);
-        assert_eq!(layer.time(), 1.0);
+        assert!((layer.time() - 1.0).abs() < EPSILON);
     }
 
     #[test]
@@ -1776,7 +1780,7 @@ mod tests {
 
         blender.play("Walk");
         assert_eq!(blender.current_clip(), Some("Walk"));
-        assert_eq!(blender.current_time(), 0.0);
+        assert!((blender.current_time() - 0.0).abs() < EPSILON);
     }
 
     #[test]
@@ -1824,8 +1828,8 @@ mod tests {
         blender.add_layer(layer2);
 
         assert_eq!(blender.layer_count(), 2);
-        assert_eq!(blender.layer(0).unwrap().weight(), 1.0);
-        assert_eq!(blender.layer(1).unwrap().weight(), 0.5);
+        assert!((blender.layer(0).unwrap().weight() - 1.0).abs() < EPSILON);
+        assert!((blender.layer(1).unwrap().weight() - 0.5).abs() < EPSILON);
     }
 
     #[test]
@@ -1851,7 +1855,7 @@ mod tests {
         blender.play("Test");
         blender.update(0.5);
 
-        assert_eq!(blender.current_time(), 0.5);
+        assert!((blender.current_time() - 0.5).abs() < EPSILON);
     }
 
     #[test]
@@ -1877,7 +1881,7 @@ mod tests {
         blender.set_looping(false);
         blender.update(2.0);
 
-        assert_eq!(blender.current_time(), 1.0);
+        assert!((blender.current_time() - 1.0).abs() < EPSILON);
         assert!(blender.current_clip().is_none());
     }
 
@@ -1891,7 +1895,7 @@ mod tests {
         blender.set_speed(2.0);
         blender.update(0.5);
 
-        assert_eq!(blender.current_time(), 1.0);
+        assert!((blender.current_time() - 1.0).abs() < EPSILON);
     }
 
     #[test]
@@ -1924,7 +1928,7 @@ mod tests {
         blender.set_blend_parameter("Movement", 0.75);
 
         if let Some(BlendNode::Blend1D(node)) = blender.blend_trees.get("Movement") {
-            assert_eq!(node.parameter(), 0.75);
+            assert!((node.parameter() - 0.75).abs() < EPSILON);
         } else {
             panic!("Expected Blend1D node");
         }
@@ -1940,7 +1944,9 @@ mod tests {
         blender.set_blend_parameters_2d("Movement", 0.5, 0.8);
 
         if let Some(BlendNode::Blend2D(node)) = blender.blend_trees.get("Movement") {
-            assert_eq!(node.parameters(), (0.5, 0.8));
+            let (x, y) = node.parameters();
+            assert!((x - 0.5).abs() < EPSILON);
+            assert!((y - 0.8).abs() < EPSILON);
         } else {
             panic!("Expected Blend2D node");
         }

@@ -1069,9 +1069,10 @@ impl Default for VisibilitySystem {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
+
+    const EPSILON: f32 = 0.001;
 
     #[test]
     fn test_culling_stats() {
@@ -1083,22 +1084,22 @@ mod tests {
             distance_culled: 5,
         };
 
-        assert_eq!(stats.cull_rate(), 40.0);
+        assert!((stats.cull_rate() - 40.0).abs() < EPSILON);
     }
 
     #[test]
     fn test_visibility_system_creation() {
         let system = VisibilitySystem::new();
-        assert_eq!(system.max_distance(), 1000.0);
+        assert!((system.max_distance() - 1000.0).abs() < EPSILON);
     }
 
     #[test]
     fn test_visibility_system_max_distance() {
         let mut system = VisibilitySystem::with_max_distance(500.0);
-        assert_eq!(system.max_distance(), 500.0);
+        assert!((system.max_distance() - 500.0).abs() < EPSILON);
 
         system.set_max_distance(750.0);
-        assert_eq!(system.max_distance(), 750.0);
+        assert!((system.max_distance() - 750.0).abs() < EPSILON);
     }
 
     #[test]

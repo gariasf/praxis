@@ -312,9 +312,10 @@ pub trait BoundingVolume {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
+
+    const EPSILON: f32 = 0.001;
 
     #[test]
     fn test_aabb_creation() {
@@ -350,7 +351,7 @@ mod tests {
     #[test]
     fn test_aabb_volume() {
         let aabb = Aabb::from_min_max(Vec3::ZERO, Vec3::splat(2.0));
-        assert_eq!(aabb.volume(), 8.0);
+        assert!((aabb.volume() - 8.0).abs() < EPSILON);
     }
 
     #[test]
@@ -411,6 +412,6 @@ mod tests {
 
         let distance = aabb.ray_intersection_distance(origin, direction, 100.0);
         assert!(distance.is_some());
-        assert_eq!(distance.unwrap(), 0.0);
+        assert!((distance.unwrap() - 0.0).abs() < EPSILON);
     }
 }

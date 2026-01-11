@@ -210,16 +210,17 @@ impl Default for FrustumCuller {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
+
+    const EPSILON: f32 = 0.001;
 
     #[test]
     fn test_plane_distance() {
         let plane = Plane::new(Vec3::Y, 0.0);
-        assert_eq!(plane.distance_to_point(Vec3::ZERO), 0.0);
-        assert_eq!(plane.distance_to_point(Vec3::new(0.0, 5.0, 0.0)), 5.0);
-        assert_eq!(plane.distance_to_point(Vec3::new(0.0, -3.0, 0.0)), -3.0);
+        assert!((plane.distance_to_point(Vec3::ZERO) - 0.0).abs() < EPSILON);
+        assert!((plane.distance_to_point(Vec3::new(0.0, 5.0, 0.0)) - 5.0).abs() < EPSILON);
+        assert!((plane.distance_to_point(Vec3::new(0.0, -3.0, 0.0)) - (-3.0)).abs() < EPSILON);
     }
 
     #[test]

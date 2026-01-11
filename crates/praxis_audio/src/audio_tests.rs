@@ -1,12 +1,9 @@
 //! Comprehensive tests for audio system.
 
 #[cfg(test)]
-#[allow(
-    clippy::float_cmp,
-    clippy::collection_is_never_read,
-    clippy::cast_sign_loss
-)]
+#[allow(clippy::collection_is_never_read, clippy::cast_sign_loss)]
 mod tests {
+    const EPSILON: f32 = 0.001;
     use crate::systems::{calculate_doppler_factor, calculate_spatial_params};
     use crate::*;
     use praxis_math::Vec3;
@@ -53,12 +50,12 @@ mod tests {
         let source = AudioSource::new("test.ogg").with_volume(2.0);
 
         // Volume should be clamped to 1.0
-        assert_eq!(source.volume, 1.0);
+        assert!((source.volume - 1.0).abs() < EPSILON);
 
         let source = AudioSource::new("test.ogg").with_volume(-0.5);
 
         // Volume should be clamped to 0.0
-        assert_eq!(source.volume, 0.0);
+        assert!((source.volume - 0.0).abs() < EPSILON);
     }
 
     #[test]
@@ -99,9 +96,9 @@ mod tests {
     fn test_playback_settings_defaults() {
         let settings = PlaybackSettings::default();
 
-        assert_eq!(settings.volume, 1.0);
+        assert!((settings.volume - 1.0).abs() < EPSILON);
         assert!(!settings.looping);
-        assert_eq!(settings.panning, 0.0);
+        assert!((settings.panning - 0.0).abs() < EPSILON);
     }
 
     #[test]
@@ -111,27 +108,27 @@ mod tests {
             .with_looping(true)
             .with_panning(0.5);
 
-        assert_eq!(settings.volume, 0.7);
+        assert!((settings.volume - 0.7).abs() < EPSILON);
         assert!(settings.looping);
-        assert_eq!(settings.panning, 0.5);
+        assert!((settings.panning - 0.5).abs() < EPSILON);
     }
 
     #[test]
     fn test_playback_settings_volume_clamping() {
         let settings = PlaybackSettings::new().with_volume(2.0);
-        assert_eq!(settings.volume, 1.0);
+        assert!((settings.volume - 1.0).abs() < EPSILON);
 
         let settings = PlaybackSettings::new().with_volume(-1.0);
-        assert_eq!(settings.volume, 0.0);
+        assert!((settings.volume - 0.0).abs() < EPSILON);
     }
 
     #[test]
     fn test_playback_settings_panning_clamping() {
         let settings = PlaybackSettings::new().with_panning(2.0);
-        assert_eq!(settings.panning, 1.0);
+        assert!((settings.panning - 1.0).abs() < EPSILON);
 
         let settings = PlaybackSettings::new().with_panning(-2.0);
-        assert_eq!(settings.panning, -1.0);
+        assert!((settings.panning - (-1.0)).abs() < EPSILON);
     }
 
     #[test]
@@ -214,7 +211,7 @@ mod tests {
             calculate_spatial_params(source_pos, listener_pos, reference_distance, max_distance);
 
         // At max distance, attenuation should be 0.0
-        assert_eq!(params.attenuation, 0.0);
+        assert!((params.attenuation - 0.0).abs() < EPSILON);
     }
 
     #[test]
@@ -228,7 +225,7 @@ mod tests {
             calculate_spatial_params(source_pos, listener_pos, reference_distance, max_distance);
 
         // Beyond max distance, attenuation should be 0.0
-        assert_eq!(params.attenuation, 0.0);
+        assert!((params.attenuation - 0.0).abs() < EPSILON);
     }
 
     #[test]
@@ -375,7 +372,7 @@ mod tests {
             calculate_doppler_factor(previous_pos, current_pos, listener_pos, doppler_scale);
 
         // Should be 1.0 when disabled
-        assert_eq!(factor, 1.0);
+        assert!((factor - 1.0).abs() < EPSILON);
     }
 
     #[test]
@@ -447,8 +444,8 @@ mod tests {
     fn test_audio_source_default_distances() {
         let source = AudioSource::new("test.ogg");
 
-        assert_eq!(source.max_distance, 100.0);
-        assert_eq!(source.reference_distance, 1.0);
+        assert!((source.max_distance - 100.0).abs() < EPSILON);
+        assert!((source.reference_distance - 1.0).abs() < EPSILON);
     }
 
     #[test]
@@ -457,8 +454,8 @@ mod tests {
             .with_max_distance(250.0)
             .with_reference_distance(10.0);
 
-        assert_eq!(source.max_distance, 250.0);
-        assert_eq!(source.reference_distance, 10.0);
+        assert!((source.max_distance - 250.0).abs() < EPSILON);
+        assert!((source.reference_distance - 10.0).abs() < EPSILON);
     }
 
     #[test]
