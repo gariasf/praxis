@@ -69,7 +69,7 @@
 //! 3. **Fragment shader blending**: For each pixel, sample all layers and blend:
 //!    ```glsl
 //!    vec4 weights = texture(splatMap, uv);
-//!    vec3 finalColor = weights.r * grassColor 
+//!    vec3 finalColor = weights.r * grassColor
 //!                    + weights.g * rockColor
 //!                    + weights.b * sandColor
 //!                    + weights.a * snowColor;

@@ -17,7 +17,7 @@
 //! ```lua
 //! -- Good: Namespaced
 //! console.list_entities()
-//! 
+//!
 //! -- Bad: Global pollution
 //! list_entities()
 //! ```
@@ -88,13 +88,13 @@
 //! ```lua
 //! -- Find the player entity
 //! local player = console.find_entity("Player")
-//! 
+//!
 //! -- Check its current position
 //! console.inspect(player)
-//! 
+//!
 //! -- Move it to origin
 //! console.set_transform(player, 0, 0, 0)
-//! 
+//!
 //! -- Spawn a test enemy nearby
 //! console.spawn("DebugEnemy")
 //! ```
@@ -109,9 +109,9 @@
 //! ```lua
 //! -- Check entity count before test
 //! local before = console.entity_count()
-//! 
+//!
 //! -- Run some game logic...
-//! 
+//!
 //! -- Check after
 //! local after = console.entity_count()
 //! print("Leaked entities:", after - before)

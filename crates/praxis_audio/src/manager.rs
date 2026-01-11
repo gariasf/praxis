@@ -109,17 +109,17 @@ pub struct AudioManager {
     /// Kira's audio manager - handles audio thread and mixing.
     /// Uses `DefaultBackend` which automatically selects the system's audio driver.
     manager: KiraAudioManager,
-    
+
     /// Cache of loaded sound data keyed by file path.
     /// Prevents redundant disk I/O and decoding for frequently played sounds.
     /// `StaticSoundData` uses Arc internally, so clones are cheap.
     loaded_sounds: HashMap<String, StaticSoundData>,
-    
+
     /// Pool of currently playing sounds keyed by unique ID.
     /// Enables real-time control of active sounds (volume, pause, stop).
     /// Cleaned up periodically to remove finished sounds.
     playing_sounds: HashMap<u64, StaticSoundHandle>,
-    
+
     /// Incrementing counter for generating unique sound IDs.
     /// Never reused to prevent handle confusion.
     next_sound_id: u64,

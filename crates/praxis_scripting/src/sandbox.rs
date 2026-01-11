@@ -57,7 +57,7 @@
 //! ```lua
 //! -- Before sandbox
 //! io.open("/etc/passwd", "r")  -- Works
-//! 
+//!
 //! -- After sandbox
 //! io.open("/etc/passwd", "r")  -- Error: attempt to index nil value
 //! ```
@@ -89,7 +89,7 @@ use std::sync::Arc;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SandboxLevel {
     /// No restrictions - full access to all Lua features.
-    /// 
+    ///
     /// Use this for:
     /// - Trusted development scripts
     /// - Engine-internal scripts
@@ -136,7 +136,7 @@ pub struct SandboxConfig {
     pub level: SandboxLevel,
 
     /// Allow file I/O operations (reading/writing files).
-    /// 
+    ///
     /// Only applies to Moderate level. Strict always disables this.
     /// Grants access to: `io.open`, `io.read`, `io.write`, etc.
     pub allow_file_io: bool,
@@ -183,7 +183,7 @@ impl Default for SandboxConfig {
             allow_file_io: false,
             allow_network: false,
             allow_os_access: false,
-            instruction_limit: 1_000_000,    // 1 million instructions (about 16ms on modern CPU)
+            instruction_limit: 1_000_000, // 1 million instructions (about 16ms on modern CPU)
             memory_limit: 100 * 1024 * 1024, // 100 MB
         }
     }
@@ -420,7 +420,7 @@ fn apply_resource_limits(lua: &Lua, config: &SandboxConfig) -> Result<()> {
 /// // Before each script execution
 /// reset_instruction_counter(&lua, &config)?;
 /// lua.load("expensive_script()").exec()?;
-/// 
+///
 /// // Counter is reset for next script
 /// reset_instruction_counter(&lua, &config)?;
 /// lua.load("another_script()").exec()?;

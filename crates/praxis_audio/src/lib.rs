@@ -169,7 +169,7 @@
 //!
 //! Example workflow:
 //! ```text
-//! play_sound("explosion.ogg") 
+//! play_sound("explosion.ogg")
 //!   ↓
 //! Check loaded_sounds cache
 //!   ↓ (miss)

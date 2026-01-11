@@ -459,58 +459,58 @@ impl CommandRegistry {
 pub struct ConsolePanel {
     /// Whether the console is visible (toggleable with ~ key typically)
     pub visible: bool,
-    
+
     /// Current text in the input field (user is typing this)
     input_buffer: String,
-    
+
     /// Ring buffer of log entries (messages, warnings, errors).
     /// VecDeque allows efficient push_back/pop_front for FIFO behavior.
     history: VecDeque<LogEntry>,
-    
+
     /// Ring buffer of previously executed commands (for Up/Down arrow recall).
     /// Separate from log history: this is "what I typed", not "what happened".
     command_history: VecDeque<String>,
-    
+
     /// Current position when navigating command history via Up/Down arrows.
     /// None = not in history mode, Some(idx) = viewing command_history[idx].
     history_index: Option<usize>,
-    
+
     /// Saves the user's incomplete input when they press Up to enter history mode.
     /// Restored when they press Down past the most recent command.
     temp_input: Option<String>,
-    
+
     /// If true, scroll to bottom when new log entries arrive (follow mode).
     /// If false, user scrolled up to read older logs, don't disturb them.
     auto_scroll: bool,
-    
+
     /// Text filter for log entries (case-insensitive substring match)
     filter_text: String,
-    
+
     /// Log level filter (None = show all, Some(level) = show only that level)
     filter_level: Option<LogLevel>,
-    
+
     /// Registry of custom debug commands.
     /// Arc<RwLock> allows multiple systems to register commands at startup.
     command_registry: Arc<RwLock<CommandRegistry>>,
-    
+
     /// Optional Lua scripting context for REPL functionality.
     /// If set, unrecognized commands are treated as Lua code.
     #[cfg(feature = "scripting")]
     lua_context: Option<Arc<RwLock<ScriptingContext>>>,
-    
+
     /// Optional ECS World pointer for Lua console commands.
     /// Updated each frame via set_world() to enable ECS queries from Lua.
     /// Safety: Must be kept valid; set_world() should be called every frame.
     #[cfg(feature = "scripting")]
     world_ptr: Option<*mut praxis_ecs::World>,
-    
+
     /// Flag to request focus on the input field next frame.
     /// (egui requires one frame delay to focus newly created widgets)
     focus_input: bool,
-    
+
     /// List of command suggestions for the current input (prefix matching)
     autocomplete_suggestions: Vec<String>,
-    
+
     /// Index of the currently selected autocomplete suggestion (Tab to cycle)
     autocomplete_index: Option<usize>,
 }

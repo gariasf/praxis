@@ -92,16 +92,16 @@ pub struct ScriptingContext {
     /// The Lua VM instance. Arc is used for sharing with closures and performance monitor.
     /// Note: Lua is !Send + !Sync, so this can only be used on one thread.
     lua: Arc<Lua>,
-    
+
     /// Configuration including sandbox settings
     config: ScriptingConfig,
-    
+
     /// Map of script names to their file paths for hot-reload tracking
     loaded_scripts: HashMap<String, PathBuf>,
-    
+
     /// Optional hot-reload watcher for automatic script reloading
     hot_reload_watcher: Option<Arc<RwLock<HotReloadWatcher>>>,
-    
+
     /// Optional performance monitor for tracking execution time
     performance_monitor: Option<Arc<ScriptPerformanceMonitor>>,
 }
@@ -157,10 +157,10 @@ impl ScriptingContext {
 
         // Register custom math utilities (Vec3, etc.)
         bindings::register_math_api(&self.lua)?;
-        
+
         // Register engine-specific APIs (logging, timing, etc.)
         bindings::register_engine_api(&self.lua)?;
-        
+
         // Register console commands for REPL/debugging
         bindings::register_console_commands(&self.lua)?;
 
@@ -441,13 +441,13 @@ impl ScriptingContext {
     {
         // Set the world pointer in thread-local storage
         crate::bindings::ecs_api::set_world_context(&self.lua, world)?;
-        
+
         // Execute the closure (may call Lua functions that access the world)
         let result = f(&self.lua);
-        
+
         // Always clear the world pointer, even if an error occurred
         crate::bindings::ecs_api::clear_world_context(&self.lua)?;
-        
+
         result
     }
 

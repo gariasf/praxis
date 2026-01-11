@@ -449,7 +449,7 @@ impl ProceduralTextureGenerator {
         // Compile GLSL source to SPIR-V binary bytecode.
         // This is where shaderc (Google's shader compiler) is invoked.
         let spirv_bytes = compile_shader_to_spirv(shader_source)?;
-        
+
         // Convert byte array to 32-bit word array (SPIR-V uses u32 words).
         let spirv_words = spirv::bytes_to_words(&spirv_bytes)
             .map_err(|e| eyre::eyre!("Failed to convert SPIR-V bytes to words: {}", e))?;
@@ -553,14 +553,14 @@ impl ProceduralTextureGenerator {
             .ok_or_else(|| eyre::eyre!("No output node"))?;
 
         let mut shader = String::new();
-        
+
         // GLSL version: 450 is for Vulkan 1.0+
         shader.push_str("#version 450\n\n");
-        
+
         // Define workgroup size: 16×16 threads per workgroup
         // This must match the dispatch calculation in generate()
         shader.push_str("layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;\n\n");
-        
+
         // Declare output image: set 0, binding 0, RGBA8 format, write-only
         // This matches the descriptor set binding in generate()
         shader.push_str(
@@ -576,7 +576,7 @@ impl ProceduralTextureGenerator {
         // Include noise function implementations from noise_functions.glsl
         // These provide Perlin, Simplex, Worley noise + fBm variants
         shader.push_str(&self.generate_noise_functions());
-        
+
         // Include utility functions (coordinate transforms, etc.)
         shader.push_str(&self.generate_utility_functions());
 
@@ -926,7 +926,7 @@ fn compile_shader_to_spirv(source: &str) -> Result<Vec<u8>> {
 
     // Create shader compiler instance
     let compiler = Compiler::new().ok_or_else(|| eyre::eyre!("Failed to create compiler"))?;
-    
+
     // Create compilation options
     let mut options =
         CompileOptions::new().ok_or_else(|| eyre::eyre!("Failed to create compile options"))?;
@@ -937,7 +937,7 @@ fn compile_shader_to_spirv(source: &str) -> Result<Vec<u8>> {
         shaderc::TargetEnv::Vulkan,
         shaderc::EnvVersion::Vulkan1_2 as u32,
     );
-    
+
     // Set optimization level: Performance
     // Prioritizes runtime speed over compilation time and binary size
     // This is important for procedural textures which may be evaluated millions of times

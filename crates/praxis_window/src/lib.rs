@@ -286,7 +286,7 @@ impl ApplicationHandler for App {
     /// If any step fails, we log an error and exit the event loop cleanly.
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         trace!("Application resumed");
-        
+
         // Guard against double-initialization (can happen on mobile platforms)
         if self.state.is_some() {
             trace!("State already initialized, skipping");
@@ -377,7 +377,7 @@ impl ApplicationHandler for App {
                 info!("Close requested, exiting event loop...");
                 event_loop.exit();
             }
-            
+
             // Time to render a frame
             // This is the heart of the rendering loop for real-time graphics
             WindowEvent::RedrawRequested => {
@@ -440,7 +440,7 @@ impl ApplicationHandler for App {
                     info!("Window initialization complete, rendering started");
                 }
             }
-            
+
             // Window size changed (user dragged border, maximized, restored, etc.)
             WindowEvent::Resized(size) => {
                 // Update stored size immediately (even if we defer swapchain recreation)
@@ -456,7 +456,7 @@ impl ApplicationHandler for App {
                 // Request redraw to process the resize or continue rendering
                 state.window.request_redraw();
             }
-            
+
             // Escape key pressed - exit application
             // This is a convenience feature for quick testing/debugging
             WindowEvent::KeyboardInput {
@@ -471,7 +471,7 @@ impl ApplicationHandler for App {
                 info!("Escape key pressed, exiting application");
                 event_loop.exit();
             }
-            
+
             // Ignore all other events (mouse movement, focus changes, etc.)
             _ => (),
         }
@@ -535,7 +535,7 @@ pub fn run() -> Result<()> {
         "Starting event loop (initialized in {:?})",
         app_start.elapsed()
     );
-    
+
     // Run the event loop - this blocks until event_loop.exit() is called
     // The event loop will call app.resumed() once, then app.window_event() for each event
     event_loop

@@ -109,7 +109,7 @@ pub fn play_sound_system(
                 if source.sound_handle.is_none() {
                     // === START NEW SOUND ===
                     // This is the first frame where the sound is playing
-                    
+
                     // Initialize playback settings from component configuration
                     let mut settings = PlaybackSettings::new()
                         .with_volume(source.volume)
@@ -127,7 +127,7 @@ pub fn play_sound_system(
                                 source.reference_distance,
                                 source.max_distance,
                             );
-                            
+
                             // Apply attenuation and panning to initial settings
                             settings.volume = source.volume * spatial_params.attenuation;
                             settings.panning = spatial_params.panning;
@@ -145,7 +145,7 @@ pub fn play_sound_system(
                 } else if source.spatial {
                     // === UPDATE EXISTING SPATIAL SOUND ===
                     // Sound is already playing, update its spatial parameters
-                    
+
                     if let (Some(source_pos), Some(listener_trans)) =
                         (transform.map(|t| t.translation), listener_transform)
                     {
@@ -161,7 +161,7 @@ pub fn play_sound_system(
                             // Apply updated volume (base volume × distance attenuation)
                             let final_volume = source.volume * spatial_params.attenuation;
                             let _ = audio_manager.set_sound_volume(handle.id, final_volume);
-                            
+
                             // Apply updated stereo panning
                             let _ =
                                 audio_manager.set_sound_panning(handle.id, spatial_params.panning);
@@ -482,7 +482,7 @@ pub fn calculate_spatial_params(
     // === CALCULATE PANNING ===
     // Simple left-right panning based on X-axis relative position
     let relative_pos = source_pos - listener_pos;
-    
+
     // Normalize by max_distance to prevent extreme panning for nearby sources
     // Positive X = right, Negative X = left
     let panning = (relative_pos.x / max_distance).clamp(-1.0, 1.0);

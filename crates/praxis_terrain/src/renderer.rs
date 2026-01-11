@@ -151,7 +151,7 @@ impl TerrainRenderer {
         // Calculate chunk's world-space position from its grid coordinates
         // Each chunk is positioned at (chunk_x * chunk_size, 0, chunk_z * chunk_size)
         let model_matrix = Mat4::from_translation(chunk.id.world_position(64.0));
-        
+
         // Compute Model-View-Projection matrix for vertex transformation in shader
         // Matrix multiplication order: projection * view * model (right-to-left application)
         let model_view_proj = proj_matrix * view_matrix * model_matrix;
@@ -502,7 +502,7 @@ impl VegetationRenderer {
             .filter_map(|(i, inst)| {
                 // Calculate distance from camera to this instance
                 let dist = (inst.position - camera_pos).length();
-                
+
                 // Distance culling: only include instances within view range
                 if dist < view_distance {
                     let wind_phase = (i as f32 * 0.1 + time) * layer.wind_strength;
