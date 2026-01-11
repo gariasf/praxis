@@ -1179,16 +1179,6 @@ impl ParticleRenderer {
     }
 }
 
-/// Deprecated type alias for backward compatibility.
-///
-/// Use [`ParticleRenderer`] instead, which better reflects the type's responsibility
-/// as a GPU renderer rather than a game system.
-#[deprecated(
-    since = "0.1.0",
-    note = "Use `ParticleRenderer` instead. This alias will be removed in a future version."
-)]
-pub type ParticleSystem = ParticleRenderer;
-
 /// Linear interpolation between two colors.
 fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     [

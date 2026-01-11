@@ -2538,10 +2538,9 @@ pub use material_layers::{
     MAX_MATERIAL_LAYERS,
 };
 pub use mesh::{GpuMesh, MeshData};
-#[allow(deprecated)]
 pub use particles::{
     CollisionPlane, EmitterShape, GpuParticle, ParticleEmitterConfig, ParticleForce,
-    ParticleInstance, ParticleRenderer, ParticleSystem, SoftParticleConfig,
+    ParticleInstance, ParticleRenderer, SoftParticleConfig,
     MAX_PARTICLES_PER_EMITTER,
 };
 pub use post_process::{
