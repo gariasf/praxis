@@ -218,7 +218,7 @@ impl AssetLoader<MeshData> for MeshLoader {
         let mut indices: Vec<u16> = Vec::new();
         let mut normals: Vec<[f32; 3]> = Vec::new();
         let mut uvs: Vec<[f32; 2]> = Vec::new();
-        
+
         // CONSISTENCY TRACKING: Track whether we've seen normals/UVs
         // If one model has them, all must have them (GPU vertex format must be consistent)
         let mut has_normals = false;
@@ -227,7 +227,7 @@ impl AssetLoader<MeshData> for MeshLoader {
         // STEP 3: MERGE ALL MODELS INTO SINGLE MESH
         for model in &models {
             let mesh = &model.mesh;
-            
+
             // INDEX OFFSET: Calculate offset for merging indices
             // When merging models, we need to offset indices to point to the right vertices
             // in the combined vertex buffer
@@ -253,7 +253,7 @@ impl AssetLoader<MeshData> for MeshLoader {
             for &i in &mesh.indices {
                 // Apply offset to map indices to merged buffer
                 let adjusted_index = i + vertex_offset;
-                
+
                 // U16 LIMIT CHECK: GPU uses u16 indices, so max 65535 vertices
                 // If we exceed this, we need to split the mesh or use u32 indices
                 if adjusted_index > u16::MAX as u32 {
@@ -321,12 +321,12 @@ impl AssetLoader<MeshData> for MeshLoader {
         // Package all vertex attributes into MeshData struct
         // Optional attributes (normals, uvs, colors, tangents) are None if not present
         Ok(MeshData {
-            positions,           // Required: vertex positions in 3D space
-            colors: None,        // Optional: per-vertex colors (not in OBJ format)
-            normals: if has_normals { Some(normals) } else { None },  // Optional: surface normals
-            uvs: if has_uvs { Some(uvs) } else { None },              // Optional: texture coordinates
-            tangents: None,      // Optional: tangent vectors (for normal mapping, not in OBJ)
-            indices,             // Triangle indices (3 per triangle)
+            positions,    // Required: vertex positions in 3D space
+            colors: None, // Optional: per-vertex colors (not in OBJ format)
+            normals: if has_normals { Some(normals) } else { None }, // Optional: surface normals
+            uvs: if has_uvs { Some(uvs) } else { None }, // Optional: texture coordinates
+            tangents: None, // Optional: tangent vectors (for normal mapping, not in OBJ)
+            indices,      // Triangle indices (3 per triangle)
         })
     }
 
@@ -1171,13 +1171,13 @@ impl GltfLoader {
         debug!("Processing {} textures", document.textures().len());
         for texture in document.textures() {
             let image = &images[texture.source().index()];
-            
+
             // TEXTURE DATA EXTRACTION:
             // - pixels: Raw image data (already decoded from PNG/JPEG)
             // - width/height: Image dimensions in pixels
             // - format: Pixel layout (RGB or RGBA)
             let gltf_texture = GltfTexture {
-                data: image.pixels.clone(),  // Clone pixel data (could be large!)
+                data: image.pixels.clone(), // Clone pixel data (could be large!)
                 width: image.width,
                 height: image.height,
                 format: match image.format {
@@ -1205,7 +1205,7 @@ impl GltfLoader {
             // PBR METALLIC-ROUGHNESS: The standard GLTF material model
             // Alternative models (specular-glossiness) are extensions not handled here
             let pbr = material.pbr_metallic_roughness();
-            
+
             // MATERIAL PROPERTIES:
             // - base_color: Diffuse color (RGBA, values 0-1)
             // - metallic: 0=dielectric, 1=metallic (affects reflections)
@@ -1237,7 +1237,7 @@ impl GltfLoader {
         // GLTF meshes can have multiple "primitives" (sub-meshes with different materials)
         // We treat each primitive as a separate mesh in our engine
         debug!("Processing {} meshes", document.meshes().len());
-        
+
         // PRIMITIVE MAPPING: Track which engine mesh indices belong to each GLTF mesh
         // This is needed later when building the scene hierarchy
         let mut mesh_primitive_map: HashMap<usize, Vec<usize>> = HashMap::new();
@@ -1292,7 +1292,7 @@ impl GltfLoader {
                 let indices: Vec<u16> = reader
                     .read_indices()
                     .ok_or_else(|| eyre::eyre!("Mesh primitive missing indices"))?
-                    .into_u32()  // Normalize all index types to u32 first
+                    .into_u32() // Normalize all index types to u32 first
                     .map(|i| {
                         // U16 VALIDATION: Check if index fits in u16 range
                         if i > u16::MAX as u32 {
@@ -1305,12 +1305,12 @@ impl GltfLoader {
 
                 // CONSTRUCT MESH DATA: Package all attributes together
                 let mesh_data = MeshData {
-                    positions,           // Required: vertex positions
-                    colors: None,        // Optional: per-vertex colors (rarely in GLTF)
-                    normals,             // Optional: surface normals
-                    uvs,                 // Optional: texture coordinates
-                    tangents,            // Optional: tangent vectors (for normal mapping)
-                    indices,             // Triangle indices
+                    positions,    // Required: vertex positions
+                    colors: None, // Optional: per-vertex colors (rarely in GLTF)
+                    normals,      // Optional: surface normals
+                    uvs,          // Optional: texture coordinates
+                    tangents,     // Optional: tangent vectors (for normal mapping)
+                    indices,      // Triangle indices
                 };
 
                 // TRACK PRIMITIVE: Remember which engine mesh index this primitive uses
@@ -1333,7 +1333,7 @@ impl GltfLoader {
         // GLTF nodes form a tree structure with transforms and attachments
         // Nodes can have: transforms, meshes, cameras, lights, skins
         debug!("Processing {} nodes", document.nodes().len());
-        
+
         // NODE INDEX MAPPING: GLTF node indices may not be contiguous (0, 1, 2...)
         // We create a contiguous mapping for our engine's scene graph
         let mut node_map: HashMap<usize, usize> = HashMap::new();
@@ -1369,9 +1369,9 @@ impl GltfLoader {
 
             let gltf_node = GltfNode {
                 name: node.name().map(String::from),
-                transform,      // Local transform (relative to parent)
-                mesh_indices,   // References to meshes attached to this node
-                children,       // Child node indices
+                transform,    // Local transform (relative to parent)
+                mesh_indices, // References to meshes attached to this node
+                children,     // Child node indices
             };
 
             nodes.push(gltf_node);
@@ -1429,13 +1429,13 @@ impl GltfLoader {
         // All asset data is now loaded and ready for use by the engine
         // The GltfAsset struct provides convenient methods for accessing and traversing this data
         Ok(GltfAsset {
-            meshes,         // All mesh geometry (each primitive is a separate mesh)
-            materials,      // PBR material properties
-            textures,       // Decoded image data
-            nodes,          // Scene graph hierarchy with transforms
-            root_nodes,     // Entry points for scene traversal
-            animations,     // Skeletal animation clips
-            skins,          // Skeleton hierarchies for animation
+            meshes,     // All mesh geometry (each primitive is a separate mesh)
+            materials,  // PBR material properties
+            textures,   // Decoded image data
+            nodes,      // Scene graph hierarchy with transforms
+            root_nodes, // Entry points for scene traversal
+            animations, // Skeletal animation clips
+            skins,      // Skeleton hierarchies for animation
         })
     }
 

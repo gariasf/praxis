@@ -683,7 +683,7 @@ impl SaveManager {
             // Serialize each component into the EntityDefinition
             // Note: We only serialize the LOCAL Transform, not GlobalTransform
             // GlobalTransform is derived from the hierarchy and will be recomputed on load
-            
+
             // Name
             if let Some(name) = name {
                 entity_def.name = Some(name.0.clone());
@@ -710,7 +710,7 @@ impl SaveManager {
             // Asset References: Store the string ID, not the actual asset data
             // These IDs will be used to recreate handles when loading
             // The asset system will resolve these IDs to actual assets
-            
+
             // Mesh
             if let Some(mesh) = mesh {
                 entity_def.mesh = Some(mesh.id.clone());
@@ -921,7 +921,7 @@ impl SaveManager {
         let mut entity_builder = world.spawn_empty();
 
         // Restore components from serialized data
-        
+
         // Name
         if let Some(ref name) = entity_def.name {
             entity_builder.insert(Name(name.clone()));
@@ -941,7 +941,7 @@ impl SaveManager {
 
         // Asset References - recreate handles from saved string IDs
         // The asset system will resolve these IDs to actual asset data
-        
+
         // Mesh
         if let Some(ref mesh_id) = entity_def.mesh {
             entity_builder.insert(MeshHandle::new(mesh_id));

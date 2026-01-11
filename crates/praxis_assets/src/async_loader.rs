@@ -484,11 +484,11 @@ impl AsyncAssetLoader<MeshData> for AsyncMeshLoader {
         // - Capacity 1 is sufficient since we only send one result per load
         // - crossbeam_channel is chosen for its excellent performance and MPSC semantics
         let (sender, receiver) = crossbeam_channel::bounded(1);
-        
+
         // SHARED STATE: Clone Arc-wrapped loader for the spawned task
         // Arc allows shared ownership across threads without copying the loader
         let loader = Arc::clone(&self.loader);
-        
+
         // CANCELLATION SUPPORT: AtomicBool for lock-free cancellation signaling
         // - Wrapped in Arc for shared access between handle and task
         // - Atomic operations are lock-free and very fast

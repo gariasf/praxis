@@ -99,7 +99,7 @@
 //! return INSIDE  // Sphere is inside all planes
 //! ```
 //!
-//! **Why spheres?** 
+//! **Why spheres?**
 //! - Only 4 floats (center xyz + radius)
 //! - Rotation invariant (no need to transform with orientation)
 //! - Fast test (6 dot products + comparisons)
