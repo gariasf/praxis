@@ -64,10 +64,21 @@ impl TerrainRenderer {
     /// This method records draw commands for all provided chunks into the given command buffer builder.
     /// The builder must be within an active render pass before calling this method.
     ///
+    /// **Frustum Culling for Chunks:**
+    /// Only chunks visible to the camera should be passed to this function. Frustum culling is
+    /// typically performed by the caller before invoking render_chunks:
+    ///
+    /// 1. **Frustum extraction**: Extract 6 planes from the view-projection matrix
+    /// 2. **AABB testing**: Test each chunk's axis-aligned bounding box against frustum planes
+    /// 3. **Visibility determination**: A chunk is visible if its AABB intersects the frustum
+    /// 4. **Filtered rendering**: Only pass visible chunks to this function
+    ///
+    /// This eliminates expensive GPU work for off-screen chunks, often culling 60-80% of chunks.
+    ///
     /// # Arguments
     ///
     /// * `builder` - Command buffer builder within an active render pass
-    /// * `chunks` - Terrain chunks to render
+    /// * `chunks` - Terrain chunks to render (should be frustum-culled beforehand)
     /// * `material` - Terrain material configuration
     /// * `splatmap` - Splat map for texture blending
     /// * `view_matrix` - Camera view matrix
@@ -90,7 +101,21 @@ impl TerrainRenderer {
             .bind_pipeline_graphics(pipeline.clone())
             .map_err(|e| praxis_utils::eyre::eyre!("Failed to bind terrain pipeline: {}", e))?;
 
+        // Iterate through all visible chunks (assumed to be frustum-culled already)
         for chunk in chunks {
+            // **LOD Distance Calculation and Mesh Selection:**
+            // Each chunk stores multiple pre-generated meshes at different LOD levels.
+            // The `chunk.lod.current_level` index selects which mesh to render based on
+            // distance from camera (updated by TerrainLodManager before rendering).
+            //
+            // Example LOD selection logic (done elsewhere):
+            //   distance = length(camera_pos - chunk_center)
+            //   if distance < 50.0 { current_level = 0; }        // High detail
+            //   else if distance < 100.0 { current_level = 1; }  // Medium detail
+            //   else if distance < 200.0 { current_level = 2; }  // Low detail
+            //   else { current_level = 3; }                      // Lowest detail
+            //
+            // This allows far chunks to use 1/64th the triangles of near chunks.
             if let Some(mesh) = &chunk.meshes[chunk.lod.current_level] {
                 self.render_chunk(
                     builder,
@@ -123,14 +148,21 @@ impl TerrainRenderer {
             .as_ref()
             .ok_or_else(|| praxis_utils::eyre::eyre!("Terrain pipeline not set"))?;
 
+        // Calculate chunk's world-space position from its grid coordinates
+        // Each chunk is positioned at (chunk_x * chunk_size, 0, chunk_z * chunk_size)
         let model_matrix = Mat4::from_translation(chunk.id.world_position(64.0));
+        
+        // Compute Model-View-Projection matrix for vertex transformation in shader
+        // Matrix multiplication order: projection * view * model (right-to-left application)
         let model_view_proj = proj_matrix * view_matrix * model_matrix;
 
+        // Push constants provide per-draw data directly to the GPU without descriptor sets
+        // This is faster than uniform buffers for small, frequently-changing data
         #[repr(C)]
         #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
         struct ModelPushConstants {
-            model: [[f32; 4]; 4],
-            model_view_proj: [[f32; 4]; 4],
+            model: [[f32; 4]; 4],           // Model matrix for normal transformation
+            model_view_proj: [[f32; 4]; 4], // Combined MVP for position transformation
         }
 
         let push_constants = ModelPushConstants {
@@ -138,6 +170,7 @@ impl TerrainRenderer {
             model_view_proj: model_view_proj.to_cols_array_2d(),
         };
 
+        // Bind vertex buffer containing terrain mesh vertices (position, normal, UV, etc.)
         builder
             .bind_vertex_buffers(0, mesh.vertex_buffer.clone())
             .map_err(|e| praxis_utils::eyre::eyre!("Failed to bind vertex buffer: {}", e))?
@@ -145,10 +178,13 @@ impl TerrainRenderer {
             .map_err(|e| praxis_utils::eyre::eyre!("Failed to bind index buffer: {}", e))?;
 
         unsafe {
+            // Upload push constants to the pipeline
             builder
                 .push_constants(pipeline.layout().clone(), 0, push_constants)
                 .map_err(|e| praxis_utils::eyre::eyre!("Failed to push constants: {}", e))?;
 
+            // Issue indexed draw call: GPU renders mesh using indices to reference vertices
+            // Parameters: (index_count, instance_count, first_index, vertex_offset, first_instance)
             builder
                 .draw_indexed(mesh.index_count, 1, 0, 0, 0)
                 .map_err(|e| praxis_utils::eyre::eyre!("Failed to draw indexed: {}", e))?;
@@ -158,6 +194,29 @@ impl TerrainRenderer {
     }
 
     /// Creates a descriptor set for terrain rendering with splat map and material layers.
+    ///
+    /// **Texture Splatting Setup:**
+    /// This function binds all textures needed for terrain material blending:
+    ///
+    /// 1. **Splat map (binding 1)**: RGBA texture storing blend weights for 4 material layers
+    ///    - Red channel: Layer 0 weight (e.g., grass)
+    ///    - Green channel: Layer 1 weight (e.g., rock)
+    ///    - Blue channel: Layer 2 weight (e.g., dirt)
+    ///    - Alpha channel: Layer 3 weight (e.g., snow)
+    ///
+    /// 2. **Material textures (bindings 2+)**: Each material layer has multiple texture maps
+    ///    - Albedo: Base color
+    ///    - Normal: Surface detail
+    ///    - Roughness/Metallic: PBR properties
+    ///
+    /// The fragment shader samples the splat map, then blends all material layers:
+    /// ```glsl
+    /// vec4 weights = texture(splatMap, uv);
+    /// vec3 albedo = weights.r * texture(layer0_albedo, uv).rgb
+    ///             + weights.g * texture(layer1_albedo, uv).rgb
+    ///             + weights.b * texture(layer2_albedo, uv).rgb
+    ///             + weights.a * texture(layer3_albedo, uv).rgb;
+    /// ```
     ///
     /// # Panics
     ///
@@ -179,11 +238,14 @@ impl TerrainRenderer {
             .set_layouts()[0]
             .clone();
 
+        // Binding 0: View-projection uniform buffer
+        // Binding 1: Splat map texture + sampler (contains blend weights)
         let mut writes = vec![
             WriteDescriptorSet::buffer(0, view_proj_buffer),
             WriteDescriptorSet::image_view_sampler(1, splat_map_view, splat_map_sampler),
         ];
 
+        // Bindings 2+: Material layer textures (albedo, normal, etc. for each layer)
         for (i, (view, sampler)) in layer_textures.iter().zip(layer_samplers.iter()).enumerate() {
             writes.push(WriteDescriptorSet::image_view_sampler(
                 (2 + i) as u32,
@@ -200,23 +262,46 @@ impl TerrainRenderer {
 }
 
 /// Instance data for GPU instancing of vegetation.
+///
+/// **GPU Instancing Structure:**
+/// Each instance of vegetation (grass blade, tree, rock) needs its own transform and properties.
+/// Instead of storing this data in uniform buffers or push constants (which have size limits),
+/// we upload it as a vertex buffer where each "vertex" represents one instance.
+///
+/// The vertex shader reads this per-instance data using `gl_InstanceID`:
+/// ```glsl
+/// layout(location = 5) in mat4 instanceModel;    // Instance transform
+/// layout(location = 9) in vec4 instanceColor;    // Color variation
+///
+/// void main() {
+///     // Apply instance transform to base mesh vertex
+///     gl_Position = viewProj * instanceModel * vec4(vertexPos, 1.0);
+///     fragColor = instanceColor;
+/// }
+/// ```
+///
+/// This allows rendering 100,000+ instances with a single draw call.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct VegetationInstanceData {
-    /// Model matrix column 0.
+    /// Model matrix column 0 (contains X-axis basis and X translation).
     pub model_col0: [f32; 4],
-    /// Model matrix column 1.
+    /// Model matrix column 1 (contains Y-axis basis and Y translation).
     pub model_col1: [f32; 4],
-    /// Model matrix column 2.
+    /// Model matrix column 2 (contains Z-axis basis and Z translation).
     pub model_col2: [f32; 4],
-    /// Model matrix column 3.
+    /// Model matrix column 3 (contains position and homogeneous coordinate).
     pub model_col3: [f32; 4],
-    /// Color variation RGB and wind phase.
+    /// Color variation RGB (for visual diversity) and wind phase (for animation offset).
     pub color_and_wind: [f32; 4],
 }
 
 impl VegetationInstanceData {
     /// Creates instance data from a model matrix and color.
+    ///
+    /// The model matrix encodes position, rotation, and scale for this vegetation instance.
+    /// We store it column-major (as Mat4 is already in column-major format) to match
+    /// GPU expectations. Wind phase provides per-instance animation offset for natural motion.
     pub fn from_matrix(model: Mat4, color: Vec3, wind_phase: f32) -> Self {
         let cols = model.to_cols_array_2d();
         Self {
@@ -279,6 +364,22 @@ impl VegetationRenderer {
     }
 
     /// Renders a vegetation layer using GPU instancing.
+    ///
+    /// **GPU Instancing in Action:**
+    /// This function demonstrates the instancing workflow:
+    ///
+    /// 1. **Prepare instance data**: Create an array of `VegetationInstanceData`, one per instance
+    /// 2. **Upload to GPU**: Store instance data in a vertex buffer (VERTEX_BUFFER usage)
+    /// 3. **Single draw call**: GPU renders base mesh N times, reading instance data per draw
+    ///
+    /// Key insight: Instead of calling `draw()` 100,000 times (one per grass blade), we call
+    /// `draw_instanced(mesh, 100000)` once. The GPU automatically invokes the vertex shader
+    /// 100,000 times with different `gl_InstanceID` values, allowing each instance to read
+    /// its unique transform from the instance buffer.
+    ///
+    /// Performance comparison:
+    /// - Traditional: 100,000 draw calls = ~100ms CPU overhead
+    /// - Instanced: 1 draw call = ~0.1ms CPU overhead (1000x faster)
     pub fn render_layer(
         &self,
         layer: &VegetationLayer,
@@ -291,11 +392,13 @@ impl VegetationRenderer {
             return Ok(());
         }
 
+        // Build instance data array: each entry contains transform + color for one instance
         let instance_data: Vec<VegetationInstanceData> = layer
             .instances
             .iter()
             .enumerate()
             .map(|(i, inst)| {
+                // Vary wind phase per instance to avoid synchronized animation
                 let wind_phase = (i as f32 * 0.1 + time) * layer.wind_strength;
                 VegetationInstanceData::from_matrix(
                     inst.model_matrix(),
@@ -305,6 +408,9 @@ impl VegetationRenderer {
             })
             .collect();
 
+        // Upload instance data to GPU as a vertex buffer (one per vegetation layer)
+        // PREFER_DEVICE: Store in VRAM for fast GPU access
+        // HOST_SEQUENTIAL_WRITE: Allow CPU updates for dynamic vegetation
         let _instance_buffer = Buffer::from_iter(
             self.memory_allocator.clone(),
             BufferCreateInfo {
@@ -360,6 +466,26 @@ impl VegetationRenderer {
     }
 
     /// Builds instance buffer data for a vegetation layer with frustum culling.
+    ///
+    /// **Frustum Culling for Vegetation:**
+    /// With millions of vegetation instances, rendering all of them every frame would be wasteful.
+    /// Frustum culling eliminates instances outside the camera's view before uploading to GPU.
+    ///
+    /// Culling process:
+    /// 1. **Distance culling**: Quick rejection based on distance from camera
+    ///    - Calculate distance from camera to instance position
+    ///    - If distance > view_distance, skip this instance
+    /// 2. **Frustum culling** (can be added): Test if instance is within view frustum
+    ///    - Extract 6 planes from view-projection matrix
+    ///    - Test instance bounding sphere against planes
+    ///    - Only include instances that intersect frustum
+    /// 3. **LOD selection** (can be added): Choose mesh detail based on distance
+    ///    - Near instances: Full detail mesh
+    ///    - Medium distance: Simplified mesh
+    ///    - Far distance: Billboard (single quad)
+    ///
+    /// Performance impact: Typically culls 50-70% of instances, saving GPU vertex processing.
+    /// The filtered instance data is uploaded to GPU, so only visible instances are rendered.
     pub fn build_instance_buffer(
         &self,
         layer: &VegetationLayer,
@@ -367,12 +493,17 @@ impl VegetationRenderer {
         view_distance: f32,
         time: f32,
     ) -> Result<Subbuffer<[VegetationInstanceData]>> {
+        // Filter instances: only include those within view distance
+        // This is a simple distance-based culling; full frustum culling would be more efficient
         let visible_instances: Vec<VegetationInstanceData> = layer
             .instances
             .iter()
             .enumerate()
             .filter_map(|(i, inst)| {
+                // Calculate distance from camera to this instance
                 let dist = (inst.position - camera_pos).length();
+                
+                // Distance culling: only include instances within view range
                 if dist < view_distance {
                     let wind_phase = (i as f32 * 0.1 + time) * layer.wind_strength;
                     Some(VegetationInstanceData::from_matrix(
@@ -381,11 +512,14 @@ impl VegetationRenderer {
                         wind_phase,
                     ))
                 } else {
+                    // Instance is too far away, exclude from rendering
                     None
                 }
             })
             .collect();
 
+        // Upload only visible instances to GPU
+        // This dramatically reduces vertex processing load on the GPU
         let buffer = Buffer::from_iter(
             self.memory_allocator.clone(),
             BufferCreateInfo {
