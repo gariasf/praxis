@@ -149,7 +149,8 @@ struct Particle {
 }
 
 /// GPU particle data for compute shaders.
-#[repr(C)]
+/// Layout matches the GLSL struct in particle_sort.comp
+#[repr(C, align(16))]
 #[derive(Clone, Copy, Debug, Default, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct GpuParticle {
     pub position: [f32; 3],
@@ -303,6 +304,22 @@ pub struct ParticleInstance {
     /// Texture atlas index (for multi-texture particles).
     #[format(R32_SFLOAT)]
     pub atlas_index: f32,
+}
+
+/// Indirect draw command for particle rendering (matches VkDrawIndexedIndirectCommand).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ParticleIndirectDrawCommand {
+    /// Number of indices to draw (6 for quad).
+    pub index_count: u32,
+    /// Number of instances (particle count).
+    pub instance_count: u32,
+    /// First index in the index buffer.
+    pub first_index: u32,
+    /// Vertex offset in the vertex buffer.
+    pub vertex_offset: i32,
+    /// First instance ID.
+    pub first_instance: u32,
 }
 
 /// Shape of particle emitter.
@@ -794,6 +811,7 @@ impl ParticleEmitter {
 pub struct ParticleRenderer {
     emitters: HashMap<String, ParticleEmitter>,
     instance_buffer: Option<Subbuffer<[ParticleInstance]>>,
+    indirect_draw_buffer: Option<Subbuffer<ParticleIndirectDrawCommand>>,
     quad_vertices: Subbuffer<[Vertex3D]>,
     quad_indices: Subbuffer<[u16]>,
     memory_allocator: Arc<dyn MemoryAllocator>,
@@ -870,6 +888,7 @@ impl ParticleRenderer {
         Ok(Self {
             emitters: HashMap::new(),
             instance_buffer: None,
+            indirect_draw_buffer: None,
             quad_vertices: quad_vertex_buffer,
             quad_indices: quad_index_buffer,
             memory_allocator,
@@ -989,15 +1008,18 @@ impl ParticleRenderer {
 
         if all_instances.is_empty() {
             self.instance_buffer = None;
+            self.indirect_draw_buffer = None;
             return Ok(());
         }
 
+        let instance_count = all_instances.len();
+
         trace!(
             "Preparing {} particle instances for rendering",
-            all_instances.len()
+            instance_count
         );
 
-        if self.enable_gpu_sorting && all_instances.len() > 1 {
+        if self.enable_gpu_sorting && instance_count > 1 {
             self.sort_particles_gpu(&mut all_instances)?;
         } else {
             all_instances.sort_by(|a, b| {
@@ -1025,6 +1047,33 @@ impl ParticleRenderer {
         .map_err(|e| eyre::eyre!("Failed to create particle instance buffer: {}", e))?;
 
         self.instance_buffer = Some(instance_buffer);
+
+        // Create indirect draw buffer for indirect rendering
+        let indirect_draw_cmd = ParticleIndirectDrawCommand {
+            index_count: 6, // 2 triangles = 6 indices for quad
+            instance_count: instance_count as u32,
+            first_index: 0,
+            vertex_offset: 0,
+            first_instance: 0,
+        };
+
+        let indirect_buffer = Buffer::from_data(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::INDIRECT_BUFFER | BufferUsage::TRANSFER_DST,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            indirect_draw_cmd,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create indirect draw buffer: {}", e))?;
+
+        self.indirect_draw_buffer = Some(indirect_buffer);
+
         Ok(())
     }
 
@@ -1055,7 +1104,7 @@ impl ParticleRenderer {
         let gpu_buffer = Buffer::from_iter(
             self.memory_allocator.clone(),
             BufferCreateInfo {
-                usage: BufferUsage::STORAGE_BUFFER,
+                usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST | BufferUsage::TRANSFER_SRC,
                 ..Default::default()
             },
             AllocationCreateInfo {
@@ -1110,15 +1159,17 @@ impl ParticleRenderer {
                     num_particles: padded_count as u32,
                 };
 
+                builder
+                    .push_constants(
+                        self.sort_pipeline.as_ref().unwrap().layout().clone(),
+                        0,
+                        push_constants,
+                    )
+                    .map_err(|e| eyre::eyre!("Failed to push constants: {}", e))?;
+
                 unsafe {
                     builder
-                        .push_constants(
-                            self.sort_pipeline.as_ref().unwrap().layout().clone(),
-                            0,
-                            push_constants,
-                        )
-                        .map_err(|e| eyre::eyre!("Failed to push constants: {}", e))?
-                        .dispatch([(padded_count / 256) as u32 + 1, 1, 1])
+                        .dispatch([(padded_count.div_ceil(256)) as u32, 1, 1])
                         .map_err(|e| eyre::eyre!("Failed to dispatch: {}", e))?;
                 }
             }
@@ -1176,6 +1227,11 @@ impl ParticleRenderer {
     /// Gets the quad index buffer.
     pub fn quad_index_buffer(&self) -> &Subbuffer<[u16]> {
         &self.quad_indices
+    }
+
+    /// Gets the indirect draw buffer for indirect rendering.
+    pub fn indirect_draw_buffer(&self) -> Option<&Subbuffer<ParticleIndirectDrawCommand>> {
+        self.indirect_draw_buffer.as_ref()
     }
 }
 
@@ -1356,8 +1412,16 @@ mod tests {
 
     #[test]
     fn test_particle_instance_size() {
-        // Verify ParticleInstance has expected size
+        // Verify ParticleInstance has expected size (3 + 4 + 1 + 1 + 1 floats = 10 * 4 = 40 bytes)
         assert_eq!(std::mem::size_of::<ParticleInstance>(), 40);
+    }
+
+    #[test]
+    fn test_gpu_particle_size() {
+        // Verify GpuParticle has expected size with alignment
+        // (3 + 1 + 3 + 1 + 4 + 1 + 1 + 1 + 1 = 16 floats = 64 bytes)
+        assert_eq!(std::mem::size_of::<GpuParticle>(), 64);
+        assert_eq!(std::mem::align_of::<GpuParticle>(), 16);
     }
 
     #[test]
@@ -1368,5 +1432,21 @@ mod tests {
         };
         let emitter = ParticleEmitter::new(config);
         assert_eq!(emitter.particles.len(), MAX_PARTICLES_PER_EMITTER);
+    }
+
+    #[test]
+    fn test_particle_indirect_draw_command_size() {
+        // Should match VkDrawIndexedIndirectCommand (20 bytes)
+        assert_eq!(std::mem::size_of::<ParticleIndirectDrawCommand>(), 20);
+    }
+
+    #[test]
+    fn test_particle_indirect_draw_command_default() {
+        let cmd = ParticleIndirectDrawCommand::default();
+        assert_eq!(cmd.index_count, 0);
+        assert_eq!(cmd.instance_count, 0);
+        assert_eq!(cmd.first_index, 0);
+        assert_eq!(cmd.vertex_offset, 0);
+        assert_eq!(cmd.first_instance, 0);
     }
 }

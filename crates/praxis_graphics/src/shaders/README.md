@@ -186,6 +186,21 @@ GPU-based bitonic sort for particles:
 - Efficient parallel sorting algorithm
 - Works on power-of-two particle counts
 - Uses bitonic sort algorithm for parallel execution
+- Proper std430 buffer layout matching Rust GpuParticle struct
+
+#### `particle_update.comp`
+GPU-accelerated particle simulation:
+- Updates particle positions, velocities, and lifetimes on GPU
+- Applies forces (gravity, wind, drag)
+- Updates camera distance for sorting
+- Processes up to 256 particles per workgroup
+
+#### `particle_emit.comp`
+GPU-based particle emission:
+- Emits new particles on GPU
+- Atomic operations for thread-safe particle slot allocation
+- Randomized particle properties (velocity, size, lifetime)
+- Supports various emitter shapes
 
 ## Shader Conventions
 

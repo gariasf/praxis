@@ -3022,7 +3022,8 @@ pub use material_layers::{
 pub use mesh::{GpuMesh, MeshData};
 pub use particles::{
     CollisionPlane, EmitterShape, GpuParticle, ParticleEmitterConfig, ParticleForce,
-    ParticleInstance, ParticleRenderer, SoftParticleConfig, MAX_PARTICLES_PER_EMITTER,
+    ParticleIndirectDrawCommand, ParticleInstance, ParticleRenderer, SoftParticleConfig,
+    MAX_PARTICLES_PER_EMITTER,
 };
 pub use post_process::{
     BloomConfig, BloomEffect, BrightnessExtractionPass, ChromaticAberrationConfig,

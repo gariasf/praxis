@@ -2,9 +2,22 @@
 
 layout(local_size_x = 256) in;
 
-layout(set = 0, binding = 0) buffer ParticleBuffer {
-    vec4 position_distance[];
-} particles;
+// Match GpuParticle struct in Rust
+struct GpuParticle {
+    vec3 position;
+    float _padding1;
+    vec3 velocity;
+    float _padding2;
+    vec4 color;
+    float size;
+    float rotation;
+    float lifetime;
+    float camera_distance;
+};
+
+layout(set = 0, binding = 0, std430) buffer ParticleBuffer {
+    GpuParticle particles[];
+};
 
 layout(push_constant) uniform PushConstants {
     uint stage;
@@ -27,15 +40,16 @@ void main() {
     if (partner_id < pc.num_particles && partner_id > id) {
         bool ascending = ((id & distance) == 0);
         
-        float dist_a = particles.position_distance[id].w;
-        float dist_b = particles.position_distance[partner_id].w;
+        float dist_a = particles[id].camera_distance;
+        float dist_b = particles[partner_id].camera_distance;
         
+        // Sort back-to-front for alpha blending (higher distance first)
         bool should_swap = (ascending && dist_a < dist_b) || (!ascending && dist_a > dist_b);
         
         if (should_swap) {
-            vec4 temp = particles.position_distance[id];
-            particles.position_distance[id] = particles.position_distance[partner_id];
-            particles.position_distance[partner_id] = temp;
+            GpuParticle temp = particles[id];
+            particles[id] = particles[partner_id];
+            particles[partner_id] = temp;
         }
     }
 }

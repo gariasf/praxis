@@ -1,0 +1,121 @@
+#version 450
+
+// GPU-accelerated particle emission compute shader
+// Emits new particles based on emitter configuration
+
+layout(local_size_x = 64) in;
+
+// Match GpuParticle struct in Rust
+struct GpuParticle {
+    vec3 position;
+    float _padding1;
+    vec3 velocity;
+    float _padding2;
+    vec4 color;
+    float size;
+    float rotation;
+    float lifetime;
+    float camera_distance;
+};
+
+layout(set = 0, binding = 0, std430) buffer ParticleBuffer {
+    GpuParticle particles[];
+};
+
+layout(set = 0, binding = 1, std140) uniform EmitterUniforms {
+    vec3 emitter_position;
+    float emission_rate;
+    vec3 initial_velocity;
+    float velocity_randomness;
+    vec4 initial_color;
+    float initial_size;
+    float size_randomness;
+    float particle_lifetime;
+    float lifetime_randomness;
+    float delta_time;
+    uint max_particles;
+    uint emit_count;
+    float time;
+} emitter;
+
+layout(set = 0, binding = 2, std430) buffer ParticleCounter {
+    uint active_count;
+    uint dead_indices[];
+} counter;
+
+// Hash function for randomness
+float hash(uint seed) {
+    seed = (seed ^ 61u) ^ (seed >> 16u);
+    seed *= 9u;
+    seed = seed ^ (seed >> 4u);
+    seed *= 0x27d4eb2du;
+    seed = seed ^ (seed >> 15u);
+    return float(seed) / 4294967296.0;
+}
+
+vec3 randomDirection(uint seed) {
+    float theta = hash(seed * 2u) * 6.28318530718; // 2 * PI
+    float phi = acos(2.0 * hash(seed * 2u + 1u) - 1.0);
+    
+    return vec3(
+        sin(phi) * cos(theta),
+        sin(phi) * sin(theta),
+        cos(phi)
+    );
+}
+
+void main() {
+    uint id = gl_GlobalInvocationID.x;
+    
+    if (id >= emitter.emit_count) {
+        return;
+    }
+    
+    // Find a dead particle slot
+    if (counter.active_count >= emitter.max_particles) {
+        return;
+    }
+    
+    uint particle_index = atomicAdd(counter.active_count, 1);
+    if (particle_index >= emitter.max_particles) {
+        atomicAdd(counter.active_count, -1);
+        return;
+    }
+    
+    // Generate random seed based on particle index and time
+    uint seed = uint(emitter.time * 1000.0) + particle_index;
+    
+    // Emit particle
+    GpuParticle particle;
+    
+    // Position (at emitter location for now, can add shape offsets)
+    particle.position = emitter.emitter_position;
+    
+    // Velocity with randomness
+    vec3 random_offset = randomDirection(seed) * emitter.velocity_randomness;
+    particle.velocity = emitter.initial_velocity + random_offset;
+    
+    // Color
+    particle.color = emitter.initial_color;
+    
+    // Size with randomness
+    float size_rand = (hash(seed + 1000u) - 0.5) * 2.0 * emitter.size_randomness;
+    particle.size = emitter.initial_size + size_rand;
+    
+    // Lifetime with randomness
+    float lifetime_rand = (hash(seed + 2000u) - 0.5) * 2.0 * emitter.lifetime_randomness;
+    particle.lifetime = emitter.particle_lifetime + lifetime_rand;
+    
+    // Rotation
+    particle.rotation = hash(seed + 3000u) * 6.28318530718;
+    
+    // Camera distance (will be updated later)
+    particle.camera_distance = 0.0;
+    
+    // Padding
+    particle._padding1 = 0.0;
+    particle._padding2 = 0.0;
+    
+    // Write particle
+    particles[particle_index] = particle;
+}
