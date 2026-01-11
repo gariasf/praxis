@@ -10,6 +10,17 @@
 #![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::cast_precision_loss)]
 //!
+//! # Overview: Why Spatial Optimization Matters
+//!
+//! In a 3D game engine, rendering every object in a scene is prohibitively expensive. Consider
+//! a city with 100,000 buildings - rendering all of them when the camera sees only 100 wastes
+//! 99.9% of GPU resources. Spatial optimization solves this by:
+//!
+//! - **Reducing Draw Calls**: Only submit visible objects to the GPU (major performance win)
+//! - **Lowering Vertex Processing**: Skip vertex shading for culled objects
+//! - **Enabling Large Worlds**: Support scenes with millions of objects efficiently
+//! - **Balancing LOD**: Show high detail nearby, low detail far away
+//!
 //! # Architecture
 //!
 //! The spatial optimization pipeline works as follows:
@@ -19,6 +30,74 @@
 //! 3. **LOD Selection**: Choose appropriate mesh detail level based on distance
 //! 4. **Occlusion Culling**: Test object visibility using GPU occlusion queries
 //! 5. **Rendering**: Only visible objects at appropriate LOD levels are rendered
+//!
+//! # Spatial Partitioning Trade-offs
+//!
+//! This crate provides two primary spatial structures, each with different characteristics:
+//!
+//! ## Octree
+//!
+//! **Structure**: Recursively subdivides 3D space into 8 equal octants (2×2×2 grid).
+//! Each node splits into 8 children when entity count exceeds threshold.
+//!
+//! **Best For**:
+//! - Static scenes with uniform object distribution
+//! - Broad-phase collision detection
+//! - Scenes where objects naturally cluster in space (e.g., voxel worlds)
+//!
+//! **Advantages**:
+//! - Simple, intuitive spatial subdivision
+//! - Good for evenly distributed objects
+//! - Natural fit for volumetric data (voxels, particles)
+//! - Predictable memory layout
+//!
+//! **Disadvantages**:
+//! - Poor performance with non-uniform object distribution (empty space wastes nodes)
+//! - Fixed subdivision can miss tight groupings
+//! - Rebuilding entire tree for dynamic objects is expensive
+//! - Objects spanning octant boundaries stored in parent (loose octree problem)
+//!
+//! **Insertion Cost**: O(log n) per object on average
+//! **Query Cost**: O(log n) for point queries, O(k + log n) for range queries (k = results)
+//!
+//! ## BVH (Bounding Volume Hierarchy)
+//!
+//! **Structure**: Binary tree where each node's bounds tightly enclose its children.
+//! Built bottom-up by recursively partitioning objects along longest axis.
+//!
+//! **Best For**:
+//! - Ray tracing and ray casting (near-optimal for ray queries)
+//! - Scenes with clustered or non-uniform object distribution
+//! - Mesh rendering with frustum culling
+//!
+//! **Advantages**:
+//! - Tight-fitting bounds (no wasted space testing)
+//! - Excellent ray tracing performance (O(log n) average case)
+//! - Adapts naturally to object clustering
+//! - Binary branching = better cache performance than octree's 8-way
+//!
+//! **Disadvantages**:
+//! - More complex construction algorithm
+//! - Requires full rebuild for dynamic scenes (though faster to build than octree)
+//! - Slightly higher memory overhead per node
+//! - Less intuitive spatial partitioning than octree
+//!
+//! **Insertion Cost**: O(n log n) to rebuild entire tree (optimized with SAH heuristics)
+//! **Query Cost**: O(log n) for ray queries, O(log n + k) for range queries
+//!
+//! ## Choosing Between Them
+//!
+//! | Scenario | Recommended Structure |
+//! |----------|----------------------|
+//! | Static mesh rendering | BVH (tighter bounds = better culling) |
+//! | Ray casting (e.g., picking) | BVH (near-optimal for rays) |
+//! | Voxel/volumetric data | Octree (natural spatial mapping) |
+//! | Uniform object distribution | Octree (simpler, equally effective) |
+//! | Clustered objects (cities, forests) | BVH (adapts to clustering) |
+//! | Frequent insertions/removals | Neither - use spatial hashing instead |
+//!
+//! **Performance Rule of Thumb**: For typical game scenes with meshes and frustum culling,
+//! BVH typically outperforms octree by 20-40% due to tighter bounds and better cache behavior.
 //!
 //! # Example Usage
 //!

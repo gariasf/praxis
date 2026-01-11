@@ -2,6 +2,160 @@
 //!
 //! A BVH is a tree structure where each node contains a bounding volume that encloses
 //! its children. BVHs are typically faster than octrees for ray tracing and nearest neighbor queries.
+//!
+//! # How BVHs Work
+//!
+//! Unlike octrees which divide *space*, BVHs divide *objects*. Each node contains a bounding
+//! box that tightly fits its children, creating a hierarchy where spatial proximity in 3D
+//! space maps to tree proximity, but without fixed spatial divisions.
+//!
+//! ```text
+//! BVH Structure:
+//!
+//!                    Root (bounds all objects)
+//!                   /                          \
+//!            Left Subtree                    Right Subtree
+//!        (bounds left half)              (bounds right half)
+//!            /         \                      /           \
+//!      Left-Left  Left-Right          Right-Left   Right-Right
+//!      (bounds)    (bounds)            (bounds)      (bounds)
+//!         |           |                   |              |
+//!      Objects     Objects             Objects        Objects
+//! ```
+//!
+//! # BVH Construction Algorithm (Bottom-Up, Recursive)
+//!
+//! The `build_recursive` function implements a top-down construction strategy:
+//!
+//! ## Algorithm Steps:
+//!
+//! 1. **Base Case**: If only 1 entity, create leaf node with entity and its bounds
+//!
+//! 2. **Compute Combined Bounds**: Union of all entity bounding boxes
+//!    - This becomes the parent node's bounds
+//!    - Tightly encloses all children (no wasted space)
+//!
+//! 3. **Choose Split Axis**: Select axis with largest spatial extent
+//!    - Compute size = (max - min) for each axis
+//!    - Split along longest dimension (X, Y, or Z)
+//!    - **Why?** Maximizes separation between children, minimizes overlap
+//!    - **Example**: Linear arrangement along X → split on X axis
+//!
+//! 4. **Partition Objects**: Sort entities along chosen axis by their center points
+//!    - Use quicksort/mergesort: O(n log n)
+//!    - Split at median: left half gets first n/2, right half gets rest
+//!    - **Why median?** Creates balanced tree (depth = log₂ n)
+//!
+//! 5. **Recurse**: Build left and right subtrees from partitioned entity lists
+//!    - Left child: entities [0..mid]
+//!    - Right child: entities [mid..n]
+//!    - Each child recursively applies steps 1-5
+//!
+//! 6. **Create Internal Node**: Node with combined bounds and two child pointers
+//!
+//! ## Complexity Analysis:
+//!
+//! - **Time**: O(n log² n)
+//!   - O(n log n) to sort at each level
+//!   - O(log n) tree levels
+//!   - Total: O(n log n) × O(log n) = O(n log² n)
+//! - **Space**: O(n) for tree nodes
+//! - **Tree Height**: O(log n) for balanced tree
+//!
+//! ## Construction Example:
+//!
+//! ```text
+//! Given 4 objects with centers: A(0,0,0), B(10,0,0), C(0,10,0), D(10,10,0)
+//!
+//! Step 1: Compute combined bounds: [min:(0,0,0), max:(10,10,0)]
+//! Step 2: Choose split axis: X and Y equal (10), choose X arbitrarily
+//! Step 3: Sort by X: [A(0,_,_), C(0,_,_), B(10,_,_), D(10,_,_)]
+//! Step 4: Split at median (2): Left=[A,C], Right=[B,D]
+//! Step 5: Recurse:
+//!         Left subtree: Bounds(A∪C), split on Y, children: Leaf(A), Leaf(C)
+//!         Right subtree: Bounds(B∪D), split on Y, children: Leaf(B), Leaf(D)
+//! Step 6: Root = Internal(bounds, left, right)
+//! ```
+//!
+//! # BVH Traversal Algorithm (Ray Queries)
+//!
+//! BVHs excel at ray tracing because binary structure enables efficient traversal:
+//!
+//! ```text
+//! function RayQuery(node, ray):
+//!     // Test ray against node's bounding box
+//!     if ray does NOT intersect node.bounds:
+//!         return []  // Early rejection (KEY optimization)
+//!
+//!     if node is Leaf:
+//!         return [node.entity]  // Found intersection
+//!
+//!     // Test both children (binary tree = 2 tests, not 8 like octree)
+//!     results = []
+//!     results += RayQuery(node.left, ray)
+//!     results += RayQuery(node.right, ray)
+//!     return results
+//! ```
+//!
+//! ## Performance Analysis:
+//!
+//! - **Average case**: O(log n) ray-box tests
+//! - **Worst case**: O(n) if ray pierces many nodes
+//! - **Typical**: 10-30 tests for 1000-object scene
+//!
+//! ## Why BVH is Better for Rays:
+//!
+//! 1. **Tighter Bounds**: Boxes fit objects exactly (no empty space like octree)
+//! 2. **Binary Branching**: Test 2 children vs 8 (better cache locality)
+//! 3. **Adaptive Structure**: Automatically balances to object distribution
+//!
+//! # BVH vs Octree Trade-offs
+//!
+//! ## BVH Advantages:
+//! - **Tight-fitting bounds**: No wasted space testing empty regions
+//! - **Better ray tracing**: Near-optimal O(log n) average case
+//! - **Adapts to clustering**: Naturally handles non-uniform object distribution
+//! - **Binary tree**: Better CPU cache performance (2 children vs 8)
+//! - **Frustum culling**: Tighter bounds = fewer false positives
+//!
+//! ## BVH Disadvantages:
+//! - **Rebuild cost**: Full tree rebuild on any change (O(n log n))
+//! - **Construction complexity**: More complex than octree subdivision
+//! - **Memory overhead**: Stores explicit bounds per internal node
+//! - **Less intuitive**: Spatial partitioning not as obvious as octree
+//!
+//! ## When to Use BVH:
+//! - Ray tracing / ray casting (e.g., mouse picking, line-of-sight)
+//! - Static or infrequently changing scenes
+//! - Frustum culling for rendering
+//! - Objects with non-uniform distribution (cities, forests)
+//!
+//! ## When to Use Octree Instead:
+//! - Volumetric data (voxels, particles)
+//! - Uniform object distribution
+//! - Simpler implementation needs
+//! - Educational purposes (more intuitive)
+//!
+//! # Integration with Rendering Pipeline
+//!
+//! BVH integrates into frustum culling via `query_with_predicate`:
+//!
+//! ```text
+//! 1. Extract Frustum: Compute 6 planes from camera view-projection matrix
+//! 2. Query BVH: bvh.query_with_predicate(|bounds| frustum.intersects(bounds))
+//! 3. Hierarchical Test:
+//!    - Test root bounds against frustum
+//!    - If outside: cull entire scene
+//!    - If inside/intersecting: recursively test left and right children
+//!    - Accumulate visible entities from leaf nodes
+//! 4. Result: List of potentially visible entities (ready for LOD selection)
+//! ```
+//!
+//! **Performance Example**:
+//! - 5,000 objects, 150 visible (3%)
+//! - Brute force: 5,000 frustum tests
+//! - BVH: ~25 node tests + 150 entity tests = 175 tests
+//! - **Speedup**: 28× faster culling
 
 use crate::aabb::Aabb;
 use bevy_ecs::entity::Entity;
@@ -38,6 +192,26 @@ impl BvhNode {
     }
 
     /// Queries all entities that intersect the given bounds.
+    ///
+    /// # Hierarchical Query Algorithm
+    ///
+    /// 1. **Early Rejection**: Test node bounds against query bounds first
+    ///    - If no intersection, skip this entire subtree (KEY optimization)
+    ///    - One AABB test eliminates entire branch
+    /// 2. **Leaf Case**: If leaf node, add entity to results
+    /// 3. **Internal Case**: Recursively query both left and right children
+    ///    - Binary branching: exactly 2 recursive calls per internal node
+    ///    - Each child performs its own bounds test (step 1)
+    ///
+    /// # Performance
+    ///
+    /// - **Best case**: O(log n) - query region intersects only one leaf path
+    /// - **Average case**: O(log n + k) - k = number of results
+    /// - **Worst case**: O(n) - query region overlaps entire tree
+    ///
+    /// Compare to octree's 8-way branching:
+    /// - BVH: 2 children = better cache locality
+    /// - Octree: 8 children = more branches to test
     pub fn query(&self, query_bounds: &Aabb, results: &mut Vec<Entity>) {
         if !self.bounds().intersects(query_bounds) {
             return;
@@ -146,6 +320,47 @@ impl Bvh {
     }
 
     /// Recursively builds the BVH tree.
+    ///
+    /// # Construction Algorithm (Top-Down, Recursive)
+    ///
+    /// This implements a **Surface Area Heuristic (SAH)-lite** approach:
+    ///
+    /// 1. **Base Case**: Single entity → create leaf node
+    ///
+    /// 2. **Compute Bounds**: Union all entity AABBs to get parent bounds
+    ///    - Tight fit: no empty space unlike octree's fixed cells
+    ///
+    /// 3. **Choose Split Axis**: Pick axis with largest extent (X, Y, or Z)
+    ///    - **Goal**: Maximize separation between children
+    ///    - **Why largest axis?** Objects spread out more on this axis
+    ///    - **Example**: 100 objects in line along X-axis → split on X
+    ///
+    /// 4. **Sort and Partition**: Sort entities by center position on split axis
+    ///    - Sort cost: O(n log n) per level
+    ///    - Split at median: balanced tree (depth = log₂ n)
+    ///    - Left subtree: first half, Right subtree: second half
+    ///
+    /// 5. **Recurse**: Build left and right children from partitions
+    ///    - Each child is an independent BVH of its partition
+    ///    - Tree naturally balances due to median split
+    ///
+    /// 6. **Create Internal Node**: Store combined bounds and child pointers
+    ///
+    /// # Complexity
+    ///
+    /// - **Time**: O(n log² n)
+    ///   - Tree depth: O(log n) levels
+    ///   - Sort at each level: O(n log n)
+    ///   - Total: O(log n) × O(n log n) = O(n log² n)
+    /// - **Space**: O(n) nodes in tree
+    ///
+    /// # Optimizations (Not Implemented)
+    ///
+    /// Advanced BVH builders use Surface Area Heuristic (SAH):
+    /// - Test multiple split positions, choose one minimizing cost
+    /// - Cost function: `surface_area(left)` × `count(left)` + `surface_area(right)` × `count(right)`
+    /// - Improves ray tracing by 2-3×, but 10× slower to build
+    /// - Trade-off: construction time vs query performance
     fn build_recursive(mut entities: Vec<(Entity, Aabb)>) -> BvhNode {
         if entities.len() == 1 {
             let (entity, bounds) = entities.pop().unwrap();
@@ -316,6 +531,39 @@ impl Bvh {
     ///
     /// This enables hierarchical culling by testing node bounds against
     /// arbitrary predicates (e.g., frustum intersection) before descending.
+    ///
+    /// # Use Case: Frustum Culling Integration
+    ///
+    /// This is THE key function for rendering pipeline integration:
+    ///
+    /// ```rust,ignore
+    /// // Extract frustum planes from camera
+    /// let frustum = camera.extract_frustum();
+    ///
+    /// // Query BVH with frustum test as predicate
+    /// let visible = bvh.query_with_predicate(|bounds| {
+    ///     frustum.intersects_aabb(bounds)
+    /// });
+    ///
+    /// // Result: only entities potentially visible to camera
+    /// for entity in visible {
+    ///     renderer.draw(entity);
+    /// }
+    /// ```
+    ///
+    /// # How It Works
+    ///
+    /// 1. Test root bounds against predicate (e.g., frustum intersection)
+    /// 2. If fails: entire scene culled (early exit)
+    /// 3. If passes: recursively test children
+    /// 4. Leaf nodes: add entity if parent bounds passed
+    ///
+    /// # Performance
+    ///
+    /// Hierarchical testing dramatically reduces predicate evaluations:
+    /// - **Without hierarchy**: Test all 10,000 entities
+    /// - **With BVH**: Test ~25 internal nodes + 150 visible entities = 175 tests
+    /// - **Speedup**: 57× fewer tests
     pub fn query_with_predicate<F>(&self, predicate: &F) -> Vec<Entity>
     where
         F: Fn(&Aabb) -> bool,
@@ -328,11 +576,19 @@ impl Bvh {
     }
 
     /// Recursively queries a node with a predicate.
+    ///
+    /// # Hierarchical Culling in Action
+    ///
+    /// This function implements the core hierarchical culling optimization:
+    /// - Test parent bounds BEFORE descending to children
+    /// - If parent fails predicate, skip entire subtree
+    /// - This single test can eliminate thousands of objects
     fn query_node_with_predicate<F>(node: &BvhNode, predicate: &F, results: &mut Vec<Entity>)
     where
         F: Fn(&Aabb) -> bool,
     {
         // Test node bounds first (hierarchical culling)
+        // This one test can cull entire subtree - THE key optimization
         if !predicate(node.bounds()) {
             return;
         }

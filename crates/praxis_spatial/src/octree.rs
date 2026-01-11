@@ -2,6 +2,116 @@
 //!
 //! An octree recursively subdivides 3D space into eight octants, providing efficient
 //! spatial queries for large numbers of objects.
+//!
+//! # How Octrees Work
+//!
+//! An octree divides 3D space using recursive 8-way subdivision. Each node represents a cubic
+//! region of space and can split into 8 equally-sized child cubes (octants). This creates a
+//! tree where spatial proximity in 3D space maps to tree proximity in the hierarchy.
+//!
+//! ## Subdivision Strategy
+//!
+//! ```text
+//! Root Node (entire world)
+//! │
+//! ├─ If entities > threshold AND depth < max_depth:
+//! │  ├─ Split into 8 octants (2x2x2 grid)
+//! │  │  ├─ Octant 0: (−x, −y, −z)  [bottom-back-left]
+//! │  │  ├─ Octant 1: (+x, −y, −z)  [bottom-back-right]
+//! │  │  ├─ Octant 2: (−x, +y, −z)  [top-back-left]
+//! │  │  ├─ Octant 3: (+x, +y, −z)  [top-back-right]
+//! │  │  ├─ Octant 4: (−x, −y, +z)  [bottom-front-left]
+//! │  │  ├─ Octant 5: (+x, −y, +z)  [bottom-front-right]
+//! │  │  ├─ Octant 6: (−x, +y, +z)  [top-front-left]
+//! │  │  └─ Octant 7: (+x, +y, +z)  [top-front-right]
+//! │  └─ Recursively insert entities into appropriate child octants
+//! └─ Else: Store entities in this node (leaf)
+//! ```
+//!
+//! # Insertion Algorithm
+//!
+//! When inserting an entity with bounds `B` into a node `N`:
+//!
+//! 1. **Bounds Check**: If `B` doesn't intersect `N.bounds`, reject insertion (return false)
+//! 2. **Leaf Decision**: If node is a leaf AND (entity count < threshold OR depth >= `max_depth`):
+//!    - Store entity in this node's entity list
+//!    - Return true (insertion complete)
+//! 3. **Subdivision**: If node is a leaf but entity count reached threshold:
+//!    - Create 8 child octants by bisecting each axis
+//!    - Move existing entities to appropriate children
+//!    - Fall through to step 4
+//! 4. **Child Selection**: Determine which octant contains the entity's center
+//!    - Use bitwise encoding: bit 0 = x sign, bit 1 = y sign, bit 2 = z sign
+//!    - Example: center at (+x, −y, +z) → octant 5 (binary 101)
+//! 5. **Recursive Insert**: Try to insert into the selected child octant
+//! 6. **Fallback**: If entity doesn't fully fit in any child (spans multiple octants):
+//!    - Store entity in this node's entity list
+//!    - This handles the "loose octree problem" where large objects stay at higher levels
+//!
+//! **Complexity**: O(log n) average case, O(depth) worst case
+//!
+//! # Query Algorithm
+//!
+//! When querying for entities intersecting bounds `Q`:
+//!
+//! 1. **Early Rejection**: If `Q` doesn't intersect node bounds, return immediately
+//!    - This is the key optimization: entire subtrees eliminated with one AABB test
+//! 2. **Collect Entities**: Add all entities in this node to results
+//!    - These are entities that span multiple octants or fit loosely
+//! 3. **Recurse to Children**: If node has children:
+//!    - Test `Q` against each of 8 child octants
+//!    - Recursively query children that intersect `Q`
+//!    - Children that don't intersect are skipped entirely (hierarchical culling)
+//!
+//! **Complexity**: O(log n + k) where k = number of results
+//! **Key Insight**: Testing parent bounds before children eliminates entire subtrees,
+//! reducing O(n) brute force search to O(log n) for most queries.
+//!
+//! # Integration with Rendering Pipeline
+//!
+//! The octree integrates with frustum culling in the rendering pipeline:
+//!
+//! ```text
+//! Frame Start
+//!    ↓
+//! Update Camera (extract frustum planes from view-projection matrix)
+//!    ↓
+//! Query Octree with Frustum Predicate
+//!    ├─ Test root node bounds against frustum
+//!    │  └─ If outside frustum: cull entire scene (early exit)
+//!    ├─ Recursively test child octants
+//!    │  ├─ Inside frustum: descend and test children
+//!    │  ├─ Outside frustum: skip entire subtree (hierarchical culling)
+//!    │  └─ Intersecting: test contained entities individually
+//!    └─ Return visible entity list
+//!    ↓
+//! LOD Selection (choose mesh detail based on distance)
+//!    ↓
+//! Submit Draw Calls (only for visible entities)
+//!    ↓
+//! GPU Renders Visible Objects
+//! ```
+//!
+//! **Performance Impact**: In a scene with 10,000 objects where 100 are visible:
+//! - Brute force: 10,000 frustum tests
+//! - Octree: ~100-500 tests (parent nodes + visible entities)
+//! - **Speed-up**: 20-100× faster culling
+//!
+//! # Loose Octree Problem
+//!
+//! Objects that span multiple octants cannot be cleanly assigned to a single child. Solutions:
+//!
+//! 1. **Store in Parent** (this implementation): Keep spanning objects at higher levels
+//!    - Pro: Simple, no duplication
+//!    - Con: Large objects tested more frequently
+//!
+//! 2. **Duplicate in Children**: Store object in all intersecting octants
+//!    - Pro: More precise culling
+//!    - Con: Memory overhead, update complexity
+//!
+//! 3. **Loose Octree**: Expand octant bounds to overlap
+//!    - Pro: Objects fit cleanly into single octant
+//!    - Con: More complex intersection tests
 
 use crate::aabb::Aabb;
 use bevy_ecs::entity::Entity;
@@ -36,6 +146,21 @@ impl OctreeNode {
     }
 
     /// Subdivides this node into eight children.
+    ///
+    /// # Algorithm Details
+    ///
+    /// Creates 8 child octants by:
+    /// 1. Computing node's center point (bisection point for all 3 axes)
+    /// 2. Computing half-extents (child size = parent size / 2)
+    /// 3. For each octant (0-7):
+    ///    - Use bit pattern to determine position relative to center
+    ///    - Bit 0: x direction (0 = negative, 1 = positive)
+    ///    - Bit 1: y direction (0 = negative, 1 = positive)
+    ///    - Bit 2: z direction (0 = negative, 1 = positive)
+    /// 4. Compute child center = parent center + (`half_extents` / 2) * direction
+    /// 5. Create child with bounds centered at computed position
+    ///
+    /// Example: Octant 5 (binary 101) = (+x, -y, +z) quadrant
     fn subdivide(&mut self) {
         let center = self.bounds.center();
         let half_size = self.bounds.half_extents();
@@ -72,6 +197,15 @@ impl OctreeNode {
     }
 
     /// Determines which child octant contains the given bounds.
+    ///
+    /// # Algorithm
+    ///
+    /// Uses the entity's center point to determine octant membership via bitwise encoding:
+    /// - Compare center against node's center on each axis
+    /// - Set bit for each positive axis (x=bit0, y=bit1, z=bit2)
+    /// - Result is octant index 0-7
+    ///
+    /// Returns None if bounds don't fit within this node (shouldn't happen in valid tree).
     fn get_octant_index(&self, bounds: &Aabb) -> Option<usize> {
         let center = self.bounds.center();
         let obj_center = bounds.center();
@@ -95,6 +229,27 @@ impl OctreeNode {
     }
 
     /// Inserts an entity into this node or its children.
+    ///
+    /// # Insertion Algorithm (Recursive Top-Down)
+    ///
+    /// 1. **Bounds Check**: Early rejection if entity doesn't intersect node bounds
+    /// 2. **Leaf Storage**: If node is leaf and hasn't exceeded capacity, store here
+    /// 3. **Subdivision Trigger**: If capacity exceeded, subdivide into 8 octants
+    /// 4. **Child Insertion**: Try to place entity in appropriate child octant
+    /// 5. **Fallback Storage**: If entity spans multiple octants, store in parent
+    ///
+    /// # Performance Notes
+    ///
+    /// - Average case: O(log n) - descends tree depth
+    /// - Worst case: O(depth) when many subdivisions occur
+    /// - Subdivision is expensive (creates 8 nodes) but amortized over many insertions
+    ///
+    /// # Loose Octree Handling
+    ///
+    /// Entities that don't cleanly fit into a single child octant are stored at the
+    /// parent level. This is the "loose octree" problem - a trade-off between:
+    /// - Storage simplicity (store once vs duplicate in multiple children)
+    /// - Query efficiency (test large objects more often vs precise bounds)
     fn insert(&mut self, entity: Entity, bounds: &Aabb, max_entities: usize) -> bool {
         if !self.bounds.intersects(bounds) {
             return false;
@@ -123,6 +278,28 @@ impl OctreeNode {
     }
 
     /// Queries all entities that intersect the given bounds.
+    ///
+    /// # Query Algorithm (Recursive with Hierarchical Culling)
+    ///
+    /// 1. **Early Rejection**: Test node bounds against query bounds
+    ///    - If no intersection, return immediately (cull entire subtree)
+    ///    - This is the KEY optimization: one AABB test eliminates 8+ child tests
+    /// 2. **Collect Local Entities**: Add all entities stored at this node
+    ///    - These are entities that span multiple octants
+    /// 3. **Recurse to Children**: For each of 8 child octants:
+    ///    - Recursively query children (they'll do their own bounds test)
+    ///    - Children outside query bounds return immediately (hierarchical culling)
+    ///
+    /// # Performance Analysis
+    ///
+    /// For a balanced tree with N entities and depth D = log₈(N):
+    /// - Brute force: O(N) tests (check every entity)
+    /// - Octree: O(D + k) = O(log N + k) where k = result count
+    /// - Typical speedup: 10-100× for queries selecting <10% of entities
+    ///
+    /// Example: 8,000 entities in 4-level octree (8⁴ = 4,096 leaf capacity)
+    /// - Point query (1 result): ~4 node tests vs 8,000 entity tests = 2000× faster
+    /// - Range query (100 results): ~40 node tests vs 8,000 entity tests = 200× faster
     fn query(&self, bounds: &Aabb, results: &mut Vec<Entity>) {
         if !self.bounds.intersects(bounds) {
             return;
