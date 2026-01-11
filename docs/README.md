@@ -27,6 +27,8 @@ Task-oriented tutorials for implementing features:
   - [Advanced Materials](guides/rendering/advanced-materials.md) - PBR and material techniques
   - [LOD System](guides/rendering/lod.md) - Level of detail management
   - [GPU Culling](guides/rendering/gpu-culling.md) - GPU-driven culling techniques
+  - [Temporal Anti-Aliasing (TAA)](guides/rendering/taa.md) - Temporal anti-aliasing with velocity buffers
+  - [Screen-Space Reflections (SSR)](guides/rendering/ssr.md) - Real-time reflections via ray marching
 - [Spatial Optimization](guides/spatial-optimization.md) - Frustum culling, LOD, and occlusion culling
 
 **Animation**
@@ -44,6 +46,7 @@ Task-oriented tutorials for implementing features:
   - [GLTF Loading](guides/assets/gltf.md) - GLTF format support
   - [OBJ Loading](guides/assets/obj.md) - OBJ format support
   - [Procedural Textures](guides/assets/procedural-textures.md) - Runtime texture generation
+  - [Async Asset Loading](guides/async-assets.md) - Non-blocking asset loading with tokio
 
 **Systems**
 - [Audio](guides/audio.md) - Spatial audio with Kira
@@ -52,6 +55,8 @@ Task-oriented tutorials for implementing features:
 - [Scripting](guides/scripting.md) - Lua scripting integration
 - [Terrain](guides/terrain.md) - Terrain generation and rendering
 - [Networking](guides/systems/networking.md) - Multiplayer client-server architecture
+- [Serialization](guides/serialization.md) - Save/load system with versioning
+- [Console](guides/console.md) - In-game console with Lua REPL and ECS introspection
 
 For comprehensive particle rendering documentation, see [crates/praxis_graphics/PARTICLES.md](../crates/praxis_graphics/PARTICLES.md).
 
@@ -151,6 +156,7 @@ cargo run --example material_demo             # Material system
 cargo run --example terrain_demo              # Terrain rendering
 cargo run --example scripting_demo            # Lua scripting
 cargo run --example scripting_advanced_demo   # Advanced scripting
+cargo run --example scripting_console_demo    # Console with Lua REPL
 cargo run --example networking_demo           # Networking features
 
 # Performance & Tools
