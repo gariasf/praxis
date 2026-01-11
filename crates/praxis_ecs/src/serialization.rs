@@ -11,6 +11,156 @@
 //! - **`WorldSnapshot`**: Serializable representation of world state
 //! - **`EntityData`**: Serializable representation of an entity and its components
 //!
+//! # SerializableComponent Trait Design
+//!
+//! ## Purpose and Philosophy
+//! The `SerializableComponent` trait enables type-safe, extensible serialization of ECS components.
+//! It's designed around several key principles:
+//!
+//! ### 1. Type Erasure with Type Safety
+//! The registry stores trait objects (`Box<dyn Fn(...)>`) to handle any component type,
+//! while preserving type safety through the trait's associated functions:
+//! ```rust,no_run
+//! use praxis_ecs::{ComponentRegistry, Transform};
+//!
+//! let mut registry = ComponentRegistry::new();
+//! registry.register::<Transform>();  // Type-safe registration
+//!
+//! // Internally stores type-erased functions, but maintains type information
+//! ```
+//!
+//! ### 2. Deferred Component Insertion
+//! The `deserialize_component` method returns a closure rather than the component directly.
+//! This enables:
+//! - **Two-phase deserialization**: Create all entities first, then insert components
+//! - **Entity reference resolution**: Resolve references to other entities after all are spawned
+//! - **Flexible insertion logic**: Custom logic for complex components
+//!
+//! ```rust,no_run
+//! use praxis_ecs::{SerializableComponent, DeserializeContext, Entity, Component};
+//! use praxis_utils::Result;
+//! # use serde::{Serialize, Deserialize};
+//!
+//! #[derive(Component, Serialize, Deserialize)]
+//! struct Health(f32);
+//!
+//! impl SerializableComponent for Health {
+//!     fn serialize_component(&self) -> Result<String> {
+//!         Ok(ron::to_string(self)?)
+//!     }
+//!
+//!     fn deserialize_component(
+//!         data: &str,
+//!         _entity: Entity,
+//!         _context: &DeserializeContext,
+//!     ) -> Result<Box<dyn FnOnce(&mut bevy_ecs::world::EntityWorldMut)>>
+//!     where
+//!         Self: Sized + 'static,
+//!     {
+//!         let component: Health = ron::from_str(data)?;
+//!         // Return closure for deferred insertion
+//!         Ok(Box::new(move |entity_mut| {
+//!             entity_mut.insert(component);
+//!         }))
+//!     }
+//!
+//!     fn type_name() -> &'static str {
+//!         "Health"
+//!     }
+//! }
+//! ```
+//!
+//! ### 3. Entity Reference Resolution
+//! Components that reference other entities need special handling:
+//! ```rust,no_run
+//! # use praxis_ecs::{SerializableComponent, DeserializeContext, Component, Entity, Parent};
+//! # use praxis_utils::Result;
+//! # use serde::{Serialize, Deserialize};
+//! // Parent component contains an Entity reference
+//! impl SerializableComponent for Parent {
+//!     fn serialize_component(&self) -> Result<String> {
+//!         // Serialize the entity index
+//!         let data = self.0.index() as u64;
+//!         Ok(ron::to_string(&data)?)
+//!     }
+//!
+//!     fn deserialize_component(
+//!         data: &str,
+//!         _entity: Entity,
+//!         context: &DeserializeContext,  // Provides entity mapping
+//!     ) -> Result<Box<dyn FnOnce(&mut bevy_ecs::world::EntityWorldMut)>>
+//!     where
+//!         Self: Sized + 'static,
+//!     {
+//!         let serialized_id: u64 = ron::from_str(data)?;
+//!         // Resolve the serialized ID to the actual entity
+//!         let parent_entity = context.get_entity(serialized_id)
+//!             .ok_or_else(|| praxis_utils::eyre::eyre!("Parent entity not found"))?;
+//!         
+//!         Ok(Box::new(move |entity_mut| {
+//!             entity_mut.insert(Parent(parent_entity));
+//!         }))
+//!     }
+//!
+//!     fn type_name() -> &'static str {
+//!         "Parent"
+//!     }
+//! }
+//! ```
+//!
+//! ## Design Patterns
+//!
+//! ### Component Registry Pattern
+//! The registry acts as a type-erased collection of serialization functions:
+//! - **TypeId → SerializeFn**: Maps component types to serialization
+//! - **String → DeserializeFn**: Maps type names to deserialization
+//! - **TypeId → String**: Maps types to their string names
+//!
+//! This allows registering any component type while maintaining type safety.
+//!
+//! ### NoSave Marker Pattern
+//! Use the `NoSave` component to exclude entities from serialization:
+//! ```rust,no_run
+//! use praxis_ecs::{World, NoSave, Transform};
+//!
+//! let mut world = World::new();
+//!
+//! // This entity will be saved
+//! world.spawn(Transform::default());
+//!
+//! // This entity will NOT be saved (temporary visualization, etc.)
+//! world.spawn((Transform::default(), NoSave));
+//! ```
+//!
+//! ### Selective Component Serialization
+//! Only registered components are serialized, allowing fine-grained control:
+//! ```rust,no_run
+//! use praxis_ecs::{ComponentRegistry, Transform, Name};
+//! # use praxis_ecs::Component;
+//! # #[derive(Component)]
+//! # struct RuntimeOnly;
+//!
+//! let mut registry = ComponentRegistry::new();
+//! registry.register::<Transform>();  // Will be saved
+//! registry.register::<Name>();       // Will be saved
+//! // RuntimeOnly is not registered, so it won't be serialized
+//! ```
+//!
+//! ## Performance Considerations
+//!
+//! ### Deserialization Process
+//! 1. **Parse RON string** → WorldSnapshot
+//! 2. **First pass**: Spawn all entities, build entity ID mapping
+//! 3. **Second pass**: Deserialize components, resolve entity references
+//! 4. **Third pass**: Insert components into entities
+//!
+//! This three-phase approach ensures all entity references can be resolved correctly.
+//!
+//! ### Memory Usage
+//! - Snapshot captures complete world state in memory
+//! - Component data is serialized to strings
+//! - For large worlds, consider streaming or chunked serialization
+//!
 //! # Example
 //!
 //! ```rust,no_run

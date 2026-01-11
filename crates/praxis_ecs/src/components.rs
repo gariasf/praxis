@@ -4,6 +4,148 @@
 //! most game projects. These components are designed to work together
 //! to form the building blocks of game entities.
 //!
+//! # Component Design Principles
+//!
+//! ## Pure Data Structures
+//! Components should be pure data structures without behavior (methods that modify state).
+//! This separation of data and behavior is core to ECS architecture:
+//!
+//! **Good Component Design:**
+//! ```rust,no_run
+//! use praxis_ecs::Component;
+//!
+//! #[derive(Component)]
+//! struct Health {
+//!     current: f32,
+//!     max: f32,
+//! }
+//!
+//! // Helper methods that don't modify state are fine
+//! impl Health {
+//!     fn is_alive(&self) -> bool {
+//!         self.current > 0.0
+//!     }
+//!     
+//!     fn percentage(&self) -> f32 {
+//!         self.current / self.max
+//!     }
+//! }
+//! ```
+//!
+//! **Behavior Belongs in Systems:**
+//! ```rust,no_run
+//! use praxis_ecs::Query;
+//! # use praxis_ecs::Component;
+//! # #[derive(Component)]
+//! # struct Health { current: f32, max: f32 }
+//!
+//! // Systems contain the behavior that modifies components
+//! fn regeneration_system(mut query: Query<&mut Health>) {
+//!     for mut health in query.iter_mut() {
+//!         if health.current < health.max {
+//!             health.current = (health.current + 1.0).min(health.max);
+//!         }
+//!     }
+//! }
+//! ```
+//!
+//! ## Small and Focused
+//! Keep components small and focused on a single responsibility. This enables better
+//! composition and more efficient query patterns:
+//!
+//! ```rust,no_run
+//! use praxis_ecs::Component;
+//! use praxis_math::Vec3;
+//!
+//! // Good: Small, focused components
+//! #[derive(Component)]
+//! struct Velocity(Vec3);
+//!
+//! #[derive(Component)]
+//! struct Acceleration(Vec3);
+//!
+//! #[derive(Component)]
+//! struct MaxSpeed(f32);
+//!
+//! // Systems can query for exactly what they need
+//! // fn movement_system(query: Query<(&mut Transform, &Velocity)>) { ... }
+//! // fn acceleration_system(query: Query<(&mut Velocity, &Acceleration, &MaxSpeed)>) { ... }
+//! ```
+//!
+//! ## Marker Components
+//! Zero-sized marker components are useful for tagging entities with specific properties:
+//!
+//! ```rust,no_run
+//! use praxis_ecs::{Component, Query, With};
+//!
+//! #[derive(Component)]
+//! struct Player;  // Marker component
+//!
+//! #[derive(Component)]
+//! struct Enemy;   // Marker component
+//!
+//! // Query only entities with the Player marker
+//! fn player_input_system(query: Query<&mut Transform, With<Player>>) {
+//!     // Only processes player entities
+//! }
+//! ```
+//!
+//! ## Component Relationships
+//!
+//! ### Hierarchical Relationships
+//! Use `Parent` and `Children` components to create entity hierarchies:
+//! ```rust,no_run
+//! use praxis_ecs::{World, Transform, Parent, Children};
+//!
+//! let mut world = World::new();
+//! let parent = world.spawn(Transform::default());
+//! let child = world.spawn((
+//!     Transform::from_xyz(1.0, 0.0, 0.0),  // Offset from parent
+//!     Parent(parent),
+//! ));
+//! // The sync_parent_child_relationships system will automatically add Children to parent
+//! ```
+//!
+//! ### Reference Components
+//! Use Entity IDs to create relationships between entities:
+//! ```rust,no_run
+//! use praxis_ecs::{Component, Entity};
+//!
+//! #[derive(Component)]
+//! struct Target(Entity);  // References another entity
+//!
+//! #[derive(Component)]
+//! struct Owner(Entity);   // References the owning entity
+//! ```
+//!
+//! ## Handle-Based Components
+//! Use handles for referencing externally managed resources (meshes, materials, textures):
+//! ```rust,no_run
+//! use praxis_ecs::{MeshHandle, MaterialHandle, Transform};
+//!
+//! // Handles reference resources managed by external systems
+//! // Multiple entities can share the same resource via handles
+//! # let mut world = praxis_ecs::World::new();
+//! world.spawn((
+//!     Transform::default(),
+//!     MeshHandle::new("cube"),      // References shared mesh
+//!     MaterialHandle::new("metal"),  // References shared material
+//! ));
+//! ```
+//!
+//! ## Serializable Components
+//! Components should implement `Serialize` and `Deserialize` for persistence:
+//! ```rust,no_run
+//! use praxis_ecs::Component;
+//! use serde::{Serialize, Deserialize};
+//!
+//! #[derive(Component, Serialize, Deserialize)]
+//! struct GameSettings {
+//!     difficulty: u32,
+//!     sound_volume: f32,
+//! }
+//! ```
+//!
 //! # Lighting Components
 //!
 //! The ECS provides two types of light components for scene lighting:

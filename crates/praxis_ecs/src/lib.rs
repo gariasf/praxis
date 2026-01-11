@@ -10,6 +10,136 @@
 //! - **Components**: Data attached to entities (position, velocity, etc.)
 //! - **Systems**: Logic that operates on entities with specific components
 //!
+//! ## ECS Architecture Principles
+//!
+//! ### Data-Oriented Design
+//! ECS promotes data-oriented design by separating data (components) from behavior (systems).
+//! This separation enables:
+//! - **Cache-friendly memory access**: Components are stored in contiguous memory (archetype storage),
+//!   allowing efficient iteration and cache utilization.
+//! - **Flexible composition**: Entities can mix any combination of components without inheritance hierarchies.
+//! - **Parallel execution**: Systems can run concurrently when they access different components.
+//!
+//! ### Component Composition over Inheritance
+//! Rather than creating deep inheritance hierarchies, ECS favors composition:
+//! ```rust,no_run
+//! use praxis_ecs::{World, Transform, Name};
+//! use praxis_physics::RigidBody;
+//!
+//! let mut world = World::new();
+//!
+//! // Compose different entity types from components:
+//! let player = world.spawn((
+//!     Name::new("Player"),
+//!     Transform::from_xyz(0.0, 0.0, 0.0),
+//!     RigidBody::Dynamic,
+//! ));
+//!
+//! let static_prop = world.spawn((
+//!     Name::new("Building"),
+//!     Transform::from_xyz(10.0, 0.0, 5.0),
+//!     RigidBody::Static,
+//! ));
+//! ```
+//!
+//! ### Query-Driven Systems
+//! Systems operate on entities by querying for specific component combinations:
+//! ```rust,no_run
+//! use praxis_ecs::{Query, Transform};
+//! use praxis_physics::RigidBody;
+//!
+//! // This system runs on entities with BOTH Transform and RigidBody components
+//! fn update_physics(mut query: Query<(&mut Transform, &RigidBody)>) {
+//!     for (mut transform, rigidbody) in query.iter_mut() {
+//!         // Update transform based on physics
+//!     }
+//! }
+//! ```
+//!
+//! ### System Scheduling and Parallelism
+//! The ECS schedules systems based on their data access patterns:
+//! - **Parallel execution**: Systems accessing different components run concurrently
+//! - **Automatic synchronization**: Systems with overlapping mutable access run sequentially
+//! - **Explicit ordering**: Use `.chain()` or `.after()`/`.before()` for ordering constraints
+//!
+//! ```rust,no_run
+//! use praxis_ecs::{Schedule, IntoSystemConfigs};
+//!
+//! # fn physics_system() {}
+//! # fn animation_system() {}
+//! # fn rendering_system() {}
+//! let mut schedule = Schedule::default();
+//! schedule.add_systems((
+//!     physics_system,
+//!     animation_system,  // Can run parallel with physics_system if no data conflicts
+//!     rendering_system,   // Runs after both complete
+//! ).chain());
+//! ```
+//!
+//! ## World Access Patterns
+//!
+//! The ECS provides different levels of world access depending on your needs:
+//!
+//! ### Immutable Access (`&World`, `Res<T>`)
+//! Use when you only need to read data. Multiple systems can read simultaneously:
+//! ```rust,no_run
+//! use praxis_ecs::{Query, Res, Transform, LightingData};
+//!
+//! // Multiple systems can read Transform simultaneously
+//! fn shadow_rendering(query: Query<&Transform>, lighting: Res<LightingData>) {
+//!     // Read-only access allows parallel execution
+//! }
+//! ```
+//!
+//! ### Mutable Access (`&mut World`, `ResMut<T>`, `Query<&mut T>`)
+//! Use when you need to modify data. Mutable access is exclusive:
+//! ```rust,no_run
+//! use praxis_ecs::{Query, ResMut, Transform, LightingData};
+//!
+//! // Only one system can mutate Transform at a time
+//! fn movement_system(mut query: Query<&mut Transform>) {
+//!     // Exclusive mutable access
+//! }
+//!
+//! // Only one system can mutate LightingData at a time
+//! fn update_lighting(mut lighting: ResMut<LightingData>) {
+//!     lighting.clear();
+//! }
+//! ```
+//!
+//! ### Commands for Deferred Operations
+//! Use `Commands` for structural changes (spawning/despawning entities, adding/removing components):
+//! ```rust,no_run
+//! use praxis_ecs::{Commands, Entity, Query, Transform, With};
+//!
+//! # #[derive(praxis_ecs::Component)]
+//! # struct Dead;
+//! // Commands defer operations until the end of the system stage
+//! fn cleanup_dead_entities(mut commands: Commands, query: Query<Entity, With<Dead>>) {
+//!     for entity in query.iter() {
+//!         commands.entity(entity).despawn();  // Deferred despawn
+//!     }
+//! }
+//! ```
+//!
+//! ### Exclusive World Access
+//! Use direct `&mut World` access when you need complete control (use sparingly):
+//! ```rust,no_run
+//! use praxis_ecs::World;
+//!
+//! // Exclusive world access prevents parallel execution
+//! fn exclusive_system(world: &mut World) {
+//!     // Can do anything, but blocks all other systems
+//!     world.clear_entities();
+//! }
+//! ```
+//!
+//! **When to use each:**
+//! - **Queries**: Most common case - accessing specific components on entities
+//! - **Resources**: Accessing global singleton data (Res/ResMut)
+//! - **Commands**: Spawning/despawning entities or adding/removing components
+//! - **Exclusive World**: Rare cases needing complete control (e.g., world serialization)
+//!
 //! # Transform Propagation System
 //!
 //! The transform propagation system automatically updates `GlobalTransform` components

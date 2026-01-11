@@ -2,6 +2,226 @@
 //!
 //! This module provides a wrapper around bevy_ecs::World with additional
 //! functionality specific to the Praxis engine.
+//!
+//! # World Access Patterns
+//!
+//! The World is the central container for all ECS data. Understanding how to access
+//! the world correctly is crucial for writing efficient, safe systems.
+//!
+//! ## Access Pattern Overview
+//!
+//! | Pattern | Thread Safety | Parallelism | Use Case |
+//! |---------|--------------|-------------|----------|
+//! | `Query<&T>` | Yes (shared) | Parallel reads | Reading component data |
+//! | `Query<&mut T>` | Yes (exclusive) | Sequential writes | Modifying components |
+//! | `Res<T>` | Yes (shared) | Parallel reads | Reading global resources |
+//! | `ResMut<T>` | Yes (exclusive) | Sequential writes | Modifying resources |
+//! | `Commands` | Yes (deferred) | Parallel commands | Structural changes |
+//! | `&mut World` | No (exclusive) | Blocks all | Complete control |
+//!
+//! ## Shared (Immutable) Access
+//!
+//! Multiple systems can read the same data simultaneously. This enables parallel execution:
+//!
+//! ```rust,no_run
+//! use praxis_ecs::{Query, Res, Transform, LightingData};
+//!
+//! // System 1 - reads Transform
+//! fn calculate_lighting(
+//!     transforms: Query<&Transform>,
+//!     lighting: Res<LightingData>,
+//! ) {
+//!     for transform in transforms.iter() {
+//!         // Read-only access to position
+//!         let position = transform.translation;
+//!     }
+//! }
+//!
+//! // System 2 - also reads Transform (can run in parallel with System 1)
+//! fn render_shadows(
+//!     transforms: Query<&Transform>,
+//!     lighting: Res<LightingData>,
+//! ) {
+//!     for transform in transforms.iter() {
+//!         // Both systems can read simultaneously
+//!         let position = transform.translation;
+//!     }
+//! }
+//! ```
+//!
+//! ## Exclusive (Mutable) Access
+//!
+//! Only ONE system can have mutable access to a component or resource at a time.
+//! The scheduler ensures this automatically:
+//!
+//! ```rust,no_run
+//! use praxis_ecs::{Query, ResMut, Transform, LightingData};
+//!
+//! // System 1 - mutates Transform
+//! fn apply_physics(mut transforms: Query<&mut Transform>) {
+//!     for mut transform in transforms.iter_mut() {
+//!         transform.translation.y -= 9.8 * 0.016;  // gravity
+//!     }
+//! }
+//!
+//! // System 2 - also mutates Transform (MUST run sequentially, not parallel)
+//! fn apply_animations(mut transforms: Query<&mut Transform>) {
+//!     for mut transform in transforms.iter_mut() {
+//!         // Scheduler ensures this runs before or after apply_physics
+//!     }
+//! }
+//! ```
+//!
+//! ## Mixed Access Patterns
+//!
+//! Systems can mix read and write access. The scheduler analyzes all accesses:
+//!
+//! ```rust,no_run
+//! use praxis_ecs::{Query, Res, ResMut, Transform, LightingData};
+//! # use praxis_ecs::Component;
+//! # #[derive(Component)]
+//! # struct Velocity(praxis_math::Vec3);
+//!
+//! // Reads Velocity, writes Transform
+//! fn movement_system(
+//!     mut query: Query<(&Velocity, &mut Transform)>,
+//!     time: Res<DeltaTime>,
+//! ) {
+//!     for (velocity, mut transform) in query.iter_mut() {
+//!         transform.translation += velocity.0 * time.0;
+//!     }
+//! }
+//!
+//! // Writes Velocity, reads Transform (can't run parallel with movement_system)
+//! fn acceleration_system(
+//!     mut query: Query<(&Transform, &mut Velocity)>,
+//! ) {
+//!     // Overlapping mutable access to Transform means sequential execution
+//! }
+//! ```
+//!
+//! ## Commands: Deferred Structural Changes
+//!
+//! Use Commands for spawning/despawning entities or adding/removing components.
+//! These operations are deferred until the end of the system stage:
+//!
+//! ```rust,no_run
+//! use praxis_ecs::{Commands, Entity, Query, Transform, With};
+//! # use praxis_ecs::Component;
+//!
+//! #[derive(Component)]
+//! struct Dead;
+//!
+//! // Multiple systems can queue commands in parallel
+//! fn spawn_enemies(mut commands: Commands) {
+//!     commands.spawn(Transform::from_xyz(10.0, 0.0, 0.0));
+//!     // Spawning is deferred
+//! }
+//!
+//! fn cleanup_dead(mut commands: Commands, query: Query<Entity, With<Dead>>) {
+//!     for entity in query.iter() {
+//!         commands.entity(entity).despawn();  // Despawn is deferred
+//!     }
+//! }
+//! ```
+//!
+//! **Why defer?** This allows multiple systems to safely queue structural changes without
+//! invalidating iterators or causing race conditions.
+//!
+//! ## When to Use Exclusive World Access
+//!
+//! Direct `&mut World` access should be rare. Use it only when you need:
+//! - **Complete introspection**: Iterating all entities regardless of components
+//! - **Dynamic queries**: Creating queries at runtime
+//! - **Bulk operations**: Clearing all entities, world serialization
+//!
+//! ```rust,no_run
+//! use praxis_ecs::World;
+//!
+//! // Exclusive system - blocks all parallel execution
+//! fn serialize_world(world: &mut World) {
+//!     // Can access anything, but prevents parallelism
+//!     let entity_count = world.entity_count();
+//!     // Perform serialization...
+//! }
+//! ```
+//!
+//! **Trade-off**: Exclusive access blocks ALL other systems from running in parallel.
+//!
+//! ## Query Filters
+//!
+//! Filters refine which entities a query matches without accessing component data:
+//!
+//! ```rust,no_run
+//! use praxis_ecs::{Query, With, Without, Changed, Added, Or, Transform};
+//! # use praxis_ecs::Component;
+//! # #[derive(Component)]
+//! # struct Player;
+//! # #[derive(Component)]
+//! # struct Enemy;
+//! # #[derive(Component)]
+//! # struct Dead;
+//!
+//! // Only entities WITH Player component
+//! fn player_system(query: Query<&Transform, With<Player>>) {}
+//!
+//! // Only entities WITHOUT Dead component
+//! fn active_entities(query: Query<&Transform, Without<Dead>>) {}
+//!
+//! // Only entities where Transform changed this frame
+//! fn dirty_transforms(query: Query<&Transform, Changed<Transform>>) {}
+//!
+//! // Only entities where Transform was just added
+//! fn new_transforms(query: Query<&Transform, Added<Transform>>) {}
+//!
+//! // Entities with Player OR Enemy
+//! fn combatants(query: Query<&Transform, Or<(With<Player>, With<Enemy>)>>) {}
+//! ```
+//!
+//! ## ParamSet: Resolving Mutable Conflicts
+//!
+//! When you need multiple conflicting queries in one system, use ParamSet:
+//!
+//! ```rust,no_run
+//! use praxis_ecs::{ParamSet, Query, Entity, Transform};
+//! # use praxis_ecs::Component;
+//! # #[derive(Component)]
+//! # struct Parent(Entity);
+//!
+//! fn transform_hierarchy(
+//!     mut queries: ParamSet<(
+//!         Query<&Transform>,           // Query 1: read all transforms
+//!         Query<(&Parent, &mut Transform)>,  // Query 2: write child transforms
+//!     )>,
+//! ) {
+//!     // Use query 1
+//!     let parent_transforms: Vec<_> = queries.p0()
+//!         .iter()
+//!         .map(|t| t.translation)
+//!         .collect();
+//!     
+//!     // Use query 2 (can't access p0 and p1 simultaneously)
+//!     for (_parent, mut transform) in queries.p1().iter_mut() {
+//!         // Update child transforms
+//!     }
+//! }
+//! ```
+//!
+//! ## Best Practices
+//!
+//! 1. **Prefer specific queries over exclusive world access** - Better parallelism
+//! 2. **Use Commands for structural changes** - Avoids invalidating iterators
+//! 3. **Split systems with conflicting access** - Enables parallel execution
+//! 4. **Use filters to narrow queries** - Reduces work and improves cache locality
+//! 5. **Batch operations when possible** - Better cache utilization
+//! 6. **Avoid calling inner_mut() unless necessary** - Bypasses safety tracking
+//!
+//! ## Performance Tips
+//!
+//! - **Query caching**: bevy_ecs caches query results for efficient iteration
+//! - **Archetype storage**: Entities with the same components are stored contiguously
+//! - **Change detection**: Use `Changed<T>` filters to avoid unnecessary work
+//! - **Batch spawning**: `spawn_batch()` is faster than multiple `spawn()` calls
 
 use bevy_ecs::{
     bundle::Bundle,
@@ -14,6 +234,12 @@ use bevy_ecs::{
 };
 use praxis_utils::{debug, error, eyre, info, trace, Result};
 use std::ops::{Deref, DerefMut};
+
+/// Delta time resource used in documentation examples.
+/// In actual usage, this would be provided by the engine's time system.
+#[derive(Resource)]
+#[allow(dead_code)]
+struct DeltaTime(f32);
 
 /// The main ECS world container.
 ///
