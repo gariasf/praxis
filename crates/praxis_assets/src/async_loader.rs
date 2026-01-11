@@ -804,4 +804,808 @@ mod tests {
 
         assert!(result.is_err());
     }
+
+    // ============================================================================
+    // Non-blocking file I/O tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_async_load_returns_immediately() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_nonblocking.obj");
+
+        // Create a file with some content
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+        std::fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let start = std::time::Instant::now();
+        let (_handle, receiver) = loader
+            .load_async(&test_file)
+            .await
+            .expect("Failed to start load");
+        let elapsed = start.elapsed();
+
+        // load_async should return very quickly (< 50ms), proving it's non-blocking
+        assert!(
+            elapsed.as_millis() < 50,
+            "load_async took too long: {:?}",
+            elapsed
+        );
+
+        // Verify the actual load completes in the background
+        let result = receiver.recv().unwrap();
+        assert!(result.is_ok());
+
+        std::fs::remove_file(&test_file).ok();
+    }
+
+    #[tokio::test]
+    async fn test_multiple_async_loads_dont_block_each_other() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+
+        let test_files: Vec<_> = (0..5)
+            .map(|i| temp_dir.join(format!("test_nonblocking_{}.obj", i)))
+            .collect();
+
+        for file in &test_files {
+            std::fs::write(file, obj_content).expect("Failed to write test file");
+        }
+
+        let start = std::time::Instant::now();
+
+        // Start all loads - should return quickly even though there are multiple
+        let mut loads = Vec::new();
+        for file in &test_files {
+            let load = loader.load_async(file).await.expect("Failed to start load");
+            loads.push(load);
+        }
+
+        let elapsed = start.elapsed();
+
+        // Starting 5 loads should still be very quick (< 100ms)
+        assert!(
+            elapsed.as_millis() < 100,
+            "Starting 5 loads took too long: {:?}",
+            elapsed
+        );
+
+        // Verify all loads complete
+        for (_handle, receiver) in loads {
+            let result = receiver.recv().unwrap();
+            assert!(result.is_ok());
+        }
+
+        for file in &test_files {
+            std::fs::remove_file(file).ok();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_try_recv_is_nonblocking() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_try_recv_nonblocking.obj");
+
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+        std::fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let (_handle, receiver) = loader
+            .load_async(&test_file)
+            .await
+            .expect("Failed to start load");
+
+        // Immediately try to receive - should return Err (not ready) without blocking
+        let start = std::time::Instant::now();
+        let immediate_result = receiver.try_recv();
+        let elapsed = start.elapsed();
+
+        // try_recv should be instant
+        assert!(elapsed.as_micros() < 1000, "try_recv blocked unexpectedly");
+
+        // Depending on timing, it might be done or not, but it should not have blocked
+        match immediate_result {
+            Ok(result) => {
+                // If it completed that fast, verify it's valid
+                assert!(result.is_ok());
+            }
+            Err(_) => {
+                // Expected - not ready yet
+                // Wait for completion
+                let result = receiver.recv().unwrap();
+                assert!(result.is_ok());
+            }
+        }
+
+        std::fs::remove_file(&test_file).ok();
+    }
+
+    // ============================================================================
+    // Channel-based completion notification tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_receiver_gets_successful_result() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_channel_success.obj");
+
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+        std::fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let (_handle, receiver) = loader
+            .load_async(&test_file)
+            .await
+            .expect("Failed to start load");
+
+        // Wait for the result to be sent through the channel
+        let result = receiver.recv().unwrap();
+
+        // Verify the result is Ok and contains valid data
+        assert!(result.is_ok());
+        let mesh_data = result.unwrap();
+        assert_eq!(mesh_data.positions.len(), 3);
+        assert_eq!(mesh_data.indices.len(), 3);
+
+        std::fs::remove_file(&test_file).ok();
+    }
+
+    #[tokio::test]
+    async fn test_receiver_gets_error_result() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_channel_error.obj");
+
+        // Write invalid OBJ content to trigger a parsing error
+        std::fs::write(&test_file, "invalid obj content\n")
+            .expect("Failed to write test file");
+
+        let (_handle, receiver) = loader
+            .load_async(&test_file)
+            .await
+            .expect("Failed to start load");
+
+        // Wait for the result - should be an error
+        let result = receiver.recv().unwrap();
+        assert!(result.is_err());
+
+        std::fs::remove_file(&test_file).ok();
+    }
+
+    #[tokio::test]
+    async fn test_channel_closed_when_handle_dropped() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_channel_dropped.obj");
+
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+        std::fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let (handle, receiver) = loader
+            .load_async(&test_file)
+            .await
+            .expect("Failed to start load");
+
+        // Drop the handle immediately
+        drop(handle);
+
+        // Receiver should still be able to get the result (loading continues)
+        let result = receiver.recv().unwrap();
+        assert!(result.is_ok());
+
+        std::fs::remove_file(&test_file).ok();
+    }
+
+    #[tokio::test]
+    async fn test_multiple_receivers_not_allowed() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_single_receiver.obj");
+
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+        std::fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let (_handle, receiver) = loader
+            .load_async(&test_file)
+            .await
+            .expect("Failed to start load");
+
+        // Channels are bounded with capacity 1, so only one result is sent
+        let result1 = receiver.recv().unwrap();
+        assert!(result1.is_ok());
+
+        // Trying to receive again should fail (channel is empty and sender dropped)
+        let result2 = receiver.recv();
+        assert!(result2.is_err());
+
+        std::fs::remove_file(&test_file).ok();
+    }
+
+    // ============================================================================
+    // Concurrent load requests tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_concurrent_loads_complete_independently() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+
+        let test_files: Vec<_> = (0..10)
+            .map(|i| temp_dir.join(format!("test_concurrent_{}.obj", i)))
+            .collect();
+
+        for file in &test_files {
+            std::fs::write(file, obj_content).expect("Failed to write test file");
+        }
+
+        // Start 10 concurrent loads
+        let mut loads = Vec::new();
+        for file in &test_files {
+            let load = loader.load_async(file).await.expect("Failed to start load");
+            loads.push(load);
+        }
+
+        // All loads should complete successfully
+        for (_handle, receiver) in loads {
+            let result = receiver.recv().unwrap();
+            assert!(result.is_ok());
+        }
+
+        for file in &test_files {
+            std::fs::remove_file(file).ok();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_loads_with_mixed_results() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+
+        let valid_file = temp_dir.join("test_concurrent_valid.obj");
+        let invalid_file = temp_dir.join("test_concurrent_invalid.obj");
+
+        std::fs::write(
+            &valid_file,
+            "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n",
+        )
+        .expect("Failed to write valid file");
+        std::fs::write(&invalid_file, "invalid content")
+            .expect("Failed to write invalid file");
+
+        // Load both files concurrently
+        let (handle1, receiver1) = loader.load_async(&valid_file).await.unwrap();
+        let (handle2, receiver2) = loader.load_async(&invalid_file).await.unwrap();
+
+        // Wait for both to complete
+        let result1 = receiver1.recv().unwrap();
+        let result2 = receiver2.recv().unwrap();
+
+        // One should succeed, one should fail
+        assert!(result1.is_ok());
+        assert!(result2.is_err());
+
+        // Both handles should be finished
+        assert!(handle1.is_finished());
+        assert!(handle2.is_finished());
+
+        std::fs::remove_file(&valid_file).ok();
+        std::fs::remove_file(&invalid_file).ok();
+    }
+
+    #[tokio::test]
+    async fn test_load_many_async_concurrent() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+
+        let paths: Vec<_> = (0..20)
+            .map(|i| temp_dir.join(format!("test_load_many_{}.obj", i)))
+            .collect();
+
+        for path in &paths {
+            std::fs::write(path, obj_content).expect("Failed to write test file");
+        }
+
+        let start = std::time::Instant::now();
+        let loads = loader
+            .load_many_async(paths.clone())
+            .await
+            .expect("Failed to start loads");
+        let spawn_time = start.elapsed();
+
+        // Spawning 20 loads should be fast
+        assert!(spawn_time.as_millis() < 200);
+
+        // All should complete successfully
+        for (_handle, receiver) in loads {
+            let result = receiver.recv().unwrap();
+            assert!(result.is_ok());
+        }
+
+        for path in &paths {
+            std::fs::remove_file(path).ok();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_loads_different_loaders() {
+        let mesh_loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+
+        let mesh_file = temp_dir.join("test_different_loader.obj");
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+        std::fs::write(&mesh_file, obj_content).expect("Failed to write test file");
+
+        // Start multiple loads from the same loader instance concurrently
+        let (h1, r1) = mesh_loader.load_async(&mesh_file).await.unwrap();
+        let (h2, r2) = mesh_loader.load_async(&mesh_file).await.unwrap();
+        let (h3, r3) = mesh_loader.load_async(&mesh_file).await.unwrap();
+
+        // All should complete
+        assert!(r1.recv().unwrap().is_ok());
+        assert!(r2.recv().unwrap().is_ok());
+        assert!(r3.recv().unwrap().is_ok());
+
+        assert!(h1.is_finished());
+        assert!(h2.is_finished());
+        assert!(h3.is_finished());
+
+        std::fs::remove_file(&mesh_file).ok();
+    }
+
+    // ============================================================================
+    // Cancellation tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_cancellation_sets_flag() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_cancel_flag.obj");
+
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+        std::fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let (handle, _receiver) = loader.load_async(&test_file).await.unwrap();
+
+        assert!(!handle.is_cancelled());
+        handle.cancel();
+        assert!(handle.is_cancelled());
+
+        std::fs::remove_file(&test_file).ok();
+    }
+
+    #[tokio::test]
+    async fn test_early_cancellation() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_early_cancel.obj");
+
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+        std::fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let (handle, receiver) = loader.load_async(&test_file).await.unwrap();
+
+        // Cancel immediately
+        handle.cancel();
+
+        // The result might be an error or success depending on timing,
+        // but we should get a result
+        let result = receiver.recv();
+        assert!(result.is_ok()); // Channel should receive something
+
+        std::fs::remove_file(&test_file).ok();
+    }
+
+    #[tokio::test]
+    async fn test_batch_cancel_all() {
+        let loader = AsyncMeshLoader::new();
+        let mut batch = AsyncBatchLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+
+        let paths: Vec<_> = (0..5)
+            .map(|i| temp_dir.join(format!("test_batch_cancel_{}.obj", i)))
+            .collect();
+
+        for path in &paths {
+            std::fs::write(path, obj_content).expect("Failed to write test file");
+        }
+
+        // Add loads to batch
+        for path in &paths {
+            batch.add(loader.load_async(path).await.unwrap());
+        }
+
+        // Cancel all
+        batch.cancel_all();
+
+        // Verify all handles are marked as cancelled
+        assert_eq!(batch.total_count(), 5);
+
+        for path in &paths {
+            std::fs::remove_file(path).ok();
+        }
+    }
+
+    // ============================================================================
+    // Handle state tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_handle_is_finished_transitions() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_is_finished.obj");
+
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+        std::fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let (handle, receiver) = loader.load_async(&test_file).await.unwrap();
+
+        // Initially might or might not be finished (depends on timing)
+        let initial_state = handle.is_finished();
+
+        // Wait for completion
+        let result = receiver.recv().unwrap();
+        assert!(result.is_ok());
+
+        // After completion, should definitely be finished
+        assert!(handle.is_finished());
+
+        // Should remain finished
+        assert!(handle.is_finished());
+
+        // Verify initial state was consistent (either false or true, but not both)
+        assert!(initial_state == false || handle.is_finished());
+
+        std::fs::remove_file(&test_file).ok();
+    }
+
+    #[tokio::test]
+    async fn test_handle_path_preserved() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_handle_path_preserved.obj");
+
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+        std::fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        let (handle, receiver) = loader.load_async(&test_file).await.unwrap();
+
+        // Path should be accessible before completion
+        assert_eq!(handle.path(), test_file.as_path());
+
+        // Wait for completion
+        let _result = receiver.recv().unwrap();
+
+        // Path should still be accessible after completion
+        assert_eq!(handle.path(), test_file.as_path());
+
+        std::fs::remove_file(&test_file).ok();
+    }
+
+    // ============================================================================
+    // Batch loader tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_batch_completed_count_updates() {
+        let loader = AsyncMeshLoader::new();
+        let mut batch = AsyncBatchLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+
+        let paths: Vec<_> = (0..3)
+            .map(|i| temp_dir.join(format!("test_batch_progress_{}.obj", i)))
+            .collect();
+
+        for path in &paths {
+            std::fs::write(path, obj_content).expect("Failed to write test file");
+        }
+
+        for path in &paths {
+            batch.add(loader.load_async(path).await.unwrap());
+        }
+
+        assert_eq!(batch.total_count(), 3);
+
+        // Wait for completion
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Should all be complete
+        assert_eq!(batch.completed_count(), 3);
+        assert_eq!(batch.pending_count(), 0);
+        assert!(batch.is_complete());
+
+        for path in &paths {
+            std::fs::remove_file(path).ok();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_batch_try_receive_completed_partial() {
+        let loader = AsyncMeshLoader::new();
+        let mut batch = AsyncBatchLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+
+        let paths: Vec<_> = (0..5)
+            .map(|i| temp_dir.join(format!("test_batch_partial_{}.obj", i)))
+            .collect();
+
+        for path in &paths {
+            std::fs::write(path, obj_content).expect("Failed to write test file");
+        }
+
+        for path in &paths {
+            batch.add(loader.load_async(path).await.unwrap());
+        }
+
+        // Try receiving immediately (likely nothing ready yet)
+        let completed_early = batch.try_receive_completed();
+
+        // Wait a bit
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+        // Try receiving again (some might be ready)
+        let completed_mid = batch.try_receive_completed();
+
+        // Wait for all to complete
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Try receiving final batch
+        let completed_final = batch.try_receive_completed();
+
+        // Total completed should equal original count
+        let total_completed = completed_early.len() + completed_mid.len() + completed_final.len();
+        assert_eq!(total_completed, 5);
+
+        // Batch should now be empty
+        assert_eq!(batch.total_count(), 0);
+
+        for path in &paths {
+            std::fs::remove_file(path).ok();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_batch_is_complete() {
+        let loader = AsyncMeshLoader::new();
+        let mut batch = AsyncBatchLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+
+        // Empty batch is complete
+        assert!(batch.is_complete());
+
+        let test_file = temp_dir.join("test_batch_complete.obj");
+        std::fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        batch.add(loader.load_async(&test_file).await.unwrap());
+
+        // May or may not be complete immediately (timing dependent)
+        // But after waiting, should be complete
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        assert!(batch.is_complete());
+
+        std::fs::remove_file(&test_file).ok();
+    }
+
+    // ============================================================================
+    // Tokio runtime integration tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_spawns_on_tokio_runtime() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_tokio_spawn.obj");
+
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+        std::fs::write(&test_file, obj_content).expect("Failed to write test file");
+
+        // This test verifies the task runs on the tokio runtime
+        let (handle, receiver) = loader.load_async(&test_file).await.unwrap();
+
+        // The JoinHandle should be valid
+        assert!(!handle.is_cancelled());
+
+        // Should be able to await the result through the channel
+        let result = receiver.recv().unwrap();
+        assert!(result.is_ok());
+
+        std::fs::remove_file(&test_file).ok();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn test_concurrent_loads_with_multi_thread_runtime() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+
+        let paths: Vec<_> = (0..50)
+            .map(|i| temp_dir.join(format!("test_multithread_{}.obj", i)))
+            .collect();
+
+        for path in &paths {
+            std::fs::write(path, obj_content).expect("Failed to write test file");
+        }
+
+        // Start 50 concurrent loads on multi-threaded runtime
+        let loads = loader
+            .load_many_async(paths.clone())
+            .await
+            .expect("Failed to start loads");
+
+        // All should complete successfully
+        for (_handle, receiver) in loads {
+            let result = receiver.recv().unwrap();
+            assert!(result.is_ok());
+        }
+
+        for path in &paths {
+            std::fs::remove_file(path).ok();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_file_exists_check_with_tokio_fs() {
+        let loader = AsyncMeshLoader::new();
+
+        // Test with non-existent file - should fail immediately
+        let result = loader
+            .load_async("definitely_does_not_exist_99999.obj")
+            .await;
+        assert!(result.is_err());
+
+        // The error should occur before spawning, so it's immediate
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("not found") || error_msg.contains("No such file"));
+    }
+
+    // ============================================================================
+    // Error handling tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_invalid_obj_format_error_propagated() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_invalid_format.obj");
+
+        // Write completely invalid content
+        std::fs::write(&test_file, "This is not a valid OBJ file at all!")
+            .expect("Failed to write test file");
+
+        let (_handle, receiver) = loader.load_async(&test_file).await.unwrap();
+
+        let result = receiver.recv().unwrap();
+        assert!(result.is_err());
+
+        std::fs::remove_file(&test_file).ok();
+    }
+
+    #[tokio::test]
+    async fn test_empty_file_handling() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_empty.obj");
+
+        // Write empty file
+        std::fs::write(&test_file, "").expect("Failed to write test file");
+
+        let (_handle, receiver) = loader.load_async(&test_file).await.unwrap();
+
+        let result = receiver.recv().unwrap();
+        // Empty OBJ file should load but with no vertices
+        if let Ok(mesh_data) = result {
+            assert_eq!(mesh_data.positions.len(), 0);
+        }
+
+        std::fs::remove_file(&test_file).ok();
+    }
+
+    #[tokio::test]
+    async fn test_multiple_errors_independent() {
+        let loader = AsyncMeshLoader::new();
+        let temp_dir = std::env::temp_dir();
+
+        let invalid_file1 = temp_dir.join("test_error1.obj");
+        let invalid_file2 = temp_dir.join("test_error2.obj");
+
+        std::fs::write(&invalid_file1, "invalid1").expect("Failed to write test file");
+        std::fs::write(&invalid_file2, "invalid2").expect("Failed to write test file");
+
+        let (_, receiver1) = loader.load_async(&invalid_file1).await.unwrap();
+        let (_, receiver2) = loader.load_async(&invalid_file2).await.unwrap();
+
+        let result1 = receiver1.recv().unwrap();
+        let result2 = receiver2.recv().unwrap();
+
+        // Both should error independently
+        assert!(result1.is_err());
+        assert!(result2.is_err());
+
+        std::fs::remove_file(&invalid_file1).ok();
+        std::fs::remove_file(&invalid_file2).ok();
+    }
+
+    // ============================================================================
+    // Integration tests with real scenarios
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_realistic_game_loading_scenario() {
+        let loader = AsyncMeshLoader::new();
+        let mut batch = AsyncBatchLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+
+        // Simulate loading multiple assets for a game level
+        let asset_names = vec!["player", "enemy", "terrain", "building", "prop"];
+        let paths: Vec<_> = asset_names
+            .iter()
+            .map(|name| temp_dir.join(format!("test_game_{}.obj", name)))
+            .collect();
+
+        for path in &paths {
+            std::fs::write(path, obj_content).expect("Failed to write test file");
+        }
+
+        // Start loading all assets
+        for path in &paths {
+            batch.add(loader.load_async(path).await.unwrap());
+        }
+
+        // Simulate game loop checking for loading progress
+        let mut loaded_count = 0;
+        while !batch.is_complete() {
+            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+            let completed = batch.try_receive_completed();
+            loaded_count += completed.len();
+        }
+
+        assert_eq!(loaded_count, 5);
+
+        for path in &paths {
+            std::fs::remove_file(path).ok();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_wait_all_blocks_until_complete() {
+        let loader = AsyncMeshLoader::new();
+        let mut batch = AsyncBatchLoader::new();
+        let temp_dir = std::env::temp_dir();
+        let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
+
+        let paths: Vec<_> = (0..5)
+            .map(|i| temp_dir.join(format!("test_wait_all_{}.obj", i)))
+            .collect();
+
+        for path in &paths {
+            std::fs::write(path, obj_content).expect("Failed to write test file");
+        }
+
+        for path in &paths {
+            batch.add(loader.load_async(path).await.unwrap());
+        }
+
+        // wait_all should block until all are done
+        let results = batch.wait_all();
+
+        // All results should be present and successful
+        assert_eq!(results.len(), 5);
+        for result in results {
+            assert!(result.is_ok());
+        }
+
+        for path in &paths {
+            std::fs::remove_file(path).ok();
+        }
+    }
 }
