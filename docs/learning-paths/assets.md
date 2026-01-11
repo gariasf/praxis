@@ -4,9 +4,9 @@ Master asset loading, management, and the content pipeline.
 
 ## Path Overview
 
-**Time Investment**: 4-6 days  
-**Prerequisites**: Basic file I/O understanding  
-**Final Goal**: Efficient asset pipeline
+**Time Investment**: 5-7 days  
+**Prerequisites**: Basic file I/O understanding, tokio basics (for async section)  
+**Final Goal**: Efficient asset pipeline with async loading
 
 ## Progression Map
 
@@ -23,11 +23,13 @@ Intermediate (2 days)
 ├── Animations from GLTF
 └── Asset management patterns
     ↓
-Advanced (2 days)
+Advanced (2-3 days)
 ├── Custom asset loaders
 ├── Asset hot-reload
-├── Asset streaming
-└── Build pipelines
+├── Async asset loading with tokio
+├── Channel-based completion notification
+├── Concurrent load management
+└── Asset streaming and cancellation
 ```
 
 ---
@@ -134,10 +136,11 @@ world.spawn((
 
 ## Advanced: Custom Pipeline
 
-**Practice** (6-8 hours):
+**Practice** (8-10 hours):
 1. Create custom asset loader
 2. Implement hot-reload
 3. Build asset processing
+4. Implement async asset loading
 
 **Custom Loader**:
 ```rust
@@ -169,12 +172,134 @@ asset_manager.check_for_changes()?;
 // Assets automatically reload!
 ```
 
+**Async Asset Loading**:
+
+Non-blocking asset loading with tokio and channel-based completion:
+
+```rust
+use praxis_assets::async_loader::{AsyncAssetLoader, AsyncMeshLoader};
+
+// Create async loader
+let loader = AsyncMeshLoader::new();
+
+// Start loading asynchronously
+let (handle, receiver) = loader.load_async("assets/models/cube.obj").await?;
+
+// Do other work while loading...
+println!("Loading in background: {}", handle.path().display());
+
+// Non-blocking check
+if let Ok(result) = receiver.try_recv() {
+    match result {
+        Ok(mesh_data) => println!("Loaded {} vertices", mesh_data.positions.len()),
+        Err(e) => eprintln!("Load failed: {}", e),
+    }
+} else {
+    println!("Still loading...");
+}
+
+// Or wait for completion (blocking)
+let mesh_data = receiver.recv().unwrap()?;
+```
+
+**Multiple Concurrent Loads**:
+
+```rust
+use praxis_assets::async_loader::{AsyncBatchLoader, AsyncMeshLoader};
+
+let loader = AsyncMeshLoader::new();
+let mut batch = AsyncBatchLoader::new();
+
+// Queue multiple loads
+batch.add(loader.load_async("models/player.obj").await?);
+batch.add(loader.load_async("models/enemy.obj").await?);
+batch.add(loader.load_async("models/prop.obj").await?);
+
+// Check progress in game loop
+while !batch.is_complete() {
+    let completed = batch.try_receive_completed();
+    for result in completed {
+        match result {
+            Ok(mesh) => println!("Asset loaded!"),
+            Err(e) => eprintln!("Failed: {}", e),
+        }
+    }
+    
+    println!("Progress: {}/{}", 
+        batch.completed_count(), 
+        batch.total_count()
+    );
+    
+    // Update game while loading
+    tokio::time::sleep(Duration::from_millis(16)).await;
+}
+```
+
+**Load Cancellation**:
+
+```rust
+// Start loading
+let (handle, receiver) = loader.load_async("large_asset.obj").await?;
+
+// Cancel if user changes scene
+if scene_changed {
+    handle.cancel();
+}
+
+// Or use with timeout
+tokio::select! {
+    result = async { receiver.recv().unwrap() } => {
+        println!("Loaded in time!");
+    }
+    _ = tokio::time::sleep(Duration::from_secs(5)) => {
+        handle.cancel();
+        println!("Load timed out");
+    }
+}
+```
+
+### Exercises
+
+**Exercise 1: Basic Async Loading**
+- Load 3 meshes asynchronously
+- Print status while loading
+- Verify all complete successfully
+- Compare load times with synchronous loading
+
+**Exercise 2: Game Level Loader**
+- Create a level with 10+ assets
+- Load all assets concurrently
+- Display loading progress bar
+- Handle individual load failures gracefully
+
+**Exercise 3: Streaming System**
+- Implement priority-based loading queue
+- Load high-priority assets first
+- Stream in background assets while playing
+- Cancel loads when assets move out of range
+
+**Exercise 4: Channel-Based Integration**
+- Create a loading screen with progress updates
+- Use channels to send completion notifications to main thread
+- Update UI in real-time as assets complete
+- Handle errors with user-friendly messages
+
+**Exercise 5: Resource Budget System**
+- Track total memory used by loaded assets
+- Load assets until memory budget reached
+- Unload oldest assets when over budget
+- Use async loading to check file sizes before loading
+
 ### Checkpoint
 - [ ] Created custom loader
 - [ ] Hot-reload working
 - [ ] Asset pipeline established
+- [ ] Async loading with tokio working
+- [ ] Channel-based completion notifications implemented
+- [ ] Multiple concurrent loads managed
+- [ ] Load cancellation working
 
-**Time**: 8-10 hours
+**Time**: 10-12 hours
 
 ---
 
