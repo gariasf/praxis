@@ -540,7 +540,1196 @@ fn compile_shader_to_spirv(source: &str) -> Result<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    // Tests disabled: These require valid Vulkan objects which cannot be created
-    // with std::mem::zeroed(). They should be re-enabled when proper test fixtures
-    // with real or mock Vulkan contexts are available.
+    use super::*;
+    use crate::graph::{BlendMode, ColorRamp, ColorStop, NoiseType, TextureGraph, TextureNode};
+
+    #[test]
+    fn test_texture_generation_params_default() {
+        let params = TextureGenerationParams::default();
+        assert_eq!(params.width, 512);
+        assert_eq!(params.height, 512);
+        assert_eq!(params.seed, 0);
+    }
+
+    #[test]
+    fn test_texture_generation_params_custom() {
+        let params = TextureGenerationParams {
+            width: 1024,
+            height: 2048,
+            seed: 42,
+        };
+        assert_eq!(params.width, 1024);
+        assert_eq!(params.height, 2048);
+        assert_eq!(params.seed, 42);
+    }
+
+    #[test]
+    fn test_texture_generation_params_equality() {
+        let params1 = TextureGenerationParams {
+            width: 256,
+            height: 256,
+            seed: 1,
+        };
+        let params2 = TextureGenerationParams {
+            width: 256,
+            height: 256,
+            seed: 1,
+        };
+        assert_eq!(params1, params2);
+    }
+
+    #[test]
+    fn test_compile_shader_to_spirv_simple() {
+        let source = r#"
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout(set = 0, binding = 0, rgba8) uniform writeonly image2D outputImage;
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    imageStore(outputImage, pixel, vec4(1.0, 0.0, 0.0, 1.0));
+}
+"#;
+
+        let result = compile_shader_to_spirv(source);
+        assert!(
+            result.is_ok(),
+            "Simple shader compilation should succeed: {:?}",
+            result.err()
+        );
+
+        let spirv = result.unwrap();
+        assert!(!spirv.is_empty(), "SPIR-V output should not be empty");
+        assert_eq!(
+            spirv.len() % 4,
+            0,
+            "SPIR-V should be aligned to 4 bytes"
+        );
+
+        let magic = u32::from_le_bytes([spirv[0], spirv[1], spirv[2], spirv[3]]);
+        assert_eq!(
+            magic, 0x0723_0203,
+            "SPIR-V should start with correct magic number"
+        );
+    }
+
+    #[test]
+    fn test_compile_shader_to_spirv_with_uniforms() {
+        let source = r#"
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout(set = 0, binding = 0, rgba8) uniform writeonly image2D outputImage;
+
+const uint WIDTH = 512u;
+const uint HEIGHT = 512u;
+const uint SEED = 42u;
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x >= WIDTH || pixel.y >= HEIGHT) return;
+    
+    vec2 uv = vec2(pixel) / vec2(WIDTH, HEIGHT);
+    vec4 color = vec4(uv, float(SEED) / 100.0, 1.0);
+    imageStore(outputImage, pixel, color);
+}
+"#;
+
+        let result = compile_shader_to_spirv(source);
+        assert!(
+            result.is_ok(),
+            "Shader with uniforms should compile successfully"
+        );
+
+        let spirv = result.unwrap();
+        assert!(spirv.len() > 100, "SPIR-V with uniforms should be substantial");
+    }
+
+    #[test]
+    fn test_compile_shader_to_spirv_invalid_syntax() {
+        let source = r#"
+#version 450
+
+layout(local_size_x = 16) in;
+
+void main() {
+    this is invalid syntax
+}
+"#;
+
+        let result = compile_shader_to_spirv(source);
+        assert!(result.is_err(), "Invalid shader should fail to compile");
+
+        let err = result.unwrap_err();
+        let err_str = format!("{}", err);
+        assert!(
+            err_str.contains("Shader compilation failed"),
+            "Error should indicate compilation failure"
+        );
+    }
+
+    #[test]
+    fn test_compile_shader_to_spirv_missing_entry_point() {
+        let source = r#"
+#version 450
+
+layout(local_size_x = 16) in;
+
+void not_main() {
+}
+"#;
+
+        let result = compile_shader_to_spirv(source);
+        assert!(
+            result.is_err(),
+            "Shader without main entry point should fail"
+        );
+    }
+
+    #[test]
+    fn test_compute_dispatch_dimensions_exact_multiple() {
+        let workgroup_size = 16;
+        let width = 512;
+        let height = 512;
+
+        let dispatch_x = width.div_ceil(workgroup_size);
+        let dispatch_y = height.div_ceil(workgroup_size);
+
+        assert_eq!(dispatch_x, 32);
+        assert_eq!(dispatch_y, 32);
+
+        assert!(width <= dispatch_x * workgroup_size);
+        assert!(height <= dispatch_y * workgroup_size);
+    }
+
+    #[test]
+    fn test_compute_dispatch_dimensions_non_multiple() {
+        let workgroup_size = 16;
+        let width = 500;
+        let height = 300;
+
+        let dispatch_x = width.div_ceil(workgroup_size);
+        let dispatch_y = height.div_ceil(workgroup_size);
+
+        assert_eq!(dispatch_x, 32);
+        assert_eq!(dispatch_y, 19);
+
+        assert!(width <= dispatch_x * workgroup_size);
+        assert!(height <= dispatch_y * workgroup_size);
+    }
+
+    #[test]
+    fn test_compute_dispatch_dimensions_small_texture() {
+        let workgroup_size = 16;
+        let width = 8;
+        let height = 8;
+
+        let dispatch_x = width.div_ceil(workgroup_size);
+        let dispatch_y = height.div_ceil(workgroup_size);
+
+        assert_eq!(dispatch_x, 1);
+        assert_eq!(dispatch_y, 1);
+
+        assert!(width <= dispatch_x * workgroup_size);
+        assert!(height <= dispatch_y * workgroup_size);
+    }
+
+    #[test]
+    fn test_compute_dispatch_dimensions_large_texture() {
+        let workgroup_size = 16;
+        let width = 4096;
+        let height = 4096;
+
+        let dispatch_x = width.div_ceil(workgroup_size);
+        let dispatch_y = height.div_ceil(workgroup_size);
+
+        assert_eq!(dispatch_x, 256);
+        assert_eq!(dispatch_y, 256);
+    }
+
+    #[test]
+    fn test_compute_dispatch_dimensions_edge_cases() {
+        let workgroup_size = 16;
+
+        let test_cases = [
+            (1, 1, 1, 1),
+            (15, 15, 1, 1),
+            (16, 16, 1, 1),
+            (17, 17, 2, 2),
+            (31, 31, 2, 2),
+            (32, 32, 2, 2),
+            (33, 33, 3, 3),
+        ];
+
+        for (width, height, expected_x, expected_y) in test_cases.iter() {
+            let dispatch_x = width.div_ceil(workgroup_size);
+            let dispatch_y = height.div_ceil(workgroup_size);
+
+            assert_eq!(
+                dispatch_x, *expected_x,
+                "width {} should result in dispatch_x {}",
+                width, expected_x
+            );
+            assert_eq!(
+                dispatch_y, *expected_y,
+                "height {} should result in dispatch_y {}",
+                height, expected_y
+            );
+        }
+    }
+
+    #[test]
+    fn test_shader_generation_perlin_noise() {
+        let mut graph = TextureGraph::new();
+        let noise_id = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Perlin,
+            scale: 8.0,
+            octaves: 4,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+        graph.set_output(noise_id);
+
+        let params = TextureGenerationParams {
+            width: 512,
+            height: 512,
+            seed: 42,
+        };
+
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params);
+
+        assert!(shader.is_ok(), "Shader generation should succeed");
+        let shader_source = shader.unwrap();
+
+        assert!(shader_source.contains("#version 450"));
+        assert!(shader_source.contains("layout(local_size_x = 16"));
+        assert!(shader_source.contains("const uint SEED = 42u"));
+        assert!(shader_source.contains("const uint WIDTH = 512u"));
+        assert!(shader_source.contains("const uint HEIGHT = 512u"));
+        assert!(shader_source.contains("perlin_noise"));
+        assert!(shader_source.contains("fbm_perlin_noise"));
+        assert!(shader_source.contains("void main()"));
+        assert!(shader_source.contains("eval_node_0"));
+    }
+
+    #[test]
+    fn test_shader_generation_simplex_noise() {
+        let mut graph = TextureGraph::new();
+        let noise_id = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Simplex,
+            scale: 10.0,
+            octaves: 3,
+            persistence: 0.6,
+            lacunarity: 2.5,
+        });
+        graph.set_output(noise_id);
+
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        assert!(shader.contains("simplex_noise"));
+        assert!(shader.contains("fbm_simplex_noise"));
+        assert!(shader.contains("* 10.0"));
+        assert!(shader.contains("3"));
+    }
+
+    #[test]
+    fn test_shader_generation_worley_noise() {
+        let mut graph = TextureGraph::new();
+        let noise_id = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Worley,
+            scale: 5.0,
+            octaves: 2,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+        graph.set_output(noise_id);
+
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        assert!(shader.contains("worley_noise"));
+        assert!(shader.contains("fbm_worley_noise"));
+    }
+
+    #[test]
+    fn test_shader_generation_constant() {
+        let mut graph = TextureGraph::new();
+        let constant_id = graph.add_node(TextureNode::Constant {
+            color: [1.0, 0.5, 0.25, 1.0],
+        });
+        graph.set_output(constant_id);
+
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        assert!(shader.contains("vec4(1, 0.5, 0.25, 1)"));
+    }
+
+    #[test]
+    fn test_shader_generation_blend_add() {
+        let mut graph = TextureGraph::new();
+        let noise1 = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Perlin,
+            scale: 4.0,
+            octaves: 2,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+        let noise2 = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Simplex,
+            scale: 8.0,
+            octaves: 2,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+        let blend = graph.add_node(TextureNode::Blend {
+            input_a: noise1,
+            input_b: noise2,
+            mode: BlendMode::Add,
+            factor: 0.5,
+        });
+        graph.set_output(blend);
+
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        assert!(shader.contains("eval_node_0"));
+        assert!(shader.contains("eval_node_1"));
+        assert!(shader.contains("eval_node_2"));
+        assert!(shader.contains("a + b"));
+    }
+
+    #[test]
+    fn test_shader_generation_blend_multiply() {
+        let mut graph = TextureGraph::new();
+        let n1 = graph.add_node(TextureNode::Constant {
+            color: [1.0, 1.0, 1.0, 1.0],
+        });
+        let n2 = graph.add_node(TextureNode::Constant {
+            color: [0.5, 0.5, 0.5, 1.0],
+        });
+        let blend = graph.add_node(TextureNode::Blend {
+            input_a: n1,
+            input_b: n2,
+            mode: BlendMode::Multiply,
+            factor: 0.5,
+        });
+        graph.set_output(blend);
+
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        assert!(shader.contains("a * b"));
+    }
+
+    #[test]
+    fn test_shader_generation_blend_mix() {
+        let mut graph = TextureGraph::new();
+        let n1 = graph.add_node(TextureNode::Constant {
+            color: [1.0, 0.0, 0.0, 1.0],
+        });
+        let n2 = graph.add_node(TextureNode::Constant {
+            color: [0.0, 1.0, 0.0, 1.0],
+        });
+        let blend = graph.add_node(TextureNode::Blend {
+            input_a: n1,
+            input_b: n2,
+            mode: BlendMode::Mix,
+            factor: 0.3,
+        });
+        graph.set_output(blend);
+
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        assert!(shader.contains("mix(a, b, 0.3)"));
+    }
+
+    #[test]
+    fn test_shader_generation_transform() {
+        let mut graph = TextureGraph::new();
+        let noise = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Perlin,
+            scale: 5.0,
+            octaves: 2,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+        let transform = graph.add_node(TextureNode::Transform {
+            input: noise,
+            params: TransformParams {
+                offset: Vec2::new(0.1, 0.2),
+                rotation: 0.5,
+                scale: Vec2::new(2.0, 3.0),
+            },
+        });
+        graph.set_output(transform);
+
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        assert!(shader.contains("transform_uv"));
+        assert!(shader.contains("vec2(0.1, 0.2)"));
+        assert!(shader.contains("0.5"));
+        assert!(shader.contains("vec2(2, 3)"));
+    }
+
+    #[test]
+    fn test_shader_generation_color_ramp() {
+        let mut graph = TextureGraph::new();
+        let noise = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Perlin,
+            scale: 5.0,
+            octaves: 2,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+
+        let ramp = ColorRamp::new(vec![
+            ColorStop {
+                position: 0.0,
+                color: [0.0, 0.0, 0.0, 1.0],
+            },
+            ColorStop {
+                position: 0.5,
+                color: [0.5, 0.5, 0.5, 1.0],
+            },
+            ColorStop {
+                position: 1.0,
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+        ]);
+
+        let ramp_node = graph.add_node(TextureNode::ColorRamp { input: noise, ramp });
+        graph.set_output(ramp_node);
+
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        assert!(shader.contains("if (t <= 0.5)"));
+        assert!(shader.contains("else if (t <= 1)"));
+        assert!(shader.contains("vec4(0, 0, 0, 1)"));
+        assert!(shader.contains("vec4(0.5, 0.5, 0.5, 1)"));
+        assert!(shader.contains("vec4(1, 1, 1, 1)"));
+    }
+
+    #[test]
+    fn test_shader_generation_invert() {
+        let mut graph = TextureGraph::new();
+        let noise = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Perlin,
+            scale: 5.0,
+            octaves: 2,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+        let invert = graph.add_node(TextureNode::Invert { input: noise });
+        graph.set_output(invert);
+
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        assert!(shader.contains("1.0 - color.rgb"));
+    }
+
+    #[test]
+    fn test_shader_generation_clamp() {
+        let mut graph = TextureGraph::new();
+        let noise = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Perlin,
+            scale: 5.0,
+            octaves: 2,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+        let clamp = graph.add_node(TextureNode::Clamp {
+            input: noise,
+            min: 0.2,
+            max: 0.8,
+        });
+        graph.set_output(clamp);
+
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        assert!(shader.contains("clamp(color, 0.2, 0.8)"));
+    }
+
+    #[test]
+    fn test_shader_generation_power() {
+        let mut graph = TextureGraph::new();
+        let noise = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Perlin,
+            scale: 5.0,
+            octaves: 2,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+        let power = graph.add_node(TextureNode::Power {
+            input: noise,
+            exponent: 2.5,
+        });
+        graph.set_output(power);
+
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        assert!(shader.contains("pow(color.rgb, vec3(2.5))"));
+    }
+
+    #[test]
+    fn test_shader_generation_threshold() {
+        let mut graph = TextureGraph::new();
+        let noise = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Perlin,
+            scale: 5.0,
+            octaves: 2,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+        let threshold = graph.add_node(TextureNode::Threshold {
+            input: noise,
+            threshold: 0.5,
+        });
+        graph.set_output(threshold);
+
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        assert!(shader.contains("step(0.5, color.r)"));
+    }
+
+    #[test]
+    fn test_shader_generation_contrast() {
+        let mut graph = TextureGraph::new();
+        let noise = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Perlin,
+            scale: 5.0,
+            octaves: 2,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+        let contrast = graph.add_node(TextureNode::Contrast {
+            input: noise,
+            amount: 0.3,
+        });
+        graph.set_output(contrast);
+
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        assert!(shader.contains("(color.rgb - 0.5) * (1.0 + 0.3) + 0.5"));
+    }
+
+    #[test]
+    fn test_shader_generation_brightness() {
+        let mut graph = TextureGraph::new();
+        let noise = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Perlin,
+            scale: 5.0,
+            octaves: 2,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+        let brightness = graph.add_node(TextureNode::Brightness {
+            input: noise,
+            amount: 0.2,
+        });
+        graph.set_output(brightness);
+
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        assert!(shader.contains("color.rgb + 0.2"));
+    }
+
+    #[test]
+    fn test_shader_generation_complex_graph() {
+        let mut graph = TextureGraph::new();
+
+        let noise1 = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Perlin,
+            scale: 4.0,
+            octaves: 3,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+
+        let noise2 = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Simplex,
+            scale: 8.0,
+            octaves: 2,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+
+        let blend = graph.add_node(TextureNode::Blend {
+            input_a: noise1,
+            input_b: noise2,
+            mode: BlendMode::Multiply,
+            factor: 0.5,
+        });
+
+        let power = graph.add_node(TextureNode::Power {
+            input: blend,
+            exponent: 2.0,
+        });
+
+        let contrast = graph.add_node(TextureNode::Contrast {
+            input: power,
+            amount: 0.3,
+        });
+
+        graph.set_output(contrast);
+
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        assert!(shader.contains("eval_node_0"));
+        assert!(shader.contains("eval_node_1"));
+        assert!(shader.contains("eval_node_2"));
+        assert!(shader.contains("eval_node_3"));
+        assert!(shader.contains("eval_node_4"));
+        assert!(shader.contains("perlin_noise"));
+        assert!(shader.contains("simplex_noise"));
+        assert!(shader.contains("a * b"));
+        assert!(shader.contains("pow(color.rgb, vec3(2))"));
+        assert!(shader.contains("(color.rgb - 0.5) * (1.0 + 0.3) + 0.5"));
+    }
+
+    #[test]
+    fn test_shader_generation_no_output_fails() {
+        let graph = TextureGraph::new();
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params);
+
+        assert!(shader.is_err(), "Graph without output should fail");
+    }
+
+    #[test]
+    fn test_shader_compilation_produces_valid_spirv() {
+        let mut graph = TextureGraph::new();
+        let noise_id = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Perlin,
+            scale: 8.0,
+            octaves: 4,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+        graph.set_output(noise_id);
+
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader_source = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        let spirv_result = compile_shader_to_spirv(&shader_source);
+        assert!(
+            spirv_result.is_ok(),
+            "Generated shader should compile to valid SPIR-V: {:?}",
+            spirv_result.err()
+        );
+
+        let spirv = spirv_result.unwrap();
+        assert!(!spirv.is_empty());
+        assert_eq!(spirv.len() % 4, 0, "SPIR-V must be 4-byte aligned");
+
+        let magic = u32::from_le_bytes([spirv[0], spirv[1], spirv[2], spirv[3]]);
+        assert_eq!(magic, 0x0723_0203, "Must have valid SPIR-V magic number");
+    }
+
+    #[test]
+    fn test_shader_has_correct_bindings() {
+        let mut graph = TextureGraph::new();
+        let noise_id = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Perlin,
+            scale: 8.0,
+            octaves: 4,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+        graph.set_output(noise_id);
+
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        assert!(shader.contains("layout(set = 0, binding = 0"));
+        assert!(shader.contains("rgba8"));
+        assert!(shader.contains("writeonly image2D outputImage"));
+    }
+
+    #[test]
+    fn test_shader_has_correct_workgroup_size() {
+        let mut graph = TextureGraph::new();
+        let noise_id = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Perlin,
+            scale: 8.0,
+            octaves: 4,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+        graph.set_output(noise_id);
+
+        let params = TextureGenerationParams::default();
+        let generator = create_mock_generator();
+        let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        assert!(shader.contains("layout(local_size_x = 16, local_size_y = 16, local_size_z = 1)"));
+    }
+
+    #[test]
+    fn test_shader_respects_seed_parameter() {
+        let mut graph = TextureGraph::new();
+        let noise_id = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Perlin,
+            scale: 8.0,
+            octaves: 4,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+        graph.set_output(noise_id);
+
+        let generator = create_mock_generator();
+
+        let params1 = TextureGenerationParams {
+            width: 512,
+            height: 512,
+            seed: 0,
+        };
+        let shader1 = generator.compile_graph_to_shader(&graph, params1).unwrap();
+        assert!(shader1.contains("const uint SEED = 0u"));
+
+        let params2 = TextureGenerationParams {
+            width: 512,
+            height: 512,
+            seed: 12345,
+        };
+        let shader2 = generator.compile_graph_to_shader(&graph, params2).unwrap();
+        assert!(shader2.contains("const uint SEED = 12345u"));
+    }
+
+    #[test]
+    fn test_shader_respects_dimensions() {
+        let mut graph = TextureGraph::new();
+        let noise_id = graph.add_node(TextureNode::Noise {
+            noise_type: NoiseType::Perlin,
+            scale: 8.0,
+            octaves: 4,
+            persistence: 0.5,
+            lacunarity: 2.0,
+        });
+        graph.set_output(noise_id);
+
+        let generator = create_mock_generator();
+
+        let params = TextureGenerationParams {
+            width: 1024,
+            height: 2048,
+            seed: 0,
+        };
+        let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
+
+        assert!(shader.contains("const uint WIDTH = 1024u"));
+        assert!(shader.contains("const uint HEIGHT = 2048u"));
+    }
+
+    #[test]
+    fn test_readback_buffer_size_calculation() {
+        let params = TextureGenerationParams {
+            width: 512,
+            height: 512,
+            seed: 0,
+        };
+
+        let buffer_size = (params.width * params.height * 4) as u64;
+        assert_eq!(buffer_size, 1_048_576);
+
+        let params_small = TextureGenerationParams {
+            width: 64,
+            height: 64,
+            seed: 0,
+        };
+        let buffer_size_small = (params_small.width * params_small.height * 4) as u64;
+        assert_eq!(buffer_size_small, 16_384);
+
+        let params_large = TextureGenerationParams {
+            width: 4096,
+            height: 4096,
+            seed: 0,
+        };
+        let buffer_size_large = (params_large.width * params_large.height * 4) as u64;
+        assert_eq!(buffer_size_large, 67_108_864);
+    }
+
+    #[test]
+    fn test_all_blend_modes_generate_valid_shaders() {
+        let blend_modes = [
+            (BlendMode::Add, "a + b"),
+            (BlendMode::Multiply, "a * b"),
+            (BlendMode::Min, "min(a, b)"),
+            (BlendMode::Max, "max(a, b)"),
+            (BlendMode::Mix, "mix(a, b, 0.5)"),
+            (BlendMode::Screen, "1.0 - (1.0 - a) * (1.0 - b)"),
+            (
+                BlendMode::Overlay,
+                "mix(2.0 * a * b, 1.0 - 2.0 * (1.0 - a) * (1.0 - b), step(0.5, a))",
+            ),
+            (BlendMode::Subtract, "a - b"),
+        ];
+
+        let generator = create_mock_generator();
+        let params = TextureGenerationParams::default();
+
+        for (mode, expected_expr) in &blend_modes {
+            let mut graph = TextureGraph::new();
+            let n1 = graph.add_node(TextureNode::Constant {
+                color: [1.0, 1.0, 1.0, 1.0],
+            });
+            let n2 = graph.add_node(TextureNode::Constant {
+                color: [0.5, 0.5, 0.5, 1.0],
+            });
+            let blend = graph.add_node(TextureNode::Blend {
+                input_a: n1,
+                input_b: n2,
+                mode: *mode,
+                factor: 0.5,
+            });
+            graph.set_output(blend);
+
+            let shader = generator
+                .compile_graph_to_shader(&graph, params)
+                .expect(&format!("Failed to generate shader for blend mode {:?}", mode));
+
+            assert!(
+                shader.contains(expected_expr),
+                "Shader for {:?} should contain: {}",
+                mode,
+                expected_expr
+            );
+
+            let spirv = compile_shader_to_spirv(&shader);
+            assert!(
+                spirv.is_ok(),
+                "Shader for {:?} should compile to SPIR-V",
+                mode
+            );
+        }
+    }
+
+    #[test]
+    fn test_all_noise_types_generate_valid_shaders() {
+        let noise_types = [
+            (NoiseType::Perlin, "perlin_noise"),
+            (NoiseType::Simplex, "simplex_noise"),
+            (NoiseType::Worley, "worley_noise"),
+        ];
+
+        let generator = create_mock_generator();
+        let params = TextureGenerationParams::default();
+
+        for (noise_type, expected_fn) in &noise_types {
+            let mut graph = TextureGraph::new();
+            let noise = graph.add_node(TextureNode::Noise {
+                noise_type: *noise_type,
+                scale: 8.0,
+                octaves: 4,
+                persistence: 0.5,
+                lacunarity: 2.0,
+            });
+            graph.set_output(noise);
+
+            let shader = generator
+                .compile_graph_to_shader(&graph, params)
+                .expect(&format!("Failed to generate shader for noise type {:?}", noise_type));
+
+            assert!(
+                shader.contains(expected_fn),
+                "Shader for {:?} should contain: {}",
+                noise_type,
+                expected_fn
+            );
+
+            let spirv = compile_shader_to_spirv(&shader);
+            assert!(
+                spirv.is_ok(),
+                "Shader for {:?} should compile to SPIR-V",
+                noise_type
+            );
+        }
+    }
+
+    fn create_mock_generator() -> MockGenerator {
+        MockGenerator
+    }
+
+    struct MockGenerator;
+
+    impl MockGenerator {
+        fn compile_graph_to_shader(
+            &self,
+            graph: &TextureGraph,
+            params: TextureGenerationParams,
+        ) -> Result<String> {
+            let output_id = graph
+                .output()
+                .ok_or_else(|| eyre::eyre!("No output node"))?;
+
+            let mut shader = String::new();
+            shader.push_str("#version 450\n\n");
+            shader
+                .push_str("layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;\n\n");
+            shader.push_str(
+                "layout(set = 0, binding = 0, rgba8) uniform writeonly image2D outputImage;\n\n",
+            );
+
+            shader.push_str(&format!("const uint SEED = {}u;\n", params.seed));
+            shader.push_str(&format!("const uint WIDTH = {}u;\n", params.width));
+            shader.push_str(&format!("const uint HEIGHT = {}u;\n\n", params.height));
+
+            shader.push_str(&self.generate_noise_functions());
+            shader.push_str(&self.generate_utility_functions());
+
+            let mut generated_nodes = std::collections::HashSet::new();
+            self.generate_node_function(graph, output_id, &mut generated_nodes, &mut shader)?;
+
+            shader.push_str("\nvoid main() {\n");
+            shader.push_str("    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);\n");
+            shader.push_str("    if (pixel.x >= WIDTH || pixel.y >= HEIGHT) return;\n\n");
+            shader.push_str("    vec2 uv = vec2(pixel) / vec2(WIDTH, HEIGHT);\n");
+            shader.push_str(&format!(
+                "    vec4 color = eval_node_{}(uv);\n",
+                output_id.0
+            ));
+            shader.push_str("    imageStore(outputImage, pixel, color);\n");
+            shader.push_str("}\n");
+
+            Ok(shader)
+        }
+
+        #[allow(clippy::only_used_in_recursion)]
+        fn generate_node_function(
+            &self,
+            graph: &TextureGraph,
+            node_id: TextureNodeId,
+            generated: &mut std::collections::HashSet<TextureNodeId>,
+            shader: &mut String,
+        ) -> Result<()> {
+            if generated.contains(&node_id) {
+                return Ok(());
+            }
+
+            let node = graph
+                .get_node(node_id)
+                .ok_or_else(|| eyre::eyre!("Node not found"))?;
+
+            match node {
+                TextureNode::Noise {
+                    noise_type,
+                    scale,
+                    octaves,
+                    persistence,
+                    lacunarity,
+                } => {
+                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
+
+                    let noise_fn = match noise_type {
+                        NoiseType::Perlin => "perlin_noise",
+                        NoiseType::Simplex => "simplex_noise",
+                        NoiseType::Worley => "worley_noise",
+                    };
+
+                    shader.push_str(&format!(
+                        "    float value = fbm_{noise_fn}(uv * {scale}, SEED, {octaves}, {persistence}, {lacunarity});\n"
+                    ));
+                    shader.push_str("    value = value * 0.5 + 0.5;\n");
+                    shader.push_str("    return vec4(value, value, value, 1.0);\n");
+                    shader.push_str("}\n\n");
+                }
+                TextureNode::Constant { color } => {
+                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
+                    shader.push_str(&format!(
+                        "    return vec4({}, {}, {}, {});\n",
+                        color[0], color[1], color[2], color[3]
+                    ));
+                    shader.push_str("}\n\n");
+                }
+                TextureNode::Transform { input, params } => {
+                    self.generate_node_function(graph, *input, generated, shader)?;
+                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
+                    shader.push_str(&format!(
+                        "    vec2 transformed = transform_uv(uv, vec2({}, {}), {}, vec2({}, {}));\n",
+                        params.offset.x, params.offset.y, params.rotation, params.scale.x, params.scale.y
+                    ));
+                    shader.push_str(&format!("    return eval_node_{}(transformed);\n", input.0));
+                    shader.push_str("}\n\n");
+                }
+                TextureNode::Blend {
+                    input_a,
+                    input_b,
+                    mode,
+                    factor,
+                } => {
+                    self.generate_node_function(graph, *input_a, generated, shader)?;
+                    self.generate_node_function(graph, *input_b, generated, shader)?;
+
+                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
+                    shader.push_str(&format!("    vec4 a = eval_node_{}(uv);\n", input_a.0));
+                    shader.push_str(&format!("    vec4 b = eval_node_{}(uv);\n", input_b.0));
+
+                    let blend_expr = match mode {
+                        BlendMode::Add => "a + b",
+                        BlendMode::Multiply => "a * b",
+                        BlendMode::Min => "min(a, b)",
+                        BlendMode::Max => "max(a, b)",
+                        BlendMode::Mix => &format!("mix(a, b, {factor})"),
+                        BlendMode::Screen => "1.0 - (1.0 - a) * (1.0 - b)",
+                        BlendMode::Overlay => {
+                            "mix(2.0 * a * b, 1.0 - 2.0 * (1.0 - a) * (1.0 - b), step(0.5, a))"
+                        }
+                        BlendMode::Subtract => "a - b",
+                    };
+
+                    shader.push_str(&format!("    return {blend_expr};\n"));
+                    shader.push_str("}\n\n");
+                }
+                TextureNode::ColorRamp { input, ramp } => {
+                    self.generate_node_function(graph, *input, generated, shader)?;
+                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
+                    shader.push_str(&format!("    float t = eval_node_{}(uv).r;\n", input.0));
+
+                    if ramp.stops.len() >= 2 {
+                        for i in 0..ramp.stops.len() - 1 {
+                            let stop1 = &ramp.stops[i];
+                            let stop2 = &ramp.stops[i + 1];
+
+                            let condition = if i == 0 {
+                                format!("if (t <= {})", stop2.position)
+                            } else {
+                                format!("else if (t <= {})", stop2.position)
+                            };
+
+                            shader.push_str(&format!("    {condition} {{\n"));
+                            shader.push_str(&format!(
+                                "        float factor = (t - {}) / ({} - {});\n",
+                                stop1.position, stop2.position, stop1.position
+                            ));
+                            shader.push_str(&format!(
+                                "        vec4 c1 = vec4({}, {}, {}, {});\n",
+                                stop1.color[0], stop1.color[1], stop1.color[2], stop1.color[3]
+                            ));
+                            shader.push_str(&format!(
+                                "        vec4 c2 = vec4({}, {}, {}, {});\n",
+                                stop2.color[0], stop2.color[1], stop2.color[2], stop2.color[3]
+                            ));
+                            shader.push_str("        return mix(c1, c2, factor);\n");
+                            shader.push_str("    }\n");
+                        }
+                        shader.push_str(&format!(
+                            "    return vec4({}, {}, {}, {});\n",
+                            ramp.stops.last().unwrap().color[0],
+                            ramp.stops.last().unwrap().color[1],
+                            ramp.stops.last().unwrap().color[2],
+                            ramp.stops.last().unwrap().color[3]
+                        ));
+                    } else {
+                        shader.push_str("    return vec4(0.0, 0.0, 0.0, 1.0);\n");
+                    }
+
+                    shader.push_str("}\n\n");
+                }
+                TextureNode::Invert { input } => {
+                    self.generate_node_function(graph, *input, generated, shader)?;
+                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
+                    shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
+                    shader.push_str("    return vec4(1.0 - color.rgb, color.a);\n");
+                    shader.push_str("}\n\n");
+                }
+                TextureNode::Clamp { input, min, max } => {
+                    self.generate_node_function(graph, *input, generated, shader)?;
+                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
+                    shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
+                    shader.push_str(&format!("    return clamp(color, {min}, {max});\n"));
+                    shader.push_str("}\n\n");
+                }
+                TextureNode::Power { input, exponent } => {
+                    self.generate_node_function(graph, *input, generated, shader)?;
+                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
+                    shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
+                    shader.push_str(&format!(
+                        "    return vec4(pow(color.rgb, vec3({exponent})), color.a);\n"
+                    ));
+                    shader.push_str("}\n\n");
+                }
+                TextureNode::Threshold { input, threshold } => {
+                    self.generate_node_function(graph, *input, generated, shader)?;
+                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
+                    shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
+                    shader.push_str(&format!("    float value = step({threshold}, color.r);\n"));
+                    shader.push_str("    return vec4(value, value, value, color.a);\n");
+                    shader.push_str("}\n\n");
+                }
+                TextureNode::Contrast { input, amount } => {
+                    self.generate_node_function(graph, *input, generated, shader)?;
+                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
+                    shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
+                    shader.push_str(&format!(
+                        "    vec3 adjusted = (color.rgb - 0.5) * (1.0 + {amount}) + 0.5;\n"
+                    ));
+                    shader.push_str("    return vec4(adjusted, color.a);\n");
+                    shader.push_str("}\n\n");
+                }
+                TextureNode::Brightness { input, amount } => {
+                    self.generate_node_function(graph, *input, generated, shader)?;
+                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
+                    shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
+                    shader.push_str(&format!(
+                        "    return vec4(color.rgb + {amount}, color.a);\n"
+                    ));
+                    shader.push_str("}\n\n");
+                }
+            }
+
+            generated.insert(node_id);
+            Ok(())
+        }
+
+        fn generate_noise_functions(&self) -> String {
+            include_str!("shaders/noise_functions.glsl").to_string()
+        }
+
+        fn generate_utility_functions(&self) -> String {
+            r#"
+vec2 transform_uv(vec2 uv, vec2 offset, float rotation, vec2 scale) {
+    uv -= 0.5;
+    float s = sin(rotation);
+    float c = cos(rotation);
+    uv = vec2(uv.x * c - uv.y * s, uv.x * s + uv.y * c);
+    uv /= scale;
+    uv += 0.5 + offset;
+    return uv;
+}
+
+"#
+            .to_string()
+        }
+    }
 }
