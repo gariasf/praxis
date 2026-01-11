@@ -2,7 +2,41 @@
 //!
 //! This crate provides functionality for loading, managing and accessing game assets.
 //!
+//! # Architecture Overview
+//!
+//! The asset system bridges the gap between file formats (OBJ, GLTF) and the engine's
+//! runtime representation (GPU buffers, materials, scene graphs). It handles:
+//!
+//! - **File I/O**: Reading assets from disk (sync and async)
+//! - **Format parsing**: Converting file formats to engine data structures
+//! - **Validation**: Ensuring data meets engine requirements (e.g., triangulated meshes)
+//! - **Data transformation**: Converting to GPU-friendly formats (vertex buffers, indices)
+//! - **Error handling**: Graceful failure with detailed error messages
+//!
+//! ## Design Goals
+//!
+//! 1. **Performance**: Minimize blocking operations, maximize throughput
+//! 2. **Flexibility**: Support multiple file formats with a unified interface
+//! 3. **Correctness**: Validate data early to catch issues before GPU upload
+//! 4. **Usability**: Simple API for common cases, powerful API for advanced use
+//!
 //! # Architecture
+//!
+//! The asset system is built around a flexible trait-based architecture that separates
+//! concerns into specialized components:
+//!
+//! ## Core Design Philosophy
+//!
+//! The asset pipeline follows a **producer-consumer model** where loaders parse files and
+//! produce data structures, which are then consumed by rendering or gameplay systems.
+//! This separation enables:
+//!
+//! - **Format independence**: Adding new formats doesn't affect rendering code
+//! - **Async loading**: Long I/O operations don't block the main thread
+//! - **Caching**: Managers can deduplicate and cache assets transparently
+//! - **Testing**: Each component can be tested in isolation
+//!
+//! ## Component Responsibilities
 //!
 //! The asset system is built around a flexible trait-based architecture:
 //!
@@ -15,6 +49,74 @@
 //! - **`AsyncGltfLoader`**: Async GLTF/GLB loader with channel-based completion
 //! - **`AsyncBatchLoader`**: Batch manager for multiple concurrent loads
 //! - Integration with `praxis_graphics::MeshAssetManager` for GPU upload
+//!
+//! ## Asset Pipeline Flow
+//!
+//! The typical asset loading pipeline follows this flow:
+//!
+//! ```text
+//! File System          Loader              Engine
+//!     │                  │                   │
+//!     │  read file       │                   │
+//!     │◄─────────────────┤                   │
+//!     │                  │                   │
+//!     │  file contents   │                   │
+//!     ├─────────────────►│                   │
+//!     │                  │ parse format      │
+//!     │                  │ validate data     │
+//!     │                  │ convert to        │
+//!     │                  │ MeshData/Asset    │
+//!     │                  │                   │
+//!     │                  │  asset data       │
+//!     │                  ├──────────────────►│
+//!     │                  │                   │ upload to GPU
+//!     │                  │                   │ create entities
+//!     │                  │                   │ setup materials
+//! ```
+//!
+//! For async loading, the loader spawns a tokio task and returns immediately with a channel,
+//! allowing the engine to continue processing while I/O happens in the background.
+//!
+//! ## Vertex Attribute Handling
+//!
+//! Both OBJ and GLTF loaders produce `MeshData` structures with standardized vertex attributes:
+//!
+//! ### Required Attributes
+//! - **Positions** (`Vec<[f32; 3]>`): 3D vertex positions in model space
+//! - **Indices** (`Vec<u16>`): Triangle indices (3 per triangle, max 65535 vertices)
+//!
+//! ### Optional Attributes
+//! - **Normals** (`Option<Vec<[f32; 3]>>`): Per-vertex normal vectors for lighting
+//! - **UVs** (`Option<Vec<[f32; 2]>>`): Texture coordinates (0.0-1.0 range)
+//! - **Tangents** (`Option<Vec<[f32; 4]>>`): Tangent vectors for normal mapping (GLTF only)
+//! - **Colors** (`Option<Vec<[f32; 4]>>`): Per-vertex RGBA colors (not commonly used)
+//!
+//! ### Format Differences
+//!
+//! | Feature | OBJ | GLTF |
+//! |---------|-----|------|
+//! | Positions | ✓ | ✓ |
+//! | Normals | ✓ (optional) | ✓ (optional) |
+//! | UVs | ✓ (optional) | ✓ (optional, multiple sets) |
+//! | Tangents | ✗ | ✓ (optional) |
+//! | Colors | ✗ | ✓ (rare) |
+//! | Materials | Ignored | ✓ (PBR) |
+//! | Animations | ✗ | ✓ (skeletal) |
+//! | Scene Graph | ✗ | ✓ (hierarchical) |
+//!
+//! ### Consistency Requirements
+//!
+//! When merging multiple models (OBJ) or primitives (GLTF), all must have the same attribute set.
+//! You can't mix meshes with normals and without normals - the GPU vertex format must be uniform.
+//!
+//! ### GPU Upload
+//!
+//! After loading, `MeshData` is uploaded to GPU buffers via `MeshAssetManager`:
+//! - Positions → Vertex buffer (attribute location 0)
+//! - Normals → Vertex buffer (attribute location 1, if present)
+//! - UVs → Vertex buffer (attribute location 2, if present)
+//! - Tangents → Vertex buffer (attribute location 3, if present)
+//! - Indices → Index buffer (u16 format)
 //!
 //! # OBJ File Loading
 //!

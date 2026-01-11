@@ -3,6 +3,59 @@
 //! This module provides the core asset loading functionality, including
 //! generic traits for loading assets and specific implementations for
 //! different file formats.
+//!
+//! # Overview
+//!
+//! This module implements two main loaders:
+//!
+//! ## MeshLoader (OBJ Format)
+//!
+//! Loads Wavefront OBJ files - a simple text-based format for 3D geometry.
+//!
+//! **Key Features:**
+//! - Simple, widely-supported format
+//! - Text-based, human-readable
+//! - Supports positions, normals, UVs
+//! - Multiple objects merged into single mesh
+//! - Material files (MTL) are ignored
+//!
+//! **Parsing Strategy:**
+//! Uses the `tobj` library to parse the OBJ format, then converts to our MeshData.
+//! Handles index offsetting when merging multiple objects.
+//!
+//! **Limitations:**
+//! - No materials, textures, or animations
+//! - No scene hierarchy
+//! - Text format is slower to parse than binary
+//!
+//! ## GltfLoader (GLTF/GLB Format)
+//!
+//! Loads glTF 2.0 files - a comprehensive 3D asset format designed for efficient
+//! transmission and loading.
+//!
+//! **Key Features:**
+//! - Binary format (GLB) for fast loading
+//! - Complete scene graph with hierarchy
+//! - PBR materials with textures
+//! - Skeletal animations
+//! - Skins/skeletons for character rigging
+//! - Multiple primitives per mesh
+//! - Embedded or external resources
+//!
+//! **Parsing Strategy:**
+//! Uses the `gltf` library to parse the format, then extracts:
+//! 1. Binary buffers (vertex data, animation data)
+//! 2. Decoded images (textures)
+//! 3. Scene graph (nodes, transforms, hierarchies)
+//! 4. Materials (PBR properties)
+//! 5. Animations (keyframes)
+//! 6. Skins (bone hierarchies)
+//!
+//! **Advantages over OBJ:**
+//! - Binary format is 3-5x faster to parse
+//! - Complete scene information
+//! - Optimized for real-time rendering
+//! - Industry-standard for modern 3D assets
 
 use praxis_graphics::MeshData;
 use praxis_math::{Mat4, Quat, Vec3};
@@ -123,17 +176,24 @@ impl AssetLoader<MeshData> for MeshLoader {
         let path = path.as_ref();
         info!("Loading mesh from: {}", path.display());
 
-        // Load the OBJ file using tobj
+        // STEP 1: PARSE OBJ FILE
+        // Use the `tobj` library to parse the Wavefront OBJ format
+        // tobj handles the low-level parsing of vertices, faces, normals, etc.
         let (models, _materials) = tobj::load_obj(
             path,
             &tobj::LoadOptions {
+                // TRIANGULATE: Convert quads/polygons to triangles automatically
+                // Our rendering pipeline only supports triangular meshes
                 triangulate: true,
+                // SINGLE_INDEX: Use the same index buffer for all attributes
+                // This simplifies GPU upload (one index buffer instead of separate per-attribute)
                 single_index: true,
                 ..Default::default()
             },
         )
         .map_err(|e| eyre::eyre!("Failed to load OBJ file '{}': {}", path.display(), e))?;
 
+        // VALIDATION: Ensure file contained at least one model
         if models.is_empty() {
             return Err(eyre::eyre!(
                 "OBJ file '{}' contains no models",
@@ -141,6 +201,8 @@ impl AssetLoader<MeshData> for MeshLoader {
             ));
         }
 
+        // MULTI-MODEL HANDLING: OBJ files can contain multiple objects
+        // We merge them all into a single mesh for simplicity
         if models.len() > 1 {
             info!(
                 "OBJ file '{}' contains {} models, merging into single mesh",
@@ -149,15 +211,26 @@ impl AssetLoader<MeshData> for MeshLoader {
             );
         }
 
+        // STEP 2: ALLOCATE VERTEX ATTRIBUTE BUFFERS
+        // Pre-allocate vectors for vertex data that will be sent to GPU
+        // Positions are required, others are optional
         let mut positions: Vec<[f32; 3]> = Vec::new();
         let mut indices: Vec<u16> = Vec::new();
         let mut normals: Vec<[f32; 3]> = Vec::new();
         let mut uvs: Vec<[f32; 2]> = Vec::new();
+        
+        // CONSISTENCY TRACKING: Track whether we've seen normals/UVs
+        // If one model has them, all must have them (GPU vertex format must be consistent)
         let mut has_normals = false;
         let mut has_uvs = false;
 
+        // STEP 3: MERGE ALL MODELS INTO SINGLE MESH
         for model in &models {
             let mesh = &model.mesh;
+            
+            // INDEX OFFSET: Calculate offset for merging indices
+            // When merging models, we need to offset indices to point to the right vertices
+            // in the combined vertex buffer
             let vertex_offset = positions.len() as u32;
 
             debug!(
@@ -167,14 +240,22 @@ impl AssetLoader<MeshData> for MeshLoader {
                 mesh.indices.len()
             );
 
+            // VERTEX POSITIONS: Convert flat array to [f32; 3] array
+            // OBJ stores positions as [x1, y1, z1, x2, y2, z2, ...]
+            // We need [[x1, y1, z1], [x2, y2, z2], ...] for GPU upload
             positions.extend(
                 mesh.positions
                     .chunks_exact(3)
                     .map(|chunk| [chunk[0], chunk[1], chunk[2]]),
             );
 
+            // INDICES: Adjust indices for merged vertex buffer and validate range
             for &i in &mesh.indices {
+                // Apply offset to map indices to merged buffer
                 let adjusted_index = i + vertex_offset;
+                
+                // U16 LIMIT CHECK: GPU uses u16 indices, so max 65535 vertices
+                // If we exceed this, we need to split the mesh or use u32 indices
                 if adjusted_index > u16::MAX as u32 {
                     return Err(eyre::eyre!(
                         "Merged mesh has too many vertices for u16 indices (vertex index: {})",
@@ -184,6 +265,8 @@ impl AssetLoader<MeshData> for MeshLoader {
                 indices.push(adjusted_index as u16);
             }
 
+            // OPTIONAL NORMALS: Process if present
+            // Normals are used for lighting calculations (Phong, PBR)
             if !mesh.normals.is_empty() {
                 has_normals = true;
                 normals.extend(
@@ -192,12 +275,16 @@ impl AssetLoader<MeshData> for MeshLoader {
                         .map(|chunk| [chunk[0], chunk[1], chunk[2]]),
                 );
             } else if has_normals {
+                // CONSISTENCY CHECK: All models must have same attributes
+                // Can't have some with normals and some without (GPU vertex format must match)
                 return Err(eyre::eyre!(
                     "Model '{}' is missing normals while previous models had them. All models must have consistent attributes.",
                     model.name
                 ));
             }
 
+            // OPTIONAL TEXTURE COORDINATES: Process if present
+            // UVs map textures onto the mesh surface
             if !mesh.texcoords.is_empty() {
                 has_uvs = true;
                 uvs.extend(
@@ -206,6 +293,7 @@ impl AssetLoader<MeshData> for MeshLoader {
                         .map(|chunk| [chunk[0], chunk[1]]),
                 );
             } else if has_uvs {
+                // CONSISTENCY CHECK: Same as normals
                 return Err(eyre::eyre!(
                     "Model '{}' is missing texture coordinates while previous models had them. All models must have consistent attributes.",
                     model.name
@@ -213,7 +301,7 @@ impl AssetLoader<MeshData> for MeshLoader {
             }
         }
 
-        // Validate that we have actual vertex data
+        // FINAL VALIDATION: Ensure we loaded actual data
         if positions.is_empty() {
             return Err(eyre::eyre!(
                 "OBJ file '{}' contains no vertex data",
@@ -229,13 +317,16 @@ impl AssetLoader<MeshData> for MeshLoader {
             indices.len()
         );
 
+        // STEP 4: CONSTRUCT ENGINE MESH DATA
+        // Package all vertex attributes into MeshData struct
+        // Optional attributes (normals, uvs, colors, tangents) are None if not present
         Ok(MeshData {
-            positions,
-            colors: None,
-            normals: if has_normals { Some(normals) } else { None },
-            uvs: if has_uvs { Some(uvs) } else { None },
-            tangents: None,
-            indices,
+            positions,           // Required: vertex positions in 3D space
+            colors: None,        // Optional: per-vertex colors (not in OBJ format)
+            normals: if has_normals { Some(normals) } else { None },  // Optional: surface normals
+            uvs: if has_uvs { Some(uvs) } else { None },              // Optional: texture coordinates
+            tangents: None,      // Optional: tangent vectors (for normal mapping, not in OBJ)
+            indices,             // Triangle indices (3 per triangle)
         })
     }
 
@@ -695,7 +786,44 @@ impl GltfNode {
 
 /// Material data from GLTF.
 ///
-/// Contains material properties extracted from GLTF materials.
+/// Contains material properties extracted from GLTF materials using the
+/// PBR (Physically Based Rendering) metallic-roughness workflow.
+///
+/// # Material Import Process
+///
+/// GLTF materials are converted from the glTF PBR metallic-roughness model:
+///
+/// 1. **Base Color**: RGBA diffuse/albedo color (default: white [1,1,1,1])
+/// 2. **Metallic**: 0 = dielectric (plastic, wood), 1 = metal (default: 0)
+/// 3. **Roughness**: 0 = smooth/glossy, 1 = rough/matte (default: 0.5)
+/// 4. **Textures**: Optional texture references for base color and normal maps
+///
+/// These properties map directly to PBR shader parameters used in the rendering pipeline.
+///
+/// # Texture Workflow
+///
+/// Materials can reference textures by index:
+/// - **Base Color Texture**: Albedo/diffuse map (modulates base_color)
+/// - **Normal Texture**: Normal map for surface detail (tangent space)
+///
+/// The renderer combines the color factor with the texture:
+/// ```text
+/// final_color = base_color_factor * texture_sample(base_color_texture, uv)
+/// ```
+///
+/// # Limitations
+///
+/// Currently imported properties:
+/// - Base color (factor + texture)
+/// - Metallic/roughness (factors only, no metallic-roughness texture yet)
+/// - Normal map
+///
+/// Not yet imported:
+/// - Emissive color/texture
+/// - Occlusion texture
+/// - Alpha mode (opaque, mask, blend)
+/// - Double-sided flag
+/// - Metallic-roughness combined texture
 #[derive(Debug, Clone)]
 pub struct GltfMaterial {
     /// Material name from GLTF file (if present).
@@ -1005,28 +1133,59 @@ impl GltfLoader {
     /// - The file doesn't exist or cannot be read
     /// - The GLTF format is invalid
     /// - Required data is missing or malformed
+    ///
+    /// # GLTF Loading Pipeline
+    ///
+    /// GLTF is a comprehensive 3D asset format that includes:
+    /// - Scene hierarchies (nodes with transforms and parent-child relationships)
+    /// - Meshes (geometry with multiple primitives)
+    /// - Materials (PBR properties: metallic, roughness, base color, textures)
+    /// - Textures (embedded or external image data)
+    /// - Animations (skeletal animation keyframes)
+    /// - Skins (skeleton hierarchies with inverse bind matrices)
+    ///
+    /// This loader processes all these components and converts them to engine data structures.
     pub fn load_gltf(&self, path: impl AsRef<Path>) -> Result<GltfAsset> {
         let path = path.as_ref();
         info!("Loading GLTF from: {}", path.display());
 
+        // STEP 1: PARSE GLTF FILE AND LOAD BINARY DATA
+        // The gltf::import function:
+        // - Parses the JSON structure (or GLB binary)
+        // - Loads all referenced binary buffers (vertex data, animation data, etc.)
+        // - Decodes all referenced images (PNG, JPEG, embedded base64)
+        // Returns: (document - metadata, buffers - binary data, images - decoded pixels)
         let (document, buffers, images) = gltf::import(path)
             .map_err(|e| eyre::eyre!("Failed to load GLTF file '{}': {}", path.display(), e))?;
 
+        // STEP 2: ALLOCATE ASSET STORAGE
+        // Pre-allocate vectors for all asset types we'll extract
         let mut meshes = Vec::new();
         let mut materials = Vec::new();
         let mut textures = Vec::new();
         let mut nodes = Vec::new();
 
+        // STEP 3: LOAD TEXTURES
+        // Textures are already decoded by gltf::import into raw RGBA/RGB pixel data
+        // We just need to extract dimensions and format, and store the pixel data
         debug!("Processing {} textures", document.textures().len());
         for texture in document.textures() {
             let image = &images[texture.source().index()];
+            
+            // TEXTURE DATA EXTRACTION:
+            // - pixels: Raw image data (already decoded from PNG/JPEG)
+            // - width/height: Image dimensions in pixels
+            // - format: Pixel layout (RGB or RGBA)
             let gltf_texture = GltfTexture {
-                data: image.pixels.clone(),
+                data: image.pixels.clone(),  // Clone pixel data (could be large!)
                 width: image.width,
                 height: image.height,
                 format: match image.format {
+                    // Most common: 8-bit RGBA (4 bytes per pixel)
                     gltf::image::Format::R8G8B8A8 => GltfTextureFormat::R8G8B8A8,
+                    // Less common: 8-bit RGB (3 bytes per pixel, no alpha)
                     gltf::image::Format::R8G8B8 => GltfTextureFormat::R8G8B8,
+                    // Error on unsupported formats (R16, floating point, etc.)
                     _ => {
                         return Err(eyre::eyre!(
                             "Unsupported texture format: {:?}",
@@ -1038,13 +1197,26 @@ impl GltfLoader {
             textures.push(gltf_texture);
         }
 
+        // STEP 4: LOAD MATERIALS
+        // GLTF uses PBR (Physically Based Rendering) material model
+        // Key properties: base color, metallic, roughness, textures
         debug!("Processing {} materials", document.materials().len());
         for material in document.materials() {
+            // PBR METALLIC-ROUGHNESS: The standard GLTF material model
+            // Alternative models (specular-glossiness) are extensions not handled here
             let pbr = material.pbr_metallic_roughness();
+            
+            // MATERIAL PROPERTIES:
+            // - base_color: Diffuse color (RGBA, values 0-1)
+            // - metallic: 0=dielectric, 1=metallic (affects reflections)
+            // - roughness: 0=smooth/shiny, 1=rough/matte
             let base_color = pbr.base_color_factor();
             let metallic = pbr.metallic_factor();
             let roughness = pbr.roughness_factor();
 
+            // TEXTURE REFERENCES: Materials can reference textures by index
+            // base_color_texture: Albedo/diffuse map
+            // normal_texture: Normal map for surface detail
             let base_color_texture_index =
                 pbr.base_color_texture().map(|info| info.texture().index());
 
@@ -1061,13 +1233,21 @@ impl GltfLoader {
             materials.push(gltf_material);
         }
 
+        // STEP 5: LOAD MESHES
+        // GLTF meshes can have multiple "primitives" (sub-meshes with different materials)
+        // We treat each primitive as a separate mesh in our engine
         debug!("Processing {} meshes", document.meshes().len());
+        
+        // PRIMITIVE MAPPING: Track which engine mesh indices belong to each GLTF mesh
+        // This is needed later when building the scene hierarchy
         let mut mesh_primitive_map: HashMap<usize, Vec<usize>> = HashMap::new();
 
         for mesh in document.meshes() {
             let mut primitive_indices = Vec::new();
 
             for primitive in mesh.primitives() {
+                // PRIMITIVE MODE CHECK: Only triangles are supported
+                // GLTF also supports lines, points, triangle strips, etc.
                 if primitive.mode() != gltf::mesh::Mode::Triangles {
                     debug!(
                         "Skipping non-triangle primitive in mesh '{}'",
@@ -1076,28 +1256,45 @@ impl GltfLoader {
                     continue;
                 }
 
+                // BUFFER READER: Set up accessor to read binary vertex data
+                // The reader abstracts away buffer views, accessors, and data types
                 let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
+                // VERTEX POSITIONS: Required attribute
+                // Positions are stored as Vec3 (3 floats per vertex)
                 let positions: Vec<[f32; 3]> = reader
                     .read_positions()
                     .ok_or_else(|| eyre::eyre!("Mesh primitive missing positions"))?
                     .collect();
 
+                // VERTEX NORMALS: Optional attribute
+                // Used for lighting (Phong shading, PBR)
+                // Vec3 normalized vectors pointing away from surface
                 let normals: Option<Vec<[f32; 3]>> =
                     reader.read_normals().map(|iter| iter.collect());
 
+                // TEXTURE COORDINATES: Optional attribute (UV mapping)
+                // GLTF supports multiple UV sets (0, 1, 2...), we use set 0
+                // Can be various types (u8, u16, f32), normalized to f32
                 let uvs: Option<Vec<[f32; 2]>> = reader
                     .read_tex_coords(0)
                     .map(|iter| iter.into_f32().collect());
 
+                // TANGENT VECTORS: Optional attribute for normal mapping
+                // Vec4: xyz = tangent direction, w = handedness (+1 or -1)
+                // Tangents + normals define the tangent space for normal maps
                 let tangents: Option<Vec<[f32; 4]>> =
                     reader.read_tangents().map(|iter| iter.collect());
 
+                // INDICES: Triangle indices (required in practice)
+                // GLTF supports u8, u16, u32 indices; we convert to u16
+                // Each triangle uses 3 indices
                 let indices: Vec<u16> = reader
                     .read_indices()
                     .ok_or_else(|| eyre::eyre!("Mesh primitive missing indices"))?
-                    .into_u32()
+                    .into_u32()  // Normalize all index types to u32 first
                     .map(|i| {
+                        // U16 VALIDATION: Check if index fits in u16 range
                         if i > u16::MAX as u32 {
                             Err(eyre::eyre!("Index {} exceeds u16::MAX", i))
                         } else {
@@ -1106,43 +1303,61 @@ impl GltfLoader {
                     })
                     .collect::<Result<Vec<_>>>()?;
 
+                // CONSTRUCT MESH DATA: Package all attributes together
                 let mesh_data = MeshData {
-                    positions,
-                    colors: None,
-                    normals,
-                    uvs,
-                    tangents,
-                    indices,
+                    positions,           // Required: vertex positions
+                    colors: None,        // Optional: per-vertex colors (rarely in GLTF)
+                    normals,             // Optional: surface normals
+                    uvs,                 // Optional: texture coordinates
+                    tangents,            // Optional: tangent vectors (for normal mapping)
+                    indices,             // Triangle indices
                 };
 
+                // TRACK PRIMITIVE: Remember which engine mesh index this primitive uses
                 primitive_indices.push(meshes.len());
                 meshes.push(mesh_data);
             }
 
+            // MAP GLTF MESH TO ENGINE MESH INDICES
             mesh_primitive_map.insert(mesh.index(), primitive_indices);
         }
 
+        // STEP 6: SELECT SCENE
+        // GLTF files can contain multiple scenes, but we use the default one
         let default_scene = document
             .default_scene()
             .or_else(|| document.scenes().next())
             .ok_or_else(|| eyre::eyre!("GLTF file contains no scenes"))?;
 
+        // STEP 7: BUILD SCENE HIERARCHY
+        // GLTF nodes form a tree structure with transforms and attachments
+        // Nodes can have: transforms, meshes, cameras, lights, skins
         debug!("Processing {} nodes", document.nodes().len());
+        
+        // NODE INDEX MAPPING: GLTF node indices may not be contiguous (0, 1, 2...)
+        // We create a contiguous mapping for our engine's scene graph
         let mut node_map: HashMap<usize, usize> = HashMap::new();
 
         for (new_index, node) in document.nodes().enumerate() {
             node_map.insert(node.index(), new_index);
         }
 
+        // PROCESS EACH NODE: Extract transform, mesh references, and children
         for node in document.nodes() {
+            // NODE TRANSFORM: GLTF stores as 4x4 matrix (or TRS decomposition)
+            // This is the local transform relative to the parent node
             let transform = Mat4::from_cols_array_2d(&node.transform().matrix());
 
+            // MESH REFERENCES: Node can reference a mesh (which has multiple primitives)
+            // Look up the engine mesh indices for this GLTF mesh
             let mesh_indices = node
                 .mesh()
                 .and_then(|mesh| mesh_primitive_map.get(&mesh.index()))
                 .cloned()
                 .unwrap_or_default();
 
+            // CHILDREN: Build parent-child relationships
+            // Map GLTF child indices to our engine's node indices
             let children: Vec<usize> = node
                 .children()
                 .map(|child| {
@@ -1154,14 +1369,16 @@ impl GltfLoader {
 
             let gltf_node = GltfNode {
                 name: node.name().map(String::from),
-                transform,
-                mesh_indices,
-                children,
+                transform,      // Local transform (relative to parent)
+                mesh_indices,   // References to meshes attached to this node
+                children,       // Child node indices
             };
 
             nodes.push(gltf_node);
         }
 
+        // ROOT NODES: Nodes without parents (top of hierarchy)
+        // These are the entry points for scene traversal
         let root_nodes: Vec<usize> = default_scene
             .nodes()
             .map(|node| {
@@ -1171,20 +1388,28 @@ impl GltfLoader {
             })
             .collect();
 
-        // Load skins and skeletons
+        // STEP 8: LOAD SKELETAL ANIMATION DATA (SKINS)
+        // Skins define skeleton hierarchies used for character animation
+        // Each skin contains: joint nodes, inverse bind matrices, bone hierarchy
         debug!("Processing {} skins", document.skins().len());
         let mut skins = Vec::new();
 
         for skin in document.skins() {
+            // SKIN LOADING: Extract skeleton structure and bind pose
+            // See load_skin() for details on bone hierarchy construction
             let gltf_skin = Self::load_skin(&skin, &buffers, &node_map)?;
             skins.push(gltf_skin);
         }
 
-        // Load animations
+        // STEP 9: LOAD ANIMATIONS
+        // Animations contain keyframe data for bone transforms over time
+        // Channels specify which node/bone to animate and what property (translation/rotation/scale)
         debug!("Processing {} animations", document.animations().len());
         let mut animations = Vec::new();
 
         for animation in document.animations() {
+            // ANIMATION LOADING: Extract keyframes and build animation clips
+            // See load_animation() for details on keyframe extraction and interpolation
             let gltf_animation = Self::load_animation(&animation, &buffers, &node_map, &skins)?;
             animations.push(gltf_animation);
         }
@@ -1200,14 +1425,17 @@ impl GltfLoader {
             animations.len()
         );
 
+        // STEP 10: PACKAGE AND RETURN
+        // All asset data is now loaded and ready for use by the engine
+        // The GltfAsset struct provides convenient methods for accessing and traversing this data
         Ok(GltfAsset {
-            meshes,
-            materials,
-            textures,
-            nodes,
-            root_nodes,
-            animations,
-            skins,
+            meshes,         // All mesh geometry (each primitive is a separate mesh)
+            materials,      // PBR material properties
+            textures,       // Decoded image data
+            nodes,          // Scene graph hierarchy with transforms
+            root_nodes,     // Entry points for scene traversal
+            animations,     // Skeletal animation clips
+            skins,          // Skeleton hierarchies for animation
         })
     }
 

@@ -3,7 +3,76 @@
 //! This module provides non-blocking asset loading functionality using tokio's
 //! async runtime and crossbeam channels for completion notification.
 //!
+//! # Why Async Asset Loading?
+//!
+//! Game engines need to load assets without freezing the main thread:
+//!
+//! - **Large files**: A 50MB mesh can take hundreds of milliseconds to parse
+//! - **Frame budget**: At 60 FPS, you have ~16ms per frame total
+//! - **User experience**: The game must remain responsive during loading
+//! - **Loading screens**: Display progress and animations while assets load
+//! - **Streaming**: Load assets on-demand as the player moves through the world
+//!
+//! Without async loading, the game would freeze whenever it loads an asset, causing stuttering
+//! and poor user experience. With async loading, the game continues running smoothly while
+//! assets load in the background.
+//!
 //! # Architecture
+//!
+//! The async loading system is built on three key components:
+//!
+//! ## 1. Tokio Runtime Integration
+//!
+//! All async loaders use **`tokio::task::spawn_blocking`** to offload CPU-bound file parsing
+//! to tokio's blocking thread pool. This prevents file I/O and parsing from blocking the
+//! async executor, allowing other async tasks to continue executing.
+//!
+//! Why `spawn_blocking` instead of `spawn`?
+//! - File parsing (OBJ, GLTF) is CPU-intensive and synchronous
+//! - Regular `spawn` would block the executor thread
+//! - `spawn_blocking` moves work to dedicated blocking threads
+//! - The main async task remains responsive
+//!
+//! ## 2. Channel-Based Completion
+//!
+//! Loading results are communicated via **crossbeam channels** instead of async futures.
+//! This design choice provides several benefits:
+//!
+//! - **Non-blocking polling**: `try_recv()` checks completion without blocking
+//! - **Thread-safe**: Can be checked from any thread or task
+//! - **Game loop friendly**: Easy to poll in a main loop without async/await
+//! - **Bounded capacity**: Prevents memory buildup if results aren't consumed
+//!
+//! ```text
+//! Caller Thread              Blocking Thread Pool
+//!      │                            │
+//!      │ load_async()              │
+//!      ├──────────────────┐        │
+//!      │ spawn task       │        │
+//!      │ create channel   │        │
+//!      │ return (handle,rx)        │
+//!      │◄─────────────────┘        │
+//!      │                            │
+//!      │                   ┌────────┤
+//!      │                   │ parse  │
+//!      │                   │ file   │
+//!      │                   └────────┤
+//!      │                            │
+//!      │        result              │
+//!      │◄───────channel─────────────┤
+//!      │                            │
+//! ```
+//!
+//! ## 3. LoadHandle for Lifecycle Management
+//!
+//! The **`LoadHandle`** provides control over the loading operation:
+//!
+//! - **Status checking**: `is_finished()` polls without blocking
+//! - **Cancellation support**: `cancel()` signals the task to abort
+//! - **Path tracking**: `path()` identifies what's being loaded
+//! - **JoinHandle wrapper**: Underlying tokio task handle
+//!
+//! Components:
 //!
 //! - **`AsyncAssetLoader<T>`**: Core trait for async loading of any asset type
 //! - **`AsyncMeshLoader`**: Async loader for OBJ meshes
@@ -73,6 +142,67 @@
 //! println!("All meshes loaded!");
 //! # Ok(())
 //! # }
+//! ```
+//!
+//! # Game Loop Integration Pattern
+//!
+//! In a typical game engine, you want to load assets without blocking the main loop:
+//!
+//! ```rust,no_run
+//! use praxis_assets::async_loader::{AsyncAssetLoader, AsyncMeshLoader, AsyncBatchLoader};
+//! use crossbeam_channel::Receiver;
+//! use praxis_graphics::MeshData;
+//!
+//! struct LoadingState {
+//!     pending: Vec<(String, Receiver<praxis_utils::Result<MeshData>>)>,
+//! }
+//!
+//! impl LoadingState {
+//!     pub fn start_load(&mut self, loader: &AsyncMeshLoader, name: String, path: String) {
+//!         // Start async load (non-blocking)
+//!         if let Ok((_handle, receiver)) = tokio::runtime::Runtime::new()
+//!             .unwrap()
+//!             .block_on(loader.load_async(&path))
+//!         {
+//!             self.pending.push((name, receiver));
+//!         }
+//!     }
+//!
+//!     pub fn process_completed(&mut self) -> Vec<(String, MeshData)> {
+//!         let mut completed = Vec::new();
+//!         let mut still_pending = Vec::new();
+//!
+//!         // Check all pending loads (non-blocking)
+//!         for (name, receiver) in std::mem::take(&mut self.pending) {
+//!             match receiver.try_recv() {
+//!                 Ok(Ok(mesh_data)) => {
+//!                     completed.push((name, mesh_data));
+//!                 }
+//!                 Ok(Err(_)) => {
+//!                     // Load failed, drop it
+//!                 }
+//!                 Err(_) => {
+//!                     // Still loading, keep it
+//!                     still_pending.push((name, receiver));
+//!                 }
+//!             }
+//!         }
+//!
+//!         self.pending = still_pending;
+//!         completed
+//!     }
+//! }
+//!
+//! // In your game loop:
+//! // loop {
+//! //     // Process completed loads
+//! //     for (name, mesh_data) in loading_state.process_completed() {
+//! //         render_context.mesh_manager_mut().load_mesh(&name, mesh_data)?;
+//! //     }
+//! //
+//! //     // Continue with rendering, physics, etc.
+//! //     // The game never blocks waiting for assets!
+//! // }
 //! ```
 
 use crate::loader::{AssetLoader, GltfAsset, GltfLoader, MeshLoader};
@@ -337,7 +467,9 @@ impl AsyncAssetLoader<MeshData> for AsyncMeshLoader {
         let path_buf = path.as_ref().to_path_buf();
         let path_for_handle = path_buf.clone();
 
-        // Verify file exists before spawning task
+        // EARLY VALIDATION: Check file existence using tokio's async fs API
+        // This avoids spawning a blocking task for files that don't exist
+        // tokio::fs::try_exists is async and doesn't block the executor
         if !tokio::fs::try_exists(&path_buf).await? {
             return Err(praxis_utils::eyre::eyre!(
                 "File not found: {}",
@@ -347,29 +479,56 @@ impl AsyncAssetLoader<MeshData> for AsyncMeshLoader {
 
         info!("Starting async load for: {}", path_buf.display());
 
+        // CHANNEL SETUP: Create a bounded channel with capacity 1
+        // - Bounded prevents unbounded memory growth if results aren't consumed
+        // - Capacity 1 is sufficient since we only send one result per load
+        // - crossbeam_channel is chosen for its excellent performance and MPSC semantics
         let (sender, receiver) = crossbeam_channel::bounded(1);
+        
+        // SHARED STATE: Clone Arc-wrapped loader for the spawned task
+        // Arc allows shared ownership across threads without copying the loader
         let loader = Arc::clone(&self.loader);
+        
+        // CANCELLATION SUPPORT: AtomicBool for lock-free cancellation signaling
+        // - Wrapped in Arc for shared access between handle and task
+        // - Atomic operations are lock-free and very fast
+        // - Relaxed ordering is sufficient (no dependent memory operations)
         let cancelled = Arc::new(AtomicBool::new(false));
         let cancelled_clone = Arc::clone(&cancelled);
 
-        // Spawn loading task
+        // SPAWN BLOCKING TASK: Move CPU-bound work off the async executor
+        // spawn_blocking runs on a dedicated thread pool for blocking operations
+        // This is critical: OBJ/GLTF parsing is synchronous and CPU-intensive
+        // Using regular spawn() would block the executor and starve other async tasks
         let join_handle = tokio::task::spawn_blocking(move || {
-            // Check if cancelled before loading
+            // CANCELLATION CHECK 1: Before starting expensive I/O
+            // Allows early exit if user cancelled before task starts
             if cancelled_clone.load(Ordering::Relaxed) {
                 let _ = sender.send(Err(praxis_utils::eyre::eyre!("Load cancelled")));
                 return;
             }
 
-            // Perform the actual loading (blocking I/O)
+            // BLOCKING I/O: Perform the actual file loading and parsing
+            // This is where the CPU-intensive work happens:
+            // - Read file from disk (blocking I/O)
+            // - Parse OBJ format (CPU-bound)
+            // - Convert to MeshData (memory allocations)
             let result = loader.load(&path_buf);
 
-            // Check if cancelled before sending result
+            // CANCELLATION CHECK 2: Before sending result
+            // Avoids sending result if cancelled during loading
+            // Even if cancelled, we still ran the load (hard to interrupt),
+            // but we avoid cluttering the channel
             if !cancelled_clone.load(Ordering::Relaxed) {
-                // Send result through channel (ignore error if receiver dropped)
+                // SEND RESULT: Send through channel (ignore send error)
+                // Send fails if receiver was dropped, which is fine (caller lost interest)
+                // The `let _` explicitly ignores the Result to document this is intentional
                 let _ = sender.send(result);
             }
         });
 
+        // CREATE HANDLE: Wrap tokio JoinHandle with our LoadHandle abstraction
+        // This gives the caller control over the operation without exposing tokio internals
         let handle = LoadHandle::new(join_handle, path_for_handle, cancelled);
 
         Ok((handle, receiver))
