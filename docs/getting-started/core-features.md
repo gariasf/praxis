@@ -18,6 +18,10 @@ When you build Praxis with `cargo build`, you get all of these systems:
 - **Particle Systems**: GPU-accelerated particle effects with emitters, behaviors, and render modes
 - **Level of Detail (LOD)**: Automatic mesh switching based on distance for performance optimization
 - **Post-Processing**: Bloom, color grading, and custom effect pipelines
+- **Temporal Anti-Aliasing (TAA)**: High-quality anti-aliasing using temporal reprojection with velocity buffer
+- **Screen Space Reflections (SSR)**: Real-time reflections using screen-space ray marching
+- **Bindless Rendering**: Modern Vulkan descriptor indexing for efficient material and texture management
+- **GPU Culling**: Automatic frustum and occlusion culling on GPU for optimal draw call batching
 
 See: [Rendering Guide](../guides/rendering.md), [Deferred Rendering Guide](../guides/deferred-rendering.md)
 
@@ -42,6 +46,7 @@ See: [ECS Architecture](../concepts/ecs-architecture.md)
 - **Animation System**: Skeletal animation with blend trees, cross-fading, and layered animation
 - **Scene Serialization**: Save and load complete scenes with JSON format
 - **Bone Hierarchies**: Full skeletal animation support for characters and creatures
+- **Universal Serialization System**: Flexible serialization for entities, components, resources, and custom types with JSON and binary formats
 
 See: [Transform Hierarchy](../concepts/transform-hierarchy.md), [Animation Guides](../guides/animation/)
 
@@ -53,6 +58,7 @@ See: [Transform Hierarchy](../concepts/transform-hierarchy.md), [Animation Guide
 - **Texture Formats**: PNG, JPEG, TGA, BMP
 - **Animation Loading**: Skeletal animations from glTF files
 - **Material Import**: PBR material properties from asset files
+- **Async Asset Loading**: Non-blocking background loading with progress tracking and automatic dependency resolution
 
 See: [GLTF Loading](../gltf-loading.md), [OBJ Loading](../obj-loading.md)
 
@@ -100,6 +106,7 @@ See: [Input Guide](../guides/input.md), [Input System](../input-system.md)
 - **Performance Overlays**: FPS counters, profiling displays
 - **Vulkan Integration**: GPU-accelerated rendering via egui_vulkano
 - **Layout**: Windows, panels, buttons, sliders, text input
+- **Console Panel**: Interactive console with command history, Lua scripting support, and system integration
 
 See: [GUI System](../gui-system.md)
 
