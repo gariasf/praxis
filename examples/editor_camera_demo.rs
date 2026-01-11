@@ -14,11 +14,17 @@ use praxis_editor::{
     update_editor_camera_system, EditorCamera, EditorCameraController, Selectable, SelectionSystem,
 };
 #[cfg(feature = "editor")]
+use praxis_graphics::RenderContext;
+#[cfg(feature = "editor")]
+use praxis_gui::EguiIntegration;
+#[cfg(feature = "editor")]
 use praxis_input::InputState;
 #[cfg(feature = "editor")]
 use praxis_math::Vec3;
 #[cfg(feature = "editor")]
-use praxis_utils::Result;
+use praxis_utils::{error, Result};
+#[cfg(feature = "editor")]
+use std::sync::Arc;
 #[cfg(feature = "editor")]
 use winit::application::ApplicationHandler;
 #[cfg(feature = "editor")]
@@ -60,9 +66,11 @@ fn main() -> Result<()> {
 #[cfg(feature = "editor")]
 #[derive(Default)]
 struct App {
-    window: Option<Window>,
+    window: Option<Arc<Window>>,
     world: Option<World>,
     schedule: Option<Schedule>,
+    render_context: Option<RenderContext>,
+    egui_integration: Option<EguiIntegration>,
 }
 
 #[cfg(feature = "editor")]
@@ -84,7 +92,7 @@ impl App {
             EditorCamera,
         ));
 
-        println!("Created editor camera entity: {:?}", camera_entity);
+        println!("Created editor camera entity: {camera_entity:?}");
 
         // Create some selectable objects in the scene
         world.spawn((
@@ -126,14 +134,37 @@ impl ApplicationHandler for App {
             return;
         }
 
-        let window = event_loop
-            .create_window(
-                Window::default_attributes()
-                    .with_inner_size(PhysicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT))
-                    .with_title("Praxis Editor Camera Demo")
-                    .with_resizable(true),
-            )
-            .expect("Failed to create window");
+        let window = match event_loop.create_window(
+            Window::default_attributes()
+                .with_inner_size(PhysicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT))
+                .with_title("Praxis Editor Camera Demo")
+                .with_resizable(true),
+        ) {
+            Ok(w) => Arc::new(w),
+            Err(e) => {
+                error!("Failed to create window: {}", e);
+                event_loop.exit();
+                return;
+            }
+        };
+
+        // Create render context
+        let render_context = match pollster::block_on(RenderContext::new(window.clone())) {
+            Ok(ctx) => ctx,
+            Err(e) => {
+                error!("Failed to create render context: {}", e);
+                event_loop.exit();
+                return;
+            }
+        };
+
+        // Create egui integration
+        let egui_integration = EguiIntegration::new(
+            event_loop,
+            render_context.surface(),
+            render_context.queue(),
+            render_context.swapchain_format(),
+        );
 
         let (world, schedule) = Self::setup_world();
 
@@ -151,6 +182,8 @@ impl ApplicationHandler for App {
         self.window = Some(window);
         self.world = Some(world);
         self.schedule = Some(schedule);
+        self.render_context = Some(render_context);
+        self.egui_integration = Some(egui_integration);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -159,10 +192,29 @@ impl ApplicationHandler for App {
             None => return,
         };
 
+        let window = match self.window.as_ref() {
+            Some(w) => w,
+            None => return,
+        };
+
+        // Let egui handle the event first
+        if let Some(egui_integration) = &mut self.egui_integration {
+            if egui_integration.handle_event(window, &event) {
+                window.request_redraw();
+                return;
+            }
+        }
+
         match event {
             WindowEvent::CloseRequested => {
                 println!("\nExiting...");
                 event_loop.exit();
+            }
+            WindowEvent::Resized(size) => {
+                if let Some(render_context) = &mut self.render_context {
+                    render_context.configure_surface(size.width, size.height);
+                }
+                window.request_redraw();
             }
             WindowEvent::RedrawRequested => {
                 {
@@ -247,9 +299,19 @@ impl ApplicationHandler for App {
                     );
                 }
 
-                if let Some(window) = &self.window {
-                    window.request_redraw();
+                // Render a simple frame (just clear screen)
+                if let Some(render_context) = &mut self.render_context {
+                    if let Err(e) = render_context.render(&praxis_graphics::RenderCommands {
+                        view: praxis_math::Mat4::IDENTITY,
+                        proj: praxis_math::Mat4::IDENTITY,
+                        draw_commands: &[],
+                        lighting: None,
+                    }) {
+                        error!("Render error: {}", e);
+                    }
                 }
+
+                window.request_redraw();
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if event.physical_key == winit::keyboard::PhysicalKey::Code(KeyCode::Escape)
@@ -259,24 +321,22 @@ impl ApplicationHandler for App {
                     event_loop.exit();
                 }
 
-                let mut input_state = world.get_resource_mut::<InputState>().unwrap();
+                let input_state = world.get_resource_mut::<InputState>().unwrap();
                 praxis_input::winit_integration::process_window_event(
-                    &mut input_state,
+                    input_state,
                     &WindowEvent::KeyboardInput {
                         device_id: winit::event::DeviceId::dummy(),
                         event: event.clone(),
                         is_synthetic: false,
                     },
                 );
+                window.request_redraw();
             }
             _ => {
-                let mut input_state = world.get_resource_mut::<InputState>().unwrap();
-                praxis_input::winit_integration::process_window_event(&mut input_state, &event);
+                let input_state = world.get_resource_mut::<InputState>().unwrap();
+                praxis_input::winit_integration::process_window_event(input_state, &event);
+                window.request_redraw();
             }
-        }
-
-        if let Some(window) = &self.window {
-            window.request_redraw();
         }
     }
 }

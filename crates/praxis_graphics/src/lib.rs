@@ -2085,6 +2085,29 @@ impl RenderContext {
         self.recreate_swapchain = true;
     }
 
+    /// Gets a reference to the surface.
+    ///
+    /// Use this for creating egui integration or other windowing operations.
+    pub fn surface(&self) -> Arc<Surface> {
+        self.surface.clone()
+    }
+
+    /// Gets the swapchain image format.
+    ///
+    /// Use this for creating compatible render passes or egui integration.
+    pub fn swapchain_format(&self) -> vulkano::format::Format {
+        self.swapchain.image_format()
+    }
+
+    /// Gets a reference to the graphics queue.
+    ///
+    /// Use this for submitting commands or creating egui integration.
+    pub fn queue(&self) -> Arc<Queue> {
+        self.graphics_queue.clone()
+    }
+
+
+
     /// Creates a render pass suitable for post-processing.
     ///
     /// This is a simple render pass with a single color attachment,

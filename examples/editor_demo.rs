@@ -26,7 +26,9 @@ use praxis_ecs::World;
 #[cfg(feature = "editor")]
 use praxis_editor::{init_with_console, EditorState, LogBuffer, UndoRedoSystem};
 #[cfg(feature = "editor")]
-use praxis_gui::EguiContext;
+use praxis_graphics::RenderContext;
+#[cfg(feature = "editor")]
+use praxis_gui::EguiIntegration;
 #[cfg(feature = "editor")]
 use praxis_input::InputState;
 #[cfg(feature = "editor")]
@@ -53,21 +55,13 @@ const WINDOW_HEIGHT: u32 = 1080;
 
 /// Main application state.
 #[cfg(feature = "editor")]
+#[derive(Default)]
 struct App {
     window: Option<Arc<Window>>,
     world: Option<World>,
     editor_state: Option<EditorState>,
-}
-
-#[cfg(feature = "editor")]
-impl Default for App {
-    fn default() -> Self {
-        Self {
-            window: None,
-            world: None,
-            editor_state: None,
-        }
-    }
+    render_context: Option<RenderContext>,
+    egui_integration: Option<EguiIntegration>,
 }
 
 #[cfg(feature = "editor")]
@@ -94,6 +88,24 @@ impl ApplicationHandler for App {
             }
         };
 
+        // Create render context
+        let render_context = match pollster::block_on(RenderContext::new(window.clone())) {
+            Ok(ctx) => ctx,
+            Err(e) => {
+                error!("Failed to create render context: {}", e);
+                event_loop.exit();
+                return;
+            }
+        };
+
+        // Create egui integration
+        let egui_integration = EguiIntegration::new(
+            event_loop,
+            render_context.surface(),
+            render_context.queue(),
+            render_context.swapchain_format(),
+        );
+
         // Create editor state with console integration
         let log_buffer = LogBuffer::new();
         let editor_state = EditorState::with_log_buffer(log_buffer);
@@ -102,7 +114,6 @@ impl ApplicationHandler for App {
         let mut world = World::new();
         world.insert_resource(InputState::default());
         world.insert_resource(UndoRedoSystem::new());
-        world.insert_resource(EguiContext::default());
 
         info!("=== Praxis Editor Demo ===");
         info!("This demo shows EditorState integration with:");
@@ -122,6 +133,8 @@ impl ApplicationHandler for App {
         self.window = Some(window.clone());
         self.world = Some(world);
         self.editor_state = Some(editor_state);
+        self.render_context = Some(render_context);
+        self.egui_integration = Some(egui_integration);
 
         window.request_redraw();
     }
@@ -132,10 +145,24 @@ impl ApplicationHandler for App {
             None => return,
         };
 
+        // Let egui handle the event first
+        if let Some(egui_integration) = &mut self.egui_integration {
+            if egui_integration.handle_event(window, &event) {
+                window.request_redraw();
+                return;
+            }
+        }
+
         match event {
             WindowEvent::CloseRequested => {
                 info!("Close requested, exiting...");
                 event_loop.exit();
+            }
+            WindowEvent::Resized(size) => {
+                if let Some(render_context) = &mut self.render_context {
+                    render_context.configure_surface(size.width, size.height);
+                }
+                window.request_redraw();
             }
             WindowEvent::RedrawRequested => {
                 // Update input state
@@ -146,15 +173,28 @@ impl ApplicationHandler for App {
                     }
 
                     // Render editor UI
-                    if let Some(editor_state) = &mut self.editor_state {
-                        let ctx = world
-                            .get_resource::<EguiContext>()
-                            .unwrap()
-                            .context()
-                            .clone();
-                        // Note: We pass None for undo_system, world, selection, and render_context to avoid borrowing issues
-                        // In a full implementation, these would be properly integrated
-                        editor_state.ui(&ctx, None, None, None, None);
+                    if let (Some(editor_state), Some(egui_integration), Some(render_context)) = (
+                        &mut self.editor_state,
+                        &mut self.egui_integration,
+                        &mut self.render_context,
+                    ) {
+                        egui_integration.begin_frame(window);
+
+                        let ctx = egui_integration.context();
+                        editor_state.ui(ctx, None, Some(world), None, Some(render_context));
+
+                        let (_full_output, _clipped_primitives) = egui_integration.end_frame(window);
+
+                        // Render a simple frame (just clear screen for now)
+                        // Full GUI rendering integration would require proper Vulkan command buffer integration
+                        if let Err(e) = render_context.render(&praxis_graphics::RenderCommands {
+                            view: praxis_math::Mat4::IDENTITY,
+                            proj: praxis_math::Mat4::IDENTITY,
+                            draw_commands: &[],
+                            lighting: None,
+                        }) {
+                            error!("Render error: {}", e);
+                        }
                     }
                 }
 
@@ -169,9 +209,9 @@ impl ApplicationHandler for App {
                 }
 
                 if let Some(world) = &mut self.world {
-                    let mut input_state = world.get_resource_mut::<InputState>().unwrap();
+                    let input_state = world.get_resource_mut::<InputState>().unwrap();
                     praxis_input::winit_integration::process_window_event(
-                        &mut input_state,
+                        input_state,
                         &WindowEvent::KeyboardInput {
                             device_id: winit::event::DeviceId::dummy(),
                             event: event.clone(),
@@ -179,16 +219,16 @@ impl ApplicationHandler for App {
                         },
                     );
                 }
+                window.request_redraw();
             }
             _ => {
                 if let Some(world) = &mut self.world {
-                    let mut input_state = world.get_resource_mut::<InputState>().unwrap();
-                    praxis_input::winit_integration::process_window_event(&mut input_state, &event);
+                    let input_state = world.get_resource_mut::<InputState>().unwrap();
+                    praxis_input::winit_integration::process_window_event(input_state, &event);
                 }
+                window.request_redraw();
             }
         }
-
-        window.request_redraw();
     }
 }
 
