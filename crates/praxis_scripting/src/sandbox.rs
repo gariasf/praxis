@@ -47,7 +47,7 @@ impl Default for SandboxConfig {
             allow_file_io: false,
             allow_network: false,
             allow_os_access: false,
-            instruction_limit: 1_000_000, // 1 million instructions
+            instruction_limit: 1_000_000,    // 1 million instructions
             memory_limit: 100 * 1024 * 1024, // 100 MB
         }
     }
@@ -188,7 +188,7 @@ pub fn reset_instruction_counter(lua: &Lua, config: &SandboxConfig) -> Result<()
     if config.instruction_limit > 0 {
         // Remove the old hook and set a new one with a fresh counter
         lua.remove_hook();
-        
+
         let instruction_limit = config.instruction_limit;
         let instruction_count = Arc::new(AtomicUsize::new(0));
         let count_clone = instruction_count.clone();
@@ -288,16 +288,23 @@ mod tests {
         apply_sandbox(&lua, &config).unwrap();
 
         // This should fail due to instruction limit
-        let result = lua.load(r#"
+        let result = lua
+            .load(
+                r#"
             local sum = 0
             for i = 1, 1000000 do
                 sum = sum + i
             end
             return sum
-        "#).exec();
+        "#,
+            )
+            .exec();
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("instruction limit"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("instruction limit"));
     }
 
     #[test]
@@ -315,12 +322,16 @@ mod tests {
         apply_sandbox(&lua, &config).unwrap();
 
         // Try to allocate a large table that should exceed the limit
-        let result = lua.load(r#"
+        let result = lua
+            .load(
+                r#"
             local t = {}
             for i = 1, 1000000 do
                 t[i] = string.rep("a", 1000)
             end
-        "#).exec();
+        "#,
+            )
+            .exec();
 
         assert!(result.is_err());
     }
@@ -340,24 +351,32 @@ mod tests {
         apply_sandbox(&lua, &config).unwrap();
 
         // Run a script that uses some instructions
-        let result = lua.load(r#"
+        let result = lua
+            .load(
+                r#"
             local sum = 0
             for i = 1, 1000 do
                 sum = sum + i
             end
-        "#).exec();
+        "#,
+            )
+            .exec();
         assert!(result.is_ok());
 
         // Reset the counter
         reset_instruction_counter(&lua, &config).unwrap();
 
         // Run another script - should work fine with reset counter
-        let result = lua.load(r#"
+        let result = lua
+            .load(
+                r#"
             local sum = 0
             for i = 1, 1000 do
                 sum = sum + i
             end
-        "#).exec();
+        "#,
+            )
+            .exec();
         assert!(result.is_ok());
     }
 }

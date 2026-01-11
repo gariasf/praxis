@@ -25,9 +25,7 @@ mod common;
 
 use common::CameraController;
 use praxis_ecs::{PerspectiveCameraBundle, Transform, World};
-use praxis_graphics::{
-    sphere_mesh, DrawCommand, LightingUniforms, RenderCommands, RenderContext,
-};
+use praxis_graphics::{sphere_mesh, DrawCommand, LightingUniforms, RenderCommands, RenderContext};
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::{Mat4, Quat, Vec3};
 use praxis_scene::{AnimatedPose, AnimationClip, AnimationPlayer, Bone, Skeleton};
@@ -112,9 +110,7 @@ fn compute_bone_world_transforms(skeleton: &Skeleton, pose: &AnimatedPose) -> Ve
     let mut world_transforms = Vec::new();
 
     for bone_index in 0..skeleton.bone_count() {
-        let local_transform = pose
-            .local_transform(bone_index)
-            .unwrap_or(Mat4::IDENTITY);
+        let local_transform = pose.local_transform(bone_index).unwrap_or(Mat4::IDENTITY);
 
         let world_transform = if let Some(bone) = skeleton.bone(bone_index) {
             if let Some(parent_index) = bone.parent_index {
@@ -502,7 +498,10 @@ impl ApplicationHandler for App {
         self.animated_entity = Some(animated_entity);
 
         // Start playing walk animation by default
-        if let Some(mut player) = world.inner_mut().get_mut::<AnimationPlayer>(animated_entity) {
+        if let Some(mut player) = world
+            .inner_mut()
+            .get_mut::<AnimationPlayer>(animated_entity)
+        {
             player.play("Walk");
             player.set_looping("Walk", true);
         }

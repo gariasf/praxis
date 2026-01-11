@@ -755,12 +755,7 @@ mod tests {
     #[test]
     fn test_gpu_draw_command_bytemuck_pod() {
         // Test that we can cast to bytes safely
-        let cmd = GpuDrawCommand::new(
-            Mat4::IDENTITY,
-            Vec4::ZERO,
-            0,
-            0,
-        );
+        let cmd = GpuDrawCommand::new(Mat4::IDENTITY, Vec4::ZERO, 0, 0);
         let _bytes: &[u8] = bytemuck::bytes_of(&cmd);
     }
 
@@ -832,11 +827,11 @@ mod tests {
     fn test_culling_uniforms_creation() {
         let view_proj = Mat4::IDENTITY;
         let frustum_planes = [
-            Vec4::new(1.0, 0.0, 0.0, 1.0),  // left
-            Vec4::new(-1.0, 0.0, 0.0, 1.0), // right
-            Vec4::new(0.0, 1.0, 0.0, 1.0),  // bottom
-            Vec4::new(0.0, -1.0, 0.0, 1.0), // top
-            Vec4::new(0.0, 0.0, 1.0, 0.1),  // near
+            Vec4::new(1.0, 0.0, 0.0, 1.0),    // left
+            Vec4::new(-1.0, 0.0, 0.0, 1.0),   // right
+            Vec4::new(0.0, 1.0, 0.0, 1.0),    // bottom
+            Vec4::new(0.0, -1.0, 0.0, 1.0),   // top
+            Vec4::new(0.0, 0.0, 1.0, 0.1),    // near
             Vec4::new(0.0, 0.0, -1.0, 100.0), // far
         ];
         let camera_position = Vec3::new(5.0, 10.0, 15.0);
@@ -860,12 +855,7 @@ mod tests {
 
     #[test]
     fn test_culling_uniforms_frustum_disabled() {
-        let mut uniforms = CullingUniforms::new(
-            Mat4::IDENTITY,
-            [Vec4::ZERO; 6],
-            Vec3::ZERO,
-            0,
-        );
+        let mut uniforms = CullingUniforms::new(Mat4::IDENTITY, [Vec4::ZERO; 6], Vec3::ZERO, 0);
 
         uniforms.enable_frustum_culling = 0;
         assert_eq!(uniforms.enable_frustum_culling, 0);
@@ -873,12 +863,7 @@ mod tests {
 
     #[test]
     fn test_culling_uniforms_occlusion_enabled() {
-        let mut uniforms = CullingUniforms::new(
-            Mat4::IDENTITY,
-            [Vec4::ZERO; 6],
-            Vec3::ZERO,
-            0,
-        );
+        let mut uniforms = CullingUniforms::new(Mat4::IDENTITY, [Vec4::ZERO; 6], Vec3::ZERO, 0);
 
         uniforms.enable_occlusion_culling = 1;
         assert_eq!(uniforms.enable_occlusion_culling, 1);
@@ -886,12 +871,7 @@ mod tests {
 
     #[test]
     fn test_culling_uniforms_bytemuck_pod() {
-        let uniforms = CullingUniforms::new(
-            Mat4::IDENTITY,
-            [Vec4::ZERO; 6],
-            Vec3::ZERO,
-            100,
-        );
+        let uniforms = CullingUniforms::new(Mat4::IDENTITY, [Vec4::ZERO; 6], Vec3::ZERO, 100);
         let _bytes: &[u8] = bytemuck::bytes_of(&uniforms);
     }
 
@@ -905,7 +885,11 @@ mod tests {
         // All planes should be normalized
         for plane in &planes {
             let length = (plane.x * plane.x + plane.y * plane.y + plane.z * plane.z).sqrt();
-            assert!((length - 1.0).abs() < 0.001, "Plane not normalized: {}", length);
+            assert!(
+                (length - 1.0).abs() < 0.001,
+                "Plane not normalized: {}",
+                length
+            );
         }
     }
 
@@ -916,16 +900,16 @@ mod tests {
         let aspect = 16.0 / 9.0;
         let near = 0.1;
         let far = 100.0;
-        
+
         let projection = Mat4::perspective_rh(fov, aspect, near, far);
-        
+
         // Simple view matrix looking down -Z
         let view = Mat4::look_at_rh(
             Vec3::new(0.0, 0.0, 10.0),
             Vec3::new(0.0, 0.0, 0.0),
             Vec3::new(0.0, 1.0, 0.0),
         );
-        
+
         let view_proj = projection * view;
         let planes = extract_frustum_planes(view_proj);
 
@@ -1068,7 +1052,7 @@ mod tests {
             Vec4::new(-1.0, 0.0, 0.0, 10.0),
             Vec4::new(0.0, 1.0, 0.0, 10.0),
             Vec4::new(0.0, -1.0, 0.0, 10.0),
-            Vec4::new(0.0, 0.0, 1.0, 1.0),    // near plane at z = -1
+            Vec4::new(0.0, 0.0, 1.0, 1.0), // near plane at z = -1
             Vec4::new(0.0, 0.0, -1.0, 100.0),
         ];
 
@@ -1171,7 +1155,11 @@ mod tests {
         // Half inside (x: -5 to 5), half outside (x: 15 to 25)
         let mut visible_count = 0;
         for i in 0..10 {
-            let x = if i < 5 { (i as f32) - 2.5 } else { 15.0 + (i as f32) };
+            let x = if i < 5 {
+                (i as f32) - 2.5
+            } else {
+                15.0 + (i as f32)
+            };
             let center = Vec3::new(x, 0.0, 10.0);
             let radius = 0.5;
             if is_sphere_in_frustum_cpu(center, radius, &frustum_planes) {
@@ -1281,9 +1269,21 @@ mod tests {
         ));
 
         // After 90° rotation around Y, (5, 0, 0) becomes approximately (0, 0, -5)
-        assert!(world_center.x.abs() < 0.001, "x should be near 0, got {}", world_center.x);
-        assert!(world_center.y.abs() < 0.001, "y should be near 0, got {}", world_center.y);
-        assert!((world_center.z + 5.0).abs() < 0.001, "z should be near -5, got {}", world_center.z);
+        assert!(
+            world_center.x.abs() < 0.001,
+            "x should be near 0, got {}",
+            world_center.x
+        );
+        assert!(
+            world_center.y.abs() < 0.001,
+            "y should be near 0, got {}",
+            world_center.y
+        );
+        assert!(
+            (world_center.z + 5.0).abs() < 0.001,
+            "z should be near -5, got {}",
+            world_center.z
+        );
     }
 
     // ===== Indirect Draw Buffer Generation Tests =====
@@ -1317,9 +1317,24 @@ mod tests {
     fn test_indirect_draw_multiple_meshes() {
         // Simulate creating indirect commands for multiple visible meshes
         let meshes = vec![
-            GpuMeshData { index_count: 36, first_index: 0, vertex_offset: 0, _padding: 0 },
-            GpuMeshData { index_count: 24, first_index: 36, vertex_offset: 0, _padding: 0 },
-            GpuMeshData { index_count: 48, first_index: 60, vertex_offset: 0, _padding: 0 },
+            GpuMeshData {
+                index_count: 36,
+                first_index: 0,
+                vertex_offset: 0,
+                _padding: 0,
+            },
+            GpuMeshData {
+                index_count: 24,
+                first_index: 36,
+                vertex_offset: 0,
+                _padding: 0,
+            },
+            GpuMeshData {
+                index_count: 48,
+                first_index: 60,
+                vertex_offset: 0,
+                _padding: 0,
+            },
         ];
 
         let mut indirect_commands = Vec::new();
@@ -1389,7 +1404,7 @@ mod tests {
 
         let center = Vec3::new(0.0, 0.0, 0.0);
         let radius = -1.0; // Invalid, but mathematically testable
-        
+
         // With negative radius, the test becomes distance < 1.0 instead of distance < -1.0
         // This would make everything visible if center is inside
         assert!(is_sphere_in_frustum_cpu(center, radius, &frustum_planes));
@@ -1397,24 +1412,14 @@ mod tests {
 
     #[test]
     fn test_draw_command_count_zero() {
-        let uniforms = CullingUniforms::new(
-            Mat4::IDENTITY,
-            [Vec4::ZERO; 6],
-            Vec3::ZERO,
-            0,
-        );
+        let uniforms = CullingUniforms::new(Mat4::IDENTITY, [Vec4::ZERO; 6], Vec3::ZERO, 0);
 
         assert_eq!(uniforms.draw_command_count, 0);
     }
 
     #[test]
     fn test_draw_command_count_large() {
-        let uniforms = CullingUniforms::new(
-            Mat4::IDENTITY,
-            [Vec4::ZERO; 6],
-            Vec3::ZERO,
-            100_000,
-        );
+        let uniforms = CullingUniforms::new(Mat4::IDENTITY, [Vec4::ZERO; 6], Vec3::ZERO, 100_000);
 
         assert_eq!(uniforms.draw_command_count, 100_000);
     }
@@ -1428,14 +1433,14 @@ mod tests {
         let aspect = 16.0 / 9.0;
         let near = 0.1;
         let far = 100.0;
-        
+
         let projection = Mat4::perspective_rh(fov, aspect, near, far);
         let view = Mat4::look_at_rh(
             Vec3::new(0.0, 0.0, 10.0), // camera at z=10
-            Vec3::new(0.0, 0.0, 0.0),   // looking at origin
+            Vec3::new(0.0, 0.0, 0.0),  // looking at origin
             Vec3::new(0.0, 1.0, 0.0),
         );
-        
+
         let view_proj = projection * view;
         let frustum_planes = extract_frustum_planes(view_proj);
 
@@ -1443,14 +1448,14 @@ mod tests {
         let mut visible_count = 0;
         let grid_size = 5;
         let spacing = 2.0;
-        
+
         for x in 0..grid_size {
             for y in 0..grid_size {
                 let pos_x = (x as f32 - 2.0) * spacing;
                 let pos_y = (y as f32 - 2.0) * spacing;
                 let center = Vec3::new(pos_x, pos_y, 0.0); // Objects at z=0
                 let radius = 0.5;
-                
+
                 if is_sphere_in_frustum_cpu(center, radius, &frustum_planes) {
                     visible_count += 1;
                 }
@@ -1469,28 +1474,33 @@ mod tests {
             Vec4::new(-1.0, 0.0, 0.0, 10.0),
             Vec4::new(0.0, 1.0, 0.0, 10.0),
             Vec4::new(0.0, -1.0, 0.0, 10.0),
-            Vec4::new(0.0, 0.0, 1.0, 1.0),    // near at z=-1
-            Vec4::new(0.0, 0.0, -1.0, 50.0),  // far at z=50
+            Vec4::new(0.0, 0.0, 1.0, 1.0),   // near at z=-1
+            Vec4::new(0.0, 0.0, -1.0, 50.0), // far at z=50
         ];
 
         let test_depths = vec![
-            (-5.0, false),  // behind near plane
-            (0.0, true),    // at near plane
-            (25.0, true),   // middle of frustum
-            (49.0, true),   // near far plane
-            (55.0, false),  // beyond far plane
+            (-5.0, false), // behind near plane
+            (0.0, true),   // at near plane
+            (25.0, true),  // middle of frustum
+            (49.0, true),  // near far plane
+            (55.0, false), // beyond far plane
         ];
 
         for (depth, expected_visible) in test_depths {
             let center = Vec3::new(0.0, 0.0, depth);
             let radius = 0.5;
             let is_visible = is_sphere_in_frustum_cpu(center, radius, &frustum_planes);
-            
+
             assert_eq!(
-                is_visible, expected_visible,
+                is_visible,
+                expected_visible,
                 "Object at depth {} should be {}",
                 depth,
-                if expected_visible { "visible" } else { "culled" }
+                if expected_visible {
+                    "visible"
+                } else {
+                    "culled"
+                }
             );
         }
     }
@@ -1503,14 +1513,14 @@ mod tests {
         let work_group_size = 64;
 
         let test_cases = vec![
-            (0, 0),      // 0 commands -> 0 work groups
-            (1, 1),      // 1 command -> 1 work group
-            (63, 1),     // 63 commands -> 1 work group
-            (64, 1),     // 64 commands -> 1 work group
-            (65, 2),     // 65 commands -> 2 work groups
-            (128, 2),    // 128 commands -> 2 work groups
-            (129, 3),    // 129 commands -> 3 work groups
-            (1000, 16),  // 1000 commands -> 16 work groups (1000/64 = 15.625, ceil = 16)
+            (0, 0),     // 0 commands -> 0 work groups
+            (1, 1),     // 1 command -> 1 work group
+            (63, 1),    // 63 commands -> 1 work group
+            (64, 1),    // 64 commands -> 1 work group
+            (65, 2),    // 65 commands -> 2 work groups
+            (128, 2),   // 128 commands -> 2 work groups
+            (129, 3),   // 129 commands -> 3 work groups
+            (1000, 16), // 1000 commands -> 16 work groups (1000/64 = 15.625, ceil = 16)
         ];
 
         for (command_count, expected_groups) in test_cases {
@@ -1519,7 +1529,7 @@ mod tests {
             } else {
                 (command_count + work_group_size - 1) / work_group_size
             };
-            
+
             assert_eq!(
                 work_groups, expected_groups,
                 "Command count {} should require {} work groups",
@@ -1536,7 +1546,7 @@ mod tests {
         let work_groups = (max_commands + work_group_size - 1) / work_group_size;
 
         assert_eq!(work_groups, 1563); // ceil(100000 / 64) = 1563
-        
+
         // Verify work group calculation matches div_ceil used in actual code
         let work_groups_div_ceil = max_commands.div_ceil(work_group_size);
         assert_eq!(work_groups, work_groups_div_ceil);

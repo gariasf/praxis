@@ -289,10 +289,7 @@ fn test_remove_component_command_execute() {
     let entity = world.spawn(Name::new("TestEntity")).id();
 
     let name = world.get::<Name>(entity).unwrap().0.clone();
-    let mut command = RemoveComponentCommand::new(
-        entity,
-        ComponentData::Name { data: name },
-    );
+    let mut command = RemoveComponentCommand::new(entity, ComponentData::Name { data: name });
 
     assert!(command.execute(&mut world).is_ok());
     assert!(world.get::<Name>(entity).is_none());
@@ -304,10 +301,7 @@ fn test_remove_component_command_undo() {
     let entity = world.spawn(Name::new("TestEntity")).id();
 
     let name = world.get::<Name>(entity).unwrap().0.clone();
-    let mut command = RemoveComponentCommand::new(
-        entity,
-        ComponentData::Name { data: name },
-    );
+    let mut command = RemoveComponentCommand::new(entity, ComponentData::Name { data: name });
 
     command.execute(&mut world).unwrap();
     command.undo(&mut world).unwrap();

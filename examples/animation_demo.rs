@@ -26,9 +26,7 @@ mod common;
 
 use common::CameraController;
 use praxis_ecs::{Component, PerspectiveCameraBundle, Transform, World};
-use praxis_graphics::{
-    sphere_mesh, DrawCommand, LightingUniforms, RenderCommands, RenderContext,
-};
+use praxis_graphics::{sphere_mesh, DrawCommand, LightingUniforms, RenderCommands, RenderContext};
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::{Mat4, Quat, Vec3};
 use praxis_scene::{AnimatedPose, AnimationBlender, AnimationClip, BlendNode1D, Bone, Skeleton};
@@ -266,9 +264,7 @@ fn compute_bone_world_transforms(skeleton: &Skeleton, pose: &AnimatedPose) -> Ve
     let mut world_transforms = Vec::new();
 
     for bone_index in 0..skeleton.bone_count() {
-        let local_transform = pose
-            .local_transform(bone_index)
-            .unwrap_or(Mat4::IDENTITY);
+        let local_transform = pose.local_transform(bone_index).unwrap_or(Mat4::IDENTITY);
 
         let world_transform = if let Some(bone) = skeleton.bone(bone_index) {
             if let Some(parent_index) = bone.parent_index {
@@ -430,8 +426,7 @@ impl App {
         if mode_changed {
             if let Some(world) = &mut self.world {
                 if let Some(entity) = self.animated_entity {
-                    if let Some(mut blender) =
-                        world.inner_mut().get_mut::<AnimationBlender>(entity)
+                    if let Some(mut blender) = world.inner_mut().get_mut::<AnimationBlender>(entity)
                     {
                         match self.demo_state.current_mode {
                             AnimationMode::Idle => {
@@ -481,8 +476,7 @@ impl App {
         if self.demo_state.current_mode == AnimationMode::BlendTree {
             if let Some(world) = &mut self.world {
                 if let Some(entity) = self.animated_entity {
-                    if let Some(mut blender) =
-                        world.inner_mut().get_mut::<AnimationBlender>(entity)
+                    if let Some(mut blender) = world.inner_mut().get_mut::<AnimationBlender>(entity)
                     {
                         blender.set_blend_parameter("SpeedBlend", self.demo_state.speed_parameter);
                     }
@@ -556,10 +550,10 @@ impl App {
                                 transform.translation = bone_world.col(3).truncate();
 
                                 let scale = match bone_index {
-                                    0 => 1.5, // Root - larger
+                                    0 => 1.5,     // Root - larger
                                     1 | 2 => 1.2, // Spine/Chest
-                                    3 => 1.0, // Head
-                                    _ => 0.8, // Limbs
+                                    3 => 1.0,     // Head
+                                    _ => 0.8,     // Limbs
                                 };
                                 transform.scale = Vec3::splat(scale);
                             }
@@ -907,8 +901,6 @@ fn main() -> Result<()> {
 
 #[cfg(feature = "headless")]
 fn main() -> Result<()> {
-    println!(
-        "animation_demo example requires graphics support and cannot run in headless mode"
-    );
+    println!("animation_demo example requires graphics support and cannot run in headless mode");
     Ok(())
 }

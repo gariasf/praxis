@@ -11,3 +11,11 @@ praxis_math = { path = "../praxis_math", version = "0.1.0" }
 praxis_graphics = { path = "../praxis_graphics", version = "0.1.0" }
 serde = { version = "1.0", features = ["derive"] }
 ron = "0.8"
+
+[dev-dependencies]
+praxis_physics = { path = "../praxis_physics", version = "0.1.0" }
+praxis_audio = { path = "../praxis_audio", version = "0.1.0" }
+
+[features]
+test_physics = []
+test_audio = []

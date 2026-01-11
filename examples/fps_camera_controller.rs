@@ -49,7 +49,9 @@ fn main() -> Result<()> {
 
 #[cfg(feature = "headless")]
 fn main() -> Result<()> {
-    println!("fps_camera_controller example requires graphics support and cannot run in headless mode");
+    println!(
+        "fps_camera_controller example requires graphics support and cannot run in headless mode"
+    );
     Ok(())
 }
 

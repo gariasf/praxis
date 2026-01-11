@@ -101,7 +101,10 @@ impl TestWorld {
     }
 
     /// Despawns an entity.
-    pub fn despawn(&mut self, entity: praxis_ecs::Entity) -> Result<(), bevy_ecs::error::EntityNotFound> {
+    pub fn despawn(
+        &mut self,
+        entity: praxis_ecs::Entity,
+    ) -> Result<(), bevy_ecs::error::EntityNotFound> {
         self.world.despawn(entity)
     }
 

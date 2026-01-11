@@ -454,7 +454,9 @@ mod tests {
         )?;
 
         // Create indices
-        let indices: Vec<u16> = (0..index_count).map(|i| (i % vertex_count) as u16).collect();
+        let indices: Vec<u16> = (0..index_count)
+            .map(|i| (i % vertex_count) as u16)
+            .collect();
 
         let index_buffer = Buffer::from_iter(
             allocator,
@@ -482,7 +484,10 @@ mod tests {
     fn test_terrain_renderer_creation() {
         // Test requires Vulkan setup, so we just test basic structure
         // This verifies the types are correct
-        assert_eq!(std::mem::size_of::<TerrainRenderer>(), std::mem::size_of::<TerrainRenderer>());
+        assert_eq!(
+            std::mem::size_of::<TerrainRenderer>(),
+            std::mem::size_of::<TerrainRenderer>()
+        );
     }
 
     #[test]
@@ -490,7 +495,7 @@ mod tests {
         // Without a real Vulkan context, we can't create the renderer,
         // but we can verify error handling logic exists by checking the structure
         // The render_chunk function checks for terrain_pipeline being None
-        
+
         // Verify that the error path exists in the code
         let error_msg = "Terrain pipeline not set";
         assert!(error_msg.contains("pipeline"));
@@ -503,7 +508,7 @@ mod tests {
         let chunk_id = TerrainChunkId::new(2, 3);
         let chunk_size = 64.0;
         let world_pos = chunk_id.world_position(chunk_size);
-        
+
         assert_eq!(world_pos.x, 128.0);
         assert_eq!(world_pos.y, 0.0);
         assert_eq!(world_pos.z, 192.0);
@@ -516,7 +521,7 @@ mod tests {
         let chunk_size = 64.0;
         let world_pos = chunk_id.world_position(chunk_size);
         let model_matrix = Mat4::from_translation(world_pos);
-        
+
         // Verify translation components
         let translation = model_matrix.to_cols_array_2d();
         assert_eq!(translation[3][0], 64.0);
@@ -531,22 +536,17 @@ mod tests {
         let chunk_id = TerrainChunkId::new(0, 0);
         let world_pos = chunk_id.world_position(64.0);
         let model_matrix = Mat4::from_translation(world_pos);
-        
+
         let view_matrix = Mat4::look_at_rh(
             Vec3::new(0.0, 100.0, 100.0),
             Vec3::new(0.0, 0.0, 0.0),
             Vec3::new(0.0, 1.0, 0.0),
         );
-        
-        let proj_matrix = Mat4::perspective_rh(
-            45.0_f32.to_radians(),
-            16.0 / 9.0,
-            0.1,
-            1000.0,
-        );
-        
+
+        let proj_matrix = Mat4::perspective_rh(45.0_f32.to_radians(), 16.0 / 9.0, 0.1, 1000.0);
+
         let mvp = proj_matrix * view_matrix * model_matrix;
-        
+
         // Verify MVP matrix is valid (not NaN or infinite)
         let mvp_array = mvp.to_cols_array_2d();
         for row in &mvp_array {
@@ -565,7 +565,7 @@ mod tests {
             model: [[f32; 4]; 4],
             model_view_proj: [[f32; 4]; 4],
         }
-        
+
         // Each matrix is 16 floats (64 bytes), total should be 128 bytes
         assert_eq!(std::mem::size_of::<TestPushConstants>(), 128);
     }
@@ -579,13 +579,13 @@ mod tests {
             model: [[f32; 4]; 4],
             model_view_proj: [[f32; 4]; 4],
         }
-        
+
         let identity = Mat4::IDENTITY;
         let push_constants = TestPushConstants {
             model: identity.to_cols_array_2d(),
             model_view_proj: identity.to_cols_array_2d(),
         };
-        
+
         // Verify identity matrix values
         for i in 0..4 {
             for j in 0..4 {
@@ -603,10 +603,10 @@ mod tests {
         // Test that render_chunk uses the current LOD level from chunk
         let chunk_id = TerrainChunkId::new(0, 0);
         let mut chunk = TerrainChunk::new(chunk_id, 64.0, 4);
-        
+
         // Set LOD level
         chunk.lod.current_level = 2;
-        
+
         // Verify LOD level is used
         assert_eq!(chunk.lod.current_level, 2);
         assert!(chunk.lod.current_level < chunk.meshes.len());
@@ -617,11 +617,11 @@ mod tests {
         // Test mesh access pattern used in render_chunk
         let chunk_id = TerrainChunkId::new(0, 0);
         let chunk = TerrainChunk::new(chunk_id, 64.0, 4);
-        
+
         // Verify we can access mesh at current LOD level
         let lod_level = chunk.lod.current_level;
         assert!(lod_level < chunk.meshes.len());
-        
+
         // Initially meshes are None
         assert!(chunk.meshes[lod_level].is_none());
     }
@@ -632,7 +632,7 @@ mod tests {
         let chunk_id = TerrainChunkId::new(0, 0);
         let num_lod_levels = 4;
         let chunk = TerrainChunk::new(chunk_id, 64.0, num_lod_levels);
-        
+
         assert_eq!(chunk.meshes.len(), num_lod_levels);
         assert_eq!(chunk.lod.num_levels, num_lod_levels);
     }
@@ -647,7 +647,7 @@ mod tests {
             (-1, -1, -64.0, -64.0),
             (5, 3, 320.0, 192.0),
         ];
-        
+
         for (x, z, expected_x, expected_z) in test_cases {
             let chunk_id = TerrainChunkId::new(x, z);
             let world_pos = chunk_id.world_position(64.0);
@@ -680,7 +680,7 @@ mod tests {
         let first_index = 0u32;
         let vertex_offset = 0i32;
         let first_instance = 0u32;
-        
+
         // Verify draw parameters are valid
         assert!(index_count > 0);
         assert_eq!(instance_count, 1);
@@ -729,24 +729,19 @@ mod tests {
             Vec3::new(0.0, 0.0, 0.0),
             Vec3::new(0.0, 1.0, 0.0),
         );
-        
-        let proj = Mat4::perspective_rh(
-            45.0_f32.to_radians(),
-            1920.0 / 1080.0,
-            0.1,
-            1000.0,
-        );
-        
+
+        let proj = Mat4::perspective_rh(45.0_f32.to_radians(), 1920.0 / 1080.0, 0.1, 1000.0);
+
         // Verify matrices are valid
         let view_array = view.to_cols_array_2d();
         let proj_array = proj.to_cols_array_2d();
-        
+
         for row in &view_array {
             for &value in row {
                 assert!(value.is_finite());
             }
         }
-        
+
         for row in &proj_array {
             for &value in row {
                 assert!(value.is_finite());
@@ -760,9 +755,9 @@ mod tests {
         let model = Mat4::from_translation(Vec3::new(10.0, 0.0, 10.0));
         let view = Mat4::from_translation(Vec3::new(0.0, -5.0, -20.0));
         let proj = Mat4::IDENTITY;
-        
+
         let mvp = proj * view * model;
-        
+
         // Verify result is valid
         let mvp_array = mvp.to_cols_array_2d();
         for row in &mvp_array {
@@ -780,9 +775,9 @@ mod tests {
             TerrainChunk::new(TerrainChunkId::new(1, 0), 64.0, 4),
             TerrainChunk::new(TerrainChunkId::new(0, 1), 64.0, 4),
         ];
-        
+
         assert_eq!(chunks.len(), 3);
-        
+
         // Verify each chunk can be accessed
         for chunk in &chunks {
             assert_eq!(chunk.lod.num_levels, 4);
@@ -795,15 +790,15 @@ mod tests {
         // Test chunks at different LOD levels
         let chunk_id = TerrainChunkId::new(0, 0);
         let mut chunk = TerrainChunk::new(chunk_id, 64.0, 4);
-        
+
         // Test LOD level 0 (highest detail)
         chunk.lod.current_level = 0;
         assert_eq!(chunk.lod.current_level, 0);
-        
+
         // Test LOD level 2
         chunk.lod.current_level = 2;
         assert_eq!(chunk.lod.current_level, 2);
-        
+
         // Test LOD level 3 (lowest detail)
         chunk.lod.current_level = 3;
         assert_eq!(chunk.lod.current_level, 3);
@@ -824,7 +819,7 @@ mod tests {
         let first_index = 0u32;
         let vertex_offset = 0i32;
         let first_instance = 0u32;
-        
+
         assert!(index_count > 0, "Index count must be positive");
         assert_eq!(instance_count, 1, "Should draw single instance");
         assert_eq!(first_index, 0, "Should start at first index");
@@ -838,10 +833,10 @@ mod tests {
         let chunk_id = TerrainChunkId::new(2, 3);
         let chunk_size = 64.0;
         let chunk = TerrainChunk::new(chunk_id, chunk_size, 4);
-        
+
         let expected_min = Vec3::new(128.0, 0.0, 192.0);
         let expected_max = Vec3::new(192.0, 0.0, 256.0);
-        
+
         assert_eq!(chunk.bounds_min, expected_min);
         assert_eq!(chunk.bounds_max, expected_max);
     }
@@ -861,33 +856,28 @@ mod tests {
         // Test all matrix transformations used in render_chunk
         let chunk_id = TerrainChunkId::new(1, 2);
         let chunk_size = 64.0;
-        
+
         // Model matrix (translation)
         let world_pos = chunk_id.world_position(chunk_size);
         let model = Mat4::from_translation(world_pos);
-        
+
         // View matrix (camera)
         let view = Mat4::look_at_rh(
             Vec3::new(100.0, 100.0, 100.0),
             Vec3::new(64.0, 0.0, 128.0),
             Vec3::new(0.0, 1.0, 0.0),
         );
-        
+
         // Projection matrix
-        let proj = Mat4::perspective_rh(
-            60.0_f32.to_radians(),
-            16.0 / 9.0,
-            0.1,
-            500.0,
-        );
-        
+        let proj = Mat4::perspective_rh(60.0_f32.to_radians(), 16.0 / 9.0, 0.1, 500.0);
+
         // Combined MVP
         let mvp = proj * view * model;
-        
+
         // Convert to array format for push constants
         let model_array = model.to_cols_array_2d();
         let mvp_array = mvp.to_cols_array_2d();
-        
+
         // Verify all values are finite
         for i in 0..4 {
             for j in 0..4 {
@@ -909,18 +899,15 @@ mod tests {
     #[test]
     fn test_vegetation_instance_data_layout() {
         // Test vegetation instance data structure
-        let instance = VegetationInstanceData::from_matrix(
-            Mat4::IDENTITY,
-            Vec3::new(0.5, 0.8, 0.3),
-            1.5,
-        );
-        
+        let instance =
+            VegetationInstanceData::from_matrix(Mat4::IDENTITY, Vec3::new(0.5, 0.8, 0.3), 1.5);
+
         // Verify identity matrix
         assert_eq!(instance.model_col0, [1.0, 0.0, 0.0, 0.0]);
         assert_eq!(instance.model_col1, [0.0, 1.0, 0.0, 0.0]);
         assert_eq!(instance.model_col2, [0.0, 0.0, 1.0, 0.0]);
         assert_eq!(instance.model_col3, [0.0, 0.0, 0.0, 1.0]);
-        
+
         // Verify color and wind
         assert_eq!(instance.color_and_wind[0], 0.5);
         assert_eq!(instance.color_and_wind[1], 0.8);
@@ -936,7 +923,7 @@ mod tests {
             wind_strength: 0.5,
             wind_direction: [1.0, 0.0],
         };
-        
+
         assert_eq!(push_constants.time, 1.5);
         assert_eq!(push_constants.wind_strength, 0.5);
         assert_eq!(push_constants.wind_direction, [1.0, 0.0]);

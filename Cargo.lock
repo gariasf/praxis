@@ -3539,6 +3539,8 @@ dependencies = [
  "praxis_ecs",
  "praxis_math",
  "praxis_utils",
+ "ron",
+ "serde",
 ]
 
 [[package]]
@@ -3558,8 +3560,10 @@ name = "praxis_ecs"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
+ "praxis_audio",
  "praxis_graphics",
  "praxis_math",
+ "praxis_physics",
  "praxis_utils",
  "ron",
  "serde",
@@ -3679,6 +3683,8 @@ dependencies = [
  "praxis_math",
  "praxis_utils",
  "rapier3d",
+ "ron",
+ "serde",
 ]
 
 [[package]]

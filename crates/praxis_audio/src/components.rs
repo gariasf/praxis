@@ -2,6 +2,9 @@
 
 use praxis_ecs::Component;
 
+#[cfg(feature = "serialization")]
+use serde::{Deserialize, Serialize};
+
 /// Component that marks an entity as an audio source.
 ///
 /// When attached to an entity with a `Transform`, the audio system will
@@ -99,7 +102,8 @@ impl AudioSource {
     ///
     /// * `volume` - Volume level from 0.0 (silent) to 1.0 (full volume)
     #[must_use]
-    pub const fn with_volume(mut self, volume: f32) -> Self {
+    #[allow(clippy::missing_const_for_fn)] // clamp is not const in stable Rust
+    pub fn with_volume(mut self, volume: f32) -> Self {
         self.volume = volume.clamp(0.0, 1.0);
         self
     }
@@ -237,6 +241,7 @@ impl AudioSource {
 
 /// Playback state of an audio source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
 pub enum AudioState {
     /// Audio is currently playing.
     Playing,
@@ -281,3 +286,97 @@ pub struct SoundHandle {
 /// ```
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub struct AudioListener;
+
+/// Serialization support for audio components.
+#[cfg(feature = "serialization")]
+mod serialization {
+    use super::{AudioState, AudioSource};
+    use bevy_ecs::entity::Entity;
+    use praxis_ecs::{DeserializeContext, SerializableComponent};
+    use praxis_utils::Result;
+    use serde::{Deserialize, Serialize};
+
+    type InsertComponentFn = Box<dyn FnOnce(&mut bevy_ecs::world::EntityWorldMut)>;
+
+    /// Serializable representation of `AudioSource` (excludes internal runtime fields).
+    #[derive(Serialize, Deserialize)]
+    struct SerializableAudioSource {
+        path: String,
+        volume: f32,
+        spatial: bool,
+        looping: bool,
+        state: AudioState,
+        max_distance: f32,
+        reference_distance: f32,
+        doppler_enabled: bool,
+        doppler_scale: f32,
+    }
+
+    impl From<&AudioSource> for SerializableAudioSource {
+        fn from(source: &AudioSource) -> Self {
+            Self {
+                path: source.path.clone(),
+                volume: source.volume,
+                spatial: source.spatial,
+                looping: source.looping,
+                state: source.state,
+                max_distance: source.max_distance,
+                reference_distance: source.reference_distance,
+                doppler_enabled: source.doppler_enabled,
+                doppler_scale: source.doppler_scale,
+            }
+        }
+    }
+
+    impl From<SerializableAudioSource> for AudioSource {
+        fn from(serializable: SerializableAudioSource) -> Self {
+            Self {
+                path: serializable.path,
+                volume: serializable.volume,
+                spatial: serializable.spatial,
+                looping: serializable.looping,
+                state: serializable.state,
+                max_distance: serializable.max_distance,
+                reference_distance: serializable.reference_distance,
+                doppler_enabled: serializable.doppler_enabled,
+                doppler_scale: serializable.doppler_scale,
+                sound_handle: None,
+                previous_position: None,
+            }
+        }
+    }
+
+    impl SerializableComponent for AudioSource {
+        fn serialize_component(&self) -> Result<String> {
+            let serializable = SerializableAudioSource::from(self);
+            Ok(ron::to_string(&serializable)?)
+        }
+
+        fn deserialize_component(
+            data: &str,
+            _entity: Entity,
+            _context: &DeserializeContext,
+        ) -> Result<InsertComponentFn>
+        where
+            Self: Sized + 'static,
+        {
+            let serializable: SerializableAudioSource = ron::from_str(data)?;
+            let component = Self::from(serializable);
+            Ok(Box::new(move |entity_mut| {
+                entity_mut.insert(component);
+            }))
+        }
+
+        fn type_name() -> &'static str
+        where
+            Self: Sized,
+        {
+            "AudioSource"
+        }
+    }
+}
+
+#[cfg(not(feature = "serialization"))]
+mod serialization {
+    // Empty module when serialization feature is disabled
+}

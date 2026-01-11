@@ -229,27 +229,61 @@ impl AppState {
             KeyCode::ShiftLeft | KeyCode::ShiftRight => self.keys.down = pressed,
             KeyCode::Digit1 if pressed => {
                 self.features.taa_enabled = !self.features.taa_enabled;
-                info!("TAA: {}", if self.features.taa_enabled { "ON" } else { "OFF" });
+                info!(
+                    "TAA: {}",
+                    if self.features.taa_enabled {
+                        "ON"
+                    } else {
+                        "OFF"
+                    }
+                );
             }
             KeyCode::Digit2 if pressed => {
                 self.features.ssr_enabled = !self.features.ssr_enabled;
-                info!("SSR: {}", if self.features.ssr_enabled { "ON" } else { "OFF" });
+                info!(
+                    "SSR: {}",
+                    if self.features.ssr_enabled {
+                        "ON"
+                    } else {
+                        "OFF"
+                    }
+                );
             }
             KeyCode::Digit3 if pressed => {
                 self.features.ssao_enabled = !self.features.ssao_enabled;
-                info!("SSAO: {}", if self.features.ssao_enabled { "ON" } else { "OFF" });
+                info!(
+                    "SSAO: {}",
+                    if self.features.ssao_enabled {
+                        "ON"
+                    } else {
+                        "OFF"
+                    }
+                );
             }
             KeyCode::Digit4 if pressed => {
                 self.features.shadows_enabled = !self.features.shadows_enabled;
-                info!("Shadows: {}", if self.features.shadows_enabled { "ON" } else { "OFF" });
+                info!(
+                    "Shadows: {}",
+                    if self.features.shadows_enabled {
+                        "ON"
+                    } else {
+                        "OFF"
+                    }
+                );
             }
             KeyCode::KeyT if pressed => {
                 self.show_terrain_stats = !self.show_terrain_stats;
-                info!("Terrain stats: {}", if self.show_terrain_stats { "ON" } else { "OFF" });
+                info!(
+                    "Terrain stats: {}",
+                    if self.show_terrain_stats { "ON" } else { "OFF" }
+                );
             }
             KeyCode::KeyN if pressed => {
                 self.show_network_stats = !self.show_network_stats;
-                info!("Network stats: {}", if self.show_network_stats { "ON" } else { "OFF" });
+                info!(
+                    "Network stats: {}",
+                    if self.show_network_stats { "ON" } else { "OFF" }
+                );
             }
             #[cfg(feature = "scripting")]
             KeyCode::KeyL if pressed => {
@@ -369,7 +403,9 @@ async fn setup_networking(state: &mut AppState, is_server: bool) -> Result<()> {
     } else {
         info!("Connecting to network server at 127.0.0.1:7777...");
         let mut client = NetworkClient::new(config).await?;
-        client.connect("127.0.0.1:7777", "DemoClient".to_string()).await?;
+        client
+            .connect("127.0.0.1:7777", "DemoClient".to_string())
+            .await?;
 
         info!("Network client connected successfully");
         state.network_mode = Some(NetworkMode::Client(client));
@@ -447,16 +483,16 @@ fn print_welcome_banner() {
     println!("╚═══════════════════════════════════════════════════════════╝");
     println!();
     println!("Features:");
-    
+
     #[cfg(feature = "terrain")]
     println!("  ✓ Terrain Rendering (512x512 heightmap, 4 LOD levels)");
-    
+
     #[cfg(feature = "networking")]
     println!("  ✓ TCP Networking (Client-server with entity replication)");
-    
+
     #[cfg(feature = "scripting")]
     println!("  ✓ Scripting Integration (Lua with hot-reload)");
-    
+
     println!("  ✓ Modern Rendering (TAA, SSR, SSAO, Shadows)");
     println!("  ✓ GPU Culling (Frustum and occlusion culling)");
     println!("  ✓ Deferred Rendering (G-buffer with HDR)");
@@ -472,10 +508,10 @@ fn print_welcome_banner() {
     println!("  4              Toggle Shadows");
     println!("  T              Show terrain stats");
     println!("  N              Show network stats");
-    
+
     #[cfg(feature = "scripting")]
     println!("  L              Reload Lua scripts");
-    
+
     println!("  ESC            Exit");
     println!();
 }
@@ -503,7 +539,7 @@ fn main() -> Result<()> {
     info!("Starting Praxis Complete Features Demo");
 
     let event_loop = EventLoop::new()?;
-    
+
     #[allow(deprecated)]
     let window = Arc::new(
         event_loop.create_window(
@@ -570,14 +606,16 @@ fn main() -> Result<()> {
                 elwt.exit();
             }
             Event::WindowEvent {
-                event: WindowEvent::KeyboardInput { 
-                    event: KeyEvent { 
-                        physical_key: PhysicalKey::Code(keycode), 
-                        state: key_state, 
-                        .. 
-                    }, 
-                    .. 
-                },
+                event:
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                physical_key: PhysicalKey::Code(keycode),
+                                state: key_state,
+                                ..
+                            },
+                        ..
+                    },
                 ..
             } => {
                 let pressed = key_state.is_pressed();
@@ -601,7 +639,9 @@ fn main() -> Result<()> {
                 ..
             } => {
                 let current_time = Instant::now();
-                let delta_time = current_time.duration_since(state.last_frame_time).as_secs_f32();
+                let delta_time = current_time
+                    .duration_since(state.last_frame_time)
+                    .as_secs_f32();
                 state.last_frame_time = current_time;
 
                 accumulated_frame_time += Duration::from_secs_f32(delta_time);
@@ -611,7 +651,8 @@ fn main() -> Result<()> {
 
                 // Print stats every 2 seconds
                 if last_stats_print.elapsed() >= Duration::from_secs(2) {
-                    let avg_frame_time = accumulated_frame_time.as_secs_f32() / frame_count_for_avg as f32;
+                    let avg_frame_time =
+                        accumulated_frame_time.as_secs_f32() / frame_count_for_avg as f32;
                     let fps = 1.0 / avg_frame_time;
 
                     info!("=== Frame Stats ===");
@@ -648,10 +689,38 @@ fn main() -> Result<()> {
                     }
 
                     info!("=== Rendering Features ===");
-                    info!("  TAA: {}", if state.features.taa_enabled { "ON" } else { "OFF" });
-                    info!("  SSR: {}", if state.features.ssr_enabled { "ON" } else { "OFF" });
-                    info!("  SSAO: {}", if state.features.ssao_enabled { "ON" } else { "OFF" });
-                    info!("  Shadows: {}", if state.features.shadows_enabled { "ON" } else { "OFF" });
+                    info!(
+                        "  TAA: {}",
+                        if state.features.taa_enabled {
+                            "ON"
+                        } else {
+                            "OFF"
+                        }
+                    );
+                    info!(
+                        "  SSR: {}",
+                        if state.features.ssr_enabled {
+                            "ON"
+                        } else {
+                            "OFF"
+                        }
+                    );
+                    info!(
+                        "  SSAO: {}",
+                        if state.features.ssao_enabled {
+                            "ON"
+                        } else {
+                            "OFF"
+                        }
+                    );
+                    info!(
+                        "  Shadows: {}",
+                        if state.features.shadows_enabled {
+                            "ON"
+                        } else {
+                            "OFF"
+                        }
+                    );
 
                     #[cfg(feature = "scripting")]
                     if let Some(context) = &state.scripting_context {
@@ -678,6 +747,8 @@ fn main() -> Result<()> {
 
 #[cfg(feature = "headless")]
 fn main() -> Result<()> {
-    println!("complete_features_demo example requires graphics support and cannot run in headless mode");
+    println!(
+        "complete_features_demo example requires graphics support and cannot run in headless mode"
+    );
     Ok(())
 }

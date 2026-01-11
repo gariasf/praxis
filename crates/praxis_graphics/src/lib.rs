@@ -3199,11 +3199,7 @@ impl MockRenderContext {
     /// # Returns
     ///
     /// Always returns `Ok(())`.
-    pub fn load_material(
-        &mut self,
-        _name: &str,
-        _properties: MaterialProperties,
-    ) -> Result<()> {
+    pub fn load_material(&mut self, _name: &str, _properties: MaterialProperties) -> Result<()> {
         self.material_count += 1;
         Ok(())
     }

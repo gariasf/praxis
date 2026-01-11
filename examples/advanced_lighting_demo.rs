@@ -514,8 +514,6 @@ fn main() -> Result<()> {
 
 #[cfg(feature = "headless")]
 fn main() -> Result<()> {
-    println!(
-        "advanced_lighting_demo requires graphics support and cannot run in headless mode"
-    );
+    println!("advanced_lighting_demo requires graphics support and cannot run in headless mode");
     Ok(())
 }

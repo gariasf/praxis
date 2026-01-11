@@ -419,7 +419,9 @@ mod tests {
         let client_id = 42;
         let server_tick = 100;
 
-        client.handle_connection_accepted(client_id, server_tick).unwrap();
+        client
+            .handle_connection_accepted(client_id, server_tick)
+            .unwrap();
 
         // Verify state transition to Connected
         assert_eq!(client.state(), ClientState::Connected);
@@ -437,7 +439,9 @@ mod tests {
         assert_eq!(client.state(), ClientState::Connecting);
 
         // Simulate connection rejection
-        client.handle_connection_rejected("Server full".to_string()).unwrap();
+        client
+            .handle_connection_rejected("Server full".to_string())
+            .unwrap();
 
         // Verify state transition back to Disconnected
         assert_eq!(client.state(), ClientState::Disconnected);
@@ -487,7 +491,10 @@ mod tests {
         *client.server_address.write() = Some(addr);
 
         // 5. Disconnect to move back to Disconnected
-        client.disconnect("Test complete".to_string()).await.unwrap();
+        client
+            .disconnect("Test complete".to_string())
+            .await
+            .unwrap();
         assert_eq!(client.state(), ClientState::Disconnected);
         assert!(client.client_id().is_none());
     }
@@ -502,7 +509,9 @@ mod tests {
         assert_eq!(client.state(), ClientState::Connecting);
 
         // Reject the connection
-        client.handle_connection_rejected("Version mismatch".to_string()).unwrap();
+        client
+            .handle_connection_rejected("Version mismatch".to_string())
+            .unwrap();
 
         // Should return to Disconnected
         assert_eq!(client.state(), ClientState::Disconnected);
@@ -603,7 +612,9 @@ mod tests {
         assert_eq!(client.state(), ClientState::Connecting);
 
         // Reject it
-        client.handle_connection_rejected("Reason 1".to_string()).unwrap();
+        client
+            .handle_connection_rejected("Reason 1".to_string())
+            .unwrap();
         assert_eq!(client.state(), ClientState::Disconnected);
 
         // Second connection attempt

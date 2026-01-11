@@ -355,6 +355,8 @@ fn main() -> Result<()> {
 
 #[cfg(feature = "headless")]
 fn main() -> Result<()> {
-    println!("environment_probe_demo example requires graphics support and cannot run in headless mode");
+    println!(
+        "environment_probe_demo example requires graphics support and cannot run in headless mode"
+    );
     Ok(())
 }

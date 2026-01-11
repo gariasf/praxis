@@ -62,12 +62,12 @@ struct App {
     visibility_system: Option<VisibilitySystem>,
     entities_with_bounds: Vec<(praxis_ecs::Entity, Aabb)>,
     previous_frame_end: Option<Box<dyn GpuFuture>>,
-    
+
     // Visualization toggles
     show_frustum: bool,
     show_octree: bool,
     show_lod: bool,
-    
+
     // Camera control
     camera_yaw: f32,
     camera_pitch: f32,
@@ -171,8 +171,7 @@ impl App {
         ));
 
         // Initialize frame synchronization
-        let previous_frame_end =
-            sync::now(render_context.device.clone()).boxed();
+        let previous_frame_end = sync::now(render_context.device.clone()).boxed();
 
         info!("Scene setup complete");
 
@@ -308,7 +307,7 @@ impl App {
                 // Visualize entity bounds and LOD levels
                 for (entity, aabb) in &self.entities_with_bounds {
                     let is_visible = frustum_culler.is_visible(aabb);
-                    
+
                     if is_visible {
                         visible_count += 1;
                     } else {
@@ -365,7 +364,7 @@ impl App {
                         } else {
                             (Vec3::new(1.0, 0.5, 0.0), 3) // Orange - LOD 3 (billboard)
                         };
-                        
+
                         lod_counts[lod_level] += 1;
 
                         let size = aabb.half_extents();
@@ -484,12 +483,7 @@ impl App {
                     ..Default::default()
                 },
             )?
-            .set_viewport(
-                0,
-                [render_context.viewport().clone()]
-                    .into_iter()
-                    .collect(),
-            )?;
+            .set_viewport(0, [render_context.viewport().clone()].into_iter().collect())?;
 
         // Render debug lines
         line_renderer.render(&mut builder, &debug_batch)?;
@@ -516,13 +510,11 @@ impl App {
                 self.previous_frame_end = Some(future.boxed());
             }
             Err(VulkanError::OutOfDate) => {
-                self.previous_frame_end =
-                    Some(sync::now(render_context.device.clone()).boxed());
+                self.previous_frame_end = Some(sync::now(render_context.device.clone()).boxed());
             }
             Err(e) => {
                 eprintln!("Failed to flush future: {e}");
-                self.previous_frame_end =
-                    Some(sync::now(render_context.device.clone()).boxed());
+                self.previous_frame_end = Some(sync::now(render_context.device.clone()).boxed());
             }
         }
 
@@ -769,9 +761,7 @@ fn main() -> Result<()> {
 
 #[cfg(feature = "headless")]
 fn main() -> Result<()> {
-    println!(
-        "spatial_optimization_demo requires graphics support and cannot run in headless mode"
-    );
+    println!("spatial_optimization_demo requires graphics support and cannot run in headless mode");
     Ok(())
 }
 

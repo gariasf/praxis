@@ -351,9 +351,7 @@ impl EntityOperations {
             ComponentData::Transform {
                 data: transform.into(),
             },
-            ComponentData::Name {
-                data: name.into(),
-            },
+            ComponentData::Name { data: name.into() },
         ];
         let mut command = CreateEntityCommand::new(components);
         self.execute_create_command(world, undo_system, &mut command)?;
@@ -628,9 +626,7 @@ impl EntityOperations {
             world,
             undo_system,
             entity,
-            ComponentData::Name {
-                data: name.into(),
-            },
+            ComponentData::Name { data: name.into() },
         )
     }
 
@@ -1367,7 +1363,10 @@ mod tests {
         let mut entity_ops = EntityOperations::new();
 
         let original = world
-            .spawn((Transform::from_xyz(10.0, 5.0, 0.0), Name::new("Test Entity")))
+            .spawn((
+                Transform::from_xyz(10.0, 5.0, 0.0),
+                Name::new("Test Entity"),
+            ))
             .id();
 
         assert!(!entity_ops.has_clipboard());
@@ -1386,7 +1385,10 @@ mod tests {
         let mut entity_ops = EntityOperations::new();
 
         let original = world
-            .spawn((Transform::from_xyz(10.0, 5.0, 0.0), Name::new("Test Entity")))
+            .spawn((
+                Transform::from_xyz(10.0, 5.0, 0.0),
+                Name::new("Test Entity"),
+            ))
             .id();
 
         entity_ops
@@ -1421,11 +1423,7 @@ mod tests {
             .unwrap();
 
         let pasted = entity_ops
-            .paste_entity_with_offset(
-                &mut world,
-                &mut undo_system,
-                Some(Vec3::new(5.0, 0.0, 0.0)),
-            )
+            .paste_entity_with_offset(&mut world, &mut undo_system, Some(Vec3::new(5.0, 0.0, 0.0)))
             .unwrap()
             .unwrap();
 

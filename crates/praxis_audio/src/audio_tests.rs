@@ -536,10 +536,7 @@ mod tests {
         let mut sound_ids = Vec::new();
         for i in 0..5 {
             let id = manager
-                .play_sound(
-                    "footstep.ogg",
-                    PlaybackSettings::new().with_volume(0.3),
-                )
+                .play_sound("footstep.ogg", PlaybackSettings::new().with_volume(0.3))
                 .unwrap();
             sound_ids.push(id);
             assert_eq!(id, (i + 1) as u64);
@@ -552,9 +549,7 @@ mod tests {
         let explosion_id = manager
             .play_sound(
                 "explosion.ogg",
-                PlaybackSettings::new()
-                    .with_volume(0.8)
-                    .with_panning(0.5),
+                PlaybackSettings::new().with_volume(0.8).with_panning(0.5),
             )
             .unwrap();
         manager.set_sound_panning(explosion_id, -0.5).unwrap();

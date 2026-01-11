@@ -64,7 +64,7 @@ fn setup_scripting_context() -> praxis_utils::Result<ScriptingContext> {
             allow_file_io: false,
             allow_network: false,
             allow_os_access: false,
-            instruction_limit: 1_000_000, // 1 million instructions
+            instruction_limit: 1_000_000,    // 1 million instructions
             memory_limit: 100 * 1024 * 1024, // 100 MB
         },
         enable_performance_monitoring: true,

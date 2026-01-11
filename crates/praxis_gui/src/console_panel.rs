@@ -694,9 +694,7 @@ impl ConsolePanel {
                 };
                 let mut help_text = format!("Available commands ({}):\n", all_commands.len());
                 for (name, description, usage) in all_commands {
-                    help_text.push_str(&format!(
-                        "  {name}: {description}\n    Usage: {usage}\n"
-                    ));
+                    help_text.push_str(&format!("  {name}: {description}\n    Usage: {usage}\n"));
                 }
                 help_text.push_str("\nYou can also execute Lua code directly.");
                 self.log(help_text, LogLevel::Info);
@@ -705,7 +703,9 @@ impl ConsolePanel {
             } else {
                 let command_info = {
                     let registry = self.command_registry.read();
-                    registry.get_command_info(&args[0]).map(|(d, u)| (d.to_string(), u.to_string()))
+                    registry
+                        .get_command_info(&args[0])
+                        .map(|(d, u)| (d.to_string(), u.to_string()))
                 };
                 if let Some((description, usage)) = command_info {
                     self.log(format!("{description}\nUsage: {usage}"), LogLevel::Info);
@@ -750,7 +750,7 @@ impl ConsolePanel {
                     LogLevel::Error,
                 );
             }
-            
+
             #[cfg(not(feature = "scripting"))]
             self.log(
                 format!("Unknown command: {command}. Use 'help' for available commands."),

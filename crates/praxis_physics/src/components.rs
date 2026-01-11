@@ -6,6 +6,9 @@
 use bevy_ecs::component::Component;
 use praxis_math::Vec3;
 
+#[cfg(feature = "serialization")]
+use serde::{Deserialize, Serialize};
+
 /// Rigid body component defining the physics behavior type.
 ///
 /// A rigid body is a solid object that maintains its shape during physics simulation.
@@ -63,6 +66,7 @@ use praxis_math::Vec3;
 /// ));
 /// ```
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
 pub enum RigidBody {
     /// Dynamic body affected by forces and collisions.
     ///
@@ -171,6 +175,7 @@ impl Default for RigidBody {
 /// ));
 /// ```
 #[derive(Component, Debug, Clone)]
+#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
 pub enum Collider {
     /// Box-shaped collider with half-extents.
     ///
@@ -1328,4 +1333,74 @@ impl CollisionEventReceiver {
     pub const fn event_count(&self) -> usize {
         self.events.len()
     }
+}
+
+/// Serialization support for physics components.
+#[cfg(feature = "serialization")]
+mod serialization {
+    use super::{Collider, RigidBody};
+    use bevy_ecs::entity::Entity;
+    use praxis_ecs::{DeserializeContext, SerializableComponent};
+    use praxis_utils::Result;
+
+    type InsertComponentFn = Box<dyn FnOnce(&mut bevy_ecs::world::EntityWorldMut)>;
+
+    impl SerializableComponent for RigidBody {
+        fn serialize_component(&self) -> Result<String> {
+            Ok(ron::to_string(self)?)
+        }
+
+        fn deserialize_component(
+            data: &str,
+            _entity: Entity,
+            _context: &DeserializeContext,
+        ) -> Result<InsertComponentFn>
+        where
+            Self: Sized + 'static,
+        {
+            let component: Self = ron::from_str(data)?;
+            Ok(Box::new(move |entity_mut| {
+                entity_mut.insert(component);
+            }))
+        }
+
+        fn type_name() -> &'static str
+        where
+            Self: Sized,
+        {
+            "RigidBody"
+        }
+    }
+
+    impl SerializableComponent for Collider {
+        fn serialize_component(&self) -> Result<String> {
+            Ok(ron::to_string(self)?)
+        }
+
+        fn deserialize_component(
+            data: &str,
+            _entity: Entity,
+            _context: &DeserializeContext,
+        ) -> Result<InsertComponentFn>
+        where
+            Self: Sized + 'static,
+        {
+            let component: Self = ron::from_str(data)?;
+            Ok(Box::new(move |entity_mut| {
+                entity_mut.insert(component);
+            }))
+        }
+
+        fn type_name() -> &'static str
+        where
+            Self: Sized,
+        {
+            "Collider"
+        }
+    }
+}
+
+#[cfg(not(feature = "serialization"))]
+mod serialization {
+    // Empty module when serialization feature is disabled
 }

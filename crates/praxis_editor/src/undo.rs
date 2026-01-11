@@ -350,18 +350,42 @@ impl EditorCommand for TransformEditCommand {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ComponentData {
-    Transform { data: SerializableTransform },
-    Name { data: String },
-    Parent { entity: SerializableEntity },
-    MeshHandle { id: String },
-    MaterialHandle { id: String },
-    MaterialProperties { data: SerializableMaterialProperties },
-    RigidBody { data: SerializableRigidBody },
-    Collider { data: SerializableCollider },
-    PhysicsVelocity { data: SerializablePhysicsVelocity },
-    Mass { data: SerializableMass },
-    AudioSource { data: SerializableAudioSource },
-    PerspectiveProjection { data: SerializablePerspectiveProjection },
+    Transform {
+        data: SerializableTransform,
+    },
+    Name {
+        data: String,
+    },
+    Parent {
+        entity: SerializableEntity,
+    },
+    MeshHandle {
+        id: String,
+    },
+    MaterialHandle {
+        id: String,
+    },
+    MaterialProperties {
+        data: SerializableMaterialProperties,
+    },
+    RigidBody {
+        data: SerializableRigidBody,
+    },
+    Collider {
+        data: SerializableCollider,
+    },
+    PhysicsVelocity {
+        data: SerializablePhysicsVelocity,
+    },
+    Mass {
+        data: SerializableMass,
+    },
+    AudioSource {
+        data: SerializableAudioSource,
+    },
+    PerspectiveProjection {
+        data: SerializablePerspectiveProjection,
+    },
 }
 
 /// Serializable material properties.
@@ -1667,7 +1691,10 @@ impl PasteEntityCommand {
                 .iter()
                 .position(|c| matches!(c, ComponentData::Transform { .. }))
             {
-                if let ComponentData::Transform { data: ref mut transform } = components[transform_idx] {
+                if let ComponentData::Transform {
+                    data: ref mut transform,
+                } = components[transform_idx]
+                {
                     transform.translation[0] += offset_vec.x;
                     transform.translation[1] += offset_vec.y;
                     transform.translation[2] += offset_vec.z;
@@ -2391,7 +2418,8 @@ mod tests {
             .id();
 
         let copy_cmd = CopyEntityCommand::from_world(original, &world).unwrap();
-        let mut paste_cmd = PasteEntityCommand::from_copy(&copy_cmd, Some(Vec3::new(5.0, 0.0, 0.0)));
+        let mut paste_cmd =
+            PasteEntityCommand::from_copy(&copy_cmd, Some(Vec3::new(5.0, 0.0, 0.0)));
 
         assert!(paste_cmd.execute(&mut world).is_ok());
         assert!(paste_cmd.created_entity.is_some());

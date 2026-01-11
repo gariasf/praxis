@@ -213,7 +213,7 @@ fn test_audio_manager_with_device() {
     skip_if_no_audio_backend!(result);
 
     let manager = result.unwrap();
-    
+
     // Verify manager starts with clean state
     assert_eq!(manager.loaded_sound_count(), 0);
     assert_eq!(manager.playing_sound_count(), 0);

@@ -12,9 +12,7 @@ use vulkano::{
         allocator::CommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage,
         CopyImageToBufferInfo,
     },
-    descriptor_set::{
-        allocator::DescriptorSetAllocator, DescriptorSet, WriteDescriptorSet,
-    },
+    descriptor_set::{allocator::DescriptorSetAllocator, DescriptorSet, WriteDescriptorSet},
     device::{Device, Queue},
     format::Format,
     image::{view::ImageView, Image, ImageCreateInfo, ImageType, ImageUsage},
@@ -521,7 +519,13 @@ fn compile_shader_to_spirv(source: &str) -> Result<Vec<u8>> {
     options.set_optimization_level(shaderc::OptimizationLevel::Performance);
 
     let binary_result = compiler
-        .compile_into_spirv(source, ShaderKind::Compute, "shader.comp", "main", Some(&options))
+        .compile_into_spirv(
+            source,
+            ShaderKind::Compute,
+            "shader.comp",
+            "main",
+            Some(&options),
+        )
         .map_err(|e| eyre::eyre!("Shader compilation failed: {}", e))?;
 
     if binary_result.get_num_warnings() > 0 {

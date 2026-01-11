@@ -383,7 +383,11 @@ mod tests {
         let client_addr = client.peer_addr().unwrap();
 
         // Send multiple messages
-        let messages = vec![b"message1".to_vec(), b"message2".to_vec(), b"message3".to_vec()];
+        let messages = vec![
+            b"message1".to_vec(),
+            b"message2".to_vec(),
+            b"message3".to_vec(),
+        ];
 
         for msg in &messages {
             transport.send_reliable(client_addr, msg).unwrap();
@@ -552,10 +556,7 @@ mod tests {
         let client_addr = client.local_addr().unwrap();
 
         // Start receive loop
-        transport
-            .receive_loop(config.buffer_size)
-            .await
-            .unwrap();
+        transport.receive_loop(config.buffer_size).await.unwrap();
 
         // Send from client to server
         let test_data = b"Hello, UDP!";
@@ -589,9 +590,7 @@ mod tests {
 
         // Send from server to client
         let test_data = b"Server to client";
-        transport
-            .send_unreliable(client_addr, test_data)
-            .unwrap();
+        transport.send_unreliable(client_addr, test_data).unwrap();
 
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -619,10 +618,7 @@ mod tests {
         let client = UdpSocket::bind("127.0.0.1:0").await.unwrap();
         let client_addr = client.local_addr().unwrap();
 
-        transport
-            .receive_loop(config.buffer_size)
-            .await
-            .unwrap();
+        transport.receive_loop(config.buffer_size).await.unwrap();
 
         // Send multiple datagrams
         let messages = vec![
@@ -673,10 +669,7 @@ mod tests {
 
         let client = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
-        transport
-            .receive_loop(config.buffer_size)
-            .await
-            .unwrap();
+        transport.receive_loop(config.buffer_size).await.unwrap();
 
         // Send a datagram that fits in buffer
         let small_data = vec![1u8; 1024];
@@ -966,7 +959,10 @@ mod tests {
 
         // Client2 should not receive anything
         let result = timeout(Duration::from_millis(100), client2.read_u32()).await;
-        assert!(result.is_err(), "Client2 should not have received a message");
+        assert!(
+            result.is_err(),
+            "Client2 should not have received a message"
+        );
     }
 
     #[tokio::test]
@@ -983,10 +979,7 @@ mod tests {
 
         let client = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
-        transport
-            .receive_loop(config.buffer_size)
-            .await
-            .unwrap();
+        transport.receive_loop(config.buffer_size).await.unwrap();
 
         // Send many datagrams rapidly
         let num_messages = 50;

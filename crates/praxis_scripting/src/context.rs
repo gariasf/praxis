@@ -337,10 +337,8 @@ impl ScriptingContext {
                 if values.is_empty() {
                     String::new()
                 } else {
-                    let formatted: Vec<String> = values
-                        .iter()
-                        .map(|v| format_lua_value(v))
-                        .collect();
+                    let formatted: Vec<String> =
+                        values.iter().map(|v| format_lua_value(v)).collect();
                     formatted.join(", ")
                 }
             }
@@ -352,10 +350,8 @@ impl ScriptingContext {
                         if values.is_empty() {
                             String::new()
                         } else {
-                            let formatted: Vec<String> = values
-                                .iter()
-                                .map(|v| format_lua_value(v))
-                                .collect();
+                            let formatted: Vec<String> =
+                                values.iter().map(|v| format_lua_value(v)).collect();
                             formatted.join(", ")
                         }
                     }
@@ -394,7 +390,11 @@ impl ScriptingContext {
     /// # let mut world = World::new();
     /// let result = context.eval_interactive_with_world("world.spawn()", &mut world).unwrap();
     /// ```
-    pub fn eval_interactive_with_world(&self, code: &str, world: &mut praxis_ecs::World) -> Result<String> {
+    pub fn eval_interactive_with_world(
+        &self,
+        code: &str,
+        world: &mut praxis_ecs::World,
+    ) -> Result<String> {
         self.with_world(world, |_| self.eval_interactive(code))
     }
 }

@@ -600,6 +600,8 @@ fn main() -> Result<()> {
 
 #[cfg(feature = "headless")]
 fn main() -> Result<()> {
-    println!("procedural_texture_demo example requires graphics support and cannot run in headless mode");
+    println!(
+        "procedural_texture_demo example requires graphics support and cannot run in headless mode"
+    );
     Ok(())
 }

@@ -283,7 +283,9 @@ impl ApplicationHandler for App {
 
 #[cfg(feature = "headless")]
 fn main() -> Result<()> {
-    println!("editor_camera_demo example requires graphics support and cannot run in headless mode");
+    println!(
+        "editor_camera_demo example requires graphics support and cannot run in headless mode"
+    );
     Ok(())
 }
 

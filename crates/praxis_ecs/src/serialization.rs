@@ -1069,4 +1069,224 @@ mod tests {
         assert!(ron_string.contains("entities"));
         assert!(ron_string.contains("components"));
     }
+
+    #[test]
+    #[cfg(all(feature = "test_physics", feature = "test_audio"))]
+    fn test_rigidbody_serialization_roundtrip() {
+        use praxis_physics::RigidBody;
+
+        let mut registry = ComponentRegistry::new();
+        registry.register::<RigidBody>();
+
+        // Test Dynamic
+        let mut world = World::new();
+        world.spawn(RigidBody::Dynamic);
+        let ron_string = registry.serialize_world(&world).unwrap();
+        let mut new_world = World::new();
+        registry
+            .deserialize_world(&ron_string, &mut new_world)
+            .unwrap();
+
+        let mut query = new_world.inner_mut().query::<&RigidBody>();
+        let bodies: Vec<_> = query.iter(new_world.inner()).collect();
+        assert_eq!(bodies.len(), 1);
+        assert_eq!(*bodies[0], RigidBody::Dynamic);
+
+        // Test Static
+        let mut world = World::new();
+        world.spawn(RigidBody::Static);
+        let ron_string = registry.serialize_world(&world).unwrap();
+        let mut new_world = World::new();
+        registry
+            .deserialize_world(&ron_string, &mut new_world)
+            .unwrap();
+
+        let mut query = new_world.inner_mut().query::<&RigidBody>();
+        let bodies: Vec<_> = query.iter(new_world.inner()).collect();
+        assert_eq!(bodies.len(), 1);
+        assert_eq!(*bodies[0], RigidBody::Static);
+
+        // Test Kinematic
+        let mut world = World::new();
+        world.spawn(RigidBody::Kinematic);
+        let ron_string = registry.serialize_world(&world).unwrap();
+        let mut new_world = World::new();
+        registry
+            .deserialize_world(&ron_string, &mut new_world)
+            .unwrap();
+
+        let mut query = new_world.inner_mut().query::<&RigidBody>();
+        let bodies: Vec<_> = query.iter(new_world.inner()).collect();
+        assert_eq!(bodies.len(), 1);
+        assert_eq!(*bodies[0], RigidBody::Kinematic);
+    }
+
+    #[test]
+    #[cfg(all(feature = "test_physics", feature = "test_audio"))]
+    fn test_collider_serialization_roundtrip() {
+        use praxis_physics::Collider;
+
+        let mut registry = ComponentRegistry::new();
+        registry.register::<Collider>();
+
+        // Test Cuboid
+        let mut world = World::new();
+        world.spawn(Collider::cuboid(1.0, 2.0, 3.0));
+        let ron_string = registry.serialize_world(&world).unwrap();
+        let mut new_world = World::new();
+        registry
+            .deserialize_world(&ron_string, &mut new_world)
+            .unwrap();
+
+        let mut query = new_world.inner_mut().query::<&Collider>();
+        let colliders: Vec<_> = query.iter(new_world.inner()).collect();
+        assert_eq!(colliders.len(), 1);
+        if let Collider::Cuboid { hx, hy, hz } = colliders[0] {
+            assert_eq!(*hx, 1.0);
+            assert_eq!(*hy, 2.0);
+            assert_eq!(*hz, 3.0);
+        } else {
+            panic!("Expected Cuboid collider");
+        }
+
+        // Test Sphere
+        let mut world = World::new();
+        world.spawn(Collider::sphere(0.5));
+        let ron_string = registry.serialize_world(&world).unwrap();
+        let mut new_world = World::new();
+        registry
+            .deserialize_world(&ron_string, &mut new_world)
+            .unwrap();
+
+        let mut query = new_world.inner_mut().query::<&Collider>();
+        let colliders: Vec<_> = query.iter(new_world.inner()).collect();
+        assert_eq!(colliders.len(), 1);
+        if let Collider::Sphere { radius } = colliders[0] {
+            assert_eq!(*radius, 0.5);
+        } else {
+            panic!("Expected Sphere collider");
+        }
+
+        // Test CapsuleY
+        let mut world = World::new();
+        world.spawn(Collider::capsule_y(1.0, 0.25));
+        let ron_string = registry.serialize_world(&world).unwrap();
+        let mut new_world = World::new();
+        registry
+            .deserialize_world(&ron_string, &mut new_world)
+            .unwrap();
+
+        let mut query = new_world.inner_mut().query::<&Collider>();
+        let colliders: Vec<_> = query.iter(new_world.inner()).collect();
+        assert_eq!(colliders.len(), 1);
+        if let Collider::CapsuleY {
+            half_height,
+            radius,
+        } = colliders[0]
+        {
+            assert_eq!(*half_height, 1.0);
+            assert_eq!(*radius, 0.25);
+        } else {
+            panic!("Expected CapsuleY collider");
+        }
+    }
+
+    #[test]
+    #[cfg(all(feature = "test_physics", feature = "test_audio"))]
+    fn test_audiosource_serialization_roundtrip() {
+        use praxis_audio::AudioSource;
+
+        let mut registry = ComponentRegistry::new();
+        registry.register::<AudioSource>();
+
+        let mut world = World::new();
+        let source = AudioSource::new("assets/sounds/test.ogg")
+            .with_volume(0.75)
+            .with_spatial(true)
+            .with_looping(true)
+            .with_max_distance(50.0)
+            .with_reference_distance(2.0)
+            .with_doppler(true)
+            .with_doppler_scale(1.5);
+
+        world.spawn(source);
+
+        let ron_string = registry.serialize_world(&world).unwrap();
+        let mut new_world = World::new();
+        registry
+            .deserialize_world(&ron_string, &mut new_world)
+            .unwrap();
+
+        let mut query = new_world.inner_mut().query::<&AudioSource>();
+        let sources: Vec<_> = query.iter(new_world.inner()).collect();
+        assert_eq!(sources.len(), 1);
+
+        let deserialized = sources[0];
+        assert_eq!(deserialized.path(), "assets/sounds/test.ogg");
+        assert_eq!(deserialized.volume(), 0.75);
+        assert_eq!(deserialized.is_spatial(), true);
+        assert_eq!(deserialized.is_looping(), true);
+        assert_eq!(deserialized.max_distance(), 50.0);
+        assert_eq!(deserialized.reference_distance(), 2.0);
+        assert_eq!(deserialized.doppler_enabled, true);
+        assert_eq!(deserialized.doppler_scale, 1.5);
+
+        // Verify internal fields are reset to None
+        assert!(deserialized.sound_handle.is_none());
+        assert!(deserialized.previous_position.is_none());
+    }
+
+    #[test]
+    #[cfg(all(feature = "test_physics", feature = "test_audio"))]
+    fn test_physics_and_audio_combined_serialization() {
+        use praxis_audio::AudioSource;
+        use praxis_physics::{Collider, RigidBody};
+
+        let mut world = World::new();
+
+        // Create an entity with physics and audio components
+        world.spawn((
+            Name::new("SoundEmitter"),
+            Transform::from_xyz(5.0, 10.0, 15.0),
+            RigidBody::Dynamic,
+            Collider::sphere(1.0),
+            AudioSource::new("assets/sounds/bounce.ogg")
+                .with_volume(0.8)
+                .with_spatial(true),
+        ));
+
+        let mut registry = ComponentRegistry::new();
+        registry.register::<Name>();
+        registry.register::<Transform>();
+        registry.register::<RigidBody>();
+        registry.register::<Collider>();
+        registry.register::<AudioSource>();
+
+        let ron_string = registry.serialize_world(&world).unwrap();
+
+        let mut new_world = World::new();
+        registry
+            .deserialize_world(&ron_string, &mut new_world)
+            .unwrap();
+
+        // Verify all components were deserialized
+        let mut name_query = new_world.inner_mut().query::<&Name>();
+        let names: Vec<_> = name_query.iter(new_world.inner()).collect();
+        assert_eq!(names.len(), 1);
+        assert_eq!(names[0].0, "SoundEmitter");
+
+        let mut body_query = new_world.inner_mut().query::<&RigidBody>();
+        let bodies: Vec<_> = body_query.iter(new_world.inner()).collect();
+        assert_eq!(bodies.len(), 1);
+        assert_eq!(*bodies[0], RigidBody::Dynamic);
+
+        let mut collider_query = new_world.inner_mut().query::<&Collider>();
+        let colliders: Vec<_> = collider_query.iter(new_world.inner()).collect();
+        assert_eq!(colliders.len(), 1);
+
+        let mut audio_query = new_world.inner_mut().query::<&AudioSource>();
+        let sources: Vec<_> = audio_query.iter(new_world.inner()).collect();
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0].path(), "assets/sounds/bounce.ogg");
+    }
 }

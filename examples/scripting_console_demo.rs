@@ -19,23 +19,23 @@
 //! -- Basic Lua expressions
 //! 2 + 2
 //! math.sqrt(16)
-//! 
+//!
 //! -- Entity introspection
 //! console.list_entities()
 //! console.entity_count()
-//! 
+//!
 //! -- Find and inspect entities
 //! local id = console.find_entity("Player")
 //! console.inspect(id)
-//! 
+//!
 //! -- Modify transforms
 //! console.set_transform(id, 10, 5, 0)
 //! console.get_transform(id)
-//! 
+//!
 //! -- Spawn and despawn entities
 //! console.spawn("DynamicEntity")
 //! console.list_entities()
-//! 
+//!
 //! -- Query by component
 //! console.query_with_transform()
 //! console.query_with_name()
@@ -158,7 +158,10 @@ impl ScriptingConsoleDemo {
         if self.frame_count % 60 == 0 {
             let entity_count = self.world.inner().entities().len();
             if entity_count > 0 {
-                self.console.log_debug(format!("Frame {}: {} entities active", self.frame_count, entity_count));
+                self.console.log_debug(format!(
+                    "Frame {}: {} entities active",
+                    self.frame_count, entity_count
+                ));
             }
         }
     }
@@ -177,38 +180,38 @@ impl ScriptingConsoleDemo {
             .show(egui_ctx, |ui| {
                 ui.heading("Interactive Lua REPL with ECS");
                 ui.separator();
-                
+
                 ui.label("Controls:");
                 ui.label("  ~ or F1: Toggle console");
                 ui.label("  Up/Down: Command history");
                 ui.label("  Tab: Autocomplete");
                 ui.separator();
-                
+
                 ui.label("Lua Expressions:");
                 ui.label("  2 + 2");
                 ui.label("  math.sqrt(16)");
                 ui.label("  print('Hello')");
                 ui.separator();
-                
+
                 ui.label("ECS Introspection:");
                 ui.label("  console.list_entities()");
                 ui.label("  console.entity_count()");
                 ui.label("  console.query_with_name()");
                 ui.label("  console.query_with_transform()");
                 ui.separator();
-                
+
                 ui.label("Entity Operations:");
                 ui.label("  id = console.find_entity('Player')");
                 ui.label("  console.inspect(id)");
                 ui.label("  console.get_transform(id)");
                 ui.label("  console.set_transform(id, 10, 5, 0)");
                 ui.separator();
-                
+
                 ui.label("Spawn/Despawn:");
                 ui.label("  console.spawn('NewEntity')");
                 ui.label("  console.despawn(id)");
                 ui.separator();
-                
+
                 ui.label(format!("Frame: {}", self.frame_count));
                 ui.label(format!("Entities: {}", self.world.inner().entities().len()));
             });
@@ -316,6 +319,8 @@ fn main() -> Result<()> {
 
 #[cfg(feature = "headless")]
 fn main() -> Result<()> {
-    println!("scripting_console_demo example requires graphics support and cannot run in headless mode");
+    println!(
+        "scripting_console_demo example requires graphics support and cannot run in headless mode"
+    );
     Ok(())
 }

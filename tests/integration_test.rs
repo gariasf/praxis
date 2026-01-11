@@ -53,14 +53,16 @@ fn init_assets_once() {
 fn test_tracing_initialization() {
     // Use Once to ensure tracing is only initialized once per process
     init_tracing_once();
-    
+
     // Verify that subsequent calls don't panic
     let result = praxis_utils::init();
     // Either success (if we're the first) or an error about already being initialized is OK
     if let Err(e) = &result {
         let error_str = format!("{e:?}");
         assert!(
-            error_str.contains("already") || error_str.contains("set") || error_str.contains("global default"),
+            error_str.contains("already")
+                || error_str.contains("set")
+                || error_str.contains("global default"),
             "Unexpected initialization error: {e:?}"
         );
     }
@@ -77,13 +79,13 @@ fn test_cross_crate_initialization_order() {
     // Initialize subsystems in order, tracking whether they were already initialized
     let ecs_was_initialized = ECS_INIT.is_completed();
     init_ecs_once();
-    
+
     let input_was_initialized = INPUT_INIT.is_completed();
     init_input_once();
-    
+
     let physics_was_initialized = PHYSICS_INIT.is_completed();
     init_physics_once();
-    
+
     let assets_was_initialized = ASSETS_INIT.is_completed();
     init_assets_once();
 
@@ -98,17 +100,17 @@ fn test_cross_crate_initialization_order() {
         let result = praxis_ecs::init();
         assert!(result.is_ok(), "Repeated ECS init should be safe");
     }
-    
+
     if !input_was_initialized {
         let result = praxis_input::init();
         assert!(result.is_ok(), "Repeated input init should be safe");
     }
-    
+
     if !physics_was_initialized {
         let result = praxis_physics::init();
         assert!(result.is_ok(), "Repeated physics init should be safe");
     }
-    
+
     if !assets_was_initialized {
         let result = praxis_assets::init();
         assert!(result.is_ok(), "Repeated assets init should be safe");
@@ -124,16 +126,28 @@ fn test_independent_subsystem_initialization() {
 
     // Each subsystem should initialize successfully, whether it's the first time or not
     init_ecs_once();
-    assert!(ECS_INIT.is_completed(), "ECS should initialize independently");
+    assert!(
+        ECS_INIT.is_completed(),
+        "ECS should initialize independently"
+    );
 
     init_input_once();
-    assert!(INPUT_INIT.is_completed(), "Input should initialize independently");
+    assert!(
+        INPUT_INIT.is_completed(),
+        "Input should initialize independently"
+    );
 
     init_physics_once();
-    assert!(PHYSICS_INIT.is_completed(), "Physics should initialize independently");
+    assert!(
+        PHYSICS_INIT.is_completed(),
+        "Physics should initialize independently"
+    );
 
     init_assets_once();
-    assert!(ASSETS_INIT.is_completed(), "Assets should initialize independently");
+    assert!(
+        ASSETS_INIT.is_completed(),
+        "Assets should initialize independently"
+    );
 }
 
 /// Test that repeated initialization calls are safe.
@@ -473,10 +487,10 @@ fn test_explicit_initialization_order() {
 
     // Initialize in a specific order
     init_tracing_once(); // Utils/tracing first
-    init_ecs_once();     // ECS second
-    init_input_once();   // Input third
+    init_ecs_once(); // ECS second
+    init_input_once(); // Input third
     init_physics_once(); // Physics fourth
-    init_assets_once();  // Assets fifth
+    init_assets_once(); // Assets fifth
 
     // Verify all are initialized
     assert!(TRACING_INIT.is_completed());

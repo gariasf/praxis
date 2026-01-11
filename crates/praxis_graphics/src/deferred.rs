@@ -1309,20 +1309,14 @@ mod tests {
         let vertex_pos = Vec3::new(1.0, 0.0, -5.0);
 
         // Current frame matrices
-        let view_current = Mat4::look_at_rh(
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(0.0, 0.0, -1.0),
-            Vec3::Y,
-        );
+        let view_current =
+            Mat4::look_at_rh(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0), Vec3::Y);
         let proj = Mat4::perspective_rh(std::f32::consts::PI / 4.0, 16.0 / 9.0, 0.1, 100.0);
         let model = Mat4::IDENTITY;
 
         // Previous frame matrices (camera moved)
-        let view_previous = Mat4::look_at_rh(
-            Vec3::new(0.5, 0.0, 0.0),
-            Vec3::new(0.5, 0.0, -1.0),
-            Vec3::Y,
-        );
+        let view_previous =
+            Mat4::look_at_rh(Vec3::new(0.5, 0.0, 0.0), Vec3::new(0.5, 0.0, -1.0), Vec3::Y);
 
         // Calculate current position
         let current_pos = proj * view_current * model * Vec4::from((vertex_pos, 1.0));
@@ -1572,7 +1566,11 @@ mod tests {
         let offset = history_color - center;
         let unit_offset = offset / extents.max(Vec3::splat(0.0001));
 
-        let max_component = unit_offset.x.abs().max(unit_offset.y.abs()).max(unit_offset.z.abs());
+        let max_component = unit_offset
+            .x
+            .abs()
+            .max(unit_offset.y.abs())
+            .max(unit_offset.z.abs());
 
         // History is inside AABB
         assert!(max_component <= 1.0);
@@ -1600,7 +1598,11 @@ mod tests {
         let offset = history_color - center;
         let unit_offset = offset / extents.max(Vec3::splat(0.0001));
 
-        let max_component = unit_offset.x.abs().max(unit_offset.y.abs()).max(unit_offset.z.abs());
+        let max_component = unit_offset
+            .x
+            .abs()
+            .max(unit_offset.y.abs())
+            .max(unit_offset.z.abs());
 
         // History is outside AABB
         assert!(max_component > 1.0);
@@ -1630,7 +1632,11 @@ mod tests {
         let offset = history_color - center;
         let unit_offset = offset / extents.max(Vec3::splat(0.0001));
 
-        let max_component = unit_offset.x.abs().max(unit_offset.y.abs()).max(unit_offset.z.abs());
+        let max_component = unit_offset
+            .x
+            .abs()
+            .max(unit_offset.y.abs())
+            .max(unit_offset.z.abs());
 
         assert!(max_component > 1.0);
 

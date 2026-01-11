@@ -29,14 +29,12 @@ mod common;
 
 use common::CameraController;
 use praxis_ecs::{PerspectiveCameraBundle, Transform, World};
-use praxis_graphics::{
-    sphere_mesh, DrawCommand, LightingUniforms, RenderCommands, RenderContext,
-};
+use praxis_graphics::{sphere_mesh, DrawCommand, LightingUniforms, RenderCommands, RenderContext};
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::{Mat4, Quat, Vec3};
 use praxis_scene::{
-    AdditiveBlendNode, AnimatedPose, AnimationBlender, AnimationClip, AnimationLayer,
-    BlendNode1D, BlendNode2D, Bone, BoneMask, LayerBlendMode, Skeleton,
+    AdditiveBlendNode, AnimatedPose, AnimationBlender, AnimationClip, AnimationLayer, BlendNode1D,
+    BlendNode2D, Bone, BoneMask, LayerBlendMode, Skeleton,
 };
 use praxis_utils::{info, Result};
 use std::sync::Arc;
@@ -279,44 +277,44 @@ fn create_wave_animation() -> AnimationClip {
 /// Forward movement animation for 2D blend tree
 fn create_forward_animation() -> AnimationClip {
     let mut clip = AnimationClip::new("Forward".to_string(), 1.0);
-    
+
     clip.add_rotation_keyframe(1, 0.0, Quat::IDENTITY);
     clip.add_rotation_keyframe(1, 0.5, Quat::from_rotation_x(-0.1));
     clip.add_rotation_keyframe(1, 1.0, Quat::IDENTITY);
-    
+
     clip
 }
 
 /// Backward movement animation for 2D blend tree
 fn create_backward_animation() -> AnimationClip {
     let mut clip = AnimationClip::new("Backward".to_string(), 1.0);
-    
+
     clip.add_rotation_keyframe(1, 0.0, Quat::IDENTITY);
     clip.add_rotation_keyframe(1, 0.5, Quat::from_rotation_x(0.1));
     clip.add_rotation_keyframe(1, 1.0, Quat::IDENTITY);
-    
+
     clip
 }
 
 /// Left strafe animation for 2D blend tree
 fn create_left_animation() -> AnimationClip {
     let mut clip = AnimationClip::new("Left".to_string(), 1.0);
-    
+
     clip.add_rotation_keyframe(1, 0.0, Quat::IDENTITY);
     clip.add_rotation_keyframe(1, 0.5, Quat::from_rotation_z(0.1));
     clip.add_rotation_keyframe(1, 1.0, Quat::IDENTITY);
-    
+
     clip
 }
 
 /// Right strafe animation for 2D blend tree
 fn create_right_animation() -> AnimationClip {
     let mut clip = AnimationClip::new("Right".to_string(), 1.0);
-    
+
     clip.add_rotation_keyframe(1, 0.0, Quat::IDENTITY);
     clip.add_rotation_keyframe(1, 0.5, Quat::from_rotation_z(-0.1));
     clip.add_rotation_keyframe(1, 1.0, Quat::IDENTITY);
-    
+
     clip
 }
 
@@ -366,9 +364,7 @@ fn compute_bone_world_transforms(skeleton: &Skeleton, pose: &AnimatedPose) -> Ve
     let mut world_transforms = Vec::new();
 
     for bone_index in 0..skeleton.bone_count() {
-        let local_transform = pose
-            .local_transform(bone_index)
-            .unwrap_or(Mat4::IDENTITY);
+        let local_transform = pose.local_transform(bone_index).unwrap_or(Mat4::IDENTITY);
 
         let world_transform = if let Some(bone) = skeleton.bone(bone_index) {
             if let Some(parent_index) = bone.parent_index {
@@ -609,14 +605,19 @@ impl App {
                         DemoMode::BlendTree1D => {
                             if mode_actually_changed {
                                 blender.activate_blend_tree("SpeedBlend");
-                                println!("Activated 1D blend tree (use arrow keys to adjust speed)");
+                                println!(
+                                    "Activated 1D blend tree (use arrow keys to adjust speed)"
+                                );
                             }
-                            blender.set_blend_parameter("SpeedBlend", self.demo_state.blend_param_1d);
+                            blender
+                                .set_blend_parameter("SpeedBlend", self.demo_state.blend_param_1d);
                         }
                         DemoMode::BlendTree2D => {
                             if mode_actually_changed {
                                 blender.activate_blend_tree("DirectionalBlend");
-                                println!("Activated 2D blend tree (use arrow keys to adjust direction)");
+                                println!(
+                                    "Activated 2D blend tree (use arrow keys to adjust direction)"
+                                );
                             }
                             blender.set_blend_parameters_2d(
                                 "DirectionalBlend",
@@ -627,9 +628,9 @@ impl App {
                         DemoMode::LayeredAnimation => {
                             if mode_actually_changed {
                                 blender.play("Walk");
-                                
+
                                 // Note: Can't remove layers directly, so we work with what we have
-                                
+
                                 if self.demo_state.layered_enabled {
                                     // Create upper body mask (right arm only)
                                     let mut upper_body_mask = BoneMask::with_bone_count(10);
@@ -733,10 +734,10 @@ impl App {
                                 transform.translation = bone_world.col(3).truncate();
 
                                 let scale = match bone_index {
-                                    0 => 1.8,      // Root - larger
-                                    1 | 2 => 1.4,  // Spine/Chest
-                                    3 => 1.2,      // Head
-                                    _ => 1.0,      // Limbs
+                                    0 => 1.8,     // Root - larger
+                                    1 | 2 => 1.4, // Spine/Chest
+                                    3 => 1.2,     // Head
+                                    _ => 1.0,     // Limbs
                                 };
                                 transform.scale = Vec3::splat(scale);
                             }

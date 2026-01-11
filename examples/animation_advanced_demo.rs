@@ -24,9 +24,7 @@ mod common;
 
 use common::CameraController;
 use praxis_ecs::{Component, PerspectiveCameraBundle, Transform, World};
-use praxis_graphics::{
-    sphere_mesh, DrawCommand, LightingUniforms, RenderCommands, RenderContext,
-};
+use praxis_graphics::{sphere_mesh, DrawCommand, LightingUniforms, RenderCommands, RenderContext};
 use praxis_input::{Action, InputMap, InputState};
 use praxis_math::{Mat4, Quat, Vec3};
 use praxis_scene::{
@@ -134,7 +132,13 @@ fn create_ik_controller(target: Vec3) -> IkController {
 
 fn create_source_skeleton() -> Skeleton {
     Skeleton::new(vec![
-        Bone::with_bind_pose("Hips".to_string(), None, Vec3::ZERO, Quat::IDENTITY, Vec3::ONE),
+        Bone::with_bind_pose(
+            "Hips".to_string(),
+            None,
+            Vec3::ZERO,
+            Quat::IDENTITY,
+            Vec3::ONE,
+        ),
         Bone::with_bind_pose(
             "Spine".to_string(),
             Some(0),
@@ -161,7 +165,13 @@ fn create_source_skeleton() -> Skeleton {
 
 fn create_target_skeleton() -> Skeleton {
     Skeleton::new(vec![
-        Bone::with_bind_pose("hips".to_string(), None, Vec3::ZERO, Quat::IDENTITY, Vec3::ONE),
+        Bone::with_bind_pose(
+            "hips".to_string(),
+            None,
+            Vec3::ZERO,
+            Quat::IDENTITY,
+            Vec3::ONE,
+        ),
         Bone::with_bind_pose(
             "spine".to_string(),
             Some(0),
@@ -205,7 +215,13 @@ fn create_source_animation() -> AnimationClip {
 
 fn create_additive_skeleton() -> Skeleton {
     Skeleton::new(vec![
-        Bone::with_bind_pose("Root".to_string(), None, Vec3::ZERO, Quat::IDENTITY, Vec3::ONE),
+        Bone::with_bind_pose(
+            "Root".to_string(),
+            None,
+            Vec3::ZERO,
+            Quat::IDENTITY,
+            Vec3::ONE,
+        ),
         Bone::with_bind_pose(
             "Spine".to_string(),
             Some(0),
@@ -247,9 +263,7 @@ fn compute_bone_world_transforms(skeleton: &Skeleton, pose: &AnimatedPose) -> Ve
     let mut world_transforms = Vec::new();
 
     for bone_index in 0..skeleton.bone_count() {
-        let local_transform = pose
-            .local_transform(bone_index)
-            .unwrap_or(Mat4::IDENTITY);
+        let local_transform = pose.local_transform(bone_index).unwrap_or(Mat4::IDENTITY);
 
         let world_transform = if let Some(bone) = skeleton.bone(bone_index) {
             if let Some(parent_index) = bone.parent_index {
@@ -509,10 +523,7 @@ impl App {
                 let source_skeleton = create_source_skeleton();
                 let target_skeleton = {
                     let inner = world.inner();
-                    inner
-                        .get::<Skeleton>(retarget_entity)
-                        .unwrap()
-                        .clone()
+                    inner.get::<Skeleton>(retarget_entity).unwrap().clone()
                 };
 
                 let retargeter = AnimationRetargeter::auto(&source_skeleton, &target_skeleton);
@@ -671,7 +682,8 @@ impl App {
                                 let bone_world =
                                     base_transform.compute_matrix() * world_transforms[bone_index];
                                 transform.translation = bone_world.col(3).truncate();
-                                transform.scale = Vec3::splat(if bone_index == 3 { 1.2 } else { 0.8 });
+                                transform.scale =
+                                    Vec3::splat(if bone_index == 3 { 1.2 } else { 0.8 });
                             }
                         }
                     }
@@ -700,7 +712,8 @@ impl App {
                                 let bone_world =
                                     base_transform.compute_matrix() * world_transforms[bone_index];
                                 transform.translation = bone_world.col(3).truncate();
-                                transform.scale = Vec3::splat(if bone_index == 0 { 1.2 } else { 0.9 });
+                                transform.scale =
+                                    Vec3::splat(if bone_index == 0 { 1.2 } else { 0.9 });
                             }
                         }
                     }
