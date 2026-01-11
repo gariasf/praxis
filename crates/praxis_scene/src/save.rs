@@ -13,6 +13,105 @@
 //! - **Incremental Saves**: Support for auto-saves and named save slots
 //! - **Selective Persistence**: Entities marked with `NoSave` are excluded
 //!
+//! # Versioning Strategy
+//!
+//! The save system uses a two-tier versioning approach:
+//!
+//! ## Save Format Version (`CURRENT_SAVE_VERSION`)
+//!
+//! This version number tracks changes to the overall save file structure itself,
+//! including the `SaveFile`, `SaveMetadata`, and top-level organization. When this
+//! version changes, it indicates structural changes to how saves are organized.
+//!
+//! - **Incrementing**: Bump this version when changing the save file wrapper structure
+//! - **Migration**: Add migration code to handle older save file formats
+//! - **Current Version**: Version 1 (initial release)
+//!
+//! ## Scene Format Version (`CURRENT_SCENE_VERSION`)
+//!
+//! Defined in `definition.rs`, this tracks changes to the scene graph structure,
+//! entity definitions, and component serialization format.
+//!
+//! - **Version 1**: Initial scene format
+//! - **Version 2**: Added physics, audio, animation, and material components
+//! - **Migration**: The `migration` module handles upgrading old scene formats
+//!
+//! ## Version Check Flow
+//!
+//! When loading a save:
+//! 1. Check `SaveFile.version` against `CURRENT_SAVE_VERSION`
+//! 2. Check `SceneDefinition.version` against `CURRENT_SCENE_VERSION`
+//! 3. Migrate both if necessary, applying transformations in order
+//! 4. Set versions to current after successful migration
+//!
+//! This two-tier approach allows independent evolution of the save wrapper and
+//! scene content formats.
+//!
+//! # Entity Serialization with Asset References
+//!
+//! When capturing world state, the save system carefully handles asset references:
+//!
+//! ## Asset Handle Serialization
+//!
+//! Asset handles (`MeshHandle`, `TextureHandle`, `MaterialHandle`) store string IDs
+//! that reference assets in the asset management system. These IDs are serialized
+//! directly into the save file:
+//!
+//! ```rust,ignore
+//! // During save: Extract the string ID from the handle
+//! if let Some(mesh) = mesh_handle {
+//!     entity_def.mesh = Some(mesh.id.clone());  // Serialize the ID string
+//! }
+//! ```
+//!
+//! ## Asset Loading on Restore
+//!
+//! When loading a save, asset IDs are converted back into handles:
+//!
+//! ```rust,ignore
+//! // During load: Recreate handle with the ID
+//! if let Some(ref mesh_id) = entity_def.mesh {
+//!     entity_builder.insert(MeshHandle::new(mesh_id));  // Restore the handle
+//! }
+//! ```
+//!
+//! The actual asset data (mesh vertices, texture pixels, etc.) is NOT stored in
+//! save files. Instead, saves store references that the asset system will resolve
+//! when the game loads. This keeps save files small and ensures assets are loaded
+//! through the normal asset pipeline.
+//!
+//! ## Handling Missing Assets
+//!
+//! If an asset referenced in a save file no longer exists:
+//! - The entity will spawn with an invalid handle
+//! - The rendering system will skip entities with invalid asset handles
+//! - Game logic should handle gracefully or show placeholder assets
+//!
+//! # Hierarchy Preservation
+//!
+//! The save system preserves parent-child relationships through recursive traversal:
+//!
+//! ## During Save (`capture_world_state`)
+//!
+//! 1. **Identify Root Entities**: Find all entities without a `Parent` component
+//! 2. **Build Entity Map**: Create a hashmap of all entities and their data
+//! 3. **Recursive Hierarchy Building**: For each root entity:
+//!    - Query its `Children` component
+//!    - Recursively process each child, building the hierarchy depth-first
+//!    - Move child entities from the map into their parent's children vector
+//! 4. **Collect Roots**: All remaining entities in the map are root entities
+//!
+//! This produces a nested `EntityDefinition` structure that mirrors the ECS hierarchy.
+//!
+//! ## During Load (`restore_world_state`)
+//!
+//! 1. **Spawn Recursively**: Starting from root entities, spawn each entity
+//! 2. **Set Parent Links**: When spawning children, insert `Parent(parent_entity)`
+//! 3. **Build Children Lists**: After spawning, the transform system rebuilds `Children`
+//!
+//! The parent-child links are bidirectional in the ECS but stored as a tree in the
+//! save file for clarity and efficiency.
+//!
 //! # Example
 //!
 //! ```rust,no_run
@@ -494,6 +593,32 @@ impl SaveManager {
     ///
     /// This includes all entities, components, and hierarchies, excluding
     /// entities marked with the `NoSave` component.
+    ///
+    /// # Algorithm Overview
+    ///
+    /// This method performs a two-phase process to preserve entity hierarchies:
+    ///
+    /// ## Phase 1: Entity Collection
+    /// - Query all entities in the world
+    /// - For each entity, serialize all components into an `EntityDefinition`
+    /// - Store entities in a `HashMap` for O(1) lookup during hierarchy building
+    /// - Track which entities are roots (have no `Parent` component)
+    ///
+    /// ## Phase 2: Hierarchy Construction
+    /// - For each root entity, recursively build the hierarchy tree
+    /// - Use the `Children` component to find child entities
+    /// - Move children from the `HashMap` into their parent's children vector
+    /// - This creates a nested tree structure suitable for serialization
+    ///
+    /// ## Asset Reference Handling
+    /// - Asset handles are serialized as string IDs (e.g., `"cube_mesh"`)
+    /// - The actual asset data remains in the asset system
+    /// - On load, these IDs are used to create new handles that reference the same assets
+    ///
+    /// ## Component Exclusion
+    /// - Entities with `NoSave` component are skipped entirely
+    /// - Transient components (like physics state) could be excluded here
+    /// - Global transform is not saved (it's derived from local transform + hierarchy)
     #[allow(clippy::too_many_lines)]
     fn capture_world_state(world: &mut World) -> SceneDefinition {
         let mut scene = SceneDefinition::new("SavedGame");
@@ -504,11 +629,12 @@ impl SaveManager {
             tags: vec!["save".to_string()],
         };
 
-        // Build entity map and find roots
+        // Phase 1: Build entity map and identify roots
+        // We use a HashMap for O(1) lookups during hierarchy building
         let mut entity_map: HashMap<Entity, EntityDefinition> = HashMap::new();
         let mut root_entities = Vec::new();
 
-        // Query all entities
+        // Query all entities and serialize their components
         let mut query = world.query::<(
             bevy_ecs::entity::Entity,
             Option<&Name>,
@@ -545,7 +671,8 @@ impl SaveManager {
             no_save,
         ) in query.iter(world)
         {
-            // Skip entities marked with NoSave
+            // Skip entities marked with NoSave - these are temporary entities that
+            // should not be persisted (e.g., debug visualizations, editor gizmos)
             if no_save.is_some() {
                 debug!("Skipping entity {:?} marked with NoSave", entity);
                 continue;
@@ -553,6 +680,10 @@ impl SaveManager {
 
             let mut entity_def = EntityDefinition::new();
 
+            // Serialize each component into the EntityDefinition
+            // Note: We only serialize the LOCAL Transform, not GlobalTransform
+            // GlobalTransform is derived from the hierarchy and will be recomputed on load
+            
             // Name
             if let Some(name) = name {
                 entity_def.name = Some(name.0.clone());
@@ -576,6 +707,10 @@ impl SaveManager {
                 });
             }
 
+            // Asset References: Store the string ID, not the actual asset data
+            // These IDs will be used to recreate handles when loading
+            // The asset system will resolve these IDs to actual assets
+            
             // Mesh
             if let Some(mesh) = mesh {
                 entity_def.mesh = Some(mesh.id.clone());
@@ -642,15 +777,20 @@ impl SaveManager {
             // Active
             entity_def.active = Some(active.is_some());
 
-            // Track entities
+            // Track which entities are roots (no Parent component)
+            // These will be the starting points for hierarchy building
             if parent.is_none() {
                 root_entities.push(entity);
             }
 
+            // Store in map for hierarchy building
+            // After hierarchy building, only root entities will remain in this map
             entity_map.insert(entity, entity_def);
         }
 
-        // Build hierarchy - process each root entity
+        // Phase 2: Build hierarchy - recursively nest children into parents
+        // This converts the flat ECS representation (Parent + Children components)
+        // into a nested tree structure suitable for serialization
         for parent_entity in &root_entities {
             if let Some(children_component) = world.get::<Children>(*parent_entity) {
                 let children_clone = children_component.0.clone();
@@ -663,7 +803,9 @@ impl SaveManager {
             }
         }
 
-        // Collect root entities
+        // Phase 3: Collect root entities into the scene
+        // After recursive hierarchy building, only root entities remain in the map
+        // All child entities have been nested into their parents' children vectors
         for root in root_entities {
             if let Some(entity_def) = entity_map.remove(&root) {
                 scene.add_entity(entity_def);
@@ -676,18 +818,40 @@ impl SaveManager {
     }
 
     /// Recursively builds the entity hierarchy.
+    ///
+    /// This method constructs the nested `EntityDefinition` tree structure by:
+    /// 1. Iterating through each child entity
+    /// 2. Removing the child from the entity map (it will become nested)
+    /// 3. Recursively processing the child's children (depth-first traversal)
+    /// 4. Adding the fully-built child definition to the parent's children vector
+    ///
+    /// # Why Remove from Map?
+    ///
+    /// Entities are removed from the map once they're placed in their parent's
+    /// children vector. This ensures:
+    /// - Each entity appears exactly once in the final tree
+    /// - Root entities remain in the map after this process
+    /// - O(1) removal time due to `HashMap` usage
+    ///
+    /// # Depth-First Traversal
+    ///
+    /// The recursion processes the deepest children first, building the tree
+    /// from leaves up to roots. This matches how the ECS stores hierarchies
+    /// using `Parent` (upward links) and `Children` (downward links).
     fn build_hierarchy_recursive(
         parent_entity: Entity,
         children: &[Entity],
         entity_map: &mut HashMap<Entity, EntityDefinition>,
         world: &World,
     ) {
-        // Collect children for this parent
+        // Collect children definitions for this parent
         let mut children_defs = Vec::new();
 
         for child_entity in children {
+            // Remove child from map - it will be nested into parent
             if let Some(mut child_def) = entity_map.remove(child_entity) {
-                // Recursively process child's children
+                // Recursively process this child's children before adding it to parent
+                // This ensures we build the tree bottom-up
                 if let Some(grandchildren) = world.get::<Children>(*child_entity) {
                     let grandchildren_clone = grandchildren.0.clone();
                     Self::build_hierarchy_recursive(
@@ -724,6 +888,28 @@ impl SaveManager {
     }
 
     /// Recursively spawns entities from definitions.
+    ///
+    /// This method reconstructs the ECS entity hierarchy from the nested tree structure:
+    ///
+    /// 1. **Spawn Entity**: Create a new entity in the world
+    /// 2. **Restore Components**: Deserialize and insert all components
+    /// 3. **Set Parent Link**: If this entity has a parent, insert `Parent(parent_entity)`
+    /// 4. **Restore Asset References**: Convert string IDs back to asset handles
+    /// 5. **Recurse for Children**: Spawn all child entities with this entity as parent
+    ///
+    /// # Transform Restoration
+    ///
+    /// - **Local Transform**: Restored from the saved data (position, rotation, scale)
+    /// - **Global Transform**: Initialized to default; will be computed by transform system
+    ///
+    /// The transform system will automatically propagate global transforms down the
+    /// hierarchy after entities are spawned.
+    ///
+    /// # Parent-Child Linking
+    ///
+    /// The `Parent` component is set during spawning. The `Children` component is not
+    /// explicitly set here - it should be managed by the transform system or hierarchy
+    /// maintenance system to keep it in sync with `Parent` components.
     #[allow(clippy::only_used_in_recursion)]
     fn spawn_entity_recursive(
         &self,
@@ -734,12 +920,14 @@ impl SaveManager {
     ) -> Result<Entity> {
         let mut entity_builder = world.spawn_empty();
 
+        // Restore components from serialized data
+        
         // Name
         if let Some(ref name) = entity_def.name {
             entity_builder.insert(Name(name.clone()));
         }
 
-        // Transform
+        // Transform - restore local transform and initialize global transform
         if let Some(ref transform_def) = entity_def.transform {
             let (translation, rotation, scale) = transform_def.to_components();
             entity_builder.insert(Transform {
@@ -747,9 +935,13 @@ impl SaveManager {
                 rotation,
                 scale,
             });
+            // GlobalTransform starts at default; transform system will compute it
             entity_builder.insert(GlobalTransform::default());
         }
 
+        // Asset References - recreate handles from saved string IDs
+        // The asset system will resolve these IDs to actual asset data
+        
         // Mesh
         if let Some(ref mesh_id) = entity_def.mesh {
             entity_builder.insert(MeshHandle::new(mesh_id));
@@ -835,19 +1027,22 @@ impl SaveManager {
             entity_builder.insert(Active);
         }
 
-        // Parent
+        // Parent - establish upward link in the hierarchy
+        // The Children component (downward link) should be managed by the hierarchy system
         if let Some(parent_entity) = parent {
             entity_builder.insert(Parent(parent_entity));
         }
 
         let entity = entity_builder.id();
 
-        // Track entity by name for cross-references
+        // Track entity by name for potential cross-references
+        // This allows other systems to look up entities by name after loading
         if let Some(ref name) = entity_def.name {
             entity_map.insert(name.clone(), entity);
         }
 
-        // Spawn children
+        // Recursively spawn all children with this entity as their parent
+        // This reconstructs the full hierarchy tree from the nested definition structure
         for child_def in &entity_def.children {
             self.spawn_entity_recursive(world, child_def, Some(entity), entity_map)?;
         }

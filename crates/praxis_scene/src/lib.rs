@@ -15,6 +15,42 @@
 //! - Hierarchical parent-child relationships
 //! - Custom metadata
 //!
+//! # Transform Propagation
+//!
+//! The scene system works closely with the ECS transform hierarchy to ensure
+//! proper transform propagation from parents to children:
+//!
+//! - **Local Transforms**: Each entity has a `Transform` component storing its
+//!   local position, rotation, and scale relative to its parent (or world space
+//!   if it has no parent).
+//!
+//! - **Global Transforms**: The `GlobalTransform` component stores the final
+//!   world-space transform computed by multiplying the entity's local transform
+//!   with its parent's global transform. This propagation happens automatically
+//!   in the ECS transform system.
+//!
+//! - **Hierarchy Maintenance**: When entities are spawned from a scene definition,
+//!   the `Parent` and `Children` components establish the hierarchy. The transform
+//!   system then propagates changes down the hierarchy each frame.
+//!
+//! # Parent-Child Relationships
+//!
+//! The scene system uses ECS components to represent hierarchical relationships:
+//!
+//! - **Parent Component**: A child entity stores a `Parent(Entity)` component
+//!   referencing its parent entity. This creates the upward link in the hierarchy.
+//!
+//! - **Children Component**: A parent entity stores a `Children(Vec<Entity>)`
+//!   component containing all its child entities. This creates the downward link.
+//!
+//! - **Bidirectional Links**: Both components must be kept in sync. When spawning
+//!   scenes, both are automatically set up. When modifying hierarchies at runtime,
+//!   both must be updated together.
+//!
+//! - **Transform Propagation**: Changes to a parent's transform automatically
+//!   propagate to all descendants through the global transform system, which
+//!   traverses the `Children` component recursively.
+//!
 //! # Scene Loading Example
 //!
 //! ```rust,no_run

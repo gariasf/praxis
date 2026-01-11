@@ -1,4 +1,62 @@
 //! Scene graph traversal utilities.
+//!
+//! This module provides tools for traversing entity hierarchies in the scene graph.
+//! Understanding these traversal patterns is essential for working with parent-child
+//! relationships and transform hierarchies.
+//!
+//! # Scene Graph Structure
+//!
+//! The scene graph is a tree-like structure where entities can have parent-child
+//! relationships. This is represented in the ECS using two components:
+//!
+//! - **`Parent(Entity)`**: Points to the parent entity (upward link)
+//! - **`Children(Vec<Entity>)`**: Contains all child entities (downward link)
+//!
+//! These bidirectional links enable both upward traversal (finding ancestors) and
+//! downward traversal (finding descendants).
+//!
+//! # Traversal Patterns
+//!
+//! ## Depth-First Traversal
+//!
+//! Visits a parent, then recursively visits all its children before moving to siblings.
+//! This is useful for:
+//! - Transform propagation (parent transforms must be computed before children)
+//! - Hierarchical updates where child behavior depends on parent state
+//! - Serialization (maintains natural nesting structure)
+//!
+//! Example order for tree:
+//! ```text
+//!     A
+//!    / \
+//!   B   C
+//!  /
+//! D
+//! ```
+//! Visit order: A → B → D → C
+//!
+//! ## Breadth-First Traversal
+//!
+//! Visits all entities at one depth level before moving to the next level.
+//! This is useful for:
+//! - Level-by-level processing
+//! - Finding nearest neighbors in the hierarchy
+//! - Parallel processing by depth level
+//!
+//! Example order for same tree:
+//! Visit order: A → B → C → D
+//!
+//! # Transform Propagation Context
+//!
+//! These traversal utilities complement the transform system's propagation:
+//!
+//! 1. **Transform System**: Automatically propagates `GlobalTransform` down the
+//!    hierarchy using the `Children` component
+//! 2. **Traversal Utilities**: Provide explicit iteration over entities in a hierarchy
+//!    for custom processing beyond transforms
+//!
+//! The depth-first iterator mirrors how transform propagation works internally,
+//! ensuring parents are processed before their children.
 
 use praxis_ecs::{Children, Entity, Parent, World};
 use std::collections::VecDeque;
@@ -7,12 +65,51 @@ use std::collections::VecDeque;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TraversalOrder {
     /// Depth-first traversal (visit parent before children).
+    ///
+    /// Processes each branch completely before moving to the next branch.
+    /// Guarantees parents are visited before their children, which is essential
+    /// for transform propagation and hierarchical updates.
     DepthFirst,
     /// Breadth-first traversal (visit all siblings before descendants).
+    ///
+    /// Processes all entities at one depth level before moving deeper.
+    /// Useful for level-by-level operations or when processing order within
+    /// a depth matters more than parent-child ordering.
     BreadthFirst,
 }
 
 /// Iterator for traversing a scene graph from a root entity.
+///
+/// This iterator uses a work queue (`VecDeque`) to track entities that need to be visited.
+/// The traversal order determines how children are added to the queue.
+///
+/// # Implementation Details
+///
+/// ## Depth-First Implementation
+///
+/// Children are pushed to the **front** of the queue (in reverse order):
+/// - Current entity is visited
+/// - Its children are added to the front of the queue
+/// - Next iteration immediately processes the first child
+/// - This creates depth-first behavior as we go deep before going wide
+///
+/// Example: Parent with children [A, B, C]
+/// 1. Pop Parent from queue → visit Parent
+/// 2. Push C, B, A to front (reverse order, so A ends up first)
+/// 3. Pop A → visit A (goes deep into A's subtree before B or C)
+///
+/// ## Breadth-First Implementation
+///
+/// Children are pushed to the **back** of the queue (in order):
+/// - Current entity is visited
+/// - Its children are added to the back of the queue
+/// - Next iteration processes the next sibling first
+/// - This creates breadth-first behavior as we complete each level
+///
+/// Example: Parent with children [A, B, C]
+/// 1. Pop Parent from queue → visit Parent
+/// 2. Push A, B, C to back
+/// 3. Pop A → visit A (but A's children go to back, so B comes next)
 ///
 /// # Example
 ///
@@ -50,16 +147,27 @@ impl Iterator for SceneGraphIterator<'_> {
     type Item = Entity;
 
     fn next(&mut self) -> Option<Self::Item> {
+        // Pop the next entity from the front of the queue
         let entity = self.to_visit.pop_front()?;
 
+        // If this entity has children, add them to the queue based on traversal order
         if let Some(children) = self.world.get::<Children>(entity) {
             match self.order {
                 TraversalOrder::DepthFirst => {
+                    // Push children to the FRONT in REVERSE order
+                    // This ensures the first child is processed next (depth-first)
+                    // Reverse is necessary because push_front reverses the order:
+                    // [A, B, C] reversed and pushed front becomes: C→front, B→front, A→front
+                    // Result: [A, B, C, ...rest] so A is popped next
                     for child in children.0.iter().rev() {
                         self.to_visit.push_front(*child);
                     }
                 }
                 TraversalOrder::BreadthFirst => {
+                    // Push children to the BACK in normal order
+                    // This ensures siblings at the current level are processed before
+                    // going deeper into the hierarchy (breadth-first)
+                    // [A, B, C] pushed to back: [...existing, A, B, C]
                     for child in &children.0 {
                         self.to_visit.push_back(*child);
                     }
@@ -72,6 +180,26 @@ impl Iterator for SceneGraphIterator<'_> {
 }
 
 /// Gets all root entities (entities without a parent).
+///
+/// Root entities are the top-level entities in the scene hierarchy - they have
+/// no `Parent` component. These are the starting points for hierarchy traversal
+/// and transform propagation.
+///
+/// # Why Root Entities Matter
+///
+/// - **Transform Propagation**: The transform system starts at roots and propagates
+///   down through children
+/// - **Scene Serialization**: Save systems serialize starting from roots to capture
+///   the complete hierarchy structure
+/// - **Hierarchy Operations**: Many hierarchy operations (like finding all entities
+///   in the scene) start by finding roots then traversing downward
+///
+/// # Implementation Note
+///
+/// This function currently filters entities with a `Transform` component. This is
+/// because the scene system primarily deals with spatial entities. Entities without
+/// transforms (like UI elements or purely logical entities) are not considered
+/// part of the main scene hierarchy.
 ///
 /// # Example
 ///
@@ -133,6 +261,25 @@ fn collect_children_recursive(world: &World, entity: Entity, result: &mut Vec<En
 /// Returns a vector of entities from the immediate parent up to the root,
 /// in order from nearest to farthest.
 ///
+/// # Use Cases
+///
+/// - **Computing World-Space Transforms**: The parent chain is traversed to compute
+///   an entity's final world-space transform by multiplying all ancestor transforms
+/// - **Path Finding**: Determine the path from an entity to the root
+/// - **Hierarchy Depth**: The chain length equals the entity's depth in the hierarchy
+/// - **Relationship Checking**: Used internally by `is_ancestor_of` to check ancestry
+///
+/// # Algorithm
+///
+/// Follows the `Parent` component links upward until reaching an entity with no parent:
+/// 1. Start at the given entity
+/// 2. Look up its `Parent` component
+/// 3. Add the parent to the chain and move to that parent
+/// 4. Repeat until reaching a root entity (no `Parent` component)
+///
+/// This creates an upward traversal from child to root, which is the reverse of
+/// the typical downward traversal through `Children` components.
+///
 /// # Example
 ///
 /// ```rust,no_run
@@ -148,6 +295,7 @@ pub fn get_parent_chain(world: &World, entity: Entity) -> Vec<Entity> {
     let mut chain = Vec::new();
     let mut current = entity;
 
+    // Walk up the parent chain until we reach a root entity (no parent)
     while let Some(parent) = world.get::<Parent>(current) {
         chain.push(parent.0);
         current = parent.0;
