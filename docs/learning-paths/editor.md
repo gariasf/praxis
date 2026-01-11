@@ -21,7 +21,10 @@ Intermediate (4-5 days)
 ├── Asset browser
 ├── Transform gizmos
 ├── Multi-selection
-└── Scene management
+├── Console panel
+├── Scene management
+├── Save/load system
+└── Serialization
     ↓
 Advanced (5-6 days)
 ├── Undo/redo system
@@ -68,29 +71,225 @@ Advanced (5-6 days)
 
 ## Intermediate: Advanced Features
 
-**Practice** (8-10 hours):
+**Practice** (10-14 hours):
 1. Read [Asset Browser](../editor/asset-browser.md)
 2. Read [Gizmos](../editor/gizmos.md)
-3. Practice workflows
+3. Read [Console Panel](../editor/console-panel.md)
+4. Read [Scene Format](../scene-format-v2.md)
+5. Practice workflows
 
 **Features**:
-- Drag-and-drop assets
-- Transform gizmos (translate, rotate, scale)
-- Multi-entity selection (Shift+click, box select)
-- Scene save/load
+- **Asset Browser**: Drag-and-drop assets
+- **Transform Gizmos**: Translate, rotate, scale tools
+- **Multi-Selection**: Shift+click, box select
+- **Console Panel**: Execute commands, view logs, debug
+- **Scene Management**: Save/load scenes
+- **Serialization**: Persist game state and scenes
 
-**Exercises**:
+### Console Panel
+
+The console panel provides a command-line interface for debugging and runtime control.
+
+**Console Features**:
+- Execute commands at runtime
+- View log messages and warnings
+- Command history (↑/↓ arrows)
+- Auto-completion (Tab key)
+- Custom command registration
+
+**Basic Console Commands**:
+```rust
+// Spawn entity
+> spawn cube at 0,5,0
+
+// Query entities
+> list entities
+
+// Modify component
+> set transform position 1,2,3
+
+// Debug info
+> stats
+> fps
+```
+
+**Run Console Demo**:
+```bash
+cargo run --example scripting_console_demo
+```
+
+### Save/Load System
+
+Praxis supports comprehensive scene and game state persistence.
+
+**Scene Serialization**:
+```rust
+use praxis_scene::{Scene, SceneManager};
+
+// Save scene
+let scene = Scene::from_world(&world);
+scene.save_to_file("scenes/my_level.scene")?;
+
+// Load scene
+let scene = Scene::load_from_file("scenes/my_level.scene")?;
+scene.spawn_into_world(&mut world);
+```
+
+**Serialization Format**:
+- Human-readable JSON
+- Includes entities, components, hierarchy
+- Asset references preserved
+- Transform hierarchy maintained
+
+**Example Scene File**:
+```json
+{
+  "entities": [
+    {
+      "id": 1,
+      "components": {
+        "Transform": {
+          "translation": [0.0, 5.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "MeshHandle": "cube.obj"
+      }
+    }
+  ]
+}
+```
+
+**Run Scene Serialization Demo**:
+```bash
+cargo run --example scene_serialization_demo
+```
+
+### Exercises
+
+#### Exercise 1: Asset Workflow
 1. Drag model from asset browser
 2. Use gizmos to position
 3. Multi-select and move group
 4. Save scene, reload
 
+#### Exercise 2: Build Custom Console Commands
+Build a console command system for your game:
+
+```rust
+use praxis_scripting::{ScriptingContext, ConsoleCommand};
+
+// Define custom command
+struct TeleportCommand;
+
+impl ConsoleCommand for TeleportCommand {
+    fn name(&self) -> &str {
+        "teleport"
+    }
+    
+    fn help(&self) -> &str {
+        "teleport <entity> <x> <y> <z> - Teleport entity to position"
+    }
+    
+    fn execute(&self, args: &[&str], world: &mut World) -> Result<String> {
+        let entity_id: u32 = args[0].parse()?;
+        let x: f32 = args[1].parse()?;
+        let y: f32 = args[2].parse()?;
+        let z: f32 = args[3].parse()?;
+        
+        // Find entity and update transform
+        let entity = world.entity_from_id(entity_id)?;
+        if let Some(mut transform) = world.get_mut::<Transform>(entity) {
+            transform.translation = Vec3::new(x, y, z);
+            Ok(format!("Teleported entity {} to ({}, {}, {})", entity_id, x, y, z))
+        } else {
+            Err("Entity has no Transform component".into())
+        }
+    }
+}
+
+// Register command
+context.register_command(Box::new(TeleportCommand))?;
+```
+
+**Tasks**:
+1. Implement a `spawn` command that creates entities
+2. Add a `delete` command to remove entities
+3. Create a `save_state` command for game state persistence
+4. Build a `load_state` command to restore game state
+
+#### Exercise 3: Implement Game State Persistence
+Create a save/load system for game progress:
+
+```rust
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize)]
+struct GameState {
+    player_position: Vec3,
+    inventory: Vec<String>,
+    quest_progress: HashMap<String, u32>,
+    entities: Vec<EntityData>,
+}
+
+impl GameState {
+    fn save(&self, path: &str) -> Result<()> {
+        let json = serde_json::to_string_pretty(self)?;
+        std::fs::write(path, json)?;
+        Ok(())
+    }
+    
+    fn load(path: &str) -> Result<Self> {
+        let json = std::fs::read_to_string(path)?;
+        let state = serde_json::from_str(&json)?;
+        Ok(state)
+    }
+    
+    fn from_world(world: &World) -> Self {
+        // Extract game state from ECS world
+        let mut state = GameState::default();
+        
+        // Query player position
+        for (transform, player) in world.query::<(&Transform, &Player)>().iter() {
+            state.player_position = transform.translation;
+        }
+        
+        // Save other game data...
+        state
+    }
+    
+    fn apply_to_world(&self, world: &mut World) {
+        // Restore game state to ECS world
+        // Spawn entities, set positions, restore progress
+    }
+}
+```
+
+**Tasks**:
+1. Define your game's state structure
+2. Implement serialization for custom components
+3. Add autosave functionality
+4. Create multiple save slots
+5. Handle save data versioning
+
+#### Exercise 4: Scene Editing Workflow
+1. Create a level with multiple entities
+2. Use console to debug entity positions
+3. Save the scene to a file
+4. Modify the scene file manually
+5. Reload and verify changes
+6. Export game state at specific points
+
 ### Checkpoint
 - [ ] Asset workflow efficient
 - [ ] Gizmo manipulation smooth
-- [ ] Can manage scenes
+- [ ] Can use console for debugging
+- [ ] Understand serialization format
+- [ ] Can save/load scenes
+- [ ] Built custom console commands
+- [ ] Implemented game state persistence
 
-**Time**: 10-12 hours
+**Time**: 14-18 hours
 
 ---
 
