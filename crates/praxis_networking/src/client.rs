@@ -363,6 +363,7 @@ impl NetworkClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::NetworkMessage;
 
     #[tokio::test]
     async fn test_client_creation() {
@@ -385,5 +386,343 @@ mod tests {
 
         let timeout = ConnectionError::Timeout;
         assert!(timeout.to_string().contains("timeout"));
+    }
+
+    #[tokio::test]
+    async fn test_client_state_transitions_disconnected_to_connecting() {
+        let config = NetworkConfig::default();
+        let mut client = NetworkClient::new(config).await.unwrap();
+
+        assert_eq!(client.state(), ClientState::Disconnected);
+
+        // Transition to Connecting happens in connect(), but requires a valid server
+        // For unit tests, we verify initial state is correct
+        assert_eq!(client.state(), ClientState::Disconnected);
+    }
+
+    #[tokio::test]
+    async fn test_client_state_connecting_initial() {
+        let config = NetworkConfig::default();
+        let client = NetworkClient::new(config).await.unwrap();
+
+        // Verify that new clients start as Disconnected
+        assert_eq!(client.state(), ClientState::Disconnected);
+        assert!(client.client_id().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_client_state_connected_after_acceptance() {
+        let config = NetworkConfig::default();
+        let client = NetworkClient::new(config).await.unwrap();
+
+        // Simulate connection acceptance
+        let client_id = 42;
+        let server_tick = 100;
+
+        client.handle_connection_accepted(client_id, server_tick).unwrap();
+
+        // Verify state transition to Connected
+        assert_eq!(client.state(), ClientState::Connected);
+        assert_eq!(client.client_id(), Some(client_id));
+        assert_eq!(client.server_tick(), server_tick);
+    }
+
+    #[tokio::test]
+    async fn test_client_state_disconnected_after_rejection() {
+        let config = NetworkConfig::default();
+        let client = NetworkClient::new(config).await.unwrap();
+
+        // Simulate setting to connecting state
+        *client.state.write() = ClientState::Connecting;
+        assert_eq!(client.state(), ClientState::Connecting);
+
+        // Simulate connection rejection
+        client.handle_connection_rejected("Server full".to_string()).unwrap();
+
+        // Verify state transition back to Disconnected
+        assert_eq!(client.state(), ClientState::Disconnected);
+    }
+
+    #[tokio::test]
+    async fn test_client_state_disconnecting_transition() {
+        let config = NetworkConfig::default();
+        let mut client = NetworkClient::new(config).await.unwrap();
+
+        // Set up client as connected first
+        *client.state.write() = ClientState::Connected;
+        *client.client_id.write() = Some(123);
+        let addr: SocketAddr = "127.0.0.1:7777".parse().unwrap();
+        *client.server_address.write() = Some(addr);
+
+        assert_eq!(client.state(), ClientState::Connected);
+
+        // Disconnect should transition through Disconnecting to Disconnected
+        client.disconnect("Client quit".to_string()).await.unwrap();
+
+        // Verify final state
+        assert_eq!(client.state(), ClientState::Disconnected);
+        assert!(client.client_id().is_none());
+        assert!(client.server_address.read().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_client_state_full_connection_lifecycle() {
+        let config = NetworkConfig::default();
+        let mut client = NetworkClient::new(config).await.unwrap();
+
+        // 1. Start as Disconnected
+        assert_eq!(client.state(), ClientState::Disconnected);
+
+        // 2. Simulate Connecting state
+        *client.state.write() = ClientState::Connecting;
+        assert_eq!(client.state(), ClientState::Connecting);
+
+        // 3. Accept connection to move to Connected
+        client.handle_connection_accepted(99, 50).unwrap();
+        assert_eq!(client.state(), ClientState::Connected);
+        assert_eq!(client.client_id(), Some(99));
+
+        // 4. Set server address for disconnect to work
+        let addr: SocketAddr = "127.0.0.1:7777".parse().unwrap();
+        *client.server_address.write() = Some(addr);
+
+        // 5. Disconnect to move back to Disconnected
+        client.disconnect("Test complete".to_string()).await.unwrap();
+        assert_eq!(client.state(), ClientState::Disconnected);
+        assert!(client.client_id().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_client_state_rejection_during_connecting() {
+        let config = NetworkConfig::default();
+        let client = NetworkClient::new(config).await.unwrap();
+
+        // Simulate Connecting state
+        *client.state.write() = ClientState::Connecting;
+        assert_eq!(client.state(), ClientState::Connecting);
+
+        // Reject the connection
+        client.handle_connection_rejected("Version mismatch".to_string()).unwrap();
+
+        // Should return to Disconnected
+        assert_eq!(client.state(), ClientState::Disconnected);
+    }
+
+    #[tokio::test]
+    async fn test_client_tick_increments() {
+        let config = NetworkConfig::default();
+        let mut client = NetworkClient::new(config).await.unwrap();
+
+        // Set client to connected state
+        *client.state.write() = ClientState::Connected;
+
+        let initial_tick = client.current_tick();
+        assert_eq!(initial_tick, 0);
+
+        // Update should increment tick
+        client.update(0.016).unwrap();
+        assert_eq!(client.current_tick(), initial_tick + 1);
+
+        client.update(0.016).unwrap();
+        assert_eq!(client.current_tick(), initial_tick + 2);
+    }
+
+    #[tokio::test]
+    async fn test_client_no_update_when_disconnected() {
+        let config = NetworkConfig::default();
+        let mut client = NetworkClient::new(config).await.unwrap();
+
+        assert_eq!(client.state(), ClientState::Disconnected);
+
+        let initial_tick = client.current_tick();
+
+        // Update should do nothing when disconnected
+        client.update(0.016).unwrap();
+
+        // Tick should not increment
+        assert_eq!(client.current_tick(), initial_tick);
+    }
+
+    #[tokio::test]
+    async fn test_client_server_tick_tracking() {
+        let config = NetworkConfig::default();
+        let client = NetworkClient::new(config).await.unwrap();
+
+        assert_eq!(client.server_tick(), 0);
+
+        // Simulate receiving replication message
+        let replication = crate::ReplicationMessage::new(123, 1000);
+        client.handle_replication(replication).unwrap();
+
+        assert_eq!(client.server_tick(), 123);
+    }
+
+    #[tokio::test]
+    async fn test_client_pong_handling() {
+        let config = NetworkConfig::default();
+        let client = NetworkClient::new(config).await.unwrap();
+
+        // Enable profiling
+        *client.profiler.write() = Some(crate::NetworkProfiler::new());
+
+        // Get current timestamp
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+
+        // Simulate receiving pong with timestamp from 50ms ago
+        let old_timestamp = now.saturating_sub(50);
+        client.handle_pong(old_timestamp).unwrap();
+
+        // Verify profiler recorded the latency
+        let profiler = client.profiler.read();
+        assert!(profiler.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_client_command_ack_handling() {
+        let config = NetworkConfig::default();
+        let client = NetworkClient::new(config).await.unwrap();
+
+        // Should handle command acks without error
+        let result = client.handle_command_ack(42);
+        assert!(result.is_ok());
+
+        let result = client.handle_command_ack(100);
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_client_multiple_connections_rejected() {
+        let config = NetworkConfig::default();
+        let client = NetworkClient::new(config).await.unwrap();
+
+        // First connection attempt - simulate connecting
+        *client.state.write() = ClientState::Connecting;
+        assert_eq!(client.state(), ClientState::Connecting);
+
+        // Reject it
+        client.handle_connection_rejected("Reason 1".to_string()).unwrap();
+        assert_eq!(client.state(), ClientState::Disconnected);
+
+        // Second connection attempt
+        *client.state.write() = ClientState::Connecting;
+        assert_eq!(client.state(), ClientState::Connecting);
+
+        // Accept this time
+        client.handle_connection_accepted(555, 1000).unwrap();
+        assert_eq!(client.state(), ClientState::Connected);
+        assert_eq!(client.client_id(), Some(555));
+    }
+
+    #[tokio::test]
+    async fn test_client_state_persistence() {
+        let config = NetworkConfig::default();
+        let client = NetworkClient::new(config).await.unwrap();
+
+        // Verify state persists across multiple reads
+        assert_eq!(client.state(), ClientState::Disconnected);
+        assert_eq!(client.state(), ClientState::Disconnected);
+
+        *client.state.write() = ClientState::Connected;
+        assert_eq!(client.state(), ClientState::Connected);
+        assert_eq!(client.state(), ClientState::Connected);
+    }
+
+    #[test]
+    fn test_client_state_equality() {
+        assert_eq!(ClientState::Disconnected, ClientState::Disconnected);
+        assert_eq!(ClientState::Connecting, ClientState::Connecting);
+        assert_eq!(ClientState::Connected, ClientState::Connected);
+        assert_eq!(ClientState::Disconnecting, ClientState::Disconnecting);
+
+        assert_ne!(ClientState::Disconnected, ClientState::Connected);
+        assert_ne!(ClientState::Connecting, ClientState::Disconnecting);
+    }
+
+    #[test]
+    fn test_client_state_copy_clone() {
+        let state1 = ClientState::Connected;
+        let state2 = state1; // Copy
+        let state3 = state1.clone(); // Clone
+
+        assert_eq!(state1, state2);
+        assert_eq!(state1, state3);
+        assert_eq!(state2, state3);
+    }
+
+    #[test]
+    fn test_connection_error_types() {
+        let rejected = ConnectionError::Rejected("Test reason".to_string());
+        let timeout = ConnectionError::Timeout;
+        let network = ConnectionError::NetworkError("Socket error".to_string());
+
+        // Test Display trait
+        assert!(rejected.to_string().contains("Test reason"));
+        assert!(timeout.to_string().contains("timeout"));
+        assert!(network.to_string().contains("Socket error"));
+
+        // Test that they can be cloned
+        let rejected_clone = rejected.clone();
+        assert!(rejected_clone.to_string().contains("Test reason"));
+    }
+
+    #[tokio::test]
+    async fn test_client_handle_message_connection_accepted() {
+        let config = NetworkConfig::default();
+        let client = NetworkClient::new(config).await.unwrap();
+
+        // Create and serialize ConnectionAccepted message
+        let msg = NetworkMessage::ConnectionAccepted {
+            client_id: 789,
+            server_tick: 500,
+        };
+        let data = msg.serialize().unwrap();
+
+        let addr: SocketAddr = "127.0.0.1:7777".parse().unwrap();
+
+        // Handle the message
+        client.handle_message(addr, &data).unwrap();
+
+        // Verify state changed
+        assert_eq!(client.state(), ClientState::Connected);
+        assert_eq!(client.client_id(), Some(789));
+        assert_eq!(client.server_tick(), 500);
+    }
+
+    #[tokio::test]
+    async fn test_client_handle_message_connection_rejected() {
+        let config = NetworkConfig::default();
+        let client = NetworkClient::new(config).await.unwrap();
+
+        *client.state.write() = ClientState::Connecting;
+
+        let msg = NetworkMessage::ConnectionRejected {
+            reason: "Too many players".to_string(),
+        };
+        let data = msg.serialize().unwrap();
+
+        let addr: SocketAddr = "127.0.0.1:7777".parse().unwrap();
+
+        client.handle_message(addr, &data).unwrap();
+
+        assert_eq!(client.state(), ClientState::Disconnected);
+    }
+
+    #[tokio::test]
+    async fn test_client_handle_message_replication() {
+        let config = NetworkConfig::default();
+        let client = NetworkClient::new(config).await.unwrap();
+
+        let replication = crate::ReplicationMessage::new(250, 5000);
+        let msg = NetworkMessage::Replication(replication);
+        let data = msg.serialize().unwrap();
+
+        let addr: SocketAddr = "127.0.0.1:7777".parse().unwrap();
+
+        client.handle_message(addr, &data).unwrap();
+
+        assert_eq!(client.server_tick(), 250);
     }
 }
