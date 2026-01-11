@@ -31,14 +31,16 @@ Interactive examples with graphical output and user controls.
 | Example | Description |
 |---------|-------------|
 | `comprehensive_scene_demo` | Complete asset pipeline with OBJ loading, procedural textures, and FPS camera |
+| `complete_features_demo` | **Full engine showcase** - Terrain, networking, scripting, TAA, SSR, SSAO, deferred rendering |
 | `scene_demo` | Scene loading and saving with basic rendering |
+| `save_load_demo` | Save/load system with metadata, validation, and multiple save slots (console output) |
 | `multi_mesh_demo` | Multiple meshes with transforms |
 | `material_demo` | Material system demonstration with PBR properties and post-processing |
 | `environment_probe_demo` | Environment map reflections |
 | `particles_demo` | GPU-accelerated particle rendering |
 | `terrain_demo` | Heightmap terrain with LOD, texture splatting, and vegetation |
 | `advanced_lighting_demo` | Advanced lighting techniques and effects |
-| `procedural_texture_demo` | Real-time procedural texture generation |
+| `procedural_texture_demo` | **GPU compute shaders** - Real-time procedural texture generation with node-based graphs |
 
 #### Animation Demos
 
@@ -89,7 +91,7 @@ Interactive examples with graphical output and user controls.
 | `spatial_optimization_demo` | Frustum culling, octree, BVH queries, LOD system |
 | `profiling_demo` | CPU/GPU profiling, memory tracking, Chrome trace export |
 | `profiling_advanced_demo` | Advanced profiling with visualization data generation |
-| `gpu_culling_demo` | GPU-based culling techniques |
+| `gpu_culling_demo` | **GPU compute culling** - Frustum culling with indirect draw buffers (1000+ objects) |
 
 #### Networking Demos
 
@@ -123,6 +125,7 @@ Console output demonstrations for data structures, patterns, and systems without
 |---------|-------------|
 | `scripting_demo` | Lua scripting with hot-reload and sandboxing (console output) |
 | `scripting_advanced_demo` | Scripting with ECS systems and performance profiling (console output) |
+| `scripting_console_demo` | **Interactive Lua REPL** - Full ECS introspection, entity queries, live modifications |
 
 ## Featured Examples
 
@@ -142,9 +145,35 @@ cargo run --example hello_triangle
 
 **Controls:** ESC (exit)
 
-### Comprehensive Scene Demo ★
+### Complete Features Demo ★ NEW
 
-The most complete example demonstrating the full asset pipeline:
+**The ultimate showcase** demonstrating ALL major engine capabilities:
+- Terrain rendering with LOD and texture splatting
+- TCP networking with entity replication
+- Lua scripting with hot-reload
+- Modern rendering: TAA, SSR, SSAO, shadows
+- Deferred rendering with HDR
+- GPU culling and physics integration
+
+```bash
+cargo run --example complete_features_demo
+# Or with networking:
+cargo run --example complete_features_demo -- --server  # Server mode
+cargo run --example complete_features_demo -- --client  # Client mode
+```
+
+**Controls:** WASD (move), Mouse (look), Space/Shift (up/down), 1-4 (toggle TAA/SSR/SSAO/Shadows), T (terrain stats), N (network stats), L (reload scripts), ESC (exit)
+
+**What you'll learn:**
+- How all engine systems work together
+- Performance optimization techniques
+- Modern rendering features
+- Multiplayer architecture
+- Scripting integration patterns
+
+### Comprehensive Scene Demo
+
+Complete example demonstrating the full asset pipeline:
 - OBJ mesh loading
 - Procedural texture generation
 - ECS-based scene management
@@ -181,6 +210,104 @@ cargo run --example animation_demo
 ```
 
 **Controls:** 1-4 (switch animations), Arrow Up/Down (adjust blend), ESC (exit)
+
+### GPU Culling Demo
+
+GPU-driven frustum culling demonstration:
+- Compute shader-based culling
+- Indirect draw buffer generation
+- 1000+ objects with minimal CPU overhead
+- Bounding sphere culling
+
+```bash
+cargo run --example gpu_culling_demo
+```
+
+**Controls:** WASD (move), Mouse (look), ESC (exit)
+
+**What you'll learn:**
+- GPU compute shader usage
+- Indirect drawing techniques
+- Performance optimization
+- Large-scale scene rendering
+
+### Procedural Texture Demo
+
+Real-time GPU procedural texture generation:
+- Node-based texture graphs
+- Multiple noise types (Perlin, Simplex, Worley)
+- Complex materials (marble, wood, clouds)
+- LRU caching with statistics
+- 5-10ms generation for 512x512 textures
+
+```bash
+cargo run --example procedural_texture_demo
+```
+
+**Controls:** WASD (move), Mouse (look), Space/Ctrl (up/down), R (regenerate with new seed), C (clear cache stats), ESC (exit)
+
+**What you'll learn:**
+- GPU compute shader workflows
+- Procedural generation techniques
+- Texture composition patterns
+- Performance monitoring
+
+### Scripting Console Demo
+
+Interactive Lua REPL with full ECS access:
+- Live entity inspection and modification
+- Transform manipulation from console
+- Entity spawning/despawning
+- Component queries
+- Command history and autocomplete
+
+```bash
+cargo run --example scripting_console_demo
+```
+
+**Controls:** ~ or F1 (toggle console), Up/Down (history), Tab (autocomplete), Enter (execute)
+
+**Try these commands:**
+```lua
+-- Introspection
+console.list_entities()
+console.entity_count()
+
+-- Entity operations
+id = console.find_entity("Player")
+console.inspect(id)
+console.get_transform(id)
+console.set_transform(id, 10, 5, 0)
+
+-- Spawn/despawn
+console.spawn("NewEntity")
+console.despawn(id)
+```
+
+**What you'll learn:**
+- Lua-ECS integration
+- Runtime introspection
+- Console command patterns
+- Interactive debugging
+
+### Save/Load System Demo
+
+Complete game state persistence (console output):
+- Full world serialization
+- Save metadata (name, description, playtime, tags)
+- Multiple save slots
+- Validation and verification
+- NoSave component exclusion
+
+```bash
+cargo run --example save_load_demo
+```
+
+**What you'll learn:**
+- Scene serialization patterns
+- Save file management
+- Metadata systems
+- Entity filtering
 
 ### Terrain Demo
 
