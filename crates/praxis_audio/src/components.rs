@@ -290,7 +290,7 @@ pub struct AudioListener;
 /// Serialization support for audio components.
 #[cfg(feature = "serialization")]
 mod serialization {
-    use super::{AudioState, AudioSource};
+    use super::{AudioSource, AudioState};
     use bevy_ecs::entity::Entity;
     use praxis_ecs::{DeserializeContext, SerializableComponent};
     use praxis_utils::Result;

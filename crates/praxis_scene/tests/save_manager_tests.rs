@@ -132,8 +132,13 @@ fn test_save_and_load_entity_with_all_components() {
     manager.load_from_file(&mut new_world, &save_path).unwrap();
 
     // Verify all components
-    let mut query =
-        new_world.query::<(&Name, &Transform, &MeshHandle, &TextureHandle, &MaterialHandle)>();
+    let mut query = new_world.query::<(
+        &Name,
+        &Transform,
+        &MeshHandle,
+        &TextureHandle,
+        &MaterialHandle,
+    )>();
     let mut count = 0;
     for (name, transform, mesh, texture, material) in query.iter(&new_world) {
         assert_eq!(name.0, "FullEntity");
@@ -798,7 +803,11 @@ fn test_load_clears_world() {
     manager.load_from_file(&mut world, &save_path).unwrap();
 
     // Verify world only has the saved entity
-    let names: Vec<String> = world.query::<&Name>().iter(&world).map(|n| n.0.clone()).collect();
+    let names: Vec<String> = world
+        .query::<&Name>()
+        .iter(&world)
+        .map(|n| n.0.clone())
+        .collect();
     assert_eq!(names.len(), 1);
     assert!(names.contains(&"SavedEntity".to_string()));
     assert!(!names.contains(&"ExtraEntity".to_string()));
@@ -821,8 +830,8 @@ fn test_version_migration_from_v0() {
         scene,
     };
 
-    let ron_string = ron::ser::to_string_pretty(&save_file, ron::ser::PrettyConfig::default())
-        .unwrap();
+    let ron_string =
+        ron::ser::to_string_pretty(&save_file, ron::ser::PrettyConfig::default()).unwrap();
     fs::write(&save_path, ron_string).unwrap();
 
     // Load and verify migration
@@ -850,8 +859,8 @@ fn test_version_migration_from_v1() {
         scene,
     };
 
-    let ron_string = ron::ser::to_string_pretty(&save_file, ron::ser::PrettyConfig::default())
-        .unwrap();
+    let ron_string =
+        ron::ser::to_string_pretty(&save_file, ron::ser::PrettyConfig::default()).unwrap();
     fs::write(&save_path, ron_string).unwrap();
 
     // Load and verify migration
@@ -883,7 +892,7 @@ fn test_complex_scene_round_trip() {
     let save_path = test_dir.join("complex_scene.ron");
 
     // Create a complex scene with multiple entity types
-    
+
     // Camera
     world.spawn((
         Name("MainCamera".to_string()),
@@ -1089,7 +1098,11 @@ fn test_multiple_save_load_cycles() {
     let mut world3 = World::new();
     manager.load_from_file(&mut world3, &save_path).unwrap();
 
-    let names: Vec<String> = world3.query::<&Name>().iter(&world3).map(|n| n.0.clone()).collect();
+    let names: Vec<String> = world3
+        .query::<&Name>()
+        .iter(&world3)
+        .map(|n| n.0.clone())
+        .collect();
     assert_eq!(names.len(), 2);
     assert!(names.contains(&"Entity1".to_string()));
     assert!(names.contains(&"Entity2".to_string()));

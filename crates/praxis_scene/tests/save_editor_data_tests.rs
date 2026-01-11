@@ -64,8 +64,8 @@ fn test_save_with_editor_camera() {
     scene.set_editor_data(EditorData::new().with_camera(editor_camera));
 
     let save_file = SaveFile::new(scene, SaveMetadata::new("Editor Camera Test"));
-    let ron_string = ron::ser::to_string_pretty(&save_file, ron::ser::PrettyConfig::default())
-        .unwrap();
+    let ron_string =
+        ron::ser::to_string_pretty(&save_file, ron::ser::PrettyConfig::default()).unwrap();
     fs::write(&save_path, ron_string).unwrap();
 
     // Load and verify
@@ -100,8 +100,8 @@ fn test_save_with_editor_viewport_settings() {
     scene.set_editor_data(EditorData::new().with_viewport(viewport));
 
     let save_file = SaveFile::new(scene, SaveMetadata::new("Viewport Settings Test"));
-    let ron_string = ron::ser::to_string_pretty(&save_file, ron::ser::PrettyConfig::default())
-        .unwrap();
+    let ron_string =
+        ron::ser::to_string_pretty(&save_file, ron::ser::PrettyConfig::default()).unwrap();
     fs::write(&save_path, ron_string).unwrap();
 
     // Load and verify
@@ -135,8 +135,8 @@ fn test_save_with_selected_entities() {
     scene.set_editor_data(EditorData::new().with_selected_entities(selected));
 
     let save_file = SaveFile::new(scene, SaveMetadata::new("Selection Test"));
-    let ron_string = ron::ser::to_string_pretty(&save_file, ron::ser::PrettyConfig::default())
-        .unwrap();
+    let ron_string =
+        ron::ser::to_string_pretty(&save_file, ron::ser::PrettyConfig::default()).unwrap();
     fs::write(&save_path, ron_string).unwrap();
 
     // Load and verify
@@ -172,8 +172,8 @@ fn test_save_with_editor_preferences() {
     scene.set_editor_data(EditorData::new().with_preferences(prefs));
 
     let save_file = SaveFile::new(scene, SaveMetadata::new("Preferences Test"));
-    let ron_string = ron::ser::to_string_pretty(&save_file, ron::ser::PrettyConfig::default())
-        .unwrap();
+    let ron_string =
+        ron::ser::to_string_pretty(&save_file, ron::ser::PrettyConfig::default()).unwrap();
     fs::write(&save_path, ron_string).unwrap();
 
     // Load and verify
@@ -215,8 +215,8 @@ fn test_save_with_complete_editor_data() {
     scene.set_editor_data(editor_data);
 
     let save_file = SaveFile::new(scene, SaveMetadata::new("Complete Editor Data Test"));
-    let ron_string = ron::ser::to_string_pretty(&save_file, ron::ser::PrettyConfig::default())
-        .unwrap();
+    let ron_string =
+        ron::ser::to_string_pretty(&save_file, ron::ser::PrettyConfig::default()).unwrap();
     fs::write(&save_path, ron_string).unwrap();
 
     // Load and verify all parts
@@ -451,8 +451,8 @@ fn test_editor_data_serialization_roundtrip() {
 
     // Save
     let save_file = SaveFile::new(scene, SaveMetadata::new("Roundtrip Test"));
-    let ron_string = ron::ser::to_string_pretty(&save_file, ron::ser::PrettyConfig::default())
-        .unwrap();
+    let ron_string =
+        ron::ser::to_string_pretty(&save_file, ron::ser::PrettyConfig::default()).unwrap();
     fs::write(&save_path, ron_string).unwrap();
 
     // Load

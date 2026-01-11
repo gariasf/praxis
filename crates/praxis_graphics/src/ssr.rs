@@ -285,8 +285,7 @@ impl SsrRenderer {
         )?;
 
         // Create pipelines
-        let ssr_pipeline =
-            Self::create_ssr_pipeline(&device, &ssr_render_pass, [width, height])?;
+        let ssr_pipeline = Self::create_ssr_pipeline(&device, &ssr_render_pass, [width, height])?;
         let blur_pipeline =
             Self::create_blur_pipeline(&device, &blur_render_pass, [width, height])?;
         let composite_pipeline =
@@ -828,7 +827,11 @@ impl SsrRenderer {
                         gbuffer.normal.clone(),
                         sampler.clone(),
                     ),
-                    WriteDescriptorSet::image_view_sampler(1, gbuffer.depth.clone(), sampler.clone()),
+                    WriteDescriptorSet::image_view_sampler(
+                        1,
+                        gbuffer.depth.clone(),
+                        sampler.clone(),
+                    ),
                     WriteDescriptorSet::image_view_sampler(
                         2,
                         gbuffer.metallic_roughness.clone(),
@@ -1106,12 +1109,8 @@ impl SsrRenderer {
     pub fn resize(&mut self, width: u32, height: u32) -> Result<()> {
         info!("Resizing SSR renderer: {}x{}", width, height);
 
-        let (ssr_texture, ssr_framebuffer) = Self::create_ssr_target(
-            &self.memory_allocator,
-            &self.ssr_render_pass,
-            width,
-            height,
-        )?;
+        let (ssr_texture, ssr_framebuffer) =
+            Self::create_ssr_target(&self.memory_allocator, &self.ssr_render_pass, width, height)?;
 
         let (blur_texture_a, blur_framebuffer_a) = Self::create_blur_target(
             &self.memory_allocator,

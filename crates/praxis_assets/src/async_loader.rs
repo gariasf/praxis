@@ -959,8 +959,7 @@ mod tests {
         let test_file = temp_dir.join("test_channel_error.obj");
 
         // Write invalid OBJ content to trigger a parsing error
-        std::fs::write(&test_file, "invalid obj content\n")
-            .expect("Failed to write test file");
+        std::fs::write(&test_file, "invalid obj content\n").expect("Failed to write test file");
 
         let (_handle, receiver) = loader
             .load_async(&test_file)
@@ -1072,8 +1071,7 @@ mod tests {
             "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n",
         )
         .expect("Failed to write valid file");
-        std::fs::write(&invalid_file, "invalid content")
-            .expect("Failed to write invalid file");
+        std::fs::write(&invalid_file, "invalid content").expect("Failed to write invalid file");
 
         // Load both files concurrently
         let (handle1, receiver1) = loader.load_async(&valid_file).await.unwrap();

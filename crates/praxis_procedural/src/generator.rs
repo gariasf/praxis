@@ -601,11 +601,7 @@ void main() {
 
         let spirv = result.unwrap();
         assert!(!spirv.is_empty(), "SPIR-V output should not be empty");
-        assert_eq!(
-            spirv.len() % 4,
-            0,
-            "SPIR-V should be aligned to 4 bytes"
-        );
+        assert_eq!(spirv.len() % 4, 0, "SPIR-V should be aligned to 4 bytes");
 
         let magic = u32::from_le_bytes([spirv[0], spirv[1], spirv[2], spirv[3]]);
         assert_eq!(
@@ -643,7 +639,10 @@ void main() {
         );
 
         let spirv = result.unwrap();
-        assert!(spirv.len() > 100, "SPIR-V with uniforms should be substantial");
+        assert!(
+            spirv.len() > 100,
+            "SPIR-V with uniforms should be substantial"
+        );
     }
 
     #[test]
@@ -1417,7 +1416,10 @@ void not_main() {
 
             let shader = generator
                 .compile_graph_to_shader(&graph, params)
-                .expect(&format!("Failed to generate shader for blend mode {:?}", mode));
+                .expect(&format!(
+                    "Failed to generate shader for blend mode {:?}",
+                    mode
+                ));
 
             assert!(
                 shader.contains(expected_expr),
@@ -1459,7 +1461,10 @@ void not_main() {
 
             let shader = generator
                 .compile_graph_to_shader(&graph, params)
-                .expect(&format!("Failed to generate shader for noise type {:?}", noise_type));
+                .expect(&format!(
+                    "Failed to generate shader for noise type {:?}",
+                    noise_type
+                ));
 
             assert!(
                 shader.contains(expected_fn),
