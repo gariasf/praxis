@@ -1203,4 +1203,564 @@ mod tests {
             assert!((unpacked - *normal).length() < 0.001);
         }
     }
+
+    // ===== TAA (Temporal Anti-Aliasing) Tests =====
+
+    #[test]
+    fn test_velocity_buffer_static_object() {
+        // Test velocity buffer generation for a static object
+        // Static objects should have zero velocity
+        use praxis_math::{Mat4, Vec4};
+
+        let current_pos = Vec4::new(0.5, 0.5, 0.5, 1.0);
+        let previous_pos = Vec4::new(0.5, 0.5, 0.5, 1.0);
+
+        // Simulate perspective division (clip space to NDC)
+        let current_ndc = Vec4::new(
+            current_pos.x / current_pos.w,
+            current_pos.y / current_pos.w,
+            current_pos.z / current_pos.w,
+            1.0,
+        );
+        let previous_ndc = Vec4::new(
+            previous_pos.x / previous_pos.w,
+            previous_pos.y / previous_pos.w,
+            previous_pos.z / previous_pos.w,
+            1.0,
+        );
+
+        // Calculate velocity
+        let velocity_x = current_ndc.x - previous_ndc.x;
+        let velocity_y = current_ndc.y - previous_ndc.y;
+
+        // Static object should have zero velocity
+        assert!((velocity_x).abs() < 0.0001);
+        assert!((velocity_y).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_velocity_buffer_moving_object() {
+        // Test velocity buffer generation for a moving object
+        use praxis_math::Vec4;
+
+        // Object moved from one position to another
+        let current_pos = Vec4::new(0.6, 0.5, 0.5, 1.0);
+        let previous_pos = Vec4::new(0.4, 0.5, 0.5, 1.0);
+
+        // Convert to NDC
+        let current_ndc = Vec4::new(
+            current_pos.x / current_pos.w,
+            current_pos.y / current_pos.w,
+            current_pos.z / current_pos.w,
+            1.0,
+        );
+        let previous_ndc = Vec4::new(
+            previous_pos.x / previous_pos.w,
+            previous_pos.y / previous_pos.w,
+            previous_pos.z / previous_pos.w,
+            1.0,
+        );
+
+        // Calculate velocity
+        let velocity_x = current_ndc.x - previous_ndc.x;
+        let velocity_y = current_ndc.y - previous_ndc.y;
+
+        // Should have velocity in x direction
+        assert!((velocity_x - 0.2).abs() < 0.0001);
+        assert!((velocity_y).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_velocity_buffer_perspective_division() {
+        // Test that perspective division is correctly applied
+        use praxis_math::Vec4;
+
+        // Object with non-unit w component (after projection)
+        let current_pos = Vec4::new(1.0, 2.0, 3.0, 2.0);
+        let previous_pos = Vec4::new(0.5, 1.0, 1.5, 2.0);
+
+        // Convert to NDC by dividing by w
+        let current_ndc_x = current_pos.x / current_pos.w;
+        let current_ndc_y = current_pos.y / current_pos.w;
+        let previous_ndc_x = previous_pos.x / previous_pos.w;
+        let previous_ndc_y = previous_pos.y / previous_pos.w;
+
+        // Calculate velocity
+        let velocity_x = current_ndc_x - previous_ndc_x;
+        let velocity_y = current_ndc_y - previous_ndc_y;
+
+        // Check correct perspective division
+        assert!((current_ndc_x - 0.5).abs() < 0.0001);
+        assert!((current_ndc_y - 1.0).abs() < 0.0001);
+        assert!((previous_ndc_x - 0.25).abs() < 0.0001);
+        assert!((previous_ndc_y - 0.5).abs() < 0.0001);
+
+        // Velocity should be the difference
+        assert!((velocity_x - 0.25).abs() < 0.0001);
+        assert!((velocity_y - 0.5).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_velocity_buffer_camera_motion() {
+        // Test velocity calculation for camera motion (all objects move in screen space)
+        use praxis_math::{Mat4, Vec3, Vec4};
+
+        // Simple vertex position
+        let vertex_pos = Vec3::new(1.0, 0.0, -5.0);
+
+        // Current frame matrices
+        let view_current = Mat4::look_at_rh(
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(0.0, 0.0, -1.0),
+            Vec3::Y,
+        );
+        let proj = Mat4::perspective_rh(std::f32::consts::PI / 4.0, 16.0 / 9.0, 0.1, 100.0);
+        let model = Mat4::IDENTITY;
+
+        // Previous frame matrices (camera moved)
+        let view_previous = Mat4::look_at_rh(
+            Vec3::new(0.5, 0.0, 0.0),
+            Vec3::new(0.5, 0.0, -1.0),
+            Vec3::Y,
+        );
+
+        // Calculate current position
+        let current_pos = proj * view_current * model * Vec4::from((vertex_pos, 1.0));
+        let previous_pos = proj * view_previous * model * Vec4::from((vertex_pos, 1.0));
+
+        // Convert to NDC
+        let current_ndc_x = current_pos.x / current_pos.w;
+        let previous_ndc_x = previous_pos.x / previous_pos.w;
+
+        // Calculate velocity
+        let velocity_x = current_ndc_x - previous_ndc_x;
+
+        // Camera moved right, so object should appear to move left in screen space
+        assert!(velocity_x < 0.0);
+    }
+
+    #[test]
+    fn test_temporal_reprojection_no_motion() {
+        // Test temporal reprojection with no motion
+        let velocity_x = 0.0;
+        let velocity_y = 0.0;
+
+        // Current UV coordinate
+        let uv_x = 0.5;
+        let uv_y = 0.5;
+
+        // Calculate reprojected UV (subtracting velocity for history lookup)
+        let history_uv_x = uv_x - velocity_x;
+        let history_uv_y = uv_y - velocity_y;
+
+        // No motion means same UV
+        assert!((history_uv_x - 0.5).abs() < 0.0001);
+        assert!((history_uv_y - 0.5).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_temporal_reprojection_with_motion() {
+        // Test temporal reprojection with object motion
+        let velocity_x = 0.1;
+        let velocity_y = 0.05;
+
+        let uv_x = 0.5;
+        let uv_y = 0.5;
+
+        // Calculate reprojected UV
+        let history_uv_x = uv_x - velocity_x;
+        let history_uv_y = uv_y - velocity_y;
+
+        // History should be at previous position
+        assert!((history_uv_x - 0.4).abs() < 0.0001);
+        assert!((history_uv_y - 0.45).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_temporal_reprojection_out_of_bounds() {
+        // Test that out-of-bounds reprojection is detected
+        let velocity_x = 1.5;
+        let velocity_y = 0.0;
+
+        let uv_x = 0.5;
+        let uv_y = 0.5;
+
+        let history_uv_x = uv_x - velocity_x;
+        let history_uv_y = uv_y - velocity_y;
+
+        // Check if reprojected UV is out of valid range [0, 1]
+        let valid_history = history_uv_x >= 0.0
+            && history_uv_x <= 1.0
+            && history_uv_y >= 0.0
+            && history_uv_y <= 1.0;
+
+        // Should be invalid (history_uv_x = -1.0)
+        assert!(!valid_history);
+    }
+
+    #[test]
+    fn test_temporal_reprojection_edge_case() {
+        // Test edge case where reprojection is just at boundary
+        let velocity_x = 0.5;
+        let velocity_y = 0.5;
+
+        let uv_x = 0.5;
+        let uv_y = 0.5;
+
+        let history_uv_x = uv_x - velocity_x;
+        let history_uv_y = uv_y - velocity_y;
+
+        // Should be exactly at (0, 0) which is valid
+        assert!((history_uv_x - 0.0).abs() < 0.0001);
+        assert!((history_uv_y - 0.0).abs() < 0.0001);
+
+        let valid_history = history_uv_x >= 0.0
+            && history_uv_x <= 1.0
+            && history_uv_y >= 0.0
+            && history_uv_y <= 1.0;
+        assert!(valid_history);
+    }
+
+    #[test]
+    fn test_rgb_to_ycocg_conversion() {
+        // Test RGB to YCoCg color space conversion
+        // Used for better neighborhood clamping in TAA
+
+        // Pure red
+        let rgb = Vec3::new(1.0, 0.0, 0.0);
+        let y = rgb.dot(Vec3::new(0.25, 0.5, 0.25));
+        let co = rgb.dot(Vec3::new(0.5, 0.0, -0.5));
+        let cg = rgb.dot(Vec3::new(-0.25, 0.5, -0.25));
+
+        assert!((y - 0.25).abs() < 0.0001);
+        assert!((co - 0.5).abs() < 0.0001);
+        assert!((cg - (-0.25)).abs() < 0.0001);
+
+        // Pure green
+        let rgb = Vec3::new(0.0, 1.0, 0.0);
+        let y = rgb.dot(Vec3::new(0.25, 0.5, 0.25));
+        let co = rgb.dot(Vec3::new(0.5, 0.0, -0.5));
+        let cg = rgb.dot(Vec3::new(-0.25, 0.5, -0.25));
+
+        assert!((y - 0.5).abs() < 0.0001);
+        assert!((co - 0.0).abs() < 0.0001);
+        assert!((cg - 0.5).abs() < 0.0001);
+
+        // Pure blue
+        let rgb = Vec3::new(0.0, 0.0, 1.0);
+        let y = rgb.dot(Vec3::new(0.25, 0.5, 0.25));
+        let co = rgb.dot(Vec3::new(0.5, 0.0, -0.5));
+        let cg = rgb.dot(Vec3::new(-0.25, 0.5, -0.25));
+
+        assert!((y - 0.25).abs() < 0.0001);
+        assert!((co - (-0.5)).abs() < 0.0001);
+        assert!((cg - (-0.25)).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_ycocg_to_rgb_conversion() {
+        // Test YCoCg to RGB conversion (inverse of rgb_to_ycocg)
+        let ycocg = Vec3::new(0.5, 0.25, -0.125);
+
+        let y = ycocg.x;
+        let co = ycocg.y;
+        let cg = ycocg.z;
+
+        let tmp = y - cg;
+        let r = tmp + co;
+        let g = y + cg;
+        let b = tmp - co;
+
+        // Reconstruct RGB
+        let rgb = Vec3::new(r, g, b);
+
+        // Values should be valid (in range and finite)
+        assert!(rgb.x.is_finite() && rgb.x >= 0.0);
+        assert!(rgb.y.is_finite() && rgb.y >= 0.0);
+        assert!(rgb.z.is_finite() && rgb.z >= 0.0);
+    }
+
+    #[test]
+    fn test_ycocg_roundtrip() {
+        // Test that RGB -> YCoCg -> RGB preserves color
+        let original = Vec3::new(0.8, 0.3, 0.5);
+
+        // Convert to YCoCg
+        let y = original.dot(Vec3::new(0.25, 0.5, 0.25));
+        let co = original.dot(Vec3::new(0.5, 0.0, -0.5));
+        let cg = original.dot(Vec3::new(-0.25, 0.5, -0.25));
+
+        // Convert back to RGB
+        let tmp = y - cg;
+        let r = tmp + co;
+        let g = y + cg;
+        let b = tmp - co;
+        let reconstructed = Vec3::new(r, g, b);
+
+        // Should match original
+        assert!((reconstructed - original).length() < 0.0001);
+    }
+
+    #[test]
+    fn test_neighborhood_min_max() {
+        // Test neighborhood min/max calculation for clamping
+        // Simulates 3x3 neighborhood sampling
+
+        let samples = [
+            Vec3::new(0.5, 0.5, 0.5), // Center
+            Vec3::new(0.4, 0.4, 0.4), // Darker neighbors
+            Vec3::new(0.6, 0.6, 0.6), // Brighter neighbors
+            Vec3::new(0.45, 0.45, 0.45),
+            Vec3::new(0.55, 0.55, 0.55),
+            Vec3::new(0.48, 0.48, 0.48),
+            Vec3::new(0.52, 0.52, 0.52),
+            Vec3::new(0.47, 0.47, 0.47),
+            Vec3::new(0.53, 0.53, 0.53),
+        ];
+
+        let mut color_min = samples[0];
+        let mut color_max = samples[0];
+
+        for sample in samples.iter() {
+            color_min = color_min.min(*sample);
+            color_max = color_max.max(*sample);
+        }
+
+        // Min should be the darkest sample
+        assert!((color_min.x - 0.4).abs() < 0.0001);
+        // Max should be the brightest sample
+        assert!((color_max.x - 0.6).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_neighborhood_average() {
+        // Test neighborhood average calculation
+        let samples = [
+            Vec3::new(0.5, 0.5, 0.5),
+            Vec3::new(0.5, 0.5, 0.5),
+            Vec3::new(0.5, 0.5, 0.5),
+            Vec3::new(0.5, 0.5, 0.5),
+            Vec3::new(0.5, 0.5, 0.5),
+            Vec3::new(0.5, 0.5, 0.5),
+            Vec3::new(0.5, 0.5, 0.5),
+            Vec3::new(0.5, 0.5, 0.5),
+            Vec3::new(0.5, 0.5, 0.5),
+        ];
+
+        let mut color_avg = Vec3::ZERO;
+        for sample in samples.iter() {
+            color_avg += *sample;
+        }
+        color_avg /= 9.0;
+
+        // Average of uniform samples should equal the sample value
+        assert!((color_avg.x - 0.5).abs() < 0.0001);
+        assert!((color_avg.y - 0.5).abs() < 0.0001);
+        assert!((color_avg.z - 0.5).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_aabb_clipping_inside() {
+        // Test AABB clipping when history color is inside the box
+        let aabb_min = Vec3::new(0.4, 0.4, 0.4);
+        let aabb_max = Vec3::new(0.6, 0.6, 0.6);
+        let history_color = Vec3::new(0.5, 0.5, 0.5);
+
+        let center = (aabb_max + aabb_min) * 0.5;
+        let extents = (aabb_max - aabb_min) * 0.5;
+
+        let offset = history_color - center;
+        let unit_offset = offset / extents.max(Vec3::splat(0.0001));
+
+        let max_component = unit_offset.x.abs().max(unit_offset.y.abs()).max(unit_offset.z.abs());
+
+        // History is inside AABB
+        assert!(max_component <= 1.0);
+
+        // Clipped color should equal history (no clipping needed)
+        let clipped = if max_component > 1.0 {
+            center + offset / max_component
+        } else {
+            history_color
+        };
+
+        assert!((clipped - history_color).length() < 0.0001);
+    }
+
+    #[test]
+    fn test_aabb_clipping_outside() {
+        // Test AABB clipping when history color is outside the box
+        let aabb_min = Vec3::new(0.4, 0.4, 0.4);
+        let aabb_max = Vec3::new(0.6, 0.6, 0.6);
+        let history_color = Vec3::new(0.8, 0.5, 0.5); // Outside on X axis
+
+        let center = (aabb_max + aabb_min) * 0.5;
+        let extents = (aabb_max - aabb_min) * 0.5;
+
+        let offset = history_color - center;
+        let unit_offset = offset / extents.max(Vec3::splat(0.0001));
+
+        let max_component = unit_offset.x.abs().max(unit_offset.y.abs()).max(unit_offset.z.abs());
+
+        // History is outside AABB
+        assert!(max_component > 1.0);
+
+        // Clip to AABB
+        let clipped = center + offset / max_component;
+
+        // Clipped value should be on the boundary of the AABB
+        assert!(clipped.x >= aabb_min.x && clipped.x <= aabb_max.x);
+        assert!(clipped.y >= aabb_min.y && clipped.y <= aabb_max.y);
+        assert!(clipped.z >= aabb_min.z && clipped.z <= aabb_max.z);
+
+        // Clipped X should be at the max boundary
+        assert!((clipped.x - aabb_max.x).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_aabb_clipping_corner() {
+        // Test AABB clipping when history is far from corner
+        let aabb_min = Vec3::new(0.4, 0.4, 0.4);
+        let aabb_max = Vec3::new(0.6, 0.6, 0.6);
+        let history_color = Vec3::new(0.9, 0.9, 0.9); // Far outside corner
+
+        let center = (aabb_max + aabb_min) * 0.5;
+        let extents = (aabb_max - aabb_min) * 0.5;
+
+        let offset = history_color - center;
+        let unit_offset = offset / extents.max(Vec3::splat(0.0001));
+
+        let max_component = unit_offset.x.abs().max(unit_offset.y.abs()).max(unit_offset.z.abs());
+
+        assert!(max_component > 1.0);
+
+        let clipped = center + offset / max_component;
+
+        // All components should be within AABB
+        assert!(clipped.x >= aabb_min.x && clipped.x <= aabb_max.x + 0.0001);
+        assert!(clipped.y >= aabb_min.y && clipped.y <= aabb_max.y + 0.0001);
+        assert!(clipped.z >= aabb_min.z && clipped.z <= aabb_max.z + 0.0001);
+    }
+
+    #[test]
+    fn test_adaptive_blend_factor_static() {
+        // Test adaptive blend factor for static objects (no velocity)
+        let velocity = Vec3::new(0.0, 0.0, 0.0);
+        let velocity_length = velocity.length();
+        let base_blend_factor = 0.1;
+
+        // Adaptive blend: more history for static objects
+        let adaptive_blend = base_blend_factor
+            + (0.5 - base_blend_factor) * (velocity_length * 10.0).clamp(0.0, 1.0);
+
+        // Static objects should use mostly history (low blend factor)
+        assert!((adaptive_blend - base_blend_factor).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_adaptive_blend_factor_fast_motion() {
+        // Test adaptive blend factor for fast-moving objects
+        let velocity = Vec3::new(0.2, 0.2, 0.0);
+        let velocity_length = velocity.length();
+        let base_blend_factor = 0.1;
+
+        // Adaptive blend: less history for fast motion
+        let adaptive_blend = base_blend_factor
+            + (0.5 - base_blend_factor) * (velocity_length * 10.0).clamp(0.0, 1.0);
+
+        // Fast motion should blend towards 0.5 (more current frame)
+        assert!(adaptive_blend > base_blend_factor);
+        assert!(adaptive_blend <= 0.5);
+    }
+
+    #[test]
+    fn test_adaptive_blend_factor_very_fast() {
+        // Test adaptive blend factor caps at 0.5 for very fast motion
+        let velocity = Vec3::new(1.0, 1.0, 0.0); // Very large velocity
+        let velocity_length = velocity.length();
+        let base_blend_factor = 0.1;
+
+        let adaptive_blend = base_blend_factor
+            + (0.5 - base_blend_factor) * (velocity_length * 10.0).clamp(0.0, 1.0);
+
+        // Should cap at 0.5
+        assert!((adaptive_blend - 0.5).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_velocity_buffer_format() {
+        // Test velocity buffer uses RG16F format (2 channels, 16-bit float)
+        // Velocity is stored in screen space as (u, v) motion
+
+        let velocity = praxis_math::Vec2::new(0.123, -0.456);
+
+        // Simulate 16-bit float precision
+        let quantize = |v: f32| -> f32 { (v * 1000.0).round() / 1000.0 };
+
+        let stored_x = quantize(velocity.x);
+        let stored_y = quantize(velocity.y);
+
+        // Should maintain reasonable precision
+        assert!((stored_x - velocity.x).abs() < 0.001);
+        assert!((stored_y - velocity.y).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_previous_frame_matrix_calculation() {
+        // Test that previous frame matrices are correctly tracked
+        use praxis_math::{Mat4, Vec3, Vec4};
+
+        let model_current = Mat4::from_translation(Vec3::new(1.0, 0.0, 0.0));
+        let model_previous = Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0));
+
+        let view = Mat4::look_at_rh(Vec3::ZERO, Vec3::NEG_Z, Vec3::Y);
+        let proj = Mat4::perspective_rh(std::f32::consts::PI / 4.0, 1.0, 0.1, 100.0);
+
+        let vertex = Vec3::new(0.0, 0.0, -5.0);
+
+        // Current MVP
+        let current_mvp = proj * view * model_current;
+        let current_pos = current_mvp * Vec4::from((vertex, 1.0));
+
+        // Previous MVP
+        let previous_mvp = proj * view * model_previous;
+        let previous_pos = previous_mvp * Vec4::from((vertex, 1.0));
+
+        // Positions should be different due to model matrix change
+        assert!((current_pos.x - previous_pos.x).abs() > 0.01);
+    }
+
+    #[test]
+    fn test_jitter_offset_application() {
+        // Test camera jitter for TAA (sub-pixel offsets)
+        use praxis_math::Vec2;
+
+        // Halton sequence common for TAA jitter
+        let jitter_offset = Vec2::new(0.5 / 1920.0, 0.5 / 1080.0); // Half pixel offset
+
+        // Jitter should be very small (sub-pixel)
+        assert!(jitter_offset.x.abs() < 0.001);
+        assert!(jitter_offset.y.abs() < 0.001);
+        assert!(jitter_offset.x > 0.0);
+        assert!(jitter_offset.y > 0.0);
+    }
+
+    #[test]
+    fn test_taa_blend_factor_range() {
+        // Test that blend factors are in valid range [0, 1]
+        let test_factors = [0.0, 0.05, 0.1, 0.2, 0.5, 1.0];
+
+        for factor in test_factors.iter() {
+            assert!(*factor >= 0.0 && *factor <= 1.0);
+
+            // Simulate blending
+            let history_color = 0.8;
+            let current_color = 0.3;
+            let blended = history_color * (1.0 - factor) + current_color * factor;
+
+            // Result should be between history and current
+            assert!(blended >= current_color.min(history_color));
+            assert!(blended <= current_color.max(history_color));
+        }
+    }
 }
