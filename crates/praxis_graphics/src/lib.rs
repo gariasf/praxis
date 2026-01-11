@@ -789,7 +789,7 @@ mod shaders;
 pub mod shadow;
 pub mod skybox;
 pub mod ssao;
-// pub mod ssr; // TODO: Module file not yet created
+pub mod ssr;
 pub mod taa;
 pub mod texture;
 pub mod uniform_buffer;

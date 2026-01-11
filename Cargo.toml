@@ -221,6 +221,28 @@ required-features = ["editor"]
 name = "advanced_lighting_demo"
 path = "examples/advanced_lighting_demo.rs"
 
+[[example]]
+name = "complete_features_demo"
+path = "examples/complete_features_demo.rs"
+required-features = ["terrain", "networking", "scripting"]
+
+[[example]]
+name = "gpu_culling_demo"
+path = "examples/gpu_culling_demo.rs"
+
+[[example]]
+name = "save_load_demo"
+path = "examples/save_load_demo.rs"
+
+[[example]]
+name = "procedural_texture_demo"
+path = "examples/procedural_texture_demo.rs"
+
+[[example]]
+name = "scripting_console_demo"
+path = "examples/scripting_console_demo.rs"
+required-features = ["scripting", "editor"]
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 vulkano = "0.35.1"

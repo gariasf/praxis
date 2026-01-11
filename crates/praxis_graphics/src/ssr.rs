@@ -63,8 +63,8 @@
 //! ```
 
 use crate::{deferred::GBuffer, environment_probe::IblData, post_process::QuadVertex, shaders};
-use praxis_math::{Mat4, Vec2, Vec3};
-use praxis_utils::{debug, eyre, info, trace, Result};
+use praxis_math::{Mat4, Vec3};
+use praxis_utils::{eyre, info, trace, Result};
 use std::sync::Arc;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage},
