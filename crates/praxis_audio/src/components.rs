@@ -1,4 +1,53 @@
 //! Audio components for the ECS.
+//!
+//! # Component-Based Audio Architecture
+//!
+//! This module defines ECS components for attaching audio to entities.
+//! The component-based approach provides several key benefits:
+//!
+//! ## Benefits of Component-Based Audio
+//!
+//! 1. **Automatic Position Tracking**
+//!    - Audio sources inherit transform from entity hierarchy
+//!    - No manual position synchronization required
+//!    - Works seamlessly with parent-child relationships
+//!
+//! 2. **Lifecycle Management**
+//!    - Audio cleaned up automatically when entity despawns
+//!    - No orphaned sound handles or memory leaks
+//!    - Natural coupling between game objects and their sounds
+//!
+//! 3. **Data-Driven Configuration**
+//!    - Audio properties stored as data (serializable)
+//!    - Can be tweaked in editor or config files
+//!    - Supports hot-reloading and runtime modification
+//!
+//! 4. **ECS Query Performance**
+//!    - Systems efficiently process only relevant entities
+//!    - Change detection minimizes unnecessary work
+//!    - Parallel iteration where possible
+//!
+//! ## Component Workflow
+//!
+//! ```text
+//! Entity Creation
+//!     ↓
+//! Add AudioSource component (configuration)
+//!     ↓
+//! Add Transform component (position)
+//!     ↓
+//! Set state to Playing
+//!     ↓
+//! play_sound_system detects state change
+//!     ↓
+//! AudioManager creates sound handle
+//!     ↓
+//! Handle stored in component
+//!     ↓
+//! System updates spatial params each frame
+//!     ↓
+//! Entity despawns → Component dropped → Handle cleaned up
+//! ```
 
 use praxis_ecs::Component;
 
@@ -9,6 +58,78 @@ use serde::{Deserialize, Serialize};
 ///
 /// When attached to an entity with a `Transform`, the audio system will
 /// play spatial audio positioned at the entity's location.
+///
+/// # Component Fields
+///
+/// ## Configuration Fields (User-Facing)
+/// - `path`: Audio file to play
+/// - `volume`: Base volume level (0.0 to 1.0)
+/// - `spatial`: Enable 3D positioning
+/// - `looping`: Repeat playback continuously
+/// - `state`: Playback control (Playing/Paused/Stopped)
+/// - `max_distance`: Sound inaudible beyond this distance
+/// - `reference_distance`: Distance for full volume
+/// - `doppler_enabled`: Enable pitch shifting for velocity
+/// - `doppler_scale`: Intensity of doppler effect
+///
+/// ## Internal Fields (System-Managed)
+/// - `sound_handle`: Kira sound control handle
+/// - `previous_position`: Cached position for velocity calculation
+///
+/// These internal fields are managed by the audio system and should not
+/// be modified directly by user code.
+///
+/// # Usage Patterns
+///
+/// ## Pattern 1: One-Shot Sound
+/// ```rust,no_run
+/// use praxis_audio::AudioSource;
+/// use praxis_ecs::{World, Transform};
+///
+/// let mut world = World::new();
+///
+/// // Explosion that plays once at a location
+/// world.spawn((
+///     Transform::from_xyz(10.0, 0.0, 5.0),
+///     AudioSource::new("assets/sounds/explosion.ogg")
+///         .with_volume(0.8)
+///         .with_spatial(true),
+/// ));
+/// ```
+///
+/// ## Pattern 2: Looping Ambient Sound
+/// ```rust,no_run
+/// # use praxis_audio::AudioSource;
+/// # use praxis_ecs::{World, Transform};
+/// # let mut world = World::new();
+/// // Fire crackling sound that loops
+/// world.spawn((
+///     Transform::from_xyz(0.0, 0.0, 0.0),
+///     AudioSource::new("assets/sounds/fire.ogg")
+///         .with_volume(0.5)
+///         .with_spatial(true)
+///         .with_looping(true)
+///         .with_max_distance(50.0)
+///         .with_reference_distance(2.0),
+/// ));
+/// ```
+///
+/// ## Pattern 3: Moving Sound with Doppler
+/// ```rust,no_run
+/// # use praxis_audio::AudioSource;
+/// # use praxis_ecs::{World, Transform};
+/// # let mut world = World::new();
+/// // Car engine that changes pitch with movement
+/// world.spawn((
+///     Transform::from_xyz(0.0, 0.0, 0.0),
+///     AudioSource::new("assets/sounds/engine.ogg")
+///         .with_volume(0.7)
+///         .with_spatial(true)
+///         .with_looping(true)
+///         .with_doppler(true)
+///         .with_doppler_scale(1.0),
+/// ));
+/// ```
 ///
 /// # Example
 ///
@@ -30,38 +151,61 @@ use serde::{Deserialize, Serialize};
 #[derive(Component, Debug, Clone)]
 pub struct AudioSource {
     /// Path to the audio file to play.
+    /// Relative to the working directory or assets folder.
+    /// Cached by `AudioManager` for efficient playback.
     pub path: String,
 
     /// Volume level (0.0 to 1.0).
+    /// This is the base volume before spatial attenuation is applied.
+    /// For spatial sounds: `final_volume` = volume × attenuation
     pub volume: f32,
 
     /// Whether to enable spatial audio positioning.
+    /// - true: Volume and panning based on position relative to listener
+    /// - false: Sound plays at full volume with center panning
     pub spatial: bool,
 
     /// Whether the audio should loop continuously.
+    /// - true: Sound restarts from beginning when it ends
+    /// - false: Sound plays once and stops
     pub looping: bool,
 
     /// Playback state.
+    /// Controls whether the sound is playing, paused, or stopped.
+    /// Modified by user code to control playback.
     pub state: AudioState,
 
     /// Maximum distance for audio attenuation (in world units).
-    /// Beyond this distance, the sound is inaudible.
+    /// Beyond this distance, the sound is completely inaudible (volume = 0).
+    /// Typical values: 50-200 units depending on sound type.
     pub max_distance: f32,
 
     /// Reference distance for audio attenuation (in world units).
-    /// At this distance, the volume is at the specified level.
+    /// At distances ≤ `reference_distance`, the volume is at maximum.
+    /// Between reference and max distance, inverse square law applies.
+    /// Typical values: 1-10 units depending on sound intensity.
     pub reference_distance: f32,
 
     /// Whether to enable doppler effect for this source.
+    /// Doppler causes pitch to shift based on velocity relative to listener.
+    /// Best used for fast-moving objects (vehicles, projectiles).
     pub doppler_enabled: bool,
 
     /// Doppler scale factor (0.0 to disable, 1.0 for normal, higher for exaggerated).
+    /// Scales the intensity of the doppler effect.
+    /// - 0.0: No doppler (same as `doppler_enabled` = false)
+    /// - 1.0: Realistic doppler
+    /// - 2.0: Exaggerated doppler (arcade style)
     pub doppler_scale: f32,
 
     /// Handle to the playing sound instance (internal use).
+    /// Managed by the audio system - do not modify directly.
+    /// Contains the unique ID used to control the sound in `AudioManager`.
     pub(crate) sound_handle: Option<SoundHandle>,
 
     /// Previous position for velocity calculation (internal use).
+    /// Managed by the audio system - do not modify directly.
+    /// Used to calculate velocity for doppler effect.
     pub(crate) previous_position: Option<praxis_math::Vec3>,
 }
 
@@ -240,25 +384,50 @@ impl AudioSource {
 }
 
 /// Playback state of an audio source.
+///
+/// This enum controls the lifecycle of sound playback:
+/// - **Playing**: Sound is actively playing (or will start next frame)
+/// - **Paused**: Sound is paused and can be resumed
+/// - **Stopped**: Sound is not playing and handle is cleaned up
+///
+/// State transitions are handled by the audio system based on this value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
 pub enum AudioState {
     /// Audio is currently playing.
+    /// The audio system will start playback if no handle exists,
+    /// or continue updating spatial parameters if already playing.
     Playing,
 
     /// Audio is paused.
+    /// The sound handle is preserved and can be resumed from the current position.
     Paused,
 
     /// Audio is stopped.
+    /// The sound handle is cleaned up. Starting again will play from the beginning.
     Stopped,
 }
 
 /// Internal handle to a playing sound instance.
 ///
 /// This is used internally by the audio system to manage sound playback.
+/// Contains the unique ID that maps to a `StaticSoundHandle` in `AudioManager`.
+///
+/// # Lifecycle
+///
+/// 1. Created when `AudioManager.play_sound()` succeeds
+/// 2. Stored in `AudioSource.sound_handle`
+/// 3. Used to control sound (volume, pause, stop, etc.)
+/// 4. Dropped when sound stops or entity despawns
+///
+/// # Note
+///
+/// User code should not create or modify `SoundHandle` directly.
+/// It is managed entirely by the audio system.
 #[derive(Debug, Clone)]
 pub struct SoundHandle {
     /// Unique identifier for the sound instance.
+    /// Maps to a `StaticSoundHandle` in `AudioManager.playing_sounds`.
     pub id: u64,
 }
 
@@ -267,8 +436,32 @@ pub struct SoundHandle {
 /// Typically attached to the camera entity. The audio system uses the
 /// listener's position to calculate spatial audio parameters.
 ///
+/// # Single Listener Model
+///
 /// Only one listener should be active at a time. If multiple listeners
-/// exist, the system uses the first one found.
+/// exist, the system uses the first one found. This prevents ambiguity
+/// in spatial audio calculations.
+///
+/// # 3D Listener Management
+///
+/// The listener's Transform is queried each frame to:
+/// 1. Calculate distance to each audio source
+/// 2. Compute attenuation based on distance
+/// 3. Calculate stereo panning based on relative position
+/// 4. Apply doppler effect based on relative velocity
+///
+/// # Listener Positioning
+///
+/// The listener should be positioned where the player's "ears" are:
+/// - First-person: Attach to camera (player's head position)
+/// - Third-person: Attach to camera (slightly behind character)
+/// - Top-down: Attach to camera (bird's eye view position)
+///
+/// # Performance
+///
+/// Listener queries are very fast (single entity lookup).
+/// The system caches the listener transform for the frame to avoid
+/// repeated queries when processing multiple audio sources.
 ///
 /// # Example
 ///
@@ -288,6 +481,22 @@ pub struct SoundHandle {
 pub struct AudioListener;
 
 /// Serialization support for audio components.
+///
+/// When the "serialization" feature is enabled, audio components can be
+/// serialized to/from RON format for scene saving and loading.
+///
+/// # Serialization Strategy
+///
+/// Only user-facing configuration fields are serialized:
+/// - path, volume, spatial, looping, state
+/// - `max_distance`, `reference_distance`
+/// - `doppler_enabled`, `doppler_scale`
+///
+/// Internal runtime fields are NOT serialized:
+/// - `sound_handle`: Would be invalid after deserialization
+/// - `previous_position`: Recalculated on first frame
+///
+/// This ensures serialized data is portable and deterministic.
 #[cfg(feature = "serialization")]
 mod serialization {
     use super::{AudioSource, AudioState};
