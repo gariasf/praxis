@@ -743,6 +743,14 @@ impl BindlessTextureManager {
             writes.push(WriteDescriptorSet::buffer(1, buffer.clone()));
         }
 
+        // Guard against empty descriptor writes (validation error)
+        if writes.is_empty() {
+            return Err(eyre::eyre!(
+                "Cannot create bindless descriptor set: no textures or materials registered. \
+                 Register at least one texture or material before getting the descriptor set."
+            ));
+        }
+
         // Create descriptor set
         let descriptor_set = DescriptorSet::new(
             self.descriptor_set_allocator.clone(),
