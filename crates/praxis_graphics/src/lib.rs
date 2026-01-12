@@ -1802,10 +1802,13 @@ impl RenderContext {
         // Create dummy bindless descriptor set for when bindless rendering is disabled
         // The pipeline layout expects set 2 to be bound even in traditional mode
         debug!("Creating dummy bindless descriptor set");
-        let bindless_set_layout = graphics_pipeline.layout().set_layouts().get(2)
+        let bindless_set_layout = graphics_pipeline
+            .layout()
+            .set_layouts()
+            .get(2)
             .ok_or_else(|| eyre::eyre!("Pipeline missing set 2 layout for bindless rendering"))?
             .clone();
-        
+
         // Create a dummy material buffer for the bindless set
         let dummy_material_buffer = Buffer::from_data(
             memory_allocator.clone(),
@@ -1826,11 +1829,7 @@ impl RenderContext {
             descriptor_set_allocator.clone(),
             bindless_set_layout,
             [
-                WriteDescriptorSet::image_view_sampler_array(
-                    0,
-                    0,
-                    vec![],
-                ),
+                WriteDescriptorSet::image_view_sampler_array(0, 0, vec![]),
                 WriteDescriptorSet::buffer(1, dummy_material_buffer),
             ],
             [],
@@ -2468,14 +2467,14 @@ impl RenderContext {
         if self.recreate_swapchain {
             debug!("Recreating swapchain due to pending resize");
             let start_time = std::time::Instant::now();
-            
+
             // Wait for all GPU work to complete before recreating swapchain
             previous_frame_end
                 .then_signal_fence_and_flush()
                 .expect("Failed to flush previous frame end")
                 .wait(None)
                 .expect("Failed to wait for previous frame");
-            
+
             self.recreate_swapchain_and_framebuffers()?;
             self.recreate_swapchain = false;
             previous_frame_end = sync::now(self.device.clone()).boxed();
@@ -2654,11 +2653,11 @@ impl RenderContext {
 
         trace!("Acquiring next swapchain image");
         let acquire_start = std::time::Instant::now();
-        
+
         // Acquire with timeout to prevent indefinite blocking
         let (image_index, suboptimal, acquire_future) = match vulkano::swapchain::acquire_next_image(
             self.swapchain.clone(),
-            Some(std::time::Duration::from_secs(1))
+            Some(std::time::Duration::from_secs(1)),
         ) {
             Ok(result) => result,
             Err(vulkano::Validated::Error(vulkano::VulkanError::OutOfDate)) => {
@@ -2669,7 +2668,7 @@ impl RenderContext {
             }
             Err(e) => return Err(eyre::eyre!("Failed to acquire next image: {}", e)),
         };
-        
+
         trace!(
             "Image {} acquired in {:?}",
             image_index,
@@ -2730,7 +2729,7 @@ impl RenderContext {
         if let Some(ref dummy_bindless_set) = self.dummy_bindless_descriptor_set {
             // Store descriptor set to ensure it remains alive during command buffer execution
             self.frame_descriptor_sets.push(dummy_bindless_set.clone());
-            
+
             command_buffer_builder
                 .bind_descriptor_sets(
                     PipelineBindPoint::Graphics,
@@ -2819,8 +2818,7 @@ impl RenderContext {
 
         // Wait for previous frame to finish before submitting new work
         // This ensures proper synchronization and prevents validation layer warnings
-        previous_frame_end
-            .cleanup_finished();
+        previous_frame_end.cleanup_finished();
 
         let execution = acquire_future
             .then_execute(self.graphics_queue.clone(), command_buffer)
@@ -3314,6 +3312,7 @@ mod tests {
             model: Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0)),
             texture_name: Some("test_texture".to_string()),
             material_properties: Some(MaterialProperties::default()),
+            bone_matrices: None,
         };
 
         assert_eq!(cmd.mesh_id, "test_mesh");
@@ -3328,6 +3327,7 @@ mod tests {
             model: Mat4::IDENTITY,
             texture_name: None,
             material_properties: None,
+            bone_matrices: None,
         };
 
         assert!(cmd.texture_name.is_none());
@@ -3341,6 +3341,7 @@ mod tests {
             model: Mat4::IDENTITY,
             texture_name: None,
             material_properties: None,
+            bone_matrices: None,
         }];
 
         let render_cmds = RenderCommands {

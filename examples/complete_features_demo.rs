@@ -215,8 +215,7 @@ impl AppState {
             }
 
             // Execute update scripts
-            if let Err(e) = context.call_function::<f32, ()>("game_logic", "update", delta_time)
-            {
+            if let Err(e) = context.call_function::<f32, ()>("game_logic", "update", delta_time) {
                 warn!("Script update error: {}", e);
             }
         }
@@ -441,10 +440,13 @@ fn setup_scripting(state: &mut AppState) -> Result<()> {
     if std::path::Path::new(script_path).exists() {
         info!("Loading game logic from file: {}", script_path);
         context.load_script("game_logic", script_path)?;
-        
+
         // Enable hot-reload
         context.enable_hot_reload("examples/scripts")?;
-        info!("Script hot-reload enabled - edit {} to see changes", script_path);
+        info!(
+            "Script hot-reload enabled - edit {} to see changes",
+            script_path
+        );
     } else {
         info!("Script file not found, using inline script");
         // Load game logic script from inline string
@@ -478,7 +480,7 @@ fn setup_scripting(state: &mut AppState) -> Result<()> {
         end
     "#,
         )?;
-        
+
         info!("Note: Create {} for hot-reload support", script_path);
     }
 

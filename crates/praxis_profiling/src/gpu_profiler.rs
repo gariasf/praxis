@@ -66,6 +66,8 @@ pub struct GpuProfiler {
     /// Maximum number of queries per frame
     #[allow(dead_code)]
     max_queries_per_frame: u32,
+    /// Last frame's total GPU time in milliseconds
+    last_frame_time_ms: Option<f64>,
 }
 
 impl GpuProfiler {
@@ -131,6 +133,7 @@ impl GpuProfiler {
             active_queries: HashMap::new(),
             timestamp_period,
             max_queries_per_frame,
+            last_frame_time_ms: None,
         })
     }
 
@@ -221,7 +224,7 @@ impl GpuProfiler {
     ///
     /// This should be called after the GPU has finished executing commands.
     /// Uses WAIT flag to ensure results are available before reading.
-    pub fn collect_results(&self) -> Result<Vec<GpuTimestamp>> {
+    pub fn collect_results(&mut self) -> Result<Vec<GpuTimestamp>> {
         // Get the previous frame's query pool
         let prev_pool_index = if self.current_pool_index == 0 {
             self.query_pools.len() - 1
@@ -238,6 +241,7 @@ impl GpuProfiler {
 
         if query_count == 0 {
             // No queries were used in this frame
+            self.last_frame_time_ms = None;
             return Ok(results);
         }
 
@@ -249,6 +253,8 @@ impl GpuProfiler {
 
         match result {
             Ok(_) => {
+                let mut total_duration_ns = 0u64;
+
                 // Process timestamp pairs
                 for i in (0..query_count).step_by(2) {
                     if (i + 1) >= query_count {
@@ -272,6 +278,7 @@ impl GpuProfiler {
                                 start_ns: (start_ts as f64 * self.timestamp_period as f64) as u64,
                                 end_ns: (end_ts as f64 * self.timestamp_period as f64) as u64,
                             });
+                            total_duration_ns += duration_ns;
                         } else {
                             debug!(
                                 "GPU profiler: Ignoring query {} with excessive duration: {}ms",
@@ -281,10 +288,18 @@ impl GpuProfiler {
                         }
                     }
                 }
+
+                // Update last frame time in milliseconds
+                self.last_frame_time_ms = if total_duration_ns > 0 {
+                    Some(total_duration_ns as f64 / 1_000_000.0)
+                } else {
+                    None
+                };
             }
             Err(e) => {
                 // Results not ready yet, this is expected if GPU is still working
                 debug!("GPU query results not ready: {:?}", e);
+                self.last_frame_time_ms = None;
             }
         }
 
@@ -299,6 +314,13 @@ impl GpuProfiler {
     /// Returns whether timestamp queries are supported.
     pub fn is_supported(&self) -> bool {
         self.timestamp_period > 0.0
+    }
+
+    /// Returns the last frame's total GPU time in milliseconds.
+    ///
+    /// Returns `None` if no GPU timing data is available for the last frame.
+    pub fn last_frame_time_ms(&self) -> f64 {
+        self.last_frame_time_ms.unwrap_or(0.0)
     }
 }
 

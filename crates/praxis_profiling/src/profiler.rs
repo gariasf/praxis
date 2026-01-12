@@ -49,13 +49,7 @@
 //! - Query pool allocation and reset
 //! - Synchronization of asynchronous results
 //! - Conversion from device ticks to nanoseconds
-//!
-//! TODO: GPU profiler integration is incomplete. Currently, GPU timing data is collected
-//! but not fully integrated into `ProfilerStats::gpu_time_ms` (see line 307). Need to:
-//! 1. Store GPU frame times in `GpuProfiler` state
-//! 2. Expose `get_last_frame_time_ms()` or similar API
-//! 3. Update `statistics()` method to populate `gpu_time_ms` from GPU profiler
-//! 4. Add GPU time to `FrameStatistics` for historical tracking
+//! - Storage of per-frame GPU timing in `last_frame_time_ms`
 //!
 //! # Memory Tracking
 //!
@@ -205,7 +199,6 @@ pub struct Profiler {
     /// Frame statistics (rolling window of historical frame data)
     frame_stats: Arc<Mutex<FrameStatistics>>,
     /// GPU profiler (optional, set up after Vulkan initialization)
-    /// TODO: Currently not fully integrated - see statistics() method
     gpu_profiler: Option<Arc<Mutex<GpuProfiler>>>,
     /// Memory tracker (monitors allocations/deallocations)
     memory_tracker: Arc<AllocationTracker>,
@@ -376,8 +369,8 @@ impl Profiler {
     ///
     /// 3. **GPU Results Collection**:
     ///    - Retrieve GPU timestamp query results (from 1-2 frames ago due to async nature)
+    ///    - Store total GPU frame time for statistics retrieval
     ///    - Export GPU timings to Chrome trace format
-    ///    - Note: GPU timings are not yet integrated into frame statistics (see TODO in statistics())
     ///
     /// 4. **Memory Tracking**:
     ///    - Export current memory usage as counter event for Chrome trace
@@ -484,14 +477,10 @@ impl Profiler {
             min_fps: frame_stats.min_fps(),
             max_fps: frame_stats.max_fps(),
             cpu_time_ms: frame_stats.avg_frame_time.as_secs_f64() * 1000.0,
-            // TODO: GPU profiler integration incomplete
-            // Currently gpu_time_ms is always 0.0 because GPU timing data is not stored
-            // in a retrievable format. To fix:
-            // 1. Add `last_frame_gpu_time: Option<Duration>` field to GpuProfiler
-            // 2. Store total GPU frame time in GpuProfiler::collect_results()
-            // 3. Add `pub fn last_frame_time_ms(&self) -> f64` method to GpuProfiler
-            // 4. Call it here: `gpu_time_ms: self.gpu_profiler.as_ref().map_or(0.0, |p| p.lock().last_frame_time_ms())`
-            gpu_time_ms: 0.0, // TODO: Get from GPU profiler
+            gpu_time_ms: self
+                .gpu_profiler
+                .as_ref()
+                .map_or(0.0, |p| p.lock().last_frame_time_ms()),
             memory_allocated: mem_stats.current_allocated,
             memory_peak: mem_stats.peak_allocated,
             bottleneck_count: bottlenecks.len(),
