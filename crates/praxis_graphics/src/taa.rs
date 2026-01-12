@@ -338,6 +338,12 @@ impl TaaRenderTarget {
     }
 }
 
+/// Type alias for fullscreen quad vertex buffer (using QuadVertex).
+type QuadBuffers = (
+    vulkano::buffer::Subbuffer<[QuadVertex]>,
+    vulkano::buffer::Subbuffer<[u32]>,
+);
+
 /// TAA renderer implementing temporal anti-aliasing.
 pub struct TaaRenderer {
     #[allow(dead_code)]
@@ -478,13 +484,9 @@ impl TaaRenderer {
     }
 
     /// Creates vertex and index buffers for full-screen quad.
-    #[allow(clippy::type_complexity)]
     fn create_fullscreen_quad(
         memory_allocator: &Arc<StandardMemoryAllocator>,
-    ) -> Result<(
-        vulkano::buffer::Subbuffer<[QuadVertex]>,
-        vulkano::buffer::Subbuffer<[u32]>,
-    )> {
+    ) -> Result<QuadBuffers> {
         let vertices = [
             QuadVertex {
                 position: [-1.0, -1.0],

@@ -401,6 +401,12 @@ pub struct DeferredRenderer {
     height: u32,
 }
 
+/// Type alias for fullscreen quad vertex buffer.
+type FullscreenQuadBuffers = (
+    vulkano::buffer::Subbuffer<[FullscreenVertex]>,
+    vulkano::buffer::Subbuffer<[u32]>,
+);
+
 /// Vertex format for full-screen quad in lighting pass.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, bytemuck::Pod, bytemuck::Zeroable, Vertex)]
@@ -688,13 +694,9 @@ impl DeferredRenderer {
     }
 
     /// Creates vertex and index buffers for full-screen quad.
-    #[allow(clippy::type_complexity)]
     fn create_fullscreen_quad(
         memory_allocator: &Arc<StandardMemoryAllocator>,
-    ) -> Result<(
-        vulkano::buffer::Subbuffer<[FullscreenVertex]>,
-        vulkano::buffer::Subbuffer<[u32]>,
-    )> {
+    ) -> Result<FullscreenQuadBuffers> {
         let vertices = [
             FullscreenVertex {
                 position: [-1.0, -1.0],
