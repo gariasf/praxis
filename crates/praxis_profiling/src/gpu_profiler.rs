@@ -154,6 +154,8 @@ impl GpuProfiler {
     ) -> Result<()> {
         let pool = self.query_pools[self.current_pool_index].clone();
 
+        // Reset all queries in the pool
+        // Note: This must be done on the GPU timeline, not CPU
         unsafe {
             builder
                 .reset_query_pool(pool.clone(), 0..self.queries_per_pool)
@@ -167,8 +169,12 @@ impl GpuProfiler {
     ///
     /// Returns the query indices (start, end) to use with command buffer.
     pub fn begin_query(&mut self, name: impl Into<String>) -> Option<(Arc<QueryPool>, u32, u32)> {
+        // Ensure we don't exceed the query pool capacity
         if self.next_query_index + 2 > self.queries_per_pool {
-            error!("GPU profiler: Query pool exhausted");
+            error!(
+                "GPU profiler: Query pool exhausted (used {}/{})",
+                self.next_query_index, self.queries_per_pool
+            );
             return None;
         }
 
@@ -180,6 +186,11 @@ impl GpuProfiler {
 
         self.active_queries
             .insert(name.clone(), (pool.clone(), start_index, end_index));
+
+        debug!(
+            "GPU profiler: Started query '{}' (indices {}-{})",
+            name, start_index, end_index
+        );
 
         Some((pool, start_index, end_index))
     }
@@ -209,6 +220,7 @@ impl GpuProfiler {
     /// Collects the results of GPU timing measurements from the previous frame.
     ///
     /// This should be called after the GPU has finished executing commands.
+    /// Uses WAIT flag to ensure results are available before reading.
     pub fn collect_results(&self) -> Result<Vec<GpuTimestamp>> {
         // Get the previous frame's query pool
         let prev_pool_index = if self.current_pool_index == 0 {
@@ -220,36 +232,57 @@ impl GpuProfiler {
         let pool = self.query_pools[prev_pool_index].clone();
         let mut results = Vec::new();
 
-        // Note: In a real implementation, we'd need to track which queries were used
-        // For now, we'll attempt to read all active queries
-        let query_count = self.queries_per_pool;
+        // Only read queries that were actually used in the previous frame
+        // Use the max query index from previous frame to avoid reading uninitialized queries
+        let query_count = self.next_query_index.min(self.queries_per_pool);
+        
+        if query_count == 0 {
+            // No queries were used in this frame
+            return Ok(results);
+        }
+
         let mut timestamps = vec![0u64; query_count as usize];
 
-        // Try to get query results (non-blocking)
+        // Try to get query results with WAIT flag to ensure availability
+        // WAIT ensures GPU operations complete before reading results
         let result = pool.get_results(
             0..query_count,
             &mut timestamps,
-            QueryResultFlags::PARTIAL | QueryResultFlags::WITH_AVAILABILITY,
+            QueryResultFlags::WAIT,
         );
 
         match result {
             Ok(_) => {
                 // Process timestamp pairs
                 for i in (0..query_count).step_by(2) {
+                    if (i + 1) >= query_count {
+                        break; // Incomplete pair
+                    }
+
                     let start_ts = timestamps[i as usize];
                     let end_ts = timestamps[(i + 1) as usize];
 
+                    // Validate timestamp values before processing
                     if start_ts > 0 && end_ts > 0 && end_ts >= start_ts {
                         let duration_raw = end_ts - start_ts;
                         let duration_ns =
                             (duration_raw as f64 * self.timestamp_period as f64) as u64;
 
-                        results.push(GpuTimestamp {
-                            name: format!("Query_{}", i / 2),
-                            duration_ns,
-                            start_ns: (start_ts as f64 * self.timestamp_period as f64) as u64,
-                            end_ns: (end_ts as f64 * self.timestamp_period as f64) as u64,
-                        });
+                        // Sanity check: duration should be reasonable (< 1 second)
+                        if duration_ns < 1_000_000_000 {
+                            results.push(GpuTimestamp {
+                                name: format!("Query_{}", i / 2),
+                                duration_ns,
+                                start_ns: (start_ts as f64 * self.timestamp_period as f64) as u64,
+                                end_ns: (end_ts as f64 * self.timestamp_period as f64) as u64,
+                            });
+                        } else {
+                            debug!(
+                                "GPU profiler: Ignoring query {} with excessive duration: {}ms",
+                                i / 2,
+                                duration_ns / 1_000_000
+                            );
+                        }
                     }
                 }
             }

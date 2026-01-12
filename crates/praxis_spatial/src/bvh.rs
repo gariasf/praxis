@@ -587,9 +587,16 @@ impl Bvh {
     where
         F: Fn(&Aabb) -> bool,
     {
+        let bounds = node.bounds();
+        
+        // Validate bounds are finite before testing predicate
+        if !bounds.min.is_finite() || !bounds.max.is_finite() {
+            return;
+        }
+
         // Test node bounds first (hierarchical culling)
         // This one test can cull entire subtree - THE key optimization
-        if !predicate(node.bounds()) {
+        if !predicate(bounds) {
             return;
         }
 

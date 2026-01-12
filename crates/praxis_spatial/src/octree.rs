@@ -398,6 +398,11 @@ impl OctreeNode {
     where
         F: Fn(&Aabb) -> bool,
     {
+        // Validate bounds are finite before testing
+        if !self.bounds.min.is_finite() || !self.bounds.max.is_finite() {
+            return;
+        }
+
         // Test node bounds first (hierarchical culling)
         if !predicate(&self.bounds) {
             return;
@@ -608,7 +613,12 @@ impl Octree {
         self.root.query_with_predicate(predicate, &mut results);
 
         // Filter to only include entities whose actual bounds match the predicate
-        results.retain(|&entity| self.entity_bounds.get(&entity).is_some_and(predicate));
+        // Also validate that entity bounds are finite
+        results.retain(|&entity| {
+            self.entity_bounds.get(&entity).is_some_and(|bounds| {
+                bounds.min.is_finite() && bounds.max.is_finite() && predicate(bounds)
+            })
+        });
 
         results
     }
