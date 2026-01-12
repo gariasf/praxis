@@ -170,6 +170,9 @@ impl GpuMesh {
             ))
             .map_err(|e| eyre::eyre!("Failed to record index buffer copy: {}", e))?;
 
+        // Vulkano 0.35 handles synchronization automatically through the command buffer builder
+        // No explicit pipeline barrier needed for buffer copies
+
         let command_buffer = builder
             .build()
             .map_err(|e| eyre::eyre!("Failed to build transfer command buffer: {}", e))?;
@@ -357,6 +360,9 @@ impl GpuMesh {
                 index_buffer.clone(),
             ))
             .map_err(|e| eyre::eyre!("Failed to record index buffer copy: {}", e))?;
+
+        // Vulkano 0.35 handles synchronization automatically through the command buffer builder
+        // No explicit pipeline barrier needed for buffer copies
 
         let command_buffer = builder
             .build()

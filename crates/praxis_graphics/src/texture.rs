@@ -12,19 +12,18 @@ use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage},
     command_buffer::{
         allocator::CommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage,
-        CopyBufferToImageInfo, DependencyInfo, ImageMemoryBarrier,
+        CopyBufferToImageInfo,
     },
     device::Queue,
     format::Format,
     image::{
         sampler::{BorderColor, Filter, Sampler, SamplerAddressMode, SamplerCreateInfo},
         view::{ImageView, ImageViewCreateInfo, ImageViewType},
-        Image, ImageAspects, ImageCreateInfo, ImageLayout, ImageSubresourceRange, ImageType,
-        ImageUsage,
+        Image, ImageAspects, ImageCreateInfo, ImageSubresourceRange, ImageType, ImageUsage,
     },
     memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
     pipeline::graphics::depth_stencil::CompareOp,
-    sync::{self, GpuFuture, PipelineStages},
+    sync::{self, GpuFuture},
 };
 
 /// GPU-side texture data containing image, view, and sampler.
@@ -154,27 +153,8 @@ impl Texture {
             .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(buffer, image.clone()))
             .map_err(|e| eyre::eyre!("Failed to copy buffer to image: {}", e))?;
 
-        // Add pipeline barrier to transition from TRANSFER_DST_OPTIMAL to SHADER_READ_ONLY_OPTIMAL
-        // and ensure transfer writes complete before shader reads
-        builder
-            .pipeline_barrier(&DependencyInfo {
-                image_memory_barriers: vec![ImageMemoryBarrier {
-                    src_stages: PipelineStages::TRANSFER,
-                    src_access: vulkano::sync::AccessFlags::TRANSFER_WRITE,
-                    dst_stages: PipelineStages::FRAGMENT_SHADER,
-                    dst_access: vulkano::sync::AccessFlags::SHADER_READ,
-                    old_layout: ImageLayout::TransferDstOptimal,
-                    new_layout: ImageLayout::ShaderReadOnlyOptimal,
-                    subresource_range: ImageSubresourceRange {
-                        aspects: ImageAspects::COLOR,
-                        mip_levels: 0..1,
-                        array_layers: 0..1,
-                    },
-                    ..ImageMemoryBarrier::image(image.clone())
-                }],
-                ..Default::default()
-            })
-            .map_err(|e| eyre::eyre!("Failed to add pipeline barrier: {}", e))?;
+        // Vulkano 0.35 handles synchronization and layout transitions automatically
+        // No explicit pipeline barrier needed
 
         let command_buffer = builder
             .build()
