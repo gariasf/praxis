@@ -239,7 +239,7 @@ path = "examples/save_load_demo.rs"
 [[example]]
 name = "scripting_console_demo"
 path = "examples/scripting_console_demo.rs"
-required-features = ["scripting", "editor"]
+required-features = ["scripting"]
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

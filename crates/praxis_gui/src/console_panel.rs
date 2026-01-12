@@ -213,8 +213,6 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 #[cfg(feature = "scripting")]
-use mlua;
-#[cfg(feature = "scripting")]
 use praxis_scripting::ScriptingContext;
 
 /// Maximum number of log entries to keep in the history buffer.
