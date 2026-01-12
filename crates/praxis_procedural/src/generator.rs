@@ -361,6 +361,25 @@ impl ProceduralTextureGenerator {
                 .map_err(|e| eyre::eyre!("Failed to dispatch compute shader: {}", e))?;
         }
 
+        // Memory barrier for compute-to-transfer synchronization:
+        // Vulkano 0.35+ automatically inserts pipeline barriers between command buffer operations
+        // based on resource usage tracking. When we dispatch the compute shader and then copy
+        // the image to a buffer, Vulkano detects that:
+        // 1. The compute shader writes to the image (COMPUTE_SHADER stage, SHADER_WRITE access)
+        // 2. The copy operation reads from the image (TRANSFER stage, TRANSFER_READ access)
+        //
+        // Vulkano will automatically insert a pipeline barrier with the appropriate:
+        // - Source stage: COMPUTE_SHADER
+        // - Destination stage: TRANSFER  
+        // - Memory dependency: SHADER_WRITE → TRANSFER_READ
+        //
+        // This ensures all compute shader writes complete and are visible before the transfer
+        // operation begins, preventing visual artifacts or data corruption when the texture
+        // is used in the graphics pipeline.
+        //
+        // The automatic synchronization happens during command buffer building and is equivalent
+        // to manually inserting: vkCmdPipelineBarrier(COMPUTE_SHADER, TRANSFER, image_barrier)
+
         // Allocate CPU-accessible staging buffer for reading back pixel data.
         // Buffer size = width × height × 4 bytes (RGBA8 = 4 bytes per pixel).
         // TRANSFER_DST: Allows image copy operations to write to this buffer.
@@ -383,7 +402,7 @@ impl ProceduralTextureGenerator {
 
         // Record command to copy GPU image → CPU-accessible staging buffer.
         // This is a GPU DMA operation that happens after compute shader completes.
-        // Vulkan automatically inserts barriers to ensure compute finishes first.
+        // Vulkano automatically ensures proper compute-to-transfer synchronization.
         builder
             .copy_image_to_buffer(CopyImageToBufferInfo::image_buffer(
                 output_image.clone(),
