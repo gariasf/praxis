@@ -178,18 +178,21 @@ impl Default for VolumetricFog {
 }
 
 /// Renderer for volumetric fog effects.
+#[deprecated(
+    since = "0.1.0",
+    note = "VolumetricFogRenderer is an experimental stub with no implementation. \
+            See tracking issue: https://github.com/praxis-engine/praxis/issues/TBD"
+)]
+#[allow(dead_code)]
 pub struct VolumetricFogRenderer {
-    #[allow(dead_code)]
     device: Arc<Device>,
-    #[allow(dead_code)]
     memory_allocator: Arc<StandardMemoryAllocator>,
-    #[allow(dead_code)]
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     uniform_buffer: Subbuffer<VolumetricFogUniforms>,
-    #[allow(dead_code)]
     pipeline: Option<Arc<GraphicsPipeline>>,
 }
 
+#[allow(deprecated)]
 impl VolumetricFogRenderer {
     pub fn new(
         device: Arc<Device>,

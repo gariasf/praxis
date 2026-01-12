@@ -3122,6 +3122,7 @@ impl RenderContext {
 }
 
 // Public re-exports
+#[allow(deprecated)]
 pub use area_lights::{
     AreaLight, AreaLightData, AreaLightManager, AreaLightType, LtcMatrixData, MAX_AREA_LIGHTS,
 };
@@ -3133,6 +3134,7 @@ pub use environment_probe::{
     EnvironmentProbe, EnvironmentProbeCapture, EnvironmentProbeConfig, EnvironmentProbeManager,
     IblData, IblUniforms, ProbeUpdateMode, MAX_ENVIRONMENT_PROBES, SPECULAR_MIP_LEVELS,
 };
+#[allow(deprecated)]
 pub use god_rays::{GodRays, GodRaysConfig, GodRaysRenderer, RadialBlurPass};
 pub use hdr::{
     calculate_luminance, ExposureCalculator, ExposureMode, HdrRenderTarget,
@@ -3192,6 +3194,7 @@ pub use visual_feedback::{
     batch_to_lines, create_axis_indicator, create_bounding_box, create_gizmo_lines, create_grid,
     create_selection_outline, AxisIndicatorConfig, GridConfig,
 };
+#[allow(deprecated)]
 pub use volumetric_fog::{
     FogDensityFunction, VolumetricFog, VolumetricFogConfig, VolumetricFogRenderer,
     MAX_RAYMARCH_STEPS,

@@ -140,12 +140,10 @@ impl Default for GodRays {
 }
 
 /// Radial blur pass for god rays effect.
+#[allow(dead_code)]
 pub struct RadialBlurPass {
-    #[allow(dead_code)]
     device: Arc<Device>,
-    #[allow(dead_code)]
     memory_allocator: Arc<StandardMemoryAllocator>,
-    #[allow(dead_code)]
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     uniform_buffer: Subbuffer<GodRaysUniforms>,
 }
@@ -199,14 +197,19 @@ impl RadialBlurPass {
 }
 
 /// Renderer for god rays effects.
+#[deprecated(
+    since = "0.1.0",
+    note = "GodRaysRenderer is an experimental stub with no implementation. \
+            See tracking issue: https://github.com/praxis-engine/praxis/issues/TBD"
+)]
+#[allow(dead_code)]
 pub struct GodRaysRenderer {
-    #[allow(dead_code)]
     device: Arc<Device>,
-    #[allow(dead_code)]
     memory_allocator: Arc<StandardMemoryAllocator>,
     radial_blur_pass: RadialBlurPass,
 }
 
+#[allow(deprecated)]
 impl GodRaysRenderer {
     pub fn new(
         device: Arc<Device>,

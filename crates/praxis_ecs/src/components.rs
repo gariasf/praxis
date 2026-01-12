@@ -3,6 +3,9 @@
 //! This module provides frequently-used components that are common across
 //! most game projects. These components are designed to work together
 //! to form the building blocks of game entities.
+
+// Allow deprecated warnings in this module for experimental stub types
+#![allow(deprecated)]
 //!
 //! # Component Design Principles
 //!
@@ -2270,13 +2273,18 @@ impl From<String> for Skybox {
 ///
 /// **Note**: This component currently has no functionality and should not be used in
 /// production code. It exists as a placeholder for future development.
+#[allow(deprecated, dead_code)]
+#[deprecated(
+    since = "0.1.0",
+    note = "LightProbeComponent is an experimental stub with no implementation. \
+            See tracking issue: https://github.com/praxis-engine/praxis/issues/TBD"
+)]
 #[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LightProbeComponent {
     pub id: String,
 }
 
-// Allow dead code for experimental feature
-#[allow(dead_code)]
+#[allow(deprecated, dead_code)]
 impl LightProbeComponent {
     pub fn new(id: impl Into<String>) -> Self {
         Self { id: id.into() }
@@ -2287,12 +2295,14 @@ impl LightProbeComponent {
     }
 }
 
+#[allow(deprecated)]
 impl From<&str> for LightProbeComponent {
     fn from(id: &str) -> Self {
         Self::new(id)
     }
 }
 
+#[allow(deprecated)]
 impl From<String> for LightProbeComponent {
     fn from(id: String) -> Self {
         Self { id }
@@ -2341,8 +2351,12 @@ impl From<String> for LightProbeComponent {
 /// //         .with_intensity(10.0),
 /// // ));
 /// ```
-// Allow dead code for experimental feature
-#[allow(dead_code)]
+#[allow(deprecated, dead_code)]
+#[deprecated(
+    since = "0.1.0",
+    note = "AreaLightComponent is an experimental stub with no implementation. \
+            See tracking issue: https://github.com/praxis-engine/praxis/issues/TBD"
+)]
 #[derive(Component, Debug, Clone, Copy)]
 pub struct AreaLightComponent {
     pub light_type: AreaLightType,
@@ -2355,8 +2369,12 @@ pub struct AreaLightComponent {
 ///
 /// **Note**: Part of the experimental area lighting system. See [`AreaLightComponent`]
 /// for implementation status.
-// Allow dead code for experimental feature
-#[allow(dead_code)]
+#[allow(deprecated, dead_code)]
+#[deprecated(
+    since = "0.1.0",
+    note = "AreaLightType is an experimental stub with no implementation. \
+            See tracking issue: https://github.com/praxis-engine/praxis/issues/TBD"
+)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AreaLightType {
     /// Rectangular area light with width and height.
@@ -2369,8 +2387,7 @@ pub enum AreaLightType {
     Sphere { radius: f32 },
 }
 
-// Allow dead code for experimental feature
-#[allow(dead_code)]
+#[allow(deprecated, dead_code)]
 impl AreaLightComponent {
     /// Creates a rectangular area light.
     pub fn rectangle(width: f32, height: f32) -> Self {
@@ -2421,6 +2438,7 @@ impl AreaLightComponent {
     }
 }
 
+#[allow(deprecated)]
 impl Default for AreaLightComponent {
     fn default() -> Self {
         Self::rectangle(1.0, 1.0)

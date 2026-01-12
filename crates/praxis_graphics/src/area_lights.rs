@@ -215,19 +215,22 @@ impl Default for LtcMatrixData {
 }
 
 /// Manager for area light system.
+#[deprecated(
+    since = "0.1.0",
+    note = "AreaLightManager is an experimental stub with no implementation. \
+            See tracking issue: https://github.com/praxis-engine/praxis/issues/TBD"
+)]
+#[allow(dead_code)]
 pub struct AreaLightManager {
-    #[allow(dead_code)]
     device: Arc<Device>,
-    #[allow(dead_code)]
     memory_allocator: Arc<StandardMemoryAllocator>,
     light_buffer: Subbuffer<[AreaLightData; MAX_AREA_LIGHTS]>,
     lights: Vec<AreaLight>,
-    #[allow(dead_code)]
     ltc_matrix_1: Option<Arc<ImageView>>,
-    #[allow(dead_code)]
     ltc_matrix_2: Option<Arc<ImageView>>,
 }
 
+#[allow(deprecated)]
 impl AreaLightManager {
     pub fn new(
         device: Arc<Device>,
