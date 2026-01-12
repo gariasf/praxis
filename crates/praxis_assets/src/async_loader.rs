@@ -742,7 +742,6 @@ impl<T> Default for AsyncBatchLoader<T> {
 }
 
 #[cfg(test)]
-#[allow(clippy::uninlined_format_args)]
 mod tests {
     use super::*;
 
@@ -1000,8 +999,7 @@ mod tests {
         // load_async should return very quickly (< 50ms), proving it's non-blocking
         assert!(
             elapsed.as_millis() < 50,
-            "load_async took too long: {:?}",
-            elapsed
+            "load_async took too long: {elapsed:?}"
         );
 
         // Verify the actual load completes in the background
@@ -1018,7 +1016,7 @@ mod tests {
         let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
 
         let test_files: Vec<_> = (0..5)
-            .map(|i| temp_dir.join(format!("test_nonblocking_{}.obj", i)))
+            .map(|i| temp_dir.join(format!("test_nonblocking_{i}.obj")))
             .collect();
 
         for file in &test_files {
@@ -1039,8 +1037,7 @@ mod tests {
         // Starting 5 loads should still be very quick (< 100ms)
         assert!(
             elapsed.as_millis() < 100,
-            "Starting 5 loads took too long: {:?}",
-            elapsed
+            "Starting 5 loads took too long: {elapsed:?}"
         );
 
         // Verify all loads complete
@@ -1204,7 +1201,7 @@ mod tests {
         let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
 
         let test_files: Vec<_> = (0..10)
-            .map(|i| temp_dir.join(format!("test_concurrent_{}.obj", i)))
+            .map(|i| temp_dir.join(format!("test_concurrent_{i}.obj")))
             .collect();
 
         for file in &test_files {
@@ -1271,7 +1268,7 @@ mod tests {
         let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
 
         let paths: Vec<_> = (0..20)
-            .map(|i| temp_dir.join(format!("test_load_many_{}.obj", i)))
+            .map(|i| temp_dir.join(format!("test_load_many_{i}.obj")))
             .collect();
 
         for path in &paths {
@@ -1395,7 +1392,7 @@ mod tests {
         let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
 
         let paths: Vec<_> = (0..5)
-            .map(|i| temp_dir.join(format!("test_batch_cancel_{}.obj", i)))
+            .map(|i| temp_dir.join(format!("test_batch_cancel_{i}.obj")))
             .collect();
 
         for path in &paths {
@@ -1487,7 +1484,7 @@ mod tests {
         let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
 
         let paths: Vec<_> = (0..3)
-            .map(|i| temp_dir.join(format!("test_batch_progress_{}.obj", i)))
+            .map(|i| temp_dir.join(format!("test_batch_progress_{i}.obj")))
             .collect();
 
         for path in &paths {
@@ -1526,7 +1523,7 @@ mod tests {
         let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
 
         let paths: Vec<_> = (0..5)
-            .map(|i| temp_dir.join(format!("test_batch_partial_{}.obj", i)))
+            .map(|i| temp_dir.join(format!("test_batch_partial_{i}.obj")))
             .collect();
 
         for path in &paths {
@@ -1622,7 +1619,7 @@ mod tests {
         let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
 
         let paths: Vec<_> = (0..50)
-            .map(|i| temp_dir.join(format!("test_multithread_{}.obj", i)))
+            .map(|i| temp_dir.join(format!("test_multithread_{i}.obj")))
             .collect();
 
         for path in &paths {
@@ -1743,7 +1740,7 @@ mod tests {
         let asset_names = vec!["player", "enemy", "terrain", "building", "prop"];
         let paths: Vec<_> = asset_names
             .iter()
-            .map(|name| temp_dir.join(format!("test_game_{}.obj", name)))
+            .map(|name| temp_dir.join(format!("test_game_{name}.obj")))
             .collect();
 
         for path in &paths {
@@ -1784,7 +1781,7 @@ mod tests {
         let obj_content = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.5 1.0 0.0\nf 1 2 3\n";
 
         let paths: Vec<_> = (0..5)
-            .map(|i| temp_dir.join(format!("test_wait_all_{}.obj", i)))
+            .map(|i| temp_dir.join(format!("test_wait_all_{i}.obj")))
             .collect();
 
         for path in &paths {

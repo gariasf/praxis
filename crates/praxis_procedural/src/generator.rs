@@ -975,7 +975,7 @@ fn compile_shader_to_spirv(source: &str) -> Result<Vec<u8>> {
 }
 
 #[cfg(test)]
-#[allow(clippy::uninlined_format_args, clippy::expect_fun_call)]
+#[allow(clippy::expect_fun_call)]
 mod tests {
     use super::*;
     use crate::graph::{BlendMode, ColorRamp, ColorStop, NoiseType, TextureGraph, TextureNode};
@@ -1206,13 +1206,11 @@ void not_main() {
 
             assert_eq!(
                 dispatch_x, *expected_x,
-                "width {} should result in dispatch_x {}",
-                width, expected_x
+                "width {width} should result in dispatch_x {expected_x}"
             );
             assert_eq!(
                 dispatch_y, *expected_y,
-                "height {} should result in dispatch_y {}",
-                height, expected_y
+                "height {height} should result in dispatch_y {expected_y}"
             );
         }
     }
@@ -1856,22 +1854,18 @@ void not_main() {
             let shader = generator
                 .compile_graph_to_shader(&graph, params)
                 .expect(&format!(
-                    "Failed to generate shader for blend mode {:?}",
-                    mode
+                    "Failed to generate shader for blend mode {mode:?}"
                 ));
 
             assert!(
                 shader.contains(expected_expr),
-                "Shader for {:?} should contain: {}",
-                mode,
-                expected_expr
+                "Shader for {mode:?} should contain: {expected_expr}"
             );
 
             let spirv = compile_shader_to_spirv(&shader);
             assert!(
                 spirv.is_ok(),
-                "Shader for {:?} should compile to SPIR-V",
-                mode
+                "Shader for {mode:?} should compile to SPIR-V"
             );
         }
     }
@@ -1901,22 +1895,18 @@ void not_main() {
             let shader = generator
                 .compile_graph_to_shader(&graph, params)
                 .expect(&format!(
-                    "Failed to generate shader for noise type {:?}",
-                    noise_type
+                    "Failed to generate shader for noise type {noise_type:?}"
                 ));
 
             assert!(
                 shader.contains(expected_fn),
-                "Shader for {:?} should contain: {}",
-                noise_type,
-                expected_fn
+                "Shader for {noise_type:?} should contain: {expected_fn}"
             );
 
             let spirv = compile_shader_to_spirv(&shader);
             assert!(
                 spirv.is_ok(),
-                "Shader for {:?} should compile to SPIR-V",
-                noise_type
+                "Shader for {noise_type:?} should compile to SPIR-V"
             );
         }
     }
