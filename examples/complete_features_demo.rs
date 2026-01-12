@@ -41,10 +41,7 @@ use praxis_terrain::{
 };
 
 #[cfg(feature = "networking")]
-use praxis_networking::{
-    NetworkClient, NetworkConfig, NetworkProfiler, NetworkServer, Replicated, ReplicatedTransform,
-    ReplicatedVelocity, ReplicationRegistry,
-};
+use praxis_networking::{NetworkClient, NetworkConfig, NetworkServer, ReplicationRegistry};
 
 #[cfg(feature = "scripting")]
 use praxis_scripting::{SandboxConfig, SandboxLevel, ScriptingConfig, ScriptingContext};
@@ -212,8 +209,14 @@ impl AppState {
 
         #[cfg(feature = "scripting")]
         if let Some(context) = &mut self.scripting_context {
+            // Process hot-reload events
+            if let Err(e) = context.process_hot_reload() {
+                warn!("Hot-reload error: {}", e);
+            }
+
             // Execute update scripts
-            if let Err(e) = context.call_function("game_logic", "update", delta_time) {
+            if let Err(e) = context.call_function::<f32, ()>("game_logic", "update", delta_time)
+            {
                 warn!("Script update error: {}", e);
             }
         }
@@ -288,10 +291,10 @@ impl AppState {
             #[cfg(feature = "scripting")]
             KeyCode::KeyL if pressed => {
                 if let Some(context) = &mut self.scripting_context {
-                    if let Err(e) = context.reload_all() {
-                        warn!("Script reload error: {}", e);
-                    } else {
-                        info!("Scripts reloaded");
+                    info!("Manual script reload requested");
+                    match context.reload_script("game_logic") {
+                        Ok(()) => info!("Scripts reloaded successfully"),
+                        Err(e) => warn!("Script reload error: {}", e),
                     }
                 }
             }
@@ -433,10 +436,21 @@ fn setup_scripting(state: &mut AppState) -> Result<()> {
 
     let mut context = ScriptingContext::new(config)?;
 
-    // Load game logic script
-    context.load_string(
-        "game_logic",
-        r#"
+    // Try to load from file first, fall back to inline script
+    let script_path = "examples/scripts/complete_features_demo.lua";
+    if std::path::Path::new(script_path).exists() {
+        info!("Loading game logic from file: {}", script_path);
+        context.load_script("game_logic", script_path)?;
+        
+        // Enable hot-reload
+        context.enable_hot_reload("examples/scripts")?;
+        info!("Script hot-reload enabled - edit {} to see changes", script_path);
+    } else {
+        info!("Script file not found, using inline script");
+        // Load game logic script from inline string
+        context.load_string(
+            "game_logic",
+            r#"
         -- Game logic script
         function update(delta_time)
             -- Called every frame
@@ -463,12 +477,9 @@ fn setup_scripting(state: &mut AppState) -> Result<()> {
             end
         end
     "#,
-    )?;
-
-    // Enable hot-reload if scripts directory exists
-    if std::path::Path::new("scripts").exists() {
-        context.enable_hot_reload("scripts")?;
-        info!("Script hot-reload enabled");
+        )?;
+        
+        info!("Note: Create {} for hot-reload support", script_path);
     }
 
     state.scripting_context = Some(context);
