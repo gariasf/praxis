@@ -583,7 +583,7 @@ impl ProceduralTextureGenerator {
         // Generate function for each node in the graph
         // Nodes are generated recursively starting from the output node
         let mut generated_nodes = std::collections::HashSet::new();
-        self.generate_node_function(graph, output_id, &mut generated_nodes, &mut shader)?;
+        Self::generate_node_function(graph, output_id, &mut generated_nodes, &mut shader)?;
 
         // Generate main() entry point
         shader.push_str("\nvoid main() {\n");
@@ -646,21 +646,19 @@ impl ProceduralTextureGenerator {
     ///     return eval_node_0(transformed);
     /// }
     /// ```
-    #[allow(clippy::only_used_in_recursion)]
     fn generate_node_function(
-        &self,
-        graph: &TextureGraph,
-        node_id: TextureNodeId,
-        generated: &mut std::collections::HashSet<TextureNodeId>,
-        shader: &mut String,
+        graph_ref: &TextureGraph,
+        current_node: TextureNodeId,
+        generated_nodes: &mut std::collections::HashSet<TextureNodeId>,
+        output_shader: &mut String,
     ) -> Result<()> {
         // Skip if this node was already generated (deduplication)
-        if generated.contains(&node_id) {
+        if generated_nodes.contains(&current_node) {
             return Ok(());
         }
 
-        let node = graph
-            .get_node(node_id)
+        let node = graph_ref
+            .get_node(current_node)
             .ok_or_else(|| eyre::eyre!("Node not found"))?;
 
         match node {
@@ -672,7 +670,7 @@ impl ProceduralTextureGenerator {
                 persistence,
                 lacunarity,
             } => {
-                shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
+                output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
 
                 // Select noise function based on type
                 let noise_fn = match noise_type {
@@ -686,27 +684,27 @@ impl ProceduralTextureGenerator {
                 // - octaves: Number of detail layers
                 // - persistence: Amplitude decay per octave (typically 0.5)
                 // - lacunarity: Frequency multiplier per octave (typically 2.0)
-                shader.push_str(&format!(
+                output_shader.push_str(&format!(
                     "    float value = fbm_{noise_fn}(uv * {scale}, SEED, {octaves}, {persistence}, {lacunarity});\n"
                 ));
                 // Normalize noise from [-1, 1] to [0, 1] range
-                shader.push_str("    value = value * 0.5 + 0.5;\n");
+                output_shader.push_str("    value = value * 0.5 + 0.5;\n");
                 // Return as grayscale color (R=G=B=value, A=1)
-                shader.push_str("    return vec4(value, value, value, 1.0);\n");
-                shader.push_str("}\n\n");
+                output_shader.push_str("    return vec4(value, value, value, 1.0);\n");
+                output_shader.push_str("}\n\n");
             }
             TextureNode::Constant { color } => {
-                shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                shader.push_str(&format!(
+                output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                output_shader.push_str(&format!(
                     "    return vec4({}, {}, {}, {});\n",
                     color[0], color[1], color[2], color[3]
                 ));
-                shader.push_str("}\n\n");
+                output_shader.push_str("}\n\n");
             }
             TextureNode::Transform { input, params } => {
-                self.generate_node_function(graph, *input, generated, shader)?;
-                shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                shader.push_str(&format!(
+                Self::generate_node_function(graph_ref, *input, generated_nodes, output_shader)?;
+                output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                output_shader.push_str(&format!(
                     "    vec2 transformed = transform_uv(uv, vec2({}, {}), {}, vec2({}, {}));\n",
                     params.offset.x,
                     params.offset.y,
@@ -714,8 +712,8 @@ impl ProceduralTextureGenerator {
                     params.scale.x,
                     params.scale.y
                 ));
-                shader.push_str(&format!("    return eval_node_{}(transformed);\n", input.0));
-                shader.push_str("}\n\n");
+                output_shader.push_str(&format!("    return eval_node_{}(transformed);\n", input.0));
+                output_shader.push_str("}\n\n");
             }
             TextureNode::Blend {
                 input_a,
@@ -723,12 +721,12 @@ impl ProceduralTextureGenerator {
                 mode,
                 factor,
             } => {
-                self.generate_node_function(graph, *input_a, generated, shader)?;
-                self.generate_node_function(graph, *input_b, generated, shader)?;
+                Self::generate_node_function(graph_ref, *input_a, generated_nodes, output_shader)?;
+                Self::generate_node_function(graph_ref, *input_b, generated_nodes, output_shader)?;
 
-                shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                shader.push_str(&format!("    vec4 a = eval_node_{}(uv);\n", input_a.0));
-                shader.push_str(&format!("    vec4 b = eval_node_{}(uv);\n", input_b.0));
+                output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                output_shader.push_str(&format!("    vec4 a = eval_node_{}(uv);\n", input_a.0));
+                output_shader.push_str(&format!("    vec4 b = eval_node_{}(uv);\n", input_b.0));
 
                 let blend_expr = match mode {
                     BlendMode::Add => "a + b",
@@ -743,13 +741,13 @@ impl ProceduralTextureGenerator {
                     BlendMode::Subtract => "a - b",
                 };
 
-                shader.push_str(&format!("    return {blend_expr};\n"));
-                shader.push_str("}\n\n");
+                output_shader.push_str(&format!("    return {blend_expr};\n"));
+                output_shader.push_str("}\n\n");
             }
             TextureNode::ColorRamp { input, ramp } => {
-                self.generate_node_function(graph, *input, generated, shader)?;
-                shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                shader.push_str(&format!("    float t = eval_node_{}(uv).r;\n", input.0));
+                Self::generate_node_function(graph_ref, *input, generated_nodes, output_shader)?;
+                output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                output_shader.push_str(&format!("    float t = eval_node_{}(uv).r;\n", input.0));
 
                 if ramp.stops.len() >= 2 {
                     for i in 0..ramp.stops.len() - 1 {
@@ -762,23 +760,23 @@ impl ProceduralTextureGenerator {
                             format!("else if (t <= {})", stop2.position)
                         };
 
-                        shader.push_str(&format!("    {condition} {{\n"));
-                        shader.push_str(&format!(
+                        output_shader.push_str(&format!("    {condition} {{\n"));
+                        output_shader.push_str(&format!(
                             "        float factor = (t - {}) / ({} - {});\n",
                             stop1.position, stop2.position, stop1.position
                         ));
-                        shader.push_str(&format!(
+                        output_shader.push_str(&format!(
                             "        vec4 c1 = vec4({}, {}, {}, {});\n",
                             stop1.color[0], stop1.color[1], stop1.color[2], stop1.color[3]
                         ));
-                        shader.push_str(&format!(
+                        output_shader.push_str(&format!(
                             "        vec4 c2 = vec4({}, {}, {}, {});\n",
                             stop2.color[0], stop2.color[1], stop2.color[2], stop2.color[3]
                         ));
-                        shader.push_str("        return mix(c1, c2, factor);\n");
-                        shader.push_str("    }\n");
+                        output_shader.push_str("        return mix(c1, c2, factor);\n");
+                        output_shader.push_str("    }\n");
                     }
-                    shader.push_str(&format!(
+                    output_shader.push_str(&format!(
                         "    return vec4({}, {}, {}, {});\n",
                         ramp.stops.last().unwrap().color[0],
                         ramp.stops.last().unwrap().color[1],
@@ -786,64 +784,64 @@ impl ProceduralTextureGenerator {
                         ramp.stops.last().unwrap().color[3]
                     ));
                 } else {
-                    shader.push_str("    return vec4(0.0, 0.0, 0.0, 1.0);\n");
+                    output_shader.push_str("    return vec4(0.0, 0.0, 0.0, 1.0);\n");
                 }
 
-                shader.push_str("}\n\n");
+                output_shader.push_str("}\n\n");
             }
             TextureNode::Invert { input } => {
-                self.generate_node_function(graph, *input, generated, shader)?;
-                shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
-                shader.push_str("    return vec4(1.0 - color.rgb, color.a);\n");
-                shader.push_str("}\n\n");
+                Self::generate_node_function(graph_ref, *input, generated_nodes, output_shader)?;
+                output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                output_shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
+                output_shader.push_str("    return vec4(1.0 - color.rgb, color.a);\n");
+                output_shader.push_str("}\n\n");
             }
             TextureNode::Clamp { input, min, max } => {
-                self.generate_node_function(graph, *input, generated, shader)?;
-                shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
-                shader.push_str(&format!("    return clamp(color, {min}, {max});\n"));
-                shader.push_str("}\n\n");
+                Self::generate_node_function(graph_ref, *input, generated_nodes, output_shader)?;
+                output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                output_shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
+                output_shader.push_str(&format!("    return clamp(color, {min}, {max});\n"));
+                output_shader.push_str("}\n\n");
             }
             TextureNode::Power { input, exponent } => {
-                self.generate_node_function(graph, *input, generated, shader)?;
-                shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
-                shader.push_str(&format!(
+                Self::generate_node_function(graph_ref, *input, generated_nodes, output_shader)?;
+                output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                output_shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
+                output_shader.push_str(&format!(
                     "    return vec4(pow(color.rgb, vec3({exponent})), color.a);\n"
                 ));
-                shader.push_str("}\n\n");
+                output_shader.push_str("}\n\n");
             }
             TextureNode::Threshold { input, threshold } => {
-                self.generate_node_function(graph, *input, generated, shader)?;
-                shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
-                shader.push_str(&format!("    float value = step({threshold}, color.r);\n"));
-                shader.push_str("    return vec4(value, value, value, color.a);\n");
-                shader.push_str("}\n\n");
+                Self::generate_node_function(graph_ref, *input, generated_nodes, output_shader)?;
+                output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                output_shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
+                output_shader.push_str(&format!("    float value = step({threshold}, color.r);\n"));
+                output_shader.push_str("    return vec4(value, value, value, color.a);\n");
+                output_shader.push_str("}\n\n");
             }
             TextureNode::Contrast { input, amount } => {
-                self.generate_node_function(graph, *input, generated, shader)?;
-                shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
-                shader.push_str(&format!(
+                Self::generate_node_function(graph_ref, *input, generated_nodes, output_shader)?;
+                output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                output_shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
+                output_shader.push_str(&format!(
                     "    vec3 adjusted = (color.rgb - 0.5) * (1.0 + {amount}) + 0.5;\n"
                 ));
-                shader.push_str("    return vec4(adjusted, color.a);\n");
-                shader.push_str("}\n\n");
+                output_shader.push_str("    return vec4(adjusted, color.a);\n");
+                output_shader.push_str("}\n\n");
             }
             TextureNode::Brightness { input, amount } => {
-                self.generate_node_function(graph, *input, generated, shader)?;
-                shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
-                shader.push_str(&format!(
+                Self::generate_node_function(graph_ref, *input, generated_nodes, output_shader)?;
+                output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                output_shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
+                output_shader.push_str(&format!(
                     "    return vec4(color.rgb + {amount}, color.a);\n"
                 ));
-                shader.push_str("}\n\n");
+                output_shader.push_str("}\n\n");
             }
         }
 
-        generated.insert(node_id);
+        generated_nodes.insert(current_node);
         Ok(())
     }
 
@@ -1943,7 +1941,7 @@ void not_main() {
             shader.push_str(&self.generate_utility_functions());
 
             let mut generated_nodes = std::collections::HashSet::new();
-            self.generate_node_function(graph, output_id, &mut generated_nodes, &mut shader)?;
+            Self::generate_node_function(graph, output_id, &mut generated_nodes, &mut shader)?;
 
             shader.push_str("\nvoid main() {\n");
             shader.push_str("    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);\n");
@@ -1959,20 +1957,18 @@ void not_main() {
             Ok(shader)
         }
 
-        #[allow(clippy::only_used_in_recursion)]
         fn generate_node_function(
-            &self,
-            graph: &TextureGraph,
-            node_id: TextureNodeId,
-            generated: &mut std::collections::HashSet<TextureNodeId>,
-            shader: &mut String,
+            graph_ref: &TextureGraph,
+            current_node: TextureNodeId,
+            generated_nodes: &mut std::collections::HashSet<TextureNodeId>,
+            output_shader: &mut String,
         ) -> Result<()> {
-            if generated.contains(&node_id) {
+            if generated_nodes.contains(&current_node) {
                 return Ok(());
             }
 
-            let node = graph
-                .get_node(node_id)
+            let node = graph_ref
+                .get_node(current_node)
                 .ok_or_else(|| eyre::eyre!("Node not found"))?;
 
             match node {
@@ -1983,7 +1979,7 @@ void not_main() {
                     persistence,
                     lacunarity,
                 } => {
-                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
+                    output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
 
                     let noise_fn = match noise_type {
                         NoiseType::Perlin => "perlin_noise",
@@ -1991,30 +1987,30 @@ void not_main() {
                         NoiseType::Worley => "worley_noise",
                     };
 
-                    shader.push_str(&format!(
+                    output_shader.push_str(&format!(
                         "    float value = fbm_{noise_fn}(uv * {scale}, SEED, {octaves}, {persistence}, {lacunarity});\n"
                     ));
-                    shader.push_str("    value = value * 0.5 + 0.5;\n");
-                    shader.push_str("    return vec4(value, value, value, 1.0);\n");
-                    shader.push_str("}\n\n");
+                    output_shader.push_str("    value = value * 0.5 + 0.5;\n");
+                    output_shader.push_str("    return vec4(value, value, value, 1.0);\n");
+                    output_shader.push_str("}\n\n");
                 }
                 TextureNode::Constant { color } => {
-                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                    shader.push_str(&format!(
+                    output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                    output_shader.push_str(&format!(
                         "    return vec4({}, {}, {}, {});\n",
                         color[0], color[1], color[2], color[3]
                     ));
-                    shader.push_str("}\n\n");
+                    output_shader.push_str("}\n\n");
                 }
                 TextureNode::Transform { input, params } => {
-                    self.generate_node_function(graph, *input, generated, shader)?;
-                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                    shader.push_str(&format!(
+                    Self::generate_node_function(graph_ref, *input, generated_nodes, output_shader)?;
+                    output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                    output_shader.push_str(&format!(
                         "    vec2 transformed = transform_uv(uv, vec2({}, {}), {}, vec2({}, {}));\n",
                         params.offset.x, params.offset.y, params.rotation, params.scale.x, params.scale.y
                     ));
-                    shader.push_str(&format!("    return eval_node_{}(transformed);\n", input.0));
-                    shader.push_str("}\n\n");
+                    output_shader.push_str(&format!("    return eval_node_{}(transformed);\n", input.0));
+                    output_shader.push_str("}\n\n");
                 }
                 TextureNode::Blend {
                     input_a,
@@ -2022,12 +2018,12 @@ void not_main() {
                     mode,
                     factor,
                 } => {
-                    self.generate_node_function(graph, *input_a, generated, shader)?;
-                    self.generate_node_function(graph, *input_b, generated, shader)?;
+                    Self::generate_node_function(graph_ref, *input_a, generated_nodes, output_shader)?;
+                    Self::generate_node_function(graph_ref, *input_b, generated_nodes, output_shader)?;
 
-                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                    shader.push_str(&format!("    vec4 a = eval_node_{}(uv);\n", input_a.0));
-                    shader.push_str(&format!("    vec4 b = eval_node_{}(uv);\n", input_b.0));
+                    output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                    output_shader.push_str(&format!("    vec4 a = eval_node_{}(uv);\n", input_a.0));
+                    output_shader.push_str(&format!("    vec4 b = eval_node_{}(uv);\n", input_b.0));
 
                     let blend_expr = match mode {
                         BlendMode::Add => "a + b",
@@ -2042,13 +2038,13 @@ void not_main() {
                         BlendMode::Subtract => "a - b",
                     };
 
-                    shader.push_str(&format!("    return {blend_expr};\n"));
-                    shader.push_str("}\n\n");
+                    output_shader.push_str(&format!("    return {blend_expr};\n"));
+                    output_shader.push_str("}\n\n");
                 }
                 TextureNode::ColorRamp { input, ramp } => {
-                    self.generate_node_function(graph, *input, generated, shader)?;
-                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                    shader.push_str(&format!("    float t = eval_node_{}(uv).r;\n", input.0));
+                    Self::generate_node_function(graph_ref, *input, generated_nodes, output_shader)?;
+                    output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                    output_shader.push_str(&format!("    float t = eval_node_{}(uv).r;\n", input.0));
 
                     if ramp.stops.len() >= 2 {
                         for i in 0..ramp.stops.len() - 1 {
@@ -2061,23 +2057,23 @@ void not_main() {
                                 format!("else if (t <= {})", stop2.position)
                             };
 
-                            shader.push_str(&format!("    {condition} {{\n"));
-                            shader.push_str(&format!(
+                            output_shader.push_str(&format!("    {condition} {{\n"));
+                            output_shader.push_str(&format!(
                                 "        float factor = (t - {}) / ({} - {});\n",
                                 stop1.position, stop2.position, stop1.position
                             ));
-                            shader.push_str(&format!(
+                            output_shader.push_str(&format!(
                                 "        vec4 c1 = vec4({}, {}, {}, {});\n",
                                 stop1.color[0], stop1.color[1], stop1.color[2], stop1.color[3]
                             ));
-                            shader.push_str(&format!(
+                            output_shader.push_str(&format!(
                                 "        vec4 c2 = vec4({}, {}, {}, {});\n",
                                 stop2.color[0], stop2.color[1], stop2.color[2], stop2.color[3]
                             ));
-                            shader.push_str("        return mix(c1, c2, factor);\n");
-                            shader.push_str("    }\n");
+                            output_shader.push_str("        return mix(c1, c2, factor);\n");
+                            output_shader.push_str("    }\n");
                         }
-                        shader.push_str(&format!(
+                        output_shader.push_str(&format!(
                             "    return vec4({}, {}, {}, {});\n",
                             ramp.stops.last().unwrap().color[0],
                             ramp.stops.last().unwrap().color[1],
@@ -2085,64 +2081,64 @@ void not_main() {
                             ramp.stops.last().unwrap().color[3]
                         ));
                     } else {
-                        shader.push_str("    return vec4(0.0, 0.0, 0.0, 1.0);\n");
+                        output_shader.push_str("    return vec4(0.0, 0.0, 0.0, 1.0);\n");
                     }
 
-                    shader.push_str("}\n\n");
+                    output_shader.push_str("}\n\n");
                 }
                 TextureNode::Invert { input } => {
-                    self.generate_node_function(graph, *input, generated, shader)?;
-                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                    shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
-                    shader.push_str("    return vec4(1.0 - color.rgb, color.a);\n");
-                    shader.push_str("}\n\n");
+                    Self::generate_node_function(graph_ref, *input, generated_nodes, output_shader)?;
+                    output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                    output_shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
+                    output_shader.push_str("    return vec4(1.0 - color.rgb, color.a);\n");
+                    output_shader.push_str("}\n\n");
                 }
                 TextureNode::Clamp { input, min, max } => {
-                    self.generate_node_function(graph, *input, generated, shader)?;
-                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                    shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
-                    shader.push_str(&format!("    return clamp(color, {min}, {max});\n"));
-                    shader.push_str("}\n\n");
+                    Self::generate_node_function(graph_ref, *input, generated_nodes, output_shader)?;
+                    output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                    output_shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
+                    output_shader.push_str(&format!("    return clamp(color, {min}, {max});\n"));
+                    output_shader.push_str("}\n\n");
                 }
                 TextureNode::Power { input, exponent } => {
-                    self.generate_node_function(graph, *input, generated, shader)?;
-                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                    shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
-                    shader.push_str(&format!(
+                    Self::generate_node_function(graph_ref, *input, generated_nodes, output_shader)?;
+                    output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                    output_shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
+                    output_shader.push_str(&format!(
                         "    return vec4(pow(color.rgb, vec3({exponent})), color.a);\n"
                     ));
-                    shader.push_str("}\n\n");
+                    output_shader.push_str("}\n\n");
                 }
                 TextureNode::Threshold { input, threshold } => {
-                    self.generate_node_function(graph, *input, generated, shader)?;
-                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                    shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
-                    shader.push_str(&format!("    float value = step({threshold}, color.r);\n"));
-                    shader.push_str("    return vec4(value, value, value, color.a);\n");
-                    shader.push_str("}\n\n");
+                    Self::generate_node_function(graph_ref, *input, generated_nodes, output_shader)?;
+                    output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                    output_shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
+                    output_shader.push_str(&format!("    float value = step({threshold}, color.r);\n"));
+                    output_shader.push_str("    return vec4(value, value, value, color.a);\n");
+                    output_shader.push_str("}\n\n");
                 }
                 TextureNode::Contrast { input, amount } => {
-                    self.generate_node_function(graph, *input, generated, shader)?;
-                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                    shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
-                    shader.push_str(&format!(
+                    Self::generate_node_function(graph_ref, *input, generated_nodes, output_shader)?;
+                    output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                    output_shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
+                    output_shader.push_str(&format!(
                         "    vec3 adjusted = (color.rgb - 0.5) * (1.0 + {amount}) + 0.5;\n"
                     ));
-                    shader.push_str("    return vec4(adjusted, color.a);\n");
-                    shader.push_str("}\n\n");
+                    output_shader.push_str("    return vec4(adjusted, color.a);\n");
+                    output_shader.push_str("}\n\n");
                 }
                 TextureNode::Brightness { input, amount } => {
-                    self.generate_node_function(graph, *input, generated, shader)?;
-                    shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", node_id.0));
-                    shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
-                    shader.push_str(&format!(
+                    Self::generate_node_function(graph_ref, *input, generated_nodes, output_shader)?;
+                    output_shader.push_str(&format!("vec4 eval_node_{}(vec2 uv) {{\n", current_node.0));
+                    output_shader.push_str(&format!("    vec4 color = eval_node_{}(uv);\n", input.0));
+                    output_shader.push_str(&format!(
                         "    return vec4(color.rgb + {amount}, color.a);\n"
                     ));
-                    shader.push_str("}\n\n");
+                    output_shader.push_str("}\n\n");
                 }
             }
 
-            generated.insert(node_id);
+            generated_nodes.insert(current_node);
             Ok(())
         }
 
