@@ -3,6 +3,18 @@
 //! This module provides a GPU-based culling system that performs frustum and occlusion
 //! culling using compute shaders, generating indirect draw buffers to minimize CPU overhead.
 //!
+//! # Vulkan Validation and Synchronization
+//!
+//! This implementation includes proper setup to satisfy Vulkan validation:
+//!
+//! - **Synchronization**: Vulkano handles pipeline barriers automatically based on buffer usage
+//! - **Buffer Usage Flags**: All buffers have appropriate usage flags (STORAGE_BUFFER,
+//!   INDIRECT_BUFFER, TRANSFER_DST) based on their usage patterns
+//! - **Memory Types**: Buffers use appropriate memory type filters for host-visible or
+//!   device-local allocations
+//! - **Atomic Operations**: Draw count uses atomic operations for thread-safe counter increments
+//! - **Bounds Checking**: Shader includes bounds checks to prevent buffer overflows
+//!
 //! # Educational: Compute Shader Culling
 //!
 //! ## The Visibility Problem
@@ -592,6 +604,12 @@ impl GpuCullingManager {
         mesh_data: &[GpuMeshData],
     ) -> Result<()> {
         let draw_count = draw_commands.len();
+        
+        if draw_count == 0 || mesh_data.is_empty() {
+            self.current_draw_count = 0;
+            return Ok(());
+        }
+        
         self.current_draw_count = draw_count as u32;
 
         trace!(
@@ -609,6 +627,14 @@ impl GpuCullingManager {
             self.allocate_buffers(draw_count)?;
         }
 
+        // Reset draw count to zero first (must happen before compute shader runs)
+        if let Some(buffer) = &self.draw_count_buffer {
+            let mut write = buffer
+                .write()
+                .map_err(|e| eyre::eyre!("Failed to map draw count buffer: {}", e))?;
+            *write = 0;
+        }
+
         // Upload draw commands
         if let Some(buffer) = &self.draw_command_buffer {
             let mut write = buffer
@@ -623,14 +649,6 @@ impl GpuCullingManager {
                 .write()
                 .map_err(|e| eyre::eyre!("Failed to map mesh data buffer: {}", e))?;
             write[..mesh_data.len()].copy_from_slice(mesh_data);
-        }
-
-        // Reset draw count to zero
-        if let Some(buffer) = &self.draw_count_buffer {
-            let mut write = buffer
-                .write()
-                .map_err(|e| eyre::eyre!("Failed to map draw count buffer: {}", e))?;
-            *write = 0;
         }
 
         Ok(())
@@ -679,11 +697,14 @@ impl GpuCullingManager {
         let indirect_draw_buffer = Buffer::new_slice::<IndirectDrawCommand>(
             self.memory_allocator.clone(),
             BufferCreateInfo {
-                usage: BufferUsage::STORAGE_BUFFER | BufferUsage::INDIRECT_BUFFER,
+                usage: BufferUsage::STORAGE_BUFFER 
+                    | BufferUsage::INDIRECT_BUFFER 
+                    | BufferUsage::TRANSFER_DST,
                 ..Default::default()
             },
             AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE 
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
                 ..Default::default()
             },
             max_draw_commands as u64,
@@ -694,11 +715,12 @@ impl GpuCullingManager {
         let visible_indices_buffer = Buffer::new_slice::<u32>(
             self.memory_allocator.clone(),
             BufferCreateInfo {
-                usage: BufferUsage::STORAGE_BUFFER,
+                usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST,
                 ..Default::default()
             },
             AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE 
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
                 ..Default::default()
             },
             max_draw_commands as u64,
@@ -709,11 +731,13 @@ impl GpuCullingManager {
         let draw_count_buffer = Buffer::from_data(
             self.memory_allocator.clone(),
             BufferCreateInfo {
-                usage: BufferUsage::STORAGE_BUFFER | BufferUsage::INDIRECT_BUFFER,
+                usage: BufferUsage::STORAGE_BUFFER 
+                    | BufferUsage::INDIRECT_BUFFER 
+                    | BufferUsage::TRANSFER_DST,
                 ..Default::default()
             },
             AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
                     | MemoryTypeFilter::HOST_RANDOM_ACCESS,
                 ..Default::default()
             },
@@ -746,6 +770,14 @@ impl GpuCullingManager {
         )
         .map_err(|e| eyre::eyre!("Failed to create culling uniforms buffer: {}", e))?;
 
+        // Initialize draw count buffer to zero
+        {
+            let mut write = draw_count_buffer
+                .write()
+                .map_err(|e| eyre::eyre!("Failed to initialize draw count buffer: {}", e))?;
+            *write = 0;
+        }
+
         self.draw_command_buffer = Some(draw_command_buffer);
         self.mesh_data_buffer = Some(mesh_data_buffer);
         self.indirect_draw_buffer = Some(indirect_draw_buffer);
@@ -766,6 +798,8 @@ impl GpuCullingManager {
     /// 1. Bind the culling compute pipeline
     /// 2. Update culling uniforms
     /// 3. Dispatch compute work groups
+    ///
+    /// Vulkano automatically handles synchronization barriers based on buffer usage flags.
     ///
     /// # Arguments
     ///
