@@ -7,17 +7,18 @@ use praxis_ecs::{Schedule, Transform, World};
 use praxis_math::{Quat, Vec3};
 #[cfg(feature = "networking")]
 use praxis_networking::{
-    ExtrapolationSystem, InterpolationBuffer, InterpolationSystem, LagCompensation,
-    LagCompensationSystem, NetworkClient, NetworkConfig, NetworkExtrapolation, NetworkId,
-    NetworkInterpolation, NetworkProfiler, NetworkServer, Replicated, ReplicatedTransform,
-    ReplicatedVelocity, ReplicationRegistry,
+    InterpolationBuffer, LagCompensation, LagCompensationSystem, NetworkClient, NetworkConfig,
+    NetworkId, NetworkInterpolation, NetworkProfiler, NetworkServer, Replicated,
+    ReplicatedTransform, ReplicatedVelocity, ReplicationRegistry,
 };
+#[cfg(feature = "networking")]
+use praxis_utils::Result;
 #[cfg(feature = "networking")]
 use std::time::{Duration, Instant};
 
 /// Demonstrates server setup and entity replication.
 #[cfg(feature = "networking")]
-async fn run_server() -> color_eyre::Result<()> {
+async fn run_server() -> Result<()> {
     println!("=== Starting Network Server ===\n");
 
     // Configure server
@@ -99,7 +100,7 @@ async fn run_server() -> color_eyre::Result<()> {
             server.update(delta)?;
 
             // Update lag compensation history
-            LagCompensationSystem::update(&mut lag_comp, 1, world.inner());
+            LagCompensationSystem::update(&mut lag_comp, 1, world.inner_mut());
 
             // Print status every second
             if tick_count % 60 == 0 {
@@ -123,7 +124,7 @@ async fn run_server() -> color_eyre::Result<()> {
 
 /// Demonstrates client setup and connection.
 #[cfg(feature = "networking")]
-async fn run_client() -> color_eyre::Result<()> {
+async fn run_client() -> Result<()> {
     println!("=== Starting Network Client ===\n");
 
     // Wait a bit for server to start
@@ -307,10 +308,12 @@ fn demonstrate_lag_compensation() {
     let mut world = bevy_ecs::world::World::new();
 
     // Spawn target entity
-    let entity = world.spawn((
-        NetworkId::new(1),
-        ReplicatedTransform::new(Vec3::ZERO, Quat::IDENTITY, Vec3::ONE),
-    ));
+    let entity = world
+        .spawn((
+            NetworkId::new(1),
+            ReplicatedTransform::new(Vec3::ZERO, Quat::IDENTITY, Vec3::ONE),
+        ))
+        .id();
 
     println!("Target entity spawned at (0, 0, 0)");
 
@@ -320,12 +323,14 @@ fn demonstrate_lag_compensation() {
         let position = Vec3::new(i as f32, 0.0, 0.0);
 
         // Update entity position
-        if let Some(mut transform) = world.get_mut::<ReplicatedTransform>(entity) {
-            transform.translation = position;
+        if let Some(mut entity_mut) = world.get_entity_mut(entity) {
+            if let Some(mut transform) = entity_mut.get_mut::<ReplicatedTransform>() {
+                transform.translation = position;
+            }
         }
 
         // Record snapshot
-        lag_comp.record_snapshot(1, timestamp, &world);
+        lag_comp.record_snapshot(1, timestamp, &mut world);
 
         println!("  t={}ms: position ({}, 0, 0)", timestamp, i);
     }
@@ -342,11 +347,13 @@ fn demonstrate_lag_compensation() {
             println!("Successfully rewound world to t=300ms");
 
             // Check entity position
-            if let Some(transform) = world.get::<ReplicatedTransform>(entity) {
-                println!(
-                    "Entity position after rewind: ({}, {}, {})",
-                    transform.translation.x, transform.translation.y, transform.translation.z
-                );
+            if let Some(entity_ref) = world.get_entity(entity) {
+                if let Some(transform) = entity_ref.get::<ReplicatedTransform>() {
+                    println!(
+                        "Entity position after rewind: ({}, {}, {})",
+                        transform.translation.x, transform.translation.y, transform.translation.z
+                    );
+                }
             }
 
             // Restore state
@@ -363,14 +370,9 @@ fn demonstrate_lag_compensation() {
 
 #[cfg(feature = "networking")]
 #[tokio::main]
-async fn main() -> color_eyre::Result<()> {
-    // Initialize error handling
-    color_eyre::install()?;
-
+async fn main() -> Result<()> {
     // Initialize logging
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .init();
+    tracing_subscriber::fmt::init();
 
     println!("╔═══════════════════════════════════════════╗");
     println!("║  Praxis Networking Demonstration         ║");
