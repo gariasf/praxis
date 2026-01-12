@@ -108,7 +108,12 @@ use crate::resources::{ContactEvents, PhysicsConfig, PhysicsTime, PhysicsWorld};
 /// - **Resources**: `PhysicsWorld` (`ResMut`), `PhysicsConfig` (`Res`), `PhysicsTime` (`ResMut`),
 ///   `ContactEvents` (`ResMut`)
 /// - **Ordering**: Should run after user input and before rendering
-#[allow(clippy::needless_pass_by_value)]
+///
+/// # Note on Parameters
+///
+/// ECS system parameters (`Query`, `Res`, `ResMut`) must be passed by value as required by the
+/// ECS framework's system trait bounds. They are zero-cost abstractions that provide access to
+/// ECS world data through the scheduler.
 pub fn physics_step_system(
     mut physics_world: ResMut<PhysicsWorld>,
     config: Res<PhysicsConfig>,
@@ -423,7 +428,12 @@ pub fn physics_step_system(
 /// - **Resources**: `PhysicsWorld` (`ResMut`)
 /// - **Query**: Entities with `Transform` and `RigidBody` components
 /// - **Change Detection**: Uses `Changed<Transform>` for ECS→Physics sync
-#[allow(clippy::needless_pass_by_value, clippy::type_complexity)]
+///
+/// # Note on Parameters
+///
+/// ECS system parameters (`Query`, `Res`, `ResMut`, `ParamSet`) must be passed by value as
+/// required by the ECS framework's system trait bounds. They are zero-cost abstractions that
+/// provide access to ECS world data through the scheduler.
 pub fn sync_physics_transforms_system(
     mut physics_world: ResMut<PhysicsWorld>,
     // ParamSet is required because changed_query reads Transform while all_query mutates it.
@@ -772,7 +782,12 @@ pub fn sync_physics_transforms_system(
 /// let mut schedule = Schedule::default();
 /// schedule.add_systems(sync_transforms_to_physics);
 /// ```
-#[allow(clippy::needless_pass_by_value)]
+///
+/// # Note on Parameters
+///
+/// ECS system parameters (`Query`, `Res`, `ResMut`) must be passed by value as required by the
+/// ECS framework's system trait bounds. They are zero-cost abstractions that provide access to
+/// ECS world data through the scheduler.
 pub fn sync_transforms_to_physics(
     mut physics_world: ResMut<PhysicsWorld>,
     query: Query<(Entity, &Transform, &PraxisRigidBody), With<PraxisRigidBody>>,
@@ -852,7 +867,12 @@ pub fn sync_transforms_to_physics(
 ///     sync_transforms_from_physics,
 /// ).chain());
 /// ```
-#[allow(clippy::needless_pass_by_value)]
+///
+/// # Note on Parameters
+///
+/// ECS system parameters (`Res`, `ResMut`) must be passed by value as required by the ECS
+/// framework's system trait bounds. They are zero-cost abstractions that provide access to
+/// ECS world data through the scheduler.
 pub fn step_physics_simulation(
     mut physics_world: ResMut<PhysicsWorld>,
     config: Res<PhysicsConfig>,
@@ -923,7 +943,12 @@ pub fn step_physics_simulation(
 ///     sync_transforms_from_physics,
 /// ).chain());
 /// ```
-#[allow(clippy::needless_pass_by_value)]
+///
+/// # Note on Parameters
+///
+/// ECS system parameters (`Query`, `Res`) must be passed by value as required by the ECS
+/// framework's system trait bounds. They are zero-cost abstractions that provide access to
+/// ECS world data through the scheduler.
 pub fn sync_transforms_from_physics(
     physics_world: Res<PhysicsWorld>,
     mut query: Query<(Entity, &mut Transform, &PraxisRigidBody), With<PraxisRigidBody>>,
@@ -972,7 +997,12 @@ pub fn sync_transforms_from_physics(
 /// let mut schedule = Schedule::default();
 /// schedule.add_systems(apply_external_forces);
 /// ```
-#[allow(clippy::needless_pass_by_value)]
+///
+/// # Note on Parameters
+///
+/// ECS system parameters (`Query`, `ResMut`) must be passed by value as required by the ECS
+/// framework's system trait bounds. They are zero-cost abstractions that provide access to
+/// ECS world data through the scheduler.
 pub fn apply_external_forces(
     mut physics_world: ResMut<PhysicsWorld>,
     mut query: Query<(Entity, &mut ExternalForces), With<PraxisRigidBody>>,
@@ -1017,7 +1047,12 @@ pub fn apply_external_forces(
 /// let mut schedule = Schedule::default();
 /// schedule.add_systems(sync_colliders);
 /// ```
-#[allow(clippy::needless_pass_by_value)]
+///
+/// # Note on Parameters
+///
+/// ECS system parameters (`Query`, `ResMut`) must be passed by value as required by the ECS
+/// framework's system trait bounds. They are zero-cost abstractions that provide access to
+/// ECS world data through the scheduler.
 pub fn sync_colliders(
     mut physics_world: ResMut<PhysicsWorld>,
     query: Query<(Entity, &PraxisCollider, Option<&Sensor>), With<PraxisRigidBody>>,
@@ -1094,7 +1129,12 @@ pub fn sync_colliders(
 /// let mut schedule = Schedule::default();
 /// schedule.add_systems(sync_physics_properties);
 /// ```
-#[allow(clippy::needless_pass_by_value)]
+///
+/// # Note on Parameters
+///
+/// ECS system parameters (`Query`, `ResMut`) must be passed by value as required by the ECS
+/// framework's system trait bounds. They are zero-cost abstractions that provide access to
+/// ECS world data through the scheduler.
 pub fn sync_physics_properties(
     mut physics_world: ResMut<PhysicsWorld>,
     velocity_query: Query<(Entity, &PhysicsVelocity), With<PraxisRigidBody>>,
@@ -1269,7 +1309,12 @@ pub fn sync_physics_properties(
 /// - **Resources**: `PhysicsWorld` (`ResMut`) - mutable access to physics state
 /// - **System Parameter**: `RemovedComponents<RigidBody>` - tracks removed `RigidBody` components
 /// - **Ordering**: Should run before physics simulation to avoid processing stale entities
-#[allow(clippy::needless_pass_by_value)]
+///
+/// # Note on Parameters
+///
+/// ECS system parameters (`ResMut`, `RemovedComponents`) must be passed by value as required by
+/// the ECS framework's system trait bounds. They are zero-cost abstractions that provide access
+/// to ECS world data through the scheduler.
 pub fn cleanup_physics_entities(
     mut physics_world: ResMut<PhysicsWorld>,
     mut removed_bodies: RemovedComponents<PraxisRigidBody>,
@@ -1461,7 +1506,12 @@ pub fn cleanup_physics_entities(
 ///
 /// - **Query**: Entities with `CollisionEventReceiver` components (mutable)
 /// - **Ordering**: Should run before `physics_step_system`
-#[allow(clippy::needless_pass_by_value)]
+///
+/// # Note on Parameters
+///
+/// ECS system parameters (`Query`) must be passed by value as required by the ECS framework's
+/// system trait bounds. They are zero-cost abstractions that provide access to ECS world data
+/// through the scheduler.
 pub fn clear_collision_event_receivers(mut query: Query<&mut CollisionEventReceiver>) {
     for mut receiver in &mut query {
         receiver.clear();
@@ -1606,7 +1656,12 @@ pub fn clear_collision_event_receivers(mut query: Query<&mut CollisionEventRecei
 /// - **Resources**: `ContactEvents` (Res) - source of collision events
 /// - **Query**: Entities with `CollisionEventReceiver` components (mutable)
 /// - **Ordering**: Should run after `physics_step_system`
-#[allow(clippy::needless_pass_by_value)]
+///
+/// # Note on Parameters
+///
+/// ECS system parameters (`Query`, `Res`) must be passed by value as required by the ECS
+/// framework's system trait bounds. They are zero-cost abstractions that provide access to
+/// ECS world data through the scheduler.
 pub fn populate_collision_events(
     contact_events: Res<ContactEvents>,
     mut query: Query<(Entity, &mut CollisionEventReceiver)>,

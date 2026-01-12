@@ -1799,6 +1799,44 @@ impl RenderContext {
             &graphics_pipeline,
         )?;
 
+        // Create dummy bindless descriptor set for when bindless rendering is disabled
+        // The pipeline layout expects set 2 to be bound even in traditional mode
+        debug!("Creating dummy bindless descriptor set");
+        let bindless_set_layout = graphics_pipeline.layout().set_layouts().get(2)
+            .ok_or_else(|| eyre::eyre!("Pipeline missing set 2 layout for bindless rendering"))?
+            .clone();
+        
+        // Create a dummy material buffer for the bindless set
+        let dummy_material_buffer = Buffer::from_data(
+            memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [0u8; 256], // Dummy data
+        )
+        .map_err(|e| eyre::eyre!("Failed to create dummy material buffer: {}", e))?;
+
+        let dummy_bindless_set = DescriptorSet::new(
+            descriptor_set_allocator.clone(),
+            bindless_set_layout,
+            [
+                WriteDescriptorSet::image_view_sampler_array(
+                    0,
+                    0,
+                    vec![],
+                ),
+                WriteDescriptorSet::buffer(1, dummy_material_buffer),
+            ],
+            [],
+        )
+        .map_err(|e| eyre::eyre!("Failed to create dummy bindless descriptor set: {}", e))?;
+
         info!(
             "Graphics context initialization complete in {:?}",
             init_start.elapsed()
