@@ -2722,6 +2722,9 @@ impl RenderContext {
             .push_constants(self.graphics_pipeline.layout().clone(), 0, material_index)
             .map_err(|e| eyre::eyre!("Failed to set push constants: {}", e))?;
 
+        let mut last_transform_set: Option<Arc<DescriptorSet>> = None;
+        let mut last_material_set: Option<Arc<DescriptorSet>> = None;
+
         // Bind dummy bindless descriptor set (Set 2) to satisfy shader requirements
         // Even though we're not using bindless mode, the shader declares Set 2 and it must be bound
         if let Some(ref dummy_bindless_set) = self.dummy_bindless_descriptor_set {
@@ -2738,8 +2741,6 @@ impl RenderContext {
                 .map_err(|e| eyre::eyre!("Failed to bind dummy bindless descriptor set: {}", e))?;
         }
 
-        let mut last_material_set: Option<Arc<DescriptorSet>> = None;
-
         for (transform_set, material_set, mesh, object_index) in draw_list.iter() {
             command_buffer_builder
                 .bind_vertex_buffers(0, mesh.vertex_buffer.clone())
@@ -2751,13 +2752,35 @@ impl RenderContext {
                 .dynamic_uniform_buffer
                 .get_dynamic_offset(*object_index);
 
-            // Bind transform descriptor set with dynamic offset (set 0)
+            // Bind transform descriptor set with dynamic offset (Set 0)
+            // Must be bound in ascending order: Set 0 before Set 1
             let set_with_offsets = vulkano::descriptor_set::DescriptorSetWithOffsets::new(
                 transform_set.clone(),
                 [dynamic_offset],
             );
 
-            // Bind material descriptor set only when material changes (set 1)
+            // Check if transform set needs rebinding (different texture)
+            let transform_changed = last_transform_set
+                .as_ref()
+                .is_none_or(|last| !Arc::ptr_eq(last, transform_set));
+
+            // SAFETY: We ensure the dynamic offset is within bounds via the dynamic uniform buffer
+            // and the draw parameters are valid for the bound mesh
+            unsafe {
+                command_buffer_builder.bind_descriptor_sets_unchecked(
+                    PipelineBindPoint::Graphics,
+                    self.graphics_pipeline.layout().clone(),
+                    0,
+                    set_with_offsets,
+                );
+            }
+
+            if transform_changed {
+                last_transform_set = Some(transform_set.clone());
+            }
+
+            // Bind material descriptor set only when material changes (Set 1)
+            // Must be bound after Set 0 to maintain ascending order
             let material_changed = last_material_set
                 .as_ref()
                 .is_none_or(|last| !Arc::ptr_eq(last, material_set));
@@ -2775,16 +2798,9 @@ impl RenderContext {
                 last_material_set = Some(material_set.clone());
             }
 
-            // SAFETY: We ensure the dynamic offset is within bounds via the dynamic uniform buffer
-            // and the draw parameters are valid for the bound mesh
+            // Draw the mesh
+            // SAFETY: We ensure the draw parameters are valid for the bound mesh
             unsafe {
-                command_buffer_builder.bind_descriptor_sets_unchecked(
-                    PipelineBindPoint::Graphics,
-                    self.graphics_pipeline.layout().clone(),
-                    0,
-                    set_with_offsets,
-                );
-
                 command_buffer_builder
                     .draw_indexed(mesh.index_count, 1, 0, 0, 0)
                     .map_err(|e| eyre::eyre!("Failed to draw indexed: {}", e))?;
