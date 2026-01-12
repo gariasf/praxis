@@ -4,6 +4,7 @@
 //! Components are designed to be intuitive and match common physics concepts.
 
 use bevy_ecs::component::Component;
+use bitflags::bitflags;
 use praxis_math::Vec3;
 
 #[cfg(feature = "serialization")]
@@ -898,122 +899,160 @@ impl Default for Sleeping {
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub struct Sensor;
 
-/// Locked axes component for constraining rigid body motion.
-///
-/// Prevents movement or rotation along specified axes. Useful for
-/// creating 2.5D gameplay or restricting physics behavior.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use praxis_physics::{LockedAxes, RigidBody, Collider};
-/// use praxis_ecs::{World, Transform};
-///
-/// let mut world = World::new();
-///
-/// // Character that can't rotate (stays upright)
-/// world.spawn((
-///     Transform::default(),
-///     RigidBody::Dynamic,
-///     Collider::capsule_y(0.5, 1.0),
-///     LockedAxes::rotation(),
-/// ));
-///
-/// // Object that can only move in XZ plane (2.5D)
-/// world.spawn((
-///     Transform::default(),
-///     RigidBody::Dynamic,
-///     Collider::cuboid(1.0, 1.0, 1.0),
-///     LockedAxes::new().lock_translation_y().lock_rotation_x().lock_rotation_z(),
-/// ));
-/// ```
-#[derive(Component, Debug, Clone, Copy, Default)]
-#[allow(clippy::struct_excessive_bools)]
-pub struct LockedAxes {
-    /// Lock translation along X axis.
-    pub lock_translation_x: bool,
-    /// Lock translation along Y axis.
-    pub lock_translation_y: bool,
-    /// Lock translation along Z axis.
-    pub lock_translation_z: bool,
-    /// Lock rotation around X axis.
-    pub lock_rotation_x: bool,
-    /// Lock rotation around Y axis.
-    pub lock_rotation_y: bool,
-    /// Lock rotation around Z axis.
-    pub lock_rotation_z: bool,
+bitflags! {
+    /// Locked axes component for constraining rigid body motion.
+    ///
+    /// Prevents movement or rotation along specified axes using bitflags.
+    /// Useful for creating 2.5D gameplay or restricting physics behavior.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use praxis_physics::{LockedAxes, RigidBody, Collider};
+    /// use praxis_ecs::{World, Transform};
+    ///
+    /// let mut world = World::new();
+    ///
+    /// // Character that can't rotate (stays upright)
+    /// world.spawn((
+    ///     Transform::default(),
+    ///     RigidBody::Dynamic,
+    ///     Collider::capsule_y(0.5, 1.0),
+    ///     LockedAxes::rotation(),
+    /// ));
+    ///
+    /// // Object that can only move in XZ plane (2.5D)
+    /// world.spawn((
+    ///     Transform::default(),
+    ///     RigidBody::Dynamic,
+    ///     Collider::cuboid(1.0, 1.0, 1.0),
+    ///     LockedAxes::TRANSLATION_Y | LockedAxes::ROTATION_X | LockedAxes::ROTATION_Z,
+    /// ));
+    /// ```
+    #[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct LockedAxes: u8 {
+        /// Lock translation along X axis.
+        const TRANSLATION_X = 0b0000_0001;
+        /// Lock translation along Y axis.
+        const TRANSLATION_Y = 0b0000_0010;
+        /// Lock translation along Z axis.
+        const TRANSLATION_Z = 0b0000_0100;
+        /// Lock rotation around X axis.
+        const ROTATION_X = 0b0000_1000;
+        /// Lock rotation around Y axis.
+        const ROTATION_Y = 0b0001_0000;
+        /// Lock rotation around Z axis.
+        const ROTATION_Z = 0b0010_0000;
+    }
 }
 
 impl LockedAxes {
     /// Creates an unlocked axes configuration.
     #[must_use]
-    pub fn new() -> Self {
-        Self::default()
+    pub const fn new() -> Self {
+        Self::empty()
     }
 
     /// Locks all translation axes (no linear movement).
     #[must_use]
-    pub fn translation() -> Self {
-        Self {
-            lock_translation_x: true,
-            lock_translation_y: true,
-            lock_translation_z: true,
-            ..Default::default()
-        }
+    pub const fn translation() -> Self {
+        Self::from_bits_truncate(
+            Self::TRANSLATION_X.bits() | Self::TRANSLATION_Y.bits() | Self::TRANSLATION_Z.bits(),
+        )
     }
 
     /// Locks all rotation axes (no angular movement).
     #[must_use]
-    pub fn rotation() -> Self {
-        Self {
-            lock_rotation_x: true,
-            lock_rotation_y: true,
-            lock_rotation_z: true,
-            ..Default::default()
-        }
+    pub const fn rotation() -> Self {
+        Self::from_bits_truncate(
+            Self::ROTATION_X.bits() | Self::ROTATION_Y.bits() | Self::ROTATION_Z.bits(),
+        )
     }
 
     /// Locks translation along X axis.
     #[must_use]
-    pub const fn lock_translation_x(mut self) -> Self {
-        self.lock_translation_x = true;
-        self
+    pub const fn lock_translation_x(self) -> Self {
+        self.union(Self::TRANSLATION_X)
     }
 
     /// Locks translation along Y axis.
     #[must_use]
-    pub const fn lock_translation_y(mut self) -> Self {
-        self.lock_translation_y = true;
-        self
+    pub const fn lock_translation_y(self) -> Self {
+        self.union(Self::TRANSLATION_Y)
     }
 
     /// Locks translation along Z axis.
     #[must_use]
-    pub const fn lock_translation_z(mut self) -> Self {
-        self.lock_translation_z = true;
-        self
+    pub const fn lock_translation_z(self) -> Self {
+        self.union(Self::TRANSLATION_Z)
     }
 
     /// Locks rotation around X axis.
     #[must_use]
-    pub const fn lock_rotation_x(mut self) -> Self {
-        self.lock_rotation_x = true;
-        self
+    pub const fn lock_rotation_x(self) -> Self {
+        self.union(Self::ROTATION_X)
     }
 
     /// Locks rotation around Y axis.
     #[must_use]
-    pub const fn lock_rotation_y(mut self) -> Self {
-        self.lock_rotation_y = true;
-        self
+    pub const fn lock_rotation_y(self) -> Self {
+        self.union(Self::ROTATION_Y)
     }
 
     /// Locks rotation around Z axis.
     #[must_use]
-    pub const fn lock_rotation_z(mut self) -> Self {
-        self.lock_rotation_z = true;
-        self
+    pub const fn lock_rotation_z(self) -> Self {
+        self.union(Self::ROTATION_Z)
     }
+
+    /// Checks if translation along X axis is locked.
+    #[must_use]
+    pub const fn is_translation_x_locked(self) -> bool {
+        self.contains(Self::TRANSLATION_X)
+    }
+
+    /// Checks if translation along Y axis is locked.
+    #[must_use]
+    pub const fn is_translation_y_locked(self) -> bool {
+        self.contains(Self::TRANSLATION_Y)
+    }
+
+    /// Checks if translation along Z axis is locked.
+    #[must_use]
+    pub const fn is_translation_z_locked(self) -> bool {
+        self.contains(Self::TRANSLATION_Z)
+    }
+
+    /// Checks if rotation around X axis is locked.
+    #[must_use]
+    pub const fn is_rotation_x_locked(self) -> bool {
+        self.contains(Self::ROTATION_X)
+    }
+
+    /// Checks if rotation around Y axis is locked.
+    #[must_use]
+    pub const fn is_rotation_y_locked(self) -> bool {
+        self.contains(Self::ROTATION_Y)
+    }
+
+    /// Checks if rotation around Z axis is locked.
+    #[must_use]
+    pub const fn is_rotation_z_locked(self) -> bool {
+        self.contains(Self::ROTATION_Z)
+    }
+}
+
+impl Default for LockedAxes {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
+// Implement Component trait for LockedAxes
+impl Component for LockedAxes {
+    const STORAGE_TYPE: bevy_ecs::component::StorageType =
+        bevy_ecs::component::StorageType::Table;
 }
 
 /// Collision event types for collision detection.

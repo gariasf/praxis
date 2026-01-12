@@ -392,38 +392,47 @@ fn test_sleeping_component() {
 fn test_locked_axes_component() {
     // Test 1: Create unlocked axes
     let unlocked = LockedAxes::new();
-    assert!(!unlocked.lock_translation_x);
-    assert!(!unlocked.lock_translation_y);
-    assert!(!unlocked.lock_translation_z);
-    assert!(!unlocked.lock_rotation_x);
-    assert!(!unlocked.lock_rotation_y);
-    assert!(!unlocked.lock_rotation_z);
+    assert!(!unlocked.is_translation_x_locked());
+    assert!(!unlocked.is_translation_y_locked());
+    assert!(!unlocked.is_translation_z_locked());
+    assert!(!unlocked.is_rotation_x_locked());
+    assert!(!unlocked.is_rotation_y_locked());
+    assert!(!unlocked.is_rotation_z_locked());
 
     // Test 2: Lock all translation
     let trans_locked = LockedAxes::translation();
-    assert!(trans_locked.lock_translation_x);
-    assert!(trans_locked.lock_translation_y);
-    assert!(trans_locked.lock_translation_z);
-    assert!(!trans_locked.lock_rotation_x);
+    assert!(trans_locked.is_translation_x_locked());
+    assert!(trans_locked.is_translation_y_locked());
+    assert!(trans_locked.is_translation_z_locked());
+    assert!(!trans_locked.is_rotation_x_locked());
 
     // Test 3: Lock all rotation
     let rot_locked = LockedAxes::rotation();
-    assert!(rot_locked.lock_rotation_x);
-    assert!(rot_locked.lock_rotation_y);
-    assert!(rot_locked.lock_rotation_z);
-    assert!(!rot_locked.lock_translation_x);
+    assert!(rot_locked.is_rotation_x_locked());
+    assert!(rot_locked.is_rotation_y_locked());
+    assert!(rot_locked.is_rotation_z_locked());
+    assert!(!rot_locked.is_translation_x_locked());
 
     // Test 4: Builder pattern - lock specific axes
     let custom = LockedAxes::new()
         .lock_translation_y()
         .lock_rotation_x()
         .lock_rotation_z();
-    assert!(!custom.lock_translation_x);
-    assert!(custom.lock_translation_y);
-    assert!(!custom.lock_translation_z);
-    assert!(custom.lock_rotation_x);
-    assert!(!custom.lock_rotation_y);
-    assert!(custom.lock_rotation_z);
+    assert!(!custom.is_translation_x_locked());
+    assert!(custom.is_translation_y_locked());
+    assert!(!custom.is_translation_z_locked());
+    assert!(custom.is_rotation_x_locked());
+    assert!(!custom.is_rotation_y_locked());
+    assert!(custom.is_rotation_z_locked());
+
+    // Test 5: Bitwise operations
+    let combined = LockedAxes::TRANSLATION_X | LockedAxes::ROTATION_Y;
+    assert!(combined.is_translation_x_locked());
+    assert!(!combined.is_translation_y_locked());
+    assert!(!combined.is_translation_z_locked());
+    assert!(!combined.is_rotation_x_locked());
+    assert!(combined.is_rotation_y_locked());
+    assert!(!combined.is_rotation_z_locked());
 }
 
 #[test]
