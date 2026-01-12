@@ -183,7 +183,8 @@ impl ApplicationHandler for App {
                         let ctx = egui_integration.context();
                         editor_state.ui(ctx, None, Some(world), None, Some(render_context));
 
-                        let (_full_output, _clipped_primitives) = egui_integration.end_frame(window);
+                        let (_full_output, _clipped_primitives) =
+                            egui_integration.end_frame(window);
 
                         // Render a simple frame (just clear screen for now)
                         // Full GUI rendering integration would require proper Vulkan command buffer integration

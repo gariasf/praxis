@@ -526,7 +526,10 @@ impl VegetationRenderer {
             .iter()
             .enumerate()
             .filter_map(|(i, inst)| {
-                if !inst.position.x.is_finite() || !inst.position.y.is_finite() || !inst.position.z.is_finite() {
+                if !inst.position.x.is_finite()
+                    || !inst.position.y.is_finite()
+                    || !inst.position.z.is_finite()
+                {
                     return None;
                 }
 
@@ -541,7 +544,8 @@ impl VegetationRenderer {
 
                 let view_distance_sq = view_distance * view_distance;
                 if dist_sq < view_distance_sq {
-                    let wind_phase = ((i as f32 * 0.1 + time) * layer.wind_strength).clamp(0.0, 100.0);
+                    let wind_phase =
+                        ((i as f32 * 0.1 + time) * layer.wind_strength).clamp(0.0, 100.0);
                     Some(VegetationInstanceData::from_matrix(
                         inst.model_matrix(),
                         inst.color_variation,

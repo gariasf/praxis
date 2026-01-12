@@ -25,7 +25,7 @@ impl Plane {
     pub fn from_coefficients(a: f32, b: f32, c: f32, d: f32) -> Self {
         let normal = Vec3::new(a, b, c);
         let length = normal.length();
-        
+
         // Validate: ensure length is non-zero and normal is valid
         if length > 1e-6 && normal.is_finite() && d.is_finite() {
             Self {
@@ -77,12 +77,12 @@ impl Frustum {
             // Return a default frustum if matrix is invalid
             return Self {
                 planes: [
-                    Plane::new(Vec3::NEG_Z, -0.1),  // Near
-                    Plane::new(Vec3::Z, -1000.0),    // Far
-                    Plane::new(Vec3::X, 0.0),        // Left
-                    Plane::new(Vec3::NEG_X, 0.0),    // Right
-                    Plane::new(Vec3::NEG_Y, 0.0),    // Top
-                    Plane::new(Vec3::Y, 0.0),        // Bottom
+                    Plane::new(Vec3::NEG_Z, -0.1), // Near
+                    Plane::new(Vec3::Z, -1000.0),  // Far
+                    Plane::new(Vec3::X, 0.0),      // Left
+                    Plane::new(Vec3::NEG_X, 0.0),  // Right
+                    Plane::new(Vec3::NEG_Y, 0.0),  // Top
+                    Plane::new(Vec3::Y, 0.0),      // Bottom
                 ],
             };
         }
@@ -202,7 +202,7 @@ impl Frustum {
             );
 
             let distance = plane.distance_to_point(positive_vertex);
-            
+
             // Validate distance is finite before comparison
             if distance.is_finite() && distance < 0.0 {
                 return false;
@@ -225,7 +225,7 @@ impl Frustum {
             }
 
             let distance = plane.distance_to_point(center);
-            
+
             // Validate distance is finite before comparison
             if distance.is_finite() && distance < -radius {
                 return false;

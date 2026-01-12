@@ -180,6 +180,7 @@ impl AppState {
                 model: global_transform.matrix,
                 texture_name: None,
                 material_properties: None,
+                bone_matrices: None,
             })
             .collect()
     }

@@ -1041,7 +1041,8 @@ impl SaveManager {
         // This reconstructs the full hierarchy tree from the nested definition structure
         let mut child_entities = Vec::new();
         for child_def in &entity_def.children {
-            let child_entity = self.spawn_entity_recursive(world, child_def, Some(entity), entity_map)?;
+            let child_entity =
+                self.spawn_entity_recursive(world, child_def, Some(entity), entity_map)?;
             child_entities.push(child_entity);
         }
 

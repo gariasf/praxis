@@ -1479,7 +1479,7 @@ impl GltfLoader {
 
         // Build a complete map of all GLTF nodes to their parents by traversing the entire scene
         let mut node_parents: HashMap<usize, usize> = HashMap::new();
-        
+
         // Helper function to recursively build parent map
         fn build_parent_map(node: &gltf::Node, parent_map: &mut HashMap<usize, usize>) {
             for child in node.children() {
@@ -1487,7 +1487,7 @@ impl GltfLoader {
                 build_parent_map(&child, parent_map);
             }
         }
-        
+
         // Traverse all nodes in the document to build complete parent map
         for node in document.nodes() {
             build_parent_map(&node, &mut node_parents);

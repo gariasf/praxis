@@ -314,7 +314,9 @@ impl GBuffer {
                     image_type: ImageType::Dim2d,
                     format: Format::D32_SFLOAT,
                     extent,
-                    usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::SAMPLED | ImageUsage::TRANSFER_SRC,
+                    usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT
+                        | ImageUsage::SAMPLED
+                        | ImageUsage::TRANSFER_SRC,
                     ..Default::default()
                 },
                 AllocationCreateInfo::default(),
@@ -893,17 +895,20 @@ impl DeferredRenderer {
             .set_viewport(0, [params.viewport.clone()].into_iter().collect())
             .map_err(|e| eyre::eyre!("Failed to set viewport: {}", e))?;
 
-        let default_texture = params.texture_manager
+        let default_texture = params
+            .texture_manager
             .get_texture("_default_white")
             .ok_or_else(|| eyre::eyre!("Default white texture not found"))?;
 
         for (object_index, draw_cmd) in params.draw_commands.iter().enumerate() {
-            let mesh = params.mesh_manager
+            let mesh = params
+                .mesh_manager
                 .get_mesh(&draw_cmd.mesh_id)
                 .ok_or_else(|| eyre::eyre!("Mesh '{}' not found", draw_cmd.mesh_id))?;
 
             let texture = if let Some(ref tex_name) = draw_cmd.texture_name {
-                params.texture_manager
+                params
+                    .texture_manager
                     .get_texture(tex_name)
                     .ok_or_else(|| eyre::eyre!("Texture '{}' not found", tex_name))?
             } else {
@@ -959,7 +964,9 @@ impl DeferredRenderer {
                 .bind_index_buffer(mesh.index_buffer.clone())
                 .map_err(|e| eyre::eyre!("Failed to bind index buffer: {}", e))?;
 
-            let dynamic_offset = params.dynamic_uniform_buffer.get_dynamic_offset(object_index);
+            let dynamic_offset = params
+                .dynamic_uniform_buffer
+                .get_dynamic_offset(object_index);
 
             unsafe {
                 let set_with_offsets = vulkano::descriptor_set::DescriptorSetWithOffsets::new(
@@ -1044,8 +1051,10 @@ impl DeferredRenderer {
         // Create default white SSAO texture if not provided (1.0 = no occlusion)
         let default_ssao_texture = if params.ssao_texture.is_none() {
             use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage};
-            use vulkano::command_buffer::{CopyBufferToImageInfo, BufferImageCopy};
-            use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage, ImageAspects, ImageSubresourceLayers};
+            use vulkano::command_buffer::{BufferImageCopy, CopyBufferToImageInfo};
+            use vulkano::image::{
+                Image, ImageAspects, ImageCreateInfo, ImageSubresourceLayers, ImageType, ImageUsage,
+            };
             use vulkano::memory::allocator::AllocationCreateInfo;
 
             let image = Image::new(
@@ -1108,7 +1117,8 @@ impl DeferredRenderer {
             None
         };
 
-        let ssao_view = params.ssao_texture
+        let ssao_view = params
+            .ssao_texture
             .as_ref()
             .or(default_ssao_texture.as_ref())
             .unwrap();

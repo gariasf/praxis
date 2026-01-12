@@ -235,7 +235,7 @@ impl GpuProfiler {
         // Only read queries that were actually used in the previous frame
         // Use the max query index from previous frame to avoid reading uninitialized queries
         let query_count = self.next_query_index.min(self.queries_per_pool);
-        
+
         if query_count == 0 {
             // No queries were used in this frame
             return Ok(results);
@@ -245,11 +245,7 @@ impl GpuProfiler {
 
         // Try to get query results with WAIT flag to ensure availability
         // WAIT ensures GPU operations complete before reading results
-        let result = pool.get_results(
-            0..query_count,
-            &mut timestamps,
-            QueryResultFlags::WAIT,
-        );
+        let result = pool.get_results(0..query_count, &mut timestamps, QueryResultFlags::WAIT);
 
         match result {
             Ok(_) => {

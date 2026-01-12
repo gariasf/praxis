@@ -8,14 +8,11 @@
 
 #[cfg(feature = "editor")]
 use praxis_ecs::{
-    BoundingBox, CameraMatrices, GlobalTransform, MeshHandle, PerspectiveCameraBundle,
-    Transform, World,
+    BoundingBox, CameraMatrices, GlobalTransform, MeshHandle, PerspectiveCameraBundle, Transform,
+    World,
 };
 #[cfg(feature = "editor")]
-use praxis_editor::{
-    Selectable, SelectionMode,
-    SelectionSystem,
-};
+use praxis_editor::{Selectable, SelectionMode, SelectionSystem};
 #[cfg(feature = "editor")]
 use praxis_graphics::RenderContext;
 #[cfg(feature = "editor")]
@@ -116,7 +113,6 @@ impl App {
 
         (world, camera_entity)
     }
-
 }
 
 #[cfg(feature = "editor")]
@@ -219,8 +215,9 @@ impl ApplicationHandler for App {
                 {
                     let window_opt = self.window.as_ref();
                     let camera_entity_opt = self.camera_entity;
-                    
-                    if let (Some(window_ref), Some(camera_entity)) = (window_opt, camera_entity_opt) {
+
+                    if let (Some(window_ref), Some(camera_entity)) = (window_opt, camera_entity_opt)
+                    {
                         let window_size = {
                             let size = window_ref.inner_size();
                             praxis_math::Vec2::new(size.width as f32, size.height as f32)
@@ -228,27 +225,37 @@ impl ApplicationHandler for App {
 
                         let (is_lmb_pressed, mouse_pos) = {
                             let input = world.get_resource::<InputState>().unwrap();
-                            (input.is_mouse_button_just_pressed(MouseButton::Left), input.mouse_position())
+                            (
+                                input.is_mouse_button_just_pressed(MouseButton::Left),
+                                input.mouse_position(),
+                            )
                         };
 
                         if is_lmb_pressed {
-                            let mouse_pos_vec2 = praxis_math::Vec2::new(mouse_pos.0 as f32, mouse_pos.1 as f32);
+                            let mouse_pos_vec2 =
+                                praxis_math::Vec2::new(mouse_pos.0 as f32, mouse_pos.1 as f32);
 
-                            let camera_transform = match world.inner().get::<Transform>(camera_entity) {
-                                Some(t) => *t,
-                                None => Transform::default(),
-                            };
+                            let camera_transform =
+                                match world.inner().get::<Transform>(camera_entity) {
+                                    Some(t) => *t,
+                                    None => Transform::default(),
+                                };
 
-                            let camera_matrices = match world.inner().get::<CameraMatrices>(camera_entity) {
-                                Some(m) => *m,
-                                None => {
-                                    return;
-                                }
-                            };
+                            let camera_matrices =
+                                match world.inner().get::<CameraMatrices>(camera_entity) {
+                                    Some(m) => *m,
+                                    None => {
+                                        return;
+                                    }
+                                };
 
-                            let mut selectable_query = world
-                                .inner_mut()
-                                .query_filtered::<(bevy_ecs::entity::Entity, &GlobalTransform), bevy_ecs::query::With<Selectable>>();
+                            let mut selectable_query = world.inner_mut().query_filtered::<(
+                                bevy_ecs::entity::Entity,
+                                &GlobalTransform,
+                            ), bevy_ecs::query::With<
+                                Selectable,
+                            >>(
+                            );
                             let selectables: Vec<_> = selectable_query
                                 .iter(world.inner())
                                 .map(|(e, t)| (e, *t))
@@ -274,17 +281,26 @@ impl ApplicationHandler for App {
                                 let inv_projection = camera_matrices.projection.inverse();
                                 let clip = praxis_math::Vec4::new(ndc_x, ndc_y, -1.0, 1.0);
                                 let view = inv_projection * clip;
-                                let view_dir = praxis_math::Vec3::new(view.x, view.y, view.z) / view.w;
-                                let ray_dir = (camera_transform.rotation * view_dir.normalize()).normalize();
+                                let view_dir =
+                                    praxis_math::Vec3::new(view.x, view.y, view.z) / view.w;
+                                let ray_dir =
+                                    (camera_transform.rotation * view_dir.normalize()).normalize();
                                 let ray_origin = camera_transform.translation;
 
                                 for (entity, global_transform) in &selectables {
                                     if let Some(bounding_box) = bounds_data.get(entity) {
                                         let world_matrix = global_transform.matrix;
-                                        let aabb = praxis_spatial::Aabb::from_min_max(bounding_box.min, bounding_box.max)
-                                            .transform(&world_matrix);
+                                        let aabb = praxis_spatial::Aabb::from_min_max(
+                                            bounding_box.min,
+                                            bounding_box.max,
+                                        )
+                                        .transform(&world_matrix);
 
-                                        if let Some(distance) = aabb.ray_intersection_distance(ray_origin, ray_dir, closest_distance) {
+                                        if let Some(distance) = aabb.ray_intersection_distance(
+                                            ray_origin,
+                                            ray_dir,
+                                            closest_distance,
+                                        ) {
                                             if distance < closest_distance {
                                                 closest_distance = distance;
                                                 closest_entity = Some(*entity);
@@ -299,9 +315,12 @@ impl ApplicationHandler for App {
                             let (ctrl, shift, alt) = {
                                 let input = world.get_resource::<InputState>().unwrap();
                                 (
-                                    input.is_key_pressed(KeyCode::ControlLeft) || input.is_key_pressed(KeyCode::ControlRight),
-                                    input.is_key_pressed(KeyCode::ShiftLeft) || input.is_key_pressed(KeyCode::ShiftRight),
-                                    input.is_key_pressed(KeyCode::AltLeft) || input.is_key_pressed(KeyCode::AltRight)
+                                    input.is_key_pressed(KeyCode::ControlLeft)
+                                        || input.is_key_pressed(KeyCode::ControlRight),
+                                    input.is_key_pressed(KeyCode::ShiftLeft)
+                                        || input.is_key_pressed(KeyCode::ShiftRight),
+                                    input.is_key_pressed(KeyCode::AltLeft)
+                                        || input.is_key_pressed(KeyCode::AltRight),
                                 )
                             };
 
@@ -316,7 +335,7 @@ impl ApplicationHandler for App {
                             };
 
                             let selection = world.get_resource_mut::<SelectionSystem>().unwrap();
-                            
+
                             if let Some(entity) = picked {
                                 selection.select_entity(entity, mode);
                                 info!("Selected entity: {:?} (mode: {:?})", entity, mode);

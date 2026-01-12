@@ -579,14 +579,26 @@ impl TaaRenderer {
             self.descriptor_set_allocator.clone(),
             self.pipeline.layout().set_layouts()[0].clone(),
             [
-                WriteDescriptorSet::image_view_sampler(0, params.current_frame.clone(), self.sampler.clone()),
+                WriteDescriptorSet::image_view_sampler(
+                    0,
+                    params.current_frame.clone(),
+                    self.sampler.clone(),
+                ),
                 WriteDescriptorSet::image_view_sampler(
                     1,
                     params.taa_target.history_view.clone(),
                     self.sampler.clone(),
                 ),
-                WriteDescriptorSet::image_view_sampler(2, params.velocity_buffer.clone(), self.sampler.clone()),
-                WriteDescriptorSet::image_view_sampler(3, params.depth_buffer.clone(), self.sampler.clone()),
+                WriteDescriptorSet::image_view_sampler(
+                    2,
+                    params.velocity_buffer.clone(),
+                    self.sampler.clone(),
+                ),
+                WriteDescriptorSet::image_view_sampler(
+                    3,
+                    params.depth_buffer.clone(),
+                    self.sampler.clone(),
+                ),
                 WriteDescriptorSet::buffer(4, config_buffer),
             ],
             [],
@@ -608,7 +620,10 @@ impl TaaRenderer {
 
         let viewport = Viewport {
             offset: [0.0, 0.0],
-            extent: [params.taa_target.width as f32, params.taa_target.height as f32],
+            extent: [
+                params.taa_target.width as f32,
+                params.taa_target.height as f32,
+            ],
             depth_range: 0.0..=1.0,
         };
 

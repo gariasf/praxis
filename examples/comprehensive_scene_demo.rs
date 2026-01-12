@@ -103,8 +103,7 @@ impl App {
         // Initialize camera matrices for the first frame
         let inner = world.inner_mut();
         if let Some(transform) = inner.get::<Transform>(camera_entity) {
-            if let Some(projection) =
-                inner.get::<praxis_ecs::PerspectiveProjection>(camera_entity)
+            if let Some(projection) = inner.get::<praxis_ecs::PerspectiveProjection>(camera_entity)
             {
                 let view = praxis_math::Mat4::look_at_rh(
                     transform.translation,

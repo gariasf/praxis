@@ -417,7 +417,7 @@ impl EnvironmentProbeManager {
         format: Format,
     ) -> Result<Cubemap> {
         use vulkano::image::ImageCreateFlags;
-        
+
         let image = Image::new(
             allocator.clone(),
             ImageCreateInfo {
@@ -483,7 +483,7 @@ impl EnvironmentProbeManager {
         mip_levels: u32,
     ) -> Result<Cubemap> {
         use vulkano::image::ImageCreateFlags;
-        
+
         let image = Image::new(
             allocator.clone(),
             ImageCreateInfo {

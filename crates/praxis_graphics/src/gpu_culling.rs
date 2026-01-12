@@ -604,12 +604,12 @@ impl GpuCullingManager {
         mesh_data: &[GpuMeshData],
     ) -> Result<()> {
         let draw_count = draw_commands.len();
-        
+
         if draw_count == 0 || mesh_data.is_empty() {
             self.current_draw_count = 0;
             return Ok(());
         }
-        
+
         self.current_draw_count = draw_count as u32;
 
         trace!(
@@ -697,13 +697,13 @@ impl GpuCullingManager {
         let indirect_draw_buffer = Buffer::new_slice::<IndirectDrawCommand>(
             self.memory_allocator.clone(),
             BufferCreateInfo {
-                usage: BufferUsage::STORAGE_BUFFER 
-                    | BufferUsage::INDIRECT_BUFFER 
+                usage: BufferUsage::STORAGE_BUFFER
+                    | BufferUsage::INDIRECT_BUFFER
                     | BufferUsage::TRANSFER_DST,
                 ..Default::default()
             },
             AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE 
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
                     | MemoryTypeFilter::HOST_RANDOM_ACCESS,
                 ..Default::default()
             },
@@ -719,7 +719,7 @@ impl GpuCullingManager {
                 ..Default::default()
             },
             AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE 
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
                     | MemoryTypeFilter::HOST_RANDOM_ACCESS,
                 ..Default::default()
             },
@@ -731,8 +731,8 @@ impl GpuCullingManager {
         let draw_count_buffer = Buffer::from_data(
             self.memory_allocator.clone(),
             BufferCreateInfo {
-                usage: BufferUsage::STORAGE_BUFFER 
-                    | BufferUsage::INDIRECT_BUFFER 
+                usage: BufferUsage::STORAGE_BUFFER
+                    | BufferUsage::INDIRECT_BUFFER
                     | BufferUsage::TRANSFER_DST,
                 ..Default::default()
             },

@@ -32,7 +32,7 @@ fn main() -> Result<()> {
             return Ok(());
         }
     };
-    
+
     world.insert_resource(audio_manager);
 
     info!("Setting up audio scene...");

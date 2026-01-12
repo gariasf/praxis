@@ -673,7 +673,7 @@ impl Cubemap {
         );
 
         use vulkano::image::ImageCreateFlags;
-        
+
         let image = Image::new(
             allocator.clone(),
             ImageCreateInfo {

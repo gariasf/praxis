@@ -285,7 +285,10 @@ fn update_listener_position(
     }
 }
 
-fn start_audio_sources(_audio_manager: Option<ResMut<AudioManager>>, mut audio_sources: Query<&mut AudioSource>) {
+fn start_audio_sources(
+    _audio_manager: Option<ResMut<AudioManager>>,
+    mut audio_sources: Query<&mut AudioSource>,
+) {
     // Early return if no audio manager available
     if _audio_manager.is_none() {
         return;

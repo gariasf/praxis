@@ -23,20 +23,28 @@ impl Aabb {
         // Validate that min/max are finite values
         let min = if min.is_finite() { min } else { Vec3::ZERO };
         let max = if max.is_finite() { max } else { Vec3::ONE };
-        
+
         // Ensure min <= max
-        Self { 
-            min: min.min(max), 
-            max: min.max(max) 
+        Self {
+            min: min.min(max),
+            max: min.max(max),
         }
     }
 
     /// Creates a new AABB from a center point and half-extents.
     pub fn from_center_half_extents(center: Vec3, half_extents: Vec3) -> Self {
         // Validate inputs are finite
-        let center = if center.is_finite() { center } else { Vec3::ZERO };
-        let half_extents = if half_extents.is_finite() { half_extents.abs() } else { Vec3::ONE };
-        
+        let center = if center.is_finite() {
+            center
+        } else {
+            Vec3::ZERO
+        };
+        let half_extents = if half_extents.is_finite() {
+            half_extents.abs()
+        } else {
+            Vec3::ONE
+        };
+
         Self {
             min: center - half_extents,
             max: center + half_extents,

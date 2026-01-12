@@ -239,6 +239,7 @@ impl ApplicationHandler for App {
                         model: Mat4::from_translation(Vec3::new(0.0, -1.0, 0.0)),
                         texture_name: None,
                         material_properties: None,
+                        bone_matrices: None,
                     });
 
                     // Rotating colored cube at center
@@ -248,6 +249,7 @@ impl ApplicationHandler for App {
                             * Mat4::from_translation(Vec3::new(0.0, 0.5, 0.0)),
                         texture_name: None,
                         material_properties: None,
+                        bone_matrices: None,
                     });
 
                     // Red cube to the left
@@ -258,6 +260,7 @@ impl ApplicationHandler for App {
                             * Mat4::from_scale(Vec3::splat(0.8)),
                         texture_name: None,
                         material_properties: None,
+                        bone_matrices: None,
                     });
 
                     // Green cube to the right
@@ -268,6 +271,7 @@ impl ApplicationHandler for App {
                             * Mat4::from_scale(Vec3::splat(0.8)),
                         texture_name: None,
                         material_properties: None,
+                        bone_matrices: None,
                     });
 
                     // Blue cube in front
@@ -278,6 +282,7 @@ impl ApplicationHandler for App {
                             * Mat4::from_scale(Vec3::splat(0.6)),
                         texture_name: None,
                         material_properties: None,
+                        bone_matrices: None,
                     });
 
                     // Pyramid behind
@@ -287,6 +292,7 @@ impl ApplicationHandler for App {
                             * Mat4::from_rotation_y(state.rotation_angle * 1.2),
                         texture_name: None,
                         material_properties: None,
+                        bone_matrices: None,
                     });
 
                     let cmds = RenderCommands {

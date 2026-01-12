@@ -121,7 +121,8 @@ impl SceneManager {
         if !entity_def.children.is_empty() {
             let mut child_entities = Vec::with_capacity(entity_def.children.len());
             for child_def in &entity_def.children {
-                let child_entity = Self::spawn_entity_recursive(world, child_def, scene_handle, Some(entity))?;
+                let child_entity =
+                    Self::spawn_entity_recursive(world, child_def, scene_handle, Some(entity))?;
                 child_entities.push(child_entity);
             }
 

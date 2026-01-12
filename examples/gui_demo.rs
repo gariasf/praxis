@@ -692,16 +692,16 @@ impl ApplicationHandler for GuiDemoApp {
 
                 // Render GUI overlays
                 if !self.cursor_locked {
-                    if let (Some(egui_integration), Some(debug_ui)) = (
-                        &mut self.egui_integration,
-                        &mut self.debug_ui,
-                    ) {
+                    if let (Some(egui_integration), Some(debug_ui)) =
+                        (&mut self.egui_integration, &mut self.debug_ui)
+                    {
                         egui_integration.begin_frame(&window);
 
                         let ctx = egui_integration.context();
                         debug_ui.render(ctx);
 
-                        let (_full_output, _clipped_primitives) = egui_integration.end_frame(&window);
+                        let (_full_output, _clipped_primitives) =
+                            egui_integration.end_frame(&window);
                     }
                 }
 

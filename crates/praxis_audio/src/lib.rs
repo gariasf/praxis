@@ -40,7 +40,7 @@
 //! use praxis_math::Vec3;
 //!
 //! let mut world = World::new();
-//! 
+//!
 //! // AudioManager initialization may fail in headless environments
 //! // The audio systems will gracefully handle the absence of AudioManager
 //! if let Ok(audio_manager) = AudioManager::new() {

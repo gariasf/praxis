@@ -1104,7 +1104,9 @@ impl ParticleRenderer {
         let gpu_buffer = Buffer::from_iter(
             self.memory_allocator.clone(),
             BufferCreateInfo {
-                usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST | BufferUsage::TRANSFER_SRC,
+                usage: BufferUsage::STORAGE_BUFFER
+                    | BufferUsage::TRANSFER_DST
+                    | BufferUsage::TRANSFER_SRC,
                 ..Default::default()
             },
             AllocationCreateInfo {

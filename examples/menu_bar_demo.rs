@@ -189,11 +189,12 @@ impl ApplicationHandler for App {
                         egui_integration.begin_frame(window);
 
                         let ctx = egui_integration.context();
-                        
+
                         // Render the full editor UI with menu bar
                         editor_state.ui(ctx, None, Some(world), None, Some(render_context));
 
-                        let (_full_output, _clipped_primitives) = egui_integration.end_frame(window);
+                        let (_full_output, _clipped_primitives) =
+                            egui_integration.end_frame(window);
 
                         // Render a simple frame (just clear screen)
                         if let Err(e) = render_context.render(&praxis_graphics::RenderCommands {

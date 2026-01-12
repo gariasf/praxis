@@ -148,18 +148,33 @@ impl SplatMap {
         strength: f32,
         world_size: f32,
     ) {
-        if world_size <= 0.0 || radius <= 0.0 || layer_index >= 4 || self.width == 0 || self.height == 0 {
+        if world_size <= 0.0
+            || radius <= 0.0
+            || layer_index >= 4
+            || self.width == 0
+            || self.height == 0
+        {
             return;
         }
 
-        let grid_center_x = (center_x / world_size * self.width as f32).clamp(0.0, self.width as f32);
-        let grid_center_z = (center_z / world_size * self.height as f32).clamp(0.0, self.height as f32);
+        let grid_center_x =
+            (center_x / world_size * self.width as f32).clamp(0.0, self.width as f32);
+        let grid_center_z =
+            (center_z / world_size * self.height as f32).clamp(0.0, self.height as f32);
         let grid_radius = (radius / world_size * self.width as f32).max(1.0);
 
-        let min_x = ((grid_center_x - grid_radius).floor() as i32).max(0).min(self.width as i32 - 1) as u32;
-        let max_x = ((grid_center_x + grid_radius).ceil() as i32).max(0).min(self.width as i32 - 1) as u32;
-        let min_z = ((grid_center_z - grid_radius).floor() as i32).max(0).min(self.height as i32 - 1) as u32;
-        let max_z = ((grid_center_z + grid_radius).ceil() as i32).max(0).min(self.height as i32 - 1) as u32;
+        let min_x = ((grid_center_x - grid_radius).floor() as i32)
+            .max(0)
+            .min(self.width as i32 - 1) as u32;
+        let max_x = ((grid_center_x + grid_radius).ceil() as i32)
+            .max(0)
+            .min(self.width as i32 - 1) as u32;
+        let min_z = ((grid_center_z - grid_radius).floor() as i32)
+            .max(0)
+            .min(self.height as i32 - 1) as u32;
+        let max_z = ((grid_center_z + grid_radius).ceil() as i32)
+            .max(0)
+            .min(self.height as i32 - 1) as u32;
 
         for z in min_z..=max_z {
             for x in min_x..=max_x {

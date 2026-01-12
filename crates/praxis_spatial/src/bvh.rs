@@ -588,7 +588,7 @@ impl Bvh {
         F: Fn(&Aabb) -> bool,
     {
         let bounds = node.bounds();
-        
+
         // Validate bounds are finite before testing predicate
         if !bounds.min.is_finite() || !bounds.max.is_finite() {
             return;

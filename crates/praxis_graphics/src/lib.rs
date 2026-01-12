@@ -1266,10 +1266,26 @@ impl DescriptorSetPool {
                 ),
                 WriteDescriptorSet::buffer(3, lighting_buffer),
                 WriteDescriptorSet::buffer(4, shadow_buffer),
-                WriteDescriptorSet::image_view_sampler(5, dummy_shadow_map.clone(), shadow_sampler.clone()),
-                WriteDescriptorSet::image_view_sampler(6, dummy_shadow_map.clone(), shadow_sampler.clone()),
-                WriteDescriptorSet::image_view_sampler(7, dummy_shadow_map.clone(), shadow_sampler.clone()),
-                WriteDescriptorSet::image_view_sampler(8, dummy_shadow_map.clone(), shadow_sampler.clone()),
+                WriteDescriptorSet::image_view_sampler(
+                    5,
+                    dummy_shadow_map.clone(),
+                    shadow_sampler.clone(),
+                ),
+                WriteDescriptorSet::image_view_sampler(
+                    6,
+                    dummy_shadow_map.clone(),
+                    shadow_sampler.clone(),
+                ),
+                WriteDescriptorSet::image_view_sampler(
+                    7,
+                    dummy_shadow_map.clone(),
+                    shadow_sampler.clone(),
+                ),
+                WriteDescriptorSet::image_view_sampler(
+                    8,
+                    dummy_shadow_map.clone(),
+                    shadow_sampler.clone(),
+                ),
                 WriteDescriptorSet::image_view_sampler(
                     9,
                     default_normal_map.view.clone(),
@@ -1560,7 +1576,8 @@ impl RenderContext {
         let render_pass = Self::create_render_pass(&device, swapchain.image_format())?;
 
         debug!("Creating {} framebuffers", swapchain_image_views.len());
-        let framebuffers = Self::create_framebuffers(&swapchain_image_views, &depth_images, &render_pass)?;
+        let framebuffers =
+            Self::create_framebuffers(&swapchain_image_views, &depth_images, &render_pass)?;
 
         trace!("Creating command buffer allocator");
         let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
@@ -1726,13 +1743,13 @@ impl RenderContext {
             AllocationCreateInfo::default(),
         )
         .map_err(|e| eyre::eyre!("Failed to create dummy shadow image: {}", e))?;
-        
+
         let dummy_shadow_map = ImageView::new_default(dummy_shadow_image)
             .map_err(|e| eyre::eyre!("Failed to create dummy shadow image view: {}", e))?;
 
         // Create shadow sampler (depth comparison sampler)
         debug!("Creating shadow sampler");
-        use vulkano::image::sampler::{Sampler, SamplerCreateInfo, Filter, SamplerAddressMode};
+        use vulkano::image::sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo};
         use vulkano::pipeline::graphics::depth_stencil::CompareOp;
         let shadow_sampler = Sampler::new(
             device.clone(),
@@ -1837,9 +1854,11 @@ impl RenderContext {
         pipeline: &Arc<GraphicsPipeline>,
     ) -> Result<Arc<DescriptorSet>> {
         // Get the descriptor set layout for Set 2
-        let set_layout = pipeline.layout().set_layouts().get(2).ok_or_else(|| {
-            eyre::eyre!("Set 2 not found in pipeline layout")
-        })?;
+        let set_layout = pipeline
+            .layout()
+            .set_layouts()
+            .get(2)
+            .ok_or_else(|| eyre::eyre!("Set 2 not found in pipeline layout"))?;
 
         // Create a single white pixel texture for the bindless array
         let image = Image::new(
@@ -2213,8 +2232,6 @@ impl RenderContext {
         self.graphics_queue.clone()
     }
 
-
-
     /// Creates a render pass suitable for post-processing.
     ///
     /// This is a simple render pass with a single color attachment,
@@ -2463,16 +2480,17 @@ impl RenderContext {
                     "Uploading {} bone matrices for skeletal animation",
                     bone_matrices.len()
                 );
-                
-                let bone_uniforms = uniform_buffer::BoneMatricesUniforms::from_matrices(bone_matrices);
-                
+
+                let bone_uniforms =
+                    uniform_buffer::BoneMatricesUniforms::from_matrices(bone_matrices);
+
                 {
                     let mut write_lock = self.bone_matrices_buffer.write().map_err(|e| {
                         eyre::eyre!("Failed to lock bone matrices buffer for writing: {}", e)
                     })?;
                     *write_lock = bone_uniforms;
                 }
-                
+
                 // Break after first animated object (current limitation)
                 break;
             }
@@ -2579,8 +2597,8 @@ impl RenderContext {
             .begin_render_pass(
                 RenderPassBeginInfo {
                     clear_values: vec![
-                        Some([0.1, 0.2, 0.3, 1.0].into()),  // Color attachment clear value
-                        Some(1.0.into()),                     // Depth attachment clear value
+                        Some([0.1, 0.2, 0.3, 1.0].into()), // Color attachment clear value
+                        Some(1.0.into()),                  // Depth attachment clear value
                     ],
                     ..RenderPassBeginInfo::framebuffer(
                         self.framebuffers[image_index as usize].clone(),
@@ -2605,11 +2623,7 @@ impl RenderContext {
         // The shader checks this value to determine whether to use bindless or traditional rendering
         let material_index: u32 = 0xFFFF_FFFF;
         command_buffer_builder
-            .push_constants(
-                self.graphics_pipeline.layout().clone(),
-                0,
-                material_index,
-            )
+            .push_constants(self.graphics_pipeline.layout().clone(), 0, material_index)
             .map_err(|e| eyre::eyre!("Failed to set push constants: {}", e))?;
 
         // Bind dummy bindless descriptor set (Set 2) to satisfy shader requirements
@@ -2657,9 +2671,7 @@ impl RenderContext {
                         1,
                         material_set.clone(),
                     )
-                    .map_err(|e| {
-                        eyre::eyre!("Failed to bind material descriptor set: {}", e)
-                    })?;
+                    .map_err(|e| eyre::eyre!("Failed to bind material descriptor set: {}", e))?;
 
                 last_material_set = Some(material_set.clone());
             }
@@ -2845,9 +2857,9 @@ impl RenderContext {
         extent: [u32; 2],
         image_count: usize,
     ) -> Result<Vec<Arc<ImageView>>> {
-        use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
         use vulkano::format::Format;
-        
+        use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
+
         (0..image_count)
             .map(|_| {
                 let depth_image = Image::new(
@@ -2862,7 +2874,7 @@ impl RenderContext {
                     AllocationCreateInfo::default(),
                 )
                 .map_err(|e| eyre::eyre!("Failed to create depth image: {}", e))?;
-                
+
                 ImageView::new_default(depth_image)
                     .map_err(|e| eyre::eyre!("Failed to create depth image view: {}", e))
             })
@@ -2956,7 +2968,8 @@ impl RenderContext {
             new_images.len(),
         )?;
 
-        let new_framebuffers = Self::create_framebuffers(&new_image_views, &new_depth_images, &self.render_pass)?;
+        let new_framebuffers =
+            Self::create_framebuffers(&new_image_views, &new_depth_images, &self.render_pass)?;
 
         // Update viewport
         self.viewport.extent = [window_size.width as f32, window_size.height as f32];

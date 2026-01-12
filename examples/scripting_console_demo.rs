@@ -208,14 +208,12 @@ impl ApplicationHandler for ScriptingConsoleDemo {
                 }
 
                 // Render frame
-                if let (Some(egui_integration), Some(console), Some(render_context), Some(world)) =
-                    (
-                        &mut self.egui_integration,
-                        &mut self.console,
-                        &mut self.render_context,
-                        &self.world,
-                    )
-                {
+                if let (Some(egui_integration), Some(console), Some(render_context), Some(world)) = (
+                    &mut self.egui_integration,
+                    &mut self.console,
+                    &mut self.render_context,
+                    &self.world,
+                ) {
                     egui_integration.begin_frame(&window);
 
                     let ctx = egui_integration.context();

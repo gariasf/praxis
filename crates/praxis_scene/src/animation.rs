@@ -3329,12 +3329,12 @@ impl IkSolver {
                 .unwrap_or(Vec3::X);
 
             let new_dir = (positions[i + 1] - positions[i]).normalize_or_zero();
-            
+
             // Skip if directions are invalid (zero length)
             if new_dir.length_squared() < 0.001 || original_dir.length_squared() < 0.001 {
                 continue;
             }
-            
+
             let rotation = Quat::from_rotation_arc(original_dir, new_dir);
 
             if let Some(current) = pose.local_transform(bone_idx) {
@@ -3757,12 +3757,24 @@ impl AdditiveAnimation {
 
                 let delta_trans = additive_trans - ref_trans;
                 let delta_rot = ref_rot.inverse() * additive_rot;
-                
+
                 // Safely compute delta scale, avoiding division by zero
                 let delta_scale = Vec3::new(
-                    if ref_scale.x.abs() > 0.001 { additive_scale.x / ref_scale.x } else { 1.0 },
-                    if ref_scale.y.abs() > 0.001 { additive_scale.y / ref_scale.y } else { 1.0 },
-                    if ref_scale.z.abs() > 0.001 { additive_scale.z / ref_scale.z } else { 1.0 },
+                    if ref_scale.x.abs() > 0.001 {
+                        additive_scale.x / ref_scale.x
+                    } else {
+                        1.0
+                    },
+                    if ref_scale.y.abs() > 0.001 {
+                        additive_scale.y / ref_scale.y
+                    } else {
+                        1.0
+                    },
+                    if ref_scale.z.abs() > 0.001 {
+                        additive_scale.z / ref_scale.z
+                    } else {
+                        1.0
+                    },
                 );
 
                 if let Some(current) = base_pose.local_transform(*bone_idx) {

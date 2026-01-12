@@ -217,7 +217,7 @@ impl VegetationDistributor {
 
         let width = (terrain_bounds_max.x - terrain_bounds_min.x).abs();
         let depth = (terrain_bounds_max.z - terrain_bounds_min.z).abs();
-        
+
         if width <= 0.0 || depth <= 0.0 {
             return Ok(instances);
         }
@@ -225,7 +225,7 @@ impl VegetationDistributor {
         let area = width * depth;
         let density = layer.density.max(0.0);
         let target_count = ((area * density) as usize).min(100_000);
-        
+
         if target_count == 0 {
             return Ok(instances);
         }
@@ -252,7 +252,11 @@ impl VegetationDistributor {
             let y = height_fn(x, z);
             let normal = normal_fn(x, z);
 
-            if !y.is_finite() || !normal.x.is_finite() || !normal.y.is_finite() || !normal.z.is_finite() {
+            if !y.is_finite()
+                || !normal.x.is_finite()
+                || !normal.y.is_finite()
+                || !normal.z.is_finite()
+            {
                 continue;
             }
 
@@ -274,7 +278,9 @@ impl VegetationDistributor {
                 continue;
             }
 
-            let scale = rng.gen_range(layer.scale_min..layer.scale_max).clamp(0.01, 10.0);
+            let scale = rng
+                .gen_range(layer.scale_min..layer.scale_max)
+                .clamp(0.01, 10.0);
 
             let rotation = if layer.random_rotation {
                 Quat::from_rotation_y(rng.gen_range(0.0..std::f32::consts::TAU))

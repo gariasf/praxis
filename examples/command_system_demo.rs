@@ -170,10 +170,7 @@ fn demo_composite_commands(world: &mut World, history: &mut CommandHistory) {
         composite.add_command(SerializableCommand::CreateEntity(cmd));
     }
 
-    println!(
-        "Composite command with {} sub-commands",
-        composite.len()
-    );
+    println!("Composite command with {} sub-commands", composite.len());
 
     history
         .execute(world, Box::new(composite))

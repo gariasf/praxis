@@ -303,6 +303,7 @@ impl App {
             model: Mat4::IDENTITY,
             texture_name: None,
             material_properties: None,
+            bone_matrices: None,
         });
 
         // Central demonstration cube (hero character)
@@ -315,6 +316,7 @@ impl App {
             ),
             texture_name: None,
             material_properties: None,
+            bone_matrices: None,
         });
 
         // Background props (affected by environment lights only)
@@ -333,6 +335,7 @@ impl App {
                 ),
                 texture_name: None,
                 material_properties: None,
+                bone_matrices: None,
             });
         }
 
@@ -353,6 +356,7 @@ impl App {
                 ),
                 texture_name: None,
                 material_properties: None,
+                bone_matrices: None,
             });
         }
 

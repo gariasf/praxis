@@ -59,8 +59,10 @@ impl TerrainMesh {
 
         for z in 0..vertices_per_side {
             for x in 0..vertices_per_side {
-                let grid_x = (grid_start_x + (x as f32 * grid_step) as u32).min(heightmap.width.saturating_sub(1));
-                let grid_z = (grid_start_z + (z as f32 * grid_step) as u32).min(heightmap.height.saturating_sub(1));
+                let grid_x = (grid_start_x + (x as f32 * grid_step) as u32)
+                    .min(heightmap.width.saturating_sub(1));
+                let grid_z = (grid_start_z + (z as f32 * grid_step) as u32)
+                    .min(heightmap.height.saturating_sub(1));
 
                 let world_x = chunk_x as f32 * chunk_size
                     + x as f32 * chunk_size / (vertices_per_side - 1) as f32;
@@ -96,9 +98,13 @@ impl TerrainMesh {
                 let bottom_right = bottom_left + 1;
 
                 let max_index = vertices_per_side * vertices_per_side;
-                if top_left < max_index && top_right < max_index 
-                    && bottom_left < max_index && bottom_right < max_index
-                    && top_left <= u16::MAX as u32 && bottom_right <= u16::MAX as u32 {
+                if top_left < max_index
+                    && top_right < max_index
+                    && bottom_left < max_index
+                    && bottom_right < max_index
+                    && top_left <= u16::MAX as u32
+                    && bottom_right <= u16::MAX as u32
+                {
                     indices.push(top_left as u16);
                     indices.push(bottom_left as u16);
                     indices.push(top_right as u16);

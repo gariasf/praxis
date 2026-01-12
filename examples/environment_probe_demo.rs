@@ -200,6 +200,7 @@ impl App {
                     .with_metallic(0.0)
                     .with_roughness(0.9),
             ),
+            bone_matrices: None,
         };
 
         // Render metallic spheres
@@ -216,6 +217,7 @@ impl App {
                         .with_metallic(1.0)
                         .with_roughness(roughness),
                 ),
+                bone_matrices: None,
             });
         }
 
@@ -236,6 +238,7 @@ impl App {
                         .with_metallic(0.0)
                         .with_roughness(0.5),
                 ),
+                bone_matrices: None,
             });
         }
 

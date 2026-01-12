@@ -951,7 +951,7 @@ mod tests {
         let timeout = std::time::Duration::from_secs(5);
         let start = std::time::Instant::now();
         let mut completed = Vec::new();
-        
+
         while batch.total_count() > 0 && start.elapsed() < timeout {
             let mut batch_completed = batch.try_receive_completed();
             completed.append(&mut batch_completed);
@@ -1503,7 +1503,7 @@ mod tests {
         // Poll until all complete with timeout
         let timeout = std::time::Duration::from_secs(5);
         let start = std::time::Instant::now();
-        
+
         while !batch.is_complete() && start.elapsed() < timeout {
             tokio::task::yield_now().await;
         }
@@ -1579,11 +1579,11 @@ mod tests {
         // Poll until complete with timeout
         let timeout = std::time::Duration::from_secs(5);
         let start = std::time::Instant::now();
-        
+
         while !batch.is_complete() && start.elapsed() < timeout {
             tokio::task::yield_now().await;
         }
-        
+
         assert!(batch.is_complete(), "Batch did not complete within timeout");
 
         std::fs::remove_file(&test_file).ok();
@@ -1759,7 +1759,7 @@ mod tests {
         let timeout = std::time::Duration::from_secs(5);
         let start = std::time::Instant::now();
         let mut loaded_count = 0;
-        
+
         while !batch.is_complete() && start.elapsed() < timeout {
             let completed = batch.try_receive_completed();
             loaded_count += completed.len();
