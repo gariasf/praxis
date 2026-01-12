@@ -7,8 +7,7 @@
 //! - Automatic rebalancing
 //! - ECS integration
 
-use bevy_ecs::entity::Entity;
-use praxis_ecs::{IntoSystemConfigs, Schedule, World};
+use praxis_ecs::{Entity as EcsEntity, IntoSystemConfigs, Schedule, World};
 use praxis_math::Vec3;
 use praxis_spatial::{
     auto_rebalance_spatial, flush_spatial_updates, insert_spatial_entities,
@@ -35,7 +34,8 @@ fn demo_octree_basic() {
 
     let mut octree = Octree::new(Vec3::ZERO, 100.0, 4);
 
-    let entities: Vec<Entity> = (0..10).map(Entity::from_raw).collect();
+    // Create entities using sequential IDs
+    let entities: Vec<EcsEntity> = (0..10).map(EcsEntity::from_raw).collect();
 
     for (i, &entity) in entities.iter().enumerate() {
         let x = (i as f32 * 10.0) - 45.0;
@@ -60,9 +60,9 @@ fn demo_bvh_basic() {
 
     let mut bvh = Bvh::new();
 
-    let entities: Vec<(Entity, Aabb)> = (0..8)
+    let entities: Vec<(EcsEntity, Aabb)> = (0..8)
         .map(|i| {
-            let entity = Entity::from_raw(100 + i);
+            let entity = EcsEntity::from_raw(100 + i);
             let pos = Vec3::new((i as f32 * 5.0) - 17.5, 0.0, 0.0);
             let bounds = Aabb::from_center_half_extents(pos, Vec3::splat(1.5));
             (entity, bounds)
@@ -85,7 +85,7 @@ fn demo_ray_queries() {
     let mut octree = Octree::new(Vec3::ZERO, 200.0, 4);
 
     for i in 0..5 {
-        let entity = Entity::from_raw(200 + i);
+        let entity = EcsEntity::from_raw(200 + i);
         let z = (i as f32 * 10.0) + 5.0;
         let bounds = Aabb::from_center_half_extents(Vec3::new(0.0, 0.0, z), Vec3::splat(2.0));
         octree.insert(entity, bounds);
@@ -105,9 +105,9 @@ fn demo_ray_queries() {
     }
 
     let mut bvh = Bvh::new();
-    let bvh_entities: Vec<(Entity, Aabb)> = (0..5)
+    let bvh_entities: Vec<(EcsEntity, Aabb)> = (0..5)
         .map(|i| {
-            let entity = Entity::from_raw(300 + i);
+            let entity = EcsEntity::from_raw(300 + i);
             let x = (i as f32 * 8.0) + 5.0;
             let bounds = Aabb::from_center_half_extents(Vec3::new(x, 0.0, 0.0), Vec3::splat(2.0));
             (entity, bounds)
@@ -126,7 +126,7 @@ fn demo_dynamic_updates() {
 
     let mut octree = Octree::new(Vec3::ZERO, 100.0, 4);
 
-    let entity = Entity::from_raw(1000);
+    let entity = EcsEntity::from_raw(1000);
     let initial_bounds = Aabb::from_center_half_extents(Vec3::ZERO, Vec3::splat(1.0));
     octree.insert(entity, initial_bounds);
 
@@ -161,7 +161,7 @@ fn demo_spatial_manager() {
     println!("  Created spatial manager (Octree)");
 
     for i in 0..20 {
-        let entity = Entity::from_raw(2000 + i);
+        let entity = EcsEntity::from_raw(2000 + i);
         let x = (i as f32 * 8.0) - 76.0;
         let y = (i as f32 * 3.0).sin() * 10.0;
         let bounds = Aabb::from_center_half_extents(Vec3::new(x, y, 0.0), Vec3::splat(2.0));
@@ -170,7 +170,7 @@ fn demo_spatial_manager() {
 
     println!("  Inserted {} entities", manager.entity_count());
 
-    let entity = Entity::from_raw(2005);
+    let entity = EcsEntity::from_raw(2005);
     for step in 0..10 {
         let new_pos = Vec3::new(0.0, step as f32 * 0.3, 0.0);
         let new_bounds = Aabb::from_center_half_extents(new_pos, Vec3::splat(2.0));
