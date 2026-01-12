@@ -219,14 +219,12 @@ impl ApplicationHandler for App {
                         },
                     );
                 }
-                window.request_redraw();
             }
             _ => {
                 if let Some(world) = &mut self.world {
                     let input_state = world.get_resource_mut::<InputState>().unwrap();
                     praxis_input::winit_integration::process_window_event(input_state, &event);
                 }
-                window.request_redraw();
             }
         }
     }

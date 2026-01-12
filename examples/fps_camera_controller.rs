@@ -151,6 +151,11 @@ impl ApplicationHandler for App {
         self.schedule = Some(schedule);
 
         self.lock_cursor();
+
+        // Request initial redraw to start the event loop
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -207,10 +212,6 @@ impl ApplicationHandler for App {
                 let input_state = world.get_resource_mut::<InputState>().unwrap();
                 praxis_input::winit_integration::process_window_event(input_state, &event);
             }
-        }
-
-        if let Some(window) = &self.window {
-            window.request_redraw();
         }
     }
 

@@ -330,12 +330,10 @@ impl ApplicationHandler for App {
                         is_synthetic: false,
                     },
                 );
-                window.request_redraw();
             }
             _ => {
                 let input_state = world.get_resource_mut::<InputState>().unwrap();
                 praxis_input::winit_integration::process_window_event(input_state, &event);
-                window.request_redraw();
             }
         }
     }

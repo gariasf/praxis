@@ -811,8 +811,6 @@ impl ApplicationHandler for GuiDemoApp {
                 );
             }
         }
-
-        window.request_redraw();
     }
 
     fn device_event(
