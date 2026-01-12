@@ -107,10 +107,11 @@
 //!
 //! 1. **Spawn Recursively**: Starting from root entities, spawn each entity
 //! 2. **Set Parent Links**: When spawning children, insert `Parent(parent_entity)`
-//! 3. **Build Children Lists**: After spawning, the transform system rebuilds `Children`
+//! 3. **Build Children Lists**: After spawning all children, insert `Children` component
 //!
 //! The parent-child links are bidirectional in the ECS but stored as a tree in the
-//! save file for clarity and efficiency.
+//! save file for clarity and efficiency. Both `Parent` and `Children` components are
+//! explicitly restored during load to maintain the complete hierarchy.
 //!
 //! # Example
 //!
@@ -821,8 +822,8 @@ impl SaveManager {
     ///
     /// This method constructs the nested `EntityDefinition` tree structure by:
     /// 1. Iterating through each child entity
-    /// 2. Removing the child from the entity map (it will become nested)
-    /// 3. Recursively processing the child's children (depth-first traversal)
+    /// 2. Recursively processing the child's children (depth-first traversal)
+    /// 3. Removing the child from the entity map (it will become nested)
     /// 4. Adding the fully-built child definition to the parent's children vector
     ///
     /// # Why Remove from Map?
@@ -848,24 +849,20 @@ impl SaveManager {
         let mut children_defs = Vec::new();
 
         for child_entity in children {
-            // Remove child from map - it will be nested into parent
-            if let Some(mut child_def) = entity_map.remove(child_entity) {
-                // Recursively process this child's children before adding it to parent
-                // This ensures we build the tree bottom-up
-                if let Some(grandchildren) = world.get::<Children>(*child_entity) {
-                    let grandchildren_clone = grandchildren.0.clone();
-                    Self::build_hierarchy_recursive(
-                        *child_entity,
-                        &grandchildren_clone,
-                        entity_map,
-                        world,
-                    );
-                    // Re-get child_def after recursion
-                    if let Some(updated_child) = entity_map.remove(child_entity) {
-                        child_def = updated_child;
-                    }
-                }
+            // First recursively process this child's children
+            if let Some(grandchildren) = world.get::<Children>(*child_entity) {
+                let grandchildren_clone = grandchildren.0.clone();
+                Self::build_hierarchy_recursive(
+                    *child_entity,
+                    &grandchildren_clone,
+                    entity_map,
+                    world,
+                );
+            }
 
+            // Now remove child from map - it will be nested into parent
+            // After recursion, all of its descendants are already nested within it
+            if let Some(child_def) = entity_map.remove(child_entity) {
                 children_defs.push(child_def);
             }
         }
@@ -896,6 +893,7 @@ impl SaveManager {
     /// 3. **Set Parent Link**: If this entity has a parent, insert `Parent(parent_entity)`
     /// 4. **Restore Asset References**: Convert string IDs back to asset handles
     /// 5. **Recurse for Children**: Spawn all child entities with this entity as parent
+    /// 6. **Set Children Link**: Add `Children` component listing all child entities
     ///
     /// # Transform Restoration
     ///
@@ -907,9 +905,8 @@ impl SaveManager {
     ///
     /// # Parent-Child Linking
     ///
-    /// The `Parent` component is set during spawning. The `Children` component is not
-    /// explicitly set here - it should be managed by the transform system or hierarchy
-    /// maintenance system to keep it in sync with `Parent` components.
+    /// Both `Parent` and `Children` components are explicitly set during spawning to
+    /// maintain bidirectional hierarchy links.
     #[allow(clippy::only_used_in_recursion)]
     fn spawn_entity_recursive(
         &self,
@@ -1028,7 +1025,6 @@ impl SaveManager {
         }
 
         // Parent - establish upward link in the hierarchy
-        // The Children component (downward link) should be managed by the hierarchy system
         if let Some(parent_entity) = parent {
             entity_builder.insert(Parent(parent_entity));
         }
@@ -1043,8 +1039,15 @@ impl SaveManager {
 
         // Recursively spawn all children with this entity as their parent
         // This reconstructs the full hierarchy tree from the nested definition structure
+        let mut child_entities = Vec::new();
         for child_def in &entity_def.children {
-            self.spawn_entity_recursive(world, child_def, Some(entity), entity_map)?;
+            let child_entity = self.spawn_entity_recursive(world, child_def, Some(entity), entity_map)?;
+            child_entities.push(child_entity);
+        }
+
+        // Set the Children component to establish downward links in the hierarchy
+        if !child_entities.is_empty() {
+            world.entity_mut(entity).insert(Children(child_entities));
         }
 
         Ok(entity)
