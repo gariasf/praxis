@@ -130,8 +130,19 @@ impl ScriptingContext {
         };
 
         let mut context = Self {
-            // Arc is used to share Lua with closures, but Lua is !Send so this
-            // context cannot be moved across threads
+            // SAFETY: Arc<Lua> is safe here despite Lua being !Send + !Sync because:
+            // 1. Single-threaded access: The ScriptingContext itself is !Send + !Sync
+            //    (inherited from the Lua field), ensuring it can never be moved to
+            //    another thread or accessed concurrently.
+            // 2. Arc is only used for shared ownership within the same thread:
+            //    - Closures created via lua.create_function() capture Arc<Lua>
+            //    - Performance monitor holds Arc<Lua> for instrumentation hooks
+            //    - All clones stay within the same thread that created the context
+            // 3. No cross-thread sharing: The Arc reference count is only incremented
+            //    and decremented on the thread that owns the ScriptingContext.
+            // 4. Lua VM guarantee: mlua enforces that Lua cannot be used across threads,
+            //    so even if we tried to send Arc<Lua> elsewhere, mlua's API would prevent
+            //    unsafe access via compile-time !Send bounds.
             #[allow(clippy::arc_with_non_send_sync)]
             lua: Arc::new(lua),
             config,
