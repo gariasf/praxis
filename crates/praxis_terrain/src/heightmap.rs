@@ -110,19 +110,30 @@ impl TerrainHeightmap {
         if x >= self.width || y >= self.height {
             return 0.0;
         }
-        self.heights[(y * self.width + x) as usize]
+        let index = (y * self.width + x) as usize;
+        if index >= self.heights.len() {
+            return 0.0;
+        }
+        self.heights[index]
     }
 
     /// Sets the height at the specified grid coordinates.
     #[inline]
     pub fn set_height(&mut self, x: u32, y: u32, height: f32) {
         if x < self.width && y < self.height {
-            self.heights[(y * self.width + x) as usize] = height.clamp(0.0, self.max_height);
+            let index = (y * self.width + x) as usize;
+            if index < self.heights.len() {
+                self.heights[index] = height.clamp(0.0, self.max_height);
+            }
         }
     }
 
     /// Gets interpolated height at world position (bilinear interpolation).
     pub fn get_height_at(&self, world_x: f32, world_z: f32, world_size: f32) -> f32 {
+        if world_size <= 0.0 || self.width == 0 || self.height == 0 {
+            return 0.0;
+        }
+
         let grid_x = (world_x / world_size * self.width as f32).clamp(0.0, self.width as f32 - 1.0);
         let grid_z =
             (world_z / world_size * self.height as f32).clamp(0.0, self.height as f32 - 1.0);
@@ -132,8 +143,8 @@ impl TerrainHeightmap {
         let x1 = (x0 + 1).min(self.width - 1);
         let z1 = (z0 + 1).min(self.height - 1);
 
-        let fx = grid_x - x0 as f32;
-        let fz = grid_z - z0 as f32;
+        let fx = (grid_x - x0 as f32).clamp(0.0, 1.0);
+        let fz = (grid_z - z0 as f32).clamp(0.0, 1.0);
 
         let h00 = self.get_height(x0, z0);
         let h10 = self.get_height(x1, z0);

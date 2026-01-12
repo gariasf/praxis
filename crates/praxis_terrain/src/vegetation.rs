@@ -215,21 +215,46 @@ impl VegetationDistributor {
         let mut rng = rand::thread_rng();
         let mut instances = Vec::new();
 
-        let area = (terrain_bounds_max.x - terrain_bounds_min.x)
-            * (terrain_bounds_max.z - terrain_bounds_min.z);
-        let target_count = (area * layer.density) as usize;
-        let min_distance = (1.0 / layer.density.sqrt()).max(0.5);
+        let width = (terrain_bounds_max.x - terrain_bounds_min.x).abs();
+        let depth = (terrain_bounds_max.z - terrain_bounds_min.z).abs();
+        
+        if width <= 0.0 || depth <= 0.0 {
+            return Ok(instances);
+        }
+
+        let area = width * depth;
+        let density = layer.density.max(0.0);
+        let target_count = ((area * density) as usize).min(100_000);
+        
+        if target_count == 0 {
+            return Ok(instances);
+        }
+
+        let min_distance = if density > 0.0 {
+            (1.0 / density.sqrt()).max(0.5)
+        } else {
+            1.0
+        };
 
         let mut attempts = 0;
-        let max_attempts = target_count * 30;
+        let max_attempts = (target_count * 30).min(1_000_000);
+
+        let x_min = terrain_bounds_min.x.min(terrain_bounds_max.x);
+        let x_max = terrain_bounds_min.x.max(terrain_bounds_max.x);
+        let z_min = terrain_bounds_min.z.min(terrain_bounds_max.z);
+        let z_max = terrain_bounds_min.z.max(terrain_bounds_max.z);
 
         while instances.len() < target_count && attempts < max_attempts {
             attempts += 1;
 
-            let x = rng.gen_range(terrain_bounds_min.x..terrain_bounds_max.x);
-            let z = rng.gen_range(terrain_bounds_min.z..terrain_bounds_max.z);
+            let x = rng.gen_range(x_min..x_max);
+            let z = rng.gen_range(z_min..z_max);
             let y = height_fn(x, z);
             let normal = normal_fn(x, z);
+
+            if !y.is_finite() || !normal.x.is_finite() || !normal.y.is_finite() || !normal.z.is_finite() {
+                continue;
+            }
 
             let slope = normal.angle_between(Vec3::Y).to_degrees();
 
@@ -249,7 +274,7 @@ impl VegetationDistributor {
                 continue;
             }
 
-            let scale = rng.gen_range(layer.scale_min..layer.scale_max);
+            let scale = rng.gen_range(layer.scale_min..layer.scale_max).clamp(0.01, 10.0);
 
             let rotation = if layer.random_rotation {
                 Quat::from_rotation_y(rng.gen_range(0.0..std::f32::consts::TAU))
@@ -257,9 +282,10 @@ impl VegetationDistributor {
                 Quat::IDENTITY
             };
 
-            let color_r = 1.0 + rng.gen_range(-layer.color_variation..layer.color_variation);
-            let color_g = 1.0 + rng.gen_range(-layer.color_variation..layer.color_variation);
-            let color_b = 1.0 + rng.gen_range(-layer.color_variation..layer.color_variation);
+            let color_var = layer.color_variation.clamp(0.0, 1.0);
+            let color_r = (1.0 + rng.gen_range(-color_var..color_var)).clamp(0.0, 2.0);
+            let color_g = (1.0 + rng.gen_range(-color_var..color_var)).clamp(0.0, 2.0);
+            let color_b = (1.0 + rng.gen_range(-color_var..color_var)).clamp(0.0, 2.0);
 
             instances.push(
                 VegetationInstance::new(position)

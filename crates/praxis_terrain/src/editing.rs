@@ -99,14 +99,18 @@ impl HeightmapBrush {
         operation: TerrainEditOperation,
         delta_time: f32,
     ) -> Result<()> {
-        let grid_x = world_x / world_size * heightmap.width as f32;
-        let grid_z = world_z / world_size * heightmap.height as f32;
-        let grid_radius = self.radius / world_size * heightmap.width as f32;
+        if world_size <= 0.0 || heightmap.width == 0 || heightmap.height == 0 {
+            return Err(praxis_utils::eyre::eyre!("Invalid heightmap or world_size"));
+        }
 
-        let min_x = ((grid_x - grid_radius).floor() as u32).min(heightmap.width - 1);
-        let max_x = ((grid_x + grid_radius).ceil() as u32).min(heightmap.width - 1);
-        let min_z = ((grid_z - grid_radius).floor() as u32).min(heightmap.height - 1);
-        let max_z = ((grid_z + grid_radius).ceil() as u32).min(heightmap.height - 1);
+        let grid_x = (world_x / world_size * heightmap.width as f32).clamp(0.0, heightmap.width as f32);
+        let grid_z = (world_z / world_size * heightmap.height as f32).clamp(0.0, heightmap.height as f32);
+        let grid_radius = (self.radius / world_size * heightmap.width as f32).max(1.0);
+
+        let min_x = ((grid_x - grid_radius).floor() as i32).max(0).min(heightmap.width as i32 - 1) as u32;
+        let max_x = ((grid_x + grid_radius).ceil() as i32).max(0).min(heightmap.width as i32 - 1) as u32;
+        let min_z = ((grid_z - grid_radius).floor() as i32).max(0).min(heightmap.height as i32 - 1) as u32;
+        let max_z = ((grid_z + grid_radius).ceil() as i32).max(0).min(heightmap.height as i32 - 1) as u32;
 
         for z in min_z..=max_z {
             for x in min_x..=max_x {

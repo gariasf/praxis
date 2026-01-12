@@ -501,33 +501,75 @@ impl VegetationRenderer {
         view_distance: f32,
         time: f32,
     ) -> Result<Subbuffer<[VegetationInstanceData]>> {
-        // Filter instances: only include those within view distance
-        // This is a simple distance-based culling; full frustum culling would be more efficient
+        if layer.instances.is_empty() {
+            let empty_buffer = Buffer::from_iter(
+                self.memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::VERTEX_BUFFER,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                vec![VegetationInstanceData::default()],
+            )?;
+            return Ok(empty_buffer);
+        }
+
+        let view_distance = view_distance.max(0.0);
+        let time = time.max(0.0);
+
         let visible_instances: Vec<VegetationInstanceData> = layer
             .instances
             .iter()
             .enumerate()
             .filter_map(|(i, inst)| {
-                // Calculate distance from camera to this instance
-                let dist = (inst.position - camera_pos).length();
+                if !inst.position.x.is_finite() || !inst.position.y.is_finite() || !inst.position.z.is_finite() {
+                    return None;
+                }
 
-                // Distance culling: only include instances within view range
-                if dist < view_distance {
-                    let wind_phase = (i as f32 * 0.1 + time) * layer.wind_strength;
+                let dx = inst.position.x - camera_pos.x;
+                let dy = inst.position.y - camera_pos.y;
+                let dz = inst.position.z - camera_pos.z;
+                let dist_sq = dx * dx + dy * dy + dz * dz;
+
+                if !dist_sq.is_finite() || dist_sq < 0.0 {
+                    return None;
+                }
+
+                let view_distance_sq = view_distance * view_distance;
+                if dist_sq < view_distance_sq {
+                    let wind_phase = ((i as f32 * 0.1 + time) * layer.wind_strength).clamp(0.0, 100.0);
                     Some(VegetationInstanceData::from_matrix(
                         inst.model_matrix(),
                         inst.color_variation,
                         wind_phase,
                     ))
                 } else {
-                    // Instance is too far away, exclude from rendering
                     None
                 }
             })
             .collect();
 
-        // Upload only visible instances to GPU
-        // This dramatically reduces vertex processing load on the GPU
+        if visible_instances.is_empty() {
+            let empty_buffer = Buffer::from_iter(
+                self.memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::VERTEX_BUFFER,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                vec![VegetationInstanceData::default()],
+            )?;
+            return Ok(empty_buffer);
+        }
+
         let buffer = Buffer::from_iter(
             self.memory_allocator.clone(),
             BufferCreateInfo {

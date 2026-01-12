@@ -27,20 +27,40 @@ impl TerrainMesh {
         vertices_per_side: u32,
         world_scale: f32,
     ) -> Result<MeshData> {
+        if vertices_per_side < 2 {
+            return Err(praxis_utils::eyre::eyre!(
+                "vertices_per_side must be at least 2"
+            ));
+        }
+
+        if chunk_size <= 0.0 || world_scale <= 0.0 {
+            return Err(praxis_utils::eyre::eyre!(
+                "chunk_size and world_scale must be positive"
+            ));
+        }
+
         let mut positions = Vec::new();
         let mut normals = Vec::new();
         let mut uvs = Vec::new();
         let mut colors = Vec::new();
         let mut tangents = Vec::new();
 
-        let grid_start_x = (chunk_x as f32 * chunk_size / world_scale) as u32;
-        let grid_start_z = (chunk_z as f32 * chunk_size / world_scale) as u32;
+        let grid_start_x = if chunk_x >= 0 {
+            (chunk_x as f32 * chunk_size / world_scale).max(0.0) as u32
+        } else {
+            0
+        };
+        let grid_start_z = if chunk_z >= 0 {
+            (chunk_z as f32 * chunk_size / world_scale).max(0.0) as u32
+        } else {
+            0
+        };
         let grid_step = (chunk_size / world_scale / (vertices_per_side - 1) as f32).max(1.0);
 
         for z in 0..vertices_per_side {
             for x in 0..vertices_per_side {
-                let grid_x = grid_start_x + (x as f32 * grid_step) as u32;
-                let grid_z = grid_start_z + (z as f32 * grid_step) as u32;
+                let grid_x = (grid_start_x + (x as f32 * grid_step) as u32).min(heightmap.width.saturating_sub(1));
+                let grid_z = (grid_start_z + (z as f32 * grid_step) as u32).min(heightmap.height.saturating_sub(1));
 
                 let world_x = chunk_x as f32 * chunk_size
                     + x as f32 * chunk_size / (vertices_per_side - 1) as f32;
@@ -63,22 +83,35 @@ impl TerrainMesh {
             }
         }
 
+        if positions.is_empty() {
+            return Err(praxis_utils::eyre::eyre!("No vertices generated for chunk"));
+        }
+
         let mut indices = Vec::new();
         for z in 0..vertices_per_side - 1 {
             for x in 0..vertices_per_side - 1 {
-                let top_left = (z * vertices_per_side + x) as u16;
+                let top_left = z * vertices_per_side + x;
                 let top_right = top_left + 1;
-                let bottom_left = ((z + 1) * vertices_per_side + x) as u16;
+                let bottom_left = (z + 1) * vertices_per_side + x;
                 let bottom_right = bottom_left + 1;
 
-                indices.push(top_left);
-                indices.push(bottom_left);
-                indices.push(top_right);
+                let max_index = vertices_per_side * vertices_per_side;
+                if top_left < max_index && top_right < max_index 
+                    && bottom_left < max_index && bottom_right < max_index
+                    && top_left <= u16::MAX as u32 && bottom_right <= u16::MAX as u32 {
+                    indices.push(top_left as u16);
+                    indices.push(bottom_left as u16);
+                    indices.push(top_right as u16);
 
-                indices.push(top_right);
-                indices.push(bottom_left);
-                indices.push(bottom_right);
+                    indices.push(top_right as u16);
+                    indices.push(bottom_left as u16);
+                    indices.push(bottom_right as u16);
+                }
             }
+        }
+
+        if indices.is_empty() {
+            return Err(praxis_utils::eyre::eyre!("No indices generated for chunk"));
         }
 
         let mut mesh_data = MeshData {

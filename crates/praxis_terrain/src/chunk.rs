@@ -71,19 +71,37 @@ impl TerrainChunk {
 
     /// Updates the bounding box based on heightmap data.
     pub fn update_bounds(&mut self, heightmap: &TerrainHeightmap, chunk_size: f32) {
-        let grid_start_x = (self.id.x * chunk_size as i32) as u32;
-        let grid_start_z = (self.id.z * chunk_size as i32) as u32;
-        let grid_size = chunk_size as u32;
+        let grid_start_x = if self.id.x >= 0 {
+            (self.id.x as f32 * chunk_size) as u32
+        } else {
+            0
+        };
+        let grid_start_z = if self.id.z >= 0 {
+            (self.id.z as f32 * chunk_size) as u32
+        } else {
+            0
+        };
+        let grid_size = chunk_size.max(1.0) as u32;
 
         let mut min_height = f32::MAX;
         let mut max_height = f32::MIN;
 
-        for z in grid_start_z..grid_start_z + grid_size {
-            for x in grid_start_x..grid_start_x + grid_size {
+        let end_x = (grid_start_x + grid_size).min(heightmap.width);
+        let end_z = (grid_start_z + grid_size).min(heightmap.height);
+
+        for z in grid_start_z..end_z {
+            for x in grid_start_x..end_x {
                 let h = heightmap.get_height(x, z);
                 min_height = min_height.min(h);
                 max_height = max_height.max(h);
             }
+        }
+
+        if min_height == f32::MAX {
+            min_height = 0.0;
+        }
+        if max_height == f32::MIN {
+            max_height = 0.0;
         }
 
         self.bounds_min.y = min_height;

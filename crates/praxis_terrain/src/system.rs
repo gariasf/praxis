@@ -282,9 +282,18 @@ impl TerrainSystem {
 
     /// Generates mesh data for a chunk at a specific LOD level.
     fn generate_chunk_mesh(&self, chunk_id: TerrainChunkId, lod_level: usize) -> Result<MeshData> {
+        if lod_level >= self.config.lod_levels {
+            return Err(eyre::eyre!("LOD level {} exceeds configured levels {}", lod_level, self.config.lod_levels));
+        }
+
         let vertices_per_side = self
             .lod_manager
-            .get_vertex_count(self.config.vertices_per_chunk, lod_level);
+            .get_vertex_count(self.config.vertices_per_chunk, lod_level)
+            .max(2);
+
+        if vertices_per_side > 1024 {
+            return Err(eyre::eyre!("vertices_per_side {} exceeds maximum 1024", vertices_per_side));
+        }
 
         TerrainMesh::generate_chunk(
             &self.heightmap,
@@ -320,6 +329,10 @@ impl TerrainSystem {
             self.vegetation_layers.len()
         );
 
+        if self.config.world_size <= 0.0 {
+            return Err(eyre::eyre!("Invalid world_size: must be positive"));
+        }
+
         let bounds_min = Vec3::ZERO;
         let bounds_max = Vec3::new(self.config.world_size, 0.0, self.config.world_size);
 
@@ -330,8 +343,13 @@ impl TerrainSystem {
                 |x: f32, z: f32| self.heightmap.get_height_at(x, z, self.config.world_size);
 
             let normal_fn = |x: f32, z: f32| {
-                let grid_x = (x / self.config.world_size * self.heightmap.width as f32) as u32;
-                let grid_z = (z / self.config.world_size * self.heightmap.height as f32) as u32;
+                if self.config.world_size <= 0.0 || self.heightmap.width == 0 || self.heightmap.height == 0 {
+                    return Vec3::Y;
+                }
+                let grid_x = ((x / self.config.world_size * self.heightmap.width as f32)
+                    .clamp(0.0, self.heightmap.width as f32 - 1.0)) as u32;
+                let grid_z = ((z / self.config.world_size * self.heightmap.height as f32)
+                    .clamp(0.0, self.heightmap.height as f32 - 1.0)) as u32;
                 self.heightmap
                     .calculate_normal(grid_x, grid_z, self.config.world_scale)
             };
@@ -365,6 +383,10 @@ impl TerrainSystem {
             return Err(eyre::eyre!("Invalid vegetation layer index"));
         }
 
+        if radius <= 0.0 || density < 0.0 || self.config.world_size <= 0.0 {
+            return Err(eyre::eyre!("Invalid parameters for vegetation generation"));
+        }
+
         let layer = &mut self.vegetation_layers[layer_index];
         let bounds_min = Vec3::new(center.x - radius, 0.0, center.z - radius);
         let bounds_max = Vec3::new(center.x + radius, 0.0, center.z + radius);
@@ -372,8 +394,13 @@ impl TerrainSystem {
         let height_fn = |x: f32, z: f32| self.heightmap.get_height_at(x, z, self.config.world_size);
 
         let normal_fn = |x: f32, z: f32| {
-            let grid_x = (x / self.config.world_size * self.heightmap.width as f32) as u32;
-            let grid_z = (z / self.config.world_size * self.heightmap.height as f32) as u32;
+            if self.config.world_size <= 0.0 || self.heightmap.width == 0 || self.heightmap.height == 0 {
+                return Vec3::Y;
+            }
+            let grid_x = ((x / self.config.world_size * self.heightmap.width as f32)
+                .clamp(0.0, self.heightmap.width as f32 - 1.0)) as u32;
+            let grid_z = ((z / self.config.world_size * self.heightmap.height as f32)
+                .clamp(0.0, self.heightmap.height as f32 - 1.0)) as u32;
             self.heightmap
                 .calculate_normal(grid_x, grid_z, self.config.world_scale)
         };

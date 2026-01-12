@@ -31,11 +31,16 @@ impl ChunkLod {
 
     /// Updates the target LOD level based on distance.
     pub fn update_target(&mut self, distance: f32, lod_distances: &[f32]) {
+        if lod_distances.is_empty() || self.num_levels == 0 {
+            self.target_level = 0;
+            return;
+        }
+
         self.target_level = lod_distances
             .iter()
             .position(|&d| distance < d)
-            .unwrap_or(self.num_levels - 1)
-            .min(self.num_levels - 1);
+            .unwrap_or(self.num_levels.saturating_sub(1))
+            .min(self.num_levels.saturating_sub(1));
     }
 
     /// Updates the transition between LOD levels.
@@ -107,7 +112,10 @@ impl TerrainLodManager {
 
     /// Calculates the number of vertices for a chunk at a given LOD level.
     pub fn get_vertex_count(&self, base_size: u32, lod_level: usize) -> u32 {
-        let divisor = 1 << lod_level;
+        if lod_level > 10 {
+            return 2;
+        }
+        let divisor = 1u32.checked_shl(lod_level as u32).unwrap_or(1024);
         (base_size / divisor).max(2)
     }
 }

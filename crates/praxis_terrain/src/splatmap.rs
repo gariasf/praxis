@@ -107,17 +107,21 @@ impl SplatMap {
 
     /// Gets interpolated weights at a world position.
     pub fn get_weights_at(&self, world_x: f32, world_z: f32, world_size: f32) -> [f32; 4] {
+        if world_size <= 0.0 || self.width == 0 || self.height == 0 {
+            return [1.0, 0.0, 0.0, 0.0];
+        }
+
         let grid_x = (world_x / world_size * self.width as f32).clamp(0.0, self.width as f32 - 1.0);
         let grid_z =
             (world_z / world_size * self.height as f32).clamp(0.0, self.height as f32 - 1.0);
 
         let x0 = grid_x.floor() as u32;
         let z0 = grid_z.floor() as u32;
-        let x1 = (x0 + 1).min(self.width - 1);
-        let z1 = (z0 + 1).min(self.height - 1);
+        let x1 = (x0 + 1).min(self.width.saturating_sub(1));
+        let z1 = (z0 + 1).min(self.height.saturating_sub(1));
 
-        let fx = grid_x - x0 as f32;
-        let fz = grid_z - z0 as f32;
+        let fx = (grid_x - x0 as f32).clamp(0.0, 1.0);
+        let fz = (grid_z - z0 as f32).clamp(0.0, 1.0);
 
         let w00 = self.get_weights(x0, z0);
         let w10 = self.get_weights(x1, z0);
@@ -144,14 +148,18 @@ impl SplatMap {
         strength: f32,
         world_size: f32,
     ) {
-        let grid_center_x = center_x / world_size * self.width as f32;
-        let grid_center_z = center_z / world_size * self.height as f32;
-        let grid_radius = radius / world_size * self.width as f32;
+        if world_size <= 0.0 || radius <= 0.0 || layer_index >= 4 || self.width == 0 || self.height == 0 {
+            return;
+        }
 
-        let min_x = ((grid_center_x - grid_radius).floor() as u32).min(self.width - 1);
-        let max_x = ((grid_center_x + grid_radius).ceil() as u32).min(self.width - 1);
-        let min_z = ((grid_center_z - grid_radius).floor() as u32).min(self.height - 1);
-        let max_z = ((grid_center_z + grid_radius).ceil() as u32).min(self.height - 1);
+        let grid_center_x = (center_x / world_size * self.width as f32).clamp(0.0, self.width as f32);
+        let grid_center_z = (center_z / world_size * self.height as f32).clamp(0.0, self.height as f32);
+        let grid_radius = (radius / world_size * self.width as f32).max(1.0);
+
+        let min_x = ((grid_center_x - grid_radius).floor() as i32).max(0).min(self.width as i32 - 1) as u32;
+        let max_x = ((grid_center_x + grid_radius).ceil() as i32).max(0).min(self.width as i32 - 1) as u32;
+        let min_z = ((grid_center_z - grid_radius).floor() as i32).max(0).min(self.height as i32 - 1) as u32;
+        let max_z = ((grid_center_z + grid_radius).ceil() as i32).max(0).min(self.height as i32 - 1) as u32;
 
         for z in min_z..=max_z {
             for x in min_x..=max_x {
@@ -160,11 +168,11 @@ impl SplatMap {
                 let dist = (dx * dx + dz * dz).sqrt();
 
                 if dist <= grid_radius {
-                    let falloff = 1.0 - (dist / grid_radius).powi(2);
-                    let paint_strength = strength * falloff;
+                    let falloff = 1.0 - (dist / grid_radius.max(0.001)).powi(2).clamp(0.0, 1.0);
+                    let paint_strength = strength.clamp(0.0, 1.0) * falloff;
 
                     let mut weights = self.get_weights(x, z);
-                    weights[layer_index] += paint_strength;
+                    weights[layer_index] = (weights[layer_index] + paint_strength).clamp(0.0, 1.0);
                     self.set_weights(x, z, weights);
                 }
             }
