@@ -11,7 +11,6 @@ use std::time::{Duration, Instant};
 
 /// Chrome trace event type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
 pub enum ChromeTraceEventType {
     /// Duration begin event
     B,
@@ -20,11 +19,13 @@ pub enum ChromeTraceEventType {
     /// Complete event (begin + end)
     X,
     /// Instant event
-    I,
+    #[serde(rename = "i")]
+    Instant,
     /// Counter event
     C,
     /// Metadata event
-    M,
+    #[serde(rename = "M")]
+    Metadata,
 }
 
 /// A single event in Chrome trace format.
@@ -46,6 +47,9 @@ pub struct ChromeTraceEvent {
     pub pid: u32,
     /// Thread ID
     pub tid: u64,
+    /// Scope for instant events ("g" = global, "p" = process, "t" = thread)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub s: Option<String>,
     /// Additional arguments
     #[serde(skip_serializing_if = "Option::is_none")]
     pub args: Option<serde_json::Value>,
@@ -69,6 +73,7 @@ impl ChromeTraceEvent {
             dur: Some(duration.as_micros() as u64),
             pid,
             tid,
+            s: None,
             args: None,
         }
     }
@@ -84,11 +89,12 @@ impl ChromeTraceEvent {
         Self {
             name,
             cat: Some(category),
-            ph: ChromeTraceEventType::I,
+            ph: ChromeTraceEventType::Instant,
             ts: timestamp.as_micros() as u64,
             dur: None,
             pid,
             tid,
+            s: Some("t".to_string()), // Thread scope for instant events
             args: None,
         }
     }
@@ -103,7 +109,7 @@ impl ChromeTraceEvent {
         tid: u64,
     ) -> Self {
         let mut args = serde_json::Map::new();
-        args.insert("value".to_string(), serde_json::json!(value));
+        args.insert(name.clone(), serde_json::json!(value));
 
         Self {
             name,
@@ -113,6 +119,7 @@ impl ChromeTraceEvent {
             dur: None,
             pid,
             tid,
+            s: None,
             args: Some(serde_json::Value::Object(args)),
         }
     }
@@ -263,18 +270,21 @@ impl ChromeTraceExporter {
 
     /// Adds metadata to the trace.
     pub fn add_metadata(&mut self, key: String, value: serde_json::Value) {
-        let mut event = ChromeTraceEvent {
-            name: key.clone(),
+        let mut args = serde_json::Map::new();
+        args.insert(key.clone(), value);
+
+        let event = ChromeTraceEvent {
+            name: key,
             cat: None,
-            ph: ChromeTraceEventType::M,
+            ph: ChromeTraceEventType::Metadata,
             ts: 0,
             dur: None,
             pid: self.pid,
             tid: 0,
-            args: None,
+            s: None,
+            args: Some(serde_json::Value::Object(args)),
         };
 
-        event = event.with_arg(key, value);
         self.trace.add_event(event);
     }
 
@@ -309,4 +319,120 @@ fn thread_id_to_u64(thread_id: std::thread::ThreadId) -> u64 {
         .trim_start_matches("ThreadId(")
         .trim_end_matches(')');
     id_str.parse().unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_duration_event_format() {
+        let event = ChromeTraceEvent::duration(
+            "test_scope".to_string(),
+            "Test".to_string(),
+            Duration::from_micros(1000),
+            Duration::from_micros(500),
+            123,
+            456,
+        );
+
+        let json = serde_json::to_value(&event).unwrap();
+        assert_eq!(json["name"], "test_scope");
+        assert_eq!(json["cat"], "Test");
+        assert_eq!(json["ph"], "X");
+        assert_eq!(json["ts"], 1000);
+        assert_eq!(json["dur"], 500);
+        assert_eq!(json["pid"], 123);
+        assert_eq!(json["tid"], 456);
+        assert!(json["s"].is_null());
+    }
+
+    #[test]
+    fn test_instant_event_format() {
+        let event = ChromeTraceEvent::instant(
+            "frame_marker".to_string(),
+            "Frame".to_string(),
+            Duration::from_micros(2000),
+            123,
+            456,
+        );
+
+        let json = serde_json::to_value(&event).unwrap();
+        assert_eq!(json["name"], "frame_marker");
+        assert_eq!(json["cat"], "Frame");
+        assert_eq!(json["ph"], "i");
+        assert_eq!(json["ts"], 2000);
+        assert!(json["dur"].is_null());
+        assert_eq!(json["pid"], 123);
+        assert_eq!(json["tid"], 456);
+        assert_eq!(json["s"], "t");
+    }
+
+    #[test]
+    fn test_counter_event_format() {
+        let event = ChromeTraceEvent::counter(
+            "Memory".to_string(),
+            "Memory".to_string(),
+            Duration::from_micros(3000),
+            1024.0,
+            123,
+            0,
+        );
+
+        let json = serde_json::to_value(&event).unwrap();
+        assert_eq!(json["name"], "Memory");
+        assert_eq!(json["cat"], "Memory");
+        assert_eq!(json["ph"], "C");
+        assert_eq!(json["ts"], 3000);
+        assert!(json["dur"].is_null());
+        assert_eq!(json["pid"], 123);
+        assert_eq!(json["tid"], 0);
+        assert_eq!(json["args"]["Memory"], 1024.0);
+    }
+
+    #[test]
+    fn test_metadata_event_format() {
+        let mut exporter = ChromeTraceExporter::new();
+        exporter.add_metadata("process_name".to_string(), serde_json::json!("TestProcess"));
+
+        let trace = exporter.trace();
+        assert_eq!(trace.trace_events.len(), 1);
+
+        let json = serde_json::to_value(&trace.trace_events[0]).unwrap();
+        assert_eq!(json["name"], "process_name");
+        assert_eq!(json["ph"], "M");
+        assert_eq!(json["args"]["process_name"], "TestProcess");
+    }
+
+    #[test]
+    fn test_chrome_trace_serialization() {
+        let mut trace = ChromeTrace::new();
+
+        // Add a duration event
+        trace.add_event(ChromeTraceEvent::duration(
+            "test".to_string(),
+            "Test".to_string(),
+            Duration::from_micros(100),
+            Duration::from_micros(50),
+            1,
+            2,
+        ));
+
+        // Add an instant event
+        trace.add_event(ChromeTraceEvent::instant(
+            "marker".to_string(),
+            "Marker".to_string(),
+            Duration::from_micros(200),
+            1,
+            2,
+        ));
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&trace).unwrap();
+        assert!(json.contains("\"displayTimeUnit\":\"ms\""));
+        assert!(json.contains("\"traceEvents\""));
+        assert!(json.contains("\"ph\":\"X\""));
+        assert!(json.contains("\"ph\":\"i\""));
+        assert!(json.contains("\"s\":\"t\""));
+    }
 }
