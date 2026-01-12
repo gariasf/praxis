@@ -2651,6 +2651,12 @@ impl RenderContext {
             draw_list.push((transform_set, material_set, mesh, object_index));
         }
 
+        // Store dummy bindless descriptor set before command buffer recording starts
+        // This ensures it remains alive during command buffer execution
+        if let Some(ref dummy_bindless_set) = self.dummy_bindless_descriptor_set {
+            self.frame_descriptor_sets.push(dummy_bindless_set.clone());
+        }
+
         trace!("Acquiring next swapchain image");
         let acquire_start = std::time::Instant::now();
 
@@ -2726,10 +2732,8 @@ impl RenderContext {
 
         // Bind dummy bindless descriptor set (Set 2) to satisfy shader requirements
         // Even though we're not using bindless mode, the shader declares Set 2 and it must be bound
+        // Note: The descriptor set was already stored in frame_descriptor_sets before command buffer recording
         if let Some(ref dummy_bindless_set) = self.dummy_bindless_descriptor_set {
-            // Store descriptor set to ensure it remains alive during command buffer execution
-            self.frame_descriptor_sets.push(dummy_bindless_set.clone());
-
             command_buffer_builder
                 .bind_descriptor_sets(
                     PipelineBindPoint::Graphics,
