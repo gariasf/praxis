@@ -1822,7 +1822,7 @@ impl RenderContext {
         )
         .map_err(|e| eyre::eyre!("Failed to create dummy material buffer: {}", e))?;
 
-        let dummy_bindless_set = DescriptorSet::new(
+        let _dummy_bindless_set = DescriptorSet::new(
             descriptor_set_allocator.clone(),
             bindless_set_layout,
             [
@@ -3057,6 +3057,15 @@ impl RenderContext {
     /// - Resource allocation fails
     fn recreate_swapchain_and_framebuffers(&mut self) -> Result<()> {
         let recreate_start = std::time::Instant::now();
+
+        // Wait for all GPU work to complete before destroying old resources
+        // SAFETY: This is safe because we're ensuring no commands are in flight
+        // before recreating the swapchain, which is the intended use of wait_idle.
+        unsafe {
+            self.device
+                .wait_idle()
+                .map_err(|e| eyre::eyre!("Failed to wait for device idle: {}", e))?;
+        }
 
         let surface_object = self
             .surface
