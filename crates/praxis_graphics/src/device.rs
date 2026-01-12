@@ -104,6 +104,12 @@ impl VulkanDevice {
         let enable_validation_layers = cfg!(debug_assertions);
 
         // Enable debug utils extension for validation message capture
+        // This allows us to receive validation layer messages for:
+        // - Image layout transitions
+        // - Memory barriers
+        // - Synchronization issues
+        // - Descriptor set lifetime management
+        // - Swapchain acquire/present synchronization
         if enable_validation_layers {
             required_extensions.ext_debug_utils = true;
         }
@@ -126,6 +132,10 @@ impl VulkanDevice {
         trace!("Created Vulkan instance");
 
         // Set up debug messenger to capture validation layer messages
+        // This is crucial for debugging synchronization and resource management issues:
+        // - VALIDATION messages catch incorrect API usage
+        // - PERFORMANCE messages highlight suboptimal practices
+        // - GENERAL messages provide additional context
         let debug_messenger = if enable_validation_layers {
             unsafe {
                 Some(

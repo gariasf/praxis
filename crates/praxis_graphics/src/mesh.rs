@@ -174,7 +174,7 @@ impl GpuMesh {
             .build()
             .map_err(|e| eyre::eyre!("Failed to build transfer command buffer: {}", e))?;
 
-        // Submit to transfer queue with fence synchronization and wait for completion
+        // Submit to transfer queue with proper fence synchronization
         trace!("Submitting mesh transfer command buffer");
         let future = sync::now(transfer_queue.device().clone())
             .then_execute(transfer_queue.clone(), command_buffer)
@@ -182,7 +182,8 @@ impl GpuMesh {
             .then_signal_fence_and_flush()
             .map_err(|e| eyre::eyre!("Failed to signal fence and flush: {}", e))?;
 
-        // Wait for transfer to complete
+        // Wait for transfer to complete before returning
+        // This ensures buffers are ready for use in rendering
         future
             .wait(None)
             .map_err(|e| eyre::eyre!("Failed to wait for mesh transfer: {}", e))?;
@@ -361,7 +362,8 @@ impl GpuMesh {
             .build()
             .map_err(|e| eyre::eyre!("Failed to build transfer command buffer: {}", e))?;
 
-        // Submit to transfer queue with fence synchronization (non-blocking)
+        // Submit to transfer queue with proper fence synchronization (non-blocking)
+        // Caller must wait on the returned future before using the mesh
         trace!("Submitting async mesh transfer command buffer");
         let future = sync::now(transfer_queue.device().clone())
             .then_execute(transfer_queue.clone(), command_buffer)

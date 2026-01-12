@@ -147,6 +147,9 @@ impl Texture {
         )
         .map_err(|e| eyre::eyre!("Failed to create command buffer: {}", e))?;
 
+        // Copy buffer to image
+        // Note: copy_buffer_to_image handles the necessary image layout transition internally
+        // from UNDEFINED to TRANSFER_DST_OPTIMAL, then to SHADER_READ_ONLY_OPTIMAL
         builder
             .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(buffer, image.clone()))
             .map_err(|e| eyre::eyre!("Failed to copy buffer to image: {}", e))?;
@@ -156,12 +159,14 @@ impl Texture {
             .map_err(|e| eyre::eyre!("Failed to build command buffer: {}", e))?;
 
         // Submit the command buffer and wait for completion
+        // Using proper fence synchronization to ensure upload completes
         let future = sync::now(queue.device().clone())
             .then_execute(queue.clone(), command_buffer)
             .map_err(|e| eyre::eyre!("Failed to execute command buffer: {}", e))?
             .then_signal_fence_and_flush()
             .map_err(|e| eyre::eyre!("Failed to flush command buffer: {}", e))?;
 
+        // Wait for upload to complete before returning
         future
             .wait(None)
             .map_err(|e| eyre::eyre!("Failed to wait for texture upload: {}", e))?;
