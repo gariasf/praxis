@@ -173,7 +173,9 @@ fn demo_round_trip(world: &mut World) {
         ))),
         Box::new(praxis_editor::AddComponentCommand::new(
             entity,
-            ComponentData::Name("TestEntity".to_string()),
+            ComponentData::Name {
+                data: "TestEntity".to_string(),
+            },
         )),
     ];
 

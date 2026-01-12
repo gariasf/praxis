@@ -98,7 +98,7 @@ fn demo_transform_editing(world: &mut World, history: &mut CommandHistory) {
 
 #[cfg(feature = "editor")]
 fn demo_entity_creation(world: &mut World, history: &mut CommandHistory) {
-    let initial_count = world.iter_entities().count();
+    let initial_count = world.entities().len();
     println!("Initial entity count: {}", initial_count);
 
     // Create entity via command
@@ -109,17 +109,17 @@ fn demo_entity_creation(world: &mut World, history: &mut CommandHistory) {
         .execute(world, command)
         .expect("Failed to create entity");
 
-    let after_create = world.iter_entities().count();
+    let after_create = world.entities().len();
     println!("After create: {} entities", after_create);
 
     // Undo creation
     history.undo(world).expect("Failed to undo create");
-    let after_undo = world.iter_entities().count();
+    let after_undo = world.entities().len();
     println!("After undo create: {} entities", after_undo);
 
     // Redo creation
     history.redo(world).expect("Failed to redo create");
-    let after_redo = world.iter_entities().count();
+    let after_redo = world.entities().len();
     println!("After redo create: {} entities", after_redo);
 }
 
@@ -131,7 +131,9 @@ fn demo_component_management(world: &mut World, history: &mut CommandHistory) {
     // Add Name component via command
     let command = Box::new(AddComponentCommand::new(
         entity,
-        ComponentData::Name("TestEntity".to_string()),
+        ComponentData::Name {
+            data: "TestEntity".to_string(),
+        },
     ));
     history
         .execute(world, command)
@@ -156,7 +158,7 @@ fn demo_component_management(world: &mut World, history: &mut CommandHistory) {
 
 #[cfg(feature = "editor")]
 fn demo_composite_commands(world: &mut World, history: &mut CommandHistory) {
-    let initial_count = world.iter_entities().count();
+    let initial_count = world.entities().len();
     println!("Initial entity count: {}", initial_count);
 
     // Create composite command
@@ -170,24 +172,24 @@ fn demo_composite_commands(world: &mut World, history: &mut CommandHistory) {
 
     println!(
         "Composite command with {} sub-commands",
-        composite.commands.len()
+        composite.len()
     );
 
     history
         .execute(world, Box::new(composite))
         .expect("Failed to execute composite");
 
-    let after_composite = world.iter_entities().count();
+    let after_composite = world.entities().len();
     println!("After composite: {} entities", after_composite);
 
     // Undo composite (all 3 at once)
     history.undo(world).expect("Failed to undo composite");
-    let after_undo = world.iter_entities().count();
+    let after_undo = world.entities().len();
     println!("After undo composite: {} entities", after_undo);
 
     // Redo composite
     history.redo(world).expect("Failed to redo composite");
-    let after_redo = world.iter_entities().count();
+    let after_redo = world.entities().len();
     println!("After redo composite: {} entities", after_redo);
 }
 
