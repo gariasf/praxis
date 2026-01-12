@@ -86,19 +86,26 @@
 //!
 //! Descriptor sets are how shaders access resources (textures, buffers):
 //! ```text
-//! Set 0 (Per-Frame):
-//!   - Camera matrices (updated once per frame)
-//!   - Lighting data (updated once per frame)
+//! Set 0 (Per-Frame/Per-Draw):
+//!   - View/Projection matrices (camera)
+//!   - Model matrix (per-object, dynamic offset)
+//!   - Textures (albedo, normal)
+//!   - Lighting data (directional, point lights)
+//!   - Shadow maps and shadow data
+//!   - Bone matrices (skeletal animation)
 //!
 //! Set 1 (Per-Material):
-//!   - Textures (albedo, normal, etc.)
-//!   - Material properties (metallic, roughness)
+//!   - Material properties (metallic, roughness, emissive)
 //!
-//! Set 2 (Per-Object):
-//!   - Model matrix (updated for each object)
+//! Set 2 (Bindless Rendering):
+//!   - Texture array (up to 4096 textures)
+//!   - Material data buffer (up to 4096 materials)
 //! ```
 //!
 //! Grouping by update frequency minimizes GPU state changes.
+//!
+//! For a comprehensive audit of descriptor set layouts across all shaders,
+//! see `DESCRIPTOR_SET_AUDIT.md` in this crate.
 //!
 //! ### 5. Bindless Rendering (Advanced)
 //!

@@ -1,245 +1,137 @@
 # Praxis Graphics
 
-Graphics system for the Praxis game engine, providing Vulkan-based rendering via vulkano.
+Graphics system for the Praxis game engine, providing modern GPU rendering using Vulkan.
 
 ## Features
 
-- **Vulkan Rendering**: Modern graphics API with explicit control
-- **Mesh Asset Management**: Load, store, and render multiple mesh types
-- **Primitive Mesh Generation**: Built-in cube, pyramid, and quad meshes
-- **Per-Mesh Buffers**: Dedicated vertex and index buffers for each mesh
-- **Dynamic Uniform Buffers**: Efficient per-object uniform data with ring buffer
-- **Transform System**: Model-view-projection matrix pipeline
-- **Material System**: PBR materials with textures and properties
-- **Lighting**: Point lights, directional lights, and ambient lighting
-- **Texture Management**: Texture loading and binding
-- **Deferred Rendering**: Optional deferred rendering pipeline
+- **Forward and Deferred Rendering**: Choose the best approach for your scene
+- **Physically-Based Rendering (PBR)**: Metallic-roughness workflow with proper material properties
+- **Advanced Lighting**: Directional and point lights with shadow mapping
+- **Bindless Rendering**: High-performance material system with texture arrays
+- **Post-Processing**: HDR, tone mapping, bloom, SSAO, motion blur, and more
+- **Skeletal Animation**: GPU-accelerated skeletal animation with up to 256 bones
+- **Particle Systems**: GPU-based particle simulation and rendering
+- **Spatial Optimization**: Frustum culling, occlusion culling, GPU-driven rendering
 
-## Mesh System
+## Documentation
 
-The mesh system provides complete support for loading and rendering 3D geometry.
+### Getting Started
 
-### Core Types
+- [`src/lib.rs`](src/lib.rs) - Comprehensive overview of the rendering architecture
+- [`DESCRIPTOR_SETS_REFERENCE.md`](DESCRIPTOR_SETS_REFERENCE.md) - Quick reference for shader development
 
-- **`MeshData`**: CPU-side mesh definition with vertices, colors, normals, UVs, and indices
-- **`GpuMesh`**: GPU-side mesh containing Vulkan buffers
-- **`MeshAssetManager`**: Central manager for loaded meshes
+### Advanced Topics
 
-### Loading Meshes
+- [`DESCRIPTOR_SET_AUDIT.md`](DESCRIPTOR_SET_AUDIT.md) - Complete audit of descriptor set layouts
+- [`src/shaders/README.md`](src/shaders/README.md) - Shader documentation and conventions
+- [`src/bindless.rs`](src/bindless.rs) - Bindless rendering system documentation
 
-```rust
-use praxis_graphics::{RenderContext, colored_cube_mesh};
+### Key Modules
 
-// Access the mesh manager through RenderContext
-render_context
-    .mesh_manager_mut()
-    .load_mesh("cube", colored_cube_mesh())?;
-```
+- `pipeline.rs` - Graphics pipeline creation and management
+- `render_context.rs` - Main rendering context and frame management
+- `deferred.rs` - Deferred rendering implementation
+- `lighting.rs` - Lighting system (directional, point, ambient)
+- `shadow.rs` - Shadow mapping with cascaded shadow maps
+- `particles.rs` - GPU-accelerated particle system
+- `post_process/` - Post-processing effects
 
-### Primitive Meshes
+## Descriptor Set Layout
 
-Built-in primitive mesh generators:
+The Praxis graphics system uses a standardized three-set layout:
 
-```rust
-use praxis_graphics::{colored_cube_mesh, solid_cube_mesh, quad_mesh, pyramid_mesh};
+### Set 0: Per-Frame/Per-Draw Resources
+- Camera matrices and position
+- Model matrix (dynamic offset for per-object updates)
+- Textures (albedo, normal maps)
+- Lighting data (directional/point lights, ambient)
+- Shadow maps and shadow data
+- Bone matrices for skeletal animation
 
-// Multi-colored cube
-let cube = colored_cube_mesh();
+### Set 1: Per-Material Properties
+- Material properties (base color, metallic, roughness, emissive)
 
-// Single-color cube
-let red_cube = solid_cube_mesh([1.0, 0.0, 0.0]);
+### Set 2: Bindless Rendering (Optional)
+- Texture array (up to 4096 textures)
+- Material data buffer (up to 4096 materials)
 
-// Ground plane
-let ground = quad_mesh(10.0, [0.3, 0.3, 0.3]);
+See [`DESCRIPTOR_SETS_REFERENCE.md`](DESCRIPTOR_SETS_REFERENCE.md) for complete details and code examples.
 
-// Pyramid with custom colors
-let pyramid = pyramid_mesh([0.8, 0.6, 0.2], [1.0, 0.0, 0.0]);
-```
-
-### Rendering with Multiple Meshes
-
-Use `DrawCommand` and `RenderCommands` to render different mesh types:
-
-```rust
-use praxis_graphics::{DrawCommand, RenderCommands};
-use praxis_math::{Mat4, Vec3};
-
-let draw_commands = vec![
-    DrawCommand {
-        mesh_id: "cube".to_string(),
-        model: Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0)),
-        texture_name: None,
-        material_properties: None,
-    },
-    DrawCommand {
-        mesh_id: "pyramid".to_string(),
-        model: Mat4::from_translation(Vec3::new(2.0, 0.0, 0.0)),
-        texture_name: None,
-        material_properties: None,
-    },
-];
-
-let cmds = RenderCommands {
-    view,
-    proj,
-    draw_commands: &draw_commands,
-    lighting: None,
-};
-
-render_context.render(&cmds)?;
-```
-
-## Dynamic Uniform Buffers
-
-The graphics system uses dynamic uniform buffers with a ring buffer architecture for efficient per-object rendering.
-
-### Architecture
-
-Instead of creating a new uniform buffer and descriptor set for each object every frame, the system uses a single large buffer with dynamic offsets:
-
-```
-┌─────────────────────────────────────────┐
-│         Dynamic Uniform Buffer          │
-├─────────────────────────────────────────┤
-│ Frame 0 │ Frame 1 │ Frame 2 │ Frame 0..│
-│  Obj 0  │  Obj 0  │  Obj 0  │  Obj 0   │
-│  Obj 1  │  Obj 1  │  Obj 1  │  Obj 1   │
-│  Obj 2  │  Obj 2  │  Obj 2  │  Obj 2   │
-│   ...   │   ...   │   ...   │   ...    │
-└─────────────────────────────────────────┘
-```
-
-### Benefits
-
-- **Single descriptor set** bound once per frame
-- **Per-object data** accessed via dynamic offsets
-- **Persistent mapped buffer** for efficient CPU writes
-- **Ring buffer** prevents CPU-GPU stalls
-- **Automatic alignment** handling for device requirements
-
-### Configuration
-
-Key constants (configurable in `RenderContext::new()`):
+## Usage Example
 
 ```rust
-const FRAMES_IN_FLIGHT: usize = 3;        // Ring buffer size
-const MAX_OBJECTS_PER_FRAME: usize = 1024; // Max drawable objects
+use praxis_graphics::{RenderContext, pipeline::create_simple_pipeline_3d};
+
+// Create render context
+let mut render_context = RenderContext::new(
+    device,
+    swapchain,
+    memory_allocator,
+    command_buffer_allocator,
+    descriptor_set_allocator,
+)?;
+
+// Create pipeline
+let pipeline = create_simple_pipeline_3d(
+    &device,
+    &render_pass,
+    [width, height],
+)?;
+
+// Render frame
+render_context.render(|ctx| {
+    // Add meshes, lights, etc.
+    ctx.add_mesh(mesh_id, &transform);
+    ctx.add_directional_light(direction, color, intensity);
+    
+    Ok(())
+})?;
 ```
 
-Adjust based on your needs:
-- More frames in flight = smoother pacing but more memory
-- More max objects = can draw more but uses more memory
+## Performance Tips
 
-### Render Flow
-
-1. Advance ring buffer to next frame
-2. Update view/projection buffer once per frame
-3. Write all model matrices to ring buffer
-4. For each object:
-   - Calculate dynamic offset
-   - Bind descriptor set with offset
-   - Draw
-
-## Vertex Format
-
-The current vertex format (`Vertex3D`) supports:
-- Position (3D coordinates)
-- Color (RGB)
-- Normal (for lighting)
-- UV coordinates (for textures)
+1. **Use bindless rendering** for scenes with many materials to reduce descriptor set binds
+2. **Enable GPU culling** for scenes with many objects to reduce draw calls
+3. **Use deferred rendering** for scenes with many lights
+4. **Batch similar materials** to minimize state changes
+5. **Use dynamic offsets** for per-object data (already done by default for model matrices)
 
 ## Architecture
 
-The graphics system is organized into modules:
+The graphics system is built on several key principles:
 
-- **`device`**: Vulkan instance and device management
-- **`vertex`**: Vertex data structures
-- **`pipeline`**: Graphics pipeline configuration
-- **`shaders`**: GLSL shader compilation
-- **`mesh`**: Mesh data structures and asset management
-- **`primitives`**: Built-in primitive mesh generators
-- **`uniform_buffer`**: Dynamic uniform buffer management
-- **`texture`**: Texture loading and management
-- **`material`**: Material system with PBR properties
-- **`lighting`**: Lighting system
+- **Explicit resource management**: Direct control over GPU memory and synchronization
+- **Multi-threaded friendly**: Command buffer recording can be parallelized
+- **Modern API usage**: Leverages Vulkan 1.2+ features like descriptor indexing
+- **Educational code**: Extensive comments explain GPU concepts and techniques
 
-## Examples
+## Shader Development
 
-Run the graphics demos:
+When creating new shaders:
 
-```bash
-# Multiple mesh rendering
-cargo run --example multi_mesh_demo
-
-# Material demonstration (includes PBR and post-processing)
-cargo run --example material_demo
-
-# Advanced lighting
-cargo run --example advanced_lighting_demo
-
-# Environment probes
-cargo run --example environment_probe_demo
-```
+1. Follow the standard descriptor set layout (see reference guide)
+2. Use appropriate layout qualifiers (`std140` for uniforms, `std430` for storage buffers)
+3. Document deviations from standard layout in shader comments
+4. Update shader README with new shader descriptions
+5. Test with validation layers enabled
 
 ## Dependencies
 
-- `vulkano` 0.35.1: Vulkan bindings and abstractions
-- `vulkano-shaders`: Shader compilation
-- `praxis_utils`: Error handling, logging
-- `praxis_math`: Matrix and vector math
-- `praxis_ecs`: ECS integration for rendering
+- **vulkano**: Rust wrapper for Vulkan API
+- **glam**: Mathematics library for vectors and matrices
+- **bytemuck**: Safe transmutation for GPU data structures
+- **bevy_ecs**: Entity component system (optional, for integration)
 
-## Performance Characteristics
+## Contributing
 
-**Memory Usage:**
-```
-FRAMES_IN_FLIGHT × MAX_OBJECTS × aligned_sizeof(ModelUniforms) + sizeof(ViewProjection)
-```
+When making changes to shaders or pipeline code:
 
-With default settings (3 frames, 1024 max objects): ~3 MB properly aligned
+1. Verify all descriptor set layouts remain consistent
+2. Update `DESCRIPTOR_SET_AUDIT.md` if layouts change
+3. Run with validation layers to catch Vulkan errors
+4. Test with different hardware if possible
+5. Document any new patterns or conventions
 
-**CPU Overhead:**
-- Old approach: N_objects × (buffer_allocation + descriptor_set_allocation)
-- New approach: 1 × view_proj_write + 1 × bulk_model_write + N_objects × offset_calculation
+## License
 
-The new approach eliminates allocation overhead entirely.
-
-## Device Compatibility
-
-The implementation automatically queries and uses the device's `minUniformBufferOffsetAlignment` limit, ensuring compatibility across different GPUs. Typical values:
-- NVIDIA: 256 bytes
-- AMD: 256 bytes
-- Intel: 256 bytes
-- Mobile: 16-64 bytes
-
-## Testing
-
-For headless testing without GPU initialization, use `MockRenderContext`:
-
-```rust
-#[cfg(test)]
-use praxis_graphics::MockRenderContext;
-
-#[test]
-fn test_game_logic() {
-    let mut ctx = MockRenderContext::new();
-    
-    // All rendering operations are no-ops
-    ctx.load_mesh("player", mesh_data).unwrap();
-    ctx.load_texture("player_tex", path).unwrap();
-    ctx.render(&commands).unwrap();
-    
-    // Suitable for testing game logic without graphics hardware
-    assert_eq!(ctx.mesh_count(), 1);
-}
-```
-
-The mock provides the same API surface as `RenderContext` but with all operations as no-ops, allowing tests to run in CI environments without GPU access.
-
-## See Also
-
-- [Rendering Guide](../../docs/guides/rendering.md)
-- [HDR and Tonemapping](../../docs/guides/rendering/hdr-tonemapping.md)
-- [Advanced Materials](../../docs/guides/rendering/advanced-materials.md)
-- [PBR Materials Concept](../../docs/concepts/pbr-materials.md)
-- [Multi-mesh Demo](../../examples/multi_mesh_demo.rs)
+See the main Praxis repository for license information.

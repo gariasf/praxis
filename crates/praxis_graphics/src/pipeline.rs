@@ -295,6 +295,15 @@ fn load_shaders(
 /// for the model matrix, enabling dynamic offsets for efficient batching.
 ///
 /// Also configures push constants for bindless material indices.
+///
+/// # Descriptor Set Layout Convention
+///
+/// For details on descriptor set layouts across all shaders and their consistency,
+/// see `DESCRIPTOR_SET_AUDIT.md` in the `praxis_graphics` crate.
+///
+/// - **Set 0**: Per-frame/per-draw (view, model, textures, lighting, shadows)
+/// - **Set 1**: Per-material properties
+/// - **Set 2**: Bindless textures and materials (optional)
 fn create_pipeline_layout(
     device: &Arc<Device>,
     stages: &[PipelineShaderStageCreateInfo],

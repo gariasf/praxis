@@ -206,6 +206,8 @@ GPU-based particle emission:
 
 ### Binding Locations
 
+> **Note**: For a comprehensive audit of all descriptor set layouts and their consistency with pipeline creation, see [`../DESCRIPTOR_SET_AUDIT.md`](../DESCRIPTOR_SET_AUDIT.md).
+
 **Set 0: Per-frame uniforms**
 - Binding 0: View/Projection matrices
 - Binding 1: Model matrices (dynamic uniform buffer)
@@ -214,14 +216,14 @@ GPU-based particle emission:
 - Binding 4: Shadow data
 - Bindings 5-8: Shadow map samplers (one per cascade)
 - Binding 9: Normal map texture
+- Binding 10: Bone matrices (skeletal animation)
 
 **Set 1: Per-material uniforms**
 - Binding 0: Material properties (metallic, roughness, emissive)
 
-**Set 2: IBL uniforms (when used)**
-- Binding 0: Irradiance cubemap
-- Binding 1: Prefiltered cubemap
-- Binding 2: BRDF LUT
+**Set 2: Bindless textures and materials**
+- Binding 0: Texture array (up to 4096 textures)
+- Binding 1: Material data buffer (up to 4096 materials)
 
 ### Vertex Attributes
 
