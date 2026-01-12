@@ -551,11 +551,12 @@ pub struct MockAudioManager {
 }
 
 #[cfg(test)]
-#[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
+#[allow(clippy::missing_errors_doc)]
 impl MockAudioManager {
     /// Creates a new mock audio manager.
     ///
     /// All internal state is initialized to empty/default values.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             loaded_sound_count: 0,

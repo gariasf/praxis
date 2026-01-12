@@ -692,6 +692,7 @@ pub struct AnimationPlayer {
 
 impl AnimationPlayer {
     /// Creates a new empty animation player.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             clips: HashMap::new(),
@@ -705,6 +706,12 @@ impl AnimationPlayer {
     }
 
     /// Builder method to add a clip.
+    ///
+    /// # Must Use
+    ///
+    /// This method consumes `self` and returns a new instance with the clip added.
+    /// Ignoring the return value will discard the clip and may result in missing animations.
+    #[must_use = "builder methods return a new value and do not modify the original"]
     pub fn with_clip(mut self, name: String, clip: AnimationClip) -> Self {
         self.add_clip(name, clip);
         self
@@ -2601,6 +2608,7 @@ pub struct AnimationBlender {
 
 impl AnimationBlender {
     /// Creates a new animation blender.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             clips: HashMap::new(),
@@ -2621,6 +2629,12 @@ impl AnimationBlender {
     }
 
     /// Builder method to add a clip.
+    ///
+    /// # Must Use
+    ///
+    /// This method consumes `self` and returns a new instance with the clip added.
+    /// Ignoring the return value will discard the clip and may result in missing animations.
+    #[must_use = "builder methods return a new value and do not modify the original"]
     pub fn with_clip(mut self, name: impl Into<String>, clip: AnimationClip) -> Self {
         self.add_clip(name, clip);
         self
@@ -3101,12 +3115,24 @@ impl IkConstraint {
     }
 
     /// Sets the pole target for controlling bend direction.
+    ///
+    /// # Must Use
+    ///
+    /// This builder method consumes `self` and returns a new instance with the pole target set.
+    /// Ignoring the return value will discard the configuration and the IK constraint will not use the pole target.
+    #[must_use = "builder methods return a new value and do not modify the original"]
     pub fn with_pole_target(mut self, pole_target: Vec3) -> Self {
         self.pole_target = Some(pole_target);
         self
     }
 
     /// Sets the constraint weight.
+    ///
+    /// # Must Use
+    ///
+    /// This builder method consumes `self` and returns a new instance with the weight set.
+    /// Ignoring the return value will discard the weight configuration and the IK constraint will use the default weight.
+    #[must_use = "builder methods return a new value and do not modify the original"]
     pub fn with_weight(mut self, weight: f32) -> Self {
         self.weight = weight.clamp(0.0, 1.0);
         self
@@ -3685,18 +3711,36 @@ impl AdditiveAnimation {
     }
 
     /// Sets the reference pose.
+    ///
+    /// # Must Use
+    ///
+    /// This builder method consumes `self` and returns a new instance with the reference pose set.
+    /// Ignoring the return value will discard the reference pose and the additive animation will not work correctly.
+    #[must_use = "builder methods return a new value and do not modify the original"]
     pub fn with_reference_pose(mut self, reference: AnimatedPose) -> Self {
         self.reference_pose = Some(reference);
         self
     }
 
     /// Sets the weight.
+    ///
+    /// # Must Use
+    ///
+    /// This builder method consumes `self` and returns a new instance with the weight set.
+    /// Ignoring the return value will discard the weight configuration and the additive animation will use the default weight.
+    #[must_use = "builder methods return a new value and do not modify the original"]
     pub fn with_weight(mut self, weight: f32) -> Self {
         self.weight = weight.clamp(0.0, 1.0);
         self
     }
 
     /// Sets the additive mode.
+    ///
+    /// # Must Use
+    ///
+    /// This builder method consumes `self` and returns a new instance with the additive mode set.
+    /// Ignoring the return value will discard the mode configuration and the additive animation will use the default mode.
+    #[must_use = "builder methods return a new value and do not modify the original"]
     pub fn with_mode(mut self, mode: AdditiveMode) -> Self {
         self.mode = mode;
         self
@@ -3895,18 +3939,36 @@ impl RootMotionExtractor {
     }
 
     /// Enables or disables translation extraction.
+    ///
+    /// # Must Use
+    ///
+    /// This builder method consumes `self` and returns a new instance with translation extraction configured.
+    /// Ignoring the return value will discard the configuration and the extractor will use the default setting.
+    #[must_use = "builder methods return a new value and do not modify the original"]
     pub fn with_translation(mut self, enabled: bool) -> Self {
         self.extract_translation = enabled;
         self
     }
 
     /// Enables or disables rotation extraction.
+    ///
+    /// # Must Use
+    ///
+    /// This builder method consumes `self` and returns a new instance with rotation extraction configured.
+    /// Ignoring the return value will discard the configuration and the extractor will use the default setting.
+    #[must_use = "builder methods return a new value and do not modify the original"]
     pub fn with_rotation(mut self, enabled: bool) -> Self {
         self.extract_rotation = enabled;
         self
     }
 
     /// Enables or disables automatic transform application.
+    ///
+    /// # Must Use
+    ///
+    /// This builder method consumes `self` and returns a new instance with auto-apply configured.
+    /// Ignoring the return value will discard the configuration and the extractor will use the default setting.
+    #[must_use = "builder methods return a new value and do not modify the original"]
     pub fn with_auto_apply(mut self, enabled: bool) -> Self {
         self.apply_to_transform = enabled;
         self
