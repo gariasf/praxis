@@ -941,7 +941,10 @@ impl DeferredRenderer {
                 self.geometry_pipeline.layout().set_layouts()[0].clone(),
                 [
                     WriteDescriptorSet::buffer(0, params.view_proj_buffer.clone()),
-                    WriteDescriptorSet::buffer(1, params.dynamic_uniform_buffer.buffer().clone()),
+                    WriteDescriptorSet::buffer_with_range(
+                        1,
+                        params.dynamic_uniform_buffer.descriptor_buffer_info(),
+                    ),
                     WriteDescriptorSet::image_view_sampler(
                         2,
                         texture.view.clone(),

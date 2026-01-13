@@ -363,6 +363,22 @@ impl DynamicUniformBuffer {
         &self.buffer
     }
 
+    /// Returns descriptor buffer info for creating descriptor sets.
+    ///
+    /// For dynamic uniform buffers, the descriptor should cover the size of
+    /// one aligned element. Dynamic offsets are used at draw time to select
+    /// which element to access.
+    ///
+    /// # Returns
+    ///
+    /// A `DescriptorBufferInfo` with the full buffer and range `0..aligned_object_size`.
+    pub fn descriptor_buffer_info(&self) -> vulkano::descriptor_set::DescriptorBufferInfo {
+        vulkano::descriptor_set::DescriptorBufferInfo {
+            buffer: self.buffer.clone(),
+            range: 0..self.aligned_object_size as u64,
+        }
+    }
+
     /// Returns the aligned size of each object's uniform data.
     pub fn aligned_object_size(&self) -> usize {
         self.aligned_object_size

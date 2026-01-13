@@ -335,10 +335,13 @@ fn create_pipeline_layout(
 
     // Configure bindless texture array in set 2, binding 0
     // Set descriptor count for bindless array (shader uses runtime array which defaults to 0)
+    // Also set PARTIALLY_BOUND flag to allow unwritten descriptors in the array
     if let Some(set_2) = descriptor_set_layout_create_infos.set_layouts.get_mut(2) {
         if let Some(binding_0) = set_2.bindings.get_mut(&0) {
             trace!("Configuring set 2 binding 0 for bindless textures");
             binding_0.descriptor_count = crate::bindless::MAX_BINDLESS_TEXTURES;
+            binding_0.binding_flags =
+                vulkano::descriptor_set::layout::DescriptorBindingFlags::PARTIALLY_BOUND;
         }
     }
 

@@ -1258,7 +1258,7 @@ impl DescriptorSetPool {
         &mut self,
         texture_name: String,
         view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
-        dynamic_uniform_buffer: vulkano::buffer::Subbuffer<[u8]>,
+        dynamic_uniform_buffer_info: vulkano::descriptor_set::DescriptorBufferInfo,
         texture: &texture::Texture,
         lighting_buffer: vulkano::buffer::Subbuffer<lighting::LightingUniforms>,
         default_normal_map: &texture::Texture,
@@ -1288,7 +1288,7 @@ impl DescriptorSetPool {
             self.transform_descriptor_set_layout.clone(),
             [
                 WriteDescriptorSet::buffer(0, view_proj_buffer),
-                WriteDescriptorSet::buffer(1, dynamic_uniform_buffer),
+                WriteDescriptorSet::buffer_with_range(1, dynamic_uniform_buffer_info),
                 WriteDescriptorSet::image_view_sampler(
                     2,
                     texture.view.clone(),
@@ -1961,11 +1961,18 @@ impl RenderContext {
             ),
         );
 
+        // Write multiple textures to the array to satisfy potential GPU validation
+        // Some drivers validate all descriptors even if not accessed at runtime
+        // We write 4 identical dummy textures to cover common cases
+        let dummy_textures: Vec<_> = (0..4)
+            .map(|_| (image_view.clone(), sampler.clone()))
+            .collect();
+
         let descriptor_set = DescriptorSet::new(
             descriptor_set_allocator,
             set_layout.clone(),
             [
-                WriteDescriptorSet::image_view_sampler(0, image_view, sampler),
+                WriteDescriptorSet::image_view_sampler_array(0, 0, dummy_textures),
                 WriteDescriptorSet::buffer(1, material_buffer),
             ],
             [],
@@ -2454,8 +2461,23 @@ impl RenderContext {
             );
         }
 
-        // Clean up any finished GPU work to prevent resource leaks
-        previous_frame_end.cleanup_finished();
+        // Wait for previous frame to complete before writing to shared buffers.
+        // This ensures the GPU is done using buffers referenced by cached descriptor sets.
+        // The fence wait is necessary because cleanup_finished() only cleans up completed work
+        // but doesn't wait for pending work to finish.
+        //
+        // Note: On the first frame, previous_frame_end is sync::now() which has no queue,
+        // so we only flush and wait if there's actual GPU work to synchronize with.
+        if previous_frame_end.queue().is_some() {
+            previous_frame_end
+                .then_signal_fence_and_flush()
+                .map_err(|e| eyre::eyre!("Failed to flush previous frame: {}", e))?
+                .wait(None)
+                .map_err(|e| eyre::eyre!("Failed to wait for previous frame: {}", e))?;
+        } else {
+            // First frame or after reset - just clean up any finished work
+            previous_frame_end.cleanup_finished();
+        }
 
         // Clear descriptor sets from previous frame now that GPU work is complete
         self.frame_descriptor_sets.clear();
@@ -2585,7 +2607,7 @@ impl RenderContext {
             let transform_set = self.descriptor_set_pool.get_or_create_transform_set(
                 texture_name.clone(),
                 self.view_proj_buffer.clone(),
-                self.dynamic_uniform_buffer.buffer().clone(),
+                self.dynamic_uniform_buffer.descriptor_buffer_info(),
                 texture,
                 self.lighting_buffer.buffer().clone(),
                 default_normal_map,
@@ -2790,9 +2812,8 @@ impl RenderContext {
 
         trace!("Submitting command buffer to graphics queue");
 
-        // Wait for previous frame to finish before submitting new work
-        // This ensures proper synchronization and prevents validation layer warnings
-        previous_frame_end.cleanup_finished();
+        // Note: Synchronization with previous frame is handled earlier in render()
+        // via fence wait before writing to shared buffers.
 
         let execution = acquire_future
             .then_execute(self.graphics_queue.clone(), command_buffer)
