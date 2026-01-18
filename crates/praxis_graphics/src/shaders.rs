@@ -322,6 +322,14 @@ pub mod gpu_culling_comp {
     }
 }
 
+/// Compiled compute shader for GPU-driven LOD selection.
+pub mod lod_selection_comp {
+    vulkano_shaders::shader! {
+        ty: "compute",
+        path: "src/shaders/lod_selection.comp"
+    }
+}
+
 /// Compiled vertex shader for SSR ray marching pass.
 pub mod ssr_vs {
     vulkano_shaders::shader! {
@@ -378,4 +386,11 @@ pub fn load_gpu_culling_comp(
     device: Arc<Device>,
 ) -> Result<Arc<vulkano::shader::ShaderModule>, vulkano::Validated<vulkano::VulkanError>> {
     gpu_culling_comp::load(device)
+}
+
+/// Loads the LOD selection compute shader.
+pub fn load_lod_selection_comp(
+    device: Arc<Device>,
+) -> Result<Arc<vulkano::shader::ShaderModule>, vulkano::Validated<vulkano::VulkanError>> {
+    lod_selection_comp::load(device)
 }

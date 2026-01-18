@@ -13,6 +13,7 @@
 //! - **`LodGroup`**: Manages multiple LOD levels for a single entity
 //! - **`LodManager`**: System-wide LOD manager that handles LOD selection and transitions
 //! - **`LodTransition`**: Manages smooth alpha-blended transitions between LOD levels
+//! - **`GpuLodSelector`**: GPU-driven LOD selection using compute shaders for optimal performance
 //!
 //! # Distance-Based LOD Selection
 //!
@@ -60,8 +61,21 @@
 //! # }
 //! ```
 
-use praxis_math::Vec3;
-use praxis_utils::{debug, trace};
+use crate::shaders;
+use praxis_math::{Mat4, Vec3};
+use praxis_utils::{debug, eyre, trace, Result};
+use std::sync::Arc;
+use vulkano::{
+    buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
+    command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer},
+    descriptor_set::{allocator::DescriptorSetAllocator, DescriptorSet, WriteDescriptorSet},
+    device::Device,
+    memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
+    pipeline::{
+        compute::ComputePipelineCreateInfo, layout::PipelineDescriptorSetLayoutCreateInfo,
+        ComputePipeline, Pipeline, PipelineBindPoint, PipelineShaderStageCreateInfo,
+    },
+};
 
 /// Maximum number of LOD levels supported per entity.
 pub const MAX_LOD_LEVELS: usize = 8;
@@ -966,5 +980,598 @@ mod tests {
 
         let lod2 = LodLevel::with_screen_coverage("test2", -0.5);
         assert_eq!(lod2.screen_coverage, Some(0.0));
+    }
+}
+
+// ===== GPU-Driven LOD Selection =====
+
+/// Per-object data for GPU LOD calculation.
+///
+/// This structure matches the shader's ObjectData layout and contains all
+/// information needed to calculate LOD on the GPU.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct GpuObjectData {
+    /// Model matrix transforming from model to world space.
+    pub model: [[f32; 4]; 4],
+
+    /// Bounding sphere in model space (xyz = center, w = radius).
+    pub bounding_sphere: [f32; 4],
+
+    /// Base mesh ID (highest detail).
+    pub mesh_id: u32,
+
+    /// Number of LOD levels for this object.
+    pub lod_count: u32,
+
+    /// Offset into the LOD levels array.
+    pub lod_offset: u32,
+
+    /// Padding for alignment.
+    pub padding: u32,
+}
+
+impl GpuObjectData {
+    /// Creates new GPU object data.
+    pub fn new(
+        model: Mat4,
+        bounding_sphere: [f32; 4],
+        mesh_id: u32,
+        lod_count: u32,
+        lod_offset: u32,
+    ) -> Self {
+        Self {
+            model: model.to_cols_array_2d(),
+            bounding_sphere,
+            mesh_id,
+            lod_count,
+            lod_offset,
+            padding: 0,
+        }
+    }
+}
+
+/// GPU LOD level definition.
+///
+/// Matches the shader's LodLevel structure for GPU-side LOD selection.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct GpuLodLevel {
+    /// Mesh ID for this LOD level.
+    pub mesh_id: u32,
+
+    /// Minimum distance squared.
+    pub min_distance_sq: f32,
+
+    /// Maximum distance squared.
+    pub max_distance_sq: f32,
+
+    /// Padding for alignment.
+    pub padding: u32,
+}
+
+impl GpuLodLevel {
+    /// Creates a new GPU LOD level from a CPU LOD level.
+    pub fn from_lod_level(level: &LodLevel, mesh_id: u32) -> Self {
+        Self {
+            mesh_id,
+            min_distance_sq: level.min_distance_squared,
+            max_distance_sq: level.max_distance_squared,
+            padding: 0,
+        }
+    }
+}
+
+/// LOD selection uniforms passed to the compute shader.
+#[repr(C, align(16))]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct LodUniforms {
+    /// Camera position in world space.
+    pub camera_position: [f32; 3],
+
+    /// Global LOD bias (-1.0 to 1.0).
+    pub lod_bias: f32,
+
+    /// Number of objects to process.
+    pub object_count: u32,
+
+    /// Enable LOD system (0 = disabled, 1 = enabled).
+    pub enable_lod: u32,
+
+    /// Padding for alignment.
+    pub padding1: u32,
+
+    /// Padding for alignment.
+    pub padding2: u32,
+}
+
+impl LodUniforms {
+    /// Creates LOD uniforms.
+    pub fn new(camera_position: Vec3, lod_bias: f32, object_count: u32, enable_lod: bool) -> Self {
+        Self {
+            camera_position: camera_position.to_array(),
+            lod_bias,
+            object_count,
+            enable_lod: if enable_lod { 1 } else { 0 },
+            padding1: 0,
+            padding2: 0,
+        }
+    }
+}
+
+/// GPU-driven LOD selection manager.
+///
+/// This manager uses compute shaders to calculate appropriate LOD levels for all
+/// objects in parallel on the GPU, avoiding expensive CPU-side distance calculations
+/// and enabling efficient LOD selection for tens of thousands of objects.
+///
+/// # Architecture
+///
+/// The GPU LOD selector works in two stages:
+/// 1. **LOD Selection**: Compute shader reads object positions and camera position,
+///    calculates distances, and selects appropriate LOD levels
+/// 2. **Indirect Draw Generation**: Selected LOD levels feed into indirect draw
+///    buffer generation for GPU culling system
+///
+/// # Performance Benefits
+///
+/// - **Massively Parallel**: All LOD calculations happen simultaneously on GPU
+/// - **No CPU-GPU Sync**: Distance calculations stay on GPU
+/// - **Efficient Memory Access**: Coalesced reads/writes in compute shader
+/// - **Scalability**: Handles 10,000+ objects with minimal overhead
+///
+/// # Usage
+///
+/// ```rust,ignore
+/// use praxis_graphics::lod::{GpuLodSelector, GpuObjectData, GpuLodLevel};
+/// use praxis_math::{Mat4, Vec3};
+///
+/// // Initialize selector
+/// let mut lod_selector = GpuLodSelector::new(
+///     device.clone(),
+///     memory_allocator.clone(),
+///     descriptor_set_allocator.clone(),
+/// )?;
+///
+/// // Prepare object data and LOD definitions
+/// let objects = vec![
+///     GpuObjectData::new(
+///         Mat4::IDENTITY,
+///         [0.0, 0.0, 0.0, 1.0], // Bounding sphere
+///         0, // Base mesh ID
+///         3, // 3 LOD levels
+///         0, // Offset in LOD array
+///     ),
+/// ];
+///
+/// let lod_levels = vec![
+///     GpuLodLevel { mesh_id: 0, min_distance_sq: 0.0, max_distance_sq: 100.0, padding: 0 },
+///     GpuLodLevel { mesh_id: 1, min_distance_sq: 100.0, max_distance_sq: 400.0, padding: 0 },
+///     GpuLodLevel { mesh_id: 2, min_distance_sq: 400.0, max_distance_sq: f32::MAX, padding: 0 },
+/// ];
+///
+/// // Dispatch LOD selection
+/// lod_selector.prepare_frame(&objects, &lod_levels)?;
+/// lod_selector.dispatch_lod_selection(
+///     command_buffer,
+///     Vec3::new(0.0, 5.0, 10.0), // Camera position
+///     0.0, // LOD bias
+///     true, // Enable LOD
+/// )?;
+///
+/// // Read selected LOD levels (for use with indirect draw generation)
+/// let selected_lods = lod_selector.selected_lod_buffer();
+/// let distances = lod_selector.distance_buffer();
+/// ```
+pub struct GpuLodSelector {
+    device: Arc<Device>,
+    memory_allocator: Arc<dyn MemoryAllocator>,
+    descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,
+
+    compute_pipeline: Arc<ComputePipeline>,
+
+    // Buffers
+    object_data_buffer: Option<Subbuffer<[GpuObjectData]>>,
+    lod_level_buffer: Option<Subbuffer<[GpuLodLevel]>>,
+    selected_lod_buffer: Option<Subbuffer<[u32]>>,
+    distance_buffer: Option<Subbuffer<[f32]>>,
+    uniforms_buffer: Option<Subbuffer<LodUniforms>>,
+
+    descriptor_set: Option<Arc<DescriptorSet>>,
+
+    max_objects: usize,
+    max_lod_levels: usize,
+    current_object_count: u32,
+}
+
+impl GpuLodSelector {
+    /// Creates a new GPU LOD selector.
+    ///
+    /// # Arguments
+    ///
+    /// * `device` - Vulkan device
+    /// * `memory_allocator` - Memory allocator for buffers
+    /// * `descriptor_set_allocator` - Descriptor set allocator
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if pipeline or buffer creation fails.
+    pub fn new(
+        device: Arc<Device>,
+        memory_allocator: Arc<dyn MemoryAllocator>,
+        descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,
+    ) -> Result<Self> {
+        debug!("Creating GPU LOD selector");
+
+        // Create compute pipeline
+        let compute_pipeline = Self::create_compute_pipeline(device.clone())?;
+
+        Ok(Self {
+            device,
+            memory_allocator,
+            descriptor_set_allocator,
+            compute_pipeline,
+            object_data_buffer: None,
+            lod_level_buffer: None,
+            selected_lod_buffer: None,
+            distance_buffer: None,
+            uniforms_buffer: None,
+            descriptor_set: None,
+            max_objects: 0,
+            max_lod_levels: 0,
+            current_object_count: 0,
+        })
+    }
+
+    /// Creates the LOD selection compute pipeline.
+    fn create_compute_pipeline(device: Arc<Device>) -> Result<Arc<ComputePipeline>> {
+        trace!("Loading LOD selection compute shader");
+
+        let shader = shaders::load_lod_selection_comp(device.clone())
+            .map_err(|e| eyre::eyre!("Failed to load LOD selection shader: {}", e))?;
+
+        let stage = PipelineShaderStageCreateInfo::new(shader.entry_point("main").unwrap());
+
+        let layout = vulkano::pipeline::PipelineLayout::new(
+            device.clone(),
+            PipelineDescriptorSetLayoutCreateInfo::from_stages(&[stage.clone()])
+                .into_pipeline_layout_create_info(device.clone())
+                .map_err(|e| eyre::eyre!("Failed to create pipeline layout info: {}", e))?,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create pipeline layout: {}", e))?;
+
+        ComputePipeline::new(
+            device.clone(),
+            None,
+            ComputePipelineCreateInfo::stage_layout(stage, layout),
+        )
+        .map_err(|e| eyre::eyre!("Failed to create compute pipeline: {}", e))
+    }
+
+    /// Prepares buffers for a new frame.
+    ///
+    /// This should be called once per frame with the current object data and LOD definitions.
+    /// It allocates or resizes buffers as needed and uploads the data.
+    ///
+    /// # Arguments
+    ///
+    /// * `objects` - Object data (transforms, bounding spheres, LOD metadata)
+    /// * `lod_levels` - LOD level definitions for all objects
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if buffer allocation or upload fails.
+    pub fn prepare_frame(
+        &mut self,
+        objects: &[GpuObjectData],
+        lod_levels: &[GpuLodLevel],
+    ) -> Result<()> {
+        let object_count = objects.len();
+        let lod_count = lod_levels.len();
+
+        if object_count == 0 {
+            self.current_object_count = 0;
+            return Ok(());
+        }
+
+        self.current_object_count = object_count as u32;
+
+        trace!(
+            "Preparing GPU LOD frame: {} objects, {} LOD levels",
+            object_count,
+            lod_count
+        );
+
+        // Reallocate buffers if needed
+        if object_count > self.max_objects || lod_count > self.max_lod_levels {
+            debug!(
+                "Reallocating GPU LOD buffers: {} objects (was {}), {} LOD levels (was {})",
+                object_count, self.max_objects, lod_count, self.max_lod_levels
+            );
+            self.allocate_buffers(object_count, lod_count)?;
+        }
+
+        // Upload object data
+        if let Some(buffer) = &self.object_data_buffer {
+            let mut write = buffer
+                .write()
+                .map_err(|e| eyre::eyre!("Failed to map object data buffer: {}", e))?;
+            write[..object_count].copy_from_slice(objects);
+        }
+
+        // Upload LOD level data
+        if let Some(buffer) = &self.lod_level_buffer {
+            let mut write = buffer
+                .write()
+                .map_err(|e| eyre::eyre!("Failed to map LOD level buffer: {}", e))?;
+            write[..lod_count].copy_from_slice(lod_levels);
+        }
+
+        Ok(())
+    }
+
+    /// Allocates GPU buffers for LOD selection.
+    fn allocate_buffers(&mut self, max_objects: usize, max_lod_levels: usize) -> Result<()> {
+        debug!(
+            "Allocating GPU LOD buffers for {} objects, {} LOD levels",
+            max_objects, max_lod_levels
+        );
+
+        // Object data buffer (input)
+        let object_data_buffer = Buffer::new_slice::<GpuObjectData>(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            max_objects as u64,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create object data buffer: {}", e))?;
+
+        // LOD level buffer (input)
+        let lod_level_buffer = Buffer::new_slice::<GpuLodLevel>(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            max_lod_levels as u64,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create LOD level buffer: {}", e))?;
+
+        // Selected LOD buffer (output)
+        let selected_lod_buffer = Buffer::new_slice::<u32>(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_SRC,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            max_objects as u64,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create selected LOD buffer: {}", e))?;
+
+        // Distance buffer (output, for debugging/sorting)
+        let distance_buffer = Buffer::new_slice::<f32>(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_SRC,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            max_objects as u64,
+        )
+        .map_err(|e| eyre::eyre!("Failed to create distance buffer: {}", e))?;
+
+        // Uniforms buffer
+        let uniforms_buffer = Buffer::from_data(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            LodUniforms::new(Vec3::ZERO, 0.0, 0, true),
+        )
+        .map_err(|e| eyre::eyre!("Failed to create LOD uniforms buffer: {}", e))?;
+
+        self.object_data_buffer = Some(object_data_buffer);
+        self.lod_level_buffer = Some(lod_level_buffer);
+        self.selected_lod_buffer = Some(selected_lod_buffer);
+        self.distance_buffer = Some(distance_buffer);
+        self.uniforms_buffer = Some(uniforms_buffer);
+        self.max_objects = max_objects;
+        self.max_lod_levels = max_lod_levels;
+
+        // Descriptor set will be recreated on next dispatch
+        self.descriptor_set = None;
+
+        Ok(())
+    }
+
+    /// Dispatches the LOD selection compute shader.
+    ///
+    /// This records commands into the provided command buffer to:
+    /// 1. Bind the LOD selection compute pipeline
+    /// 2. Update LOD uniforms
+    /// 3. Dispatch compute work groups
+    ///
+    /// # Arguments
+    ///
+    /// * `builder` - Command buffer builder to record into
+    /// * `camera_position` - Camera position in world space
+    /// * `lod_bias` - Global LOD bias (-1.0 to 1.0)
+    /// * `enable_lod` - Enable LOD system
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if command recording fails.
+    pub fn dispatch_lod_selection(
+        &mut self,
+        builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
+        camera_position: Vec3,
+        lod_bias: f32,
+        enable_lod: bool,
+    ) -> Result<()> {
+        if self.current_object_count == 0 {
+            return Ok(());
+        }
+
+        trace!(
+            "Dispatching LOD selection for {} objects",
+            self.current_object_count
+        );
+
+        // Update uniforms
+        let uniforms = LodUniforms::new(
+            camera_position,
+            lod_bias,
+            self.current_object_count,
+            enable_lod,
+        );
+
+        if let Some(buffer) = &self.uniforms_buffer {
+            let mut write = buffer
+                .write()
+                .map_err(|e| eyre::eyre!("Failed to map LOD uniforms buffer: {}", e))?;
+            *write = uniforms;
+        }
+
+        // Create or get descriptor set
+        if self.descriptor_set.is_none() {
+            self.create_descriptor_set()?;
+        }
+
+        let descriptor_set = self.descriptor_set.as_ref().unwrap();
+
+        // Bind pipeline and descriptor set
+        builder
+            .bind_pipeline_compute(self.compute_pipeline.clone())
+            .map_err(|e| eyre::eyre!("Failed to bind compute pipeline: {}", e))?
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                self.compute_pipeline.layout().clone(),
+                0,
+                descriptor_set.clone(),
+            )
+            .map_err(|e| eyre::eyre!("Failed to bind descriptor sets: {}", e))?;
+
+        // Dispatch compute work groups (64 threads per group)
+        let work_group_count = self.current_object_count.div_ceil(64);
+
+        unsafe {
+            builder
+                .dispatch([work_group_count, 1, 1])
+                .map_err(|e| eyre::eyre!("Failed to dispatch compute: {}", e))?;
+        }
+
+        trace!(
+            "Dispatched {} compute work groups for LOD selection",
+            work_group_count
+        );
+
+        Ok(())
+    }
+
+    /// Creates the descriptor set for the LOD selection compute shader.
+    fn create_descriptor_set(&mut self) -> Result<()> {
+        trace!("Creating LOD selection descriptor set");
+
+        let layout = self
+            .compute_pipeline
+            .layout()
+            .set_layouts()
+            .first()
+            .ok_or_else(|| eyre::eyre!("No descriptor set layout in pipeline"))?;
+
+        let descriptor_set = DescriptorSet::new(
+            self.descriptor_set_allocator.clone(),
+            layout.clone(),
+            [
+                WriteDescriptorSet::buffer(0, self.uniforms_buffer.clone().unwrap()),
+                WriteDescriptorSet::buffer(1, self.object_data_buffer.clone().unwrap()),
+                WriteDescriptorSet::buffer(2, self.lod_level_buffer.clone().unwrap()),
+                WriteDescriptorSet::buffer(3, self.selected_lod_buffer.clone().unwrap()),
+                WriteDescriptorSet::buffer(4, self.distance_buffer.clone().unwrap()),
+            ],
+            [],
+        )
+        .map_err(|e| eyre::eyre!("Failed to create descriptor set: {}", e))?;
+
+        self.descriptor_set = Some(descriptor_set);
+
+        Ok(())
+    }
+
+    /// Gets the selected LOD buffer for use in indirect draw generation.
+    ///
+    /// This buffer contains mesh IDs for each object after LOD selection.
+    pub fn selected_lod_buffer(&self) -> Option<&Subbuffer<[u32]>> {
+        self.selected_lod_buffer.as_ref()
+    }
+
+    /// Gets the distance buffer (for debugging/sorting).
+    ///
+    /// This buffer contains squared distances from camera to each object.
+    pub fn distance_buffer(&self) -> Option<&Subbuffer<[f32]>> {
+        self.distance_buffer.as_ref()
+    }
+
+    /// Reads back selected LOD levels for debugging.
+    ///
+    /// This requires CPU-GPU sync and should only be used for debugging.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if buffer mapping fails.
+    pub fn read_selected_lods(&self) -> Result<Vec<u32>> {
+        if let Some(buffer) = &self.selected_lod_buffer {
+            let read = buffer
+                .read()
+                .map_err(|e| eyre::eyre!("Failed to read selected LOD buffer: {}", e))?;
+            Ok(read[..self.current_object_count as usize].to_vec())
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    /// Reads back distances for debugging.
+    ///
+    /// This requires CPU-GPU sync and should only be used for debugging.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if buffer mapping fails.
+    pub fn read_distances(&self) -> Result<Vec<f32>> {
+        if let Some(buffer) = &self.distance_buffer {
+            let read = buffer
+                .read()
+                .map_err(|e| eyre::eyre!("Failed to read distance buffer: {}", e))?;
+            Ok(read[..self.current_object_count as usize].to_vec())
+        } else {
+            Ok(Vec::new())
+        }
     }
 }

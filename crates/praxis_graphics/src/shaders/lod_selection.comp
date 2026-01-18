@@ -1,0 +1,129 @@
+#version 450
+
+// GPU-driven LOD selection compute shader
+// Reads object-camera distances and outputs LOD levels per object
+// Feeds results to indirect draw buffer generation
+
+// Work group size - process 64 objects per work group
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+// Per-object data for LOD calculation
+struct ObjectData {
+    mat4 model;              // Model matrix (64 bytes)
+    vec4 bounding_sphere;    // xyz = center, w = radius (16 bytes)
+    uint mesh_id;            // Base mesh ID (4 bytes)
+    uint lod_count;          // Number of LOD levels (4 bytes)
+    uint lod_offset;         // Offset into LOD distance array (4 bytes)
+    uint padding;            // Padding for alignment (4 bytes)
+    // Total: 96 bytes
+};
+
+// LOD level definition
+struct LodLevel {
+    uint mesh_id;            // Mesh ID for this LOD level
+    float min_distance_sq;   // Min distance squared
+    float max_distance_sq;   // Max distance squared
+    uint padding;            // Padding for alignment
+    // Total: 16 bytes
+};
+
+// LOD selection uniforms
+layout(set = 0, binding = 0, std140) uniform LodUniforms {
+    vec3 camera_position;    // Camera position in world space
+    float lod_bias;          // Global LOD bias (-1.0 to 1.0)
+    uint object_count;       // Number of objects to process
+    uint enable_lod;         // Enable LOD system (0 = disabled, 1 = enabled)
+    uint padding1;
+    uint padding2;
+} lod_uniforms;
+
+// Input buffer: Object data (transforms, bounding spheres, LOD metadata)
+layout(set = 0, binding = 1, std430) readonly buffer ObjectDataBuffer {
+    ObjectData objects[];
+} object_data;
+
+// Input buffer: LOD level definitions
+layout(set = 0, binding = 2, std430) readonly buffer LodLevelBuffer {
+    LodLevel levels[];
+} lod_levels;
+
+// Output buffer: Selected LOD levels per object
+layout(set = 0, binding = 3, std430) writeonly buffer LodSelectionBuffer {
+    uint selected_lod[];
+} lod_selection;
+
+// Output buffer: Distance squared per object (for debugging/sorting)
+layout(set = 0, binding = 4, std430) writeonly buffer DistanceBuffer {
+    float distances[];
+} distance_buffer;
+
+// Select LOD level based on squared distance
+uint select_lod_level(uint object_index, float distance_squared) {
+    ObjectData obj = object_data.objects[object_index];
+    
+    // If no LOD levels defined, return base mesh
+    if (obj.lod_count == 0) {
+        return obj.mesh_id;
+    }
+    
+    // Apply LOD bias by scaling distance
+    float bias_scale = 1.0;
+    if (lod_uniforms.lod_bias > 0.0) {
+        // Positive bias: make objects appear closer (higher detail)
+        bias_scale = 1.0 - lod_uniforms.lod_bias * 0.5;
+    } else if (lod_uniforms.lod_bias < 0.0) {
+        // Negative bias: make objects appear farther (lower detail)
+        bias_scale = 1.0 + (-lod_uniforms.lod_bias) * 0.5;
+    }
+    
+    float adjusted_distance_squared = distance_squared * bias_scale * bias_scale;
+    
+    // Find appropriate LOD level
+    for (uint i = 0; i < obj.lod_count; i++) {
+        uint lod_index = obj.lod_offset + i;
+        LodLevel level = lod_levels.levels[lod_index];
+        
+        if (adjusted_distance_squared >= level.min_distance_sq && 
+            adjusted_distance_squared < level.max_distance_sq) {
+            return level.mesh_id;
+        }
+    }
+    
+    // If no level matches, use lowest detail level (last in array)
+    uint last_lod_index = obj.lod_offset + obj.lod_count - 1;
+    return lod_levels.levels[last_lod_index].mesh_id;
+}
+
+void main() {
+    uint object_index = gl_GlobalInvocationID.x;
+    
+    // Early out if beyond object count
+    if (object_index >= lod_uniforms.object_count) {
+        return;
+    }
+    
+    // Load object data
+    ObjectData obj = object_data.objects[object_index];
+    
+    // Transform object center to world space
+    vec4 world_center = obj.model * vec4(obj.bounding_sphere.xyz, 1.0);
+    
+    // Calculate squared distance from camera to object
+    vec3 delta = world_center.xyz - lod_uniforms.camera_position;
+    float distance_squared = dot(delta, delta);
+    
+    // Store distance for debugging/sorting
+    distance_buffer.distances[object_index] = distance_squared;
+    
+    // Select appropriate LOD level
+    uint selected_mesh_id;
+    if (lod_uniforms.enable_lod != 0) {
+        selected_mesh_id = select_lod_level(object_index, distance_squared);
+    } else {
+        // LOD disabled, use base mesh
+        selected_mesh_id = obj.mesh_id;
+    }
+    
+    // Write selected LOD level
+    lod_selection.selected_lod[object_index] = selected_mesh_id;
+}
