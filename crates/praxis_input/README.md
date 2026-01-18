@@ -1,219 +1,84 @@
 # Praxis Input
 
-Input handling system for the Praxis game engine, providing keyboard, mouse, and gamepad input tracking with action mapping support for rebindable controls.
+Input handling with action mapping for the Praxis game engine.
 
-## Features
+## Overview
 
-- **Input State Tracking**: Track keyboard keys, mouse buttons, and mouse movement/scroll
-- **Action Mapping**: Map physical inputs to logical actions for rebindable controls
-- **Frame-aware Input**: Distinguish between "pressed", "just pressed", and "just released" states
-- **winit Integration**: Seamless integration with winit window events
-- **ECS Resource**: Designed to work as bevy_ecs resources
+Keyboard, mouse, and gamepad tracking with frame-aware state and rebindable controls.
 
-## Usage
+**Key Features:**
+- Input state tracking (pressed, just pressed, just released)
+- Action mapping for rebindable controls
+- Mouse position/delta and scroll tracking
+- Seamless winit integration
+- ECS resource integration
 
-### Basic Input State
+## Quick Start
 
 ```rust
-use praxis_input::InputState;
+use praxis_input::{InputState, InputMap, Action};
 use winit::keyboard::KeyCode;
 
 let mut input = InputState::default();
 
-// Simulate key press
-input.press_key(KeyCode::KeyW);
-
-// Check input state
+// Check state
 if input.is_key_pressed(KeyCode::KeyW) {
     // Move forward
 }
 
 if input.is_key_just_pressed(KeyCode::Space) {
-    // Jump (only triggers once per press)
+    // Jump (once per press)
 }
 ```
 
-### Action Mapping
+## Action Mapping
 
 ```rust
-use praxis_input::{InputMap, Action, InputState};
-use winit::keyboard::KeyCode;
-
 let mut input_map = InputMap::default();
 
-// Bind multiple keys to the same action
+// Bind keys to actions
 input_map.bind_key(Action::new("jump"), KeyCode::Space);
-input_map.bind_key(Action::new("jump"), KeyCode::KeyW);
+input_map.bind_key(Action::new("fire"), KeyCode::KeyE);
 
-// Check if action is active
-let input_state = InputState::default();
+// Check actions
 if input_map.is_action_pressed(&Action::new("jump"), &input_state) {
     // Perform jump
 }
 ```
 
-### Integration with ECS
+## ECS Integration
 
 ```rust
-use bevy_ecs::world::World;
-use praxis_input::{InputState, InputMap, Action};
-use winit::keyboard::KeyCode;
+use praxis_ecs::World;
 
-let mut world = World::new();
-
-// Add input resources
 world.insert_resource(InputState::default());
-
-let mut input_map = InputMap::default();
-input_map.bind_key(Action::new("fire"), KeyCode::Space);
 world.insert_resource(input_map);
 
-// In your systems
-fn player_input_system(
-    input_state: Res<InputState>,
-    input_map: Res<InputMap>,
-) {
-    if input_map.is_action_just_pressed(&Action::new("fire"), &input_state) {
+// In systems
+fn player_system(input: Res<InputState>, map: Res<InputMap>) {
+    if map.is_action_just_pressed(&Action::new("fire"), &input) {
         // Fire weapon
     }
 }
 ```
 
-### winit Event Handling
+## Documentation
 
-```rust
-use praxis_input::{InputState, winit_integration};
-use winit::event::WindowEvent;
+**Comprehensive Guide:**
+- [Input Guide](../../docs/guides/input.md) - Complete input system guide
 
-let mut input_state = InputState::default();
+**Concepts:**
+- [Input Concepts](../../docs/concepts/input.md)
 
-// In your event loop
-match event {
-    WindowEvent::KeyboardInput { .. }
-    | WindowEvent::MouseInput { .. }
-    | WindowEvent::CursorMoved { .. }
-    | WindowEvent::MouseWheel { .. } => {
-        winit_integration::process_window_event(&mut input_state, &event);
-    }
-    _ => {}
-}
-```
-
-### Frame Updates
-
-Call `update()` at the beginning of each frame to clear "just pressed" and "just released" states:
-
-```rust
-use praxis_input::InputState;
-
-let mut input_state = InputState::default();
-
-// Game loop
-loop {
-    input_state.update();  // Clear frame-specific state
-    
-    // Process events and check input
-    // ...
-}
-```
-
-## Architecture
-
-### InputState
-
-The `InputState` resource tracks the current state of all input devices:
-
-- **Keyboard**: Set of pressed keys, just pressed keys, just released keys
-- **Mouse Buttons**: Set of pressed buttons, just pressed buttons, just released buttons
-- **Mouse Position**: Current cursor position and delta since last frame
-- **Mouse Scroll**: Scroll wheel delta for the current frame
-
-### InputMap
-
-The `InputMap` resource provides action mapping capabilities:
-
-- Maps `Action` identifiers to sets of `InputBinding`s
-- Supports multiple inputs per action
-- Bidirectional lookup (action → bindings, binding → actions)
-- Enables rebindable controls
-
-### Action
-
-Logical game actions that abstract physical inputs:
-
-- Identified by string-based `ActionId`
-- Can be bound to multiple physical inputs
-- Enables control remapping without changing game logic
-
-## Common Input Patterns
-
-### Movement
-
-```rust
-fn movement_system(
-    input: Res<InputState>,
-    mut query: Query<&mut Transform>,
-) {
-    for mut transform in query.iter_mut() {
-        let mut movement = Vec3::ZERO;
-        
-        if input.is_key_pressed(KeyCode::KeyW) {
-            movement.z -= 1.0;
-        }
-        if input.is_key_pressed(KeyCode::KeyS) {
-            movement.z += 1.0;
-        }
-        if input.is_key_pressed(KeyCode::KeyA) {
-            movement.x -= 1.0;
-        }
-        if input.is_key_pressed(KeyCode::KeyD) {
-            movement.x += 1.0;
-        }
-        
-        transform.translation += movement.normalize_or_zero() * speed * delta_time;
-    }
-}
-```
-
-### Camera Control
-
-```rust
-fn camera_system(
-    input: Res<InputState>,
-    mut query: Query<&mut Transform, With<Camera>>,
-) {
-    for mut transform in query.iter_mut() {
-        let mouse_delta = input.mouse_delta();
-        
-        // Rotate camera based on mouse movement
-        let yaw = mouse_delta.x * sensitivity;
-        let pitch = mouse_delta.y * sensitivity;
-        
-        transform.rotate_y(yaw);
-        transform.rotate_local_x(pitch);
-    }
-}
-```
+**Reference:**
+- [Input API Reference](../../docs/reference/input-api.md)
 
 ## Examples
 
-Run the examples to see the input system in action:
-
 ```bash
-# Basic input demonstration
 cargo run --example input_integration
-
-# FPS camera controller
-cargo run --example fps_camera_controller
 ```
 
 ## Dependencies
 
-- `winit` 0.30.11: Window and input events
-- `praxis_utils`: Error handling
-
-## See Also
-
-- [Input Guide](../../docs/guides/input.md)
-- [Camera Controller Example](../../examples/fps_camera_controller.rs)
-- [winit Documentation](https://docs.rs/winit)
+- `winit` 0.30.11: Input events
