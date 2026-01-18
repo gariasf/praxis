@@ -3624,7 +3624,9 @@ name = "praxis_graphics"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "crossbeam-channel",
  "image",
+ "parking_lot",
  "pollster",
  "praxis_math",
  "praxis_procedural",

@@ -16,6 +16,8 @@ praxis_math = { path = "../praxis_math", version = "0.1.0" }
 praxis_procedural = { path = "../praxis_procedural", version = "0.1.0" }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 rand = "0.8"
+parking_lot = "0.12"
+crossbeam-channel = "0.5"
 
 [dev-dependencies]
 serial_test = "3.0"

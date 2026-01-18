@@ -3929,7 +3929,9 @@ pub use material_layers::{
     LayerParamsUniforms, MaterialLayerCache, MaterialLayerRenderer, MaterialTextureSet,
     MAX_MATERIAL_LAYERS,
 };
-pub use mesh::{GpuMesh, MeshData};
+pub use mesh::{
+    GpuMesh, MeshData, MeshStreamingState, MeshStreamingSystem, StreamingGpuMesh,
+};
 pub use particles::{
     CollisionPlane, EmitterShape, GpuParticle, ParticleEmitterConfig, ParticleForce,
     ParticleIndirectDrawCommand, ParticleInstance, ParticleRenderer, SoftParticleConfig,

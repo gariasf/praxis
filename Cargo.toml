@@ -233,6 +233,10 @@ name = "gpu_culling_demo"
 path = "examples/gpu_culling_demo.rs"
 
 [[example]]
+name = "mesh_streaming_demo"
+path = "examples/mesh_streaming_demo.rs"
+
+[[example]]
 name = "save_load_demo"
 path = "examples/save_load_demo.rs"
 
