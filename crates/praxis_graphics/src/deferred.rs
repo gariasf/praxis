@@ -3,6 +3,42 @@
 //! This module provides a complete deferred rendering pipeline that separates
 //! geometry rendering from lighting calculations, enabling efficient many-light scenarios.
 //!
+//! # Velocity Buffer Integration
+//!
+//! The deferred renderer now includes integrated velocity buffer generation during the
+//! geometry pass. This enables:
+//!
+//! - **Temporal Anti-Aliasing (TAA)**: Accurate reprojection of previous frame samples
+//! - **Motion Blur**: Per-pixel velocity-based blur for realistic motion rendering
+//!
+//! ## Usage
+//!
+//! To use velocity buffers, provide both current and previous frame matrices:
+//!
+//! ```rust,ignore
+//! // Store previous frame state
+//! let previous_view_proj = current_view_proj.clone();
+//! let previous_dynamic_uniforms = current_dynamic_uniforms.clone();
+//!
+//! // Update current frame
+//! let current_view_proj = ViewProjectionUniforms::new(view, proj);
+//! let current_dynamic_uniforms = update_transforms(&draw_commands);
+//!
+//! // Render with velocity buffer generation
+//! let params = DeferredRenderParams {
+//!     // ... other params
+//!     view_proj_buffer: current_view_proj_buffer,
+//!     dynamic_uniform_buffer: &current_dynamic_uniforms,
+//!     previous_view_proj_buffer: previous_view_proj_buffer,
+//!     previous_dynamic_uniform_buffer: &previous_dynamic_uniforms,
+//! };
+//!
+//! deferred_renderer.render(&mut cmd_buffer, &params)?;
+//!
+//! // Access velocity buffer
+//! let velocity = deferred_renderer.velocity_buffer().unwrap();
+//! ```
+//!
 //! # Educational: Why Deferred Rendering?
 //!
 //! ## The Lighting Problem
@@ -87,12 +123,13 @@
 //!
 //! ## Pass 1: Geometry Pass (Write G-Buffer)
 //! ```text
-//! Input: 3D meshes with vertices, normals, UVs, materials
-//! Output: G-buffer textures (albedo, normal, material, depth)
+//! Input: 3D meshes with vertices, normals, UVs, materials, current & previous transforms
+//! Output: G-buffer textures (albedo, normal, material, velocity, depth)
 //!
 //! For each mesh:
 //!   1. Vertex Shader:
-//!      - Transform vertices to clip space
+//!      - Transform vertices to clip space (current frame)
+//!      - Transform vertices to clip space (previous frame)
 //!      - Transform normals to world space
 //!      - Pass through UVs and material properties
 //!
@@ -101,8 +138,12 @@
 //!      - Write albedo to RT0
 //!      - Write world-space normal to RT1
 //!      - Write material properties to RT2
-//!      - Write velocity to RT3
+//!      - Calculate and write screen-space velocity to RT3
 //!      - Depth written automatically
+//!
+//! Velocity Calculation:
+//!   velocity = (current_position / current_w) - (previous_position / previous_w)
+//!   This produces per-pixel motion vectors for TAA and motion blur.
 //! ```
 //!
 //! ## Pass 2: Lighting Pass (Read G-Buffer)
@@ -149,6 +190,7 @@
 //! - **Albedo**: Base color (RGB) + unused (A)
 //! - **Normal**: World-space normals (RGB) + unused (A)
 //! - **Metallic-Roughness**: Metallic (R), Roughness (G), Emissive (B), unused (A)
+//! - **Velocity**: Screen-space motion vectors (RG) for TAA and motion blur
 //! - **Depth**: Standard depth buffer for depth testing
 //!
 //! ## Pass 2: Lighting Pass
@@ -156,6 +198,12 @@
 //! - Sample all G-buffer textures for current fragment
 //! - Calculate lighting from all lights (directional + point)
 //! - Output final lit color to framebuffer
+//!
+//! ## Velocity Buffer for Motion Effects
+//! The velocity buffer is automatically populated during the geometry pass by computing
+//! per-pixel motion vectors from current and previous frame transformations. This enables:
+//! - **TAA (Temporal Anti-Aliasing)**: Accurate history reprojection for temporal filtering
+//! - **Motion Blur**: Per-object velocity-based blur for realistic motion effects
 //!
 //! # Benefits Over Forward Rendering
 //!
@@ -207,6 +255,48 @@ use vulkano::{
 };
 
 /// Parameters for deferred rendering.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use praxis_graphics::{DeferredRenderParams, uniform_buffer::ViewProjectionUniforms};
+/// use praxis_math::Mat4;
+///
+/// // Current frame matrices
+/// let view = Mat4::look_at_rh(camera_pos, camera_target, Vec3::Y);
+/// let proj = Mat4::perspective_rh(fov, aspect, near, far);
+/// let view_proj = ViewProjectionUniforms::new(view, proj);
+/// let view_proj_buffer = create_uniform_buffer(&memory_allocator, view_proj)?;
+///
+/// // Previous frame matrices (for velocity buffer)
+/// let previous_view_proj = ViewProjectionUniforms::new(previous_view, previous_proj);
+/// let previous_view_proj_buffer = create_uniform_buffer(&memory_allocator, previous_view_proj)?;
+///
+/// // Per-object transforms (current and previous)
+/// let dynamic_uniform_buffer = update_object_transforms(&draw_commands)?;
+/// let previous_dynamic_uniform_buffer = update_previous_object_transforms(&draw_commands)?;
+///
+/// let params = DeferredRenderParams {
+///     output_framebuffer,
+///     viewport,
+///     draw_commands: &draw_commands,
+///     view_proj_buffer,
+///     dynamic_uniform_buffer: &dynamic_uniform_buffer,
+///     mesh_manager: &mesh_manager,
+///     texture_manager: &texture_manager,
+///     lighting_buffer,
+///     previous_view_proj_buffer,
+///     previous_dynamic_uniform_buffer: &previous_dynamic_uniform_buffer,
+/// };
+///
+/// deferred_renderer.render(&mut command_buffer, &params)?;
+///
+/// // Access velocity buffer for TAA or motion blur
+/// if let Some(velocity_buffer) = deferred_renderer.velocity_buffer() {
+///     // Use velocity buffer for post-processing
+///     taa_pass.render(&mut command_buffer, velocity_buffer)?;
+/// }
+/// ```
 pub struct DeferredRenderParams<'a> {
     /// Output framebuffer for final rendering
     pub output_framebuffer: Arc<Framebuffer>,
@@ -224,6 +314,10 @@ pub struct DeferredRenderParams<'a> {
     pub texture_manager: &'a crate::texture::TextureManager,
     /// Lighting uniforms buffer
     pub lighting_buffer: vulkano::buffer::Subbuffer<lighting::LightingUniforms>,
+    /// Previous frame view-projection uniform buffer (for velocity buffer)
+    pub previous_view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
+    /// Previous frame dynamic uniform buffer (for velocity buffer)
+    pub previous_dynamic_uniform_buffer: &'a crate::uniform_buffer::DynamicUniformBuffer,
 }
 
 /// Parameters for geometry pass rendering.
@@ -235,6 +329,8 @@ struct GeometryPassParams<'a> {
     dynamic_uniform_buffer: &'a crate::uniform_buffer::DynamicUniformBuffer,
     mesh_manager: &'a mesh::MeshAssetManager,
     texture_manager: &'a crate::texture::TextureManager,
+    previous_view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
+    previous_dynamic_uniform_buffer: &'a crate::uniform_buffer::DynamicUniformBuffer,
 }
 
 /// Parameters for lighting pass rendering.
@@ -370,8 +466,22 @@ impl GBuffer {
 /// Deferred renderer managing G-buffer passes and lighting accumulation.
 ///
 /// This renderer implements a complete deferred rendering pipeline:
-/// 1. Geometry pass: Render scene to G-buffer
+/// 1. Geometry pass: Render scene to G-buffer (including velocity buffer for motion vectors)
 /// 2. Lighting pass: Full-screen pass accumulating lighting from G-buffer
+///
+/// # Velocity Buffer Integration
+///
+/// The deferred renderer automatically generates per-object motion vectors during the geometry pass.
+/// These motion vectors are stored in the velocity buffer (G-buffer attachment) and can be used for:
+/// - **Temporal Anti-Aliasing (TAA)**: Reprojection of previous frame samples
+/// - **Motion Blur**: Per-pixel velocity-based blur effects
+///
+/// Motion vectors are computed by comparing current and previous frame transformations:
+/// - Current frame: `view * proj * model * position`
+/// - Previous frame: `previous_view * previous_proj * previous_model * position`
+/// - Velocity: `current_ndc - previous_ndc` (screen-space motion)
+///
+/// To use velocity buffers, provide both current and previous frame matrices in `DeferredRenderParams`.
 pub struct DeferredRenderer {
     device: Arc<Device>,
     memory_allocator: Arc<StandardMemoryAllocator>,
@@ -570,7 +680,13 @@ impl DeferredRenderer {
         let mut layout_create_infos = PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages);
 
         if let Some(set_0) = layout_create_infos.set_layouts.get_mut(0) {
+            // Binding 1: Dynamic uniform buffer for current model matrices
             if let Some(binding) = set_0.bindings.get_mut(&1) {
+                binding.descriptor_type =
+                    vulkano::descriptor_set::layout::DescriptorType::UniformBufferDynamic;
+            }
+            // Binding 3: Dynamic uniform buffer for previous model matrices
+            if let Some(binding) = set_0.bindings.get_mut(&3) {
                 binding.descriptor_type =
                     vulkano::descriptor_set::layout::DescriptorType::UniformBufferDynamic;
             }
@@ -769,6 +885,21 @@ impl DeferredRenderer {
         Ok(())
     }
 
+    /// Returns a reference to the velocity buffer from the G-buffer.
+    ///
+    /// The velocity buffer contains per-pixel motion vectors computed during the geometry pass.
+    /// These motion vectors represent screen-space velocity and can be used for:
+    /// - Temporal Anti-Aliasing (TAA) reprojection
+    /// - Motion blur post-processing effects
+    ///
+    /// # Returns
+    ///
+    /// An `Option` containing a reference to the velocity buffer `ImageView`, or `None` if the
+    /// G-buffer has not been initialized.
+    pub fn velocity_buffer(&self) -> Option<&Arc<ImageView>> {
+        self.gbuffer.as_ref().map(|gbuffer| &gbuffer.velocity)
+    }
+
     /// Renders the scene using deferred rendering.
     ///
     /// This performs two passes:
@@ -796,6 +927,8 @@ impl DeferredRenderer {
                 dynamic_uniform_buffer: params.dynamic_uniform_buffer,
                 mesh_manager: params.mesh_manager,
                 texture_manager: params.texture_manager,
+                previous_view_proj_buffer: params.previous_view_proj_buffer.clone(),
+                previous_dynamic_uniform_buffer: params.previous_dynamic_uniform_buffer,
             },
         )?;
 
@@ -842,6 +975,8 @@ impl DeferredRenderer {
                 dynamic_uniform_buffer: params.dynamic_uniform_buffer,
                 mesh_manager: params.mesh_manager,
                 texture_manager: params.texture_manager,
+                previous_view_proj_buffer: params.previous_view_proj_buffer.clone(),
+                previous_dynamic_uniform_buffer: params.previous_dynamic_uniform_buffer,
             },
         )?;
 
@@ -945,8 +1080,13 @@ impl DeferredRenderer {
                         1,
                         params.dynamic_uniform_buffer.descriptor_buffer_info(),
                     ),
+                    WriteDescriptorSet::buffer(2, params.previous_view_proj_buffer.clone()),
+                    WriteDescriptorSet::buffer_with_range(
+                        3,
+                        params.previous_dynamic_uniform_buffer.descriptor_buffer_info(),
+                    ),
                     WriteDescriptorSet::image_view_sampler(
-                        2,
+                        4,
                         texture.view.clone(),
                         texture.sampler.clone(),
                     ),
@@ -969,14 +1109,18 @@ impl DeferredRenderer {
                 .bind_index_buffer(mesh.index_buffer.clone())
                 .map_err(|e| eyre::eyre!("Failed to bind index buffer: {}", e))?;
 
-            let dynamic_offset = params
+            let current_dynamic_offset = params
                 .dynamic_uniform_buffer
+                .get_dynamic_offset(object_index);
+            
+            let previous_dynamic_offset = params
+                .previous_dynamic_uniform_buffer
                 .get_dynamic_offset(object_index);
 
             unsafe {
                 let set_with_offsets = vulkano::descriptor_set::DescriptorSetWithOffsets::new(
                     descriptor_set,
-                    [dynamic_offset],
+                    [current_dynamic_offset, previous_dynamic_offset],
                 );
 
                 builder.bind_descriptor_sets_unchecked(
