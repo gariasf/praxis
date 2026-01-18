@@ -364,11 +364,12 @@
 //! - **Fewer GPU Binds**: Bind once per material, not once per object
 //! - **Memory Efficient**: Descriptor sets are pooled and reused automatically
 //!
-//! ## Descriptor Set Pooling
+//! ## Descriptor Set Pooling with LRU Eviction
 //!
 //! The rendering system uses a descriptor set pool (`DescriptorSetPool`) to pre-allocate
 //! and reuse both transform and material descriptor sets across frames, eliminating
-//! per-frame allocation overhead:
+//! per-frame allocation overhead. The pool implements LRU (Least Recently Used) eviction
+//! to prevent unbounded memory growth:
 //!
 //! ### Transform Descriptor Sets
 //! - Pooled by texture name (all other bindings are shared)
@@ -379,16 +380,24 @@
 //! - Pooled by texture name and material properties hash
 //! - Created once per unique material and reused across all frames
 //!
+//! ### LRU Eviction Policy
+//! - Tracks frame usage for each descriptor set
+//! - Evicts sets unused for 60+ frames (configurable via `set_descriptor_set_pool_eviction_threshold()`)
+//! - Runs eviction check every 60 frames to minimize overhead
+//! - Balances memory efficiency with cache hit rates
+//!
 //! **Performance Impact:**
 //! - **Frame 1**: Creates 10 transform sets + 5 material sets for 100 objects (15 allocations)
 //! - **Frame 2+**: Reuses all 15 cached descriptor sets (zero allocations)
-//! - **Result**: 100x+ reduction in descriptor set allocations for typical scenes
+//! - **Frame 120+**: Unused descriptor sets automatically evicted, freeing memory
+//! - **Result**: 100x+ reduction in descriptor set allocations with bounded memory usage
 //!
 //! **Management**: Pool is maintained internally and can be inspected via
-//! `descriptor_set_pool_size()` or cleared via `clear_descriptor_set_pool()`
+//! `descriptor_set_pool_size()` or cleared via `clear_descriptor_set_pool()`. Eviction
+//! threshold can be adjusted via `set_descriptor_set_pool_eviction_threshold()`.
 //!
-//! This approach eliminates GPU API overhead and memory fragmentation in scenes
-//! with many objects.
+//! This approach eliminates GPU API overhead and memory fragmentation while ensuring
+//! memory usage remains bounded even in scenes with frequently changing materials.
 //!
 //! See the `material` module documentation for detailed explanations of descriptor set
 //! lifecycle and efficiency gains.
@@ -1190,6 +1199,26 @@ impl TransformKey {
     }
 }
 
+/// Entry in the descriptor set cache with LRU tracking.
+///
+/// Tracks when the descriptor set was last used to enable LRU eviction.
+struct CachedDescriptorSet {
+    /// The descriptor set
+    descriptor_set: Arc<DescriptorSet>,
+    /// Frame number when this descriptor set was last used
+    last_used_frame: u64,
+}
+
+/// Entry in the material descriptor set cache with LRU tracking.
+struct CachedMaterialDescriptorSet {
+    /// The descriptor set
+    descriptor_set: Arc<DescriptorSet>,
+    /// The material properties buffer
+    material_buffer: vulkano::buffer::Subbuffer<material::MaterialProperties>,
+    /// Frame number when this descriptor set was last used
+    last_used_frame: u64,
+}
+
 /// Pool for pre-allocating and reusing descriptor sets for materials and transforms.
 ///
 /// The descriptor set pool manages both material and transform descriptor sets to
@@ -1197,12 +1226,22 @@ impl TransformKey {
 /// keyed by their properties, allowing multiple objects to share descriptor sets
 /// when they use identical configurations.
 ///
+/// # LRU Eviction
+///
+/// The pool implements Least Recently Used (LRU) eviction to prevent unbounded memory growth:
+/// - Tracks frame usage for each descriptor set
+/// - Evicts descriptor sets unused for 60+ frames
+/// - Runs eviction at the start of each frame
+///
+/// This balances memory efficiency with cache hit rates. In typical scenes, active
+/// descriptor sets are reused every frame, so only truly unused sets are evicted.
+///
 /// # Benefits
 ///
 /// - **Eliminated Per-Frame Allocations**: Descriptor sets are created once and reused
 /// - **Cache Efficiency**: Identical configurations share the same descriptor set
 /// - **Lower GPU Overhead**: Significantly fewer descriptor set allocations and bindings
-/// - **Memory Efficiency**: No redundant descriptor set storage
+/// - **Memory Efficiency**: LRU eviction prevents unbounded growth
 ///
 /// # Pooling Strategy
 ///
@@ -1228,20 +1267,21 @@ impl TransformKey {
 /// Frame 3: 200 objects with same 10 textures and 5 materials
 ///   - Reuses all 15 cached descriptor sets (zero allocations)
 ///
-/// Result: 100x+ reduction in descriptor set allocations
+/// Frame 63: Different scene with new textures/materials
+///   - Original 15 sets not used, marked as unused
+///
+/// Frame 123: Eviction runs
+///   - Original 15 sets evicted (unused for 60 frames)
+///   - Memory freed for new descriptor sets
+///
+/// Result: 100x+ reduction in descriptor set allocations with bounded memory usage
 /// ```
 struct DescriptorSetPool {
     /// Cached transform descriptor sets indexed by texture name
-    transform_sets: HashMap<TransformKey, Arc<DescriptorSet>>,
+    transform_sets: HashMap<TransformKey, CachedDescriptorSet>,
 
     /// Cached material descriptor sets indexed by material key
-    material_sets: HashMap<
-        MaterialKey,
-        (
-            Arc<DescriptorSet>,
-            vulkano::buffer::Subbuffer<material::MaterialProperties>,
-        ),
-    >,
+    material_sets: HashMap<MaterialKey, CachedMaterialDescriptorSet>,
 
     /// Descriptor set allocator for creating new sets
     descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,
@@ -1254,6 +1294,12 @@ struct DescriptorSetPool {
 
     /// Layout for material descriptor sets
     material_descriptor_set_layout: Arc<vulkano::descriptor_set::layout::DescriptorSetLayout>,
+
+    /// Current frame number for LRU tracking
+    current_frame: u64,
+
+    /// Number of frames a descriptor set can remain unused before eviction
+    eviction_threshold: u64,
 }
 
 impl DescriptorSetPool {
@@ -1271,13 +1317,79 @@ impl DescriptorSetPool {
             memory_allocator,
             transform_descriptor_set_layout,
             material_descriptor_set_layout,
+            current_frame: 0,
+            eviction_threshold: 60,
+        }
+    }
+
+    /// Advances to the next frame and evicts unused descriptor sets.
+    ///
+    /// This should be called at the start of each frame before any descriptor set
+    /// operations. It increments the frame counter and evicts descriptor sets that
+    /// haven't been used within the eviction threshold.
+    ///
+    /// # Performance
+    ///
+    /// Eviction is O(n) where n is the number of cached descriptor sets, but typically
+    /// runs very quickly since most descriptor sets remain in use. In practice, eviction
+    /// removes only a handful of sets per frame in dynamic scenes, or none at all in
+    /// stable scenes.
+    fn begin_frame(&mut self) {
+        self.current_frame += 1;
+
+        // Only run eviction check occasionally to reduce overhead
+        // Check every 60 frames (approximately once per second at 60 FPS)
+        if self.current_frame % 60 != 0 {
+            return;
+        }
+
+        let eviction_cutoff = self.current_frame.saturating_sub(self.eviction_threshold);
+
+        // Evict unused transform descriptor sets
+        let transform_count_before = self.transform_sets.len();
+        self.transform_sets.retain(|key, cached| {
+            let should_keep = cached.last_used_frame >= eviction_cutoff;
+            if !should_keep {
+                trace!(
+                    "Evicting transform descriptor set for texture '{}' (last used: frame {}, current: frame {})",
+                    key.texture_name,
+                    cached.last_used_frame,
+                    self.current_frame
+                );
+            }
+            should_keep
+        });
+        let transform_evicted = transform_count_before - self.transform_sets.len();
+
+        // Evict unused material descriptor sets
+        let material_count_before = self.material_sets.len();
+        self.material_sets.retain(|key, cached| {
+            let should_keep = cached.last_used_frame >= eviction_cutoff;
+            if !should_keep {
+                trace!(
+                    "Evicting material descriptor set for texture '{}' (last used: frame {}, current: frame {})",
+                    key.texture_name,
+                    cached.last_used_frame,
+                    self.current_frame
+                );
+            }
+            should_keep
+        });
+        let material_evicted = material_count_before - self.material_sets.len();
+
+        if transform_evicted > 0 || material_evicted > 0 {
+            debug!(
+                "Evicted {} transform and {} material descriptor sets (unused for {} frames)",
+                transform_evicted, material_evicted, self.eviction_threshold
+            );
         }
     }
 
     /// Gets or creates a transform descriptor set for the given texture.
     ///
     /// If a descriptor set already exists for this texture combination, returns the
-    /// cached version. Otherwise, creates a new descriptor set and caches it.
+    /// cached version and updates its last used frame. Otherwise, creates a new
+    /// descriptor set and caches it.
     ///
     /// # Arguments
     ///
@@ -1311,12 +1423,14 @@ impl DescriptorSetPool {
     ) -> Result<Arc<DescriptorSet>> {
         let key = TransformKey::new(texture_name.clone());
 
-        if let Some(descriptor_set) = self.transform_sets.get(&key) {
+        if let Some(cached) = self.transform_sets.get_mut(&key) {
             trace!(
                 "Reusing cached transform descriptor set for texture '{}'",
                 texture_name
             );
-            return Ok(descriptor_set.clone());
+            // Update last used frame for LRU tracking
+            cached.last_used_frame = self.current_frame;
+            return Ok(cached.descriptor_set.clone());
         }
 
         trace!(
@@ -1369,16 +1483,21 @@ impl DescriptorSetPool {
         )
         .map_err(|e| eyre::eyre!("Failed to create transform descriptor set: {}", e))?;
 
-        // Cache the descriptor set for reuse
-        self.transform_sets.insert(key, descriptor_set.clone());
+        // Cache the descriptor set for reuse with current frame tracking
+        let cached = CachedDescriptorSet {
+            descriptor_set: descriptor_set.clone(),
+            last_used_frame: self.current_frame,
+        };
+        self.transform_sets.insert(key, cached);
 
         Ok(descriptor_set)
     }
 
     /// Gets or creates a material descriptor set for the given properties.
     ///
-    /// If a descriptor set already exists for this material, returns the cached version.
-    /// Otherwise, creates a new descriptor set and caches it for future use.
+    /// If a descriptor set already exists for this material, returns the cached version
+    /// and updates its last used frame. Otherwise, creates a new descriptor set and
+    /// caches it for future use.
     ///
     /// # Arguments
     ///
@@ -1399,9 +1518,11 @@ impl DescriptorSetPool {
     ) -> Result<Arc<DescriptorSet>> {
         let key = MaterialKey::new(texture_name, &material_props);
 
-        if let Some((descriptor_set, _)) = self.material_sets.get(&key) {
+        if let Some(cached) = self.material_sets.get_mut(&key) {
             trace!("Reusing cached material descriptor set");
-            return Ok(descriptor_set.clone());
+            // Update last used frame for LRU tracking
+            cached.last_used_frame = self.current_frame;
+            return Ok(cached.descriptor_set.clone());
         }
 
         trace!("Creating new material descriptor set");
@@ -1431,9 +1552,13 @@ impl DescriptorSetPool {
         )
         .map_err(|e| eyre::eyre!("Failed to create material descriptor set: {}", e))?;
 
-        // Cache the descriptor set and buffer for reuse
-        self.material_sets
-            .insert(key, (descriptor_set.clone(), material_buffer));
+        // Cache the descriptor set and buffer for reuse with current frame tracking
+        let cached = CachedMaterialDescriptorSet {
+            descriptor_set: descriptor_set.clone(),
+            material_buffer,
+            last_used_frame: self.current_frame,
+        };
+        self.material_sets.insert(key, cached);
 
         Ok(descriptor_set)
     }
@@ -1441,7 +1566,8 @@ impl DescriptorSetPool {
     /// Clears all cached descriptor sets.
     ///
     /// This should be called when materials or textures are modified to ensure
-    /// the cache is invalidated.
+    /// the cache is invalidated. Resets the frame counter to prevent issues
+    /// with stale frame numbers.
     fn clear(&mut self) {
         debug!(
             "Clearing descriptor set pool ({} transform sets, {} material sets)",
@@ -1450,6 +1576,7 @@ impl DescriptorSetPool {
         );
         self.transform_sets.clear();
         self.material_sets.clear();
+        self.current_frame = 0;
     }
 
     /// Returns the total number of cached descriptor sets.
@@ -2217,13 +2344,45 @@ impl RenderContext {
         self.descriptor_set_pool.len()
     }
 
+    /// Gets the current frame number used for LRU tracking.
+    ///
+    /// This value increments each frame and is used to determine which descriptor
+    /// sets are eligible for eviction based on the LRU policy.
+    pub fn descriptor_set_pool_frame(&self) -> u64 {
+        self.descriptor_set_pool.current_frame
+    }
+
+    /// Gets the eviction threshold for descriptor sets.
+    ///
+    /// Descriptor sets that haven't been used within this many frames are
+    /// eligible for eviction during the periodic cleanup.
+    pub fn descriptor_set_pool_eviction_threshold(&self) -> u64 {
+        self.descriptor_set_pool.eviction_threshold
+    }
+
+    /// Sets the eviction threshold for descriptor sets.
+    ///
+    /// # Arguments
+    ///
+    /// * `threshold` - Number of frames a descriptor set can remain unused before eviction
+    ///
+    /// # Recommended Values
+    ///
+    /// - **60 frames** (default): Good for typical scenes at 60 FPS (~1 second of inactivity)
+    /// - **120 frames**: More conservative, suitable for scenes with frequent texture changes
+    /// - **30 frames**: Aggressive eviction for memory-constrained environments
+    pub fn set_descriptor_set_pool_eviction_threshold(&mut self, threshold: u64) {
+        self.descriptor_set_pool.eviction_threshold = threshold;
+    }
+
     /// Clears the descriptor set pool cache.
     ///
     /// This should be called when materials or textures are modified to ensure
     /// stale descriptor sets are not reused. The pool will automatically rebuild
     /// the cache as textures and materials are used in subsequent frames.
     ///
-    /// Clears both transform and material descriptor set caches.
+    /// Clears both transform and material descriptor set caches and resets the
+    /// frame counter.
     pub fn clear_descriptor_set_pool(&mut self) {
         self.descriptor_set_pool.clear();
     }
@@ -2691,6 +2850,9 @@ impl RenderContext {
 
         // Clear descriptor sets from previous frame now that GPU work is complete
         self.frame_descriptor_sets.clear();
+
+        // Advance frame counter and perform LRU eviction of unused descriptor sets
+        self.descriptor_set_pool.begin_frame();
 
         self.dynamic_uniform_buffer.next_frame();
 
