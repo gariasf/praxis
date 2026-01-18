@@ -3,15 +3,15 @@
 //! This module provides a caching layer to avoid redundant texture generation.
 //! Textures are cached based on their generation parameters and graph structure.
 
-use crate::generator::TextureGenerationParams;
+use crate::generator::{GeneratedTexture, TextureGenerationParams};
 use crate::graph::TextureGraph;
 use praxis_utils::{debug, info, trace};
 use std::collections::HashMap;
 
 /// Key for identifying cached textures.
 ///
-/// The key is based on the texture graph structure and generation parameters.
-/// Two textures with the same key are guaranteed to be identical.
+/// The key is based on the texture graph structure and generation parameters,
+/// including compression settings.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TextureCacheKey {
     /// Hash of the texture graph structure
@@ -22,6 +22,12 @@ pub struct TextureCacheKey {
     height: u32,
     /// Random seed used for generation
     seed: u32,
+    /// Whether compression is enabled
+    compress: bool,
+    /// Compression format (if compressed)
+    compression_format: Option<u8>, // Store as u8 for Hash compatibility
+    /// Compression quality (if compressed)
+    compression_quality: Option<u8>, // Store as u8 for Hash compatibility
 }
 
 impl TextureCacheKey {
@@ -32,6 +38,15 @@ impl TextureCacheKey {
             width: params.width,
             height: params.height,
             seed: params.seed,
+            compress: params.compress,
+            compression_format: params.compression_format.map(|f| match f {
+                crate::compression::CompressionFormat::BC7 => 0,
+                crate::compression::CompressionFormat::BC5 => 1,
+            }),
+            compression_quality: params.compression_quality.map(|q| match q {
+                crate::compression::CompressionQuality::Fast => 0,
+                crate::compression::CompressionQuality::High => 1,
+            }),
         }
     }
 
@@ -64,14 +79,20 @@ impl TextureCacheKey {
 /// Cache entry for a generated texture.
 #[derive(Clone)]
 pub struct CachedTexture {
-    /// RGBA8 texture data
-    pub data: Vec<u8>,
-    /// Width in pixels
-    pub width: u32,
-    /// Height in pixels
-    pub height: u32,
+    /// Generated texture (uncompressed or compressed)
+    pub texture: GeneratedTexture,
     /// Number of times this texture has been accessed
     pub access_count: u64,
+}
+
+impl CachedTexture {
+    /// Returns the size in bytes of this cached texture.
+    pub fn size_bytes(&self) -> usize {
+        match &self.texture {
+            GeneratedTexture::Uncompressed { data, .. } => data.len(),
+            GeneratedTexture::Compressed(compressed) => compressed.data.len(),
+        }
+    }
 }
 
 /// Statistics about the texture cache.
@@ -158,15 +179,19 @@ impl ProceduralTextureCache {
 
     /// Looks up a texture in the cache.
     ///
-    /// Returns the cached texture data if found, otherwise returns `None`.
-    pub fn get(&mut self, key: &TextureCacheKey) -> Option<Vec<u8>> {
+    /// Returns the cached texture if found, otherwise returns `None`.
+    pub fn get(&mut self, key: &TextureCacheKey) -> Option<GeneratedTexture> {
         self.stats.total_lookups += 1;
 
         if let Some(entry) = self.cache.get_mut(key) {
             self.stats.hits += 1;
             entry.access_count += 1;
-            trace!("Cache hit for texture {}x{}", entry.width, entry.height);
-            Some(entry.data.clone())
+            let (width, height) = match &entry.texture {
+                GeneratedTexture::Uncompressed { width, height, .. } => (*width, *height),
+                GeneratedTexture::Compressed(c) => (c.width, c.height),
+            };
+            trace!("Cache hit for texture {}x{}", width, height);
+            Some(entry.texture.clone())
         } else {
             self.stats.misses += 1;
             trace!("Cache miss");
@@ -177,22 +202,26 @@ impl ProceduralTextureCache {
     /// Inserts a texture into the cache.
     ///
     /// If the cache is full, the least recently used texture will be evicted.
-    pub fn insert(&mut self, key: TextureCacheKey, data: Vec<u8>, width: u32, height: u32) {
-        let entry_size = data.len();
+    pub fn insert(&mut self, key: TextureCacheKey, texture: GeneratedTexture) {
+        let (width, height, entry_size) = match &texture {
+            GeneratedTexture::Uncompressed {
+                data,
+                width,
+                height,
+            } => (*width, *height, data.len()),
+            GeneratedTexture::Compressed(c) => (c.width, c.height, c.data.len()),
+        };
 
         while self.should_evict(entry_size) {
             self.evict_lru();
         }
 
-        self.cache.insert(
-            key,
-            CachedTexture {
-                data,
-                width,
-                height,
-                access_count: 0,
-            },
-        );
+        let entry = CachedTexture {
+            texture,
+            access_count: 0,
+        };
+
+        self.cache.insert(key, entry);
 
         self.current_memory += entry_size;
         self.stats.cached_count = self.cache.len();
@@ -254,13 +283,18 @@ impl ProceduralTextureCache {
 
         if let Some(key) = lru_key {
             if let Some(entry) = self.cache.remove(&key) {
-                self.current_memory -= entry.data.len();
+                let entry_size = entry.size_bytes();
+                let (width, height) = match &entry.texture {
+                    GeneratedTexture::Uncompressed { width, height, .. } => (*width, *height),
+                    GeneratedTexture::Compressed(c) => (c.width, c.height),
+                };
+                self.current_memory -= entry_size;
                 self.stats.cached_count = self.cache.len();
                 self.stats.memory_used = self.current_memory;
                 debug!(
                     "Evicted texture {}x{} from cache ({} remaining)",
-                    entry.width,
-                    entry.height,
+                    width,
+                    height,
                     self.cache.len()
                 );
             }
@@ -270,13 +304,15 @@ impl ProceduralTextureCache {
     /// Removes specific texture from cache by key.
     pub fn remove(&mut self, key: &TextureCacheKey) -> bool {
         if let Some(entry) = self.cache.remove(key) {
-            self.current_memory -= entry.data.len();
+            let entry_size = entry.size_bytes();
+            let (width, height) = match &entry.texture {
+                GeneratedTexture::Uncompressed { width, height, .. } => (*width, *height),
+                GeneratedTexture::Compressed(c) => (c.width, c.height),
+            };
+            self.current_memory -= entry_size;
             self.stats.cached_count = self.cache.len();
             self.stats.memory_used = self.current_memory;
-            debug!(
-                "Removed texture {}x{} from cache",
-                entry.width, entry.height
-            );
+            debug!("Removed texture {}x{} from cache", width, height);
             true
         } else {
             false
@@ -341,6 +377,9 @@ mod tests {
             width: 512,
             height: 512,
             seed: 0,
+            compress: false,
+            compression_format: None,
+            compression_quality: None,
         };
 
         let key1 = TextureCacheKey::new(&graph1, params);
@@ -358,16 +397,32 @@ mod tests {
             width: 64,
             height: 64,
             seed: 0,
+            compress: false,
+            compression_format: None,
+            compression_quality: None,
         };
         let key = TextureCacheKey::new(&graph, params);
 
         let data = vec![255u8; 64 * 64 * 4];
-        cache.insert(key.clone(), data.clone(), 64, 64);
+        let texture = GeneratedTexture::Uncompressed {
+            data: data.clone(),
+            width: 64,
+            height: 64,
+        };
+        cache.insert(key.clone(), texture);
 
         assert_eq!(cache.len(), 1);
 
         let retrieved = cache.get(&key).unwrap();
-        assert_eq!(retrieved, data);
+        match retrieved {
+            GeneratedTexture::Uncompressed {
+                data: retrieved_data,
+                ..
+            } => {
+                assert_eq!(retrieved_data, data);
+            }
+            _ => panic!("Expected uncompressed texture"),
+        }
     }
 
     #[test]
@@ -381,10 +436,17 @@ mod tests {
                 width: 64,
                 height: 64,
                 seed: i,
+                compress: false,
+                compression_format: None,
+                compression_quality: None,
             };
             let key = TextureCacheKey::new(&graph, params);
-            let data = vec![i as u8; 64 * 64 * 4];
-            cache.insert(key, data, 64, 64);
+            let texture = GeneratedTexture::Uncompressed {
+                data: vec![i as u8; 64 * 64 * 4],
+                width: 64,
+                height: 64,
+            };
+            cache.insert(key, texture);
         }
 
         assert_eq!(cache.len(), 2);
@@ -399,11 +461,19 @@ mod tests {
             width: 64,
             height: 64,
             seed: 0,
+            compress: false,
+            compression_format: None,
+            compression_quality: None,
         };
         let key = TextureCacheKey::new(&graph, params);
 
         cache.get(&key);
-        cache.insert(key.clone(), vec![0; 64 * 64 * 4], 64, 64);
+        let texture = GeneratedTexture::Uncompressed {
+            data: vec![0; 64 * 64 * 4],
+            width: 64,
+            height: 64,
+        };
+        cache.insert(key.clone(), texture);
         cache.get(&key);
 
         let stats = cache.statistics();

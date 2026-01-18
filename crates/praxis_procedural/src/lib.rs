@@ -163,6 +163,7 @@
 //! ```
 
 pub mod cache;
+pub mod compression;
 pub mod generator;
 pub mod graph;
 pub mod noise;
@@ -171,7 +172,10 @@ pub mod noise;
 mod integration_tests;
 
 pub use cache::{CacheStatistics, ProceduralTextureCache, TextureCacheKey};
-pub use generator::{ProceduralTextureGenerator, TextureGenerationParams};
+pub use compression::{
+    CompressedTextureData, CompressionFormat, CompressionQuality, TextureCompressor,
+};
+pub use generator::{GeneratedTexture, ProceduralTextureGenerator, TextureGenerationParams};
 pub use graph::{
     BlendMode, ColorRamp, ColorStop, NoiseType, TextureGraph, TextureNode, TextureNodeId,
     TransformParams,
