@@ -23,6 +23,10 @@ Internal documentation serves to:
 - **[profiling-implementation.md](profiling-implementation.md)** - Profiling system including CPU, GPU, memory tracking, and Chrome tracing
 - **[spatial-implementation-summary.md](spatial-implementation-summary.md)** - Spatial partitioning (Octree, BVH) with ECS integration
 
+### Historical Documentation
+- **[archived-audits/](archived-audits/)** - Comprehensive audit reports from January 2026 covering all 19 crates
+- **[implementation-history/](implementation-history/)** - Historical implementation notes from feature development
+
 ## Internal vs User-Facing Documentation
 
 | Internal docs (`docs/internals/`) | User-facing docs (`docs/guides/`, etc.) |

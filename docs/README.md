@@ -112,11 +112,13 @@ Editor tools and workflows:
 - [Inspector](editor/inspector.md) - Component property editing
 - [Undo/Redo](editor/undo-redo.md) - Command history system
 
-### [Audit](audit/)
-Technical audits and analysis for each crate - useful for understanding implementation details and improvement opportunities.
-
 ### [Internals](internals/)
-Implementation documentation for engine developers and contributors.
+Implementation documentation for engine developers and contributors, including:
+- Current implementation details for complex subsystems
+- Historical documentation and archived audits
+- Development notes and design decisions
+
+**Note:** Comprehensive audit reports from January 2026 have been moved to [internals/archived-audits/](internals/archived-audits/) to preserve them as historical reference while acknowledging that line numbers and temporal assessments may become outdated.
 
 ## Examples
 
