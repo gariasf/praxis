@@ -31,6 +31,8 @@ Task-oriented tutorials for implementing features:
   - [Screen-Space Reflections (SSR)](guides/rendering/ssr.md) - Real-time reflections via ray marching
 - [Spatial Optimization](guides/spatial-optimization.md) - Frustum culling, LOD, and occlusion culling
 
+For comprehensive particle rendering documentation, see [crates/praxis_graphics/PARTICLES.md](../crates/praxis_graphics/PARTICLES.md).
+
 **Animation**
 - [Animation Overview](guides/animation.md) - Quick start guide
 - [Animation Guides](guides/animation/) - Comprehensive animation documentation:
@@ -57,8 +59,6 @@ Task-oriented tutorials for implementing features:
 - [Networking](guides/systems/networking.md) - Multiplayer client-server architecture
 - [Serialization](guides/serialization.md) - Save/load system with versioning
 - [Console](guides/console.md) - In-game console with Lua REPL and ECS introspection
-
-For comprehensive particle rendering documentation, see [crates/praxis_graphics/PARTICLES.md](../crates/praxis_graphics/PARTICLES.md).
 
 ### [Concepts](concepts/README.md)
 Educational explanations of engine design:

@@ -2457,7 +2457,7 @@ Complete Animation Workflow
    Character moves smoothly!
 ```
 
-For comprehensive details on the animation system, including blending algorithms and implementation details, see [Animation System Documentation](animation_system.md).
+For comprehensive details on the animation system, including blending algorithms and implementation details, see the [Animation Guides](guides/animation/).
 
 ---
 
@@ -3587,7 +3587,7 @@ shadow_manager.update(light_dir, camera_view, camera_proj)?;
 // Shadows are automatically used in rendering!
 ```
 
-For more details, see [Shadow System Documentation](shadow_system.md).
+For more details, see [Shadows Guide](guides/rendering/shadows.md).
 
 ---
 
@@ -4080,7 +4080,7 @@ pool.release(input);
 pool.release(output);
 ```
 
-For detailed information, see [Post-Processing System Documentation](post_processing_system.md).
+For detailed information, see [Post-Processing Guide](guides/rendering/post-processing.md).
 
 ---
 
@@ -5268,7 +5268,7 @@ For complete console examples, see `examples/console_demo.rs` and `examples/scri
 
 ---
 
-**Note**: For comprehensive particle system documentation including advanced features (collision detection, GPU sorting, soft particles), see [crates/praxis_graphics/PARTICLES.md](../crates/praxis_graphics/PARTICLES.md). For practical examples, see [guides/particles.md](guides/particles.md).
+**Note**: For comprehensive particle system documentation including advanced features (collision detection, GPU sorting, soft particles), see [crates/praxis_graphics/PARTICLES.md](../crates/praxis_graphics/PARTICLES.md). For practical examples, see [Particles Guide](guides/rendering/particles.md).
 
 ---
 

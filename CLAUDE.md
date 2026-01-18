@@ -48,7 +48,6 @@ cargo run --example environment_probe_demo
 cargo run --example particles_demo
 cargo run --example profiling_demo
 cargo run --example profiling_advanced_demo
-cargo run --example spatial_optimization_demo
 cargo run --example selection_demo
 cargo run --example command_system_demo
 cargo run --example undo_redo_system_demo
@@ -120,7 +119,7 @@ fn damage_system(mut query: Query<&mut Health>) {
 - HDR: `ToneMapper` with ACES/Reinhard
 - Shadows: Cascaded shadow maps
 
-**Details**: `docs/guides/rendering.md`, `docs/guides/hdr-and-tonemapping.md`
+**Details**: `docs/guides/rendering.md`, `docs/guides/rendering/hdr-tonemapping.md`
 
 ### Physics
 - `RigidBody`: Dynamic, Static, Kinematic

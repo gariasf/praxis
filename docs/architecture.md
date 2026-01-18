@@ -24,18 +24,25 @@ praxis/
 │   ├── praxis_graphics/
 │   ├── praxis_ecs/
 │   ├── praxis_scene/
+│   ├── praxis_spatial/
 │   ├── praxis_assets/
 │   ├── praxis_math/
 │   ├── praxis_gui/
 │   ├── praxis_audio/
 │   ├── praxis_physics/
+│   ├── praxis_procedural/
+│   ├── praxis_terrain/
 │   ├── praxis_scripting/
+│   ├── praxis_networking/
+│   ├── praxis_profiling/
+│   ├── praxis_editor/
 │   └── praxis_utils/
 ├── examples/           # Example applications using the engine
 ├── tests/              # Integration tests
 ├── benches/            # Benchmarks (using criterion)
 ├── assets/             # Shared assets for examples/tests
 ├── docs/               # Documentation
+├── dev-notes/          # Development notes and tracking
 └── .gitignore
 └── README.md
 ```
@@ -83,6 +90,11 @@ praxis/
   - Transform propagation for both regular and animated entities.
   - Integrates with `praxis_ecs`.
   - Depends on: `praxis_ecs`, `praxis_core`, `praxis_math`.
+- **`praxis_spatial`:**
+  - Spatial data structures for optimization.
+  - Octree and BVH (Bounding Volume Hierarchy) implementations.
+  - Frustum culling and spatial queries.
+  - Depends on: `praxis_core`, `praxis_math`, `praxis_ecs`.
 - **`praxis_assets`:**
   - Asset loading, management, and caching.
   - Supports various formats:
@@ -101,6 +113,24 @@ praxis/
   - Volume, pitch, and playback controls.
   - Multiple audio format support (OGG, MP3, WAV, FLAC).
   - Depends on: `praxis_core`, `praxis_math`, `praxis_ecs`.
+- **`praxis_physics`:**
+  - Physics simulation with Rapier3D.
+  - Rigid body dynamics (Dynamic, Static, Kinematic).
+  - Colliders (boxes, spheres, capsules, meshes).
+  - Fixed timestep integration (60 Hz default).
+  - Bidirectional transform sync with ECS.
+  - Depends on: `praxis_core`, `praxis_math`, `praxis_ecs`.
+- **`praxis_procedural`:**
+  - Procedural texture generation.
+  - Node-based texture graphs with noise functions (Perlin, Simplex, Worley).
+  - GPU-based generation with runtime GLSL-to-SPIR-V compilation.
+  - Automatic LRU caching for performance.
+  - Depends on: `praxis_core`, `praxis_graphics`, `praxis_math`.
+- **`praxis_terrain`:**
+  - Terrain generation and rendering.
+  - Height-map based terrain.
+  - Level-of-detail (LOD) system for large terrains.
+  - Depends on: `praxis_core`, `praxis_graphics`, `praxis_math`, `praxis_ecs`.
 - **`praxis_gui`:**
   - Debugging and editor tools GUI.
   - Dependency: `egui`.
@@ -108,10 +138,35 @@ praxis/
 - **`praxis_scripting`:**
   - Manages Lua VMs and provides bindings for scripting game logic.
   - Handles loading/execution of Lua scripts (via `praxis_assets`).
-  - Dependency: `mlua`.
+  - Dependency: `mlua` (Lua 5.4).
+  - Hot-reload support for rapid development.
+  - Sandboxing with configurable security levels.
   - Integrates with `praxis_ecs` for script components and entity manipulation.
   - Exposes other engine functionalities (input, scene, math, etc.) to Lua.
   - Depends on: `praxis_core`, `praxis_ecs`, `praxis_assets`, `praxis_input`, `praxis_scene`, `praxis_math`.
+- **`praxis_networking`:**
+  - Client-server networking architecture.
+  - TCP/UDP transport with connection management.
+  - Entity replication and component synchronization.
+  - Interpolation/extrapolation for smooth remote entity movement.
+  - Lag compensation for fair hit detection.
+  - Network profiling and monitoring.
+  - Depends on: `praxis_core`, `praxis_ecs`, `praxis_math`.
+- **`praxis_profiling`:**
+  - Performance profiling and monitoring.
+  - Frame time tracking and statistics.
+  - System-level profiling for ECS systems.
+  - Memory usage tracking.
+  - Depends on: `praxis_core`, `praxis_ecs`.
+- **`praxis_editor`:**
+  - Editor tools and workflows.
+  - Selection system with raycast picking.
+  - Undo/redo command history.
+  - Transform gizmos for manipulation.
+  - Asset browser with drag-and-drop.
+  - Hierarchy panel with entity tree.
+  - Inspector for component editing.
+  - Depends on: `praxis_core`, `praxis_gui`, `praxis_ecs`, `praxis_graphics`.
 - **`praxis_utils`:**
   - Common utilities shared across crates.
   - Logging: `tracing` framework with subscribers like `tracing-subscriber`.
