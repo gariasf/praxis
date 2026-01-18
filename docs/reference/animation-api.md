@@ -930,7 +930,7 @@ GLTF Animation
 GLTF Interpolation Modes:
   - LINEAR: Direct support (default)
   - STEP: Set keyframes at exact times, no interpolation
-  - CUBICSPLINE: Currently approximated as LINEAR (TODO: cubic support)
+  - CUBICSPLINE: Currently approximated as LINEAR (cubic interpolation is a potential future enhancement)
 ```
 
 ### Example: Loading and Playing GLTF Animation

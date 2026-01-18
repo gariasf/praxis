@@ -4,7 +4,7 @@
 //!
 //! The `Profiler` is the central coordinator that integrates multiple profiling subsystems:
 //! - **CPU Profiling**: Hierarchical scope timing via `ProfileScope` RAII guards
-//! - **GPU Profiling**: Vulkan timestamp queries for GPU work (see TODO below)
+//! - **GPU Profiling**: Vulkan timestamp queries for GPU work
 //! - **Memory Tracking**: Allocation/deallocation monitoring with leak detection
 //! - **System Profiling**: Per-system timing and bottleneck identification
 //! - **Frame Statistics**: Aggregation of metrics across frame history

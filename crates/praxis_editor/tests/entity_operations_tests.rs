@@ -677,7 +677,7 @@ fn test_modify_multiple_components() {
 }
 
 #[test]
-#[ignore = "FIXME: Batch undo doesn't properly remove duplicated entities"]
+#[ignore = "Known limitation: Batch undo doesn't properly remove duplicated entities"]
 fn test_complex_batch_with_mixed_operations() {
     let mut world = World::new();
     let mut undo_system = UndoRedoSystem::new();

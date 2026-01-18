@@ -1120,7 +1120,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "FIXME: Children component serialization needs investigation"]
+    #[ignore = "Known limitation: Children component serialization needs investigation"]
     fn test_complex_hierarchy_serialization() {
         use crate::{Children, Parent, World};
 

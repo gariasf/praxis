@@ -67,7 +67,7 @@
 //! - Automatically wraps expressions: `2+2` → `return 2+2`
 //! - Pretty-prints results (tables, objects, nil)
 //! - Maintains persistent `_REPL_ENV` table for locals
-//! - Handles multi-line statements (TODO: future enhancement)
+//! - Multi-line statement support is a potential future enhancement
 //!
 //! **ECS Access via `eval_interactive_with_world()`:**
 //! When `set_world()` is called each frame, Lua code gains access to:

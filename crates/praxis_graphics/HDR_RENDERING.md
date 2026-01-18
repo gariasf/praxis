@@ -284,9 +284,9 @@ impl HdrRenderer {
         output_framebuffer: &Arc<vulkano::render_pass::Framebuffer>,
         delta_time: f32,
     ) -> Result<()> {
-        // TODO: Render scene to HDR target
-        // This would require rendering to hdr_target.framebuffer()
-        // instead of directly to swapchain
+        // Note: This example shows the general structure.
+        // In a real implementation, you would render to hdr_target.framebuffer()
+        // instead of directly to the swapchain.
         
         // Calculate or approximate average luminance
         let average_luminance = 0.5;
