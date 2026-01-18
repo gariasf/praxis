@@ -998,7 +998,7 @@ use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage},
     command_buffer::{
         allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage,
-        RenderPassBeginInfo, SubpassBeginInfo, SubpassEndInfo,
+        DrawIndexedIndirectCommand, RenderPassBeginInfo, SubpassBeginInfo, SubpassEndInfo,
     },
     device::{physical::PhysicalDevice, Device, Queue},
     image::{view::ImageView, Image, ImageUsage},
@@ -1701,7 +1701,7 @@ pub struct RenderContext {
 
     /// Indirect draw buffer for multi-draw indirect rendering.
     /// Pre-allocated to avoid reallocation each frame.
-    indirect_draw_buffer: Option<vulkano::buffer::Subbuffer<[IndirectDrawCommand]>>,
+    indirect_draw_buffer: Option<vulkano::buffer::Subbuffer<[DrawIndexedIndirectCommand]>>,
 
     /// Maximum number of draw commands the indirect buffer can hold.
     max_indirect_draws: usize,
@@ -2695,7 +2695,7 @@ impl RenderContext {
             );
         }
 
-        let buffer = Buffer::new_slice::<IndirectDrawCommand>(
+        let buffer = Buffer::new_slice::<DrawIndexedIndirectCommand>(
             self.memory_allocator.clone(),
             BufferCreateInfo {
                 usage: BufferUsage::INDIRECT_BUFFER | BufferUsage::TRANSFER_DST,
@@ -2908,6 +2908,10 @@ impl RenderContext {
 
         self.dynamic_uniform_buffer.write_models(&model_matrices)?;
 
+        // Ensure indirect draw buffer has sufficient capacity
+        // This must happen before texture lookups to avoid borrow conflicts
+        self.ensure_indirect_draw_buffer_capacity(indexed_commands.len())?;
+
         let default_texture = self
             .texture_manager
             .get_texture("_default_white")
@@ -2942,9 +2946,6 @@ impl RenderContext {
                 break;
             }
         }
-
-        // Ensure indirect draw buffer has sufficient capacity
-        self.ensure_indirect_draw_buffer_capacity(indexed_commands.len())?;
 
         // Pre-allocate draw list with capacity to avoid reallocations
         let mut draw_list: Vec<(
@@ -3028,7 +3029,7 @@ impl RenderContext {
             // Create indirect draw command for this mesh
             // Note: first_instance is used by the shader to access per-instance data,
             // but in our case we use dynamic uniform buffer offsets instead
-            indirect_commands.push(IndirectDrawCommand {
+            indirect_commands.push(DrawIndexedIndirectCommand {
                 index_count: mesh.index_count,
                 instance_count: 1,
                 first_index: 0,
@@ -3216,13 +3217,11 @@ impl RenderContext {
                     
                     let mesh_changed = if i > batch_start {
                         let (_, _, prev_mesh, _) = &draw_list[i - 1];
-                        !std::ptr::eq(
-                            mesh.vertex_buffer.as_ref(),
-                            prev_mesh.vertex_buffer.as_ref(),
-                        ) || !std::ptr::eq(
-                            mesh.index_buffer.as_ref(),
-                            prev_mesh.index_buffer.as_ref(),
-                        )
+                        !Arc::ptr_eq(mesh.vertex_buffer.buffer(), prev_mesh.vertex_buffer.buffer())
+                            || !Arc::ptr_eq(
+                                mesh.index_buffer.buffer(),
+                                prev_mesh.index_buffer.buffer(),
+                            )
                     } else {
                         false
                     };
@@ -3271,13 +3270,11 @@ impl RenderContext {
                     // Bind vertex and index buffers if mesh changed
                     if i == 0 || {
                         let (_, _, prev_mesh, _) = &draw_list[i - 1];
-                        !std::ptr::eq(
-                            mesh.vertex_buffer.as_ref(),
-                            prev_mesh.vertex_buffer.as_ref(),
-                        ) || !std::ptr::eq(
-                            mesh.index_buffer.as_ref(),
-                            prev_mesh.index_buffer.as_ref(),
-                        )
+                        !Arc::ptr_eq(mesh.vertex_buffer.buffer(), prev_mesh.vertex_buffer.buffer())
+                            || !Arc::ptr_eq(
+                                mesh.index_buffer.buffer(),
+                                prev_mesh.index_buffer.buffer(),
+                            )
                     } {
                         command_buffer_builder
                             .bind_vertex_buffers(0, mesh.vertex_buffer.clone())
