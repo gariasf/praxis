@@ -1,0 +1,47 @@
+#version 450
+
+// Hi-Z pyramid generation compute shader
+// Generates hierarchical depth buffer mipmaps for occlusion culling
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// Input: depth texture from previous mip level (or original depth buffer for mip 0)
+layout(set = 0, binding = 0) uniform sampler2D u_input_depth;
+
+// Output: depth texture for current mip level
+layout(set = 0, binding = 1, r32f) uniform writeonly image2D u_output_depth;
+
+// Push constants for mip level parameters
+layout(push_constant) uniform PushConstants {
+    uvec2 input_size;   // Size of input mip level
+    uvec2 output_size;  // Size of output mip level (input_size / 2)
+    uint mip_level;     // Current mip level being generated
+} push;
+
+void main() {
+    // Calculate output pixel coordinates
+    uvec2 output_coord = gl_GlobalInvocationID.xy;
+    
+    // Early out if beyond output dimensions
+    if (output_coord.x >= push.output_size.x || output_coord.y >= push.output_size.y) {
+        return;
+    }
+    
+    // Calculate corresponding 2x2 region in input texture
+    vec2 texel_size = 1.0 / vec2(push.input_size);
+    vec2 base_uv = (vec2(output_coord) * 2.0 + 0.5) * texel_size;
+    
+    // Sample 2x2 block from input mip level
+    // We take the MAXIMUM depth value (farthest from camera) for conservative culling
+    // This ensures we don't accidentally cull objects that might be visible
+    float d0 = texture(u_input_depth, base_uv + vec2(0.0, 0.0) * texel_size).r;
+    float d1 = texture(u_input_depth, base_uv + vec2(1.0, 0.0) * texel_size).r;
+    float d2 = texture(u_input_depth, base_uv + vec2(0.0, 1.0) * texel_size).r;
+    float d3 = texture(u_input_depth, base_uv + vec2(1.0, 1.0) * texel_size).r;
+    
+    // Take maximum depth (conservative approach)
+    float max_depth = max(max(d0, d1), max(d2, d3));
+    
+    // Write to output mip level
+    imageStore(u_output_depth, ivec2(output_coord), vec4(max_depth, 0.0, 0.0, 0.0));
+}

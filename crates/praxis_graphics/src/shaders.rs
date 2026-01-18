@@ -330,6 +330,14 @@ pub mod lod_selection_comp {
     }
 }
 
+/// Compiled compute shader for Hi-Z pyramid generation.
+pub mod hiz_generate_comp {
+    vulkano_shaders::shader! {
+        ty: "compute",
+        path: "src/shaders/hiz_generate.comp"
+    }
+}
+
 /// Compiled vertex shader for SSR ray marching pass.
 pub mod ssr_vs {
     vulkano_shaders::shader! {
@@ -393,4 +401,11 @@ pub fn load_lod_selection_comp(
     device: Arc<Device>,
 ) -> Result<Arc<vulkano::shader::ShaderModule>, vulkano::Validated<vulkano::VulkanError>> {
     lod_selection_comp::load(device)
+}
+
+/// Loads the Hi-Z pyramid generation compute shader.
+pub fn load_hiz_generate_comp(
+    device: Arc<Device>,
+) -> Result<Arc<vulkano::shader::ShaderModule>, vulkano::Validated<vulkano::VulkanError>> {
+    hiz_generate_comp::load(device)
 }

@@ -86,6 +86,88 @@ bool is_sphere_in_frustum(vec3 center, float radius) {
     return true;
 }
 
+// Hi-Z depth pyramid sampler for occlusion culling
+layout(set = 0, binding = 6) uniform sampler2D hiz_pyramid;
+
+// Occlusion culling: Test bounding sphere against Hi-Z depth pyramid
+// Returns true if the object is visible (not occluded)
+bool is_visible_hiz(vec3 world_center, float world_radius) {
+    // Project bounding sphere center to clip space
+    vec4 clip_center = culling.view_proj * vec4(world_center, 1.0);
+    
+    // Early rejection if behind camera
+    if (clip_center.w <= 0.0) {
+        return false;
+    }
+    
+    // Convert to NDC
+    vec3 ndc = clip_center.xyz / clip_center.w;
+    
+    // Early rejection if outside NDC bounds [-1, 1]
+    if (abs(ndc.x) > 1.0 || abs(ndc.y) > 1.0 || abs(ndc.z) > 1.0) {
+        return false;
+    }
+    
+    // Convert NDC to screen space UV [0, 1]
+    vec2 screen_uv = ndc.xy * 0.5 + 0.5;
+    
+    // Project bounding sphere radius to screen space
+    // We test the point on the sphere closest to the camera
+    vec3 closest_point = world_center - normalize(culling.camera_position - world_center) * world_radius;
+    vec4 clip_closest = culling.view_proj * vec4(closest_point, 1.0);
+    
+    // Calculate screen-space bounding box of the sphere
+    // For simplicity, we project the sphere radius in view space
+    float view_space_z = clip_center.w;
+    float screen_radius = world_radius / view_space_z;
+    
+    // Calculate screen-space AABB in UV coordinates
+    vec2 aabb_min = screen_uv - vec2(screen_radius);
+    vec2 aabb_max = screen_uv + vec2(screen_radius);
+    
+    // Clamp to [0, 1] range
+    aabb_min = clamp(aabb_min, vec2(0.0), vec2(1.0));
+    aabb_max = clamp(aabb_max, vec2(0.0), vec2(1.0));
+    
+    // Calculate the screen-space size of the bounding box
+    vec2 aabb_size = aabb_max - aabb_min;
+    
+    // Get Hi-Z pyramid dimensions
+    vec2 hiz_size = vec2(textureSize(hiz_pyramid, 0));
+    
+    // Calculate optimal mip level based on screen-space size
+    // We want to sample a mip level where the bounding box covers roughly 2x2 pixels
+    vec2 pixel_size = aabb_size * hiz_size;
+    float max_dimension = max(pixel_size.x, pixel_size.y);
+    float mip_level = max(0.0, log2(max_dimension) - 1.0);
+    
+    // Clamp mip level to available range
+    float max_mip = float(textureQueryLevels(hiz_pyramid) - 1);
+    mip_level = clamp(mip_level, 0.0, max_mip);
+    
+    // Sample Hi-Z pyramid at the calculated mip level
+    // Sample at the four corners and center of the bounding box for robustness
+    float hiz_depth0 = textureLod(hiz_pyramid, aabb_min, mip_level).r;
+    float hiz_depth1 = textureLod(hiz_pyramid, aabb_max, mip_level).r;
+    float hiz_depth2 = textureLod(hiz_pyramid, vec2(aabb_min.x, aabb_max.y), mip_level).r;
+    float hiz_depth3 = textureLod(hiz_pyramid, vec2(aabb_max.x, aabb_min.y), mip_level).r;
+    float hiz_depth_center = textureLod(hiz_pyramid, screen_uv, mip_level).r;
+    
+    // Take the maximum depth (farthest from camera) for conservative testing
+    float max_hiz_depth = max(max(max(hiz_depth0, hiz_depth1), max(hiz_depth2, hiz_depth3)), hiz_depth_center);
+    
+    // Object depth in NDC space (closest point of sphere to camera)
+    float object_depth = clip_closest.z / clip_closest.w;
+    
+    // Convert NDC depth to [0, 1] range (same as Hi-Z pyramid)
+    object_depth = object_depth * 0.5 + 0.5;
+    
+    // Object is visible if its closest point is in front of the Hi-Z depth
+    // Add a small bias to avoid precision issues
+    const float DEPTH_BIAS = 0.001;
+    return object_depth <= (max_hiz_depth + DEPTH_BIAS);
+}
+
 
 
 void main() {
@@ -112,9 +194,16 @@ void main() {
     
     bool is_visible = true;
     
-    // Frustum culling
+    // Frustum culling (first pass)
     if (culling.enable_frustum_culling != 0) {
         if (!is_sphere_in_frustum(world_center.xyz, world_radius)) {
+            is_visible = false;
+        }
+    }
+    
+    // Occlusion culling (second pass - only test if passed frustum culling)
+    if (is_visible && culling.enable_occlusion_culling != 0) {
+        if (!is_visible_hiz(world_center.xyz, world_radius)) {
             is_visible = false;
         }
     }
