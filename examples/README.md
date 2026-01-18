@@ -36,11 +36,11 @@ Interactive examples with graphical output and user controls.
 | `save_load_demo` | Save/load system with metadata, validation, and multiple save slots (console output) |
 | `multi_mesh_demo` | Multiple meshes with transforms |
 | `material_demo` | Material system demonstration with PBR properties and post-processing |
+| `material_instancing_demo` | Efficient per-object material property overrides without full material duplication |
 | `environment_probe_demo` | Environment map reflections |
 | `particles_demo` | GPU-accelerated particle rendering |
 | `terrain_demo` | Heightmap terrain with LOD, texture splatting, and vegetation |
 | `advanced_lighting_demo` | Advanced lighting techniques and effects |
-| `procedural_texture_demo` | **GPU compute shaders** - Real-time procedural texture generation with node-based graphs |
 
 #### Animation Demos
 
@@ -68,7 +68,7 @@ Interactive examples with graphical output and user controls.
 | `selection_demo` | Entity selection, raycast picking |
 | `gui_demo` | Basic egui integration |
 | `console_demo` | Console panel with log filtering and search |
-| `menu_bar_demo` | Menu bar placeholder (design spec) |
+| `menu_bar_demo` | Menu bar with file, edit, entity, view, and help menus |
 | `scripting_console_demo` | Lua scripting with interactive console window |
 
 #### Input Demos
@@ -92,6 +92,8 @@ Interactive examples with graphical output and user controls.
 | `profiling_demo` | CPU/GPU profiling, memory tracking, Chrome trace export |
 | `profiling_advanced_demo` | Advanced profiling with visualization data generation |
 | `gpu_culling_demo` | **GPU compute culling** - Frustum culling with indirect draw buffers (1000+ objects) |
+| `lod_gpu_demo` | **GPU LOD selection** - Distance-based LOD switching using compute shaders |
+| `mesh_streaming_demo` | Background mesh loading with frustum-based priority queue |
 
 #### Networking Demos
 
@@ -125,11 +127,10 @@ Console output demonstrations for data structures, patterns, and systems without
 |---------|-------------|
 | `scripting_demo` | Lua scripting with hot-reload and sandboxing (console output) |
 | `scripting_advanced_demo` | Scripting with ECS systems and performance profiling (console output) |
-| `scripting_console_demo` | **Interactive Lua REPL** - Full ECS introspection, entity queries, live modifications |
 
 ## Featured Examples
 
-### Hello Triangle ⭐ NEW
+### Hello Triangle ⭐
 
 The absolute minimal example for learning Praxis - just ~280 lines of code:
 - Window creation and Vulkan setup
@@ -145,7 +146,7 @@ cargo run --example hello_triangle
 
 **Controls:** ESC (exit)
 
-### Complete Features Demo ★ NEW
+### Complete Features Demo ★
 
 **The ultimate showcase** demonstrating ALL major engine capabilities:
 - Terrain rendering with LOD and texture splatting
@@ -156,10 +157,10 @@ cargo run --example hello_triangle
 - GPU culling and physics integration
 
 ```bash
-cargo run --example complete_features_demo
+cargo run --example complete_features_demo --features "terrain,networking,scripting"
 # Or with networking:
-cargo run --example complete_features_demo -- --server  # Server mode
-cargo run --example complete_features_demo -- --client  # Client mode
+cargo run --example complete_features_demo --features "terrain,networking,scripting" -- --server  # Server mode
+cargo run --example complete_features_demo --features "terrain,networking,scripting" -- --client  # Client mode
 ```
 
 **Controls:** WASD (move), Mouse (look), Space/Shift (up/down), 1-4 (toggle TAA/SSR/SSAO/Shadows), T (terrain stats), N (network stats), L (reload scripts), ESC (exit)
@@ -194,7 +195,7 @@ Full editor interface:
 - Undo/redo
 
 ```bash
-cargo run --example editor_demo
+cargo run --example editor_demo --features editor
 ```
 
 ### Animation Demo
@@ -231,26 +232,45 @@ cargo run --example gpu_culling_demo
 - Performance optimization
 - Large-scale scene rendering
 
-### Procedural Texture Demo
+### LOD GPU Demo
 
-Real-time GPU procedural texture generation:
-- Node-based texture graphs
-- Multiple noise types (Perlin, Simplex, Worley)
-- Complex materials (marble, wood, clouds)
-- LRU caching with statistics
-- 5-10ms generation for 512x512 textures
+GPU-driven LOD selection demonstration:
+- Distance-based LOD switching
+- Compute shader-based LOD calculation
+- Multiple LOD levels per object
+- Debug visualization
 
 ```bash
-cargo run --example procedural_texture_demo
+cargo run --example lod_gpu_demo
 ```
 
-**Controls:** WASD (move), Mouse (look), Space/Ctrl (up/down), R (regenerate with new seed), C (clear cache stats), ESC (exit)
+**Controls:** WASD/QE (move), Arrow keys (rotate), +/- (adjust LOD bias), L (toggle LOD), ESC (exit)
 
 **What you'll learn:**
-- GPU compute shader workflows
-- Procedural generation techniques
-- Texture composition patterns
-- Performance monitoring
+- GPU-driven LOD systems
+- Distance-based detail management
+- Compute shader integration
+- LOD bias and tuning
+
+### Material Instancing Demo
+
+Efficient material system demonstration:
+- Base material with shared textures
+- Per-object property overrides
+- Memory-efficient material variants
+- Performance comparison
+
+```bash
+cargo run --example material_instancing_demo
+```
+
+**Controls:** WASD (move), Mouse (look), Space/Shift (up/down), ESC (exit)
+
+**What you'll learn:**
+- Material instancing patterns
+- Memory optimization techniques
+- Per-object material overrides
+- Performance benefits of instancing
 
 ### Scripting Console Demo
 
@@ -262,7 +282,7 @@ Interactive Lua REPL with full ECS access:
 - Command history and autocomplete
 
 ```bash
-cargo run --example scripting_console_demo
+cargo run --example scripting_console_demo --features scripting
 ```
 
 **Controls:** ~ or F1 (toggle console), Up/Down (history), Tab (autocomplete), Enter (execute)
@@ -318,7 +338,7 @@ Large-scale terrain rendering:
 - GPU-instanced vegetation
 
 ```bash
-cargo run --example terrain_demo
+cargo run --example terrain_demo --features terrain
 ```
 
 ## Documentation

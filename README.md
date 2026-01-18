@@ -21,12 +21,14 @@ Praxis is an educational yet capable game engine that prioritizes:
 - Skybox and environment rendering with IBL support
 - Environment probes for physically-based reflections
 - GPU-accelerated particle system with emission, forces, and collision
+- GPU-driven frustum culling and LOD selection
 
 ### Animation
 - Skeletal animation with keyframe interpolation
 - Animation blending (cross-fade, 1D/2D blend trees, layers)
 - Bone masking for partial-body animation
 - GLTF animation loading
+- IK, retargeting, additive blending, root motion
 
 ### Physics
 - Rapier3D integration with fixed timestep (60 Hz)
@@ -37,7 +39,7 @@ Praxis is an educational yet capable game engine that prioritizes:
 ### Spatial Optimization
 - Octree-based spatial partitioning
 - Frustum culling for efficient rendering
-- LOD (Level of Detail) system
+- LOD (Level of Detail) system with GPU-driven selection
 - Broad-phase optimization for physics and rendering
 
 ### Audio
@@ -50,6 +52,30 @@ Praxis is an educational yet capable game engine that prioritizes:
 - OBJ model support
 - PNG/JPEG textures
 
+### Scripting
+- Lua 5.4 integration with ECS access
+- Hot-reload support
+- Configurable sandboxing
+- Performance monitoring
+
+### Networking
+- Client-server architecture
+- Entity replication with interpolation/extrapolation
+- Lag compensation
+- Network profiling
+
+### Editor Tools
+- Selection and raycast picking
+- Undo/redo system
+- Transform gizmos
+- Orbit camera controller
+
+### Performance
+- CPU/GPU profiling
+- Memory tracking
+- Chrome trace export
+- Mesh streaming
+
 ## Quick Start
 
 ```bash
@@ -59,10 +85,10 @@ cd praxis
 cargo build
 
 # Run examples
+cargo run --example hello_triangle
 cargo run --example comprehensive_scene_demo
-cargo run --example fps_camera_controller
-cargo run --example audio_demo
-cargo run --example skeletal_animation_demo
+cargo run --example animation_demo
+cargo run --example editor_demo --features editor
 ```
 
 ## Requirements
@@ -101,34 +127,70 @@ praxis/
 
 ## Examples
 
+See [examples/README.md](examples/README.md) for a complete catalog with detailed descriptions.
+
+### Core Examples
+
 | Example | Description |
 |---------|-------------|
-| `comprehensive_scene_demo` | Scene loading with lighting and textures |
-| `fps_camera_controller` | First-person camera movement |
-| `audio_demo` | Spatial audio with doppler effect |
-| `skeletal_animation_demo` | Bone-based character animation |
-| `animation_blending_demo` | Blend trees and cross-fades |
-| `multi_mesh_demo` | Multiple meshes with PBR materials |
-| `input_integration` | Keyboard and mouse input handling |
-| `environment_probe_demo` | IBL reflections with environment probes |
-| `editor_demo` | Full editor interface with undo/redo |
-| `particles_demo` | GPU-accelerated particle system |
-| `spatial_optimization_demo` | Octree and frustum culling with LOD |
-| `scripting_demo` | Lua scripting integration |
-| `networking_demo` | Multiplayer and entity replication |
+| `hello_triangle` | **START HERE** - Minimal rendering example (~200 lines) |
+| `comprehensive_scene_demo` | Complete asset pipeline with OBJ loading and textures |
+| `complete_features_demo` | **Full showcase** - All engine systems working together |
 
-### Planned Examples
-The following examples are planned for future implementation:
-- `deferred_demo` - Deferred rendering with many lights
-- `hdr_demo` - HDR with tone mapping and exposure
-- `shadow_demo` - Cascaded shadow maps demonstration
-- `skybox_demo` - Cubemap skybox rendering
-- `physics_demo` - Rigid body physics with collisions
-- `obj_loader_demo` - OBJ mesh file loading
+### Rendering Examples
+
+| Example | Description |
+|---------|-------------|
+| `material_demo` | PBR materials with post-processing |
+| `material_instancing_demo` | Efficient per-object material property overrides |
+| `environment_probe_demo` | IBL reflections with environment probes |
+| `particles_demo` | GPU-accelerated particle system |
+| `advanced_lighting_demo` | Advanced lighting techniques |
+| `gpu_culling_demo` | GPU-driven frustum culling (1000+ objects) |
+| `lod_gpu_demo` | GPU-driven LOD selection with compute shaders |
+| `terrain_demo` | Heightmap terrain with LOD and texture splatting |
+
+### Animation Examples
+
+| Example | Description |
+|---------|-------------|
+| `animation_demo` | Interactive animation with blend transitions |
+| `skeletal_animation_demo` | Bone hierarchies and keyframe animation |
+| `animation_blending_demo` | Cross-fading, blend trees, layers |
+| `animation_advanced_demo` | IK, retargeting, additive blending, root motion |
+| `gltf_animation_loader_demo` | Loading animations from GLTF files |
+
+### Editor Examples
+
+| Example | Description |
+|---------|-------------|
+| `editor_demo` | Full editor with panels and tools |
+| `editor_camera_demo` | Orbit camera controller |
+| `selection_demo` | Entity selection and raycast picking |
+| `console_demo` | Console panel with log filtering |
+| `menu_bar_demo` | Menu bar with file, edit, entity, view, help menus |
+
+### System Examples
+
+| Example | Description |
+|---------|-------------|
+| `audio_demo` | Spatial audio with doppler effect |
+| `scripting_console_demo` | Interactive Lua REPL with ECS access |
+| `networking_demo` | Client-server with entity replication |
+| `spatial_optimization_demo` | Frustum culling, octree, BVH, LOD |
+| `profiling_demo` | CPU/GPU profiling and trace export |
+| `save_load_demo` | Game state persistence with metadata |
 
 Run any example with:
 ```bash
 cargo run --example <name>
+
+# Some examples require feature flags:
+cargo run --example editor_demo --features editor
+cargo run --example terrain_demo --features terrain
+cargo run --example scripting_console_demo --features scripting
+cargo run --example networking_demo --features networking
+cargo run --example complete_features_demo --features "terrain,networking,scripting"
 ```
 
 ## Development
