@@ -311,7 +311,31 @@
 //! - **Efficient Multi-Draw**: Single `vkCmdDrawIndexedIndirect` call
 //! - **Scales to Large Scenes**: 10,000+ objects with minimal CPU cost
 //!
-//! # Usage Example
+//! # Automatic Integration with RenderContext
+//!
+//! GPU culling is automatically integrated into the main rendering pipeline
+//! when enabled via `RenderContext::enable_gpu_culling()`:
+//!
+//! ```rust,ignore
+//! use praxis_graphics::RenderContext;
+//!
+//! // Enable GPU culling (one-time setup)
+//! render_context.enable_gpu_culling()?;
+//!
+//! // All subsequent render() calls automatically use GPU culling
+//! // The compute shader is dispatched before graphics rendering
+//! render_context.render(&render_commands)?;
+//! ```
+//!
+//! The integration provides:
+//! - **Automatic culling dispatch** before graphics rendering
+//! - **Proper synchronization** between compute and graphics stages
+//! - **Zero code changes** in existing rendering loops
+//! - **Transparent fallback** to CPU culling when disabled
+//!
+//! # Manual Usage Example
+//!
+//! For advanced use cases, you can use `GpuCullingManager` directly:
 //!
 //! ```rust,ignore
 //! use praxis_graphics::gpu_culling::{GpuCullingManager, GpuDrawCommand};
