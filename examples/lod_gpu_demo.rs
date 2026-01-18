@@ -117,16 +117,20 @@ impl LodGpuDemo {
                 self.objects.push(GpuObjectData::new(
                     model,
                     [0.0, 0.0, 0.0, 1.0], // Bounding sphere (center at origin, radius 1)
-                    0,                     // Base mesh ID
-                    3,                     // 3 LOD levels
-                    lod_offset,            // Offset in LOD array
+                    0,                    // Base mesh ID
+                    3,                    // 3 LOD levels
+                    lod_offset,           // Offset in LOD array
                 ));
 
                 lod_offset += 3; // Each object has 3 LOD levels
             }
         }
 
-        println!("Created {} objects with {} LOD levels", self.objects.len(), self.lod_levels.len());
+        println!(
+            "Created {} objects with {} LOD levels",
+            self.objects.len(),
+            self.lod_levels.len()
+        );
     }
 
     fn update(&mut self, delta_time: f32) {
@@ -173,18 +177,18 @@ impl LodGpuDemo {
                     },
                 ..
             } => {
-                let forward = Vec3::new(
-                    self.camera_yaw.sin(),
-                    0.0,
-                    -self.camera_yaw.cos(),
-                )
-                .normalize();
+                let forward =
+                    Vec3::new(self.camera_yaw.sin(), 0.0, -self.camera_yaw.cos()).normalize();
                 let right = Vec3::new(forward.z, 0.0, -forward.x);
 
                 match keycode {
                     // Camera movement
-                    KeyCode::KeyW => self.camera_position += forward * self.camera_speed * delta_time,
-                    KeyCode::KeyS => self.camera_position -= forward * self.camera_speed * delta_time,
+                    KeyCode::KeyW => {
+                        self.camera_position += forward * self.camera_speed * delta_time
+                    }
+                    KeyCode::KeyS => {
+                        self.camera_position -= forward * self.camera_speed * delta_time
+                    }
                     KeyCode::KeyA => self.camera_position -= right * self.camera_speed * delta_time,
                     KeyCode::KeyD => self.camera_position += right * self.camera_speed * delta_time,
                     KeyCode::KeyQ => self.camera_position.y -= self.camera_speed * delta_time,
@@ -213,7 +217,14 @@ impl LodGpuDemo {
                     }
                     KeyCode::KeyL => {
                         self.enable_lod = !self.enable_lod;
-                        println!("LOD system: {}", if self.enable_lod { "ENABLED" } else { "DISABLED" });
+                        println!(
+                            "LOD system: {}",
+                            if self.enable_lod {
+                                "ENABLED"
+                            } else {
+                                "DISABLED"
+                            }
+                        );
                     }
 
                     _ => {}
@@ -252,16 +263,14 @@ async fn main() -> Result<()> {
     if let Some(render_context) = engine.render_context_mut() {
         let device = render_context.device.clone();
         let memory_allocator = render_context.memory_allocator.clone();
-        let descriptor_set_allocator = Arc::new(vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator::new(
-            device.clone(),
-            Default::default(),
-        ));
+        let descriptor_set_allocator = Arc::new(
+            vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator::new(
+                device.clone(),
+                Default::default(),
+            ),
+        );
 
-        let selector = GpuLodSelector::new(
-            device,
-            memory_allocator,
-            descriptor_set_allocator,
-        )?;
+        let selector = GpuLodSelector::new(device, memory_allocator, descriptor_set_allocator)?;
 
         demo.lod_selector = Some(selector);
         println!("GPU LOD selector initialized successfully");

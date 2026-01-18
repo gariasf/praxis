@@ -2796,7 +2796,7 @@ impl RenderContext {
         // - Traditional: 100 draw_indexed calls
         // - Multi-draw indirect: ~10-20 draw_indexed_indirect calls (5-10x reduction)
         // - GPU culling: Eliminates CPU-side visibility tests, scales to 10,000+ objects
-        
+
         let _ = self.frame_timer.tick();
 
         let mut previous_frame_end = self
@@ -3043,9 +3043,9 @@ impl RenderContext {
         // Upload indirect draw commands to GPU buffer
         if !indirect_commands.is_empty() {
             if let Some(ref indirect_buffer) = self.indirect_draw_buffer {
-                let mut write = indirect_buffer.write().map_err(|e| {
-                    eyre::eyre!("Failed to write to indirect draw buffer: {}", e)
-                })?;
+                let mut write = indirect_buffer
+                    .write()
+                    .map_err(|e| eyre::eyre!("Failed to write to indirect draw buffer: {}", e))?;
                 write[..indirect_commands.len()].copy_from_slice(&indirect_commands);
             }
         }
@@ -3094,29 +3094,35 @@ impl RenderContext {
         .map_err(|e| eyre::eyre!("Failed to create command buffer: {}", e))?;
 
         // GPU culling: Dispatch compute shader to cull objects before graphics rendering
-        if self.use_gpu_culling && self.gpu_culling_manager.is_some() && !indexed_commands.is_empty() {
-            trace!("Dispatching GPU culling for {} objects", indexed_commands.len());
-            
+        if self.use_gpu_culling
+            && self.gpu_culling_manager.is_some()
+            && !indexed_commands.is_empty()
+        {
+            trace!(
+                "Dispatching GPU culling for {} objects",
+                indexed_commands.len()
+            );
+
             // Prepare GPU draw commands with bounding spheres
             let mut gpu_draw_commands = Vec::with_capacity(indexed_commands.len());
             let mut gpu_mesh_data = Vec::with_capacity(indexed_commands.len());
-            
+
             for (_original_index, draw_cmd) in &indexed_commands {
                 // Get mesh to extract mesh metadata
                 if let Some(mesh) = self.mesh_manager.get_mesh(&draw_cmd.mesh_id) {
                     // For now, use a simple bounding sphere (can be improved with actual mesh bounds)
                     // Center at origin with radius 1.0 (should be computed from mesh vertices in production)
                     let bounding_sphere = praxis_math::Vec4::new(0.0, 0.0, 0.0, 1.0);
-                    
+
                     let gpu_cmd = gpu_culling::GpuDrawCommand::new(
                         draw_cmd.model,
                         bounding_sphere,
                         0, // mesh_id (index into mesh_data array)
                         0, // material_id (not used for now)
                     );
-                    
+
                     gpu_draw_commands.push(gpu_cmd);
-                    
+
                     // Store mesh metadata for indirect draw generation
                     let mesh_data = gpu_culling::GpuMeshData {
                         index_count: mesh.index_count,
@@ -3124,18 +3130,18 @@ impl RenderContext {
                         vertex_offset: 0,
                         _padding: 0,
                     };
-                    
+
                     gpu_mesh_data.push(mesh_data);
                 }
             }
-            
+
             // Prepare GPU culling buffers
             if let Some(ref mut culling_manager) = self.gpu_culling_manager {
                 culling_manager.prepare_frame(&gpu_draw_commands, &gpu_mesh_data)?;
-                
+
                 // Extract frustum planes from view-projection matrix
                 let frustum_planes = gpu_culling::extract_frustum_planes(view_proj);
-                
+
                 // Dispatch GPU culling compute shader
                 culling_manager.dispatch_culling(
                     &mut command_buffer_builder,
@@ -3143,7 +3149,7 @@ impl RenderContext {
                     frustum_planes,
                     camera_position,
                 )?;
-                
+
                 trace!("GPU culling dispatched, compute shader will run before graphics rendering");
             }
         }
@@ -3203,10 +3209,10 @@ impl RenderContext {
         // we batch draws that share the same mesh and material/texture
         if !draw_list.is_empty() && self.indirect_draw_buffer.is_some() {
             let indirect_buffer = self.indirect_draw_buffer.as_ref().unwrap();
-            
+
             // Process draws in batches
             let mut batch_start = 0;
-            
+
             for i in 0..=draw_list.len() {
                 let should_flush = if i == draw_list.len() {
                     // Flush remaining batch at the end
@@ -3214,7 +3220,7 @@ impl RenderContext {
                 } else {
                     // Check if we need to flush the batch due to state changes
                     let (transform_set, material_set, mesh, _) = &draw_list[i];
-                    
+
                     let mesh_changed = if i > batch_start {
                         let (_, _, prev_mesh, _) = &draw_list[i - 1];
                         !Arc::ptr_eq(mesh.vertex_buffer.buffer(), prev_mesh.vertex_buffer.buffer())
@@ -3225,48 +3231,48 @@ impl RenderContext {
                     } else {
                         false
                     };
-                    
+
                     let transform_changed = last_transform_set
                         .as_ref()
                         .is_none_or(|last| !Arc::ptr_eq(last, transform_set));
-                    
+
                     let material_changed = last_material_set
                         .as_ref()
                         .is_none_or(|last| !Arc::ptr_eq(last, material_set));
-                    
+
                     mesh_changed || transform_changed || material_changed
                 };
-                
+
                 if should_flush && batch_start < i {
                     // Flush the accumulated batch
                     let batch_size = i - batch_start;
-                    
+
                     trace!(
                         "Multi-draw indirect batch: {} objects (indices {}-{})",
                         batch_size,
                         batch_start,
                         i - 1
                     );
-                    
+
                     // SAFETY: The indirect buffer slice is valid and contains draw commands
                     // for the current batch
                     unsafe {
                         command_buffer_builder
                             .draw_indexed_indirect(
-                                indirect_buffer.clone().slice(
-                                    (batch_start as u64)..(i as u64),
-                                ),
+                                indirect_buffer
+                                    .clone()
+                                    .slice((batch_start as u64)..(i as u64)),
                             )
                             .map_err(|e| eyre::eyre!("Failed to draw indexed indirect: {}", e))?;
                     }
-                    
+
                     batch_start = i;
                 }
-                
+
                 // Set up state for the next draw/batch
                 if i < draw_list.len() {
                     let (transform_set, material_set, mesh, object_index) = &draw_list[i];
-                    
+
                     // Bind vertex and index buffers if mesh changed
                     if i == 0 || {
                         let (_, _, prev_mesh, _) = &draw_list[i - 1];
@@ -3282,17 +3288,17 @@ impl RenderContext {
                             .bind_index_buffer(mesh.index_buffer.clone())
                             .map_err(|e| eyre::eyre!("Failed to bind index buffer: {}", e))?;
                     }
-                    
+
                     // Bind transform descriptor set with dynamic offset
                     let dynamic_offset = self
                         .dynamic_uniform_buffer
                         .get_dynamic_offset(*object_index);
-                    
+
                     let set_with_offsets = vulkano::descriptor_set::DescriptorSetWithOffsets::new(
                         transform_set.clone(),
                         [dynamic_offset],
                     );
-                    
+
                     // SAFETY: Dynamic offset is valid and within buffer bounds
                     unsafe {
                         command_buffer_builder.bind_descriptor_sets_unchecked(
@@ -3302,14 +3308,14 @@ impl RenderContext {
                             set_with_offsets,
                         );
                     }
-                    
+
                     last_transform_set = Some(transform_set.clone());
-                    
+
                     // Bind material descriptor set if changed
                     let material_changed = last_material_set
                         .as_ref()
                         .is_none_or(|last| !Arc::ptr_eq(last, material_set));
-                    
+
                     if material_changed {
                         command_buffer_builder
                             .bind_descriptor_sets(
@@ -3321,7 +3327,7 @@ impl RenderContext {
                             .map_err(|e| {
                                 eyre::eyre!("Failed to bind material descriptor set: {}", e)
                             })?;
-                        
+
                         last_material_set = Some(material_set.clone());
                     }
                 }

@@ -315,7 +315,8 @@ pub struct DeferredRenderParams<'a> {
     /// Lighting uniforms buffer
     pub lighting_buffer: vulkano::buffer::Subbuffer<lighting::LightingUniforms>,
     /// Previous frame view-projection uniform buffer (for velocity buffer)
-    pub previous_view_proj_buffer: vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
+    pub previous_view_proj_buffer:
+        vulkano::buffer::Subbuffer<uniform_buffer::ViewProjectionUniforms>,
     /// Previous frame dynamic uniform buffer (for velocity buffer)
     pub previous_dynamic_uniform_buffer: &'a crate::uniform_buffer::DynamicUniformBuffer,
 }
@@ -1083,7 +1084,9 @@ impl DeferredRenderer {
                     WriteDescriptorSet::buffer(2, params.previous_view_proj_buffer.clone()),
                     WriteDescriptorSet::buffer_with_range(
                         3,
-                        params.previous_dynamic_uniform_buffer.descriptor_buffer_info(),
+                        params
+                            .previous_dynamic_uniform_buffer
+                            .descriptor_buffer_info(),
                     ),
                     WriteDescriptorSet::image_view_sampler(
                         4,
@@ -1112,7 +1115,7 @@ impl DeferredRenderer {
             let current_dynamic_offset = params
                 .dynamic_uniform_buffer
                 .get_dynamic_offset(object_index);
-            
+
             let previous_dynamic_offset = params
                 .previous_dynamic_uniform_buffer
                 .get_dynamic_offset(object_index);
@@ -1667,7 +1670,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "FIXME: Velocity buffer calculation issues"]
     fn test_velocity_buffer_camera_motion() {
         // Test velocity calculation for camera motion (all objects move in screen space)
         use praxis_math::{Mat4, Vec3, Vec4};
@@ -1675,14 +1677,14 @@ mod tests {
         // Simple vertex position
         let vertex_pos = Vec3::new(1.0, 0.0, -5.0);
 
-        // Current frame matrices
-        let view_current =
+        // Previous frame matrices (camera was at origin)
+        let view_previous =
             Mat4::look_at_rh(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0), Vec3::Y);
         let proj = Mat4::perspective_rh(std::f32::consts::PI / 4.0, 16.0 / 9.0, 0.1, 100.0);
         let model = Mat4::IDENTITY;
 
-        // Previous frame matrices (camera moved)
-        let view_previous =
+        // Current frame matrices (camera moved right)
+        let view_current =
             Mat4::look_at_rh(Vec3::new(0.5, 0.0, 0.0), Vec3::new(0.5, 0.0, -1.0), Vec3::Y);
 
         // Calculate current position
@@ -1693,11 +1695,16 @@ mod tests {
         let current_ndc_x = current_pos.x / current_pos.w;
         let previous_ndc_x = previous_pos.x / previous_pos.w;
 
-        // Calculate velocity
+        // Calculate velocity (matches shader: current - previous)
         let velocity_x = current_ndc_x - previous_ndc_x;
 
-        // Camera moved right, so object should appear to move left in screen space
-        assert!(velocity_x < 0.0);
+        // Camera moved right (+X), so object should appear to move left in screen space (negative velocity)
+        // When camera moves right, objects shift left in screen space relative to the camera
+        assert!(
+            velocity_x < 0.0,
+            "Expected negative velocity for camera moving right, got {}",
+            velocity_x
+        );
     }
 
     #[test]

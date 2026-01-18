@@ -1051,8 +1051,7 @@ impl Default for LockedAxes {
 
 // Implement Component trait for LockedAxes
 impl Component for LockedAxes {
-    const STORAGE_TYPE: bevy_ecs::component::StorageType =
-        bevy_ecs::component::StorageType::Table;
+    const STORAGE_TYPE: bevy_ecs::component::StorageType = bevy_ecs::component::StorageType::Table;
 }
 
 /// Collision event types for collision detection.
