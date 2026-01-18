@@ -1,53 +1,21 @@
 # Mesh Streaming System
 
-The mesh streaming system provides async mesh loading with background thread processing, priority-based queuing, and frustum-based on-demand loading.
+Asynchronous mesh loading with background thread processing, priority-based queuing, and frustum-based streaming.
 
 ## Overview
 
-Large game worlds often contain thousands of meshes. Loading all meshes upfront causes long load times and high memory usage. The mesh streaming system solves this by:
+Large game worlds contain thousands of meshes. Loading all upfront causes long load times and high memory usage. The mesh streaming system provides:
 
-- **Background Loading**: Meshes load on a dedicated thread without blocking the render thread
+- **Background Loading**: Dedicated thread without blocking render
 - **Priority Queue**: High-priority meshes (close, visible) load first
-- **Frustum Culling**: Only meshes entering the view frustum are loaded
-- **Async GPU Upload**: Uses `GpuMesh::new_async()` for non-blocking GPU transfers
-- **Bounding Spheres**: Fast visibility tests using per-mesh bounding spheres
+- **Frustum Culling**: Only load meshes entering view frustum
+- **Async GPU Upload**: Non-blocking GPU transfers
+- **Bounding Spheres**: Fast visibility tests
 
-## Architecture
-
-### Components
-
-1. **`MeshStreamingSystem`**: Main coordinator
-   - Manages background thread
-   - Tracks mesh loading state
-   - Handles priority queue
-   - Processes completed uploads
-
-2. **`StreamingGpuMesh`**: Mesh container
-   - Holds GPU mesh when loaded
-   - Tracks loading state
-   - Stores bounding sphere
-   - Maintains priority
-
-3. **`MeshStreamingState`**: Loading states
-   - `Unloaded`: Not loaded yet
-   - `Queued`: Waiting in priority queue
-   - `Loading`: Currently loading
-   - `Loaded`: Ready to render
-   - `Failed`: Load error occurred
-
-4. **Background Thread**: Loader worker
-   - Processes priority queue
-   - Calls `GpuMesh::new_async()`
-   - Sends results back to main thread
-
-## Usage
-
-### Basic Setup
+## Quick Start
 
 ```rust
-use praxis_graphics::{MeshStreamingSystem, MeshData};
-use praxis_math::Vec3;
-use praxis_spatial::Frustum;
+use praxis_graphics::MeshStreamingSystem;
 
 // Create streaming system
 let mut streaming = MeshStreamingSystem::new(
@@ -60,57 +28,74 @@ let mut streaming = MeshStreamingSystem::new(
 for (id, mesh_data) in meshes {
     streaming.register_mesh(id, mesh_data)?;
 }
-```
 
-### Frame Update Loop
-
-```rust
-// 1. Update streaming system (process completed loads)
+// Per-frame update
 streaming.update();
-
-// 2. Update priorities based on camera
-let frustum = Frustum::from_view_projection(view_proj);
 streaming.update_priorities(&frustum, camera_position);
-
-// 3. Trigger loading for visible meshes
 streaming.load_visible_meshes(&|id| mesh_database.get(id).cloned());
 
-// 4. Render only loaded meshes
+// Render loaded meshes
 if streaming.is_mesh_loaded("cube") {
     let mesh = streaming.get_mesh("cube").unwrap();
     // Render mesh...
 }
 ```
 
-### Pre-loading Important Meshes
+## Architecture
 
-```rust
-// Pre-load meshes that should always be ready
-let (gpu_mesh, future) = mesh_data.upload_async(
-    allocator.clone(),
-    cmd_allocator.clone(),
-    queue.clone(),
-)?;
+### Components
 
-// Register as already loaded
-streaming.register_loaded_mesh(
-    "important_mesh",
-    gpu_mesh,
-    bounding_center,
-    bounding_radius,
-);
+**`MeshStreamingSystem`**
+- Main coordinator
+- Manages background thread
+- Tracks mesh loading state
+- Handles priority queue
+
+**`StreamingGpuMesh`**
+- Holds GPU mesh when loaded
+- Tracks loading state
+- Stores bounding sphere
+- Maintains priority
+
+**`MeshStreamingState`**
+- `Unloaded`: Not loaded yet
+- `Queued`: Waiting in priority queue
+- `Loading`: Currently loading
+- `Loaded`: Ready to render
+- `Failed`: Load error occurred
+
+**Background Thread**
+- Processes priority queue
+- Calls `GpuMesh::new_async()`
+- Sends results to main thread
+
+### Data Flow
+
+```
+Main Thread                    Background Thread
+    |                                |
+    |-- register_mesh() ------------>|
+    |                                |
+    |-- load_visible_meshes() ------>|
+    |                                |-- GpuMesh::new_async()
+    |                                |
+    |<-- send result ---------------|
+    |                                |
+    |-- update() (receive)           |
+    |                                |
+    |-- render loaded meshes         |
 ```
 
 ## Priority System
 
-Meshes are assigned priority based on:
+Meshes are prioritized based on:
 
 1. **Visibility**: In frustum vs out of frustum
 2. **Distance**: Closer meshes get higher priority
 3. **Zone Priority**: Near (100), medium (50), far (10)
 
 ```rust
-// Priority calculation (automatic in update_priorities)
+// Priority calculation (automatic)
 let distance = (world_pos - camera_pos).length();
 let visibility_priority = if distance < radius * 2.0 {
     100.0  // Very close
@@ -120,7 +105,70 @@ let visibility_priority = if distance < radius * 2.0 {
     10.0   // Far
 };
 let distance_priority = 1000.0 / (distance + 1.0);
-priority = visibility_priority + distance_priority;
+let priority = visibility_priority + distance_priority;
+```
+
+## Usage Patterns
+
+### Basic Setup
+
+```rust
+// Create streaming system
+let mut streaming = MeshStreamingSystem::new(
+    allocator.clone(),
+    cmd_allocator.clone(),
+    queue.clone(),
+);
+
+// Register meshes
+streaming.register_mesh("cube", cube_mesh_data)?;
+streaming.register_mesh("sphere", sphere_mesh_data)?;
+```
+
+### Frame Update Loop
+
+```rust
+// 1. Update streaming (process completed loads)
+streaming.update();
+
+// 2. Update priorities based on camera
+let frustum = Frustum::from_view_projection(view_proj);
+streaming.update_priorities(&frustum, camera_position);
+
+// 3. Trigger loading for visible meshes
+streaming.load_visible_meshes(&|id| {
+    mesh_database.get(id).cloned()
+});
+
+// 4. Render only loaded meshes
+for entity in entities {
+    if streaming.is_mesh_loaded(&entity.mesh_id) {
+        let mesh = streaming.get_mesh(&entity.mesh_id).unwrap();
+        // Render mesh...
+    }
+}
+```
+
+### Pre-loading Important Meshes
+
+```rust
+// Pre-load critical meshes during initialization
+let (gpu_mesh, future) = mesh_data.upload_async(
+    allocator.clone(),
+    cmd_allocator.clone(),
+    queue.clone(),
+)?;
+
+// Wait for upload
+future.wait()?;
+
+// Register as already loaded
+streaming.register_loaded_mesh(
+    "player",
+    gpu_mesh,
+    Vec3::ZERO,  // bounding center
+    1.0,         // bounding radius
+);
 ```
 
 ## Bounding Spheres
@@ -140,7 +188,25 @@ streaming.register_loaded_mesh(
 );
 ```
 
-## Performance Considerations
+**Bounding sphere calculation:**
+```rust
+fn calculate_bounding_sphere(vertices: &[Vertex]) -> (Vec3, f32) {
+    // Find center
+    let center = vertices.iter()
+        .map(|v| v.position)
+        .sum::<Vec3>() / vertices.len() as f32;
+    
+    // Find max radius
+    let radius = vertices.iter()
+        .map(|v| (v.position - center).length())
+        .max_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap_or(0.0);
+    
+    (center, radius)
+}
+```
+
+## Performance
 
 ### Background Thread
 
@@ -151,7 +217,7 @@ streaming.register_loaded_mesh(
 
 ### Memory Management
 
-- Streaming meshes hold bounding data only (small)
+- Streaming meshes hold bounding data only (~32 bytes)
 - GPU meshes created only when loaded
 - Failed loads don't retry automatically
 - Clear system to free memory: `streaming.clear()`
@@ -162,7 +228,7 @@ Uses `GpuMesh::new_async()` for:
 - Non-blocking transfer to GPU
 - Staging buffer optimization
 - Fence synchronization
-- Returns immediately with future
+- Immediate return with future
 
 ### Frustum Culling
 
@@ -170,7 +236,7 @@ Fast sphere-frustum tests:
 - 6 plane checks per mesh
 - Early-out on first failure
 - Simple dot product math
-- Runs on main thread (cheap)
+- Runs on main thread (very cheap)
 
 ## Best Practices
 
@@ -189,7 +255,7 @@ for (id, mesh_meta) in mesh_database {
 // In game loop
 streaming.update();  // Process completed loads
 streaming.update_priorities(&frustum, camera_pos);
-streaming.load_visible_meshes(&provider);
+streaming.load_visible_meshes(&mesh_provider);
 ```
 
 ### 3. Handle Loading State
@@ -205,7 +271,7 @@ match streaming.get_mesh("cube") {
 }
 ```
 
-### 4. Provide Mesh Data Provider
+### 4. Provide Efficient Data Provider
 
 ```rust
 // Efficient closure that retrieves mesh data on-demand
@@ -220,87 +286,14 @@ streaming.load_visible_meshes(&|id| {
 ```rust
 let loaded = streaming.loaded_count();
 let total = streaming.total_count();
-println!("Loaded: {}/{} meshes", loaded, total);
+println!("Loaded: {}/{} meshes ({:.1}%)", 
+         loaded, total, 
+         100.0 * loaded as f32 / total as f32);
 ```
 
-## Example: Open World Game
+## Integration Examples
 
-```rust
-struct World {
-    streaming: MeshStreamingSystem,
-    mesh_database: HashMap<String, MeshData>,
-    camera: Camera,
-}
-
-impl World {
-    fn update(&mut self) {
-        // Update streaming
-        self.streaming.update();
-        
-        // Update priorities based on camera
-        let frustum = self.camera.frustum();
-        let pos = self.camera.position();
-        self.streaming.update_priorities(&frustum, pos);
-        
-        // Load visible meshes
-        let db = &self.mesh_database;
-        self.streaming.load_visible_meshes(&|id| db.get(id).cloned());
-    }
-    
-    fn render(&self) {
-        for entity in &self.entities {
-            if self.streaming.is_mesh_loaded(&entity.mesh_id) {
-                let mesh = self.streaming.get_mesh(&entity.mesh_id).unwrap();
-                // Render entity with mesh...
-            }
-        }
-    }
-}
-```
-
-## Limitations
-
-1. **Single Background Thread**: One thread for all loading
-   - Future: Could add thread pool
-   
-2. **No LOD Support**: Loads full-quality mesh
-   - Future: Could integrate with LOD system
-   
-3. **No Unloading**: Meshes stay loaded once loaded
-   - Future: Could add LRU eviction
-   
-4. **No Progress Tracking**: Binary loaded/not loaded
-   - Future: Could add progress percentage
-   
-5. **Fixed World Position**: Uses `Vec3::ZERO` for visibility
-   - Current: Need to track entity positions
-   - Future: Pass world positions to `update_priorities`
-
-## Thread Safety
-
-- `MeshStreamingSystem`: Not `Send` (contains GPU resources)
-- Background thread: Communicates via channels
-- Mesh state: Protected by `RwLock`
-- GPU resources: Created on main thread after transfer
-
-## Error Handling
-
-Failed loads are tracked:
-```rust
-// Check if load failed
-let meshes = streaming.meshes.read();
-if let Some(mesh) = meshes.get("failed_mesh") {
-    if mesh.state == MeshStreamingState::Failed {
-        // Handle error
-    }
-}
-```
-
-No automatic retry - application must handle failures.
-
-## Integration with Existing Systems
-
-### Asset Manager
+### With Asset Manager
 
 ```rust
 // Load mesh files, create MeshData
@@ -310,7 +303,7 @@ let mesh_data = asset_manager.load_mesh("models/house.obj")?;
 streaming.register_mesh("house", mesh_data)?;
 ```
 
-### Scene Graph
+### With Scene Graph
 
 ```rust
 // Entities reference mesh IDs
@@ -322,12 +315,13 @@ struct Entity {
 // Render only if mesh is loaded
 for entity in scene.entities() {
     if streaming.is_mesh_loaded(&entity.mesh_id) {
-        // Render entity
+        let mesh = streaming.get_mesh(&entity.mesh_id)?;
+        render_entity(entity, mesh);
     }
 }
 ```
 
-### Level Streaming
+### With Level Streaming
 
 ```rust
 // When loading a new level area
@@ -336,22 +330,56 @@ for mesh in level.meshes {
 }
 
 // When unloading an area
-streaming.clear();  // Or selectively remove meshes
+for mesh_id in old_level.mesh_ids {
+    streaming.unregister_mesh(&mesh_id);
+}
 ```
+
+## Error Handling
+
+Failed loads are tracked:
+
+```rust
+// Check if load failed
+let meshes = streaming.meshes.read();
+if let Some(mesh) = meshes.get("failed_mesh") {
+    if mesh.state == MeshStreamingState::Failed {
+        eprintln!("Failed to load mesh: {}", "failed_mesh");
+        // Handle error (show placeholder, retry, etc.)
+    }
+}
+```
+
+No automatic retry - application must handle failures explicitly.
+
+## Limitations
+
+1. **Single Background Thread**: One thread for all loading (could use thread pool)
+2. **No LOD Support**: Loads full-quality mesh (could integrate with LOD system)
+3. **No Unloading**: Meshes stay loaded once loaded (could add LRU eviction)
+4. **No Progress Tracking**: Binary loaded/not loaded (could add progress percentage)
+5. **Fixed World Position**: Uses `Vec3::ZERO` for visibility (needs entity position tracking)
+
+## Thread Safety
+
+- `MeshStreamingSystem`: Not `Send` (contains GPU resources)
+- Background thread: Communicates via channels
+- Mesh state: Protected by `RwLock`
+- GPU resources: Created on main thread after transfer
 
 ## Future Enhancements
 
-1. **LOD Integration**: Load lower LODs first, upgrade to higher LODs
-2. **Unloading**: Remove distant meshes to free memory
-3. **Thread Pool**: Multiple loader threads for faster loading
-4. **Progress Tracking**: Report loading progress per mesh
-5. **Prefetching**: Predict camera movement, pre-load ahead
-6. **Compression**: Decompress mesh data on background thread
-7. **Caching**: Save GPU meshes to disk for faster startup
+- **LOD Integration**: Load lower LODs first, upgrade to higher LODs
+- **Unloading**: Remove distant meshes to free memory (LRU cache)
+- **Thread Pool**: Multiple loader threads for faster loading
+- **Progress Tracking**: Report loading progress per mesh
+- **Prefetching**: Predict camera movement, pre-load ahead
+- **Compression**: Decompress mesh data on background thread
+- **Persistent Cache**: Save GPU meshes to disk for faster startup
 
 ## See Also
 
 - `mesh.rs` - Core mesh types
 - `GpuMesh::new_async()` - Async GPU upload
 - `praxis_spatial::Frustum` - Frustum culling
-- `examples/mesh_streaming_demo.rs` - Complete example
+- Example: `examples/mesh_streaming_demo.rs`

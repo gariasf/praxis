@@ -1,35 +1,74 @@
 # Post-Processing Framework
 
-The Praxis post-processing framework provides a flexible, efficient system for applying screen-space effects to rendered scenes.
+Flexible, efficient system for applying screen-space effects to rendered scenes.
 
 ## Overview
 
-The post-processing system consists of several key components:
+The post-processing framework provides:
 
-- **`PostProcessPass`**: Trait defining a single post-processing effect
-- **`RenderTarget`**: Offscreen framebuffer for render-to-texture operations
-- **`RenderTargetPool`**: Manages reusable render targets to reduce allocations
-- **`FullScreenQuad`**: Renders a full-screen textured quad for applying effects
-- **`PostProcessChain`**: Chains multiple post-processing passes together
+- **`PostProcessPass`**: Trait for implementing effects
+- **`RenderTarget`**: Offscreen framebuffers for render-to-texture
+- **`RenderTargetPool`**: Manages reusable render targets
+- **`FullScreenQuad`**: Geometry for full-screen effects
+- **`PostProcessChain`**: Chains multiple passes together
+
+## Quick Start
+
+```rust
+use praxis_graphics::{
+    PostProcessChain, RenderTargetPool, GrayscalePass,
+};
+
+// Initialize render target pool
+let mut pool = RenderTargetPool::new(
+    memory_allocator.clone(),
+    render_pass.clone(),
+    Format::R8G8B8A8_UNORM,
+);
+
+// Create post-processing chain
+let mut chain = PostProcessChain::new(
+    command_buffer_allocator.clone(),
+    graphics_queue.clone(),
+);
+
+// Add passes
+let grayscale = GrayscalePass::new(
+    device.clone(),
+    memory_allocator.clone(),
+    Format::R8G8B8A8_UNORM,
+)?;
+chain.add_pass(Box::new(grayscale));
+
+// Render loop
+let scene_texture = pool.acquire([width, height])?;
+render_scene_to_texture(&scene_texture);
+
+let output_texture = pool.acquire([width, height])?;
+chain.process(&scene_texture, &output_texture, &mut pool)?;
+
+blit_to_screen(&output_texture);
+
+pool.release(scene_texture);
+pool.release(output_texture);
+```
 
 ## Architecture
 
 ### Render-to-Texture Flow
 
-```text
+```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Main      │────▶│    Pass 1   │────▶│    Pass 2   │────▶ Swapchain
+│   Main      │────▶│    Pass 1   │────▶│    Pass 2   │────▶ Screen
 │   Render    │     │  (Texture)  │     │  (Texture)  │
 └─────────────┘     └─────────────┘     └─────────────┘
-   Render to          Apply effect        Apply effect
-   texture A          A → B               B → screen
 ```
 
-### Component Details
+## Components
 
-#### PostProcessPass
+### PostProcessPass
 
-A trait that all post-processing effects must implement:
+Trait for implementing effects:
 
 ```rust
 pub trait PostProcessPass: Send + Sync {
@@ -44,15 +83,9 @@ pub trait PostProcessPass: Send + Sync {
 }
 ```
 
-Each pass reads from an input texture, applies an effect, and writes to an output texture.
+### RenderTarget
 
-#### RenderTarget
-
-Represents an offscreen render target consisting of:
-- Color attachment image
-- Image view for accessing the texture
-- Framebuffer for rendering
-- Sampler for reading in shaders
+Offscreen render target:
 
 ```rust
 let target = RenderTarget::new(
@@ -63,9 +96,15 @@ let target = RenderTarget::new(
 )?;
 ```
 
-#### RenderTargetPool
+**Components:**
+- Color attachment image
+- Image view for sampling
+- Framebuffer for rendering
+- Sampler for shader access
 
-Manages render target lifecycle to avoid repeated allocations:
+### RenderTargetPool
+
+Manages render target lifecycle:
 
 ```rust
 let mut pool = RenderTargetPool::new(
@@ -74,36 +113,35 @@ let mut pool = RenderTargetPool::new(
     Format::R8G8B8A8_UNORM,
 );
 
-// Acquire a target
+// Acquire
 let target = pool.acquire([1920, 1080])?;
 
-// Use target...
+// Use...
 
 // Release back to pool
 pool.release(target);
 ```
 
-The pool automatically reuses targets with matching dimensions, creating new ones only when necessary.
+Automatically reuses targets with matching dimensions.
 
-#### FullScreenQuad
+### FullScreenQuad
 
-Provides geometry for rendering full-screen effects:
+Geometry for full-screen rendering:
 
 ```rust
 let quad = FullScreenQuad::new(memory_allocator)?;
 
-// In render pass:
 builder
     .bind_vertex_buffers(0, quad.vertex_buffer().clone())
     .bind_index_buffer(quad.index_buffer().clone())
     .draw_indexed(quad.index_count(), 1, 0, 0, 0)?;
 ```
 
-The quad covers the entire viewport in clip space [-1, 1] with UV coordinates [0, 1].
+Covers viewport in clip space [-1, 1] with UV [0, 1].
 
-#### PostProcessChain
+### PostProcessChain
 
-Manages multiple passes and handles ping-pong buffering:
+Chains multiple passes:
 
 ```rust
 let mut chain = PostProcessChain::new(
@@ -111,19 +149,17 @@ let mut chain = PostProcessChain::new(
     graphics_queue,
 );
 
-// Add passes
 chain.add_pass(Box::new(grayscale_pass));
 chain.add_pass(Box::new(blur_pass));
 
-// Process texture through chain
-chain.process(&input_texture, &output_texture, &mut pool)?;
+chain.process(&input, &output, &mut pool)?;
 ```
 
 ## Built-in Passes
 
 ### CopyPass
 
-Simple passthrough that copies input to output. Useful for testing.
+Simple passthrough for testing:
 
 ```rust
 let pass = CopyPass::new(device, memory_allocator, format)?;
@@ -131,26 +167,24 @@ let pass = CopyPass::new(device, memory_allocator, format)?;
 
 ### GrayscalePass
 
-Converts color to grayscale using standard luminance formula:
-`luminance = 0.299*R + 0.587*G + 0.114*B`
+Color to grayscale conversion:
 
 ```rust
 let pass = GrayscalePass::new(device, memory_allocator, format)?;
 ```
 
+**Formula:** `luminance = 0.299*R + 0.587*G + 0.114*B`
+
 ## Creating Custom Passes
 
 ### Step 1: Write Shaders
 
-Create vertex and fragment shaders for your effect.
-
-**Vertex Shader** (`my_effect.vert`):
+**Vertex (`effect.vert`):**
 ```glsl
 #version 450
 
 layout(location = 0) in vec2 position;
 layout(location = 1) in vec2 uv;
-
 layout(location = 0) out vec2 out_uv;
 
 void main() {
@@ -159,44 +193,22 @@ void main() {
 }
 ```
 
-**Fragment Shader** (`my_effect.frag`):
+**Fragment (`effect.frag`):**
 ```glsl
 #version 450
 
 layout(location = 0) in vec2 in_uv;
-
 layout(set = 0, binding = 0) uniform sampler2D input_texture;
-
 layout(location = 0) out vec4 out_color;
 
 void main() {
     vec4 color = texture(input_texture, in_uv);
-    // Apply your effect here
+    // Apply effect...
     out_color = color;
 }
 ```
 
-### Step 2: Register Shaders
-
-Add to `src/shaders.rs`:
-
-```rust
-pub mod my_effect_vs {
-    vulkano_shaders::shader! {
-        ty: "vertex",
-        path: "src/shaders/my_effect.vert"
-    }
-}
-
-pub mod my_effect_fs {
-    vulkano_shaders::shader! {
-        ty: "fragment",
-        path: "src/shaders/my_effect.frag"
-    }
-}
-```
-
-### Step 3: Implement PostProcessPass
+### Step 2: Implement PostProcessPass
 
 ```rust
 pub struct MyEffectPass {
@@ -212,30 +224,10 @@ impl MyEffectPass {
         memory_allocator: Arc<StandardMemoryAllocator>,
         format: Format,
     ) -> Result<Self> {
-        // Create render pass
-        let render_pass = create_post_process_render_pass(device.clone(), format)?;
-
-        // Load shaders
-        let vs_module = shaders::my_effect_vs::load(device.clone())?;
-        let fs_module = shaders::my_effect_fs::load(device.clone())?;
-
-        // Create pipeline (see CopyPass for full example)
-        // ...
-
-        // Create full-screen quad
-        let quad = FullScreenQuad::new(memory_allocator)?;
-
-        // Create descriptor set allocator
-        let descriptor_set_allocator = Arc::new(
-            StandardDescriptorSetAllocator::new(device, Default::default())
-        );
-
-        Ok(Self {
-            pipeline,
-            quad,
-            descriptor_set_allocator,
-            render_pass,
-        })
+        // Load shaders and create pipeline...
+        // Create full-screen quad...
+        // Create descriptor set allocator...
+        Ok(Self { /* ... */ })
     }
 }
 
@@ -247,10 +239,9 @@ impl PostProcessPass for MyEffectPass {
         output: &RenderTarget,
     ) -> Result<()> {
         // Create descriptor set with input texture
-        let layout = self.pipeline.layout().set_layouts()[0].clone();
         let descriptor_set = DescriptorSet::new(
             self.descriptor_set_allocator.clone(),
-            layout,
+            self.pipeline.layout().set_layouts()[0].clone(),
             [WriteDescriptorSet::image_view_sampler(
                 0,
                 input.image_view().clone(),
@@ -276,7 +267,7 @@ impl PostProcessPass for MyEffectPass {
         };
         builder.set_viewport(0, [viewport].into_iter().collect())?;
 
-        // Bind pipeline and descriptor set
+        // Bind and draw
         builder
             .bind_pipeline_graphics(self.pipeline.clone())?
             .bind_descriptor_sets(
@@ -284,15 +275,11 @@ impl PostProcessPass for MyEffectPass {
                 self.pipeline.layout().clone(),
                 0,
                 descriptor_set,
-            )?;
-
-        // Draw full-screen quad
-        builder
+            )?
             .bind_vertex_buffers(0, self.quad.vertex_buffer().clone())?
             .bind_index_buffer(self.quad.index_buffer().clone())?
             .draw_indexed(self.quad.index_count(), 1, 0, 0, 0)?;
 
-        // End render pass
         builder.end_render_pass(SubpassEndInfo::default())?;
 
         Ok(())
@@ -304,75 +291,25 @@ impl PostProcessPass for MyEffectPass {
 }
 ```
 
-## Usage Example
-
-### Basic Setup
-
-```rust
-use praxis_graphics::{
-    PostProcessChain, RenderTargetPool, GrayscalePass, CopyPass,
-};
-
-// Initialize render target pool
-let mut pool = RenderTargetPool::new(
-    memory_allocator.clone(),
-    render_pass.clone(),
-    Format::R8G8B8A8_UNORM,
-);
-
-// Create post-processing chain
-let mut chain = PostProcessChain::new(
-    command_buffer_allocator.clone(),
-    graphics_queue.clone(),
-);
-
-// Create and add passes
-let grayscale = GrayscalePass::new(
-    device.clone(),
-    memory_allocator.clone(),
-    Format::R8G8B8A8_UNORM,
-)?;
-chain.add_pass(Box::new(grayscale));
-```
-
-### Render Loop
-
-```rust
-// 1. Render scene to texture
-let scene_texture = pool.acquire([width, height])?;
-render_scene_to_texture(&scene_texture);
-
-// 2. Apply post-processing
-let output_texture = pool.acquire([width, height])?;
-chain.process(&scene_texture, &output_texture, &mut pool)?;
-
-// 3. Blit to swapchain
-blit_to_screen(&output_texture);
-
-// 4. Release render targets
-pool.release(scene_texture);
-pool.release(output_texture);
-```
-
-## Performance Considerations
+## Performance
 
 ### Render Target Pooling
 
-Always use `RenderTargetPool` to avoid repeated GPU memory allocations:
+Always use `RenderTargetPool`:
 
 ```rust
-// ❌ Bad: Creates new render target every frame
+// ❌ Bad: Creates new every frame
 let target = RenderTarget::new(...)?;
 
-// ✅ Good: Reuses render targets
+// ✅ Good: Reuses targets
 let target = pool.acquire([width, height])?;
-// ... use target ...
+// ... use ...
 pool.release(target);
 ```
 
 ### Pass Ordering
 
-Order passes from cheapest to most expensive to fail fast if there are issues:
+Order from cheapest to most expensive:
 
 ```rust
 chain.add_pass(Box::new(cheap_pass));
@@ -382,16 +319,15 @@ chain.add_pass(Box::new(expensive_pass));
 
 ### Shader Optimization
 
-- Use efficient algorithms (e.g., separable blur instead of 2D convolution)
+- Use efficient algorithms (separable blur vs 2D)
 - Minimize texture samples
-- Take advantage of GPU features (texture filtering, etc.)
+- Leverage GPU hardware features
 
 ## Common Patterns
 
 ### Conditional Effects
 
 ```rust
-// Enable/disable effects based on settings
 chain.clear_passes();
 if settings.grayscale {
     chain.add_pass(Box::new(grayscale_pass));
@@ -403,10 +339,8 @@ if settings.blur {
 
 ### Multi-Pass Effects
 
-Chain multiple passes for complex effects:
-
 ```rust
-// Bloom effect: blur + combine
+// Bloom: extract bright + blur + combine
 chain.add_pass(Box::new(extract_bright_pass));
 chain.add_pass(Box::new(blur_horizontal_pass));
 chain.add_pass(Box::new(blur_vertical_pass));
@@ -414,8 +348,6 @@ chain.add_pass(Box::new(combine_pass));
 ```
 
 ### Push Constants
-
-Use push constants for effect parameters:
 
 ```glsl
 layout(push_constant) uniform Params {
@@ -432,73 +364,25 @@ builder.push_constants(
 )?;
 ```
 
-## Shader Reference
-
-### Standard Vertex Shader
-
-All post-processing passes can use the standard vertex shader:
-
-```glsl
-#version 450
-
-layout(location = 0) in vec2 position;  // [-1, 1]
-layout(location = 1) in vec2 uv;        // [0, 1]
-
-layout(location = 0) out vec2 out_uv;
-
-void main() {
-    gl_Position = vec4(position, 0.0, 1.0);
-    out_uv = uv;
-}
-```
-
-### Fragment Shader Template
-
-```glsl
-#version 450
-
-layout(location = 0) in vec2 in_uv;
-
-layout(set = 0, binding = 0) uniform sampler2D input_texture;
-
-layout(location = 0) out vec4 out_color;
-
-void main() {
-    vec4 color = texture(input_texture, in_uv);
-    
-    // Apply effect
-    // ...
-    
-    out_color = color;
-}
-```
-
 ## Troubleshooting
 
 ### Black Screen
-
-- Check that render targets have correct format
-- Verify descriptor sets are bound correctly
+- Check render targets have correct format
+- Verify descriptor sets bound correctly
 - Ensure viewport matches render target dimensions
 
 ### Performance Issues
-
 - Use `RenderTargetPool` to avoid allocations
 - Profile with GPU debugging tools
 - Consider lower-resolution intermediate targets
 
 ### Incorrect Colors
-
-- Check texture format matches shader expectations
-- Verify sampler settings (clamp vs. repeat, filtering)
+- Check texture format matches shader
+- Verify sampler settings
 - Check color space conversions
 
-## Future Enhancements
+## See Also
 
-Potential additions to the framework:
-
-- [ ] Depth-aware effects (edge detection, SSAO)
-- [ ] Compute shader support for parallel effects
-- [ ] Temporal effects (motion blur, TAA)
-- [ ] HDR rendering and tone mapping
-- [ ] Effect composition (blending multiple effects)
+- [HDR Rendering](HDR_RENDERING.md)
+- Implementation: `crates/praxis_graphics/src/post_processing.rs`
+- Examples: `examples/post_process_demo.rs`

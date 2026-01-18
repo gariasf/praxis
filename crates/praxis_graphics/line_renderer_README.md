@@ -1,36 +1,26 @@
 # Line Renderer
 
-Efficient line primitive rendering system for debug visualization, editor gizmos, and visual feedback.
+Efficient line primitive rendering for debug visualization, editor gizmos, and visual feedback.
 
 ## Features
 
-- ✅ **Colored line segments** with per-vertex colors
-- ✅ **Depth testing** for proper z-ordering with 3D geometry
-- ✅ **Batched rendering** for performance
-- ✅ **Visual feedback utilities** for common patterns
-- ✅ **Editor integration** ready for gizmos and selection
+- Colored line segments with per-vertex colors
+- Depth testing for proper z-ordering
+- Batched rendering for performance
+- Visual feedback utilities (grids, axes, bounding boxes)
+- Editor integration support
 
 ## Quick Start
 
-### 1. Initialize Line Renderer
-
 ```rust
-use praxis_graphics::RenderContext;
+use praxis_graphics::{RenderContext, LineBatch, Line};
+use praxis_math::Vec3;
 
-// Create render pass with depth buffer
+// Initialize line renderer
 let render_pass = render_context.create_render_pass_with_depth(
     vulkano::format::Format::R8G8B8A8_UNORM
 )?;
-
-// Initialize line renderer
 render_context.initialize_line_renderer(render_pass, [800, 600])?;
-```
-
-### 2. Create and Render Lines
-
-```rust
-use praxis_graphics::{LineBatch, Line};
-use praxis_math::Vec3;
 
 // Create line batch
 let mut batch = LineBatch::new();
@@ -42,10 +32,10 @@ batch.add(
     Vec3::new(1.0, 0.0, 0.0),  // color (red)
 );
 
-// Update camera and render
+// Render
 if let Some(line_renderer) = render_context.line_renderer_mut() {
     line_renderer.update_view_projection(view, proj, camera_pos)?;
-    // Render call happens within command buffer recording
+    // Rendering happens within command buffer recording
 }
 ```
 
@@ -55,7 +45,6 @@ if let Some(line_renderer) = render_context.line_renderer_mut() {
 
 ```rust
 use praxis_graphics::{create_grid, GridConfig};
-use praxis_math::Vec3;
 
 let grid = create_grid(&GridConfig {
     size: 20.0,
@@ -95,35 +84,12 @@ let bbox = create_bounding_box(
 
 ```rust
 use praxis_graphics::create_selection_outline;
-use praxis_math::Mat4;
 
 let outline = create_selection_outline(
     &transform_matrix,
     Vec3::splat(0.6),           // size
     Vec3::new(1.0, 0.5, 0.0),   // orange
 );
-```
-
-## Editor Integration
-
-### Viewport Gizmos
-
-```rust
-use praxis_graphics::{create_gizmo_lines, LineBatch};
-
-impl ViewportPanel {
-    pub fn get_gizmo_lines(&self, world: &World) -> Option<LineBatch> {
-        if !self.show_gizmos {
-            return None;
-        }
-
-        let gizmo_system = world.get_resource::<GizmoSystem>()?;
-        let gizmo = gizmo_system.active_gizmo()?;
-        
-        let lines = gizmo.get_lines(gizmo_system.mode(), gizmo_system.space());
-        Some(create_gizmo_lines(lines))
-    }
-}
 ```
 
 ## Rendering Pipeline
@@ -137,7 +103,7 @@ For correct depth testing:
 3. Render lines (test and write depth)
 4. Render transparent objects (optional)
 
-### With Depth Buffer
+### Depth Buffer Setup
 
 ```rust
 // Create depth buffer
@@ -189,9 +155,16 @@ let mut batch = LineBatch::with_capacity(expected_count);
 for line in lines {
     let mut batch = LineBatch::new();
     batch.add_line(line);
-    renderer.render(&batch)?; // Don't do this!
+    renderer.render(&batch)?;  // Don't do this!
 }
 ```
+
+## Shaders
+
+**`line.vert`**: Vertex shader with view/projection transform
+**`line.frag`**: Fragment shader with per-vertex color interpolation
+
+Both shaders support depth testing for proper 3D integration.
 
 ## Examples
 
@@ -199,29 +172,8 @@ for line in lines {
 - `examples/editor_demo.rs` - Editor gizmo integration
 - `examples/selection_demo.rs` - Selection visualization
 
-## Documentation
+## See Also
 
 - [Line Rendering Guide](../../docs/guides/line-rendering.md)
-- Module documentation: `crates/praxis_graphics/src/line_renderer.rs`
+- Implementation: `crates/praxis_graphics/src/line_renderer.rs`
 - Visual feedback: `crates/praxis_graphics/src/visual_feedback.rs`
-
-## Architecture
-
-```
-Application Code
-    ↓
-LineBatch (CPU)
-    ↓
-LineRenderer (GPU)
-    ↓
-Line Shader Pipeline
-    ↓
-Framebuffer with Depth
-```
-
-## Shaders
-
-- `src/shaders/line.vert` - Vertex shader with view/projection transform
-- `src/shaders/line.frag` - Fragment shader with per-vertex color interpolation
-
-Both shaders support depth testing for proper 3D integration.

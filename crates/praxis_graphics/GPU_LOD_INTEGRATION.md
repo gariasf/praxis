@@ -1,86 +1,58 @@
-# GPU-Driven LOD Selection Integration Guide
+# GPU LOD Integration Guide
 
-This document explains how to integrate GPU-driven LOD selection into the Praxis rendering pipeline.
+Complete integration guide for GPU-driven LOD selection with the rendering pipeline.
 
 ## Overview
 
-The GPU LOD selection system uses compute shaders to calculate appropriate LOD (Level of Detail) levels for objects based on their distance from the camera. This moves LOD calculations entirely to the GPU, enabling:
-
-- **Massively parallel processing**: All objects processed simultaneously
-- **Zero CPU overhead**: Distance calculations stay on GPU
-- **Efficient memory access**: Coalesced reads/writes in compute shader
-- **Scalability**: Handles 10,000+ objects with minimal overhead
+GPU LOD selection uses compute shaders to calculate appropriate LOD levels for objects based on distance from camera. This guide covers integration with GPU culling and indirect drawing.
 
 ## Architecture
 
-The system consists of three main components:
-
-1. **LOD Selection Compute Shader** (`lod_selection.comp`)
-   - Reads object positions and camera position from SSBOs
-   - Calculates squared distances (avoids sqrt)
-   - Selects appropriate LOD level based on distance thresholds
-   - Outputs selected mesh IDs per object
-
-2. **GPU Culling Integration**
-   - Reads selected LOD levels from LOD selection output
-   - Uses correct mesh ID for each object in culling tests
-   - Generates indirect draw commands with LOD-adjusted mesh references
-
-3. **Rust Integration** (`lod.rs`)
-   - `GpuLodSelector`: Manages compute pipeline and buffers
-   - `GpuObjectData`: Per-object data (transform, bounding sphere, LOD metadata)
-   - `GpuLodLevel`: LOD level definitions (mesh ID, distance thresholds)
-
-## Data Flow
-
 ```
 CPU Side:
-  1. Create GpuObjectData for each object (transform, LOD metadata)
-  2. Define GpuLodLevel array (all LOD definitions for all objects)
+  1. Create GpuObjectData (transforms, LOD metadata)
+  2. Define GpuLodLevel array (distance thresholds)
   3. Upload to GPU buffers
+  4. Dispatch LOD selection compute shader
 
-GPU Side (Compute Shader):
-  1. LOD Selection Pass:
-     - For each object:
-       * Calculate distance to camera
-       * Select appropriate LOD level
-       * Output selected mesh ID
+GPU Side:
+  1. LOD Selection Pass (compute):
+     - Calculate distance to camera
+     - Select appropriate LOD level
+     - Write selected mesh IDs to buffer
   
-  2. Culling Pass (existing):
-     - For each object:
-       * Read selected mesh ID from LOD buffer
-       * Perform frustum culling with correct mesh
-       * Generate indirect draw command
-
-  3. Indirect Draw (existing):
-     - Execute all visible objects in one draw call
+  2. Culling Pass (compute):
+     - Read selected LOD levels
+     - Perform frustum culling
+     - Generate indirect draw commands
+  
+  3. Indirect Draw (graphics):
+     - Execute visible objects
 ```
 
 ## Integration Steps
 
 ### Step 1: Define LOD Levels
 
-For each unique object type, define LOD levels with distance thresholds:
-
 ```rust
-use praxis_graphics::lod::{GpuLodLevel, LodLevel};
+use praxis_graphics::lod::{GpuLodLevel, GpuObjectData};
 
-// Example: Tree with 3 LOD levels
+// Define LOD levels for each object type
 let tree_lods = vec![
     GpuLodLevel {
-        mesh_id: 0,              // High detail mesh
+        mesh_id: 0,              // High detail
         min_distance_sq: 0.0,
         max_distance_sq: 100.0,  // 0-10 units
         padding: 0,
     },
     GpuLodLevel {
-        mesh_id: 1,              // Medium detail mesh
+        mesh_id: 1,              // Medium detail
         min_distance_sq: 100.0,
         max_distance_sq: 625.0,  // 10-25 units
         padding: 0,
     },
     GpuLodLevel {
-        mesh_id: 2,              // Low detail mesh
+        mesh_id: 2,              // Low detail
         min_distance_sq: 625.0,
         max_distance_sq: f32::MAX, // 25+ units
         padding: 0,
@@ -90,33 +62,26 @@ let tree_lods = vec![
 
 ### Step 2: Create Object Data
 
-For each object instance, create `GpuObjectData` with LOD metadata:
-
 ```rust
-use praxis_graphics::lod::GpuObjectData;
-use praxis_math::{Mat4, Vec3};
-
 let mut objects = Vec::new();
 let mut all_lod_levels = Vec::new();
 let mut lod_offset = 0u32;
 
 for (position, object_type) in scene_objects {
     let model = Mat4::from_translation(position);
-    
-    // Get LOD definitions for this object type
     let lods = get_lods_for_type(object_type);
     let lod_count = lods.len() as u32;
     
-    // Add LOD levels to global array
+    // Add LOD definitions to global array
     all_lod_levels.extend_from_slice(&lods);
     
-    // Create object data
+    // Create object data with LOD metadata
     objects.push(GpuObjectData::new(
         model,
-        [0.0, 0.0, 0.0, 1.0], // Bounding sphere
-        lods[0].mesh_id,       // Base mesh ID (highest detail)
-        lod_count,             // Number of LOD levels
-        lod_offset,            // Offset into LOD array
+        [0.0, 0.0, 0.0, 1.0],  // Bounding sphere
+        lods[0].mesh_id,        // Base mesh ID
+        lod_count,
+        lod_offset,
     ));
     
     lod_offset += lod_count;
@@ -125,21 +90,8 @@ for (position, object_type) in scene_objects {
 
 ### Step 3: Initialize GPU LOD Selector
 
-Create the GPU LOD selector during initialization:
-
 ```rust
 use praxis_graphics::lod::GpuLodSelector;
-use std::sync::Arc;
-
-// Create selector (once during initialization)
-let device = render_context.device.clone();
-let memory_allocator = render_context.memory_allocator.clone();
-let descriptor_set_allocator = Arc::new(
-    vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator::new(
-        device.clone(),
-        Default::default(),
-    )
-);
 
 let mut lod_selector = GpuLodSelector::new(
     device,
@@ -150,15 +102,11 @@ let mut lod_selector = GpuLodSelector::new(
 
 ### Step 4: Dispatch LOD Selection Per Frame
 
-In your render loop, before GPU culling:
-
 ```rust
-use praxis_math::Vec3;
-
 // Prepare frame data
 lod_selector.prepare_frame(&objects, &all_lod_levels)?;
 
-// In command buffer recording:
+// Dispatch LOD selection
 lod_selector.dispatch_lod_selection(
     command_buffer_builder,
     camera_position,  // Vec3
@@ -166,16 +114,16 @@ lod_selector.dispatch_lod_selection(
     enable_lod,       // bool
 )?;
 
-// Get selected LOD buffer for use in culling
+// Get selected LOD buffer for culling
 let selected_lod_buffer = lod_selector.selected_lod_buffer();
 ```
 
 ### Step 5: Integrate with GPU Culling
 
-Modify the GPU culling shader to read selected LOD levels:
+Modify GPU culling shader to read selected LODs:
 
 ```glsl
-// In gpu_culling.comp, add binding for selected LODs:
+// Add binding for selected LODs
 layout(set = 0, binding = 6, std430) readonly buffer SelectedLods {
     uint selected_mesh_ids[];
 } selected_lods;
@@ -186,70 +134,105 @@ void main() {
     // Read selected LOD level for this object
     uint mesh_id = selected_lods.selected_mesh_ids[object_index];
     
-    // Use mesh_id for culling and draw command generation
+    // Use correct mesh for culling and draw commands
     MeshData mesh = mesh_data.meshes[mesh_id];
     
-    // ... rest of culling logic
+    // Perform frustum culling...
+    if (is_visible(mesh)) {
+        // Generate indirect draw command
+    }
 }
 ```
 
 ### Step 6: Synchronization
 
-Ensure proper synchronization between LOD selection and culling:
+Vulkano automatically handles pipeline barriers based on buffer usage:
 
 ```rust
-// After LOD selection dispatch, insert pipeline barrier
-// This is handled automatically by Vulkano based on buffer usage flags
+// LOD selection buffer has:
+// - STORAGE_BUFFER usage (compute writes)
+// - Bound as input to culling compute shader
 
-// The selected_lod_buffer has:
-// - STORAGE_BUFFER usage (for compute writes)
-// - TRANSFER_SRC usage (for potential readback)
-//
-// When bound as input to culling compute shader, Vulkano automatically inserts:
-//   srcStageMask: COMPUTE_SHADER_BIT
-//   srcAccessMask: SHADER_WRITE_BIT
-//   dstStageMask: COMPUTE_SHADER_BIT
-//   dstAccessMask: SHADER_READ_BIT
+// Vulkano inserts barrier:
+//   srcStage:  COMPUTE_SHADER
+//   srcAccess: SHADER_WRITE
+//   dstStage:  COMPUTE_SHADER
+//   dstAccess: SHADER_READ
 ```
 
-## Performance Characteristics
+No manual synchronization required.
 
-### CPU Overhead
-- **Preparation**: O(1) - buffer upload (already in GPU-friendly format)
-- **Dispatch**: O(1) - single compute dispatch call
-- **No per-object work**: CPU overhead is independent of object count
+## Complete Integration Example
 
-### GPU Performance
-- **LOD Selection**: ~0.1-0.2ms for 10,000 objects (GTX 1060)
-- **Memory Bandwidth**: ~100 MB/s for 10,000 objects
-- **Compute Units**: Efficiently utilizes all available compute
+```rust
+use praxis_graphics::lod::{GpuLodSelector, GpuObjectData, GpuLodLevel};
+use praxis_graphics::GpuCullingSystem;
 
-### Scalability
-```
-Objects    | CPU Time | GPU Time | Total
------------|----------|----------|-------
-100        | <0.01ms  | <0.01ms  | <0.02ms
-1,000      | <0.01ms  | 0.02ms   | 0.03ms
-10,000     | <0.01ms  | 0.15ms   | 0.16ms
-100,000    | <0.01ms  | 1.5ms    | 1.51ms
+struct Renderer {
+    lod_selector: GpuLodSelector,
+    culling_system: GpuCullingSystem,
+}
+
+impl Renderer {
+    fn render_frame(&mut self, objects: &[Object], camera: &Camera) -> Result<()> {
+        // 1. Prepare LOD data
+        let gpu_objects: Vec<GpuObjectData> = objects.iter()
+            .map(|obj| obj.to_gpu_data())
+            .collect();
+        
+        let lod_levels: Vec<GpuLodLevel> = objects.iter()
+            .flat_map(|obj| obj.lod_levels.clone())
+            .collect();
+        
+        self.lod_selector.prepare_frame(&gpu_objects, &lod_levels)?;
+        
+        // 2. Begin command buffer
+        let mut builder = AutoCommandBufferBuilder::primary(...)?;
+        
+        // 3. Dispatch LOD selection
+        self.lod_selector.dispatch_lod_selection(
+            &mut builder,
+            camera.position,
+            0.0,   // lod_bias
+            true,  // enable_lod
+        )?;
+        
+        // 4. Dispatch GPU culling (reads LOD buffer)
+        self.culling_system.dispatch_culling(
+            &mut builder,
+            camera.view_projection,
+            camera.position,
+        )?;
+        
+        // 5. Execute indirect draw
+        let indirect_buffer = self.culling_system.indirect_draw_buffer();
+        builder.draw_indirect(indirect_buffer, ...)?;
+        
+        // 6. Execute command buffer
+        let command_buffer = builder.build()?;
+        command_buffer.execute(queue)?;
+        
+        Ok(())
+    }
+}
 ```
 
 ## LOD Bias
 
-LOD bias allows runtime adjustment of detail levels:
+Runtime detail adjustment:
 
 ```rust
-// Positive bias: Prefer higher detail (objects appear closer)
-lod_bias = 0.5;  // 50% bias toward higher detail
+// Positive: prefer higher detail
+lod_bias = 0.5;
 
-// Negative bias: Prefer lower detail (objects appear farther)
-lod_bias = -0.5; // 50% bias toward lower detail
+// Negative: prefer lower detail
+lod_bias = -0.5;
 
-// No bias: Use default distance thresholds
+// Neutral: default thresholds
 lod_bias = 0.0;
 ```
 
-The bias is applied by scaling the distance:
+**Shader implementation:**
 ```glsl
 float bias_scale = (lod_bias > 0.0)
     ? (1.0 - lod_bias * 0.5)
@@ -257,45 +240,45 @@ float bias_scale = (lod_bias > 0.0)
 float adjusted_distance_sq = distance_sq * bias_scale * bias_scale;
 ```
 
+## Performance
+
+| Objects | CPU Time | GPU Time | Total |
+|---------|----------|----------|-------|
+| 1,000   | <0.01ms  | 0.02ms   | 0.03ms |
+| 10,000  | <0.01ms  | 0.15ms   | 0.16ms |
+| 100,000 | <0.01ms  | 1.5ms    | 1.51ms |
+
+**CPU overhead**: O(1) - independent of object count  
+**GPU scalability**: Linear with object count
+
 ## Debugging
 
 ### Read Back Selected LODs
 
-For debugging, read back selected LOD levels (expensive, use sparingly):
-
 ```rust
-// Read selected LOD levels (requires CPU-GPU sync)
 let selected_lods = lod_selector.read_selected_lods()?;
 let distances = lod_selector.read_distances()?;
 
-// Analyze LOD distribution
-let mut lod_counts = vec![0; 3];
-for &lod in &selected_lods {
-    lod_counts[lod as usize] += 1;
+// Visualize LOD distribution
+for (i, &lod) in selected_lods.iter().enumerate() {
+    let color = match lod {
+        0 => Vec3::new(0.0, 1.0, 0.0), // Green = high
+        1 => Vec3::new(1.0, 1.0, 0.0), // Yellow = medium
+        2 => Vec3::new(1.0, 0.0, 0.0), // Red = low
+        _ => Vec3::new(1.0, 0.0, 1.0), // Magenta = error
+    };
+    draw_debug_sphere(objects[i].position, color);
 }
-
-println!("LOD Distribution:");
-println!("  LOD 0 (high):   {} objects", lod_counts[0]);
-println!("  LOD 1 (medium): {} objects", lod_counts[1]);
-println!("  LOD 2 (low):    {} objects", lod_counts[2]);
 ```
 
 ### Validate Distance Calculations
 
 ```rust
-// Compare GPU and CPU distance calculations
 let gpu_distances = lod_selector.read_distances()?;
-let camera_pos = Vec3::new(0.0, 5.0, 10.0);
-
 for (i, &gpu_dist) in gpu_distances.iter().enumerate() {
-    let obj_pos = get_object_position(i);
-    let cpu_dist = (obj_pos - camera_pos).length_squared();
-    
+    let cpu_dist = (obj_pos - cam_pos).length_squared();
     let error = (gpu_dist - cpu_dist).abs();
-    if error > 0.01 {
-        println!("Distance mismatch for object {}: GPU={:.2}, CPU={:.2}", 
-                 i, gpu_dist, cpu_dist);
-    }
+    assert!(error < 0.01, "Distance mismatch at object {}", i);
 }
 ```
 
@@ -303,169 +286,83 @@ for (i, &gpu_dist) in gpu_distances.iter().enumerate() {
 
 ### LOD Level Design
 
-1. **Distance Thresholds**
-   - Use squared distances (avoid sqrt)
-   - Account for object size in distance calculations
-   - Test thresholds in actual gameplay scenarios
-
-2. **Mesh Reduction**
-   - LOD 0 (high): 100% triangles
-   - LOD 1 (medium): 50-70% triangles
-   - LOD 2 (low): 20-30% triangles
-   - LOD 3+ (lowest): <10% triangles or billboards
-
-3. **Transition Zones**
-   - Add small overlap between LOD levels
-   - Consider implementing smooth blending for transitions
-   - Use hysteresis to prevent flickering at boundaries
-
-### Memory Management
-
-1. **Buffer Sizing**
-   - Allocate buffers based on max expected objects
-   - Reallocate only when exceeding capacity
-   - Use power-of-2 sizes for efficient growth
-
-2. **LOD Data Organization**
-   - Group LOD levels by object type
-   - Minimize unique LOD definitions (share when possible)
-   - Consider using LOD atlases for similar objects
-
-### Performance Optimization
-
-1. **Reduce LOD Levels**
-   - Use 2-3 LOD levels for small objects
-   - Reserve 4+ levels for large, important objects
-   - Consider screen-space size instead of distance for UI elements
-
-2. **Batch Similar Objects**
-   - Group objects with identical LOD structures
-   - Share LOD definitions across instances
-   - Use texture atlases to reduce state changes
-
-3. **Profile GPU Performance**
-   - Use Vulkan profiling tools (RenderDoc, NSight)
-   - Measure LOD selection compute time separately
-   - Monitor memory bandwidth usage
-
-## Future Enhancements
-
-### Screen-Space LOD
-
-Replace distance-based LOD with screen-space coverage:
-
-```glsl
-// Calculate projected size on screen
-float distance_to_camera = length(world_center.xyz - camera_position);
-float projected_radius = (world_radius * screen_height) / (distance_to_camera * tan(fov / 2.0));
-float screen_coverage = projected_radius / screen_height;
-
-// Select LOD based on screen coverage
-if (screen_coverage > 0.1) {
-    selected_lod = 0; // High detail (>10% of screen)
-} else if (screen_coverage > 0.05) {
-    selected_lod = 1; // Medium detail (5-10%)
-} else {
-    selected_lod = 2; // Low detail (<5%)
-}
+**Distance thresholds:**
+```rust
+// Use squared distances (avoid sqrt)
+LodLevel { min_distance_sq: 0.0, max_distance_sq: 100.0 },    // 0-10 units
+LodLevel { min_distance_sq: 100.0, max_distance_sq: 625.0 },  // 10-25 units
 ```
 
-### Temporal LOD Stability
-
-Prevent rapid LOD switching by adding hysteresis:
-
-```glsl
-// Store previous LOD level per object
-uint previous_lod = previous_lod_buffer[object_index];
-
-// Add hysteresis: require distance to cross threshold by margin
-float margin = 0.2; // 20% hysteresis
-if (selected_lod > previous_lod) {
-    // Switching to lower detail: require distance beyond threshold
-    if (distance_sq < max_distance_sq * (1.0 + margin)) {
-        selected_lod = previous_lod; // Stay at current LOD
-    }
-} else if (selected_lod < previous_lod) {
-    // Switching to higher detail: require distance below threshold
-    if (distance_sq > min_distance_sq * (1.0 - margin)) {
-        selected_lod = previous_lod; // Stay at current LOD
-    }
-}
+**Mesh reduction:**
+```
+LOD 0: 100% triangles
+LOD 1: 50-70% triangles
+LOD 2: 20-30% triangles
+LOD 3: <10% triangles
 ```
 
-### Dynamic LOD Adjustment
-
-Automatically adjust LOD thresholds based on performance:
+### Buffer Management
 
 ```rust
-// Monitor frame time
-let target_frame_time = 16.67; // 60 FPS
-let current_frame_time = measure_frame_time();
+// Pre-allocate for max expected objects
+let max_objects = 50_000;
+lod_selector.allocate_buffers(max_objects)?;
 
-if current_frame_time > target_frame_time * 1.1 {
-    // Running slow: increase LOD bias to reduce detail
-    lod_bias = (lod_bias - 0.01).clamp(-1.0, 1.0);
-} else if current_frame_time < target_frame_time * 0.9 {
-    // Running fast: decrease LOD bias to increase detail
-    lod_bias = (lod_bias + 0.01).clamp(-1.0, 1.0);
+// Grow in powers of two
+if objects.len() > max_objects {
+    max_objects = objects.len().next_power_of_two();
+    lod_selector.reallocate(max_objects)?;
+}
+```
+
+### Memory Organization
+
+```rust
+// Group LOD levels by object type
+struct ObjectType {
+    lod_levels: Vec<GpuLodLevel>,
+}
+
+// Share LOD definitions across instances
+let tree_lods = object_types["tree"].lod_levels.clone();
+for tree_position in tree_positions {
+    // All trees share same LOD definitions
 }
 ```
 
 ## Troubleshooting
 
-### LOD Popping Artifacts
+### LOD Popping
 
 **Symptom**: Visible switches between LOD levels
 
 **Solutions**:
-- Increase distance thresholds to spread out transitions
-- Implement smooth alpha blending between LOD levels
-- Add hysteresis to prevent rapid switching
+- Increase distance thresholds
+- Add hysteresis (delay switching)
 - Use screen-space LOD instead of distance-based
 
 ### Performance Issues
 
-**Symptom**: High GPU time in LOD selection pass
+**Symptom**: High GPU time in LOD selection
 
 **Solutions**:
 - Reduce number of LOD levels per object
-- Simplify distance calculations (use squared distance)
-- Group objects with similar LOD requirements
-- Profile with GPU profiling tools
+- Profile with GPU debugging tools
+- Consider CPU LOD for small scenes (<5,000 objects)
 
 ### Incorrect LOD Selection
 
-**Symptom**: Wrong LOD level displayed for distance
+**Symptom**: Wrong LOD displayed for distance
 
 **Solutions**:
-- Verify distance thresholds are squared correctly
-- Check camera position is passed correctly
-- Validate bounding sphere transformations
+- Verify distance thresholds are squared
+- Check camera position passed correctly
 - Debug with readback and CPU comparison
 
-### Buffer Overflow
+## See Also
 
-**Symptom**: Validation errors or crashes
-
-**Solutions**:
-- Ensure max_objects matches buffer allocation
-- Verify lod_offset values are correct
-- Check lod_count doesn't exceed buffer bounds
-- Add bounds checking in shader
-
-## Example: Complete Integration
-
-See `examples/lod_gpu_demo.rs` for a complete working example demonstrating:
-- Scene setup with multiple objects
-- LOD level definitions
-- GPU LOD selector initialization
-- Per-frame LOD selection dispatch
-- Debug visualization of LOD selections
-- Interactive LOD bias adjustment
-
-## References
-
-- `crates/praxis_graphics/src/lod.rs` - CPU LOD system and GPU LOD selector
-- `crates/praxis_graphics/src/shaders/lod_selection.comp` - LOD selection compute shader
-- `crates/praxis_graphics/src/gpu_culling.rs` - GPU culling system (integration target)
-- `examples/lod_gpu_demo.rs` - Complete working example
+- [LOD System](LOD_SYSTEM.md) - Overview of CPU and GPU LOD
+- [GPU Culling](GPU_CULLING.md) - GPU frustum culling
+- Example: `examples/lod_gpu_demo.rs`
+- Implementation: `crates/praxis_graphics/src/lod.rs`
+- Shader: `crates/praxis_graphics/src/shaders/lod_selection.comp`
