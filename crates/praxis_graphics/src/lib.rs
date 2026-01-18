@@ -402,6 +402,81 @@
 //! See the `material` module documentation for detailed explanations of descriptor set
 //! lifecycle and efficiency gains.
 //!
+//! ## Material Instancing System
+//!
+//! The material instancing system provides efficient per-object material property overrides
+//! without duplicating texture data, enabling scenes with hundreds of material variants:
+//!
+//! - **`MaterialInstance`**: References a base material with optional property overrides
+//! - **`MaterialInstanceManager`**: Central manager for tracking material instances
+//! - **Shared Texture Data**: Instances share GPU textures with their base material
+//! - **Per-Object Properties**: Override metallic, roughness, emissive without full material duplication
+//! - **Automatic Integration**: DrawCommand supports `material_instance_id` field for seamless rendering
+//!
+//! ## Key Benefits
+//!
+//! Material instancing dramatically reduces memory usage and setup overhead:
+//!
+//! - **Memory Efficiency**: 100 color variants = 1 base material + 100 property overrides (not 100 full materials)
+//! - **Texture Sharing**: All instances reference the same GPU textures (albedo, normal, etc.)
+//! - **Simple API**: Create instances via `MaterialInstanceManager`, reference by ID in DrawCommand
+//! - **Descriptor Set Reuse**: Instances with identical overrides share cached descriptor sets
+//!
+//! ## Usage Example
+//!
+//! ```rust,no_run
+//! use praxis_graphics::{RenderContext, DrawCommand, MaterialProperties};
+//! use praxis_math::Mat4;
+//! use std::sync::Arc;
+//!
+//! # async fn example(mut render_context: RenderContext) -> praxis_utils::Result<()> {
+//! // 1. Create base material with shared textures
+//! let base_material = Arc::new(render_context.material_manager()
+//!     .get_material("metal_base")
+//!     .expect("Base material"));
+//!
+//! // 2. Create material instances with per-object overrides
+//! let instance_mgr = render_context.material_instance_manager_mut();
+//! 
+//! instance_mgr.create_instance("red_metal", base_material.clone())
+//!     .override_properties(MaterialProperties::new()
+//!         .with_base_color([1.0, 0.0, 0.0, 1.0])
+//!         .with_metallic(0.9)
+//!         .with_roughness(0.2));
+//!
+//! instance_mgr.create_instance("blue_metal", base_material.clone())
+//!     .override_properties(MaterialProperties::new()
+//!         .with_base_color([0.0, 0.0, 1.0, 1.0])
+//!         .with_metallic(0.9)
+//!         .with_roughness(0.3));
+//!
+//! // 3. Render objects using instances (efficient - shares textures)
+//! let draw_commands = vec![
+//!     DrawCommand {
+//!         mesh_id: "sphere".to_string(),
+//!         model: Mat4::from_translation([0.0, 0.0, 0.0].into()),
+//!         texture_name: None,
+//!         material_properties: None,
+//!         material_instance_id: Some("red_metal".to_string()),
+//!         bone_matrices: None,
+//!     },
+//!     DrawCommand {
+//!         mesh_id: "sphere".to_string(),
+//!         model: Mat4::from_translation([2.0, 0.0, 0.0].into()),
+//!         texture_name: None,
+//!         material_properties: None,
+//!         material_instance_id: Some("blue_metal".to_string()),
+//!         bone_matrices: None,
+//!     },
+//! ];
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! **Performance**: For 100 objects with 100 color variants of the same base material:
+//! - **Traditional**: 100 full materials × (textures + properties) = high memory + setup overhead
+//! - **Instancing**: 1 base material + 100 property overrides = minimal memory + instant creation
+//!
 //! ## Texture Sampling Architecture
 //!
 //! The graphics pipeline supports texture sampling through:
@@ -1038,6 +1113,7 @@ use winit::window::Window;
 ///     model: Mat4::IDENTITY,
 ///     texture_name: None,
 ///     material_properties: None,
+///     material_instance_id: None,
 ///     bone_matrices: None,
 /// }
 /// # ;
@@ -1052,6 +1128,7 @@ use winit::window::Window;
 ///     model: Mat4::IDENTITY,
 ///     texture_name: Some("brick".to_string()),
 ///     material_properties: None,
+///     material_instance_id: None,
 ///     bone_matrices: None,
 /// }
 /// # ;
@@ -1068,6 +1145,7 @@ use winit::window::Window;
 ///     material_properties: Some(MaterialProperties::new()
 ///         .with_metallic(0.9)
 ///         .with_roughness(0.2)),
+///     material_instance_id: None,
 ///     bone_matrices: None,
 /// }
 /// # ;
@@ -1082,7 +1160,23 @@ use winit::window::Window;
 ///     model: Mat4::IDENTITY,
 ///     texture_name: Some("skin".to_string()),
 ///     material_properties: None,
+///     material_instance_id: None,
 ///     bone_matrices: Some(vec![Mat4::IDENTITY; 10]), // Actual bone transforms
+/// }
+/// # ;
+/// ```
+///
+/// Mesh with material instance (efficient per-object overrides):
+/// ```rust,no_run
+/// # use praxis_graphics::DrawCommand;
+/// # use praxis_math::Mat4;
+/// DrawCommand {
+///     mesh_id: "sphere".to_string(),
+///     model: Mat4::IDENTITY,
+///     texture_name: None, // Ignored when using material instance
+///     material_properties: None, // Ignored when using material instance
+///     material_instance_id: Some("red_metal_instance".to_string()),
+///     bone_matrices: None,
 /// }
 /// # ;
 /// ```
@@ -1097,6 +1191,11 @@ pub struct DrawCommand {
     /// Optional material properties for this object.
     /// If None, uses default material properties (white, non-metallic, medium roughness).
     pub material_properties: Option<material::MaterialProperties>,
+    /// Optional material instance ID for efficient per-object overrides.
+    /// If provided, takes precedence over `material_properties`.
+    /// Material instances share texture data with their base material while allowing
+    /// per-object property overrides without full duplication.
+    pub material_instance_id: Option<String>,
     /// Optional bone matrices for skeletal animation (up to 256 bones).
     /// If None, uses identity matrices (no skeletal animation).
     /// For animated meshes, provide the final skinning matrices computed from
@@ -1140,6 +1239,8 @@ pub struct DrawCommand {
 ///             model: Mat4::IDENTITY,
 ///             texture_name: None,
 ///             material_properties: None,
+///             material_instance_id: None,
+///             bone_matrices: None,
 ///         },
 ///     ],
 ///     lighting: None,
@@ -1659,6 +1760,9 @@ pub struct RenderContext {
     /// Material asset manager for loading and managing materials.
     material_manager: material::MaterialManager,
 
+    /// Material instance manager for efficient per-object parameter overrides.
+    material_instance_manager: material_instancing::MaterialInstanceManager,
+
     /// Lighting uniform buffer for passing lighting data to shaders.
     lighting_buffer: lighting::LightingUniformBuffer,
 
@@ -1875,6 +1979,10 @@ impl RenderContext {
         debug!("Creating material manager");
         let material_manager = material::MaterialManager::new();
 
+        // Initialize material instance manager
+        debug!("Creating material instance manager");
+        let material_instance_manager = material_instancing::MaterialInstanceManager::new();
+
         // Create lighting uniform buffer
         debug!("Creating lighting uniform buffer");
         let lighting_buffer = lighting::LightingUniformBuffer::new(memory_allocator.clone())?;
@@ -2029,6 +2137,9 @@ impl RenderContext {
 
             // Material management
             material_manager,
+
+            // Material instance management
+            material_instance_manager,
 
             // Lighting management
             lighting_buffer,
@@ -2228,6 +2339,103 @@ impl RenderContext {
     /// Use this to load or modify material assets.
     pub fn material_manager_mut(&mut self) -> &mut material::MaterialManager {
         &mut self.material_manager
+    }
+
+    /// Gets a reference to the material instance manager.
+    ///
+    /// Use this to access or query material instances.
+    pub fn material_instance_manager(&self) -> &material_instancing::MaterialInstanceManager {
+        &self.material_instance_manager
+    }
+
+    /// Gets a mutable reference to the material instance manager.
+    ///
+    /// Use this to create or modify material instances for efficient per-object overrides.
+    pub fn material_instance_manager_mut(
+        &mut self,
+    ) -> &mut material_instancing::MaterialInstanceManager {
+        &mut self.material_instance_manager
+    }
+
+    /// Creates a material instance from a base material for efficient per-object overrides.
+    ///
+    /// Material instances share texture data with the base material but allow per-object
+    /// property overrides (metallic, roughness, emissive, etc.). This is much more efficient
+    /// than creating full material duplicates for scenes with many material variants.
+    ///
+    /// # Arguments
+    ///
+    /// * `instance_id` - Unique identifier for this instance (used in DrawCommand)
+    /// * `base_material_id` - ID of the base material to instance from
+    ///
+    /// # Returns
+    ///
+    /// A mutable reference to the created instance for property override chaining.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the base material is not found in the material manager.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use praxis_graphics::{RenderContext, MaterialProperties};
+    /// # async fn example(mut render_context: RenderContext) -> praxis_utils::Result<()> {
+    /// // Create base material first (loaded from texture or created manually)
+    /// // render_context.material_manager_mut().create_material("metal_base", texture);
+    ///
+    /// // Create instance with property overrides
+    /// render_context.create_material_instance("red_metal", "metal_base")?
+    ///     .override_properties(MaterialProperties::new()
+    ///         .with_base_color([1.0, 0.0, 0.0, 1.0])
+    ///         .with_metallic(0.9));
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn create_material_instance(
+        &mut self,
+        instance_id: impl Into<String>,
+        base_material_id: &str,
+    ) -> Result<&mut material_instancing::MaterialInstance> {
+        let base_material = self
+            .material_manager
+            .get_material(base_material_id)
+            .ok_or_else(|| {
+                eyre::eyre!(
+                    "Base material '{}' not found for instancing",
+                    base_material_id
+                )
+            })?;
+
+        Ok(self
+            .material_instance_manager
+            .create_instance(instance_id, base_material))
+    }
+
+    /// Computes material instancing statistics for monitoring efficiency.
+    ///
+    /// Returns statistics about material instance usage including:
+    /// - Total number of instances
+    /// - Number of unique base materials
+    /// - Number of instances with overrides
+    /// - Average instances per base material
+    ///
+    /// This is useful for monitoring instancing efficiency and identifying opportunities
+    /// for optimization.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use praxis_graphics::RenderContext;
+    /// # async fn example(render_context: RenderContext) {
+    /// let stats = render_context.material_instance_stats();
+    /// println!("Material instances: {}", stats.total_instances);
+    /// println!("Unique base materials: {}", stats.unique_base_materials);
+    /// println!("Avg instances per base: {:.2}", stats.avg_instances_per_base);
+    /// # }
+    /// ```
+    pub fn material_instance_stats(&self) -> material_instancing::InstancingStats {
+        self.material_instance_manager.compute_stats()
     }
 
     /// Gets a reference to the lighting uniform buffer.
@@ -2968,26 +3176,60 @@ impl RenderContext {
                 .get_mesh(&draw_cmd.mesh_id)
                 .ok_or_else(|| eyre::eyre!("Mesh '{}' not found", draw_cmd.mesh_id))?;
 
-            let texture_name = draw_cmd
-                .texture_name
-                .as_deref()
-                .unwrap_or("_default_white")
-                .to_string();
+            // Resolve material properties and texture, handling material instances
+            // Material instances provide efficient per-object overrides without duplicating textures:
+            // - If material_instance_id is set, resolve from MaterialInstanceManager
+            // - Use instance's base material for texture and instance properties for overrides
+            // - Falls back to traditional texture_name + material_properties if no instance
+            let (texture_name, material_props, texture) = if let Some(ref instance_id) =
+                draw_cmd.material_instance_id
+            {
+                // Use material instance for efficient per-object overrides
+                let instance = self
+                    .material_instance_manager
+                    .get_instance(instance_id)
+                    .ok_or_else(|| {
+                        eyre::eyre!("Material instance '{}' not found", instance_id)
+                    })?;
 
-            let material_props = draw_cmd
-                .material_properties
-                .unwrap_or_else(material::MaterialProperties::default);
+                let base_material = instance.base_material();
+                let instance_props = instance.properties();
+
+                // Get texture from base material's albedo texture
+                // Note: For more complex scenarios, this could be extended to support
+                // texture overrides in the instance as well
+                let tex_name = base_material.id.clone();
+                let texture = self
+                    .texture_manager
+                    .get_texture(&tex_name)
+                    .unwrap_or(default_texture);
+
+                (tex_name, instance_props, texture)
+            } else {
+                // Traditional path: use texture_name and material_properties from DrawCommand
+                let tex_name = draw_cmd
+                    .texture_name
+                    .as_deref()
+                    .unwrap_or("_default_white")
+                    .to_string();
+
+                let props = draw_cmd
+                    .material_properties
+                    .unwrap_or_else(material::MaterialProperties::default);
+
+                let texture = if let Some(ref name) = draw_cmd.texture_name {
+                    self.texture_manager
+                        .get_texture(name)
+                        .ok_or_else(|| eyre::eyre!("Texture '{}' not found", name))?
+                } else {
+                    default_texture
+                };
+
+                (tex_name, props, texture)
+            };
 
             let material_changed = current_texture_name.as_ref() != Some(&texture_name)
                 || current_material_props.as_ref() != Some(&material_props);
-
-            let texture = if let Some(ref tex_name) = draw_cmd.texture_name {
-                self.texture_manager
-                    .get_texture(tex_name)
-                    .ok_or_else(|| eyre::eyre!("Texture '{}' not found", tex_name))?
-            } else {
-                default_texture
-            };
 
             // Use the descriptor set pool to get or create a cached transform descriptor set
             let transform_set = self.descriptor_set_pool.get_or_create_transform_set(

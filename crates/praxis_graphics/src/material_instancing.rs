@@ -2,6 +2,16 @@
 //!
 //! This module provides a system for creating material instances that share
 //! texture data but allow per-object property overrides without full duplication.
+//!
+//! # Integration with Rendering Pipeline
+//!
+//! The material instancing system is fully integrated with the RenderContext:
+//! - `DrawCommand` supports `material_instance_id` field for referencing instances
+//! - Instances are automatically resolved during rendering
+//! - Descriptor sets are pooled and reused efficiently
+//! - Batching optimizations apply to instances automatically
+//!
+//! See `MATERIAL_INSTANCING.md` for detailed integration documentation and usage patterns.
 
 use crate::material::{ExtendedPbrProperties, Material, MaterialProperties, ParallaxProperties};
 use std::collections::HashMap;

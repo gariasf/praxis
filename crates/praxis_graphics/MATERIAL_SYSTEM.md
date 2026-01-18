@@ -171,5 +171,7 @@ Memory Savings: 3 instances × 8MB textures = 8MB (not 24MB)
 
 ## See Also
 
+- [Material Instancing Integration](MATERIAL_INSTANCING.md) - Detailed integration with rendering pipeline
 - [Advanced Materials Documentation](../../docs/advanced-materials.md)
-- [Examples](../../examples/material_demo.rs)
+- [Material Demo](../../examples/material_demo.rs)
+- [Material Instancing Demo](../../examples/material_instancing_demo.rs)
