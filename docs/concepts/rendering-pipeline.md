@@ -40,6 +40,173 @@ Draw Commands      Recording
 Lighting Data      Descriptor Sets
 ```
 
+### Complete Pipeline Flow
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ CPU (Application Thread)                                             │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌─────────────────┐                                                │
+│  │ Game Logic      │                                                │
+│  │ - ECS Systems   │                                                │
+│  │ - Physics       │                                                │
+│  │ - Animation     │                                                │
+│  └────────┬────────┘                                                │
+│           │                                                          │
+│           ▼                                                          │
+│  ┌─────────────────┐       ┌──────────────────┐                    │
+│  │ Collect         │       │ Camera           │                    │
+│  │ Transforms      │◄──────┤ View/Projection  │                    │
+│  └────────┬────────┘       └──────────────────┘                    │
+│           │                                                          │
+│           ▼                                                          │
+│  ┌─────────────────────────────────────┐                           │
+│  │ Build DrawCommands                  │                           │
+│  │ - mesh_id                           │                           │
+│  │ - model matrix                      │                           │
+│  │ - texture_name                      │                           │
+│  │ - material_properties               │                           │
+│  └────────┬────────────────────────────┘                           │
+│           │                                                          │
+│           ▼                                                          │
+│  ┌─────────────────────────────────────┐                           │
+│  │ RenderContext::render()             │                           │
+│  │                                      │                           │
+│  │  1. Acquire swapchain image         │                           │
+│  │     ┌──────────────────────┐        │                           │
+│  │     │ Swapchain            │        │                           │
+│  │     │ [Img0][Img1][Img2]   │        │                           │
+│  │     │   ^                  │        │                           │
+│  │     │   └─ Next available  │        │                           │
+│  │     └──────────────────────┘        │                           │
+│  │                                      │                           │
+│  │  2. Upload lighting (if changed)    │                           │
+│  │     ┌──────────────────────┐        │                           │
+│  │     │ GPU Buffer           │        │                           │
+│  │     │ - Directional lights │        │                           │
+│  │     │ - Point lights       │        │                           │
+│  │     └──────────────────────┘        │                           │
+│  │                                      │                           │
+│  │  3. Sort DrawCommands by material   │                           │
+│  │     ┌──────────────────────┐        │                           │
+│  │     │ Before:              │        │                           │
+│  │     │ [TexB][TexA][TexB]   │        │                           │
+│  │     │          ↓            │        │                           │
+│  │     │ After:               │        │                           │
+│  │     │ [TexA][TexB][TexB]   │        │                           │
+│  │     └──────────────────────┘        │                           │
+│  │                                      │                           │
+│  │  4. Record command buffer            │                           │
+│  │     ┌──────────────────────────────┐│                           │
+│  │     │ begin_render_pass()          ││                           │
+│  │     │ bind_pipeline()              ││                           │
+│  │     │ set_viewport()               ││                           │
+│  │     │                              ││                           │
+│  │     │ for each DrawCommand:        ││                           │
+│  │     │   bind_vertex_buffer()       ││                           │
+│  │     │   bind_index_buffer()        ││                           │
+│  │     │   bind_descriptor_set(0)     ││  ◄─ Transform + Texture  │
+│  │     │   bind_descriptor_set(1)     ││  ◄─ Material Properties  │
+│  │     │   draw_indexed()             ││                           │
+│  │     │                              ││                           │
+│  │     │ end_render_pass()            ││                           │
+│  │     └──────────────────────────────┘│                           │
+│  │                                      │                           │
+│  │  5. Submit command buffer to GPU    │                           │
+│  └──────────────┬───────────────────────┘                           │
+│                 │                                                    │
+└─────────────────┼────────────────────────────────────────────────────┘
+                  │
+                  ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ GPU (Graphics Hardware)                                              │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌─────────────────────────────────────────────────────┐            │
+│  │ Vertex Shader (per vertex)                          │            │
+│  │                                                      │            │
+│  │  Input:  position, color, uv, normal                │            │
+│  │  Uniform: model, view, proj matrices                │            │
+│  │                                                      │            │
+│  │  Transform: gl_Position = proj * view * model * pos │            │
+│  │  Output:    v_color, v_uv, v_normal, v_world_pos    │            │
+│  └──────────────────────┬───────────────────────────────┘            │
+│                         │                                            │
+│                         ▼                                            │
+│  ┌─────────────────────────────────────────────────────┐            │
+│  │ Rasterization                                       │            │
+│  │                                                      │            │
+│  │  Triangle → Fragments (pixels)                      │            │
+│  │  Interpolate vertex attributes                      │            │
+│  └──────────────────────┬───────────────────────────────┘            │
+│                         │                                            │
+│                         ▼                                            │
+│  ┌─────────────────────────────────────────────────────┐            │
+│  │ Fragment Shader (per pixel)                         │            │
+│  │                                                      │            │
+│  │  Input:  v_color, v_uv, v_normal, v_world_pos       │            │
+│  │  Uniform: texture, lighting, material               │            │
+│  │                                                      │            │
+│  │  1. Sample texture                                  │            │
+│  │     base_color = texture(tex, v_uv) * v_color       │            │
+│  │                                                      │            │
+│  │  2. Calculate lighting                              │            │
+│  │     For each directional light:                     │            │
+│  │       diffuse += dot(normal, light_dir) * color     │            │
+│  │     For each point light:                           │            │
+│  │       diffuse += dot(normal, light_dir) *           │            │
+│  │                  color * attenuation                │            │
+│  │                                                      │            │
+│  │  3. Apply material                                  │            │
+│  │     final = (ambient + diffuse) * base_color        │            │
+│  │     final += emissive                               │            │
+│  │                                                      │            │
+│  │  Output: f_color (RGBA)                             │            │
+│  └──────────────────────┬───────────────────────────────┘            │
+│                         │                                            │
+│                         ▼                                            │
+│  ┌─────────────────────────────────────────────────────┐            │
+│  │ Framebuffer Operations                              │            │
+│  │                                                      │            │
+│  │  - Depth test                                       │            │
+│  │  - Blending                                         │            │
+│  │  - Write to framebuffer                             │            │
+│  └──────────────────────┬───────────────────────────────┘            │
+│                         │                                            │
+└─────────────────────────┼────────────────────────────────────────────┘
+                          │
+                          ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ Present to Screen                                                    │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌──────────────────────┐                                           │
+│  │ Swapchain Present    │                                           │
+│  │                      │                                           │
+│  │ [Img0] → Display     │                                           │
+│  │ [Img1] ← Rendering   │                                           │
+│  │ [Img2] ← Idle        │                                           │
+│  └──────────────────────┘                                           │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+
+Timeline (60 FPS, 16.67ms per frame):
+═══════════════════════════════════════
+
+Frame N:
+  0ms     ├─ Game logic (4ms)
+  4ms     ├─ Build draw commands (1ms)
+  5ms     ├─ Record command buffer (2ms)
+  7ms     ├─ Submit to GPU
+  7-16ms  │  GPU processing (parallel)
+  16ms    └─ Present
+
+Frame N+1:
+  16ms    ├─ Acquire next swapchain image
+  ...     └─ Repeat
+```
+
 ### Pipeline Stages
 
 #### 1. Initialization (`RenderContext::new()`)

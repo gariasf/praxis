@@ -99,6 +99,114 @@ async fn main() -> color_eyre::Result<()> {
 
 The networking system is built in layers:
 
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ Network Architecture - Full Stack                                 │
+└────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────┐
+│ Layer 5: Game Logic                                               │
+├────────────────────────────────────────────────────────────────────┤
+│  - Player input handling                                          │
+│  - Game state updates                                             │
+│  - Collision detection                                            │
+│  - AI logic                                                        │
+└───────────────────────┬────────────────────────────────────────────┘
+                        │
+                        ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ Layer 4: Replication System                                       │
+├────────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
+│  │ Priority         │  │ Rate Limiting   │  │ Serialization   │  │
+│  │ Management       │  │                 │  │ (Bincode)       │  │
+│  │ - Player: 255    │  │ - Players: 60Hz │  │                 │  │
+│  │ - NPC: 128       │  │ - NPCs: 30Hz    │  │ Component →     │  │
+│  │ - Props: 64      │  │ - Props: 15Hz   │  │ Binary Data     │  │
+│  └──────────────────┘  └─────────────────┘  └─────────────────┘  │
+└───────────────────────┬────────────────────────────────────────────┘
+                        │
+                        ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ Layer 3: Client-Side Prediction & Lag Compensation                │
+├────────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────────────────────────────────────────────────┐ │
+│  │ Client Prediction                                            │ │
+│  │                                                               │ │
+│  │  Local Input → Immediate Response → Reconcile with Server   │ │
+│  │                                                               │ │
+│  │  Timeline:                                                    │ │
+│  │  T=0   Client moves (predict)                               │ │
+│  │  T=50  Server receives input                                │ │
+│  │  T=100 Server sends confirmed position                      │ │
+│  │  T=150 Client reconciles (snap if error > threshold)        │ │
+│  └──────────────────────────────────────────────────────────────┘ │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐ │
+│  │ Lag Compensation (Server)                                    │ │
+│  │                                                               │ │
+│  │  Client fires at T=1000 (from client's perspective)         │ │
+│  │  Server receives at T=1050 (50ms latency)                   │ │
+│  │  Server rewinds world state to T=1000                       │ │
+│  │  Validates hit detection at T=1000                          │ │
+│  │  Restores to T=1050                                         │ │
+│  │  Applies damage if hit confirmed                            │ │
+│  └──────────────────────────────────────────────────────────────┘ │
+└───────────────────────┬────────────────────────────────────────────┘
+                        │
+                        ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ Layer 2: Interpolation & Extrapolation                            │
+├────────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────────────────────────────────────────────────┐ │
+│  │ Interpolation Buffer (Client)                                │ │
+│  │                                                               │ │
+│  │  Server Time:   S1──S2──S3──S4──S5  (snapshots)             │ │
+│  │                  │   │   │   │   │                           │ │
+│  │  Network ────────┼───┼───┼───┼───┼──────→                   │ │
+│  │                  ▼   ▼   ▼   ▼   ▼                           │ │
+│  │  Client Buffer: [S1][S2][S3][S4][S5]                        │ │
+│  │                          ▲                                    │ │
+│  │  Render Time: ───────────┘ (100ms behind)                   │ │
+│  │                                                               │ │
+│  │  Interpolate between S2 and S3 for smooth movement          │ │
+│  └──────────────────────────────────────────────────────────────┘ │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐ │
+│  │ Extrapolation (Packet Loss Fallback)                         │ │
+│  │                                                               │ │
+│  │  Last Known:     Position=(10, 0, 0), Velocity=(1, 0, 0)    │ │
+│  │  Predict:        Position=Last + Velocity*DeltaTime          │ │
+│  │  Max Duration:   500ms before snapping to last known        │ │
+│  └──────────────────────────────────────────────────────────────┘ │
+└───────────────────────┬────────────────────────────────────────────┘
+                        │
+                        ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ Layer 1: Transport (TCP)                                          │
+├────────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────┐                    ┌──────────────────┐     │
+│  │ Client           │                    │ Server           │     │
+│  │                  │                    │                  │     │
+│  │ Send:            │  ─────────────→    │ Receive:         │     │
+│  │ - Input          │     (TCP)          │ - Process        │     │
+│  │ - Timestamps     │                    │ - Validate       │     │
+│  │                  │                    │ - Update World   │     │
+│  │                  │                    │                  │     │
+│  │ Receive:         │  ←─────────────    │ Send:            │     │
+│  │ - World state    │     (TCP)          │ - Snapshots      │     │
+│  │ - Entity updates │                    │ - Events         │     │
+│  └──────────────────┘                    └──────────────────┘     │
+│                                                                    │
+│  TCP Characteristics:                                             │
+│  ✓ Reliable delivery (retransmission)                            │
+│  ✓ Ordered packets                                               │
+│  ✓ Connection state tracking                                     │
+│  ✗ Head-of-line blocking (one lost packet blocks all)           │
+│  ✗ Higher latency than UDP                                       │
+└────────────────────────────────────────────────────────────────────┘
+```
+
 ### Transport Layer
 
 **TCP Transport**

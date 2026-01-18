@@ -51,6 +51,85 @@ World
 
 When parent transforms change, all descendants update automatically.
 
+### Propagation Flow
+
+The system processes entities in a top-down, breadth-first manner:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Transform Propagation System                                │
+│                                                               │
+│  Step 1: Process Root Entities                              │
+│  ┌─────────────────────────────────────────┐                │
+│  │ Root Entity (no Parent)                 │                │
+│  │  - Read: Transform                      │                │
+│  │  - Write: GlobalTransform = Transform   │                │
+│  └─────────────────────────────────────────┘                │
+│                    │                                         │
+│                    ▼                                         │
+│  Step 2: Process Children (Level 1)                         │
+│  ┌─────────────────────────────────────────┐                │
+│  │ Child Entity                            │                │
+│  │  - Read: Transform, Parent              │                │
+│  │  - Get: Parent.GlobalTransform          │                │
+│  │  - Write: GlobalTransform =             │                │
+│  │           Parent.GlobalTransform *      │                │
+│  │           Transform                     │                │
+│  └─────────────────────────────────────────┘                │
+│                    │                                         │
+│                    ▼                                         │
+│  Step 3: Process Grandchildren (Level 2)                    │
+│  ┌─────────────────────────────────────────┐                │
+│  │ Grandchild Entity                       │                │
+│  │  - Read: Transform, Parent              │                │
+│  │  - Get: Parent.GlobalTransform          │                │
+│  │  - Write: GlobalTransform =             │                │
+│  │           Parent.GlobalTransform *      │                │
+│  │           Transform                     │                │
+│  └─────────────────────────────────────────┘                │
+│                    │                                         │
+│                    ▼                                         │
+│  Repeat for all hierarchy levels...                         │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+
+Matrix Multiplication Chain:
+═══════════════════════════════
+
+Root:        GlobalTransform = LocalTransform
+             [identity] * [local]
+
+Child:       GlobalTransform = Parent.GlobalTransform * LocalTransform
+             [parent_world] * [local] = [child_world]
+
+Grandchild:  GlobalTransform = Parent.GlobalTransform * LocalTransform
+             [parent_world * parent_local] * [local] = [grandchild_world]
+
+Example with actual transforms:
+═══════════════════════════════
+
+Root (Car at origin):
+  LocalTransform:  translate(0, 0, 0)
+  GlobalTransform: translate(0, 0, 0)
+
+Child (Wheel offset):
+  LocalTransform:  translate(1, 0, 0)
+  GlobalTransform: translate(0,0,0) * translate(1,0,0) = translate(1, 0, 0)
+
+Grandchild (Hub offset from wheel):
+  LocalTransform:  translate(0, 0, 0.1)
+  GlobalTransform: translate(1,0,0) * translate(0,0,0.1) = translate(1, 0, 0.1)
+
+If Car moves to (5, 0, 0):
+═══════════════════════════════
+  Car.LocalTransform = translate(5, 0, 0)
+  → System propagates to all descendants:
+  
+  Car.GlobalTransform:   translate(5, 0, 0)
+  Wheel.GlobalTransform: translate(5,0,0) * translate(1,0,0) = translate(6, 0, 0)
+  Hub.GlobalTransform:   translate(6,0,0) * translate(0,0,0.1) = translate(6, 0, 0.1)
+```
+
 ## Creating Hierarchies
 
 ```rust
