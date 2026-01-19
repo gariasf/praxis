@@ -503,12 +503,37 @@ fn my_system(system_profiler: Res<SystemProfilerResource>) {
 }
 ```
 
-## Example
+## Performance Validation and Optimization Testing
 
-See `examples/profiling_demo.rs` for a complete working example:
+For comprehensive performance testing with all rendering optimizations (GPU culling, LOD, occlusion, instancing, streaming):
 
 ```bash
-cargo run --example profiling_demo
+# Run comprehensive performance profiling demo
+cargo run --release --example performance_profiling_comprehensive
+
+# Or use automated test scripts
+./scripts/run_performance_test.sh --release      # Linux/Mac
+.\scripts\run_performance_test.ps1 -Release      # Windows
+```
+
+This creates a scene with 10,000+ objects and measures performance with different optimization combinations to validate:
+- Each optimization shows measurable improvement (10-50% FPS gain)
+- Full stack achieves 8-10x speedup over baseline
+- No false culling or visual artifacts
+- Memory usage remains stable
+
+See:
+- **[Performance Profiling Guide](performance_profiling_guide.md)** - Complete profiling workflow and validation criteria
+- **[Quick Reference](performance_profiling_quick_reference.md)** - Commands, controls, and expected results
+
+## Examples
+
+Basic profiling examples:
+
+```bash
+cargo run --example profiling_demo                          # Basic profiling features
+cargo run --example profiling_advanced_demo                  # Advanced profiling techniques
+cargo run --release --example performance_profiling_comprehensive  # Full optimization validation
 ```
 
 ## Troubleshooting

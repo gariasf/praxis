@@ -160,6 +160,10 @@ name = "profiling_advanced_demo"
 path = "examples/profiling_advanced_demo.rs"
 
 [[example]]
+name = "performance_profiling_comprehensive"
+path = "examples/performance_profiling_comprehensive.rs"
+
+[[example]]
 name = "scripting_demo"
 path = "examples/scripting_demo.rs"
 required-features = ["scripting"]
