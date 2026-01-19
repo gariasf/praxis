@@ -216,7 +216,7 @@ use crate::{
     aabb::Aabb,
     bvh::Bvh,
     frustum::{Frustum, FrustumCuller},
-    lod::{LodSelection, SpatialLodManager},
+    lod::{LodManager, LodSelection},
     octree::Octree,
 };
 use bevy_ecs::entity::Entity;
@@ -296,7 +296,7 @@ pub struct VisibilitySystem {
     /// Frustum culler.
     frustum_culler: FrustumCuller,
     /// LOD manager.
-    lod_manager: SpatialLodManager,
+    lod_manager: LodManager,
     /// Maximum rendering distance.
     max_distance: f32,
     /// Hierarchical culling mode.
@@ -314,7 +314,7 @@ impl VisibilitySystem {
     pub fn new() -> Self {
         Self {
             frustum_culler: FrustumCuller::new(),
-            lod_manager: SpatialLodManager::new(),
+            lod_manager: LodManager::new(),
             max_distance: 1000.0,
             hierarchical_mode: HierarchicalCullingMode::None,
             octree: None,
@@ -327,7 +327,7 @@ impl VisibilitySystem {
     pub fn with_octree(center: Vec3, size: f32, max_entities_per_node: usize) -> Self {
         Self {
             frustum_culler: FrustumCuller::new(),
-            lod_manager: SpatialLodManager::new(),
+            lod_manager: LodManager::new(),
             max_distance: 1000.0,
             hierarchical_mode: HierarchicalCullingMode::Octree,
             octree: Some(Octree::new(center, size, max_entities_per_node)),
@@ -340,7 +340,7 @@ impl VisibilitySystem {
     pub fn with_bvh() -> Self {
         Self {
             frustum_culler: FrustumCuller::new(),
-            lod_manager: SpatialLodManager::new(),
+            lod_manager: LodManager::new(),
             max_distance: 1000.0,
             hierarchical_mode: HierarchicalCullingMode::Bvh,
             octree: None,
@@ -353,7 +353,7 @@ impl VisibilitySystem {
     pub fn with_max_distance(max_distance: f32) -> Self {
         Self {
             frustum_culler: FrustumCuller::new(),
-            lod_manager: SpatialLodManager::new(),
+            lod_manager: LodManager::new(),
             max_distance,
             hierarchical_mode: HierarchicalCullingMode::None,
             octree: None,
@@ -368,12 +368,12 @@ impl VisibilitySystem {
     }
 
     /// Returns a reference to the LOD manager.
-    pub fn lod_manager(&self) -> &SpatialLodManager {
+    pub fn lod_manager(&self) -> &LodManager {
         &self.lod_manager
     }
 
     /// Returns a mutable reference to the LOD manager.
-    pub fn lod_manager_mut(&mut self) -> &mut SpatialLodManager {
+    pub fn lod_manager_mut(&mut self) -> &mut LodManager {
         &mut self.lod_manager
     }
 

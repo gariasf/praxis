@@ -99,11 +99,57 @@
 //! **Performance Rule of Thumb**: For typical game scenes with meshes and frustum culling,
 //! BVH typically outperforms octree by 20-40% due to tighter bounds and better cache behavior.
 //!
+//! # Spatial Structure APIs
+//!
+//! ## SpatialManager (Recommended)
+//!
+//! `SpatialManager` provides a unified interface over both Octree and BVH structures:
+//! - **Automatic structure selection**: Choose Octree or BVH at construction
+//! - **Movement tracking**: Only updates entities that move beyond threshold
+//! - **Automatic rebalancing**: Triggers rebuilds when needed
+//! - **Consistent API**: Same methods work with either underlying structure
+//!
+//! Use `SpatialManager` when:
+//! - You want a simple, high-level API
+//! - You need automatic update management
+//! - Your choice of Octree vs BVH might change
+//! - You're building general-purpose systems
+//!
+//! ## Direct Octree/BVH (Advanced)
+//!
+//! Use `Octree` or `BVH` directly when:
+//! - You need fine-grained control over rebuilds
+//! - You want to avoid wrapper overhead
+//! - You're implementing specialized spatial algorithms
+//! - You know exactly which structure you need
+//!
+//! ## LodManager (Separate System)
+//!
+//! `LodManager` handles distance-based mesh detail selection:
+//! - **Independent of spatial structures**: Works with any culling system
+//! - **Entity-to-group mapping**: Assign entities to named LOD groups
+//! - **Distance-based selection**: Choose mesh detail based on camera distance
+//!
+//! Use `LodManager` in combination with spatial structures:
+//! 1. Spatial structure (Octree/BVH) culls invisible objects
+//! 2. `LodManager` selects mesh detail for visible objects
+//! 3. Renderer draws only visible objects at appropriate detail
+//!
+//! # Naming Convention Compliance
+//!
+//! This crate follows the Praxis naming conventions:
+//! - **`SpatialManager`**: Manages spatial structures (Octree/BVH), handles updates/queries
+//! - **`LodManager`**: Manages LOD groups and entity assignments
+//! - **`Octree`/`Bvh`**: Data structures (no suffix needed for pure data structures)
+//! - **`FrustumCuller`**: Performs culling operations (verb-based name acceptable)
+//!
+//! Note: `SpatialLodManager` has been renamed to `LodManager` to avoid redundant "Spatial" prefix.
+//!
 //! # Example Usage
 //!
 //! ```rust,no_run
 //! use praxis_spatial::{
-//!     FrustumCuller, Octree, SpatialLodManager, OcclusionCuller,
+//!     FrustumCuller, Octree, LodManager, OcclusionCuller,
 //!     Aabb, BoundingVolume, LodLevel
 //! };
 //! use praxis_ecs::World;
@@ -114,7 +160,7 @@
 //!
 //! // Create spatial optimization systems
 //! let mut octree = Octree::new(Vec3::ZERO, 1000.0, 4);
-//! let mut lod_manager = SpatialLodManager::new();
+//! let mut lod_manager = LodManager::new();
 //! // let mut occlusion_culler = OcclusionCuller::new(&device, &allocator)?;
 //!
 //! // Add objects to octree
@@ -158,7 +204,7 @@ pub use gpu_culling::{
     GpuLodLevel, GpuObjectData, MAX_LOD_GROUPS, MAX_LOD_LEVELS_PER_GROUP,
 };
 pub use gpu_integration::{CullableObject, HybridCullingManager};
-pub use lod::{LodGroup, LodLevel, LodSelection, SpatialLodManager};
+pub use lod::{LodGroup, LodLevel, LodManager, LodSelection, SpatialLodManager};
 pub use occlusion::{
     OcclusionCuller, OcclusionCullerStats, OcclusionQuery, OcclusionQueryPool, OcclusionQueryResult,
 };

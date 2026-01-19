@@ -1,6 +1,55 @@
 //! Level of Detail (LOD) system for distance-based mesh switching.
 //!
 //! LOD reduces rendering cost by using simpler mesh representations for distant objects.
+//!
+//! # When to Use LOD
+//!
+//! LOD is most effective in these scenarios:
+//! - **Large outdoor environments**: Forests, cities, landscapes with many distant objects
+//! - **High object counts**: Scenes with hundreds or thousands of similar objects
+//! - **Performance-critical rendering**: When draw call count and vertex processing are bottlenecks
+//! - **Variable viewing distances**: Games with wide zoom ranges or third-person cameras
+//!
+//! # LOD Strategy
+//!
+//! The LOD system uses distance-based switching:
+//! 1. Group similar objects (e.g., "tree", "rock") into LOD groups
+//! 2. Define multiple mesh levels for each group (high/medium/low detail)
+//! 3. Set distance thresholds for each level
+//! 4. At runtime, select mesh based on camera distance
+//!
+//! # Example
+//!
+//! ```rust
+//! use praxis_spatial::{LodManager, LodGroup, LodLevel};
+//! use bevy_ecs::entity::Entity;
+//! use praxis_math::Vec3;
+//!
+//! let mut lod_manager = LodManager::new();
+//!
+//! // Define LOD levels for trees
+//! // tree_high: 0-50 units from camera
+//! // tree_medium: 50-100 units
+//! // tree_low: 100+ units
+//! lod_manager.register_lod_levels(
+//!     "tree",
+//!     vec![
+//!         LodLevel::new(50.0, "tree_high"),
+//!         LodLevel::new(100.0, "tree_medium"),
+//!         LodLevel::new(200.0, "tree_low"),
+//!     ],
+//! );
+//!
+//! // Assign entities to LOD groups
+//! let entity = Entity::from_raw(1);
+//! lod_manager.assign_entity(entity, "tree");
+//!
+//! // Select appropriate LOD based on distance
+//! let camera_pos = Vec3::ZERO;
+//! let entity_pos = Vec3::new(30.0, 0.0, 0.0); // Distance = 30
+//! let selection = lod_manager.select_lod(entity, camera_pos, entity_pos);
+//! // Result: tree_high (distance 30 < 50)
+//! ```
 
 use bevy_ecs::entity::Entity;
 use praxis_math::Vec3;
@@ -90,14 +139,32 @@ pub struct LodSelection {
 /// LOD management system.
 ///
 /// Manages LOD groups and provides distance-based mesh selection.
-pub struct SpatialLodManager {
+///
+/// This follows the **Manager** naming convention: it manages a pool of LOD groups,
+/// handles entity assignments, and provides retrieval APIs for LOD selection.
+///
+/// # Responsibilities
+///
+/// - **Resource Management**: Stores and retrieves LOD groups by name
+/// - **Entity Assignment**: Maps entities to their LOD groups
+/// - **LOD Selection**: Determines appropriate mesh detail based on distance
+///
+/// # Integration with Spatial Optimization
+///
+/// `LodManager` works in conjunction with spatial structures:
+/// 1. **Frustum Culling** (via `Octree`/`BVH`): Determines which entities are visible
+/// 2. **LOD Selection** (via `LodManager`): Chooses mesh detail for visible entities
+/// 3. **Rendering**: Only visible entities at appropriate detail are drawn
+///
+/// This separation allows independent optimization of culling and detail selection.
+pub struct LodManager {
     /// Registered LOD groups.
     groups: HashMap<String, LodGroup>,
     /// Map from entity to its LOD group name.
     entity_lod_groups: HashMap<Entity, String>,
 }
 
-impl SpatialLodManager {
+impl LodManager {
     /// Creates a new LOD manager.
     pub fn new() -> Self {
         Self {
@@ -188,11 +255,21 @@ impl SpatialLodManager {
     }
 }
 
-impl Default for SpatialLodManager {
+impl Default for LodManager {
     fn default() -> Self {
         Self::new()
     }
 }
+
+/// Type alias for backwards compatibility.
+///
+/// # Deprecation Notice
+///
+/// `SpatialLodManager` is deprecated in favor of `LodManager`.
+/// The "Spatial" prefix is redundant since the type is already in the `praxis_spatial` crate.
+/// This alias will be removed in a future version.
+#[deprecated(since = "0.1.0", note = "Use `LodManager` instead")]
+pub type SpatialLodManager = LodManager;
 
 #[cfg(test)]
 mod tests {
@@ -236,7 +313,7 @@ mod tests {
 
     #[test]
     fn test_lod_manager_registration() {
-        let mut manager = SpatialLodManager::new();
+        let mut manager = LodManager::new();
         let levels = vec![
             LodLevel::new(30.0, "rock_high"),
             LodLevel::new(60.0, "rock_low"),
@@ -248,7 +325,7 @@ mod tests {
 
     #[test]
     fn test_lod_manager_entity_assignment() {
-        let mut manager = SpatialLodManager::new();
+        let mut manager = LodManager::new();
         let entity = Entity::from_raw(1);
 
         manager.register_lod_levels(
@@ -265,7 +342,7 @@ mod tests {
 
     #[test]
     fn test_lod_manager_selection() {
-        let mut manager = SpatialLodManager::new();
+        let mut manager = LodManager::new();
         let entity = Entity::from_raw(1);
 
         // tree_high: used for distance < 50
@@ -290,7 +367,7 @@ mod tests {
 
     #[test]
     fn test_lod_manager_batch_selection() {
-        let mut manager = SpatialLodManager::new();
+        let mut manager = LodManager::new();
 
         // tree_high: used for distance < 50
         // tree_low: used for distance >= 50

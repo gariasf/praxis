@@ -74,15 +74,74 @@ lod_manager.assign_entity(entity, "tree");
 let lod = lod_manager.select_lod(entity, camera_pos, entity_pos);
 ```
 
-## When to Use Each
+## When to Use Each Structure
 
-**Octree:** Static/slow-moving objects, uniform distribution, simple queries
+### Octree
+**Best For:**
+- Static/slow-moving objects
+- Uniform object distribution
+- Voxel or volumetric data
+- Simple spatial queries
 
-**BVH:** Dynamic objects, non-uniform distribution, ray tracing
+**Pros:**
+- Intuitive spatial subdivision
+- Good for evenly distributed objects
+- Predictable memory layout
 
-**LOD:** Large worlds, distant objects, outdoor environments
+**Cons:**
+- Poor with non-uniform distribution
+- Inefficient for dynamic objects
 
-**Occlusion:** Dense urban/indoor scenes, large occluders
+### BVH (Bounding Volume Hierarchy)
+**Best For:**
+- Ray tracing and ray casting
+- Non-uniform object distribution
+- Clustered objects (cities, forests)
+- Static mesh rendering
+
+**Pros:**
+- Near-optimal for ray queries
+- Tight-fitting bounds (no wasted space)
+- Better cache performance (binary tree)
+- Adapts to object clustering
+
+**Cons:**
+- Requires full rebuild on changes
+- More complex construction
+
+### SpatialManager (Recommended)
+**Best For:**
+- General-purpose spatial management
+- When you need automatic updates
+- Applications that may switch between Octree/BVH
+
+**Pros:**
+- Unified API for both structures
+- Automatic movement tracking
+- Batched updates and rebalancing
+- Simple to use
+
+**Cons:**
+- Slight overhead vs direct structure use
+
+### LodManager (Distance-Based Detail)
+**Best For:**
+- Large outdoor environments
+- High object counts
+- Distant objects
+- Performance-critical rendering
+
+**Use With:**
+- Combine with spatial structures for complete optimization
+- Works independently of culling system
+
+### Occlusion Culling
+**Best For:**
+- Dense urban/indoor scenes
+- Large occluders (buildings, walls)
+- Complex geometry
+
+**Note:** Hardware-dependent, requires GPU support
 
 ## Documentation
 
@@ -90,6 +149,7 @@ let lod = lod_manager.select_lod(entity, camera_pos, entity_pos);
 - [Spatial Optimization Guide](../../docs/guides/spatial-optimization.md) - Complete guide and best practices
 
 **Crate Documentation:**
+- [Structure Selection Guide](STRUCTURE_SELECTION.md) - Choosing the right spatial structure
 - [Spatial Partitioning](SPATIAL_PARTITIONING.md) - Octree/BVH details
 - [Quick Reference](QUICK_REFERENCE.md) - API patterns
 

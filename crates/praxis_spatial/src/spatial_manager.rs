@@ -47,6 +47,39 @@ pub enum SpatialStructureType {
 /// Unified spatial manager that handles both octree and BVH structures.
 ///
 /// Automatically tracks entity movement and triggers updates/rebalancing as needed.
+///
+/// This follows the **Manager** naming convention: it manages spatial data structures
+/// (Octree/BVH), handles resource lifecycle (insert/remove/update), and provides
+/// query APIs for spatial searches.
+///
+/// # Why "SpatialManager" vs Just "Manager"?
+///
+/// Unlike `LodManager` which was renamed from `SpatialLodManager` to remove redundancy,
+/// `SpatialManager` retains the "Spatial" prefix because:
+/// 1. It manages multiple spatial structure types (Octree AND BVH), not just one
+/// 2. "Manager" alone would be too generic for this context
+/// 3. It's the primary entry point for the entire spatial system
+///
+/// # Responsibilities
+///
+/// - **Structure Management**: Maintains both Octree and BVH instances
+/// - **Type Selection**: Allows runtime choice between structure types
+/// - **Update Tracking**: Records entity movements and batches updates
+/// - **Automatic Rebalancing**: Triggers rebuilds based on update frequency
+/// - **Unified API**: Provides consistent interface regardless of underlying structure
+///
+/// # When to Use
+///
+/// Use `SpatialManager` when you need:
+/// - Automatic management of entity updates
+/// - Movement threshold tracking to avoid unnecessary updates
+/// - Periodic rebalancing without manual intervention
+/// - A single API that works with both Octree and BVH
+///
+/// Use `Octree` or `BVH` directly when you need:
+/// - Fine-grained control over rebuild timing
+/// - Minimal overhead (no tracking/batching)
+/// - Specialized algorithms specific to one structure type
 pub struct SpatialManager {
     /// Current structure type.
     structure_type: SpatialStructureType,

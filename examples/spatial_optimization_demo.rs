@@ -23,7 +23,7 @@ use praxis_graphics::{
 use praxis_input::InputState;
 use praxis_math::{Mat4, Quat, Vec3};
 use praxis_spatial::{
-    Aabb, Bvh, FrustumCuller, LodGroup, LodLevel, Octree, SpatialLodManager, VisibilitySystem,
+    Aabb, Bvh, FrustumCuller, LodGroup, LodLevel, LodManager, Octree, VisibilitySystem,
 };
 use praxis_utils::{info, Result};
 use std::sync::Arc;
@@ -106,7 +106,7 @@ impl App {
         // Create octree and other spatial structures
         let mut octree = Octree::new(Vec3::ZERO, 1000.0, 8);
         let mut bvh = Bvh::new();
-        let mut lod_manager = SpatialLodManager::new();
+        let mut lod_manager = LodManager::new();
         let mut visibility_system = VisibilitySystem::with_max_distance(500.0);
 
         // Configure LOD groups
@@ -706,7 +706,7 @@ impl ApplicationHandler for App {
     }
 }
 
-fn setup_lod_groups(lod_manager: &mut SpatialLodManager) {
+fn setup_lod_groups(lod_manager: &mut LodManager) {
     // Tree LOD group
     lod_manager.register_lod_group(LodGroup::new(
         "tree",
@@ -772,7 +772,7 @@ mod tests {
 
     #[test]
     fn test_lod_group_setup() {
-        let mut lod_manager = SpatialLodManager::new();
+        let mut lod_manager = LodManager::new();
         setup_lod_groups(&mut lod_manager);
         assert_eq!(lod_manager.group_count(), 3);
     }
