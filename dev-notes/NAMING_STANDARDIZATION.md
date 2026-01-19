@@ -18,15 +18,24 @@ This document tracks types that need renaming to follow the established conventi
 - **Current**: `pub struct ParticleRenderer`
 - **Result**: Correctly follows conventions for GPU rendering types
 
-### Medium Priority (Internal Inconsistencies)
+### Reviewed and Resolved
 
-#### RenderContext
+#### RenderContext (✅ Evaluated - Keep as-is)
 - **Location**: `crates/praxis_graphics/src/lib.rs` (main rendering type)
 - **Current**: `RenderContext`
-- **Issue**: Manages Vulkan resources but uses generic `Context` suffix
-- **Consider**: `RenderManager` or keep as-is (established convention)
-- **Breaking**: Yes (core API)
-- **Note**: May be too widely used to justify change; evaluate cost/benefit
+- **Decision**: **KEEP** - Does not require renaming
+- **Rationale**: 
+  - **Hybrid Responsibility**: RenderContext is a unique type that combines multiple responsibilities:
+    1. **Vulkan Context Management**: Manages instance, device, queues, swapchain lifecycle
+    2. **Rendering Orchestration**: Issues GPU commands and manages render passes
+    3. **Resource Management**: Provides access to mesh, texture, material managers
+    4. **Frame Coordination**: Handles frame synchronization and presentation
+  - **Established Pattern**: The "Context" suffix correctly reflects its role as a central coordination point that encapsulates the entire rendering subsystem, similar to established patterns in graphics APIs (OpenGL Context, Direct3D Device Context)
+  - **Not Purely Manager**: While it contains managers (MeshAssetManager, TextureManager, MaterialManager), it does more than resource management
+  - **Not Purely Renderer**: While it performs rendering via the `render()` method, it also manages the Vulkan lifecycle, swapchain recreation, and synchronization
+  - **API Stability**: Core type used extensively across all examples (50+ files), renaming would be extremely disruptive
+  - **Semantic Clarity**: "Context" accurately describes a centralized state container that provides access to all graphics subsystem functionality
+- **Conclusion**: RenderContext represents a legitimate architectural pattern for a top-level graphics context that doesn't fit neatly into Manager/Renderer/System categories. No action required.
 
 ### Lower Priority (Consider Future Refactoring)
 
@@ -78,8 +87,21 @@ All new types **must** follow the naming conventions:
 - If it manages resources/caching → `Manager`
 - If it issues GPU commands/rendering → `Renderer`  
 - If it processes ECS components → `System`
+- If it's a top-level API coordinator → `Context` (rare exception)
 
 When in doubt, ask: "What is this type's primary responsibility?"
+
+### Context Types (Rare Exception)
+
+The `Context` suffix is reserved for top-level types that:
+1. Manage entire API lifecycle (not just resources)
+2. Coordinate multiple subsystems (managers, renderers, etc.)
+3. Serve as the primary entry point to a subsystem
+4. Handle synchronization and state management across components
+
+**Example**: `RenderContext` manages Vulkan lifecycle, coordinates multiple managers/renderers, handles swapchain recreation, and provides unified rendering API.
+
+**Note**: This is a rare pattern. Most new types should use Manager/Renderer/System. Only create Context types when building top-level API abstractions.
 
 ## Decision Log
 
@@ -91,6 +113,17 @@ When in doubt, ask: "What is this type's primary responsibility?"
 - Renamed to `ParticleRenderer` to follow rendering type conventions
 - Updated all documentation references
 - Type correctly reflects its GPU rendering responsibility
+
+### RenderContext Evaluated (December 2024)
+- **Decision**: Keep as-is - no renaming required
+- **Analysis**: Evaluated whether `RenderContext` should be renamed to `RenderManager` per naming conventions
+- **Result**: `RenderContext` is a legitimate exception to the Manager/Renderer/System pattern
+- **Key Insight**: Top-level context types that encapsulate entire subsystems and provide unified API surface don't fit neatly into the three categories. The "Context" suffix is appropriate for:
+  - Types that manage API lifecycle (Vulkan instance, device, queues)
+  - Types that coordinate multiple subsystems (managers, renderers, synchronization)
+  - Types that serve as the primary entry point to a graphics API
+- **Precedent**: Established pattern in graphics programming (GLContext, VkContext, D3DContext)
+- **Impact**: This decision clarifies that "Context" is an acceptable suffix for top-level API coordinators
 
 ### Future Decisions
 Document any decisions to keep existing names or approve exceptions here.

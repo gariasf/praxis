@@ -248,15 +248,19 @@ Use these suffixes consistently to clarify responsibility:
 | **Manager** | Resource caching, asset loading, lifetime management | `AudioManager`, `TextureManager`, `SceneManager` | Manages a pool/cache of resources, handles allocation/deallocation, provides retrieval APIs |
 | **Renderer** | GPU rendering, draw calls, pipeline management | `DeferredRenderer`, `TerrainRenderer`, `ParticleRenderer` | Encapsulates Vulkan pipelines, command buffers, and draw logic; issues GPU commands |
 | **System** | ECS behavior, component processing | `SelectionSystem`, `UndoRedoSystem`, `PhysicsSystem` | Processes ECS components/queries each frame; implements game logic or editor behavior |
+| **Context** | Top-level API coordinator (rare) | `RenderContext` | Manages API lifecycle, coordinates multiple subsystems, serves as primary entry point |
 
 **Functions** that act as systems use `_system` suffix (e.g., `physics_step_system`, `frustum_culling_system`).
+
+**Context types** are reserved for top-level types that manage entire API lifecycles and coordinate multiple subsystems. Most types should use Manager/Renderer/System. Only use Context for top-level API abstractions like `RenderContext` (which manages Vulkan lifecycle, coordinates managers/renderers, and handles synchronization).
 
 **Anti-patterns to avoid**:
 - Using `System` for non-ECS types (should use `Renderer` or `Manager` instead)
 - Using `Manager` for types that only render (should be `Renderer`)
-- Using `Context` inconsistently (prefer `Manager` for resource management)
+- Using `Context` for simple resource management (should be `Manager`)
+- Creating new Context types without clear justification (rare pattern)
 
-**Note**: Some existing types predate these conventions. See `dev-notes/NAMING_STANDARDIZATION.md` for migration tracking.
+**Note**: Some existing types predate these conventions. See `dev-notes/NAMING_STANDARDIZATION.md` for migration tracking and the RenderContext evaluation.
 
 ## Code Quality
 
