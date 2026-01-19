@@ -35,6 +35,7 @@ members = [
     "crates/praxis_terrain",
     "crates/praxis_utils",
     "crates/praxis_window",
+    "scripts/benchmark-compare",
 ]
 
 [workspace.lints.clippy]

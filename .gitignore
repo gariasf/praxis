@@ -96,6 +96,13 @@ LITERATURE.md
 # Criterion benchmark results
 target/criterion/
 
+# Performance regression testing artifacts
+benchmark-results/
+*.bench
+comparison.json
+comparison.md
+regressions-detected
+
 # Asset Browser - Generated thumbnails cache (if we add disk caching in the future)
 .asset_thumbnails/
 *.thumb
