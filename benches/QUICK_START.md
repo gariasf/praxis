@@ -21,10 +21,14 @@ cargo bench --bench descriptor_set_allocation
 cargo bench --bench staging_buffer
 cargo bench --bench graphics_optimization
 
+# GPU vs CPU culling benchmark (NEW)
+cargo bench --bench graphics_optimization -- gpu_vs_cpu_culling
+
 # Run with pattern matching
 cargo bench -- physics          # All physics-related benchmarks
 cargo bench -- raycast          # Just raycast benchmarks
 cargo bench -- material_batching # Just material batching
+cargo bench -- gpu_vs_cpu       # GPU vs CPU culling
 
 # Save baseline for comparison
 cargo bench -- --save-baseline main
@@ -88,6 +92,22 @@ integrated_optimization_scenarios/baseline         time: [5.0 ms]
 integrated_optimization_scenarios/optimized        time: [4.5 ms]  ✓ 10% faster (target: 5-15%)
 ```
 
+### GPU vs CPU Culling Results
+
+Expected scalability patterns:
+```
+gpu_vs_cpu_culling/cpu_culling/1000           time: [75 µs]    ✓ Linear scaling
+gpu_vs_cpu_culling/cpu_culling/10000          time: [750 µs]   ✓ 10x objects = 10x time
+
+gpu_vs_cpu_culling/gpu_culling/1000           time: [350 µs]   ✓ Sublinear scaling
+gpu_vs_cpu_culling/gpu_culling/10000          time: [500 µs]   ✓ 10x objects = 1.4x time
+
+gpu_vs_cpu_culling/cpu_overhead_only/1000     time: [20 µs]    ✓ O(1) CPU cost
+gpu_vs_cpu_culling/cpu_overhead_only/10000    time: [20 µs]    ✓ Constant regardless of count
+```
+
+Key insight: GPU culling has **O(1) CPU overhead** regardless of object count!
+
 ## 🎯 Performance Targets
 
 ### Core Engine
@@ -112,6 +132,16 @@ integrated_optimization_scenarios/optimized        time: [4.5 ms]  ✓ 10% faste
 | persistent_staging_buffer/reuse | 2-3x faster | vs create new |
 | descriptor_set_caching/with_caching | Near-zero | After first frame |
 | **integrated_optimization_scenarios/optimized** | **5-15% faster** | **Primary target** |
+
+### GPU vs CPU Culling
+
+| Benchmark | Target | Notes |
+|-----------|--------|-------|
+| cpu_culling/1000 | < 100μs | Linear O(N) scaling |
+| cpu_culling/10000 | < 1000μs | Should be 10x slower |
+| gpu_culling/1000 | < 400μs | Includes GPU exec time |
+| gpu_culling/10000 | < 600μs | Should NOT be 10x slower |
+| **cpu_overhead_only/any** | **< 30μs** | **O(1) regardless of count** |
 
 ## 🔍 Finding Bottlenecks
 
@@ -264,6 +294,12 @@ cargo bench --bench graphics_optimization -- descriptor_set_caching
 # 4. Integrated performance (target: 5-15% improvement)
 cargo bench --bench graphics_optimization -- integrated_optimization_scenarios
 # ✅ Check: optimized_batching_and_pooling is 5-15% faster than baseline_current_approach
+
+# 5. GPU vs CPU culling (target: O(1) CPU overhead)
+cargo bench --bench graphics_optimization -- gpu_vs_cpu_culling
+# ✅ Check: cpu_overhead_only shows constant time regardless of object count
+# ✅ Check: cpu_culling shows linear scaling (10x objects = 10x time)
+# ✅ Check: gpu_culling shows sublinear scaling (10x objects ≠ 10x time)
 ```
 
 ## 🔗 More Information
