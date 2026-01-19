@@ -1,4 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use praxis_graphics::gpu_culling::{GpuCullingManager, GpuDrawCommand, GpuMeshData};
+use praxis_math::{Mat4, Vec3, Vec4};
 use std::sync::Arc;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
@@ -24,8 +26,6 @@ use vulkano::{
     sync::{self, GpuFuture},
     VulkanLibrary,
 };
-use praxis_graphics::gpu_culling::{GpuCullingManager, GpuDrawCommand, GpuMeshData};
-use praxis_math::{Mat4, Vec3, Vec4};
 
 struct GraphicsContext {
     device: Arc<Device>,
@@ -958,18 +958,14 @@ fn bench_gpu_vs_cpu_culling(c: &mut Criterion) {
                 Vec3::new(0.0, 0.0, 0.0),
                 Vec3::new(0.0, 1.0, 0.0),
             );
-            let proj = Mat4::perspective_rh(
-                std::f32::consts::PI / 4.0,
-                16.0 / 9.0,
-                0.1,
-                1000.0,
-            );
+            let proj = Mat4::perspective_rh(std::f32::consts::PI / 4.0, 16.0 / 9.0, 0.1, 1000.0);
             let view_proj = proj * view;
 
             // Extract frustum planes
             let m = view_proj.to_cols_array_2d();
             let normalize_plane = |plane: [f32; 4]| -> [f32; 4] {
-                let length = (plane[0] * plane[0] + plane[1] * plane[1] + plane[2] * plane[2]).sqrt();
+                let length =
+                    (plane[0] * plane[0] + plane[1] * plane[1] + plane[2] * plane[2]).sqrt();
                 [
                     plane[0] / length,
                     plane[1] / length,
@@ -979,27 +975,57 @@ fn bench_gpu_vs_cpu_culling(c: &mut Criterion) {
             };
 
             let frustum_planes = [
-                normalize_plane([m[0][3] + m[0][0], m[1][3] + m[1][0], m[2][3] + m[2][0], m[3][3] + m[3][0]]), // left
-                normalize_plane([m[0][3] - m[0][0], m[1][3] - m[1][0], m[2][3] - m[2][0], m[3][3] - m[3][0]]), // right
-                normalize_plane([m[0][3] + m[0][1], m[1][3] + m[1][1], m[2][3] + m[2][1], m[3][3] + m[3][1]]), // bottom
-                normalize_plane([m[0][3] - m[0][1], m[1][3] - m[1][1], m[2][3] - m[2][1], m[3][3] - m[3][1]]), // top
-                normalize_plane([m[0][3] + m[0][2], m[1][3] + m[1][2], m[2][3] + m[2][2], m[3][3] + m[3][2]]), // near
-                normalize_plane([m[0][3] - m[0][2], m[1][3] - m[1][2], m[2][3] - m[2][2], m[3][3] - m[3][2]]), // far
+                normalize_plane([
+                    m[0][3] + m[0][0],
+                    m[1][3] + m[1][0],
+                    m[2][3] + m[2][0],
+                    m[3][3] + m[3][0],
+                ]), // left
+                normalize_plane([
+                    m[0][3] - m[0][0],
+                    m[1][3] - m[1][0],
+                    m[2][3] - m[2][0],
+                    m[3][3] - m[3][0],
+                ]), // right
+                normalize_plane([
+                    m[0][3] + m[0][1],
+                    m[1][3] + m[1][1],
+                    m[2][3] + m[2][1],
+                    m[3][3] + m[3][1],
+                ]), // bottom
+                normalize_plane([
+                    m[0][3] - m[0][1],
+                    m[1][3] - m[1][1],
+                    m[2][3] - m[2][1],
+                    m[3][3] - m[3][1],
+                ]), // top
+                normalize_plane([
+                    m[0][3] + m[0][2],
+                    m[1][3] + m[1][2],
+                    m[2][3] + m[2][2],
+                    m[3][3] + m[3][2],
+                ]), // near
+                normalize_plane([
+                    m[0][3] - m[0][2],
+                    m[1][3] - m[1][2],
+                    m[2][3] - m[2][2],
+                    m[3][3] - m[3][2],
+                ]), // far
             ];
 
             // Setup test objects in a grid (approximately 50% will be visible)
             let grid_size = (object_count as f32).cbrt().ceil() as usize;
             let spacing = 10.0;
             let mut objects = Vec::with_capacity(object_count);
-            
+
             for i in 0..object_count {
                 let x = ((i % grid_size) as f32 - grid_size as f32 / 2.0) * spacing;
                 let y = (((i / grid_size) % grid_size) as f32 - grid_size as f32 / 2.0) * spacing;
                 let z = ((i / (grid_size * grid_size)) as f32 - grid_size as f32 / 2.0) * spacing;
-                
+
                 objects.push((
-                    Vec3::new(x, y, z),  // center
-                    2.0,                  // radius
+                    Vec3::new(x, y, z), // center
+                    2.0,                // radius
                 ));
             }
 
@@ -1013,7 +1039,10 @@ fn bench_gpu_vs_cpu_culling(c: &mut Criterion) {
 
                     // Test sphere against all 6 frustum planes
                     for plane in &frustum_planes {
-                        let distance = plane[0] * center.x + plane[1] * center.y + plane[2] * center.z + plane[3];
+                        let distance = plane[0] * center.x
+                            + plane[1] * center.y
+                            + plane[2] * center.z
+                            + plane[3];
                         if distance < -radius {
                             is_visible = false;
                             break;
@@ -1049,12 +1078,7 @@ fn bench_gpu_vs_cpu_culling(c: &mut Criterion) {
                 Vec3::new(0.0, 0.0, 0.0),
                 Vec3::new(0.0, 1.0, 0.0),
             );
-            let proj = Mat4::perspective_rh(
-                std::f32::consts::PI / 4.0,
-                16.0 / 9.0,
-                0.1,
-                1000.0,
-            );
+            let proj = Mat4::perspective_rh(std::f32::consts::PI / 4.0, 16.0 / 9.0, 0.1, 1000.0);
             let view_proj = proj * view;
             let camera_pos = Vec3::new(0.0, 0.0, 50.0);
 
@@ -1066,22 +1090,17 @@ fn bench_gpu_vs_cpu_culling(c: &mut Criterion) {
             let spacing = 10.0;
             let mut draw_commands = Vec::with_capacity(object_count);
             let mut mesh_data = Vec::with_capacity(object_count);
-            
+
             for i in 0..object_count {
                 let x = ((i % grid_size) as f32 - grid_size as f32 / 2.0) * spacing;
                 let y = (((i / grid_size) % grid_size) as f32 - grid_size as f32 / 2.0) * spacing;
                 let z = ((i / (grid_size * grid_size)) as f32 - grid_size as f32 / 2.0) * spacing;
-                
+
                 let model = Mat4::from_translation(Vec3::new(x, y, z));
                 let bounding_sphere = Vec4::new(0.0, 0.0, 0.0, 2.0); // local space sphere
-                
-                draw_commands.push(GpuDrawCommand::new(
-                    model,
-                    bounding_sphere,
-                    i as u32,
-                    0,
-                ));
-                
+
+                draw_commands.push(GpuDrawCommand::new(model, bounding_sphere, i as u32, 0));
+
                 mesh_data.push(GpuMeshData {
                     index_count: 36,
                     first_index: 0,
@@ -1091,7 +1110,8 @@ fn bench_gpu_vs_cpu_culling(c: &mut Criterion) {
             }
 
             // Prepare buffers once
-            culling_manager.prepare_frame(&draw_commands, &mesh_data)
+            culling_manager
+                .prepare_frame(&draw_commands, &mesh_data)
                 .expect("Failed to prepare GPU culling frame");
 
             b.iter(|| {
@@ -1106,13 +1126,9 @@ fn bench_gpu_vs_cpu_culling(c: &mut Criterion) {
                 .expect("Failed to create command buffer");
 
                 // Dispatch GPU culling compute shader
-                culling_manager.dispatch_culling(
-                    &mut builder,
-                    view_proj,
-                    frustum_planes,
-                    camera_pos,
-                )
-                .expect("Failed to dispatch GPU culling");
+                culling_manager
+                    .dispatch_culling(&mut builder, view_proj, frustum_planes, camera_pos)
+                    .expect("Failed to dispatch GPU culling");
 
                 let command_buffer = builder.build().expect("Failed to build command buffer");
 
@@ -1126,9 +1142,10 @@ fn bench_gpu_vs_cpu_culling(c: &mut Criterion) {
                 future.wait(None).expect("Failed to wait for GPU");
 
                 let cpu_time = start.elapsed();
-                
+
                 // Read back visible count for verification
-                let visible_count = culling_manager.read_visible_count()
+                let visible_count = culling_manager
+                    .read_visible_count()
                     .expect("Failed to read visible count");
 
                 black_box((visible_count, cpu_time))
@@ -1139,7 +1156,7 @@ fn bench_gpu_vs_cpu_culling(c: &mut Criterion) {
         group.bench_function(BenchmarkId::new("cpu_overhead_only", object_count), |b| {
             // This benchmark measures the CPU-side overhead of preparing and dispatching
             // GPU culling, excluding GPU execution time
-            
+
             let mut culling_manager = GpuCullingManager::new(
                 ctx.device.clone(),
                 ctx.memory_allocator.clone(),
@@ -1155,12 +1172,7 @@ fn bench_gpu_vs_cpu_culling(c: &mut Criterion) {
                 Vec3::new(0.0, 0.0, 0.0),
                 Vec3::new(0.0, 1.0, 0.0),
             );
-            let proj = Mat4::perspective_rh(
-                std::f32::consts::PI / 4.0,
-                16.0 / 9.0,
-                0.1,
-                1000.0,
-            );
+            let proj = Mat4::perspective_rh(std::f32::consts::PI / 4.0, 16.0 / 9.0, 0.1, 1000.0);
             let view_proj = proj * view;
             let camera_pos = Vec3::new(0.0, 0.0, 50.0);
             let frustum_planes = praxis_graphics::gpu_culling::extract_frustum_planes(view_proj);
@@ -1169,15 +1181,15 @@ fn bench_gpu_vs_cpu_culling(c: &mut Criterion) {
             let spacing = 10.0;
             let mut draw_commands = Vec::with_capacity(object_count);
             let mut mesh_data = Vec::with_capacity(object_count);
-            
+
             for i in 0..object_count {
                 let x = ((i % grid_size) as f32 - grid_size as f32 / 2.0) * spacing;
                 let y = (((i / grid_size) % grid_size) as f32 - grid_size as f32 / 2.0) * spacing;
                 let z = ((i / (grid_size * grid_size)) as f32 - grid_size as f32 / 2.0) * spacing;
-                
+
                 let model = Mat4::from_translation(Vec3::new(x, y, z));
                 let bounding_sphere = Vec4::new(0.0, 0.0, 0.0, 2.0);
-                
+
                 draw_commands.push(GpuDrawCommand::new(model, bounding_sphere, i as u32, 0));
                 mesh_data.push(GpuMeshData {
                     index_count: 36,
@@ -1187,7 +1199,8 @@ fn bench_gpu_vs_cpu_culling(c: &mut Criterion) {
                 });
             }
 
-            culling_manager.prepare_frame(&draw_commands, &mesh_data)
+            culling_manager
+                .prepare_frame(&draw_commands, &mesh_data)
                 .expect("Failed to prepare GPU culling frame");
 
             b.iter(|| {
@@ -1201,18 +1214,14 @@ fn bench_gpu_vs_cpu_culling(c: &mut Criterion) {
                 )
                 .expect("Failed to create command buffer");
 
-                culling_manager.dispatch_culling(
-                    &mut builder,
-                    view_proj,
-                    frustum_planes,
-                    camera_pos,
-                )
-                .expect("Failed to dispatch GPU culling");
+                culling_manager
+                    .dispatch_culling(&mut builder, view_proj, frustum_planes, camera_pos)
+                    .expect("Failed to dispatch GPU culling");
 
                 let _command_buffer = builder.build().expect("Failed to build command buffer");
 
                 let cpu_time = start.elapsed();
-                
+
                 // Note: We don't submit/wait here, just measuring CPU overhead
                 black_box(cpu_time)
             });

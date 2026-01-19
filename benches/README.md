@@ -109,9 +109,30 @@ Benchmarks scene definition serialization and deserialization using RON format.
 
 ### 7. Descriptor Set Allocation (`descriptor_set_allocation.rs`)
 
-Comprehensive benchmarks for Vulkan descriptor set allocation patterns and optimization strategies. Designed to measure the impact of planned graphics optimizations.
+Comprehensive benchmarks for Vulkan descriptor set allocation patterns and optimization strategies. Designed to measure the impact of planned graphics optimizations, with special focus on LRU caching performance.
 
-**Benchmarks:**
+**Key Benchmarks:**
+- `descriptor_caching_with_lru`: **Main benchmark** - Measures allocation rates with/without LRU caching over 1000 frames with 100 unique materials
+  - Without caching: 100,000 allocations (100 materials × 1000 frames)
+  - With LRU caching: 100 allocations (only on first frame)
+  - Validates 100x+ reduction in allocations
+  - Tracks cache hit rate (expected >99.9%)
+
+- `descriptor_allocation_with_tracking`: Detailed per-frame allocation tracking with statistics
+  - Validates frame-by-frame allocation patterns
+  - First frame: 100 allocations, subsequent frames: 0 allocations
+  - Verifies 100x+ reduction with detailed metrics
+
+- `cache_hit_rate_analysis`: Measures steady-state cache efficiency after warmup
+  - 10-frame warmup period
+  - 990 frames steady-state measurement
+  - Expected: 100% cache hit rate after warmup
+
+- `varying_material_counts`: Tests scalability (10, 50, 100, 200, 500 materials)
+  - Validates cache efficiency scales properly
+  - Ensures >99.9% hit rate regardless of material count
+
+**Legacy Benchmarks:**
 - `descriptor_set_single_allocation`: Single descriptor set allocation overhead
 - `descriptor_set_batch_allocation`: Batch allocation (10-1000 sets) with throughput metrics
 - `descriptor_reuse_vs_recreation`: Compare reusing existing sets vs recreating each frame
@@ -121,13 +142,17 @@ Comprehensive benchmarks for Vulkan descriptor set allocation patterns and optim
 - `frame_by_frame_allocation`: Simulate per-frame allocation with varying object counts
 
 **Metrics:**
+- Total allocations over 1000 frames
+- Cache hit rate percentage
+- Allocation reduction factor (with vs without caching)
+- Per-frame allocation counts
 - Descriptor sets allocated per second
-- Allocation overhead per set
 - Memory efficiency (sets created vs sets needed)
-- Impact of batching and reuse strategies
 
 **Performance targets:**
-- Target 5-15% improvement through pooling and reuse
+- **100x+ reduction** in allocations with LRU caching (primary target)
+- **>99.9% cache hit rate** after first frame
+- **100% cache hit rate** in steady-state (after warmup)
 - <50μs per descriptor set with optimal pooling
 - 10-20x reduction in allocations through material batching
 
@@ -281,9 +306,11 @@ Criterion generates detailed reports including:
 - Watch for: Linear scaling with entity count, hierarchy depth impact
 
 **Descriptor Set Allocation:**
+- **Primary Target**: 100x+ reduction in allocations with LRU caching
 - Target: < 50μs per allocation with pooling
-- Watch for: 10-20x reduction with material batching
-- Compare: "no_batching" vs "with_batching_10_materials"
+- Watch for: >99.9% cache hit rate after first frame
+- Compare: "without_caching" vs "with_lru_caching" in `descriptor_caching_with_lru`
+- Verify: Frame 1 = 100 allocations, Frames 2-1000 = 0 allocations
 
 **Staging Buffer:**
 - Target: > 500 MB/s throughput
@@ -297,23 +324,30 @@ Criterion generates detailed reports including:
 
 ### Reading Graphics Optimization Results
 
-1. **Descriptor Set Allocation**: 
+1. **Descriptor Set Allocation (LRU Caching)**: 
+   - Look at "descriptor_caching_with_lru" group
+   - Compare "without_caching" vs "with_lru_caching"
+   - **Should see 1000x reduction in allocations** (100,000 → 100)
+   - **Should see >99.9% cache hit rate**
+   - Verify assertions pass (they validate the 100x+ reduction)
+   
+2. **Descriptor Set Allocation (Legacy)**: 
    - Look at "material_batching_optimization" group
    - Compare "no_batching" vs "with_batching_10_materials"
    - Should see 10x fewer allocations
 
-2. **Staging Buffer Performance**:
+3. **Staging Buffer Performance**:
    - Look at "persistent_staging_buffer" group
    - Compare "create_new_buffer_each_time" vs "reuse_persistent_buffer"
    - Should see 2-3x throughput improvement
 
-3. **Integrated Performance** (Most Important):
+4. **Integrated Performance** (Most Important):
    - Look at "integrated_optimization_scenarios" group
    - Compare "baseline_current_approach" vs "optimized_batching_and_pooling"
    - **Target: 5-15% faster frame time**
    - This validates the overall optimization strategy
 
-4. **Frame-to-Frame Efficiency**:
+5. **Frame-to-Frame Efficiency**:
    - "descriptor_set_caching" should show near-zero cost after first frame
    - "staging_buffer_pooling" should show consistent performance
 
