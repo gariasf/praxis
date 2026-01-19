@@ -18,47 +18,71 @@ Full ECS access from Lua with hot-reload, sandboxing, and performance monitoring
 
 ```rust
 use praxis_scripting::{ScriptingContext, ScriptingConfig};
+use color_eyre::Result;
 
-let mut context = ScriptingContext::new(ScriptingConfig::default())?;
-
-// Load and execute
-context.load_script("game_logic", "scripts/game.lua")?;
-context.call_function::<_, ()>("game_logic", "update", 0.016)?;
-
-// Hot-reload
-context.enable_hot_reload("scripts")?;
-context.process_hot_reload()?;
+fn main() -> Result<()> {
+    // Initialize scripting context with default configuration
+    let mut context = ScriptingContext::new(ScriptingConfig::default())?;
+    
+    // Load and execute a script
+    context.load_script("game_logic", "scripts/game.lua")?;
+    
+    // Call a function in the loaded script
+    context.call_function::<_, ()>("game_logic", "update", 0.016)?;
+    
+    // Enable hot-reload for script directory
+    context.enable_hot_reload("scripts")?;
+    
+    // Process hot-reload events
+    context.process_hot_reload()?;
+    
+    Ok(())
+}
 ```
 
 ## Lua ECS Access
 
 ```lua
--- Spawn entity
+-- Spawn a new entity
 local entity = world.spawn()
+
+-- Add components by name
 world.add_component_name(entity, "Player")
+
+-- Add Transform component with position
 world.add_component_transform(entity, 0, 0, 0)
 
--- Query entities
+-- Query entities by name
 local player = world.get_entity_by_name("Player")
+
+-- Retrieve component data
 local transform = world.get_component_transform(player)
 print("Player at", transform.translation.x, transform.translation.y)
 
--- Modify components
+-- Modify and update components
+transform.translation.x = transform.translation.x + 1.0
 world.set_component_transform(player, transform)
 ```
 
 ## Sandboxing
 
 ```rust
-let config = ScriptingConfig {
-    sandbox: SandboxConfig {
-        level: SandboxLevel::Strict,
-        allow_file_io: false,
-        instruction_limit: 1_000_000,
-        memory_limit: 100 * 1024 * 1024, // 100 MB
-    },
-    ..Default::default()
-};
+use praxis_scripting::{ScriptingConfig, SandboxConfig, SandboxLevel};
+use color_eyre::Result;
+
+fn setup_secure_scripting() -> Result<ScriptingContext> {
+    let config = ScriptingConfig {
+        sandbox: SandboxConfig {
+            level: SandboxLevel::Strict,
+            allow_file_io: false,
+            instruction_limit: 1_000_000,  // Prevent infinite loops
+            memory_limit: 100 * 1024 * 1024, // 100 MB
+        },
+        ..Default::default()
+    };
+    
+    ScriptingContext::new(config)
+}
 ```
 
 ## Documentation
@@ -72,8 +96,13 @@ let config = ScriptingConfig {
 ## Examples
 
 ```bash
+# Basic scripting demo
 cargo run --example scripting_demo
+
+# Advanced scripting features
 cargo run --example scripting_advanced_demo
+
+# Interactive console with Lua REPL
 cargo run --example scripting_console_demo
 ```
 

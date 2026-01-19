@@ -20,38 +20,54 @@ Comprehensive multiplayer networking with automatic component synchronization, i
 
 ```rust
 use praxis_networking::{NetworkServer, NetworkConfig, ReplicationRegistry};
+use color_eyre::Result;
 
-let config = NetworkConfig {
-    bind_addr: "0.0.0.0:7777".to_string(),
-    max_clients: 32,
-    tick_rate: 60,
-    ..Default::default()
-};
-
-let mut server = NetworkServer::new(config).await?;
-server.start().await?;
-
-// Register components
-let mut registry = ReplicationRegistry::new();
-registry.register_transform();
-registry.register_velocity();
-
-// Game loop
-loop {
-    server.update(delta_time)?;
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Configure server
+    let config = NetworkConfig {
+        bind_addr: "0.0.0.0:7777".to_string(),
+        max_clients: 32,
+        tick_rate: 60,
+        ..Default::default()
+    };
+    
+    // Create and start server
+    let mut server = NetworkServer::new(config).await?;
+    server.start().await?;
+    
+    // Register components for replication
+    let mut registry = ReplicationRegistry::new();
+    registry.register_transform();
+    registry.register_velocity();
+    
+    // Game loop
+    loop {
+        let delta_time = 0.016; // 60 FPS
+        server.update(delta_time)?;
+    }
 }
 ```
 
 ### Client
 
 ```rust
-use praxis_networking::NetworkClient;
+use praxis_networking::{NetworkClient, NetworkConfig};
+use color_eyre::Result;
 
-let mut client = NetworkClient::new(NetworkConfig::default()).await?;
-client.connect("127.0.0.1:7777", "Player1".to_string()).await?;
-
-loop {
-    client.update(delta_time)?;
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Create client
+    let mut client = NetworkClient::new(NetworkConfig::default()).await?;
+    
+    // Connect to server
+    client.connect("127.0.0.1:7777", "Player1".to_string()).await?;
+    
+    // Game loop
+    loop {
+        let delta_time = 0.016; // 60 FPS
+        client.update(delta_time)?;
+    }
 }
 ```
 
@@ -59,13 +75,23 @@ loop {
 
 ```rust
 use praxis_networking::{NetworkId, Replicated, ReplicatedTransform};
+use praxis_ecs::{World, Transform};
 
-world.spawn((
-    NetworkId::new(1),
-    Replicated::new().with_priority(255),
-    Transform::default(),
-    ReplicatedTransform::default(),
-));
+fn spawn_replicated_entity(world: &mut World) {
+    world.spawn((
+        // Unique network identifier
+        NetworkId::new(1),
+        
+        // Replication component with priority (255 = highest)
+        Replicated::new().with_priority(255),
+        
+        // Standard Transform
+        Transform::default(),
+        
+        // Replicated Transform for network sync
+        ReplicatedTransform::default(),
+    ));
+}
 ```
 
 ## Documentation
@@ -79,6 +105,7 @@ world.spawn((
 ## Examples
 
 ```bash
+# Run networking demo
 cargo run --example networking_demo
 ```
 
