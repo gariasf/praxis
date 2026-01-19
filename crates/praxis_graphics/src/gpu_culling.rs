@@ -1148,10 +1148,17 @@ impl GpuCullingManager {
                 frustum_planes: [[0.0; 4]; 6],
                 camera_position: [0.0; 3],
                 _padding1: 0.0,
+                camera_direction: [0.0, 0.0, -1.0],
+                _padding2: 0.0,
+                screen_dimensions: [1920.0, 1080.0],
+                _padding3: [0.0; 2],
                 enable_frustum_culling: 1,
                 enable_occlusion_culling: 0,
+                enable_backface_culling: 0,
+                enable_small_object_culling: 0,
+                enable_distance_culling: 0,
                 draw_command_count: 0,
-                _padding2: 0,
+                _padding4: [0; 2],
             },
         )
         .map_err(|e| eyre::eyre!("Failed to create culling uniforms buffer: {}", e))?;

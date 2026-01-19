@@ -3732,6 +3732,7 @@ dependencies = [
  "praxis_utils",
  "rand 0.8.5",
  "raw-window-handle 0.6.2",
+ "serde",
  "serial_test",
  "vulkano",
  "vulkano-shaders",

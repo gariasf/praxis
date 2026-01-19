@@ -62,14 +62,13 @@
 //! ```
 
 use crate::line_renderer::{LineBatch, LineRenderer};
-use crate::lod::LodGroup;
 use praxis_math::{Mat4, Vec3};
-use praxis_utils::{debug, eyre, trace, Result};
+use praxis_utils::{debug, trace, Result};
 use std::sync::Arc;
 use vulkano::{
     command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer},
     device::Device,
-    memory::allocator::MemoryAllocator,
+    memory::allocator::StandardMemoryAllocator,
     render_pass::RenderPass,
 };
 
@@ -212,14 +211,14 @@ impl DebugRenderer {
     /// Returns an error if line renderer creation fails.
     pub fn new(
         device: Arc<Device>,
-        memory_allocator: Arc<dyn MemoryAllocator>,
         render_pass: Arc<RenderPass>,
+        memory_allocator: Arc<StandardMemoryAllocator>,
         viewport_dimensions: [u32; 2],
     ) -> Result<Self> {
         debug!("Creating debug renderer");
 
         let line_renderer =
-            LineRenderer::new(device, memory_allocator, render_pass, viewport_dimensions)?;
+            LineRenderer::new(device, render_pass, memory_allocator, viewport_dimensions)?;
 
         Ok(Self {
             line_renderer,
@@ -312,7 +311,7 @@ impl DebugRenderer {
             self.add_wireframe_sphere(&mut batch, info.position, info.radius, color);
         }
 
-        self.line_renderer.render(builder, &batch, view_proj)?;
+        self.line_renderer.render(builder, &batch)?;
 
         Ok(())
     }
@@ -342,7 +341,7 @@ impl DebugRenderer {
             self.add_wireframe_sphere(&mut batch, info.position, info.radius, color);
         }
 
-        self.line_renderer.render(builder, &batch, view_proj)?;
+        self.line_renderer.render(builder, &batch)?;
 
         Ok(())
     }
@@ -392,7 +391,7 @@ impl DebugRenderer {
             }
         }
 
-        self.line_renderer.render(builder, &batch, view_proj)?;
+        self.line_renderer.render(builder, &batch)?;
 
         Ok(())
     }
@@ -532,8 +531,11 @@ impl DebugRenderer {
     }
 
     /// Resizes the debug renderer for new viewport dimensions.
-    pub fn resize(&mut self, viewport_dimensions: [u32; 2]) -> Result<()> {
-        self.line_renderer.resize(viewport_dimensions)?;
+    ///
+    /// Note: Currently a no-op as LineRenderer doesn't support runtime resizing.
+    /// The renderer will need to be recreated for viewport changes.
+    pub fn resize(&mut self, _viewport_dimensions: [u32; 2]) -> Result<()> {
+        // LineRenderer doesn't have a resize method - it uses fixed viewport from creation
         Ok(())
     }
 }
