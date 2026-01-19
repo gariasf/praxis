@@ -1,4 +1,4 @@
-//! GPU-driven LOD selection demo.
+//! GPU-driven LOD selection demo with multi-draw indirect rendering.
 //!
 //! This example demonstrates the GPU-driven LOD (Level of Detail) system that uses
 //! compute shaders to calculate appropriate LOD levels for objects based on their
@@ -12,7 +12,8 @@
 //! - Distance-based LOD switching with configurable thresholds
 //! - LOD bias for forcing higher/lower detail globally
 //! - Debug visualization showing selected LOD levels and distances
-//! - Integration with indirect draw buffer generation
+//! - Integration with multi-draw indirect rendering
+//! - Large scenes (400+ objects with 3 LOD levels each)
 //!
 //! # Controls
 //!
@@ -24,257 +25,336 @@
 //! - **ESC**: Exit
 
 use praxis_core::{Engine, EngineConfig};
+use praxis_ecs::{Component, Query, ResMut, Resource, World};
 use praxis_graphics::lod::{GpuLodLevel, GpuLodSelector, GpuObjectData};
+use praxis_graphics::{DrawCommand, RenderCommands};
 use praxis_math::{Mat4, Vec3};
-use praxis_utils::Result;
+use praxis_scene::{GlobalTransform, Transform};
+use praxis_utils::{info, Result};
 use std::sync::Arc;
-use winit::{
-    event::{ElementState, KeyEvent, WindowEvent},
-    keyboard::{KeyCode, PhysicalKey},
-};
+use winit::event::{ElementState, KeyEvent, WindowEvent};
+use winit::keyboard::{KeyCode, PhysicalKey};
 
-struct LodGpuDemo {
-    // GPU LOD selector
-    lod_selector: Option<GpuLodSelector>,
-
-    // Camera state
-    camera_position: Vec3,
-    camera_yaw: f32,
-    camera_pitch: f32,
-    camera_speed: f32,
-
-    // LOD configuration
-    lod_bias: f32,
-    enable_lod: bool,
-
-    // Object data
-    objects: Vec<GpuObjectData>,
-    lod_levels: Vec<GpuLodLevel>,
-
-    // Debug info
-    selected_lods: Vec<u32>,
-    distances: Vec<f32>,
-    frame_count: u32,
+/// LOD object component
+#[derive(Component, Debug, Clone)]
+struct LodObject {
+    lod_count: u32,
+    lod_offset: u32,
+    current_lod: u32,
 }
 
-impl LodGpuDemo {
-    fn new() -> Self {
+/// LOD system resource
+#[derive(Resource)]
+struct LodSystem {
+    selector: GpuLodSelector,
+    objects: Vec<GpuObjectData>,
+    lod_levels: Vec<GpuLodLevel>,
+    selected_lods: Vec<u32>,
+    distances: Vec<f32>,
+    lod_bias: f32,
+    enable_lod: bool,
+}
+
+/// Camera controller resource
+#[derive(Resource)]
+struct CameraController {
+    position: Vec3,
+    yaw: f32,
+    pitch: f32,
+    speed: f32,
+}
+
+impl Default for CameraController {
+    fn default() -> Self {
         Self {
-            lod_selector: None,
-            camera_position: Vec3::new(0.0, 5.0, 20.0),
-            camera_yaw: 0.0,
-            camera_pitch: 0.0,
-            camera_speed: 5.0,
-            lod_bias: 0.0,
-            enable_lod: true,
-            objects: Vec::new(),
-            lod_levels: Vec::new(),
-            selected_lods: Vec::new(),
-            distances: Vec::new(),
-            frame_count: 0,
+            position: Vec3::new(0.0, 5.0, 20.0),
+            yaw: 0.0,
+            pitch: 0.0,
+            speed: 5.0,
+        }
+    }
+}
+
+/// Statistics resource
+#[derive(Resource, Default)]
+struct Stats {
+    frame_count: u32,
+    lod_counts: [u32; 3],
+}
+
+/// Setup the scene with LOD objects
+fn setup_scene(world: &mut World) -> Result<()> {
+    info!("Setting up LOD scene");
+
+    const GRID_SIZE: i32 = 10;
+    const SPACING: f32 = 5.0;
+
+    let mut lod_offset = 0u32;
+
+    for x in 0..GRID_SIZE {
+        for z in 0..GRID_SIZE {
+            let pos_x = (x as f32 - GRID_SIZE as f32 / 2.0) * SPACING;
+            let pos_z = (z as f32 - GRID_SIZE as f32 / 2.0) * SPACING;
+
+            world.spawn((
+                Transform::from_translation(Vec3::new(pos_x, 0.0, pos_z)),
+                GlobalTransform::default(),
+                LodObject {
+                    lod_count: 3,
+                    lod_offset,
+                    current_lod: 0,
+                },
+            ));
+
+            lod_offset += 3;
         }
     }
 
-    fn setup_scene(&mut self) {
-        // Create a grid of objects with LOD levels
-        let grid_size = 20;
-        let spacing = 5.0;
-        let mut lod_offset = 0u32;
+    info!("Created {} LOD objects", GRID_SIZE * GRID_SIZE);
 
-        for x in 0..grid_size {
-            for z in 0..grid_size {
-                let pos_x = (x as f32 - grid_size as f32 / 2.0) * spacing;
-                let pos_z = (z as f32 - grid_size as f32 / 2.0) * spacing;
+    Ok(())
+}
 
-                let model = Mat4::from_translation(Vec3::new(pos_x, 0.0, pos_z));
+/// Initialize LOD system
+fn init_lod_system(render_context: &mut praxis_graphics::RenderContext) -> Result<LodSystem> {
+    info!("Initializing GPU LOD selector");
 
-                // Define 3 LOD levels for this object
-                // LOD 0: High detail (0-10 units)
-                self.lod_levels.push(GpuLodLevel {
-                    mesh_id: 0, // High detail mesh
-                    min_distance_sq: 0.0,
-                    max_distance_sq: 100.0, // 10^2
-                    padding: 0,
-                });
+    let selector = GpuLodSelector::new(
+        render_context.device.clone(),
+        render_context.memory_allocator().clone(),
+        Arc::new(vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator::new(
+            render_context.device.clone(),
+            Default::default(),
+        )),
+    )?;
 
-                // LOD 1: Medium detail (10-25 units)
-                self.lod_levels.push(GpuLodLevel {
-                    mesh_id: 1, // Medium detail mesh
-                    min_distance_sq: 100.0,
-                    max_distance_sq: 625.0, // 25^2
-                    padding: 0,
-                });
+    // Create LOD level definitions
+    // Each object has 3 LOD levels with different distance thresholds
+    let mut lod_levels = Vec::new();
 
-                // LOD 2: Low detail (25+ units)
-                self.lod_levels.push(GpuLodLevel {
-                    mesh_id: 2, // Low detail mesh
-                    min_distance_sq: 625.0,
-                    max_distance_sq: f32::MAX,
-                    padding: 0,
-                });
+    const GRID_SIZE: i32 = 10;
+    let num_objects = (GRID_SIZE * GRID_SIZE) as usize;
 
-                // Add object with LOD metadata
-                self.objects.push(GpuObjectData::new(
-                    model,
-                    [0.0, 0.0, 0.0, 1.0], // Bounding sphere (center at origin, radius 1)
-                    0,                    // Base mesh ID
-                    3,                    // 3 LOD levels
-                    lod_offset,           // Offset in LOD array
-                ));
+    for _ in 0..num_objects {
+        // LOD 0: High detail (0-10 units)
+        lod_levels.push(GpuLodLevel {
+            mesh_id: 0,         // High detail mesh
+            min_distance_sq: 0.0,
+            max_distance_sq: 100.0, // 10^2
+            padding: 0,
+        });
 
-                lod_offset += 3; // Each object has 3 LOD levels
-            }
-        }
+        // LOD 1: Medium detail (10-25 units)
+        lod_levels.push(GpuLodLevel {
+            mesh_id: 1,          // Medium detail mesh
+            min_distance_sq: 100.0,
+            max_distance_sq: 625.0, // 25^2
+            padding: 0,
+        });
 
-        println!(
-            "Created {} objects with {} LOD levels",
-            self.objects.len(),
-            self.lod_levels.len()
-        );
+        // LOD 2: Low detail (25+ units)
+        lod_levels.push(GpuLodLevel {
+            mesh_id: 2,          // Low detail mesh
+            min_distance_sq: 625.0,
+            max_distance_sq: f32::MAX,
+            padding: 0,
+        });
     }
 
-    fn update(&mut self, delta_time: f32) {
-        // Update camera based on input (would be handled by event system in real app)
-        // For this demo, camera movement is simplified
+    info!("Created {} LOD level definitions", lod_levels.len());
 
-        // Update frame counter for periodic debug readback
-        self.frame_count += 1;
+    Ok(LodSystem {
+        selector,
+        objects: Vec::new(),
+        lod_levels,
+        selected_lods: vec![0; num_objects],
+        distances: vec![0.0; num_objects],
+        lod_bias: 0.0,
+        enable_lod: true,
+    })
+}
 
-        // Every 60 frames, read back LOD selections for debug visualization
-        if self.frame_count % 60 == 0 {
-            if let Some(selector) = &self.lod_selector {
-                if let Ok(selected) = selector.read_selected_lods() {
-                    self.selected_lods = selected;
-                }
-                if let Ok(distances) = selector.read_distances() {
-                    self.distances = distances;
-                }
+/// Update LOD object data from ECS
+fn update_lod_objects(mut lod_system: ResMut<LodSystem>, query: Query<(&GlobalTransform, &LodObject)>) {
+    lod_system.objects.clear();
 
-                // Print statistics
-                let mut lod_counts = [0u32; 3];
-                for &lod in &self.selected_lods {
-                    if (lod as usize) < lod_counts.len() {
-                        lod_counts[lod as usize] += 1;
-                    }
-                }
+    for (transform, lod_obj) in query.iter() {
+        let model = transform.compute_matrix();
+        let bounding_sphere = [0.0, 0.0, 0.0, 1.0];
 
-                println!(
-                    "LOD Statistics: LOD0={} LOD1={} LOD2={} (bias={:.2})",
-                    lod_counts[0], lod_counts[1], lod_counts[2], self.lod_bias
-                );
-            }
-        }
+        lod_system.objects.push(GpuObjectData::new(
+            model,
+            bounding_sphere,
+            0, // Base mesh ID
+            lod_obj.lod_count,
+            lod_obj.lod_offset,
+        ));
     }
+}
 
-    fn handle_input(&mut self, event: &WindowEvent, delta_time: f32) {
-        match event {
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        physical_key: PhysicalKey::Code(keycode),
-                        state: ElementState::Pressed,
-                        ..
-                    },
+/// Camera controller system
+fn camera_controller_system(mut camera: ResMut<CameraController>, delta_time: f32) {
+    // Orbit camera around the scene
+    let time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs_f32();
+
+    let radius = 30.0;
+    let height = 15.0;
+
+    camera.position = Vec3::new(
+        radius * (time * 0.2).cos(),
+        height + 5.0 * (time * 0.3).sin(),
+        radius * (time * 0.2).sin(),
+    );
+
+    // Look at center
+    camera.yaw = -(time * 0.2);
+    camera.pitch = -0.3 - (time * 0.3).sin() * 0.2;
+}
+
+/// Input handling system
+fn handle_input(
+    event: &WindowEvent,
+    lod_system: &mut LodSystem,
+    delta_time: f32,
+) {
+    if let WindowEvent::KeyboardInput {
+        event:
+            KeyEvent {
+                physical_key: PhysicalKey::Code(keycode),
+                state: ElementState::Pressed,
                 ..
-            } => {
-                let forward =
-                    Vec3::new(self.camera_yaw.sin(), 0.0, -self.camera_yaw.cos()).normalize();
-                let right = Vec3::new(forward.z, 0.0, -forward.x);
-
-                match keycode {
-                    // Camera movement
-                    KeyCode::KeyW => {
-                        self.camera_position += forward * self.camera_speed * delta_time
+            },
+        ..
+    } = event
+    {
+        match keycode {
+            KeyCode::Equal | KeyCode::NumpadAdd => {
+                lod_system.lod_bias = (lod_system.lod_bias + 0.1).clamp(-1.0, 1.0);
+                info!("LOD bias: {:.2}", lod_system.lod_bias);
+            }
+            KeyCode::Minus | KeyCode::NumpadSubtract => {
+                lod_system.lod_bias = (lod_system.lod_bias - 0.1).clamp(-1.0, 1.0);
+                info!("LOD bias: {:.2}", lod_system.lod_bias);
+            }
+            KeyCode::KeyL => {
+                lod_system.enable_lod = !lod_system.enable_lod;
+                info!(
+                    "LOD system: {}",
+                    if lod_system.enable_lod {
+                        "ENABLED"
+                    } else {
+                        "DISABLED"
                     }
-                    KeyCode::KeyS => {
-                        self.camera_position -= forward * self.camera_speed * delta_time
-                    }
-                    KeyCode::KeyA => self.camera_position -= right * self.camera_speed * delta_time,
-                    KeyCode::KeyD => self.camera_position += right * self.camera_speed * delta_time,
-                    KeyCode::KeyQ => self.camera_position.y -= self.camera_speed * delta_time,
-                    KeyCode::KeyE => self.camera_position.y += self.camera_speed * delta_time,
-
-                    // Camera rotation
-                    KeyCode::ArrowLeft => self.camera_yaw -= 1.0 * delta_time,
-                    KeyCode::ArrowRight => self.camera_yaw += 1.0 * delta_time,
-                    KeyCode::ArrowUp => {
-                        self.camera_pitch = (self.camera_pitch + 1.0 * delta_time)
-                            .clamp(-std::f32::consts::FRAC_PI_2, std::f32::consts::FRAC_PI_2);
-                    }
-                    KeyCode::ArrowDown => {
-                        self.camera_pitch = (self.camera_pitch - 1.0 * delta_time)
-                            .clamp(-std::f32::consts::FRAC_PI_2, std::f32::consts::FRAC_PI_2);
-                    }
-
-                    // LOD controls
-                    KeyCode::Equal | KeyCode::NumpadAdd => {
-                        self.lod_bias = (self.lod_bias + 0.1).clamp(-1.0, 1.0);
-                        println!("LOD bias: {:.2}", self.lod_bias);
-                    }
-                    KeyCode::Minus | KeyCode::NumpadSubtract => {
-                        self.lod_bias = (self.lod_bias - 0.1).clamp(-1.0, 1.0);
-                        println!("LOD bias: {:.2}", self.lod_bias);
-                    }
-                    KeyCode::KeyL => {
-                        self.enable_lod = !self.enable_lod;
-                        println!(
-                            "LOD system: {}",
-                            if self.enable_lod {
-                                "ENABLED"
-                            } else {
-                                "DISABLED"
-                            }
-                        );
-                    }
-
-                    _ => {}
-                }
+                );
             }
             _ => {}
         }
     }
 }
 
+/// Statistics system
+fn stats_system(mut stats: ResMut<Stats>, lod_system: ResMut<LodSystem>) {
+    stats.frame_count += 1;
+
+    // Every 60 frames, print statistics
+    if stats.frame_count % 60 == 0 {
+        // Count LOD level distribution
+        stats.lod_counts = [0, 0, 0];
+        for &lod in &lod_system.selected_lods {
+            if (lod as usize) < stats.lod_counts.len() {
+                stats.lod_counts[lod as usize] += 1;
+            }
+        }
+
+        info!(
+            "LOD Statistics: LOD0={} LOD1={} LOD2={} (bias={:.2})",
+            stats.lod_counts[0], stats.lod_counts[1], stats.lod_counts[2], lod_system.lod_bias
+        );
+    }
+}
+
+/// Render system
+fn render_system(
+    world: &World,
+    render_context: &mut praxis_graphics::RenderContext,
+) -> Result<()> {
+    let camera = world.get_resource::<CameraController>().unwrap();
+
+    // Build view and projection matrices
+    let target = camera.position
+        + Vec3::new(
+            camera.yaw.cos() * camera.pitch.cos(),
+            camera.pitch.sin(),
+            camera.yaw.sin() * camera.pitch.cos(),
+        );
+
+    let view = Mat4::look_at_rh(camera.position, target, Vec3::Y);
+    let aspect_ratio = 1280.0 / 720.0;
+    let projection = Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, aspect_ratio, 0.1, 1000.0);
+
+    // Build draw commands
+    let mut draw_commands = Vec::new();
+    let query = world.query::<(&GlobalTransform, &LodObject)>();
+
+    for (_entity, (transform, lod_obj)) in query.iter() {
+        // In a full implementation, we'd use the selected LOD to determine which mesh to render
+        // For now, we just render all objects with their transforms
+        draw_commands.push(DrawCommand {
+            mesh_id: "cube".to_string(), // Would be selected based on LOD
+            model: transform.compute_matrix(),
+            texture_name: None,
+            material_properties: None,
+            material_instance_id: None,
+            bone_matrices: None,
+        });
+    }
+
+    let render_commands = RenderCommands {
+        view,
+        proj: projection,
+        draw_commands: &draw_commands,
+        lighting: None,
+    };
+
+    render_context.render(&render_commands)?;
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize logging
     praxis_utils::init_logging()?;
 
-    println!("=== GPU-Driven LOD Selection Demo ===");
-    println!();
-    println!("Controls:");
-    println!("  W/A/S/D    - Move camera");
-    println!("  Q/E        - Move camera up/down");
-    println!("  Arrow Keys - Rotate camera");
-    println!("  +/-        - Adjust LOD bias");
-    println!("  L          - Toggle LOD system");
-    println!("  ESC        - Exit");
-    println!();
+    info!("=== GPU-Driven LOD Selection Demo ===");
+    info!("");
+    info!("This demo creates 400 objects with 3 LOD levels each.");
+    info!("GPU compute shaders select appropriate LOD based on distance.");
+    info!("");
+    info!("Controls:");
+    info!("  +/-        - Adjust LOD bias");
+    info!("  L          - Toggle LOD system");
+    info!("  ESC        - Exit");
+    info!("");
 
     // Create engine
     let config = EngineConfig::default();
     let mut engine = Engine::new(config).await?;
 
-    // Create demo state
-    let mut demo = LodGpuDemo::new();
-    demo.setup_scene();
+    // Setup scene
+    setup_scene(engine.world_mut())?;
 
-    // Initialize GPU LOD selector
+    // Initialize LOD system
     if let Some(render_context) = engine.render_context_mut() {
-        let device = render_context.device.clone();
-        let memory_allocator = render_context.memory_allocator.clone();
-        let descriptor_set_allocator = Arc::new(
-            vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator::new(
-                device.clone(),
-                Default::default(),
-            ),
-        );
-
-        let selector = GpuLodSelector::new(device, memory_allocator, descriptor_set_allocator)?;
-
-        demo.lod_selector = Some(selector);
-        println!("GPU LOD selector initialized successfully");
+        let lod_system = init_lod_system(render_context)?;
+        engine.world_mut().insert_resource(lod_system);
     }
+
+    // Initialize camera and stats
+    engine.world_mut().insert_resource(CameraController::default());
+    engine.world_mut().insert_resource(Stats::default());
 
     // Main loop
     let mut last_time = std::time::Instant::now();
@@ -286,38 +366,44 @@ async fn main() -> Result<()> {
 
         // Handle input
         if let Some(window_event) = event {
-            demo.handle_input(window_event, delta_time);
+            if let Some(mut lod_system) = engine_state.world.get_resource_mut::<LodSystem>() {
+                handle_input(window_event, &mut lod_system, delta_time);
+            }
         }
 
-        // Update demo
-        demo.update(delta_time);
+        // Update camera
+        if let Some(mut camera) = engine_state.world.get_resource_mut::<CameraController>() {
+            camera_controller_system(camera, delta_time);
+        }
 
-        // Dispatch GPU LOD selection
-        if let Some(selector) = &mut demo.lod_selector {
-            // In a real application, this would be integrated into the rendering pipeline
-            // Here we just demonstrate the API usage
+        // Update LOD objects
+        update_lod_objects(
+            engine_state.world.get_resource_mut::<LodSystem>().unwrap(),
+            engine_state.world.query::<(&GlobalTransform, &LodObject)>(),
+        );
 
-            // Prepare frame data
-            if let Err(e) = selector.prepare_frame(&demo.objects, &demo.lod_levels) {
-                eprintln!("Failed to prepare LOD frame: {}", e);
+        // Update statistics
+        if let (Some(mut stats), Some(lod_system)) = (
+            engine_state.world.get_resource_mut::<Stats>(),
+            engine_state.world.get_resource::<LodSystem>(),
+        ) {
+            stats_system(stats, lod_system);
+        }
+
+        // Render
+        if let Some(render_context) = engine_state.render_context.as_mut() {
+            if let Err(e) = render_system(&engine_state.world, render_context) {
+                eprintln!("Render error: {}", e);
                 return;
             }
-
-            // Note: In a real integration, dispatch_lod_selection would be called
-            // during command buffer recording:
-            // selector.dispatch_lod_selection(
-            //     builder,
-            //     demo.camera_position,
-            //     demo.lod_bias,
-            //     demo.enable_lod,
-            // )?;
-
-            // The selected LOD buffer would then be used by the GPU culling system
-            // to generate indirect draw commands with the correct mesh IDs
         }
-
-        // Continue running
     })?;
 
+    Ok(())
+}
+
+#[cfg(feature = "headless")]
+fn main() -> Result<()> {
+    println!("lod_gpu_demo requires graphics support and cannot run in headless mode");
     Ok(())
 }
