@@ -7,7 +7,7 @@ use crate::menu_bar::{
 };
 use crate::panels::{
     AssetsPanel, AssetsPanelExt, ConsolePanel, EditorPanel, HierarchyPanel, InspectorPanel,
-    LogBuffer, SceneViewPanel, SceneViewPanelExt,
+    LogBuffer, OptimizationPanel, SceneViewPanel, SceneViewPanelExt,
 };
 use crate::play_mode::PlayModeSystem;
 use crate::selection::SelectionSystem;
@@ -30,6 +30,8 @@ pub enum EditorTab {
     Console,
     /// Assets panel.
     Assets,
+    /// Optimization panel.
+    Optimization,
 }
 
 /// Main editor state that coordinates all editor panels and modes.
@@ -48,6 +50,8 @@ pub struct EditorState {
     console_panel: ConsolePanel,
     /// Assets panel.
     assets_panel: AssetsPanel,
+    /// Optimization panel.
+    optimization_panel: OptimizationPanel,
     /// Whether the editor is visible.
     visible: bool,
     /// Menu bar state.
@@ -86,6 +90,7 @@ impl EditorState {
             inspector_panel: InspectorPanel::new(),
             console_panel: ConsolePanel::new(),
             assets_panel: AssetsPanel::new(),
+            optimization_panel: OptimizationPanel::new(),
             visible: true,
             menu_bar_state: MenuBarState::new(),
             toolbar_state: ToolbarState::new(),
@@ -119,6 +124,7 @@ impl EditorState {
             inspector_panel: InspectorPanel::new(),
             console_panel: ConsolePanel::with_buffer(log_buffer),
             assets_panel: AssetsPanel::new(),
+            optimization_panel: OptimizationPanel::new(),
             visible: true,
             menu_bar_state: MenuBarState::new(),
             toolbar_state: ToolbarState::new(),
@@ -196,6 +202,12 @@ impl EditorState {
     #[must_use]
     pub fn assets_panel_mut(&mut self) -> &mut AssetsPanel {
         &mut self.assets_panel
+    }
+
+    /// Gets a mutable reference to the optimization panel.
+    #[must_use]
+    pub fn optimization_panel_mut(&mut self) -> &mut OptimizationPanel {
+        &mut self.optimization_panel
     }
 
     /// Gets a reference to the menu bar state.
@@ -449,6 +461,7 @@ impl EditorState {
             inspector_panel: &mut self.inspector_panel,
             console_panel: &mut self.console_panel,
             assets_panel: &mut self.assets_panel,
+            optimization_panel: &mut self.optimization_panel,
             world,
             undo_system,
             selection_system,
@@ -484,6 +497,7 @@ struct EditorTabViewer<'a> {
     inspector_panel: &'a mut InspectorPanel,
     console_panel: &'a mut ConsolePanel,
     assets_panel: &'a mut AssetsPanel,
+    optimization_panel: &'a mut OptimizationPanel,
     world: Option<&'a mut World>,
     undo_system: Option<&'a mut UndoRedoSystem>,
     selection_system: Option<&'a mut SelectionSystem>,
@@ -501,6 +515,7 @@ impl TabViewer for EditorTabViewer<'_> {
             EditorTab::Inspector => self.inspector_panel.title().into(),
             EditorTab::Console => self.console_panel.title().into(),
             EditorTab::Assets => self.assets_panel.title().into(),
+            EditorTab::Optimization => self.optimization_panel.title().into(),
         }
     }
 
@@ -569,6 +584,11 @@ impl TabViewer for EditorTabViewer<'_> {
                     self.assets_panel
                         .ui(ui, world_ref, self.render_context.as_deref_mut());
                 }
+            }
+            EditorTab::Optimization => {
+                let world_ref = self.world.as_ref().map(|w| w as &World);
+                self.optimization_panel
+                    .ui(ui, world_ref, self.render_context.as_deref_mut());
             }
         }
     }

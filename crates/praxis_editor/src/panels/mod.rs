@@ -4,6 +4,7 @@ mod assets_panel;
 mod console_panel;
 mod hierarchy_panel;
 mod inspector_panel;
+mod optimization_panel;
 mod scene_view_panel;
 #[cfg(feature = "terrain")]
 mod terrain_panel;
@@ -13,6 +14,7 @@ pub use assets_panel::{AssetEntry, AssetImportConfig, AssetType, AssetsPanel, As
 pub use console_panel::{ConsoleLayer, ConsolePanel, LogBuffer, LogLevel, LogMessage};
 pub use hierarchy_panel::HierarchyPanel;
 pub use inspector_panel::InspectorPanel;
+pub use optimization_panel::{OptimizationPanel, OptimizationPreset};
 pub use scene_view_panel::{SceneViewPanel, SceneViewPanelExt};
 #[cfg(feature = "terrain")]
 pub use terrain_panel::{TerrainPanel, TerrainPanelExt};

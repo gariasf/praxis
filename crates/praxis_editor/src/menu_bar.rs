@@ -44,6 +44,7 @@ pub enum MenuBarAction {
     ToggleConsole,
     ToggleAssets,
     ToggleScene,
+    ToggleOptimization,
 
     // Help menu
     About,
@@ -63,6 +64,7 @@ pub struct MenuBarState {
     pub console_visible: bool,
     pub assets_visible: bool,
     pub scene_visible: bool,
+    pub optimization_visible: bool,
     /// Whether to show the unsaved changes dialog.
     pub show_unsaved_dialog: bool,
     /// Pending action after unsaved changes dialog.
@@ -80,6 +82,7 @@ impl MenuBarState {
             console_visible: true,
             assets_visible: true,
             scene_visible: true,
+            optimization_visible: true,
             show_unsaved_dialog: false,
             pending_action: None,
         }
@@ -302,6 +305,13 @@ pub fn render_menu_bar(
                     .clicked()
                 {
                     actions.push(MenuBarAction::ToggleScene);
+                }
+
+                if ui
+                    .checkbox(&mut state.optimization_visible, "Optimization")
+                    .clicked()
+                {
+                    actions.push(MenuBarAction::ToggleOptimization);
                 }
             });
 

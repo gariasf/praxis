@@ -15,6 +15,7 @@
 //!   - `InspectorPanel`: Component editing for selected entities
 //!   - `ConsolePanel`: Log output with filtering, search, and tracing integration
 //!   - `AssetsPanel`: Project asset browser
+//!   - `OptimizationPanel`: Rendering optimization configuration with performance comparison
 //!
 //! # Usage
 //!
@@ -99,6 +100,42 @@
 //! ```
 //!
 //! See `CONSOLE_PANEL_IMPLEMENTATION.md` and `examples/console_demo.rs` for details.
+//!
+//! ## Optimization Panel
+//!
+//! The `OptimizationPanel` provides comprehensive control over rendering optimizations with
+//! real-time performance comparison:
+//! - **Preset Management**: Low, Medium, High, and Ultra optimization profiles
+//! - **Individual Toggles**: Fine-grained control over each optimization
+//! - **Performance Comparison**: Before/after snapshots with color-coded deltas
+//! - **Live Statistics**: Real-time monitoring of draw calls, culling, and more
+//! - **Performance Graphs**: Visual trends of rendering metrics over time
+//!
+//! **Features:**
+//! - Multi-draw indirect batching
+//! - GPU culling (frustum, occlusion, backface, distance, small objects)
+//! - GPU-driven LOD selection
+//! - Descriptor caching
+//! - Hi-Z occlusion culling
+//! - Mesh streaming
+//!
+//! **Usage:**
+//! ```rust,no_run
+//! use praxis_editor::{OptimizationPanel, OptimizationPreset};
+//! use praxis_graphics::RenderStats;
+//!
+//! let mut panel = OptimizationPanel::new();
+//!
+//! // Update with render stats each frame
+//! panel.update_stats(stats);
+//!
+//! // Apply a preset
+//! if let Some(config) = panel.config_mut() {
+//!     OptimizationPreset::Ultra.apply_to(config);
+//! }
+//! ```
+//!
+//! See `OPTIMIZATION_PANEL.md` and `examples/optimization_panel_demo.rs` for details.
 //!
 //! # Selection System
 //!
@@ -327,7 +364,7 @@ pub use menu_bar::{
 pub use panels::{
     AssetEntry, AssetImportConfig, AssetType, AssetsPanel, AssetsPanelExt, ConsoleLayer,
     ConsolePanel, EditorPanel, HierarchyPanel, InspectorPanel, LogBuffer, LogLevel, LogMessage,
-    SceneViewPanel, SceneViewPanelExt, ViewportPanel,
+    OptimizationPanel, OptimizationPreset, SceneViewPanel, SceneViewPanelExt, ViewportPanel,
 };
 #[cfg(feature = "terrain")]
 pub use panels::{TerrainPanel, TerrainPanelExt};
