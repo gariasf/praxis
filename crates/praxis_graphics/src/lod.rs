@@ -981,6 +981,501 @@ mod tests {
         let lod2 = LodLevel::with_screen_coverage("test2", -0.5);
         assert_eq!(lod2.screen_coverage, Some(0.0));
     }
+
+    // ===== GPU-Driven LOD Selection Tests =====
+
+    #[test]
+    fn test_gpu_object_data_size_and_alignment() {
+        use std::mem::{align_of, size_of};
+
+        // Size: 16 (mat4) * 4 + 16 (sphere) + 16 (4 u32s with padding) = 96 bytes
+        assert_eq!(size_of::<GpuObjectData>(), 96);
+
+        // Should be 16-byte aligned for GPU buffers
+        assert_eq!(align_of::<GpuObjectData>(), 16);
+    }
+
+    #[test]
+    fn test_gpu_lod_level_size_and_alignment() {
+        use std::mem::{align_of, size_of};
+
+        // Size: 4 (u32) + 4 (f32) + 4 (f32) + 4 (padding) = 16 bytes
+        assert_eq!(size_of::<GpuLodLevel>(), 16);
+
+        // Should be 4-byte aligned (standard for struct of u32/f32)
+        assert_eq!(align_of::<GpuLodLevel>(), 4);
+    }
+
+    #[test]
+    fn test_lod_uniforms_size_and_alignment() {
+        use std::mem::{align_of, size_of};
+
+        // Size should be multiple of 16 due to align(16)
+        assert_eq!(size_of::<LodUniforms>(), 32);
+
+        // Must be 16-byte aligned for uniform buffers
+        assert_eq!(align_of::<LodUniforms>(), 16);
+    }
+
+    #[test]
+    fn test_gpu_object_data_creation() {
+        let model = Mat4::from_translation(Vec3::new(10.0, 20.0, 30.0));
+        let bounding_sphere = [5.0, 6.0, 7.0, 2.5]; // Center (5,6,7), radius 2.5
+        let mesh_id = 42;
+        let lod_count = 3;
+        let lod_offset = 10;
+
+        let gpu_data = GpuObjectData::new(model, bounding_sphere, mesh_id, lod_count, lod_offset);
+
+        assert_eq!(gpu_data.model, model.to_cols_array_2d());
+        assert_eq!(gpu_data.bounding_sphere, bounding_sphere);
+        assert_eq!(gpu_data.mesh_id, mesh_id);
+        assert_eq!(gpu_data.lod_count, lod_count);
+        assert_eq!(gpu_data.lod_offset, lod_offset);
+        assert_eq!(gpu_data.padding, 0);
+    }
+
+    #[test]
+    fn test_gpu_lod_level_from_lod_level() {
+        let lod_level = LodLevel::new("mesh_high", 0.0, 10.0);
+        let mesh_id = 100;
+
+        let gpu_lod = GpuLodLevel::from_lod_level(&lod_level, mesh_id);
+
+        assert_eq!(gpu_lod.mesh_id, mesh_id);
+        assert_eq!(gpu_lod.min_distance_sq, 0.0);
+        assert_eq!(gpu_lod.max_distance_sq, 100.0); // 10^2
+        assert_eq!(gpu_lod.padding, 0);
+    }
+
+    #[test]
+    fn test_gpu_lod_level_distance_thresholds() {
+        let lod_level = LodLevel::new("mesh", 5.0, 20.0);
+        let gpu_lod = GpuLodLevel::from_lod_level(&lod_level, 0);
+
+        // Verify squared distances are correctly stored
+        assert_eq!(gpu_lod.min_distance_sq, 25.0); // 5^2
+        assert_eq!(gpu_lod.max_distance_sq, 400.0); // 20^2
+    }
+
+    #[test]
+    fn test_lod_uniforms_creation() {
+        let camera_pos = Vec3::new(1.0, 2.0, 3.0);
+        let lod_bias = 0.5;
+        let object_count = 1000;
+        let enable_lod = true;
+
+        let uniforms = LodUniforms::new(camera_pos, lod_bias, object_count, enable_lod);
+
+        assert_eq!(uniforms.camera_position, [1.0, 2.0, 3.0]);
+        assert_eq!(uniforms.lod_bias, 0.5);
+        assert_eq!(uniforms.object_count, 1000);
+        assert_eq!(uniforms.enable_lod, 1);
+        assert_eq!(uniforms.padding1, 0);
+        assert_eq!(uniforms.padding2, 0);
+    }
+
+    #[test]
+    fn test_lod_uniforms_enable_lod_flag() {
+        let camera_pos = Vec3::ZERO;
+
+        let uniforms_enabled = LodUniforms::new(camera_pos, 0.0, 0, true);
+        assert_eq!(uniforms_enabled.enable_lod, 1);
+
+        let uniforms_disabled = LodUniforms::new(camera_pos, 0.0, 0, false);
+        assert_eq!(uniforms_disabled.enable_lod, 0);
+    }
+
+    #[test]
+    fn test_lod_selection_logic_near_distance() {
+        // Test that LOD selection logic matches expected behavior for near objects
+        let lod_levels = vec![
+            LodLevel::new("high", 0.0, 10.0),    // 0-100 squared
+            LodLevel::new("medium", 10.0, 20.0), // 100-400 squared
+            LodLevel::new("low", 20.0, 50.0),    // 400-2500 squared
+        ];
+
+        let lod_group = LodGroup::new(lod_levels);
+
+        // Distance 5.0 squared = 25.0 -> should select level 0
+        let selected = lod_group.select_lod_level(25.0);
+        assert_eq!(selected, 0);
+    }
+
+    #[test]
+    fn test_lod_selection_logic_medium_distance() {
+        let lod_levels = vec![
+            LodLevel::new("high", 0.0, 10.0),
+            LodLevel::new("medium", 10.0, 20.0),
+            LodLevel::new("low", 20.0, 50.0),
+        ];
+
+        let lod_group = LodGroup::new(lod_levels);
+
+        // Distance 15.0 squared = 225.0 -> should select level 1
+        let selected = lod_group.select_lod_level(225.0);
+        assert_eq!(selected, 1);
+    }
+
+    #[test]
+    fn test_lod_selection_logic_far_distance() {
+        let lod_levels = vec![
+            LodLevel::new("high", 0.0, 10.0),
+            LodLevel::new("medium", 10.0, 20.0),
+            LodLevel::new("low", 20.0, 50.0),
+        ];
+
+        let lod_group = LodGroup::new(lod_levels);
+
+        // Distance 30.0 squared = 900.0 -> should select level 2
+        let selected = lod_group.select_lod_level(900.0);
+        assert_eq!(selected, 2);
+    }
+
+    #[test]
+    fn test_lod_selection_logic_extreme_distance() {
+        let lod_levels = vec![
+            LodLevel::new("high", 0.0, 10.0),
+            LodLevel::new("medium", 10.0, 20.0),
+            LodLevel::new("low", 20.0, 50.0),
+        ];
+
+        let lod_group = LodGroup::new(lod_levels);
+
+        // Distance beyond all thresholds -> should select last level
+        let selected = lod_group.select_lod_level(10000.0);
+        assert_eq!(selected, 2);
+    }
+
+    #[test]
+    fn test_lod_selection_at_boundary() {
+        let lod_levels = vec![
+            LodLevel::new("high", 0.0, 10.0),
+            LodLevel::new("medium", 10.0, 20.0),
+        ];
+
+        let lod_group = LodGroup::new(lod_levels);
+
+        // Exactly at boundary (10.0 squared = 100.0)
+        // Should select medium (level 1) as it's min_distance_sq is 100.0
+        let selected = lod_group.select_lod_level(100.0);
+        assert_eq!(selected, 1);
+
+        // Just below boundary
+        let selected = lod_group.select_lod_level(99.9);
+        assert_eq!(selected, 0);
+
+        // Just above boundary
+        let selected = lod_group.select_lod_level(100.1);
+        assert_eq!(selected, 1);
+    }
+
+    #[test]
+    fn test_lod_bias_application_positive() {
+        let lod_levels = vec![
+            LodLevel::new("high", 0.0, 10.0),    // 0-100
+            LodLevel::new("medium", 10.0, 20.0), // 100-400
+            LodLevel::new("low", 20.0, 50.0),    // 400-2500
+        ];
+
+        let mut lod_group = LodGroup::new(lod_levels);
+
+        // Positive bias should prefer higher detail
+        lod_group.set_lod_bias(1.0);
+
+        // At distance 15 squared = 225, without bias would be medium (level 1)
+        // With max positive bias (0.5 scale), adjusted = 225 * 0.5^2 = 56.25
+        // This should select high detail (level 0)
+        let selected = lod_group.select_lod_level(225.0);
+        assert_eq!(selected, 0);
+    }
+
+    #[test]
+    fn test_lod_bias_application_negative() {
+        let lod_levels = vec![
+            LodLevel::new("high", 0.0, 10.0),
+            LodLevel::new("medium", 10.0, 20.0),
+            LodLevel::new("low", 20.0, 50.0),
+        ];
+
+        let mut lod_group = LodGroup::new(lod_levels);
+
+        // Negative bias should prefer lower detail
+        lod_group.set_lod_bias(-1.0);
+
+        // At distance 5 squared = 25, without bias would be high (level 0)
+        // With max negative bias (1.5 scale), adjusted = 25 * 1.5^2 = 56.25
+        // Still in high range, but closer to medium
+        let selected = lod_group.select_lod_level(25.0);
+        // At 56.25, still in high range (0-100)
+        assert_eq!(selected, 0);
+
+        // At distance 8 squared = 64
+        // With negative bias: 64 * 1.5^2 = 144, should be in medium range
+        let selected = lod_group.select_lod_level(64.0);
+        assert_eq!(selected, 1);
+    }
+
+    #[test]
+    fn test_lod_bias_application_zero() {
+        let lod_levels = vec![
+            LodLevel::new("high", 0.0, 10.0),
+            LodLevel::new("medium", 10.0, 20.0),
+        ];
+
+        let mut lod_group = LodGroup::new(lod_levels);
+        lod_group.set_lod_bias(0.0);
+
+        // Zero bias should have no effect
+        let selected = lod_group.select_lod_level(225.0);
+        assert_eq!(selected, 1); // Medium
+    }
+
+    #[test]
+    fn test_lod_bias_clamping() {
+        let mut lod_group = LodGroup::new(vec![LodLevel::new("test", 0.0, 100.0)]);
+
+        // Test clamping to valid range [-1.0, 1.0]
+        lod_group.set_lod_bias(2.0);
+        assert_eq!(lod_group.lod_bias, 1.0);
+
+        lod_group.set_lod_bias(-2.0);
+        assert_eq!(lod_group.lod_bias, -1.0);
+
+        lod_group.set_lod_bias(0.5);
+        assert_eq!(lod_group.lod_bias, 0.5);
+    }
+
+    #[test]
+    fn test_buffer_layout_correctness_gpu_object_data() {
+        use std::mem::offset_of;
+
+        // Verify field offsets match expected GPU buffer layout
+        assert_eq!(offset_of!(GpuObjectData, model), 0);
+        assert_eq!(offset_of!(GpuObjectData, bounding_sphere), 64);
+        assert_eq!(offset_of!(GpuObjectData, mesh_id), 80);
+        assert_eq!(offset_of!(GpuObjectData, lod_count), 84);
+        assert_eq!(offset_of!(GpuObjectData, lod_offset), 88);
+        assert_eq!(offset_of!(GpuObjectData, padding), 92);
+    }
+
+    #[test]
+    fn test_buffer_layout_correctness_gpu_lod_level() {
+        use std::mem::offset_of;
+
+        // Verify field offsets match expected GPU buffer layout
+        assert_eq!(offset_of!(GpuLodLevel, mesh_id), 0);
+        assert_eq!(offset_of!(GpuLodLevel, min_distance_sq), 4);
+        assert_eq!(offset_of!(GpuLodLevel, max_distance_sq), 8);
+        assert_eq!(offset_of!(GpuLodLevel, padding), 12);
+    }
+
+    #[test]
+    fn test_buffer_layout_correctness_lod_uniforms() {
+        use std::mem::offset_of;
+
+        // Verify field offsets match expected GPU uniform buffer layout
+        assert_eq!(offset_of!(LodUniforms, camera_position), 0);
+        assert_eq!(offset_of!(LodUniforms, lod_bias), 12);
+        assert_eq!(offset_of!(LodUniforms, object_count), 16);
+        assert_eq!(offset_of!(LodUniforms, enable_lod), 20);
+        assert_eq!(offset_of!(LodUniforms, padding1), 24);
+        assert_eq!(offset_of!(LodUniforms, padding2), 28);
+    }
+
+    #[test]
+    fn test_bytemuck_pod_traits_gpu_object_data() {
+        // Verify that GpuObjectData implements Pod and Zeroable
+        let zeroed = GpuObjectData::zeroed();
+        assert_eq!(zeroed.mesh_id, 0);
+        assert_eq!(zeroed.lod_count, 0);
+        assert_eq!(zeroed.lod_offset, 0);
+        assert_eq!(zeroed.padding, 0);
+
+        // Test that we can cast to bytes
+        let data = GpuObjectData::new(Mat4::IDENTITY, [0.0; 4], 1, 2, 3);
+        let _bytes: &[u8] = bytemuck::bytes_of(&data);
+    }
+
+    #[test]
+    fn test_bytemuck_pod_traits_gpu_lod_level() {
+        let zeroed = GpuLodLevel::zeroed();
+        assert_eq!(zeroed.mesh_id, 0);
+        assert_eq!(zeroed.min_distance_sq, 0.0);
+        assert_eq!(zeroed.max_distance_sq, 0.0);
+        assert_eq!(zeroed.padding, 0);
+
+        let data = GpuLodLevel {
+            mesh_id: 5,
+            min_distance_sq: 100.0,
+            max_distance_sq: 400.0,
+            padding: 0,
+        };
+        let _bytes: &[u8] = bytemuck::bytes_of(&data);
+    }
+
+    #[test]
+    fn test_bytemuck_pod_traits_lod_uniforms() {
+        let zeroed = LodUniforms::zeroed();
+        assert_eq!(zeroed.camera_position, [0.0; 3]);
+        assert_eq!(zeroed.lod_bias, 0.0);
+        assert_eq!(zeroed.object_count, 0);
+        assert_eq!(zeroed.enable_lod, 0);
+
+        let data = LodUniforms::new(Vec3::new(1.0, 2.0, 3.0), 0.5, 100, true);
+        let _bytes: &[u8] = bytemuck::bytes_of(&data);
+    }
+
+    #[test]
+    fn test_multiple_gpu_lod_levels_array() {
+        // Test that multiple GPU LOD levels can be stored in a contiguous array
+        let cpu_levels = vec![
+            LodLevel::new("high", 0.0, 10.0),
+            LodLevel::new("medium", 10.0, 20.0),
+            LodLevel::new("low", 20.0, 50.0),
+        ];
+
+        let gpu_levels: Vec<GpuLodLevel> = cpu_levels
+            .iter()
+            .enumerate()
+            .map(|(i, level)| GpuLodLevel::from_lod_level(level, i as u32))
+            .collect();
+
+        assert_eq!(gpu_levels.len(), 3);
+        assert_eq!(gpu_levels[0].mesh_id, 0);
+        assert_eq!(gpu_levels[1].mesh_id, 1);
+        assert_eq!(gpu_levels[2].mesh_id, 2);
+
+        // Verify we can cast the entire array to bytes
+        let _bytes: &[u8] = bytemuck::cast_slice(&gpu_levels);
+    }
+
+    #[test]
+    fn test_gpu_object_data_array() {
+        // Test that multiple GPU object data can be stored in a contiguous array
+        let objects = vec![
+            GpuObjectData::new(
+                Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0)),
+                [0.0, 0.0, 0.0, 1.0],
+                0,
+                3,
+                0,
+            ),
+            GpuObjectData::new(
+                Mat4::from_translation(Vec3::new(10.0, 0.0, 0.0)),
+                [10.0, 0.0, 0.0, 1.0],
+                3,
+                3,
+                3,
+            ),
+            GpuObjectData::new(
+                Mat4::from_translation(Vec3::new(20.0, 0.0, 0.0)),
+                [20.0, 0.0, 0.0, 1.0],
+                6,
+                3,
+                6,
+            ),
+        ];
+
+        assert_eq!(objects.len(), 3);
+
+        // Verify we can cast the entire array to bytes
+        let _bytes: &[u8] = bytemuck::cast_slice(&objects);
+    }
+
+    #[test]
+    fn test_lod_selection_with_single_level() {
+        let lod_group = LodGroup::new(vec![LodLevel::new("only", 0.0, 1000.0)]);
+
+        // Any distance should select the only level
+        assert_eq!(lod_group.select_lod_level(0.0), 0);
+        assert_eq!(lod_group.select_lod_level(500.0), 0);
+        assert_eq!(lod_group.select_lod_level(1000000.0), 0);
+    }
+
+    #[test]
+    fn test_lod_selection_with_max_levels() {
+        let mut levels = Vec::new();
+        for i in 0..MAX_LOD_LEVELS {
+            let min_dist = (i * 10) as f32;
+            let max_dist = ((i + 1) * 10) as f32;
+            levels.push(LodLevel::new(format!("lod_{}", i), min_dist, max_dist));
+        }
+
+        let lod_group = LodGroup::new(levels);
+        assert_eq!(lod_group.level_count(), MAX_LOD_LEVELS);
+
+        // Test selection at various distances
+        assert_eq!(lod_group.select_lod_level(25.0), 0); // sqrt(25) = 5, in range 0-10
+        assert_eq!(lod_group.select_lod_level(225.0), 1); // sqrt(225) = 15, in range 10-20
+        assert_eq!(lod_group.select_lod_level(10000.0), MAX_LOD_LEVELS - 1); // Far away
+    }
+
+    #[test]
+    fn test_gpu_lod_data_with_complex_transform() {
+        use praxis_math::Quat;
+
+        // Create complex transform with rotation and scale
+        let translation = Vec3::new(10.0, 20.0, 30.0);
+        let rotation = Quat::from_rotation_y(std::f32::consts::PI / 4.0);
+        let scale = Vec3::new(2.0, 3.0, 4.0);
+
+        let model = Mat4::from_scale_rotation_translation(scale, rotation, translation);
+
+        let gpu_data = GpuObjectData::new(model, [0.0, 0.0, 0.0, 5.0], 0, 1, 0);
+
+        // Verify the matrix was stored correctly
+        let stored_mat = Mat4::from_cols_array_2d(&gpu_data.model);
+        let diff = (stored_mat.to_cols_array_2d()
+            .iter()
+            .flatten()
+            .zip(model.to_cols_array_2d().iter().flatten())
+            .map(|(a, b)| (a - b).abs())
+            .sum::<f32>());
+
+        assert!(diff < 0.0001, "Matrix should be stored accurately");
+    }
+
+    #[test]
+    fn test_lod_bias_interpolation_precision() {
+        let lod_levels = vec![
+            LodLevel::new("high", 0.0, 10.0),
+            LodLevel::new("low", 10.0, 50.0),
+        ];
+
+        let mut lod_group = LodGroup::new(lod_levels);
+
+        // Test various bias values
+        for bias in [-1.0, -0.5, 0.0, 0.5, 1.0] {
+            lod_group.set_lod_bias(bias);
+
+            // Verify bias is stored correctly
+            assert!((lod_group.lod_bias - bias).abs() < f32::EPSILON);
+
+            // Verify selection still works
+            let _selected = lod_group.select_lod_level(100.0);
+        }
+    }
+
+    #[test]
+    fn test_distance_threshold_edge_cases() {
+        // Test with very small distances
+        let lod_small = LodLevel::new("tiny", 0.0, 0.1);
+        let gpu_lod_small = GpuLodLevel::from_lod_level(&lod_small, 0);
+        assert_eq!(gpu_lod_small.max_distance_sq, 0.01);
+
+        // Test with very large distances
+        let lod_large = LodLevel::new("huge", 1000.0, 10000.0);
+        let gpu_lod_large = GpuLodLevel::from_lod_level(&lod_large, 0);
+        assert_eq!(gpu_lod_large.min_distance_sq, 1_000_000.0);
+        assert_eq!(gpu_lod_large.max_distance_sq, 100_000_000.0);
+
+        // Test with zero distance
+        let lod_zero = LodLevel::new("zero", 0.0, 0.0);
+        let gpu_lod_zero = GpuLodLevel::from_lod_level(&lod_zero, 0);
+        assert_eq!(gpu_lod_zero.min_distance_sq, 0.0);
+        assert_eq!(gpu_lod_zero.max_distance_sq, 0.0);
+    }
 }
 
 // ===== GPU-Driven LOD Selection =====
