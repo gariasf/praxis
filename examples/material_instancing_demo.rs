@@ -88,15 +88,15 @@ fn initialize_scene(render_context: &mut RenderContext, demo_state: &mut DemoSta
         .material_manager_mut()
         .create_material(&demo_state.base_material_id, white_texture.clone());
 
-    info!(
-        "Created base material: '{}'",
-        demo_state.base_material_id
-    );
+    info!("Created base material: '{}'", demo_state.base_material_id);
 
     // Create 100 material instances with different colors
     // This demonstrates efficient per-object material property overrides
     let num_instances = 100;
-    info!("Creating {} material instances with color variants", num_instances);
+    info!(
+        "Creating {} material instances with color variants",
+        num_instances
+    );
 
     for i in 0..num_instances {
         let instance_id = format!("color_variant_{}", i);
@@ -123,8 +123,14 @@ fn initialize_scene(render_context: &mut RenderContext, demo_state: &mut DemoSta
     info!("Material Instancing Statistics:");
     info!("  Total instances: {}", stats.total_instances);
     info!("  Unique base materials: {}", stats.unique_base_materials);
-    info!("  Instances with overrides: {}", stats.instances_with_overrides);
-    info!("  Avg instances per base: {:.2}", stats.avg_instances_per_base);
+    info!(
+        "  Instances with overrides: {}",
+        stats.instances_with_overrides
+    );
+    info!(
+        "  Avg instances per base: {:.2}",
+        stats.avg_instances_per_base
+    );
 
     info!("Scene initialization complete");
     Ok(())
@@ -224,8 +230,7 @@ fn main() -> Result<()> {
     let mut demo_state = DemoState::new();
 
     // Initialize scene
-    initialize_scene(&mut render_context, &mut demo_state)
-        .expect("Failed to initialize scene");
+    initialize_scene(&mut render_context, &mut demo_state).expect("Failed to initialize scene");
 
     // Create camera entity
     let camera_entity = world.spawn((
@@ -272,7 +277,9 @@ fn main() -> Result<()> {
                                 .update(&window, dt, &mut transform);
 
                             // Render scene
-                            if let Err(e) = render_scene(&mut render_context, &demo_state, &transform) {
+                            if let Err(e) =
+                                render_scene(&mut render_context, &demo_state, &transform)
+                            {
                                 eprintln!("Render error: {}", e);
                                 target.exit();
                             }

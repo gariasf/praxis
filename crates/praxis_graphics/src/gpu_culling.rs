@@ -646,7 +646,7 @@ impl GpuCullingManager {
 
         // Create compute pipeline
         let compute_pipeline = Self::create_compute_pipeline(device.clone())?;
-        
+
         // Create Hi-Z pyramid generation pipeline
         let hiz_pipeline = Self::create_hiz_pipeline(device.clone())?;
 
@@ -981,7 +981,7 @@ impl GpuCullingManager {
             camera_position,
             self.current_draw_count,
         );
-        
+
         // Set occlusion culling flag
         uniforms.enable_occlusion_culling = if self.enable_occlusion_culling { 1 } else { 0 };
 
@@ -1184,7 +1184,9 @@ impl GpuCullingManager {
         }
 
         // Create sampler for Hi-Z pyramid with linear filtering
-        use vulkano::image::sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo, SamplerMipmapMode};
+        use vulkano::image::sampler::{
+            Filter, Sampler, SamplerAddressMode, SamplerCreateInfo, SamplerMipmapMode,
+        };
         let hiz_sampler = Sampler::new(
             self.device.clone(),
             SamplerCreateInfo {
@@ -1203,7 +1205,7 @@ impl GpuCullingManager {
         self.hiz_mip_views = hiz_mip_views;
         self.hiz_sampler = Some(hiz_sampler);
         self.hiz_extent = extent;
-        
+
         // Descriptor set needs to be recreated with new Hi-Z resources
         self.descriptor_set = None;
 
@@ -1225,9 +1227,9 @@ impl GpuCullingManager {
             warn!("Cannot enable occlusion culling: Hi-Z pyramid not initialized");
             return;
         }
-        
+
         self.enable_occlusion_culling = enable;
-        
+
         if enable {
             debug!("Occlusion culling enabled");
         } else {
@@ -1291,7 +1293,7 @@ impl GpuCullingManager {
 
         // Generate each mip level from the previous one
         let mip_count = self.hiz_mip_views.len();
-        
+
         for mip in 1..mip_count {
             let input_view = if mip == 1 {
                 // First mip reads from the original depth buffer
@@ -1300,7 +1302,7 @@ impl GpuCullingManager {
                 // Subsequent mips read from the previous mip level
                 self.hiz_mip_views[mip - 1].clone()
             };
-            
+
             let output_view = self.hiz_mip_views[mip].clone();
 
             // Create descriptor set for this mip generation
@@ -1313,7 +1315,13 @@ impl GpuCullingManager {
                 ],
                 [],
             )
-            .map_err(|e| eyre::eyre!("Failed to create Hi-Z descriptor set for mip {}: {}", mip, e))?;
+            .map_err(|e| {
+                eyre::eyre!(
+                    "Failed to create Hi-Z descriptor set for mip {}: {}",
+                    mip,
+                    e
+                )
+            })?;
 
             self.hiz_descriptor_sets.push(descriptor_set.clone());
 
@@ -1357,11 +1365,7 @@ impl GpuCullingManager {
             };
 
             builder
-                .push_constants(
-                    self.hiz_pipeline.layout().clone(),
-                    0,
-                    push_constants,
-                )
+                .push_constants(self.hiz_pipeline.layout().clone(), 0, push_constants)
                 .map_err(|e| eyre::eyre!("Failed to push Hi-Z constants: {}", e))?;
 
             // Dispatch compute work groups (16x16 threads per group)
@@ -1374,8 +1378,14 @@ impl GpuCullingManager {
                     .map_err(|e| eyre::eyre!("Failed to dispatch Hi-Z compute: {}", e))?;
             }
 
-            trace!("Generated Hi-Z mip level {} ({}x{} -> {}x{})",
-                mip, input_size[0], input_size[1], output_size[0], output_size[1]);
+            trace!(
+                "Generated Hi-Z mip level {} ({}x{} -> {}x{})",
+                mip,
+                input_size[0],
+                input_size[1],
+                output_size[0],
+                output_size[1]
+            );
         }
 
         trace!("Hi-Z pyramid generation complete");

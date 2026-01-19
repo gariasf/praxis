@@ -39,7 +39,7 @@ impl MeshStreamingDemo {
 
         // Create mesh database with various meshes
         let mut mesh_database = HashMap::new();
-        
+
         // Register multiple meshes for streaming
         for i in 0..20 {
             let mesh_id = format!("cube_{}", i);
@@ -60,7 +60,10 @@ impl MeshStreamingDemo {
     }
 
     fn register_meshes(&mut self) -> Result<()> {
-        info!("Registering {} meshes for streaming", self.mesh_database.len());
+        info!(
+            "Registering {} meshes for streaming",
+            self.mesh_database.len()
+        );
 
         for (mesh_id, mesh_data) in &self.mesh_database {
             self.streaming_system
@@ -81,12 +84,7 @@ impl MeshStreamingDemo {
 
         // Setup camera matrices for frustum culling
         let view = Mat4::look_at_rh(self.camera_position, Vec3::ZERO, Vec3::Y);
-        let proj = Mat4::perspective_rh(
-            70.0_f32.to_radians(),
-            16.0 / 9.0,
-            0.1,
-            1000.0,
-        );
+        let proj = Mat4::perspective_rh(70.0_f32.to_radians(), 16.0 / 9.0, 0.1, 1000.0);
 
         let frustum = Frustum::from_view_projection(proj * view);
 

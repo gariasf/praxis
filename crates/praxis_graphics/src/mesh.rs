@@ -1040,16 +1040,16 @@ impl MeshAssetManager {
 pub struct StreamingGpuMesh {
     /// The actual GPU mesh (None if not loaded yet).
     pub mesh: Option<GpuMesh>,
-    
+
     /// Loading state of the mesh.
     pub state: MeshStreamingState,
-    
+
     /// Bounding sphere center in model space.
     pub bounding_center: Vec3,
-    
+
     /// Bounding sphere radius.
     pub bounding_radius: f32,
-    
+
     /// Priority for loading (higher = more important).
     pub priority: f32,
 }
@@ -1065,7 +1065,7 @@ impl StreamingGpuMesh {
             priority: 0.0,
         }
     }
-    
+
     /// Creates a streaming mesh from existing GPU mesh and bounding sphere.
     pub fn from_mesh(mesh: GpuMesh, bounding_center: Vec3, bounding_radius: f32) -> Self {
         Self {
@@ -1076,12 +1076,12 @@ impl StreamingGpuMesh {
             priority: 0.0,
         }
     }
-    
+
     /// Checks if the mesh is loaded and ready to render.
     pub fn is_loaded(&self) -> bool {
         matches!(self.state, MeshStreamingState::Loaded) && self.mesh.is_some()
     }
-    
+
     /// Checks if the mesh is currently loading.
     pub fn is_loading(&self) -> bool {
         matches!(self.state, MeshStreamingState::Loading)
@@ -1093,16 +1093,16 @@ impl StreamingGpuMesh {
 pub enum MeshStreamingState {
     /// Mesh is not loaded.
     Unloaded,
-    
+
     /// Mesh is queued for loading.
     Queued,
-    
+
     /// Mesh is currently being loaded.
     Loading,
-    
+
     /// Mesh is loaded and ready.
     Loaded,
-    
+
     /// Mesh failed to load.
     Failed,
 }
@@ -1112,10 +1112,10 @@ pub enum MeshStreamingState {
 struct MeshLoadRequest {
     /// Unique ID for the mesh.
     id: String,
-    
+
     /// Mesh data to load.
     mesh_data: MeshData,
-    
+
     /// Priority for loading (higher loads first).
     priority: f32,
 }
@@ -1146,10 +1146,10 @@ impl Ord for MeshLoadRequest {
 struct MeshLoadResult {
     /// Unique ID for the mesh.
     id: String,
-    
+
     /// Loaded GPU mesh (None if failed).
     mesh: Option<GpuMesh>,
-    
+
     /// Future for synchronization.
     future: Option<Box<dyn GpuFuture>>,
 }
@@ -1161,25 +1161,25 @@ struct MeshLoadResult {
 pub struct MeshStreamingSystem {
     /// Streaming meshes by ID.
     meshes: Arc<RwLock<HashMap<String, StreamingGpuMesh>>>,
-    
+
     /// Channel to send load requests to background thread.
     request_sender: Sender<MeshLoadRequest>,
-    
+
     /// Channel to receive load results from background thread.
     result_receiver: Receiver<MeshLoadResult>,
-    
+
     /// Background loader thread handle.
     loader_thread: Option<JoinHandle<()>>,
-    
+
     /// Flag to signal thread shutdown.
     shutdown: Arc<Mutex<bool>>,
-    
+
     /// Memory allocator for creating GPU buffers.
     allocator: Arc<dyn MemoryAllocator>,
-    
+
     /// Command buffer allocator.
     command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-    
+
     /// Transfer queue.
     transfer_queue: Arc<Queue>,
 }
@@ -1195,7 +1195,7 @@ impl MeshStreamingSystem {
         let (request_sender, request_receiver) = crossbeam_channel::unbounded();
         let (result_sender, result_receiver) = crossbeam_channel::unbounded();
         let shutdown = Arc::new(Mutex::new(false));
-        
+
         let loader_thread = Self::start_loader_thread(
             request_receiver,
             result_sender,
@@ -1204,7 +1204,7 @@ impl MeshStreamingSystem {
             command_buffer_allocator.clone(),
             transfer_queue.clone(),
         );
-        
+
         Self {
             meshes,
             request_sender,
@@ -1216,7 +1216,7 @@ impl MeshStreamingSystem {
             transfer_queue,
         }
     }
-    
+
     /// Starts the background loader thread.
     fn start_loader_thread(
         request_receiver: Receiver<MeshLoadRequest>,
@@ -1228,37 +1228,44 @@ impl MeshStreamingSystem {
     ) -> JoinHandle<()> {
         thread::spawn(move || {
             let mut priority_queue = BinaryHeap::new();
-            
+
             trace!("Mesh streaming background thread started");
-            
+
             loop {
                 if *shutdown.lock() {
                     trace!("Mesh streaming background thread shutting down");
                     break;
                 }
-                
+
                 // Collect all pending requests into priority queue
                 while let Ok(request) = request_receiver.try_recv() {
                     priority_queue.push(request);
                 }
-                
+
                 // Process highest priority request
                 if let Some(request) = priority_queue.pop() {
-                    trace!("Loading mesh '{}' with priority {}", request.id, request.priority);
-                    
+                    trace!(
+                        "Loading mesh '{}' with priority {}",
+                        request.id,
+                        request.priority
+                    );
+
                     let result = request.mesh_data.upload_async(
                         allocator.clone(),
                         command_buffer_allocator.clone(),
                         transfer_queue.clone(),
                     );
-                    
+
                     match result {
                         Ok((mesh, future)) => {
-                            if result_sender.send(MeshLoadResult {
-                                id: request.id.clone(),
-                                mesh: Some(mesh),
-                                future: Some(future),
-                            }).is_err() {
+                            if result_sender
+                                .send(MeshLoadResult {
+                                    id: request.id.clone(),
+                                    mesh: Some(mesh),
+                                    future: Some(future),
+                                })
+                                .is_err()
+                            {
                                 warn!("Failed to send mesh load result for '{}'", request.id);
                                 break;
                             }
@@ -1266,11 +1273,14 @@ impl MeshStreamingSystem {
                         }
                         Err(e) => {
                             warn!("Failed to load mesh '{}': {}", request.id, e);
-                            if result_sender.send(MeshLoadResult {
-                                id: request.id.clone(),
-                                mesh: None,
-                                future: None,
-                            }).is_err() {
+                            if result_sender
+                                .send(MeshLoadResult {
+                                    id: request.id.clone(),
+                                    mesh: None,
+                                    future: None,
+                                })
+                                .is_err()
+                            {
                                 break;
                             }
                         }
@@ -1280,30 +1290,29 @@ impl MeshStreamingSystem {
                     thread::sleep(std::time::Duration::from_millis(1));
                 }
             }
-            
+
             trace!("Mesh streaming background thread terminated");
         })
     }
-    
+
     /// Registers a mesh for streaming.
-    pub fn register_mesh(
-        &mut self,
-        id: impl Into<String>,
-        mesh_data: MeshData,
-    ) -> Result<()> {
+    pub fn register_mesh(&mut self, id: impl Into<String>, mesh_data: MeshData) -> Result<()> {
         let id = id.into();
         let (center, radius) = mesh_data.calculate_bounding_sphere();
         let center = Vec3::from(center);
-        
+
         let streaming_mesh = StreamingGpuMesh::new(center, radius);
-        
+
         let mut meshes = self.meshes.write();
         meshes.insert(id.clone(), streaming_mesh);
-        
-        debug!("Registered streaming mesh '{}' with bounds center={:?}, radius={}", id, center, radius);
+
+        debug!(
+            "Registered streaming mesh '{}' with bounds center={:?}, radius={}",
+            id, center, radius
+        );
         Ok(())
     }
-    
+
     /// Registers a pre-loaded mesh for streaming.
     pub fn register_loaded_mesh(
         &mut self,
@@ -1313,14 +1322,15 @@ impl MeshStreamingSystem {
         bounding_radius: f32,
     ) {
         let id = id.into();
-        let streaming_mesh = StreamingGpuMesh::from_mesh(gpu_mesh, bounding_center, bounding_radius);
-        
+        let streaming_mesh =
+            StreamingGpuMesh::from_mesh(gpu_mesh, bounding_center, bounding_radius);
+
         let mut meshes = self.meshes.write();
         meshes.insert(id.clone(), streaming_mesh);
-        
+
         debug!("Registered pre-loaded streaming mesh '{}'", id);
     }
-    
+
     /// Requests a mesh to be loaded with given priority.
     pub fn request_load(&self, id: &str, mesh_data: MeshData, priority: f32) {
         let request = MeshLoadRequest {
@@ -1328,7 +1338,7 @@ impl MeshStreamingSystem {
             mesh_data,
             priority,
         };
-        
+
         if self.request_sender.send(request).is_ok() {
             let mut meshes = self.meshes.write();
             if let Some(mesh) = meshes.get_mut(id) {
@@ -1337,12 +1347,12 @@ impl MeshStreamingSystem {
             }
         }
     }
-    
+
     /// Updates the streaming system, processing completed loads.
     pub fn update(&mut self) {
         while let Ok(result) = self.result_receiver.try_recv() {
             let mut meshes = self.meshes.write();
-            
+
             if let Some(streaming_mesh) = meshes.get_mut(&result.id) {
                 if let Some(mesh) = result.mesh {
                     if let Some(future) = result.future {
@@ -1361,7 +1371,7 @@ impl MeshStreamingSystem {
             }
         }
     }
-    
+
     /// Updates loading priorities based on visibility and distance to camera.
     ///
     /// # Arguments
@@ -1376,14 +1386,14 @@ impl MeshStreamingSystem {
         world_position: Vec3,
     ) {
         let mut meshes = self.meshes.write();
-        
+
         for (id, mesh) in meshes.iter_mut() {
             if mesh.is_loaded() {
                 continue;
             }
-            
+
             let mesh_center = world_position + mesh.bounding_center;
-            
+
             if is_visible(mesh_center, mesh.bounding_radius) {
                 let distance = (mesh_center - camera_position).length();
                 let visibility_priority = if distance < mesh.bounding_radius * 2.0 {
@@ -1393,21 +1403,21 @@ impl MeshStreamingSystem {
                 } else {
                     10.0
                 };
-                
+
                 let distance_priority = 1000.0 / (distance + 1.0);
                 mesh.priority = visibility_priority + distance_priority;
-                
+
                 trace!("Mesh '{}' visible, priority={}", id, mesh.priority);
             } else {
                 mesh.priority = 0.0;
             }
         }
     }
-    
+
     /// Triggers loading for all visible unloaded meshes.
     pub fn load_visible_meshes(&self, mesh_data_provider: &dyn Fn(&str) -> Option<MeshData>) {
         let meshes = self.meshes.read();
-        
+
         for (id, mesh) in meshes.iter() {
             if mesh.priority > 0.0 && matches!(mesh.state, MeshStreamingState::Unloaded) {
                 if let Some(mesh_data) = mesh_data_provider(id) {
@@ -1418,31 +1428,31 @@ impl MeshStreamingSystem {
             }
         }
     }
-    
+
     /// Gets a mesh by ID if loaded.
     pub fn get_mesh(&self, id: &str) -> Option<GpuMesh> {
         let meshes = self.meshes.read();
         meshes.get(id).and_then(|m| m.mesh.clone())
     }
-    
+
     /// Checks if a mesh is loaded.
     pub fn is_mesh_loaded(&self, id: &str) -> bool {
         let meshes = self.meshes.read();
         meshes.get(id).map_or(false, |m| m.is_loaded())
     }
-    
+
     /// Returns the number of loaded meshes.
     pub fn loaded_count(&self) -> usize {
         let meshes = self.meshes.read();
         meshes.values().filter(|m| m.is_loaded()).count()
     }
-    
+
     /// Returns the total number of meshes.
     pub fn total_count(&self) -> usize {
         let meshes = self.meshes.read();
         meshes.len()
     }
-    
+
     /// Clears all meshes and cancels pending loads.
     pub fn clear(&mut self) {
         let mut meshes = self.meshes.write();
@@ -1454,7 +1464,7 @@ impl MeshStreamingSystem {
 impl Drop for MeshStreamingSystem {
     fn drop(&mut self) {
         *self.shutdown.lock() = true;
-        
+
         if let Some(thread) = self.loader_thread.take() {
             if thread.join().is_err() {
                 warn!("Failed to join mesh streaming thread");

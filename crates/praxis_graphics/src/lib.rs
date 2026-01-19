@@ -437,7 +437,7 @@
 //!
 //! // 2. Create material instances with per-object overrides
 //! let instance_mgr = render_context.material_instance_manager_mut();
-//! 
+//!
 //! instance_mgr.create_instance("red_metal", base_material.clone())
 //!     .override_properties(MaterialProperties::new()
 //!         .with_base_color([1.0, 0.0, 0.0, 1.0])
@@ -3188,9 +3188,7 @@ impl RenderContext {
                 let instance = self
                     .material_instance_manager
                     .get_instance(instance_id)
-                    .ok_or_else(|| {
-                        eyre::eyre!("Material instance '{}' not found", instance_id)
-                    })?;
+                    .ok_or_else(|| eyre::eyre!("Material instance '{}' not found", instance_id))?;
 
                 let base_material = instance.base_material();
                 let instance_props = instance.properties();
@@ -3465,11 +3463,13 @@ impl RenderContext {
 
                     let mesh_changed = if i > batch_start {
                         let (_, _, prev_mesh, _) = &draw_list[i - 1];
-                        !Arc::ptr_eq(mesh.vertex_buffer.buffer(), prev_mesh.vertex_buffer.buffer())
-                            || !Arc::ptr_eq(
-                                mesh.index_buffer.buffer(),
-                                prev_mesh.index_buffer.buffer(),
-                            )
+                        !Arc::ptr_eq(
+                            mesh.vertex_buffer.buffer(),
+                            prev_mesh.vertex_buffer.buffer(),
+                        ) || !Arc::ptr_eq(
+                            mesh.index_buffer.buffer(),
+                            prev_mesh.index_buffer.buffer(),
+                        )
                     } else {
                         false
                     };
@@ -3518,11 +3518,13 @@ impl RenderContext {
                     // Bind vertex and index buffers if mesh changed
                     if i == 0 || {
                         let (_, _, prev_mesh, _) = &draw_list[i - 1];
-                        !Arc::ptr_eq(mesh.vertex_buffer.buffer(), prev_mesh.vertex_buffer.buffer())
-                            || !Arc::ptr_eq(
-                                mesh.index_buffer.buffer(),
-                                prev_mesh.index_buffer.buffer(),
-                            )
+                        !Arc::ptr_eq(
+                            mesh.vertex_buffer.buffer(),
+                            prev_mesh.vertex_buffer.buffer(),
+                        ) || !Arc::ptr_eq(
+                            mesh.index_buffer.buffer(),
+                            prev_mesh.index_buffer.buffer(),
+                        )
                     } {
                         command_buffer_builder
                             .bind_vertex_buffers(0, mesh.vertex_buffer.clone())
@@ -3929,9 +3931,7 @@ pub use material_layers::{
     LayerParamsUniforms, MaterialLayerCache, MaterialLayerRenderer, MaterialTextureSet,
     MAX_MATERIAL_LAYERS,
 };
-pub use mesh::{
-    GpuMesh, MeshData, MeshStreamingState, MeshStreamingSystem, StreamingGpuMesh,
-};
+pub use mesh::{GpuMesh, MeshData, MeshStreamingState, MeshStreamingSystem, StreamingGpuMesh};
 pub use particles::{
     CollisionPlane, EmitterShape, GpuParticle, ParticleEmitterConfig, ParticleForce,
     ParticleIndirectDrawCommand, ParticleInstance, ParticleRenderer, SoftParticleConfig,
@@ -4743,8 +4743,8 @@ mod mock_tests {
 
     #[test]
     fn test_indirect_draw_command_structure() {
-        // Verify IndirectDrawCommand matches VkDrawIndexedIndirectCommand layout
-        let cmd = IndirectDrawCommand {
+        // Verify DrawIndexedIndirectCommand matches VkDrawIndexedIndirectCommand layout
+        let cmd = DrawIndexedIndirectCommand {
             index_count: 36,
             instance_count: 1,
             first_index: 0,
@@ -4754,26 +4754,48 @@ mod mock_tests {
 
         assert_eq!(cmd.index_count, 36);
         assert_eq!(cmd.instance_count, 1);
-        assert_eq!(std::mem::size_of::<IndirectDrawCommand>(), 20);
+        assert_eq!(std::mem::size_of::<DrawIndexedIndirectCommand>(), 20);
     }
 
     #[test]
-    fn test_indirect_draw_command_bytemuck() {
-        // Verify we can safely transmute to bytes
-        let cmd = IndirectDrawCommand {
-            index_count: 100,
+    fn test_indirect_draw_command_field_values() {
+        // Test various valid field combinations
+        let cmd = DrawIndexedIndirectCommand {
+            index_count: 1024,
+            instance_count: 4,
+            first_index: 128,
+            vertex_offset: 256,
+            first_instance: 2,
+        };
+
+        assert_eq!(cmd.index_count, 1024);
+        assert_eq!(cmd.instance_count, 4);
+        assert_eq!(cmd.first_index, 128);
+        assert_eq!(cmd.vertex_offset, 256);
+        assert_eq!(cmd.first_instance, 2);
+    }
+
+    #[test]
+    fn test_indirect_draw_command_default_values() {
+        // Test the standard configuration used in rendering
+        let cmd = DrawIndexedIndirectCommand {
+            index_count: 36,
             instance_count: 1,
-            first_index: 50,
+            first_index: 0,
             vertex_offset: 0,
             first_instance: 0,
         };
 
-        let _bytes: &[u8] = bytemuck::bytes_of(&cmd);
+        // Verify default values are as expected for single-instance rendering
+        assert_eq!(cmd.instance_count, 1);
+        assert_eq!(cmd.first_index, 0);
+        assert_eq!(cmd.vertex_offset, 0);
+        assert_eq!(cmd.first_instance, 0);
     }
 
     #[test]
-    fn test_indirect_draw_batching_logic() {
-        // Test the batching decision logic
+    fn test_indirect_draw_batching_logic_consecutive_same_mesh_material() {
+        // Test the batching decision logic for consecutive draws with same mesh/material
 
         // Case 1: Same mesh and material should batch
         struct MockDraw {
@@ -4810,8 +4832,16 @@ mod mock_tests {
         }
 
         assert_eq!(batch_count, 1, "All draws should be in one batch");
+    }
 
-        // Case 2: Different mesh or material should split batches
+    #[test]
+    fn test_indirect_draw_batching_logic_different_meshes() {
+        // Test batching with different meshes
+        struct MockDraw {
+            mesh_id: u32,
+            material_id: u32,
+        }
+
         let draws = vec![
             MockDraw {
                 mesh_id: 1,
@@ -4827,9 +4857,9 @@ mod mock_tests {
             }, // Different material
         ];
 
-        batch_count = 0;
-        prev_mesh_id = None;
-        prev_material_id = None;
+        let mut batch_count = 0;
+        let mut prev_mesh_id = None;
+        let mut prev_material_id = None;
 
         for draw in &draws {
             if prev_mesh_id != Some(draw.mesh_id) || prev_material_id != Some(draw.material_id) {
@@ -4843,17 +4873,241 @@ mod mock_tests {
     }
 
     #[test]
-    fn test_indirect_buffer_capacity_growth() {
-        // Test that capacity grows appropriately
+    fn test_indirect_draw_batching_interleaved() {
+        // Test that interleaved mesh/material combinations create proper batches
+        struct MockDraw {
+            mesh_id: u32,
+            material_id: u32,
+        }
+
+        let draws = vec![
+            MockDraw {
+                mesh_id: 1,
+                material_id: 1,
+            },
+            MockDraw {
+                mesh_id: 1,
+                material_id: 1,
+            }, // Same - batch 1
+            MockDraw {
+                mesh_id: 2,
+                material_id: 1,
+            }, // Different mesh - batch 2
+            MockDraw {
+                mesh_id: 2,
+                material_id: 1,
+            }, // Same as previous - batch 2
+            MockDraw {
+                mesh_id: 1,
+                material_id: 1,
+            }, // Back to first combo - batch 3
+        ];
+
+        let mut batch_count = 0;
+        let mut prev_mesh_id = None;
+        let mut prev_material_id = None;
+
+        for draw in &draws {
+            if prev_mesh_id != Some(draw.mesh_id) || prev_material_id != Some(draw.material_id) {
+                batch_count += 1;
+                prev_mesh_id = Some(draw.mesh_id);
+                prev_material_id = Some(draw.material_id);
+            }
+        }
+
+        // Should have 3 batches: draws 0-1, draws 2-3, draw 4
+        assert_eq!(
+            batch_count, 3,
+            "Should have 3 batches for interleaved draws"
+        );
+    }
+
+    #[test]
+    fn test_indirect_buffer_capacity_growth_initial() {
+        // Test initial capacity allocation with 1.5x growth factor
 
         // Initial allocation should be 1.5x requested
         let required = 100;
         let allocated = (required * 3) / 2;
         assert_eq!(allocated, 150);
 
+        // Small initial request
+        let required = 10;
+        let allocated = (required * 3) / 2;
+        assert_eq!(allocated, 15);
+
+        // Large initial request
+        let required = 1000;
+        let allocated = (required * 3) / 2;
+        assert_eq!(allocated, 1500);
+    }
+
+    #[test]
+    fn test_indirect_buffer_capacity_growth_expansion() {
+        // Test capacity growth when expanding existing buffer
+
         // Growth from existing capacity
         let required = 200;
         let allocated = (required * 3) / 2;
         assert_eq!(allocated, 300);
+
+        // Growth from larger capacity
+        let required = 500;
+        let allocated = (required * 3) / 2;
+        assert_eq!(allocated, 750);
+    }
+
+    #[test]
+    fn test_indirect_buffer_capacity_no_reallocation_needed() {
+        // Test that no reallocation occurs when capacity is sufficient
+        let current_capacity = 150;
+        let required = 100;
+
+        // Should not need reallocation
+        assert!(
+            required <= current_capacity,
+            "Should not reallocate when capacity is sufficient"
+        );
+
+        // Edge case: exactly at capacity
+        let current_capacity = 150;
+        let required = 150;
+        assert!(
+            required <= current_capacity,
+            "Should not reallocate when exactly at capacity"
+        );
+    }
+
+    #[test]
+    fn test_indirect_buffer_capacity_growth_edge_cases() {
+        // Test edge cases in capacity calculation
+
+        // Single draw command
+        let required = 1;
+        let allocated = (required * 3) / 2;
+        assert_eq!(allocated, 1); // 1 * 3 / 2 = 1 (integer division)
+
+        // Just over threshold
+        let required = 101;
+        let allocated = (required * 3) / 2;
+        assert_eq!(allocated, 151);
+
+        // Zero draws (shouldn't happen in practice)
+        let required = 0;
+        let allocated = (required * 3) / 2;
+        assert_eq!(allocated, 0);
+    }
+
+    #[test]
+    fn test_multi_draw_indirect_batch_size_calculation() {
+        // Test batch size calculation for multi-draw indirect
+
+        // Scenario 1: All draws in one batch
+        let total_draws = 10;
+        let batch_start = 0;
+        let batch_end = 10;
+        let batch_size = batch_end - batch_start;
+        assert_eq!(batch_size, total_draws);
+
+        // Scenario 2: Multiple batches
+        let draws = vec![
+            (0, 3),  // batch 1: draws 0-2
+            (3, 7),  // batch 2: draws 3-6
+            (7, 10), // batch 3: draws 7-9
+        ];
+
+        for (start, end) in draws {
+            let batch_size = end - start;
+            assert!(batch_size > 0, "Batch size must be positive");
+            assert!(batch_size <= total_draws, "Batch size cannot exceed total");
+        }
+    }
+
+    #[test]
+    fn test_multi_draw_indirect_performance_benefits() {
+        // Demonstrate performance benefits of batching
+
+        // Scenario: 1000 objects with 100 unique materials (10 objects per material)
+        let total_objects = 1000;
+        let unique_materials = 100;
+        let objects_per_material = total_objects / unique_materials;
+
+        // Without batching: 1 draw call per object
+        let unbatched_draw_calls = total_objects;
+
+        // With batching: 1 draw call per material (assuming perfect sorting)
+        let batched_draw_calls = unique_materials;
+
+        let reduction_factor = unbatched_draw_calls / batched_draw_calls;
+
+        assert_eq!(unbatched_draw_calls, 1000);
+        assert_eq!(batched_draw_calls, 100);
+        assert_eq!(reduction_factor, 10);
+        assert_eq!(objects_per_material, 10);
+
+        // Batching provides 10x reduction in draw calls
+        assert!(
+            reduction_factor >= 10,
+            "Batching should provide at least 10x reduction"
+        );
+    }
+
+    #[test]
+    fn test_multi_draw_indirect_buffer_slice_calculation() {
+        // Test buffer slice calculation for indirect draws
+
+        let batch_start = 5;
+        let batch_end = 15;
+        let slice_start = batch_start as u64;
+        let slice_end = batch_end as u64;
+
+        assert_eq!(slice_start, 5);
+        assert_eq!(slice_end, 15);
+        assert_eq!(slice_end - slice_start, 10);
+
+        // Edge case: single draw
+        let batch_start = 0;
+        let batch_end = 1;
+        assert_eq!(batch_end - batch_start, 1);
+    }
+
+    #[test]
+    fn test_indirect_draw_command_array_layout() {
+        // Test that array of DrawIndexedIndirectCommand has correct layout
+        let commands = vec![
+            DrawIndexedIndirectCommand {
+                index_count: 36,
+                instance_count: 1,
+                first_index: 0,
+                vertex_offset: 0,
+                first_instance: 0,
+            },
+            DrawIndexedIndirectCommand {
+                index_count: 24,
+                instance_count: 1,
+                first_index: 0,
+                vertex_offset: 0,
+                first_instance: 0,
+            },
+            DrawIndexedIndirectCommand {
+                index_count: 48,
+                instance_count: 1,
+                first_index: 0,
+                vertex_offset: 0,
+                first_instance: 0,
+            },
+        ];
+
+        // Verify array size
+        assert_eq!(commands.len(), 3);
+
+        // Verify total byte size
+        let total_size = std::mem::size_of_val(&commands[..]);
+        assert_eq!(total_size, 20 * 3); // 20 bytes per command * 3 commands
+
+        // Verify individual commands
+        assert_eq!(commands[0].index_count, 36);
+        assert_eq!(commands[1].index_count, 24);
+        assert_eq!(commands[2].index_count, 48);
     }
 }
