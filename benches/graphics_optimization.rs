@@ -678,6 +678,267 @@ fn bench_integrated_optimization_scenarios(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_multi_draw_indirect(c: &mut Criterion) {
+    let ctx = GraphicsContext::new();
+    let mut group = c.benchmark_group("multi_draw_indirect_rendering");
+
+    // Test configurations
+    let test_configs = [
+        (500, 20, "500_objects_20_materials"),
+        (750, 20, "750_objects_20_materials"),
+        (1000, 20, "1000_objects_20_materials"),
+    ];
+
+    for (object_count, material_count, name) in test_configs {
+        // Baseline: Traditional individual draw calls
+        group.bench_function(&format!("{}_traditional", name), |b| {
+            // Pre-allocate materials and descriptor sets
+            let material_sets: Vec<_> = (0..material_count)
+                .map(|_| {
+                    let buffer = ctx.create_uniform_buffer(256);
+                    DescriptorSet::new(
+                        ctx.descriptor_set_allocator.clone(),
+                        ctx.material_layout.clone(),
+                        [WriteDescriptorSet::buffer(0, buffer)],
+                        [],
+                    )
+                    .expect("Failed to create descriptor set")
+                })
+                .collect();
+
+            b.iter(|| {
+                let mut draw_call_count = 0u32;
+                let start = std::time::Instant::now();
+
+                // Simulate individual draw calls for each object
+                for i in 0..object_count {
+                    let material_idx = i % material_count;
+
+                    // Simulate binding material descriptor set (represents CPU overhead)
+                    let _material_set = &material_sets[material_idx];
+
+                    // Simulate draw call (this represents the CPU-side call overhead)
+                    draw_call_count += 1;
+
+                    // Prevent compiler optimization
+                    black_box(draw_call_count);
+                }
+
+                let cpu_time = start.elapsed();
+
+                black_box((draw_call_count, cpu_time));
+
+                draw_call_count
+            });
+        });
+
+        // Optimized: Multi-draw indirect with material batching
+        group.bench_function(&format!("{}_multi_draw_indirect", name), |b| {
+            use vulkano::command_buffer::DrawIndexedIndirectCommand;
+
+            // Pre-allocate materials (same as traditional)
+            let material_sets: Vec<_> = (0..material_count)
+                .map(|_| {
+                    let buffer = ctx.create_uniform_buffer(256);
+                    DescriptorSet::new(
+                        ctx.descriptor_set_allocator.clone(),
+                        ctx.material_layout.clone(),
+                        [WriteDescriptorSet::buffer(0, buffer)],
+                        [],
+                    )
+                    .expect("Failed to create descriptor set")
+                })
+                .collect();
+
+            // Create indirect draw buffer
+            let indirect_commands: Vec<DrawIndexedIndirectCommand> = (0..object_count)
+                .map(|_| DrawIndexedIndirectCommand {
+                    index_count: 36, // Simple cube
+                    instance_count: 1,
+                    first_index: 0,
+                    vertex_offset: 0,
+                    first_instance: 0,
+                })
+                .collect();
+
+            let indirect_buffer = Buffer::from_iter(
+                ctx.memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::INDIRECT_BUFFER,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                indirect_commands,
+            )
+            .expect("Failed to create indirect buffer");
+
+            b.iter(|| {
+                let mut draw_call_count = 0u32;
+                let start = std::time::Instant::now();
+
+                // Group objects by material to create batches
+                let mut i = 0;
+                while i < object_count {
+                    let material_idx = i % material_count;
+                    let _material_set = &material_sets[material_idx];
+
+                    // Find consecutive objects with the same material
+                    let batch_start = i;
+                    while i < object_count && (i % material_count) == material_idx {
+                        i += 1;
+                    }
+                    let batch_size = i - batch_start;
+
+                    // Single multi-draw indirect call for entire batch
+                    draw_call_count += 1;
+
+                    // Simulate indirect buffer slice access
+                    let _batch_slice = &indirect_buffer;
+
+                    black_box((draw_call_count, batch_size));
+                }
+
+                let cpu_time = start.elapsed();
+
+                black_box((draw_call_count, cpu_time, &indirect_buffer));
+
+                draw_call_count
+            });
+        });
+    }
+
+    group.finish();
+}
+
+fn bench_draw_call_reduction_analysis(c: &mut Criterion) {
+    let mut group = c.benchmark_group("draw_call_reduction_analysis");
+
+    // Analyze draw call reduction with different material distributions
+    let object_count = 1000;
+
+    for material_count in [10, 20, 50, 100] {
+        group.bench_function(&format!("analysis_{}_materials", material_count), |b| {
+            b.iter(|| {
+                // Traditional rendering: one draw call per object
+                let traditional_draw_calls = object_count;
+
+                // Multi-draw indirect: one draw call per material batch
+                // With objects sorted by material, we get one batch per material
+                let multi_draw_calls = material_count;
+
+                // Calculate reduction factor
+                let reduction_factor = traditional_draw_calls as f32 / multi_draw_calls as f32;
+
+                black_box((traditional_draw_calls, multi_draw_calls, reduction_factor));
+
+                reduction_factor
+            });
+        });
+    }
+
+    group.finish();
+}
+
+fn bench_indirect_buffer_build_cost(c: &mut Criterion) {
+    let ctx = GraphicsContext::new();
+    let mut group = c.benchmark_group("indirect_buffer_build_cost");
+
+    for object_count in [500, 750, 1000] {
+        group.bench_function(&format!("{}_objects", object_count), |b| {
+            b.iter(|| {
+                use vulkano::command_buffer::DrawIndexedIndirectCommand;
+
+                // Simulate building indirect draw commands
+                let commands: Vec<DrawIndexedIndirectCommand> = (0..object_count)
+                    .map(|i| DrawIndexedIndirectCommand {
+                        index_count: 36,
+                        instance_count: 1,
+                        first_index: (i * 36) as u32,
+                        vertex_offset: 0,
+                        first_instance: i as u32,
+                    })
+                    .collect();
+
+                // Upload to GPU buffer
+                let buffer = Buffer::from_iter(
+                    ctx.memory_allocator.clone(),
+                    BufferCreateInfo {
+                        usage: BufferUsage::INDIRECT_BUFFER,
+                        ..Default::default()
+                    },
+                    AllocationCreateInfo {
+                        memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                            | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                        ..Default::default()
+                    },
+                    commands,
+                )
+                .expect("Failed to create buffer");
+
+                black_box(buffer);
+            });
+        });
+    }
+
+    group.finish();
+}
+
+fn bench_material_batching_overhead(c: &mut Criterion) {
+    let mut group = c.benchmark_group("material_batching_overhead");
+
+    let object_count = 1000;
+    let material_count = 20;
+
+    // Benchmark sorting objects by material
+    group.bench_function("sort_by_material", |b| {
+        // Create object list with material IDs
+        let objects: Vec<(usize, u32)> = (0..object_count)
+            .map(|i| (i, (i % material_count) as u32))
+            .collect();
+
+        b.iter(|| {
+            let mut sorted_objects = objects.clone();
+            sorted_objects.sort_by_key(|(_, material_id)| *material_id);
+            black_box(sorted_objects);
+        });
+    });
+
+    // Benchmark grouping consecutive objects by material
+    group.bench_function("group_by_material", |b| {
+        // Pre-sorted object list
+        let mut objects: Vec<(usize, u32)> = (0..object_count)
+            .map(|i| (i, (i % material_count) as u32))
+            .collect();
+        objects.sort_by_key(|(_, material_id)| *material_id);
+
+        b.iter(|| {
+            let mut batches = Vec::new();
+            let mut i = 0;
+
+            while i < objects.len() {
+                let material_id = objects[i].1;
+                let batch_start = i;
+
+                // Find consecutive objects with same material
+                while i < objects.len() && objects[i].1 == material_id {
+                    i += 1;
+                }
+
+                let batch_size = i - batch_start;
+                batches.push((material_id, batch_start, batch_size));
+            }
+
+            black_box(batches);
+        });
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_complete_frame_render_pattern,
@@ -686,5 +947,9 @@ criterion_group!(
     bench_descriptor_set_caching,
     bench_staging_buffer_pooling,
     bench_integrated_optimization_scenarios,
+    bench_multi_draw_indirect,
+    bench_draw_call_reduction_analysis,
+    bench_indirect_buffer_build_cost,
+    bench_material_batching_overhead,
 );
 criterion_main!(benches);
