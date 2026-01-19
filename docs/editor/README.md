@@ -82,7 +82,7 @@ Implementation-focused documentation for **extending** the editor:
 
 ## Related
 
-- [praxis_editor crate](../../crates/praxis_editor/README.md) - Crate-level documentation and API reference
+- [praxis_editor Crate](../../crates/praxis_editor/README.md) - Crate-level documentation and API reference
 - **Technical Documentation** in `crates/praxis_editor/`:
   - [SELECTION_SYSTEM.md](../../crates/praxis_editor/SELECTION_SYSTEM.md) - Selection implementation
   - [UNDO_REDO_SYSTEM.md](../../crates/praxis_editor/UNDO_REDO_SYSTEM.md) - Command pattern implementation

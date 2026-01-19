@@ -233,4 +233,4 @@ fn player_system(query: Query<&Transform, With<Player>>) { ... }
 ## See Also
 
 - [ECS Architecture](../concepts/ecs-architecture.md)
-- [praxis_ecs crate](../../crates/praxis_ecs/README.md)
+- [praxis_ecs Crate](../../crates/praxis_ecs/README.md)
