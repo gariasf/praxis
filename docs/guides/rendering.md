@@ -334,5 +334,8 @@ cargo run --example comprehensive_scene_demo  # Forward with materials
 - [Post-Processing](rendering/post-processing.md) - Screen-space effects
 - [Deferred Rendering](rendering/deferred-rendering.md) - Detailed G-buffer docs
 - [Advanced Rendering](rendering/advanced-rendering.md) - Pipeline deep dive
+- [GPU Culling](rendering/gpu-culling.md) - GPU-driven frustum culling
+- [Hi-Z Occlusion Culling](rendering/hiz-occlusion-culling.md) - Hierarchical Z-buffer occlusion
+- [Frustum Culling](rendering/frustum-culling.md) - View frustum culling
 - [Rendering API Reference](../reference/rendering-api.md) - API documentation
 - [praxis_graphics Crate](../../crates/praxis_graphics/README.md) - Crate documentation

@@ -265,6 +265,10 @@ required-features = ["scripting"]
 name = "texture_compression_demo"
 path = "examples/texture_compression_demo.rs"
 
+[[example]]
+name = "hiz_occlusion_demo"
+path = "examples/hiz_occlusion_demo.rs"
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 vulkano = "0.35.1"

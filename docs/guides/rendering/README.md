@@ -63,7 +63,8 @@ Praxis provides a flexible rendering system built on Vulkan via `vulkano`. The s
 ### Optimization
 
 - **[LOD System](lod.md)** - Level of detail management
-- **[GPU Culling](gpu-culling.md)** - GPU-driven visibility culling
+- **[GPU Culling](gpu-culling.md)** - GPU-driven frustum and LOD culling
+- **[Hi-Z Occlusion Culling](hiz-occlusion-culling.md)** - Hierarchical Z-buffer occlusion culling
 - **[Frustum Culling](frustum-culling.md)** - CPU-side visibility culling
 
 ### Special Effects
@@ -138,6 +139,12 @@ cargo run --example material_demo
 
 # Particles
 cargo run --example particles_demo
+
+# GPU culling
+cargo run --example gpu_culling_demo
+
+# Hi-Z occlusion culling
+cargo run --example hiz_occlusion_demo
 ```
 
 ## See Also
