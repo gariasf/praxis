@@ -167,6 +167,219 @@ cargo run --example profiling_demo            # Performance profiling
 cargo run --example profiling_advanced_demo   # Advanced profiling
 ```
 
+## Task Index
+
+**Quick reference for finding documentation by what you want to do:**
+
+### Getting Started Tasks
+
+| I want to... | Start here | Also see |
+|--------------|-----------|----------|
+| **Install Praxis and run my first example** | [Installation](getting-started/installation.md) | [Getting Started](getting-started/README.md) |
+| **Understand the workspace structure** | [Project Structure](getting-started/project-structure.md) | [Crates Reference](reference/crates.md) |
+| **Learn Praxis from scratch** | [Beginners Guide](beginners-guide.md) | [Learning Paths](learning-paths/README.md) |
+| **Choose what to learn based on my role** | [Learning Paths Quick Start](learning-paths/README.md#quick-start-by-role) | Role-specific progressions |
+| **Enable optional features (editor, scripting, etc.)** | [Feature Flags](getting-started/feature-flags.md) | [Configuration](reference/configuration.md) |
+
+### Rendering Tasks
+
+| I want to... | Start here | Also see |
+|--------------|-----------|----------|
+| **Render my first 3D scene** | [Rendering Overview](guides/rendering.md) | Example: `scene_demo` |
+| **Understand the graphics pipeline** | [Vulkan Rendering](concepts/vulkan-rendering.md) | [Rendering Pipeline](concepts/rendering-pipeline.md) |
+| **Use forward vs deferred rendering** | [Forward Rendering](guides/rendering/forward-rendering.md), [Deferred Rendering](guides/rendering/deferred-rendering.md) | Example: `comprehensive_scene_demo` |
+| **Create physically-based materials** | [PBR Materials](concepts/pbr-materials.md) | [Advanced Materials](guides/rendering/advanced-materials.md), Example: `material_demo` |
+| **Add lighting (directional, point, spot)** | [Lighting Concepts](concepts/lighting.md) | [Advanced Lighting](guides/rendering/advanced-lighting.md), Example: `advanced_lighting_demo` |
+| **Add shadows** | [Shadows Guide](guides/rendering/shadows.md) | [Rendering API](reference/rendering-api.md) |
+| **Enable HDR and tone mapping** | [HDR and Tone Mapping](guides/rendering/hdr-tonemapping.md) | [Rendering Learning Path](learning-paths/rendering.md) |
+| **Add post-processing effects** | [Post-Processing](guides/rendering/post-processing.md) | [Bloom](guides/rendering/bloom.md) |
+| **Create particle effects** | [Particles Guide](guides/rendering/particles.md) | [PARTICLES.md](../crates/praxis_graphics/PARTICLES.md), Example: `particles_demo` |
+| **Add environment-based lighting** | [Environment Probes](guides/rendering/environment-probes.md) | Example: `environment_probe_demo` |
+| **Implement temporal anti-aliasing (TAA)** | [TAA Guide](guides/rendering/taa.md) | [Rendering Learning Path (Advanced)](learning-paths/rendering.md) |
+| **Add screen-space reflections (SSR)** | [SSR Guide](guides/rendering/ssr.md) | [Rendering Learning Path (Advanced)](learning-paths/rendering.md) |
+| **Optimize rendering with LOD** | [LOD System](guides/rendering/lod.md) | [Spatial Optimization](guides/spatial-optimization.md), Example: `lod_gpu_demo` |
+| **Implement GPU-driven culling** | [GPU Culling](guides/rendering/gpu-culling.md) | Example: `gpu_culling_demo` |
+| **Add frustum culling** | [Frustum Culling](guides/rendering/frustum-culling.md) | [Spatial Optimization](guides/spatial-optimization.md) |
+| **Draw debug lines or gizmos** | [Line Rendering](guides/rendering/line-rendering.md) | [Line Rendering Quick Ref](guides/rendering/line-rendering-quick-ref.md) |
+| **Create cinematic effects** | [Cinematic Effects](guides/rendering/cinematic-effects.md) | [Post-Processing](guides/rendering/post-processing.md) |
+| **Understand material instancing** | [Material Instancing](guides/rendering/material-instancing.md) | Example: `material_instancing_demo` |
+| **Build a complete rendering pipeline** | [Rendering Learning Path](learning-paths/rendering.md) | [Architecture: Render Pipeline](architecture/render-pipeline.md) |
+
+### Animation Tasks
+
+| I want to... | Start here | Also see |
+|--------------|-----------|----------|
+| **Play skeletal animations** | [Animation Overview](guides/animation.md) | [Skeletal Basics](guides/animation/skeletal-basics.md), Example: `skeletal_animation_demo` |
+| **Understand animation concepts** | [Animation Concepts](concepts/animation.md) | [Animation API](reference/animation-api.md) |
+| **Blend between animations** | [Blending Guide](guides/animation/blending.md) | Example: `animation_blending_demo` |
+| **Create animation state machines** | [Blending Guide](guides/animation/blending.md) | [Animation Learning Path](learning-paths/animation.md) |
+| **Use inverse kinematics (IK)** | [Advanced Features](guides/animation/advanced-features.md) | Example: `animation_advanced_demo` |
+| **Implement animation retargeting** | [Advanced Features](guides/animation/advanced-features.md) | [Animation API](reference/animation-api.md) |
+| **Use root motion** | [Advanced Features](guides/animation/advanced-features.md) | Example: `animation_advanced_demo` |
+| **Integrate animation with physics** | [Advanced Integration](guides/animation/advanced-integration.md) | [Physics Guide](guides/physics.md) |
+| **Load animations from GLTF** | [GLTF Loading](guides/assets/gltf.md) | Example: `gltf_animation_loader_demo` |
+| **Master animation system** | [Animation Learning Path](learning-paths/animation.md) | Complete beginner → advanced progression |
+
+### Physics Tasks
+
+| I want to... | Start here | Also see |
+|--------------|-----------|----------|
+| **Add physics to my game** | [Physics Guide](guides/physics.md) | [Physics Concepts](concepts/physics.md) |
+| **Create rigid bodies** | [Physics Guide](guides/physics.md) | [Physics API](reference/physics-api.md) |
+| **Add colliders (box, sphere, capsule)** | [Physics Guide](guides/physics.md) | [Physics API](reference/physics-api.md) |
+| **Handle collision events** | [Physics Guide](guides/physics.md) | [Physics Learning Path](learning-paths/physics.md) |
+| **Implement raycasting** | [Physics API](reference/physics-api.md) | [Physics Learning Path](learning-paths/physics.md) |
+| **Create character controllers** | [Physics Learning Path (Intermediate)](learning-paths/physics.md) | [Physics Guide](guides/physics.md) |
+| **Use joints and constraints** | [Physics Learning Path (Intermediate)](learning-paths/physics.md) | [Physics API](reference/physics-api.md) |
+| **Integrate physics with animation (ragdolls)** | [Physics Learning Path (Advanced)](learning-paths/physics.md) | [Advanced Integration](guides/animation/advanced-integration.md) |
+| **Understand ECS-physics synchronization** | [Physics Concepts](concepts/physics.md) | [Crate README](../crates/praxis_physics/README.md) |
+
+### Asset Loading Tasks
+
+| I want to... | Start here | Also see |
+|--------------|-----------|----------|
+| **Load 3D models (GLTF, OBJ)** | [Assets Overview](guides/assets/README.md) | [GLTF Guide](guides/assets/gltf.md), [OBJ Guide](guides/assets/obj.md) |
+| **Load textures** | [Assets Overview](guides/assets/README.md) | [Mesh API](reference/mesh-api.md) |
+| **Load audio files** | [Audio Guide](guides/audio.md) | [Audio API](reference/audio-api.md) |
+| **Generate procedural textures** | [Procedural Textures](guides/assets/procedural-textures.md) | [Procedural Textures API](reference/procedural-textures-api.md), [Crate README](../crates/praxis_procedural/README.md) |
+| **Load assets asynchronously** | [Async Asset Loading](guides/async-assets.md) | [Assets Learning Path](learning-paths/assets.md) |
+| **Create custom asset loaders** | [Assets Learning Path (Advanced)](learning-paths/assets.md) | [Assets Overview](guides/assets/README.md) |
+| **Implement asset hot-reload** | [Assets Learning Path (Advanced)](learning-paths/assets.md) | [Async Asset Loading](guides/async-assets.md) |
+
+### Scene & Transform Tasks
+
+| I want to... | Start here | Also see |
+|--------------|-----------|----------|
+| **Understand scene graphs** | [Transform Hierarchy](concepts/transform-hierarchy.md) | Example: `transform_propagation_demo` |
+| **Work with transforms** | [Transform Hierarchy](concepts/transform-hierarchy.md) | [Beginners Guide: Transform System](beginners-guide.md) |
+| **Create parent-child hierarchies** | [Transform Hierarchy](concepts/transform-hierarchy.md) | [ECS Architecture](concepts/ecs-architecture.md) |
+| **Save and load scenes** | [Serialization Guide](guides/serialization.md) | [Scene Format](reference/scene-format.md), Example: `scene_serialization_demo` |
+| **Manage scene files** | [Scene Format](reference/scene-format.md) | Example: `save_load_demo` |
+
+### Audio Tasks
+
+| I want to... | Start here | Also see |
+|--------------|-----------|----------|
+| **Play sound effects** | [Audio Guide](guides/audio.md) | Example: `audio_simple` |
+| **Add 3D spatial audio** | [Spatial Audio Concepts](concepts/spatial-audio.md) | [Audio Guide](guides/audio.md), Example: `audio_demo` |
+| **Configure audio attenuation** | [Audio API](reference/audio-api.md) | [Audio Learning Path](learning-paths/audio.md) |
+| **Optimize audio performance** | [Audio Learning Path (Advanced)](learning-paths/audio.md) | [Audio API](reference/audio-api.md) |
+
+### Input Tasks
+
+| I want to... | Start here | Also see |
+|--------------|-----------|----------|
+| **Handle keyboard input** | [Input Guide](guides/input.md) | [Input Concepts](concepts/input.md), Example: `input_integration` |
+| **Handle mouse input** | [Input Guide](guides/input.md) | Example: `input_integration` |
+| **Handle gamepad input** | [Input Guide](guides/input.md) | [Input API](reference/input-api.md) |
+| **Create action mappings** | [Input API](reference/input-api.md) | [Input Learning Path](learning-paths/README.md) |
+| **Build camera controllers** | [Camera API](reference/camera-api.md) | Example: `fps_camera_controller` |
+
+### Scripting Tasks
+
+| I want to... | Start here | Also see |
+|--------------|-----------|----------|
+| **Add Lua scripting** | [Scripting Guide](guides/scripting.md) | [Scripting API](reference/scripting-api.md), Example: `scripting_demo` |
+| **Access ECS from scripts** | [Scripting Guide](guides/scripting.md) | Example: `scripting_advanced_demo` |
+| **Enable hot-reload for scripts** | [Scripting API](reference/scripting-api.md) | [Crate README](../crates/praxis_scripting/README.md) |
+| **Configure script sandboxing** | [Scripting API](reference/scripting-api.md) | [Scripting Learning Path](learning-paths/scripting.md) |
+| **Debug script performance** | [Scripting Learning Path (Advanced)](learning-paths/scripting.md) | [Scripting API](reference/scripting-api.md) |
+| **Create in-game console** | [Console Guide](guides/console.md) | Example: `console_demo`, `scripting_console_demo` |
+
+### Networking Tasks
+
+| I want to... | Start here | Also see |
+|--------------|-----------|----------|
+| **Build multiplayer games** | [Networking Guide](guides/systems/networking.md) | [Networking API](reference/networking-api.md), Example: `networking_demo` |
+| **Setup client-server architecture** | [Networking Guide](guides/systems/networking.md) | [Networking Learning Path](learning-paths/networking.md) |
+| **Replicate entities over network** | [Networking API](reference/networking-api.md) | [Crate README](../crates/praxis_networking/README.md) |
+| **Implement lag compensation** | [Networking Learning Path (Advanced)](learning-paths/networking.md) | [Networking API](reference/networking-api.md) |
+| **Handle network interpolation** | [Networking API](reference/networking-api.md) | [Networking Learning Path](learning-paths/networking.md) |
+| **Monitor network performance** | [Networking API](reference/networking-api.md) | [Profiling](profiling.md) |
+
+### Editor Tasks
+
+| I want to... | Start here | Also see |
+|--------------|-----------|----------|
+| **Use the editor** | [Editor Overview](editor/editor-overview.md) | Example: `editor_demo` |
+| **Select entities** | [Selection System](editor/selection-system.md) | Example: `selection_demo` |
+| **Use transform gizmos** | [Gizmos](editor/gizmos.md) | [Editor Overview](editor/editor-overview.md) |
+| **Navigate with editor camera** | [Editor Camera](editor/editor-camera.md) | Example: `editor_camera_demo` |
+| **Undo/redo operations** | [Undo/Redo](editor/undo-redo.md) | Example: `undo_redo_system_demo` |
+| **Manage hierarchy** | [Hierarchy Panel](editor/hierarchy-panel.md) | [Editor Overview](editor/editor-overview.md) |
+| **Browse and import assets** | [Asset Browser](editor/asset-browser.md) | [Editor Overview](editor/editor-overview.md) |
+| **Edit component properties** | [Inspector](editor/inspector.md) | [Editor Overview](editor/editor-overview.md) |
+| **Use menu bar and shortcuts** | [Menu Bar](editor/menu-bar.md) | [Editor Overview](editor/editor-overview.md) |
+| **Customize editor panels** | [Editor Learning Path (Advanced)](learning-paths/editor.md) | [Editor API](reference/editor-api.md) |
+| **Understand command pattern** | [Undo/Redo](editor/undo-redo.md) | Example: `command_system_demo`, [Crate: COMMAND_SYSTEM.md](../crates/praxis_editor/COMMAND_SYSTEM.md) |
+
+### GUI Tasks
+
+| I want to... | Start here | Also see |
+|--------------|-----------|----------|
+| **Create in-game UI** | [GUI API](reference/gui-api.md) | Example: `gui_demo` |
+| **Build menus** | [Menu Bar](editor/menu-bar.md) | Example: `menu_bar_demo` |
+| **Use immediate mode GUI** | [GUI API](reference/gui-api.md) | [Editor Overview](editor/editor-overview.md) |
+
+### Terrain Tasks
+
+| I want to... | Start here | Also see |
+|--------------|-----------|----------|
+| **Generate terrain** | [Terrain Guide](guides/terrain.md) | [Terrain API](reference/terrain-api.md), Example: `terrain_demo` |
+| **Use heightmaps** | [Terrain Guide](guides/terrain.md) | [Terrain API](reference/terrain-api.md) |
+| **Optimize terrain with LOD** | [Terrain API](reference/terrain-api.md) | [Spatial Optimization](guides/spatial-optimization.md) |
+
+### Optimization Tasks
+
+| I want to... | Start here | Also see |
+|--------------|-----------|----------|
+| **Improve rendering performance** | [Spatial Optimization](guides/spatial-optimization.md) | [Performance Learning Path](learning-paths/performance.md) |
+| **Profile CPU performance** | [Profiling](profiling.md) | [Profiling API](reference/profiling-api.md), Example: `profiling_demo` |
+| **Profile GPU performance** | [Profiling API](reference/profiling-api.md) | Example: `profiling_advanced_demo` |
+| **Use spatial partitioning (octree, BVH)** | [Spatial API](reference/spatial-api.md) | Example: `spatial_partitioning_demo` |
+| **Implement frustum culling** | [Frustum Culling](guides/rendering/frustum-culling.md) | Example: `spatial_optimization_demo` |
+| **Implement occlusion culling** | [Spatial Optimization](guides/spatial-optimization.md) | [Spatial API](reference/spatial-api.md) |
+| **Optimize with GPU culling** | [GPU Culling](guides/rendering/gpu-culling.md) | Example: `gpu_culling_demo` |
+| **Implement LOD system** | [LOD System](guides/rendering/lod.md) | Example: `lod_gpu_demo` |
+| **Stream meshes efficiently** | Example: `mesh_streaming_demo` | [Assets Learning Path](learning-paths/assets.md) |
+| **Handle 1000+ entities** | [Performance Learning Path](learning-paths/performance.md) | [Spatial Optimization](guides/spatial-optimization.md) |
+
+### ECS & Architecture Tasks
+
+| I want to... | Start here | Also see |
+|--------------|-----------|----------|
+| **Understand ECS design** | [ECS Architecture](concepts/ecs-architecture.md) | Example: `ecs_integration` |
+| **Learn ECS patterns** | [Architecture: ECS Patterns](architecture/ecs-patterns.md) | [ECS Architecture](concepts/ecs-architecture.md) |
+| **Create components** | [Components Reference](reference/components.md) | [ECS Architecture](concepts/ecs-architecture.md) |
+| **Write systems** | [ECS Architecture](concepts/ecs-architecture.md) | [Beginners Guide](beginners-guide.md) |
+| **Understand engine architecture** | [Architecture](architecture.md) | [Architecture: Engine Lifecycle](architecture/engine-lifecycle.md) |
+| **Understand crate organization** | [Crates Reference](reference/crates.md) | [Project Structure](getting-started/project-structure.md) |
+
+### Development Tasks
+
+| I want to... | Start here | Also see |
+|--------------|-----------|----------|
+| **Run tests** | [Testing](testing.md) | `cargo test --workspace` |
+| **Run benchmarks** | [Benchmarking](benchmarking.md) | `cargo bench` |
+| **Configure logging** | [Logging](logging.md) | [Profiling](profiling.md) |
+| **Contribute to the engine** | [Architecture](architecture.md) | [Crate README Audit](CRATE_README_AUDIT.md) |
+| **Understand internal implementation** | [Internals](internals/README.md) | Crate-level documentation |
+
+### Learning Path Tasks
+
+| I want to... | Start here | Also see |
+|--------------|-----------|----------|
+| **Follow structured learning** | [Learning Paths](learning-paths/README.md) | Pick a path based on your role |
+| **Learn rendering end-to-end** | [Rendering Learning Path](learning-paths/rendering.md) | Beginner → Intermediate → Advanced |
+| **Learn animation end-to-end** | [Animation Learning Path](learning-paths/animation.md) | Beginner → Intermediate → Advanced |
+| **Learn physics end-to-end** | [Physics Learning Path](learning-paths/physics.md) | Beginner → Intermediate → Advanced |
+| **Learn networking end-to-end** | [Networking Learning Path](learning-paths/networking.md) | Beginner → Intermediate → Advanced |
+| **Learn scripting end-to-end** | [Scripting Learning Path](learning-paths/scripting.md) | Beginner → Intermediate → Advanced |
+| **Master editor tools** | [Editor Learning Path](learning-paths/editor.md) | Beginner → Intermediate → Advanced |
+| **Optimize performance** | [Performance Learning Path](learning-paths/performance.md) | Requires completing another path first |
+| **Track my progress** | [Learning Paths: Milestones](learning-paths/README.md#milestone-tracking) | Beginner/Intermediate/Advanced checklists |
+| **Build a complete game** | [Learning Paths: Project Progressions](learning-paths/README.md#recommended-project-progressions) | Beginner/Intermediate/Advanced projects |
+
 ## Development
 
 - [Testing](testing.md) - Test organization and running tests
