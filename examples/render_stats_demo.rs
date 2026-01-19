@@ -154,7 +154,10 @@ fn camera_system(
     // Toggle stats display
     if input.key_just_pressed(KeyCode::Tab) {
         state.show_stats = !state.show_stats;
-        info!("Stats display: {}", if state.show_stats { "ON" } else { "OFF" });
+        info!(
+            "Stats display: {}",
+            if state.show_stats { "ON" } else { "OFF" }
+        );
     }
 
     // Export stats to CSV
@@ -171,7 +174,10 @@ fn render_system(
 ) -> Result<()> {
     // Export stats on 'E' key press
     if input.key_just_pressed(KeyCode::KeyE) {
-        let filename = format!("render_stats_{}.csv", chrono::Local::now().format("%Y%m%d_%H%M%S"));
+        let filename = format!(
+            "render_stats_{}.csv",
+            chrono::Local::now().format("%Y%m%d_%H%M%S")
+        );
         render_context.export_render_stats_csv(&filename)?;
         info!("Exported render statistics to: {}", filename);
     }
@@ -253,8 +259,9 @@ fn stats_display_system(state: Res<DemoState>, render_context: Res<RenderContext
 
     println!("\n=== Render Statistics (Frame {}) ===", stats.frame_number);
     println!("Total Objects:     {}", stats.total_objects);
-    println!("Visible Objects:   {} ({:.1}%)", 
-        stats.visible_objects, 
+    println!(
+        "Visible Objects:   {} ({:.1}%)",
+        stats.visible_objects,
         stats.visibility_ratio()
     );
     println!("Frustum Culled:    {}", stats.frustum_culled);
@@ -262,14 +269,20 @@ fn stats_display_system(state: Res<DemoState>, render_context: Res<RenderContext
     println!("Draw Calls:        {}", stats.draw_calls);
     println!("Descriptor Allocs: {}", stats.descriptor_allocations);
     println!("Culling Efficiency: {:.1}%", stats.culling_efficiency());
-    
-    println!("\n=== Historical Averages ({} frames) ===", history.frame_count());
+
+    println!(
+        "\n=== Historical Averages ({} frames) ===",
+        history.frame_count()
+    );
     println!("Avg Visible:       {:.1}", history.avg_visible_objects());
     println!("Avg Draw Calls:    {:.1}", history.avg_draw_calls());
-    println!("Avg Culling:       {:.1}%", history.avg_culling_efficiency());
+    println!(
+        "Avg Culling:       {:.1}%",
+        history.avg_culling_efficiency()
+    );
     println!("Peak Visible:      {}", history.max_visible_objects());
     println!("Peak Draw Calls:   {}", history.max_draw_calls());
-    
+
     println!("\n(Press Tab to toggle stats, E to export CSV, Esc to exit)");
 }
 

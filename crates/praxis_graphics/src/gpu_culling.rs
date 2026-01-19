@@ -517,9 +517,9 @@
 //! // Each frame:
 //! culling_manager.prepare_frame(&draw_commands, &mesh_data)?;
 //! culling_manager.dispatch_culling_extended(
-//!     cmd_builder, 
-//!     view_proj, 
-//!     frustum_planes, 
+//!     cmd_builder,
+//!     view_proj,
+//!     frustum_planes,
 //!     camera_pos,
 //!     camera_direction,
 //!     [window_width, window_height],
@@ -1270,7 +1270,11 @@ impl GpuCullingManager {
         // Set culling flags
         uniforms.enable_occlusion_culling = if self.enable_occlusion_culling { 1 } else { 0 };
         uniforms.enable_backface_culling = if self.enable_backface_culling { 1 } else { 0 };
-        uniforms.enable_small_object_culling = if self.enable_small_object_culling { 1 } else { 0 };
+        uniforms.enable_small_object_culling = if self.enable_small_object_culling {
+            1
+        } else {
+            0
+        };
         uniforms.enable_distance_culling = if self.enable_distance_culling { 1 } else { 0 };
 
         if let Some(buffer) = &self.culling_uniforms_buffer {
@@ -1882,9 +1886,7 @@ pub fn calculate_average_normal(normals: &[Vec3]) -> Vec3 {
         return Vec3::Y; // Default to up direction
     }
 
-    let sum = normals
-        .iter()
-        .fold(Vec3::ZERO, |acc, normal| acc + *normal);
+    let sum = normals.iter().fold(Vec3::ZERO, |acc, normal| acc + *normal);
 
     let avg = sum / normals.len() as f32;
 
@@ -1944,7 +1946,7 @@ impl ObjectClassConfig {
     /// Configuration for characters and important objects (always visible).
     pub const IMPORTANT: Self = Self {
         max_render_distance: -1.0, // No distance culling
-        min_screen_size: 0.0,       // No small object culling
+        min_screen_size: 0.0,      // No small object culling
         enable_backface_culling: false,
     };
 }
@@ -1983,7 +1985,7 @@ mod tests {
 
     #[test]
     fn test_culling_uniforms_size() {
-        // View-proj (64) + frustum_planes (96) + camera_position (16) + camera_direction (16) + 
+        // View-proj (64) + frustum_planes (96) + camera_position (16) + camera_direction (16) +
         // screen_dimensions (16) + flags (32) = 240 bytes
         let size = std::mem::size_of::<CullingUniforms>();
         assert_eq!(size, 240);
@@ -2571,7 +2573,7 @@ mod tests {
             Vec3::new(-0.1, 0.9, 0.0),
         ];
         let avg = calculate_average_normal(&normals);
-        
+
         // Should be approximately (0, 1, 0) when normalized
         assert!((avg.y - 1.0).abs() < 0.1);
         assert!(avg.x.abs() < 0.1);
@@ -2581,10 +2583,7 @@ mod tests {
     #[test]
     fn test_calculate_average_normal_opposing() {
         // Opposing normals should cancel out
-        let normals = vec![
-            Vec3::new(1.0, 0.0, 0.0),
-            Vec3::new(-1.0, 0.0, 0.0),
-        ];
+        let normals = vec![Vec3::new(1.0, 0.0, 0.0), Vec3::new(-1.0, 0.0, 0.0)];
         let avg = calculate_average_normal(&normals);
         // Should return default when zero
         assert_eq!(avg, Vec3::Y);
@@ -2597,7 +2596,7 @@ mod tests {
         assert!(ObjectClassConfig::MEDIUM.max_render_distance > 0.0);
         assert!(ObjectClassConfig::SMALL_PROPS.max_render_distance > 0.0);
         assert!(ObjectClassConfig::DETAIL.max_render_distance > 0.0);
-        
+
         // IMPORTANT should have no distance culling
         assert!(ObjectClassConfig::IMPORTANT.max_render_distance < 0.0);
         assert_eq!(ObjectClassConfig::IMPORTANT.min_screen_size, 0.0);
@@ -2606,9 +2605,18 @@ mod tests {
     #[test]
     fn test_object_class_config_ordering() {
         // Larger objects should have larger render distances
-        assert!(ObjectClassConfig::LARGE_STATIC.max_render_distance > ObjectClassConfig::MEDIUM.max_render_distance);
-        assert!(ObjectClassConfig::MEDIUM.max_render_distance > ObjectClassConfig::SMALL_PROPS.max_render_distance);
-        assert!(ObjectClassConfig::SMALL_PROPS.max_render_distance > ObjectClassConfig::DETAIL.max_render_distance);
+        assert!(
+            ObjectClassConfig::LARGE_STATIC.max_render_distance
+                > ObjectClassConfig::MEDIUM.max_render_distance
+        );
+        assert!(
+            ObjectClassConfig::MEDIUM.max_render_distance
+                > ObjectClassConfig::SMALL_PROPS.max_render_distance
+        );
+        assert!(
+            ObjectClassConfig::SMALL_PROPS.max_render_distance
+                > ObjectClassConfig::DETAIL.max_render_distance
+        );
     }
 
     #[test]

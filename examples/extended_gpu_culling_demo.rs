@@ -51,21 +51,21 @@ impl ObjectType {
     /// In a real application, this would be calculated from mesh data.
     fn average_normal(&self) -> Vec3 {
         match self {
-            ObjectType::Building => Vec3::Y,      // Upward facing
-            ObjectType::Tree => Vec3::Y,          // Upward facing
+            ObjectType::Building => Vec3::Y,              // Upward facing
+            ObjectType::Tree => Vec3::Y,                  // Upward facing
             ObjectType::Rock => Vec3::new(0.0, 0.7, 0.3), // Slight upward angle
-            ObjectType::Grass => Vec3::Y,         // Upward facing
-            ObjectType::Character => Vec3::ZERO,  // No back-face culling
+            ObjectType::Grass => Vec3::Y,                 // Upward facing
+            ObjectType::Character => Vec3::ZERO,          // No back-face culling
         }
     }
 
     /// Gets the back-face culling threshold.
     fn backface_threshold(&self) -> f32 {
         match self {
-            ObjectType::Building => 0.0,  // Cull when facing away
-            ObjectType::Tree => -0.1,     // Small tolerance
-            ObjectType::Rock => -0.2,     // Larger tolerance
-            ObjectType::Grass => 0.0,     // Strict culling
+            ObjectType::Building => 0.0,   // Cull when facing away
+            ObjectType::Tree => -0.1,      // Small tolerance
+            ObjectType::Rock => -0.2,      // Larger tolerance
+            ObjectType::Grass => 0.0,      // Strict culling
             ObjectType::Character => -1.0, // Never cull (threshold = -1)
         }
     }
@@ -83,7 +83,7 @@ impl SceneObject {
     /// Creates GPU draw command for this object.
     fn to_gpu_draw_command(&self, mesh_id: u32) -> GpuDrawCommand {
         let config = self.object_type.config();
-        
+
         // Build model matrix
         let model = Mat4::from_scale_rotation_translation(
             Vec3::splat(self.scale),
@@ -176,11 +176,41 @@ fn create_test_scene() -> Vec<SceneObject> {
     });
 
     info!("Created test scene with {} objects", objects.len());
-    info!("  Buildings: {}", objects.iter().filter(|o| o.object_type == ObjectType::Building).count());
-    info!("  Trees: {}", objects.iter().filter(|o| o.object_type == ObjectType::Tree).count());
-    info!("  Rocks: {}", objects.iter().filter(|o| o.object_type == ObjectType::Rock).count());
-    info!("  Grass: {}", objects.iter().filter(|o| o.object_type == ObjectType::Grass).count());
-    info!("  Characters: {}", objects.iter().filter(|o| o.object_type == ObjectType::Character).count());
+    info!(
+        "  Buildings: {}",
+        objects
+            .iter()
+            .filter(|o| o.object_type == ObjectType::Building)
+            .count()
+    );
+    info!(
+        "  Trees: {}",
+        objects
+            .iter()
+            .filter(|o| o.object_type == ObjectType::Tree)
+            .count()
+    );
+    info!(
+        "  Rocks: {}",
+        objects
+            .iter()
+            .filter(|o| o.object_type == ObjectType::Rock)
+            .count()
+    );
+    info!(
+        "  Grass: {}",
+        objects
+            .iter()
+            .filter(|o| o.object_type == ObjectType::Grass)
+            .count()
+    );
+    info!(
+        "  Characters: {}",
+        objects
+            .iter()
+            .filter(|o| o.object_type == ObjectType::Character)
+            .count()
+    );
 
     objects
 }
@@ -200,8 +230,11 @@ fn demonstrate_extended_culling() -> Result<()> {
     let scene = create_test_scene();
 
     // Example: Converting scene objects to GPU draw commands
-    info!("Converting {} scene objects to GPU draw commands...", scene.len());
-    
+    info!(
+        "Converting {} scene objects to GPU draw commands...",
+        scene.len()
+    );
+
     let draw_commands: Vec<GpuDrawCommand> = scene
         .iter()
         .enumerate()
@@ -215,8 +248,10 @@ fn demonstrate_extended_culling() -> Result<()> {
         info!("  Object {}: {:?}", i, obj.object_type);
         info!("    Max Distance: {:.1}m", cmd.max_render_distance);
         info!("    Min Screen Size: {:.1}px", cmd.min_screen_size);
-        info!("    Average Normal: ({:.2}, {:.2}, {:.2})", 
-            cmd.average_normal[0], cmd.average_normal[1], cmd.average_normal[2]);
+        info!(
+            "    Average Normal: ({:.2}, {:.2}, {:.2})",
+            cmd.average_normal[0], cmd.average_normal[1], cmd.average_normal[2]
+        );
         info!("    Backface Threshold: {:.2}", cmd.average_normal[3]);
     }
 
@@ -239,36 +274,81 @@ fn demonstrate_extended_culling() -> Result<()> {
     // Example: Object class configurations
     info!("Object Class Configurations:");
     info!("  LARGE_STATIC (buildings, terrain):");
-    info!("    - Max Distance: {:.1}m", ObjectClassConfig::LARGE_STATIC.max_render_distance);
-    info!("    - Min Screen Size: {:.1}px", ObjectClassConfig::LARGE_STATIC.min_screen_size);
-    info!("    - Back-face Culling: {}", ObjectClassConfig::LARGE_STATIC.enable_backface_culling);
+    info!(
+        "    - Max Distance: {:.1}m",
+        ObjectClassConfig::LARGE_STATIC.max_render_distance
+    );
+    info!(
+        "    - Min Screen Size: {:.1}px",
+        ObjectClassConfig::LARGE_STATIC.min_screen_size
+    );
+    info!(
+        "    - Back-face Culling: {}",
+        ObjectClassConfig::LARGE_STATIC.enable_backface_culling
+    );
     info!("");
     info!("  MEDIUM (trees, vehicles):");
-    info!("    - Max Distance: {:.1}m", ObjectClassConfig::MEDIUM.max_render_distance);
-    info!("    - Min Screen Size: {:.1}px", ObjectClassConfig::MEDIUM.min_screen_size);
-    info!("    - Back-face Culling: {}", ObjectClassConfig::MEDIUM.enable_backface_culling);
+    info!(
+        "    - Max Distance: {:.1}m",
+        ObjectClassConfig::MEDIUM.max_render_distance
+    );
+    info!(
+        "    - Min Screen Size: {:.1}px",
+        ObjectClassConfig::MEDIUM.min_screen_size
+    );
+    info!(
+        "    - Back-face Culling: {}",
+        ObjectClassConfig::MEDIUM.enable_backface_culling
+    );
     info!("");
     info!("  SMALL_PROPS (rocks, debris):");
-    info!("    - Max Distance: {:.1}m", ObjectClassConfig::SMALL_PROPS.max_render_distance);
-    info!("    - Min Screen Size: {:.1}px", ObjectClassConfig::SMALL_PROPS.min_screen_size);
-    info!("    - Back-face Culling: {}", ObjectClassConfig::SMALL_PROPS.enable_backface_culling);
+    info!(
+        "    - Max Distance: {:.1}m",
+        ObjectClassConfig::SMALL_PROPS.max_render_distance
+    );
+    info!(
+        "    - Min Screen Size: {:.1}px",
+        ObjectClassConfig::SMALL_PROPS.min_screen_size
+    );
+    info!(
+        "    - Back-face Culling: {}",
+        ObjectClassConfig::SMALL_PROPS.enable_backface_culling
+    );
     info!("");
     info!("  DETAIL (grass, small vegetation):");
-    info!("    - Max Distance: {:.1}m", ObjectClassConfig::DETAIL.max_render_distance);
-    info!("    - Min Screen Size: {:.1}px", ObjectClassConfig::DETAIL.min_screen_size);
-    info!("    - Back-face Culling: {}", ObjectClassConfig::DETAIL.enable_backface_culling);
+    info!(
+        "    - Max Distance: {:.1}m",
+        ObjectClassConfig::DETAIL.max_render_distance
+    );
+    info!(
+        "    - Min Screen Size: {:.1}px",
+        ObjectClassConfig::DETAIL.min_screen_size
+    );
+    info!(
+        "    - Back-face Culling: {}",
+        ObjectClassConfig::DETAIL.enable_backface_culling
+    );
     info!("");
     info!("  IMPORTANT (characters, objectives):");
-    info!("    - Max Distance: unlimited ({})", ObjectClassConfig::IMPORTANT.max_render_distance);
-    info!("    - Min Screen Size: none ({}px)", ObjectClassConfig::IMPORTANT.min_screen_size);
-    info!("    - Back-face Culling: {}", ObjectClassConfig::IMPORTANT.enable_backface_culling);
+    info!(
+        "    - Max Distance: unlimited ({})",
+        ObjectClassConfig::IMPORTANT.max_render_distance
+    );
+    info!(
+        "    - Min Screen Size: none ({}px)",
+        ObjectClassConfig::IMPORTANT.min_screen_size
+    );
+    info!(
+        "    - Back-face Culling: {}",
+        ObjectClassConfig::IMPORTANT.enable_backface_culling
+    );
 
     Ok(())
 }
 
 fn main() -> Result<()> {
     praxis_utils::init_logging();
-    
+
     demonstrate_extended_culling()?;
 
     info!("");

@@ -1024,6 +1024,7 @@
 //! operations as no-ops, allowing tests to run in CI environments without
 //! GPU access.
 
+pub mod adaptive_quality;
 pub mod bindless;
 pub mod debug_rendering;
 pub mod deferred;
@@ -3436,7 +3437,8 @@ impl RenderContext {
             self.current_render_stats.visible_objects = draw_list.len();
             // For now, all non-culled objects are visible (GPU culling would reduce this)
             // Frustum culling: difference between total and visible
-            let total_culled = self.current_render_stats.total_objects - self.current_render_stats.visible_objects;
+            let total_culled =
+                self.current_render_stats.total_objects - self.current_render_stats.visible_objects;
             self.current_render_stats.frustum_culled = total_culled;
             // Descriptor allocations: count of unique descriptor sets created
             self.current_render_stats.descriptor_allocations = self.descriptor_set_pool.len();
@@ -4060,6 +4062,9 @@ impl RenderContext {
 }
 
 // Public re-exports
+pub use adaptive_quality::{
+    AdaptiveQualityConfig, AdaptiveQualityStatistics, AdaptiveQualitySystem,
+};
 #[allow(deprecated)]
 pub use area_lights::{
     AreaLight, AreaLightData, AreaLightManager, AreaLightType, LtcMatrixData, MAX_AREA_LIGHTS,
