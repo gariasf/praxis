@@ -73,3 +73,9 @@ fn main() -> Result<()> {
 - `praxis_input`: Input system
 - `praxis_audio`: Audio system
 - `praxis_window`: Window management
+
+## API Stability
+
+**Status:** Stable
+
+Core initialization and lifecycle patterns are stable. Breaking changes may occur before 1.0 but will be documented in the changelog. The `praxis_core::run()` entry point is considered stable.

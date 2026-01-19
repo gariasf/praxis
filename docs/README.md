@@ -78,6 +78,7 @@ Educational explanations of engine design:
 API documentation and specifications:
 - [Components](reference/components.md) - ECS component reference
 - [Crates](reference/crates.md) - Workspace crate overview
+- [Crate README Index](reference/crate-readme-index.md) - Quick reference to all crate documentation
 - [Shaders](reference/shaders.md) - Shader reference
 - [Configuration](reference/configuration.md) - Engine configuration
 - [Scene Format](reference/scene-format.md) - Scene file specification
@@ -172,3 +173,4 @@ cargo run --example profiling_advanced_demo   # Advanced profiling
 - [Benchmarking](benchmarking.md) - Performance testing
 - [Profiling](profiling.md) - Performance analysis and optimization
 - [Logging](logging.md) - Logging configuration
+- [Crate README Audit](CRATE_README_AUDIT.md) - Documentation completeness audit and maintenance

@@ -62,3 +62,9 @@ event_loop.run(move |event, elwt| {
 
 - `winit` 0.30.11: Cross-platform windowing
 - `vulkano`: Vulkan integration
+
+## API Stability
+
+**Status:** Stable
+
+Window management API is stable. Minor changes may occur to track upstream winit updates. Breaking changes will be documented in the changelog.

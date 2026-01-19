@@ -72,3 +72,9 @@ cargo run --example gui_demo
 
 - `egui` 0.29: Immediate mode GUI
 - `praxis_scripting`: Lua REPL (optional)
+
+## API Stability
+
+**Status:** Evolving
+
+Console panel and command registry are stable. Inspector and hierarchy panels may see API improvements as editor features expand. Breaking changes will be documented in the changelog.

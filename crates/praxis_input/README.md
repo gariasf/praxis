@@ -82,3 +82,9 @@ cargo run --example input_integration
 ## Dependencies
 
 - `winit` 0.30.11: Input events
+
+## API Stability
+
+**Status:** Stable
+
+Input state tracking and action mapping APIs are stable. Minor changes may occur to track upstream winit updates. Breaking changes will be documented in the changelog.

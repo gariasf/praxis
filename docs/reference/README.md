@@ -5,6 +5,7 @@ API documentation, specifications, and configuration reference.
 ## Core Reference
 
 - [Crates](crates.md) - All workspace crates, their purposes, and dependencies
+- [Crate README Index](crate-readme-index.md) - Quick reference to all crate documentation
 - [Components](components.md) - ECS components reference
 - [Shaders](shaders.md) - Shader bindings and conventions
 - [Configuration](configuration.md) - Configurable constants and settings

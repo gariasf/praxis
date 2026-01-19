@@ -83,3 +83,9 @@ SIMD acceleration (SSE2 on x86, NEON on ARM) with automatic scalar fallback.
 ## Dependencies
 
 - `glam` 0.30.4: Core math with SIMD
+
+## API Stability
+
+**Status:** Stable
+
+Re-exports glam types with minimal additions. API follows glam's stability guarantees. AABB and geometric primitives are stable. Breaking changes will be documented in the changelog.

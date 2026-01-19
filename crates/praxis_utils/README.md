@@ -93,3 +93,9 @@ loop {
 - `color-eyre` 0.6: Rich error reporting
 - `tracing` 0.1: Structured logging
 - `tracing-subscriber` 0.3: Log formatting
+
+## API Stability
+
+**Status:** Stable
+
+Logging, error handling, and timing utilities are stable. The `Result` type alias and initialization functions are considered stable. Breaking changes will be documented in the changelog.
