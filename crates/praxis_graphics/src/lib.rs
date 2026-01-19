@@ -4151,7 +4151,8 @@ pub mod light_probe;
 pub mod volumetric_fog;
 
 pub use gpu_culling::{
-    extract_frustum_planes, GpuCullingManager, GpuDrawCommand, GpuMeshData, IndirectDrawCommand,
+    calculate_average_normal, extract_frustum_planes, GpuCullingManager, GpuDrawCommand,
+    GpuMeshData, IndirectDrawCommand, ObjectClassConfig,
 };
 
 #[cfg(test)]

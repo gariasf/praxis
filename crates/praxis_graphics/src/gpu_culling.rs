@@ -1,7 +1,15 @@
 //! GPU-driven culling system for efficient rendering of large scenes.
 //!
-//! This module provides a GPU-based culling system that performs frustum and occlusion
-//! culling using compute shaders, generating indirect draw buffers to minimize CPU overhead.
+//! This module provides a GPU-based culling system that performs multiple culling strategies
+//! using compute shaders, generating indirect draw buffers to minimize CPU overhead.
+//!
+//! # Supported Culling Strategies
+//!
+//! - **Frustum Culling**: Tests bounding spheres against view frustum planes
+//! - **Occlusion Culling**: Tests against Hi-Z depth pyramid to eliminate occluded objects
+//! - **Back-face Culling**: Culls objects facing away from the camera based on average normal
+//! - **Small Object Culling**: Culls objects smaller than a configurable screen-space threshold
+//! - **Distance Culling**: Culls objects beyond their maximum render distance (per-object configurable)
 //!
 //! # Vulkan Validation and Synchronization
 //!
@@ -285,6 +293,80 @@
 //! - **Mip-level selection**: Samples appropriate detail level based on object size
 //! - **Multi-sample testing**: Tests 5 points (4 corners + center) for robustness
 //!
+//! ## Back-Face Culling (New)
+//!
+//! Beyond traditional back-face culling in the rasterizer, GPU culling can eliminate
+//! entire objects that are facing away from the camera before they enter the graphics pipeline.
+//!
+//! ### How It Works
+//! ```text
+//! For each object:
+//!   1. Transform object's average normal to world space
+//!   2. Calculate direction from object to camera
+//!   3. Compute dot product between normal and to-camera direction
+//!   4. If dot < threshold: CULLED (facing away)
+//!   5. Otherwise: VISIBLE (facing camera)
+//! ```
+//!
+//! ### Use Cases
+//! - **Terrain patches**: Cull back-facing terrain tiles
+//! - **Vegetation billboards**: Cull grass/trees facing away
+//! - **One-sided geometry**: Walls, floors, ceilings
+//!
+//! ### Configuration
+//! Each object can specify:
+//! - Average normal direction (calculated from mesh normals)
+//! - Back-face threshold (typically -0.1 to 0.1 for tolerance)
+//!
+//! ## Small Object Culling (New)
+//!
+//! Eliminates objects that project to too few pixels on screen to be meaningful.
+//!
+//! ### Algorithm
+//! ```text
+//! For each object:
+//!   1. Project bounding sphere to screen space
+//!   2. Calculate screen-space radius in pixels
+//!   3. If diameter < min_screen_size: CULLED
+//!   4. Otherwise: VISIBLE
+//! ```
+//!
+//! ### Benefits
+//! - **Reduces overdraw**: Don't render sub-pixel objects
+//! - **Performance**: Fewer draw calls and fragment shader invocations
+//! - **LOD complement**: Works with LOD systems to eliminate tiny distant objects
+//!
+//! ### Configuration
+//! Per-object `min_screen_size` in pixels:
+//! - `0.0`: Disabled (always render)
+//! - `1.0-5.0`: Aggressive culling (cull very small objects)
+//! - `10.0+`: Conservative culling (only cull tiny objects)
+//!
+//! ## Distance-Based Culling (New)
+//!
+//! Culls objects beyond their configured maximum render distance, allowing different
+//! object classes to have different visibility ranges.
+//!
+//! ### Algorithm
+//! ```text
+//! For each object:
+//!   1. Calculate distance from camera to object center
+//!   2. If distance > max_render_distance: CULLED
+//!   3. Otherwise: VISIBLE
+//! ```
+//!
+//! ### Use Cases
+//! - **Object classes**: Different distances for buildings, vegetation, props
+//! - **Performance tuning**: Cull expensive objects at distance
+//! - **Visual importance**: Keep important objects visible longer
+//!
+//! ### Configuration
+//! Per-object `max_render_distance`:
+//! - `< 0.0`: Disabled (no distance culling)
+//! - `100.0`: Small props (rocks, debris)
+//! - `500.0`: Medium objects (trees, vehicles)
+//! - `2000.0+`: Large objects (buildings, terrain)
+//!
 //! ### Performance Cost
 //! - **Hi-Z generation**: ~0.5-1ms for 1920x1080 depth buffer
 //! - **Occlusion testing**: ~0.1-0.2ms for 10,000 objects
@@ -385,17 +467,63 @@
 //!
 //! // Prepare draw commands with bounding spheres
 //! let draw_commands: Vec<GpuDrawCommand> = objects.iter().map(|obj| {
-//!     GpuDrawCommand {
-//!         model: obj.transform,
-//!         bounding_sphere: obj.bounding_sphere,
-//!         mesh_id: obj.mesh_index,
-//!         material_id: obj.material_index,
-//!     }
+//!     GpuDrawCommand::new(
+//!         obj.transform,
+//!         obj.bounding_sphere,
+//!         obj.mesh_index,
+//!         obj.material_index,
+//!     )
 //! }).collect();
 //!
 //! // Each frame:
 //! culling_manager.prepare_frame(&draw_commands, &mesh_data)?;
 //! culling_manager.dispatch_culling(cmd_builder, view_proj, frustum_planes, camera_pos)?;
+//! ```
+//!
+//! ## Extended Culling with All Strategies
+//!
+//! ```rust,ignore
+//! use praxis_graphics::gpu_culling::{GpuCullingManager, GpuDrawCommand};
+//! use praxis_math::Vec3;
+//!
+//! let mut culling_manager = GpuCullingManager::new(
+//!     device.clone(),
+//!     memory_allocator.clone(),
+//!     descriptor_set_allocator.clone(),
+//! )?;
+//!
+//! // Enable extended culling strategies
+//! culling_manager.set_backface_culling(true);
+//! culling_manager.set_small_object_culling(true);
+//! culling_manager.set_distance_culling(true);
+//!
+//! // Prepare draw commands with extended parameters
+//! let draw_commands: Vec<GpuDrawCommand> = objects.iter().map(|obj| {
+//!     // Calculate average normal for back-face culling
+//!     let avg_normal = obj.mesh.calculate_average_normal();
+//!     
+//!     GpuDrawCommand::new_with_culling_params(
+//!         obj.transform,
+//!         obj.bounding_sphere,
+//!         avg_normal,
+//!         0.0, // backface_threshold
+//!         obj.mesh_index,
+//!         obj.material_index,
+//!         5.0, // min_screen_size (pixels)
+//!         500.0, // max_render_distance
+//!     )
+//! }).collect();
+//!
+//! // Each frame:
+//! culling_manager.prepare_frame(&draw_commands, &mesh_data)?;
+//! culling_manager.dispatch_culling_extended(
+//!     cmd_builder, 
+//!     view_proj, 
+//!     frustum_planes, 
+//!     camera_pos,
+//!     camera_direction,
+//!     [window_width, window_height],
+//! )?;
 //! ```
 //!
 //! ## Advanced: With Hi-Z Occlusion Culling
@@ -462,17 +590,23 @@ pub struct GpuDrawCommand {
     /// Bounding sphere in model space (xyz = center, w = radius).
     pub bounding_sphere: [f32; 4],
 
+    /// Average normal direction of the object in model space (for back-face culling).
+    /// w component stores the back-face culling threshold (dot product).
+    pub average_normal: [f32; 4],
+
     /// Index into mesh data buffer.
     pub mesh_id: u32,
 
     /// Index into material data buffer.
     pub material_id: u32,
 
-    /// Padding for alignment.
-    pub padding1: u32,
+    /// Minimum screen-space size in pixels for small object culling.
+    /// Objects smaller than this will be culled. 0.0 disables small object culling.
+    pub min_screen_size: f32,
 
-    /// Padding for alignment.
-    pub padding2: u32,
+    /// Maximum render distance for this object.
+    /// Objects beyond this distance will be culled. Negative value disables distance culling.
+    pub max_render_distance: f32,
 }
 
 impl GpuDrawCommand {
@@ -488,10 +622,49 @@ impl GpuDrawCommand {
         Self {
             model: model.to_cols_array_2d(),
             bounding_sphere: bounding_sphere.to_array(),
+            average_normal: [0.0, 0.0, 1.0, 0.0],
             mesh_id,
             material_id,
-            padding1: 0,
-            padding2: 0,
+            min_screen_size: 0.0,
+            max_render_distance: -1.0,
+        }
+    }
+
+    /// Creates a new GPU draw command with extended culling parameters.
+    ///
+    /// # Arguments
+    ///
+    /// * `model` - Model matrix (4x4)
+    /// * `bounding_sphere` - Bounding sphere (xyz = center, w = radius)
+    /// * `average_normal` - Average normal direction (for back-face culling)
+    /// * `backface_threshold` - Dot product threshold for back-face culling (typically -0.1 to 0.1)
+    /// * `mesh_id` - Mesh index
+    /// * `material_id` - Material index
+    /// * `min_screen_size` - Minimum screen-space size in pixels (0.0 to disable)
+    /// * `max_render_distance` - Maximum render distance (negative to disable)
+    pub fn new_with_culling_params(
+        model: Mat4,
+        bounding_sphere: Vec4,
+        average_normal: Vec3,
+        backface_threshold: f32,
+        mesh_id: u32,
+        material_id: u32,
+        min_screen_size: f32,
+        max_render_distance: f32,
+    ) -> Self {
+        Self {
+            model: model.to_cols_array_2d(),
+            bounding_sphere: bounding_sphere.to_array(),
+            average_normal: [
+                average_normal.x,
+                average_normal.y,
+                average_normal.z,
+                backface_threshold,
+            ],
+            mesh_id,
+            material_id,
+            min_screen_size,
+            max_render_distance,
         }
     }
 }
@@ -550,16 +723,33 @@ pub struct CullingUniforms {
     pub camera_position: [f32; 3],
     pub _padding1: f32,
 
+    /// Camera forward direction in world space (for back-face culling).
+    pub camera_direction: [f32; 3],
+    pub _padding2: f32,
+
+    /// Screen dimensions (width, height) for screen-space size calculations.
+    pub screen_dimensions: [f32; 2],
+    pub _padding3: [f32; 2],
+
     /// Enable frustum culling (0 = disabled, 1 = enabled).
     pub enable_frustum_culling: u32,
 
     /// Enable occlusion culling (0 = disabled, 1 = enabled).
     pub enable_occlusion_culling: u32,
 
+    /// Enable back-face culling (0 = disabled, 1 = enabled).
+    pub enable_backface_culling: u32,
+
+    /// Enable small object culling (0 = disabled, 1 = enabled).
+    pub enable_small_object_culling: u32,
+
+    /// Enable distance-based culling (0 = disabled, 1 = enabled).
+    pub enable_distance_culling: u32,
+
     /// Number of draw commands to process.
     pub draw_command_count: u32,
 
-    pub _padding2: u32,
+    pub _padding4: [u32; 2],
 }
 
 impl CullingUniforms {
@@ -582,10 +772,61 @@ impl CullingUniforms {
             ],
             camera_position: camera_position.to_array(),
             _padding1: 0.0,
+            camera_direction: [0.0, 0.0, -1.0],
+            _padding2: 0.0,
+            screen_dimensions: [1920.0, 1080.0],
+            _padding3: [0.0, 0.0],
             enable_frustum_culling: 1,
             enable_occlusion_culling: 0,
+            enable_backface_culling: 0,
+            enable_small_object_culling: 0,
+            enable_distance_culling: 0,
             draw_command_count,
-            _padding2: 0,
+            _padding4: [0, 0],
+        }
+    }
+
+    /// Creates culling uniforms with extended culling strategies.
+    ///
+    /// # Arguments
+    ///
+    /// * `view_proj` - View-projection matrix
+    /// * `frustum_planes` - Six frustum planes [left, right, bottom, top, near, far]
+    /// * `camera_position` - Camera position in world space
+    /// * `camera_direction` - Camera forward direction in world space
+    /// * `screen_dimensions` - Screen dimensions (width, height)
+    /// * `draw_command_count` - Number of draw commands to process
+    pub fn new_extended(
+        view_proj: Mat4,
+        frustum_planes: [Vec4; 6],
+        camera_position: Vec3,
+        camera_direction: Vec3,
+        screen_dimensions: [f32; 2],
+        draw_command_count: u32,
+    ) -> Self {
+        Self {
+            view_proj: view_proj.to_cols_array_2d(),
+            frustum_planes: [
+                frustum_planes[0].to_array(),
+                frustum_planes[1].to_array(),
+                frustum_planes[2].to_array(),
+                frustum_planes[3].to_array(),
+                frustum_planes[4].to_array(),
+                frustum_planes[5].to_array(),
+            ],
+            camera_position: camera_position.to_array(),
+            _padding1: 0.0,
+            camera_direction: camera_direction.to_array(),
+            _padding2: 0.0,
+            screen_dimensions,
+            _padding3: [0.0, 0.0],
+            enable_frustum_culling: 1,
+            enable_occlusion_culling: 0,
+            enable_backface_culling: 0,
+            enable_small_object_culling: 0,
+            enable_distance_culling: 0,
+            draw_command_count,
+            _padding4: [0, 0],
         }
     }
 }
@@ -620,6 +861,9 @@ pub struct GpuCullingManager {
     hiz_descriptor_sets: Vec<Arc<DescriptorSet>>,
     hiz_extent: [u32; 2],
     enable_occlusion_culling: bool,
+    enable_backface_culling: bool,
+    enable_small_object_culling: bool,
+    enable_distance_culling: bool,
 
     max_draw_commands: usize,
     current_draw_count: u32,
@@ -669,6 +913,9 @@ impl GpuCullingManager {
             hiz_descriptor_sets: Vec::new(),
             hiz_extent: [0, 0],
             enable_occlusion_culling: false,
+            enable_backface_culling: false,
+            enable_small_object_culling: false,
+            enable_distance_culling: false,
             max_draw_commands: 0,
             current_draw_count: 0,
         })
@@ -965,6 +1212,42 @@ impl GpuCullingManager {
         frustum_planes: [Vec4; 6],
         camera_position: Vec3,
     ) -> Result<()> {
+        self.dispatch_culling_extended(
+            builder,
+            view_proj,
+            frustum_planes,
+            camera_position,
+            Vec3::new(0.0, 0.0, -1.0),
+            [1920, 1080],
+        )
+    }
+
+    /// Dispatches the GPU culling compute shader with extended culling strategies.
+    ///
+    /// This is an extended version that supports back-face culling, small object culling,
+    /// and distance-based culling in addition to frustum and occlusion culling.
+    ///
+    /// # Arguments
+    ///
+    /// * `builder` - Command buffer builder to record into
+    /// * `view_proj` - View-projection matrix
+    /// * `frustum_planes` - Six frustum planes [left, right, bottom, top, near, far]
+    /// * `camera_position` - Camera position in world space
+    /// * `camera_direction` - Camera forward direction in world space
+    /// * `screen_dimensions` - Screen dimensions [width, height]
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if command recording fails.
+    pub fn dispatch_culling_extended(
+        &mut self,
+        builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
+        view_proj: Mat4,
+        frustum_planes: [Vec4; 6],
+        camera_position: Vec3,
+        camera_direction: Vec3,
+        screen_dimensions: [u32; 2],
+    ) -> Result<()> {
         if self.current_draw_count == 0 {
             return Ok(());
         }
@@ -975,15 +1258,20 @@ impl GpuCullingManager {
         );
 
         // Update culling uniforms
-        let mut uniforms = CullingUniforms::new(
+        let mut uniforms = CullingUniforms::new_extended(
             view_proj,
             frustum_planes,
             camera_position,
+            camera_direction.normalize(),
+            [screen_dimensions[0] as f32, screen_dimensions[1] as f32],
             self.current_draw_count,
         );
 
-        // Set occlusion culling flag
+        // Set culling flags
         uniforms.enable_occlusion_culling = if self.enable_occlusion_culling { 1 } else { 0 };
+        uniforms.enable_backface_culling = if self.enable_backface_culling { 1 } else { 0 };
+        uniforms.enable_small_object_culling = if self.enable_small_object_culling { 1 } else { 0 };
+        uniforms.enable_distance_culling = if self.enable_distance_culling { 1 } else { 0 };
 
         if let Some(buffer) = &self.culling_uniforms_buffer {
             let mut write = buffer
@@ -1237,6 +1525,64 @@ impl GpuCullingManager {
         }
     }
 
+    /// Enables or disables back-face culling on the GPU.
+    ///
+    /// When enabled, objects facing away from the camera (based on their average normal)
+    /// will be culled. This is useful for reducing overdraw from objects that are
+    /// facing away from the viewer.
+    ///
+    /// # Arguments
+    ///
+    /// * `enable` - Whether to enable back-face culling
+    pub fn set_backface_culling(&mut self, enable: bool) {
+        self.enable_backface_culling = enable;
+
+        if enable {
+            debug!("Back-face culling enabled");
+        } else {
+            debug!("Back-face culling disabled");
+        }
+    }
+
+    /// Enables or disables small object culling on the GPU.
+    ///
+    /// When enabled, objects that project to fewer pixels than their configured
+    /// minimum screen size will be culled. This is useful for eliminating objects
+    /// that are too small to be visible or meaningful.
+    ///
+    /// # Arguments
+    ///
+    /// * `enable` - Whether to enable small object culling
+    pub fn set_small_object_culling(&mut self, enable: bool) {
+        self.enable_small_object_culling = enable;
+
+        if enable {
+            debug!("Small object culling enabled");
+        } else {
+            debug!("Small object culling disabled");
+        }
+    }
+
+    /// Enables or disables distance-based culling on the GPU.
+    ///
+    /// When enabled, objects beyond their configured maximum render distance
+    /// will be culled. This allows different object classes to have different
+    /// render distances (e.g., large buildings visible from far away, small
+    /// props only visible up close).
+    ///
+    /// # Arguments
+    ///
+    /// * `enable` - Whether to enable distance-based culling
+    pub fn set_distance_culling(&mut self, enable: bool) {
+        self.enable_distance_culling = enable;
+
+        if enable {
+            debug!("Distance-based culling enabled");
+        } else {
+            debug!("Distance-based culling disabled");
+        }
+    }
+
     /// Generates the Hi-Z pyramid from the depth buffer.
     ///
     /// This should be called after rendering the scene to the depth buffer and before
@@ -1440,6 +1786,21 @@ impl GpuCullingManager {
         self.enable_occlusion_culling
     }
 
+    /// Returns whether back-face culling is currently enabled.
+    pub fn is_backface_culling_enabled(&self) -> bool {
+        self.enable_backface_culling
+    }
+
+    /// Returns whether small object culling is currently enabled.
+    pub fn is_small_object_culling_enabled(&self) -> bool {
+        self.enable_small_object_culling
+    }
+
+    /// Returns whether distance-based culling is currently enabled.
+    pub fn is_distance_culling_enabled(&self) -> bool {
+        self.enable_distance_culling
+    }
+
     /// Returns whether the Hi-Z pyramid has been initialized.
     pub fn is_hiz_initialized(&self) -> bool {
         self.hiz_pyramid.is_some()
@@ -1488,6 +1849,106 @@ pub fn extract_frustum_planes(view_proj: Mat4) -> [Vec4; 6] {
     [left, right, bottom, top, near, far]
 }
 
+/// Calculates average normal from a list of vertex normals.
+///
+/// This is useful for back-face culling to determine the general facing direction
+/// of an object. For complex meshes, this provides a reasonable approximation.
+///
+/// # Arguments
+///
+/// * `normals` - Slice of vertex normals
+///
+/// # Returns
+///
+/// Normalized average normal vector
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use praxis_graphics::gpu_culling::calculate_average_normal;
+/// use praxis_math::Vec3;
+///
+/// let normals = vec![
+///     Vec3::new(0.0, 1.0, 0.0),
+///     Vec3::new(0.1, 0.9, 0.0),
+///     Vec3::new(-0.1, 0.9, 0.0),
+/// ];
+///
+/// let avg_normal = calculate_average_normal(&normals);
+/// // avg_normal will be approximately (0, 1, 0)
+/// ```
+pub fn calculate_average_normal(normals: &[Vec3]) -> Vec3 {
+    if normals.is_empty() {
+        return Vec3::Y; // Default to up direction
+    }
+
+    let sum = normals
+        .iter()
+        .fold(Vec3::ZERO, |acc, normal| acc + *normal);
+
+    let avg = sum / normals.len() as f32;
+
+    // Normalize the average (handle zero case)
+    if avg.length_squared() < 1e-6 {
+        Vec3::Y
+    } else {
+        avg.normalize()
+    }
+}
+
+/// Object class configuration for distance-based culling.
+///
+/// This structure allows you to define render distance profiles for different
+/// categories of objects in your scene.
+#[derive(Debug, Clone, Copy)]
+pub struct ObjectClassConfig {
+    /// Maximum render distance for this object class.
+    pub max_render_distance: f32,
+
+    /// Minimum screen-space size in pixels before culling.
+    pub min_screen_size: f32,
+
+    /// Enable back-face culling for this class.
+    pub enable_backface_culling: bool,
+}
+
+impl ObjectClassConfig {
+    /// Configuration for large static objects (buildings, terrain).
+    pub const LARGE_STATIC: Self = Self {
+        max_render_distance: 2000.0,
+        min_screen_size: 2.0,
+        enable_backface_culling: true,
+    };
+
+    /// Configuration for medium objects (trees, vehicles).
+    pub const MEDIUM: Self = Self {
+        max_render_distance: 500.0,
+        min_screen_size: 5.0,
+        enable_backface_culling: true,
+    };
+
+    /// Configuration for small props (rocks, debris, furniture).
+    pub const SMALL_PROPS: Self = Self {
+        max_render_distance: 100.0,
+        min_screen_size: 8.0,
+        enable_backface_culling: false,
+    };
+
+    /// Configuration for detail objects (grass, small stones).
+    pub const DETAIL: Self = Self {
+        max_render_distance: 50.0,
+        min_screen_size: 10.0,
+        enable_backface_culling: false,
+    };
+
+    /// Configuration for characters and important objects (always visible).
+    pub const IMPORTANT: Self = Self {
+        max_render_distance: -1.0, // No distance culling
+        min_screen_size: 0.0,       // No small object culling
+        enable_backface_culling: false,
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1497,8 +1958,9 @@ mod tests {
 
     #[test]
     fn test_gpu_draw_command_size() {
-        // Should be 96 bytes for optimal GPU alignment
-        assert_eq!(std::mem::size_of::<GpuDrawCommand>(), 96);
+        // Should be 112 bytes (64 + 16 + 16 + 16 = 112)
+        // model (64) + bounding_sphere (16) + average_normal (16) + remaining fields (16)
+        assert_eq!(std::mem::size_of::<GpuDrawCommand>(), 112);
     }
 
     #[test]
@@ -1521,9 +1983,10 @@ mod tests {
 
     #[test]
     fn test_culling_uniforms_size() {
-        // View-proj (64) + frustum_planes (96) + camera_position (16) + flags (16) = 192 bytes
+        // View-proj (64) + frustum_planes (96) + camera_position (16) + camera_direction (16) + 
+        // screen_dimensions (16) + flags (32) = 240 bytes
         let size = std::mem::size_of::<CullingUniforms>();
-        assert_eq!(size, 192);
+        assert_eq!(size, 240);
     }
 
     // ===== GpuDrawCommand Tests =====
@@ -1541,8 +2004,42 @@ mod tests {
         assert_eq!(cmd.bounding_sphere, [1.0, 2.0, 3.0, 5.0]);
         assert_eq!(cmd.mesh_id, 42);
         assert_eq!(cmd.material_id, 7);
-        assert_eq!(cmd.padding1, 0);
-        assert_eq!(cmd.padding2, 0);
+        assert_eq!(cmd.min_screen_size, 0.0);
+        assert_eq!(cmd.max_render_distance, -1.0);
+    }
+
+    #[test]
+    fn test_gpu_draw_command_with_culling_params() {
+        let model = Mat4::from_translation(Vec3::new(10.0, 20.0, 30.0));
+        let bounding_sphere = Vec4::new(1.0, 2.0, 3.0, 5.0);
+        let average_normal = Vec3::new(0.0, 1.0, 0.0);
+        let backface_threshold = 0.1;
+        let mesh_id = 42;
+        let material_id = 7;
+        let min_screen_size = 10.0;
+        let max_render_distance = 500.0;
+
+        let cmd = GpuDrawCommand::new_with_culling_params(
+            model,
+            bounding_sphere,
+            average_normal,
+            backface_threshold,
+            mesh_id,
+            material_id,
+            min_screen_size,
+            max_render_distance,
+        );
+
+        assert_eq!(cmd.model, model.to_cols_array_2d());
+        assert_eq!(cmd.bounding_sphere, [1.0, 2.0, 3.0, 5.0]);
+        assert_eq!(cmd.average_normal[0], 0.0);
+        assert_eq!(cmd.average_normal[1], 1.0);
+        assert_eq!(cmd.average_normal[2], 0.0);
+        assert_eq!(cmd.average_normal[3], 0.1);
+        assert_eq!(cmd.mesh_id, 42);
+        assert_eq!(cmd.material_id, 7);
+        assert_eq!(cmd.min_screen_size, 10.0);
+        assert_eq!(cmd.max_render_distance, 500.0);
     }
 
     #[test]
@@ -1643,6 +2140,46 @@ mod tests {
         assert_eq!(uniforms.camera_position, [5.0, 10.0, 15.0]);
         assert_eq!(uniforms.enable_frustum_culling, 1);
         assert_eq!(uniforms.enable_occlusion_culling, 0);
+        assert_eq!(uniforms.enable_backface_culling, 0);
+        assert_eq!(uniforms.enable_small_object_culling, 0);
+        assert_eq!(uniforms.enable_distance_culling, 0);
+        assert_eq!(uniforms.draw_command_count, 1000);
+    }
+
+    #[test]
+    fn test_culling_uniforms_extended_creation() {
+        let view_proj = Mat4::IDENTITY;
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 1.0),
+            Vec4::new(-1.0, 0.0, 0.0, 1.0),
+            Vec4::new(0.0, 1.0, 0.0, 1.0),
+            Vec4::new(0.0, -1.0, 0.0, 1.0),
+            Vec4::new(0.0, 0.0, 1.0, 0.1),
+            Vec4::new(0.0, 0.0, -1.0, 100.0),
+        ];
+        let camera_position = Vec3::new(5.0, 10.0, 15.0);
+        let camera_direction = Vec3::new(0.0, 0.0, -1.0);
+        let screen_dimensions = [1920.0, 1080.0];
+        let draw_command_count = 1000;
+
+        let uniforms = CullingUniforms::new_extended(
+            view_proj,
+            frustum_planes,
+            camera_position,
+            camera_direction,
+            screen_dimensions,
+            draw_command_count,
+        );
+
+        assert_eq!(uniforms.view_proj, view_proj.to_cols_array_2d());
+        assert_eq!(uniforms.camera_position, [5.0, 10.0, 15.0]);
+        assert_eq!(uniforms.camera_direction, [0.0, 0.0, -1.0]);
+        assert_eq!(uniforms.screen_dimensions, [1920.0, 1080.0]);
+        assert_eq!(uniforms.enable_frustum_culling, 1);
+        assert_eq!(uniforms.enable_occlusion_culling, 0);
+        assert_eq!(uniforms.enable_backface_culling, 0);
+        assert_eq!(uniforms.enable_small_object_culling, 0);
+        assert_eq!(uniforms.enable_distance_culling, 0);
         assert_eq!(uniforms.draw_command_count, 1000);
     }
 
@@ -1660,6 +2197,30 @@ mod tests {
 
         uniforms.enable_occlusion_culling = 1;
         assert_eq!(uniforms.enable_occlusion_culling, 1);
+    }
+
+    #[test]
+    fn test_culling_uniforms_backface_enabled() {
+        let mut uniforms = CullingUniforms::new(Mat4::IDENTITY, [Vec4::ZERO; 6], Vec3::ZERO, 0);
+
+        uniforms.enable_backface_culling = 1;
+        assert_eq!(uniforms.enable_backface_culling, 1);
+    }
+
+    #[test]
+    fn test_culling_uniforms_small_object_enabled() {
+        let mut uniforms = CullingUniforms::new(Mat4::IDENTITY, [Vec4::ZERO; 6], Vec3::ZERO, 0);
+
+        uniforms.enable_small_object_culling = 1;
+        assert_eq!(uniforms.enable_small_object_culling, 1);
+    }
+
+    #[test]
+    fn test_culling_uniforms_distance_enabled() {
+        let mut uniforms = CullingUniforms::new(Mat4::IDENTITY, [Vec4::ZERO; 6], Vec3::ZERO, 0);
+
+        uniforms.enable_distance_culling = 1;
+        assert_eq!(uniforms.enable_distance_culling, 1);
     }
 
     #[test]
@@ -1986,6 +2547,68 @@ mod tests {
         }
 
         assert_eq!(visible_count, 5, "Half of objects should be visible");
+    }
+
+    #[test]
+    fn test_calculate_average_normal_empty() {
+        let normals: Vec<Vec3> = vec![];
+        let avg = calculate_average_normal(&normals);
+        assert_eq!(avg, Vec3::Y);
+    }
+
+    #[test]
+    fn test_calculate_average_normal_single() {
+        let normals = vec![Vec3::new(1.0, 0.0, 0.0)];
+        let avg = calculate_average_normal(&normals);
+        assert_eq!(avg, Vec3::X);
+    }
+
+    #[test]
+    fn test_calculate_average_normal_multiple() {
+        let normals = vec![
+            Vec3::new(0.0, 1.0, 0.0),
+            Vec3::new(0.1, 0.9, 0.0),
+            Vec3::new(-0.1, 0.9, 0.0),
+        ];
+        let avg = calculate_average_normal(&normals);
+        
+        // Should be approximately (0, 1, 0) when normalized
+        assert!((avg.y - 1.0).abs() < 0.1);
+        assert!(avg.x.abs() < 0.1);
+        assert!(avg.z.abs() < 0.1);
+    }
+
+    #[test]
+    fn test_calculate_average_normal_opposing() {
+        // Opposing normals should cancel out
+        let normals = vec![
+            Vec3::new(1.0, 0.0, 0.0),
+            Vec3::new(-1.0, 0.0, 0.0),
+        ];
+        let avg = calculate_average_normal(&normals);
+        // Should return default when zero
+        assert_eq!(avg, Vec3::Y);
+    }
+
+    #[test]
+    fn test_object_class_config_constants() {
+        // Test that predefined configurations are reasonable
+        assert!(ObjectClassConfig::LARGE_STATIC.max_render_distance > 0.0);
+        assert!(ObjectClassConfig::MEDIUM.max_render_distance > 0.0);
+        assert!(ObjectClassConfig::SMALL_PROPS.max_render_distance > 0.0);
+        assert!(ObjectClassConfig::DETAIL.max_render_distance > 0.0);
+        
+        // IMPORTANT should have no distance culling
+        assert!(ObjectClassConfig::IMPORTANT.max_render_distance < 0.0);
+        assert_eq!(ObjectClassConfig::IMPORTANT.min_screen_size, 0.0);
+    }
+
+    #[test]
+    fn test_object_class_config_ordering() {
+        // Larger objects should have larger render distances
+        assert!(ObjectClassConfig::LARGE_STATIC.max_render_distance > ObjectClassConfig::MEDIUM.max_render_distance);
+        assert!(ObjectClassConfig::MEDIUM.max_render_distance > ObjectClassConfig::SMALL_PROPS.max_render_distance);
+        assert!(ObjectClassConfig::SMALL_PROPS.max_render_distance > ObjectClassConfig::DETAIL.max_render_distance);
     }
 
     #[test]

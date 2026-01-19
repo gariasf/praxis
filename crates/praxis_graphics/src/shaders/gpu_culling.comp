@@ -1,7 +1,8 @@
 #version 450
 
 // GPU-driven culling compute shader
-// Performs frustum culling on the GPU to generate indirect draw buffers
+// Performs frustum culling, back-face culling, small object culling,
+// distance culling, and occlusion culling on the GPU to generate indirect draw buffers
 
 // Work group size - process 64 draw commands per work group
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
@@ -10,11 +11,12 @@ layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 struct DrawCommand {
     mat4 model;              // Model matrix (64 bytes)
     vec4 bounding_sphere;    // xyz = center, w = radius (16 bytes)
+    vec4 average_normal;     // xyz = normal direction, w = backface threshold (16 bytes)
     uint mesh_id;            // Index into mesh data (4 bytes)
     uint material_id;        // Index into material data (4 bytes)
-    uint padding1;           // Padding (4 bytes)
-    uint padding2;           // Padding (4 bytes)
-    // Total: 96 bytes
+    float min_screen_size;   // Minimum screen-space size in pixels (4 bytes)
+    float max_render_distance; // Maximum render distance (4 bytes)
+    // Total: 112 bytes
 };
 
 // Output: Indirect draw command (VkDrawIndexedIndirectCommand)
@@ -31,12 +33,19 @@ struct IndirectDrawCommand {
 layout(set = 0, binding = 0, std140) uniform CullingUniforms {
     mat4 view_proj;          // View-projection matrix for frustum culling
     vec4 frustum_planes[6];  // Frustum planes in world space (xyz = normal, w = distance)
-    vec3 camera_position;    // Camera position (reserved for future use)
+    vec3 camera_position;    // Camera position in world space
     float _padding1;
+    vec3 camera_direction;   // Camera forward direction (for back-face culling)
+    float _padding2;
+    vec2 screen_dimensions;  // Screen dimensions (width, height)
+    vec2 _padding3;
     uint enable_frustum_culling;
-    uint enable_occlusion_culling;  // Reserved for future occlusion culling
+    uint enable_occlusion_culling;
+    uint enable_backface_culling;
+    uint enable_small_object_culling;
+    uint enable_distance_culling;
     uint draw_command_count; // Number of draw commands to process
-    uint _padding2;
+    uvec2 _padding4;
 } culling;
 
 // Input buffer: Draw commands
@@ -71,6 +80,9 @@ layout(set = 0, binding = 5, std430) buffer DrawCount {
     uint count;
 } draw_count;
 
+// Hi-Z depth pyramid sampler for occlusion culling
+layout(set = 0, binding = 6) uniform sampler2D hiz_pyramid;
+
 // Frustum culling: Test bounding sphere against view frustum planes
 bool is_sphere_in_frustum(vec3 center, float radius) {
     // Test sphere against all 6 frustum planes
@@ -86,8 +98,66 @@ bool is_sphere_in_frustum(vec3 center, float radius) {
     return true;
 }
 
-// Hi-Z depth pyramid sampler for occlusion culling
-layout(set = 0, binding = 6) uniform sampler2D hiz_pyramid;
+// Back-face culling: Test if object is facing away from camera
+bool is_facing_camera(vec3 world_normal, vec3 object_center, float threshold) {
+    // Direction from object to camera
+    vec3 to_camera = normalize(culling.camera_position - object_center);
+    
+    // Alternatively, use camera forward direction for more consistent culling
+    // For objects like terrain patches, use the object-to-camera direction
+    // For objects with known facing direction, use the camera direction
+    float dot_product = dot(world_normal, to_camera);
+    
+    // Object is facing camera if dot product is positive (within threshold)
+    // Threshold allows some tolerance (typically -0.1 to 0.1)
+    return dot_product >= threshold;
+}
+
+// Distance culling: Test if object is within render distance
+bool is_within_distance(vec3 object_center, float max_distance) {
+    if (max_distance < 0.0) {
+        // Negative max_distance means no distance culling for this object
+        return true;
+    }
+    
+    float distance = length(culling.camera_position - object_center);
+    return distance <= max_distance;
+}
+
+// Small object culling: Test if object's screen-space projection is large enough
+bool is_large_enough(vec3 world_center, float world_radius, float min_screen_size) {
+    if (min_screen_size <= 0.0) {
+        // Zero or negative min_screen_size means no small object culling
+        return true;
+    }
+    
+    // Project sphere center to clip space
+    vec4 clip_center = culling.view_proj * vec4(world_center, 1.0);
+    
+    // Check if behind camera
+    if (clip_center.w <= 0.0) {
+        return false;
+    }
+    
+    // Calculate screen-space radius
+    // The sphere's radius in screen space depends on its distance from camera
+    float view_space_z = clip_center.w;
+    
+    // Project the radius using perspective divide
+    // Approximate screen-space radius in NDC units
+    float ndc_radius = world_radius / view_space_z;
+    
+    // Convert to pixel size
+    // NDC is [-1, 1], so 2 units cover the entire screen
+    float screen_radius_x = ndc_radius * culling.screen_dimensions.x * 0.5;
+    float screen_radius_y = ndc_radius * culling.screen_dimensions.y * 0.5;
+    float screen_radius = max(screen_radius_x, screen_radius_y);
+    
+    // Object is large enough if its screen-space radius exceeds the minimum
+    // We use diameter for the comparison (2 * radius)
+    float screen_diameter = screen_radius * 2.0;
+    return screen_diameter >= min_screen_size;
+}
 
 // Occlusion culling: Test bounding sphere against Hi-Z depth pyramid
 // Returns true if the object is visible (not occluded)
@@ -168,8 +238,6 @@ bool is_visible_hiz(vec3 world_center, float world_radius) {
     return object_depth <= (max_hiz_depth + DEPTH_BIAS);
 }
 
-
-
 void main() {
     uint draw_index = gl_GlobalInvocationID.x;
     
@@ -194,14 +262,39 @@ void main() {
     
     bool is_visible = true;
     
-    // Frustum culling (first pass)
-    if (culling.enable_frustum_culling != 0) {
+    // Frustum culling (first pass - broadest cull)
+    if (is_visible && culling.enable_frustum_culling != 0) {
         if (!is_sphere_in_frustum(world_center.xyz, world_radius)) {
             is_visible = false;
         }
     }
     
-    // Occlusion culling (second pass - only test if passed frustum culling)
+    // Distance culling (second pass - cull objects too far away)
+    if (is_visible && culling.enable_distance_culling != 0) {
+        if (!is_within_distance(world_center.xyz, cmd.max_render_distance)) {
+            is_visible = false;
+        }
+    }
+    
+    // Back-face culling (third pass - cull objects facing away)
+    if (is_visible && culling.enable_backface_culling != 0) {
+        // Transform average normal to world space
+        vec3 world_normal = normalize(mat3(cmd.model) * cmd.average_normal.xyz);
+        float threshold = cmd.average_normal.w;
+        
+        if (!is_facing_camera(world_normal, world_center.xyz, threshold)) {
+            is_visible = false;
+        }
+    }
+    
+    // Small object culling (fourth pass - cull objects too small on screen)
+    if (is_visible && culling.enable_small_object_culling != 0) {
+        if (!is_large_enough(world_center.xyz, world_radius, cmd.min_screen_size)) {
+            is_visible = false;
+        }
+    }
+    
+    // Occlusion culling (final pass - most expensive, only test if passed all other tests)
     if (is_visible && culling.enable_occlusion_culling != 0) {
         if (!is_visible_hiz(world_center.xyz, world_radius)) {
             is_visible = false;
