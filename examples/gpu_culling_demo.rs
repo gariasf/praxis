@@ -138,7 +138,8 @@ fn setup_scene(world: &mut World, render_context: &mut RenderContext) -> Result<
     for x in -GRID_SIZE..GRID_SIZE {
         for y in -GRID_SIZE..GRID_SIZE {
             for z in -GRID_SIZE..GRID_SIZE {
-                let position = Vec3::new(x as f32 * SPACING, y as f32 * SPACING, z as f32 * SPACING);
+                let position =
+                    Vec3::new(x as f32 * SPACING, y as f32 * SPACING, z as f32 * SPACING);
 
                 world.spawn((
                     Transform::from_translation(position),
@@ -166,10 +167,12 @@ fn init_gpu_culling(render_context: &mut RenderContext) -> Result<GpuCullingStat
     let manager = GpuCullingManager::new(
         render_context.device.clone(),
         render_context.memory_allocator().clone(),
-        Arc::new(vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator::new(
-            render_context.device.clone(),
-            Default::default(),
-        )),
+        Arc::new(
+            vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator::new(
+                render_context.device.clone(),
+                Default::default(),
+            ),
+        ),
     )?;
 
     // Prepare mesh metadata
@@ -231,7 +234,7 @@ fn render_system(world: &World, render_context: &mut RenderContext) -> Result<()
     // Build regular draw commands for all objects (GPU culling happens internally)
     let mut draw_commands = Vec::new();
     let query = world.query::<(&GlobalTransform, &CulledObject)>();
-    
+
     for (_entity, (transform, _obj)) in query.iter() {
         draw_commands.push(DrawCommand {
             mesh_id: "cube".to_string(),
@@ -316,7 +319,9 @@ async fn main() -> Result<()> {
     }
 
     // Initialize camera controller
-    engine.world_mut().insert_resource(CameraController::default());
+    engine
+        .world_mut()
+        .insert_resource(CameraController::default());
 
     // Main loop
     let mut last_time = std::time::Instant::now();
@@ -333,8 +338,13 @@ async fn main() -> Result<()> {
 
         // Update culling draw commands
         update_culling_system(
-            engine_state.world.get_resource_mut::<GpuCullingState>().unwrap(),
-            engine_state.world.query::<(&GlobalTransform, &CulledObject)>(),
+            engine_state
+                .world
+                .get_resource_mut::<GpuCullingState>()
+                .unwrap(),
+            engine_state
+                .world
+                .query::<(&GlobalTransform, &CulledObject)>(),
         );
 
         // Render

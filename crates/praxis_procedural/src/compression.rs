@@ -124,7 +124,9 @@ use praxis_utils::{eyre, trace, Result};
 use std::sync::Arc;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
-    command_buffer::{allocator::CommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage},
+    command_buffer::{
+        allocator::CommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage,
+    },
     descriptor_set::{allocator::DescriptorSetAllocator, DescriptorSet, WriteDescriptorSet},
     device::{Device, Queue},
     format::Format,
