@@ -1036,7 +1036,6 @@ pub mod line_renderer;
 pub mod lod;
 pub mod material;
 pub mod material_instancing;
-pub mod material_layers;
 pub mod mesh;
 pub mod optimization_config;
 pub mod particles;
@@ -4065,10 +4064,6 @@ impl RenderContext {
 pub use adaptive_quality::{
     AdaptiveQualityConfig, AdaptiveQualityStatistics, AdaptiveQualitySystem,
 };
-#[allow(deprecated)]
-pub use area_lights::{
-    AreaLight, AreaLightData, AreaLightManager, AreaLightType, LtcMatrixData, MAX_AREA_LIGHTS,
-};
 pub use bindless::{
     BindlessMaterialData, BindlessTextureManager, MAX_BINDLESS_MATERIALS, MAX_BINDLESS_TEXTURES,
 };
@@ -4077,8 +4072,6 @@ pub use environment_probe::{
     EnvironmentProbe, EnvironmentProbeCapture, EnvironmentProbeConfig, EnvironmentProbeManager,
     IblData, IblUniforms, ProbeUpdateMode, MAX_ENVIRONMENT_PROBES, SPECULAR_MIP_LEVELS,
 };
-#[allow(deprecated)]
-pub use god_rays::{GodRays, GodRaysConfig, GodRaysRenderer, RadialBlurPass};
 pub use hdr::{
     calculate_luminance, ExposureCalculator, ExposureMode, HdrRenderTarget,
     ToneMapPass as HdrToneMapPass, ToneMapper, ToneMappingOperator,
@@ -4103,10 +4096,6 @@ pub use material::{
     ParallaxProperties,
 };
 pub use material_instancing::{InstancingStats, MaterialInstance, MaterialInstanceManager};
-pub use material_layers::{
-    LayerParamsUniforms, MaterialLayerCache, MaterialLayerRenderer, MaterialTextureSet,
-    MAX_MATERIAL_LAYERS,
-};
 pub use mesh::{GpuMesh, MeshData, MeshStreamingState, MeshStreamingSystem, StreamingGpuMesh};
 pub use particles::{
     CollisionPlane, EmitterShape, GpuParticle, ParticleEmitterConfig, ParticleForce,
@@ -4142,18 +4131,10 @@ pub use visual_feedback::{
     batch_to_lines, create_axis_indicator, create_bounding_box, create_gizmo_lines, create_grid,
     create_selection_outline, AxisIndicatorConfig, GridConfig,
 };
-#[allow(deprecated)]
-pub use volumetric_fog::{
-    FogDensityFunction, VolumetricFog, VolumetricFogConfig, VolumetricFogRenderer,
-    MAX_RAYMARCH_STEPS,
-};
 
-pub mod area_lights;
 pub mod environment_probe;
-pub mod god_rays;
 pub mod light_linking;
 pub mod light_probe;
-pub mod volumetric_fog;
 
 pub use gpu_culling::{
     calculate_average_normal, extract_frustum_planes, GpuCullingManager, GpuDrawCommand,

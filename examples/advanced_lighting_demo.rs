@@ -1,15 +1,11 @@
 //! Advanced lighting demonstration showcasing:
 //! - Light probes for dynamic global illumination
-//! - Volumetric fog with raymarching
-//! - God rays (crepuscular rays) with radial blur
-//! - Area lights with LTC
 //! - Light linking for selective illumination
 
 use praxis_ecs::{PerspectiveCameraBundle, Transform, World};
 use praxis_graphics::{
-    colored_cube_mesh, AreaLight, AreaLightManager, AreaLightType, DrawCommand, FogDensityFunction,
-    GodRays, GodRaysConfig, LightLinkingManager, LightProbeGrid, LightProbeManager, MeshData,
-    RenderCommands, RenderContext, VolumetricFog, VolumetricFogConfig,
+    colored_cube_mesh, DrawCommand, LightLinkingManager, LightProbeGrid, LightProbeManager, MeshData,
+    RenderCommands, RenderContext,
 };
 use praxis_math::{EulerRot, Mat4, Quat, Vec3};
 use praxis_utils::{info, Result};
@@ -26,10 +22,7 @@ const WINDOW_HEIGHT: u32 = 720;
 #[allow(dead_code)]
 struct AdvancedLightingDemo {
     light_probe_manager: Option<LightProbeManager>,
-    area_light_manager: Option<AreaLightManager>,
     light_linking_manager: LightLinkingManager,
-    volumetric_fog: VolumetricFog,
-    god_rays: GodRays,
     time: f32,
 }
 
@@ -37,35 +30,9 @@ impl AdvancedLightingDemo {
     fn new() -> Self {
         let light_linking_manager = LightLinkingManager::new();
 
-        let fog_config = VolumetricFogConfig {
-            density_function: FogDensityFunction::HeightBased {
-                base_height: 0.0,
-                falloff: 0.15,
-            },
-            color: Vec3::new(0.7, 0.75, 0.8),
-            density: 0.04,
-            max_distance: 100.0,
-            num_steps: 64,
-            light_scattering: 0.4,
-            anisotropy: 0.3,
-            shadow_influence: 0.7,
-        };
-
-        let god_rays_config = GodRaysConfig {
-            num_samples: 80,
-            density: 0.6,
-            weight: 0.4,
-            decay: 0.96,
-            exposure: 0.9,
-            threshold: 0.85,
-        };
-
         Self {
             light_probe_manager: None,
-            area_light_manager: None,
             light_linking_manager,
-            volumetric_fog: VolumetricFog::new(fog_config),
-            god_rays: GodRays::new(god_rays_config),
             time: 0.0,
         }
     }
@@ -85,58 +52,6 @@ impl AdvancedLightingDemo {
         info!("Light probe grid created with {} probes", grid.probes.len());
 
         self.light_probe_manager = Some(manager);
-        Ok(())
-    }
-
-    fn setup_area_lights(
-        &mut self,
-        device: Arc<vulkano::device::Device>,
-        memory_allocator: Arc<vulkano::memory::allocator::StandardMemoryAllocator>,
-    ) -> Result<()> {
-        let mut manager = AreaLightManager::new(device, memory_allocator)?;
-
-        // Rectangle light (warm white overhead)
-        let rect_light = AreaLight {
-            light_type: AreaLightType::Rectangle {
-                width: 4.0,
-                height: 4.0,
-            },
-            position: Vec3::new(0.0, 8.0, 0.0),
-            direction: Vec3::new(0.0, -1.0, 0.0),
-            up: Vec3::new(0.0, 0.0, 1.0),
-            color: Vec3::new(1.0, 0.9, 0.7),
-            intensity: 15.0,
-            two_sided: false,
-        };
-
-        // Disk light (cool blue from side)
-        let disk_light = AreaLight {
-            light_type: AreaLightType::Disk { radius: 2.0 },
-            position: Vec3::new(-8.0, 5.0, 0.0),
-            direction: Vec3::new(1.0, -0.3, 0.0).normalize(),
-            up: Vec3::new(0.0, 1.0, 0.0),
-            color: Vec3::new(0.5, 0.7, 1.0),
-            intensity: 10.0,
-            two_sided: false,
-        };
-
-        // Sphere light (warm orange accent)
-        let sphere_light = AreaLight {
-            light_type: AreaLightType::Sphere { radius: 1.5 },
-            position: Vec3::new(6.0, 3.0, -3.0),
-            direction: Vec3::new(-1.0, 0.0, 1.0).normalize(),
-            up: Vec3::new(0.0, 1.0, 0.0),
-            color: Vec3::new(1.0, 0.6, 0.3),
-            intensity: 8.0,
-            two_sided: true,
-        };
-
-        manager.add_light(rect_light)?;
-        manager.add_light(disk_light)?;
-        manager.add_light(sphere_light)?;
-
-        info!("Area lights configured: {} lights", manager.light_count());
-        self.area_light_manager = Some(manager);
         Ok(())
     }
 
@@ -271,10 +186,6 @@ impl App {
             render_context.device.clone(),
             render_context.memory_allocator().clone(),
         )?;
-        demo.setup_area_lights(
-            render_context.device.clone(),
-            render_context.memory_allocator().clone(),
-        )?;
         demo.setup_light_linking();
 
         info!("Scene setup complete");
@@ -303,6 +214,7 @@ impl App {
             model: Mat4::IDENTITY,
             texture_name: None,
             material_properties: None,
+            material_instance_id: None,
             bone_matrices: None,
         });
 
@@ -316,6 +228,7 @@ impl App {
             ),
             texture_name: None,
             material_properties: None,
+            material_instance_id: None,
             bone_matrices: None,
         });
 
@@ -335,6 +248,7 @@ impl App {
                 ),
                 texture_name: None,
                 material_properties: None,
+                material_instance_id: None,
                 bone_matrices: None,
             });
         }
@@ -356,6 +270,7 @@ impl App {
                 ),
                 texture_name: None,
                 material_properties: None,
+                material_instance_id: None,
                 bone_matrices: None,
             });
         }
@@ -452,9 +367,6 @@ impl ApplicationHandler for App {
         println!("╚═══════════════════════════════════════════════════════════════════╝");
         println!("\nShowcasing advanced lighting features:");
         println!("  • Light Probes - 5×3×5 grid for dynamic global illumination");
-        println!("  • Volumetric Fog - Height-based with light scattering");
-        println!("  • God Rays - Crepuscular rays with radial blur");
-        println!("  • Area Lights - Rectangle, Disk, and Sphere lights with LTC");
         println!("  • Light Linking - Selective object illumination");
         println!("\nScene Layout:");
         println!("  • Central cube: Hero character (hero + environment lights)");
