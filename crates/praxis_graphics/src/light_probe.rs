@@ -290,9 +290,7 @@ impl LightProbeGrid {
 
 /// Manager for light probe system.
 pub struct LightProbeManager {
-    #[allow(dead_code)]
     device: Arc<Device>,
-    #[allow(dead_code)]
     memory_allocator: Arc<StandardMemoryAllocator>,
     probe_buffer: Subbuffer<[LightProbeData; MAX_LIGHT_PROBES]>,
     grids: Vec<LightProbeGrid>,

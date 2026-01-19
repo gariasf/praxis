@@ -65,7 +65,6 @@ pub struct CopyPass {
     pipeline: Arc<GraphicsPipeline>,
     quad: FullScreenQuad,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
-    #[allow(dead_code)]
     render_pass: Arc<RenderPass>,
 }
 
@@ -260,7 +259,6 @@ pub struct GrayscalePass {
     pipeline: Arc<GraphicsPipeline>,
     quad: FullScreenQuad,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
-    #[allow(dead_code)]
     render_pass: Arc<RenderPass>,
 }
 

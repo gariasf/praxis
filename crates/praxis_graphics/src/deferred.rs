@@ -491,7 +491,6 @@ pub struct DeferredRenderer {
     /// Render pass for geometry pass (outputs to G-buffer)
     geometry_pass: Arc<RenderPass>,
     /// Render pass for lighting pass (outputs to swapchain)
-    #[allow(dead_code)]
     lighting_pass: Arc<RenderPass>,
 
     /// Pipeline for geometry pass

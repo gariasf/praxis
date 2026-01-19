@@ -389,7 +389,6 @@ pub fn create_simple_pipeline_3d(
 ///
 /// This function is part of the public API for the shadow mapping system.
 /// It may not be used internally but is available for external use.
-#[allow(dead_code)]
 pub fn create_shadow_pipeline(
     device: &Arc<Device>,
     render_pass: &Arc<RenderPass>,
@@ -544,7 +543,6 @@ pub fn create_shadow_pipeline(
 /// # Errors
 ///
 /// Returns an error if pipeline creation fails.
-#[allow(dead_code)]
 pub fn create_post_process_pipeline(
     device: &Arc<Device>,
     render_pass: &Arc<RenderPass>,

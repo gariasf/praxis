@@ -96,7 +96,6 @@ pub struct DepthOfFieldPass {
     quad: FullScreenQuad,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     memory_allocator: Arc<StandardMemoryAllocator>,
-    #[allow(dead_code)]
     render_pass: Arc<RenderPass>,
     config: DofConfig,
 }
@@ -343,7 +342,6 @@ pub struct MotionBlurPass {
     quad: FullScreenQuad,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     memory_allocator: Arc<StandardMemoryAllocator>,
-    #[allow(dead_code)]
     render_pass: Arc<RenderPass>,
     config: MotionBlurConfig,
 }
@@ -596,7 +594,6 @@ pub struct ChromaticAberrationPass {
     quad: FullScreenQuad,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     memory_allocator: Arc<StandardMemoryAllocator>,
-    #[allow(dead_code)]
     render_pass: Arc<RenderPass>,
     config: ChromaticAberrationConfig,
 }
@@ -829,7 +826,6 @@ pub struct VignettePass {
     quad: FullScreenQuad,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     memory_allocator: Arc<StandardMemoryAllocator>,
-    #[allow(dead_code)]
     render_pass: Arc<RenderPass>,
     config: VignetteConfig,
 }
@@ -1057,7 +1053,6 @@ pub struct FilmGrainPass {
     quad: FullScreenQuad,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     memory_allocator: Arc<StandardMemoryAllocator>,
-    #[allow(dead_code)]
     render_pass: Arc<RenderPass>,
     config: FilmGrainConfig,
 }

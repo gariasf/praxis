@@ -98,7 +98,6 @@ impl VelocityBuffer {
 
 /// Velocity buffer renderer for generating motion vectors.
 pub struct VelocityBufferRenderer {
-    #[allow(dead_code)]
     device: Arc<Device>,
     memory_allocator: Arc<StandardMemoryAllocator>,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,

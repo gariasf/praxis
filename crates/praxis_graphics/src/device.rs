@@ -66,7 +66,7 @@ pub struct VulkanDevice {
 
     /// Debug messenger for Vulkan validation layer messages (only in debug builds).
     /// Must be kept alive for the duration of the instance to receive validation messages.
-    #[allow(dead_code)]
+    /// This field is intentionally unused - it exists solely for RAII cleanup.
     _debug_messenger: Option<DebugUtilsMessenger>,
 }
 

@@ -102,7 +102,6 @@ pub struct ToneMapPass {
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     operator: ToneMappingOperator,
     gamma: f32,
-    #[allow(dead_code)]
     render_pass: Arc<RenderPass>,
 }
 

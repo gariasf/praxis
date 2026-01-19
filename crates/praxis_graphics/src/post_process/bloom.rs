@@ -81,7 +81,6 @@ pub struct BrightnessExtractionPass {
     quad: FullScreenQuad,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     threshold: f32,
-    #[allow(dead_code)]
     render_pass: Arc<RenderPass>,
 }
 
@@ -266,7 +265,6 @@ pub struct GaussianBlurHorizontalPass {
     pipeline: Arc<GraphicsPipeline>,
     quad: FullScreenQuad,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
-    #[allow(dead_code)]
     render_pass: Arc<RenderPass>,
 }
 
@@ -445,7 +443,6 @@ pub struct GaussianBlurVerticalPass {
     pipeline: Arc<GraphicsPipeline>,
     quad: FullScreenQuad,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
-    #[allow(dead_code)]
     render_pass: Arc<RenderPass>,
 }
 
@@ -626,7 +623,6 @@ pub struct ToneMapPass {
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     exposure: f32,
     bloom_intensity: f32,
-    #[allow(dead_code)]
     render_pass: Arc<RenderPass>,
 }
 

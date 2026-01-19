@@ -213,6 +213,7 @@ impl SpatialHash {
         self.table[hash].particle_indices.push(index);
     }
 
+    #[allow(dead_code)]
     fn query_neighbors(&self, position: Vec3) -> Vec<usize> {
         let mut neighbors = Vec::new();
 
@@ -817,11 +818,9 @@ pub struct ParticleRenderer {
     memory_allocator: Arc<dyn MemoryAllocator>,
     command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
     queue: Arc<Queue>,
-    #[allow(dead_code)]
     device: Arc<Device>,
     sort_pipeline: Option<Arc<ComputePipeline>>,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
-    #[allow(dead_code)]
     gpu_particle_buffer: Option<Subbuffer<[GpuParticle]>>,
     enable_gpu_sorting: bool,
     camera_position: Vec3,

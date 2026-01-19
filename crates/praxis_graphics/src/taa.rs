@@ -346,7 +346,6 @@ type QuadBuffers = (
 
 /// TAA renderer implementing temporal anti-aliasing.
 pub struct TaaRenderer {
-    #[allow(dead_code)]
     device: Arc<Device>,
     memory_allocator: Arc<StandardMemoryAllocator>,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,

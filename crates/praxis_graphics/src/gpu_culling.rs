@@ -836,7 +836,6 @@ impl CullingUniforms {
 /// Manages compute shader dispatch for frustum and occlusion culling,
 /// generating indirect draw buffers on the GPU.
 pub struct GpuCullingManager {
-    #[allow(dead_code)]
     device: Arc<Device>,
     memory_allocator: Arc<dyn MemoryAllocator>,
     descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,

@@ -194,7 +194,6 @@ pub struct ShadowMapManager {
     config: ShadowConfig,
 
     /// Shadow map depth images (one per cascade).
-    #[allow(dead_code)]
     shadow_maps: Vec<Arc<Image>>,
 
     /// Image views for shadow map textures.
@@ -210,7 +209,6 @@ pub struct ShadowMapManager {
     shadow_uniform_buffer: Subbuffer<ShadowUniforms>,
 
     /// Memory allocator for creating resources.
-    #[allow(dead_code)]
     memory_allocator: Arc<StandardMemoryAllocator>,
 }
 
