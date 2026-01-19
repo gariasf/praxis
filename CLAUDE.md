@@ -66,6 +66,7 @@ cargo run --example multi_mesh_demo
 cargo run --example input_integration
 cargo run --example fps_camera_controller
 cargo run --example ecs_integration
+cargo run --example texture_compression_demo
 
 # Documentation
 cargo doc --workspace --no-deps --open

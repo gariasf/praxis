@@ -1167,6 +1167,7 @@ mod tests {
             width: 1024,
             height: 2048,
             seed: 42,
+            ..Default::default()
         };
         assert_eq!(params.width, 1024);
         assert_eq!(params.height, 2048);
@@ -1179,11 +1180,13 @@ mod tests {
             width: 256,
             height: 256,
             seed: 1,
+            ..Default::default()
         };
         let params2 = TextureGenerationParams {
             width: 256,
             height: 256,
             seed: 1,
+            ..Default::default()
         };
         assert_eq!(params1, params2);
     }
@@ -1402,6 +1405,7 @@ void not_main() {
             width: 512,
             height: 512,
             seed: 42,
+            ..Default::default()
         };
 
         let generator = create_mock_generator();
@@ -1921,6 +1925,7 @@ void not_main() {
             width: 512,
             height: 512,
             seed: 0,
+            ..Default::default()
         };
         let shader1 = generator.compile_graph_to_shader(&graph, params1).unwrap();
         assert!(shader1.contains("const uint SEED = 0u"));
@@ -1929,6 +1934,7 @@ void not_main() {
             width: 512,
             height: 512,
             seed: 12345,
+            ..Default::default()
         };
         let shader2 = generator.compile_graph_to_shader(&graph, params2).unwrap();
         assert!(shader2.contains("const uint SEED = 12345u"));
@@ -1952,6 +1958,7 @@ void not_main() {
             width: 1024,
             height: 2048,
             seed: 0,
+            ..Default::default()
         };
         let shader = generator.compile_graph_to_shader(&graph, params).unwrap();
 
@@ -1965,6 +1972,7 @@ void not_main() {
             width: 512,
             height: 512,
             seed: 0,
+            ..Default::default()
         };
 
         let buffer_size = (params.width * params.height * 4) as u64;
@@ -1974,6 +1982,7 @@ void not_main() {
             width: 64,
             height: 64,
             seed: 0,
+            ..Default::default()
         };
         let buffer_size_small = (params_small.width * params_small.height * 4) as u64;
         assert_eq!(buffer_size_small, 16_384);
@@ -1982,6 +1991,7 @@ void not_main() {
             width: 4096,
             height: 4096,
             seed: 0,
+            ..Default::default()
         };
         let buffer_size_large = (params_large.width * params_large.height * 4) as u64;
         assert_eq!(buffer_size_large, 67_108_864);

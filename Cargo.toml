@@ -261,6 +261,10 @@ name = "scripting_console_demo"
 path = "examples/scripting_console_demo.rs"
 required-features = ["scripting"]
 
+[[example]]
+name = "texture_compression_demo"
+path = "examples/texture_compression_demo.rs"
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 vulkano = "0.35.1"
