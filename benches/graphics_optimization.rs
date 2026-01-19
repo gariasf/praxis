@@ -941,6 +941,265 @@ fn bench_material_batching_overhead(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_gpu_vs_cpu_lod_selection(c: &mut Criterion) {
+    let ctx = GraphicsContext::new();
+    let mut group = c.benchmark_group("gpu_vs_cpu_lod_selection");
+    group.sample_size(50);
+
+    // Test configurations: 100, 1000, 10000, 100000 objects
+    for object_count in [100, 1000, 10000, 100000] {
+        group.throughput(Throughput::Elements(object_count as u64));
+
+        // ===== CPU LOD Selection Benchmark =====
+        group.bench_function(BenchmarkId::new("cpu_lod_selection", object_count), |b| {
+            use praxis_graphics::lod::{LodGroup, LodLevel};
+
+            // Setup camera position
+            let camera_position = Vec3::new(0.0, 0.0, 50.0);
+
+            // Setup LOD group with 3 levels
+            let lod_group = LodGroup::new(vec![
+                LodLevel::new("high", 0.0, 10.0),    // 0-10 units
+                LodLevel::new("medium", 10.0, 25.0), // 10-25 units
+                LodLevel::new("low", 25.0, 100.0),   // 25-100 units
+            ]);
+
+            // Setup test objects in a grid
+            let grid_size = (object_count as f32).cbrt().ceil() as usize;
+            let spacing = 10.0;
+            let mut object_positions = Vec::with_capacity(object_count);
+
+            for i in 0..object_count {
+                let x = ((i % grid_size) as f32 - grid_size as f32 / 2.0) * spacing;
+                let y = (((i / grid_size) % grid_size) as f32 - grid_size as f32 / 2.0) * spacing;
+                let z = ((i / (grid_size * grid_size)) as f32 - grid_size as f32 / 2.0) * spacing;
+                object_positions.push(Vec3::new(x, y, z));
+            }
+
+            b.iter(|| {
+                let start = std::time::Instant::now();
+                let mut selected_lods = Vec::with_capacity(object_count);
+
+                // CPU LOD selection - calculate distance and select LOD for each object
+                for object_position in &object_positions {
+                    // Calculate squared distance
+                    let delta = *object_position - camera_position;
+                    let distance_squared = delta.length_squared();
+
+                    // Select LOD level
+                    let selected_level = lod_group.select_lod_level(distance_squared);
+                    selected_lods.push(selected_level);
+                }
+
+                let cpu_time = start.elapsed();
+                black_box((selected_lods.len(), cpu_time))
+            });
+        });
+
+        // ===== GPU LOD Selection Benchmark =====
+        group.bench_function(BenchmarkId::new("gpu_lod_selection", object_count), |b| {
+            use praxis_graphics::lod::{GpuLodLevel, GpuLodSelector, GpuObjectData};
+
+            // Setup GPU LOD selector
+            let mut lod_selector = GpuLodSelector::new(
+                ctx.device.clone(),
+                ctx.memory_allocator.clone(),
+                Arc::new(StandardDescriptorSetAllocator::new(
+                    ctx.device.clone(),
+                    Default::default(),
+                )),
+            )
+            .expect("Failed to create GPU LOD selector");
+
+            // Setup camera position
+            let camera_position = Vec3::new(0.0, 0.0, 50.0);
+
+            // Setup test objects in a grid (same distribution as CPU test)
+            let grid_size = (object_count as f32).cbrt().ceil() as usize;
+            let spacing = 10.0;
+            let mut objects = Vec::with_capacity(object_count);
+            let mut lod_levels = Vec::with_capacity(object_count * 3);
+
+            for i in 0..object_count {
+                let x = ((i % grid_size) as f32 - grid_size as f32 / 2.0) * spacing;
+                let y = (((i / grid_size) % grid_size) as f32 - grid_size as f32 / 2.0) * spacing;
+                let z = ((i / (grid_size * grid_size)) as f32 - grid_size as f32 / 2.0) * spacing;
+
+                let model = Mat4::from_translation(Vec3::new(x, y, z));
+                let bounding_sphere = [0.0, 0.0, 0.0, 1.0]; // Center at origin, radius 1.0
+
+                objects.push(GpuObjectData::new(
+                    model,
+                    bounding_sphere,
+                    i as u32,
+                    3,
+                    (i * 3) as u32,
+                ));
+            }
+
+            // Define LOD levels (3 levels per object)
+            for _ in 0..object_count {
+                lod_levels.push(GpuLodLevel {
+                    mesh_id: 0,
+                    min_distance_sq: 0.0,
+                    max_distance_sq: 100.0, // 10^2
+                    padding: 0,
+                });
+                lod_levels.push(GpuLodLevel {
+                    mesh_id: 1,
+                    min_distance_sq: 100.0,
+                    max_distance_sq: 625.0, // 25^2
+                    padding: 0,
+                });
+                lod_levels.push(GpuLodLevel {
+                    mesh_id: 2,
+                    min_distance_sq: 625.0,
+                    max_distance_sq: 10000.0, // 100^2
+                    padding: 0,
+                });
+            }
+
+            // Prepare buffers once
+            lod_selector
+                .prepare_frame(&objects, &lod_levels)
+                .expect("Failed to prepare GPU LOD frame");
+
+            b.iter(|| {
+                let start = std::time::Instant::now();
+
+                // Create command buffer for GPU LOD selection
+                let mut builder = AutoCommandBufferBuilder::primary(
+                    ctx.command_buffer_allocator.clone(),
+                    ctx.queue.queue_family_index(),
+                    CommandBufferUsage::OneTimeSubmit,
+                )
+                .expect("Failed to create command buffer");
+
+                // Dispatch GPU LOD selection compute shader
+                lod_selector
+                    .dispatch_lod_selection(&mut builder, camera_position, 0.0, true)
+                    .expect("Failed to dispatch GPU LOD selection");
+
+                let command_buffer = builder.build().expect("Failed to build command buffer");
+
+                // Submit and wait
+                let future = sync::now(ctx.device.clone())
+                    .then_execute(ctx.queue.clone(), command_buffer)
+                    .expect("Failed to execute")
+                    .then_signal_fence_and_flush()
+                    .expect("Failed to flush");
+
+                future.wait(None).expect("Failed to wait for GPU");
+
+                let total_time = start.elapsed();
+
+                // Read back results for verification (optional, but ensures work completed)
+                let selected_count = lod_selector
+                    .read_selected_lods()
+                    .expect("Failed to read selected LODs")
+                    .len();
+
+                black_box((selected_count, total_time))
+            });
+        });
+
+        // ===== CPU Overhead Only Benchmark (GPU LOD) =====
+        group.bench_function(
+            BenchmarkId::new("gpu_lod_cpu_overhead_only", object_count),
+            |b| {
+                use praxis_graphics::lod::{GpuLodLevel, GpuLodSelector, GpuObjectData};
+
+                // This benchmark measures only CPU-side overhead of preparing and dispatching
+                // GPU LOD selection, excluding actual GPU execution time
+
+                let mut lod_selector = GpuLodSelector::new(
+                    ctx.device.clone(),
+                    ctx.memory_allocator.clone(),
+                    Arc::new(StandardDescriptorSetAllocator::new(
+                        ctx.device.clone(),
+                        Default::default(),
+                    )),
+                )
+                .expect("Failed to create GPU LOD selector");
+
+                let camera_position = Vec3::new(0.0, 0.0, 50.0);
+
+                let grid_size = (object_count as f32).cbrt().ceil() as usize;
+                let spacing = 10.0;
+                let mut objects = Vec::with_capacity(object_count);
+                let mut lod_levels = Vec::with_capacity(object_count * 3);
+
+                for i in 0..object_count {
+                    let x = ((i % grid_size) as f32 - grid_size as f32 / 2.0) * spacing;
+                    let y =
+                        (((i / grid_size) % grid_size) as f32 - grid_size as f32 / 2.0) * spacing;
+                    let z =
+                        ((i / (grid_size * grid_size)) as f32 - grid_size as f32 / 2.0) * spacing;
+
+                    let model = Mat4::from_translation(Vec3::new(x, y, z));
+                    objects.push(GpuObjectData::new(
+                        model,
+                        [0.0, 0.0, 0.0, 1.0], // Center at origin, radius 1.0
+                        i as u32,
+                        3,
+                        (i * 3) as u32,
+                    ));
+                }
+
+                for _ in 0..object_count {
+                    lod_levels.push(GpuLodLevel {
+                        mesh_id: 0,
+                        min_distance_sq: 0.0,
+                        max_distance_sq: 100.0,
+                        padding: 0,
+                    });
+                    lod_levels.push(GpuLodLevel {
+                        mesh_id: 1,
+                        min_distance_sq: 100.0,
+                        max_distance_sq: 625.0,
+                        padding: 0,
+                    });
+                    lod_levels.push(GpuLodLevel {
+                        mesh_id: 2,
+                        min_distance_sq: 625.0,
+                        max_distance_sq: 10000.0,
+                        padding: 0,
+                    });
+                }
+
+                lod_selector
+                    .prepare_frame(&objects, &lod_levels)
+                    .expect("Failed to prepare GPU LOD frame");
+
+                b.iter(|| {
+                    // Measure only CPU-side preparation and dispatch (not GPU execution)
+                    let start = std::time::Instant::now();
+
+                    let mut builder = AutoCommandBufferBuilder::primary(
+                        ctx.command_buffer_allocator.clone(),
+                        ctx.queue.queue_family_index(),
+                        CommandBufferUsage::OneTimeSubmit,
+                    )
+                    .expect("Failed to create command buffer");
+
+                    lod_selector
+                        .dispatch_lod_selection(&mut builder, camera_position, 0.0, true)
+                        .expect("Failed to dispatch GPU LOD selection");
+
+                    let _command_buffer = builder.build().expect("Failed to build command buffer");
+
+                    let cpu_time = start.elapsed();
+
+                    // Note: We don't submit/wait here, just measuring CPU overhead
+                    black_box(cpu_time)
+                });
+            },
+        );
+    }
+
+    group.finish();
+}
+
 fn bench_gpu_vs_cpu_culling(c: &mut Criterion) {
     let ctx = GraphicsContext::new();
     let mut group = c.benchmark_group("gpu_vs_cpu_culling");
@@ -1243,6 +1502,7 @@ criterion_group!(
     bench_draw_call_reduction_analysis,
     bench_indirect_buffer_build_cost,
     bench_material_batching_overhead,
+    bench_gpu_vs_cpu_lod_selection,
     bench_gpu_vs_cpu_culling,
 );
 criterion_main!(benches);
