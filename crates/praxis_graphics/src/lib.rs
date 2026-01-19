@@ -3953,6 +3953,11 @@ pub use procedural_texture::ProceduralTextureManager;
 pub use shadow::{ShadowConfig, ShadowMapManager, ShadowUniforms, MAX_SHADOW_CASCADES};
 pub use skybox::SkyboxRenderer;
 pub use ssao::{SsaoConfig, SsaoRenderer};
+pub use ssr::{SsrConfig, SsrRenderer};
+pub use taa::{
+    apply_jitter_to_projection, HaltonSequence, TaaApplyParams, TaaConfig, TaaRenderTarget,
+    TaaRenderer,
+};
 pub use texture::{Cubemap, CubemapFace, Texture, TextureManager};
 pub use uniform_buffer::{DynamicUniformBuffer, ModelUniforms, ViewProjectionUniforms};
 pub use velocity_buffer::{VelocityBuffer, VelocityBufferRenderer};
