@@ -494,4 +494,5 @@ let config = ProfilerConfig::disabled();
 ## See Also
 
 - [Profiling Guide](../profiling.md) - Comprehensive profiling guide
-- [praxis_profiling crate](../../crates/praxis_profiling/README.md) - Crate documentation
+- [Performance Learning Path](../learning-paths/performance.md) - Optimization techniques
+- [praxis_profiling Crate](../../crates/praxis_profiling/README.md) - Crate documentation

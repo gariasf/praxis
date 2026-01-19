@@ -718,10 +718,13 @@ Spatial Optimization Statistics:
 
 ## See Also
 
-- **[`praxis_spatial` crate README](../../crates/praxis_spatial/README.md)** - Detailed API documentation and implementation details
-- **[Spatial Partitioning Documentation](../../crates/praxis_spatial/SPATIAL_PARTITIONING.md)** - In-depth guide to octrees and BVH
-- **[LOD System](../lod_system.md)** - Detailed LOD configuration and best practices
-- **[Frustum Culling](../frustum_culling.md)** - Mathematical details of frustum culling
+- [Spatial API Reference](../reference/spatial-api.md) - API documentation
+- [Performance Learning Path](../learning-paths/performance.md) - Optimization techniques
+- [LOD System Guide](rendering/lod.md) - Detailed LOD configuration and best practices
+- [Frustum Culling Guide](rendering/frustum-culling.md) - Mathematical details of frustum culling
+- [GPU Culling Guide](rendering/gpu-culling.md) - GPU-driven culling techniques
+- [praxis_spatial Crate](../../crates/praxis_spatial/README.md) - Crate documentation
+- [Spatial Partitioning Documentation](../../crates/praxis_spatial/SPATIAL_PARTITIONING.md) - In-depth guide to octrees and BVH
 
 ## Examples
 

@@ -757,7 +757,16 @@ async fn download_save_from_cloud(
 
 ## See Also
 
-- [Scene Definition](../concepts/scenes.md) - Scene format details
-- [ECS](../concepts/ecs.md) - Entity-Component-System fundamentals
-- [Asset System](assets.md) - Asset loading and management
-- Example: `examples/save_load_demo.rs`
+- [Scene Format Reference](../reference/scene-format.md) - Scene format specification
+- [ECS Architecture](../concepts/ecs-architecture.md) - Entity-Component-System fundamentals
+- [Assets Guide](assets/README.md) - Asset loading and management
+- [praxis_scene Crate](../../crates/praxis_scene/README.md) - Crate documentation
+
+## Examples
+
+Run the serialization examples:
+
+```bash
+cargo run --example save_load_demo
+cargo run --example scene_serialization_demo
+```

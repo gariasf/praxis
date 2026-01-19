@@ -902,4 +902,6 @@ cargo run --example skeletal_animation_demo
   - [Blending](animation/blending.md) - Cross-fades, blend trees, layered animation, and additive blending
   - [Advanced Features](animation/advanced-features.md) - IK, retargeting, additive blending, and root motion
 - [Animation Concepts](../concepts/animation.md) - Theory and architecture
-- [praxis_scene README](../../crates/praxis_scene/README.md) - API documentation
+- [Animation API Reference](../reference/animation-api.md) - API documentation
+- [Animation Learning Path](../learning-paths/animation.md) - Structured learning progression
+- [praxis_scene Crate](../../crates/praxis_scene/README.md) - Crate documentation

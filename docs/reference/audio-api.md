@@ -871,13 +871,13 @@ Potential improvements for future development:
 - Use `Changed<Transform>` systems
 - Profile with `cargo bench`
 
-## References
+## See Also
 
+- [Audio Guide](../guides/audio.md) - Practical audio system guide
+- [Spatial Audio Concepts](../concepts/spatial-audio.md) - Theory and algorithms
+- [praxis_audio Crate](../../crates/praxis_audio/README.md) - Crate documentation
 - **Kira Audio Library:** https://github.com/tesselode/kira
 - **CPAL:** https://github.com/RustAudio/cpal
-- **Inverse Square Law:** Standard physics attenuation model
-- **Doppler Effect:** Classic acoustic physics
-- **Bevy ECS:** https://bevyengine.org/learn/book/getting-started/ecs/
 
 ## Summary
 

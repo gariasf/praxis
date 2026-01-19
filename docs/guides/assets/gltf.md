@@ -931,7 +931,9 @@ cargo run --example gltf_demo
 
 ## See Also
 
-- [Praxis Assets README](../crates/praxis_assets/README.md) - Full API documentation
-- [Mesh System](mesh_system.md) - Mesh data format and GPU upload
-- [OBJ Loading](obj_loading.md) - Alternative mesh format
-- [Material System](BEGINNERS_GUIDE.md#material-system) - Material properties and PBR
+- [Assets Guide](README.md) - Asset loading and management overview
+- [OBJ Loading Guide](obj.md) - Alternative mesh format
+- [Animation Guide](../animation.md) - Working with GLTF animations
+- [Mesh API Reference](../../reference/mesh-api.md) - Mesh architecture
+- [Assets Learning Path](../../learning-paths/assets.md) - Structured learning progression
+- [praxis_assets Crate](../../../crates/praxis_assets/README.md) - Crate documentation

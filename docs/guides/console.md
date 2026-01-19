@@ -918,8 +918,16 @@ impl Game {
 
 ## See Also
 
-- [Scripting](scripting.md) - Lua scripting system
-- [ECS](../concepts/ecs.md) - Entity-Component-System
-- [GUI](../reference/gui.md) - egui integration
-- Example: `examples/scripting_console_demo.rs`
-- Example: `examples/console_demo.rs`
+- [Scripting Guide](scripting.md) - Lua scripting system
+- [Scripting API Reference](../reference/scripting-api.md) - API documentation
+- [ECS Architecture](../concepts/ecs-architecture.md) - Entity-Component-System
+- [GUI API Reference](../reference/gui-api.md) - egui integration
+
+## Examples
+
+Run the console examples:
+
+```bash
+cargo run --example console_demo
+cargo run --example scripting_console_demo
+```

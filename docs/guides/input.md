@@ -718,5 +718,6 @@ cargo run --example input_integration
 ## See Also
 
 - [Input Concepts](../concepts/input.md) - Theory and architecture
-- [praxis_input README](../../crates/praxis_input/README.md) - API documentation
+- [Input API Reference](../reference/input-api.md) - API documentation
+- [praxis_input Crate](../../crates/praxis_input/README.md) - Crate documentation
 - [winit Documentation](https://docs.rs/winit) - Window and event handling

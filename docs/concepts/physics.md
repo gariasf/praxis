@@ -197,7 +197,7 @@ forces.force += Vec3::new(0.0, 1000.0, 0.0);
 
 ## See Also
 
-- [Beginner's Guide: Physics System](../beginners-guide.md#physics-system) - Deep dive explanation
+- [Physics Guide](../guides/physics.md) - Practical physics system guide
+- [Physics API Reference](../reference/physics-api.md) - API documentation
 - [Physics Learning Path](../learning-paths/physics.md) - Structured learning progression
-- [praxis_physics crate](../../crates/praxis_physics/README.md) - API documentation
-- Examples: Run `cargo run --example` to see available physics examples
+- [praxis_physics Crate](../../crates/praxis_physics/README.md) - Crate documentation

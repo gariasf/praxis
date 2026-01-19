@@ -121,6 +121,7 @@ Group draw calls by:
 
 - [Beginner's Guide: Rendering Pipeline Flow](../beginners-guide.md#rendering-pipeline-flow) - Complete pipeline walkthrough
 - [Beginner's Guide: Uniform Buffers](../beginners-guide.md#uniform-buffers-and-descriptor-sets) - Descriptor set deep dive
-- [Rendering Learning Path](../learning-paths/rendering.md) - Structured learning progression
 - [Rendering Guide](../guides/rendering.md) - Practical usage
-- [praxis_graphics crate](../../crates/praxis_graphics/README.md) - API docs
+- [Rendering API Reference](../reference/rendering-api.md) - API documentation
+- [Rendering Learning Path](../learning-paths/rendering.md) - Structured learning progression
+- [praxis_graphics Crate](../../crates/praxis_graphics/README.md) - Crate documentation

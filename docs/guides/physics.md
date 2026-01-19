@@ -999,5 +999,7 @@ cargo run --example physics_demo
 ## See Also
 
 - [Physics Concepts](../concepts/physics.md) - Theory and architecture
-- [praxis_physics README](../../crates/praxis_physics/README.md) - API documentation
+- [Physics API Reference](../reference/physics-api.md) - API documentation
+- [Physics Learning Path](../learning-paths/physics.md) - Structured learning progression
+- [praxis_physics Crate](../../crates/praxis_physics/README.md) - Crate documentation
 - [Rapier Documentation](https://rapier.rs/docs/) - Underlying physics engine

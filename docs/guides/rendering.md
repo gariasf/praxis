@@ -328,8 +328,11 @@ cargo run --example comprehensive_scene_demo  # Forward with materials
 
 ## See Also
 
+- [Rendering Guides](rendering/README.md) - Comprehensive rendering documentation
 - [HDR and Tone Mapping](rendering/hdr-tonemapping.md) - High dynamic range
 - [Shadows](rendering/shadows.md) - Cascaded shadow maps
 - [Post-Processing](rendering/post-processing.md) - Screen-space effects
 - [Deferred Rendering](rendering/deferred-rendering.md) - Detailed G-buffer docs
 - [Advanced Rendering](rendering/advanced-rendering.md) - Pipeline deep dive
+- [Rendering API Reference](../reference/rendering-api.md) - API documentation
+- [praxis_graphics Crate](../../crates/praxis_graphics/README.md) - Crate documentation

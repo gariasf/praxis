@@ -260,6 +260,6 @@ fn fps_controller(
 
 ## See Also
 
-- [praxis_input crate](../../crates/praxis_input/README.md) - API documentation
-- [input_integration example](../../examples/input_integration.rs) - Basic input handling
-- [fps_camera_controller example](../../examples/fps_camera_controller.rs) - FPS controls
+- [Input Guide](../guides/input.md) - Practical input system guide
+- [Input API Reference](../reference/input-api.md) - API documentation
+- [praxis_input Crate](../../crates/praxis_input/README.md) - Crate documentation

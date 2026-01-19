@@ -299,6 +299,9 @@ The OBJ loading system uses:
 
 ## See Also
 
-- [Mesh System Documentation](mesh_system.md)
-- [Asset Management Architecture](../crates/praxis_assets/src/lib.rs)
-- [tobj crate documentation](https://docs.rs/tobj)
+- [Assets Guide](README.md) - Asset loading and management overview
+- [GLTF Loading Guide](gltf.md) - GLTF format support (recommended for modern assets)
+- [Mesh API Reference](../../reference/mesh-api.md) - Mesh architecture
+- [Assets Learning Path](../../learning-paths/assets.md) - Structured learning progression
+- [praxis_assets Crate](../../../crates/praxis_assets/README.md) - Crate documentation
+- [tobj crate documentation](https://docs.rs/tobj) - Underlying OBJ parser

@@ -319,7 +319,13 @@ selection.select_entities(lights, SelectionMode::Replace);
 
 ## Examples
 
-See `examples/selection_demo.rs` for a complete working example demonstrating:
+Run the selection demo to see the system in action:
+
+```bash
+cargo run --example selection_demo
+```
+
+The example demonstrates:
 - Click-to-select with raycast picking
 - Multi-entity selection with modifier keys
 - Marquee selection
@@ -329,7 +335,7 @@ See `examples/selection_demo.rs` for a complete working example demonstrating:
 ## Technical Details
 
 For implementation details, see:
-- [crates/praxis_editor/SELECTION_SYSTEM.md](../../crates/praxis_editor/SELECTION_SYSTEM.md) - Complete implementation documentation
+- [praxis_editor SELECTION_SYSTEM.md](../../crates/praxis_editor/SELECTION_SYSTEM.md) - Complete implementation documentation
 - Raycast picking algorithm details
 - Marquee selection algorithm details
 - Event system internals

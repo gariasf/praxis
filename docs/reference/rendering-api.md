@@ -431,7 +431,9 @@ tone_mapper.apply(hdr_image, ldr_output)?;
 
 ## See Also
 
-- [Rendering Guide](../guides/rendering.md) - Comprehensive rendering guide
+- [Rendering Guide](../guides/rendering.md) - Rendering overview
+- [Rendering Guides](../guides/rendering/README.md) - Comprehensive rendering documentation
 - [HDR/Tone Mapping Guide](../guides/rendering/hdr-tonemapping.md) - HDR workflow
-- [praxis_graphics crate](../../crates/praxis_graphics/README.md) - Crate documentation
+- [Deferred Rendering Guide](../guides/rendering/deferred-rendering.md) - G-buffer details
+- [praxis_graphics Crate](../../crates/praxis_graphics/README.md) - Crate documentation
 - [Shaders Reference](shaders.md) - Shader bindings and conventions

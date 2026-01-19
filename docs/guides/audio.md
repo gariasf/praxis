@@ -590,5 +590,6 @@ cargo run --example audio_demo
 ## See Also
 
 - [Spatial Audio Concepts](../concepts/spatial-audio.md) - Theory and algorithms
-- [praxis_audio README](../../crates/praxis_audio/README.md) - API documentation
+- [Audio API Reference](../reference/audio-api.md) - API documentation
+- [praxis_audio Crate](../../crates/praxis_audio/README.md) - Crate documentation
 - [Kira Documentation](https://docs.rs/kira) - Underlying audio library

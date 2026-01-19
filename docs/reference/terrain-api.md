@@ -361,4 +361,5 @@ let config = VegetationConfig {
 ## See Also
 
 - [Terrain Guide](../guides/terrain.md) - Comprehensive terrain system guide
-- [praxis_terrain crate](../../crates/praxis_terrain/README.md) - Crate documentation
+- [Spatial Optimization Guide](../guides/spatial-optimization.md) - LOD and culling techniques
+- [praxis_terrain Crate](../../crates/praxis_terrain/README.md) - Crate documentation

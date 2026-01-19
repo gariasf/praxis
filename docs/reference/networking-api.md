@@ -289,4 +289,4 @@ fn network_client_system(
 
 - [Networking Guide](../guides/systems/networking.md) - Comprehensive multiplayer guide
 - [Networking Learning Path](../learning-paths/networking.md) - Step-by-step tutorials
-- [praxis_networking crate](../../crates/praxis_networking/README.md) - Crate documentation
+- [praxis_networking Crate](../../crates/praxis_networking/README.md) - Crate documentation

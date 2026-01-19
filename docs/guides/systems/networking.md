@@ -1541,10 +1541,12 @@ See working examples:
 
 ## See Also
 
-- [praxis_networking README](../../../crates/praxis_networking/README.md) - API documentation
-- [ECS Guide](../../concepts/ecs.md) - Understanding ECS for networking
+- [Networking API Reference](../../reference/networking-api.md) - API documentation
+- [Networking Learning Path](../../learning-paths/networking.md) - Structured learning progression
+- [ECS Architecture](../../concepts/ecs-architecture.md) - Understanding ECS for networking
 - [Physics Guide](../physics.md) - Combining physics with networking
 - [Scripting Guide](../scripting.md) - Server-side game logic
+- [praxis_networking Crate](../../../crates/praxis_networking/README.md) - Crate documentation
 
 ## Further Reading
 

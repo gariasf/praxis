@@ -585,9 +585,19 @@ end
 3. Cache computed values when possible
 4. Consider moving logic to Rust systems
 
-## Next Steps
+## See Also
 
-- Explore the [examples/scripts](../../examples/scripts) directory
-- Run `cargo run --example scripting_demo` to see the system in action
-- Check [crates/praxis_scripting/README.md](../../crates/praxis_scripting/README.md) for API details
-- Join the community to share scripts and best practices
+- [Scripting API Reference](../reference/scripting-api.md) - API documentation
+- [Scripting Learning Path](../learning-paths/scripting.md) - Structured learning progression
+- [Console Guide](console.md) - In-game console with Lua REPL
+- [praxis_scripting Crate](../../crates/praxis_scripting/README.md) - Crate documentation
+
+## Examples
+
+Run the scripting examples to see the system in action:
+
+```bash
+cargo run --example scripting_demo           # Basic scripting
+cargo run --example scripting_advanced_demo  # Advanced features
+cargo run --example scripting_console_demo   # Console with Lua REPL
+```

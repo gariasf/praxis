@@ -144,5 +144,6 @@ world.spawn((
 
 ## See Also
 
-- [praxis_audio crate](../../crates/praxis_audio/README.md) - API documentation
-- [audio_demo example](../../examples/audio_demo.rs) - Working example
+- [Audio Guide](../guides/audio.md) - Practical audio system guide
+- [Audio API Reference](../reference/audio-api.md) - API documentation
+- [praxis_audio Crate](../../crates/praxis_audio/README.md) - Crate documentation

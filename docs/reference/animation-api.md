@@ -418,5 +418,8 @@ schedule.add_systems(update_animations);
 
 ## See Also
 
-- [Animation Guides](../guides/animation/README.md) - Comprehensive animation guides
-- [praxis_scene crate](../../crates/praxis_scene/README.md) - Crate documentation
+- [Animation Guide](../guides/animation.md) - Quick start guide
+- [Animation Guides](../guides/animation/README.md) - Comprehensive animation documentation
+- [Animation Concepts](../concepts/animation.md) - Theory and architecture
+- [Animation Learning Path](../learning-paths/animation.md) - Structured learning progression
+- [praxis_scene Crate](../../crates/praxis_scene/README.md) - Crate documentation

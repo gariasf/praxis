@@ -318,4 +318,5 @@ fn movement_system(
 
 - [Physics Guide](../guides/physics.md) - Comprehensive usage guide
 - [Physics Concepts](../concepts/physics.md) - Theory and design
-- [praxis_physics crate](../../crates/praxis_physics/README.md) - Crate documentation
+- [Physics Learning Path](../learning-paths/physics.md) - Structured learning progression
+- [praxis_physics Crate](../../crates/praxis_physics/README.md) - Crate documentation

@@ -551,7 +551,8 @@ impl Command for SetColorCommand {
 
 ## See Also
 
-- [Editor Guide](../editor/editor-overview.md) - Comprehensive editor guide
-- [Selection System Guide](../editor/selection-system.md) - Selection details
-- [Undo/Redo Guide](../editor/undo-redo.md) - Command system details
-- [praxis_editor crate](../../crates/praxis_editor/README.md) - Crate documentation
+- [Editor Overview](../editor/editor-overview.md) - Comprehensive editor guide
+- [Selection System](../editor/selection-system.md) - Selection details
+- [Undo/Redo](../editor/undo-redo.md) - Command system details
+- [Editor Learning Path](../learning-paths/editor.md) - Structured learning progression
+- [praxis_editor Crate](../../crates/praxis_editor/README.md) - Crate documentation

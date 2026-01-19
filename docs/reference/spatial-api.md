@@ -469,4 +469,5 @@ LodGroup::new("character", vec![
 ## See Also
 
 - [Spatial Optimization Guide](../guides/spatial-optimization.md) - Comprehensive guide
-- [praxis_spatial crate](../../crates/praxis_spatial/README.md) - Crate documentation
+- [Performance Learning Path](../learning-paths/performance.md) - Optimization techniques
+- [praxis_spatial Crate](../../crates/praxis_spatial/README.md) - Crate documentation

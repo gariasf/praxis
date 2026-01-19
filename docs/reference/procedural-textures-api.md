@@ -356,4 +356,5 @@ fn generate_textures_system(
 ## See Also
 
 - [Procedural Textures Guide](../guides/assets/procedural-textures.md) - Comprehensive usage guide
-- [praxis_procedural crate](../../crates/praxis_procedural/README.md) - Crate documentation
+- [Assets Guides](../guides/assets/README.md) - Asset loading and management
+- [praxis_procedural Crate](../../crates/praxis_procedural/README.md) - Crate documentation

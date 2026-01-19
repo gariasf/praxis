@@ -331,4 +331,5 @@ end
 
 - [Scripting Guide](../guides/scripting.md) - Comprehensive scripting guide
 - [Scripting Learning Path](../learning-paths/scripting.md) - Step-by-step tutorials
-- [praxis_scripting crate](../../crates/praxis_scripting/README.md) - Crate documentation
+- [Console Guide](../guides/console.md) - In-game console with Lua REPL
+- [praxis_scripting Crate](../../crates/praxis_scripting/README.md) - Crate documentation

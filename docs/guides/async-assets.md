@@ -725,7 +725,9 @@ for (_, receiver) in texture_loads {
 
 ## See Also
 
-- [Asset System](assets.md) - Synchronous asset loading
-- [Mesh Loading](../reference/mesh-loading.md) - OBJ and GLTF formats
-- [Texture Loading](../reference/texture-loading.md) - Image formats
-- Example: `examples/async_asset_demo.rs`
+- [Assets Guide](assets/README.md) - Asset loading and management
+- [GLTF Loading Guide](assets/gltf.md) - GLTF format support
+- [OBJ Loading Guide](assets/obj.md) - OBJ format support
+- [Mesh API Reference](../reference/mesh-api.md) - Mesh architecture
+- [Assets Learning Path](../learning-paths/assets.md) - Structured learning progression
+- [praxis_assets Crate](../../crates/praxis_assets/README.md) - Crate documentation

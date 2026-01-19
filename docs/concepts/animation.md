@@ -160,7 +160,10 @@ for animation in &asset.animations {
 
 ## See Also
 
-- [Beginner's Guide: Animation System](../beginners-guide.md#animation-system) - Deep dive explanation
+- [Animation Guide](../guides/animation.md) - Quick start guide
+- [Animation Guides](../guides/animation/README.md) - Comprehensive animation documentation
+- [Skeletal Basics](../guides/animation/skeletal-basics.md) - Core architecture and fundamentals
+- [Blending Guide](../guides/animation/blending.md) - Cross-fades, blend trees, and layered animation
+- [Animation API Reference](../reference/animation-api.md) - API documentation
 - [Animation Learning Path](../learning-paths/animation.md) - Structured learning progression
-- [praxis_scene crate](../../crates/praxis_scene/README.md) - API documentation
-- [animation_blending_demo](../../examples/animation_blending_demo.rs) - Working example
+- [praxis_scene Crate](../../crates/praxis_scene/README.md) - Crate documentation

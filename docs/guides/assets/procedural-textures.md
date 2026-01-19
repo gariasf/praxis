@@ -428,7 +428,7 @@ let texture = manager.generate_texture_uncached(&graph, params)?;
 
 ## See Also
 
-- [Praxis Procedural Crate](../crates/praxis_procedural/README.md)
-- [Example Demo](../examples/procedural_texture_demo.rs)
-- [Graphics System](./rendering.md)
-- [Texture Management](../crates/praxis_graphics/src/texture.rs)
+- [Procedural Textures API Reference](../../reference/procedural-textures-api.md) - API documentation
+- [praxis_procedural Crate](../../../crates/praxis_procedural/README.md) - Crate documentation
+- [Rendering Guide](../rendering.md) - Graphics system overview
+- [praxis_graphics Crate](../../../crates/praxis_graphics/README.md) - Texture management documentation
