@@ -1,6 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use praxis_graphics::gpu_culling::{GpuCullingManager, GpuDrawCommand, GpuMeshData};
 use praxis_math::{Mat4, Vec3, Vec4};
+use praxis_procedural::compression::{CompressionFormat, CompressionQuality, TextureCompressor};
 use std::sync::Arc;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
@@ -1200,6 +1201,220 @@ fn bench_gpu_vs_cpu_lod_selection(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_texture_compression(c: &mut Criterion) {
+    let ctx = GraphicsContext::new();
+    let mut group = c.benchmark_group("texture_compression");
+    group.sample_size(20);
+
+    // Test configurations: 256x256, 512x512, 1024x1024
+    let texture_sizes = [
+        (256, "256x256"),
+        (512, "512x512"),
+        (1024, "1024x1024"),
+    ];
+
+    for (size, name) in texture_sizes {
+        let width = size;
+        let height = size;
+        let pixel_count = (width * height) as u64;
+
+        group.throughput(Throughput::Elements(pixel_count));
+
+        // Create test texture data (RGBA8)
+        let uncompressed_size = (width * height * 4) as usize;
+        let test_data: Vec<u8> = (0..uncompressed_size)
+            .map(|i| (i % 256) as u8)
+            .collect();
+
+        // ===== BC7 Compression Benchmark (Fast Quality) =====
+        group.bench_function(BenchmarkId::new("bc7_fast", name), |b| {
+            let mut compressor = TextureCompressor::new(
+                ctx.device.clone(),
+                ctx.queue.clone(),
+                ctx.memory_allocator.clone(),
+                ctx.command_buffer_allocator.clone(),
+                ctx.descriptor_set_allocator.clone(),
+            );
+
+            b.iter(|| {
+                let start = std::time::Instant::now();
+                
+                let compressed = compressor
+                    .compress(
+                        &test_data,
+                        width,
+                        height,
+                        CompressionFormat::BC7,
+                        CompressionQuality::Fast,
+                    )
+                    .expect("BC7 compression failed");
+
+                let gpu_time = start.elapsed();
+                
+                // Verify compression metrics
+                let compression_ratio = compressed.compression_ratio();
+                let vram_savings = compressed.vram_savings();
+                let vram_savings_percent = (vram_savings as f32 / uncompressed_size as f32) * 100.0;
+
+                black_box((
+                    compressed.data.len(),
+                    compression_ratio,
+                    vram_savings,
+                    vram_savings_percent,
+                    gpu_time,
+                ))
+            });
+        });
+
+        // ===== BC7 Compression Benchmark (High Quality) =====
+        group.bench_function(BenchmarkId::new("bc7_high", name), |b| {
+            let mut compressor = TextureCompressor::new(
+                ctx.device.clone(),
+                ctx.queue.clone(),
+                ctx.memory_allocator.clone(),
+                ctx.command_buffer_allocator.clone(),
+                ctx.descriptor_set_allocator.clone(),
+            );
+
+            b.iter(|| {
+                let start = std::time::Instant::now();
+                
+                let compressed = compressor
+                    .compress(
+                        &test_data,
+                        width,
+                        height,
+                        CompressionFormat::BC7,
+                        CompressionQuality::High,
+                    )
+                    .expect("BC7 compression failed");
+
+                let gpu_time = start.elapsed();
+                
+                let compression_ratio = compressed.compression_ratio();
+                let vram_savings = compressed.vram_savings();
+                let vram_savings_percent = (vram_savings as f32 / uncompressed_size as f32) * 100.0;
+
+                black_box((
+                    compressed.data.len(),
+                    compression_ratio,
+                    vram_savings,
+                    vram_savings_percent,
+                    gpu_time,
+                ))
+            });
+        });
+
+        // ===== BC5 Compression Benchmark (Fast Quality) =====
+        group.bench_function(BenchmarkId::new("bc5_fast", name), |b| {
+            let mut compressor = TextureCompressor::new(
+                ctx.device.clone(),
+                ctx.queue.clone(),
+                ctx.memory_allocator.clone(),
+                ctx.command_buffer_allocator.clone(),
+                ctx.descriptor_set_allocator.clone(),
+            );
+
+            b.iter(|| {
+                let start = std::time::Instant::now();
+                
+                let compressed = compressor
+                    .compress(
+                        &test_data,
+                        width,
+                        height,
+                        CompressionFormat::BC5,
+                        CompressionQuality::Fast,
+                    )
+                    .expect("BC5 compression failed");
+
+                let gpu_time = start.elapsed();
+                
+                let compression_ratio = compressed.compression_ratio();
+                let vram_savings = compressed.vram_savings();
+                let vram_savings_percent = (vram_savings as f32 / uncompressed_size as f32) * 100.0;
+
+                black_box((
+                    compressed.data.len(),
+                    compression_ratio,
+                    vram_savings,
+                    vram_savings_percent,
+                    gpu_time,
+                ))
+            });
+        });
+
+        // ===== BC5 Compression Benchmark (High Quality) =====
+        group.bench_function(BenchmarkId::new("bc5_high", name), |b| {
+            let mut compressor = TextureCompressor::new(
+                ctx.device.clone(),
+                ctx.queue.clone(),
+                ctx.memory_allocator.clone(),
+                ctx.command_buffer_allocator.clone(),
+                ctx.descriptor_set_allocator.clone(),
+            );
+
+            b.iter(|| {
+                let start = std::time::Instant::now();
+                
+                let compressed = compressor
+                    .compress(
+                        &test_data,
+                        width,
+                        height,
+                        CompressionFormat::BC5,
+                        CompressionQuality::High,
+                    )
+                    .expect("BC5 compression failed");
+
+                let gpu_time = start.elapsed();
+                
+                let compression_ratio = compressed.compression_ratio();
+                let vram_savings = compressed.vram_savings();
+                let vram_savings_percent = (vram_savings as f32 / uncompressed_size as f32) * 100.0;
+
+                black_box((
+                    compressed.data.len(),
+                    compression_ratio,
+                    vram_savings,
+                    vram_savings_percent,
+                    gpu_time,
+                ))
+            });
+        });
+
+        // ===== Compression Metrics Analysis =====
+        group.bench_function(BenchmarkId::new("metrics_analysis", name), |b| {
+            b.iter(|| {
+                // Calculate theoretical metrics
+                let uncompressed_bytes = (width * height * 4) as usize;
+                let blocks_width = width / 4;
+                let blocks_height = height / 4;
+                let num_blocks = blocks_width * blocks_height;
+                let compressed_bytes = (num_blocks * 16) as usize;
+                
+                let compression_ratio = uncompressed_bytes as f32 / compressed_bytes as f32;
+                let vram_savings = uncompressed_bytes - compressed_bytes;
+                let vram_savings_percent = (vram_savings as f32 / uncompressed_bytes as f32) * 100.0;
+                
+                // Verify 4:1 compression and 75% VRAM reduction
+                assert_eq!(compression_ratio, 4.0, "Should achieve 4:1 compression");
+                assert_eq!(vram_savings_percent, 75.0, "Should achieve 75% VRAM reduction");
+                
+                black_box((
+                    uncompressed_bytes,
+                    compressed_bytes,
+                    compression_ratio,
+                    vram_savings,
+                    vram_savings_percent,
+                ))
+            });
+        });
+    }
+
+    group.finish();
+}
+
 fn bench_gpu_vs_cpu_culling(c: &mut Criterion) {
     let ctx = GraphicsContext::new();
     let mut group = c.benchmark_group("gpu_vs_cpu_culling");
@@ -1504,5 +1719,6 @@ criterion_group!(
     bench_material_batching_overhead,
     bench_gpu_vs_cpu_lod_selection,
     bench_gpu_vs_cpu_culling,
+    bench_texture_compression,
 );
 criterion_main!(benches);

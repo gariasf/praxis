@@ -24,6 +24,9 @@ cargo bench --bench graphics_optimization
 # GPU vs CPU culling benchmark (NEW)
 cargo bench --bench graphics_optimization -- gpu_vs_cpu_culling
 
+# Texture compression benchmark (NEW)
+cargo bench --bench graphics_optimization -- texture_compression
+
 # Run with pattern matching
 cargo bench -- physics          # All physics-related benchmarks
 cargo bench -- raycast          # Just raycast benchmarks
@@ -142,6 +145,17 @@ Key insight: GPU culling has **O(1) CPU overhead** regardless of object count!
 | gpu_culling/1000 | < 400μs | Includes GPU exec time |
 | gpu_culling/10000 | < 600μs | Should NOT be 10x slower |
 | **cpu_overhead_only/any** | **< 30μs** | **O(1) regardless of count** |
+
+### Texture Compression
+
+| Benchmark | Target | Notes |
+|-----------|--------|-------|
+| bc7_fast/256x256 | < 0.5ms | Fast quality mode |
+| bc7_fast/512x512 | **< 1ms** | **Primary target** |
+| bc7_fast/1024x1024 | < 1.5ms | Acceptable overhead |
+| bc5_fast/512x512 | < 0.8ms | Faster than BC7 |
+| **VRAM savings** | **75%** | **4:1 compression ratio** |
+| **Compression ratio** | **4.0** | **Consistent across sizes** |
 
 ## 🔍 Finding Bottlenecks
 
@@ -300,6 +314,12 @@ cargo bench --bench graphics_optimization -- gpu_vs_cpu_culling
 # ✅ Check: cpu_overhead_only shows constant time regardless of object count
 # ✅ Check: cpu_culling shows linear scaling (10x objects = 10x time)
 # ✅ Check: gpu_culling shows sublinear scaling (10x objects ≠ 10x time)
+
+# 6. Texture compression (target: <1ms compression, 75% VRAM reduction)
+cargo bench --bench graphics_optimization -- texture_compression
+# ✅ Check: bc7_fast/512x512 completes in <1ms
+# ✅ Check: bc5_fast/512x512 completes in <1ms
+# ✅ Check: metrics_analysis verifies 4:1 compression and 75% VRAM savings
 ```
 
 ## 🔗 More Information

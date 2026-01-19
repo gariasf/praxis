@@ -269,6 +269,7 @@ tokio = { version = "1.40", features = ["full"] }
 tracing-subscriber = "0.3"
 base64 = "0.22"
 serial_test = "3.0"
+praxis_procedural = { path = "crates/praxis_procedural", version = "0.1.0" }
 
 [[bench]]
 name = "mesh_upload"
