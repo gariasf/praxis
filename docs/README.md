@@ -167,8 +167,7 @@ cargo run --example scripting_console_demo    # Console with Lua REPL
 cargo run --example networking_demo           # Networking features
 
 # Performance & Tools
-cargo run --example profiling_demo            # Performance profiling
-cargo run --example profiling_advanced_demo   # Advanced profiling
+cargo run --example profiling_demo            # Profiling (basic, advanced, production patterns)
 ```
 
 ## Task Index
@@ -339,7 +338,7 @@ cargo run --example profiling_advanced_demo   # Advanced profiling
 |--------------|-----------|----------|
 | **Improve rendering performance** | [Spatial Optimization](guides/spatial-optimization.md) | [Performance Learning Path](learning-paths/performance.md) |
 | **Profile CPU performance** | [Profiling](profiling.md) | [Profiling API](reference/profiling-api.md), Example: `profiling_demo` |
-| **Profile GPU performance** | [Profiling API](reference/profiling-api.md) | Example: `profiling_advanced_demo` |
+| **Profile GPU performance** | [Profiling](profiling.md) | [Profiling API](reference/profiling-api.md), Example: `profiling_demo` |
 | **Use spatial partitioning (octree, BVH)** | [Spatial API](reference/spatial-api.md) | Example: `spatial_partitioning_demo` |
 | **Implement frustum culling** | [Frustum Culling](guides/rendering/frustum-culling.md) | Example: `spatial_optimization_demo` |
 | **Implement occlusion culling** | [Spatial Optimization](guides/spatial-optimization.md) | [Spatial API](reference/spatial-api.md) |

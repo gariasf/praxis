@@ -90,8 +90,7 @@ Interactive examples with graphical output and user controls.
 | Example | Description |
 |---------|-------------|
 | `spatial_optimization_demo` | Frustum culling, octree, BVH queries, LOD system |
-| `profiling_demo` | CPU/GPU profiling, memory tracking, Chrome trace export |
-| `profiling_advanced_demo` | Advanced profiling with visualization data generation |
+| `profiling_demo` | Comprehensive profiling demo with basic, advanced, and production patterns |
 | `gpu_culling_demo` | **GPU compute culling** - Frustum culling with indirect draw buffers (1000+ objects) |
 | `lod_gpu_demo` | **GPU LOD selection** - Distance-based LOD switching using compute shaders |
 | `mesh_streaming_demo` | Background mesh loading with frustum-based priority queue |

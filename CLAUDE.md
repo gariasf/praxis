@@ -52,7 +52,6 @@ cargo run --example advanced_lighting_demo
 cargo run --example environment_probe_demo
 cargo run --example particles_demo
 cargo run --example profiling_demo
-cargo run --example profiling_advanced_demo
 cargo run --release --example performance_profiling_comprehensive
 cargo run --example selection_demo
 cargo run --example command_system_demo

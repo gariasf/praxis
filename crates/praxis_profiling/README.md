@@ -103,8 +103,11 @@ for bottleneck in bottlenecks {
 ## Examples
 
 ```bash
+# Comprehensive profiling demo with three progressive sections:
+# 1. Basic Profiling - Core features and simple usage
+# 2. Advanced Profiling - Visualization and detailed analysis
+# 3. Production Patterns - Real-world integration and best practices
 cargo run --example profiling_demo
-cargo run --example profiling_advanced_demo
 ```
 
 ## Dependencies

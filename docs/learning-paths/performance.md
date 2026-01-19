@@ -66,8 +66,8 @@ for (name, duration) in stats {
 
 **Run Examples**:
 ```bash
+# Consolidated profiling demo with progressive complexity sections
 cargo run --example profiling_demo
-cargo run --example profiling_advanced_demo
 ```
 
 **Key Metrics**:
@@ -402,9 +402,10 @@ strip = true
 ## Resources
 
 ```bash
-# Profile examples
-cargo run --release --example profiling_advanced_demo
-cargo run --release --example spatial_optimization_demo
+# Profiling examples
+cargo run --example profiling_demo                          # Comprehensive profiling demo
+cargo run --release --example spatial_optimization_demo     # Spatial optimization
+cargo run --release --example performance_profiling_comprehensive  # Full validation
 ```
 
 **External Tools**:

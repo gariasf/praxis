@@ -161,16 +161,16 @@ mod tests {
     fn test_init_subsystems_independently() {
         // Test that each subsystem can initialize independently
         // This validates the initialization order dependencies
-        
+
         // Utils should always work
         assert!(praxis_utils::init().is_ok());
-        
+
         // ECS should work after utils
         assert!(praxis_ecs::init().is_ok());
-        
+
         // Input should work after utils
         assert!(praxis_input::init().is_ok());
-        
+
         // Audio should work after utils (may fail on headless systems)
         let _ = praxis_audio::init();
     }

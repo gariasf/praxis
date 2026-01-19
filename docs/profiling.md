@@ -528,13 +528,43 @@ See:
 
 ## Examples
 
-Basic profiling examples:
+The consolidated profiling example demonstrates features in three progressive sections:
 
 ```bash
-cargo run --example profiling_demo                          # Basic profiling features
-cargo run --example profiling_advanced_demo                  # Advanced profiling techniques
-cargo run --release --example performance_profiling_comprehensive  # Full optimization validation
+# Run the comprehensive profiling demo with three sections:
+# 1. Basic Profiling - Core features and simple usage
+# 2. Advanced Profiling - Visualization and detailed analysis
+# 3. Production Patterns - Real-world integration and best practices
+cargo run --example profiling_demo
+
+# For comprehensive optimization validation
+cargo run --release --example performance_profiling_comprehensive
 ```
+
+The profiling demo covers:
+
+**Section 1: Basic Profiling**
+- CPU timing with ProfileScope
+- Memory allocation tracking
+- System performance measurement
+- Frame statistics
+- Chrome trace export
+- Leak detection
+
+**Section 2: Advanced Profiling**
+- Custom phase mappings
+- Frame time visualization data
+- Memory tracking by category
+- Variable workload profiling
+- Nested profiling scopes
+- Detailed bottleneck analysis
+
+**Section 3: Production Patterns**
+- Performance report generation
+- Long-running profiling sessions
+- Statistical analysis
+- System budget analysis
+- Best practices
 
 ## Troubleshooting
 
