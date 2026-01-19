@@ -872,15 +872,15 @@ cargo run --example procedural_texture_demo
 **General Graphics**:
 - Vulkan Tutorial: https://vulkan-tutorial.com/
 - Learn OpenGL (concepts apply): https://learnopengl.com/
-- Real-Time Rendering book (4th edition)
+- Real-Time Rendering book
 - GPU Gems series
 
 **Advanced Techniques**:
 - [High Quality Temporal Supersampling (Epic Games)](http://advances.realtimerendering.com/s2014/epic/TemporalAA.pptx) - TAA implementation
-- [GPU-Driven Rendering Pipelines (Siggraph 2015)](http://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf) - GPU culling
-- [Stochastic Screen-Space Reflections (Siggraph 2015)](http://advances.realtimerendering.com/s2015/Stochastic%20Screen-Space%20Reflections.pptx) - SSR techniques
+- [GPU-Driven Rendering Pipelines (Siggraph)](http://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf) - GPU culling
+- [Stochastic Screen-Space Reflections (Siggraph)](http://advances.realtimerendering.com/s2015/Stochastic%20Screen-Space%20Reflections.pptx) - SSR techniques
 - [Bindless Texturing for Deferred Rendering](https://www.gdcvault.com/play/1020791/) - Descriptor indexing
-- [A Comparison of Modern Graphics APIs](https://www.youtube.com/watch?v=qx20xFQXClE) - Vulkan features overview
+- [A Comparison of Graphics APIs](https://www.youtube.com/watch?v=qx20xFQXClE) - Vulkan features overview
 
 ---
 

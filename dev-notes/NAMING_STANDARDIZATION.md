@@ -16,7 +16,7 @@ This document tracks types that need renaming to follow the established conventi
 - **Location**: `crates/praxis_graphics/src/particles.rs`
 - **Status**: Renamed from previous inconsistent naming
 - **Current**: `pub struct ParticleRenderer`
-- **Result**: Now correctly follows conventions for GPU rendering types
+- **Result**: Correctly follows conventions for GPU rendering types
 
 ### Medium Priority (Internal Inconsistencies)
 
@@ -83,14 +83,14 @@ When in doubt, ask: "What is this type's primary responsibility?"
 
 ## Decision Log
 
-### 2025-01-XX: Initial Conventions Established
+### Initial Conventions Established
 - Defined Manager/Renderer/System suffixes
 - Created tracking document
 
-### 2025-01-XX: ParticleRenderer Standardization Complete
+### ParticleRenderer Standardization Complete
 - Renamed to `ParticleRenderer` to follow rendering type conventions
 - Updated all documentation references
-- Type now correctly reflects its GPU rendering responsibility
+- Type correctly reflects its GPU rendering responsibility
 
 ### Future Decisions
 Document any decisions to keep existing names or approve exceptions here.

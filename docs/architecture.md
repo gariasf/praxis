@@ -2,10 +2,10 @@
 
 ## Core Principles
 
-- **Language:** Rust (latest stable version).
+- **Language:** Rust (stable version).
 - **Safety & Concurrency:** Leverage Rust's ownership, borrowing, and type system for memory safety and concurrency.
 - **Modularity:** Design the engine as a collection of loosely coupled crates within a Cargo workspace.
-- **Pragmatism & Iteration:** Focus on building a usable engine for game creation. Develop features iteratively based on practical game development needs, aiming for usability within 1-2 years.
+- **Pragmatism & Iteration:** Focus on building a usable engine for game creation. Develop features iteratively based on practical game development needs.
 - **Performance:** Optimize critical paths, leveraging Rust's performance characteristics and libraries like `glam` (SIMD).
 - **Tooling:** Utilize the standard Rust toolchain: `cargo`, `rustfmt`, `clippy`, `rustdoc`.
 - **Error Handling:** Employ `Result<T, E>` for recoverable errors, potentially using crates like `thiserror` and `color-eyre` for better ergonomics and reporting. Panics should be reserved for unrecoverable states (bugs).
@@ -78,7 +78,7 @@ praxis/
   - May include engine-specific math utilities.
 - **`praxis_ecs`:**
   - Entity-Component-System implementation.
-  - Dependency: `bevy_ecs` (known for performance and ergonomics).
+  - Dependency: `bevy_ecs` (high-performance ECS implementation).
   - Manages entities, components, and systems.
   - Depends on: `praxis_core`.
 - **`praxis_scene`:**
@@ -193,7 +193,7 @@ praxis/
   - GUI: `egui`, `egui-winit`, `egui_vulkano`
   - Logging: `tracing`, `tracing-subscriber`
   - Error Reporting: `color-eyre`
-- **Dependency Versions:** Use latest stable versions where compatible and reasonable. Pin versions in `Cargo.lock` for reproducible builds.
+- **Dependency Versions:** Use stable versions where compatible and reasonable. Pin versions in `Cargo.lock` for reproducible builds.
 
 ## Testing
 

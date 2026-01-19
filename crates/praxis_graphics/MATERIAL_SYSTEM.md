@@ -1,6 +1,6 @@
 # Material System
 
-Comprehensive PBR material system with advanced features for modern rendering.
+Comprehensive PBR material system with advanced rendering features.
 
 ## Features
 

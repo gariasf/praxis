@@ -2,8 +2,8 @@
 
 ## Requirements
 
-- **Rust**: 1.75+ (stable)
-- **Vulkan SDK**: 1.3+ (for graphics)
+- **Rust**: Stable toolchain
+- **Vulkan SDK**: 1.3 or higher (for graphics)
 - **CMake**: For building some dependencies
 
 ### Platform-Specific

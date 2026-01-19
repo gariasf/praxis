@@ -119,7 +119,7 @@ Implementation documentation for engine developers and contributors, including:
 - Historical documentation and archived audits
 - Development notes and design decisions
 
-**Note:** Comprehensive audit reports from January 2026 have been moved to [internals/archived-audits/](internals/archived-audits/) to preserve them as historical reference while acknowledging that line numbers and temporal assessments may become outdated.
+**Note:** Comprehensive audit reports have been archived in [internals/archived-audits/](internals/archived-audits/) to preserve them as historical reference while acknowledging that line numbers and temporal assessments may become outdated.
 
 ## Examples
 

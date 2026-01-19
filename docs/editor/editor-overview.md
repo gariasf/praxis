@@ -1033,18 +1033,6 @@ If you continue to experience issues:
 
 ---
 
-## Version History
-
-- **v0.1.0** (2025-01-XX): Initial editor system implementation
-  - Core panel system with docking
-  - Selection and gizmo systems
-  - Undo/redo with command pattern
-  - Edit/Play mode transitions
-  - Console integration
-  - Asset browser
-
----
-
 ## License
 
 See `LICENSE` file in repository root.

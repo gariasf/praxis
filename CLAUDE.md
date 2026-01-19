@@ -272,7 +272,7 @@ All public items require rustdoc comments.
 | Category | Crates |
 |----------|--------|
 | Graphics | vulkano, vulkano-shaders |
-| Window | winit 0.30 |
+| Window | winit |
 | Math | glam |
 | ECS | bevy_ecs |
 | Physics | rapier3d |

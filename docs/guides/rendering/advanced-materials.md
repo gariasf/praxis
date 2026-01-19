@@ -1,6 +1,6 @@
 # Advanced Material System
 
-The Praxis advanced material system provides comprehensive support for modern PBR rendering with efficient material instancing, multi-material blending, and advanced visual effects.
+The Praxis advanced material system provides comprehensive support for PBR rendering with efficient material instancing, multi-material blending, and advanced visual effects.
 
 ## Overview
 

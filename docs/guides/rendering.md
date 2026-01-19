@@ -184,7 +184,7 @@ Praxis provides both forward and deferred rendering because no single approach i
 **Why Not Store Position?**
 - Mathematical reconstruction from depth is cheap (2-3 ALU ops)
 - Saved bandwidth (one fewer render target) improves performance more than reconstruction cost
-- Modern GPUs have excellent depth buffer compression
+- GPUs have excellent depth buffer compression
 
 **Alternatives Considered**:
 1. **Light pre-pass (deferred lighting)**: 
@@ -288,9 +288,9 @@ forward_renderer.render(transparent_objects, lighting);
 3. **Virtual texturing**: For large material variety
 4. **GPU-driven rendering**: Reduce CPU overhead
 
-**Why Not Now?**
-- Current implementation handles target use cases (indie games)
-- Premature optimization would complicate codebase
+**Future Considerations**:
+- Implementation focuses on target use cases (indie games)
+- Avoiding premature optimization to maintain codebase simplicity
 - These features require significant engineering investment
 - Can add incrementally based on user needs
 

@@ -1,11 +1,10 @@
 # Audit Reports Archival Note
 
-**Date Archived:** January 2026  
-**Reason:** Preserve as historical reference while preventing reliance on outdated line numbers and temporal assessments
+This directory contains archived audit reports preserved as historical reference while acknowledging that line numbers and temporal assessments may become outdated as the codebase evolves.
 
 ## What Was Archived
 
-All comprehensive audit reports from January 2026 have been archived in `docs/internals/archived-audits/`. This includes:
+Comprehensive audit reports have been archived in `docs/internals/archived-audits/`. This includes:
 
 ### Crate Audits (19 reports)
 - praxis_math.md
@@ -46,11 +45,11 @@ These audit reports contain valuable information:
 
 The reports contain characteristics that become problematic over time:
 
-1. **Specific Line Numbers** - References like `src/transport.rs:96-101` become inaccurate as code evolves
-2. **Point-in-Time Status** - "Last Verified: 2026-01-06" assessments may no longer reflect current state
-3. **Temporal References** - "Modern practices for 2025-2026" will become dated
-4. **Implementation Status** - "TCP send stubbed" may have been resolved or changed
-5. **Ratings** - Numeric ratings (8.5/10) are snapshots that don't update with improvements
+1. **Specific Line Numbers** - References become inaccurate as code evolves
+2. **Point-in-Time Status** - Assessments may no longer reflect current state
+3. **Temporal References** - Time-specific language becomes dated
+4. **Implementation Status** - Implementation details may have been resolved or changed
+5. **Ratings** - Numeric ratings are snapshots that don't update with improvements
 
 ## Accessing Archived Audits
 
