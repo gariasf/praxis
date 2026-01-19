@@ -70,8 +70,7 @@ cargo run --example ecs_integration
 cargo run --example texture_compression_demo
 cargo run --example hiz_occlusion_demo
 cargo run --example rendering_stress_test
-cargo run --example optimization_config_demo
-cargo run --example optimization_debug_demo
+cargo run --example optimization_showcase_demo
 cargo run --example render_stats_demo
 
 # Documentation

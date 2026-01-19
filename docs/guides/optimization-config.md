@@ -91,5 +91,5 @@ if config.has_changed() {
 
 ## See Also
 
-- Example: `examples/optimization_config_demo.rs`
+- Example: `examples/optimization_showcase_demo.rs` (unified demo with runtime toggles and debug visualization)
 - Full documentation: Module docs for `praxis_graphics::optimization_config`

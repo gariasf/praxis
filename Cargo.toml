@@ -278,6 +278,10 @@ path = "examples/hiz_occlusion_demo.rs"
 name = "rendering_stress_test"
 path = "examples/rendering_stress_test.rs"
 
+[[example]]
+name = "optimization_showcase_demo"
+path = "examples/optimization_showcase_demo.rs"
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 vulkano = "0.35.1"

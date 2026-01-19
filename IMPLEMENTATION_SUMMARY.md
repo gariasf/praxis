@@ -53,12 +53,14 @@ This implementation adds comprehensive visual debug rendering modes for the Prax
    - Performance considerations
    - Troubleshooting guide
 
-3. **`examples/optimization_debug_demo.rs`** (399 lines)
-   - Complete working demonstration
-   - Camera controller
-   - Simulated objects with LOD groups
-   - Interactive mode toggling (keys 1/2/3)
-   - Real-time updates
+3. **`examples/optimization_showcase_demo.rs`** (consolidated unified demo)
+   - Complete working demonstration with debug rendering
+   - Runtime optimization configuration and A/B testing
+   - Camera controller with presets
+   - Large-scale scene with 12,000+ objects
+   - Interactive mode toggling (Numpad 1/2/3)
+   - Optimization toggles (F1-F6)
+   - Real-time performance statistics
 
 4. **`IMPLEMENTATION_SUMMARY.md`** (This file)
    - Overview of the implementation
@@ -71,8 +73,8 @@ This implementation adds comprehensive visual debug rendering modes for the Prax
    - Added `pub mod debug_rendering;`
 
 2. **`CLAUDE.md`**
-   - Added `optimization_debug_demo` to example list
-   - Added Debug Rendering section with usage example
+   - Added `optimization_showcase_demo` to example list
+   - Consolidated optimization examples into single unified demo
 
 ## API Design
 
@@ -250,7 +252,7 @@ All tests pass and cover the core functionality.
 
 ## Example Usage
 
-From `optimization_debug_demo.rs`:
+From `optimization_showcase_demo.rs`:
 
 ```rust
 // Create debug renderer

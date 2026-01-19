@@ -331,19 +331,20 @@ if ui.checkbox("Show LOD Heat Map", &mut show_lod).changed() {
 
 ## Examples
 
-See `examples/optimization_debug_demo.rs` for a complete demonstration of all debug rendering features.
+See `examples/optimization_showcase_demo.rs` for a complete demonstration of all debug rendering features combined with runtime optimization configuration.
 
 Run the example:
 ```bash
-cargo run --example optimization_debug_demo
+cargo run --example optimization_showcase_demo
 ```
 
 Controls:
-- `1` - Toggle culling debug visualization
-- `2` - Toggle LOD heat map
-- `3` - Toggle mesh streaming state
-- `WASD` - Move camera
-- Mouse - Look around
+- `Numpad 1` - Toggle culling debug visualization
+- `Numpad 2` - Toggle LOD heat map
+- `Numpad 3` - Toggle mesh streaming state
+- `F1-F6` - Toggle individual optimizations
+- `WASD/QE` - Move camera
+- `1-9` - Camera presets
 
 ## Troubleshooting
 

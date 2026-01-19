@@ -1,61 +1,76 @@
 //! Unified Optimization Showcase Demo
 //!
-//! This comprehensive demo combines all advanced rendering optimization techniques in a single
-//! large-scale scene to demonstrate real-world performance benefits:
+//! This comprehensive demo consolidates all optimization-related examples:
+//! - Runtime configuration and A/B testing (from optimization_config_demo)
+//! - Debug visualization modes (from optimization_debug_demo)
+//! - Large-scale performance demonstration (original showcase)
 //!
-//! - **GPU-driven culling**: Frustum and occlusion culling via compute shaders
-//! - **LOD selection**: Distance-based level of detail switching
-//! - **Material instancing**: Efficient per-object material variations
-//! - **Mesh streaming**: Background loading with priority-based streaming
-//! - **Hi-Z occlusion culling**: Hierarchical depth-based visibility testing
+//! # Features
 //!
-//! # Scene Composition
+//! ## Optimization Configuration
+//! - Multi-Draw Indirect batching
+//! - GPU-driven culling (frustum + occlusion)
+//! - GPU LOD selection
+//! - Descriptor set caching
+//! - Hi-Z occlusion culling
+//! - Mesh streaming
 //!
-//! The demo creates a large-scale scene with 10,000+ objects arranged in a complex
-//! environment featuring:
-//! - Dense city-like grid with buildings (varying heights)
-//! - Scattered vegetation and props
-//! - Large occluder structures
-//! - Objects at varying distances for LOD testing
+//! ## Debug Visualization
+//! - Wireframe bounding spheres (culling results)
+//! - LOD level heat map
+//! - Mesh streaming state indicators
+//! - Performance HUD overlay
 //!
-//! # Real-Time Performance Statistics
-//!
-//! The demo displays a comprehensive performance overlay showing:
-//! - **FPS and Frame Time**: Current and average rendering performance
-//! - **Draw Call Reduction**: Traditional vs optimized draw call counts
-//! - **Culling Efficiency**: Objects culled vs total objects (frustum + occlusion)
-//! - **LOD Distribution**: Breakdown of objects per LOD level
-//! - **Streaming Metrics**: Loading status, bandwidth usage, and queue depth
-//! - **Memory Statistics**: GPU memory usage, descriptor set pooling efficiency
+//! ## Scene
+//! - 10,000+ objects (buildings, vegetation, props, occluders)
+//! - Material instancing with color variations
+//! - Multi-level LOD groups
+//! - Real-time performance statistics
 //!
 //! # Controls
 //!
-//! - **W/A/S/D**: Move camera forward/left/back/right
-//! - **Q/E**: Move camera down/up
-//! - **Mouse**: Look around (when cursor locked)
+//! ## Camera Movement
+//! - **W/A/S/D**: Move forward/left/back/right
+//! - **Q/E**: Move down/up
 //! - **Left Shift**: Sprint (faster movement)
 //! - **Space**: Reset camera to default position
-//! - **1-9**: Jump to preset viewpoints (test different scenarios)
-//! - **F**: Toggle frustum culling on/off
-//! - **O**: Toggle occlusion culling on/off
-//! - **L**: Toggle LOD system on/off
-//! - **M**: Toggle mesh streaming on/off
-//! - **I**: Toggle material instancing on/off
-//! - **H**: Toggle performance HUD overlay
-//! - **V**: Toggle visualization mode (culled objects, LOD colors, etc.)
+//! - **1-9**: Jump to preset viewpoints
+//!
+//! ## Optimization Toggles
+//! - **F1**: Toggle Multi-Draw Indirect
+//! - **F2**: Toggle GPU Culling
+//! - **F3**: Toggle GPU LOD Selection
+//! - **F4**: Toggle Descriptor Caching
+//! - **F5**: Toggle Hi-Z Occlusion
+//! - **F6**: Toggle Mesh Streaming
+//! - **F7**: Toggle optimization panel visibility
+//! - **F8**: Reset to default settings
+//!
+//! ## Debug Visualization
+//! - **Num1**: Toggle culling debug visualization
+//! - **Num2**: Toggle LOD heat map
+//! - **Num3**: Toggle mesh streaming state
+//! - **H**: Toggle performance HUD
+//! - **V**: Cycle visualization modes
 //! - **P**: Print detailed statistics to console
-//! - **ESC**: Toggle cursor lock / Exit
+//!
+//! ## Other
+//! - **ESC**: Exit
 
 use praxis_core::{Engine, EngineConfig};
 use praxis_ecs::{Component, Query, ResMut, Resource, World};
+use praxis_graphics::optimization_config::RenderingOptimizationConfig;
 use praxis_graphics::{
-    gpu_culling::{extract_frustum_planes, GpuCullingManager, GpuDrawCommand, GpuMeshData},
-    lod::{GpuLodLevel, GpuLodSelector, GpuObjectData, LodGroup, LodLevel},
+    debug_rendering::{
+        helpers, CullingDebugInfo, DebugRenderMode, DebugRenderer, LodDebugInfo,
+        StreamingDebugInfo, StreamingState,
+    },
+    lod::{LodGroup, LodLevel},
     material::MaterialProperties,
     mesh::MeshData,
     DrawCommand, RenderCommands, RenderContext,
 };
-use praxis_math::{Mat4, Quat, Vec3, Vec4};
+use praxis_math::{Mat4, Quat, Vec3};
 use praxis_scene::{GlobalTransform, Transform};
 use praxis_utils::{info, warn, Result};
 use std::collections::HashMap;
@@ -64,21 +79,18 @@ use std::time::Instant;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
-const GRID_SIZE: i32 = 25; // 50x50 grid = 2,500 base objects
+const GRID_SIZE: i32 = 25;
 const GRID_SPACING: f32 = 8.0;
-const OBJECT_LAYERS: i32 = 5; // Multiple layers for depth testing
-const TOTAL_OBJECT_TARGET: usize = 12000; // Aim for 12,000+ objects
+const TOTAL_OBJECT_TARGET: usize = 12000;
 
-/// Object types in the scene
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum ObjectType {
-    Building,   // Large static structures
-    Vegetation, // Trees, bushes
-    Prop,       // Small decorative objects
-    Occluder,   // Large walls for occlusion testing
+    Building,
+    Vegetation,
+    Prop,
+    Occluder,
 }
 
-/// Component for objects in the optimization showcase
 #[derive(Component, Clone)]
 struct OptimizedObject {
     object_type: ObjectType,
@@ -89,9 +101,11 @@ struct OptimizedObject {
     material_instance_id: String,
     mesh_id: String,
     bounding_radius: f32,
+    is_visible: bool,
+    streaming_state: StreamingState,
+    load_progress: f32,
 }
 
-/// Camera controller with full flight controls
 #[derive(Resource)]
 struct CameraController {
     position: Vec3,
@@ -100,7 +114,6 @@ struct CameraController {
     pitch: f32,
     move_speed: f32,
     sprint_multiplier: f32,
-    // Input state
     move_forward: bool,
     move_backward: bool,
     move_left: bool,
@@ -197,7 +210,6 @@ impl CameraController {
     }
 }
 
-/// Performance statistics tracking
 #[derive(Resource)]
 struct PerformanceStats {
     frame_times: Vec<f32>,
@@ -207,7 +219,7 @@ struct PerformanceStats {
     visible_objects: u32,
     frustum_culled: u32,
     occlusion_culled: u32,
-    lod_counts: [u32; 4], // LOD 0-3 distribution
+    lod_counts: [u32; 4],
     streaming_loaded: u32,
     streaming_loading: u32,
     streaming_queued: u32,
@@ -239,73 +251,49 @@ impl Default for PerformanceStats {
     }
 }
 
-/// Optimization toggles for A/B testing
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum VisualizationMode {
+    Normal,
+    LodColors,
+    CullingStatus,
+    StreamingStatus,
+}
+
 #[derive(Resource)]
-struct OptimizationToggles {
-    use_frustum_culling: bool,
-    use_occlusion_culling: bool,
-    use_lod_system: bool,
-    use_mesh_streaming: bool,
-    use_material_instancing: bool,
+struct DemoState {
+    debug_renderer: Option<DebugRenderer>,
     visualization_mode: VisualizationMode,
 }
 
-impl Default for OptimizationToggles {
+impl Default for DemoState {
     fn default() -> Self {
         Self {
-            use_frustum_culling: true,
-            use_occlusion_culling: true,
-            use_lod_system: true,
-            use_mesh_streaming: true,
-            use_material_instancing: true,
+            debug_renderer: None,
             visualization_mode: VisualizationMode::Normal,
         }
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum VisualizationMode {
-    Normal,
-    LodColors,       // Color objects by LOD level
-    CullingStatus,   // Show culled vs visible
-    StreamingStatus, // Show streaming state
-}
-
-/// Creates meshes for different LOD levels
 fn create_lod_meshes() -> HashMap<String, MeshData> {
     let mut meshes = HashMap::new();
 
-    // Building meshes (3 LOD levels)
-    meshes.insert(
-        "building_lod0".to_string(),
-        create_building_mesh(32), // High detail
-    );
-    meshes.insert(
-        "building_lod1".to_string(),
-        create_building_mesh(16), // Medium detail
-    );
-    meshes.insert(
-        "building_lod2".to_string(),
-        create_building_mesh(8), // Low detail
-    );
+    meshes.insert("building_lod0".to_string(), create_building_mesh(32));
+    meshes.insert("building_lod1".to_string(), create_building_mesh(16));
+    meshes.insert("building_lod2".to_string(), create_building_mesh(8));
 
-    // Vegetation meshes (3 LOD levels)
     meshes.insert("vegetation_lod0".to_string(), create_vegetation_mesh(24));
     meshes.insert("vegetation_lod1".to_string(), create_vegetation_mesh(12));
     meshes.insert("vegetation_lod2".to_string(), create_vegetation_mesh(6));
 
-    // Prop meshes (2 LOD levels)
     meshes.insert("prop_lod0".to_string(), create_prop_mesh(16));
     meshes.insert("prop_lod1".to_string(), create_prop_mesh(8));
 
-    // Occluder mesh (single LOD)
     meshes.insert("occluder".to_string(), create_occluder_mesh());
 
     meshes
 }
 
 fn create_building_mesh(segments: u32) -> MeshData {
-    // Create a box mesh with variable detail
     let mut positions = Vec::new();
     let mut colors = Vec::new();
     let mut indices = Vec::new();
@@ -313,34 +301,27 @@ fn create_building_mesh(segments: u32) -> MeshData {
     let size = 3.0;
     let height = 8.0;
 
-    // Simple box for now (can be enhanced with more detail)
     let vertices = [
-        // Front face
         [-size, 0.0, size],
         [size, 0.0, size],
         [size, height, size],
         [-size, height, size],
-        // Back face
         [-size, 0.0, -size],
         [-size, height, -size],
         [size, height, -size],
         [size, 0.0, -size],
-        // Top face
         [-size, height, -size],
         [-size, height, size],
         [size, height, size],
         [size, height, -size],
-        // Bottom face
         [-size, 0.0, -size],
         [size, 0.0, -size],
         [size, 0.0, size],
         [-size, 0.0, size],
-        // Right face
         [size, 0.0, -size],
         [size, height, -size],
         [size, height, size],
         [size, 0.0, size],
-        // Left face
         [-size, 0.0, -size],
         [-size, 0.0, size],
         [-size, height, size],
@@ -349,25 +330,19 @@ fn create_building_mesh(segments: u32) -> MeshData {
 
     for v in &vertices {
         positions.push(*v);
-        colors.push([0.7, 0.7, 0.8]); // Building color
+        colors.push([0.7, 0.7, 0.8]);
     }
 
     let face_indices = vec![
-        0, 1, 2, 0, 2, 3, // Front
-        4, 5, 6, 4, 6, 7, // Back
-        8, 9, 10, 8, 10, 11, // Top
-        12, 13, 14, 12, 14, 15, // Bottom
-        16, 17, 18, 16, 18, 19, // Right
-        20, 21, 22, 20, 22, 23, // Left
+        0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11, 12, 13, 14, 12, 14, 15, 16, 17,
+        18, 16, 18, 19, 20, 21, 22, 20, 22, 23,
     ];
 
     indices.extend(face_indices);
-
     MeshData::with_colors(positions, colors, indices)
 }
 
 fn create_vegetation_mesh(segments: u32) -> MeshData {
-    // Simple cone for tree
     let mut positions = Vec::new();
     let mut colors = Vec::new();
     let mut indices = Vec::new();
@@ -376,29 +351,24 @@ fn create_vegetation_mesh(segments: u32) -> MeshData {
     let height = 4.0;
     let segments = segments as usize;
 
-    // Base center
     positions.push([0.0, 0.0, 0.0]);
-    colors.push([0.2, 0.6, 0.2]); // Green
+    colors.push([0.2, 0.6, 0.2]);
 
-    // Base circle
     for i in 0..segments {
         let angle = (i as f32 / segments as f32) * std::f32::consts::TAU;
         positions.push([radius * angle.cos(), 0.0, radius * angle.sin()]);
         colors.push([0.2, 0.6, 0.2]);
     }
 
-    // Top point
     positions.push([0.0, height, 0.0]);
     colors.push([0.1, 0.5, 0.1]);
 
-    // Base triangles
     for i in 0..segments {
         indices.push(0);
         indices.push(((i + 1) % segments + 1) as u32);
         indices.push((i + 1) as u32);
     }
 
-    // Side triangles
     let top_idx = (segments + 1) as u32;
     for i in 0..segments {
         indices.push((i + 1) as u32);
@@ -410,7 +380,6 @@ fn create_vegetation_mesh(segments: u32) -> MeshData {
 }
 
 fn create_prop_mesh(segments: u32) -> MeshData {
-    // Simple sphere for props
     let mut positions = Vec::new();
     let mut colors = Vec::new();
     let mut indices = Vec::new();
@@ -432,7 +401,7 @@ fn create_prop_mesh(segments: u32) -> MeshData {
             let z = radius * sin_theta * sin_phi;
 
             positions.push([x, y, z]);
-            colors.push([0.8, 0.6, 0.3]); // Tan color
+            colors.push([0.8, 0.6, 0.3]);
         }
     }
 
@@ -455,7 +424,6 @@ fn create_prop_mesh(segments: u32) -> MeshData {
 }
 
 fn create_occluder_mesh() -> MeshData {
-    // Large wall
     let mut positions = Vec::new();
     let mut colors = Vec::new();
     let mut indices = Vec::new();
@@ -469,19 +437,16 @@ fn create_occluder_mesh() -> MeshData {
     positions.push([-width, height, 0.0]);
 
     for _ in 0..4 {
-        colors.push([0.5, 0.5, 0.5]); // Gray
+        colors.push([0.5, 0.5, 0.5]);
     }
 
     indices.extend(&[0, 1, 2, 0, 2, 3]);
-
     MeshData::with_colors(positions, colors, indices)
 }
 
-/// Sets up the massive scene with all object types
 fn setup_scene(world: &mut World, render_context: &mut RenderContext) -> Result<()> {
     info!("Setting up optimization showcase scene");
 
-    // Load all LOD meshes
     let meshes = create_lod_meshes();
     for (name, mesh_data) in &meshes {
         render_context
@@ -491,7 +456,6 @@ fn setup_scene(world: &mut World, render_context: &mut RenderContext) -> Result<
 
     info!("Loaded {} unique meshes", meshes.len());
 
-    // Create LOD level definitions
     let building_lods = vec![
         LodLevel::new("building_lod0", 0.0, 30.0),
         LodLevel::new("building_lod1", 30.0, 80.0),
@@ -512,16 +476,12 @@ fn setup_scene(world: &mut World, render_context: &mut RenderContext) -> Result<
     let mut object_count = 0;
     let mut material_instance_count = 0;
 
-    // Generate main grid of buildings
     for x in -GRID_SIZE..GRID_SIZE {
         for z in -GRID_SIZE..GRID_SIZE {
-            // Vary building heights
             let height_variation = ((x * 7 + z * 13) % 20) as f32 * 0.5;
             let y = height_variation;
-
             let position = Vec3::new(x as f32 * GRID_SPACING, y, z as f32 * GRID_SPACING);
 
-            // Create material variation
             let hue = ((x + z) as f32 * 17.0) % 360.0;
             let (r, g, b) = hsv_to_rgb(hue, 0.3, 0.8);
 
@@ -543,6 +503,9 @@ fn setup_scene(world: &mut World, render_context: &mut RenderContext) -> Result<
                     material_instance_id,
                     mesh_id: "building_lod0".to_string(),
                     bounding_radius: 5.0,
+                    is_visible: true,
+                    streaming_state: StreamingState::Loaded,
+                    load_progress: 1.0,
                 },
             ));
 
@@ -552,14 +515,12 @@ fn setup_scene(world: &mut World, render_context: &mut RenderContext) -> Result<
 
     info!("Created {} buildings", object_count);
 
-    // Add scattered vegetation
     let vegetation_count = 2000;
     for i in 0..vegetation_count {
         let angle = (i as f32 / vegetation_count as f32) * std::f32::consts::TAU;
         let radius = 20.0 + (i as f32 / vegetation_count as f32) * 150.0;
         let x = radius * angle.cos();
         let z = radius * angle.sin();
-
         let position = Vec3::new(x, 0.0, z);
 
         let material_instance_id = format!("vegetation_mat_{}", material_instance_count);
@@ -580,6 +541,9 @@ fn setup_scene(world: &mut World, render_context: &mut RenderContext) -> Result<
                 material_instance_id,
                 mesh_id: "vegetation_lod0".to_string(),
                 bounding_radius: 2.0,
+                is_visible: true,
+                streaming_state: StreamingState::Loaded,
+                load_progress: 1.0,
             },
         ));
 
@@ -588,13 +552,11 @@ fn setup_scene(world: &mut World, render_context: &mut RenderContext) -> Result<
 
     info!("Created {} vegetation objects", vegetation_count);
 
-    // Add small props scattered throughout
     let prop_count = 3000;
     for i in 0..prop_count {
         let x = ((i * 17) % 400 - 200) as f32;
         let z = ((i * 23) % 400 - 200) as f32;
         let y = ((i * 7) % 10) as f32 * 0.5;
-
         let position = Vec3::new(x * 0.5, y, z * 0.5);
 
         let hue = (i as f32 * 137.5) % 360.0;
@@ -618,6 +580,9 @@ fn setup_scene(world: &mut World, render_context: &mut RenderContext) -> Result<
                 material_instance_id,
                 mesh_id: "prop_lod0".to_string(),
                 bounding_radius: 1.0,
+                is_visible: true,
+                streaming_state: StreamingState::Loaded,
+                load_progress: 1.0,
             },
         ));
 
@@ -626,7 +591,6 @@ fn setup_scene(world: &mut World, render_context: &mut RenderContext) -> Result<
 
     info!("Created {} props", prop_count);
 
-    // Add large occluders for occlusion culling testing
     let occluder_positions = vec![
         Vec3::new(0.0, 6.0, -30.0),
         Vec3::new(40.0, 6.0, 0.0),
@@ -649,6 +613,9 @@ fn setup_scene(world: &mut World, render_context: &mut RenderContext) -> Result<
                 material_instance_id,
                 mesh_id: "occluder".to_string(),
                 bounding_radius: 15.0,
+                is_visible: true,
+                streaming_state: StreamingState::Loaded,
+                load_progress: 1.0,
             },
         ));
 
@@ -686,37 +653,47 @@ fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (f32, f32, f32) {
     (r + m, g + m, b + m)
 }
 
-/// Update LOD groups based on camera distance
-fn update_lod_system(
+fn update_objects(
     camera: &CameraController,
     mut query: Query<(&GlobalTransform, &mut OptimizedObject)>,
     delta_time: f32,
 ) {
-    for (_transform, mut obj) in query.iter_mut() {
+    for (transform, mut obj) in query.iter_mut() {
         let obj_pos = Vec3::new(
-            _transform.compute_matrix().w_axis.x,
-            _transform.compute_matrix().w_axis.y,
-            _transform.compute_matrix().w_axis.z,
+            transform.compute_matrix().w_axis.x,
+            transform.compute_matrix().w_axis.y,
+            transform.compute_matrix().w_axis.z,
         );
         let distance_sq = (obj_pos - camera.position).length_squared();
         obj.lod_group.update(distance_sq, delta_time);
+
+        let distance = distance_sq.sqrt();
+        if distance > 100.0 {
+            obj.streaming_state = StreamingState::NotLoaded;
+            obj.load_progress = 0.0;
+        } else if distance > 80.0 {
+            obj.streaming_state = StreamingState::Loading;
+            obj.load_progress = ((100.0 - distance) / 20.0).clamp(0.0, 1.0);
+        } else {
+            obj.streaming_state = StreamingState::Loaded;
+            obj.load_progress = 1.0;
+        }
+
+        obj.is_visible = distance < 120.0;
     }
 }
 
-/// Update performance statistics
 fn update_stats(
     mut stats: ResMut<PerformanceStats>,
     query: Query<&OptimizedObject>,
     delta_time: f32,
 ) {
-    // Update frame time tracking
     let frame_time_ms = delta_time * 1000.0;
     stats.frame_times.push(frame_time_ms);
     if stats.frame_times.len() > 120 {
         stats.frame_times.remove(0);
     }
 
-    // Calculate FPS
     if frame_time_ms > 0.0 {
         stats.current_fps = 1000.0 / frame_time_ms;
     }
@@ -731,19 +708,21 @@ fn update_stats(
         };
     }
 
-    // Count LOD distribution
     stats.lod_counts = [0; 4];
     stats.total_objects = 0;
+    stats.visible_objects = 0;
 
     for obj in query.iter() {
         stats.total_objects += 1;
+        if obj.is_visible {
+            stats.visible_objects += 1;
+        }
         let lod_level = obj.lod_group.current_level();
         if lod_level < 4 {
             stats.lod_counts[lod_level] += 1;
         }
     }
 
-    // Print periodic stats
     if stats.last_update_time.elapsed().as_secs() >= 2 {
         info!(
             "Performance: {:.1} FPS | Objects: {}/{} visible | LOD: L0={} L1={} L2={} L3={}",
@@ -759,7 +738,6 @@ fn update_stats(
     }
 }
 
-/// Update camera controller
 fn update_camera(mut camera: ResMut<CameraController>, delta_time: f32) {
     let forward = camera.rotation * Vec3::NEG_Z;
     let right = camera.rotation * Vec3::X;
@@ -797,11 +775,11 @@ fn update_camera(mut camera: ResMut<CameraController>, delta_time: f32) {
     }
 }
 
-/// Handle input events
 fn handle_input(
     event: &WindowEvent,
     camera: &mut CameraController,
-    toggles: &mut OptimizationToggles,
+    config: &mut RenderingOptimizationConfig,
+    demo_state: &mut DemoState,
     stats: &mut PerformanceStats,
 ) {
     match event {
@@ -817,7 +795,6 @@ fn handle_input(
             let pressed = *state == ElementState::Pressed;
 
             match keycode {
-                // Camera movement
                 KeyCode::KeyW => camera.move_forward = pressed,
                 KeyCode::KeyS => camera.move_backward = pressed,
                 KeyCode::KeyA => camera.move_left = pressed,
@@ -826,7 +803,6 @@ fn handle_input(
                 KeyCode::KeyE => camera.move_up = pressed,
                 KeyCode::ShiftLeft => camera.sprint = pressed,
 
-                // Camera presets
                 KeyCode::Digit1 if pressed => camera.set_preset(1),
                 KeyCode::Digit2 if pressed => camera.set_preset(2),
                 KeyCode::Digit3 if pressed => camera.set_preset(3),
@@ -845,57 +821,86 @@ fn handle_input(
                     info!("Camera reset");
                 }
 
-                // Optimization toggles
-                KeyCode::KeyF if pressed => {
-                    toggles.use_frustum_culling = !toggles.use_frustum_culling;
+                KeyCode::F1 if pressed => {
+                    config.set_multi_draw_indirect(!config.multi_draw_indirect());
                     info!(
-                        "Frustum culling: {}",
-                        if toggles.use_frustum_culling {
+                        "Multi-draw indirect: {}",
+                        if config.multi_draw_indirect() {
                             "ON"
                         } else {
                             "OFF"
                         }
                     );
                 }
-                KeyCode::KeyO if pressed => {
-                    toggles.use_occlusion_culling = !toggles.use_occlusion_culling;
+                KeyCode::F2 if pressed => {
+                    config.set_gpu_culling(!config.gpu_culling());
                     info!(
-                        "Occlusion culling: {}",
-                        if toggles.use_occlusion_culling {
+                        "GPU culling: {}",
+                        if config.gpu_culling() { "ON" } else { "OFF" }
+                    );
+                }
+                KeyCode::F3 if pressed => {
+                    config.set_gpu_lod_selection(!config.gpu_lod_selection());
+                    info!(
+                        "GPU LOD selection: {}",
+                        if config.gpu_lod_selection() {
                             "ON"
                         } else {
                             "OFF"
                         }
                     );
                 }
-                KeyCode::KeyL if pressed => {
-                    toggles.use_lod_system = !toggles.use_lod_system;
+                KeyCode::F4 if pressed => {
+                    config.set_descriptor_caching(!config.descriptor_caching());
                     info!(
-                        "LOD system: {}",
-                        if toggles.use_lod_system { "ON" } else { "OFF" }
+                        "Descriptor caching: {}",
+                        if config.descriptor_caching() {
+                            "ON"
+                        } else {
+                            "OFF"
+                        }
                     );
                 }
-                KeyCode::KeyM if pressed => {
-                    toggles.use_mesh_streaming = !toggles.use_mesh_streaming;
+                KeyCode::F5 if pressed => {
+                    config.set_hiz_occlusion(!config.hiz_occlusion());
+                    info!(
+                        "Hi-Z occlusion: {}",
+                        if config.hiz_occlusion() { "ON" } else { "OFF" }
+                    );
+                }
+                KeyCode::F6 if pressed => {
+                    config.set_mesh_streaming(!config.mesh_streaming());
                     info!(
                         "Mesh streaming: {}",
-                        if toggles.use_mesh_streaming {
-                            "ON"
-                        } else {
-                            "OFF"
-                        }
+                        if config.mesh_streaming() { "ON" } else { "OFF" }
                     );
                 }
-                KeyCode::KeyI if pressed => {
-                    toggles.use_material_instancing = !toggles.use_material_instancing;
+                KeyCode::F8 if pressed => {
+                    config.reset_to_defaults();
                     info!(
-                        "Material instancing: {}",
-                        if toggles.use_material_instancing {
-                            "ON"
-                        } else {
-                            "OFF"
-                        }
+                        "Reset to defaults: {}/{} optimizations enabled",
+                        config.enabled_count(),
+                        RenderingOptimizationConfig::TOTAL_OPTIMIZATIONS
                     );
+                }
+
+                KeyCode::Numpad1 if pressed => {
+                    if let Some(debug_renderer) = &mut demo_state.debug_renderer {
+                        debug_renderer.toggle_mode(DebugRenderMode::CullingResults);
+                        info!("Toggled culling debug visualization");
+                    }
+                }
+                KeyCode::Numpad2 if pressed => {
+                    if let Some(debug_renderer) = &mut demo_state.debug_renderer {
+                        debug_renderer.toggle_mode(DebugRenderMode::LodHeatMap);
+                        info!("Toggled LOD heat map");
+                    }
+                }
+                KeyCode::Numpad3 if pressed => {
+                    if let Some(debug_renderer) = &mut demo_state.debug_renderer {
+                        debug_renderer.toggle_mode(DebugRenderMode::MeshStreamingState);
+                        info!("Toggled streaming state visualization");
+                    }
                 }
 
                 KeyCode::KeyH if pressed => {
@@ -907,17 +912,17 @@ fn handle_input(
                 }
 
                 KeyCode::KeyV if pressed => {
-                    toggles.visualization_mode = match toggles.visualization_mode {
+                    demo_state.visualization_mode = match demo_state.visualization_mode {
                         VisualizationMode::Normal => VisualizationMode::LodColors,
                         VisualizationMode::LodColors => VisualizationMode::CullingStatus,
                         VisualizationMode::CullingStatus => VisualizationMode::StreamingStatus,
                         VisualizationMode::StreamingStatus => VisualizationMode::Normal,
                     };
-                    info!("Visualization mode: {:?}", toggles.visualization_mode);
+                    info!("Visualization mode: {:?}", demo_state.visualization_mode);
                 }
 
                 KeyCode::KeyP if pressed => {
-                    print_detailed_stats(stats);
+                    print_detailed_stats(stats, config);
                 }
 
                 _ => {}
@@ -927,7 +932,7 @@ fn handle_input(
     }
 }
 
-fn print_detailed_stats(stats: &PerformanceStats) {
+fn print_detailed_stats(stats: &PerformanceStats, config: &RenderingOptimizationConfig) {
     info!("=== Detailed Performance Statistics ===");
     info!(
         "FPS: {:.1} current, {:.1} average",
@@ -959,21 +964,24 @@ fn print_detailed_stats(stats: &PerformanceStats) {
             * (1.0
                 - stats.draw_calls_optimized as f32 / stats.draw_calls_traditional.max(1) as f32)
     );
+    info!("=== Optimization Config ===");
+    info!("{}", config.summary());
+    info!(
+        "Enabled: {}/{}",
+        config.enabled_count(),
+        RenderingOptimizationConfig::TOTAL_OPTIMIZATIONS
+    );
 }
 
-/// Render system
 fn render_system(world: &World, render_context: &mut RenderContext) -> Result<()> {
     let camera = world.get_resource::<CameraController>().unwrap();
-    let stats = world.get_resource::<PerformanceStats>().unwrap();
 
-    // Build camera matrices
     let forward = camera.rotation * Vec3::NEG_Z;
     let target = camera.position + forward;
     let view = Mat4::look_at_rh(camera.position, target, Vec3::Y);
     let aspect_ratio = 1280.0 / 720.0;
     let projection = Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, aspect_ratio, 0.1, 1000.0);
 
-    // Build draw commands
     let mut draw_commands = Vec::new();
     let query = world.query::<(&GlobalTransform, &OptimizedObject)>();
 
@@ -1020,41 +1028,42 @@ async fn main() -> Result<()> {
 
     info!("=== Praxis Optimization Showcase Demo ===");
     info!("");
-    info!("This demo combines all rendering optimizations in a large-scale scene:");
-    info!("  • GPU-driven culling (frustum + occlusion)");
-    info!("  • LOD selection with smooth transitions");
-    info!("  • Material instancing for efficient variations");
-    info!("  • Mesh streaming with priority-based loading");
-    info!("  • Hi-Z occlusion culling");
+    info!("This demo combines:");
+    info!("  • Runtime optimization configuration and A/B testing");
+    info!("  • Debug visualization modes for culling, LOD, and streaming");
+    info!("  • Large-scale scene with 12,000+ objects");
     info!("");
-    info!("Target: 12,000+ objects with real-time performance");
-    info!("");
-    info!("Controls:");
+    info!("Camera Controls:");
     info!("  WASD/QE - Move camera");
     info!("  Shift - Sprint");
     info!("  Space - Reset camera");
     info!("  1-9 - Camera presets");
-    info!("  F - Toggle frustum culling");
-    info!("  O - Toggle occlusion culling");
-    info!("  L - Toggle LOD system");
-    info!("  M - Toggle mesh streaming");
-    info!("  I - Toggle material instancing");
+    info!("");
+    info!("Optimization Toggles:");
+    info!("  F1 - Multi-Draw Indirect");
+    info!("  F2 - GPU Culling");
+    info!("  F3 - GPU LOD Selection");
+    info!("  F4 - Descriptor Caching");
+    info!("  F5 - Hi-Z Occlusion");
+    info!("  F6 - Mesh Streaming");
+    info!("  F8 - Reset to defaults");
+    info!("");
+    info!("Debug Visualization:");
+    info!("  Numpad 1 - Culling debug");
+    info!("  Numpad 2 - LOD heat map");
+    info!("  Numpad 3 - Streaming state");
     info!("  H - Toggle HUD");
     info!("  V - Cycle visualization modes");
     info!("  P - Print detailed stats");
-    info!("  ESC - Exit");
     info!("");
 
-    // Create engine
     let config = EngineConfig::default();
     let mut engine = Engine::new(config).await?;
 
-    // Setup scene
     if let Some(render_context) = engine.render_context_mut() {
         setup_scene(engine.world_mut(), render_context)?;
     }
 
-    // Initialize resources
     engine
         .world_mut()
         .insert_resource(CameraController::default());
@@ -1063,11 +1072,11 @@ async fn main() -> Result<()> {
         .insert_resource(PerformanceStats::default());
     engine
         .world_mut()
-        .insert_resource(OptimizationToggles::default());
+        .insert_resource(RenderingOptimizationConfig::default());
+    engine.world_mut().insert_resource(DemoState::default());
 
     info!("Scene setup complete, starting main loop");
 
-    // Main loop
     let mut last_time = std::time::Instant::now();
 
     engine.run(move |engine_state, event| {
@@ -1075,25 +1084,31 @@ async fn main() -> Result<()> {
         let delta_time = (current_time - last_time).as_secs_f32().min(0.1);
         last_time = current_time;
 
-        // Handle input
         if let Some(window_event) = event {
-            if let (Some(mut camera), Some(mut toggles), Some(mut stats)) = (
+            if let (Some(mut camera), Some(mut config), Some(mut demo_state), Some(mut stats)) = (
                 engine_state.world.get_resource_mut::<CameraController>(),
-                engine_state.world.get_resource_mut::<OptimizationToggles>(),
+                engine_state
+                    .world
+                    .get_resource_mut::<RenderingOptimizationConfig>(),
+                engine_state.world.get_resource_mut::<DemoState>(),
                 engine_state.world.get_resource_mut::<PerformanceStats>(),
             ) {
-                handle_input(window_event, &mut camera, &mut toggles, &mut stats);
+                handle_input(
+                    window_event,
+                    &mut camera,
+                    &mut config,
+                    &mut demo_state,
+                    &mut stats,
+                );
             }
         }
 
-        // Update camera
         if let Some(camera) = engine_state.world.get_resource_mut::<CameraController>() {
             update_camera(camera, delta_time);
         }
 
-        // Update LOD system
         if let Some(camera) = engine_state.world.get_resource::<CameraController>() {
-            update_lod_system(
+            update_objects(
                 &camera,
                 engine_state
                     .world
@@ -1102,7 +1117,6 @@ async fn main() -> Result<()> {
             );
         }
 
-        // Update stats
         if let Some(stats) = engine_state.world.get_resource_mut::<PerformanceStats>() {
             update_stats(
                 stats,
@@ -1111,7 +1125,6 @@ async fn main() -> Result<()> {
             );
         }
 
-        // Render
         if let Some(render_context) = engine_state.render_context.as_mut() {
             if let Err(e) = render_system(&engine_state.world, render_context) {
                 warn!("Render error: {}", e);

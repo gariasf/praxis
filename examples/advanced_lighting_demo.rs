@@ -4,8 +4,8 @@
 
 use praxis_ecs::{PerspectiveCameraBundle, Transform, World};
 use praxis_graphics::{
-    colored_cube_mesh, DrawCommand, LightLinkingManager, LightProbeGrid, LightProbeManager, MeshData,
-    RenderCommands, RenderContext,
+    colored_cube_mesh, DrawCommand, LightLinkingManager, LightProbeGrid, LightProbeManager,
+    MeshData, RenderCommands, RenderContext,
 };
 use praxis_math::{EulerRot, Mat4, Quat, Vec3};
 use praxis_utils::{info, Result};

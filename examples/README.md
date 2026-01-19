@@ -94,6 +94,7 @@ Interactive examples with graphical output and user controls.
 | `gpu_culling_demo` | **GPU compute culling** - Frustum culling with indirect draw buffers (1000+ objects) |
 | `lod_gpu_demo` | **GPU LOD selection** - Distance-based LOD switching using compute shaders |
 | `mesh_streaming_demo` | Background mesh loading with frustum-based priority queue |
+| `optimization_showcase_demo` | **Unified optimization demo** - Runtime A/B testing, debug visualization, 12,000+ objects |
 
 #### Networking Demos
 
@@ -271,6 +272,45 @@ cargo run --example material_instancing_demo
 - Memory optimization techniques
 - Per-object material overrides
 - Performance benefits of instancing
+
+### Optimization Showcase Demo
+
+Unified optimization demonstration combining all optimization techniques:
+- Runtime A/B testing with optimization toggles
+- Debug visualization modes (culling, LOD, streaming)
+- Large-scale scene with 12,000+ objects
+- Performance statistics and profiling
+- Material instancing with color variations
+
+```bash
+cargo run --example optimization_showcase_demo
+```
+
+**Camera Controls:** WASD/QE (move), Shift (sprint), Space (reset), 1-9 (presets)
+
+**Optimization Toggles:**
+- F1: Multi-Draw Indirect
+- F2: GPU Culling
+- F3: GPU LOD Selection
+- F4: Descriptor Caching
+- F5: Hi-Z Occlusion
+- F6: Mesh Streaming
+- F8: Reset to defaults
+
+**Debug Visualization:**
+- Numpad 1: Culling debug
+- Numpad 2: LOD heat map
+- Numpad 3: Streaming state
+- H: Toggle HUD
+- V: Cycle visualization modes
+- P: Print detailed stats
+
+**What you'll learn:**
+- Runtime optimization configuration and A/B testing
+- Debug visualization techniques for culling and LOD
+- Performance impact of individual optimizations
+- Large-scale scene rendering best practices
+- Combining multiple optimization techniques
 
 ### Scripting Console Demo
 
