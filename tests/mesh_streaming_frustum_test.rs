@@ -27,8 +27,8 @@ use std::sync::Arc;
 use vulkano::{
     command_buffer::allocator::StandardCommandBufferAllocator,
     device::{
-        physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions,
-        QueueCreateInfo, QueueFlags,
+        physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, QueueCreateInfo,
+        QueueFlags,
     },
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     memory::allocator::StandardMemoryAllocator,
@@ -66,9 +66,10 @@ impl MeshStreamingTestFixture {
             .enumerate_physical_devices()
             .map_err(|e| praxis_utils::eyre::eyre!("Failed to enumerate physical devices: {}", e))?
             .filter(|p| {
-                p.queue_family_properties()
-                    .iter()
-                    .any(|q| q.queue_flags.contains(QueueFlags::GRAPHICS | QueueFlags::TRANSFER))
+                p.queue_family_properties().iter().any(|q| {
+                    q.queue_flags
+                        .contains(QueueFlags::GRAPHICS | QueueFlags::TRANSFER)
+                })
             })
             .min_by_key(|p| match p.properties().device_type {
                 PhysicalDeviceType::DiscreteGpu => 0,
@@ -95,7 +96,10 @@ impl MeshStreamingTestFixture {
             .queue_family_properties()
             .iter()
             .enumerate()
-            .find(|(_, q)| q.queue_flags.contains(QueueFlags::GRAPHICS | QueueFlags::TRANSFER))
+            .find(|(_, q)| {
+                q.queue_flags
+                    .contains(QueueFlags::GRAPHICS | QueueFlags::TRANSFER)
+            })
             .map(|(i, _)| i as u32)
             .ok_or_else(|| praxis_utils::eyre::eyre!("No graphics/transfer queue family found"))?;
 
@@ -221,10 +225,10 @@ fn test_frustum_culling_with_camera_movement() -> Result<()> {
 
     // Simulate multiple camera positions moving through the scene
     let camera_positions = vec![
-        Vec3::new(-40.0, 10.0, 0.0),  // Looking at left side of grid
-        Vec3::new(0.0, 10.0, -40.0),  // Looking at front of grid
-        Vec3::new(40.0, 10.0, 0.0),   // Looking at right side of grid
-        Vec3::new(0.0, 50.0, 0.0),    // Looking down from above
+        Vec3::new(-40.0, 10.0, 0.0), // Looking at left side of grid
+        Vec3::new(0.0, 10.0, -40.0), // Looking at front of grid
+        Vec3::new(40.0, 10.0, 0.0),  // Looking at right side of grid
+        Vec3::new(0.0, 50.0, 0.0),   // Looking down from above
     ];
 
     let target = Vec3::ZERO;
@@ -355,7 +359,10 @@ fn test_priority_queue_ordering_by_distance() -> Result<()> {
     }
 
     let loaded_count = fixture.streaming_system.loaded_count();
-    info!("Meshes loaded after priority-based loading: {}", loaded_count);
+    info!(
+        "Meshes loaded after priority-based loading: {}",
+        loaded_count
+    );
 
     // Verify that visible meshes were loaded
     assert!(

@@ -23,7 +23,7 @@ use praxis_graphics::{
     lighting::{DirectionalLight, LightingUniforms},
     material::MaterialProperties,
     mesh::{MeshAssetManager, MeshData},
-    taa::{TaaApplyParams, TaaConfig, TaaRenderer, TaaRenderTarget},
+    taa::{TaaApplyParams, TaaConfig, TaaRenderTarget, TaaRenderer},
     texture::TextureManager,
     uniform_buffer::{DynamicUniformBuffer, ModelUniforms, ViewProjectionUniforms},
     velocity_buffer::{VelocityBuffer, VelocityBufferRenderer},
@@ -45,7 +45,10 @@ use vulkano::{
         QueueCreateInfo, QueueFlags,
     },
     format::Format,
-    image::{view::ImageView, Image, ImageAspects, ImageCreateInfo, ImageSubresourceLayers, ImageType, ImageUsage},
+    image::{
+        view::ImageView, Image, ImageAspects, ImageCreateInfo, ImageSubresourceLayers, ImageType,
+        ImageUsage,
+    },
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
     pipeline::graphics::viewport::Viewport,
@@ -547,7 +550,13 @@ fn test_velocity_buffer_generation_moving_objects() -> Result<()> {
     let velocities = fixture.read_velocity_buffer(&VelocityBuffer {
         image: velocity_buffer.image().clone(),
         image_view: velocity_buffer.clone(),
-        framebuffer: fixture.deferred_renderer.gbuffer.as_ref().unwrap().framebuffer.clone(),
+        framebuffer: fixture
+            .deferred_renderer
+            .gbuffer
+            .as_ref()
+            .unwrap()
+            .framebuffer
+            .clone(),
         width: fixture.width,
         height: fixture.height,
     })?;
@@ -569,7 +578,10 @@ fn test_velocity_buffer_generation_moving_objects() -> Result<()> {
         zero_velocity_ratio * 100.0
     );
 
-    info!("✓ Velocity buffer generation validated: {:.1}% zero velocity on frame 0", zero_velocity_ratio * 100.0);
+    info!(
+        "✓ Velocity buffer generation validated: {:.1}% zero velocity on frame 0",
+        zero_velocity_ratio * 100.0
+    );
 
     Ok(())
 }
@@ -704,7 +716,13 @@ fn test_motion_vector_magnitude_validation() -> Result<()> {
         let velocities = fixture.read_velocity_buffer(&VelocityBuffer {
             image: velocity_buffer.image().clone(),
             image_view: velocity_buffer.clone(),
-            framebuffer: fixture.deferred_renderer.gbuffer.as_ref().unwrap().framebuffer.clone(),
+            framebuffer: fixture
+                .deferred_renderer
+                .gbuffer
+                .as_ref()
+                .unwrap()
+                .framebuffer
+                .clone(),
             width: fixture.width,
             height: fixture.height,
         })?;
@@ -744,10 +762,10 @@ fn test_reprojection_uv_calculation() -> Result<()> {
     // Test reprojection math directly
     let test_cases = vec![
         // (current_uv, velocity, expected_history_uv)
-        ([0.5, 0.5], [0.0, 0.0], [0.5, 0.5]), // No motion
-        ([0.5, 0.5], [0.1, 0.0], [0.4, 0.5]), // Right motion
+        ([0.5, 0.5], [0.0, 0.0], [0.5, 0.5]),  // No motion
+        ([0.5, 0.5], [0.1, 0.0], [0.4, 0.5]),  // Right motion
         ([0.5, 0.5], [-0.1, 0.0], [0.6, 0.5]), // Left motion
-        ([0.5, 0.5], [0.0, 0.1], [0.5, 0.4]), // Down motion
+        ([0.5, 0.5], [0.0, 0.1], [0.5, 0.4]),  // Down motion
         ([0.5, 0.5], [0.0, -0.1], [0.5, 0.6]), // Up motion
     ];
 
@@ -896,7 +914,9 @@ fn test_history_buffer_sampling() -> Result<()> {
             previous_dynamic_uniform_buffer: &previous_dynamic_buffer,
         };
 
-        fixture.deferred_renderer.render(&mut builder, &deferred_params)?;
+        fixture
+            .deferred_renderer
+            .render(&mut builder, &deferred_params)?;
         fixture.execute_and_wait(builder)?;
 
         // If frame 1, apply TAA to test history sampling
@@ -913,12 +933,7 @@ fn test_history_buffer_sampling() -> Result<()> {
                 .ok_or_else(|| praxis_utils::eyre::eyre!("G-buffer not available"))?
                 .depth;
 
-            let current_frame = &fixture
-                .deferred_renderer
-                .gbuffer
-                .as_ref()
-                .unwrap()
-                .albedo;
+            let current_frame = &fixture.deferred_renderer.gbuffer.as_ref().unwrap().albedo;
 
             let mut builder = RecordingCommandBuffer::new(
                 fixture.command_buffer_allocator.clone(),

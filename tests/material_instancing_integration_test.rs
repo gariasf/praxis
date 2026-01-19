@@ -92,23 +92,23 @@ fn run_material_instancing_test() -> Result<()> {
 
     // Step 1: Create base material
     info!("Step 1: Creating base material");
-    
+
     // Load cube mesh
     ctx.mesh_manager_mut()
         .load_mesh("test_cube", colored_cube_mesh())?;
-    
+
     // Get default white texture (created by RenderContext initialization)
     let white_texture = ctx
         .texture_manager()
         .get_texture("_default_white")
         .ok_or_else(|| praxis_utils::eyre::eyre!("Default white texture not found"))?
         .clone();
-    
+
     // Create base material
     let base_material_id = "test_base_material";
     ctx.material_manager_mut()
         .create_material(base_material_id, white_texture.clone());
-    
+
     info!(
         "Base material '{}' created with default white texture",
         base_material_id
@@ -116,21 +116,21 @@ fn run_material_instancing_test() -> Result<()> {
 
     // Step 2: Create 50 material instances with different properties
     info!("Step 2: Creating 50 material instances with property overrides");
-    
+
     let num_instances = 50;
     let mut instance_ids = Vec::new();
 
     for i in 0..num_instances {
         let instance_id = format!("instance_{}", i);
-        
+
         // Vary metallic and roughness properties
         let metallic = (i as f32 / num_instances as f32) * 0.9 + 0.1; // Range: 0.1 to 1.0
         let roughness = 1.0 - (i as f32 / num_instances as f32) * 0.8; // Range: 1.0 to 0.2
-        
+
         // Vary color using HSV to RGB conversion
         let hue = (i as f32 / num_instances as f32) * 360.0;
         let color = hsv_to_rgb(hue, 0.8, 0.9);
-        
+
         // Create instance with property overrides
         ctx.create_material_instance(&instance_id, base_material_id)?
             .override_properties(
@@ -140,7 +140,7 @@ fn run_material_instancing_test() -> Result<()> {
                     .with_roughness(roughness)
                     .with_emissive_strength(if i % 5 == 0 { 0.2 } else { 0.0 }),
             );
-        
+
         instance_ids.push(instance_id);
     }
 
@@ -148,9 +148,9 @@ fn run_material_instancing_test() -> Result<()> {
 
     // Step 3: Verify instancing statistics
     info!("Step 3: Verifying material instancing statistics");
-    
+
     let stats = ctx.material_instance_stats();
-    
+
     assert_eq!(
         stats.total_instances, num_instances,
         "Total instances should be {}",
@@ -173,29 +173,35 @@ fn run_material_instancing_test() -> Result<()> {
     info!("Material Instancing Statistics:");
     info!("  Total instances: {}", stats.total_instances);
     info!("  Unique base materials: {}", stats.unique_base_materials);
-    info!("  Instances with overrides: {}", stats.instances_with_overrides);
-    info!("  Avg instances per base: {:.2}", stats.avg_instances_per_base);
+    info!(
+        "  Instances with overrides: {}",
+        stats.instances_with_overrides
+    );
+    info!(
+        "  Avg instances per base: {:.2}",
+        stats.avg_instances_per_base
+    );
 
     // Step 4: Verify all instances share the same base texture
     info!("Step 4: Verifying texture sharing");
-    
+
     // Get base material to check its texture
     let base_material = ctx
         .material_manager()
         .get_material(base_material_id)
         .ok_or_else(|| praxis_utils::eyre::eyre!("Base material not found"))?;
-    
+
     let base_texture_ptr = Arc::as_ptr(&base_material.albedo_texture().image);
-    
+
     // Verify each instance shares the same base texture
     for instance_id in &instance_ids {
         let instance = ctx
             .material_instance_manager()
             .get_instance(instance_id)
             .ok_or_else(|| praxis_utils::eyre::eyre!("Instance '{}' not found", instance_id))?;
-        
+
         let instance_texture_ptr = Arc::as_ptr(&instance.base_material().albedo_texture().image);
-        
+
         assert_eq!(
             base_texture_ptr, instance_texture_ptr,
             "Instance '{}' should share the same base texture",
@@ -203,29 +209,32 @@ fn run_material_instancing_test() -> Result<()> {
         );
     }
 
-    info!("All {} instances share the same base texture ✓", num_instances);
+    info!(
+        "All {} instances share the same base texture ✓",
+        num_instances
+    );
 
     // Step 5: Verify property overrides are applied correctly
     info!("Step 5: Verifying property overrides");
-    
+
     for (i, instance_id) in instance_ids.iter().enumerate() {
         let instance = ctx
             .material_instance_manager()
             .get_instance(instance_id)
             .ok_or_else(|| praxis_utils::eyre::eyre!("Instance '{}' not found", instance_id))?;
-        
+
         // Verify the instance has overrides
         assert!(
             instance.has_overrides(),
             "Instance '{}' should have property overrides",
             instance_id
         );
-        
+
         // Verify specific properties
         let props = instance.properties();
         let expected_metallic = (i as f32 / num_instances as f32) * 0.9 + 0.1;
         let expected_roughness = 1.0 - (i as f32 / num_instances as f32) * 0.8;
-        
+
         assert!(
             (props.metallic - expected_metallic).abs() < 0.001,
             "Instance '{}' metallic mismatch: expected {}, got {}",
@@ -233,7 +242,7 @@ fn run_material_instancing_test() -> Result<()> {
             expected_metallic,
             props.metallic
         );
-        
+
         assert!(
             (props.roughness - expected_roughness).abs() < 0.001,
             "Instance '{}' roughness mismatch: expected {}, got {}",
@@ -241,7 +250,7 @@ fn run_material_instancing_test() -> Result<()> {
             expected_roughness,
             props.roughness
         );
-        
+
         // Verify emissive strength
         let expected_emissive = if i % 5 == 0 { 0.2 } else { 0.0 };
         assert!(
@@ -257,25 +266,25 @@ fn run_material_instancing_test() -> Result<()> {
 
     // Step 6: Render scene with all instances
     info!("Step 6: Rendering scene with all material instances");
-    
+
     // Create draw commands for all instances
     let mut draw_commands = Vec::new();
-    
+
     // Arrange instances in a grid pattern (7x8 grid for 50 instances, with some empty spots)
     let grid_cols = 8;
     let spacing = 2.5;
-    
+
     for (i, instance_id) in instance_ids.iter().enumerate() {
         let x = (i % grid_cols) as f32 - (grid_cols as f32 / 2.0);
         let z = (i / grid_cols) as f32 - 4.0;
-        
+
         let position = Vec3::new(x * spacing, 0.0, z * spacing);
         let rotation_angle = (i as f32 * 0.1).sin() * 0.5;
-        
+
         let model = Mat4::from_translation(position)
             * Mat4::from_rotation_y(rotation_angle)
             * Mat4::from_scale(Vec3::splat(0.8));
-        
+
         draw_commands.push(DrawCommand {
             mesh_id: "test_cube".to_string(),
             model,
@@ -291,7 +300,7 @@ fn run_material_instancing_test() -> Result<()> {
     let target = Vec3::new(0.0, 0.0, 0.0);
     let up = Vec3::new(0.0, 1.0, 0.0);
     let view = Mat4::look_at_rh(eye, target, up);
-    
+
     let aspect_ratio = 800.0 / 600.0;
     let proj = Mat4::perspective_rh(45.0_f32.to_radians(), aspect_ratio, 0.1, 1000.0);
 
@@ -305,38 +314,46 @@ fn run_material_instancing_test() -> Result<()> {
 
     // Record descriptor set pool size before rendering
     let descriptor_pool_size_before = ctx.descriptor_set_pool_size();
-    debug!("Descriptor set pool size before rendering: {}", descriptor_pool_size_before);
+    debug!(
+        "Descriptor set pool size before rendering: {}",
+        descriptor_pool_size_before
+    );
 
     ctx.render(&render_commands)?;
 
-    info!("Scene rendered successfully with {} draw commands", draw_commands.len());
+    info!(
+        "Scene rendered successfully with {} draw commands",
+        draw_commands.len()
+    );
 
     // Step 7: Verify descriptor set pooling
     info!("Step 7: Verifying descriptor set pooling efficiency");
-    
+
     let descriptor_pool_size_after = ctx.descriptor_set_pool_size();
-    debug!("Descriptor set pool size after rendering: {}", descriptor_pool_size_after);
-    
+    debug!(
+        "Descriptor set pool size after rendering: {}",
+        descriptor_pool_size_after
+    );
+
     // With material instancing, we should have efficient descriptor set reuse.
     // All instances share the same base material texture, so we expect:
     // - Transform descriptor sets: one per unique texture (should be 1 for default white)
     // - Material descriptor sets: varies by property bytes, but with batching should be efficient
-    
+
     // The pool should contain descriptor sets, but not 50 separate sets per instance
     // since instances can share descriptor sets when properties match
     assert!(
         descriptor_pool_size_after > 0,
         "Descriptor set pool should contain cached sets after rendering"
     );
-    
+
     // Since we have 50 unique property combinations, we expect significantly fewer
     // descriptor sets than traditional rendering (which would need 50 full materials)
     info!(
         "Descriptor set pool contains {} cached sets for {} instances",
-        descriptor_pool_size_after,
-        num_instances
+        descriptor_pool_size_after, num_instances
     );
-    
+
     // Pool should be reasonably sized (not unbounded growth)
     assert!(
         descriptor_pool_size_after < num_instances * 3,
@@ -349,13 +366,13 @@ fn run_material_instancing_test() -> Result<()> {
 
     // Step 8: Render multiple frames to verify descriptor set reuse
     info!("Step 8: Rendering multiple frames to verify descriptor set reuse");
-    
+
     for frame in 1..=5 {
         ctx.render(&render_commands)?;
-        
+
         let pool_size = ctx.descriptor_set_pool_size();
         debug!("Frame {}: Descriptor set pool size = {}", frame, pool_size);
-        
+
         // Pool size should stabilize after first frame
         if frame > 1 {
             assert_eq!(
@@ -369,13 +386,13 @@ fn run_material_instancing_test() -> Result<()> {
 
     // Step 9: Test instance property modification
     info!("Step 9: Testing material instance property modification");
-    
+
     let test_instance_id = &instance_ids[0];
     let instance = ctx
         .material_instance_manager_mut()
         .get_instance_mut(test_instance_id)
         .ok_or_else(|| praxis_utils::eyre::eyre!("Instance '{}' not found", test_instance_id))?;
-    
+
     // Modify properties
     *instance = instance.clone().override_properties(
         MaterialProperties::new()
@@ -383,26 +400,28 @@ fn run_material_instancing_test() -> Result<()> {
             .with_metallic(0.95)
             .with_roughness(0.05),
     );
-    
+
     // Verify modification
     let modified_instance = ctx
         .material_instance_manager()
         .get_instance(test_instance_id)
         .ok_or_else(|| praxis_utils::eyre::eyre!("Instance '{}' not found", test_instance_id))?;
-    
+
     let modified_props = modified_instance.properties();
     assert_eq!(modified_props.base_color, [1.0, 0.0, 0.0, 1.0]);
     assert!((modified_props.metallic - 0.95).abs() < 0.001);
     assert!((modified_props.roughness - 0.05).abs() < 0.001);
-    
+
     info!("Material instance property modification verified ✓");
 
     // Step 10: Test instance removal
     info!("Step 10: Testing material instance removal");
-    
+
     let remove_instance_id = instance_ids.last().unwrap();
-    let removed = ctx.material_instance_manager_mut().remove_instance(remove_instance_id);
-    
+    let removed = ctx
+        .material_instance_manager_mut()
+        .remove_instance(remove_instance_id);
+
     assert!(removed, "Should successfully remove instance");
     assert!(
         ctx.material_instance_manager()
@@ -410,14 +429,14 @@ fn run_material_instancing_test() -> Result<()> {
             .is_none(),
         "Removed instance should not be accessible"
     );
-    
+
     let updated_stats = ctx.material_instance_stats();
     assert_eq!(
         updated_stats.total_instances,
         num_instances - 1,
         "Instance count should decrease after removal"
     );
-    
+
     info!("Material instance removal verified ✓");
 
     info!("✅ All material instancing integration tests passed!");
