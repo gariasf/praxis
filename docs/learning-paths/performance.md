@@ -35,9 +35,9 @@ Advanced (4-5 days)
 ## Beginner: Profiling Basics
 
 **Theory** (2-3 hours):
-1. Read [Profiling Guide](../profiling.md)
-2. Understand performance metrics
-3. Learn measurement tools
+1. Learn profiling fundamentals and tools
+2. Understand performance metrics (frame time, draw calls, memory)
+3. Study measurement techniques
 
 **Practice** (4-6 hours):
 1. Run profiling examples
@@ -393,10 +393,9 @@ strip = true
 
 ## Cross-References
 
-- All other learning paths (apply optimizations)
-- [Profiling Guide](../profiling.md)
-- [Spatial Optimization](../guides/spatial-optimization.md)
-- [LOD System](../lod-system.md)
+- All other learning paths (apply optimizations to each system)
+- [Spatial Optimization](../guides/spatial-optimization.md) - Culling and LOD techniques
+- [Rendering Path](rendering.md) - GPU profiling and rendering optimization
 
 ---
 

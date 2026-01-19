@@ -89,7 +89,7 @@ let mesh = mesh_manager.get(&handle.id)?;
 ## Intermediate: Advanced Loading
 
 **Practice** (6-8 hours):
-1. Read [GLTF Loading](../gltf-loading.md)
+1. Read [Assets Guide: GLTF Section](../guides/assets.md)
 2. Load complex scenes
 
 **GLTF Scenes**:
@@ -305,9 +305,9 @@ tokio::select! {
 
 ## Cross-References
 
-- [Rendering Path](rendering.md) - Use loaded assets
-- [Animation Path](animation.md) - Load animations
-- [Procedural Textures](../procedural-textures.md) - Generate at runtime
+- [Rendering Path](rendering.md) - Use loaded assets in rendering
+- [Animation Path](animation.md) - Load skeletal animations from GLTF
+- [Audio Path](audio.md) - Load audio files and sound banks
 
 ---
 

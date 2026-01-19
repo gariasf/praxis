@@ -591,9 +591,9 @@ fn create_ragdoll(
 ### Step 4: Performance Optimization
 
 **Theory** (2-3 hours):
-1. Read [Profiling](../profiling.md)
-2. Understand physics performance
-3. Identify bottlenecks
+1. Review [Performance Path](performance.md) for profiling basics
+2. Understand physics-specific performance characteristics
+3. Learn to identify physics bottlenecks
 
 **Optimization Techniques**:
 - Simplify colliders
@@ -713,8 +713,8 @@ fn debug_collisions(
 - [Scripting Path](scripting.md) - Script physics behaviors
 
 ### Performance
-- [Profiling](../profiling.md) - Measure physics cost
-- [Spatial Optimization](../guides/spatial-optimization.md) - Broad-phase culling
+- [Performance Path](performance.md) - Profiling physics systems
+- [Spatial Optimization](../guides/spatial-optimization.md) - Spatial acceleration structures
 
 ### Integration
 - [Input Guide](../guides/input.md) - Character controls

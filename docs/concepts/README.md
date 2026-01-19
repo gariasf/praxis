@@ -10,12 +10,12 @@ Educational explanations of the theory and design behind Praxis systems.
 
 ### Rendering
 - [Vulkan Rendering](vulkan-rendering.md) - Graphics pipeline fundamentals
-- [Rendering Pipeline](rendering-pipeline.md) - Detailed rendering architecture
+- [Rendering Pipeline](rendering-pipeline.md) - Detailed rendering architecture explained
 - [PBR Materials](pbr-materials.md) - Physically-based rendering theory
 - [Lighting](lighting.md) - Directional and point light systems
 
 ### Gameplay Systems
-- [Animation](animation.md) - Skeletal animation and blending
+- [Animation](animation.md) - Skeletal animation and blending concepts
 - [Physics](physics.md) - Rigid body simulation with Rapier3D
 - [Input](input.md) - Keyboard, mouse, and gamepad handling
 - [Spatial Audio](spatial-audio.md) - 3D audio positioning and effects

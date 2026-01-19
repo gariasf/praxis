@@ -503,9 +503,9 @@ Result = Base Animation + (Additive Animation - Reference Pose)
 ### Step 5: Performance Optimization
 
 **Theory** (2-3 hours):
-1. Read [Profiling](../profiling.md)
-2. Study animation performance
-3. Understand bottlenecks
+1. Read [Performance Path](performance.md) for profiling basics
+2. Study animation performance characteristics
+3. Understand animation-specific bottlenecks
 
 **Optimization Techniques**:
 - Animation LOD (simpler for distant characters)
@@ -555,12 +555,12 @@ Result = Base Animation + (Additive Animation - Reference Pose)
 - [Rendering Path](rendering.md) - Skinned mesh rendering
 
 ### Performance
-- [Profiling](../profiling.md) - Measure animation performance
-- [Spatial Optimization](../guides/spatial-optimization.md) - Animation LOD
+- [Performance Path](performance.md) - Profiling and optimization
+- [Spatial Optimization](../guides/spatial-optimization.md) - Animation LOD strategies
 
 ### Assets
 - [Assets Guide](../guides/assets.md) - Load animations from GLTF
-- [GLTF Loading](../gltf-loading.md) - Detailed GLTF format
+- [Assets Path](assets.md) - Complete asset pipeline mastery
 
 ---
 

@@ -215,7 +215,7 @@ println!("Packet loss: {:.1}%", stats.packet_loss_percent);
 - [Animation Path](animation.md) - Replicate animations
 
 ### Performance
-- [Profiling](../profiling.md) - Network performance
+- [Performance Path](performance.md) - Network profiling and optimization
 
 ---
 

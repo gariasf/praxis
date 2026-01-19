@@ -535,6 +535,6 @@ fn system(time: Res<Time>, mut physics: ResMut<PhysicsWorld>)
 
 ## Navigation
 
-- [Back to Learning Paths](../learning-paths.md)
-- [Learning Paths Directory](README.md)
-- [Quick Reference](../learning-paths-quick-reference.md)
+- [Back to Learning Paths](README.md)
+- [Learning Paths Roadmap](roadmap.md) - Visual progression guide
+- [Beginner's Guide](../beginners-guide.md) - Comprehensive introduction

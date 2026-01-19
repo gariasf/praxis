@@ -420,9 +420,9 @@ Understanding system interactions:
 
 ## Navigation
 
-- [Back to Learning Paths Overview](../learning-paths.md)
-- [Quick Reference](../learning-paths-quick-reference.md)
-- [Individual Path Files](./README.md)
+- [Back to Learning Paths Overview](README.md)
+- [Learning Paths Glossary](glossary.md) - Term definitions
+- [Individual Path Files](README.md) - Detailed learning paths
 
 ---
 

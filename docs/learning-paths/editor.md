@@ -72,11 +72,11 @@ Advanced (5-6 days)
 ## Intermediate: Advanced Features
 
 **Practice** (10-14 hours):
-1. Read [Asset Browser](../editor/asset-browser.md)
-2. Read [Gizmos](../editor/gizmos.md)
-3. Read [Console Panel](../editor/console-panel.md)
-4. Read [Scene Format](../scene-format-v2.md)
-5. Practice workflows
+1. Read [Editor Overview: Asset Browser](../editor/README.md#asset-browser)
+2. Read [Editor Overview: Gizmos](../editor/README.md#gizmos)
+3. Practice editor workflows with examples
+4. Understand scene serialization format
+5. Build custom workflows
 
 **Features**:
 - **Asset Browser**: Drag-and-drop assets

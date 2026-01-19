@@ -177,7 +177,7 @@ schedule.add_systems(gather_lighting_system);
 
 ## See Also
 
-- [BEGINNERS_GUIDE - Lighting System Architecture](../BEGINNERS_GUIDE.md#lighting-system-architecture) - Deep dive with data flow diagrams
+- [Beginner's Guide: Lighting System Architecture](../beginners-guide.md#lighting-system-architecture) - Deep dive with data flow diagrams
+- [Rendering Learning Path](../learning-paths/rendering.md) - Structured learning for lighting
 - [PBR Materials](pbr-materials.md) - How lights interact with materials
-- [Shadows Guide](../guides/shadows.md) - Shadow mapping for lights
-- [Deferred Rendering](../deferred_rendering.md) - Efficient many-lights rendering
+- [Rendering Guide](../guides/rendering.md) - Practical lighting implementation

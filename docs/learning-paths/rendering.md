@@ -386,7 +386,7 @@ Advanced (3-4 weeks)
 - Reuse descriptor sets across frames
 - Batch by material to reduce bindings
 
-**Measurement**: Use [Profiling](../profiling.md) to verify improvements
+**Measurement**: Use the built-in profiling tools to verify descriptor set optimizations
 
 ### Step 4: Temporal Anti-Aliasing (TAA)
 
@@ -834,14 +834,12 @@ cargo run --example complete_features_demo
 ## Cross-References
 
 ### Performance Optimization
-- [Profiling](../profiling.md) - Measure rendering performance
-- [Spatial Optimization](../guides/spatial-optimization.md) - Culling techniques
-- [LOD System](../lod-system.md) - Level of detail
+- [Performance Path](performance.md) - GPU profiling and rendering optimization
+- [Spatial Optimization](../guides/spatial-optimization.md) - Frustum culling and occlusion
 
 ### Related Systems
-- [Camera System](../camera-system.md) - Camera controls
-- [Mesh System](../mesh-system.md) - Geometry management
 - [Assets Guide](../guides/assets.md) - Load models and textures
+- [Assets Path](assets.md) - Complete asset pipeline
 
 ### Engine Internals
 - [Architecture](../architecture.md) - Overall design

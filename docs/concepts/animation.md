@@ -160,6 +160,7 @@ for animation in &asset.animations {
 
 ## See Also
 
-- [BEGINNERS_GUIDE - Animation System](../BEGINNERS_GUIDE.md#animation-system) - Deep dive explanation
+- [Beginner's Guide: Animation System](../beginners-guide.md#animation-system) - Deep dive explanation
+- [Animation Learning Path](../learning-paths/animation.md) - Structured learning progression
 - [praxis_scene crate](../../crates/praxis_scene/README.md) - API documentation
 - [animation_blending_demo](../../examples/animation_blending_demo.rs) - Working example

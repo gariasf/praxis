@@ -212,7 +212,7 @@ let rotation = Quat::from_rotation_arc(Vec3::Z, (target - position).normalize())
 
 ## See Also
 
-- [BEGINNERS_GUIDE - Transform Hierarchy Propagation](../BEGINNERS_GUIDE.md#transform-hierarchy-propagation) - Deep dive with matrix math
+- [Beginner's Guide: Transform Hierarchy Propagation](../beginners-guide.md#transform-hierarchy-propagation) - Deep dive with matrix math
+- [Animation Concepts](animation.md) - Skeletal hierarchies
 - [ECS Architecture](ecs-architecture.md) - Component patterns
 - [praxis_scene crate](../../crates/praxis_scene/README.md) - Scene API
-- [Transform Propagation](../../crates/praxis_ecs/TRANSFORM_PROPAGATION.md) - Implementation details
