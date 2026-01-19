@@ -1426,7 +1426,8 @@ mod tests {
 
         // Verify the matrix was stored correctly
         let stored_mat = Mat4::from_cols_array_2d(&gpu_data.model);
-        let diff = (stored_mat.to_cols_array_2d()
+        let diff = (stored_mat
+            .to_cols_array_2d()
             .iter()
             .flatten()
             .zip(model.to_cols_array_2d().iter().flatten())

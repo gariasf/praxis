@@ -2143,4 +2143,386 @@ mod tests {
             assert!(blended <= current_color.max(history_color));
         }
     }
+
+    // ===== Requested Velocity Buffer Unit Tests =====
+
+    #[test]
+    fn test_velocity_perspective_division_correctness() {
+        // Test that perspective division is correctly applied in velocity calculation
+        use praxis_math::Vec4;
+
+        // Test case 1: Unit w component (no perspective division needed)
+        let current_clip = Vec4::new(0.5, 0.3, 0.8, 1.0);
+        let previous_clip = Vec4::new(0.4, 0.2, 0.7, 1.0);
+
+        // Apply perspective division
+        let current_ndc = Vec4::new(
+            current_clip.x / current_clip.w,
+            current_clip.y / current_clip.w,
+            current_clip.z / current_clip.w,
+            1.0,
+        );
+        let previous_ndc = Vec4::new(
+            previous_clip.x / previous_clip.w,
+            previous_clip.y / previous_clip.w,
+            previous_clip.z / previous_clip.w,
+            1.0,
+        );
+
+        let velocity = praxis_math::Vec2::new(
+            current_ndc.x - previous_ndc.x,
+            current_ndc.y - previous_ndc.y,
+        );
+
+        assert!((velocity.x - 0.1).abs() < 0.0001);
+        assert!((velocity.y - 0.1).abs() < 0.0001);
+
+        // Test case 2: Non-unit w component (perspective division required)
+        let current_clip = Vec4::new(2.0, 1.5, 4.0, 2.0);
+        let previous_clip = Vec4::new(1.0, 0.5, 2.0, 1.0);
+
+        let current_ndc = Vec4::new(
+            current_clip.x / current_clip.w,
+            current_clip.y / current_clip.w,
+            current_clip.z / current_clip.w,
+            1.0,
+        );
+        let previous_ndc = Vec4::new(
+            previous_clip.x / previous_clip.w,
+            previous_clip.y / previous_clip.w,
+            previous_clip.z / previous_clip.w,
+            1.0,
+        );
+
+        // current_ndc = (2.0/2.0, 1.5/2.0) = (1.0, 0.75)
+        // previous_ndc = (1.0/1.0, 0.5/1.0) = (1.0, 0.5)
+        assert!((current_ndc.x - 1.0).abs() < 0.0001);
+        assert!((current_ndc.y - 0.75).abs() < 0.0001);
+        assert!((previous_ndc.x - 1.0).abs() < 0.0001);
+        assert!((previous_ndc.y - 0.5).abs() < 0.0001);
+
+        let velocity = praxis_math::Vec2::new(
+            current_ndc.x - previous_ndc.x,
+            current_ndc.y - previous_ndc.y,
+        );
+
+        assert!((velocity.x - 0.0).abs() < 0.0001);
+        assert!((velocity.y - 0.25).abs() < 0.0001);
+
+        // Test case 3: Different w components (depth affects perspective)
+        let current_clip = Vec4::new(4.0, 3.0, 8.0, 4.0);
+        let previous_clip = Vec4::new(2.0, 2.0, 4.0, 2.0);
+
+        let current_ndc = Vec4::new(
+            current_clip.x / current_clip.w,
+            current_clip.y / current_clip.w,
+            current_clip.z / current_clip.w,
+            1.0,
+        );
+        let previous_ndc = Vec4::new(
+            previous_clip.x / previous_clip.w,
+            previous_clip.y / previous_clip.w,
+            previous_clip.z / previous_clip.w,
+            1.0,
+        );
+
+        // current_ndc = (4.0/4.0, 3.0/4.0) = (1.0, 0.75)
+        // previous_ndc = (2.0/2.0, 2.0/2.0) = (1.0, 1.0)
+        assert!((current_ndc.x - 1.0).abs() < 0.0001);
+        assert!((current_ndc.y - 0.75).abs() < 0.0001);
+        assert!((previous_ndc.x - 1.0).abs() < 0.0001);
+        assert!((previous_ndc.y - 1.0).abs() < 0.0001);
+
+        let velocity = praxis_math::Vec2::new(
+            current_ndc.x - previous_ndc.x,
+            current_ndc.y - previous_ndc.y,
+        );
+
+        assert!((velocity.x - 0.0).abs() < 0.0001);
+        assert!((velocity.y - (-0.25)).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_velocity_camera_motion_object_moves_left_when_camera_moves_right() {
+        // Test that when camera moves right, objects appear to move left in screen space
+        use praxis_math::{Mat4, Vec3, Vec4};
+
+        // World-space vertex position
+        let vertex_world = Vec3::new(0.0, 0.0, -10.0);
+        let model = Mat4::IDENTITY;
+
+        // Projection matrix (same for both frames)
+        let proj = Mat4::perspective_rh(std::f32::consts::PI / 4.0, 16.0 / 9.0, 0.1, 100.0);
+
+        // Previous frame: camera at origin looking down -Z
+        let view_previous =
+            Mat4::look_at_rh(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0), Vec3::Y);
+
+        // Current frame: camera moved right (+X direction)
+        let view_current =
+            Mat4::look_at_rh(Vec3::new(2.0, 0.0, 0.0), Vec3::new(2.0, 0.0, -1.0), Vec3::Y);
+
+        // Calculate positions in clip space
+        let vertex_vec4 = Vec4::from((vertex_world, 1.0));
+        let previous_clip = proj * view_previous * model * vertex_vec4;
+        let current_clip = proj * view_current * model * vertex_vec4;
+
+        // Perspective division to NDC
+        let previous_ndc_x = previous_clip.x / previous_clip.w;
+        let current_ndc_x = current_clip.x / current_clip.w;
+
+        // Calculate velocity (current - previous)
+        let velocity_x = current_ndc_x - previous_ndc_x;
+
+        // When camera moves right (+X), the object should appear to move left in screen space
+        // This means velocity should be negative
+        assert!(
+            velocity_x < 0.0,
+            "Expected negative velocity when camera moves right, got velocity_x = {}",
+            velocity_x
+        );
+
+        // The velocity should be significant (not near zero)
+        assert!(
+            velocity_x.abs() > 0.01,
+            "Expected significant velocity, got velocity_x = {}",
+            velocity_x
+        );
+    }
+
+    #[test]
+    fn test_velocity_camera_motion_comprehensive() {
+        // Test all camera motion directions produce correct screen-space velocity
+        use praxis_math::{Mat4, Vec3, Vec4};
+
+        let vertex_world = Vec3::new(0.0, 0.0, -10.0);
+        let model = Mat4::IDENTITY;
+        let proj = Mat4::perspective_rh(std::f32::consts::PI / 4.0, 16.0 / 9.0, 0.1, 100.0);
+
+        // Test camera moving right
+        let view_prev = Mat4::look_at_rh(Vec3::ZERO, Vec3::NEG_Z, Vec3::Y);
+        let view_curr =
+            Mat4::look_at_rh(Vec3::new(1.0, 0.0, 0.0), Vec3::new(1.0, 0.0, -1.0), Vec3::Y);
+
+        let prev_clip = proj * view_prev * model * Vec4::from((vertex_world, 1.0));
+        let curr_clip = proj * view_curr * model * Vec4::from((vertex_world, 1.0));
+        let vel_x = (curr_clip.x / curr_clip.w) - (prev_clip.x / prev_clip.w);
+
+        assert!(
+            vel_x < 0.0,
+            "Camera moving right should produce negative velocity (object moves left)"
+        );
+
+        // Test camera moving left
+        let view_curr = Mat4::look_at_rh(
+            Vec3::new(-1.0, 0.0, 0.0),
+            Vec3::new(-1.0, 0.0, -1.0),
+            Vec3::Y,
+        );
+        let curr_clip = proj * view_curr * model * Vec4::from((vertex_world, 1.0));
+        let vel_x = (curr_clip.x / curr_clip.w) - (prev_clip.x / prev_clip.w);
+
+        assert!(
+            vel_x > 0.0,
+            "Camera moving left should produce positive velocity (object moves right)"
+        );
+
+        // Test camera moving up
+        let view_curr =
+            Mat4::look_at_rh(Vec3::new(0.0, 1.0, 0.0), Vec3::new(0.0, 1.0, -1.0), Vec3::Y);
+        let curr_clip = proj * view_curr * model * Vec4::from((vertex_world, 1.0));
+        let vel_y = (curr_clip.y / curr_clip.w) - (prev_clip.y / prev_clip.w);
+
+        assert!(
+            vel_y < 0.0,
+            "Camera moving up should produce negative velocity (object moves down)"
+        );
+
+        // Test camera moving down
+        let view_curr = Mat4::look_at_rh(
+            Vec3::new(0.0, -1.0, 0.0),
+            Vec3::new(0.0, -1.0, -1.0),
+            Vec3::Y,
+        );
+        let curr_clip = proj * view_curr * model * Vec4::from((vertex_world, 1.0));
+        let vel_y = (curr_clip.y / curr_clip.w) - (prev_clip.y / prev_clip.w);
+
+        assert!(
+            vel_y > 0.0,
+            "Camera moving down should produce positive velocity (object moves up)"
+        );
+    }
+
+    #[test]
+    fn test_velocity_temporal_reprojection_uv_calculation() {
+        // Test temporal reprojection UV calculation from velocity
+        use praxis_math::Vec2;
+
+        // Test case 1: No motion - UV should remain unchanged
+        let current_uv = Vec2::new(0.5, 0.5);
+        let velocity = Vec2::new(0.0, 0.0);
+
+        // Reprojection: subtract velocity from current UV to get history UV
+        let history_uv = current_uv - velocity;
+
+        assert!((history_uv.x - 0.5).abs() < 0.0001);
+        assert!((history_uv.y - 0.5).abs() < 0.0001);
+
+        // Test case 2: Object moving right (positive velocity)
+        let current_uv = Vec2::new(0.6, 0.5);
+        let velocity = Vec2::new(0.1, 0.0);
+
+        // To find history: current_uv - velocity (where was it before)
+        let history_uv = current_uv - velocity;
+
+        assert!(
+            (history_uv.x - 0.5).abs() < 0.0001,
+            "History should be to the left"
+        );
+        assert!((history_uv.y - 0.5).abs() < 0.0001);
+
+        // Test case 3: Object moving up (positive Y velocity)
+        let current_uv = Vec2::new(0.5, 0.7);
+        let velocity = Vec2::new(0.0, 0.2);
+
+        let history_uv = current_uv - velocity;
+
+        assert!((history_uv.x - 0.5).abs() < 0.0001);
+        assert!(
+            (history_uv.y - 0.5).abs() < 0.0001,
+            "History should be below"
+        );
+
+        // Test case 4: Diagonal motion
+        let current_uv = Vec2::new(0.8, 0.6);
+        let velocity = Vec2::new(0.3, 0.1);
+
+        let history_uv = current_uv - velocity;
+
+        assert!((history_uv.x - 0.5).abs() < 0.0001);
+        assert!((history_uv.y - 0.5).abs() < 0.0001);
+
+        // Test case 5: Negative velocity (camera motion compensation)
+        let current_uv = Vec2::new(0.4, 0.4);
+        let velocity = Vec2::new(-0.1, -0.1);
+
+        let history_uv = current_uv - velocity;
+
+        assert!((history_uv.x - 0.5).abs() < 0.0001);
+        assert!((history_uv.y - 0.5).abs() < 0.0001);
+
+        // Test case 6: Large motion
+        let current_uv = Vec2::new(0.9, 0.8);
+        let velocity = Vec2::new(0.5, 0.4);
+
+        let history_uv = current_uv - velocity;
+
+        assert!((history_uv.x - 0.4).abs() < 0.0001);
+        assert!((history_uv.y - 0.4).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_velocity_out_of_bounds_detection() {
+        // Test detection of out-of-bounds reprojection for temporal anti-aliasing
+        use praxis_math::Vec2;
+
+        // Helper function to check if UV is in valid range [0, 1]
+        let is_valid_uv =
+            |uv: Vec2| -> bool { uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0 };
+
+        // Test case 1: Valid reprojection (within bounds)
+        let current_uv = Vec2::new(0.5, 0.5);
+        let velocity = Vec2::new(0.2, 0.1);
+        let history_uv = current_uv - velocity;
+
+        assert!(
+            is_valid_uv(history_uv),
+            "Expected valid UV, got {:?}",
+            history_uv
+        );
+        assert!((history_uv.x - 0.3).abs() < 0.0001);
+        assert!((history_uv.y - 0.4).abs() < 0.0001);
+
+        // Test case 2: Out of bounds - left edge
+        let current_uv = Vec2::new(0.1, 0.5);
+        let velocity = Vec2::new(0.2, 0.0);
+        let history_uv = current_uv - velocity;
+
+        assert!(!is_valid_uv(history_uv), "Expected out of bounds (left)");
+        assert!(history_uv.x < 0.0);
+
+        // Test case 3: Out of bounds - right edge
+        let current_uv = Vec2::new(0.9, 0.5);
+        let velocity = Vec2::new(-0.2, 0.0);
+        let history_uv = current_uv - velocity;
+
+        assert!(!is_valid_uv(history_uv), "Expected out of bounds (right)");
+        assert!(history_uv.x > 1.0);
+
+        // Test case 4: Out of bounds - top edge
+        let current_uv = Vec2::new(0.5, 0.1);
+        let velocity = Vec2::new(0.0, 0.2);
+        let history_uv = current_uv - velocity;
+
+        assert!(!is_valid_uv(history_uv), "Expected out of bounds (top)");
+        assert!(history_uv.y < 0.0);
+
+        // Test case 5: Out of bounds - bottom edge
+        let current_uv = Vec2::new(0.5, 0.9);
+        let velocity = Vec2::new(0.0, -0.2);
+        let history_uv = current_uv - velocity;
+
+        assert!(!is_valid_uv(history_uv), "Expected out of bounds (bottom)");
+        assert!(history_uv.y > 1.0);
+
+        // Test case 6: Out of bounds - corner (multiple edges)
+        let current_uv = Vec2::new(0.1, 0.1);
+        let velocity = Vec2::new(0.3, 0.3);
+        let history_uv = current_uv - velocity;
+
+        assert!(!is_valid_uv(history_uv), "Expected out of bounds (corner)");
+        assert!(history_uv.x < 0.0);
+        assert!(history_uv.y < 0.0);
+
+        // Test case 7: Exactly on boundary (should be valid)
+        let current_uv = Vec2::new(0.5, 0.5);
+        let velocity = Vec2::new(0.5, 0.5);
+        let history_uv = current_uv - velocity;
+
+        assert!(is_valid_uv(history_uv), "Boundary UV should be valid");
+        assert!((history_uv.x - 0.0).abs() < 0.0001);
+        assert!((history_uv.y - 0.0).abs() < 0.0001);
+
+        // Test case 8: Just beyond boundary
+        let current_uv = Vec2::new(0.4, 0.5);
+        let velocity = Vec2::new(0.41, 0.0);
+        let history_uv = current_uv - velocity;
+
+        assert!(
+            !is_valid_uv(history_uv),
+            "Just beyond boundary should be invalid"
+        );
+        assert!(history_uv.x < 0.0);
+
+        // Test case 9: Large velocity causing major out of bounds
+        let current_uv = Vec2::new(0.5, 0.5);
+        let velocity = Vec2::new(2.0, 1.5);
+        let history_uv = current_uv - velocity;
+
+        assert!(
+            !is_valid_uv(history_uv),
+            "Large velocity should cause out of bounds"
+        );
+        assert!(history_uv.x < 0.0);
+        assert!(history_uv.y < 0.0);
+
+        // Test case 10: Edge case - exactly at maximum
+        let current_uv = Vec2::new(0.5, 0.5);
+        let velocity = Vec2::new(-0.5, -0.5);
+        let history_uv = current_uv - velocity;
+
+        assert!(is_valid_uv(history_uv), "UV at maximum should be valid");
+        assert!((history_uv.x - 1.0).abs() < 0.0001);
+        assert!((history_uv.y - 1.0).abs() < 0.0001);
+    }
 }
