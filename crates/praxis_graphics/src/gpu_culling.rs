@@ -484,6 +484,7 @@
 //!
 //! ```rust,ignore
 //! use praxis_graphics::gpu_culling::{GpuCullingManager, GpuDrawCommand};
+//! use praxis_graphics::optimization_config::RenderingOptimizationConfig;
 //! use praxis_math::Vec3;
 //!
 //! let mut culling_manager = GpuCullingManager::new(
@@ -496,6 +497,12 @@
 //! culling_manager.set_backface_culling(true);
 //! culling_manager.set_small_object_culling(true);
 //! culling_manager.set_distance_culling(true);
+//!
+//! // Optional: Use runtime configuration for A/B testing
+//! let mut config = RenderingOptimizationConfig::default();
+//! config.set_backface_culling(true);
+//! config.set_small_object_culling(true);
+//! config.set_distance_culling(true);
 //!
 //! // Prepare draw commands with extended parameters
 //! let draw_commands: Vec<GpuDrawCommand> = objects.iter().map(|obj| {
@@ -523,6 +530,7 @@
 //!     camera_pos,
 //!     camera_direction,
 //!     [window_width, window_height],
+//!     Some(&config), // Pass config for runtime control
 //! )?;
 //! ```
 //!
@@ -1225,6 +1233,7 @@ impl GpuCullingManager {
             camera_position,
             Vec3::new(0.0, 0.0, -1.0),
             [1920, 1080],
+            None,
         )
     }
 
@@ -1232,6 +1241,18 @@ impl GpuCullingManager {
     ///
     /// This is an extended version that supports back-face culling, small object culling,
     /// and distance-based culling in addition to frustum and occlusion culling.
+    ///
+    /// # Culling Strategy Control
+    ///
+    /// The culling strategy enable flags are determined by both the manager's internal state
+    /// and the optional `RenderingOptimizationConfig`. When a config is provided, its settings
+    /// are combined with the manager's flags using logical AND (both must be enabled for the
+    /// strategy to be active).
+    ///
+    /// This design allows for:
+    /// - **Static configuration**: Set strategies once via `set_*_culling()` methods
+    /// - **Runtime control**: Toggle strategies dynamically via `RenderingOptimizationConfig`
+    /// - **A/B testing**: Compare performance with/without specific strategies
     ///
     /// # Arguments
     ///
@@ -1241,6 +1262,7 @@ impl GpuCullingManager {
     /// * `camera_position` - Camera position in world space
     /// * `camera_direction` - Camera forward direction in world space
     /// * `screen_dimensions` - Screen dimensions [width, height]
+    /// * `config` - Optional rendering optimization config for runtime culling strategy control
     ///
     /// # Errors
     ///
@@ -1253,6 +1275,7 @@ impl GpuCullingManager {
         camera_position: Vec3,
         camera_direction: Vec3,
         screen_dimensions: [u32; 2],
+        config: Option<&crate::utilities::optimization_config::RenderingOptimizationConfig>,
     ) -> Result<()> {
         if self.current_draw_count == 0 {
             return Ok(());
@@ -1273,15 +1296,39 @@ impl GpuCullingManager {
             self.current_draw_count,
         );
 
-        // Set culling flags
-        uniforms.enable_occlusion_culling = if self.enable_occlusion_culling { 1 } else { 0 };
-        uniforms.enable_backface_culling = if self.enable_backface_culling { 1 } else { 0 };
-        uniforms.enable_small_object_culling = if self.enable_small_object_culling {
-            1
+        // Set culling flags from manager state
+        let enable_occlusion = self.enable_occlusion_culling;
+        let enable_backface = self.enable_backface_culling;
+        let enable_small_object = self.enable_small_object_culling;
+        let enable_distance = self.enable_distance_culling;
+
+        // If config is provided, combine flags with logical AND (both must be enabled)
+        let enable_occlusion = if let Some(cfg) = config {
+            enable_occlusion && cfg.hiz_occlusion()
         } else {
-            0
+            enable_occlusion
         };
-        uniforms.enable_distance_culling = if self.enable_distance_culling { 1 } else { 0 };
+        let enable_backface = if let Some(cfg) = config {
+            enable_backface && cfg.backface_culling()
+        } else {
+            enable_backface
+        };
+        let enable_small_object = if let Some(cfg) = config {
+            enable_small_object && cfg.small_object_culling()
+        } else {
+            enable_small_object
+        };
+        let enable_distance = if let Some(cfg) = config {
+            enable_distance && cfg.distance_culling()
+        } else {
+            enable_distance
+        };
+
+        // Apply combined flags to uniforms
+        uniforms.enable_occlusion_culling = if enable_occlusion { 1 } else { 0 };
+        uniforms.enable_backface_culling = if enable_backface { 1 } else { 0 };
+        uniforms.enable_small_object_culling = if enable_small_object { 1 } else { 0 };
+        uniforms.enable_distance_culling = if enable_distance { 1 } else { 0 };
 
         if let Some(buffer) = &self.culling_uniforms_buffer {
             let mut write = buffer
