@@ -162,6 +162,7 @@
 //! - `ssr`: Screen-space reflections with hierarchical ray marching and environment probe fallback
 //! - `post_process`: Post-processing framework for screen-space effects
 //! - `gpu_culling`: GPU-driven culling for large scenes with minimal CPU overhead
+//! - `utilities`: Supporting systems (optimization config, render stats, velocity buffers, light linking, light probes)
 //!
 //! # Unified Rendering API
 //!
@@ -1031,12 +1032,17 @@ pub mod deferred;
 mod device;
 pub mod gpu_culling;
 pub mod hdr;
+/// Re-export stub for backwards compatibility. Module moved to `utilities::light_linking`.
+pub mod light_linking;
+/// Re-export stub for backwards compatibility. Module moved to `utilities::light_probe`.
+pub mod light_probe;
 pub mod lighting;
 pub mod line_renderer;
 pub mod lod;
 pub mod material;
 pub mod material_instancing;
 pub mod mesh;
+/// Re-export stub for backwards compatibility. Module moved to `utilities::optimization_config`.
 pub mod optimization_config;
 pub mod particles;
 mod pipeline;
@@ -1045,6 +1051,7 @@ pub mod post_process;
 /// Public API is re-exported at crate root (see `pub use primitives::{...}` below).
 mod primitives;
 pub mod procedural_texture;
+/// Re-export stub for backwards compatibility. Module moved to `utilities::render_stats`.
 pub mod render_stats;
 mod shaders;
 pub mod shadow;
@@ -1054,6 +1061,8 @@ pub mod ssr;
 pub mod taa;
 pub mod texture;
 pub mod uniform_buffer;
+pub mod utilities;
+/// Re-export stub for backwards compatibility. Module moved to `utilities::velocity_buffer`.
 pub mod velocity_buffer;
 /// Private module containing vertex type definitions.
 /// Public API is re-exported at crate root (see `pub use vertex::Vertex3D` below).
@@ -1820,10 +1829,10 @@ pub struct RenderContext {
     use_gpu_culling: bool,
 
     /// Render statistics tracking (current frame).
-    current_render_stats: render_stats::RenderStats,
+    current_render_stats: utilities::render_stats::RenderStats,
 
     /// Render statistics history for analysis and visualization.
-    render_stats_history: render_stats::RenderStatsHistory,
+    render_stats_history: utilities::render_stats::RenderStatsHistory,
 
     /// Frame counter for statistics tracking.
     stats_frame_number: u64,
@@ -2195,8 +2204,8 @@ impl RenderContext {
             use_gpu_culling: false,
 
             // Render statistics tracking
-            current_render_stats: render_stats::RenderStats::new(0),
-            render_stats_history: render_stats::RenderStatsHistory::new(300),
+            current_render_stats: utilities::render_stats::RenderStats::new(0),
+            render_stats_history: utilities::render_stats::RenderStatsHistory::new(300),
             stats_frame_number: 0,
             collect_render_stats: true, // Enabled by default for performance monitoring
         })
@@ -2481,7 +2490,7 @@ impl RenderContext {
     /// println!("Draw calls: {}", stats.draw_calls);
     /// # }
     /// ```
-    pub fn render_stats(&self) -> &render_stats::RenderStats {
+    pub fn render_stats(&self) -> &utilities::render_stats::RenderStats {
         &self.current_render_stats
     }
 
@@ -2501,14 +2510,14 @@ impl RenderContext {
     /// println!("Average culling efficiency: {:.1}%", history.avg_culling_efficiency());
     /// # }
     /// ```
-    pub fn render_stats_history(&self) -> &render_stats::RenderStatsHistory {
+    pub fn render_stats_history(&self) -> &utilities::render_stats::RenderStatsHistory {
         &self.render_stats_history
     }
 
     /// Gets a mutable reference to the render statistics history.
     ///
     /// Allows modifying the history, such as clearing it or adjusting the tracked frame count.
-    pub fn render_stats_history_mut(&mut self) -> &mut render_stats::RenderStatsHistory {
+    pub fn render_stats_history_mut(&mut self) -> &mut utilities::render_stats::RenderStatsHistory {
         &mut self.render_stats_history
     }
 
@@ -3144,7 +3153,7 @@ impl RenderContext {
         // Initialize render stats for this frame
         if self.collect_render_stats {
             self.stats_frame_number += 1;
-            self.current_render_stats = render_stats::RenderStats::new(self.stats_frame_number);
+            self.current_render_stats = utilities::render_stats::RenderStats::new(self.stats_frame_number);
             self.current_render_stats.total_objects = cmds.draw_commands.len();
         }
 
@@ -4125,7 +4134,12 @@ pub use taa::{
 };
 pub use texture::{Cubemap, CubemapFace, Texture, TextureManager};
 pub use uniform_buffer::{DynamicUniformBuffer, ModelUniforms, ViewProjectionUniforms};
-pub use velocity_buffer::{VelocityBuffer, VelocityBufferRenderer};
+pub use utilities::{
+    LightChannel, LightLinkingManager, LightLinkingMask, LightProbe, LightProbeData,
+    LightProbeGrid, LightProbeManager, ProbeBlendMode, RenderStats, RenderStatsHistory,
+    RenderStatsVisualizer, RenderingOptimizationConfig, VelocityBuffer, VelocityBufferRenderer,
+    DEFAULT_LIGHT_CHANNEL, MAX_LIGHT_PROBES, PROBE_IRRADIANCE_COEFFS,
+};
 pub use vertex::Vertex3D;
 pub use visual_feedback::{
     batch_to_lines, create_axis_indicator, create_bounding_box, create_gizmo_lines, create_grid,
@@ -4133,8 +4147,6 @@ pub use visual_feedback::{
 };
 
 pub mod environment_probe;
-pub mod light_linking;
-pub mod light_probe;
 
 pub use gpu_culling::{
     calculate_average_normal, extract_frustum_planes, GpuCullingManager, GpuDrawCommand,
