@@ -71,6 +71,7 @@ cargo run --example texture_compression_demo
 cargo run --example hiz_occlusion_demo
 cargo run --example rendering_stress_test
 cargo run --example optimization_config_demo
+cargo run --example optimization_debug_demo
 
 # Documentation
 cargo doc --workspace --no-deps --open
@@ -214,6 +215,27 @@ registry.register_velocity();
 - Camera: Orbit controller
 
 **Details**: `docs/editor/README.md`
+
+### Debug Rendering
+- **`DebugRenderer`**: Visual debugging for optimization systems
+- **Culling Visualization**: Wireframe bounding spheres (green=visible, red=culled)
+- **LOD Heat Map**: Color-coded LOD levels (blue=high detail, red=low detail)
+- **Occlusion Buffer**: Hierarchical Z-buffer visualization
+- **Mesh Streaming**: Loading progress and state indicators
+
+```rust
+// Create debug renderer
+let debug_renderer = DebugRenderer::new(device, allocator, render_pass, [1920, 1080])?;
+
+// Enable debug modes
+debug_renderer.enable_mode(DebugRenderMode::CullingResults);
+debug_renderer.enable_mode(DebugRenderMode::LodHeatMap);
+
+// Render overlays
+debug_renderer.render_all_debug(&mut cmd_builder, &culling_info, &lod_info, &streaming_info, view_proj)?;
+```
+
+**Details**: `crates/praxis_graphics/DEBUG_RENDERING.md`
 
 ## Naming Conventions
 

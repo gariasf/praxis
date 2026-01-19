@@ -1025,6 +1025,7 @@
 //! GPU access.
 
 pub mod bindless;
+pub mod debug_rendering;
 pub mod deferred;
 mod device;
 pub mod gpu_culling;
