@@ -5,38 +5,46 @@ This directory contains internal implementation documentation for engine develop
 ## Purpose
 
 Internal documentation serves to:
-- Record implementation decisions and technical details
-- Provide reference for future maintenance and enhancements
-- Document the current state of complex subsystems
+- Record architecturally significant implementation decisions
+- Provide technical context for complex subsystems
+- Document design patterns and integration approaches
+- Preserve historical context for understanding current architecture
 
 ## Documents
 
-### Graphics & Rendering
-- **[advanced-lighting-implementation.md](advanced-lighting-implementation.md)** - Light probes, volumetric fog, and advanced lighting
-- **[visual-feedback-systems.md](visual-feedback-systems.md)** - Line rendering, grid renderer, and selection highlighting
-
-### Editor
-- **[drag-drop-implementation.md](drag-drop-implementation.md)** - Drag-and-drop asset instantiation system
+### Editor Systems
 - **[viewport-integration.md](viewport-integration.md)** - Viewport panel integration with render context, gizmos, and raycasting
-
-### Performance & Optimization
-- **[profiling-implementation.md](profiling-implementation.md)** - Profiling system including CPU, GPU, memory tracking, and Chrome tracing
-- **[spatial-implementation-summary.md](spatial-implementation-summary.md)** - Spatial partitioning (Octree, BVH) with ECS integration
+- **[visual-feedback-systems.md](visual-feedback-systems.md)** - Line rendering, grid renderer, and selection highlighting
 
 ### Historical Documentation
 - **[archived-audits/](archived-audits/)** - Comprehensive audit reports from January 2026 covering all 19 crates
-- **[implementation-history/](implementation-history/)** - Historical implementation notes from feature development
 
 ## Internal vs User-Facing Documentation
 
 | Internal docs (`docs/internals/`) | User-facing docs (`docs/guides/`, etc.) |
 |-----------------------------------|----------------------------------------|
 | Implementation-specific details | How-to guides for engine users |
-| Code structure and architecture | Conceptual explanations |
+| Design decisions and rationale | Conceptual explanations |
 | Developer-oriented context | API reference and usage examples |
+| Historical snapshots | Current best practices |
+
+## Guidelines for Internal Documentation
+
+Documents in this directory should:
+- Focus on **why** decisions were made, not just **what** was implemented
+- Explain complex integration points between subsystems
+- Document non-obvious design patterns
+- Serve as reference for future maintenance and refactoring
+
+Documents should **not** be:
+- Pure work logs or task lists
+- Duplicates of information in user-facing guides
+- Step-by-step tutorials (those belong in `docs/guides/`)
+- Simple API documentation (that belongs in rustdoc comments)
 
 ## See Also
 
 - [Main Documentation](../README.md)
 - [Architecture](../architecture.md)
 - [Guides](../guides/)
+- [Reference](../reference/)

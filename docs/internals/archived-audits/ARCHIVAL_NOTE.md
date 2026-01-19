@@ -5,7 +5,7 @@
 
 ## What Was Archived
 
-All comprehensive audit reports from January 2026 have been moved from `docs/audit/` to `docs/internals/archived-audits/`. This includes:
+All comprehensive audit reports from January 2026 have been archived in `docs/internals/archived-audits/`. This includes:
 
 ### Crate Audits (19 reports)
 - praxis_math.md
@@ -58,15 +58,9 @@ The reports are preserved at: `docs/internals/archived-audits/`
 
 A comprehensive index is available in the archived [README.md](README.md).
 
-## Redirection
+## Access
 
-The original `docs/audit/` directory now contains:
-- **README.md** - Explains the archival and points to the new location
-- **Individual files** - Each replaced with a redirect message pointing to the archived version
-
-This ensures anyone following old links or documentation will be directed to both:
-1. The archived historical report
-2. Information about current documentation sources
+The archived reports are preserved for historical reference and technical context. Anyone seeking information about past implementation decisions can refer to these reports while understanding they represent a point-in-time snapshot.
 
 ## Current Documentation Sources
 
