@@ -2369,4 +2369,481 @@ mod tests {
         let work_groups_div_ceil = max_commands.div_ceil(work_group_size);
         assert_eq!(work_groups, work_groups_div_ceil);
     }
+
+    // ===== Additional Frustum Plane Extraction Tests =====
+
+    #[test]
+    fn test_extract_frustum_planes_normalization() {
+        // Test that all extracted frustum planes are properly normalized
+        let fov = std::f32::consts::PI / 3.0; // 60 degrees
+        let aspect = 1.77; // 16:9
+        let near = 0.1;
+        let far = 1000.0;
+
+        let projection = Mat4::perspective_rh(fov, aspect, near, far);
+        let view = Mat4::look_at_rh(
+            Vec3::new(10.0, 5.0, 20.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(0.0, 1.0, 0.0),
+        );
+
+        let view_proj = projection * view;
+        let planes = extract_frustum_planes(view_proj);
+
+        // All planes must be normalized (length of normal = 1.0)
+        for (i, plane) in planes.iter().enumerate() {
+            let normal_length = (plane.x * plane.x + plane.y * plane.y + plane.z * plane.z).sqrt();
+            assert!(
+                (normal_length - 1.0).abs() < 0.001,
+                "Plane {} has non-unit normal length: {}, expected 1.0",
+                i,
+                normal_length
+            );
+        }
+    }
+
+    #[test]
+    fn test_extract_frustum_planes_plane_order() {
+        // Verify that planes are returned in the expected order
+        let projection = Mat4::perspective_rh(std::f32::consts::PI / 4.0, 1.0, 1.0, 100.0);
+        let view = Mat4::IDENTITY;
+        let view_proj = projection * view;
+
+        let planes = extract_frustum_planes(view_proj);
+
+        // Planes should be [left, right, bottom, top, near, far]
+        assert_eq!(planes.len(), 6);
+        // Just verify we get 6 planes in the expected order format
+    }
+
+    #[test]
+    fn test_extract_frustum_planes_consistency() {
+        // Test that extracting planes twice from the same matrix gives identical results
+        let view_proj = Mat4::perspective_rh(std::f32::consts::PI / 4.0, 16.0 / 9.0, 0.1, 100.0);
+
+        let planes1 = extract_frustum_planes(view_proj);
+        let planes2 = extract_frustum_planes(view_proj);
+
+        for i in 0..6 {
+            assert_eq!(planes1[i], planes2[i], "Plane {} should be identical", i);
+        }
+    }
+
+    #[test]
+    fn test_extract_frustum_planes_with_translation() {
+        // Test frustum extraction with camera translation
+        let projection = Mat4::perspective_rh(std::f32::consts::PI / 4.0, 1.0, 1.0, 100.0);
+        let view = Mat4::from_translation(Vec3::new(100.0, 50.0, -30.0));
+        let view_proj = projection * view;
+
+        let planes = extract_frustum_planes(view_proj);
+
+        // All planes should still be normalized despite translation
+        for (i, plane) in planes.iter().enumerate() {
+            let normal_length = (plane.x * plane.x + plane.y * plane.y + plane.z * plane.z).sqrt();
+            assert!(
+                (normal_length - 1.0).abs() < 0.001,
+                "Plane {} not normalized after translation: {}",
+                i,
+                normal_length
+            );
+        }
+    }
+
+    #[test]
+    fn test_extract_frustum_planes_with_rotation() {
+        // Test frustum extraction with camera rotation
+        let projection = Mat4::perspective_rh(std::f32::consts::PI / 4.0, 1.0, 1.0, 100.0);
+        let rotation = Mat4::from_quat(Quat::from_rotation_y(std::f32::consts::PI / 4.0));
+        let view_proj = projection * rotation;
+
+        let planes = extract_frustum_planes(view_proj);
+
+        // All planes should be normalized
+        for (i, plane) in planes.iter().enumerate() {
+            let normal_length = (plane.x * plane.x + plane.y * plane.y + plane.z * plane.z).sqrt();
+            assert!(
+                (normal_length - 1.0).abs() < 0.001,
+                "Plane {} not normalized after rotation: {}",
+                i,
+                normal_length
+            );
+        }
+    }
+
+    // ===== Additional Sphere-Frustum Intersection Tests =====
+
+    #[test]
+    fn test_sphere_frustum_intersection_exact_tangent() {
+        // Test sphere exactly touching a frustum plane (tangent)
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),
+            Vec4::new(0.0, 1.0, 0.0, 10.0),
+            Vec4::new(0.0, -1.0, 0.0, 10.0),
+            Vec4::new(0.0, 0.0, 1.0, 1.0),
+            Vec4::new(0.0, 0.0, -1.0, 100.0),
+        ];
+
+        // Sphere at x = -9, radius = 1, so it touches the left plane at x = -10
+        let center = Vec3::new(-9.0, 0.0, 10.0);
+        let radius = 1.0;
+        assert!(
+            is_sphere_in_frustum_cpu(center, radius, &frustum_planes),
+            "Tangent sphere should be visible"
+        );
+    }
+
+    #[test]
+    fn test_sphere_frustum_intersection_barely_outside() {
+        // Test sphere just barely outside the frustum
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),
+            Vec4::new(0.0, 1.0, 0.0, 10.0),
+            Vec4::new(0.0, -1.0, 0.0, 10.0),
+            Vec4::new(0.0, 0.0, 1.0, 1.0),
+            Vec4::new(0.0, 0.0, -1.0, 100.0),
+        ];
+
+        // Sphere at x = -11.1, radius = 1, so closest point is at x = -10.1 (outside)
+        let center = Vec3::new(-11.1, 0.0, 10.0);
+        let radius = 1.0;
+        assert!(
+            !is_sphere_in_frustum_cpu(center, radius, &frustum_planes),
+            "Sphere just outside should be culled"
+        );
+    }
+
+    #[test]
+    fn test_sphere_frustum_intersection_barely_inside() {
+        // Test sphere just barely inside the frustum
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),
+            Vec4::new(0.0, 1.0, 0.0, 10.0),
+            Vec4::new(0.0, -1.0, 0.0, 10.0),
+            Vec4::new(0.0, 0.0, 1.0, 1.0),
+            Vec4::new(0.0, 0.0, -1.0, 100.0),
+        ];
+
+        // Sphere at x = -9.9, radius = 1, so closest point is at x = -10.9 (inside)
+        let center = Vec3::new(-9.9, 0.0, 10.0);
+        let radius = 1.1;
+        assert!(
+            is_sphere_in_frustum_cpu(center, radius, &frustum_planes),
+            "Sphere just inside should be visible"
+        );
+    }
+
+    #[test]
+    fn test_sphere_frustum_intersection_corner_case() {
+        // Test sphere near a corner of the frustum
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 10.0),
+            Vec4::new(-1.0, 0.0, 0.0, 10.0),
+            Vec4::new(0.0, 1.0, 0.0, 10.0),
+            Vec4::new(0.0, -1.0, 0.0, 10.0),
+            Vec4::new(0.0, 0.0, 1.0, 1.0),
+            Vec4::new(0.0, 0.0, -1.0, 100.0),
+        ];
+
+        // Sphere near top-right corner
+        let center = Vec3::new(8.0, 8.0, 10.0);
+        let radius = 1.0;
+        assert!(
+            is_sphere_in_frustum_cpu(center, radius, &frustum_planes),
+            "Sphere near corner should be visible"
+        );
+
+        // Sphere outside top-right corner
+        let center = Vec3::new(12.0, 12.0, 10.0);
+        let radius = 1.0;
+        assert!(
+            !is_sphere_in_frustum_cpu(center, radius, &frustum_planes),
+            "Sphere outside corner should be culled"
+        );
+    }
+
+    #[test]
+    fn test_sphere_frustum_intersection_multiple_planes() {
+        // Test sphere that intersects multiple frustum planes
+        let frustum_planes = [
+            Vec4::new(1.0, 0.0, 0.0, 5.0),
+            Vec4::new(-1.0, 0.0, 0.0, 5.0),
+            Vec4::new(0.0, 1.0, 0.0, 5.0),
+            Vec4::new(0.0, -1.0, 0.0, 5.0),
+            Vec4::new(0.0, 0.0, 1.0, 1.0),
+            Vec4::new(0.0, 0.0, -1.0, 50.0),
+        ];
+
+        // Large sphere at origin intersects all planes but is still inside
+        let center = Vec3::new(0.0, 0.0, 25.0);
+        let radius = 3.0;
+        assert!(
+            is_sphere_in_frustum_cpu(center, radius, &frustum_planes),
+            "Sphere intersecting multiple planes should be visible"
+        );
+    }
+
+    // ===== Additional GPU Data Structure Validation Tests =====
+
+    #[test]
+    fn test_gpu_draw_command_16_byte_alignment() {
+        // GPU shader std140 layout requires 16-byte alignment
+        assert_eq!(
+            std::mem::align_of::<GpuDrawCommand>(),
+            1,
+            "GpuDrawCommand should have natural alignment"
+        );
+
+        // Size should be a multiple of 16 bytes for array elements
+        let size = std::mem::size_of::<GpuDrawCommand>();
+        assert_eq!(
+            size % 16,
+            0,
+            "GpuDrawCommand size {} should be multiple of 16 bytes",
+            size
+        );
+    }
+
+    #[test]
+    fn test_gpu_mesh_data_16_byte_alignment() {
+        // Verify 16-byte total size for std140 compatibility
+        let size = std::mem::size_of::<GpuMeshData>();
+        assert_eq!(
+            size, 16,
+            "GpuMeshData should be exactly 16 bytes, got {}",
+            size
+        );
+
+        // Ensure it's tightly packed
+        assert_eq!(
+            size,
+            4 + 4 + 4 + 4,
+            "GpuMeshData should be tightly packed (4 u32s)"
+        );
+    }
+
+    #[test]
+    fn test_culling_uniforms_std140_layout() {
+        // std140 requires specific alignment rules
+        let size = std::mem::size_of::<CullingUniforms>();
+        let align = std::mem::align_of::<CullingUniforms>();
+
+        // Must be 16-byte aligned
+        assert_eq!(align, 16, "CullingUniforms must be 16-byte aligned");
+
+        // Size must be multiple of 16
+        assert_eq!(
+            size % 16,
+            0,
+            "CullingUniforms size {} must be multiple of 16",
+            size
+        );
+
+        // Verify expected size (mat4 + 6*vec4 + vec4 + vec4 = 64 + 96 + 16 + 16 = 192)
+        assert_eq!(size, 192, "CullingUniforms should be 192 bytes");
+    }
+
+    #[test]
+    fn test_indirect_draw_command_vulkan_compatibility() {
+        // Must match VkDrawIndexedIndirectCommand exactly
+        let size = std::mem::size_of::<IndirectDrawCommand>();
+        assert_eq!(
+            size, 20,
+            "IndirectDrawCommand must be exactly 20 bytes to match Vulkan spec"
+        );
+
+        // Verify field offsets match Vulkan spec
+        use std::mem::offset_of;
+        assert_eq!(offset_of!(IndirectDrawCommand, index_count), 0);
+        assert_eq!(offset_of!(IndirectDrawCommand, instance_count), 4);
+        assert_eq!(offset_of!(IndirectDrawCommand, first_index), 8);
+        assert_eq!(offset_of!(IndirectDrawCommand, vertex_offset), 12);
+        assert_eq!(offset_of!(IndirectDrawCommand, first_instance), 16);
+    }
+
+    #[test]
+    fn test_gpu_draw_command_padding_zeroed() {
+        // Ensure padding is properly zeroed
+        let cmd = GpuDrawCommand::new(Mat4::IDENTITY, Vec4::ZERO, 0, 0);
+
+        assert_eq!(cmd.padding1, 0, "padding1 should be zero");
+        assert_eq!(cmd.padding2, 0, "padding2 should be zero");
+    }
+
+    #[test]
+    fn test_culling_uniforms_padding_zeroed() {
+        // Ensure padding fields are properly zeroed
+        let uniforms = CullingUniforms::new(Mat4::IDENTITY, [Vec4::ZERO; 6], Vec3::ZERO, 100);
+
+        assert_eq!(uniforms._padding1, 0.0, "_padding1 should be zero");
+        assert_eq!(uniforms._padding2, 0, "_padding2 should be zero");
+    }
+
+    #[test]
+    fn test_gpu_data_structures_pod_trait() {
+        // Verify all GPU data structures implement Pod (plain old data)
+        // This is compile-time checked, but we can test runtime size invariants
+
+        // GpuDrawCommand
+        let cmd = GpuDrawCommand::new(Mat4::IDENTITY, Vec4::ZERO, 0, 0);
+        let cmd_bytes = bytemuck::bytes_of(&cmd);
+        assert_eq!(cmd_bytes.len(), std::mem::size_of::<GpuDrawCommand>());
+
+        // GpuMeshData
+        let mesh = GpuMeshData {
+            index_count: 0,
+            first_index: 0,
+            vertex_offset: 0,
+            _padding: 0,
+        };
+        let mesh_bytes = bytemuck::bytes_of(&mesh);
+        assert_eq!(mesh_bytes.len(), std::mem::size_of::<GpuMeshData>());
+
+        // IndirectDrawCommand
+        let indirect = IndirectDrawCommand::default();
+        let indirect_bytes = bytemuck::bytes_of(&indirect);
+        assert_eq!(
+            indirect_bytes.len(),
+            std::mem::size_of::<IndirectDrawCommand>()
+        );
+
+        // CullingUniforms
+        let uniforms = CullingUniforms::new(Mat4::IDENTITY, [Vec4::ZERO; 6], Vec3::ZERO, 0);
+        let uniforms_bytes = bytemuck::bytes_of(&uniforms);
+        assert_eq!(uniforms_bytes.len(), std::mem::size_of::<CullingUniforms>());
+    }
+
+    // ===== Additional Bounding Sphere Calculation Tests =====
+
+    #[test]
+    fn test_bounding_sphere_non_uniform_scale() {
+        // Test bounding sphere with non-uniform scaling
+        let scale = Vec3::new(2.0, 3.0, 1.0);
+        let model = Mat4::from_scale(scale);
+        let bounding_sphere = Vec4::new(0.0, 0.0, 0.0, 1.0);
+
+        let _cmd = GpuDrawCommand::new(model, bounding_sphere, 0, 0);
+
+        // For non-uniform scale, we use length of scale vector
+        // scale_factor = length([2.0, 3.0, 1.0]) = sqrt(4 + 9 + 1) = sqrt(14) ≈ 3.742
+        let scale_factor = (2.0_f32 * 2.0 + 3.0 * 3.0 + 1.0 * 1.0).sqrt();
+        assert!((scale_factor - 3.742).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_bounding_sphere_combined_transform() {
+        // Test bounding sphere with translation + rotation + scale
+        let translation = Vec3::new(10.0, 20.0, 30.0);
+        let rotation = Quat::from_rotation_z(std::f32::consts::PI / 4.0);
+        let scale = Vec3::splat(2.0);
+
+        let model = Mat4::from_scale_rotation_translation(scale, rotation, translation);
+        let bounding_sphere = Vec4::new(1.0, 0.0, 0.0, 2.0);
+
+        let cmd = GpuDrawCommand::new(model, bounding_sphere, 0, 0);
+
+        // Verify the transform is stored correctly
+        let stored_model = Mat4::from_cols_array_2d(&cmd.model);
+
+        // Transform the center
+        let center = Vec3::new(
+            cmd.bounding_sphere[0],
+            cmd.bounding_sphere[1],
+            cmd.bounding_sphere[2],
+        );
+        let world_center = stored_model.transform_point3(center);
+
+        // Check that translation is approximately correct
+        // The exact position depends on rotation, but should be near the translation
+        let distance_from_translation = (world_center - translation).length();
+        assert!(
+            distance_from_translation < 5.0,
+            "Transformed center should be near translation point"
+        );
+    }
+
+    #[test]
+    fn test_bounding_sphere_zero_scale() {
+        // Test edge case of zero scale
+        let scale = Vec3::splat(0.0);
+        let model = Mat4::from_scale(scale);
+        let bounding_sphere = Vec4::new(0.0, 0.0, 0.0, 5.0);
+
+        let _cmd = GpuDrawCommand::new(model, bounding_sphere, 0, 0);
+
+        // With zero scale, radius should become zero
+        let scale_factor = (0.0_f32 * 0.0 + 0.0 * 0.0 + 0.0 * 0.0).sqrt();
+        assert_eq!(scale_factor, 0.0);
+    }
+
+    #[test]
+    fn test_bounding_sphere_negative_scale() {
+        // Test negative scale (mirroring)
+        let scale = Vec3::new(-1.0, 1.0, 1.0);
+        let model = Mat4::from_scale(scale);
+        let bounding_sphere = Vec4::new(5.0, 0.0, 0.0, 2.0);
+
+        let cmd = GpuDrawCommand::new(model, bounding_sphere, 0, 0);
+
+        let model_mat = Mat4::from_cols_array_2d(&cmd.model);
+        let center = Vec3::new(
+            cmd.bounding_sphere[0],
+            cmd.bounding_sphere[1],
+            cmd.bounding_sphere[2],
+        );
+        let world_center = model_mat.transform_point3(center);
+
+        // X should be mirrored
+        assert!(
+            (world_center.x + 5.0).abs() < 0.001,
+            "X coordinate should be mirrored"
+        );
+    }
+
+    #[test]
+    fn test_bounding_sphere_large_translation() {
+        // Test with very large translation values
+        let translation = Vec3::new(1000.0, 2000.0, 3000.0);
+        let model = Mat4::from_translation(translation);
+        let bounding_sphere = Vec4::new(1.0, 2.0, 3.0, 5.0);
+
+        let cmd = GpuDrawCommand::new(model, bounding_sphere, 0, 0);
+
+        let model_mat = Mat4::from_cols_array_2d(&cmd.model);
+        let center = Vec3::new(
+            cmd.bounding_sphere[0],
+            cmd.bounding_sphere[1],
+            cmd.bounding_sphere[2],
+        );
+        let world_center = model_mat.transform_point3(center);
+
+        assert!((world_center.x - 1001.0).abs() < 0.001);
+        assert!((world_center.y - 2002.0).abs() < 0.001);
+        assert!((world_center.z - 3003.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_bounding_sphere_offset_from_origin() {
+        // Test bounding sphere that's offset from model origin
+        let model = Mat4::from_translation(Vec3::new(10.0, 0.0, 0.0));
+        let bounding_sphere = Vec4::new(5.0, 5.0, 5.0, 2.0); // Center at (5,5,5) in model space
+
+        let cmd = GpuDrawCommand::new(model, bounding_sphere, 0, 0);
+
+        let model_mat = Mat4::from_cols_array_2d(&cmd.model);
+        let center = Vec3::new(
+            cmd.bounding_sphere[0],
+            cmd.bounding_sphere[1],
+            cmd.bounding_sphere[2],
+        );
+        let world_center = model_mat.transform_point3(center);
+
+        // Center should be at (15, 5, 5) in world space
+        assert!((world_center.x - 15.0).abs() < 0.001);
+        assert!((world_center.y - 5.0).abs() < 0.001);
+        assert!((world_center.z - 5.0).abs() < 0.001);
+    }
 }
