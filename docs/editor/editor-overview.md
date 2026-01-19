@@ -2,6 +2,8 @@
 
 Comprehensive documentation for the Praxis game engine editor system, covering architecture, usage, customization, keyboard shortcuts, and troubleshooting.
 
+> **Note**: This document provides a high-level overview and user guide. For technical implementation details, API documentation, and system internals, see the corresponding files in `crates/praxis_editor/`.
+
 ## Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
@@ -24,11 +26,14 @@ praxis_editor
 ├── EditorState          # Root coordinator managing all panels and modes
 ├── EditorMode           # Edit/Play mode state machine
 ├── Panels               # Modular UI components
-│   ├── SceneViewPanel   # 3D viewport
+│   ├── SceneViewPanel   # 3D viewport with grid
 │   ├── HierarchyPanel   # Entity tree
 │   ├── InspectorPanel   # Component editing
 │   ├── ConsolePanel     # Log output
-│   └── AssetsPanel      # Asset browser
+│   ├── AssetsPanel      # Asset browser
+│   ├── ProjectSettingsPanel  # Project configuration (optional)
+│   ├── TerrainPanel     # Terrain editing (feature: terrain)
+│   └── ViewportPanel    # Additional viewport support
 ├── SelectionSystem      # Multi-entity selection
 ├── GizmoSystem          # Transform manipulation
 ├── UndoRedoSystem       # Command pattern undo/redo

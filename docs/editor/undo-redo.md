@@ -2,19 +2,24 @@
 
 Comprehensive undo/redo functionality for the Praxis editor with command history, dirty state tracking, and keyboard shortcuts.
 
+## Overview
+
+The Undo/Redo System uses the command pattern to provide full undo/redo capabilities for all editor operations. It maintains a history stack, tracks unsaved changes, and integrates with the menu system and keyboard shortcuts.
+
 ## Features
 
-- **Command History**: Up to 100 commands in history
-- **Dirty State Tracking**: Tracks unsaved changes automatically
-- **Keyboard Shortcuts**: Ctrl+Z (undo), Ctrl+Y (redo)
-- **Menu Integration**: Visual feedback in editor menu
+- **Command History**: Up to 100 commands in undo/redo stacks
+- **Dirty State Tracking**: Automatically tracks unsaved changes
+- **Keyboard Shortcuts**: Ctrl+Z (undo), Ctrl+Y (redo), Ctrl+Shift+Z (redo alternate)
+- **Menu Integration**: Visual feedback in editor menu with command descriptions
 - **Serialization**: Save/load history to RON format
+- **Composite Commands**: Group multiple operations into single undoable action
 
 ## Architecture
 
-### UndoRedoSystem
+### UndoRedoSystem (Resource)
 
-ECS resource wrapping command history with dirty state:
+ECS resource managing command history and dirty state:
 
 ```rust
 pub struct UndoRedoSystem {
@@ -24,21 +29,18 @@ pub struct UndoRedoSystem {
 }
 ```
 
-### CommandHistory
-
-Manages undo/redo stacks:
-
-```rust
-pub struct CommandHistory {
-    undo_stack: VecDeque<Box<dyn EditorCommand>>,
-    redo_stack: VecDeque<Box<dyn EditorCommand>>,
-    max_history_size: usize,  // 100
-}
-```
+**Key Methods**:
+- `execute_command(world, command)` - Execute and add to history
+- `undo(world)` - Undo last command
+- `redo(world)` - Redo last undone command
+- `can_undo()` / `can_redo()` - Check if operation is available
+- `undo_description()` / `redo_description()` - Get command descriptions
+- `is_dirty()` - Check for unsaved changes
+- `mark_saved()` - Mark current state as saved
 
 ### EditorCommand Trait
 
-Interface for undoable operations:
+Base interface for undoable operations:
 
 ```rust
 pub trait EditorCommand {
@@ -55,39 +57,40 @@ pub trait EditorCommand {
 
 ```rust
 use praxis_editor::UndoRedoSystem;
-use praxis_ecs::World;
 
-let mut undo_system = UndoRedoSystem::new();
-let mut world = World::new();
+// Create and insert as resource
+let undo_system = UndoRedoSystem::new();
 world.insert_resource(undo_system);
 ```
 
 ### Executing Commands
 
 ```rust
-use praxis_editor::{UndoRedoSystem, TransformEditCommand};
-use praxis_ecs::Transform;
+use praxis_editor::TransformEditCommand;
 
 let command = Box::new(TransformEditCommand::new(
     entity,
-    Transform::default(),
-    Transform::from_xyz(10.0, 5.0, 3.0),
+    old_transform,
+    new_transform,
 ));
 
-undo_system.execute_command(&mut world, command).unwrap();
+// Execute command (adds to undo stack)
+undo_system.execute_command(&mut world, command)?;
 ```
 
 ### Undo/Redo Operations
 
 ```rust
-// Check availability
+// Check and perform undo
 if undo_system.can_undo() {
     println!("Will undo: {}", undo_system.undo_description().unwrap());
-    undo_system.undo(&mut world).unwrap();
+    undo_system.undo(&mut world)?;
 }
 
+// Check and perform redo
 if undo_system.can_redo() {
-    undo_system.redo(&mut world).unwrap();
+    println!("Will redo: {}", undo_system.redo_description().unwrap());
+    undo_system.redo(&mut world)?;
 }
 ```
 
@@ -99,64 +102,50 @@ if undo_system.is_dirty() {
     show_unsaved_warning();
 }
 
-// Mark as saved (after saving to disk)
+// After saving to disk
+save_scene(&world)?;
 undo_system.mark_saved();
+assert!(!undo_system.is_dirty());
 
-// Becomes dirty again after new command
-undo_system.execute_command(&mut world, command).unwrap();
+// Becomes dirty after new command
+undo_system.execute_command(&mut world, command)?;
 assert!(undo_system.is_dirty());
 
-// Undo back to saved state → becomes clean
-undo_system.undo(&mut world).unwrap();
+// Undo back to saved state - becomes clean
+undo_system.undo(&mut world)?;
 assert!(!undo_system.is_dirty());
-```
-
-### Keyboard Shortcuts
-
-```rust
-use praxis_editor::handle_command_shortcuts;
-use praxis_ecs::Schedule;
-
-let mut schedule = Schedule::default();
-schedule.add_systems(handle_command_shortcuts);
-
-// Handles: Ctrl+Z (undo), Ctrl+Y (redo), Ctrl+Shift+Z (redo alt)
 ```
 
 ## Available Commands
 
-### Transform
-
+### Transform Commands
 ```rust
 use praxis_editor::TransformEditCommand;
 
-let cmd = TransformEditCommand::new(entity, old_transform, new_transform);
+TransformEditCommand::new(entity, old_transform, new_transform);
 ```
 
-### Entity Creation/Deletion
-
+### Entity Commands
 ```rust
 use praxis_editor::{CreateEntityCommand, DeleteEntityCommand};
 
-let create = CreateEntityCommand::with_transform(Transform::default());
-let delete = DeleteEntityCommand::from_world(entity, &world)?;
+CreateEntityCommand::with_transform(Transform::default());
+DeleteEntityCommand::from_world(entity, &world)?;
 ```
 
-### Components
-
+### Component Commands
 ```rust
 use praxis_editor::{AddComponentCommand, RemoveComponentCommand, ComponentData};
 
-let add = AddComponentCommand::new(entity, ComponentData::Name("Player".into()));
-let remove = RemoveComponentCommand::new(entity, ComponentData::Name(current_name));
+AddComponentCommand::new(entity, ComponentData::Name("Player".into()));
+RemoveComponentCommand::new(entity, ComponentData::Name(old_name));
 ```
 
-### Hierarchy
-
+### Hierarchy Commands
 ```rust
 use praxis_editor::SetParentCommand;
 
-let cmd = SetParentCommand::from_world(child, Some(parent), &world)?;
+SetParentCommand::from_world(child, Some(parent), &world)?;
 ```
 
 ### Composite Commands
@@ -170,74 +159,161 @@ let mut composite = CompositeCommand::new("Create Scene".into());
 composite.add_command(SerializableCommand::CreateEntity(cmd1));
 composite.add_command(SerializableCommand::CreateEntity(cmd2));
 
-// Undo/redo as a single operation
-undo_system.execute_command(&mut world, Box::new(composite)).unwrap();
+// Undo/redo as single operation
+undo_system.execute_command(&mut world, Box::new(composite))?;
 ```
+
+## Keyboard Shortcuts
+
+Built-in keyboard shortcuts (via `handle_command_shortcuts` system):
+
+| Shortcut | Action |
+|----------|--------|
+| **Ctrl+Z** | Undo last command |
+| **Ctrl+Y** | Redo last undone command |
+| **Ctrl+Shift+Z** | Redo (alternative) |
+
+Add to your schedule:
+```rust
+use praxis_editor::handle_command_shortcuts;
+
+schedule.add_systems(handle_command_shortcuts);
+```
+
+## Menu Integration
+
+The menu bar automatically integrates with undo/redo:
+
+```rust
+use praxis_editor::EditorState;
+
+let mut editor = EditorState::new();
+
+// Render editor with undo/redo integration
+editor.ui(&egui_context, Some(&mut undo_system), Some(&mut world));
+```
+
+**Menu Features**:
+- Command descriptions in menu items (e.g., "Undo: Move Entity")
+- Enabled/disabled state based on availability
+- Dirty state indicator (asterisk on "Save Scene *")
+- Status bar shows "● Unsaved" when dirty
+
+## Dirty State Behavior
+
+The dirty state intelligently tracks unsaved changes:
+
+1. **Initially Clean**: New system starts with `dirty = false`
+2. **Becomes Dirty**: When executing commands, or redoing
+3. **Becomes Clean**: When calling `mark_saved()`, or undoing back to saved state
+4. **Saved State Tracking**: Records undo count at save, compares current count
+
+### Example Flow
+
+```rust
+let mut system = UndoRedoSystem::new();
+assert!(!system.is_dirty());  // Clean
+
+system.execute_command(&mut world, cmd1)?;
+assert!(system.is_dirty());  // Dirty
+
+system.mark_saved();
+assert!(!system.is_dirty());  // Clean after save
+
+system.execute_command(&mut world, cmd2)?;
+assert!(system.is_dirty());  // Dirty
+
+system.undo(&mut world)?;
+assert!(!system.is_dirty());  // Clean - back at saved state
+```
+
+## History Limit
+
+The system maintains a maximum of **100 commands**:
+- When executing the 101st command, the oldest is automatically removed
+- Prevents unbounded memory growth
+- Sufficient for typical editing sessions
+
+## Serialization
+
+Save and load command history:
+
+```rust
+// Save history to RON
+let ron = undo_system.to_ron()?;
+std::fs::write("history.ron", ron)?;
+
+// Load history from RON
+let ron = std::fs::read_to_string("history.ron")?;
+undo_system.from_ron(&ron)?;
+```
+
+**Note**: Loading marks the state as dirty.
 
 ## Best Practices
 
 1. **Always use `execute_command`**: Don't execute commands directly
+   ```rust
+   // Wrong: command.execute(&mut world)
+   // Right: undo_system.execute_command(&mut world, command)
+   ```
 
-2. **Capture state before deletion**:
+2. **Capture state before deletion**: For proper undo
    ```rust
    let cmd = DeleteEntityCommand::from_world(entity, &world)?;
    ```
 
-3. **Group related operations**:
+3. **Group related operations**: Use `CompositeCommand`
    ```rust
    let mut composite = CompositeCommand::new("Create Player".into());
    composite.add_command(create_cmd);
    composite.add_command(name_cmd);
    ```
 
-4. **Mark saved appropriately**:
+4. **Mark saved appropriately**: After successful save operations
    ```rust
    save_scene_to_file(&world)?;
    undo_system.mark_saved();
    ```
 
-5. **Check dirty on exit**:
+5. **Check dirty on exit**: Warn users about unsaved changes
    ```rust
    if undo_system.is_dirty() {
        show_unsaved_changes_dialog();
    }
    ```
 
-## Serialization
-
-```rust
-// Save history
-let ron = undo_system.to_ron()?;
-std::fs::write("history.ron", ron)?;
-
-// Load history
-let ron = std::fs::read_to_string("history.ron")?;
-undo_system.from_ron(&ron)?;
-```
-
-## History Limit
-
-The system maintains a maximum of **100 commands**. When executing the 101st command, the oldest is automatically removed.
-
 ## Performance
 
 - **Memory**: Bounded by 100 command limit
-- **Execution**: O(1) for single commands, O(n) for composite
+- **Execution**: O(1) for single commands, O(n) for composite with n operations
 - **Undo/Redo**: O(1) stack operations
 
 ## Limitations
 
-- Entity IDs not stable across sessions (serialized commands may not work)
-- Only Transform, Name, Parent components supported out-of-box
-- No branching/undo tree support
+1. **Entity ID Stability**: Entity IDs not stable across sessions (serialized commands may not work after restart)
+2. **Component Support**: Only Transform, Name, Parent components supported out-of-box
+3. **History Size**: Limited to 100 entries
+4. **No Branching**: Executing new command clears redo stack (no undo tree)
 
-## Example
+## Examples
 
-```bash
-cargo run --example undo_redo_system_demo
-```
+See these examples for demonstrations:
+- `examples/undo_redo_system_demo.rs` - Full undo/redo demonstration
+- `examples/command_system_demo.rs` - Command pattern examples
+- `examples/editor_demo.rs` - Integration with editor
+
+## Technical Details
+
+For implementation details, see:
+- [crates/praxis_editor/UNDO_REDO_SYSTEM.md](../../crates/praxis_editor/UNDO_REDO_SYSTEM.md) - Complete implementation documentation
+- Command serialization format
+- History management algorithms
+- Dirty state tracking logic
 
 ## See Also
 
-- [Command System](commands.md) - Detailed command pattern documentation
-- [Selection System](selection.md) - Selection works with undo/redo
+- [Menu Bar](menu-bar.md) - Menu integration with undo/redo
+- [Selection System](selection-system.md) - Selection operations are undoable
+- [Gizmos](gizmos.md) - Transform gizmo operations are undoable
+- [Hierarchy Panel](hierarchy-panel.md) - Entity operations are undoable

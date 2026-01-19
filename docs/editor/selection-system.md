@@ -1,448 +1,259 @@
-# Selection System Guide
+# Selection System
+
+Comprehensive entity selection functionality for the Praxis editor with multi-entity selection, raycast picking, marquee selection, and keyboard shortcuts.
 
 ## Overview
 
-The Selection System provides comprehensive entity selection functionality for the Praxis editor, including multi-entity selection, raycast picking, marquee selection, keyboard shortcuts, and event notifications.
+The Selection System enables intuitive entity selection in the editor through multiple interaction methods. It uses a marker component pattern with ECS integration for efficient queries and clean separation of concerns.
+
+## Key Features
+
+- **Multi-Entity Selection**: Select single or multiple entities with modifier keys
+- **Raycast Picking**: Click entities in 3D viewport to select them
+- **Marquee Selection**: Drag selection box to select multiple entities
+- **Keyboard Shortcuts**: Ctrl+A (select all), Ctrl+D (deselect all)
+- **Selection Events**: Event system for UI updates
+- **Modifier Key Support**: Shift (add), Ctrl (remove), Alt (toggle)
 
 ## Architecture
 
-### Core Components
+### Components
 
-The selection system consists of three main parts:
+#### `Selectable` (Marker)
+Must be present on entities that can be selected.
 
-1. **SelectionSystem** (Resource): Manages selection state and operations
-2. **Selectable** (Component): Marks entities that can be selected
-3. **Selected** (Component): Marks currently selected entities
-
-### Design Rationale
-
-The dual-component design separates concerns:
-- `Selectable`: Persistent capability marker
-- `Selected`: Transient state marker (added/removed frequently)
-
-This enables efficient queries and clear intent:
 ```rust
-// Query all selectable entities
-Query<Entity, With<Selectable>>
-
-// Query currently selected entities
-Query<Entity, With<Selected>>
-
-// Query selectable but not selected
-Query<Entity, (With<Selectable>, Without<Selected>)>
+world.spawn((
+    Transform::default(),
+    Selectable,  // Makes this entity selectable
+));
 ```
 
-## Selection Modes
-
-The system supports four selection modes for different use cases:
-
-### Replace Mode
-
-Clears existing selection and selects new entities:
+#### `Selected` (Marker)
+Automatically added/removed by the selection system when entities are selected/deselected.
 
 ```rust
-selection.select_entity(entity, SelectionMode::Replace);
-```
-
-**Use Cases**: Primary selection, single-click without modifiers
-
-### Add Mode
-
-Adds entities to existing selection:
-
-```rust
-selection.select_entity(entity, SelectionMode::Add);
-```
-
-**Use Cases**: Shift+Click, building selection set
-
-### Remove Mode
-
-Removes entities from selection:
-
-```rust
-selection.select_entity(entity, SelectionMode::Remove);
-```
-
-**Use Cases**: Ctrl+Click on selected entity, deselecting
-
-### Toggle Mode
-
-Toggles entity selection state:
-
-```rust
-selection.select_entity(entity, SelectionMode::Toggle);
-```
-
-**Use Cases**: Alt+Click, quick selection changes
-
-## API Reference
-
-### SelectionSystem
-
-Resource managing selection state:
-
-```rust
-pub struct SelectionSystem {
-    selected: HashSet<Entity>,
-    events: RingBuffer<SelectionEvent>,
-    marquee: Option<MarqueeSelection>,
-    input_enabled: bool,
+// Query selected entities
+fn highlight_selected(query: Query<&Transform, With<Selected>>) {
+    for transform in query.iter() {
+        // Render selection highlight
+    }
 }
 ```
 
-**Core Methods**:
+### Resource
+
+#### `SelectionSystem`
+Main resource managing selection state and operations.
+
+**Key Methods**:
+- `select_entity(entity, mode)` - Select single entity
+- `select_entities(entities, mode)` - Select multiple entities
+- `clear()` - Clear all selections
+- `is_selected(entity)` - Check if entity is selected
+- `selected_entities()` - Iterator over selected entities
+- `raycast_pick(...)` - Find entity at screen position
+- `start_marquee(pos)` / `update_marquee(pos)` / `end_marquee()` - Box selection
+
+## Selection Modes
+
+### Replace (Default)
+Clears existing selection and selects new entities.
+
+**Input**: Click (no modifiers)  
+**Use case**: Selecting a single entity
+
+### Add
+Adds entities to existing selection without clearing.
+
+**Input**: Shift+Click  
+**Use case**: Building up a selection set
+
+### Remove
+Removes entities from selection.
+
+**Input**: Ctrl+Click  
+**Use case**: Deselecting specific entities
+
+### Toggle
+Toggles entity selection state.
+
+**Input**: Alt+Click  
+**Use case**: Quick selection adjustments
+
+## Usage
+
+### Basic Setup
 
 ```rust
-// Single entity operations
-pub fn select_entity(&mut self, entity: Entity, mode: SelectionMode);
-pub fn deselect_entity(&mut self, entity: Entity);
-pub fn is_selected(&self, entity: Entity) -> bool;
+use praxis_editor::{SelectionSystem, Selectable, update_selection_system};
 
-// Batch operations
-pub fn select_entities(&mut self, entities: Vec<Entity>, mode: SelectionMode);
-pub fn clear(&mut self);
+// Create world and add selection system
+let mut world = World::new();
+world.insert_resource(SelectionSystem::new());
 
-// Query operations
-pub fn selected_entities(&self) -> impl Iterator<Item = Entity>;
-pub fn selected_count(&self) -> usize;
+// Add system to schedule
+schedule.add_systems(update_selection_system);
 
-// Event handling
-pub fn events(&self) -> &[SelectionEvent];
-pub fn drain_events(&mut self) -> Vec<SelectionEvent>;
+// Spawn selectable entities
+world.spawn((Transform::default(), Selectable));
+```
 
-// Input configuration
-pub fn set_input_enabled(&mut self, enabled: bool);
-pub fn is_input_enabled(&self) -> bool;
+### Programmatic Selection
+
+```rust
+use praxis_editor::{SelectionSystem, SelectionMode};
+
+let mut selection = world.resource_mut::<SelectionSystem>();
+
+// Select single entity
+selection.select_entity(entity, SelectionMode::Replace);
+
+// Select multiple entities
+selection.select_entities(vec![entity1, entity2], SelectionMode::Add);
+
+// Check selection
+if selection.is_selected(entity) {
+    println!("Selected!");
+}
+
+// Clear all
+selection.clear();
 ```
 
 ### Raycast Picking
 
-Click-to-select functionality using ray-sphere intersection:
+Convert mouse clicks to entity selections:
 
 ```rust
-pub fn raycast_pick(
-    &self,
-    mouse_pos: Vec2,
-    viewport_size: Vec2,
-    camera: &Camera,
-    camera_matrices: &CameraMatrices,
-    camera_transform: &GlobalTransform,
-    selectable_query: &Query<(Entity, &GlobalTransform), With<Selectable>>,
-) -> Option<Entity>;
-```
-
-**Algorithm**:
-1. Convert mouse screen position to NDC [-1, 1]
-2. Unproject to view space using inverse projection
-3. Transform to world space using camera rotation
-4. Test all selectable entities for intersection
-5. Return closest entity along ray
-
-**Example**:
-
-```rust
-if input.mouse_button_just_pressed(MouseButton::Left) {
-    let picked = selection.raycast_pick(
-        input.mouse_position(),
-        viewport_size,
-        &camera,
-        &camera_matrices,
-        &camera_transform,
-        &selectable_query,
-    );
-    
-    if let Some(entity) = picked {
-        let mode = if input.key_pressed(KeyCode::Shift) {
-            SelectionMode::Add
-        } else {
-            SelectionMode::Replace
-        };
-        selection.select_entity(entity, mode);
-    }
-}
-```
-
-### Marquee Selection
-
-Box selection for selecting multiple entities at once:
-
-```rust
-// Start marquee (on mouse down)
-pub fn start_marquee(&mut self, screen_pos: Vec2);
-
-// Update during drag
-pub fn update_marquee(&mut self, screen_pos: Vec2);
-
-// Complete and select (on mouse up)
-pub fn end_marquee(
-    &mut self,
-    camera: &Camera,
-    camera_matrices: &CameraMatrices,
-    camera_transform: &GlobalTransform,
-    selectable_query: &Query<(Entity, &GlobalTransform), With<Selectable>>,
-    mode: SelectionMode,
-) -> Vec<Entity>;
-```
-
-**Algorithm**:
-1. Track start position on mouse down
-2. Update end position during drag
-3. Compute screen-space rectangle
-4. Project each entity to screen space
-5. Select entities within rectangle
-
-**Example**:
-
-```rust
-// On mouse down
-if input.mouse_button_just_pressed(MouseButton::Left) {
-    selection.start_marquee(input.mouse_position());
-}
-
-// During drag
-if input.mouse_button_pressed(MouseButton::Left) {
-    selection.update_marquee(input.mouse_position());
-}
-
-// On mouse up
-if input.mouse_button_just_released(MouseButton::Left) {
-    let mode = if input.key_pressed(KeyCode::Shift) {
+// On mouse click in viewport
+if let Some(entity) = selection.raycast_pick(
+    mouse_pos,
+    viewport_size,
+    &camera,
+    &camera_matrices,
+    &camera_transform,
+    &selectable_query,
+) {
+    let mode = if shift_pressed {
         SelectionMode::Add
     } else {
         SelectionMode::Replace
     };
-    
-    let selected = selection.end_marquee(
+    selection.select_entity(entity, mode);
+}
+```
+
+### Marquee (Box) Selection
+
+Drag to select multiple entities:
+
+```rust
+// On mouse down - start marquee
+if mouse_down {
+    selection.start_marquee(mouse_pos);
+}
+
+// During drag - update marquee
+if dragging {
+    selection.update_marquee(mouse_pos);
+}
+
+// On mouse up - complete selection
+if mouse_up {
+    let entities = selection.end_marquee(
         &camera,
         &camera_matrices,
         &camera_transform,
         &selectable_query,
-        mode,
+        SelectionMode::Replace,
     );
-    
-    println!("Selected {} entities", selected.len());
 }
 ```
 
-**Click vs. Drag Detection**:
+## Selection Events
 
-The system distinguishes clicks from drags:
-- **Click**: Start and end positions within 5 pixels → Raycast pick
-- **Drag**: Distance > 5 pixels → Marquee selection
-
-## ECS Integration
-
-### Components
-
-Mark entities as selectable:
+React to selection changes:
 
 ```rust
-use praxis_editor::{Selectable, Selected};
+use praxis_editor::SelectionEvent;
 
-// Spawn selectable entity
-world.spawn((
-    Transform::default(),
-    Mesh::default(),
-    Selectable,  // Can be selected
-));
-
-// Check if entity is selected
-fn highlight_selected(query: Query<&MeshRenderer, With<Selected>>) {
-    for renderer in query.iter() {
-        renderer.set_color(Color::BLUE);
+for event in selection.drain_events() {
+    match event {
+        SelectionEvent::Selected(entities) => {
+            // Update inspector to show selected entities
+        }
+        SelectionEvent::Deselected(entities) => {
+            // Clear inspector or update UI
+        }
+        SelectionEvent::Cleared => {
+            // Hide selection-dependent UI
+        }
+        SelectionEvent::Changed => {
+            // Generic selection change
+        }
     }
 }
 ```
 
+## Keyboard Shortcuts
+
+Built-in keyboard shortcuts (handled by `handle_selection_input_system`):
+
+| Shortcut | Action |
+|----------|--------|
+| **Ctrl+A** | Select all selectable entities |
+| **Ctrl+D** | Deselect all entities |
+
+### Custom Shortcuts
+
+Disable built-in input and implement your own:
+
+```rust
+selection.set_input_enabled(false);
+
+// Custom handling
+if input.ctrl() && input.just_pressed(KeyCode::KeyA) {
+    let all: Vec<Entity> = selectable_query.iter().collect();
+    selection.select_entities(all, SelectionMode::Replace);
+}
+```
+
+## ECS Integration
+
 ### Systems
 
-Two ECS systems synchronize selection state:
+**`update_selection_system`**: Synchronizes `Selected` components with `SelectionSystem` state. Run this every frame.
 
-#### `update_selection_system`
-
-Synchronizes `Selected` components with SelectionSystem:
+**`handle_selection_input_system`**: Processes keyboard shortcuts (Ctrl+A, Ctrl+D). Add to your schedule.
 
 ```rust
-pub fn update_selection_system(
-    mut commands: Commands,
-    selection: Res<SelectionSystem>,
-    selected_query: Query<Entity, With<Selected>>,
-    selectable_query: Query<Entity, With<Selectable>>,
-)
-```
-
-**Behavior**:
-- Adds `Selected` to newly selected entities
-- Removes `Selected` from deselected entities
-- Validates entities still exist
-
-#### `handle_selection_input_system`
-
-Processes keyboard shortcuts:
-
-```rust
-pub fn handle_selection_input_system(
-    input: Res<InputState>,
-    mut selection: ResMut<SelectionSystem>,
-    selectable_query: Query<Entity, With<Selectable>>,
-)
-```
-
-**Shortcuts**:
-- `Ctrl+A`: Select all selectable entities
-- `Ctrl+D`: Deselect all entities
-
-### System Setup
-
-Add systems to your schedule:
-
-```rust
-use praxis_editor::{update_selection_system, handle_selection_input_system};
-use bevy_ecs::schedule::Schedule;
-
-let mut schedule = Schedule::default();
 schedule.add_systems((
     handle_selection_input_system,
     update_selection_system,
 ).chain());
 ```
 
-## Keyboard Shortcuts
+### Visual Feedback
 
-### Built-in Shortcuts
-
-| Shortcut | Action | Mode |
-|----------|--------|------|
-| Click | Select entity | Replace |
-| Shift+Click | Add to selection | Add |
-| Ctrl+Click | Remove from selection | Remove |
-| Alt+Click | Toggle selection | Toggle |
-| Ctrl+A | Select all | Replace |
-| Ctrl+D | Deselect all | Clear |
-
-### Custom Shortcuts
-
-Disable built-in input and implement custom shortcuts:
+Use the `Selected` component for rendering:
 
 ```rust
-selection.set_input_enabled(false);
-
-// Custom shortcut handling
-if input.key_pressed(KeyCode::A) && input.key_pressed(KeyCode::LControl) {
-    // Your custom select-all logic
-    let entities: Vec<Entity> = selectable_query.iter().collect();
-    selection.select_entities(entities, SelectionMode::Replace);
-}
-```
-
-## Selection Events
-
-The system generates events for selection changes:
-
-### Event Types
-
-```rust
-pub enum SelectionEvent {
-    Selected(Vec<Entity>),    // Entities were selected
-    Deselected(Vec<Entity>),  // Entities were deselected
-    Cleared,                   // All selections cleared
-    Changed,                   // Generic change notification
-}
-```
-
-### Event Handling
-
-Two ways to access events:
-
-#### Inspect Events (Non-consuming)
-
-```rust
-// Read events without removing them
-for event in selection.events() {
-    match event {
-        SelectionEvent::Selected(entities) => {
-            println!("Selected {} entities", entities.len());
-        }
-        SelectionEvent::Deselected(entities) => {
-            println!("Deselected {} entities", entities.len());
-        }
-        SelectionEvent::Cleared => {
-            println!("Selection cleared");
-        }
-        SelectionEvent::Changed => {
-            println!("Selection changed");
+fn highlight_selected_system(
+    mut materials: Query<&mut MaterialProperties>,
+    selected: Query<Entity, With<Selected>>,
+) {
+    let selected_set: HashSet<_> = selected.iter().collect();
+    
+    for (entity, mut material) in materials.iter_mut() {
+        if selected_set.contains(&entity) {
+            material.base_color = [1.0, 1.0, 0.0, 1.0]; // Yellow highlight
         }
     }
 }
 ```
 
-#### Drain Events (Consuming)
-
-```rust
-// Process and remove events
-for event in selection.drain_events() {
-    match event {
-        SelectionEvent::Selected(entities) => {
-            update_inspector(entities);
-        }
-        _ => {}
-    }
-}
-```
-
-### Event Usage Examples
-
-**Update Inspector Panel**:
-```rust
-for event in selection.drain_events() {
-    if let SelectionEvent::Selected(entities) = event {
-        inspector.set_targets(entities);
-    }
-}
-```
-
-**Update Outline Renderer**:
-```rust
-for event in selection.events() {
-    match event {
-        SelectionEvent::Selected(entities) => {
-            outline_renderer.add_entities(entities);
-        }
-        SelectionEvent::Deselected(entities) => {
-            outline_renderer.remove_entities(entities);
-        }
-        SelectionEvent::Cleared => {
-            outline_renderer.clear();
-        }
-        _ => {}
-    }
-}
-```
-
-**Analytics/Logging**:
-```rust
-for event in selection.events() {
-    analytics.log_editor_event("selection_changed", event);
-}
-```
-
-## Advanced Usage
-
-### Selection Filtering
-
-Filter selection by component type:
-
-```rust
-// Select only entities with Light component
-let lights: Vec<Entity> = selectable_query
-    .iter()
-    .filter(|(entity, _)| world.get::<Light>(*entity).is_some())
-    .map(|(entity, _)| entity)
-    .collect();
-
-selection.select_entities(lights, SelectionMode::Replace);
-```
+## Advanced Features
 
 ### Hierarchical Selection
 
@@ -455,251 +266,77 @@ fn select_hierarchy(
     children_query: &Query<&Children>,
 ) {
     let mut entities = vec![entity];
-    
-    // Recursively collect children
-    fn collect_children(
-        entity: Entity,
-        entities: &mut Vec<Entity>,
-        children_query: &Query<&Children>,
-    ) {
-        if let Ok(children) = children_query.get(entity) {
-            for child in children.iter() {
-                entities.push(*child);
-                collect_children(*child, entities, children_query);
-            }
-        }
-    }
-    
-    collect_children(entity, &mut entities, children_query);
+    collect_children_recursive(entity, &mut entities, children_query);
     selection.select_entities(entities, SelectionMode::Add);
 }
 ```
 
-### Selection Groups
+### Selection Filtering
 
-Save and restore selection sets:
-
-```rust
-use std::collections::HashMap;
-
-struct SelectionGroups {
-    groups: HashMap<String, Vec<Entity>>,
-}
-
-impl SelectionGroups {
-    pub fn save(&mut self, name: String, selection: &SelectionSystem) {
-        let entities = selection.selected_entities().collect();
-        self.groups.insert(name, entities);
-    }
-    
-    pub fn restore(&self, name: &str, selection: &mut SelectionSystem) {
-        if let Some(entities) = self.groups.get(name) {
-            selection.select_entities(entities.clone(), SelectionMode::Replace);
-        }
-    }
-}
-```
-
-### Custom Intersection Tests
-
-Extend raycast picking with custom bounds:
+Filter selection by component type:
 
 ```rust
-// Use AABB instead of sphere
-pub fn raycast_pick_aabb(
-    ray_origin: Vec3,
-    ray_direction: Vec3,
-    query: &Query<(Entity, &GlobalTransform, &Aabb), With<Selectable>>,
-) -> Option<Entity> {
-    let mut closest_entity = None;
-    let mut closest_distance = f32::MAX;
-    
-    for (entity, transform, aabb) in query.iter() {
-        if let Some(distance) = ray_aabb_intersection(
-            ray_origin,
-            ray_direction,
-            aabb,
-            transform.translation(),
-        ) {
-            if distance < closest_distance {
-                closest_distance = distance;
-                closest_entity = Some(entity);
-            }
-        }
-    }
-    
-    closest_entity
-}
+// Select only entities with Light component
+let lights: Vec<Entity> = selectable_query
+    .iter()
+    .filter(|&(e, _)| world.get::<Light>(e).is_some())
+    .map(|(e, _)| e)
+    .collect();
+
+selection.select_entities(lights, SelectionMode::Replace);
 ```
 
 ## Performance Considerations
 
-### Selection Limits
-
-The system is optimized for typical editor use:
-- **Selected entities**: 1-1000 (HashSet lookup: O(1))
-- **Selectable entities**: 1-100,000 (Query iteration: O(n))
-- **Event buffer**: 100 events (ring buffer, configurable)
+- **Selected entities**: O(1) lookup via HashSet, efficient for 1-1000 entities
+- **Selectable entities**: O(n) iteration for raycast/marquee, optimize with spatial partitioning
+- **Event buffer**: Ring buffer with 100 event capacity
 
 ### Optimization Tips
 
-1. **Use spatial partitioning**: Reduce entities tested for picking
-```rust
-let candidates = octree.query_frustum(&camera_frustum);
-let picked = raycast_pick_subset(ray, &candidates);
-```
-
-2. **Batch operations**: Use `select_entities()` instead of multiple `select_entity()` calls
-```rust
-// Slow
-for entity in entities {
-    selection.select_entity(entity, SelectionMode::Add);
-}
-
-// Fast
-selection.select_entities(entities, SelectionMode::Add);
-```
-
-3. **Event processing**: Drain events when done processing
-```rust
-// Process events once per frame
-for event in selection.drain_events() {
-    handle_event(event);
-}
-```
-
-4. **Cull off-screen entities**: Skip raycast tests for culled entities
-```rust
-let visible_entities: Vec<_> = selectable_query
-    .iter()
-    .filter(|(_, transform)| frustum.contains_point(transform.translation()))
-    .collect();
-```
+1. **Spatial Partitioning**: Use octree/BVH to reduce raycast candidates
+2. **Batch Operations**: Use `select_entities()` instead of multiple `select_entity()` calls
+3. **Cull Off-Screen**: Skip raycast tests for entities outside camera frustum
+4. **Event Processing**: Drain events once per frame to avoid accumulation
 
 ## Troubleshooting
 
 ### Selection Not Working
-
-**Problem**: Entities don't select when clicked
-**Solutions**:
 - Verify entity has `Selectable` component
-- Check raycast is hitting the entity (add debug visualization)
-- Ensure `update_selection_system` is running
-- Verify camera matrices are correct
+- Check `update_selection_system` is in schedule
+- Ensure `SelectionSystem` resource exists
+- Verify camera matrices are correct for raycast
 
-### Multiple Entities Selected When Clicking
-
-**Problem**: Click selects multiple overlapping entities
-**Solutions**:
-- Check entity bounds (may be too large)
-- Use depth sorting to pick closest entity
-- Implement occlusion testing
-
-### Performance Issues with Large Scenes
-
-**Problem**: Selection is slow with many entities
-**Solutions**:
-- Implement spatial partitioning (octree, BVH)
-- Cull off-screen entities before raycast
-- Use simpler intersection tests (sphere vs. mesh)
-- Batch selection operations
+### Multiple Entities Selected When Clicking One
+- Entity bounds may be too large (adjust picking radius)
+- Implement depth sorting to pick closest entity
+- Use more accurate bounds (AABB vs sphere)
 
 ### Events Not Firing
-
-**Problem**: SelectionEvent not received
-**Solutions**:
-- Check if events were already drained
+- Check if events were already drained elsewhere
 - Use `events()` to inspect without consuming
-- Verify selection actually changed
-- Check event buffer isn't full (increase size)
+- Verify event buffer isn't full
 
-## Complete Example
+## Examples
 
-```rust
-use praxis_editor::*;
-use praxis_ecs::*;
-use praxis_input::InputState;
+See `examples/selection_demo.rs` for a complete working example demonstrating:
+- Click-to-select with raycast picking
+- Multi-entity selection with modifier keys
+- Marquee selection
+- Keyboard shortcuts
+- Visual feedback for selected entities
 
-// Setup
-fn setup(mut world: World) {
-    // Add selection resource
-    world.insert_resource(SelectionSystem::new());
-    
-    // Spawn selectable entities
-    for x in 0..10 {
-        for z in 0..10 {
-            world.spawn((
-                Transform::from_xyz(x as f32 * 2.0, 0.0, z as f32 * 2.0),
-                Mesh::cube(),
-                Selectable,
-            ));
-        }
-    }
-    
-    // Setup systems
-    let mut schedule = Schedule::default();
-    schedule.add_systems((
-        handle_input_system,
-        handle_selection_input_system,
-        update_selection_system,
-        highlight_selected_system,
-    ).chain());
-    
-    world.insert_resource(schedule);
-}
+## Technical Details
 
-// Handle mouse input
-fn handle_input_system(
-    input: Res<InputState>,
-    mut selection: ResMut<SelectionSystem>,
-    camera_query: Query<(&Camera, &CameraMatrices, &GlobalTransform)>,
-    selectable_query: Query<(Entity, &GlobalTransform), With<Selectable>>,
-) {
-    let (camera, matrices, transform) = camera_query.single();
-    
-    // Click selection
-    if input.mouse_button_just_pressed(MouseButton::Left) {
-        let picked = selection.raycast_pick(
-            input.mouse_position(),
-            Vec2::new(1920.0, 1080.0),
-            camera,
-            matrices,
-            transform,
-            &selectable_query,
-        );
-        
-        if let Some(entity) = picked {
-            let mode = if input.key_pressed(KeyCode::Shift) {
-                SelectionMode::Add
-            } else {
-                SelectionMode::Replace
-            };
-            selection.select_entity(entity, mode);
-        }
-    }
-}
-
-// Visual feedback for selected entities
-fn highlight_selected_system(
-    mut query: Query<&mut Material>,
-    selected_query: Query<Entity, With<Selected>>,
-) {
-    let selected: HashSet<_> = selected_query.iter().collect();
-    
-    for (entity, mut material) in query.iter_mut() {
-        if selected.contains(&entity) {
-            material.set_color(Color::rgb(0.5, 0.7, 1.0));
-        } else {
-            material.set_color(Color::rgb(0.7, 0.7, 0.7));
-        }
-    }
-}
-```
+For implementation details, see:
+- [crates/praxis_editor/SELECTION_SYSTEM.md](../../crates/praxis_editor/SELECTION_SYSTEM.md) - Complete implementation documentation
+- Raycast picking algorithm details
+- Marquee selection algorithm details
+- Event system internals
 
 ## See Also
 
-- [Editor Camera Guide](camera.md)
-- [Hierarchy Panel Guide](hierarchy.md)
-- [Inspector Panel Guide](inspector.md)
-- [Gizmos Guide](gizmos.md)
-- [Undo/Redo System](undo-redo.md)
+- [Gizmos](gizmos.md) - Transform manipulation of selected entities
+- [Hierarchy Panel](hierarchy-panel.md) - Tree view with selection integration
+- [Inspector Panel](inspector.md) - Edit components of selected entities
+- [Editor Camera](editor-camera.md) - Focus camera on selection
