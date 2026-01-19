@@ -69,9 +69,9 @@ struct SceneObject {
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum ObjectType {
-    Occluder,       // Large walls that block view
-    SmallObject,    // Objects behind occluders (should be culled)
-    VisibleObject,  // Objects around occluders (should remain visible)
+    Occluder,      // Large walls that block view
+    SmallObject,   // Objects behind occluders (should be culled)
+    VisibleObject, // Objects around occluders (should remain visible)
 }
 
 struct CameraState {
@@ -159,7 +159,7 @@ struct App {
 
     // Scene data
     scene_objects: Vec<SceneObject>,
-    
+
     // Camera
     camera: CameraState,
 
@@ -246,9 +246,9 @@ impl App {
         // Create large occluder walls in the center
         let occluder_configs = vec![
             (Vec3::new(0.0, 5.0, 0.0), Vec3::new(10.0, 10.0, 2.0)), // Main wall
-            (Vec3::new(-12.0, 5.0, 0.0), Vec3::new(5.0, 8.0, 1.5)),  // Left wall
-            (Vec3::new(12.0, 5.0, 0.0), Vec3::new(5.0, 8.0, 1.5)),   // Right wall
-            (Vec3::new(0.0, 5.0, -10.0), Vec3::new(8.0, 8.0, 1.5)),  // Back wall
+            (Vec3::new(-12.0, 5.0, 0.0), Vec3::new(5.0, 8.0, 1.5)), // Left wall
+            (Vec3::new(12.0, 5.0, 0.0), Vec3::new(5.0, 8.0, 1.5)),  // Right wall
+            (Vec3::new(0.0, 5.0, -10.0), Vec3::new(8.0, 8.0, 1.5)), // Back wall
         ];
 
         for (pos, scale) in occluder_configs {
@@ -496,8 +496,7 @@ impl App {
         let target = self.camera.position + self.camera.forward();
         let view = Mat4::look_at_rh(self.camera.position, target, Vec3::Y);
         let aspect = WINDOW_WIDTH as f32 / WINDOW_HEIGHT as f32;
-        let projection =
-            Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, aspect, 0.1, 1000.0);
+        let projection = Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, aspect, 0.1, 1000.0);
 
         // Note: In a full implementation, we would:
         // 1. Update GPU culling manager with scene objects
@@ -589,7 +588,12 @@ impl ApplicationHandler for App {
         }
     }
 
-    fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: winit::event::DeviceId, event: DeviceEvent) {
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: winit::event::DeviceId,
+        event: DeviceEvent,
+    ) {
         if let DeviceEvent::MouseMotion { delta } = event {
             if self.cursor_locked {
                 self.input_state
@@ -611,9 +615,9 @@ fn main() -> Result<()> {
     let event_loop = EventLoop::new().expect("Failed to create event loop");
     let mut app = App::default();
 
-    event_loop.run_app(&mut app).map_err(|e| {
-        praxis_utils::eyre::eyre!("Event loop error: {}", e)
-    })?;
+    event_loop
+        .run_app(&mut app)
+        .map_err(|e| praxis_utils::eyre::eyre!("Event loop error: {}", e))?;
 
     Ok(())
 }

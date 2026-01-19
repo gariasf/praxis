@@ -69,6 +69,7 @@ cargo run --example fps_camera_controller
 cargo run --example ecs_integration
 cargo run --example texture_compression_demo
 cargo run --example hiz_occlusion_demo
+cargo run --example rendering_stress_test
 
 # Documentation
 cargo doc --workspace --no-deps --open

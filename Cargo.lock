@@ -3526,6 +3526,7 @@ dependencies = [
  "praxis_terrain",
  "praxis_utils",
  "praxis_window",
+ "rand 0.8.5",
  "serial_test",
  "tokio",
  "tracing-subscriber",

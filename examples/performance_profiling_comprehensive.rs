@@ -371,14 +371,23 @@ impl ProfilingState {
         if let Some(level) = snapshot.level {
             info!("Optimization Level: {}", level.name());
         }
-        info!("  FPS: {:.1} (min: {:.1}, max: {:.1})", 
-              snapshot.avg_fps, snapshot.min_fps, snapshot.max_fps);
+        info!(
+            "  FPS: {:.1} (min: {:.1}, max: {:.1})",
+            snapshot.avg_fps, snapshot.min_fps, snapshot.max_fps
+        );
         info!("  Frame Time: {:.2}ms", snapshot.avg_frame_time_ms);
-        info!("  Objects: {} total, {} visible, {} culled",
-              snapshot.total_objects, snapshot.visible_objects, snapshot.culled_objects);
-        if snapshot.lod_high_count > 0 || snapshot.lod_medium_count > 0 || snapshot.lod_low_count > 0 {
-            info!("  LOD Distribution: High={}, Medium={}, Low={}",
-                  snapshot.lod_high_count, snapshot.lod_medium_count, snapshot.lod_low_count);
+        info!(
+            "  Objects: {} total, {} visible, {} culled",
+            snapshot.total_objects, snapshot.visible_objects, snapshot.culled_objects
+        );
+        if snapshot.lod_high_count > 0
+            || snapshot.lod_medium_count > 0
+            || snapshot.lod_low_count > 0
+        {
+            info!(
+                "  LOD Distribution: High={}, Medium={}, Low={}",
+                snapshot.lod_high_count, snapshot.lod_medium_count, snapshot.lod_low_count
+            );
         }
         info!("  Draw Calls: {}", snapshot.draw_calls);
         info!("  Triangles: {}", snapshot.triangles_rendered);
@@ -435,9 +444,15 @@ impl ProfilingState {
         for level in levels {
             if let Some(snapshot) = self.snapshots.get(&level) {
                 if snapshot.total_objects > 0 {
-                    let cull_pct = (snapshot.culled_objects as f64 / snapshot.total_objects as f64) * 100.0;
-                    info!("{}: {:.1}% culled ({}/{})",
-                          level.name(), cull_pct, snapshot.culled_objects, snapshot.total_objects);
+                    let cull_pct =
+                        (snapshot.culled_objects as f64 / snapshot.total_objects as f64) * 100.0;
+                    info!(
+                        "{}: {:.1}% culled ({}/{})",
+                        level.name(),
+                        cull_pct,
+                        snapshot.culled_objects,
+                        snapshot.total_objects
+                    );
                 }
             }
         }
@@ -489,15 +504,21 @@ fn setup_scene(world: &mut World, render_context: &mut RenderContext) -> Result<
 fn setup_meshes(render_context: &mut RenderContext) -> Result<()> {
     // High detail meshes
     let sphere_high = sphere_mesh(2.0, 32, 32, [0.7, 0.3, 0.3]);
-    render_context.mesh_manager_mut().load_mesh("sphere_high", sphere_high)?;
+    render_context
+        .mesh_manager_mut()
+        .load_mesh("sphere_high", sphere_high)?;
 
     // Medium detail meshes
     let sphere_medium = sphere_mesh(2.0, 16, 16, [0.7, 0.7, 0.3]);
-    render_context.mesh_manager_mut().load_mesh("sphere_medium", sphere_medium)?;
+    render_context
+        .mesh_manager_mut()
+        .load_mesh("sphere_medium", sphere_medium)?;
 
     // Low detail meshes
     let sphere_low = sphere_mesh(2.0, 8, 8, [0.3, 0.7, 0.3]);
-    render_context.mesh_manager_mut().load_mesh("sphere_low", sphere_low)?;
+    render_context
+        .mesh_manager_mut()
+        .load_mesh("sphere_low", sphere_low)?;
 
     // Cube for instancing
     let cube = colored_cube_mesh();
@@ -505,7 +526,9 @@ fn setup_meshes(render_context: &mut RenderContext) -> Result<()> {
 
     // Large occluder
     let occluder = solid_cube_mesh([0.3, 0.3, 0.3]);
-    render_context.mesh_manager_mut().load_mesh("occluder", occluder)?;
+    render_context
+        .mesh_manager_mut()
+        .load_mesh("occluder", occluder)?;
 
     info!("Loaded {} test meshes", 5);
     Ok(())
@@ -549,7 +572,7 @@ fn create_instance_groups(world: &mut World) -> u32 {
 
     for group_id in 0..NUM_GROUPS {
         let base_x = (group_id as f32 * 15.0) - 150.0;
-        
+
         for i in 0..INSTANCES_PER_GROUP {
             let offset = i as f32 * 1.5;
             let position = Vec3::new(base_x + offset, 5.0, 50.0);
@@ -780,7 +803,8 @@ fn render_system(
 ) -> Result<()> {
     let _scope = ProfileScope::new("render");
 
-    let camera = world.get_resource::<CameraController>()
+    let camera = world
+        .get_resource::<CameraController>()
         .ok_or_else(|| praxis_utils::eyre::eyre!("Camera not found"))?;
 
     // Build view and projection matrices
@@ -799,7 +823,7 @@ fn render_system(
     // Group objects for instancing if enabled
     if level.has_instancing() {
         let _scope = ProfileScope::new("build_instanced_commands");
-        
+
         // In a real implementation, we would batch by instance group
         // For this demo, we'll simulate the reduction in draw calls
         let query = world.query::<(&Transform, &SceneObject)>();
@@ -826,7 +850,7 @@ fn render_system(
         draw_calls = draw_commands.len() as u32 / 10; // Simulated 10x reduction
     } else {
         let _scope = ProfileScope::new("build_draw_commands");
-        
+
         let query = world.query::<(&Transform, &SceneObject)>();
         for (_entity, (transform, obj)) in query.iter() {
             if !obj.is_visible {
@@ -940,10 +964,13 @@ fn handle_input(
                     profiling_state.start_measurement(OptimizationLevel::FrustumLodOcclusion);
                 }
                 KeyCode::Digit5 if pressed => {
-                    profiling_state.start_measurement(OptimizationLevel::FrustumLodOcclusionInstancing);
+                    profiling_state
+                        .start_measurement(OptimizationLevel::FrustumLodOcclusionInstancing);
                 }
                 KeyCode::Digit6 if pressed => {
-                    profiling_state.start_measurement(OptimizationLevel::FrustumLodOcclusionInstancingStreaming);
+                    profiling_state.start_measurement(
+                        OptimizationLevel::FrustumLodOcclusionInstancingStreaming,
+                    );
                 }
                 KeyCode::Digit7 if pressed => {
                     profiling_state.start_measurement(OptimizationLevel::Full);
@@ -964,13 +991,18 @@ fn handle_input(
                         profiling_state.export_trace = true;
                         info!("Started Chrome trace export");
                     } else {
-                        let _ = profiling_state.profiler.end_trace_export("performance_trace.json");
+                        let _ = profiling_state
+                            .profiler
+                            .end_trace_export("performance_trace.json");
                         profiling_state.export_trace = false;
                         info!("Saved Chrome trace to: performance_trace.json");
                     }
                 }
                 KeyCode::KeyI if pressed => {
-                    info!("Current optimization level: {}", profiling_state.current_level.name());
+                    info!(
+                        "Current optimization level: {}",
+                        profiling_state.current_level.name()
+                    );
                     profiling_state.print_snapshot(&profiling_state.current_snapshot);
                 }
 
@@ -1013,7 +1045,9 @@ async fn main() -> Result<()> {
     }
 
     // Initialize resources
-    engine.world_mut().insert_resource(CameraController::default());
+    engine
+        .world_mut()
+        .insert_resource(CameraController::default());
     engine.world_mut().insert_resource(ProfilingState::new());
 
     // Main loop
@@ -1025,7 +1059,9 @@ async fn main() -> Result<()> {
         last_time = current_time;
 
         // Get profiling state for this frame
-        let mut profiling_state = engine_state.world.get_resource_mut::<ProfilingState>()
+        let mut profiling_state = engine_state
+            .world
+            .get_resource_mut::<ProfilingState>()
             .expect("ProfilingState resource missing");
 
         profiling_state.profiler.begin_frame();
@@ -1050,7 +1086,11 @@ async fn main() -> Result<()> {
             engine_state.world.get_resource::<ProfilingState>(),
             engine_state.world.get_resource::<CameraController>(),
         ) {
-            culling_system(state, camera, engine_state.world.query::<(&Transform, &mut SceneObject)>());
+            culling_system(
+                state,
+                camera,
+                engine_state.world.query::<(&Transform, &mut SceneObject)>(),
+            );
         }
 
         // Render
