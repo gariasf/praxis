@@ -2,6 +2,10 @@
 
 This document presents common Entity-Component-System design patterns used in Praxis. These patterns help structure game logic efficiently, maintain clean code, and leverage the ECS architecture for maximum performance.
 
+**Related Architecture Documentation:**
+- [ECS System Execution Order](ecs-system-execution-order.md) - Visual guide to when systems run and how they interact
+- [ECS Architecture](../concepts/ecs-architecture.md) - Core ECS concepts and theory
+
 ## Introduction to ECS
 
 The Entity-Component-System architecture separates data (Components) from behavior (Systems):

@@ -2,6 +2,10 @@
 
 This document provides a deep dive into Praxis's rendering architecture, comparing forward and deferred rendering approaches, and explaining when to use each technique. Understanding these rendering paths is essential for optimizing visual quality and performance.
 
+**Related Architecture Documentation:**
+- [Rendering Pipeline Stages](rendering-pipeline-stages.md) - Detailed visual breakdown of all rendering stages
+- [Crate Dependency Graph](crate-dependency-graph.md) - How graphics subsystems depend on each other
+
 ## Overview
 
 Praxis supports two primary rendering pipelines:

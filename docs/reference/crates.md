@@ -2,6 +2,9 @@
 
 Overview of all workspace crates, their purposes, and dependencies.
 
+**Visual Architecture:**
+- [Crate Dependency Graph](../architecture/crate-dependency-graph.md) - Complete visual diagram of crate dependencies and layers
+
 ## Core Crates
 
 ### praxis

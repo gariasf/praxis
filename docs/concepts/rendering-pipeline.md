@@ -2,6 +2,10 @@
 
 This document provides a comprehensive explanation of Praxis's rendering pipeline, covering the lighting system, material system, and physics rendering integration.
 
+**Related Architecture Documentation:**
+- [Rendering Pipeline Stages](../architecture/rendering-pipeline-stages.md) - Detailed visual breakdown of rendering stages
+- [Render Pipeline Architecture](../architecture/render-pipeline.md) - Forward vs deferred rendering comparison
+
 ## Table of Contents
 
 1. [Overview](#overview)

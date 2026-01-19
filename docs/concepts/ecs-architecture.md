@@ -2,6 +2,10 @@
 
 Entity-Component-System (ECS) is the core architectural pattern in Praxis, powered by `bevy_ecs`.
 
+**Related Architecture Documentation:**
+- [ECS System Execution Order](../architecture/ecs-system-execution-order.md) - Visual guide to system scheduling and data flow
+- [ECS Design Patterns](../architecture/ecs-patterns.md) - Common patterns and best practices
+
 ## Core Concepts
 
 ### Entities

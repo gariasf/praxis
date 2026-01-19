@@ -2,6 +2,11 @@
 
 This document provides a detailed overview of the Praxis engine's lifecycle, from initialization through frame execution to shutdown. Understanding the engine lifecycle is essential for integrating systems, managing resources, and optimizing performance.
 
+**Related Architecture Documentation:**
+- [Crate Dependency Graph](crate-dependency-graph.md) - See how subsystems depend on each other
+- [ECS System Execution Order](ecs-system-execution-order.md) - Detailed system execution flow per frame
+- [Rendering Pipeline Stages](rendering-pipeline-stages.md) - GPU rendering stages within each frame
+
 ## Overview
 
 The Praxis engine follows a structured initialization and execution pattern that sets up all core systems before entering the main event loop. The lifecycle consists of three main phases:

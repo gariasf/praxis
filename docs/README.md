@@ -63,6 +63,10 @@ For comprehensive particle rendering documentation, see [crates/praxis_graphics/
 ### [Concepts](concepts/README.md)
 Educational explanations of engine design:
 - [Architecture](architecture.md) - Overall engine design and crate organization
+  - [Crate Dependency Graph](architecture/crate-dependency-graph.md) - Visual crate organization diagram
+  - [Rendering Pipeline Stages](architecture/rendering-pipeline-stages.md) - Complete rendering flow diagrams
+  - [ECS System Execution Order](architecture/ecs-system-execution-order.md) - System scheduling visualization
+  - [Multiplayer Data Flow](architecture/multiplayer-data-flow.md) - Client-server networking architecture
 - [ECS Architecture](concepts/ecs-architecture.md) - Entity-Component-System patterns
 - [Vulkan Rendering](concepts/vulkan-rendering.md) - Graphics pipeline fundamentals
 - [Rendering Pipeline](concepts/rendering-pipeline.md) - Detailed rendering explanation

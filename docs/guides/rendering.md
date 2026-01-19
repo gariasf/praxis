@@ -2,6 +2,10 @@
 
 Praxis supports both forward and deferred rendering pipelines with Vulkan via `vulkano`.
 
+**Architecture Documentation:**
+- [Rendering Pipeline Stages](../architecture/rendering-pipeline-stages.md) - Complete visual breakdown of the rendering pipeline
+- [Render Pipeline Architecture](../architecture/render-pipeline.md) - Detailed comparison of forward vs deferred rendering
+
 ## Forward Rendering (Default)
 
 Forward rendering processes each object through the full lighting calculation:

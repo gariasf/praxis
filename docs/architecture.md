@@ -1,5 +1,11 @@
 # Praxis Engine - Rust Architecture
 
+**Detailed Architecture Diagrams:**
+- [Crate Dependency Graph](architecture/crate-dependency-graph.md) - Visual crate organization and dependencies
+- [Rendering Pipeline Stages](architecture/rendering-pipeline-stages.md) - Complete rendering flow diagrams
+- [ECS System Execution Order](architecture/ecs-system-execution-order.md) - System scheduling and data flow
+- [Multiplayer Data Flow](architecture/multiplayer-data-flow.md) - Client-server networking architecture
+
 ## Core Principles
 
 - **Language:** Rust (stable version).

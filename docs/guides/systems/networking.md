@@ -2,6 +2,9 @@
 
 Practical guide to building multiplayer games with Praxis using client-server architecture, entity replication, and lag compensation.
 
+**Related Architecture Documentation:**
+- [Multiplayer Data Flow](../../architecture/multiplayer-data-flow.md) - Complete visual guide to client-server data flow, entity replication, and lag compensation
+
 ## Table of Contents
 
 1. [Overview](#overview)
