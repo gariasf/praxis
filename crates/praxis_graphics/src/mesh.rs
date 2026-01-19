@@ -1471,6 +1471,14 @@ impl MeshStreamingSystem {
         meshes.clear();
         debug!("Cleared all streaming meshes");
     }
+
+    /// Gets the streaming state of a mesh by ID.
+    ///
+    /// Returns `None` if the mesh doesn't exist.
+    pub fn get_mesh_state(&self, id: &str) -> Option<MeshStreamingState> {
+        let meshes = self.meshes.read();
+        meshes.get(id).map(|m| m.state)
+    }
 }
 
 impl Drop for MeshStreamingSystem {
