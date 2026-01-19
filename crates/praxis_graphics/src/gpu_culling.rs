@@ -1195,7 +1195,7 @@ impl GpuCullingManager {
                 mipmap_mode: SamplerMipmapMode::Nearest,
                 address_mode: [SamplerAddressMode::ClampToEdge; 3],
                 mip_lod_bias: 0.0,
-                max_lod: mip_levels as f32,
+                lod: 0.0..=(mip_levels as f32),
                 ..Default::default()
             },
         )

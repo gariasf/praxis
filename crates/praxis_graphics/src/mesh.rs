@@ -1150,8 +1150,8 @@ struct MeshLoadResult {
     /// Loaded GPU mesh (None if failed).
     mesh: Option<GpuMesh>,
 
-    /// Future for synchronization.
-    future: Option<Box<dyn GpuFuture>>,
+    /// Whether the GPU transfer completed successfully.
+    transfer_success: bool,
 }
 
 /// Background mesh streaming system.
@@ -1258,11 +1258,18 @@ impl MeshStreamingSystem {
 
                     match result {
                         Ok((mesh, future)) => {
+                            // Wait for GPU transfer to complete on background thread
+                            // This is necessary because GpuFuture is not Send
+                            let transfer_success = future
+                                .then_signal_fence_and_flush()
+                                .map(|fence| fence.wait(None).is_ok())
+                                .unwrap_or(false);
+
                             if result_sender
                                 .send(MeshLoadResult {
                                     id: request.id.clone(),
                                     mesh: Some(mesh),
-                                    future: Some(future),
+                                    transfer_success,
                                 })
                                 .is_err()
                             {
@@ -1277,7 +1284,7 @@ impl MeshStreamingSystem {
                                 .send(MeshLoadResult {
                                     id: request.id.clone(),
                                     mesh: None,
-                                    future: None,
+                                    transfer_success: false,
                                 })
                                 .is_err()
                             {
@@ -1355,15 +1362,13 @@ impl MeshStreamingSystem {
 
             if let Some(streaming_mesh) = meshes.get_mut(&result.id) {
                 if let Some(mesh) = result.mesh {
-                    if let Some(future) = result.future {
-                        if future.wait(None).is_ok() {
-                            streaming_mesh.mesh = Some(mesh);
-                            streaming_mesh.state = MeshStreamingState::Loaded;
-                            info!("Mesh '{}' loaded and ready", result.id);
-                        } else {
-                            streaming_mesh.state = MeshStreamingState::Failed;
-                            warn!("Mesh '{}' GPU transfer failed", result.id);
-                        }
+                    if result.transfer_success {
+                        streaming_mesh.mesh = Some(mesh);
+                        streaming_mesh.state = MeshStreamingState::Loaded;
+                        info!("Mesh '{}' loaded and ready", result.id);
+                    } else {
+                        streaming_mesh.state = MeshStreamingState::Failed;
+                        warn!("Mesh '{}' GPU transfer failed", result.id);
                     }
                 } else {
                     streaming_mesh.state = MeshStreamingState::Failed;
@@ -1416,15 +1421,22 @@ impl MeshStreamingSystem {
 
     /// Triggers loading for all visible unloaded meshes.
     pub fn load_visible_meshes(&self, mesh_data_provider: &dyn Fn(&str) -> Option<MeshData>) {
-        let meshes = self.meshes.read();
+        // Collect mesh IDs and priorities that need loading first
+        let to_load: Vec<(String, f32)> = {
+            let meshes = self.meshes.read();
+            meshes
+                .iter()
+                .filter(|(_, mesh)| {
+                    mesh.priority > 0.0 && matches!(mesh.state, MeshStreamingState::Unloaded)
+                })
+                .map(|(id, mesh)| (id.clone(), mesh.priority))
+                .collect()
+        };
 
-        for (id, mesh) in meshes.iter() {
-            if mesh.priority > 0.0 && matches!(mesh.state, MeshStreamingState::Unloaded) {
-                if let Some(mesh_data) = mesh_data_provider(id) {
-                    drop(meshes);
-                    self.request_load(id, mesh_data, mesh.priority);
-                    let meshes = self.meshes.read();
-                }
+        // Now process loading requests with lock released
+        for (id, priority) in to_load {
+            if let Some(mesh_data) = mesh_data_provider(&id) {
+                self.request_load(&id, mesh_data, priority);
             }
         }
     }

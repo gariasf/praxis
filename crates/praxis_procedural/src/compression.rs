@@ -124,13 +124,10 @@ use praxis_utils::{eyre, trace, Result};
 use std::sync::Arc;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
-    command_buffer::{
-        allocator::CommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage,
-        CopyBufferInfo,
-    },
+    command_buffer::{allocator::CommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage},
     descriptor_set::{allocator::DescriptorSetAllocator, DescriptorSet, WriteDescriptorSet},
     device::{Device, Queue},
-    image::{view::ImageView, Image, ImageCreateInfo, ImageType, ImageUsage},
+    format::Format,
     memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
     pipeline::{
         compute::ComputePipelineCreateInfo, layout::PipelineDescriptorSetLayoutCreateInfo,
@@ -138,7 +135,6 @@ use vulkano::{
         PipelineShaderStageCreateInfo,
     },
     sync::{self, GpuFuture},
-    Format,
 };
 
 /// Texture compression format.
@@ -453,13 +449,14 @@ impl TextureCompressor {
         format: CompressionFormat,
         quality: CompressionQuality,
     ) -> Result<Arc<ComputePipeline>> {
-        let pipeline = match format {
-            CompressionFormat::BC7 => &mut self.bc7_pipeline,
-            CompressionFormat::BC5 => &mut self.bc5_pipeline,
+        // Check if pipeline already exists (immutable borrow)
+        let existing = match format {
+            CompressionFormat::BC7 => self.bc7_pipeline.clone(),
+            CompressionFormat::BC5 => self.bc5_pipeline.clone(),
         };
 
-        if let Some(p) = pipeline {
-            return Ok(p.clone());
+        if let Some(p) = existing {
+            return Ok(p);
         }
 
         // Generate shader source for this format and quality
@@ -467,7 +464,12 @@ impl TextureCompressor {
 
         // Compile and create pipeline
         let new_pipeline = self.create_compute_pipeline(&shader_source)?;
-        *pipeline = Some(new_pipeline.clone());
+
+        // Now store the pipeline (mutable borrow)
+        match format {
+            CompressionFormat::BC7 => self.bc7_pipeline = Some(new_pipeline.clone()),
+            CompressionFormat::BC5 => self.bc5_pipeline = Some(new_pipeline.clone()),
+        };
 
         Ok(new_pipeline)
     }

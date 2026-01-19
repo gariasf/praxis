@@ -668,6 +668,7 @@ impl ViewportPanel {
                     model: grid_renderer.model_matrix(),
                     texture_name: None,
                     material_properties: None,
+                    material_instance_id: None,
                     bone_matrices: None,
                 });
             }
@@ -681,6 +682,7 @@ impl ViewportPanel {
                 model: transform.compute_matrix(),
                 texture_name: None,
                 material_properties: None,
+                material_instance_id: None,
                 bone_matrices: None,
             });
         }

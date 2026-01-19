@@ -6,8 +6,8 @@
 
 use crate::texture::Texture;
 use praxis_procedural::{
-    ProceduralTextureCache, ProceduralTextureGenerator, TextureCacheKey, TextureGenerationParams,
-    TextureGraph,
+    GeneratedTexture, ProceduralTextureCache, ProceduralTextureGenerator, TextureCacheKey,
+    TextureGenerationParams, TextureGraph,
 };
 use praxis_utils::{debug, info, trace, Result};
 use std::sync::Arc;
@@ -96,7 +96,7 @@ impl ProceduralTextureManager {
     ) -> Result<Texture> {
         let cache_key = TextureCacheKey::new(graph, params);
 
-        let data = if let Some(cached_data) = self.cache.get(&cache_key) {
+        let generated = if let Some(cached_data) = self.cache.get(&cache_key) {
             debug!(
                 "Using cached procedural texture ({}x{})",
                 params.width, params.height
@@ -108,12 +108,29 @@ impl ProceduralTextureManager {
                 params.width, params.height
             );
             let data = self.generator.generate(graph, params)?;
-            self.cache
-                .insert(cache_key, data.clone(), params.width, params.height);
-            data
+            let generated = GeneratedTexture::Uncompressed {
+                data,
+                width: params.width,
+                height: params.height,
+            };
+            self.cache.insert(cache_key, generated.clone());
+            generated
         };
 
-        self.create_texture_from_data(&data, params.width, params.height)
+        // Extract data from GeneratedTexture
+        match generated {
+            GeneratedTexture::Uncompressed {
+                data,
+                width,
+                height,
+            } => self.create_texture_from_data(&data, width, height),
+            GeneratedTexture::Compressed(_) => {
+                // For now, compressed textures are not supported in this path
+                Err(praxis_utils::eyre::eyre!(
+                    "Compressed textures not yet supported in generate_texture"
+                ))
+            }
+        }
     }
 
     /// Generates a texture and does not cache it.
