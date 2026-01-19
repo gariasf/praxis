@@ -1045,6 +1045,7 @@ pub mod post_process;
 /// Public API is re-exported at crate root (see `pub use primitives::{...}` below).
 mod primitives;
 pub mod procedural_texture;
+pub mod render_stats;
 mod shaders;
 pub mod shadow;
 pub mod skybox;
@@ -1817,6 +1818,18 @@ pub struct RenderContext {
 
     /// Whether to use GPU culling for visibility determination.
     use_gpu_culling: bool,
+
+    /// Render statistics tracking (current frame).
+    current_render_stats: render_stats::RenderStats,
+
+    /// Render statistics history for analysis and visualization.
+    render_stats_history: render_stats::RenderStatsHistory,
+
+    /// Frame counter for statistics tracking.
+    stats_frame_number: u64,
+
+    /// Whether to collect render statistics.
+    collect_render_stats: bool,
 }
 
 impl RenderContext {
@@ -2180,6 +2193,12 @@ impl RenderContext {
             // GPU culling (disabled by default)
             gpu_culling_manager: None,
             use_gpu_culling: false,
+
+            // Render statistics tracking
+            current_render_stats: render_stats::RenderStats::new(0),
+            render_stats_history: render_stats::RenderStatsHistory::new(300),
+            stats_frame_number: 0,
+            collect_render_stats: true, // Enabled by default for performance monitoring
         })
     }
 
@@ -2438,6 +2457,119 @@ impl RenderContext {
     /// ```
     pub fn material_instance_stats(&self) -> material_instancing::InstancingStats {
         self.material_instance_manager.compute_stats()
+    }
+
+    /// Gets a reference to the current frame's render statistics.
+    ///
+    /// Returns the statistics collected during the most recent frame, including:
+    /// - Total objects submitted
+    /// - Visible objects after culling
+    /// - Frustum and occlusion culled counts
+    /// - Draw calls issued
+    /// - Descriptor set allocations
+    /// - Active LOD levels
+    /// - Streaming queue depth
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use praxis_graphics::RenderContext;
+    /// # async fn example(render_context: RenderContext) {
+    /// let stats = render_context.render_stats();
+    /// println!("Visible objects: {}/{}", stats.visible_objects, stats.total_objects);
+    /// println!("Culling efficiency: {:.1}%", stats.culling_efficiency());
+    /// println!("Draw calls: {}", stats.draw_calls);
+    /// # }
+    /// ```
+    pub fn render_stats(&self) -> &render_stats::RenderStats {
+        &self.current_render_stats
+    }
+
+    /// Gets a reference to the render statistics history.
+    ///
+    /// Returns the rolling history of frame statistics with aggregated metrics.
+    /// Useful for analyzing trends, computing averages, and generating graphs.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use praxis_graphics::RenderContext;
+    /// # async fn example(render_context: RenderContext) {
+    /// let history = render_context.render_stats_history();
+    /// println!("Average visible objects: {:.1}", history.avg_visible_objects());
+    /// println!("Peak draw calls: {}", history.max_draw_calls());
+    /// println!("Average culling efficiency: {:.1}%", history.avg_culling_efficiency());
+    /// # }
+    /// ```
+    pub fn render_stats_history(&self) -> &render_stats::RenderStatsHistory {
+        &self.render_stats_history
+    }
+
+    /// Gets a mutable reference to the render statistics history.
+    ///
+    /// Allows modifying the history, such as clearing it or adjusting the tracked frame count.
+    pub fn render_stats_history_mut(&mut self) -> &mut render_stats::RenderStatsHistory {
+        &mut self.render_stats_history
+    }
+
+    /// Enables or disables render statistics collection.
+    ///
+    /// When disabled, statistics tracking has zero overhead. When enabled, minimal overhead
+    /// is added to track rendering metrics each frame.
+    ///
+    /// # Arguments
+    ///
+    /// * `enabled` - Whether to collect render statistics
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use praxis_graphics::RenderContext;
+    /// # async fn example(mut render_context: RenderContext) {
+    /// // Disable for maximum performance in release builds
+    /// render_context.set_render_stats_enabled(false);
+    ///
+    /// // Re-enable for profiling
+    /// render_context.set_render_stats_enabled(true);
+    /// # }
+    /// ```
+    pub fn set_render_stats_enabled(&mut self, enabled: bool) {
+        self.collect_render_stats = enabled;
+    }
+
+    /// Returns whether render statistics collection is enabled.
+    pub fn is_render_stats_enabled(&self) -> bool {
+        self.collect_render_stats
+    }
+
+    /// Exports render statistics history to a CSV file.
+    ///
+    /// Creates a CSV file containing all tracked frame statistics, suitable for
+    /// analysis in spreadsheet software or data science tools.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the output CSV file
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if file creation or writing fails.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use praxis_graphics::RenderContext;
+    /// # async fn example(render_context: RenderContext) -> std::io::Result<()> {
+    /// render_context.export_render_stats_csv("render_stats.csv")?;
+    /// println!("Render statistics exported to render_stats.csv");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn export_render_stats_csv<P: AsRef<std::path::Path>>(
+        &self,
+        path: P,
+    ) -> std::io::Result<()> {
+        self.render_stats_history.export_to_csv(path)
     }
 
     /// Gets a reference to the lighting uniform buffer.
@@ -3009,6 +3141,13 @@ impl RenderContext {
 
         let _ = self.frame_timer.tick();
 
+        // Initialize render stats for this frame
+        if self.collect_render_stats {
+            self.stats_frame_number += 1;
+            self.current_render_stats = render_stats::RenderStats::new(self.stats_frame_number);
+            self.current_render_stats.total_objects = cmds.draw_commands.len();
+        }
+
         let mut previous_frame_end = self
             .previous_frame_end
             .take()
@@ -3292,6 +3431,17 @@ impl RenderContext {
             }
         }
 
+        // Track render stats: visible objects (objects that passed culling and will be rendered)
+        if self.collect_render_stats {
+            self.current_render_stats.visible_objects = draw_list.len();
+            // For now, all non-culled objects are visible (GPU culling would reduce this)
+            // Frustum culling: difference between total and visible
+            let total_culled = self.current_render_stats.total_objects - self.current_render_stats.visible_objects;
+            self.current_render_stats.frustum_culled = total_culled;
+            // Descriptor allocations: count of unique descriptor sets created
+            self.current_render_stats.descriptor_allocations = self.descriptor_set_pool.len();
+        }
+
         // Store dummy bindless descriptor set before command buffer recording starts
         // This ensures it remains alive during command buffer execution
         if let Some(ref dummy_bindless_set) = self.dummy_bindless_descriptor_set {
@@ -3452,6 +3602,9 @@ impl RenderContext {
         if !draw_list.is_empty() && self.indirect_draw_buffer.is_some() {
             let indirect_buffer = self.indirect_draw_buffer.as_ref().unwrap();
 
+            // Track draw calls for render stats
+            let mut draw_call_count = 0;
+
             // Process draws in batches
             let mut batch_start = 0;
 
@@ -3509,6 +3662,9 @@ impl RenderContext {
                             )
                             .map_err(|e| eyre::eyre!("Failed to draw indexed indirect: {}", e))?;
                     }
+
+                    // Track this draw call
+                    draw_call_count += 1;
 
                     batch_start = i;
                 }
@@ -3578,6 +3734,11 @@ impl RenderContext {
                     }
                 }
             }
+
+            // Record draw call count to render stats
+            if self.collect_render_stats {
+                self.current_render_stats.draw_calls = draw_call_count;
+            }
         }
 
         command_buffer_builder
@@ -3630,6 +3791,14 @@ impl RenderContext {
         self.previous_frame_end = Some(future.boxed());
 
         trace!("Frame rendering complete");
+
+        // Record render stats for this frame
+        if self.collect_render_stats {
+            // Note: visible_objects, draw_calls, and descriptor_allocations are set during rendering
+            // Final values are recorded into history here
+            self.render_stats_history
+                .record(self.current_render_stats.clone());
+        }
 
         Ok(())
     }

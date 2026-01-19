@@ -72,6 +72,7 @@ cargo run --example hiz_occlusion_demo
 cargo run --example rendering_stress_test
 cargo run --example optimization_config_demo
 cargo run --example optimization_debug_demo
+cargo run --example render_stats_demo
 
 # Documentation
 cargo doc --workspace --no-deps --open
