@@ -1036,6 +1036,7 @@ pub mod material;
 pub mod material_instancing;
 pub mod material_layers;
 pub mod mesh;
+pub mod optimization_config;
 pub mod particles;
 mod pipeline;
 pub mod post_process;
