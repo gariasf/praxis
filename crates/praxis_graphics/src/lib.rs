@@ -3153,7 +3153,8 @@ impl RenderContext {
         // Initialize render stats for this frame
         if self.collect_render_stats {
             self.stats_frame_number += 1;
-            self.current_render_stats = utilities::render_stats::RenderStats::new(self.stats_frame_number);
+            self.current_render_stats =
+                utilities::render_stats::RenderStats::new(self.stats_frame_number);
             self.current_render_stats.total_objects = cmds.draw_commands.len();
         }
 

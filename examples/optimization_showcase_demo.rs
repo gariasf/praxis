@@ -45,6 +45,9 @@
 //! - **F6**: Toggle Mesh Streaming
 //! - **F7**: Toggle optimization panel visibility
 //! - **F8**: Reset to default settings
+//! - **F9**: Toggle Backface Culling
+//! - **F10**: Toggle Small Object Culling
+//! - **F11**: Toggle Distance Culling
 //!
 //! ## Debug Visualization
 //! - **Num1**: Toggle culling debug visualization
@@ -883,6 +886,39 @@ fn handle_input(
                         RenderingOptimizationConfig::TOTAL_OPTIMIZATIONS
                     );
                 }
+                KeyCode::F9 if pressed => {
+                    config.set_backface_culling(!config.backface_culling());
+                    info!(
+                        "Backface culling: {}",
+                        if config.backface_culling() {
+                            "ON"
+                        } else {
+                            "OFF"
+                        }
+                    );
+                }
+                KeyCode::F10 if pressed => {
+                    config.set_small_object_culling(!config.small_object_culling());
+                    info!(
+                        "Small object culling: {}",
+                        if config.small_object_culling() {
+                            "ON"
+                        } else {
+                            "OFF"
+                        }
+                    );
+                }
+                KeyCode::F11 if pressed => {
+                    config.set_distance_culling(!config.distance_culling());
+                    info!(
+                        "Distance culling: {}",
+                        if config.distance_culling() {
+                            "ON"
+                        } else {
+                            "OFF"
+                        }
+                    );
+                }
 
                 KeyCode::Numpad1 if pressed => {
                     if let Some(debug_renderer) = &mut demo_state.debug_renderer {
@@ -1047,6 +1083,9 @@ async fn main() -> Result<()> {
     info!("  F5 - Hi-Z Occlusion");
     info!("  F6 - Mesh Streaming");
     info!("  F8 - Reset to defaults");
+    info!("  F9 - Backface Culling");
+    info!("  F10 - Small Object Culling");
+    info!("  F11 - Distance Culling");
     info!("");
     info!("Debug Visualization:");
     info!("  Numpad 1 - Culling debug");

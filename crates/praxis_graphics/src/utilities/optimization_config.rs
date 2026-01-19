@@ -38,6 +38,9 @@
 //! - `F6`: Mesh Streaming
 //! - `F7`: Toggle entire panel visibility
 //! - `F8`: Reset all to defaults
+//! - `F9`: Backface Culling
+//! - `F10`: Small Object Culling
+//! - `F11`: Distance Culling
 //!
 //! # Performance Comparison
 //!
@@ -112,6 +115,15 @@ pub struct RenderingOptimizationConfig {
     /// Enable background mesh streaming.
     mesh_streaming: bool,
 
+    /// Enable backface culling for GPU culling.
+    backface_culling: bool,
+
+    /// Enable small object culling for GPU culling.
+    small_object_culling: bool,
+
+    /// Enable distance-based culling for GPU culling.
+    distance_culling: bool,
+
     /// Flag indicating if any setting has changed since last reset.
     #[serde(skip)]
     changed: bool,
@@ -130,6 +142,9 @@ impl Default for RenderingOptimizationConfig {
             descriptor_caching: true,
             hiz_occlusion: false,  // Disabled by default (requires setup)
             mesh_streaming: false, // Disabled by default (requires setup)
+            backface_culling: false,
+            small_object_culling: false,
+            distance_culling: false,
             changed: false,
             show_panel: true,
         }
@@ -146,6 +161,9 @@ impl RenderingOptimizationConfig {
             descriptor_caching: true,
             hiz_occlusion: true,
             mesh_streaming: true,
+            backface_culling: true,
+            small_object_culling: true,
+            distance_culling: true,
             changed: false,
             show_panel: true,
         }
@@ -160,6 +178,9 @@ impl RenderingOptimizationConfig {
             descriptor_caching: false,
             hiz_occlusion: false,
             mesh_streaming: false,
+            backface_culling: false,
+            small_object_culling: false,
+            distance_culling: false,
             changed: false,
             show_panel: true,
         }
@@ -193,6 +214,21 @@ impl RenderingOptimizationConfig {
     /// Checks if mesh streaming is enabled.
     pub fn mesh_streaming(&self) -> bool {
         self.mesh_streaming
+    }
+
+    /// Checks if backface culling is enabled.
+    pub fn backface_culling(&self) -> bool {
+        self.backface_culling
+    }
+
+    /// Checks if small object culling is enabled.
+    pub fn small_object_culling(&self) -> bool {
+        self.small_object_culling
+    }
+
+    /// Checks if distance culling is enabled.
+    pub fn distance_culling(&self) -> bool {
+        self.distance_culling
     }
 
     /// Sets multi-draw indirect enabled/disabled.
@@ -267,6 +303,42 @@ impl RenderingOptimizationConfig {
         }
     }
 
+    /// Sets backface culling enabled/disabled.
+    pub fn set_backface_culling(&mut self, enabled: bool) {
+        if self.backface_culling != enabled {
+            self.backface_culling = enabled;
+            self.changed = true;
+            info!(
+                "Backface culling: {}",
+                if enabled { "enabled" } else { "disabled" }
+            );
+        }
+    }
+
+    /// Sets small object culling enabled/disabled.
+    pub fn set_small_object_culling(&mut self, enabled: bool) {
+        if self.small_object_culling != enabled {
+            self.small_object_culling = enabled;
+            self.changed = true;
+            info!(
+                "Small object culling: {}",
+                if enabled { "enabled" } else { "disabled" }
+            );
+        }
+    }
+
+    /// Sets distance culling enabled/disabled.
+    pub fn set_distance_culling(&mut self, enabled: bool) {
+        if self.distance_culling != enabled {
+            self.distance_culling = enabled;
+            self.changed = true;
+            info!(
+                "Distance culling: {}",
+                if enabled { "enabled" } else { "disabled" }
+            );
+        }
+    }
+
     /// Enables all optimizations.
     pub fn enable_all(&mut self) {
         let old_state = (
@@ -276,6 +348,9 @@ impl RenderingOptimizationConfig {
             self.descriptor_caching,
             self.hiz_occlusion,
             self.mesh_streaming,
+            self.backface_culling,
+            self.small_object_culling,
+            self.distance_culling,
         );
 
         self.multi_draw_indirect = true;
@@ -284,6 +359,9 @@ impl RenderingOptimizationConfig {
         self.descriptor_caching = true;
         self.hiz_occlusion = true;
         self.mesh_streaming = true;
+        self.backface_culling = true;
+        self.small_object_culling = true;
+        self.distance_culling = true;
 
         let new_state = (
             self.multi_draw_indirect,
@@ -292,6 +370,9 @@ impl RenderingOptimizationConfig {
             self.descriptor_caching,
             self.hiz_occlusion,
             self.mesh_streaming,
+            self.backface_culling,
+            self.small_object_culling,
+            self.distance_culling,
         );
 
         if old_state != new_state {
@@ -309,6 +390,9 @@ impl RenderingOptimizationConfig {
             self.descriptor_caching,
             self.hiz_occlusion,
             self.mesh_streaming,
+            self.backface_culling,
+            self.small_object_culling,
+            self.distance_culling,
         );
 
         self.multi_draw_indirect = false;
@@ -317,6 +401,9 @@ impl RenderingOptimizationConfig {
         self.descriptor_caching = false;
         self.hiz_occlusion = false;
         self.mesh_streaming = false;
+        self.backface_culling = false;
+        self.small_object_culling = false;
+        self.distance_culling = false;
 
         let new_state = (
             self.multi_draw_indirect,
@@ -325,6 +412,9 @@ impl RenderingOptimizationConfig {
             self.descriptor_caching,
             self.hiz_occlusion,
             self.mesh_streaming,
+            self.backface_culling,
+            self.small_object_culling,
+            self.distance_culling,
         );
 
         if old_state != new_state {
@@ -472,6 +562,43 @@ impl RenderingOptimizationConfig {
                 ui.add_space(10.0);
 
                 ui.separator();
+                ui.heading("GPU Culling Strategies");
+                ui.separator();
+
+                // Backface culling
+                ui.horizontal(|ui| {
+                    let mut enabled = self.backface_culling;
+                    if ui.checkbox(&mut enabled, "Backface Culling").changed() {
+                        self.set_backface_culling(enabled);
+                    }
+                    ui.label(RichText::new("(F9)").color(Color32::GRAY).small());
+                });
+                ui.label("Cull objects facing away from camera");
+                ui.add_space(5.0);
+
+                // Small object culling
+                ui.horizontal(|ui| {
+                    let mut enabled = self.small_object_culling;
+                    if ui.checkbox(&mut enabled, "Small Object Culling").changed() {
+                        self.set_small_object_culling(enabled);
+                    }
+                    ui.label(RichText::new("(F10)").color(Color32::GRAY).small());
+                });
+                ui.label("Cull objects below screen-space threshold");
+                ui.add_space(5.0);
+
+                // Distance culling
+                ui.horizontal(|ui| {
+                    let mut enabled = self.distance_culling;
+                    if ui.checkbox(&mut enabled, "Distance Culling").changed() {
+                        self.set_distance_culling(enabled);
+                    }
+                    ui.label(RichText::new("(F11)").color(Color32::GRAY).small());
+                });
+                ui.label("Cull objects beyond max render distance");
+                ui.add_space(10.0);
+
+                ui.separator();
 
                 // Bulk operations
                 ui.horizontal(|ui| {
@@ -525,6 +652,9 @@ impl RenderingOptimizationConfig {
     /// - `F6`: Toggle Mesh Streaming
     /// - `F7`: Toggle Panel Visibility
     /// - `F8`: Reset to Defaults
+    /// - `F9`: Toggle Backface Culling
+    /// - `F10`: Toggle Small Object Culling
+    /// - `F11`: Toggle Distance Culling
     ///
     /// # Arguments
     ///
@@ -568,6 +698,15 @@ impl RenderingOptimizationConfig {
         if ctx.input(|i| i.key_pressed(Key::F8)) {
             self.reset_to_defaults();
         }
+        if ctx.input(|i| i.key_pressed(Key::F9)) {
+            self.set_backface_culling(!self.backface_culling);
+        }
+        if ctx.input(|i| i.key_pressed(Key::F10)) {
+            self.set_small_object_culling(!self.small_object_culling);
+        }
+        if ctx.input(|i| i.key_pressed(Key::F11)) {
+            self.set_distance_culling(!self.distance_culling);
+        }
     }
 
     /// Gets a summary of all optimization states.
@@ -583,7 +722,10 @@ impl RenderingOptimizationConfig {
              - GPU LOD Selection: {}\n\
              - Descriptor Caching: {}\n\
              - Hi-Z Occlusion: {}\n\
-             - Mesh Streaming: {}",
+             - Mesh Streaming: {}\n\
+             - Backface Culling: {}\n\
+             - Small Object Culling: {}\n\
+             - Distance Culling: {}",
             if self.multi_draw_indirect {
                 "enabled"
             } else {
@@ -606,6 +748,21 @@ impl RenderingOptimizationConfig {
                 "disabled"
             },
             if self.mesh_streaming {
+                "enabled"
+            } else {
+                "disabled"
+            },
+            if self.backface_culling {
+                "enabled"
+            } else {
+                "disabled"
+            },
+            if self.small_object_culling {
+                "enabled"
+            } else {
+                "disabled"
+            },
+            if self.distance_culling {
                 "enabled"
             } else {
                 "disabled"
@@ -634,11 +791,20 @@ impl RenderingOptimizationConfig {
         if self.mesh_streaming {
             count += 1;
         }
+        if self.backface_culling {
+            count += 1;
+        }
+        if self.small_object_culling {
+            count += 1;
+        }
+        if self.distance_culling {
+            count += 1;
+        }
         count
     }
 
     /// Total number of available optimizations.
-    pub const TOTAL_OPTIMIZATIONS: usize = 6;
+    pub const TOTAL_OPTIMIZATIONS: usize = 9;
 }
 
 #[cfg(test)]
@@ -654,6 +820,9 @@ mod tests {
         assert!(config.descriptor_caching());
         assert!(!config.hiz_occlusion()); // Disabled by default
         assert!(!config.mesh_streaming()); // Disabled by default
+        assert!(!config.backface_culling()); // Disabled by default
+        assert!(!config.small_object_culling()); // Disabled by default
+        assert!(!config.distance_culling()); // Disabled by default
         assert!(!config.has_changed());
         assert!(config.is_panel_visible());
     }
@@ -667,6 +836,9 @@ mod tests {
         assert!(config.descriptor_caching());
         assert!(config.hiz_occlusion());
         assert!(config.mesh_streaming());
+        assert!(config.backface_culling());
+        assert!(config.small_object_culling());
+        assert!(config.distance_culling());
         assert_eq!(
             config.enabled_count(),
             RenderingOptimizationConfig::TOTAL_OPTIMIZATIONS
@@ -682,6 +854,9 @@ mod tests {
         assert!(!config.descriptor_caching());
         assert!(!config.hiz_occlusion());
         assert!(!config.mesh_streaming());
+        assert!(!config.backface_culling());
+        assert!(!config.small_object_culling());
+        assert!(!config.distance_culling());
         assert_eq!(config.enabled_count(), 0);
     }
 
@@ -749,6 +924,36 @@ mod tests {
     }
 
     #[test]
+    fn test_toggle_backface_culling() {
+        let mut config = RenderingOptimizationConfig::default();
+        let initial = config.backface_culling();
+
+        config.set_backface_culling(!initial);
+        assert_eq!(config.backface_culling(), !initial);
+        assert!(config.has_changed());
+    }
+
+    #[test]
+    fn test_toggle_small_object_culling() {
+        let mut config = RenderingOptimizationConfig::default();
+        let initial = config.small_object_culling();
+
+        config.set_small_object_culling(!initial);
+        assert_eq!(config.small_object_culling(), !initial);
+        assert!(config.has_changed());
+    }
+
+    #[test]
+    fn test_toggle_distance_culling() {
+        let mut config = RenderingOptimizationConfig::default();
+        let initial = config.distance_culling();
+
+        config.set_distance_culling(!initial);
+        assert_eq!(config.distance_culling(), !initial);
+        assert!(config.has_changed());
+    }
+
+    #[test]
     fn test_enable_all() {
         let mut config = RenderingOptimizationConfig::all_disabled();
         assert_eq!(config.enabled_count(), 0);
@@ -786,6 +991,12 @@ mod tests {
         assert_eq!(config.descriptor_caching(), defaults.descriptor_caching());
         assert_eq!(config.hiz_occlusion(), defaults.hiz_occlusion());
         assert_eq!(config.mesh_streaming(), defaults.mesh_streaming());
+        assert_eq!(config.backface_culling(), defaults.backface_culling());
+        assert_eq!(
+            config.small_object_culling(),
+            defaults.small_object_culling()
+        );
+        assert_eq!(config.distance_culling(), defaults.distance_culling());
         assert!(config.has_changed());
     }
 
@@ -839,6 +1050,15 @@ mod tests {
 
         config.set_mesh_streaming(true);
         assert_eq!(config.enabled_count(), 6);
+
+        config.set_backface_culling(true);
+        assert_eq!(config.enabled_count(), 7);
+
+        config.set_small_object_culling(true);
+        assert_eq!(config.enabled_count(), 8);
+
+        config.set_distance_culling(true);
+        assert_eq!(config.enabled_count(), 9);
     }
 
     #[test]
@@ -852,6 +1072,9 @@ mod tests {
         assert!(summary.contains("Descriptor Caching"));
         assert!(summary.contains("Hi-Z Occlusion"));
         assert!(summary.contains("Mesh Streaming"));
+        assert!(summary.contains("Backface Culling"));
+        assert!(summary.contains("Small Object Culling"));
+        assert!(summary.contains("Distance Culling"));
     }
 
     #[test]
@@ -872,6 +1095,12 @@ mod tests {
         );
         assert_eq!(config.hiz_occlusion(), deserialized.hiz_occlusion());
         assert_eq!(config.mesh_streaming(), deserialized.mesh_streaming());
+        assert_eq!(config.backface_culling(), deserialized.backface_culling());
+        assert_eq!(
+            config.small_object_culling(),
+            deserialized.small_object_culling()
+        );
+        assert_eq!(config.distance_culling(), deserialized.distance_culling());
     }
 
     #[test]

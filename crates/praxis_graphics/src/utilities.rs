@@ -17,8 +17,15 @@ pub mod render_stats;
 pub mod velocity_buffer;
 
 // Re-export commonly used types for convenience
-pub use light_linking::{LightChannel, LightLinkingManager, LightLinkingMask, DEFAULT_LIGHT_CHANNEL};
-pub use light_probe::{LightProbe, LightProbeData, LightProbeGrid, LightProbeManager, ProbeBlendMode, MAX_LIGHT_PROBES, PROBE_IRRADIANCE_COEFFS};
+pub use light_linking::{
+    LightChannel, LightLinkingManager, LightLinkingMask, DEFAULT_LIGHT_CHANNEL,
+};
+pub use light_probe::{
+    LightProbe, LightProbeData, LightProbeGrid, LightProbeManager, ProbeBlendMode,
+    MAX_LIGHT_PROBES, PROBE_IRRADIANCE_COEFFS,
+};
 pub use optimization_config::RenderingOptimizationConfig;
-pub use render_stats::{RenderStats, RenderStatsHistory, RenderStatsVisualizer, CullingBreakdown, StatsSummary};
+pub use render_stats::{
+    CullingBreakdown, RenderStats, RenderStatsHistory, RenderStatsVisualizer, StatsSummary,
+};
 pub use velocity_buffer::{VelocityBuffer, VelocityBufferRenderer};
