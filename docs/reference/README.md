@@ -18,12 +18,41 @@ API documentation, specifications, and configuration reference.
 
 Comprehensive API reference for each subsystem:
 
+### Core Systems
+
+- [Rendering API](rendering-api.md) - Vulkan rendering, meshes, materials, lighting, post-processing
+- [Camera API](camera-api.md) - Camera types, projections, and controllers
+- [Physics API](physics-api.md) - Rigid bodies, colliders, forces, and collision detection
+- [Input API](input-api.md) - Keyboard, mouse, gamepad handling and action mapping
+
+### Scene & Animation
+
 - [Animation API](animation-api.md) - Skeletal animation, blending, IK, and root motion
-- [Audio API](audio-api.md) - Audio playback and spatial audio
-- [Camera API](camera-api.md) - Camera types and controllers
-- [GUI API](gui-api.md) - GUI system and widgets
-- [Input API](input-api.md) - Keyboard, mouse, and gamepad handling
 - [Mesh API](mesh-api.md) - Geometry loading and management
+
+### Audio & Media
+
+- [Audio API](audio-api.md) - Audio playback and spatial audio
+
+### Assets & Generation
+
+- [Procedural Textures API](procedural-textures-api.md) - GPU-accelerated texture generation
+- [Terrain API](terrain-api.md) - Heightmap terrain, LOD, materials, and vegetation
+
+### Optimization
+
+- [Spatial API](spatial-api.md) - Culling, LOD, octree, BVH, and occlusion queries
+- [Profiling API](profiling-api.md) - CPU/GPU profiling, memory tracking, and bottleneck detection
+
+### Multiplayer & Scripting
+
+- [Networking API](networking-api.md) - Client-server, entity replication, and lag compensation
+- [Scripting API](scripting-api.md) - Lua integration, ECS access, and hot-reload
+
+### Editor
+
+- [Editor API](editor-api.md) - Selection, undo/redo, gizmos, and panels
+- [GUI API](gui-api.md) - GUI system and widgets
 
 ## Rustdoc API Documentation
 
@@ -37,4 +66,4 @@ cargo doc --workspace --no-deps --open
 
 - [Guides](../guides/README.md) - How to use these APIs
 - [Concepts](../concepts/README.md) - Theory behind the APIs
-- [Internals](../internals/) - Implementation details for contributors
+- [Learning Paths](../learning-paths/README.md) - Structured learning for specific topics

@@ -44,13 +44,15 @@ pub struct Children(pub Vec<Entity>);
 
 ## Rendering Components
 
-### Mesh
+### Mesh / MeshHandle
 Reference to a loaded mesh.
 
 ```rust
 #[derive(Component)]
-pub struct Mesh(pub String);  // Mesh ID/name
+pub struct MeshHandle { pub id: String }
 ```
+
+**See**: [Mesh API](mesh-api.md) for details.
 
 ### Material
 PBR material properties.
@@ -68,17 +70,17 @@ pub struct Material {
 ## Camera Components
 
 ### Camera
-Projection settings.
+Marks entity as a camera with active/priority control.
 
 ```rust
 #[derive(Component)]
 pub struct Camera {
-    pub fov: f32,
-    pub near: f32,
-    pub far: f32,
-    pub aspect: f32,
+    pub is_active: bool,
+    pub priority: i32,
 }
 ```
+
+**See**: [Camera API](camera-api.md) for projection types and usage.
 
 ### EditorCamera
 Marker for the editor camera entity.
@@ -133,18 +135,10 @@ Spatial audio emitter.
 
 ```rust
 #[derive(Component)]
-pub struct AudioSource {
-    pub path: String,
-    pub volume: f32,
-    pub spatial: bool,
-    pub looping: bool,
-    pub max_distance: f32,
-    pub reference_distance: f32,
-    pub doppler_enabled: bool,
-    pub doppler_scale: f32,
-    pub state: PlaybackState,
-}
+pub struct AudioSource { /* ... */ }
 ```
+
+**See**: [Audio API](audio-api.md) for properties and usage.
 
 ### AudioListener
 Marks the audio listener entity.
@@ -161,35 +155,30 @@ Bone hierarchy for skeletal animation.
 
 ```rust
 #[derive(Component)]
-pub struct Skeleton {
-    bones: Vec<Bone>,
-    inverse_bind_matrices: Vec<Mat4>,
-}
+pub struct Skeleton { /* ... */ }
 ```
+
+**See**: [Animation API](animation-api.md) for methods and usage.
 
 ### AnimationPlayer
 Controls animation playback.
 
 ```rust
 #[derive(Component)]
-pub struct AnimationPlayer {
-    clips: HashMap<String, AnimationClip>,
-    active: HashSet<String>,
-    // ...
-}
+pub struct AnimationPlayer { /* ... */ }
 ```
+
+**See**: [Animation API](animation-api.md) for methods and usage.
 
 ### AnimatedPose
 Current computed bone transforms.
 
 ```rust
 #[derive(Component)]
-pub struct AnimatedPose {
-    local_transforms: Vec<Transform>,
-    world_transforms: Vec<Mat4>,
-    skinning_matrices: Vec<Mat4>,
-}
+pub struct AnimatedPose { /* ... */ }
 ```
+
+**See**: [Animation API](animation-api.md) for methods and usage.
 
 ## Editor Components
 
