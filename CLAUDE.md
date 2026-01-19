@@ -235,6 +235,114 @@ debug_renderer.render_all_debug(&mut cmd_builder, &culling_info, &lod_info, &str
 
 **Details**: `crates/praxis_graphics/DEBUG_RENDERING.md`
 
+## Educational Value & Design Rationale
+
+Praxis is designed as an educational 3D game engine. Each subsystem exists to teach specific concepts while maintaining production-quality patterns. Use this rationale when evaluating feature additions:
+
+### Core Engine (`praxis_core`, `praxis_window`, `praxis_utils`)
+**What it teaches**: Engine architecture fundamentals, application lifecycle management, cross-cutting concerns (logging, error handling, timing).  
+**Why it exists**: Demonstrates how to structure a game engine's foundation, manage the main loop, handle platform abstraction (windowing), and implement essential utilities that all subsystems depend on.  
+**Evaluation criteria**: New features should focus on foundational patterns that apply across all engine types, not game-specific logic.
+
+### Rendering (`praxis_graphics`)
+**What it teaches**: Modern Vulkan rendering, forward/deferred pipelines, HDR tone mapping, shadow mapping, GPU-driven optimization (culling, LOD, occlusion), debug visualization.  
+**Why it exists**: Modern graphics APIs like Vulkan are complex but powerful. Shows how to build safe Rust abstractions over Vulkan using `vulkano`, implement common rendering techniques, and visualize optimization systems for learning.  
+**Evaluation criteria**: Additions should demonstrate fundamental rendering techniques or modern GPU-driven approaches, not bleeding-edge research or engine-specific hacks.
+
+### ECS (`praxis_ecs`)
+**What it teaches**: Entity Component System architecture using `bevy_ecs`, data-oriented design, composition over inheritance.  
+**Why it exists**: ECS is a proven pattern for game engines. Demonstrates how to structure game logic around components and systems rather than traditional OOP hierarchies.  
+**Evaluation criteria**: Components should represent reusable, composable data. Systems should be focused and demonstrate clear ECS patterns.
+
+### Math (`praxis_math`)
+**What it teaches**: 3D mathematics using `glam`, vectors, matrices, quaternions, coordinate spaces.  
+**Why it exists**: Provides thin wrapper around battle-tested math library while demonstrating common 3D math patterns and conventions. Shows when to use library types vs. custom abstractions.  
+**Evaluation criteria**: Only add math utilities that demonstrate common game engine patterns, not problem-specific calculations.
+
+### Scene Management (`praxis_scene`)
+**What it teaches**: Transform hierarchies, parent-child relationships, skeletal animation, animation blending, clip playback.  
+**Why it exists**: Scene graphs and transform propagation are fundamental to 3D engines. Animation systems demonstrate complex state management and temporal interpolation.  
+**Evaluation criteria**: Features should focus on core scene organization and animation techniques applicable to most 3D applications.
+
+### Spatial Structures (`praxis_spatial`)
+**What it teaches**: Spatial partitioning (octrees, BVH), spatial queries, performance optimization through data structure choice.  
+**Why it exists**: Demonstrates how spatial data structures enable efficient queries and culling in large 3D worlds. Shows trade-offs between different structures.  
+**Evaluation criteria**: Additions should demonstrate fundamental spatial algorithms with clear performance characteristics and use cases.
+
+### Asset Pipeline (`praxis_assets`)
+**What it teaches**: Asset loading (OBJ, GLTF), parsing file formats, async loading, resource management.  
+**Why it exists**: Shows how to integrate standard 3D formats, handle I/O efficiently, and manage asset lifetime. Demonstrates practical parsing and data transformation.  
+**Evaluation criteria**: Support formats that are industry-standard and demonstrate different design philosophies (simple vs. complex, text vs. binary).
+
+### Input (`praxis_input`)
+**What it teaches**: Input abstraction, keyboard/mouse/gamepad handling, input mapping, frame-by-frame state management.  
+**Why it exists**: Demonstrates how to abstract platform-specific input and provide game-friendly APIs. Shows state vs. event-based input patterns.  
+**Evaluation criteria**: Features should demonstrate input patterns common across games, not application-specific bindings.
+
+### GUI (`praxis_gui`)
+**What it teaches**: Immediate-mode GUI using `egui`, editor UI patterns, tool development.  
+**Why it exists**: Shows how to integrate GUI systems into rendering pipeline, build editor tools, and handle UI state. Demonstrates immediate-mode vs. retained-mode trade-offs.  
+**Evaluation criteria**: GUI additions should focus on editor/tool patterns, not game HUD (which belongs in separate examples).
+
+### Physics (`praxis_physics`)
+**What it teaches**: Physics integration using `rapier3d`, rigid body simulation, collision detection, ECS-physics synchronization.  
+**Why it exists**: Demonstrates how to integrate a physics engine, sync with ECS transforms bidirectionally, handle fixed timesteps, and expose physics features through ECS.  
+**Evaluation criteria**: Features should show practical physics integration patterns, not advanced simulation techniques better left to Rapier itself.
+
+### Audio (`praxis_audio`)
+**What it teaches**: Audio playback using `kira`, spatial audio, sound management, resource pooling.  
+**Why it exists**: Shows how to integrate audio middleware, manage sound resources, and implement common audio patterns (background music, sound effects, spatial positioning).  
+**Evaluation criteria**: Demonstrate common audio patterns in games, not advanced DSP or music production features.
+
+### Procedural Generation (`praxis_procedural`)
+**What it teaches**: Node-based texture generation, noise algorithms (Perlin, Simplex, Worley), GPU compute shaders, runtime GLSL compilation, LRU caching.  
+**Why it exists**: Demonstrates GPU-accelerated procedural content, shader compilation pipeline, and cache management. Shows graph-based composition patterns.  
+**Evaluation criteria**: Focus on foundational procedural techniques and GPU compute patterns, not specific artistic use cases.
+
+### Terrain (`praxis_terrain`)
+**What it teaches**: Terrain generation, height maps, LOD systems for terrain, chunk management.  
+**Why it exists**: Terrain is a common game feature with unique challenges (scale, LOD, streaming). Demonstrates specialized rendering and data management.  
+**Evaluation criteria**: Features should demonstrate scalable terrain techniques applicable to various games, not specific biome/game logic.
+
+### Profiling (`praxis_profiling`)
+**What it teaches**: Performance measurement, timing, profiling integration, identifying bottlenecks.  
+**Why it exists**: Performance is critical in game engines. Shows how to instrument code, measure frame time, and identify optimization opportunities.  
+**Evaluation criteria**: Additions should help users understand engine performance, not solve specific optimization problems.
+
+### Scripting (`praxis_scripting`)
+**What it teaches**: Lua integration via `mlua`, script-ECS bridge, hot-reload, sandboxing, performance monitoring.  
+**Why it exists**: Demonstrates how to embed scripting, expose engine functionality safely, enable rapid iteration, and monitor script performance.  
+**Evaluation criteria**: Focus on engine-script integration patterns and safety, not Lua language features or game-specific scripts.
+
+### Networking (`praxis_networking`)
+**What it teaches**: Client-server architecture, entity replication, interpolation/extrapolation, lag compensation, network profiling.  
+**Why it exists**: Multiplayer is complex. Shows how to synchronize game state, handle latency, implement server authority, and monitor network performance.  
+**Evaluation criteria**: Demonstrate foundational networking patterns for games, not specific game genres or protocols.
+
+### Editor (`praxis_editor`)
+**What it teaches**: Editor architecture, selection systems, undo/redo, gizmos, transform tools, command pattern.  
+**Why it exists**: Shows how to build editor tools, implement robust undo/redo, handle user manipulation, and separate editor from runtime.  
+**Evaluation criteria**: Features should demonstrate general editor patterns useful across projects, not application-specific tools.
+
+### General Principles for Feature Evaluation
+
+When considering new features or subsystems:
+
+1. **Educational First**: Does it teach a fundamental concept or pattern?
+2. **Broad Applicability**: Is it useful across multiple game types/projects?
+3. **Production Quality**: Does it demonstrate industry patterns, not toy examples?
+4. **Appropriate Scope**: Does it fit the subsystem's educational focus?
+5. **Clear Trade-offs**: Does it illustrate design decisions and their consequences?
+6. **Avoid Over-Engineering**: Keep implementations clear and maintainable over maximally abstract.
+7. **Complement, Don't Duplicate**: Does it teach something distinct from existing subsystems?
+
+**Anti-patterns to reject**:
+- Game-specific logic (belongs in examples, not engine crates)
+- Bleeding-edge research without proven educational value
+- Features that obscure rather than illuminate underlying concepts
+- Duplicate approaches without clear pedagogical distinction
+- Dependencies on non-standard or unstable libraries without strong justification
+
 ## Naming Conventions
 
 ### Type Suffixes
