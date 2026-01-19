@@ -5,6 +5,9 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
+# Structured logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# Enhanced error reporting with backtraces and suggestions
 color-eyre = "0.6"

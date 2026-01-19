@@ -220,6 +220,7 @@ The codebase is heavily documented. Start with:
 - [Getting Started](docs/getting-started/README.md) — Installation and setup
 - [Guides](docs/guides/README.md) — Task-oriented tutorials
 - [Learning Paths](docs/learning-paths/README.md) — Structured progressions from beginner to advanced
+- [Dependencies Reference](docs/reference/dependencies.md) — Complete listing of all external dependencies
 - Shader files in `crates/praxis_graphics/src/shaders/` — Extensive educational comments
 
 ## Goals

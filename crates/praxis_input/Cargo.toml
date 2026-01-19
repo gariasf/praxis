@@ -5,9 +5,16 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
+# Window and input event handling
 winit = { version = "0.30.11", features = ["rwh_05"] }
+
+# ECS framework
 bevy_ecs = "0.14"
+
+# Internal dependencies
 praxis_utils = { path = "../praxis_utils", version = "0.1.0" }
+
+# Optional serialization for input mappings
 serde = { version = "1.0", features = ["derive"], optional = true }
 
 [features]

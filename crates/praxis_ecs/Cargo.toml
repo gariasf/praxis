@@ -5,10 +5,15 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
+# ECS framework with serialization support
 bevy_ecs = { version = "0.14", features = ["serialize"] }
+
+# Internal dependencies
 praxis_utils = { path = "../praxis_utils", version = "0.1.0" }
 praxis_math = { path = "../praxis_math", version = "0.1.0" }
 praxis_graphics = { path = "../praxis_graphics", version = "0.1.0" }
+
+# Component serialization (serialization.rs)
 serde = { version = "1.0", features = ["derive"] }
 ron = "0.8"
 
