@@ -1207,11 +1207,7 @@ fn bench_texture_compression(c: &mut Criterion) {
     group.sample_size(20);
 
     // Test configurations: 256x256, 512x512, 1024x1024
-    let texture_sizes = [
-        (256, "256x256"),
-        (512, "512x512"),
-        (1024, "1024x1024"),
-    ];
+    let texture_sizes = [(256, "256x256"), (512, "512x512"), (1024, "1024x1024")];
 
     for (size, name) in texture_sizes {
         let width = size;
@@ -1222,9 +1218,7 @@ fn bench_texture_compression(c: &mut Criterion) {
 
         // Create test texture data (RGBA8)
         let uncompressed_size = (width * height * 4) as usize;
-        let test_data: Vec<u8> = (0..uncompressed_size)
-            .map(|i| (i % 256) as u8)
-            .collect();
+        let test_data: Vec<u8> = (0..uncompressed_size).map(|i| (i % 256) as u8).collect();
 
         // ===== BC7 Compression Benchmark (Fast Quality) =====
         group.bench_function(BenchmarkId::new("bc7_fast", name), |b| {
@@ -1238,7 +1232,7 @@ fn bench_texture_compression(c: &mut Criterion) {
 
             b.iter(|| {
                 let start = std::time::Instant::now();
-                
+
                 let compressed = compressor
                     .compress(
                         &test_data,
@@ -1250,7 +1244,7 @@ fn bench_texture_compression(c: &mut Criterion) {
                     .expect("BC7 compression failed");
 
                 let gpu_time = start.elapsed();
-                
+
                 // Verify compression metrics
                 let compression_ratio = compressed.compression_ratio();
                 let vram_savings = compressed.vram_savings();
@@ -1278,7 +1272,7 @@ fn bench_texture_compression(c: &mut Criterion) {
 
             b.iter(|| {
                 let start = std::time::Instant::now();
-                
+
                 let compressed = compressor
                     .compress(
                         &test_data,
@@ -1290,7 +1284,7 @@ fn bench_texture_compression(c: &mut Criterion) {
                     .expect("BC7 compression failed");
 
                 let gpu_time = start.elapsed();
-                
+
                 let compression_ratio = compressed.compression_ratio();
                 let vram_savings = compressed.vram_savings();
                 let vram_savings_percent = (vram_savings as f32 / uncompressed_size as f32) * 100.0;
@@ -1317,7 +1311,7 @@ fn bench_texture_compression(c: &mut Criterion) {
 
             b.iter(|| {
                 let start = std::time::Instant::now();
-                
+
                 let compressed = compressor
                     .compress(
                         &test_data,
@@ -1329,7 +1323,7 @@ fn bench_texture_compression(c: &mut Criterion) {
                     .expect("BC5 compression failed");
 
                 let gpu_time = start.elapsed();
-                
+
                 let compression_ratio = compressed.compression_ratio();
                 let vram_savings = compressed.vram_savings();
                 let vram_savings_percent = (vram_savings as f32 / uncompressed_size as f32) * 100.0;
@@ -1356,7 +1350,7 @@ fn bench_texture_compression(c: &mut Criterion) {
 
             b.iter(|| {
                 let start = std::time::Instant::now();
-                
+
                 let compressed = compressor
                     .compress(
                         &test_data,
@@ -1368,7 +1362,7 @@ fn bench_texture_compression(c: &mut Criterion) {
                     .expect("BC5 compression failed");
 
                 let gpu_time = start.elapsed();
-                
+
                 let compression_ratio = compressed.compression_ratio();
                 let vram_savings = compressed.vram_savings();
                 let vram_savings_percent = (vram_savings as f32 / uncompressed_size as f32) * 100.0;
@@ -1392,15 +1386,19 @@ fn bench_texture_compression(c: &mut Criterion) {
                 let blocks_height = height / 4;
                 let num_blocks = blocks_width * blocks_height;
                 let compressed_bytes = (num_blocks * 16) as usize;
-                
+
                 let compression_ratio = uncompressed_bytes as f32 / compressed_bytes as f32;
                 let vram_savings = uncompressed_bytes - compressed_bytes;
-                let vram_savings_percent = (vram_savings as f32 / uncompressed_bytes as f32) * 100.0;
-                
+                let vram_savings_percent =
+                    (vram_savings as f32 / uncompressed_bytes as f32) * 100.0;
+
                 // Verify 4:1 compression and 75% VRAM reduction
                 assert_eq!(compression_ratio, 4.0, "Should achieve 4:1 compression");
-                assert_eq!(vram_savings_percent, 75.0, "Should achieve 75% VRAM reduction");
-                
+                assert_eq!(
+                    vram_savings_percent, 75.0,
+                    "Should achieve 75% VRAM reduction"
+                );
+
                 black_box((
                     uncompressed_bytes,
                     compressed_bytes,
