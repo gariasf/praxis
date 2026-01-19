@@ -44,13 +44,14 @@ Interactive examples with graphical output and user controls.
 
 #### Animation Demos
 
-| Example | Description |
-|---------|-------------|
-| `skeletal_animation_demo` | Bone hierarchies and keyframe animation |
-| `animation_demo` | Interactive animation with blend transitions |
-| `animation_blending_demo` | Cross-fading, blend trees, layers |
-| `animation_advanced_demo` | IK, retargeting, additive blending, root motion |
-| `gltf_animation_loader_demo` | Loading animations from GLTF files |
+**Recommended Learning Path:** Follow in order to learn skeletal animation from basics to advanced.
+
+| Example | Level | Description |
+|---------|-------|-------------|
+| `skeletal_animation_demo` | **Beginner** | Start here - Bone hierarchies, keyframe animation, AnimationPlayer API |
+| `animation_blending_demo` | **Intermediate** | Production blending - Cross-fades, 1D/2D blend trees, layered animation |
+| `animation_advanced_demo` | **Advanced** | Procedural techniques - IK, retargeting, additive animation |
+| `gltf_animation_loader_demo` | Integration | Loading animations from GLTF asset files |
 
 #### Audio Demos
 
@@ -199,19 +200,51 @@ Full editor interface:
 cargo run --example editor_demo --features editor
 ```
 
-### Animation Demo
+### Animation Demos - Learning Path
 
-Interactive character animation:
-- Skeletal animation with 10-bone humanoid
-- Smooth cross-fade transitions
-- 1D blend tree for speed-based blending
-- Real-time parameter adjustment
+#### 1. Skeletal Animation Demo (Beginner)
+
+Start here to learn skeletal animation fundamentals:
+- 3-bone skeleton (Root, Spine, Head)
+- Keyframe animation with translation and rotation
+- AnimationPlayer API for playback control
+- Animation looping and weight-based blending
 
 ```bash
-cargo run --example animation_demo
+cargo run --example skeletal_animation_demo
 ```
 
-**Controls:** 1-4 (switch animations), Arrow Up/Down (adjust blend), ESC (exit)
+**Controls:** 1-3 (switch/blend animations), WASD (camera), ESC (exit)
+
+#### 2. Animation Blending Demo (Intermediate)
+
+Production-ready blending techniques:
+- 10-bone humanoid skeleton
+- Cross-fade transitions
+- 1D blend trees (speed-based: Idle/Walk/Run)
+- 2D blend trees (directional movement)
+- Layered animation with bone masking
+- Additive blending
+
+```bash
+cargo run --example animation_blending_demo
+```
+
+**Controls:** 1-8 (demo modes), Arrow keys (adjust parameters), ESC (exit)
+
+#### 3. Animation Advanced Demo (Advanced)
+
+Procedural animation techniques:
+- Inverse Kinematics (IK) for target reaching
+- Animation retargeting between different skeletons
+- Manual additive animation with reference poses
+- Side-by-side demonstration
+
+```bash
+cargo run --example animation_advanced_demo
+```
+
+**Controls:** 1-3 (select demo), WASD (camera), ESC (exit)
 
 ### GPU Culling Demo
 

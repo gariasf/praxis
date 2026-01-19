@@ -1,11 +1,15 @@
-//! Visual demonstration of advanced animation blending features.
+//! Intermediate: Comprehensive animation blending techniques.
 //!
-//! This example showcases:
+//! This example demonstrates production-ready animation blending:
 //! - **Cross-fade transitions** - Smooth transitions between animations
 //! - **1D blend trees** - Speed-based blending (Idle -> Walk -> Run)
 //! - **2D blend trees** - Directional movement blending
-//! - **Layered animation** - Upper body waving while walking
-//! - **Additive blending** - Additive animation layering
+//! - **Layered animation** - Upper body waving while walking with bone masking
+//! - **Additive blending** - Layering animations additively
+//!
+//! **Learning Focus**: After understanding basics (skeletal_animation_demo),
+//! learn production blending techniques here. Uses AnimationBlender API.
+//! For IK/retargeting, see animation_advanced_demo
 //!
 //! Controls:
 //! - **WASD** - Move camera
@@ -895,15 +899,19 @@ impl ApplicationHandler for App {
         self.animated_entity = Some(animated_entity);
 
         println!("\n╔══════════════════════════════════════════════════════════╗");
-        println!("║     PRAXIS - ANIMATION BLENDING DEMONSTRATION          ║");
+        println!("║  PRAXIS - ANIMATION BLENDING (INTERMEDIATE LEVEL)      ║");
         println!("╚══════════════════════════════════════════════════════════╝");
         println!("\n✨ FEATURES DEMONSTRATED:");
-        println!("  🎬 Cross-fade transitions between animations");
-        println!("  📊 1D blend trees for speed-based blending");
-        println!("  🎯 2D blend trees for directional movement");
-        println!("  🦴 Layered animation with bone masking");
-        println!("  ➕ Additive animation blending");
-        println!("  👁️  Visual skeleton with 10 animated bones");
+        println!("  🎬 Cross-fade transitions - Smooth animation changes");
+        println!("  📊 1D blend trees - Speed-based blending (Idle/Walk/Run)");
+        println!("  🎯 2D blend trees - Directional movement blending");
+        println!("  🦴 Layered animation - Upper body independent control");
+        println!("  ➕ Additive animation - Walk + Recoil combined");
+        println!("  👁️  Visual skeleton with 10 humanoid bones");
+        println!("\n📚 LEARNING PATH:");
+        println!("  ✓ skeletal_animation_demo - Basic concepts (completed)");
+        println!("  ▸ YOU ARE HERE - Production blending techniques");
+        println!("  ▸ animation_advanced_demo - IK, retargeting, advanced features");
         println!("\n⌨️  CAMERA CONTROLS:");
         println!("  WASD        - Move horizontally");
         println!("  Space       - Move up");

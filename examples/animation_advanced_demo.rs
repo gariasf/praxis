@@ -1,13 +1,15 @@
-//! Advanced animation features demo with visual rendering.
+//! Advanced: Inverse Kinematics, retargeting, and procedural animation.
 //!
-//! Demonstrates:
-//! - Inverse Kinematics (IK) for procedural limb positioning
-//! - Animation retargeting between different skeletons
-//! - Enhanced additive animation blending
-//! - Root motion extraction for character movement
-//! - **Visual rendering of all features with 3D meshes**
-//! - **Camera controls for viewing**
-//! - **Interactive controls for switching between demos**
+//! This example demonstrates advanced animation techniques:
+//! - **Inverse Kinematics (IK)** - Procedural limb positioning to reach targets
+//! - **Animation Retargeting** - Transfer animations between different skeletons
+//! - **Additive Animation** - Manual additive blending with reference poses
+//! - **Side-by-side comparison** - Three different demos running simultaneously
+//!
+//! **Learning Focus**: After mastering blending (animation_blending_demo),
+//! learn procedural animation techniques here. These features enable
+//! dynamic character interaction with the environment (IK), asset reuse
+//! (retargeting), and complex animation layering (additive)
 //!
 //! Controls:
 //! - WASD - Move camera
@@ -925,13 +927,17 @@ impl ApplicationHandler for App {
         self.additive_entity = Some(additive_entity);
 
         println!("\n╔════════════════════════════════════════════════════════╗");
-        println!("║    PRAXIS - ADVANCED ANIMATION FEATURES DEMO         ║");
+        println!("║   PRAXIS - ADVANCED ANIMATION (ADVANCED LEVEL)       ║");
         println!("╚════════════════════════════════════════════════════════╝");
         println!("\n✨ FEATURES DEMONSTRATED:");
-        println!("  🎯 Inverse Kinematics (IK) - Procedural limb positioning");
-        println!("  🔄 Animation Retargeting - Transfer animations between skeletons");
-        println!("  ➕ Additive Animation Blending - Layer animations on top of base");
-        println!("  👁️  Visual rendering with 3D bone markers");
+        println!("  🎯 Inverse Kinematics (IK) - Arm reaches for moving target");
+        println!("  🔄 Animation Retargeting - Animations adapt to new skeleton");
+        println!("  ➕ Additive Animation - Walk + Recoil with reference pose");
+        println!("  👁️  Side-by-side visualization of all three techniques");
+        println!("\n📚 LEARNING PATH:");
+        println!("  ✓ skeletal_animation_demo - Basic concepts (completed)");
+        println!("  ✓ animation_blending_demo - Blending techniques (completed)");
+        println!("  ▸ YOU ARE HERE - Advanced procedural techniques");
         println!("\n⌨️  CAMERA CONTROLS:");
         println!("  WASD        - Move horizontally");
         println!("  Space       - Move up");

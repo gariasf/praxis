@@ -26,7 +26,6 @@ cargo run --example hello_triangle
 cargo run --example comprehensive_scene_demo
 cargo run --example complete_features_demo
 cargo run --example skeletal_animation_demo
-cargo run --example animation_demo
 cargo run --example animation_blending_demo
 cargo run --example animation_advanced_demo
 cargo run --example gltf_animation_loader_demo

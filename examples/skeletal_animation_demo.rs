@@ -1,14 +1,16 @@
-//! Visual skeletal animation demonstration with rendering.
+//! Beginner: Basic skeletal animation fundamentals.
 //!
-//! This example demonstrates the skeletal animation system with:
-//! - Creating a skeleton with multiple bones
+//! This example demonstrates core skeletal animation concepts:
+//! - Creating a skeleton with bones and hierarchy
 //! - Defining animation clips with keyframes
-//! - Playing and controlling animations
+//! - Using AnimationPlayer for playback control
 //! - Keyframe interpolation
-//! - Animation looping and blending
-//! - **Visual rendering of animated skeleton**
-//! - **3D meshes attached to bones**
-//! - **Camera controls for viewing**
+//! - Animation looping and simple blending
+//! - Visual rendering of animated skeleton with bone markers
+//!
+//! **Learning Focus**: Start here to understand skeletal animation basics.
+//! For advanced blending (cross-fade, blend trees), see animation_blending_demo.
+//! For IK and retargeting, see animation_advanced_demo
 //!
 //! Controls:
 //! - **WASD** - Move camera
@@ -508,14 +510,17 @@ impl ApplicationHandler for App {
         }
 
         println!("\n╔════════════════════════════════════════════════════════╗");
-        println!("║      PRAXIS - SKELETAL ANIMATION DEMONSTRATION       ║");
+        println!("║   PRAXIS - SKELETAL ANIMATION (BEGINNER LEVEL)       ║");
         println!("╚════════════════════════════════════════════════════════╝");
         println!("\n✨ FEATURES DEMONSTRATED:");
-        println!("  🦴 Skeletal animation with 3 bones (Root, Spine, Head)");
+        println!("  🦴 Skeletal animation basics with 3-bone skeleton");
         println!("  🎬 Keyframe animation with translation and rotation");
-        println!("  🔄 Animation looping and blending");
-        println!("  👁️  Visual skeleton rendering with colored bones");
-        println!("  🔵 Bone position markers (spheres)");
+        println!("  🎮 AnimationPlayer API for playback control");
+        println!("  🔄 Animation looping and weight-based blending");
+        println!("  👁️  Visual skeleton rendering with colored bone markers");
+        println!("\n📚 NEXT STEPS:");
+        println!("  ▸ animation_blending_demo - Cross-fade, blend trees, layering");
+        println!("  ▸ animation_advanced_demo - IK, retargeting, additive blending");
         println!("\n⌨️  CAMERA CONTROLS:");
         println!("  WASD        - Move horizontally");
         println!("  Space       - Move up");
