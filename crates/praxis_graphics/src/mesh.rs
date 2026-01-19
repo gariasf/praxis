@@ -2423,14 +2423,8 @@ mod tests {
             priority: 2.0,
         };
 
-        assert_eq!(
-            req1.partial_cmp(&req2),
-            Some(std::cmp::Ordering::Less)
-        );
-        assert_eq!(
-            req2.partial_cmp(&req1),
-            Some(std::cmp::Ordering::Greater)
-        );
+        assert_eq!(req1.partial_cmp(&req2), Some(std::cmp::Ordering::Less));
+        assert_eq!(req2.partial_cmp(&req1), Some(std::cmp::Ordering::Greater));
 
         let req3 = MeshLoadRequest {
             id: "c".to_string(),
@@ -2438,10 +2432,7 @@ mod tests {
             priority: 1.0,
         };
 
-        assert_eq!(
-            req1.partial_cmp(&req3),
-            Some(std::cmp::Ordering::Equal)
-        );
+        assert_eq!(req1.partial_cmp(&req3), Some(std::cmp::Ordering::Equal));
     }
 
     #[test]

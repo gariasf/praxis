@@ -891,20 +891,38 @@ fn compile_shader_to_spirv(source: &str) -> Result<Vec<u8>> {
 mod tests {
     use super::*;
 
+    // ========== BC7/BC5 Format Properties Tests ==========
+
     #[test]
-    fn test_compression_format_properties() {
+    fn test_bc7_block_size() {
         assert_eq!(CompressionFormat::BC7.block_size(), 16);
+    }
+
+    #[test]
+    fn test_bc5_block_size() {
         assert_eq!(CompressionFormat::BC5.block_size(), 16);
+    }
+
+    #[test]
+    fn test_bc7_block_dimensions() {
         assert_eq!(CompressionFormat::BC7.block_dimensions(), (4, 4));
+    }
+
+    #[test]
+    fn test_bc5_block_dimensions() {
         assert_eq!(CompressionFormat::BC5.block_dimensions(), (4, 4));
     }
 
     #[test]
-    fn test_vulkan_formats() {
+    fn test_bc7_vulkan_format() {
         assert_eq!(
             CompressionFormat::BC7.vulkan_format(),
             Format::BC7_UNORM_BLOCK
         );
+    }
+
+    #[test]
+    fn test_bc5_vulkan_format() {
         assert_eq!(
             CompressionFormat::BC5.vulkan_format(),
             Format::BC5_UNORM_BLOCK
@@ -912,33 +930,238 @@ mod tests {
     }
 
     #[test]
-    fn test_compressed_texture_data_metrics() {
-        let data = CompressedTextureData {
-            data: vec![0u8; 256 * 1024], // 256 KB
-            width: 1024,
-            height: 1024,
-            blocks_width: 256,
-            blocks_height: 256,
-            format: CompressionFormat::BC7,
-        };
-
-        // Original: 1024×1024×4 = 4 MB
-        // Compressed: 256 KB
-        // Ratio: 4096 KB / 256 KB = 16... wait, that's wrong
-        // Actually: 256×256 blocks × 16 bytes = 1 MB, not 256 KB
-        // Let me recalculate: 1024×1024 pixels × 4 bytes = 4 MB
-        // Compressed: (1024/4) × (1024/4) blocks × 16 bytes = 256×256×16 = 1 MB
-        let ratio = data.compression_ratio();
-        assert!(ratio >= 3.9 && ratio <= 4.1, "Expected ~4x compression");
-
-        let savings = data.vram_savings();
-        assert!(savings > 3_000_000, "Should save ~3 MB");
+    fn test_compression_format_equality() {
+        assert_eq!(CompressionFormat::BC7, CompressionFormat::BC7);
+        assert_eq!(CompressionFormat::BC5, CompressionFormat::BC5);
+        assert_ne!(CompressionFormat::BC7, CompressionFormat::BC5);
     }
 
     #[test]
-    fn test_dimension_validation() {
-        // These would need a real TextureCompressor instance to test
-        // Just verify the math works correctly
+    fn test_compression_format_clone() {
+        let bc7 = CompressionFormat::BC7;
+        let bc7_clone = bc7;
+        assert_eq!(bc7, bc7_clone);
+    }
+
+    #[test]
+    fn test_compression_format_debug() {
+        let bc7_debug = format!("{:?}", CompressionFormat::BC7);
+        assert_eq!(bc7_debug, "BC7");
+
+        let bc5_debug = format!("{:?}", CompressionFormat::BC5);
+        assert_eq!(bc5_debug, "BC5");
+    }
+
+    // ========== Compressed Texture Metrics Tests ==========
+
+    #[test]
+    fn test_compression_ratio_512x512() {
+        let width = 512u32;
+        let height = 512u32;
+        let blocks = (width / 4) * (height / 4);
+        let compressed_size = (blocks * 16) as usize;
+
+        let data = CompressedTextureData {
+            data: vec![0u8; compressed_size],
+            width,
+            height,
+            blocks_width: width / 4,
+            blocks_height: height / 4,
+            format: CompressionFormat::BC7,
+        };
+
+        let ratio = data.compression_ratio();
+        assert_eq!(ratio, 4.0, "512x512 should have exactly 4:1 compression");
+    }
+
+    #[test]
+    fn test_compression_ratio_1024x1024() {
+        let width = 1024u32;
+        let height = 1024u32;
+        let blocks = (width / 4) * (height / 4);
+        let compressed_size = (blocks * 16) as usize;
+
+        let data = CompressedTextureData {
+            data: vec![0u8; compressed_size],
+            width,
+            height,
+            blocks_width: width / 4,
+            blocks_height: height / 4,
+            format: CompressionFormat::BC7,
+        };
+
+        let ratio = data.compression_ratio();
+        assert_eq!(ratio, 4.0, "1024x1024 should have exactly 4:1 compression");
+    }
+
+    #[test]
+    fn test_compression_ratio_2048x2048() {
+        let width = 2048u32;
+        let height = 2048u32;
+        let blocks = (width / 4) * (height / 4);
+        let compressed_size = (blocks * 16) as usize;
+
+        let data = CompressedTextureData {
+            data: vec![0u8; compressed_size],
+            width,
+            height,
+            blocks_width: width / 4,
+            blocks_height: height / 4,
+            format: CompressionFormat::BC5,
+        };
+
+        let ratio = data.compression_ratio();
+        assert_eq!(ratio, 4.0, "2048x2048 should have exactly 4:1 compression");
+    }
+
+    #[test]
+    fn test_compression_ratio_non_square() {
+        let width = 1024u32;
+        let height = 512u32;
+        let blocks = (width / 4) * (height / 4);
+        let compressed_size = (blocks * 16) as usize;
+
+        let data = CompressedTextureData {
+            data: vec![0u8; compressed_size],
+            width,
+            height,
+            blocks_width: width / 4,
+            blocks_height: height / 4,
+            format: CompressionFormat::BC7,
+        };
+
+        let ratio = data.compression_ratio();
+        assert_eq!(
+            ratio, 4.0,
+            "Non-square textures should also have 4:1 compression"
+        );
+    }
+
+    #[test]
+    fn test_vram_savings_512x512() {
+        let width = 512u32;
+        let height = 512u32;
+        let blocks = (width / 4) * (height / 4);
+        let compressed_size = (blocks * 16) as usize;
+
+        let data = CompressedTextureData {
+            data: vec![0u8; compressed_size],
+            width,
+            height,
+            blocks_width: width / 4,
+            blocks_height: height / 4,
+            format: CompressionFormat::BC7,
+        };
+
+        let savings = data.vram_savings();
+        let expected_uncompressed = (512 * 512 * 4) as usize; // 1 MB
+        let expected_savings = expected_uncompressed - compressed_size;
+
+        assert_eq!(savings, expected_savings);
+        assert_eq!(savings, 786_432); // 768 KB saved
+    }
+
+    #[test]
+    fn test_vram_savings_1024x1024() {
+        let width = 1024u32;
+        let height = 1024u32;
+        let blocks = (width / 4) * (height / 4);
+        let compressed_size = (blocks * 16) as usize;
+
+        let data = CompressedTextureData {
+            data: vec![0u8; compressed_size],
+            width,
+            height,
+            blocks_width: width / 4,
+            blocks_height: height / 4,
+            format: CompressionFormat::BC7,
+        };
+
+        let savings = data.vram_savings();
+        let expected_uncompressed = (1024 * 1024 * 4) as usize; // 4 MB
+        let expected_savings = expected_uncompressed - compressed_size;
+
+        assert_eq!(savings, expected_savings);
+        assert_eq!(savings, 3_145_728); // 3 MB saved
+    }
+
+    #[test]
+    fn test_vram_savings_2048x2048() {
+        let width = 2048u32;
+        let height = 2048u32;
+        let blocks = (width / 4) * (height / 4);
+        let compressed_size = (blocks * 16) as usize;
+
+        let data = CompressedTextureData {
+            data: vec![0u8; compressed_size],
+            width,
+            height,
+            blocks_width: width / 4,
+            blocks_height: height / 4,
+            format: CompressionFormat::BC5,
+        };
+
+        let savings = data.vram_savings();
+        let expected_uncompressed = (2048 * 2048 * 4) as usize; // 16 MB
+        let expected_savings = expected_uncompressed - compressed_size;
+
+        assert_eq!(savings, expected_savings);
+        assert_eq!(savings, 12_582_912); // 12 MB saved
+    }
+
+    #[test]
+    fn test_vram_savings_minimum_texture() {
+        let width = 4u32;
+        let height = 4u32;
+        let compressed_size = 16; // One block
+
+        let data = CompressedTextureData {
+            data: vec![0u8; compressed_size],
+            width,
+            height,
+            blocks_width: 1,
+            blocks_height: 1,
+            format: CompressionFormat::BC7,
+        };
+
+        let savings = data.vram_savings();
+        assert_eq!(savings, 48); // 64 bytes - 16 bytes = 48 bytes saved
+    }
+
+    #[test]
+    fn test_vram_savings_percentage() {
+        let width = 512u32;
+        let height = 512u32;
+        let blocks = (width / 4) * (height / 4);
+        let compressed_size = (blocks * 16) as usize;
+
+        let data = CompressedTextureData {
+            data: vec![0u8; compressed_size],
+            width,
+            height,
+            blocks_width: width / 4,
+            blocks_height: height / 4,
+            format: CompressionFormat::BC7,
+        };
+
+        let uncompressed = (width * height * 4) as f32;
+        let savings_pct = (data.vram_savings() as f32 / uncompressed) * 100.0;
+
+        assert!((savings_pct - 75.0).abs() < 0.01, "Should save 75% VRAM");
+    }
+
+    // ========== Dimension Validation Tests ==========
+
+    #[test]
+    fn test_valid_dimensions_4x4() {
+        let width = 4u32;
+        let height = 4u32;
+        assert_eq!(width % 4, 0);
+        assert_eq!(height % 4, 0);
+    }
+
+    #[test]
+    fn test_valid_dimensions_512x512() {
         let width = 512u32;
         let height = 512u32;
         assert_eq!(width % 4, 0);
@@ -948,13 +1171,244 @@ mod tests {
         let blocks_height = height / 4;
         assert_eq!(blocks_width, 128);
         assert_eq!(blocks_height, 128);
+    }
 
-        let num_blocks = blocks_width * blocks_height;
-        let compressed_size = num_blocks * 16;
-        assert_eq!(compressed_size, 262_144); // 256 KB
+    #[test]
+    fn test_valid_dimensions_1024x1024() {
+        let width = 1024u32;
+        let height = 1024u32;
+        assert_eq!(width % 4, 0);
+        assert_eq!(height % 4, 0);
 
-        let uncompressed_size = width * height * 4;
-        let ratio = uncompressed_size as f32 / compressed_size as f32;
+        let blocks_width = width / 4;
+        let blocks_height = height / 4;
+        assert_eq!(blocks_width, 256);
+        assert_eq!(blocks_height, 256);
+    }
+
+    #[test]
+    fn test_valid_dimensions_non_square() {
+        let width = 1024u32;
+        let height = 512u32;
+        assert_eq!(width % 4, 0);
+        assert_eq!(height % 4, 0);
+
+        let blocks_width = width / 4;
+        let blocks_height = height / 4;
+        assert_eq!(blocks_width, 256);
+        assert_eq!(blocks_height, 128);
+    }
+
+    #[test]
+    fn test_valid_dimensions_large() {
+        let width = 4096u32;
+        let height = 2048u32;
+        assert_eq!(width % 4, 0);
+        assert_eq!(height % 4, 0);
+
+        let blocks_width = width / 4;
+        let blocks_height = height / 4;
+        assert_eq!(blocks_width, 1024);
+        assert_eq!(blocks_height, 512);
+    }
+
+    #[test]
+    fn test_invalid_dimensions_not_multiple_of_4() {
+        let invalid_widths = [1u32, 2, 3, 5, 7, 10, 15, 100, 511, 1023];
+        let invalid_heights = [1u32, 2, 3, 5, 7, 10, 15, 100, 511, 1023];
+
+        for width in invalid_widths {
+            assert_ne!(width % 4, 0, "Width {} should not be valid", width);
+        }
+
+        for height in invalid_heights {
+            assert_ne!(height % 4, 0, "Height {} should not be valid", height);
+        }
+    }
+
+    #[test]
+    fn test_compressed_size_calculation() {
+        let test_cases = [
+            (4u32, 4u32, 16usize),              // 1 block
+            (8u32, 8u32, 64usize),              // 4 blocks
+            (16u32, 16u32, 256usize),           // 16 blocks
+            (512u32, 512u32, 262_144usize),     // 16,384 blocks
+            (1024u32, 1024u32, 1_048_576usize), // 65,536 blocks
+        ];
+
+        for (width, height, expected_size) in test_cases {
+            let blocks_width = width / 4;
+            let blocks_height = height / 4;
+            let num_blocks = blocks_width * blocks_height;
+            let compressed_size = (num_blocks * 16) as usize;
+
+            assert_eq!(
+                compressed_size, expected_size,
+                "{}x{} should produce {} bytes",
+                width, height, expected_size
+            );
+        }
+    }
+
+    #[test]
+    fn test_uncompressed_size_calculation() {
+        let test_cases = [
+            (4u32, 4u32, 64usize),              // 16 pixels × 4 bytes
+            (8u32, 8u32, 256usize),             // 64 pixels × 4 bytes
+            (512u32, 512u32, 1_048_576usize),   // 512×512×4
+            (1024u32, 1024u32, 4_194_304usize), // 1024×1024×4
+        ];
+
+        for (width, height, expected_size) in test_cases {
+            let uncompressed_size = (width * height * 4) as usize;
+
+            assert_eq!(
+                uncompressed_size, expected_size,
+                "{}x{} RGBA8 should be {} bytes",
+                width, height, expected_size
+            );
+        }
+    }
+
+    #[test]
+    fn test_blocks_calculation() {
+        let test_cases = [
+            (4u32, 4u32, 1u32, 1u32),
+            (8u32, 8u32, 2u32, 2u32),
+            (16u32, 16u32, 4u32, 4u32),
+            (512u32, 512u32, 128u32, 128u32),
+            (1024u32, 1024u32, 256u32, 256u32),
+            (1024u32, 512u32, 256u32, 128u32),
+            (2048u32, 1024u32, 512u32, 256u32),
+        ];
+
+        for (width, height, expected_bw, expected_bh) in test_cases {
+            let blocks_width = width / 4;
+            let blocks_height = height / 4;
+
+            assert_eq!(
+                blocks_width, expected_bw,
+                "Width {} should produce {} blocks",
+                width, expected_bw
+            );
+            assert_eq!(
+                blocks_height, expected_bh,
+                "Height {} should produce {} blocks",
+                height, expected_bh
+            );
+        }
+    }
+
+    #[test]
+    fn test_compression_format_consistency() {
+        // Ensure all formats have same block size and dimensions
+        let formats = [CompressionFormat::BC7, CompressionFormat::BC5];
+
+        for format in formats {
+            assert_eq!(
+                format.block_size(),
+                16,
+                "{:?} should have 16-byte blocks",
+                format
+            );
+            assert_eq!(
+                format.block_dimensions(),
+                (4, 4),
+                "{:?} should have 4x4 dimensions",
+                format
+            );
+        }
+    }
+
+    #[test]
+    fn test_compressed_data_clone() {
+        let data = CompressedTextureData {
+            data: vec![1, 2, 3, 4],
+            width: 4,
+            height: 4,
+            blocks_width: 1,
+            blocks_height: 1,
+            format: CompressionFormat::BC7,
+        };
+
+        let cloned = data.clone();
+        assert_eq!(data.data, cloned.data);
+        assert_eq!(data.width, cloned.width);
+        assert_eq!(data.height, cloned.height);
+        assert_eq!(data.blocks_width, cloned.blocks_width);
+        assert_eq!(data.blocks_height, cloned.blocks_height);
+        assert_eq!(data.format, cloned.format);
+    }
+
+    #[test]
+    fn test_compressed_data_debug() {
+        let data = CompressedTextureData {
+            data: vec![0u8; 16],
+            width: 4,
+            height: 4,
+            blocks_width: 1,
+            blocks_height: 1,
+            format: CompressionFormat::BC7,
+        };
+
+        let debug_str = format!("{:?}", data);
+        assert!(debug_str.contains("CompressedTextureData"));
+    }
+
+    #[test]
+    fn test_compression_ratio_calculation_accuracy() {
+        // Test that compression ratio calculation is accurate for various sizes
+        let width = 256u32;
+        let height = 256u32;
+        let uncompressed = width * height * 4; // RGBA8
+        let blocks = (width / 4) * (height / 4);
+        let compressed = blocks * 16;
+
+        let data = CompressedTextureData {
+            data: vec![0u8; compressed as usize],
+            width,
+            height,
+            blocks_width: width / 4,
+            blocks_height: height / 4,
+            format: CompressionFormat::BC7,
+        };
+
+        let ratio = data.compression_ratio();
+        let expected_ratio = uncompressed as f32 / compressed as f32;
+
+        assert_eq!(ratio, expected_ratio);
         assert_eq!(ratio, 4.0);
+    }
+
+    #[test]
+    fn test_minimum_valid_texture_size() {
+        // 4x4 is the minimum valid size (one block)
+        let width = 4u32;
+        let height = 4u32;
+
+        assert_eq!(width % 4, 0);
+        assert_eq!(height % 4, 0);
+
+        let blocks_width = width / 4;
+        let blocks_height = height / 4;
+
+        assert_eq!(blocks_width, 1);
+        assert_eq!(blocks_height, 1);
+
+        let compressed_size = blocks_width * blocks_height * 16;
+        assert_eq!(compressed_size, 16);
+    }
+
+    #[test]
+    fn test_power_of_two_dimensions() {
+        // Common power-of-2 texture sizes
+        let pot_sizes = [4u32, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096];
+
+        for size in pot_sizes {
+            assert_eq!(size % 4, 0, "Power-of-2 size {} should be valid", size);
+
+            let blocks = size / 4;
+            assert!(blocks.is_power_of_two(), "Block count should be power-of-2");
+        }
     }
 }

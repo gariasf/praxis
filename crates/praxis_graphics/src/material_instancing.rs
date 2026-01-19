@@ -226,21 +226,21 @@ mod tests {
             parallax_properties: ParallaxProperties::default(),
             layers: Vec::new(),
         };
-        
+
         // Set distinctive default values for testing
         material.properties = MaterialProperties::new()
             .with_metallic(0.5)
             .with_roughness(0.3)
             .with_base_color([1.0, 0.0, 0.0, 1.0]);
-        
+
         material.extended_properties = ExtendedPbrProperties::new()
             .with_clearcoat(0.2)
             .with_sheen(0.1);
-        
+
         material.parallax_properties = ParallaxProperties::new()
             .with_height_scale(0.03)
             .with_min_samples(10);
-        
+
         Arc::new(material)
     }
 
@@ -250,10 +250,7 @@ mod tests {
         let instance = MaterialInstance::new(material.clone());
 
         assert!(!instance.has_overrides());
-        assert_eq!(
-            Arc::as_ptr(&instance.base_material),
-            Arc::as_ptr(&material)
-        );
+        assert_eq!(Arc::as_ptr(&instance.base_material), Arc::as_ptr(&material));
         assert_eq!(instance.base_material().id, "test_base");
     }
 
@@ -262,14 +259,17 @@ mod tests {
         let material = create_test_material("test_base");
         let original_metallic = material.properties.metallic;
         let original_roughness = material.properties.roughness;
-        
-        let instance = MaterialInstance::new(material.clone())
-            .override_properties(MaterialProperties::new().with_metallic(0.8).with_roughness(0.9));
+
+        let instance = MaterialInstance::new(material.clone()).override_properties(
+            MaterialProperties::new()
+                .with_metallic(0.8)
+                .with_roughness(0.9),
+        );
 
         assert!(instance.has_overrides());
         assert_eq!(instance.properties().metallic, 0.8);
         assert_eq!(instance.properties().roughness, 0.9);
-        
+
         // Base material should remain unchanged
         assert_eq!(material.properties.metallic, original_metallic);
         assert_eq!(material.properties.roughness, original_roughness);
@@ -279,16 +279,17 @@ mod tests {
     fn test_material_instance_extended_overrides() {
         let material = create_test_material("test_base");
         let original_clearcoat = material.extended_properties.clearcoat;
-        
-        let instance = MaterialInstance::new(material.clone())
-            .override_extended(ExtendedPbrProperties::new()
+
+        let instance = MaterialInstance::new(material.clone()).override_extended(
+            ExtendedPbrProperties::new()
                 .with_clearcoat(0.9)
-                .with_sheen(0.7));
+                .with_sheen(0.7),
+        );
 
         assert!(instance.has_overrides());
         assert_eq!(instance.extended_properties().clearcoat, 0.9);
         assert_eq!(instance.extended_properties().sheen, 0.7);
-        
+
         // Base material should remain unchanged
         assert_eq!(material.extended_properties.clearcoat, original_clearcoat);
     }
@@ -297,24 +298,28 @@ mod tests {
     fn test_material_instance_parallax_overrides() {
         let material = create_test_material("test_base");
         let original_height_scale = material.parallax_properties.height_scale;
-        
-        let instance = MaterialInstance::new(material.clone())
-            .override_parallax(ParallaxProperties::new()
+
+        let instance = MaterialInstance::new(material.clone()).override_parallax(
+            ParallaxProperties::new()
                 .with_height_scale(0.08)
-                .with_min_samples(20));
+                .with_min_samples(20),
+        );
 
         assert!(instance.has_overrides());
         assert_eq!(instance.parallax_properties().height_scale, 0.08);
         assert_eq!(instance.parallax_properties().min_samples, 20);
-        
+
         // Base material should remain unchanged
-        assert_eq!(material.parallax_properties.height_scale, original_height_scale);
+        assert_eq!(
+            material.parallax_properties.height_scale,
+            original_height_scale
+        );
     }
 
     #[test]
     fn test_material_instance_multiple_overrides() {
         let material = create_test_material("test_base");
-        
+
         let instance = MaterialInstance::new(material.clone())
             .override_properties(MaterialProperties::new().with_metallic(0.9))
             .override_extended(ExtendedPbrProperties::new().with_clearcoat(0.5))
@@ -329,24 +334,36 @@ mod tests {
     #[test]
     fn test_material_instance_effective_property_resolution() {
         let material = create_test_material("test_base");
-        
+
         // Instance without overrides should return base material properties
         let instance_no_override = MaterialInstance::new(material.clone());
-        assert_eq!(instance_no_override.properties().metallic, material.properties.metallic);
-        assert_eq!(instance_no_override.properties().roughness, material.properties.roughness);
-        assert_eq!(instance_no_override.extended_properties().clearcoat, 
-                   material.extended_properties.clearcoat);
-        assert_eq!(instance_no_override.parallax_properties().height_scale, 
-                   material.parallax_properties.height_scale);
-        
+        assert_eq!(
+            instance_no_override.properties().metallic,
+            material.properties.metallic
+        );
+        assert_eq!(
+            instance_no_override.properties().roughness,
+            material.properties.roughness
+        );
+        assert_eq!(
+            instance_no_override.extended_properties().clearcoat,
+            material.extended_properties.clearcoat
+        );
+        assert_eq!(
+            instance_no_override.parallax_properties().height_scale,
+            material.parallax_properties.height_scale
+        );
+
         // Instance with overrides should return overridden values
         let instance_with_override = MaterialInstance::new(material.clone())
             .override_properties(MaterialProperties::new().with_metallic(0.75));
-        
+
         assert_eq!(instance_with_override.properties().metallic, 0.75);
         // Non-overridden properties should still come from base
-        assert_eq!(instance_with_override.extended_properties().clearcoat, 
-                   material.extended_properties.clearcoat);
+        assert_eq!(
+            instance_with_override.extended_properties().clearcoat,
+            material.extended_properties.clearcoat
+        );
     }
 
     #[test]
@@ -415,7 +432,8 @@ mod tests {
 
         {
             let instance = manager.get_instance_mut("instance1").unwrap();
-            *instance = instance.clone()
+            *instance = instance
+                .clone()
                 .override_properties(MaterialProperties::new().with_metallic(0.95));
         }
 
@@ -436,7 +454,7 @@ mod tests {
 
         assert!(manager.remove_instance("instance1"));
         assert_eq!(manager.instance_count(), 0);
-        
+
         // Removing non-existent instance should return false
         assert!(!manager.remove_instance("instance1"));
         assert!(!manager.remove_instance("nonexistent"));
@@ -525,7 +543,8 @@ mod tests {
 
         // Instance with override
         let instance1 = manager.create_instance("instance1", material.clone());
-        *instance1 = instance1.clone()
+        *instance1 = instance1
+            .clone()
             .override_properties(MaterialProperties::new().with_metallic(0.9));
 
         // Instance without override
@@ -533,7 +552,8 @@ mod tests {
 
         // Instance with multiple overrides
         let instance3 = manager.create_instance("instance3", material);
-        *instance3 = instance3.clone()
+        *instance3 = instance3
+            .clone()
             .override_properties(MaterialProperties::new().with_roughness(0.8))
             .override_extended(ExtendedPbrProperties::new().with_clearcoat(0.7));
 
@@ -554,10 +574,11 @@ mod tests {
         // Modify through mutable reference
         {
             let instance = manager.get_instance_mut("instance1").unwrap();
-            *instance = instance.clone()
-                .override_properties(MaterialProperties::new()
+            *instance = instance.clone().override_properties(
+                MaterialProperties::new()
                     .with_metallic(0.7)
-                    .with_roughness(0.6));
+                    .with_roughness(0.6),
+            );
         }
 
         // Verify changes persisted
@@ -616,17 +637,17 @@ mod tests {
     #[test]
     fn test_effective_property_independence() {
         let material = create_test_material("test_base");
-        
+
         let instance1 = MaterialInstance::new(material.clone())
             .override_properties(MaterialProperties::new().with_metallic(0.9));
-        
+
         let instance2 = MaterialInstance::new(material.clone())
             .override_properties(MaterialProperties::new().with_metallic(0.3));
 
         // Each instance should have independent overrides
         assert_eq!(instance1.properties().metallic, 0.9);
         assert_eq!(instance2.properties().metallic, 0.3);
-        
+
         // Base material should be unaffected
         assert_ne!(material.properties.metallic, 0.9);
         assert_ne!(material.properties.metallic, 0.3);
@@ -637,13 +658,14 @@ mod tests {
         let material = create_test_material("test_base");
         let base_roughness = material.properties.roughness;
         let base_color = material.properties.base_color;
-        
+
         // Override only metallic, other properties should come from base
-        let instance = MaterialInstance::new(material.clone())
-            .override_properties(MaterialProperties::new()
+        let instance = MaterialInstance::new(material.clone()).override_properties(
+            MaterialProperties::new()
                 .with_metallic(0.95)
                 .with_roughness(base_roughness)
-                .with_base_color(base_color));
+                .with_base_color(base_color),
+        );
 
         let props = instance.properties();
         assert_eq!(props.metallic, 0.95);
