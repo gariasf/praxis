@@ -2141,4 +2141,343 @@ mod tests {
             assert!(dot.abs() < 0.01);
         }
     }
+
+    // Streaming mesh tests
+
+    #[test]
+    fn test_streaming_gpu_mesh_new() {
+        let center = Vec3::new(1.0, 2.0, 3.0);
+        let radius = 5.0;
+
+        let streaming_mesh = StreamingGpuMesh::new(center, radius);
+
+        assert!(streaming_mesh.mesh.is_none());
+        assert_eq!(streaming_mesh.state, MeshStreamingState::Unloaded);
+        assert_eq!(streaming_mesh.bounding_center, center);
+        assert_eq!(streaming_mesh.bounding_radius, radius);
+        assert_eq!(streaming_mesh.priority, 0.0);
+        assert!(!streaming_mesh.is_loaded());
+        assert!(!streaming_mesh.is_loading());
+    }
+
+    #[test]
+    fn test_streaming_state_transitions() {
+        let center = Vec3::new(0.0, 0.0, 0.0);
+        let radius = 1.0;
+
+        let mut mesh = StreamingGpuMesh::new(center, radius);
+
+        // Initial state: Unloaded
+        assert_eq!(mesh.state, MeshStreamingState::Unloaded);
+        assert!(!mesh.is_loaded());
+        assert!(!mesh.is_loading());
+
+        // Transition to Queued
+        mesh.state = MeshStreamingState::Queued;
+        assert_eq!(mesh.state, MeshStreamingState::Queued);
+        assert!(!mesh.is_loaded());
+        assert!(!mesh.is_loading());
+
+        // Transition to Loading
+        mesh.state = MeshStreamingState::Loading;
+        assert_eq!(mesh.state, MeshStreamingState::Loading);
+        assert!(!mesh.is_loaded());
+        assert!(mesh.is_loading());
+
+        // Transition to Loaded (requires mesh data)
+        mesh.state = MeshStreamingState::Loaded;
+        assert_eq!(mesh.state, MeshStreamingState::Loaded);
+        // Still not loaded because mesh is None
+        assert!(!mesh.is_loaded());
+
+        // Transition to Failed
+        mesh.state = MeshStreamingState::Failed;
+        assert_eq!(mesh.state, MeshStreamingState::Failed);
+        assert!(!mesh.is_loaded());
+        assert!(!mesh.is_loading());
+    }
+
+    #[test]
+    fn test_mesh_streaming_state_equality() {
+        assert_eq!(MeshStreamingState::Unloaded, MeshStreamingState::Unloaded);
+        assert_eq!(MeshStreamingState::Queued, MeshStreamingState::Queued);
+        assert_eq!(MeshStreamingState::Loading, MeshStreamingState::Loading);
+        assert_eq!(MeshStreamingState::Loaded, MeshStreamingState::Loaded);
+        assert_eq!(MeshStreamingState::Failed, MeshStreamingState::Failed);
+
+        assert_ne!(MeshStreamingState::Unloaded, MeshStreamingState::Queued);
+        assert_ne!(MeshStreamingState::Loading, MeshStreamingState::Loaded);
+    }
+
+    #[test]
+    fn test_mesh_load_request_ordering() {
+        let mesh_data = MeshData::new(vec![[0.0, 0.0, 0.0]], vec![0]);
+
+        let req1 = MeshLoadRequest {
+            id: "mesh1".to_string(),
+            mesh_data: mesh_data.clone(),
+            priority: 10.0,
+        };
+
+        let req2 = MeshLoadRequest {
+            id: "mesh2".to_string(),
+            mesh_data: mesh_data.clone(),
+            priority: 20.0,
+        };
+
+        let req3 = MeshLoadRequest {
+            id: "mesh3".to_string(),
+            mesh_data: mesh_data.clone(),
+            priority: 15.0,
+        };
+
+        // Higher priority should compare greater
+        assert!(req2 > req1);
+        assert!(req3 > req1);
+        assert!(req2 > req3);
+    }
+
+    #[test]
+    fn test_mesh_load_request_priority_queue() {
+        let mesh_data = MeshData::new(vec![[0.0, 0.0, 0.0]], vec![0]);
+        let mut queue = BinaryHeap::new();
+
+        queue.push(MeshLoadRequest {
+            id: "low".to_string(),
+            mesh_data: mesh_data.clone(),
+            priority: 5.0,
+        });
+
+        queue.push(MeshLoadRequest {
+            id: "high".to_string(),
+            mesh_data: mesh_data.clone(),
+            priority: 50.0,
+        });
+
+        queue.push(MeshLoadRequest {
+            id: "medium".to_string(),
+            mesh_data: mesh_data.clone(),
+            priority: 25.0,
+        });
+
+        // Should pop in descending priority order
+        let first = queue.pop().unwrap();
+        assert_eq!(first.id, "high");
+        assert_eq!(first.priority, 50.0);
+
+        let second = queue.pop().unwrap();
+        assert_eq!(second.id, "medium");
+        assert_eq!(second.priority, 25.0);
+
+        let third = queue.pop().unwrap();
+        assert_eq!(third.id, "low");
+        assert_eq!(third.priority, 5.0);
+    }
+
+    #[test]
+    fn test_mesh_load_request_equality() {
+        let mesh_data = MeshData::new(vec![[0.0, 0.0, 0.0]], vec![0]);
+
+        let req1 = MeshLoadRequest {
+            id: "mesh1".to_string(),
+            mesh_data: mesh_data.clone(),
+            priority: 10.0,
+        };
+
+        let req2 = MeshLoadRequest {
+            id: "mesh1".to_string(),
+            mesh_data: mesh_data.clone(),
+            priority: 20.0,
+        };
+
+        let req3 = MeshLoadRequest {
+            id: "mesh2".to_string(),
+            mesh_data: mesh_data.clone(),
+            priority: 10.0,
+        };
+
+        // Equality based on ID only
+        assert_eq!(req1, req2);
+        assert_ne!(req1, req3);
+    }
+
+    #[test]
+    fn test_calculate_bounding_sphere_for_streaming() {
+        let positions = vec![
+            [-2.0, -2.0, -2.0],
+            [2.0, -2.0, -2.0],
+            [2.0, 2.0, -2.0],
+            [-2.0, 2.0, -2.0],
+            [-2.0, -2.0, 2.0],
+            [2.0, -2.0, 2.0],
+            [2.0, 2.0, 2.0],
+            [-2.0, 2.0, 2.0],
+        ];
+        let mesh_data = MeshData::new(positions, vec![]);
+        let (center, radius) = mesh_data.calculate_bounding_sphere();
+
+        let center_vec = Vec3::from(center);
+        let streaming_mesh = StreamingGpuMesh::new(center_vec, radius);
+
+        assert_eq!(streaming_mesh.bounding_center, center_vec);
+        assert_eq!(streaming_mesh.bounding_radius, radius);
+
+        // Verify radius encompasses all points
+        let expected_radius = (12.0f32).sqrt(); // sqrt(2^2 + 2^2 + 2^2) for each corner
+        assert!((radius - expected_radius).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_bounding_sphere_from_triangle() {
+        let positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.5, 1.0, 0.0]];
+        let mesh_data = MeshData::new(positions, vec![0, 1, 2]);
+        let (center, radius) = mesh_data.calculate_bounding_sphere();
+
+        // Center should be approximately at the centroid
+        assert!((center[0] - 0.5).abs() < 0.01);
+        assert!((center[1] - 0.333).abs() < 0.1);
+        assert!(center[2].abs() < 0.01);
+
+        // Radius should be distance from centroid to farthest vertex
+        assert!(radius > 0.0);
+    }
+
+    #[test]
+    fn test_mesh_data_creation_with_bounding_sphere() {
+        let positions = vec![[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]];
+        let indices = vec![0, 1, 2];
+
+        let mesh_data = MeshData::new(positions.clone(), indices.clone());
+        assert_eq!(mesh_data.positions, positions);
+        assert_eq!(mesh_data.indices, indices);
+
+        let (center, radius) = mesh_data.calculate_bounding_sphere();
+        assert!(radius > 0.0);
+
+        // Center should be the average of all positions
+        let expected_center = [4.0, 5.0, 6.0];
+        assert!((center[0] - expected_center[0]).abs() < 0.01);
+        assert!((center[1] - expected_center[1]).abs() < 0.01);
+        assert!((center[2] - expected_center[2]).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_streaming_mesh_priority_update() {
+        let center = Vec3::new(0.0, 0.0, 0.0);
+        let radius = 1.0;
+
+        let mut mesh = StreamingGpuMesh::new(center, radius);
+        assert_eq!(mesh.priority, 0.0);
+
+        mesh.priority = 42.5;
+        assert_eq!(mesh.priority, 42.5);
+
+        mesh.priority = 100.0;
+        assert_eq!(mesh.priority, 100.0);
+    }
+
+    #[test]
+    fn test_mesh_data_creation_for_streaming_registration() {
+        // Test various mesh creation methods for streaming registration
+        let positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+        let indices = vec![0, 1, 2];
+
+        // Basic creation
+        let mesh1 = MeshData::new(positions.clone(), indices.clone());
+        assert_eq!(mesh1.positions.len(), 3);
+
+        // With colors
+        let colors = vec![[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+        let mesh2 = MeshData::with_colors(positions.clone(), colors, indices.clone());
+        assert!(mesh2.colors.is_some());
+
+        // With UVs
+        let uvs = vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]];
+        let mesh3 = MeshData::with_uvs(positions.clone(), uvs, indices.clone());
+        assert!(mesh3.uvs.is_some());
+
+        // All should be able to calculate bounding spheres
+        let (c1, r1) = mesh1.calculate_bounding_sphere();
+        let (c2, r2) = mesh2.calculate_bounding_sphere();
+        let (c3, r3) = mesh3.calculate_bounding_sphere();
+
+        assert_eq!(c1, c2);
+        assert_eq!(c1, c3);
+        assert_eq!(r1, r2);
+        assert_eq!(r1, r3);
+    }
+
+    #[test]
+    fn test_mesh_load_request_partial_ord() {
+        let mesh_data = MeshData::new(vec![[0.0, 0.0, 0.0]], vec![0]);
+
+        let req1 = MeshLoadRequest {
+            id: "a".to_string(),
+            mesh_data: mesh_data.clone(),
+            priority: 1.0,
+        };
+
+        let req2 = MeshLoadRequest {
+            id: "b".to_string(),
+            mesh_data: mesh_data.clone(),
+            priority: 2.0,
+        };
+
+        assert_eq!(
+            req1.partial_cmp(&req2),
+            Some(std::cmp::Ordering::Less)
+        );
+        assert_eq!(
+            req2.partial_cmp(&req1),
+            Some(std::cmp::Ordering::Greater)
+        );
+
+        let req3 = MeshLoadRequest {
+            id: "c".to_string(),
+            mesh_data: mesh_data.clone(),
+            priority: 1.0,
+        };
+
+        assert_eq!(
+            req1.partial_cmp(&req3),
+            Some(std::cmp::Ordering::Equal)
+        );
+    }
+
+    #[test]
+    fn test_bounding_sphere_with_negative_coordinates() {
+        let positions = vec![[-5.0, -5.0, -5.0], [-3.0, -3.0, -3.0]];
+        let mesh_data = MeshData::new(positions, vec![0, 1]);
+        let (center, radius) = mesh_data.calculate_bounding_sphere();
+
+        assert!((center[0] + 4.0).abs() < 0.01);
+        assert!((center[1] + 4.0).abs() < 0.01);
+        assert!((center[2] + 4.0).abs() < 0.01);
+        assert!(radius > 0.0);
+    }
+
+    #[test]
+    fn test_streaming_state_copy() {
+        let state1 = MeshStreamingState::Loading;
+        let state2 = state1;
+
+        assert_eq!(state1, state2);
+        assert_eq!(state1, MeshStreamingState::Loading);
+    }
+
+    #[test]
+    fn test_mesh_data_clone_for_streaming() {
+        let positions = vec![[1.0, 2.0, 3.0]];
+        let indices = vec![0];
+        let mesh_data = MeshData::new(positions.clone(), indices.clone());
+
+        let cloned = mesh_data.clone();
+        assert_eq!(cloned.positions, mesh_data.positions);
+        assert_eq!(cloned.indices, mesh_data.indices);
+
+        let (c1, r1) = mesh_data.calculate_bounding_sphere();
+        let (c2, r2) = cloned.calculate_bounding_sphere();
+        assert_eq!(c1, c2);
+        assert_eq!(r1, r2);
+    }
 }
