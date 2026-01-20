@@ -10,6 +10,9 @@ This curriculum provides a structured approach to learning game engine design pr
 
 **Prerequisites**: Basic programming knowledge, linear algebra fundamentals (vectors, matrices), and understanding of 3D coordinate systems.
 
+!!! tip "Mathematical Prerequisites"
+    Before starting this curriculum, review the [Mathematical Foundations](math/) section covering vectors, matrices, quaternions, coordinate spaces, and interpolation. These concepts are used throughout the course.
+
 ## Educational Resources
 
 - **[Code Examples Guide](CODE_EXAMPLES.md)** - Side-by-side implementations of core algorithms in Rust (Praxis), C++ (Unreal-style), and C# (Unity-style), showing how abstract concepts map to concrete code across different engine architectures
@@ -1216,6 +1219,15 @@ Several themes appear across modules:
 
 ### B. Essential Mathematics
 
+For comprehensive coverage, see the [Mathematical Foundations](math/) section:
+
+- **[Vectors](math/vectors.md)**: Positions, directions, dot product, cross product
+- **[Matrices](math/matrices.md)**: Transformations, projections, model-view-projection
+- **[Quaternions](math/quaternions.md)**: Rotation representation without gimbal lock
+- **[Coordinate Spaces](math/coordinate-spaces.md)**: Local, world, view, clip, and screen spaces
+- **[Interpolation](math/interpolation.md)**: LERP, SLERP, easing functions, splines
+
+Quick reference:
 - **Linear Algebra**: Vectors, matrices, transformations
 - **Quaternions**: 4D rotation representation
 - **Coordinate Systems**: Right-handed vs. left-handed, row-major vs. column-major

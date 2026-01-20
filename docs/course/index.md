@@ -30,6 +30,12 @@ Use the tabs to switch between languages and see how the same concept translates
 
 <div class="feature-grid">
   <div class="feature-card">
+    <h3>🧮 Mathematical Foundations</h3>
+    <p>Essential 3D math: vectors, matrices, quaternions, coordinate spaces, and interpolation.</p>
+    <a href="math/">Start with Math →</a>
+  </div>
+
+  <div class="feature-card">
     <h3>📚 Core Curriculum</h3>
     <p>Structured lessons covering game engine architecture from fundamentals to advanced topics.</p>
     <a href="CURRICULUM.html">View Curriculum →</a>
@@ -73,10 +79,11 @@ Choose your path based on your background and goals:
 ### For Beginners
 Start with the fundamentals and build up to complex systems.
 
-1. [Curriculum](CURRICULUM.md) - Core concepts and theory
-2. [Code Examples](CODE_EXAMPLES.md) - See concepts in action
-3. [Exercises](exercises/index.md) - Practice implementations
-4. [Beginner Projects](projects/index.md) - Build simple demos
+1. [Mathematical Foundations](math/) - 3D math prerequisites
+2. [Curriculum](CURRICULUM.md) - Core concepts and theory
+3. [Code Examples](CODE_EXAMPLES.md) - See concepts in action
+4. [Exercises](exercises/index.md) - Practice implementations
+5. [Beginner Projects](projects/index.md) - Build simple demos
 
 ### For Experienced Developers
 Dive into specific topics or compare implementations.
@@ -89,10 +96,11 @@ Dive into specific topics or compare implementations.
 ### For Engine Developers
 Deep dive into implementation details and trade-offs.
 
-1. [Rendering Patterns](patterns/rendering-architecture-patterns.md)
-2. [Component Storage](patterns/component-storage-strategies.md)
-3. [Memory Management](patterns/memory-management-approaches.md)
-4. [Game Loop Patterns](patterns/game-loop-patterns.md)
+1. [Mathematical Foundations](math/) - 3D math deep dive
+2. [Rendering Patterns](patterns/rendering-architecture-patterns.md)
+3. [Component Storage](patterns/component-storage-strategies.md)
+4. [Memory Management](patterns/memory-management-approaches.md)
+5. [Game Loop Patterns](patterns/game-loop-patterns.md)
 
 ## Featured Topics
 
