@@ -324,7 +324,7 @@ cargo run --example profiling_demo            # Profiling (basic, advanced, prod
 | **Edit component properties** | [Inspector](editor/inspector.md) | [Editor Overview](editor/editor-overview.md) |
 | **Use menu bar and shortcuts** | [Menu Bar](editor/menu-bar.md) | [Editor Overview](editor/editor-overview.md) |
 | **Customize editor panels** | [Editor Learning Path (Advanced)](learning-paths/editor.md) | [Editor API](reference/editor-api.md) |
-| **Understand command pattern** | [Undo/Redo](editor/undo-redo.md) | Example: `command_system_demo`, [Crate: COMMAND_SYSTEM.md](../crates/praxis_editor/COMMAND_SYSTEM.md) |
+| **Understand command pattern** | [Undo/Redo](editor/undo-redo.md) | Example: `command_system_demo`, [Crate: command-system.md](../crates/praxis_editor/command-system.md) |
 
 ### GUI Tasks
 
@@ -399,4 +399,4 @@ cargo run --example profiling_demo            # Profiling (basic, advanced, prod
 - [Benchmarking](benchmarking.md) - Performance testing
 - [Profiling](profiling.md) - Performance analysis and optimization
 - [Logging](logging.md) - Logging configuration
-- [Crate README Audit](CRATE_README_AUDIT.md) - Documentation completeness audit and maintenance
+- [Development Notes](../dev-notes/README.md) - Implementation notes, audits, and internal documentation

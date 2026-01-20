@@ -84,15 +84,15 @@ Implementation-focused documentation for **extending** the editor:
 
 - [praxis_editor Crate](../../crates/praxis_editor/README.md) - Crate-level documentation and API reference
 - **Technical Documentation** in `crates/praxis_editor/`:
-  - [SELECTION_SYSTEM.md](../../crates/praxis_editor/SELECTION_SYSTEM.md) - Selection implementation
-  - [UNDO_REDO_SYSTEM.md](../../crates/praxis_editor/UNDO_REDO_SYSTEM.md) - Command pattern implementation
-  - [EDITOR_CAMERA.md](../../crates/praxis_editor/EDITOR_CAMERA.md) - Camera controller implementation
-  - [GIZMOS.md](../../crates/praxis_editor/GIZMOS.md) - Gizmo system implementation
-  - [MENU_BAR.md](../../crates/praxis_editor/MENU_BAR.md) - Menu system implementation
-  - [VIEWPORT_PANEL.md](../../crates/praxis_editor/VIEWPORT_PANEL.md) - Viewport rendering
-  - [COMMAND_SYSTEM.md](../../crates/praxis_editor/COMMAND_SYSTEM.md) - Command architecture
-  - [PLAY_MODE_SYSTEM.md](../../crates/praxis_editor/PLAY_MODE_SYSTEM.md) - Play mode system
-  - [TOOLBAR_SYSTEM.md](../../crates/praxis_editor/TOOLBAR_SYSTEM.md) - Toolbar system
+  - [selection-system.md](../../crates/praxis_editor/selection-system.md) - Selection implementation
+  - [undo-redo-system.md](../../crates/praxis_editor/undo-redo-system.md) - Command pattern implementation
+  - [editor-camera.md](../../crates/praxis_editor/editor-camera.md) - Camera controller implementation
+  - [gizmos.md](../../crates/praxis_editor/gizmos.md) - Gizmo system implementation
+  - [menu-bar.md](../../crates/praxis_editor/menu-bar.md) - Menu system implementation
+  - [viewport-panel.md](../../crates/praxis_editor/viewport-panel.md) - Viewport rendering
+  - [command-system.md](../../crates/praxis_editor/command-system.md) - Command architecture
+  - [play-mode-system.md](../../crates/praxis_editor/play-mode-system.md) - Play mode system
+  - [toolbar-system.md](../../crates/praxis_editor/toolbar-system.md) - Toolbar system
 - **Examples**:
   - `examples/editor_demo.rs` - Full editor demonstration
   - `examples/selection_demo.rs` - Selection system demo
