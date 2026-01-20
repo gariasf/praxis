@@ -142,6 +142,61 @@ pub mod conversion {
             stats.streaming_queue_depth as f64,
         ));
 
+        // Memory metrics (if available)
+        if let Some(ref mem) = stats.memory_snapshot {
+            counters.push((
+                "VRAM Total (MB)".to_string(),
+                "Memory".to_string(),
+                mem.total_mb(),
+            ));
+
+            counters.push((
+                "VRAM Texture (MB)".to_string(),
+                "Memory/Breakdown".to_string(),
+                mem.category_mb(
+                    praxis_graphics::utilities::memory_profiler::MemoryCategory::Texture,
+                ),
+            ));
+
+            counters.push((
+                "VRAM Mesh (MB)".to_string(),
+                "Memory/Breakdown".to_string(),
+                mem.category_mb(
+                    praxis_graphics::utilities::memory_profiler::MemoryCategory::MeshBuffer,
+                ),
+            ));
+
+            counters.push((
+                "VRAM Descriptor (MB)".to_string(),
+                "Memory/Breakdown".to_string(),
+                mem.category_mb(
+                    praxis_graphics::utilities::memory_profiler::MemoryCategory::DescriptorSet,
+                ),
+            ));
+
+            counters.push((
+                "VRAM Compute (MB)".to_string(),
+                "Memory/Breakdown".to_string(),
+                mem.category_mb(
+                    praxis_graphics::utilities::memory_profiler::MemoryCategory::ComputeBuffer,
+                ),
+            ));
+
+            counters.push((
+                "VRAM Render Target (MB)".to_string(),
+                "Memory/Breakdown".to_string(),
+                mem.category_mb(
+                    praxis_graphics::utilities::memory_profiler::MemoryCategory::RenderTarget,
+                ),
+            ));
+
+            counters.push((
+                "Memory Allocations".to_string(),
+                "Memory".to_string(),
+                mem.allocation_count as f64,
+            ));
+        }
+
         counters
     }
 }
@@ -162,11 +217,12 @@ mod tests {
             descriptor_allocations: 15,
             active_lod_levels: vec![(0, 50), (1, 150), (2, 50)],
             streaming_queue_depth: 5,
+            memory_snapshot: None,
         };
 
         let counters = conversion::render_stats_to_counters(&stats);
 
-        // Should have base counters (8) + LOD levels (3)
+        // Should have base counters (8) + LOD levels (3), no memory stats
         assert_eq!(counters.len(), 11);
 
         // Verify culling efficiency
@@ -203,11 +259,12 @@ mod tests {
             descriptor_allocations: 5,
             active_lod_levels: vec![],
             streaming_queue_depth: 0,
+            memory_snapshot: None,
         };
 
         let counters = conversion::render_stats_to_counters(&stats);
 
-        // Should have only base counters (8) when no LOD levels
+        // Should have only base counters (8) when no LOD levels and no memory
         assert_eq!(counters.len(), 8);
     }
 }

@@ -84,6 +84,9 @@ pub struct RenderStats {
 
     /// Number of meshes in streaming queue
     pub streaming_queue_depth: usize,
+
+    /// Optional memory snapshot for correlation with VRAM usage
+    pub memory_snapshot: Option<super::memory_profiler::MemorySnapshot>,
 }
 
 impl RenderStats {
@@ -99,7 +102,32 @@ impl RenderStats {
             descriptor_allocations: 0,
             active_lod_levels: Vec::new(),
             streaming_queue_depth: 0,
+            memory_snapshot: None,
         }
+    }
+
+    /// Attaches a memory snapshot to this render stats for correlation analysis.
+    pub fn with_memory_snapshot(
+        mut self,
+        snapshot: super::memory_profiler::MemorySnapshot,
+    ) -> Self {
+        self.memory_snapshot = Some(snapshot);
+        self
+    }
+
+    /// Returns the total VRAM usage in MB if a memory snapshot is attached.
+    pub fn vram_usage_mb(&self) -> Option<f64> {
+        self.memory_snapshot.as_ref().map(|s| s.total_mb())
+    }
+
+    /// Returns VRAM usage for a specific category in MB if a memory snapshot is attached.
+    pub fn vram_category_mb(
+        &self,
+        category: super::memory_profiler::MemoryCategory,
+    ) -> Option<f64> {
+        self.memory_snapshot
+            .as_ref()
+            .map(|s| s.category_mb(category))
     }
 
     /// Calculates the culling efficiency as a percentage.
@@ -486,9 +514,9 @@ impl RenderStatsHistory {
     /// # CSV Format
     ///
     /// ```csv
-    /// frame_number,total_objects,visible_objects,frustum_culled,occlusion_culled,draw_calls,descriptor_allocations,streaming_queue_depth,culling_efficiency
-    /// 1,1000,250,650,100,120,15,5,75.0
-    /// 2,1000,245,655,100,118,15,4,75.5
+    /// frame_number,total_objects,visible_objects,frustum_culled,occlusion_culled,draw_calls,descriptor_allocations,streaming_queue_depth,culling_efficiency,vram_total_mb,vram_texture_mb,vram_mesh_mb,vram_descriptor_mb
+    /// 1,1000,250,650,100,120,15,5,75.0,245.5,120.3,80.2,15.1
+    /// 2,1000,245,655,100,118,15,4,75.5,245.8,120.5,80.3,15.2
     /// ```
     pub fn export_to_csv<P: AsRef<Path>>(&self, path: P) -> std::io::Result<()> {
         let mut file = File::create(path)?;
@@ -496,14 +524,31 @@ impl RenderStatsHistory {
         // Write CSV header
         writeln!(
             file,
-            "frame_number,total_objects,visible_objects,frustum_culled,occlusion_culled,draw_calls,descriptor_allocations,streaming_queue_depth,culling_efficiency"
+            "frame_number,total_objects,visible_objects,frustum_culled,occlusion_culled,draw_calls,descriptor_allocations,streaming_queue_depth,culling_efficiency,vram_total_mb,vram_texture_mb,vram_mesh_mb,vram_descriptor_mb,vram_compute_mb,vram_render_target_mb"
         )?;
 
         // Write data rows
         for stats in &self.frames {
+            let vram_total = stats.vram_usage_mb().unwrap_or(0.0);
+            let vram_texture = stats
+                .vram_category_mb(super::memory_profiler::MemoryCategory::Texture)
+                .unwrap_or(0.0);
+            let vram_mesh = stats
+                .vram_category_mb(super::memory_profiler::MemoryCategory::MeshBuffer)
+                .unwrap_or(0.0);
+            let vram_descriptor = stats
+                .vram_category_mb(super::memory_profiler::MemoryCategory::DescriptorSet)
+                .unwrap_or(0.0);
+            let vram_compute = stats
+                .vram_category_mb(super::memory_profiler::MemoryCategory::ComputeBuffer)
+                .unwrap_or(0.0);
+            let vram_rt = stats
+                .vram_category_mb(super::memory_profiler::MemoryCategory::RenderTarget)
+                .unwrap_or(0.0);
+
             writeln!(
                 file,
-                "{},{},{},{},{},{},{},{},{:.2}",
+                "{},{},{},{},{},{},{},{},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2}",
                 stats.frame_number,
                 stats.total_objects,
                 stats.visible_objects,
@@ -512,7 +557,13 @@ impl RenderStatsHistory {
                 stats.draw_calls,
                 stats.descriptor_allocations,
                 stats.streaming_queue_depth,
-                stats.culling_efficiency()
+                stats.culling_efficiency(),
+                vram_total,
+                vram_texture,
+                vram_mesh,
+                vram_descriptor,
+                vram_compute,
+                vram_rt,
             )?;
         }
 
@@ -712,6 +763,7 @@ mod tests {
         assert_eq!(stats.frame_number, 42);
         assert_eq!(stats.total_objects, 0);
         assert_eq!(stats.culling_efficiency(), 0.0);
+        assert!(stats.memory_snapshot.is_none());
     }
 
     #[test]
@@ -726,6 +778,7 @@ mod tests {
             descriptor_allocations: 15,
             active_lod_levels: vec![],
             streaming_queue_depth: 0,
+            memory_snapshot: None,
         };
 
         assert_eq!(stats.culling_efficiency(), 75.0);
@@ -746,6 +799,7 @@ mod tests {
             descriptor_allocations: 5,
             active_lod_levels: vec![],
             streaming_queue_depth: 2,
+            memory_snapshot: None,
         };
 
         history.record(stats1.clone());
@@ -762,6 +816,7 @@ mod tests {
             descriptor_allocations: 6,
             active_lod_levels: vec![],
             streaming_queue_depth: 3,
+            memory_snapshot: None,
         };
 
         history.record(stats2);
@@ -784,6 +839,7 @@ mod tests {
                 descriptor_allocations: 1,
                 active_lod_levels: vec![],
                 streaming_queue_depth: 0,
+                memory_snapshot: None,
             };
             history.record(stats);
         }
@@ -807,6 +863,7 @@ mod tests {
             descriptor_allocations: 5,
             active_lod_levels: vec![(0, 20), (1, 50), (2, 30)],
             streaming_queue_depth: 0,
+            memory_snapshot: None,
         };
 
         assert_eq!(stats.total_lod_objects(), 100);

@@ -81,6 +81,7 @@
 //! When the `graphics_integration` feature is enabled (default), the profiler can automatically
 //! export rendering statistics from `praxis_graphics::RenderStats` as counter events:
 //!
+//! ### Rendering Metrics
 //! - **Culling Efficiency**: Percentage of objects successfully culled
 //! - **Draw Call Reduction**: Number of draw calls saved by culling and batching
 //! - **Visible Objects**: Objects rendered after culling
@@ -88,6 +89,15 @@
 //! - **Occlusion Culled**: Objects culled by occlusion test
 //! - **LOD Distribution**: Percentage of objects at each LOD level
 //! - **Streaming Queue**: Mesh streaming queue depth
+//!
+//! ### GPU Memory Metrics
+//! - **VRAM Total**: Total GPU memory usage in megabytes
+//! - **VRAM Texture**: Memory used by textures
+//! - **VRAM Mesh**: Memory used by mesh buffers (vertex/index)
+//! - **VRAM Descriptor**: Memory used by descriptor sets
+//! - **VRAM Compute**: Memory used by compute shader buffers
+//! - **VRAM Render Target**: Memory used by render targets (framebuffers, shadow maps, etc.)
+//! - **Memory Allocations**: Total number of active GPU allocations
 //!
 //! To export: call `begin_trace_export()`, run normally, then `end_trace_export(path)`.
 //! Load the resulting JSON file in Chrome at chrome://tracing for interactive analysis.

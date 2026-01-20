@@ -1841,6 +1841,12 @@ pub struct RenderContext {
 
     /// Whether to collect render statistics.
     collect_render_stats: bool,
+
+    /// GPU memory profiler for VRAM tracking.
+    memory_profiler: utilities::memory_profiler::MemoryProfiler,
+
+    /// Whether to collect memory profiling data.
+    collect_memory_stats: bool,
 }
 
 impl RenderContext {
@@ -2211,6 +2217,10 @@ impl RenderContext {
             render_stats_history: utilities::render_stats::RenderStatsHistory::new(300),
             stats_frame_number: 0,
             collect_render_stats: true, // Enabled by default for performance monitoring
+
+            // Memory profiling
+            memory_profiler: utilities::memory_profiler::MemoryProfiler::new(),
+            collect_memory_stats: true, // Enabled by default for VRAM tracking
         })
     }
 
@@ -2552,6 +2562,177 @@ impl RenderContext {
     /// Returns whether render statistics collection is enabled.
     pub fn is_render_stats_enabled(&self) -> bool {
         self.collect_render_stats
+    }
+
+    /// Gets a reference to the memory profiler.
+    ///
+    /// Use this to query current VRAM usage, allocation counts, and memory history.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use praxis_graphics::RenderContext;
+    /// # async fn example(render_context: RenderContext) {
+    /// let profiler = render_context.memory_profiler();
+    /// println!("Total VRAM: {:.2} MB", profiler.total_allocated_mb());
+    /// println!("Peak VRAM: {:.2} MB", profiler.peak_mb());
+    /// println!("Active allocations: {}", profiler.allocation_count());
+    /// # }
+    /// ```
+    pub fn memory_profiler(&self) -> &utilities::memory_profiler::MemoryProfiler {
+        &self.memory_profiler
+    }
+
+    /// Gets a mutable reference to the memory profiler.
+    ///
+    /// Allows modifying the profiler, such as resetting state or adjusting settings.
+    pub fn memory_profiler_mut(&mut self) -> &mut utilities::memory_profiler::MemoryProfiler {
+        &mut self.memory_profiler
+    }
+
+    /// Enables or disables memory profiling.
+    ///
+    /// When disabled, allocation tracking continues but snapshots are not recorded.
+    /// This can slightly reduce overhead while maintaining allocation state.
+    ///
+    /// # Arguments
+    ///
+    /// * `enabled` - Whether to enable memory profiling
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use praxis_graphics::RenderContext;
+    /// # async fn example(mut render_context: RenderContext) {
+    /// // Disable during loading sequences
+    /// render_context.set_memory_profiling_enabled(false);
+    ///
+    /// // ... load assets ...
+    ///
+    /// // Re-enable for runtime tracking
+    /// render_context.set_memory_profiling_enabled(true);
+    /// # }
+    /// ```
+    pub fn set_memory_profiling_enabled(&mut self, enabled: bool) {
+        self.collect_memory_stats = enabled;
+        self.memory_profiler.set_enabled(enabled);
+    }
+
+    /// Returns whether memory profiling is enabled.
+    pub fn is_memory_profiling_enabled(&self) -> bool {
+        self.collect_memory_stats
+    }
+
+    /// Records a texture allocation in the memory profiler.
+    ///
+    /// This should be called after successfully loading or creating a texture.
+    /// Automatically calculates size based on texture dimensions and format.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Texture identifier
+    /// * `width` - Width in pixels
+    /// * `height` - Height in pixels
+    /// * `format_name` - Format description (e.g., "RGBA8", "D32F")
+    fn record_texture_allocation(
+        &mut self,
+        name: &str,
+        width: u32,
+        height: u32,
+        format_name: &str,
+    ) {
+        if self.collect_memory_stats {
+            // Estimate bytes per pixel based on format name
+            let bytes_per_pixel = if format_name.contains("RGBA8") {
+                4
+            } else if format_name.contains("RGB8") {
+                3
+            } else if format_name.contains("D32") {
+                4
+            } else if format_name.contains("D16") {
+                2
+            } else {
+                4 // Default to 4 bytes
+            };
+
+            let size_bytes = (width * height * bytes_per_pixel) as u64;
+            let metadata = format!("{}x{} {}", width, height, format_name);
+
+            self.memory_profiler.record_allocation(
+                format!("texture_{}", name),
+                utilities::memory_profiler::MemoryCategory::Texture,
+                size_bytes,
+                Some(metadata),
+            );
+        }
+    }
+
+    /// Records a mesh buffer allocation in the memory profiler.
+    ///
+    /// This should be called after successfully uploading a mesh to the GPU.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Mesh identifier
+    /// * `vertex_count` - Number of vertices
+    /// * `index_count` - Number of indices
+    fn record_mesh_allocation(&mut self, name: &str, vertex_count: usize, index_count: usize) {
+        if self.collect_memory_stats {
+            // Each Vertex3D is 48 bytes (3 floats pos + 3 floats normal + 3 floats color + 2 floats uv + 4 floats tangent)
+            // Each index is 2 bytes (u16)
+            let vertex_bytes = vertex_count * std::mem::size_of::<crate::vertex::Vertex3D>();
+            let index_bytes = index_count * 2;
+            let total_bytes = (vertex_bytes + index_bytes) as u64;
+
+            let metadata = format!("{} verts, {} indices", vertex_count, index_count);
+
+            self.memory_profiler.record_allocation(
+                format!("mesh_{}", name),
+                utilities::memory_profiler::MemoryCategory::MeshBuffer,
+                total_bytes,
+                Some(metadata),
+            );
+        }
+    }
+
+    /// Records a descriptor set allocation in the memory profiler.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Descriptor set identifier
+    /// * `estimated_size` - Estimated size in bytes (typically small, ~256 bytes)
+    fn record_descriptor_set_allocation(&mut self, id: &str, estimated_size: u64) {
+        if self.collect_memory_stats {
+            self.memory_profiler.record_allocation(
+                format!("descriptor_{}", id),
+                utilities::memory_profiler::MemoryCategory::DescriptorSet,
+                estimated_size,
+                None,
+            );
+        }
+    }
+
+    /// Records a compute buffer allocation in the memory profiler.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Buffer identifier
+    /// * `size_bytes` - Size in bytes
+    /// * `description` - Optional description
+    fn record_compute_buffer_allocation(
+        &mut self,
+        name: &str,
+        size_bytes: u64,
+        description: Option<String>,
+    ) {
+        if self.collect_memory_stats {
+            self.memory_profiler.record_allocation(
+                format!("compute_{}", name),
+                utilities::memory_profiler::MemoryCategory::ComputeBuffer,
+                size_bytes,
+                description,
+            );
+        }
     }
 
     /// Exports render statistics history to a CSV file.
@@ -3806,9 +3987,21 @@ impl RenderContext {
 
         trace!("Frame rendering complete");
 
-        // Record render stats for this frame
+        // Update memory profiler for this frame
+        if self.collect_memory_stats {
+            self.memory_profiler.begin_frame();
+        }
+
+        // Record render stats for this frame with memory correlation
         if self.collect_render_stats {
             // Note: visible_objects, draw_calls, and descriptor_allocations are set during rendering
+
+            // Attach memory snapshot if memory profiling is enabled
+            if self.collect_memory_stats {
+                let memory_snapshot = self.memory_profiler.snapshot();
+                self.current_render_stats.memory_snapshot = Some(memory_snapshot);
+            }
+
             // Final values are recorded into history here
             self.render_stats_history
                 .record(self.current_render_stats.clone());

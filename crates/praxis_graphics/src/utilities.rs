@@ -3,6 +3,7 @@
 //! This module consolidates various utility systems that support the main rendering pipeline:
 //! - **Optimization Configuration**: Runtime toggles for rendering optimizations
 //! - **Render Statistics**: Performance tracking and metrics collection
+//! - **Memory Profiling**: GPU memory tracking and VRAM usage analysis
 //! - **Velocity Buffers**: Motion vector generation for motion blur
 //! - **Light Linking**: Channel-based light-object interaction control
 //! - **Light Probes**: Dynamic global illumination using spherical harmonics
@@ -14,6 +15,7 @@
 pub mod hardware_tier;
 pub mod light_linking;
 pub mod light_probe;
+pub mod memory_profiler;
 pub mod optimization_config;
 pub mod render_stats;
 pub mod velocity_buffer;
@@ -28,6 +30,9 @@ pub use light_linking::{
 pub use light_probe::{
     LightProbe, LightProbeData, LightProbeGrid, LightProbeManager, ProbeBlendMode,
     MAX_LIGHT_PROBES, PROBE_IRRADIANCE_COEFFS,
+};
+pub use memory_profiler::{
+    MemoryCategory, MemoryHistory, MemoryProfiler, MemorySnapshot, VramAllocation,
 };
 pub use optimization_config::RenderingOptimizationConfig;
 pub use render_stats::{
