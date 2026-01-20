@@ -1736,6 +1736,8 @@ pub struct RenderContext {
     // Public fields for external access
     /// The Vulkan instance - connection to the Vulkan API
     pub instance: Arc<Instance>,
+    /// The physical device (GPU)
+    pub physical_device: Arc<PhysicalDevice>,
     /// The logical device - interface to the GPU
     pub device: Arc<Device>,
     /// Queue for submitting graphics commands
@@ -2128,6 +2130,7 @@ impl RenderContext {
         Ok(Self {
             // Public fields
             instance,
+            physical_device,
             device,
             graphics_queue,
             present_queue,
@@ -4136,8 +4139,9 @@ pub use taa::{
 pub use texture::{Cubemap, CubemapFace, Texture, TextureManager};
 pub use uniform_buffer::{DynamicUniformBuffer, ModelUniforms, ViewProjectionUniforms};
 pub use utilities::{
-    LightChannel, LightLinkingManager, LightLinkingMask, LightProbe, LightProbeData,
-    LightProbeGrid, LightProbeManager, ProbeBlendMode, RenderStats, RenderStatsHistory,
+    GpuVendor, HardwareTier, HardwareTierConfig, HardwareTierDetector, LightChannel,
+    LightLinkingManager, LightLinkingMask, LightProbe, LightProbeData, LightProbeGrid,
+    LightProbeManager, ProbeBlendMode, QualityPreset, RenderStats, RenderStatsHistory,
     RenderStatsVisualizer, RenderingOptimizationConfig, VelocityBuffer, VelocityBufferRenderer,
     DEFAULT_LIGHT_CHANNEL, MAX_LIGHT_PROBES, PROBE_IRRADIANCE_COEFFS,
 };

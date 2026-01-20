@@ -70,6 +70,7 @@ cargo run --example hiz_occlusion_demo
 cargo run --example rendering_stress_test
 cargo run --example optimization_showcase_demo
 cargo run --example render_stats_demo
+cargo run --example hardware_tier_demo
 
 # Documentation
 cargo doc --workspace --no-deps --open
