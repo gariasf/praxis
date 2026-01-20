@@ -1,0 +1,249 @@
+site_name: Praxis Game Engine Course
+site_description: Educational game engine course with multi-language code examples
+site_author: Praxis Contributors
+site_url: https://yourusername.github.io/praxis/
+
+repo_name: yourusername/praxis
+repo_url: https://github.com/yourusername/praxis
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: en
+  palette:
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  features:
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - navigation.tracking
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.tabs.link
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+    - content.action.view
+    - toc.follow
+    - toc.integrate
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil
+    view: material/eye
+
+plugins:
+  - search:
+      separator: '[\s\-,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
+      lang:
+        - en
+  - tags:
+      tags_file: tags.md
+  - git-revision-date-localized:
+      enable_creation_date: true
+      type: timeago
+
+markdown_extensions:
+  # Python Markdown
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  
+  # Python Markdown Extensions
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+      use_pygments: true
+      linenums: true
+      linenums_style: pymdownx-inline
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      check_paths: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+      combine_header_slug: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+extra:
+  analytics:
+    provider: google
+    property: G-XXXXXXXXXX  # Replace with your Google Analytics ID
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/yourusername/praxis
+    - icon: fontawesome/brands/rust
+      link: https://www.rust-lang.org/
+  version:
+    provider: mike
+    default: latest
+  consent:
+    title: Cookie consent
+    description: >-
+      We use cookies to recognize your repeated visits and preferences, as well
+      as to measure the effectiveness of our documentation and whether users
+      find what they're searching for. With your consent, you're helping us to
+      make our documentation better.
+  language_selector:
+    - name: Pseudocode
+      code: pseudo
+      icon: material/code-block-tags
+    - name: Rust (Praxis)
+      code: rust
+      icon: fontawesome/brands/rust
+    - name: C++ (Unreal)
+      code: cpp
+      icon: material/language-cpp
+    - name: C# (Unity)
+      code: csharp
+      icon: material/language-csharp
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/extra.js
+  - javascripts/mathjax.js
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - getting-started/index.md
+    - Installation: getting-started/installation.md
+    - Project Structure: getting-started/project-structure.md
+    - Feature Flags: getting-started/feature-flags.md
+    - Beginners Guide: beginners-guide.md
+  
+  - Course:
+    - course/index.md
+    - Curriculum: course/CURRICULUM.md
+    - Code Examples:
+      - course/CODE_EXAMPLES.md
+      - Transform Propagation: course/examples/transform-propagation.md
+      - Frustum Culling: course/examples/frustum-culling.md
+      - Fixed Timestep Physics: course/examples/fixed-timestep-physics.md
+      - ECS vs OOP: course/examples/ecs-vs-oop.md
+    - Universal Patterns:
+      - course/patterns/index.md
+      - Game Loop Patterns: course/patterns/game-loop-patterns.md
+      - Component Storage: course/patterns/component-storage-strategies.md
+      - Rendering Architecture: course/patterns/rendering-architecture-patterns.md
+      - Memory Management: course/patterns/memory-management-approaches.md
+    - Exercises: course/exercises/index.md
+    - Projects: course/projects/index.md
+    - Comparisons: course/comparisons/index.md
+    - Language Guide: course/LANGUAGE_GUIDE.md
+    - Glossary: course/glossary.md
+  
+  - Guides:
+    - guides/index.md
+    - Rendering:
+      - guides/rendering.md
+      - Forward Rendering: guides/rendering/forward-rendering.md
+      - Deferred Rendering: guides/rendering/deferred-rendering.md
+      - HDR & Tone Mapping: guides/rendering/hdr-tonemapping.md
+      - Shadows: guides/rendering/shadows.md
+      - Post-Processing: guides/rendering/post-processing.md
+    - Animation:
+      - guides/animation.md
+      - Skeletal Basics: guides/animation/skeletal-basics.md
+      - Animation Blending: guides/animation/blending.md
+      - Advanced Features: guides/animation/advanced-features.md
+    - Physics: guides/physics.md
+    - Audio: guides/audio.md
+    - Scripting: guides/scripting.md
+    - Networking: guides/systems/networking.md
+  
+  - Concepts:
+    - concepts/index.md
+    - ECS Architecture: concepts/ecs-architecture.md
+    - Vulkan Rendering: concepts/vulkan-rendering.md
+    - Transform Hierarchy: concepts/transform-hierarchy.md
+    - PBR Materials: concepts/pbr-materials.md
+    - Animation: concepts/animation.md
+    - Physics: concepts/physics.md
+  
+  - Reference:
+    - reference/index.md
+    - Components: reference/components.md
+    - Crates: reference/crates.md
+    - API Reference: reference/api/index.md
+  
+  - Learning Paths:
+    - learning-paths/index.md
+    - Rendering: learning-paths/rendering.md
+    - Animation: learning-paths/animation.md
+    - Physics: learning-paths/physics.md
+    - Performance: learning-paths/performance.md
+  
+  - Editor:
+    - editor/index.md
+    - Editor Overview: editor/editor-overview.md
+    - Selection System: editor/selection-system.md
+    - Gizmos: editor/gizmos.md
+  
+  - Architecture:
+    - architecture.md
+    - Crate Dependencies: architecture/crate-dependency-graph.md
+    - Rendering Pipeline: architecture/rendering-pipeline-stages.md
+  
+  - Tags: tags.md
+
+copyright: >
+  Copyright &copy; 2024 Praxis Contributors –
+  <a href="#__consent">Change cookie settings</a>

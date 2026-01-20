@@ -128,3 +128,21 @@ world_snapshot.ron
 
 .claude
 nul
+
+# MkDocs - Documentation site build artifacts
+site/
+.cache/
+
+# Python virtual environment for docs (if using venv)
+venv/
+.venv/
+docs_venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# MkDocs cache
+.mkdocs_cache/
