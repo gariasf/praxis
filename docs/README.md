@@ -108,6 +108,7 @@ Each path provides:
 ### [Course Materials](course/)
 Educational curriculum and universal patterns:
 - **[Curriculum](course/CURRICULUM.md)** - Language-agnostic game engine architecture course
+- **[Code Examples Guide](course/CODE_EXAMPLES.md)** - Side-by-side algorithm implementations in Rust (Praxis), C++ (Unreal-style), and C# (Unity-style), demonstrating how abstract concepts translate to concrete code
 - **[Universal Patterns](course/patterns/)** - Design patterns and trade-offs independent of Praxis:
   - [Game Loop Patterns](course/patterns/game-loop-patterns.md) - Fixed, variable, and semi-fixed timestep approaches
   - [Component Storage Strategies](course/patterns/component-storage-strategies.md) - Table-based, archetype, sparse set storage

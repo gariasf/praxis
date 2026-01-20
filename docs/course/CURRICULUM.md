@@ -10,6 +10,10 @@ This curriculum provides a structured approach to learning game engine design pr
 
 **Prerequisites**: Basic programming knowledge, linear algebra fundamentals (vectors, matrices), and understanding of 3D coordinate systems.
 
+## Educational Resources
+
+- **[Code Examples Guide](CODE_EXAMPLES.md)** - Side-by-side implementations of core algorithms in Rust (Praxis), C++ (Unreal-style), and C# (Unity-style), showing how abstract concepts map to concrete code across different engine architectures
+
 ## Curriculum Structure
 
 The curriculum consists of 12 concept-focused modules organized into four tiers:
