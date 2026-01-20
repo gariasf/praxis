@@ -33,8 +33,8 @@
 
 use praxis_audio::{AudioListener, AudioSource};
 use praxis_ecs::{
-    Camera, Children, DirectionalLight, Entity, GlobalTransform, MaterialHandle,
-    MaterialPropertiesComponent, MeshHandle, Name, OrthographicProjection, Parent,
+    Camera, Children, CullingDebug, CullingParams, DirectionalLight, Entity, GlobalTransform,
+    MaterialHandle, MaterialPropertiesComponent, MeshHandle, Name, OrthographicProjection, Parent,
     PerspectiveProjection, PointLight, TextureHandle, Transform, Visibility, World,
 };
 use praxis_math::Quat;
@@ -124,6 +124,7 @@ impl InspectorPanel {
             self.render_texture_component(ui, world, entity);
             self.render_material_component(ui, world, entity);
             self.render_material_properties_component(ui, world, entity);
+            self.render_culling_params_component(ui, world, entity);
             self.render_camera_component(ui, world, entity);
             self.render_perspective_projection_component(ui, world, entity);
             self.render_orthographic_projection_component(ui, world, entity);
@@ -167,6 +168,7 @@ impl InspectorPanel {
                 let has_audio_source = world.inner().get::<AudioSource>(entity).is_some();
                 let has_audio_listener = world.inner().get::<AudioListener>(entity).is_some();
                 let has_visibility = world.inner().get::<Visibility>(entity).is_some();
+                let has_culling_params = world.inner().get::<CullingParams>(entity).is_some();
 
                 if !has_name && ui.selectable_label(false, "Name").clicked() {
                     let _ = world.insert_component(entity, Name::new("New Entity"));
@@ -244,6 +246,10 @@ impl InspectorPanel {
                 }
                 if !has_visibility && ui.selectable_label(false, "Visibility").clicked() {
                     let _ = world.insert_component(entity, Visibility::default());
+                    self.add_component_open = false;
+                }
+                if !has_culling_params && ui.selectable_label(false, "Culling Params").clicked() {
+                    let _ = world.insert_component(entity, CullingParams::default());
                     self.add_component_open = false;
                 }
             });
@@ -512,6 +518,251 @@ impl InspectorPanel {
                 });
             if !open {
                 world.remove_component::<MaterialPropertiesComponent>(entity);
+            }
+        }
+    }
+
+    /// Renders the CullingParams component editor.
+    fn render_culling_params_component(
+        &self,
+        ui: &mut egui::Ui,
+        world: &mut World,
+        entity: Entity,
+    ) {
+        let mut query = world.query::<&mut CullingParams>();
+        if let Ok(mut params) = query.get_mut(world.inner_mut(), entity) {
+            let mut open = true;
+            egui::CollapsingHeader::new("Culling Parameters")
+                .default_open(true)
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("GPU Culling Configuration");
+                        if ui.button("🗑").on_hover_text("Remove component").clicked() {
+                            open = false;
+                        }
+                    });
+
+                    ui.separator();
+
+                    // Preset buttons
+                    ui.label("Presets:");
+                    ui.horizontal(|ui| {
+                        if ui
+                            .button("Disabled")
+                            .on_hover_text("Disable all culling")
+                            .clicked()
+                        {
+                            *params = CullingParams::disabled();
+                        }
+                        if ui
+                            .button("Large Static")
+                            .on_hover_text("Buildings, terrain")
+                            .clicked()
+                        {
+                            *params = CullingParams::large_static();
+                        }
+                        if ui
+                            .button("Medium")
+                            .on_hover_text("Trees, vehicles")
+                            .clicked()
+                        {
+                            *params = CullingParams::medium();
+                        }
+                        if ui
+                            .button("Small Props")
+                            .on_hover_text("Rocks, debris")
+                            .clicked()
+                        {
+                            *params = CullingParams::small_props();
+                        }
+                        if ui
+                            .button("Detail")
+                            .on_hover_text("Grass, small stones")
+                            .clicked()
+                        {
+                            *params = CullingParams::detail();
+                        }
+                    });
+
+                    ui.separator();
+
+                    // Average Normal
+                    ui.label("Average Normal:");
+                    ui.horizontal(|ui| {
+                        ui.label("X:");
+                        let mut changed = ui
+                            .add(egui::DragValue::new(&mut params.average_normal.x).speed(0.01))
+                            .changed();
+                        ui.label("Y:");
+                        changed |= ui
+                            .add(egui::DragValue::new(&mut params.average_normal.y).speed(0.01))
+                            .changed();
+                        ui.label("Z:");
+                        changed |= ui
+                            .add(egui::DragValue::new(&mut params.average_normal.z).speed(0.01))
+                            .changed();
+
+                        if changed {
+                            params.average_normal = params.average_normal.normalize();
+                        }
+                    });
+                    ui.label("↳ Normal direction for back-face culling");
+
+                    ui.separator();
+
+                    // Back-face Threshold
+                    ui.horizontal(|ui| {
+                        ui.label("Back-face Threshold:");
+                        ui.add(
+                            egui::DragValue::new(&mut params.backface_threshold)
+                                .speed(0.01)
+                                .range(-1.0..=1.0),
+                        );
+                    });
+                    ui.label("↳ Dot product threshold (-0.1 to 0.1 typical)");
+                    if params.backface_threshold != 0.0 {
+                        ui.colored_label(
+                            egui::Color32::YELLOW,
+                            format!(
+                                "  ⚠ Back-face culling active (threshold: {:.2})",
+                                params.backface_threshold
+                            ),
+                        );
+                    }
+
+                    ui.separator();
+
+                    // Minimum Screen Size
+                    ui.horizontal(|ui| {
+                        ui.label("Min Screen Size (pixels):");
+                        ui.add(
+                            egui::DragValue::new(&mut params.min_screen_size)
+                                .speed(0.5)
+                                .range(0.0..=100.0),
+                        );
+                    });
+                    ui.label("↳ Cull objects smaller than this (0.0 = disabled)");
+                    if params.min_screen_size > 0.0 {
+                        ui.colored_label(
+                            egui::Color32::YELLOW,
+                            format!(
+                                "  ⚠ Small object culling active ({:.1} pixels)",
+                                params.min_screen_size
+                            ),
+                        );
+                    }
+
+                    ui.separator();
+
+                    // Maximum Render Distance
+                    ui.horizontal(|ui| {
+                        ui.label("Max Render Distance:");
+                        ui.add(
+                            egui::DragValue::new(&mut params.max_render_distance)
+                                .speed(10.0)
+                                .range(-1.0..=10000.0),
+                        );
+                    });
+                    ui.label("↳ Cull beyond this distance (< 0 = disabled)");
+                    if params.max_render_distance >= 0.0 {
+                        ui.colored_label(
+                            egui::Color32::YELLOW,
+                            format!(
+                                "  ⚠ Distance culling active ({:.1} units)",
+                                params.max_render_distance
+                            ),
+                        );
+                    }
+
+                    ui.separator();
+
+                    // Summary
+                    ui.label("Active Culling Strategies:");
+                    let mut strategies = Vec::new();
+                    if params.backface_threshold != 0.0 {
+                        strategies.push("Back-face");
+                    }
+                    if params.min_screen_size > 0.0 {
+                        strategies.push("Small object");
+                    }
+                    if params.max_render_distance >= 0.0 {
+                        strategies.push("Distance");
+                    }
+                    if strategies.is_empty() {
+                        ui.label("  None (all culling disabled)");
+                    } else {
+                        ui.label(format!("  {}", strategies.join(", ")));
+                    }
+
+                    // Real-time preview from CullingDebug component
+                    if let Ok(debug) = world.inner().get::<CullingDebug>(entity) {
+                        ui.separator();
+                        ui.label("Real-time Preview:");
+
+                        let color = debug.debug_color();
+                        let color32 = egui::Color32::from_rgb(
+                            (color[0] * 255.0) as u8,
+                            (color[1] * 255.0) as u8,
+                            (color[2] * 255.0) as u8,
+                        );
+
+                        if debug.is_culled() {
+                            ui.colored_label(
+                                color32,
+                                format!(
+                                    "  ❌ Would be CULLED by: {}",
+                                    debug.primary_cull_reason().unwrap_or("Unknown")
+                                ),
+                            );
+                        } else {
+                            ui.colored_label(color32, "  ✓ Would be VISIBLE");
+                        }
+
+                        // Detailed stats
+                        ui.label(format!(
+                            "  Distance: {:.1} units",
+                            debug.distance_from_camera
+                        ));
+                        ui.label(format!(
+                            "  Screen size: {:.1} pixels",
+                            debug.screen_size_pixels
+                        ));
+                        ui.label(format!("  Backface dot: {:.2}", debug.backface_dot));
+
+                        // Individual test results
+                        ui.horizontal(|ui| {
+                            ui.label("  Tests:");
+                            if debug.culled_by_frustum {
+                                ui.colored_label(egui::Color32::RED, "Frustum❌");
+                            } else {
+                                ui.colored_label(egui::Color32::GREEN, "Frustum✓");
+                            }
+                            if debug.culled_by_backface {
+                                ui.colored_label(egui::Color32::LIGHT_RED, "Backface❌");
+                            } else {
+                                ui.colored_label(egui::Color32::GREEN, "Backface✓");
+                            }
+                            if debug.culled_by_screen_size {
+                                ui.colored_label(egui::Color32::YELLOW, "Size❌");
+                            } else {
+                                ui.colored_label(egui::Color32::GREEN, "Size✓");
+                            }
+                            if debug.culled_by_distance {
+                                ui.colored_label(egui::Color32::LIGHT_BLUE, "Dist❌");
+                            } else {
+                                ui.colored_label(egui::Color32::GREEN, "Dist✓");
+                            }
+                        });
+                    } else {
+                        ui.separator();
+                        ui.colored_label(
+                            egui::Color32::GRAY,
+                            "  ℹ Enable culling debug visualization to see real-time preview",
+                        );
+                    }
+                });
+            if !open {
+                world.remove_component::<CullingParams>(entity);
             }
         }
     }

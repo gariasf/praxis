@@ -442,12 +442,12 @@ pub mod systems;
 mod world;
 
 pub use components::{
-    Active, BoundingBox, Camera, CameraMatrices, Children, Culled, DirectionalLight,
-    DirectionalLightInfo, EngineManaged, EnvironmentProbe, EnvironmentProbeUpdateMode,
-    GlobalTransform, LightingData, LodComponent, LodGroupComponent, MaterialHandle,
-    MaterialPropertiesComponent, Mesh, MeshHandle, Name, NoSave, OrthographicProjection, Parent,
-    ParticleEmitter, PerspectiveProjection, PointLight, PointLightInfo, Skybox, TextureHandle,
-    Transform, Visibility, Visible,
+    Active, BoundingBox, Camera, CameraMatrices, Children, Culled, CullingDebug, CullingParams,
+    DirectionalLight, DirectionalLightInfo, EngineManaged, EnvironmentProbe,
+    EnvironmentProbeUpdateMode, GlobalTransform, LightingData, LodComponent, LodGroupComponent,
+    MaterialHandle, MaterialPropertiesComponent, Mesh, MeshHandle, Name, NoSave,
+    OrthographicProjection, Parent, ParticleEmitter, PerspectiveProjection, PointLight,
+    PointLightInfo, Skybox, TextureHandle, Transform, Visibility, Visible,
 };
 pub use serialization::{
     ComponentRegistry, DeserializeContext, EntityData, SerializableComponent, WorldSnapshot,

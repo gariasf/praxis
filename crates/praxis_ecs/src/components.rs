@@ -614,6 +614,257 @@ pub struct NoSave;
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub struct EngineManaged;
 
+/// Debug information about which culling strategies would eliminate an object.
+///
+/// This component is automatically added by debug systems and provides real-time
+/// feedback in the editor viewport about which culling strategies would cull each object.
+///
+/// # Usage in Editor
+///
+/// When enabled in the editor, this component shows:
+/// - Whether backface culling would eliminate the object
+/// - Whether small object culling would eliminate the object
+/// - Whether distance culling would eliminate the object
+///
+/// The viewport can visualize this with color-coded overlays:
+/// - Green: Object would be rendered
+/// - Red: Object would be culled by frustum
+/// - Orange: Object would be culled by backface test
+/// - Yellow: Object would be culled by screen size
+/// - Blue: Object would be culled by distance
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct CullingDebug {
+    /// Would be culled by frustum test.
+    pub culled_by_frustum: bool,
+
+    /// Would be culled by backface test.
+    pub culled_by_backface: bool,
+
+    /// Would be culled by screen size test.
+    pub culled_by_screen_size: bool,
+
+    /// Would be culled by distance test.
+    pub culled_by_distance: bool,
+
+    /// Calculated screen-space size in pixels.
+    pub screen_size_pixels: f32,
+
+    /// Calculated distance from camera.
+    pub distance_from_camera: f32,
+
+    /// Calculated dot product for backface test.
+    pub backface_dot: f32,
+}
+
+impl CullingDebug {
+    /// Returns true if any culling strategy would eliminate this object.
+    pub fn is_culled(&self) -> bool {
+        self.culled_by_frustum
+            || self.culled_by_backface
+            || self.culled_by_screen_size
+            || self.culled_by_distance
+    }
+
+    /// Returns the primary reason for culling (the first active strategy).
+    pub fn primary_cull_reason(&self) -> Option<&'static str> {
+        if self.culled_by_frustum {
+            Some("Frustum")
+        } else if self.culled_by_backface {
+            Some("Backface")
+        } else if self.culled_by_screen_size {
+            Some("Screen Size")
+        } else if self.culled_by_distance {
+            Some("Distance")
+        } else {
+            None
+        }
+    }
+
+    /// Returns a color to visualize the culling state.
+    pub fn debug_color(&self) -> [f32; 3] {
+        if !self.is_culled() {
+            [0.0, 1.0, 0.0] // Green: visible
+        } else if self.culled_by_frustum {
+            [1.0, 0.0, 0.0] // Red: frustum
+        } else if self.culled_by_backface {
+            [1.0, 0.5, 0.0] // Orange: backface
+        } else if self.culled_by_screen_size {
+            [1.0, 1.0, 0.0] // Yellow: screen size
+        } else if self.culled_by_distance {
+            [0.0, 0.5, 1.0] // Blue: distance
+        } else {
+            [1.0, 1.0, 1.0] // White: unknown
+        }
+    }
+}
+
+/// Per-object GPU culling parameters.
+///
+/// This component allows fine-grained control over culling behavior for individual objects.
+/// Artists and designers can configure different culling strategies per object to optimize
+/// rendering performance while maintaining visual quality.
+///
+/// # Culling Strategies
+///
+/// - **Back-face Culling**: Culls objects facing away from camera based on average normal
+/// - **Small Object Culling**: Culls objects below minimum screen-space size
+/// - **Distance Culling**: Culls objects beyond maximum render distance
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use praxis_ecs::{World, Transform, MeshHandle, CullingParams};
+/// use praxis_math::Vec3;
+///
+/// let mut world = World::new();
+///
+/// // Large building visible from far away
+/// world.spawn((
+///     Transform::from_xyz(100.0, 0.0, 0.0),
+///     MeshHandle::new("building"),
+///     CullingParams {
+///         average_normal: Vec3::Y,
+///         backface_threshold: 0.0,
+///         min_screen_size: 2.0,
+///         max_render_distance: 2000.0,
+///     },
+/// ));
+///
+/// // Small prop only visible up close
+/// world.spawn((
+///     Transform::from_xyz(5.0, 0.0, 0.0),
+///     MeshHandle::new("rock"),
+///     CullingParams {
+///         average_normal: Vec3::Y,
+///         backface_threshold: 0.0,
+///         min_screen_size: 8.0,
+///         max_render_distance: 50.0,
+///     },
+/// ));
+/// ```
+#[derive(Component, Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct CullingParams {
+    /// Average normal direction of the object in model space.
+    ///
+    /// Used for back-face culling to determine if the object is facing away from camera.
+    /// For complex meshes, this should be calculated as the average of all vertex normals.
+    pub average_normal: Vec3,
+
+    /// Back-face culling threshold (dot product between normal and view direction).
+    ///
+    /// Objects with dot(normal, to_camera) < threshold will be culled.
+    /// - `-0.1 to 0.1`: Tolerant (objects nearly perpendicular to view are kept)
+    /// - `0.0`: Standard (cull exactly back-facing objects)
+    /// - `0.3+`: Aggressive (cull objects not directly facing camera)
+    pub backface_threshold: f32,
+
+    /// Minimum screen-space size in pixels before culling.
+    ///
+    /// Objects projecting to fewer pixels will be culled. This reduces overdraw
+    /// from sub-pixel objects.
+    /// - `0.0`: Disabled (always render)
+    /// - `1.0-5.0`: Aggressive culling
+    /// - `10.0+`: Conservative culling
+    pub min_screen_size: f32,
+
+    /// Maximum render distance for this object.
+    ///
+    /// Objects beyond this distance will be culled. Allows different object classes
+    /// to have different visibility ranges.
+    /// - `< 0.0`: Disabled (no distance culling)
+    /// - `50.0-100.0`: Small props
+    /// - `500.0`: Medium objects
+    /// - `2000.0+`: Large structures
+    pub max_render_distance: f32,
+}
+
+impl Default for CullingParams {
+    fn default() -> Self {
+        Self {
+            average_normal: Vec3::Y,
+            backface_threshold: 0.0,
+            min_screen_size: 0.0,
+            max_render_distance: -1.0,
+        }
+    }
+}
+
+impl CullingParams {
+    /// Creates culling parameters with all culling disabled.
+    pub fn disabled() -> Self {
+        Self {
+            average_normal: Vec3::Y,
+            backface_threshold: 0.0,
+            min_screen_size: 0.0,
+            max_render_distance: -1.0,
+        }
+    }
+
+    /// Creates culling parameters for large static objects (buildings, terrain).
+    pub fn large_static() -> Self {
+        Self {
+            average_normal: Vec3::Y,
+            backface_threshold: 0.0,
+            min_screen_size: 2.0,
+            max_render_distance: 2000.0,
+        }
+    }
+
+    /// Creates culling parameters for medium objects (trees, vehicles).
+    pub fn medium() -> Self {
+        Self {
+            average_normal: Vec3::Y,
+            backface_threshold: 0.0,
+            min_screen_size: 5.0,
+            max_render_distance: 500.0,
+        }
+    }
+
+    /// Creates culling parameters for small props (rocks, debris).
+    pub fn small_props() -> Self {
+        Self {
+            average_normal: Vec3::Y,
+            backface_threshold: 0.0,
+            min_screen_size: 8.0,
+            max_render_distance: 100.0,
+        }
+    }
+
+    /// Creates culling parameters for detail objects (grass, small stones).
+    pub fn detail() -> Self {
+        Self {
+            average_normal: Vec3::Y,
+            backface_threshold: 0.0,
+            min_screen_size: 10.0,
+            max_render_distance: 50.0,
+        }
+    }
+
+    /// Sets the average normal direction.
+    pub fn with_average_normal(mut self, normal: Vec3) -> Self {
+        self.average_normal = normal.normalize();
+        self
+    }
+
+    /// Sets the back-face culling threshold.
+    pub fn with_backface_threshold(mut self, threshold: f32) -> Self {
+        self.backface_threshold = threshold;
+        self
+    }
+
+    /// Sets the minimum screen size in pixels.
+    pub fn with_min_screen_size(mut self, size: f32) -> Self {
+        self.min_screen_size = size;
+        self
+    }
+
+    /// Sets the maximum render distance.
+    pub fn with_max_render_distance(mut self, distance: f32) -> Self {
+        self.max_render_distance = distance;
+        self
+    }
+}
+
 /// Handle to a mesh asset stored in the graphics system.
 ///
 /// This component references a mesh by its unique identifier. The actual

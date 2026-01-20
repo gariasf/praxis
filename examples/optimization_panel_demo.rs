@@ -11,7 +11,7 @@ use praxis_ecs::{GlobalTransform, MeshHandle, Name, Transform, World};
 use praxis_editor::{EditorState, OptimizationPanel};
 use praxis_graphics::{MaterialHandle, RenderContext, RenderStats};
 use praxis_input::InputState;
-use praxis_math::{Vec3, Quat};
+use praxis_math::{Quat, Vec3};
 use praxis_utils::Result;
 use praxis_window::{Window, WindowBuilder};
 use std::sync::Arc;
@@ -132,10 +132,9 @@ fn main() -> Result<()> {
 
                 // End frame and render
                 let full_output = egui_integration.context().end_frame();
-                let paint_jobs = egui_integration.context().tessellate(
-                    full_output.shapes,
-                    full_output.pixels_per_point,
-                );
+                let paint_jobs = egui_integration
+                    .context()
+                    .tessellate(full_output.shapes, full_output.pixels_per_point);
 
                 if let Err(e) = egui_integration.render(
                     &window,
@@ -152,8 +151,10 @@ fn main() -> Result<()> {
                     // For example:
                     // render_context.set_optimization_config(config.clone());
                     if config.has_changed() {
-                        println!("Optimization config changed: {} optimizations enabled", 
-                                 config.enabled_count());
+                        println!(
+                            "Optimization config changed: {} optimizations enabled",
+                            config.enabled_count()
+                        );
                     }
                 }
 

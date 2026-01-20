@@ -440,20 +440,56 @@ impl HardwareTierConfig {
             self.shadow_resolution,
             self.shadow_resolution,
             self.shadow_cascades,
-            if self.enable_soft_shadows { "enabled" } else { "disabled" },
+            if self.enable_soft_shadows {
+                "enabled"
+            } else {
+                "disabled"
+            },
             self.lod_bias,
             self.texture_quality,
             self.anisotropic_filtering,
             self.msaa_samples,
-            if self.enable_post_processing { "enabled" } else { "disabled" },
-            if self.enable_bloom { "enabled" } else { "disabled" },
-            if self.enable_ssao { "enabled" } else { "disabled" },
+            if self.enable_post_processing {
+                "enabled"
+            } else {
+                "disabled"
+            },
+            if self.enable_bloom {
+                "enabled"
+            } else {
+                "disabled"
+            },
+            if self.enable_ssao {
+                "enabled"
+            } else {
+                "disabled"
+            },
             self.ssao_samples,
-            if self.enable_ssr { "enabled" } else { "disabled" },
-            if self.enable_taa { "enabled" } else { "disabled" },
-            if self.enable_gpu_culling { "enabled" } else { "disabled" },
-            if self.enable_hiz_occlusion { "enabled" } else { "disabled" },
-            if self.enable_mesh_streaming { "enabled" } else { "disabled" },
+            if self.enable_ssr {
+                "enabled"
+            } else {
+                "disabled"
+            },
+            if self.enable_taa {
+                "enabled"
+            } else {
+                "disabled"
+            },
+            if self.enable_gpu_culling {
+                "enabled"
+            } else {
+                "disabled"
+            },
+            if self.enable_hiz_occlusion {
+                "enabled"
+            } else {
+                "disabled"
+            },
+            if self.enable_mesh_streaming {
+                "enabled"
+            } else {
+                "disabled"
+            },
             self.max_particles,
             self.view_distance_multiplier,
             self.target_fps
@@ -559,13 +595,8 @@ impl HardwareTierDetector {
         let device_id = properties.device_id;
 
         // Determine hardware tier
-        let tier = Self::determine_tier(
-            device_type,
-            vendor,
-            total_vram,
-            compute_units,
-            &device_name,
-        );
+        let tier =
+            Self::determine_tier(device_type, vendor, total_vram, compute_units, &device_name);
 
         info!("Hardware Detection Results:");
         info!("  Device: {}", device_name);
@@ -575,8 +606,22 @@ impl HardwareTierDetector {
         info!("  Total VRAM: {} MB", total_vram / (1024 * 1024));
         info!("  Estimated Compute Units: {}", compute_units);
         info!("  Max Texture Dimension: {}", max_texture_dimension);
-        info!("  Descriptor Indexing: {}", if supports_descriptor_indexing { "supported" } else { "not supported" });
-        info!("  Timeline Semaphores: {}", if supports_timeline_semaphores { "supported" } else { "not supported" });
+        info!(
+            "  Descriptor Indexing: {}",
+            if supports_descriptor_indexing {
+                "supported"
+            } else {
+                "not supported"
+            }
+        );
+        info!(
+            "  Timeline Semaphores: {}",
+            if supports_timeline_semaphores {
+                "supported"
+            } else {
+                "not supported"
+            }
+        );
         info!("  Detected Tier: {} - {}", tier.name(), tier.description());
 
         Self {
@@ -816,12 +861,8 @@ impl HardwareTierDetector {
             "variable_rate_shading" => {
                 matches!(self.tier, HardwareTier::MidRange | HardwareTier::HighEnd)
             }
-            "hiz_occlusion" => {
-                !matches!(self.tier, HardwareTier::Integrated)
-            }
-            "advanced_post_processing" => {
-                !matches!(self.tier, HardwareTier::Integrated)
-            }
+            "hiz_occlusion" => !matches!(self.tier, HardwareTier::Integrated),
+            "advanced_post_processing" => !matches!(self.tier, HardwareTier::Integrated),
             _ => false,
         }
     }

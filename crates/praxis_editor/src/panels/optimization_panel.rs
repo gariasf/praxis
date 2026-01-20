@@ -150,9 +150,7 @@ impl OptimizationPanel {
         Self {
             title: "Rendering Optimization".to_string(),
             config_owned: Some(RenderingOptimizationConfig::default()),
-            current_preset: OptimizationPreset::detect_from(
-                &RenderingOptimizationConfig::default(),
-            ),
+            current_preset: OptimizationPreset::detect_from(&RenderingOptimizationConfig::default()),
             before_stats: None,
             after_stats: None,
             comparison_active: false,
@@ -225,10 +223,7 @@ impl OptimizationPanel {
                     RichText::new(preset.name())
                 };
 
-                if ui
-                    .selectable_label(is_selected, button_text)
-                    .clicked()
-                {
+                if ui.selectable_label(is_selected, button_text).clicked() {
                     self.current_preset = preset;
                     if let Some(config) = &mut self.config_owned {
                         preset.apply_to(config);
@@ -415,10 +410,7 @@ impl OptimizationPanel {
                 if ui.button("✓ Capture After").clicked() {
                     self.end_comparison();
                 }
-                ui.label(
-                    RichText::new("⏳ Waiting for after capture...")
-                        .color(Color32::YELLOW),
-                );
+                ui.label(RichText::new("⏳ Waiting for after capture...").color(Color32::YELLOW));
             }
 
             if self.before_stats.is_some() || self.after_stats.is_some() {
@@ -437,17 +429,17 @@ impl OptimizationPanel {
             self.render_comparison_results(ui, before, after);
         } else if let Some(before) = &self.before_stats {
             ui.label(
-                RichText::new("Before state captured. Toggle optimizations and capture after state.")
-                    .color(Color32::LIGHT_BLUE),
+                RichText::new(
+                    "Before state captured. Toggle optimizations and capture after state.",
+                )
+                .color(Color32::LIGHT_BLUE),
             );
             ui.add_space(5.0);
             self.render_snapshot_summary(ui, "Before", before);
         } else {
             ui.label(
-                RichText::new(
-                    "Capture before/after snapshots to compare optimization impact.",
-                )
-                .color(Color32::GRAY),
+                RichText::new("Capture before/after snapshots to compare optimization impact.")
+                    .color(Color32::GRAY),
             );
         }
     }
@@ -480,14 +472,10 @@ impl OptimizationPanel {
         ui.heading("Performance Delta");
 
         // Calculate improvements
-        let draw_call_improvement = calculate_improvement(
-            before.stats.draw_calls,
-            after.stats.draw_calls,
-        );
-        let visible_improvement = calculate_improvement(
-            before.stats.visible_objects,
-            after.stats.visible_objects,
-        );
+        let draw_call_improvement =
+            calculate_improvement(before.stats.draw_calls, after.stats.draw_calls);
+        let visible_improvement =
+            calculate_improvement(before.stats.visible_objects, after.stats.visible_objects);
         let culling_improvement =
             after.stats.culling_efficiency() - before.stats.culling_efficiency();
 
@@ -518,10 +506,7 @@ impl OptimizationPanel {
             } else {
                 Color32::GRAY
             };
-            ui.label(
-                RichText::new(format!("({culling_improvement:+.1}%)"))
-                    .color(color),
-            );
+            ui.label(RichText::new(format!("({culling_improvement:+.1}%)")).color(color));
         });
 
         ui.add_space(10.0);
@@ -548,7 +533,11 @@ impl OptimizationPanel {
                         .map(|(i, s)| [i as f64, s.visible_objects as f64])
                         .collect();
 
-                    plot_ui.line(Line::new(draw_calls).name("Draw Calls").color(Color32::BLUE));
+                    plot_ui.line(
+                        Line::new(draw_calls)
+                            .name("Draw Calls")
+                            .color(Color32::BLUE),
+                    );
                     plot_ui.line(
                         Line::new(visible)
                             .name("Visible Objects")
@@ -583,10 +572,7 @@ impl OptimizationPanel {
                 Color32::GRAY
             };
 
-            ui.label(
-                RichText::new(format!("({improvement:+.1}%)"))
-                    .color(color),
-            );
+            ui.label(RichText::new(format!("({improvement:+.1}%)")).color(color));
         });
     }
 
@@ -630,15 +616,9 @@ impl OptimizationPanel {
                 "Culling Efficiency: {:.1}%",
                 latest.culling_efficiency()
             ));
-            ui.label(format!(
-                "Streaming Queue: {}",
-                latest.streaming_queue_depth
-            ));
+            ui.label(format!("Streaming Queue: {}", latest.streaming_queue_depth));
         } else {
-            ui.label(
-                RichText::new("No statistics available yet.")
-                    .color(Color32::GRAY),
-            );
+            ui.label(RichText::new("No statistics available yet.").color(Color32::GRAY));
         }
     }
 

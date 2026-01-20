@@ -7,8 +7,8 @@ use bevy_ecs::entity::Entity;
 use egui::{Color32, DragValue, Ui};
 use praxis_audio::AudioSource;
 use praxis_ecs::{
-    MaterialHandle, MaterialPropertiesComponent, MeshHandle, Name, PerspectiveProjection,
-    Transform, World,
+    CullingDebug, CullingParams, MaterialHandle, MaterialPropertiesComponent, MeshHandle, Name,
+    PerspectiveProjection, Transform, World,
 };
 use praxis_math::Quat;
 use praxis_physics::{Collider, Mass, PhysicsVelocity, RigidBody};
@@ -70,6 +70,7 @@ impl InspectorPanel {
             self.display_mesh_handle_component(ui, world, entity);
             self.display_material_handle_component(ui, world, entity);
             self.display_material_properties_component(ui, world, entity);
+            self.display_culling_params_component(ui, world, entity);
             self.display_rigidbody_component(ui, world, entity);
             self.display_collider_component(ui, world, entity);
             self.display_physics_velocity_component(ui, world, entity);
@@ -302,6 +303,147 @@ impl InspectorPanel {
                 world
                     .entity_mut(entity)
                     .insert(MaterialPropertiesComponent(props));
+            }
+        }
+    }
+
+    fn display_culling_params_component(&mut self, ui: &mut Ui, world: &mut World, entity: Entity) {
+        let culling_params = world.get::<CullingParams>(entity).copied();
+
+        if let Some(mut params) = culling_params {
+            let mut changed = false;
+
+            ui.collapsing("Culling Parameters", |ui| {
+                // Preset buttons
+                ui.label("Presets:");
+                ui.horizontal(|ui| {
+                    if ui
+                        .button("Disabled")
+                        .on_hover_text("Disable all culling")
+                        .clicked()
+                    {
+                        params = CullingParams::disabled();
+                        changed = true;
+                    }
+                    if ui
+                        .button("Large")
+                        .on_hover_text("Buildings, terrain")
+                        .clicked()
+                    {
+                        params = CullingParams::large_static();
+                        changed = true;
+                    }
+                    if ui
+                        .button("Medium")
+                        .on_hover_text("Trees, vehicles")
+                        .clicked()
+                    {
+                        params = CullingParams::medium();
+                        changed = true;
+                    }
+                    if ui.button("Small").on_hover_text("Rocks, debris").clicked() {
+                        params = CullingParams::small_props();
+                        changed = true;
+                    }
+                    if ui.button("Detail").on_hover_text("Grass").clicked() {
+                        params = CullingParams::detail();
+                        changed = true;
+                    }
+                });
+
+                ui.separator();
+
+                // Average Normal
+                ui.label("Average Normal:");
+                ui.horizontal(|ui| {
+                    ui.label("X:");
+                    let normal_changed = ui
+                        .add(DragValue::new(&mut params.average_normal.x).speed(0.01))
+                        .changed();
+                    ui.label("Y:");
+                    let normal_changed = normal_changed
+                        || ui
+                            .add(DragValue::new(&mut params.average_normal.y).speed(0.01))
+                            .changed();
+                    ui.label("Z:");
+                    let normal_changed = normal_changed
+                        || ui
+                            .add(DragValue::new(&mut params.average_normal.z).speed(0.01))
+                            .changed();
+
+                    if normal_changed {
+                        params.average_normal = params.average_normal.normalize();
+                        changed = true;
+                    }
+                });
+
+                // Back-face Threshold
+                ui.horizontal(|ui| {
+                    ui.label("Backface Threshold:");
+                    changed |= ui
+                        .add(
+                            DragValue::new(&mut params.backface_threshold)
+                                .speed(0.01)
+                                .range(-1.0..=1.0),
+                        )
+                        .changed();
+                });
+
+                // Min Screen Size
+                ui.horizontal(|ui| {
+                    ui.label("Min Screen Size:");
+                    changed |= ui
+                        .add(
+                            DragValue::new(&mut params.min_screen_size)
+                                .speed(0.5)
+                                .range(0.0..=100.0),
+                        )
+                        .changed();
+                });
+
+                // Max Render Distance
+                ui.horizontal(|ui| {
+                    ui.label("Max Distance:");
+                    changed |= ui
+                        .add(
+                            DragValue::new(&mut params.max_render_distance)
+                                .speed(10.0)
+                                .range(-1.0..=10000.0),
+                        )
+                        .changed();
+                });
+
+                // Real-time preview from CullingDebug component
+                if let Some(debug) = world.get::<CullingDebug>(entity) {
+                    ui.separator();
+                    ui.label("Real-time Preview:");
+
+                    let color = debug.debug_color();
+                    let color32 = Color32::from_rgb(
+                        (color[0] * 255.0) as u8,
+                        (color[1] * 255.0) as u8,
+                        (color[2] * 255.0) as u8,
+                    );
+
+                    if debug.is_culled() {
+                        ui.colored_label(
+                            color32,
+                            format!(
+                                "❌ Culled by: {}",
+                                debug.primary_cull_reason().unwrap_or("Unknown")
+                            ),
+                        );
+                    } else {
+                        ui.colored_label(color32, "✓ Visible");
+                    }
+
+                    ui.label(format!("Distance: {:.1}", debug.distance_from_camera));
+                    ui.label(format!("Screen: {:.1}px", debug.screen_size_pixels));
+                }
+            });
+
+            if changed {
+                world.entity_mut(entity).insert(params);
             }
         }
     }

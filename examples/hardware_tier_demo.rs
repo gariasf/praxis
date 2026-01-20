@@ -238,15 +238,29 @@ fn main() -> Result<()> {
     for preset in presets {
         let cfg = HardwareTierConfig::from_preset(preset);
         let is_recommended = preset == detector.recommended_preset();
-        
+
         info!(
             "{:8} {}",
             preset.name(),
-            if is_recommended { "← RECOMMENDED" } else { "" }
+            if is_recommended {
+                "← RECOMMENDED"
+            } else {
+                ""
+            }
         );
-        info!("  Shadows: {}x{}", cfg.shadow_resolution, cfg.shadow_resolution);
+        info!(
+            "  Shadows: {}x{}",
+            cfg.shadow_resolution, cfg.shadow_resolution
+        );
         info!("  MSAA: {}x", cfg.msaa_samples);
-        info!("  Post-FX: {}", if cfg.enable_post_processing { "Yes" } else { "No" });
+        info!(
+            "  Post-FX: {}",
+            if cfg.enable_post_processing {
+                "Yes"
+            } else {
+                "No"
+            }
+        );
         info!("  SSAO: {}", if cfg.enable_ssao { "Yes" } else { "No" });
         info!("  SSR: {}", if cfg.enable_ssr { "Yes" } else { "No" });
         info!("  Target: {:.0} FPS", cfg.target_fps);
@@ -271,7 +285,8 @@ fn main() -> Result<()> {
     engine.run(move |_engine, dt| {
         rotation += dt * 0.5;
 
-        let transform = Mat4::from_rotation_y(rotation) * Mat4::from_translation(Vec3::new(0.0, 0.0, -5.0));
+        let transform =
+            Mat4::from_rotation_y(rotation) * Mat4::from_translation(Vec3::new(0.0, 0.0, -5.0));
 
         let commands = RenderCommands {
             view_matrix: Mat4::look_at_rh(
