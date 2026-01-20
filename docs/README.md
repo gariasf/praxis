@@ -105,6 +105,15 @@ Each path provides:
 - Hands-on exercises and examples
 - Cross-references to related systems
 
+### [Course Materials](course/)
+Educational curriculum and universal patterns:
+- **[Curriculum](course/CURRICULUM.md)** - Language-agnostic game engine architecture course
+- **[Universal Patterns](course/patterns/)** - Design patterns and trade-offs independent of Praxis:
+  - [Game Loop Patterns](course/patterns/game-loop-patterns.md) - Fixed, variable, and semi-fixed timestep approaches
+  - [Component Storage Strategies](course/patterns/component-storage-strategies.md) - Table-based, archetype, sparse set storage
+  - [Rendering Architecture Patterns](course/patterns/rendering-architecture-patterns.md) - Forward, deferred, forward+, clustered rendering
+  - [Memory Management Approaches](course/patterns/memory-management-approaches.md) - Manual, reference counting, GC, ownership
+
 ### [Editor](editor/README.md)
 Editor tools and workflows:
 - [Editor Overview](editor/editor-overview.md) - Panels and editor architecture

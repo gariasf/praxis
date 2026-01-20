@@ -1243,6 +1243,17 @@ Several themes appear across modules:
 - **Learn OpenGL / Vulkan Tutorial**: Graphics API tutorials
 - **Bevy Engine**: Modern Rust ECS reference
 
+### F. Universal Patterns Reference
+
+The [Universal Patterns](patterns/) directory contains language and engine-agnostic documentation of fundamental game engine design patterns:
+
+- **[Game Loop Patterns](patterns/game-loop-patterns.md)**: Fixed timestep, variable timestep, semi-fixed timestep approaches with trade-offs and implementation considerations
+- **[Component Storage Strategies](patterns/component-storage-strategies.md)**: Table-based, archetype, sparse set, and hybrid storage patterns for ECS systems
+- **[Rendering Architecture Patterns](patterns/rendering-architecture-patterns.md)**: Forward, deferred, forward+, clustered rendering approaches with performance characteristics
+- **[Memory Management Approaches](patterns/memory-management-approaches.md)**: Manual, reference counting, garbage collection, and ownership-based memory management strategies
+
+These patterns documents complement the curriculum modules by providing deep dives into design trade-offs, cross-engine examples, and decision-making frameworks that apply regardless of implementation language or specific engine.
+
 ---
 
 ## Curriculum Maintenance
