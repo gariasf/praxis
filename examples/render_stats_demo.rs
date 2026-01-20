@@ -21,6 +21,32 @@
 //! - **CSV Export**: Save statistics for spreadsheet analysis
 //! - **Performance Monitoring**: Track culling efficiency and draw call batching
 //!
+//! # Profiling Integration
+//!
+//! This demo can be extended to export rendering statistics to Chrome trace format
+//! for comprehensive performance analysis. See the profiling integration example:
+//!
+//! ```rust,ignore
+//! use praxis_profiling::{Profiler, ProfilerConfig};
+//! use std::time::Instant;
+//!
+//! // Create profiler
+//! let mut profiler = Profiler::new(ProfilerConfig::default());
+//! profiler.begin_trace_export();
+//!
+//! // In render loop (after rendering):
+//! let render_stats = render_context.current_render_stats();
+//! profiler.record_render_stats(&render_stats, Instant::now());
+//!
+//! // Later, save the trace:
+//! profiler.end_trace_export("render_stats_trace.json")?;
+//! // View in chrome://tracing to see culling efficiency, draw calls, LOD distribution, etc.
+//! ```
+//!
+//! This integration allows you to visualize rendering metrics alongside CPU/GPU profiling
+//! data in a single timeline, making it easier to identify performance bottlenecks and
+//! correlate rendering behavior with frame timing.
+//!
 //! # Controls
 //!
 //! - **W/A/S/D**: Move camera

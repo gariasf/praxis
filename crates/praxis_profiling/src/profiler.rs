@@ -451,6 +451,46 @@ impl Profiler {
         self.frame_start = None;
     }
 
+    /// Records rendering statistics for the current frame.
+    ///
+    /// When Chrome trace export is active, this method automatically exports
+    /// rendering metrics as counter events in the trace timeline. This provides
+    /// a comprehensive view of rendering performance including:
+    ///
+    /// - Culling efficiency (percentage of objects culled)
+    /// - Draw call reduction (objects culled vs. draw calls issued)
+    /// - Visible object counts
+    /// - Frustum and occlusion culling breakdown
+    /// - LOD distribution across levels
+    /// - Mesh streaming queue depth
+    ///
+    /// # Arguments
+    ///
+    /// * `stats` - RenderStats snapshot from the graphics system
+    /// * `timestamp` - Timestamp for these metrics (typically frame start time)
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // In your render loop:
+    /// profiler.begin_frame();
+    ///
+    /// // ... rendering code ...
+    ///
+    /// // Record render stats before ending frame
+    /// let render_stats = render_context.current_render_stats();
+    /// profiler.record_render_stats(&render_stats, Instant::now());
+    ///
+    /// profiler.end_frame();
+    /// ```
+    #[cfg(feature = "graphics_integration")]
+    pub fn record_render_stats(&self, stats: &praxis_graphics::RenderStats, timestamp: Instant) {
+        // Only export if trace export is active
+        if let Some(ref mut exporter) = *self.trace_exporter.lock() {
+            exporter.add_render_stats(stats, timestamp);
+        }
+    }
+
     /// Returns the current frame breakdown.
     pub fn current_frame_breakdown(&self) -> Option<FrameBreakdown> {
         self.current_frame.lock().clone()

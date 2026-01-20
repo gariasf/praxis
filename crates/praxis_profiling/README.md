@@ -12,6 +12,7 @@ Comprehensive CPU/GPU profiling with memory tracking, bottleneck identification,
 - Memory allocation tracking and leak detection
 - ECS system profiling with bottleneck identification
 - Chrome Trace Event Format export
+- Rendering statistics integration (culling efficiency, draw calls, LOD distribution)
 - ~50-100ns overhead per scope
 
 ## Quick Start
@@ -87,6 +88,34 @@ for bottleneck in bottlenecks {
         bottleneck.name, bottleneck.percentage, bottleneck.recommendation);
 }
 ```
+
+## Rendering Statistics Integration
+
+When the `graphics_integration` feature is enabled (default), rendering metrics are automatically exported to Chrome traces:
+
+```rust
+use praxis_profiling::Profiler;
+use std::time::Instant;
+
+let mut profiler = Profiler::new(ProfilerConfig::default());
+profiler.begin_trace_export();
+
+// In render loop
+let render_stats = render_context.current_render_stats();
+profiler.record_render_stats(&render_stats, Instant::now());
+
+profiler.end_trace_export("trace.json")?;
+```
+
+**Exported Metrics:**
+- Culling efficiency (% of objects culled)
+- Draw call reduction (batching effectiveness)
+- Visible object counts
+- Frustum and occlusion culling breakdown
+- LOD distribution across levels
+- Mesh streaming queue depth
+
+See [RENDER_STATS_INTEGRATION.md](RENDER_STATS_INTEGRATION.md) for details.
 
 ## Chrome Tracing
 

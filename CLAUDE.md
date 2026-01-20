@@ -306,9 +306,9 @@ Praxis is designed as an educational 3D game engine. Each subsystem exists to te
 **Evaluation criteria**: Features should demonstrate scalable terrain techniques applicable to various games, not specific biome/game logic.
 
 ### Profiling (`praxis_profiling`)
-**What it teaches**: Performance measurement, timing, profiling integration, identifying bottlenecks.  
-**Why it exists**: Performance is critical in game engines. Shows how to instrument code, measure frame time, and identify optimization opportunities.  
-**Evaluation criteria**: Additions should help users understand engine performance, not solve specific optimization problems.
+**What it teaches**: Performance measurement, timing, profiling integration, identifying bottlenecks, Chrome trace export, rendering statistics integration.  
+**Why it exists**: Performance is critical in game engines. Shows how to instrument code, measure frame time, identify optimization opportunities, and export comprehensive profiling data. Demonstrates integration between subsystems (profiling + graphics) for holistic performance analysis.  
+**Evaluation criteria**: Additions should help users understand engine performance, not solve specific optimization problems. Integration features should demonstrate cross-cutting profiling patterns.
 
 ### Scripting (`praxis_scripting`)
 **What it teaches**: Lua integration via `mlua`, script-ECS bridge, hot-reload, sandboxing, performance monitoring.  

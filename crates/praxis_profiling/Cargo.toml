@@ -7,7 +7,7 @@ license = "MIT"
 [dependencies]
 # Internal dependencies
 praxis_utils = { path = "../praxis_utils", version = "0.1.0" }
-praxis_graphics = { path = "../praxis_graphics", version = "0.1.0" }
+praxis_graphics = { path = "../praxis_graphics", version = "0.1.0", optional = true }
 
 # Vulkan GPU profiling (gpu_profiler.rs)
 vulkano = "0.35.1"
@@ -21,3 +21,7 @@ serde_json = "1.0"
 
 # Thread-safe timing data storage (profiler.rs, system_profiler.rs)
 parking_lot = "0.12"
+
+[features]
+default = ["graphics_integration"]
+graphics_integration = ["praxis_graphics"]

@@ -253,6 +253,147 @@ impl ChromeTraceExporter {
         self.trace.add_event(event);
     }
 
+    /// Adds a generic counter to the trace with a custom category.
+    pub fn add_counter(&mut self, name: String, category: String, timestamp: Instant, value: f64) {
+        let timestamp = timestamp.duration_since(self.start_time);
+
+        let event = ChromeTraceEvent::counter(name, category, timestamp, value, self.pid, 0);
+
+        self.trace.add_event(event);
+    }
+
+    /// Adds multiple counters to the trace at the same timestamp.
+    ///
+    /// This is useful for recording related metrics together (e.g., all rendering stats).
+    pub fn add_counters(&mut self, counters: Vec<(String, String, f64)>, timestamp: Instant) {
+        for (name, category, value) in counters {
+            self.add_counter(name, category, timestamp, value);
+        }
+    }
+
+    /// Adds rendering statistics as counter events.
+    ///
+    /// This method exports comprehensive rendering metrics to the trace timeline:
+    /// - **Culling Efficiency**: Percentage of objects successfully culled
+    /// - **Draw Call Reduction**: How many draw calls were saved by culling
+    /// - **Visible Objects**: Number of objects actually rendered
+    /// - **Frustum Culled**: Number of objects culled by frustum test
+    /// - **Occlusion Culled**: Number of objects culled by occlusion test
+    /// - **LOD Distribution**: Percentage of objects at each LOD level
+    /// - **Streaming Queue**: Number of meshes waiting to be loaded
+    ///
+    /// All metrics are recorded as counter events in the "Rendering" category,
+    /// allowing visualization of rendering performance over time in chrome://tracing.
+    ///
+    /// # Arguments
+    ///
+    /// * `stats` - RenderStats snapshot from praxis_graphics
+    /// * `timestamp` - Timestamp for these metrics (typically frame start time)
+    #[cfg(feature = "graphics_integration")]
+    pub fn add_render_stats(&mut self, stats: &praxis_graphics::RenderStats, timestamp: Instant) {
+        let ts = timestamp.duration_since(self.start_time);
+
+        // Core culling metrics
+        self.trace.add_event(ChromeTraceEvent::counter(
+            "Culling Efficiency %".to_string(),
+            "Rendering".to_string(),
+            ts,
+            stats.culling_efficiency() as f64,
+            self.pid,
+            0,
+        ));
+
+        // Object counts
+        self.trace.add_event(ChromeTraceEvent::counter(
+            "Total Objects".to_string(),
+            "Rendering".to_string(),
+            ts,
+            stats.total_objects as f64,
+            self.pid,
+            0,
+        ));
+
+        self.trace.add_event(ChromeTraceEvent::counter(
+            "Visible Objects".to_string(),
+            "Rendering".to_string(),
+            ts,
+            stats.visible_objects as f64,
+            self.pid,
+            0,
+        ));
+
+        self.trace.add_event(ChromeTraceEvent::counter(
+            "Frustum Culled".to_string(),
+            "Rendering".to_string(),
+            ts,
+            stats.frustum_culled as f64,
+            self.pid,
+            0,
+        ));
+
+        self.trace.add_event(ChromeTraceEvent::counter(
+            "Occlusion Culled".to_string(),
+            "Rendering".to_string(),
+            ts,
+            stats.occlusion_culled as f64,
+            self.pid,
+            0,
+        ));
+
+        // Draw call metrics
+        self.trace.add_event(ChromeTraceEvent::counter(
+            "Draw Calls".to_string(),
+            "Rendering".to_string(),
+            ts,
+            stats.draw_calls as f64,
+            self.pid,
+            0,
+        ));
+
+        let draw_call_reduction = stats.total_objects.saturating_sub(stats.draw_calls);
+        self.trace.add_event(ChromeTraceEvent::counter(
+            "Draw Call Reduction".to_string(),
+            "Rendering".to_string(),
+            ts,
+            draw_call_reduction as f64,
+            self.pid,
+            0,
+        ));
+
+        // Descriptor allocations
+        self.trace.add_event(ChromeTraceEvent::counter(
+            "Descriptor Allocations".to_string(),
+            "Rendering".to_string(),
+            ts,
+            stats.descriptor_allocations as f64,
+            self.pid,
+            0,
+        ));
+
+        // LOD distribution (percentage per level)
+        let lod_distribution = stats.lod_distribution_percentages();
+        for (level, percentage) in lod_distribution {
+            self.trace.add_event(ChromeTraceEvent::counter(
+                format!("LOD Level {} %", level),
+                "Rendering/LOD".to_string(),
+                ts,
+                percentage as f64,
+                self.pid,
+                0,
+            ));
+        }
+
+        // Streaming metrics
+        self.trace.add_event(ChromeTraceEvent::counter(
+            "Streaming Queue Depth".to_string(),
+            "Rendering".to_string(),
+            ts,
+            stats.streaming_queue_depth as f64,
+            self.pid,
+            0,
+        ));
+    }
+
     /// Adds a frame marker to the trace.
     pub fn add_frame_marker(&mut self, frame_number: u64, timestamp: Instant) {
         let timestamp = timestamp.duration_since(self.start_time);
@@ -434,5 +575,124 @@ mod tests {
         assert!(json.contains("\"ph\":\"X\""));
         assert!(json.contains("\"ph\":\"i\""));
         assert!(json.contains("\"s\":\"t\""));
+    }
+
+    #[test]
+    #[cfg(feature = "graphics_integration")]
+    fn test_add_render_stats() {
+        use praxis_graphics::RenderStats;
+        use std::time::Instant;
+
+        let mut exporter = ChromeTraceExporter::new();
+        let start_time = Instant::now();
+
+        let stats = RenderStats {
+            frame_number: 1,
+            total_objects: 1000,
+            visible_objects: 250,
+            frustum_culled: 650,
+            occlusion_culled: 100,
+            draw_calls: 120,
+            descriptor_allocations: 15,
+            active_lod_levels: vec![(0, 50), (1, 150), (2, 50)],
+            streaming_queue_depth: 5,
+        };
+
+        exporter.add_render_stats(&stats, start_time);
+
+        let trace = exporter.trace();
+
+        // Should have base counters (8) + LOD levels (3) = 11 events
+        assert_eq!(trace.trace_events.len(), 11);
+
+        // Verify culling efficiency counter exists
+        let culling_eff = trace
+            .trace_events
+            .iter()
+            .find(|e| e.name == "Culling Efficiency %");
+        assert!(culling_eff.is_some());
+        let culling_eff = culling_eff.unwrap();
+        assert_eq!(culling_eff.cat, Some("Rendering".to_string()));
+
+        // Verify counter value is correct (75% culling efficiency)
+        if let Some(args) = &culling_eff.args {
+            if let Some(value) = args.get("Culling Efficiency %") {
+                assert_eq!(value.as_f64().unwrap(), 75.0);
+            }
+        }
+
+        // Verify LOD counter exists
+        let lod_0 = trace
+            .trace_events
+            .iter()
+            .find(|e| e.name == "LOD Level 0 %");
+        assert!(lod_0.is_some());
+        assert_eq!(lod_0.unwrap().cat, Some("Rendering/LOD".to_string()));
+
+        // Verify draw call reduction
+        let draw_call_reduction = trace
+            .trace_events
+            .iter()
+            .find(|e| e.name == "Draw Call Reduction");
+        assert!(draw_call_reduction.is_some());
+        if let Some(args) = &draw_call_reduction.unwrap().args {
+            if let Some(value) = args.get("Draw Call Reduction") {
+                // total_objects (1000) - draw_calls (120) = 880
+                assert_eq!(value.as_f64().unwrap(), 880.0);
+            }
+        }
+    }
+
+    #[test]
+    fn test_add_counter() {
+        use std::time::Instant;
+
+        let mut exporter = ChromeTraceExporter::new();
+        let timestamp = Instant::now();
+
+        exporter.add_counter(
+            "Test Counter".to_string(),
+            "Test Category".to_string(),
+            timestamp,
+            42.5,
+        );
+
+        let trace = exporter.trace();
+        assert_eq!(trace.trace_events.len(), 1);
+
+        let event = &trace.trace_events[0];
+        assert_eq!(event.name, "Test Counter");
+        assert_eq!(event.cat, Some("Test Category".to_string()));
+
+        if let Some(args) = &event.args {
+            if let Some(value) = args.get("Test Counter") {
+                assert_eq!(value.as_f64().unwrap(), 42.5);
+            }
+        }
+    }
+
+    #[test]
+    fn test_add_counters() {
+        use std::time::Instant;
+
+        let mut exporter = ChromeTraceExporter::new();
+        let timestamp = Instant::now();
+
+        exporter.add_counters(
+            vec![
+                ("Counter 1".to_string(), "Category".to_string(), 1.0),
+                ("Counter 2".to_string(), "Category".to_string(), 2.0),
+                ("Counter 3".to_string(), "Category".to_string(), 3.0),
+            ],
+            timestamp,
+        );
+
+        let trace = exporter.trace();
+        assert_eq!(trace.trace_events.len(), 3);
+
+        for (i, event) in trace.trace_events.iter().enumerate() {
+            assert_eq!(event.name, format!("Counter {}", i + 1));
+            assert_eq!(event.cat, Some("Category".to_string()));
+        }
     }
 }

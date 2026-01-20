@@ -66,6 +66,7 @@
 //! - Each scope becomes a duration event (start time + duration)
 //! - GPU timings are exported as separate GPU track events
 //! - Memory counters are exported as counter events (show memory over time)
+//! - Rendering metrics are exported as counter events (culling, draw calls, LOD distribution)
 //! - Frame markers show frame boundaries for correlation
 //!
 //! This format allows visualization of:
@@ -73,16 +74,32 @@
 //! - Nested scope relationships (parent/child)
 //! - Multi-threaded execution patterns
 //! - Performance across frames
+//! - Rendering optimization metrics over time
+//!
+//! ## Rendering Statistics Integration
+//!
+//! When the `graphics_integration` feature is enabled (default), the profiler can automatically
+//! export rendering statistics from `praxis_graphics::RenderStats` as counter events:
+//!
+//! - **Culling Efficiency**: Percentage of objects successfully culled
+//! - **Draw Call Reduction**: Number of draw calls saved by culling and batching
+//! - **Visible Objects**: Objects rendered after culling
+//! - **Frustum Culled**: Objects culled by frustum test
+//! - **Occlusion Culled**: Objects culled by occlusion test
+//! - **LOD Distribution**: Percentage of objects at each LOD level
+//! - **Streaming Queue**: Mesh streaming queue depth
 //!
 //! To export: call `begin_trace_export()`, run normally, then `end_trace_export(path)`.
 //! Load the resulting JSON file in Chrome at chrome://tracing for interactive analysis.
 //!
 //! # Example
 //!
+//! ## Basic CPU Profiling
+//!
 //! ```rust,ignore
 //! use praxis_profiling::{Profiler, ProfileScope};
 //!
-//! let mut profiler = Profiler::new();
+//! let mut profiler = Profiler::new(ProfilerConfig::default());
 //! profiler.begin_frame();
 //!
 //! {
@@ -92,6 +109,38 @@
 //!
 //! profiler.end_frame();
 //! ```
+//!
+//! ## Chrome Trace Export with Rendering Statistics
+//!
+//! ```rust,ignore
+//! use praxis_profiling::Profiler;
+//! use std::time::Instant;
+//!
+//! let mut profiler = Profiler::new(ProfilerConfig::default());
+//!
+//! // Start trace export
+//! profiler.begin_trace_export();
+//!
+//! // Main loop
+//! for frame in 0..300 {
+//!     profiler.begin_frame();
+//!
+//!     // ... rendering code ...
+//!
+//!     // Record rendering statistics (when graphics_integration feature is enabled)
+//!     #[cfg(feature = "graphics_integration")]
+//!     {
+//!         let render_stats = render_context.current_render_stats();
+//!         profiler.record_render_stats(&render_stats, Instant::now());
+//!     }
+//!
+//!     profiler.end_frame();
+//! }
+//!
+//! // Save trace file
+//! profiler.end_trace_export("trace.json")?;
+//! // Load trace.json in chrome://tracing to visualize performance
+//! ```
 
 mod chrome_trace;
 mod frame_breakdown;
@@ -99,6 +148,8 @@ mod gpu_profiler;
 mod integration;
 mod memory_tracker;
 mod profiler;
+#[cfg(feature = "graphics_integration")]
+mod render_stats_integration;
 mod scope;
 mod system_profiler;
 mod visualization;
@@ -109,6 +160,8 @@ pub use gpu_profiler::{GpuProfiler, GpuTimestamp, TimestampQuery};
 pub use integration::{ProfilerResource, SystemProfilerResource};
 pub use memory_tracker::{AllocationTracker, LeakDetector, MemoryAllocation, MemoryStatistics};
 pub use profiler::{Profiler, ProfilerConfig, ProfilerStats};
+#[cfg(feature = "graphics_integration")]
+pub use render_stats_integration::conversion;
 pub use scope::{ProfileScope, ScopeId};
 pub use system_profiler::{BottleneckInfo, BottleneckType, SystemProfiler, SystemStats};
 pub use visualization::{
