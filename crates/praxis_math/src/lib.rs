@@ -247,6 +247,35 @@
 
 use praxis_utils::{info, Result};
 
+// Re-export all glam types and functions for convenient access throughout the engine.
+// This allows other crates to use math types via `praxis_math::Vec3` instead of
+// depending on glam directly, providing a stable interface even if we change the
+// underlying math library in the future.
+//
+// Glam provides:
+// - SIMD-optimized implementations for performance-critical operations
+// - Comprehensive set of vector, matrix, and quaternion types
+// - No-std support (important for some embedded or console targets)
+// - Battle-tested by numerous game engines and graphics applications
+pub use glam::*;
+
+// Re-export serde for convenience when defining serializable math types
+pub use serde::{Deserialize, Serialize};
+
+// Public modules
+pub mod aabb;
+pub mod coordinate_spaces;
+pub mod frustum;
+pub mod helpers;
+pub mod ray;
+
+// Re-export commonly used types at crate root
+pub use aabb::Aabb;
+pub use coordinate_spaces::{CoordinateSpace, Space};
+pub use frustum::{Frustum, Plane};
+pub use helpers::*;
+pub use ray::Ray;
+
 /// Initializes the math library.
 ///
 /// This function sets up any necessary global state for the math library.
@@ -272,15 +301,3 @@ pub fn init() -> Result<()> {
     info!("Initializing math library");
     Ok(())
 }
-
-// Re-export all glam types and functions for convenient access throughout the engine.
-// This allows other crates to use math types via `praxis_math::Vec3` instead of
-// depending on glam directly, providing a stable interface even if we change the
-// underlying math library in the future.
-//
-// Glam provides:
-// - SIMD-optimized implementations for performance-critical operations
-// - Comprehensive set of vector, matrix, and quaternion types
-// - No-std support (important for some embedded or console targets)
-// - Battle-tested by numerous game engines and graphics applications
-pub use glam::*;

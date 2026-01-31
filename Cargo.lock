@@ -3658,6 +3658,7 @@ version = "0.1.0"
 dependencies = [
  "glam 0.30.10",
  "praxis_utils",
+ "serde",
 ]
 
 [[package]]
