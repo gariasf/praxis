@@ -3,6 +3,33 @@
 //! This module provides functionality for loading textures from common image formats
 //! (PNG, JPEG) and managing them on the GPU. Textures are wrapped in Vulkan image
 //! objects with associated samplers for texture filtering.
+//!
+//! # Staging Buffer Upload
+//!
+//! Like meshes, textures use a staging buffer approach for GPU upload:
+//!
+//! 1. **Staging Buffer**: Host-visible buffer created from pixel data
+//! 2. **GPU Image**: Device-local image created with TRANSFER_DST | SAMPLED usage
+//! 3. **Transfer Command**: `copy_buffer_to_image` copies staging → image
+//! 4. **Layout Transition**: Automatic transition from UNDEFINED → TRANSFER_DST → SHADER_READ_ONLY
+//!
+//! ## Upload Process
+//!
+//! ```text
+//! CPU Side              Transfer Queue           GPU Side
+//! ┌──────────┐         ┌──────────┐           ┌──────────┐
+//! │  Image   │         │ Command  │           │  Image   │
+//! │   Data   │────────▶│  Buffer  │──────────▶│  (VRAM)  │
+//! │ (Vec<u8>)│  Copy   │(Transfer)│  Execute  │          │
+//! └──────────┘         └──────────┘           └──────────┘
+//!                            │
+//!                      Layout Transitions:
+//!                      UNDEFINED → TRANSFER_DST
+//!                      TRANSFER_DST → SHADER_READ_ONLY
+//! ```
+//!
+//! Vulkano 0.35 handles layout transitions automatically, ensuring correct
+//! synchronization without explicit pipeline barriers.
 
 use praxis_utils::{debug, eyre, info, trace, Result};
 use std::collections::HashMap;

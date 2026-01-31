@@ -1027,8 +1027,10 @@
 
 pub mod adaptive_quality;
 pub mod bindless;
+mod buffer;
 pub mod debug_rendering;
 pub mod deferred;
+pub mod descriptor_manager;
 mod device;
 pub mod gpu_culling;
 pub mod hdr;
@@ -4273,7 +4275,11 @@ pub use adaptive_quality::{
 pub use bindless::{
     BindlessMaterialData, BindlessTextureManager, MAX_BINDLESS_MATERIALS, MAX_BINDLESS_TEXTURES,
 };
+pub use buffer::{BufferManager, GpuBuffer, StagingBuffer};
 pub use deferred::{DeferredRenderer, GBuffer};
+pub use descriptor_manager::{
+    DescriptorSetCache, DescriptorSetKey, ResourceLifetimeTracker,
+};
 pub use environment_probe::{
     EnvironmentProbe, EnvironmentProbeCapture, EnvironmentProbeConfig, EnvironmentProbeManager,
     IblData, IblUniforms, ProbeUpdateMode, MAX_ENVIRONMENT_PROBES, SPECULAR_MIP_LEVELS,

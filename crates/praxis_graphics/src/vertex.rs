@@ -1,6 +1,53 @@
 //! Vertex data structures and utilities for the graphics system.
 //!
 //! This module defines the vertex formats used by the graphics pipeline to render geometry.
+//!
+//! # Zero-Copy Data Conversion with bytemuck
+//!
+//! Vertex data uses `bytemuck::Pod` (Plain Old Data) for safe, zero-copy conversion
+//! between Rust types and GPU memory. This eliminates serialization overhead and
+//! allows direct memory uploads.
+//!
+//! ## Why bytemuck?
+//!
+//! ```rust
+//! use praxis_graphics::Vertex3D;
+//!
+//! let vertex = Vertex3D::new([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
+//!
+//! // Zero-copy conversion to byte slice
+//! let bytes: &[u8] = bytemuck::bytes_of(&vertex);
+//!
+//! // Can be directly uploaded to GPU buffer
+//! // No serialization, no copying, just reinterpretation
+//! ```
+//!
+//! ## Requirements for Pod
+//!
+//! For a type to implement `bytemuck::Pod`, it must be:
+//!
+//! - `#[repr(C)]`: Stable, predictable memory layout
+//! - `Copy`: Bitwise copyable
+//! - `Zeroable`: Safe to zero-initialize
+//! - No padding bits with undefined values
+//! - No references, pointers, or non-Pod fields
+//!
+//! ## Memory Layout Guarantees
+//!
+//! ```text
+//! Vertex3D (92 bytes total):
+//! Offset  Field           Size  Type
+//! 0       position        12    [f32; 3]
+//! 12      normal          12    [f32; 3]
+//! 24      color           12    [f32; 3]
+//! 36      uv              8     [f32; 2]
+//! 44      tangent         16    [f32; 4]
+//! 60      bone_indices    16    [i32; 4]
+//! 76      bone_weights    16    [f32; 4]
+//! ```
+//!
+//! This layout is guaranteed stable by `#[repr(C)]` and matches Vulkan's
+//! expectations for vertex input.
 
 use vulkano::pipeline::graphics::vertex_input::Vertex;
 

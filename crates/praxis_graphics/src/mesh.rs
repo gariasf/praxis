@@ -4,6 +4,52 @@
 //! for rendering 3D geometry. Meshes can be created procedurally or loaded from
 //! external sources.
 //!
+//! # Staging Buffer Upload Pattern
+//!
+//! Meshes are uploaded to the GPU using a two-stage approach for optimal performance:
+//!
+//! 1. **Staging Buffers** (Host-visible, CPU-accessible):
+//!    - Created in `PREFER_HOST` memory with `HOST_SEQUENTIAL_WRITE` filter
+//!    - Allow fast CPU writes without GPU memory mapping overhead
+//!    - Used as temporary upload buffers
+//!    - Automatically cleaned up after transfer completes
+//!
+//! 2. **Device Buffers** (Device-local, GPU-only):
+//!    - Created in `PREFER_DEVICE` memory for optimal GPU access
+//!    - Cannot be directly written from CPU
+//!    - Provide 10-100x faster GPU access than host-visible memory
+//!    - Permanent storage for rendering
+//!
+//! ## Upload Process
+//!
+//! ```text
+//! CPU Side                    Transfer Queue              GPU Side
+//! ┌─────────────┐            ┌─────────────┐           ┌─────────────┐
+//! │   Vertex    │            │   Command   │           │   Device    │
+//! │    Data     │───────────▶│   Buffer    │──────────▶│   Buffer    │
+//! │ (Vec<T>)    │   Copy     │  (Transfer) │  Execute  │  (VRAM)     │
+//! └─────────────┘            └─────────────┘           └─────────────┘
+//!       │                           │                         │
+//!       │ Create Staging Buffer     │                         │
+//!       └──────────────────────────▶│                         │
+//!                                   │ Create Device Buffer    │
+//!                                   └────────────────────────▶│
+//!                                   │ Copy Staging → Device   │
+//!                                   └────────────────────────▶│
+//!                                   │ Signal Fence & Wait     │
+//!                                   └────────────────────────▶│
+//!                                                              │
+//!                                                          Ready for
+//!                                                          Rendering
+//! ```
+//!
+//! ## Benefits
+//!
+//! - **Fast CPU Writes**: Staging buffers optimized for sequential CPU writes
+//! - **Optimal GPU Access**: Device buffers provide maximum GPU performance
+//! - **Clean Abstraction**: Complexity hidden behind `GpuMesh::new()`
+//! - **Async Support**: Non-blocking uploads with `GpuMesh::new_async()`
+//!
 //! # Async Mesh Streaming
 //!
 //! The module supports async mesh streaming with background loading:
