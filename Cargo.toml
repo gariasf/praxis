@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 authors = ["Guillem Arias <hello@gariasf.com>"]
+description = "A 3D game engine in Rust for educational purposes"
+repository = "https://github.com/gariasf/praxis"
+keywords = ["gamedev", "graphics", "engine", "vulkan", "ecs"]
+categories = ["game-engines", "graphics", "rendering"]
 
 [features]
 default = []
@@ -35,7 +39,6 @@ members = [
     "crates/praxis_terrain",
     "crates/praxis_utils",
     "crates/praxis_window",
-    "scripts/benchmark-compare",
 ]
 
 [workspace.lints.clippy]
@@ -61,266 +64,19 @@ praxis_scene = { path = "crates/praxis_scene", version = "0.1.0" }
 praxis_networking = { path = "crates/praxis_networking", version = "0.1.0", optional = true }
 praxis_physics = { path = "crates/praxis_physics", version = "0.1.0" }
 praxis_audio = { path = "crates/praxis_audio", version = "0.1.0" }
-praxis_gui = { path = "crates/praxis_gui", version = "0.1.0", features = [] }
+praxis_gui = { path = "crates/praxis_gui", version = "0.1.0" }
 praxis_spatial = { path = "crates/praxis_spatial", version = "0.1.0" }
 praxis_procedural = { path = "crates/praxis_procedural", version = "0.1.0" }
 praxis_profiling = { path = "crates/praxis_profiling", version = "0.1.0" }
 praxis_scripting = { path = "crates/praxis_scripting", version = "0.1.0", optional = true }
 praxis_terrain = { path = "crates/praxis_terrain", version = "0.1.0", optional = true }
-winit = { version = "0.30.11", features = ["rwh_05"] }
-pollster = "0.4"
-egui = "0.29"
-parking_lot = "0.12"
-
-[[example]]
-name = "hello_triangle"
-path = "examples/hello_triangle.rs"
-
-[[example]]
-name = "ecs_integration"
-path = "examples/ecs_integration.rs"
-
-[[example]]
-name = "transform_propagation_demo"
-path = "examples/transform_propagation_demo.rs"
-
-[[example]]
-name = "multi_mesh_demo"
-path = "examples/multi_mesh_demo.rs"
-
-[[example]]
-name = "input_integration"
-path = "examples/input_integration.rs"
-
-[[example]]
-name = "fps_camera_controller"
-path = "examples/fps_camera_controller.rs"
-
-[[example]]
-name = "comprehensive_scene_demo"
-path = "examples/comprehensive_scene_demo.rs"
-
-[[example]]
-name = "scene_demo"
-path = "examples/scene_demo.rs"
-
-[[example]]
-name = "gui_demo"
-path = "examples/gui_demo.rs"
-
-[[example]]
-name = "audio_demo"
-path = "examples/audio_demo.rs"
-
-[[example]]
-name = "audio_simple"
-path = "examples/audio_simple.rs"
-
-[[example]]
-name = "environment_probe_demo"
-path = "examples/environment_probe_demo.rs"
-
-[[example]]
-name = "command_system_demo"
-path = "examples/command_system_demo.rs"
-required-features = ["editor"]
-
-[[example]]
-name = "command_serialization_demo"
-path = "examples/command_serialization_demo.rs"
-required-features = ["editor"]
-
-[[example]]
-name = "undo_redo_system_demo"
-path = "examples/undo_redo_system_demo.rs"
-required-features = ["editor"]
-
-[[example]]
-name = "editor_demo"
-path = "examples/editor_demo.rs"
-required-features = ["editor"]
-
-[[example]]
-name = "particles_demo"
-path = "examples/particles_demo.rs"
-
-[[example]]
-name = "spatial_optimization_demo"
-path = "examples/spatial_optimization_demo.rs"
-
-[[example]]
-name = "spatial_partitioning_demo"
-path = "examples/spatial_partitioning_demo.rs"
-
-[[example]]
-name = "profiling_demo"
-path = "examples/profiling_demo.rs"
-
-[[example]]
-name = "performance_profiling_comprehensive"
-path = "examples/performance_profiling_comprehensive.rs"
-
-[[example]]
-name = "scripting_demo"
-path = "examples/scripting_demo.rs"
-required-features = ["scripting"]
-
-[[example]]
-name = "scripting_advanced_demo"
-path = "examples/scripting_advanced_demo.rs"
-required-features = ["scripting"]
-
-[[example]]
-name = "networking_demo"
-path = "examples/networking_demo.rs"
-required-features = ["networking"]
-
-[[example]]
-name = "terrain_demo"
-path = "examples/terrain_demo.rs"
-required-features = ["terrain"]
-
-[[example]]
-name = "animation_demo"
-path = "examples/animation_demo.rs"
-
-[[example]]
-name = "skeletal_animation_demo"
-path = "examples/skeletal_animation_demo.rs"
-
-[[example]]
-name = "animation_blending_demo"
-path = "examples/animation_blending_demo.rs"
-
-[[example]]
-name = "animation_advanced_demo"
-path = "examples/animation_advanced_demo.rs"
-
-[[example]]
-name = "gltf_animation_loader_demo"
-path = "examples/gltf_animation_loader_demo.rs"
-
-[[example]]
-name = "material_demo"
-path = "examples/material_demo.rs"
-
-[[example]]
-name = "material_instancing_demo"
-path = "examples/material_instancing_demo.rs"
-
-[[example]]
-name = "console_demo"
-path = "examples/console_demo.rs"
-required-features = ["scripting"]
-
-[[example]]
-name = "scene_serialization_demo"
-path = "examples/scene_serialization_demo.rs"
-
-[[example]]
-name = "menu_bar_demo"
-path = "examples/menu_bar_demo.rs"
-required-features = ["editor"]
-
-[[example]]
-name = "editor_camera_demo"
-path = "examples/editor_camera_demo.rs"
-required-features = ["editor"]
-
-[[example]]
-name = "selection_demo"
-path = "examples/selection_demo.rs"
-required-features = ["editor"]
-
-[[example]]
-name = "advanced_lighting_demo"
-path = "examples/advanced_lighting_demo.rs"
-
-[[example]]
-name = "complete_features_demo"
-path = "examples/complete_features_demo.rs"
-required-features = ["terrain", "networking", "scripting"]
-
-[[example]]
-name = "gpu_culling_demo"
-path = "examples/gpu_culling_demo.rs"
-
-[[example]]
-name = "lod_gpu_demo"
-path = "examples/lod_gpu_demo.rs"
-
-[[example]]
-name = "mesh_streaming_demo"
-path = "examples/mesh_streaming_demo.rs"
-
-[[example]]
-name = "save_load_demo"
-path = "examples/save_load_demo.rs"
-
-[[example]]
-name = "scripting_console_demo"
-path = "examples/scripting_console_demo.rs"
-required-features = ["scripting"]
-
-[[example]]
-name = "texture_compression_demo"
-path = "examples/texture_compression_demo.rs"
-
-[[example]]
-name = "hiz_occlusion_demo"
-path = "examples/hiz_occlusion_demo.rs"
-
-[[example]]
-name = "rendering_stress_test"
-path = "examples/rendering_stress_test.rs"
-
-[[example]]
-name = "optimization_showcase_demo"
-path = "examples/optimization_showcase_demo.rs"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
-vulkano = "0.35.1"
-bevy_ecs = "0.14"
-tokio = { version = "1.40", features = ["full"] }
-tracing-subscriber = "0.3"
-base64 = "0.22"
-serial_test = "3.0"
-rand = "0.8"
-praxis_procedural = { path = "crates/praxis_procedural", version = "0.1.0" }
 
-[[bench]]
-name = "mesh_upload"
-harness = false
+[profile.dev]
+opt-level = 1
 
-[[bench]]
-name = "render_loop"
-harness = false
-
-[[bench]]
-name = "physics_step"
-harness = false
-
-[[bench]]
-name = "transform_propagation"
-harness = false
-
-[[bench]]
-name = "asset_loading"
-harness = false
-
-[[bench]]
-name = "scene_serialization"
-harness = false
-
-[[bench]]
-name = "descriptor_set_allocation"
-harness = false
-
-[[bench]]
-name = "staging_buffer"
-harness = false
-
-[[bench]]
-name = "graphics_optimization"
-harness = false
+[profile.release]
+lto = true
+codegen-units = 1

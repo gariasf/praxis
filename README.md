@@ -78,6 +78,8 @@ Praxis is an educational yet capable game engine that prioritizes:
 
 ## Quick Start
 
+See [QUICK_START.md](QUICK_START.md) for detailed setup instructions.
+
 ```bash
 # Clone and build
 git clone https://github.com/gariasf/praxis
@@ -95,6 +97,7 @@ cargo run --example editor_demo --features editor
 
 - Rust (latest stable via [rustup](https://rustup.rs/))
 - Vulkan-capable GPU and drivers
+- System dependencies (see [QUICK_START.md](QUICK_START.md))
 
 ## Project Structure
 
@@ -195,6 +198,8 @@ cargo run --example complete_features_demo --features "terrain,networking,script
 
 ## Development
 
+See [WORKSPACE.md](WORKSPACE.md) for detailed workspace documentation.
+
 ```bash
 # Run tests
 cargo test --workspace
@@ -208,6 +213,9 @@ cargo clippy --all -- -D warnings
 
 # Generate docs
 cargo doc --workspace --no-deps --open
+
+# Use task runners (optional)
+just ci     # or: cargo make ci
 ```
 
 ## Documentation
@@ -231,6 +239,8 @@ The codebase is heavily documented. Start with:
 - Use only free, open-source, battle-tested libraries
 
 ## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guidelines.
 
 Contributions welcome. Please:
 

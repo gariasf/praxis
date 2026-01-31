@@ -1,80 +1,80 @@
-# Praxis GUI
+# praxis_gui
 
-GUI system using egui for the Praxis engine.
+Immediate-mode GUI for Praxis engine using egui.
 
 ## Overview
 
-Immediate mode GUI with debug panels, console, and editor integration.
+Integrates egui immediate-mode GUI with Vulkan rendering for editor tools and debug UI.
 
-**Key Features:**
-- Debug UI with performance metrics
-- Entity inspector and hierarchy panel
-- Console panel with Lua REPL
-- Transform gizmos
-- Command history and autocomplete
+## Features
 
-## Quick Start
+- **Immediate-Mode**: No retained state, easy to use
+- **Vulkan Integration**: Renders via `egui_vulkano`
+- **Window Management**: Windows, panels, menus
+- **Widgets**: Buttons, sliders, text, images, plots
+- **Styling**: Customizable themes
+- **Input Handling**: Mouse, keyboard, touch
 
-### Console Panel
-
-```rust
-use praxis_gui::ConsolePanel;
-
-let mut console = ConsolePanel::new();
-
-// Log messages
-console.log_info("Console initialized");
-console.log_warning("This is a warning");
-
-// Render
-console.render(&egui_ctx);
-```
-
-### Custom Commands
+## Example
 
 ```rust
-use praxis_gui::CommandRegistry;
+use praxis_gui::{egui, EguiRenderer};
 
-let registry = console.command_registry();
-let mut registry = registry.write();
+// Create renderer
+let mut egui_renderer = EguiRenderer::new(device, queue, surface_format);
 
-registry.register(
-    "hello",
-    "Prints a greeting",
-    "hello [name]",
-    |args| {
-        let name = args.get(0).unwrap_or(&"World");
-        Ok(format!("Hello, {}!", name))
-    },
-);
+// Render UI
+egui_renderer.run(|ctx| {
+    egui::Window::new("Debug").show(ctx, |ui| {
+        ui.label(format!("FPS: {}", fps));
+        ui.separator();
+        
+        if ui.button("Reset").clicked() {
+            // Reset
+        }
+        
+        ui.add(egui::Slider::new(&mut value, 0.0..=1.0)
+            .text("Speed"));
+    });
+});
 ```
 
-## Console Controls
+## Common Patterns
 
-- **~ or F1:** Toggle console
-- **Up/Down:** Command history
-- **Tab:** Autocomplete
-- **Enter:** Execute command/Lua
+### Inspector Panel
 
-## Documentation
+```rust
+egui::SidePanel::left("inspector").show(ctx, |ui| {
+    ui.heading("Inspector");
+    ui.label("Transform");
+    ui.add(egui::DragValue::new(&mut pos.x).prefix("X: "));
+    ui.add(egui::DragValue::new(&mut pos.y).prefix("Y: "));
+    ui.add(egui::DragValue::new(&mut pos.z).prefix("Z: "));
+});
+```
 
-**Reference:**
-- [GUI API Reference](../../docs/reference/gui-api.md)
+### Menu Bar
 
-## Examples
-
-```bash
-cargo run --example console_demo
-cargo run --example gui_demo
+```rust
+egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
+    egui::menu::bar(ui, |ui| {
+        ui.menu_button("File", |ui| {
+            if ui.button("New").clicked() { /* ... */ }
+            if ui.button("Open").clicked() { /* ... */ }
+        });
+    });
+});
 ```
 
 ## Dependencies
 
-- `egui` 0.29: Immediate mode GUI
-- `praxis_scripting`: Lua REPL (optional)
+- `egui`: Immediate-mode GUI library
+- `egui_vulkano`: Vulkan integration
+- `egui-winit`: Window integration
+- `vulkano`: Vulkan bindings
 
-## API Stability
+## Usage
 
-**Status:** Evolving
-
-Console panel and command registry are stable. Inspector and hierarchy panels may see API improvements as editor features expand. Breaking changes will be documented in the changelog.
+```toml
+praxis_gui = { path = "../praxis_gui", version = "0.1.0" }
+```

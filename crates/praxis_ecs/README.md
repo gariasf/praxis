@@ -1,90 +1,87 @@
-# Praxis ECS
+# praxis_ecs
 
-Entity Component System for the Praxis game engine, built on bevy_ecs.
+ECS integration for Praxis engine using bevy_ecs.
 
 ## Overview
 
-ECS with transform hierarchy, camera system, lighting, and comprehensive serialization.
+Wraps `bevy_ecs` to provide the Entity Component System architecture for Praxis.
 
-**Key Features:**
-- Transform hierarchy with automatic propagation
-- Perspective and orthographic cameras
-- Directional and point lights with shadows
-- Component serialization to RON format
-- Parent-child relationships with entity references
-- Common components (Name, Transform, Visibility, etc.)
+## Concepts
 
-## Quick Start
+### Entities
+
+Unique identifiers for game objects:
 
 ```rust
-use praxis_ecs::{World, Transform, Name, ComponentRegistry};
-
-let mut world = World::new();
-
-// Spawn entities
-world.spawn((
-    Name::new("Player"),
-    Transform::from_xyz(10.0, 0.0, 5.0),
-));
-
-// Serialization
-let mut registry = ComponentRegistry::new();
-registry.register_common_types();
-
-let ron_string = world.serialize(&registry)?;
-let mut new_world = World::new();
-new_world.deserialize(&ron_string, &registry)?;
+let entity = world.spawn().id();
 ```
 
-## Transform Hierarchy
+### Components
+
+Data attached to entities:
 
 ```rust
-use praxis_ecs::{Transform, GlobalTransform, Parent, Children};
+#[derive(Component)]
+struct Health(f32);
 
-// Parent-child relationships automatically propagate transforms
-let parent = world.spawn((
-    Transform::default(),
-    GlobalTransform::default(),
-));
-
-let child = world.spawn((
-    Transform::from_xyz(1.0, 0.0, 0.0),
-    GlobalTransform::default(),
-    Parent(parent),
-));
-
-// Run transform propagation system
-use praxis_ecs::systems::propagate_transforms;
-schedule.add_systems(propagate_transforms);
+#[derive(Component)]
+struct Velocity(Vec3);
 ```
 
-## Camera System
+### Systems
+
+Functions that process components:
 
 ```rust
-use praxis_ecs::{PerspectiveCameraBundle, Camera};
-
-world.spawn(PerspectiveCameraBundle::new(
-    Vec3::new(0.0, 2.0, 5.0),
-    60.0_f32.to_radians(),
-    16.0 / 9.0,
-));
+fn movement_system(mut query: Query<(&mut Transform, &Velocity)>, time: Res<Time>) {
+    for (mut transform, velocity) in query.iter_mut() {
+        transform.position += velocity.0 * time.delta_seconds();
+    }
+}
 ```
 
-## Documentation
+### Resources
 
-**Reference:**
-- [Components Reference](../../docs/reference/components.md)
-- [Camera API](../../docs/reference/camera-api.md)
+Global state:
 
-**Concepts:**
-- [ECS Architecture](../../docs/concepts/ecs-architecture.md)
-- [Transform Hierarchy](../../docs/concepts/transform-hierarchy.md)
+```rust
+#[derive(Resource)]
+struct GameConfig {
+    difficulty: u32,
+}
+```
 
-**Crate Documentation:**
-- [Transform Propagation](TRANSFORM_PROPAGATION.md)
+## Features
+
+- Data-oriented design
+- Parallel system execution
+- Type-safe queries
+- Composition over inheritance
+
+## Example
+
+```rust
+use praxis_ecs::prelude::*;
+
+#[derive(Component)]
+struct Player;
+
+fn spawn_player(mut commands: Commands) {
+    commands.spawn((
+        Player,
+        Transform::default(),
+        Health(100.0),
+    ));
+}
+```
 
 ## Dependencies
 
-- `bevy_ecs` 0.14: Core ECS
-- `ron` 0.8: Serialization
-- `serde` 1.0: Serialization framework
+- `bevy_ecs`: Entity Component System
+- `serde`: Serialization support
+
+## Usage
+
+```toml
+praxis_ecs = { path = "../praxis_ecs", version = "0.1.0" }
+```

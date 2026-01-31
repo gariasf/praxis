@@ -1,145 +1,125 @@
-# Praxis Profiling
+# praxis_profiling
 
-Performance profiling and analysis tools for the Praxis game engine.
+Performance profiling and metrics for Praxis engine.
 
 ## Overview
 
-Comprehensive CPU/GPU profiling with memory tracking, bottleneck identification, and Chrome trace export.
+Provides performance measurement, profiling, and metrics collection with Chrome trace export.
 
-**Key Features:**
-- Frame time breakdown with hierarchical scopes
-- GPU profiling via Vulkan timestamp queries
-- Memory allocation tracking and leak detection
-- ECS system profiling with bottleneck identification
-- Chrome Trace Event Format export
-- Rendering statistics integration (culling efficiency, draw calls, LOD distribution)
-- ~50-100ns overhead per scope
+## Features
 
-## Quick Start
+### Timing
 
-```rust
-use praxis_profiling::{Profiler, ProfilerConfig, ProfileScope};
+- High-resolution timers
+- Frame time tracking
+- Delta time calculation
+- Average, min, max statistics
 
-let mut profiler = Profiler::new(ProfilerConfig::default());
-profiler.begin_trace_export();
+### Profiling Scopes
 
-loop {
-    profiler.begin_frame();
-    
-    {
-        let _scope = ProfileScope::new("physics_update");
-        // Physics code
-    }
-    
-    {
-        let _scope = ProfileScope::new("render");
-        // Rendering code
-    }
-    
-    profiler.end_frame();
-}
+- Hierarchical scope tracking
+- CPU profiling
+- Thread-safe profiling
+- Zero-cost when disabled
 
-profiler.end_trace_export("trace.json")?;
-```
+### Metrics Collection
 
-## GPU Profiling
+- FPS tracking
+- Frame time distribution
+- Memory usage
+- Custom metrics
+
+### Chrome Trace Export
+
+- Compatible with chrome://tracing
+- Visualize performance in browser
+- Thread and scope hierarchy
+- Duration and instant events
+
+## Example
 
 ```rust
-use praxis_profiling::GpuProfiler;
+use praxis_profiling::{Profiler, profile_scope};
 
-let gpu_profiler = GpuProfiler::new(device.clone(), queue.clone(), 128, 3)?;
-profiler.setup_gpu_profiler(gpu_profiler);
+let mut profiler = Profiler::new();
 
-// In rendering code
-if let Some((pool, start, end)) = gpu_profiler.begin_query("main_pass") {
-    GpuProfiler::write_timestamp(&mut builder, pool.clone(), start, ...)?;
-    // Rendering commands
-    GpuProfiler::write_timestamp(&mut builder, pool, end, ...)?;
-}
-```
-
-## Memory Tracking
-
-```rust
-let tracker = profiler.memory_tracker();
-
-let id = tracker.track_allocation(1024 * 1024, "vertex_buffer".into(), "Rendering".into());
-// Use memory
-tracker.track_deallocation(id);
-
-let stats = tracker.statistics();
-println!("Current: {} bytes, Peak: {} bytes", 
-    stats.current_allocated, stats.peak_allocated);
-```
-
-## Bottleneck Detection
-
-```rust
-let system_profiler = profiler.system_profiler();
-
+// Profile a scope
 {
-    let _guard = SystemProfileScope::new(&system_profiler, "physics_system");
-    // System code
+    let _scope = profile_scope!("render_frame");
+    
+    // Nested scopes
+    {
+        let _scope = profile_scope!("update_transforms");
+        // ...
+    }
+    
+    {
+        let _scope = profile_scope!("draw_calls");
+        // ...
+    }
 }
 
-let bottlenecks = system_profiler.identify_bottlenecks();
-for bottleneck in bottlenecks {
-    println!("{}: {:.1}% - {}", 
-        bottleneck.name, bottleneck.percentage, bottleneck.recommendation);
-}
+// Export trace
+profiler.export_chrome_trace("trace.json")?;
 ```
 
-## Rendering Statistics Integration
-
-When the `graphics_integration` feature is enabled (default), rendering metrics are automatically exported to Chrome traces:
+## Macro Usage
 
 ```rust
-use praxis_profiling::Profiler;
-use std::time::Instant;
+// Profile function
+#[profile_function]
+fn expensive_operation() {
+    // ...
+}
 
-let mut profiler = Profiler::new(ProfilerConfig::default());
-profiler.begin_trace_export();
+// Profile scope with custom name
+profile_scope!("custom_name");
 
-// In render loop
-let render_stats = render_context.current_render_stats();
-profiler.record_render_stats(&render_stats, Instant::now());
-
-profiler.end_trace_export("trace.json")?;
+// Profile with metadata
+profile_scope!("load_asset", "path" => asset_path);
 ```
 
-**Exported Metrics:**
-- Culling efficiency (% of objects culled)
-- Draw call reduction (batching effectiveness)
-- Visible object counts
-- Frustum and occlusion culling breakdown
-- LOD distribution across levels
-- Mesh streaming queue depth
+## Integration
 
-See [RENDER_STATS_INTEGRATION.md](RENDER_STATS_INTEGRATION.md) for details.
+```rust
+use praxis_profiling::{Profiler, ProfilerConfig};
 
-## Chrome Tracing
+// Initialize
+let config = ProfilerConfig {
+    enabled: true,
+    max_frames: 300,
+    ..Default::default()
+};
+let mut profiler = Profiler::new_with_config(config);
 
-1. `profiler.begin_trace_export()`
-2. Run application
-3. `profiler.end_trace_export("trace.json")`
-4. Open in chrome://tracing or ui.perfetto.dev
+// Each frame
+profiler.begin_frame();
+// ... game logic ...
+profiler.end_frame();
 
-## Documentation
-
-**Comprehensive Guide:**
-- [Profiling Guide](../../docs/profiling.md) - Complete profiling guide
-
-## Examples
-
-```bash
-# Comprehensive profiling demo with three progressive sections:
-# 1. Basic Profiling - Core features and simple usage
-# 2. Advanced Profiling - Visualization and detailed analysis
-# 3. Production Patterns - Real-world integration and best practices
-cargo run --example profiling_demo
+// Report
+let stats = profiler.frame_stats();
+println!("Frame time: {:.2}ms", stats.avg_frame_time_ms);
 ```
+
+## Chrome Trace Format
+
+Open `trace.json` in Chrome:
+1. Navigate to `chrome://tracing`
+2. Click "Load"
+3. Select trace file
+4. Visualize performance timeline
 
 ## Dependencies
 
-- `tracing`: Structured logging
-- `vulkano`: GPU profiling (optional)
+- `serde`: Serialization
+- `serde_json`: JSON export
+- `web-time`: High-resolution timing
+- `rustc-hash`: Fast hash maps
+- `parking_lot`: Fast mutexes
+
+## Usage
+
+```toml
+praxis_profiling = { path = "../praxis_profiling", version = "0.1.0" }
+```

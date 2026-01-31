@@ -1,90 +1,68 @@
-# Praxis Input
+# praxis_input
 
-Input handling with action mapping for the Praxis game engine.
+Input handling for Praxis engine: keyboard, mouse, gamepad.
 
 ## Overview
 
-Keyboard, mouse, and gamepad tracking with frame-aware state and rebindable controls.
+Provides unified input abstraction for keyboard, mouse, and gamepad input.
 
-**Key Features:**
-- Input state tracking (pressed, just pressed, just released)
-- Action mapping for rebindable controls
-- Mouse position/delta and scroll tracking
-- Seamless winit integration
-- ECS resource integration
+## Features
 
-## Quick Start
+- **Keyboard**: Key state tracking (pressed, just_pressed, just_released)
+- **Mouse**: Position, delta, buttons, scroll
+- **Gamepad**: Button and axis mapping, multiple controllers
+- **Input Mapping**: Map physical inputs to logical actions
+- **Frame-based State**: Clear distinction between current and previous frame
+
+## Example
 
 ```rust
-use praxis_input::{InputState, InputMap, Action};
-use winit::keyboard::KeyCode;
+use praxis_input::{Input, KeyCode, MouseButton};
 
-let mut input = InputState::default();
-
-// Check state
-if input.is_key_pressed(KeyCode::KeyW) {
+// Check keyboard
+if input.key_pressed(KeyCode::W) {
     // Move forward
 }
 
-if input.is_key_just_pressed(KeyCode::Space) {
-    // Jump (once per press)
+if input.key_just_pressed(KeyCode::Space) {
+    // Jump
+}
+
+// Check mouse
+let mouse_delta = input.mouse_delta();
+if input.mouse_button_pressed(MouseButton::Left) {
+    // Fire weapon
+}
+
+// Check gamepad
+if let Some(gamepad) = input.gamepads().next() {
+    let left_stick = gamepad.left_stick();
+    // Move character
 }
 ```
 
-## Action Mapping
+## Input Mapping
 
 ```rust
-let mut input_map = InputMap::default();
+use praxis_input::InputMap;
 
-// Bind keys to actions
-input_map.bind_key(Action::new("jump"), KeyCode::Space);
-input_map.bind_key(Action::new("fire"), KeyCode::KeyE);
+let mut input_map = InputMap::new();
+input_map.bind_key("jump", KeyCode::Space);
+input_map.bind_key("jump", KeyCode::ButtonSouth); // Gamepad
 
-// Check actions
-if input_map.is_action_pressed(&Action::new("jump"), &input_state) {
-    // Perform jump
+if input_map.action_pressed(&input, "jump") {
+    // Jump
 }
-```
-
-## ECS Integration
-
-```rust
-use praxis_ecs::World;
-
-world.insert_resource(InputState::default());
-world.insert_resource(input_map);
-
-// In systems
-fn player_system(input: Res<InputState>, map: Res<InputMap>) {
-    if map.is_action_just_pressed(&Action::new("fire"), &input) {
-        // Fire weapon
-    }
-}
-```
-
-## Documentation
-
-**Comprehensive Guide:**
-- [Input Guide](../../docs/guides/input.md) - Complete input system guide
-
-**Concepts:**
-- [Input Concepts](../../docs/concepts/input.md)
-
-**Reference:**
-- [Input API Reference](../../docs/reference/input-api.md)
-
-## Examples
-
-```bash
-cargo run --example input_integration
 ```
 
 ## Dependencies
 
-- `winit` 0.30.11: Input events
+- `winit`: Window events
+- `gilrs`: Gamepad support
+- `rustc-hash`: Fast hash maps
 
-## API Stability
+## Usage
 
-**Status:** Stable
-
-Input state tracking and action mapping APIs are stable. Minor changes may occur to track upstream winit updates. Breaking changes will be documented in the changelog.
+```toml
+praxis_input = { path = "../praxis_input", version = "0.1.0" }
+```

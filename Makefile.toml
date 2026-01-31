@@ -1,0 +1,145 @@
+# Praxis Engine - Cargo Make Configuration
+# Install: cargo install cargo-make
+# Run: cargo make <task>
+
+[config]
+default_to_workspace = false
+skip_core_tasks = true
+
+[tasks.default]
+description = "Show available tasks"
+command = "cargo"
+args = ["make", "--list-all-steps"]
+
+# Build Tasks
+[tasks.build]
+description = "Build all crates (debug)"
+command = "cargo"
+args = ["build", "--workspace"]
+
+[tasks.build-release]
+description = "Build all crates (release)"
+command = "cargo"
+args = ["build", "--workspace", "--release"]
+
+[tasks.build-all-features]
+description = "Build with all features"
+command = "cargo"
+args = ["build", "--workspace", "--all-features"]
+
+# Check Tasks
+[tasks.check]
+description = "Check all crates compile"
+command = "cargo"
+args = ["check", "--all", "--all-features"]
+
+[tasks.check-minimal]
+description = "Check with no default features"
+command = "cargo"
+args = ["check", "--all", "--no-default-features"]
+
+# Format Tasks
+[tasks.fmt]
+description = "Format all code"
+command = "cargo"
+args = ["fmt", "--all"]
+
+[tasks.fmt-check]
+description = "Check formatting"
+command = "cargo"
+args = ["fmt", "--all", "--", "--check"]
+
+# Lint Tasks
+[tasks.clippy]
+description = "Run clippy linter"
+command = "cargo"
+args = ["clippy", "--all", "--all-features", "--", "-D", "warnings"]
+
+[tasks.clippy-fix]
+description = "Run clippy with auto-fix"
+command = "cargo"
+args = ["clippy", "--all", "--all-features", "--fix"]
+
+# Test Tasks
+[tasks.test]
+description = "Run all tests"
+command = "cargo"
+args = ["test", "--workspace", "--all-features"]
+
+[tasks.test-verbose]
+description = "Run tests with output"
+command = "cargo"
+args = ["test", "--workspace", "--all-features", "--", "--nocapture"]
+
+# Documentation Tasks
+[tasks.doc]
+description = "Generate and open documentation"
+command = "cargo"
+args = ["doc", "--workspace", "--no-deps", "--open"]
+
+[tasks.doc-build]
+description = "Generate documentation"
+command = "cargo"
+args = ["doc", "--workspace", "--no-deps"]
+
+# CI Tasks
+[tasks.ci]
+description = "Run all CI checks"
+dependencies = ["check", "fmt-check", "clippy", "test"]
+
+[tasks.ci-minimal]
+description = "Run CI checks with minimal features"
+dependencies = ["check-minimal", "fmt-check", "test"]
+
+# Example Tasks
+[tasks.examples]
+description = "Build all examples (headless)"
+command = "cargo"
+args = ["build", "--examples", "--features", "headless"]
+
+[tasks.examples-graphics]
+description = "Build all examples with graphics"
+command = "cargo"
+args = ["build", "--examples", "--all-features"]
+
+# Benchmark Tasks
+[tasks.bench]
+description = "Run all benchmarks"
+command = "cargo"
+args = ["bench", "--workspace"]
+
+# Maintenance Tasks
+[tasks.clean]
+description = "Clean build artifacts"
+command = "cargo"
+args = ["clean"]
+
+[tasks.update]
+description = "Update dependencies"
+command = "cargo"
+args = ["update"]
+
+[tasks.tree]
+description = "Show dependency tree"
+command = "cargo"
+args = ["tree"]
+
+[tasks.tree-duplicates]
+description = "Show duplicate dependencies"
+command = "cargo"
+args = ["tree", "-d"]
+
+[tasks.audit]
+description = "Security audit"
+command = "cargo"
+args = ["audit"]
+
+[tasks.outdated]
+description = "Check for outdated dependencies"
+command = "cargo"
+args = ["outdated"]
+
+[tasks.timings]
+description = "Profile compilation time"
+command = "cargo"
+args = ["build", "--workspace", "--timings"]

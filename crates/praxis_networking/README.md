@@ -1,51 +1,69 @@
-# Praxis Networking
+# praxis_networking
 
-Client-server networking with entity replication for the Praxis game engine.
+Networking and multiplayer for Praxis engine.
 
 ## Overview
 
-Comprehensive multiplayer networking with automatic component synchronization, interpolation, and lag compensation.
+Client-server networking with entity replication, lag compensation, and network profiling.
 
-**Key Features:**
-- Client-server architecture (TCP/UDP)
-- Automatic entity replication
-- Component serialization (any Serde type)
-- Interpolation/extrapolation for smooth movement
-- Server-side lag compensation for hit detection
-- Network profiler (bandwidth, latency, jitter)
+## Features
 
-## Quick Start
+### Client-Server Architecture
+
+- TCP for reliable commands
+- UDP for unreliable state updates
+- Connection management
+- Heartbeat and timeout
+
+### Entity Replication
+
+- Automatic component synchronization
+- Configurable replication frequency
+- Delta compression
+- Priority-based updates
+
+### Interpolation & Extrapolation
+
+- Client-side prediction
+- Server reconciliation
+- Smooth remote entity movement
+- Configurable buffer size
+
+### Lag Compensation
+
+- Server-side rewind for hit detection
+- Snapshot history
+- Fair gameplay despite latency
+
+### Network Profiler
+
+- Bandwidth monitoring
+- Latency tracking
+- Packet loss detection
+- Per-entity statistics
+
+## Example
 
 ### Server
 
 ```rust
-use praxis_networking::{NetworkServer, NetworkConfig, ReplicationRegistry};
-use color_eyre::Result;
+use praxis_networking::{NetworkServer, NetworkConfig};
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    // Configure server
-    let config = NetworkConfig {
-        bind_addr: "0.0.0.0:7777".to_string(),
-        max_clients: 32,
-        tick_rate: 60,
-        ..Default::default()
-    };
-    
-    // Create and start server
-    let mut server = NetworkServer::new(config).await?;
-    server.start().await?;
-    
-    // Register components for replication
-    let mut registry = ReplicationRegistry::new();
-    registry.register_transform();
-    registry.register_velocity();
-    
-    // Game loop
-    loop {
-        let delta_time = 0.016; // 60 FPS
-        server.update(delta_time)?;
-    }
+let config = NetworkConfig {
+    max_clients: 32,
+    tick_rate: 60,
+    ..Default::default()
+};
+
+let mut server = NetworkServer::new(config).await?;
+server.start().await?;
+
+// Game loop
+loop {
+    server.receive_messages()?;
+    // Update game state
+    server.replicate_entities(&world)?;
+    server.send_updates()?;
 }
 ```
 
@@ -53,64 +71,93 @@ async fn main() -> Result<()> {
 
 ```rust
 use praxis_networking::{NetworkClient, NetworkConfig};
-use color_eyre::Result;
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    // Create client
-    let mut client = NetworkClient::new(NetworkConfig::default()).await?;
-    
-    // Connect to server
-    client.connect("127.0.0.1:7777", "Player1".to_string()).await?;
-    
-    // Game loop
-    loop {
-        let delta_time = 0.016; // 60 FPS
-        client.update(delta_time)?;
-    }
+let config = NetworkConfig::default();
+let mut client = NetworkClient::new(config).await?;
+client.connect("127.0.0.1:7878").await?;
+
+// Game loop
+loop {
+    client.receive_updates()?;
+    client.apply_interpolation(&mut world)?;
+    // Render
+    client.send_commands(commands)?;
 }
 ```
 
 ## Entity Replication
 
 ```rust
-use praxis_networking::{NetworkId, Replicated, ReplicatedTransform};
-use praxis_ecs::{World, Transform};
+use praxis_networking::{ReplicationRegistry, Replicated};
 
-fn spawn_replicated_entity(world: &mut World) {
-    world.spawn((
-        // Unique network identifier
-        NetworkId::new(1),
-        
-        // Replication component with priority (255 = highest)
-        Replicated::new().with_priority(255),
-        
-        // Standard Transform
-        Transform::default(),
-        
-        // Replicated Transform for network sync
-        ReplicatedTransform::default(),
-    ));
-}
+// Register components for replication
+let mut registry = ReplicationRegistry::new();
+registry.register::<Transform>();
+registry.register::<Velocity>();
+registry.register::<Health>();
+
+// Mark entity for replication
+commands.spawn((
+    Transform::default(),
+    Velocity::default(),
+    Replicated::new(update_frequency_hz: 20),
+));
 ```
 
-## Documentation
+## Lag Compensation
 
-**Comprehensive Guide:**
-- [Networking Guide](../../docs/guides/systems/networking.md) - Complete multiplayer guide
+```rust
+// Server-side hit detection with rewind
+let hit = server.check_hit_with_compensation(
+    shooter_id,
+    target_position,
+    shooter_latency_ms,
+)?;
+```
 
-**Learning Path:**
-- [Networking Learning Path](../../docs/learning-paths/networking.md)
+## Network Profiler
 
-## Examples
+```rust
+let stats = server.network_stats();
+println!("Bandwidth: {} KB/s", stats.bandwidth_kbps);
+println!("Latency: {}ms", stats.avg_latency_ms);
+println!("Packet loss: {:.2}%", stats.packet_loss_percent);
+```
 
-```bash
-# Run networking demo
-cargo run --example networking_demo
+## Message Types
+
+```rust
+#[derive(Serialize, Deserialize)]
+enum ServerMessage {
+    Welcome { client_id: u64 },
+    EntitySpawned { entity_id: u64, components: ComponentData },
+    EntityUpdated { entity_id: u64, components: ComponentData },
+    EntityDespawned { entity_id: u64 },
+}
+
+#[derive(Serialize, Deserialize)]
+enum ClientMessage {
+    Connect { player_name: String },
+    Command { command_type: CommandType, data: Vec<u8> },
+    Disconnect,
+}
 ```
 
 ## Dependencies
 
-- `tokio` 1.40: Async runtime
-- `bincode`: Binary serialization
-- `bevy_ecs` 0.14: ECS integration
+- `tokio`: Async networking
+- `serde`: Serialization
+- `bincode`: Binary encoding
+- `rustc-hash`: Fast hash maps
+- `parking_lot`: Fast mutexes
+
+## Usage
+
+```toml
+# In root Cargo.toml
+[features]
+networking = ["praxis_networking"]
+
+# In your crate
+praxis_networking = { path = "../praxis_networking", version = "0.1.0" }
+```

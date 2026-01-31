@@ -1,141 +1,208 @@
-# GitHub Actions Workflows
+# GitHub Actions CI Configuration
 
-This directory contains CI/CD workflows for the Praxis game engine.
+This directory contains the CI/CD workflows for the Praxis engine.
 
-## Active Workflows
+## Workflows
 
-### `rust-ci.yml` - Standard CI Pipeline
+### rust-ci.yml - Main Rust CI
 
-Runs on every PR and push to main.
+Primary continuous integration workflow that runs on all PRs and pushes to main.
 
-**Jobs:**
-- `check`: Cargo check, format, and clippy
-- `test`: Run test suite
-- `build_examples`: Build all examples
+#### Jobs
 
-**Duration:** ~5-10 minutes
+1. **check** - Cargo Check
+   - Runs `cargo check --all --all-features`
+   - Runs `cargo check --all --no-default-features`
+   - Ensures code compiles with all feature combinations
 
-### `performance-regression.yml` - Performance Testing
+2. **fmt** - Format Check
+   - Runs `cargo fmt --all -- --check`
+   - Ensures code follows Rust formatting standards
+   - Must pass for PR to be merged
 
-Runs on every PR and push to main.
+3. **clippy** - Lint Check
+   - Runs `cargo clippy --all --all-features -- -D warnings`
+   - Enforces code quality standards
+   - Treats all warnings as errors
+   - Must pass for PR to be merged
 
-**Jobs:**
-- `benchmark`: Run critical performance benchmarks and compare against main branch
+4. **test** - Test Suite
+   - Runs `cargo test --workspace --all-features`
+   - Executes all unit and integration tests
+   - Must pass for PR to be merged
 
-**Critical Benchmarks Tracked:**
-- Multi-draw indirect batching performance
-- GPU culling overhead  
-- Descriptor allocation rate with LRU caching
+5. **build_examples** - Example Build
+   - Runs `cargo build --examples --features headless`
+   - Ensures all examples compile
+   - Uses headless mode for CI (no GPU)
 
-**Regression Threshold:** 10%
+### docs.yml - Documentation
 
-**Duration:** ~10-15 minutes
+Builds and deploys documentation to GitHub Pages.
 
-**Failure Conditions:**
-- Any critical benchmark regresses by >10% compared to main branch
-- Benchmark execution fails
+### performance-regression.yml - Performance Testing
 
-**PR Comments:**
-- Automatically posts benchmark comparison results to PR
-- Highlights regressions and improvements
-- Marks critical benchmarks with 🚨
+Runs benchmarks and detects performance regressions.
 
-## Workflow Configuration
+## System Dependencies
 
-### Triggers
+The CI requires these system packages on Ubuntu:
 
-Both workflows trigger on:
-- Pull requests to `main` branch
-- Direct pushes to `main` branch
+- `libasound2-dev`: Audio support (ALSA)
+- `libudev-dev`: Device detection
+- `pkg-config`: Build configuration
 
-### Caching
+## Running CI Locally
 
-All workflows use `Swatinem/rust-cache@v2` to cache:
-- Cargo registry
-- Cargo build artifacts
-- Target directory
-
-The performance workflow also caches Criterion baseline results.
-
-### System Dependencies
-
-Both workflows install:
-- `libasound2-dev` (audio support)
-- `libudev-dev` (device support)
-- `pkg-config` (build tool)
-
-Performance workflow additionally installs:
-- `libvulkan-dev` (Vulkan development headers)
-- `vulkan-validationlayers` (Vulkan validation)
-- `mesa-vulkan-drivers` (software Vulkan rendering)
-
-## Local Testing
-
-### Test CI Checks Locally
+### Prerequisites
 
 ```bash
-# Run checks
-cargo check --all --features headless
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Install components
+rustup component add rustfmt clippy
+```
+
+### Run All Checks
+
+```bash
+# Option 1: Using cargo-make
+cargo install cargo-make
+cargo make ci
+
+# Option 2: Using just
+cargo install just
+just ci
+
+# Option 3: Manual
+cargo check --all --all-features
 cargo fmt --all -- --check
-cargo clippy --all --features headless -- -D warnings
+cargo clippy --all --all-features -- -D warnings
+cargo test --workspace --all-features
+```
 
-# Run tests
-cargo test --workspace --features headless
+### Individual Checks
 
-# Build examples
+```bash
+# Check compilation
+cargo check --all --all-features
+cargo check --all --no-default-features
+
+# Format
+cargo fmt --all
+
+# Lint
+cargo clippy --all --all-features -- -D warnings
+
+# Test
+cargo test --workspace --all-features
+
+# Examples
 cargo build --examples --features headless
 ```
 
-### Test Performance Benchmarks Locally
+## Caching
 
-See [Performance Regression Testing Documentation](../../docs/performance-regression-testing.md) for detailed instructions.
+The CI uses `Swatinem/rust-cache@v2` to cache:
+- Cargo registry
+- Cargo index
+- Target directory
+- Build artifacts
 
-Quick version:
-```bash
-# Run critical benchmarks
-cargo bench --bench graphics_optimization -- "multi_draw_indirect"
-cargo bench --bench graphics_optimization -- "gpu_vs_cpu_culling"
-cargo bench --bench descriptor_set_allocation -- "descriptor_set_caching_lru"
-```
+This significantly speeds up CI runs.
 
-## Adding New Workflows
+## Feature Flags in CI
 
-When adding a new workflow:
+The CI tests multiple feature combinations:
 
-1. Create `.github/workflows/your-workflow.yml`
-2. Use existing workflows as templates
-3. Add caching with `rust-cache` action
-4. Install necessary system dependencies
-5. Document in this README
-6. Test locally using `act` or similar tools
+1. **All features**: `--all-features`
+2. **No default features**: `--no-default-features`
+3. **Headless mode**: `--features headless` (for examples)
 
 ## Troubleshooting
 
-### Workflow Fails on System Dependencies
+### CI Passes Locally But Fails on GitHub
 
-If system dependency installation fails:
-1. Check Ubuntu package availability
-2. Update package names if needed
-3. Add PPA repositories if required
+1. **Different Rust version**: CI uses stable, ensure you're on stable
+2. **Cache issues**: Clear GitHub cache or add `[cache]` to workflow
+3. **Platform differences**: CI runs on Ubuntu, may behave differently
 
-### Cache Issues
+### Clippy Warnings
 
-If caching causes problems:
-1. Clear cache via GitHub UI (Actions → Caches)
-2. Update `rust-cache` action version
-3. Adjust cache key in workflow
+If clippy fails:
 
-### Performance Benchmark Variance
+```bash
+# See all warnings
+cargo clippy --all --all-features
 
-If benchmarks show high variance:
-1. Re-run the workflow (variance is expected)
-2. Check for system load on GitHub runners
-3. Consider adjusting regression threshold
-4. Use local benchmarks for comparison
+# Auto-fix where possible
+cargo clippy --all --all-features --fix
+```
 
-## Related Documentation
+### Format Issues
 
-- [GitHub Actions Documentation](https://docs.github.com/en/actions)
-- [Performance Regression Testing](../../docs/performance-regression-testing.md)
-- [Benchmark Comparison Tool](../../scripts/benchmark-compare/README.md)
-- [Praxis CI/CD Setup](../../docs/ci-cd-setup.md) (if exists)
+If format check fails:
+
+```bash
+# Format all code
+cargo fmt --all
+
+# Check what would change
+cargo fmt --all -- --check
+```
+
+### Test Failures
+
+```bash
+# Run tests with output
+cargo test --workspace --all-features -- --nocapture
+
+# Run specific test
+cargo test test_name -- --nocapture
+
+# Run tests for specific crate
+cargo test -p praxis_graphics
+```
+
+## Adding New Checks
+
+To add a new CI job, edit `.github/workflows/rust-ci.yml`:
+
+```yaml
+new_job:
+  name: New Check
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libasound2-dev libudev-dev pkg-config
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+    
+    - name: Run Check
+      run: cargo your-command
+```
+
+## Badge
+
+Add to README.md:
+
+```markdown
+[![CI](https://github.com/USERNAME/praxis/workflows/Rust%20CI/badge.svg)](https://github.com/USERNAME/praxis/actions)
+```
+
+## Best Practices
+
+1. **Keep CI fast**: Use caching, run checks in parallel
+2. **Fail fast**: Run quick checks (fmt) before slow ones (clippy, test)
+3. **Test feature combinations**: Ensure all features work independently
+4. **Use headless mode**: For examples that need GPU
+5. **Document requirements**: List system dependencies clearly

@@ -1,166 +1,68 @@
-# Praxis Spatial
+# praxis_spatial
 
-Spatial optimization with culling, LOD, octree, and BVH for the Praxis game engine.
+Spatial data structures for Praxis engine: octrees, BVH.
 
 ## Overview
 
-Comprehensive spatial data structures and optimization systems for efficient rendering and queries.
+Provides spatial partitioning data structures for efficient queries and culling.
 
-**Key Features:**
-- Frustum culling with AABB/sphere tests
-- Octree and BVH spatial partitioning
-- Distance-based LOD system
-- Hardware occlusion queries (Vulkan)
-- Unified spatial manager with automatic updates
-- ECS integration with component-based API
-
-## Quick Start
-
-### Spatial Manager
-
-```rust
-use praxis_spatial::{SpatialManager, SpatialConfig, Aabb};
-
-let config = SpatialConfig {
-    center: Vec3::ZERO,
-    size: 1000.0,
-    max_entities_per_node: 8,
-    movement_threshold: 0.5,
-    ..Default::default()
-};
-
-let mut manager = SpatialManager::new_octree(config);
-
-// Insert entities
-manager.insert(entity, bounds);
-
-// Query
-let nearby = manager.query_radius(Vec3::ZERO, 50.0);
-let ray_hits = manager.query_ray_sorted(origin, direction, max_distance);
-
-// Update when moved
-manager.update(entity, new_bounds);
-manager.flush_updates();
-```
-
-### Frustum Culling
-
-```rust
-use praxis_spatial::{FrustumCuller, Aabb};
-
-let mut culler = FrustumCuller::new();
-culler.update(view_proj_matrix);
-
-if culler.is_visible(&entity_bounds) {
-    // Render entity
-}
-```
-
-### LOD System
-
-```rust
-use praxis_spatial::{LodManager, LodGroup, LodLevel};
-
-lod_manager.register_lod_group(LodGroup::new(
-    "tree",
-    vec![
-        LodLevel::new(0.0, "tree_high"),
-        LodLevel::new(50.0, "tree_medium"),
-        LodLevel::new(100.0, "tree_low"),
-    ],
-));
-
-lod_manager.assign_entity(entity, "tree");
-let lod = lod_manager.select_lod(entity, camera_pos, entity_pos);
-```
-
-## When to Use Each Structure
+## Features
 
 ### Octree
-**Best For:**
-- Static/slow-moving objects
-- Uniform object distribution
-- Voxel or volumetric data
-- Simple spatial queries
 
-**Pros:**
-- Intuitive spatial subdivision
-- Good for evenly distributed objects
-- Predictable memory layout
-
-**Cons:**
-- Poor with non-uniform distribution
-- Inefficient for dynamic objects
+- Hierarchical spatial partitioning
+- Dynamic insertion and removal
+- Frustum culling queries
+- Radius queries
+- Ray casting
 
 ### BVH (Bounding Volume Hierarchy)
-**Best For:**
-- Ray tracing and ray casting
-- Non-uniform object distribution
-- Clustered objects (cities, forests)
-- Static mesh rendering
 
-**Pros:**
-- Near-optimal for ray queries
-- Tight-fitting bounds (no wasted space)
-- Better cache performance (binary tree)
-- Adapts to object clustering
+- Fast ray-triangle intersection
+- Static mesh optimization
+- AABB queries
 
-**Cons:**
-- Requires full rebuild on changes
-- More complex construction
+### Spatial Hash
 
-### SpatialManager (Recommended)
-**Best For:**
-- General-purpose spatial management
-- When you need automatic updates
-- Applications that may switch between Octree/BVH
+- Fixed-size grid for uniform distributions
+- O(1) insertion and removal
+- Fast neighbor queries
 
-**Pros:**
-- Unified API for both structures
-- Automatic movement tracking
-- Batched updates and rebalancing
-- Simple to use
+## Example
 
-**Cons:**
-- Slight overhead vs direct structure use
+```rust
+use praxis_spatial::{Octree, AABB};
 
-### LodManager (Distance-Based Detail)
-**Best For:**
-- Large outdoor environments
-- High object counts
-- Distant objects
-- Performance-critical rendering
+// Create octree
+let mut octree = Octree::new(AABB::from_center_size(
+    Vec3::ZERO,
+    Vec3::splat(100.0),
+));
 
-**Use With:**
-- Combine with spatial structures for complete optimization
-- Works independently of culling system
+// Insert objects
+octree.insert(entity, aabb);
 
-### Occlusion Culling
-**Best For:**
-- Dense urban/indoor scenes
-- Large occluders (buildings, walls)
-- Complex geometry
+// Query visible objects
+let visible = octree.frustum_query(&frustum);
 
-**Note:** Hardware-dependent, requires GPU support
-
-## Documentation
-
-**Comprehensive Guide:**
-- [Spatial Optimization Guide](../../docs/guides/spatial-optimization.md) - Complete guide and best practices
-
-**Crate Documentation:**
-- [Structure Selection Guide](STRUCTURE_SELECTION.md) - Choosing the right spatial structure
-- [Spatial Partitioning](SPATIAL_PARTITIONING.md) - Octree/BVH details
-- [Quick Reference](QUICK_REFERENCE.md) - API patterns
-
-## Examples
-
-```bash
-cargo run --example spatial_partitioning_demo
-cargo run --example spatial_optimization_demo
+// Radius query
+let nearby = octree.radius_query(position, radius);
 ```
+
+## Use Cases
+
+- Frustum culling for rendering
+- Broad-phase collision detection
+- Neighbor queries for AI
+- LOD selection
+- Spatial audio
 
 ## Dependencies
 
-- `bevy_ecs` 0.14: ECS integration
-- `vulkano`: Occlusion queries (optional)
+- `serde`: Serialization support
+
+## Usage
+
+```toml
+praxis_spatial = { path = "../praxis_spatial", version = "0.1.0" }
+```

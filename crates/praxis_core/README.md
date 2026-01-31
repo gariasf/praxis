@@ -1,81 +1,57 @@
-# Praxis Core
+# praxis_core
 
-Core engine lifecycle and subsystem orchestration for the Praxis game engine.
+Core engine lifecycle and main loop for Praxis.
 
 ## Overview
 
-Main entry point coordinating initialization, event loop, and subsystem integration.
+Manages the engine's initialization, main loop, and shutdown. Coordinates all subsystems.
 
-**Key Features:**
-- Unified initialization (`praxis_core::run()`)
-- Subsystem orchestration (utils, ECS, input, audio, window)
-- Event loop management
-- Resource initialization patterns
+## Responsibilities
 
-## Quick Start
+- Engine initialization
+- Main game loop
+- Frame timing and delta time
+- Subsystem coordination
+- Resource management
+- Shutdown and cleanup
 
-### Simple Initialization
+## Architecture
 
-```rust
-use praxis_core;
+The core provides the foundation that all other subsystems build upon:
 
-fn main() -> praxis_utils::Result<()> {
-    praxis_core::run()
-}
+```
+praxis_core
+    ├── Window (praxis_window)
+    ├── Graphics (praxis_graphics)
+    ├── ECS (praxis_ecs)
+    ├── Input (praxis_input)
+    └── Audio (praxis_audio)
 ```
 
-### Custom Initialization
+## Example
 
 ```rust
-use praxis_utils::Result;
-use praxis_ecs::World;
+use praxis_core::Engine;
 
-fn main() -> Result<()> {
-    // Initialize subsystems
-    praxis_utils::init()?;
-    praxis_ecs::init()?;
-    praxis_input::init()?;
-    praxis_audio::init()?;
-    
-    // Create world and resources
-    let mut world = World::new();
-    
-    // Setup custom application
-    // ...
-    
-    Ok(())
+fn main() {
+    let mut engine = Engine::new().expect("Failed to create engine");
+    engine.run();
 }
 ```
-
-## Lifecycle Phases
-
-1. **Startup:** Initialize utils → ECS → input → audio
-2. **Event Loop:** Create winit EventLoop
-3. **Window Creation:** ApplicationHandler::resumed()
-4. **Runtime Loop:** Input → Update → Render → Audio
-5. **Shutdown:** Cleanup resources on exit
-
-## Documentation
-
-**Comprehensive Guides:**
-- [Architecture Guide](../../docs/architecture.md) - Engine design
-- [Getting Started](../../docs/getting-started/README.md) - Installation and setup
-- [Beginner's Guide](../../docs/beginners-guide.md) - Learning resource
-
-**Architecture Details:**
-- [Engine Lifecycle](../../docs/architecture/engine-lifecycle.md)
-- [ECS Patterns](../../docs/architecture/ecs-patterns.md)
 
 ## Dependencies
 
-- `praxis_utils`: Logging, error handling
-- `praxis_ecs`: Entity-Component-System
-- `praxis_input`: Input system
-- `praxis_audio`: Audio system
+- `praxis_utils`: Logging and error handling
 - `praxis_window`: Window management
+- `praxis_graphics`: Rendering
+- `praxis_ecs`: Entity Component System
+- `praxis_input`: Input handling
+- `praxis_audio`: Audio system
+- `pollster`: Async runtime
+- `parking_lot`: Faster mutexes
 
-## API Stability
+## Usage
 
-**Status:** Stable
-
-Core initialization and lifecycle patterns are stable. Breaking changes may occur before 1.0 but will be documented in the changelog. The `praxis_core::run()` entry point is considered stable.
+```toml
+praxis_core = { path = "../praxis_core", version = "0.1.0" }
+```

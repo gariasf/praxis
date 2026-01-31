@@ -1,118 +1,59 @@
-# Praxis Graphics
+# praxis_graphics
 
-Vulkan-based rendering system for the Praxis game engine.
+Vulkan-based rendering system for Praxis engine.
 
 ## Overview
 
-Modern GPU rendering with forward/deferred pipelines, PBR materials, skeletal animation, particles, and advanced post-processing.
+Modern rendering system built on Vulkan using `vulkano` for safe Rust abstractions.
 
-**Key Features:**
-- Forward and deferred rendering pipelines
-- Physically-based rendering (PBR) with material instancing
-- Bindless texture/material system (4096 textures)
-- GPU-accelerated skeletal animation (256 bones)
-- Particle systems with collision detection
-- Post-processing (HDR, bloom, SSAO, motion blur)
-- Spatial optimization (frustum/GPU culling, LOD)
-- Mesh streaming with background loading
+## Features
 
-## Quick Start
-
-```rust
-use praxis_graphics::RenderContext;
-
-// Initialize rendering
-let render_context = RenderContext::new(window).await?;
-
-// Render a frame
-render_context.render(&RenderCommands {
-    view: camera.view,
-    proj: camera.projection,
-    draw_commands: &objects,
-    lighting: Some(&lights),
-})?;
-```
+- **Forward Rendering**: Single-pass rendering with direct lighting
+- **Deferred Rendering**: Multi-pass rendering for complex lighting
+- **HDR & Tone Mapping**: ACES and Reinhard tone mapping
+- **Shadow Mapping**: Cascaded shadow maps for directional lights
+- **GPU-Driven Optimization**:
+  - Frustum culling
+  - Occlusion culling (Hi-Z)
+  - LOD system
+  - Mesh streaming
+- **Debug Visualization**: Culling, LOD, occlusion overlays
 
 ## Architecture
 
-### Descriptor Set Layout (3 sets)
+```
+RenderContext
+    ├── Device & Swapchain
+    ├── Pipelines
+    ├── Descriptor Sets
+    ├── Command Buffers
+    └── Synchronization
+```
 
-- **Set 0**: Per-frame/per-draw (camera, model matrix, textures, lights, shadows, bones)
-- **Set 1**: Per-material properties (base color, metallic, roughness, emissive)
-- **Set 2**: Bindless rendering (texture arrays, material buffers)
+## Example
 
-See [`DESCRIPTOR_SETS_REFERENCE.md`](DESCRIPTOR_SETS_REFERENCE.md) for complete shader reference.
+```rust
+use praxis_graphics::{RenderContext, Camera};
 
-### Rendering Pipelines
+let context = RenderContext::new(window)?;
+let camera = Camera::new(position, target);
 
-**Forward Rendering:**
-- Single-pass lighting calculation
-- Per-pixel shading
-- Suitable for simple scenes (<1000 objects)
-
-**Deferred Rendering:**
-- G-buffer pass (albedo, normal, metallic-roughness)
-- Lighting pass (accumulate lights)
-- Post-processing effects
-- Suitable for complex scenes with many lights
-
-## Documentation
-
-### Core Systems
-
-- [Descriptor Sets Reference](DESCRIPTOR_SETS_REFERENCE.md) - Shader development guide
-- [Material System](MATERIAL_SYSTEM.md) - PBR materials and instancing
-- [Bindless Rendering](BINDLESS_RENDERING.md) - High-performance material system
-- [Descriptor Set Caching](DESCRIPTOR_SET_CACHING.md) - Automatic optimization
-
-### Performance Systems
-
-- [GPU Culling](GPU_CULLING.md) - Frustum culling on GPU
-- [LOD System](LOD_SYSTEM.md) - CPU and GPU-driven LOD
-- [GPU LOD Integration](GPU_LOD_INTEGRATION.md) - Integration guide
-- [Mesh Streaming](MESH_STREAMING.md) - Background mesh loading
-
-### Rendering Features
-
-- [HDR Rendering](HDR_RENDERING.md) - HDR pipeline and tone mapping
-- [Post-Processing](POST_PROCESSING.md) - Post-processing framework
-- [Particles](PARTICLES.md) - GPU particle systems
-- [Material Instancing](MATERIAL_INSTANCING.md) - Efficient material variants
-- [Line Renderer](line_renderer_README.md) - Debug visualization
-
-### Comprehensive Guides
-
-- [Rendering Overview](../../docs/guides/rendering.md)
-- [PBR Materials Guide](../../docs/guides/rendering/advanced-materials.md)
-- [HDR & Tone Mapping](../../docs/guides/rendering/hdr-tonemapping.md)
-- [Shadows Guide](../../docs/guides/rendering/shadows.md)
-
-## Examples
-
-```bash
-# Basic rendering
-cargo run --example hello_triangle
-cargo run --example material_demo
-
-# Advanced features
-cargo run --example advanced_lighting_demo
-cargo run --example particles_demo
-cargo run --example gpu_culling_demo
-cargo run --example lod_gpu_demo
-
-# Post-processing
-cargo run --example hdr_demo
-cargo run --example bloom_demo
-
-# Editor integration
-cargo run --example editor_demo
-cargo run --example selection_demo
+// Render loop
+context.begin_frame()?;
+context.render_scene(&camera, &meshes)?;
+context.end_frame()?;
 ```
 
 ## Dependencies
 
-- `vulkano` 0.35.1 - Safe Vulkan wrapper
-- `glam` 0.30.4 - Fast math library
-- `bytemuck` 1.14 - Zero-copy GPU data structures
-- `image` 0.24 - Texture loading
-- `gltf` 0.16 - glTF model loading
+- `vulkano`: Safe Vulkan bindings
+- `vulkano-shaders`: Shader compilation
+- `vulkano-util`: Memory management
+- `image`: Image loading
+- `parking_lot`: Fast mutexes
+
+## Usage
+
+```toml
+praxis_graphics = { path = "../praxis_graphics", version = "0.1.0" }
+```

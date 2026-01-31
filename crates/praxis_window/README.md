@@ -1,70 +1,41 @@
-# Praxis Window
+# praxis_window
 
-Window management and event handling for the Praxis game engine using winit.
+Window management for Praxis engine using winit.
 
 ## Overview
 
-Cross-platform window creation, event processing, and Vulkan surface integration.
+Provides cross-platform window creation and event handling through `winit`.
 
-**Key Features:**
-- Window creation with customizable properties
-- Event handling (resize, focus, close, input)
-- Vulkan surface management
-- Multi-platform support (Windows, macOS, Linux)
-- Multi-monitor support
+## Features
 
-## Quick Start
+- Cross-platform window creation
+- Event handling (resize, close, focus, etc.)
+- Raw window handle for Vulkan
+- Monitor and display management
+- High-DPI support
+
+## Example
 
 ```rust
-use praxis_window::WindowConfig;
-
-let config = WindowConfig {
-    title: "My Game".to_string(),
-    width: 1920,
-    height: 1080,
-    resizable: true,
-    fullscreen: false,
-    vsync: true,
+use praxis_window::winit::{
+    event_loop::EventLoop,
+    window::WindowBuilder,
 };
 
-let window = praxis_window::create_window(config)?;
-```
-
-## Event Loop Integration
-
-```rust
-use winit::event_loop::{EventLoop, ControlFlow};
-
 let event_loop = EventLoop::new()?;
-event_loop.set_control_flow(ControlFlow::Poll);
-
-event_loop.run(move |event, elwt| {
-    match event {
-        Event::WindowEvent { event, .. } => {
-            match event {
-                WindowEvent::CloseRequested => elwt.exit(),
-                WindowEvent::Resized(size) => { /* handle resize */ }
-                _ => {}
-            }
-        }
-        _ => {}
-    }
-})?;
+let window = WindowBuilder::new()
+    .with_title("Praxis Engine")
+    .with_inner_size((1920, 1080))
+    .build(&event_loop)?;
 ```
-
-## Integration
-
-**Graphics:** Vulkan surface creation
-**Input:** Forward events to input system
-**GUI:** Event forwarding to egui
 
 ## Dependencies
 
-- `winit` 0.30.11: Cross-platform windowing
-- `vulkano`: Vulkan integration
+- `winit`: Window creation and event handling
+- `raw-window-handle`: Raw window handle for graphics APIs
 
-## API Stability
+## Usage
 
-**Status:** Stable
-
-Window management API is stable. Minor changes may occur to track upstream winit updates. Breaking changes will be documented in the changelog.
+```toml
+praxis_window = { path = "../praxis_window", version = "0.1.0" }
+```
