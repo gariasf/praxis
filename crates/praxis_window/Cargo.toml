@@ -8,12 +8,9 @@ license = "MIT"
 # Window management and event loop
 winit = { version = "0.30.11", features = ["rwh_05"] }
 
-# Block on async operations (used in window creation)
-pollster = "0.4"
+# Raw window handle for graphics backend integration
+raw-window-handle = "0.6"
 
 # Internal dependencies
 praxis_utils = { path = "../praxis_utils", version = "0.1.0" }
-praxis_graphics = { path = "../praxis_graphics", version = "0.1.0" }
 praxis_math = { path = "../praxis_math", version = "0.1.0" }
-praxis_ecs = { path = "../praxis_ecs", version = "0.1.0" }
-praxis_gui = { path = "../praxis_gui", version = "0.1.0" }

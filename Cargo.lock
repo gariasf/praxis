@@ -3496,6 +3496,7 @@ name = "praxis"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "pollster",
  "praxis_assets",
  "praxis_audio",
  "praxis_core",
@@ -3797,12 +3798,9 @@ dependencies = [
 name = "praxis_window"
 version = "0.1.0"
 dependencies = [
- "pollster",
- "praxis_ecs",
- "praxis_graphics",
- "praxis_gui",
  "praxis_math",
  "praxis_utils",
+ "raw-window-handle 0.6.2",
  "winit",
 ]
 
