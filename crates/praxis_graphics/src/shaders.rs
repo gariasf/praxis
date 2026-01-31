@@ -18,6 +18,22 @@ pub mod fs {
     }
 }
 
+/// Compiled vertex shader for forward PBR rendering.
+pub mod forward_pbr_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/shaders/forward_pbr.vert"
+    }
+}
+
+/// Compiled fragment shader for forward PBR rendering.
+pub mod forward_pbr_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/shaders/forward_pbr.frag"
+    }
+}
+
 /// Compiled vertex shader for shadow map generation.
 pub mod shadow_vs {
     vulkano_shaders::shader! {

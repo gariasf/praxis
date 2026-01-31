@@ -1030,10 +1030,13 @@ pub mod bindless;
 mod buffer;
 pub mod debug_rendering;
 pub mod deferred;
+pub mod descriptor_binding;
 pub mod descriptor_manager;
 mod device;
 pub mod gpu_culling;
 pub mod hdr;
+pub mod pipeline_state;
+pub mod shader_reflection;
 /// Re-export stub for backwards compatibility. Module moved to `utilities::light_linking`.
 pub mod light_linking;
 /// Re-export stub for backwards compatibility. Module moved to `utilities::light_probe`.
