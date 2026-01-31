@@ -529,6 +529,9 @@ impl InspectorPanel {
         world: &mut World,
         entity: Entity,
     ) {
+        // Fetch debug info first to avoid borrow conflicts
+        let debug_info = world.inner().get::<CullingDebug>(entity).cloned();
+        
         let mut query = world.query::<&mut CullingParams>();
         if let Ok(mut params) = query.get_mut(world.inner_mut(), entity) {
             let mut open = true;
@@ -695,7 +698,7 @@ impl InspectorPanel {
                     }
 
                     // Real-time preview from CullingDebug component
-                    if let Ok(debug) = world.inner().get::<CullingDebug>(entity) {
+                    if let Some(debug) = &debug_info {
                         ui.separator();
                         ui.label("Real-time Preview:");
 

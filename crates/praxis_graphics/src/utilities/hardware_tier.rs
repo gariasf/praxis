@@ -569,12 +569,11 @@ impl HardwareTierDetector {
 
         // Query memory properties to determine VRAM
         let memory_properties = physical_device.memory_properties();
-        let total_vram = Self::calculate_total_vram(memory_properties);
+        let total_vram = Self::calculate_total_vram(&memory_properties);
 
-        // Query limits
-        let limits = &properties.limits;
-        let max_texture_dimension = limits.max_image_dimension2_d;
-        let max_bound_descriptor_sets = limits.max_bound_descriptor_sets;
+        // Query limits directly from properties
+        let max_texture_dimension = properties.max_image_dimension2_d;
+        let max_bound_descriptor_sets = properties.max_bound_descriptor_sets;
 
         // Query supported features
         let supported_extensions = physical_device.supported_extensions();
@@ -589,7 +588,10 @@ impl HardwareTierDetector {
         let compute_units = Self::estimate_compute_units(vendor, device_type, total_vram);
 
         let device_name = properties.device_name.clone();
-        let api_version = properties.api_version.into();
+        // Convert Version to u32 (Vulkan version format: major << 22 | minor << 12 | patch)
+        let api_version: u32 = (properties.api_version.major << 22)
+            | (properties.api_version.minor << 12)
+            | properties.api_version.patch;
         let driver_version = properties.driver_version;
         let vendor_id = properties.vendor_id;
         let device_id = properties.device_id;
@@ -646,23 +648,24 @@ impl HardwareTierDetector {
     ///
     /// Sums all device-local memory heaps to get total VRAM.
     fn calculate_total_vram(
-        memory_properties: &vulkano::device::physical::MemoryProperties,
+        memory_properties: &vulkano::memory::MemoryProperties,
     ) -> u64 {
         use vulkano::memory::MemoryPropertyFlags;
 
         memory_properties
             .memory_heaps
             .iter()
-            .filter(|heap| {
+            .enumerate()
+            .filter(|(heap_index, _heap)| {
                 // Find device-local heaps (actual VRAM)
                 memory_properties.memory_types.iter().any(|mem_type| {
-                    mem_type.heap_index as usize == heap.index()
+                    mem_type.heap_index as usize == *heap_index
                         && mem_type
                             .property_flags
                             .intersects(MemoryPropertyFlags::DEVICE_LOCAL)
                 })
             })
-            .map(|heap| heap.size)
+            .map(|(_index, heap)| heap.size)
             .sum()
     }
 

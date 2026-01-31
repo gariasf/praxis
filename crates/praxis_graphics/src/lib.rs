@@ -4332,11 +4332,9 @@ pub use taa::{
 pub use texture::{Cubemap, CubemapFace, Texture, TextureManager};
 pub use uniform_buffer::{DynamicUniformBuffer, ModelUniforms, ViewProjectionUniforms};
 pub use utilities::{
-    GpuVendor, HardwareTier, HardwareTierConfig, HardwareTierDetector, LightChannel,
-    LightLinkingManager, LightLinkingMask, LightProbe, LightProbeData, LightProbeGrid,
-    LightProbeManager, ProbeBlendMode, QualityPreset, RenderStats, RenderStatsHistory,
-    RenderStatsVisualizer, RenderingOptimizationConfig, VelocityBuffer, VelocityBufferRenderer,
-    DEFAULT_LIGHT_CHANNEL, MAX_LIGHT_PROBES, PROBE_IRRADIANCE_COEFFS,
+    GpuVendor, HardwareTier, HardwareTierConfig, HardwareTierDetector, QualityPreset, RenderStats,
+    RenderStatsHistory, RenderStatsVisualizer, RenderingOptimizationConfig, VelocityBuffer,
+    VelocityBufferRenderer,
 };
 pub use vertex::Vertex3D;
 pub use visual_feedback::{
