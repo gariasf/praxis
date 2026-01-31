@@ -3,11 +3,18 @@ name = "praxis_utils"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
+description = "Foundational utilities for Praxis engine: logging, error handling, and timing"
+authors = ["Guillem Arias <hello@gariasf.com>"]
 
 [dependencies]
-# Structured logging
+# Structured logging with hierarchical spans and events
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# Logging configuration and formatting
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "ansi"] }
 
 # Enhanced error reporting with backtraces and suggestions
 color-eyre = "0.6"
+
+[lints]
+workspace = true

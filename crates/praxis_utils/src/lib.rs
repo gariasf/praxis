@@ -29,7 +29,7 @@
 //! ```rust
 //! use praxis_utils::{info, debug, error, warn};
 //!
-//! fn load_asset(path: &str) -> Result<()> {
+//! fn load_asset(path: &str) -> Result<(), String> {
 //!     info!("Loading asset from {}", path);
 //!     
 //!     // Structured fields (not string concatenation)
@@ -52,7 +52,7 @@
 //! fn process_mesh(name: &str, vertex_count: usize) {
 //!     // All logs within this function automatically include
 //!     // the function name and arguments in their context
-//!     info!("Processing mesh vertices");
+//!     praxis_utils::info!("Processing mesh vertices");
 //! }
 //! ```
 //!
@@ -77,7 +77,7 @@
 //! ```
 //!
 //! The engine sets sensible defaults:
-//! - `debug` level globally (if RUST_LOG not set)
+//! - `debug` level globally (if `RUST_LOG` not set)
 //! - `info` for `winit` (reduces window event spam)
 //! - `debug` for `vulkano` (useful GPU debugging)
 //!
@@ -101,8 +101,8 @@
 //!     let data = std::fs::read_to_string("config.toml")?;
 //!     
 //!     // Add context to errors with .wrap_err()
-//!     let config: Config = toml::from_str(&data)
-//!         .wrap_err("Failed to parse engine configuration")?;
+//!     // let config: Config = toml::from_str(&data)
+//!     //     .wrap_err("Failed to parse engine configuration")?;
 //!     
 //!     Ok(())
 //! }
@@ -110,10 +110,11 @@
 //!
 //! ## Error Context Patterns
 //!
+//! The `errors` module provides extension traits for adding context to errors.
 //! Common patterns used throughout the engine:
 //!
 //! ```rust,ignore
-//! use praxis_utils::{Result, eyre};
+//! use praxis_utils::{Result, WrapErr, Context, bail, ensure};
 //!
 //! // Pattern 1: Add context to fallible operations
 //! fn load_shader(path: &str) -> Result<ShaderModule> {
@@ -122,21 +123,28 @@
 //!     // ...
 //! }
 //!
-//! // Pattern 2: Create custom errors with eyre!
+//! // Pattern 2: Convert Option to Result with context
+//! fn find_entity(id: u32) -> Result<Entity> {
+//!     world.get(id)
+//!         .context("Entity not found")
+//! }
+//!
+//! // Pattern 3: Validation with ensure!
 //! fn validate_mesh(mesh: &Mesh) -> Result<()> {
-//!     if mesh.vertices.is_empty() {
-//!         return Err(eyre::eyre!("Mesh has no vertices"));
-//!     }
+//!     ensure!(!mesh.vertices.is_empty(), "Mesh has no vertices");
 //!     Ok(())
 //! }
 //!
-//! // Pattern 3: Provide suggestions
-//! fn init_vulkan() -> Result<Instance> {
-//!     create_instance()
-//!         .wrap_err("Failed to create Vulkan instance")
-//!         .suggestion("Ensure Vulkan drivers are installed")?
+//! // Pattern 4: Early return with bail!
+//! fn check_requirements() -> Result<()> {
+//!     if !requirements_met() {
+//!         bail!("Requirements not met");
+//!     }
+//!     Ok(())
 //! }
 //! ```
+//!
+//! See the [`errors`] module documentation for more patterns and best practices.
 //!
 //! ## Error Chain Example
 //!
@@ -250,7 +258,7 @@
 //! ## Delta Time Clamping
 //!
 //! The timer automatically clamps delta time to prevent huge jumps:
-//! - **Problem**: If the game pauses for 5 seconds, delta_time would be 5.0s
+//! - **Problem**: If the game pauses for 5 seconds, `delta_time` would be 5.0s
 //! - **Solution**: Clamped to 100ms (0.1s) maximum
 //! - **Benefit**: Physics simulations remain stable after debugger breakpoints
 //!
@@ -320,10 +328,12 @@
 //!
 //! - [`tracing` documentation](https://docs.rs/tracing)
 //! - [`color-eyre` documentation](https://docs.rs/color-eyre)
-//! - `observability` module for detailed tracing initialization
-//! - `timing` module for frame timing utilities
+//! - [`observability`] module for detailed tracing initialization
+//! - [`timing`] module for frame timing utilities
+//! - [`errors`] module for error handling utilities
 
 mod observability;
+pub mod errors;
 pub mod timing;
 
 pub use observability::{init_tracing, init_tracing_with_layer};
@@ -333,6 +343,9 @@ pub use color_eyre::{
     eyre::{self, Error},
     Report, Result,
 };
+
+// Re-export error utilities
+pub use errors::{bail, ensure, Context, WrapErr};
 
 // Re-export tracing macros for direct use from other crates
 pub use tracing::{debug, error, info, instrument, trace, warn};
@@ -356,10 +369,15 @@ pub use tracing::{debug, error, info, instrument, trace, warn};
 /// - The tracing subscriber is already initialized (called twice)
 /// - The color-eyre panic handler is already installed
 ///
+/// # Errors
+///
+/// Returns an error if the tracing subscriber or color-eyre panic handler
+/// are already initialized (typically from calling this function twice).
+///
 /// # Examples
 ///
-/// ```
-/// fn main() -> color_eyre::Result<()> {
+/// ```no_run
+/// fn main() -> praxis_utils::Result<()> {
 ///     // First thing: initialize utilities
 ///     praxis_utils::init()?;
 ///     
