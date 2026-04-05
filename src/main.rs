@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use wgpu::{Buffer, util::DeviceExt};
 
 use winit::{
     application::ApplicationHandler,
@@ -8,8 +9,143 @@ use winit::{
     window::{Window, WindowId},
 };
 
-// Winit and Window
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct Vertex {
+    position: [f32; 3],
+    color: [f32; 3],
+}
 
+impl Vertex {
+    const ATTRIBS: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![
+        0 => Float32x3,
+        1 => Float32x3,
+    ];
+
+    fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &Self::ATTRIBS,
+        }
+    }
+}
+
+const CUBE_VERTICES: [Vertex; 24] = [
+    // Front face (red)
+    Vertex {
+        position: [-0.5, -0.5, 0.5],
+        color: [1.0, 0.0, 0.0],
+    },
+    Vertex {
+        position: [0.5, -0.5, 0.5],
+        color: [1.0, 0.0, 0.0],
+    },
+    Vertex {
+        position: [0.5, 0.5, 0.5],
+        color: [1.0, 0.0, 0.0],
+    },
+    Vertex {
+        position: [-0.5, 0.5, 0.5],
+        color: [1.0, 0.0, 0.0],
+    },
+    // Back face (green)
+    Vertex {
+        position: [0.5, -0.5, -0.5],
+        color: [0.0, 1.0, 0.0],
+    },
+    Vertex {
+        position: [-0.5, -0.5, -0.5],
+        color: [0.0, 1.0, 0.0],
+    },
+    Vertex {
+        position: [-0.5, 0.5, -0.5],
+        color: [0.0, 1.0, 0.0],
+    },
+    Vertex {
+        position: [0.5, 0.5, -0.5],
+        color: [0.0, 1.0, 0.0],
+    },
+    // Top face (blue)
+    Vertex {
+        position: [-0.5, 0.5, 0.5],
+        color: [0.0, 0.0, 1.0],
+    },
+    Vertex {
+        position: [0.5, 0.5, 0.5],
+        color: [0.0, 0.0, 1.0],
+    },
+    Vertex {
+        position: [0.5, 0.5, -0.5],
+        color: [0.0, 0.0, 1.0],
+    },
+    Vertex {
+        position: [-0.5, 0.5, -0.5],
+        color: [0.0, 0.0, 1.0],
+    },
+    // Bottom face (yellow)
+    Vertex {
+        position: [-0.5, -0.5, -0.5],
+        color: [1.0, 1.0, 0.0],
+    },
+    Vertex {
+        position: [0.5, -0.5, -0.5],
+        color: [1.0, 1.0, 0.0],
+    },
+    Vertex {
+        position: [0.5, -0.5, 0.5],
+        color: [1.0, 1.0, 0.0],
+    },
+    Vertex {
+        position: [-0.5, -0.5, 0.5],
+        color: [1.0, 1.0, 0.0],
+    },
+    // Right face (cyan)
+    Vertex {
+        position: [0.5, -0.5, 0.5],
+        color: [0.0, 1.0, 1.0],
+    },
+    Vertex {
+        position: [0.5, -0.5, -0.5],
+        color: [0.0, 1.0, 1.0],
+    },
+    Vertex {
+        position: [0.5, 0.5, -0.5],
+        color: [0.0, 1.0, 1.0],
+    },
+    Vertex {
+        position: [0.5, 0.5, 0.5],
+        color: [0.0, 1.0, 1.0],
+    },
+    // Left face (magenta)
+    Vertex {
+        position: [-0.5, -0.5, -0.5],
+        color: [1.0, 0.0, 1.0],
+    },
+    Vertex {
+        position: [-0.5, -0.5, 0.5],
+        color: [1.0, 0.0, 1.0],
+    },
+    Vertex {
+        position: [-0.5, 0.5, 0.5],
+        color: [1.0, 0.0, 1.0],
+    },
+    Vertex {
+        position: [-0.5, 0.5, -0.5],
+        color: [1.0, 0.0, 1.0],
+    },
+];
+
+const CUBE_INDICES: [u16; 36] = [
+    0, 1, 2, 0, 2, 3, // front
+    4, 5, 6, 4, 6, 7, // back
+    8, 9, 10, 8, 10, 11, // top
+    12, 13, 14, 12, 14, 15, // bottom
+    16, 17, 18, 16, 18, 19, // right
+    20, 21, 22, 20, 22, 23, // left
+];
+
+// Winit and Window
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes = Window::default_attributes();
@@ -59,7 +195,6 @@ struct App {
 }
 
 // wgpu and GPU
-
 pub struct State {
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
@@ -68,6 +203,9 @@ pub struct State {
     is_surface_configured: bool,
     window: Arc<Window>,
     render_pipeline: wgpu::RenderPipeline,
+    vertex_buffer: Buffer,
+    index_buffer: Buffer,
+    num_indices: u32,
 }
 
 impl State {
@@ -143,7 +281,7 @@ impl State {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[],
+                buffers: &[Vertex::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -178,6 +316,18 @@ impl State {
             cache: None,
         });
 
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(&CUBE_VERTICES),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(&CUBE_INDICES),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
         Ok(Self {
             surface,
             device,
@@ -186,6 +336,9 @@ impl State {
             is_surface_configured: false,
             render_pipeline,
             window,
+            vertex_buffer,
+            index_buffer,
+            num_indices: CUBE_INDICES.len() as u32,
         })
     }
 
@@ -276,7 +429,9 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.draw(0..3, 0..1);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
 
         // submit will accept anything that implements IntoIter
