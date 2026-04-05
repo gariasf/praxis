@@ -153,12 +153,55 @@ struct CameraUniform {
     view_proj: [[f32; 4]; 4],
 }
 
+// Camera
+struct Camera {
+    position: glam::Vec3,
+    yaw: f32,   // radians, left-right
+    pitch: f32, // radians, up-down
+    speed: f32,
+    sensitivity: f32,
+}
+
+impl Camera {
+    fn new() -> Self {
+        Self {
+            position: glam::vec3(0.0, 0.0, 2.0),
+            yaw: -std::f32::consts::FRAC_PI_2, // look towards -Z
+            pitch: 0.0,
+            speed: 2.0,
+            sensitivity: 0.003,
+        }
+    }
+
+    fn forward(&self) -> glam::Vec3 {
+        glam::vec3(
+            self.yaw.cos() * self.pitch.cos(),
+            self.pitch.sin(),
+            self.yaw.sin() * self.pitch.cos(),
+        )
+        .normalize()
+    }
+
+    fn right(&self) -> glam::Vec3 {
+        self.forward().cross(glam::Vec3::Y).normalize()
+    }
+
+    fn view_matrix(&self) -> glam::Mat4 {
+        let target = self.position + self.forward();
+        glam::Mat4::look_at_rh(self.position, target, glam::Vec3::Y)
+    }
+}
+
 // Winit and Window
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes = Window::default_attributes();
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        window
+            .set_cursor_grab(winit::window::CursorGrabMode::Confined)
+            .ok();
+        window.set_cursor_visible(false);
 
         self.state = Some(pollster::block_on(State::new(window)).unwrap());
     }
@@ -191,8 +234,32 @@ impl ApplicationHandler for App {
                         ..
                     },
                 ..
-            } => state.handle_key(event_loop, code, key_state.is_pressed()),
+            } => {
+                if key_state.is_pressed() {
+                    state.keys_pressed.insert(code);
+                } else {
+                    state.keys_pressed.remove(&code);
+                }
+                if code == KeyCode::Escape && key_state.is_pressed() {
+                    event_loop.exit();
+                }
+            }
             _ => {}
+        }
+    }
+
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
+        if let Some(state) = &mut self.state
+            && let winit::event::DeviceEvent::MouseMotion { delta } = event
+        {
+            state.camera.yaw += delta.0 as f32 * state.camera.sensitivity;
+            state.camera.pitch -= delta.1 as f32 * state.camera.sensitivity;
+            state.camera.pitch = state.camera.pitch.clamp(-1.5, 1.5); // ~86 degrees
         }
     }
 }
@@ -216,8 +283,10 @@ pub struct State {
     num_indices: u32,
     camera_buffer: Buffer,
     camera_bind_group: wgpu::BindGroup,
-    start_time: std::time::Instant,
     depth_texture_view: wgpu::TextureView,
+    keys_pressed: std::collections::HashSet<KeyCode>,
+    last_frame: std::time::Instant,
+    camera: Camera,
 }
 
 impl State {
@@ -391,8 +460,10 @@ impl State {
             num_indices: CUBE_INDICES.len() as u32,
             camera_buffer,
             camera_bind_group: bind_group,
-            start_time: std::time::Instant::now(),
             depth_texture_view,
+            camera: Camera::new(),
+            keys_pressed: std::collections::HashSet::new(),
+            last_frame: std::time::Instant::now(),
         })
     }
 
@@ -406,20 +477,37 @@ impl State {
         }
     }
 
-    fn handle_key(&self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
-        if let (KeyCode::Escape, true) = (code, is_pressed) {
-            event_loop.exit()
-        }
-    }
-
     fn update(&mut self) {
-        let elapsed = self.start_time.elapsed().as_secs_f32();
-        let aspect = self.config.width as f32 / self.config.height as f32;
+        let now = std::time::Instant::now();
+        let dt = (now - self.last_frame).as_secs_f32();
+        self.last_frame = now;
 
-        let model =
-            glam::Mat4::from_rotation_y(elapsed) * glam::Mat4::from_rotation_x(elapsed * 0.5);
-        let view =
-            glam::Mat4::look_at_rh(glam::vec3(0.0, 0.0, 4.0), glam::Vec3::ZERO, glam::Vec3::Y);
+        let forward = self.camera.forward();
+        let right = self.camera.right();
+        let speed = self.camera.speed * dt;
+
+        if self.keys_pressed.contains(&KeyCode::KeyW) {
+            self.camera.position += forward * speed;
+        }
+        if self.keys_pressed.contains(&KeyCode::KeyS) {
+            self.camera.position -= forward * speed;
+        }
+        if self.keys_pressed.contains(&KeyCode::KeyD) {
+            self.camera.position += right * speed;
+        }
+        if self.keys_pressed.contains(&KeyCode::KeyA) {
+            self.camera.position -= right * speed;
+        }
+        if self.keys_pressed.contains(&KeyCode::Space) {
+            self.camera.position.y += speed;
+        }
+        if self.keys_pressed.contains(&KeyCode::ShiftLeft) {
+            self.camera.position.y -= speed;
+        }
+
+        let aspect = self.config.width as f32 / self.config.height as f32;
+        let model = glam::Mat4::IDENTITY;
+        let view = self.camera.view_matrix();
         let proj = glam::Mat4::perspective_rh(45_f32.to_radians(), aspect, 0.1, 100.0);
 
         let view_proj = proj * view * model;
