@@ -145,6 +145,14 @@ const CUBE_INDICES: [u16; 36] = [
     20, 21, 22, 20, 22, 23, // left
 ];
 
+// MVP
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct CameraUniform {
+    view_proj: [[f32; 4]; 4],
+}
+
 // Winit and Window
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
@@ -206,6 +214,9 @@ pub struct State {
     vertex_buffer: Buffer,
     index_buffer: Buffer,
     num_indices: u32,
+    camera_buffer: Buffer,
+    camera_bind_group: wgpu::BindGroup,
+    start_time: std::time::Instant,
 }
 
 impl State {
@@ -269,10 +280,24 @@ impl State {
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Camera Bind Group Layout"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[],
+                bind_group_layouts: &[Some(&bind_group_layout)],
                 immediate_size: 0,
             });
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -328,6 +353,22 @@ impl State {
             usage: wgpu::BufferUsages::INDEX,
         });
 
+        let camera_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Camera Buffer"),
+            size: std::mem::size_of::<CameraUniform>() as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Camera Bind Group"),
+            layout: &bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
+        });
+
         Ok(Self {
             surface,
             device,
@@ -339,6 +380,9 @@ impl State {
             vertex_buffer,
             index_buffer,
             num_indices: CUBE_INDICES.len() as u32,
+            camera_buffer,
+            camera_bind_group: bind_group,
+            start_time: std::time::Instant::now(),
         })
     }
 
@@ -358,7 +402,21 @@ impl State {
     }
 
     fn update(&mut self) {
-        // remove `todo!()`
+        let elapsed = self.start_time.elapsed().as_secs_f32();
+        let aspect = self.config.width as f32 / self.config.height as f32;
+
+        let model =
+            glam::Mat4::from_rotation_y(elapsed) * glam::Mat4::from_rotation_x(elapsed * 0.5);
+        let view =
+            glam::Mat4::look_at_rh(glam::vec3(0.0, 0.0, 2.0), glam::Vec3::ZERO, glam::Vec3::Y);
+        let proj = glam::Mat4::perspective_rh(45_f32.to_radians(), aspect, 0.1, 100.0);
+
+        let view_proj = proj * view * model;
+        let uniform = CameraUniform {
+            view_proj: view_proj.to_cols_array_2d(),
+        };
+        self.queue
+            .write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[uniform]));
     }
 
     fn render(&mut self) -> anyhow::Result<()> {
@@ -431,6 +489,7 @@ impl State {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
 
