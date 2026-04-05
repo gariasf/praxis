@@ -33,43 +33,49 @@ they're actually needed. No empty scaffolding.
 
 ---
 
-## Phase 1 — Window & Triangle
+## Phase 1 — Window & Triangle (done)
 
-Open a window and render a colored triangle.
-
-- [ ] Set up cargo workspace with a single binary crate
-- [ ] Create a window with winit, handle close/resize events
-- [ ] Initialize wgpu: instance, adapter, device, surface
-- [ ] Write a basic vertex + fragment shader (WGSL)
-- [ ] Create a render pipeline and draw a hardcoded triangle
-- [ ] Handle window resize (recreate surface config)
-
-References: Learn Wgpu (https://sotrh.github.io/learn-wgpu/) chapters 1-3, wgpu repo examples.
+- [x] Set up cargo workspace with a single binary crate
+- [x] Create a window with winit, handle close/resize events
+- [x] Initialize wgpu: instance, adapter, device, surface
+- [x] Write a basic vertex + fragment shader (WGSL)
+- [x] Create a render pipeline and draw a hardcoded triangle
+- [x] Handle window resize (recreate surface config)
 
 ---
 
-## Phase 2 — 3D Fundamentals
+## Phase 2 — 3D Fundamentals (done)
 
-Render a rotating 3D cube with a movable camera.
-
-- [ ] Add glam for math (vectors, matrices, quaternions)
-- [ ] Implement a perspective camera (view + projection matrices)
-- [ ] Create vertex buffers and index buffers for a cube
-- [ ] Pass MVP matrix to the shader via a uniform buffer
-- [ ] Add basic input handling (keyboard/mouse via winit)
-- [ ] Implement a fly camera or orbit camera
-- [ ] Add depth buffer
+- [x] Add glam for math (vectors, matrices, quaternions)
+- [x] Implement a perspective camera (view + projection matrices)
+- [x] Create vertex buffers and index buffers for a cube
+- [x] Pass MVP matrix to the shader via a uniform buffer
+- [x] Add basic input handling (keyboard/mouse via winit)
+- [x] Implement a fly camera
+- [x] Add depth buffer
 
 ---
 
 ## Phase 3 — Textures & Mesh Loading
 
-Load a textured glTF model and display it.
+### Part A — Texture pipeline
 
-- [ ] Load an image and create a wgpu texture + sampler
-- [ ] Sample the texture in the fragment shader (UV coordinates)
-- [ ] Integrate the `gltf` crate to parse .glb files
-- [ ] Extract vertex positions, normals, UVs, and indices from glTF
+Texture a cube with an image loaded from disk.
+
+- [ ] Add `image` crate for decoding PNG/JPG
+- [ ] Load image bytes and decode to RGBA
+- [ ] Create a wgpu::Texture and write pixel data with queue.write_texture()
+- [ ] Create a TextureView and Sampler
+- [ ] Add a bind group (group 1) with texture view + sampler
+- [ ] Add UV coordinates to the Vertex struct
+- [ ] Update shader: sample texture with textureSample()
+
+### Part B — glTF mesh loading
+
+Load and render a glTF model with its textures.
+
+- [ ] Add `gltf` crate for parsing .glb/.gltf files
+- [ ] Extract vertex positions, normals, UVs, and indices
 - [ ] Render a loaded mesh with its base color texture
 - [ ] Support multiple meshes in a single file
 
