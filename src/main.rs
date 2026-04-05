@@ -12,8 +12,7 @@ use winit::{
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        #[allow(unused_mut)]
-        let mut window_attributes = Window::default_attributes();
+        let window_attributes = Window::default_attributes();
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
@@ -35,7 +34,7 @@ impl ApplicationHandler for App {
                 match state.render() {
                     Ok(_) => {}
                     Err(e) => {
-                        log::error!("{e}");
+                        tracing::error!("{e}");
                         event_loop.exit();
                     }
                 }
@@ -57,12 +56,6 @@ impl ApplicationHandler for App {
 #[derive(Default)]
 struct App {
     state: Option<State>,
-}
-
-impl App {
-    pub fn new() -> Self {
-        Self { state: None }
-    }
 }
 
 // wgpu and GPU
@@ -206,9 +199,8 @@ impl State {
     }
 
     fn handle_key(&self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
-        match (code, is_pressed) {
-            (KeyCode::Escape, true) => event_loop.exit(),
-            _ => {}
+        if let (KeyCode::Escape, true) = (code, is_pressed) {
+            event_loop.exit()
         }
     }
 
@@ -297,8 +289,8 @@ impl State {
 
 // Main
 pub fn run() -> anyhow::Result<()> {
-    let event_loop = EventLoop::with_user_event().build()?;
-    let mut app = App::new();
+    let event_loop = EventLoop::new()?;
+    let mut app = App::default();
     event_loop.run_app(&mut app)?;
 
     Ok(())
