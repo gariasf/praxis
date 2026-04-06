@@ -309,6 +309,10 @@ impl State {
     }
 
     pub fn update(&mut self) {
+        if !self.is_surface_configured {
+            return;
+        }
+
         let now = std::time::Instant::now();
         let dt = (now - self.last_frame).as_secs_f32();
         self.last_frame = now;
