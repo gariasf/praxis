@@ -22,6 +22,12 @@ pub fn load_model(path: &str) -> anyhow::Result<LoadedModel> {
 
     for mesh in meshes {
         for primitive in mesh.primitives() {
+            if primitive.mode() != gltf::mesh::Mode::Triangles {
+                return Err(anyhow::anyhow!(
+                    "Unsupported primitive mode: {:?}. Only triangle primitives are supported",
+                    primitive.mode()
+                ));
+            }
             let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
             let positions: Vec<[f32; 3]> = reader
