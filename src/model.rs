@@ -13,7 +13,7 @@ pub struct LoadedModel {
 pub fn load_model(path: &str) -> anyhow::Result<LoadedModel> {
     let (document, buffers, images) = gltf::import(path)?;
 
-    let mut meshes = document.meshes();
+    let meshes = document.meshes();
     if meshes.len() == 0 {
         return Err(anyhow::anyhow!("No meshes found"));
     }
@@ -41,9 +41,8 @@ pub fn load_model(path: &str) -> anyhow::Result<LoadedModel> {
 
             let indices: Vec<u32> = reader
                 .read_indices()
-                .ok_or(anyhow::anyhow!("Mesh has no indices"))?
-                .into_u32()
-                .collect();
+                .map(|iter| iter.into_u32().collect())
+                .unwrap_or_else(|| (0..positions.len() as u32).collect());
 
             let vertices: Vec<Vertex> = positions
                 .iter()
