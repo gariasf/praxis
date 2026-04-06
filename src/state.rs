@@ -182,7 +182,7 @@ impl State {
             cache: None,
         });
 
-        let model = crate::model::load_glb("assets/BoxTextured.gltf")?;
+        let model = crate::model::load_model("assets/BoxTextured.gltf")?;
 
         let mut primitives = Vec::new();
         for prim in &model.primitives {

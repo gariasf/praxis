@@ -10,7 +10,7 @@ pub struct LoadedModel {
     pub primitives: Vec<LoadedPrimitive>,
 }
 
-pub fn load_glb(path: &str) -> anyhow::Result<LoadedModel> {
+pub fn load_model(path: &str) -> anyhow::Result<LoadedModel> {
     let (document, buffers, images) = gltf::import(path)?;
 
     let mesh = document
@@ -54,23 +54,25 @@ pub fn load_glb(path: &str) -> anyhow::Result<LoadedModel> {
             })
             .collect();
 
-        let base_color_image = primitive
+        let base_color_image = if let Some(tex_info) = primitive
             .material()
             .pbr_metallic_roughness()
             .base_color_texture()
-            .map(|tex_info| {
-                let image = &images[tex_info.texture().source().index()];
-                let pixels = match image.format {
-                    gltf::image::Format::R8G8B8A8 => image.pixels.clone(),
-                    gltf::image::Format::R8G8B8 => image
-                        .pixels
-                        .chunks(3)
-                        .flat_map(|rgb| [rgb[0], rgb[1], rgb[2], 255])
-                        .collect(),
-                    other => panic!("Unsupported texture format: {:?}", other),
-                };
-                (pixels, image.width, image.height)
-            });
+        {
+            let image = &images[tex_info.texture().source().index()];
+            let pixels = match image.format {
+                gltf::image::Format::R8G8B8A8 => image.pixels.clone(),
+                gltf::image::Format::R8G8B8 => image
+                    .pixels
+                    .chunks(3)
+                    .flat_map(|rgb| [rgb[0], rgb[1], rgb[2], 255])
+                    .collect(),
+                other => anyhow::bail!("Unsupported texture format: {:?}", other),
+            };
+            Some((pixels, image.width, image.height))
+        } else {
+            None
+        };
 
         primitives.push(LoadedPrimitive {
             vertices,
