@@ -33,35 +33,107 @@ impl Vertex {
 
 const CUBE_VERTICES: [Vertex; 24] = [
     // Front face
-    Vertex { position: [-0.5, -0.5,  0.5], uv: [0.0, 1.0] },
-    Vertex { position: [ 0.5, -0.5,  0.5], uv: [1.0, 1.0] },
-    Vertex { position: [ 0.5,  0.5,  0.5], uv: [1.0, 0.0] },
-    Vertex { position: [-0.5,  0.5,  0.5], uv: [0.0, 0.0] },
+    Vertex {
+        position: [-0.5, -0.5, 0.5],
+        uv: [0.0, 1.0],
+    },
+    Vertex {
+        position: [0.5, -0.5, 0.5],
+        uv: [1.0, 1.0],
+    },
+    Vertex {
+        position: [0.5, 0.5, 0.5],
+        uv: [1.0, 0.0],
+    },
+    Vertex {
+        position: [-0.5, 0.5, 0.5],
+        uv: [0.0, 0.0],
+    },
     // Back face
-    Vertex { position: [ 0.5, -0.5, -0.5], uv: [0.0, 1.0] },
-    Vertex { position: [-0.5, -0.5, -0.5], uv: [1.0, 1.0] },
-    Vertex { position: [-0.5,  0.5, -0.5], uv: [1.0, 0.0] },
-    Vertex { position: [ 0.5,  0.5, -0.5], uv: [0.0, 0.0] },
+    Vertex {
+        position: [0.5, -0.5, -0.5],
+        uv: [0.0, 1.0],
+    },
+    Vertex {
+        position: [-0.5, -0.5, -0.5],
+        uv: [1.0, 1.0],
+    },
+    Vertex {
+        position: [-0.5, 0.5, -0.5],
+        uv: [1.0, 0.0],
+    },
+    Vertex {
+        position: [0.5, 0.5, -0.5],
+        uv: [0.0, 0.0],
+    },
     // Top face
-    Vertex { position: [-0.5,  0.5,  0.5], uv: [0.0, 1.0] },
-    Vertex { position: [ 0.5,  0.5,  0.5], uv: [1.0, 1.0] },
-    Vertex { position: [ 0.5,  0.5, -0.5], uv: [1.0, 0.0] },
-    Vertex { position: [-0.5,  0.5, -0.5], uv: [0.0, 0.0] },
+    Vertex {
+        position: [-0.5, 0.5, 0.5],
+        uv: [0.0, 1.0],
+    },
+    Vertex {
+        position: [0.5, 0.5, 0.5],
+        uv: [1.0, 1.0],
+    },
+    Vertex {
+        position: [0.5, 0.5, -0.5],
+        uv: [1.0, 0.0],
+    },
+    Vertex {
+        position: [-0.5, 0.5, -0.5],
+        uv: [0.0, 0.0],
+    },
     // Bottom face
-    Vertex { position: [-0.5, -0.5, -0.5], uv: [0.0, 1.0] },
-    Vertex { position: [ 0.5, -0.5, -0.5], uv: [1.0, 1.0] },
-    Vertex { position: [ 0.5, -0.5,  0.5], uv: [1.0, 0.0] },
-    Vertex { position: [-0.5, -0.5,  0.5], uv: [0.0, 0.0] },
+    Vertex {
+        position: [-0.5, -0.5, -0.5],
+        uv: [0.0, 1.0],
+    },
+    Vertex {
+        position: [0.5, -0.5, -0.5],
+        uv: [1.0, 1.0],
+    },
+    Vertex {
+        position: [0.5, -0.5, 0.5],
+        uv: [1.0, 0.0],
+    },
+    Vertex {
+        position: [-0.5, -0.5, 0.5],
+        uv: [0.0, 0.0],
+    },
     // Right face
-    Vertex { position: [ 0.5, -0.5,  0.5], uv: [0.0, 1.0] },
-    Vertex { position: [ 0.5, -0.5, -0.5], uv: [1.0, 1.0] },
-    Vertex { position: [ 0.5,  0.5, -0.5], uv: [1.0, 0.0] },
-    Vertex { position: [ 0.5,  0.5,  0.5], uv: [0.0, 0.0] },
+    Vertex {
+        position: [0.5, -0.5, 0.5],
+        uv: [0.0, 1.0],
+    },
+    Vertex {
+        position: [0.5, -0.5, -0.5],
+        uv: [1.0, 1.0],
+    },
+    Vertex {
+        position: [0.5, 0.5, -0.5],
+        uv: [1.0, 0.0],
+    },
+    Vertex {
+        position: [0.5, 0.5, 0.5],
+        uv: [0.0, 0.0],
+    },
     // Left face
-    Vertex { position: [-0.5, -0.5, -0.5], uv: [0.0, 1.0] },
-    Vertex { position: [-0.5, -0.5,  0.5], uv: [1.0, 1.0] },
-    Vertex { position: [-0.5,  0.5,  0.5], uv: [1.0, 0.0] },
-    Vertex { position: [-0.5,  0.5, -0.5], uv: [0.0, 0.0] },
+    Vertex {
+        position: [-0.5, -0.5, -0.5],
+        uv: [0.0, 1.0],
+    },
+    Vertex {
+        position: [-0.5, -0.5, 0.5],
+        uv: [1.0, 1.0],
+    },
+    Vertex {
+        position: [-0.5, 0.5, 0.5],
+        uv: [1.0, 0.0],
+    },
+    Vertex {
+        position: [-0.5, 0.5, -0.5],
+        uv: [0.0, 0.0],
+    },
 ];
 
 const CUBE_INDICES: [u16; 36] = [
