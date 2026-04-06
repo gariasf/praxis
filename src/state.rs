@@ -5,7 +5,14 @@ use winit::{keyboard::KeyCode, window::Window};
 
 use crate::camera::{Camera, CameraUniform};
 use crate::texture::create_depth_texture;
-use crate::vertex::{CUBE_INDICES, CUBE_VERTICES, Vertex};
+use crate::vertex::Vertex;
+
+pub struct GpuPrimitive {
+    vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+    num_indices: u32,
+    texture_bind_group: wgpu::BindGroup,
+}
 
 pub struct State {
     surface: wgpu::Surface<'static>,
@@ -15,16 +22,13 @@ pub struct State {
     is_surface_configured: bool,
     window: Arc<Window>,
     render_pipeline: wgpu::RenderPipeline,
-    vertex_buffer: Buffer,
-    index_buffer: Buffer,
-    num_indices: u32,
     camera_buffer: Buffer,
     camera_bind_group: wgpu::BindGroup,
     depth_texture_view: wgpu::TextureView,
     pub keys_pressed: std::collections::HashSet<KeyCode>,
     last_frame: std::time::Instant,
     pub camera: Camera,
-    texture_bind_group: wgpu::BindGroup,
+    primitives: Vec<GpuPrimitive>,
 }
 
 impl State {
@@ -178,17 +182,77 @@ impl State {
             cache: None,
         });
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&CUBE_VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+        let model = crate::model::load_glb("assets/BoxTextured.gltf")?;
 
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(&CUBE_INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
+        let mut primitives = Vec::new();
+        for prim in &model.primitives {
+            let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(&prim.vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
+            let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Index Buffer"),
+                contents: bytemuck::cast_slice(&prim.indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+
+            // Fallback: 1x1 white texture if no base color image
+            let (tex_data, tex_width, tex_height) = match &prim.base_color_image {
+                Some((data, w, h)) => (data.as_slice(), *w, *h),
+                None => (&[255u8, 255, 255, 255] as &[u8], 1, 1),
+            };
+
+            let texture = device.create_texture_with_data(
+                &queue,
+                &wgpu::TextureDescriptor {
+                    label: Some("Diffuse Texture"),
+                    size: wgpu::Extent3d {
+                        width: tex_width,
+                        height: tex_height,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                    view_formats: &[],
+                },
+                wgpu::util::TextureDataOrder::LayerMajor,
+                tex_data,
+            );
+
+            let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+            let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                ..Default::default()
+            });
+
+            let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("Texture Bind Group"),
+                layout: &texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&texture_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&sampler),
+                    },
+                ],
+            });
+
+            primitives.push(GpuPrimitive {
+                vertex_buffer,
+                index_buffer,
+                num_indices: prim.indices.len() as u32,
+                texture_bind_group,
+            });
+        }
 
         let camera_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Camera Buffer"),
@@ -208,56 +272,6 @@ impl State {
 
         let depth_texture_view = create_depth_texture(&device, config.width, config.height);
 
-        let img = image::open("assets/pikuma.png")
-            .map_err(|e| {
-                tracing::error!("Failed to load texture: {e}");
-                e
-            })?
-            .to_rgba8();
-        tracing::info!("Loaded texture: {}x{}", img.width(), img.height());
-        let (tex_width, tex_height) = img.dimensions();
-
-        let diffuse_texture = device.create_texture_with_data(
-            &queue,
-            &wgpu::TextureDescriptor {
-                label: Some("Diffuse Texture"),
-                size: wgpu::Extent3d {
-                    width: tex_width,
-                    height: tex_height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            },
-            wgpu::util::TextureDataOrder::LayerMajor,
-            img.as_raw(),
-        );
-
-        let diffuse_view = diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
-        });
-
-        let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Texture Bind Group"),
-            layout: &texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
-                },
-            ],
-        });
         Ok(Self {
             surface,
             device,
@@ -266,16 +280,13 @@ impl State {
             is_surface_configured: false,
             render_pipeline,
             window,
-            vertex_buffer,
-            index_buffer,
-            num_indices: CUBE_INDICES.len() as u32,
             camera_buffer,
             camera_bind_group: bind_group,
             depth_texture_view,
             camera: Camera::new(),
             keys_pressed: std::collections::HashSet::new(),
             last_frame: std::time::Instant::now(),
-            texture_bind_group,
+            primitives,
         })
     }
 
@@ -405,11 +416,15 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.texture_bind_group, &[]);
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+
+            for prim in &self.primitives {
+                render_pass.set_vertex_buffer(0, prim.vertex_buffer.slice(..));
+                render_pass
+                    .set_index_buffer(prim.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.set_bind_group(1, &prim.texture_bind_group, &[]);
+                render_pass.draw_indexed(0..prim.num_indices, 0, 0..1);
+            }
         }
 
         // submit will accept anything that implements IntoIter

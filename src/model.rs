@@ -11,7 +11,7 @@ pub struct LoadedModel {
 }
 
 pub fn load_glb(path: &str) -> anyhow::Result<LoadedModel> {
-    let (document, buffers, _images) = gltf::import(path)?;
+    let (document, buffers, images) = gltf::import(path)?;
 
     let mesh = document
         .meshes()
@@ -54,10 +54,28 @@ pub fn load_glb(path: &str) -> anyhow::Result<LoadedModel> {
             })
             .collect();
 
+        let base_color_image = primitive
+            .material()
+            .pbr_metallic_roughness()
+            .base_color_texture()
+            .map(|tex_info| {
+                let image = &images[tex_info.texture().source().index()];
+                let pixels = match image.format {
+                    gltf::image::Format::R8G8B8A8 => image.pixels.clone(),
+                    gltf::image::Format::R8G8B8 => image
+                        .pixels
+                        .chunks(3)
+                        .flat_map(|rgb| [rgb[0], rgb[1], rgb[2], 255])
+                        .collect(),
+                    other => panic!("Unsupported texture format: {:?}", other),
+                };
+                (pixels, image.width, image.height)
+            });
+
         primitives.push(LoadedPrimitive {
             vertices,
             indices,
-            base_color_image: None, // texture extraction later
+            base_color_image,
         });
     }
 
