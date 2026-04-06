@@ -13,3 +13,4 @@ pollster = "0.4"
 anyhow = "1"
 bytemuck = "1.25.0"
 image = { version = "0.25", default-features = false, features = ["png"] }
+gltf = { version = "1.4.1", default-features = false, features = ["import", "utils"] }

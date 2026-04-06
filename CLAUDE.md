@@ -28,8 +28,6 @@ See `ROADMAP.md` for current progress and next steps.
 
 - `cargo fmt` and `cargo clippy` must pass.
 - Use `tracing::info!` / `tracing::error!` etc. for logging. Not `log`, not `println!`.
-- wgpu 29 API: some fields are `Option` that weren't in older versions
-  (e.g. `depth_write_enabled: Some(true)`, `depth_compare: Some(...)`).
 - Shaders are WGSL (`.wgsl` files in `src/`).
 - No `unsafe` unless absolutely necessary and clearly explained.
 - Keep dependencies minimal. Use feature flags to avoid pulling in the world
