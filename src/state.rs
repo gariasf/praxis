@@ -283,7 +283,7 @@ impl State {
             device,
             queue,
             config,
-            is_surface_configured: false,
+            is_surface_configured,
             render_pipeline,
             window,
             camera_buffer,
