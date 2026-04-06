@@ -13,13 +13,13 @@ use winit::{
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
     position: [f32; 3],
-    color: [f32; 3],
+    uv: [f32; 2],
 }
 
 impl Vertex {
     const ATTRIBS: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![
         0 => Float32x3,
-        1 => Float32x3,
+        1 => Float32x2,
     ];
 
     fn desc() -> wgpu::VertexBufferLayout<'static> {
@@ -32,108 +32,36 @@ impl Vertex {
 }
 
 const CUBE_VERTICES: [Vertex; 24] = [
-    // Front face (red)
-    Vertex {
-        position: [-0.5, -0.5, 0.5],
-        color: [1.0, 0.0, 0.0],
-    },
-    Vertex {
-        position: [0.5, -0.5, 0.5],
-        color: [1.0, 0.0, 0.0],
-    },
-    Vertex {
-        position: [0.5, 0.5, 0.5],
-        color: [1.0, 0.0, 0.0],
-    },
-    Vertex {
-        position: [-0.5, 0.5, 0.5],
-        color: [1.0, 0.0, 0.0],
-    },
-    // Back face (green)
-    Vertex {
-        position: [0.5, -0.5, -0.5],
-        color: [0.0, 1.0, 0.0],
-    },
-    Vertex {
-        position: [-0.5, -0.5, -0.5],
-        color: [0.0, 1.0, 0.0],
-    },
-    Vertex {
-        position: [-0.5, 0.5, -0.5],
-        color: [0.0, 1.0, 0.0],
-    },
-    Vertex {
-        position: [0.5, 0.5, -0.5],
-        color: [0.0, 1.0, 0.0],
-    },
-    // Top face (blue)
-    Vertex {
-        position: [-0.5, 0.5, 0.5],
-        color: [0.0, 0.0, 1.0],
-    },
-    Vertex {
-        position: [0.5, 0.5, 0.5],
-        color: [0.0, 0.0, 1.0],
-    },
-    Vertex {
-        position: [0.5, 0.5, -0.5],
-        color: [0.0, 0.0, 1.0],
-    },
-    Vertex {
-        position: [-0.5, 0.5, -0.5],
-        color: [0.0, 0.0, 1.0],
-    },
-    // Bottom face (yellow)
-    Vertex {
-        position: [-0.5, -0.5, -0.5],
-        color: [1.0, 1.0, 0.0],
-    },
-    Vertex {
-        position: [0.5, -0.5, -0.5],
-        color: [1.0, 1.0, 0.0],
-    },
-    Vertex {
-        position: [0.5, -0.5, 0.5],
-        color: [1.0, 1.0, 0.0],
-    },
-    Vertex {
-        position: [-0.5, -0.5, 0.5],
-        color: [1.0, 1.0, 0.0],
-    },
-    // Right face (cyan)
-    Vertex {
-        position: [0.5, -0.5, 0.5],
-        color: [0.0, 1.0, 1.0],
-    },
-    Vertex {
-        position: [0.5, -0.5, -0.5],
-        color: [0.0, 1.0, 1.0],
-    },
-    Vertex {
-        position: [0.5, 0.5, -0.5],
-        color: [0.0, 1.0, 1.0],
-    },
-    Vertex {
-        position: [0.5, 0.5, 0.5],
-        color: [0.0, 1.0, 1.0],
-    },
-    // Left face (magenta)
-    Vertex {
-        position: [-0.5, -0.5, -0.5],
-        color: [1.0, 0.0, 1.0],
-    },
-    Vertex {
-        position: [-0.5, -0.5, 0.5],
-        color: [1.0, 0.0, 1.0],
-    },
-    Vertex {
-        position: [-0.5, 0.5, 0.5],
-        color: [1.0, 0.0, 1.0],
-    },
-    Vertex {
-        position: [-0.5, 0.5, -0.5],
-        color: [1.0, 0.0, 1.0],
-    },
+    // Front face
+    Vertex { position: [-0.5, -0.5,  0.5], uv: [0.0, 1.0] },
+    Vertex { position: [ 0.5, -0.5,  0.5], uv: [1.0, 1.0] },
+    Vertex { position: [ 0.5,  0.5,  0.5], uv: [1.0, 0.0] },
+    Vertex { position: [-0.5,  0.5,  0.5], uv: [0.0, 0.0] },
+    // Back face
+    Vertex { position: [ 0.5, -0.5, -0.5], uv: [0.0, 1.0] },
+    Vertex { position: [-0.5, -0.5, -0.5], uv: [1.0, 1.0] },
+    Vertex { position: [-0.5,  0.5, -0.5], uv: [1.0, 0.0] },
+    Vertex { position: [ 0.5,  0.5, -0.5], uv: [0.0, 0.0] },
+    // Top face
+    Vertex { position: [-0.5,  0.5,  0.5], uv: [0.0, 1.0] },
+    Vertex { position: [ 0.5,  0.5,  0.5], uv: [1.0, 1.0] },
+    Vertex { position: [ 0.5,  0.5, -0.5], uv: [1.0, 0.0] },
+    Vertex { position: [-0.5,  0.5, -0.5], uv: [0.0, 0.0] },
+    // Bottom face
+    Vertex { position: [-0.5, -0.5, -0.5], uv: [0.0, 1.0] },
+    Vertex { position: [ 0.5, -0.5, -0.5], uv: [1.0, 1.0] },
+    Vertex { position: [ 0.5, -0.5,  0.5], uv: [1.0, 0.0] },
+    Vertex { position: [-0.5, -0.5,  0.5], uv: [0.0, 0.0] },
+    // Right face
+    Vertex { position: [ 0.5, -0.5,  0.5], uv: [0.0, 1.0] },
+    Vertex { position: [ 0.5, -0.5, -0.5], uv: [1.0, 1.0] },
+    Vertex { position: [ 0.5,  0.5, -0.5], uv: [1.0, 0.0] },
+    Vertex { position: [ 0.5,  0.5,  0.5], uv: [0.0, 0.0] },
+    // Left face
+    Vertex { position: [-0.5, -0.5, -0.5], uv: [0.0, 1.0] },
+    Vertex { position: [-0.5, -0.5,  0.5], uv: [1.0, 1.0] },
+    Vertex { position: [-0.5,  0.5,  0.5], uv: [1.0, 0.0] },
+    Vertex { position: [-0.5,  0.5, -0.5], uv: [0.0, 0.0] },
 ];
 
 const CUBE_INDICES: [u16; 36] = [
@@ -287,6 +215,7 @@ pub struct State {
     keys_pressed: std::collections::HashSet<KeyCode>,
     last_frame: std::time::Instant,
     camera: Camera,
+    texture_bind_group: wgpu::BindGroup,
 }
 
 impl State {
@@ -364,10 +293,33 @@ impl State {
             }],
         });
 
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Texture Bind Group Layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[Some(&bind_group_layout)],
+                bind_group_layouts: &[Some(&bind_group_layout), Some(&texture_bind_group_layout)],
                 immediate_size: 0,
             });
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -447,6 +399,66 @@ impl State {
 
         let depth_texture_view = create_depth_texture(&device, config.width, config.height);
 
+        let img = image::open("assets/pikuma.png")
+            .map_err(|e| {
+                tracing::error!("Failed to load texture: {e}");
+                e
+            })?
+            .to_rgba8();
+        tracing::info!("Loaded texture: {}x{}", img.width(), img.height());
+        let (tex_width, tex_height) = img.dimensions();
+
+        let diffuse_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Diffuse Texture"),
+            size: wgpu::Extent3d {
+                width: tex_width,
+                height: tex_height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+
+        queue.write_texture(
+            diffuse_texture.as_image_copy(),
+            &img,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * tex_width),
+                rows_per_image: Some(tex_height),
+            },
+            wgpu::Extent3d {
+                width: tex_width,
+                height: tex_height,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        let diffuse_view = diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+
+        let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Texture Bind Group"),
+            layout: &texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&diffuse_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
+                },
+            ],
+        });
         Ok(Self {
             surface,
             device,
@@ -464,6 +476,7 @@ impl State {
             camera: Camera::new(),
             keys_pressed: std::collections::HashSet::new(),
             last_frame: std::time::Instant::now(),
+            texture_bind_group,
         })
     }
 
@@ -596,6 +609,7 @@ impl State {
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.texture_bind_group, &[]);
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
 
