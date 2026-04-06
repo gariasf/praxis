@@ -276,7 +276,9 @@ impl State {
             }],
         });
 
-        let depth_texture_view = create_depth_texture(&device, config.width, config.height);
+        let depth_width = config.width.max(1);
+        let depth_height = config.height.max(1);
+        let depth_texture_view = create_depth_texture(&device, depth_width, depth_height);
 
         Ok(Self {
             surface,
