@@ -378,9 +378,8 @@ impl State {
                 return Ok(());
             }
             wgpu::CurrentSurfaceTexture::Lost => {
-                // We could recreate the devices and all resources
-                // created with it here, but we'll just bail
-                anyhow::bail!("Lost device");
+                // The surface texture was lost; bail with an accurate error.
+                anyhow::bail!("Surface texture lost");
             }
         };
 
