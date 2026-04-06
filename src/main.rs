@@ -480,34 +480,24 @@ impl State {
         tracing::info!("Loaded texture: {}x{}", img.width(), img.height());
         let (tex_width, tex_height) = img.dimensions();
 
-        let diffuse_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Diffuse Texture"),
-            size: wgpu::Extent3d {
-                width: tex_width,
-                height: tex_height,
-                depth_or_array_layers: 1,
+        let diffuse_texture = device.create_texture_with_data(
+            &queue,
+            &wgpu::TextureDescriptor {
+                label: Some("Diffuse Texture"),
+                size: wgpu::Extent3d {
+                    width: tex_width,
+                    height: tex_height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
             },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-
-        queue.write_texture(
-            diffuse_texture.as_image_copy(),
-            &img,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * tex_width),
-                rows_per_image: Some(tex_height),
-            },
-            wgpu::Extent3d {
-                width: tex_width,
-                height: tex_height,
-                depth_or_array_layers: 1,
-            },
+            wgpu::util::TextureDataOrder::LayerMajor,
+            img.as_raw(),
         );
 
         let diffuse_view = diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
