@@ -90,6 +90,10 @@ impl State {
             desired_maximum_frame_latency: 2,
         };
 
+        let is_surface_configured = size.width > 0 && size.height > 0;
+        if is_surface_configured {
+            surface.configure(&device, &config);
+        }
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
