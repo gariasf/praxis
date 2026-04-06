@@ -1,14 +1,16 @@
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
-    position: [f32; 3],
-    uv: [f32; 2],
+    pub position: [f32; 3],
+    pub normal: [f32; 3],
+    pub uv: [f32; 2],
 }
 
 impl Vertex {
-    const ATTRIBS: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![
+    const ATTRIBS: [wgpu::VertexAttribute; 3] = wgpu::vertex_attr_array![
         0 => Float32x3,
-        1 => Float32x2,
+        1 => Float32x3,
+        2 => Float32x2,
     ];
 
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
@@ -22,113 +24,41 @@ impl Vertex {
 
 pub const CUBE_VERTICES: [Vertex; 24] = [
     // Front face
-    Vertex {
-        position: [-0.5, -0.5, 0.5],
-        uv: [0.0, 1.0],
-    },
-    Vertex {
-        position: [0.5, -0.5, 0.5],
-        uv: [1.0, 1.0],
-    },
-    Vertex {
-        position: [0.5, 0.5, 0.5],
-        uv: [1.0, 0.0],
-    },
-    Vertex {
-        position: [-0.5, 0.5, 0.5],
-        uv: [0.0, 0.0],
-    },
+    Vertex { position: [-0.5, -0.5,  0.5], normal: [0.0, 0.0, 1.0], uv: [0.0, 1.0] },
+    Vertex { position: [ 0.5, -0.5,  0.5], normal: [0.0, 0.0, 1.0], uv: [1.0, 1.0] },
+    Vertex { position: [ 0.5,  0.5,  0.5], normal: [0.0, 0.0, 1.0], uv: [1.0, 0.0] },
+    Vertex { position: [-0.5,  0.5,  0.5], normal: [0.0, 0.0, 1.0], uv: [0.0, 0.0] },
     // Back face
-    Vertex {
-        position: [0.5, -0.5, -0.5],
-        uv: [0.0, 1.0],
-    },
-    Vertex {
-        position: [-0.5, -0.5, -0.5],
-        uv: [1.0, 1.0],
-    },
-    Vertex {
-        position: [-0.5, 0.5, -0.5],
-        uv: [1.0, 0.0],
-    },
-    Vertex {
-        position: [0.5, 0.5, -0.5],
-        uv: [0.0, 0.0],
-    },
+    Vertex { position: [ 0.5, -0.5, -0.5], normal: [0.0, 0.0, -1.0], uv: [0.0, 1.0] },
+    Vertex { position: [-0.5, -0.5, -0.5], normal: [0.0, 0.0, -1.0], uv: [1.0, 1.0] },
+    Vertex { position: [-0.5,  0.5, -0.5], normal: [0.0, 0.0, -1.0], uv: [1.0, 0.0] },
+    Vertex { position: [ 0.5,  0.5, -0.5], normal: [0.0, 0.0, -1.0], uv: [0.0, 0.0] },
     // Top face
-    Vertex {
-        position: [-0.5, 0.5, 0.5],
-        uv: [0.0, 1.0],
-    },
-    Vertex {
-        position: [0.5, 0.5, 0.5],
-        uv: [1.0, 1.0],
-    },
-    Vertex {
-        position: [0.5, 0.5, -0.5],
-        uv: [1.0, 0.0],
-    },
-    Vertex {
-        position: [-0.5, 0.5, -0.5],
-        uv: [0.0, 0.0],
-    },
+    Vertex { position: [-0.5,  0.5,  0.5], normal: [0.0, 1.0, 0.0], uv: [0.0, 1.0] },
+    Vertex { position: [ 0.5,  0.5,  0.5], normal: [0.0, 1.0, 0.0], uv: [1.0, 1.0] },
+    Vertex { position: [ 0.5,  0.5, -0.5], normal: [0.0, 1.0, 0.0], uv: [1.0, 0.0] },
+    Vertex { position: [-0.5,  0.5, -0.5], normal: [0.0, 1.0, 0.0], uv: [0.0, 0.0] },
     // Bottom face
-    Vertex {
-        position: [-0.5, -0.5, -0.5],
-        uv: [0.0, 1.0],
-    },
-    Vertex {
-        position: [0.5, -0.5, -0.5],
-        uv: [1.0, 1.0],
-    },
-    Vertex {
-        position: [0.5, -0.5, 0.5],
-        uv: [1.0, 0.0],
-    },
-    Vertex {
-        position: [-0.5, -0.5, 0.5],
-        uv: [0.0, 0.0],
-    },
+    Vertex { position: [-0.5, -0.5, -0.5], normal: [0.0, -1.0, 0.0], uv: [0.0, 1.0] },
+    Vertex { position: [ 0.5, -0.5, -0.5], normal: [0.0, -1.0, 0.0], uv: [1.0, 1.0] },
+    Vertex { position: [ 0.5, -0.5,  0.5], normal: [0.0, -1.0, 0.0], uv: [1.0, 0.0] },
+    Vertex { position: [-0.5, -0.5,  0.5], normal: [0.0, -1.0, 0.0], uv: [0.0, 0.0] },
     // Right face
-    Vertex {
-        position: [0.5, -0.5, 0.5],
-        uv: [0.0, 1.0],
-    },
-    Vertex {
-        position: [0.5, -0.5, -0.5],
-        uv: [1.0, 1.0],
-    },
-    Vertex {
-        position: [0.5, 0.5, -0.5],
-        uv: [1.0, 0.0],
-    },
-    Vertex {
-        position: [0.5, 0.5, 0.5],
-        uv: [0.0, 0.0],
-    },
+    Vertex { position: [ 0.5, -0.5,  0.5], normal: [1.0, 0.0, 0.0], uv: [0.0, 1.0] },
+    Vertex { position: [ 0.5, -0.5, -0.5], normal: [1.0, 0.0, 0.0], uv: [1.0, 1.0] },
+    Vertex { position: [ 0.5,  0.5, -0.5], normal: [1.0, 0.0, 0.0], uv: [1.0, 0.0] },
+    Vertex { position: [ 0.5,  0.5,  0.5], normal: [1.0, 0.0, 0.0], uv: [0.0, 0.0] },
     // Left face
-    Vertex {
-        position: [-0.5, -0.5, -0.5],
-        uv: [0.0, 1.0],
-    },
-    Vertex {
-        position: [-0.5, -0.5, 0.5],
-        uv: [1.0, 1.0],
-    },
-    Vertex {
-        position: [-0.5, 0.5, 0.5],
-        uv: [1.0, 0.0],
-    },
-    Vertex {
-        position: [-0.5, 0.5, -0.5],
-        uv: [0.0, 0.0],
-    },
+    Vertex { position: [-0.5, -0.5, -0.5], normal: [-1.0, 0.0, 0.0], uv: [0.0, 1.0] },
+    Vertex { position: [-0.5, -0.5,  0.5], normal: [-1.0, 0.0, 0.0], uv: [1.0, 1.0] },
+    Vertex { position: [-0.5,  0.5,  0.5], normal: [-1.0, 0.0, 0.0], uv: [1.0, 0.0] },
+    Vertex { position: [-0.5,  0.5, -0.5], normal: [-1.0, 0.0, 0.0], uv: [0.0, 0.0] },
 ];
 
-pub const CUBE_INDICES: [u16; 36] = [
-    0, 1, 2, 0, 2, 3, // front
-    4, 5, 6, 4, 6, 7, // back
-    8, 9, 10, 8, 10, 11, // top
+pub const CUBE_INDICES: [u32; 36] = [
+    0, 1, 2, 0, 2, 3,       // front
+    4, 5, 6, 4, 6, 7,       // back
+    8, 9, 10, 8, 10, 11,    // top
     12, 13, 14, 12, 14, 15, // bottom
     16, 17, 18, 16, 18, 19, // right
     20, 21, 22, 20, 22, 23, // left
