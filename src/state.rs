@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use tracing_subscriber::layer::Identity;
 use wgpu::{Buffer, util::DeviceExt};
 use winit::{keyboard::KeyCode, window::Window};
 
@@ -34,8 +33,8 @@ pub struct State {
     primitives: Vec<GpuPrimitive>,
     light_buffer: Buffer,
     light_bind_group: wgpu::BindGroup,
-    model_buffer: Buffer,
-    model_bind_group: wgpu::BindGroup,
+    model_buffers: Vec<(Buffer, wgpu::BindGroup)>,
+    transforms: Vec<glam::Mat4>,
 }
 
 impl State {
@@ -232,6 +231,12 @@ impl State {
 
         let model = crate::model::load_model("assets/DamagedHelmet.glb")?;
 
+        let transforms = vec![
+            glam::Mat4::from_translation(glam::vec3(0.0, 0.0, 0.0)),
+            glam::Mat4::from_translation(glam::vec3(2.0, 0.0, 0.0)),
+            glam::Mat4::from_translation(glam::vec3(-2.0, 0.0, 0.0)),
+        ];
+
         let mut primitives = Vec::new();
         for prim in &model.primitives {
             let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -334,20 +339,27 @@ impl State {
             }],
         });
 
-        let model_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Model Buffer"),
-            size: std::mem::size_of::<ModelUniform>() as wgpu::BufferAddress, // Reuse size for simplicity
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Model Bind Group"),
-            layout: &model_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: model_buffer.as_entire_binding(),
-            }],
-        });
+        let model_buffers: Vec<(Buffer, wgpu::BindGroup)> = transforms
+            .iter()
+            .enumerate()
+            .map(|(i, _)| {
+                let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some(&format!("Model Buffer {i}")),
+                    size: std::mem::size_of::<ModelUniform>() as wgpu::BufferAddress,
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                });
+                let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some(&format!("Model Bind Group {i}")),
+                    layout: &model_bind_group_layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: buffer.as_entire_binding(),
+                    }],
+                });
+                (buffer, bind_group)
+            })
+            .collect();
 
         let depth_width = config.width.max(1);
         let depth_height = config.height.max(1);
@@ -370,8 +382,8 @@ impl State {
             primitives,
             light_buffer,
             light_bind_group,
-            model_buffer,
-            model_bind_group,
+            model_buffers,
+            transforms,
         })
     }
 
@@ -418,11 +430,10 @@ impl State {
         }
 
         let aspect = self.config.width as f32 / self.config.height as f32;
-        let model = glam::Mat4::IDENTITY;
         let view = self.camera.view_matrix();
         let proj = glam::Mat4::perspective_rh(45_f32.to_radians(), aspect, 0.1, 100.0);
 
-        let view_proj = proj * view * model;
+        let view_proj = proj * view;
         let camera_uniform = CameraUniform {
             view_proj: view_proj.to_cols_array_2d(),
             camera_pos: [
@@ -439,16 +450,17 @@ impl State {
             ambient: [1.0, 1.0, 1.0, 0.1],
         };
 
-        let model_uniform = ModelUniform {
-            model: model.to_cols_array_2d(),
-            normal_matrix: model.inverse().transpose().to_cols_array_2d(),
-        };
-
-        self.queue.write_buffer(
-            &self.model_buffer,
-            0,
-            bytemuck::cast_slice(&[model_uniform]),
-        );
+        for (i, &transform) in self.transforms.iter().enumerate() {
+            let model_uniform = ModelUniform {
+                model: transform.to_cols_array_2d(),
+                normal_matrix: transform.inverse().transpose().to_cols_array_2d(),
+            };
+            self.queue.write_buffer(
+                &self.model_buffers[i].0,
+                0,
+                bytemuck::cast_slice(&[model_uniform]),
+            );
+        }
 
         self.queue.write_buffer(
             &self.camera_buffer,
@@ -539,14 +551,17 @@ impl State {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_bind_group(2, &self.light_bind_group, &[]);
-            render_pass.set_bind_group(3, &self.model_bind_group, &[]);
 
-            for prim in &self.primitives {
-                render_pass.set_vertex_buffer(0, prim.vertex_buffer.slice(..));
-                render_pass
-                    .set_index_buffer(prim.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.set_bind_group(1, &prim.texture_bind_group, &[]);
-                render_pass.draw_indexed(0..prim.num_indices, 0, 0..1);
+            for (i, _) in self.transforms.iter().enumerate() {
+                render_pass.set_bind_group(3, &self.model_buffers[i].1, &[]);
+
+                for prim in &self.primitives {
+                    render_pass.set_bind_group(1, &prim.texture_bind_group, &[]);
+                    render_pass.set_vertex_buffer(0, prim.vertex_buffer.slice(..));
+                    render_pass
+                        .set_index_buffer(prim.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                    render_pass.draw_indexed(0..prim.num_indices, 0, 0..1);
+                }
             }
         }
 
