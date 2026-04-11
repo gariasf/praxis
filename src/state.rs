@@ -4,6 +4,7 @@ use wgpu::{Buffer, util::DeviceExt};
 use winit::{keyboard::KeyCode, window::Window};
 
 use crate::camera::{Camera, CameraUniform};
+use crate::light::LightUniform;
 use crate::texture::create_depth_texture;
 use crate::vertex::Vertex;
 
@@ -29,6 +30,8 @@ pub struct State {
     last_frame: std::time::Instant,
     pub camera: Camera,
     primitives: Vec<GpuPrimitive>,
+    light_buffer: Buffer,
+    light_bind_group: wgpu::BindGroup,
 }
 
 impl State {
@@ -96,19 +99,20 @@ impl State {
         }
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Camera Bind Group Layout"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
+        let camera_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Camera Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -133,10 +137,29 @@ impl State {
                 ],
             });
 
+        let light_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Light Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[Some(&bind_group_layout), Some(&texture_bind_group_layout)],
+                bind_group_layouts: &[
+                    Some(&camera_bind_group_layout),
+                    Some(&texture_bind_group_layout),
+                    Some(&light_bind_group_layout),
+                ],
                 immediate_size: 0,
             });
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -267,12 +290,28 @@ impl State {
             mapped_at_creation: false,
         });
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Camera Bind Group"),
-            layout: &bind_group_layout,
+            layout: &camera_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: camera_buffer.as_entire_binding(),
+            }],
+        });
+
+        let light_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Light Buffer"),
+            size: std::mem::size_of::<LightUniform>() as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Light Bind Group"),
+            layout: &light_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: light_buffer.as_entire_binding(),
             }],
         });
 
@@ -289,12 +328,14 @@ impl State {
             render_pipeline,
             window,
             camera_buffer,
-            camera_bind_group: bind_group,
+            camera_bind_group,
             depth_texture_view,
             camera: Camera::new(),
             keys_pressed: std::collections::HashSet::new(),
             last_frame: std::time::Instant::now(),
             primitives,
+            light_buffer,
+            light_bind_group,
         })
     }
 
@@ -346,11 +387,33 @@ impl State {
         let proj = glam::Mat4::perspective_rh(45_f32.to_radians(), aspect, 0.1, 100.0);
 
         let view_proj = proj * view * model;
-        let uniform = CameraUniform {
+        let camera_uniform = CameraUniform {
             view_proj: view_proj.to_cols_array_2d(),
+            camera_pos: [
+                self.camera.position.x,
+                self.camera.position.y,
+                self.camera.position.z,
+                0.0,
+            ],
         };
-        self.queue
-            .write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[uniform]));
+
+        let light_uniform = LightUniform {
+            direction: [0.5, -1.0, -0.3, 0.0],
+            color: [1.0, 1.0, 1.0, 1.0],
+            ambient: [1.0, 1.0, 1.0, 0.1],
+        };
+
+        self.queue.write_buffer(
+            &self.camera_buffer,
+            0,
+            bytemuck::cast_slice(&[camera_uniform]),
+        );
+
+        self.queue.write_buffer(
+            &self.light_buffer,
+            0,
+            bytemuck::cast_slice(&[light_uniform]),
+        );
     }
 
     pub fn render(&mut self) -> anyhow::Result<()> {
@@ -428,6 +491,7 @@ impl State {
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            render_pass.set_bind_group(2, &self.light_bind_group, &[]);
 
             for prim in &self.primitives {
                 render_pass.set_vertex_buffer(0, prim.vertex_buffer.slice(..));

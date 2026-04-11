@@ -1,9 +1,20 @@
 @group(0) @binding(0)
 var<uniform> camera: CameraUniform;
-
 struct CameraUniform {
     view_proj: mat4x4<f32>,
+    camera_pos:  vec4<f32>,
 }
+
+@group(2) @binding(0)
+var<uniform> light: LightUniform;
+struct LightUniform {
+    direction: vec4<f32>,
+    color: vec4<f32>,
+    ambient: vec4<f32>,
+}
+
+
+
 
 @group(1) @binding(0)
 var t_diffuse: texture_2d<f32>;
@@ -33,5 +44,11 @@ fn vs_main(
 // Fragment shader
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSample(t_diffuse, s_diffuse, in.uv);
+    let normal = normalize(in.normal);
+    let ambient_color = light.ambient.rgb * light.ambient.a;
+    let light_dir = normalize(-light.direction.xyz);
+    let diffuse_strength = max(dot(normal, light_dir), 0.0);
+    let diffuse_color = light.color.rgb * light.color.a * diffuse_strength;
+    let texture_color = textureSample(t_diffuse, s_diffuse, in.uv);
+    return vec4<f32>((ambient_color + diffuse_color) * texture_color.rgb, texture_color.a);
 }
