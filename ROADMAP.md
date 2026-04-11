@@ -56,43 +56,43 @@ they're actually needed. No empty scaffolding.
 
 ---
 
-## Phase 3 — Textures & Mesh Loading
+## Phase 3 — Textures & Mesh Loading (done)
 
 ### Part A — Texture pipeline
 
 Texture a cube with an image loaded from disk.
 
-- [ ] Add `image` crate for decoding PNG/JPG
-- [ ] Load image bytes and decode to RGBA
-- [ ] Create a wgpu::Texture and write pixel data with queue.write_texture()
-- [ ] Create a TextureView and Sampler
-- [ ] Add a bind group (group 1) with texture view + sampler
-- [ ] Add UV coordinates to the Vertex struct
-- [ ] Update shader: sample texture with textureSample()
+- [x] Add `image` crate for decoding PNG/JPG
+- [x] Load image bytes and decode to RGBA
+- [x] Create a wgpu::Texture and write pixel data with queue.write_texture()
+- [x] Create a TextureView and Sampler
+- [x] Add a bind group (group 1) with texture view + sampler
+- [x] Add UV coordinates to the Vertex struct
+- [x] Update shader: sample texture with textureSample()
 
 ### Part B — glTF mesh loading
 
 Load and render a glTF model with its textures.
 
-- [ ] Add `gltf` crate for parsing .glb/.gltf files
-- [ ] Extract vertex positions, normals, UVs, and indices
-- [ ] Render a loaded mesh with its base color texture
-- [ ] Support multiple meshes in a single file
+- [x] Add `gltf` crate for parsing .glb/.gltf files
+- [x] Extract vertex positions, normals, UVs, and indices
+- [x] Render a loaded mesh with its base color texture
+- [x] Support multiple meshes in a single file
 
 Good test models: glTF sample models repo (Box, DamagedHelmet, Sponza).
 
 ---
 
-## Phase 4 — Basic Lighting (Phong/Blinn-Phong)
+## Phase 4 — Basic Lighting (Blinn-Phong) (done)
 
 A lit scene with at least one light source.
 
-- [ ] Pass surface normals to the fragment shader
-- [ ] Implement directional light in the shader
-- [ ] Add ambient + diffuse + specular components
-- [ ] Support point lights (with attenuation)
-- [ ] Pass light data via uniform buffers
-- [ ] Multiple objects in the scene with different positions
+- [x] Pass surface normals to the fragment shader
+- [x] Implement directional light in the shader
+- [x] Add ambient + diffuse + specular components
+- [x] Support point lights (with attenuation)
+- [x] Pass light data via uniform buffers
+- [x] Multiple objects in the scene with different positions
 
 ---
 

@@ -1,5 +1,12 @@
 use crate::vertex::Vertex;
 
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ModelUniform {
+    pub model: [[f32; 4]; 4],
+    pub normal_matrix: [[f32; 4]; 4],
+}
+
 pub struct LoadedPrimitive {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
