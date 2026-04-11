@@ -13,9 +13,6 @@ struct LightUniform {
     ambient: vec4<f32>,
 }
 
-
-
-
 @group(1) @binding(0)
 var t_diffuse: texture_2d<f32>;
 @group(1) @binding(1)
@@ -26,6 +23,7 @@ struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) uv: vec2<f32>,
     @location(1) normal: vec3<f32>,
+    @location(2) world_pos: vec3<f32>,
 }
 
 @vertex
@@ -38,6 +36,7 @@ fn vs_main(
     out.clip_position = camera.view_proj * vec4<f32>(position, 1.0);
     out.uv = uv;
     out.normal = normal;
+    out.world_pos = position;
     return out;
 }
 
@@ -50,5 +49,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let diffuse_strength = max(dot(normal, light_dir), 0.0);
     let diffuse_color = light.color.rgb * light.color.a * diffuse_strength;
     let texture_color = textureSample(t_diffuse, s_diffuse, in.uv);
-    return vec4<f32>((ambient_color + diffuse_color) * texture_color.rgb, texture_color.a);
+
+    let view_dir = normalize(camera.camera_pos.xyz - in.world_pos);
+    let half_vec = normalize(light_dir + view_dir);
+    let specular = pow(max(dot(normal, half_vec), 0.0), 200.0);
+    return vec4<f32>((ambient_color + diffuse_color + specular) * texture_color.rgb, texture_color.a);
 }
