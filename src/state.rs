@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
+use tracing_subscriber::layer::Identity;
 use wgpu::{Buffer, util::DeviceExt};
 use winit::{keyboard::KeyCode, window::Window};
 
 use crate::camera::{Camera, CameraUniform};
 use crate::light::LightUniform;
+use crate::model::ModelUniform;
 use crate::texture::create_depth_texture;
 use crate::vertex::Vertex;
 
@@ -32,6 +34,8 @@ pub struct State {
     primitives: Vec<GpuPrimitive>,
     light_buffer: Buffer,
     light_bind_group: wgpu::BindGroup,
+    model_buffer: Buffer,
+    model_bind_group: wgpu::BindGroup,
 }
 
 impl State {
@@ -152,6 +156,21 @@ impl State {
                 }],
             });
 
+        let model_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Model Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
@@ -159,9 +178,11 @@ impl State {
                     Some(&camera_bind_group_layout),
                     Some(&texture_bind_group_layout),
                     Some(&light_bind_group_layout),
+                    Some(&model_bind_group_layout),
                 ],
                 immediate_size: 0,
             });
+
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
             layout: Some(&render_pipeline_layout),
@@ -209,7 +230,7 @@ impl State {
             cache: None,
         });
 
-        let model = crate::model::load_model("assets/BoxTextured.gltf")?;
+        let model = crate::model::load_model("assets/DamagedHelmet.glb")?;
 
         let mut primitives = Vec::new();
         for prim in &model.primitives {
@@ -289,7 +310,6 @@ impl State {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-
         let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Camera Bind Group"),
             layout: &camera_bind_group_layout,
@@ -305,13 +325,27 @@ impl State {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-
         let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Light Bind Group"),
             layout: &light_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: light_buffer.as_entire_binding(),
+            }],
+        });
+
+        let model_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Model Buffer"),
+            size: std::mem::size_of::<ModelUniform>() as wgpu::BufferAddress, // Reuse size for simplicity
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Model Bind Group"),
+            layout: &model_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: model_buffer.as_entire_binding(),
             }],
         });
 
@@ -336,6 +370,8 @@ impl State {
             primitives,
             light_buffer,
             light_bind_group,
+            model_buffer,
+            model_bind_group,
         })
     }
 
@@ -402,6 +438,17 @@ impl State {
             color: [1.0, 1.0, 1.0, 1.0],
             ambient: [1.0, 1.0, 1.0, 0.1],
         };
+
+        let model_uniform = ModelUniform {
+            model: model.to_cols_array_2d(),
+            normal_matrix: model.inverse().transpose().to_cols_array_2d(),
+        };
+
+        self.queue.write_buffer(
+            &self.model_buffer,
+            0,
+            bytemuck::cast_slice(&[model_uniform]),
+        );
 
         self.queue.write_buffer(
             &self.camera_buffer,
@@ -492,6 +539,7 @@ impl State {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_bind_group(2, &self.light_bind_group, &[]);
+            render_pass.set_bind_group(3, &self.model_bind_group, &[]);
 
             for prim in &self.primitives {
                 render_pass.set_vertex_buffer(0, prim.vertex_buffer.slice(..));

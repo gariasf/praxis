@@ -5,6 +5,11 @@ struct CameraUniform {
     camera_pos:  vec4<f32>,
 }
 
+@group(1) @binding(0)
+var t_diffuse: texture_2d<f32>;
+@group(1) @binding(1)
+var s_diffuse: sampler;
+
 @group(2) @binding(0)
 var<uniform> light: LightUniform;
 struct LightUniform {
@@ -13,10 +18,12 @@ struct LightUniform {
     ambient: vec4<f32>,
 }
 
-@group(1) @binding(0)
-var t_diffuse: texture_2d<f32>;
-@group(1) @binding(1)
-var s_diffuse: sampler;
+@group(3) @binding(0)
+var<uniform> model: ModelUniform;
+struct ModelUniform {
+    model: mat4x4<f32>,
+    normal_matrix: mat4x4<f32>,
+}
 
 // Vertex shader
 struct VertexOutput {
@@ -33,10 +40,10 @@ fn vs_main(
     @location(2) uv: vec2<f32>,
 ) -> VertexOutput {
     var out: VertexOutput;
-    out.clip_position = camera.view_proj * vec4<f32>(position, 1.0);
+    out.clip_position = camera.view_proj * model.model * vec4<f32>(position, 1.0);
     out.uv = uv;
-    out.normal = normal;
-    out.world_pos = position;
+    out.normal = (model.normal_matrix * vec4<f32>(normal, 0.0)).xyz;
+    out.world_pos = (model.model * vec4<f32>(position, 1.0)).xyz;
     return out;
 }
 
