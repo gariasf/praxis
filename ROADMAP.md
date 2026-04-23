@@ -3,6 +3,11 @@
 Step-by-step plan for building a 3D engine in Rust.
 Each milestone ends with something visible and runnable.
 
+**Target shape:** a big-world, lore-heavy RPG (Skyrim-style). This anchors which
+rendering features are core (streaming, LOD, shadow cascades, scene hierarchy,
+long view distances) vs. polish (HDR10, upscaling, ray tracing). The engine may
+grow to cover persistence, scripting, and AI later; the foundation is rendering.
+
 ## Tech Stack
 
 - **Language:** Rust
@@ -30,6 +35,35 @@ praxis/
 
 Add crates like `praxis_assets`, `praxis_scene`, `praxis_ui` only when
 they're actually needed. No empty scaffolding.
+
+---
+
+## Design Principles
+
+How new systems are built. Distinct from the coding principles at the bottom
+(those are about process: small commits, run-it-see-it, etc.).
+
+1. **Handle-based resources.** Meshes, textures, materials, lights live in
+   central pools and are referenced by `u32` or generational handles. ECS
+   components carry handles, never owned GPU buffers. Lets the renderer batch,
+   instance, or move to bindless later without rewriting components.
+
+2. **Authoring data in components, not GPU byte layout.** `Transform` is
+   `glam::Affine3A`, not `[[f32; 4]; 4]`. The renderer packs GPU bytes on
+   upload. Keeps ECS readable and independent of wgpu specifics.
+
+3. **Renderer pulls, entities don't push.** No `entity.draw()`. The renderer
+   queries the ECS for renderables, sorts and batches, then issues draws.
+   Prerequisite for culling, instancing, and (eventually) GPU-driven rendering.
+
+4. **One uber-shader, features behind flags.** Resist the urge to spawn a new
+   pipeline per effect. Add shader branches, push constants, or uniforms.
+   Fewer PSOs, fewer state changes, less to reason about.
+
+Inspired by modern AAA renderers (Spartan Engine, id Tech). Scoped to what a
+learning engine on wgpu can actually benefit from. Even if bindless and
+GPU-driven draws never happen here, designing around these shapes keeps those
+doors open.
 
 ---
 
@@ -104,6 +138,9 @@ earlier because by now the data that flows through the engine is clear.
 - [ ] Design the core: Entity (ID), Component (data), System (logic)
 - [ ] Implement a sparse set or archetype storage for components
 - [ ] Basic query API: "give me all entities with Transform + Mesh"
+- [ ] Central resource pools: MeshPool, TexturePool, MaterialPool — hand out handles
+- [ ] Components hold handles (MeshHandle, MaterialHandle), not owned GPU resources
+- [ ] Keep component data in authoring form (`glam::Affine3A`, etc.), not GPU bytes
 - [ ] Refactor the renderer to query ECS for renderable entities
 - [ ] Refactor input/camera to be systems
 - [ ] Add/remove entities at runtime
@@ -136,7 +173,21 @@ Parent-child relationships and a proper scene hierarchy.
 
 ---
 
-## Phase 8 — Shadows
+## Phase 8 — Streaming & World Chunks
+
+A big-world RPG can't fit in memory. Load and unload the world as the player
+moves.
+
+- [ ] Divide the world into chunks (fixed-size cells, like Skyrim's exterior cells)
+- [ ] Async load meshes/textures from disk without stalling the render loop
+- [ ] Stream in a radius around the camera, stream out beyond
+- [ ] Smooth transition across chunk boundaries (no pop-in, no frame hitch)
+- [ ] Persistent entity state across load/unload (edits to the world survive)
+- [ ] Debug visualization of loaded/unloaded chunks
+
+---
+
+## Phase 9 — Shadows
 
 Dynamic shadows from at least directional lights.
 
@@ -148,7 +199,19 @@ Dynamic shadows from at least directional lights.
 
 ---
 
-## Phase 9 — Debug UI & In-Game Tools
+## Phase 10 — LOD & Imposters
+
+Big view distances need cheaper versions of far-away geometry.
+
+- [ ] Discrete mesh LODs (glTF supports via extras or separate meshes)
+- [ ] Distance-based LOD selection per renderable
+- [ ] Imposters for distant vegetation / props (billboards with baked lighting)
+- [ ] LOD bias and smooth crossfade to hide pops
+- [ ] Per-chunk LOD (whole chunks degrade at distance, not just individual objects)
+
+---
+
+## Phase 11 — Debug UI & In-Game Tools
 
 An in-game overlay for tweaking and debugging.
 
@@ -161,7 +224,7 @@ An in-game overlay for tweaking and debugging.
 
 ---
 
-## Phase 10 — Deferred Rendering (Optional)
+## Phase 12 — Deferred Rendering (Optional)
 
 Switch from forward to deferred rendering for many lights.
 
