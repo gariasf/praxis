@@ -1,20 +1,18 @@
 use std::sync::Arc;
 
+use bevy_ecs::world::World;
 use wgpu::{Buffer, util::DeviceExt};
 use winit::{keyboard::KeyCode, window::Window};
 
 use crate::camera::{Camera, CameraUniform};
+use crate::components::{MeshRef, Transform};
 use crate::light::LightUniform;
 use crate::model::ModelUniform;
+use crate::resources::{
+    Material, MaterialHandle, MaterialPool, Mesh, MeshPool, Primitive, TexturePool,
+};
 use crate::texture::create_depth_texture;
 use crate::vertex::Vertex;
-
-pub struct GpuPrimitive {
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    num_indices: u32,
-    texture_bind_group: wgpu::BindGroup,
-}
 
 pub struct State {
     surface: wgpu::Surface<'static>,
@@ -30,15 +28,15 @@ pub struct State {
     pub keys_pressed: std::collections::HashSet<KeyCode>,
     last_frame: std::time::Instant,
     pub camera: Camera,
-    primitives: Vec<GpuPrimitive>,
     light_buffer: Buffer,
     light_bind_group: wgpu::BindGroup,
     model_buffers: Vec<(Buffer, wgpu::BindGroup)>,
-    transforms: Vec<glam::Mat4>,
+    world: World,
 }
 
 impl State {
     pub async fn new(window: Arc<Window>) -> anyhow::Result<State> {
+        // Device and queue setup
         let size = window.inner_size();
 
         // The instance is a handle to our GPU
@@ -229,14 +227,12 @@ impl State {
             cache: None,
         });
 
+        let mut world = World::new();
+        world.insert_resource(MeshPool::default());
+        world.insert_resource(MaterialPool::default());
+        world.insert_resource(TexturePool::default());
+
         let model = crate::model::load_model("assets/DamagedHelmet.glb")?;
-
-        let transforms = vec![
-            glam::Mat4::from_translation(glam::vec3(0.0, 0.0, 0.0)),
-            glam::Mat4::from_translation(glam::vec3(2.0, 0.0, 0.0)),
-            glam::Mat4::from_translation(glam::vec3(-2.0, 0.0, 0.0)),
-        ];
-
         let mut primitives = Vec::new();
         for prim in &model.primitives {
             let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -301,13 +297,29 @@ impl State {
                 ],
             });
 
-            primitives.push(GpuPrimitive {
+            primitives.push(Primitive {
                 vertex_buffer,
                 index_buffer,
                 num_indices: prim.indices.len() as u32,
                 texture_bind_group,
+                material: MaterialHandle(0), // Placeholder, as we don't have a material system implemented
             });
         }
+        let mesh = Mesh { primitives };
+        let mesh_handle = world.resource_mut::<MeshPool>().insert(mesh);
+
+        world.spawn((
+            Transform(glam::Affine3A::from_translation(glam::vec3(0.0, 0.0, 0.0))),
+            MeshRef(mesh_handle),
+        ));
+        world.spawn((
+            Transform(glam::Affine3A::from_translation(glam::vec3(2.0, 0.0, 0.0))),
+            MeshRef(mesh_handle),
+        ));
+        world.spawn((
+            Transform(glam::Affine3A::from_translation(glam::vec3(-2.0, 0.0, 0.0))),
+            MeshRef(mesh_handle),
+        ));
 
         let camera_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Camera Buffer"),
@@ -339,8 +351,10 @@ impl State {
             }],
         });
 
-        let model_buffers: Vec<(Buffer, wgpu::BindGroup)> = transforms
-            .iter()
+        let mut renderable_query = world.query::<(&Transform, &MeshRef)>();
+
+        let model_buffers: Vec<(Buffer, wgpu::BindGroup)> = renderable_query
+            .iter(&world)
             .enumerate()
             .map(|(i, _)| {
                 let buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -379,11 +393,10 @@ impl State {
             camera: Camera::new(),
             keys_pressed: std::collections::HashSet::new(),
             last_frame: std::time::Instant::now(),
-            primitives,
             light_buffer,
             light_bind_group,
             model_buffers,
-            transforms,
+            world,
         })
     }
 
@@ -463,15 +476,21 @@ impl State {
             num_point_lights: [4.0, 0.0, 0.0, 0.0],
         };
 
-        for (i, &transform) in self.transforms.iter().enumerate() {
-            let model_uniform = ModelUniform {
-                model: transform.to_cols_array_2d(),
-                normal_matrix: transform.inverse().transpose().to_cols_array_2d(),
+        let mut renderable_query = self.world.query::<(&Transform, &MeshRef)>();
+
+        for (entity_index, (transform, _mesh_ref)) in renderable_query.iter(&self.world).enumerate()
+        {
+            let model = ModelUniform {
+                model: glam::Mat4::from(transform.0).to_cols_array_2d(),
+                normal_matrix: glam::Mat4::from(transform.0)
+                    .inverse()
+                    .transpose()
+                    .to_cols_array_2d(),
             };
             self.queue.write_buffer(
-                &self.model_buffers[i].0,
+                &self.model_buffers[entity_index].0,
                 0,
-                bytemuck::cast_slice(&[model_uniform]),
+                bytemuck::cast_slice(&[model]),
             );
         }
 
@@ -565,15 +584,24 @@ impl State {
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_bind_group(2, &self.light_bind_group, &[]);
 
-            for (i, _) in self.transforms.iter().enumerate() {
-                render_pass.set_bind_group(3, &self.model_buffers[i].1, &[]);
+            let mut renderable_query = self.world.query::<(&Transform, &MeshRef)>();
+            let mesh_pool = self.world.resource::<MeshPool>();
 
-                for prim in &self.primitives {
-                    render_pass.set_bind_group(1, &prim.texture_bind_group, &[]);
-                    render_pass.set_vertex_buffer(0, prim.vertex_buffer.slice(..));
-                    render_pass
-                        .set_index_buffer(prim.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                    render_pass.draw_indexed(0..prim.num_indices, 0, 0..1);
+            for (entity_index, (_transform, mesh_ref)) in
+                renderable_query.iter(&self.world).enumerate()
+            {
+                render_pass.set_bind_group(3, &self.model_buffers[entity_index].1, &[]);
+
+                let mesh = mesh_pool.get(mesh_ref.0);
+
+                for primitive in &mesh.primitives {
+                    render_pass.set_bind_group(1, &primitive.texture_bind_group, &[]);
+                    render_pass.set_vertex_buffer(0, primitive.vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(
+                        primitive.index_buffer.slice(..),
+                        wgpu::IndexFormat::Uint32,
+                    );
+                    render_pass.draw_indexed(0..primitive.num_indices, 0, 0..1);
                 }
             }
         }

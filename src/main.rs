@@ -11,8 +11,10 @@ use winit::{
 use crate::state::State;
 
 mod camera;
+mod components;
 mod light;
 mod model;
+mod resources;
 mod state;
 mod texture;
 mod vertex;
