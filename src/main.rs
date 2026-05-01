@@ -8,10 +8,11 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use crate::state::State;
+use crate::{input::Input, state::State};
 
 mod camera;
 mod components;
+mod input;
 mod instance;
 mod light;
 mod model;
@@ -65,9 +66,9 @@ impl ApplicationHandler for App {
                 ..
             } => {
                 if key_state.is_pressed() {
-                    state.keys_pressed.insert(code);
+                    state.world.resource_mut::<Input>().pressed.insert(code);
                 } else {
-                    state.keys_pressed.remove(&code);
+                    state.world.resource_mut::<Input>().pressed.remove(&code);
                 }
                 if code == KeyCode::Escape && key_state.is_pressed() {
                     event_loop.exit();

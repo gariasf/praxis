@@ -6,6 +6,7 @@ use winit::{keyboard::KeyCode, window::Window};
 
 use crate::camera::{Camera, CameraUniform};
 use crate::components::{MeshRef, Transform};
+use crate::input::Input;
 use crate::instance::{INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData};
 use crate::light::LightUniform;
 use crate::resources::{MaterialHandle, MaterialPool, Mesh, MeshPool, Primitive, TexturePool};
@@ -23,12 +24,12 @@ pub struct State {
     camera_buffer: Buffer,
     camera_bind_group: wgpu::BindGroup,
     depth_texture_view: wgpu::TextureView,
-    pub keys_pressed: std::collections::HashSet<KeyCode>,
     last_frame: std::time::Instant,
     pub camera: Camera,
     light_buffer: Buffer,
     light_bind_group: wgpu::BindGroup,
-    world: World,
+    // World is an internal detail, it should not be public. But this will do for now.
+    pub world: World,
     instance_buffer: wgpu::Buffer,
     instance_bind_group: wgpu::BindGroup,
     instance_capacity: u64,
@@ -231,6 +232,7 @@ impl State {
         world.insert_resource(MeshPool::default());
         world.insert_resource(MaterialPool::default());
         world.insert_resource(TexturePool::default());
+        world.insert_resource(Input::default());
 
         let model = crate::model::load_model("assets/DamagedHelmet.glb")?;
         let mut primitives = Vec::new();
@@ -385,7 +387,6 @@ impl State {
             camera_bind_group,
             depth_texture_view,
             camera: Camera::new(),
-            keys_pressed: std::collections::HashSet::new(),
             last_frame: std::time::Instant::now(),
             light_buffer,
             light_bind_group,
@@ -419,22 +420,24 @@ impl State {
         let right = self.camera.right();
         let speed = self.camera.speed * dt;
 
-        if self.keys_pressed.contains(&KeyCode::KeyW) {
+        let input = self.world.resource::<Input>();
+
+        if input.pressed.contains(&KeyCode::KeyW) {
             self.camera.position += forward * speed;
         }
-        if self.keys_pressed.contains(&KeyCode::KeyS) {
+        if input.pressed.contains(&KeyCode::KeyS) {
             self.camera.position -= forward * speed;
         }
-        if self.keys_pressed.contains(&KeyCode::KeyD) {
+        if input.pressed.contains(&KeyCode::KeyD) {
             self.camera.position += right * speed;
         }
-        if self.keys_pressed.contains(&KeyCode::KeyA) {
+        if input.pressed.contains(&KeyCode::KeyA) {
             self.camera.position -= right * speed;
         }
-        if self.keys_pressed.contains(&KeyCode::Space) {
+        if input.pressed.contains(&KeyCode::Space) {
             self.camera.position.y += speed;
         }
-        if self.keys_pressed.contains(&KeyCode::ShiftLeft) {
+        if input.pressed.contains(&KeyCode::ShiftLeft) {
             self.camera.position.y -= speed;
         }
 

@@ -298,7 +298,7 @@ Where to look:
   initialized in `State::new`. Resources inserted right after via
   `world.insert_resource(MeshPool::default())`.
 
-- [ ] <!-- TODO -->
+- [x] Done
 
 Checkpoint: `cargo build` passes. `World::new()` runs and resources
 register without panicking.
@@ -339,7 +339,7 @@ Where to look:
 - `src/state.rs:36` (`model_buffers`) — **also stays** this step:
   still one buffer per renderable. Deleted in Step 3.
 
-- [ ] <!-- TODO -->
+- [x] Done
 
 Checkpoint: **three helmets still on screen, unchanged**. `State` no
 longer owns `Vec<Transform>` or hardcoded primitive lists. Milestone
@@ -420,7 +420,7 @@ Where to look:
   uniform `Model` struct goes away. Match WGSL `InstanceData` layout
   to the Rust side (16-byte alignment; column-major matrices).
 
-- [ ] <!-- TODO -->
+- [x] Done
 
 Checkpoint: same 3 helmets, but `State` no longer owns `transforms` or
 any per-entity buffers. One instance buffer, one `queue.write_buffer`
