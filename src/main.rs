@@ -21,7 +21,7 @@ mod systems;
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes =
-            Window::default_attributes().with_inner_size(winit::dpi::PhysicalSize::new(1280, 720));
+            Window::default_attributes().with_inner_size(winit::dpi::PhysicalSize::new(2560, 1440));
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
         window
