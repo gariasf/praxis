@@ -4,14 +4,13 @@ use bevy_ecs::world::World;
 use wgpu::{Buffer, util::DeviceExt};
 use winit::{keyboard::KeyCode, window::Window};
 
-use crate::camera::{Camera, CameraUniform};
+use crate::assets::{MaterialHandle, Mesh, Primitive};
 use crate::components::{MeshRef, Transform};
-use crate::input::Input;
-use crate::instance::{INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData};
-use crate::light::LightUniform;
-use crate::resources::{MaterialHandle, MaterialPool, Mesh, MeshPool, Primitive, TexturePool};
-use crate::texture::create_depth_texture;
-use crate::vertex::Vertex;
+use crate::render::{
+    CameraUniform, INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData, LightUniform, Vertex,
+    create_depth_texture,
+};
+use crate::resources::{Camera, Input, MaterialPool, MeshPool, TexturePool};
 
 pub struct State {
     surface: wgpu::Surface<'static>,
@@ -234,7 +233,7 @@ impl State {
         world.insert_resource(TexturePool::default());
         world.insert_resource(Input::default());
 
-        let model = crate::model::load_model("assets/DamagedHelmet.glb")?;
+        let model = crate::assets::load_model("assets/DamagedHelmet.glb")?;
         let mut primitives = Vec::new();
         for prim in &model.primitives {
             let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

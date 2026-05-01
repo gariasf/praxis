@@ -1,4 +1,4 @@
-use crate::vertex::Vertex;
+use crate::render::Vertex;
 
 pub struct LoadedPrimitive {
     pub vertices: Vec<Vertex>,

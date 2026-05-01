@@ -1,11 +1,3 @@
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct CameraUniform {
-    pub view_proj: [[f32; 4]; 4],
-    pub camera_pos: [f32; 4], // w unused
-}
-
-// Camera
 pub struct Camera {
     pub position: glam::Vec3,
     pub yaw: f32,   // radians, left-right
@@ -14,6 +6,7 @@ pub struct Camera {
     pub sensitivity: f32,
 }
 
+// TODO: We'll probably move this to some system?
 impl Camera {
     pub fn new() -> Self {
         Self {

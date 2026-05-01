@@ -1,6 +1,6 @@
 use crate::{
     components::{MeshRef, Transform},
-    instance::InstanceData,
+    render::instance::InstanceData,
 };
 use bevy_ecs::world::World;
 

@@ -1,5 +1,6 @@
-use crate::resources::MeshHandle;
 use bevy_ecs::prelude::*;
+
+use crate::assets::MeshHandle;
 
 #[derive(Component)]
 pub struct Transform(pub glam::Affine3A);
