@@ -10,7 +10,7 @@ use crate::render::{
     CameraUniform, INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData, LightUniform, Vertex,
     create_depth_texture,
 };
-use crate::resources::{Camera, Input, MaterialPool, MeshPool, TexturePool};
+use crate::resources::{Camera, Input, MaterialPool, MeshPool, TexturePool, Time};
 
 pub struct State {
     surface: wgpu::Surface<'static>,
@@ -23,7 +23,6 @@ pub struct State {
     camera_buffer: Buffer,
     camera_bind_group: wgpu::BindGroup,
     depth_texture_view: wgpu::TextureView,
-    last_frame: std::time::Instant,
     pub camera: Camera,
     light_buffer: Buffer,
     light_bind_group: wgpu::BindGroup,
@@ -232,6 +231,7 @@ impl State {
         world.insert_resource(MaterialPool::default());
         world.insert_resource(TexturePool::default());
         world.insert_resource(Input::default());
+        world.insert_resource(Time::new());
 
         let model = crate::assets::load_model("assets/DamagedHelmet.glb")?;
         let mut primitives = Vec::new();
@@ -386,7 +386,6 @@ impl State {
             camera_bind_group,
             depth_texture_view,
             camera: Camera::new(),
-            last_frame: std::time::Instant::now(),
             light_buffer,
             light_bind_group,
             world,
@@ -411,13 +410,12 @@ impl State {
             return;
         }
 
-        let now = std::time::Instant::now();
-        let dt = (now - self.last_frame).as_secs_f32();
-        self.last_frame = now;
+        self.world.resource_mut::<Time>().tick();
+        let delta_time = self.world.resource::<Time>().delta_time;
 
         let forward = self.camera.forward();
         let right = self.camera.right();
-        let speed = self.camera.speed * dt;
+        let speed = self.camera.speed * delta_time;
 
         let input = self.world.resource::<Input>();
 
