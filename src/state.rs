@@ -23,7 +23,6 @@ pub struct State {
     camera_buffer: Buffer,
     camera_bind_group: wgpu::BindGroup,
     depth_texture_view: wgpu::TextureView,
-    pub camera: Camera,
     light_buffer: Buffer,
     light_bind_group: wgpu::BindGroup,
     // World is an internal detail, it should not be public. But this will do for now.
@@ -232,6 +231,7 @@ impl State {
         world.insert_resource(TexturePool::default());
         world.insert_resource(Input::default());
         world.insert_resource(Time::new());
+        world.insert_resource(Camera::new());
 
         let model = crate::assets::load_model("assets/DamagedHelmet.glb")?;
         let mut primitives = Vec::new();
@@ -385,7 +385,6 @@ impl State {
             camera_buffer,
             camera_bind_group,
             depth_texture_view,
-            camera: Camera::new(),
             light_buffer,
             light_bind_group,
             world,
@@ -413,44 +412,55 @@ impl State {
         self.world.resource_mut::<Time>().tick();
         let delta_time = self.world.resource::<Time>().delta_time;
 
-        let forward = self.camera.forward();
-        let right = self.camera.right();
-        let speed = self.camera.speed * delta_time;
+        let (w, s, d, a, space, shift) = {
+            let pressed = &self.world.resource::<Input>().pressed;
+            (
+                pressed.contains(&KeyCode::KeyW),
+                pressed.contains(&KeyCode::KeyS),
+                pressed.contains(&KeyCode::KeyD),
+                pressed.contains(&KeyCode::KeyA),
+                pressed.contains(&KeyCode::Space),
+                pressed.contains(&KeyCode::ShiftLeft),
+            )
+        };
 
-        let input = self.world.resource::<Input>();
+        {
+            let mut camera = self.world.resource_mut::<Camera>();
 
-        if input.pressed.contains(&KeyCode::KeyW) {
-            self.camera.position += forward * speed;
+            let forward_dir = camera.forward();
+            let right_dir = camera.right();
+            let speed = camera.speed * delta_time;
+
+            if w {
+                camera.position += forward_dir * speed;
+            }
+            if s {
+                camera.position -= forward_dir * speed;
+            }
+            if d {
+                camera.position += right_dir * speed;
+            }
+            if a {
+                camera.position -= right_dir * speed;
+            }
+            if space {
+                camera.position.y += speed;
+            }
+            if shift {
+                camera.position.y -= speed;
+            }
         }
-        if input.pressed.contains(&KeyCode::KeyS) {
-            self.camera.position -= forward * speed;
-        }
-        if input.pressed.contains(&KeyCode::KeyD) {
-            self.camera.position += right * speed;
-        }
-        if input.pressed.contains(&KeyCode::KeyA) {
-            self.camera.position -= right * speed;
-        }
-        if input.pressed.contains(&KeyCode::Space) {
-            self.camera.position.y += speed;
-        }
-        if input.pressed.contains(&KeyCode::ShiftLeft) {
-            self.camera.position.y -= speed;
-        }
+
+        let camera = self.world.resource::<Camera>();
 
         let aspect = self.config.width as f32 / self.config.height as f32;
-        let view = self.camera.view_matrix();
+        let view = camera.view_matrix();
         let proj = glam::Mat4::perspective_rh(45_f32.to_radians(), aspect, 0.1, 100.0);
 
         let view_proj = proj * view;
         let camera_uniform = CameraUniform {
             view_proj: view_proj.to_cols_array_2d(),
-            camera_pos: [
-                self.camera.position.x,
-                self.camera.position.y,
-                self.camera.position.z,
-                0.0,
-            ],
+            camera_pos: [camera.position.x, camera.position.y, camera.position.z, 0.0],
         };
 
         let light_uniform = LightUniform {

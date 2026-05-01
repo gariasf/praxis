@@ -1,3 +1,6 @@
+use bevy_ecs::resource::Resource;
+
+#[derive(Resource)]
 pub struct Camera {
     pub position: glam::Vec3,
     pub yaw: f32,   // radians, left-right
@@ -6,7 +9,6 @@ pub struct Camera {
     pub sensitivity: f32,
 }
 
-// TODO: We'll probably move this to some system?
 impl Camera {
     pub fn new() -> Self {
         Self {

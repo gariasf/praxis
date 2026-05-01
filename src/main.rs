@@ -8,7 +8,7 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use crate::resources::Input;
+use crate::resources::{Camera, Input};
 use crate::state::State;
 
 mod assets;
@@ -83,9 +83,10 @@ impl ApplicationHandler for App {
         if let Some(state) = &mut self.state
             && let winit::event::DeviceEvent::MouseMotion { delta } = event
         {
-            state.camera.yaw += delta.0 as f32 * state.camera.sensitivity;
-            state.camera.pitch -= delta.1 as f32 * state.camera.sensitivity;
-            state.camera.pitch = state.camera.pitch.clamp(-1.5, 1.5); // ~86 degrees
+            let mut camera = state.world.resource_mut::<Camera>();
+            camera.yaw += delta.0 as f32 * camera.sensitivity;
+            camera.pitch -= delta.1 as f32 * camera.sensitivity;
+            camera.pitch = camera.pitch.clamp(-1.5, 1.5); // ~86 degrees
         }
     }
 }
