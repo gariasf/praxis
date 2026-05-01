@@ -6,11 +6,9 @@ use winit::{keyboard::KeyCode, window::Window};
 
 use crate::camera::{Camera, CameraUniform};
 use crate::components::{MeshRef, Transform};
+use crate::instance::{INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData};
 use crate::light::LightUniform;
-use crate::model::ModelUniform;
-use crate::resources::{
-    Material, MaterialHandle, MaterialPool, Mesh, MeshPool, Primitive, TexturePool,
-};
+use crate::resources::{MaterialHandle, MaterialPool, Mesh, MeshPool, Primitive, TexturePool};
 use crate::texture::create_depth_texture;
 use crate::vertex::Vertex;
 
@@ -30,8 +28,10 @@ pub struct State {
     pub camera: Camera,
     light_buffer: Buffer,
     light_bind_group: wgpu::BindGroup,
-    model_buffers: Vec<(Buffer, wgpu::BindGroup)>,
     world: World,
+    instance_buffer: wgpu::Buffer,
+    instance_bind_group: wgpu::BindGroup,
+    instance_capacity: u64,
 }
 
 impl State {
@@ -153,14 +153,14 @@ impl State {
                 }],
             });
 
-        let model_bind_group_layout =
+        let storage_buffer_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Model Bind Group Layout"),
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
@@ -175,7 +175,7 @@ impl State {
                     Some(&camera_bind_group_layout),
                     Some(&texture_bind_group_layout),
                     Some(&light_bind_group_layout),
-                    Some(&model_bind_group_layout),
+                    Some(&storage_buffer_layout),
                 ],
                 immediate_size: 0,
             });
@@ -351,29 +351,23 @@ impl State {
             }],
         });
 
-        let mut renderable_query = world.query::<(&Transform, &MeshRef)>();
+        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Instance Buffer"),
+            size: INSTANCE_BUFFER_INITIAL_CAPACITY * std::mem::size_of::<InstanceData>() as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
 
-        let model_buffers: Vec<(Buffer, wgpu::BindGroup)> = renderable_query
-            .iter(&world)
-            .enumerate()
-            .map(|(i, _)| {
-                let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some(&format!("Model Buffer {i}")),
-                    size: std::mem::size_of::<ModelUniform>() as wgpu::BufferAddress,
-                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                });
-                let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some(&format!("Model Bind Group {i}")),
-                    layout: &model_bind_group_layout,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: buffer.as_entire_binding(),
-                    }],
-                });
-                (buffer, bind_group)
-            })
-            .collect();
+        let instance_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Instance Bind Group"),
+            layout: &storage_buffer_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: instance_buffer.as_entire_binding(),
+            }],
+        });
+
+        let instance_capacity = INSTANCE_BUFFER_INITIAL_CAPACITY;
 
         let depth_width = config.width.max(1);
         let depth_height = config.height.max(1);
@@ -395,8 +389,10 @@ impl State {
             last_frame: std::time::Instant::now(),
             light_buffer,
             light_bind_group,
-            model_buffers,
             world,
+            instance_buffer,
+            instance_bind_group,
+            instance_capacity,
         })
     }
 
@@ -476,23 +472,11 @@ impl State {
             num_point_lights: [4.0, 0.0, 0.0, 0.0],
         };
 
-        let mut renderable_query = self.world.query::<(&Transform, &MeshRef)>();
-
-        for (entity_index, (transform, _mesh_ref)) in renderable_query.iter(&self.world).enumerate()
-        {
-            let model = ModelUniform {
-                model: glam::Mat4::from(transform.0).to_cols_array_2d(),
-                normal_matrix: glam::Mat4::from(transform.0)
-                    .inverse()
-                    .transpose()
-                    .to_cols_array_2d(),
-            };
-            self.queue.write_buffer(
-                &self.model_buffers[entity_index].0,
-                0,
-                bytemuck::cast_slice(&[model]),
-            );
-        }
+        crate::systems::prepare::prepare_renderables(
+            &mut self.world,
+            &self.queue,
+            &self.instance_buffer,
+        );
 
         self.queue.write_buffer(
             &self.camera_buffer,
@@ -583,6 +567,7 @@ impl State {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_bind_group(2, &self.light_bind_group, &[]);
+            render_pass.set_bind_group(3, &self.instance_bind_group, &[]);
 
             let mut renderable_query = self.world.query::<(&Transform, &MeshRef)>();
             let mesh_pool = self.world.resource::<MeshPool>();
@@ -590,8 +575,6 @@ impl State {
             for (entity_index, (_transform, mesh_ref)) in
                 renderable_query.iter(&self.world).enumerate()
             {
-                render_pass.set_bind_group(3, &self.model_buffers[entity_index].1, &[]);
-
                 let mesh = mesh_pool.get(mesh_ref.0);
 
                 for primitive in &mesh.primitives {
@@ -601,7 +584,12 @@ impl State {
                         primitive.index_buffer.slice(..),
                         wgpu::IndexFormat::Uint32,
                     );
-                    render_pass.draw_indexed(0..primitive.num_indices, 0, 0..1);
+                    let instance_idx = entity_index as u32;
+                    render_pass.draw_indexed(
+                        0..primitive.num_indices,
+                        0,
+                        instance_idx..instance_idx + 1,
+                    );
                 }
             }
         }

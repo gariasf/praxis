@@ -12,10 +12,12 @@ use crate::state::State;
 
 mod camera;
 mod components;
+mod instance;
 mod light;
 mod model;
 mod resources;
 mod state;
+mod systems;
 mod texture;
 mod vertex;
 

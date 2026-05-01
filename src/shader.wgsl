@@ -23,31 +23,37 @@ struct LightUniform {
     num_point_lights: vec4<f32>,
 }
 
-@group(3) @binding(0)
-var<uniform> model: ModelUniform;
-struct ModelUniform {
+struct InstanceData {
     model: mat4x4<f32>,
     normal_matrix: mat4x4<f32>,
 }
 
+@group(3) @binding(0)
+var<storage, read> instances: array<InstanceData>;
+
+struct VertexInput {
+    @location(0) position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) uv: vec2<f32>,
+}
+
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
+    @location(0) world_pos: vec3<f32>,
     @location(1) normal: vec3<f32>,
-    @location(2) world_pos: vec3<f32>,
+    @location(2) uv: vec2<f32>
 }
 
 @vertex
 fn vs_main(
-    @location(0) position: vec3<f32>,
-    @location(1) normal: vec3<f32>,
-    @location(2) uv: vec2<f32>,
+in: VertexInput, @builtin(instance_index) instance_idx: u32
 ) -> VertexOutput {
     var out: VertexOutput;
-    out.clip_position = camera.view_proj * model.model * vec4<f32>(position, 1.0);
-    out.uv = uv;
-    out.normal = (model.normal_matrix * vec4<f32>(normal, 0.0)).xyz;
-    out.world_pos = (model.model * vec4<f32>(position, 1.0)).xyz;
+    let instance = instances[instance_idx];
+    out.clip_position = camera.view_proj * instance.model * vec4<f32>(in.position, 1.0);
+    out.uv = in.uv;
+    out.normal = (instance.normal_matrix * vec4<f32>(in.normal, 0.0)).xyz;
+    out.world_pos = (instance.model * vec4<f32>(in.position, 1.0)).xyz;
     return out;
 }
 
