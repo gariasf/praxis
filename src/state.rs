@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
+use bevy_ecs::system::RunSystemOnce;
 use bevy_ecs::world::World;
 use wgpu::{Buffer, util::DeviceExt};
-use winit::{keyboard::KeyCode, window::Window};
+use winit::window::Window;
 
 use crate::assets::{MaterialHandle, Mesh, Primitive};
 use crate::components::{MeshRef, Transform};
@@ -11,6 +12,7 @@ use crate::render::{
     create_depth_texture,
 };
 use crate::resources::{Camera, Input, MaterialPool, MeshPool, TexturePool, Time};
+use crate::systems::camera_system;
 
 pub struct State {
     surface: wgpu::Surface<'static>,
@@ -410,46 +412,10 @@ impl State {
         }
 
         self.world.resource_mut::<Time>().tick();
-        let delta_time = self.world.resource::<Time>().delta_time;
 
-        let (w, s, d, a, space, shift) = {
-            let pressed = &self.world.resource::<Input>().pressed;
-            (
-                pressed.contains(&KeyCode::KeyW),
-                pressed.contains(&KeyCode::KeyS),
-                pressed.contains(&KeyCode::KeyD),
-                pressed.contains(&KeyCode::KeyA),
-                pressed.contains(&KeyCode::Space),
-                pressed.contains(&KeyCode::ShiftLeft),
-            )
-        };
-
-        {
-            let mut camera = self.world.resource_mut::<Camera>();
-
-            let forward_dir = camera.forward();
-            let right_dir = camera.right();
-            let speed = camera.speed * delta_time;
-
-            if w {
-                camera.position += forward_dir * speed;
-            }
-            if s {
-                camera.position -= forward_dir * speed;
-            }
-            if d {
-                camera.position += right_dir * speed;
-            }
-            if a {
-                camera.position -= right_dir * speed;
-            }
-            if space {
-                camera.position.y += speed;
-            }
-            if shift {
-                camera.position.y -= speed;
-            }
-        }
+        self.world
+            .run_system_once(camera_system)
+            .expect("camera_system failed");
 
         let camera = self.world.resource::<Camera>();
 
