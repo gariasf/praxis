@@ -8,15 +8,18 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use crate::resources::{Camera, Input};
+use crate::camera::Camera;
+use crate::input::Input;
 use crate::state::State;
 
 mod assets;
+mod camera;
 mod components;
+mod helmet;
+mod input;
 mod render;
-mod resources;
 mod state;
-mod systems;
+mod time;
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {

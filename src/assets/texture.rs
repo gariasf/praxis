@@ -1,7 +1,4 @@
 pub struct Texture {
     pub view: wgpu::TextureView,
-    pub texture: wgpu::Texture,
+    pub gpu_handle: wgpu::Texture,
 }
-
-#[derive(Copy, Clone, Eq, PartialEq)]
-pub struct TextureHandle(pub u32);

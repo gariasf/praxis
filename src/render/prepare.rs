@@ -1,12 +1,10 @@
-use crate::{
-    components::{MeshRef, Transform},
-    render::instance::InstanceData,
-};
-use bevy_ecs::world::World;
+use bevy_ecs::prelude::*;
+
+use crate::components::{MeshRef, Transform};
+use crate::render::InstanceData;
 
 pub fn prepare_renderables(world: &mut World) -> Vec<InstanceData> {
     let mut renderable_query = world.query::<(&Transform, &MeshRef)>();
-
     renderable_query
         .iter(world)
         .map(|(transform, _mesh_ref)| {

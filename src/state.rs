@@ -1,20 +1,19 @@
 use std::sync::Arc;
 
-use bevy_ecs::schedule::{IntoScheduleConfigs, Schedule};
-use bevy_ecs::world::World;
-use wgpu::{Buffer, util::DeviceExt};
+use bevy_ecs::prelude::*;
+use wgpu::util::DeviceExt;
 use winit::window::Window;
 
-use crate::assets::{MaterialHandle, Mesh, Primitive};
+use crate::assets::{MaterialHandle, MaterialPool, Mesh, MeshPool, Primitive, TexturePool};
+use crate::camera::{Camera, fly_camera};
 use crate::components::{MeshRef, Transform};
+use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
+use crate::input::{Input, clear_just_pressed};
 use crate::render::{
     CameraUniform, INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData, LightUniform, Vertex,
-    create_depth_texture,
+    create_depth_texture, prepare_renderables,
 };
-use crate::resources::{
-    Camera, HelmetHandles, Input, MaterialPool, MeshPool, RuntimeHelmets, TexturePool, Time,
-};
-use crate::systems::{clear_just_pressed, despawn_helmet, fly_camera, spawn_helmet, tick_time};
+use crate::time::{Time, tick_time};
 
 pub struct State {
     surface: wgpu::Surface<'static>,
@@ -24,10 +23,10 @@ pub struct State {
     is_surface_configured: bool,
     window: Arc<Window>,
     render_pipeline: wgpu::RenderPipeline,
-    camera_buffer: Buffer,
+    camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     depth_texture_view: wgpu::TextureView,
-    light_buffer: Buffer,
+    light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
     // World is an internal detail, it should not be public. But this will do for now.
     pub world: World,
@@ -35,7 +34,7 @@ pub struct State {
     instance_bind_group: wgpu::BindGroup,
     instance_capacity: u64,
     schedule: Schedule,
-    storage_buffer_layout: wgpu::BindGroupLayout,
+    instance_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl State {
@@ -157,9 +156,9 @@ impl State {
                 }],
             });
 
-        let storage_buffer_layout =
+        let instance_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Model Bind Group Layout"),
+                label: Some("Instance Bind Group Layout"),
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
@@ -179,7 +178,7 @@ impl State {
                     Some(&camera_bind_group_layout),
                     Some(&texture_bind_group_layout),
                     Some(&light_bind_group_layout),
-                    Some(&storage_buffer_layout),
+                    Some(&instance_bind_group_layout),
                 ],
                 immediate_size: 0,
             });
@@ -328,7 +327,7 @@ impl State {
         }
         let mesh = Mesh { primitives };
         let mesh_handle = world.resource_mut::<MeshPool>().insert(mesh);
-        world.insert_resource(HelmetHandles { mesh: mesh_handle });
+        world.insert_resource(HelmetAssets { mesh: mesh_handle });
 
         world.spawn((
             Transform(glam::Affine3A::from_translation(glam::vec3(0.0, 0.0, 0.0))),
@@ -382,7 +381,7 @@ impl State {
 
         let instance_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Instance Bind Group"),
-            layout: &storage_buffer_layout,
+            layout: &instance_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: instance_buffer.as_entire_binding(),
@@ -413,7 +412,7 @@ impl State {
             instance_bind_group,
             instance_capacity,
             schedule,
-            storage_buffer_layout,
+            instance_bind_group_layout,
         })
     }
 
@@ -443,7 +442,7 @@ impl State {
         let view_proj = proj * view;
         let camera_uniform = CameraUniform {
             view_proj: view_proj.to_cols_array_2d(),
-            camera_pos: [camera.position.x, camera.position.y, camera.position.z, 0.0],
+            position: [camera.position.x, camera.position.y, camera.position.z, 0.0],
         };
 
         let light_uniform = LightUniform {
@@ -465,7 +464,7 @@ impl State {
             num_point_lights: [4.0, 0.0, 0.0, 0.0],
         };
 
-        let instance_data = crate::systems::prepare::prepare_renderables(&mut self.world);
+        let instance_data = prepare_renderables(&mut self.world);
         self.ensure_instance_capacity(instance_data.len() as u64);
         self.queue.write_buffer(
             &self.instance_buffer,
@@ -615,7 +614,7 @@ impl State {
 
         self.instance_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Instance Bind Group"),
-            layout: &self.storage_buffer_layout,
+            layout: &self.instance_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: self.instance_buffer.as_entire_binding(),

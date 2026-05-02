@@ -306,24 +306,24 @@ Skipping the entity-layer learning trades weeks of foundational work for
 faster progress on rendering phases. See `PLAN.md` for the full
 phase-scratch plan.
 
-- [ ] Pin a current `bevy_ecs` 0.x version; confirm `cargo tree` shows
+- [x] Pin a current `bevy_ecs` 0.x version; confirm `cargo tree` shows
       no transitive dep on `bevy_render` / `bevy_app` / `bevy_window`
-- [ ] Define components: `Transform` (`glam::Affine3A` newtype),
+- [x] Define components: `Transform` (`glam::Affine3A` newtype),
       `MeshRef`, `MaterialRef`, `LightRef` — pure data, no GPU bytes
-- [ ] Don't import `bevy_transform::Transform`; keep our own
-- [ ] Central resource pools: `MeshPool`, `TexturePool`, `MaterialPool`
+- [x] Don't import `bevy_transform::Transform`; keep our own
+- [x] Central resource pools: `MeshPool`, `TexturePool`, `MaterialPool`
       as `#[derive(Resource)]`; pool internals (handle-indexed `Vec`s)
       are still ours
-- [ ] Components hold handles (`MeshHandle`, `MaterialHandle`), not
+- [x] Components hold handles (`MeshHandle`, `MaterialHandle`), not
       owned GPU resources
-- [ ] Migrate 3 helmets via `commands.spawn((Transform(...),
+- [x] Migrate 3 helmets via `commands.spawn((Transform(...),
       MeshRef(h), MaterialRef(m)))`
-- [ ] Renderer reads via `Query<(&Transform, &MeshRef, &MaterialRef)>`;
+- [x] Renderer reads via `Query<(&Transform, &MeshRef, &MaterialRef)>`;
       `prepare_renderables` system builds one persistent instance buffer
       per frame (no per-entity uniform buffers)
-- [ ] Refactor input/camera to be bevy systems registered in a
+- [x] Refactor input/camera to be bevy systems registered in a
       `Schedule`
-- [ ] Add/remove entities at runtime via `Commands::spawn` /
+- [x] Add/remove entities at runtime via `Commands::spawn` /
       `entity.despawn`
 
 ---

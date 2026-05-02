@@ -1,14 +1,26 @@
-use bevy_ecs::system::{Commands, Res, ResMut};
+use bevy_ecs::prelude::*;
 use winit::keyboard::KeyCode;
 
+use crate::assets::MeshHandle;
+use crate::camera::Camera;
 use crate::components::{MeshRef, Transform};
-use crate::resources::{Camera, HelmetHandles, Input, RuntimeHelmets};
+use crate::input::Input;
+
+#[derive(Resource)]
+pub struct HelmetAssets {
+    pub mesh: MeshHandle,
+}
+
+#[derive(Resource, Default)]
+pub struct RuntimeHelmets {
+    pub entities: Vec<Entity>,
+}
 
 pub fn spawn_helmet(
     mut commands: Commands,
     input: Res<Input>,
     camera: Res<Camera>,
-    handles: Res<HelmetHandles>,
+    assets: Res<HelmetAssets>,
     mut runtime_helmets: ResMut<RuntimeHelmets>,
 ) {
     if !input.just_pressed.contains(&KeyCode::KeyG) {
@@ -19,7 +31,7 @@ pub fn spawn_helmet(
     let entity = commands
         .spawn((
             Transform(glam::Affine3A::from_translation(position)),
-            MeshRef(handles.mesh),
+            MeshRef(assets.mesh),
         ))
         .id();
 

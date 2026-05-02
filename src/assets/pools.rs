@@ -1,5 +1,6 @@
+use bevy_ecs::prelude::*;
+
 use crate::assets::{Material, Mesh, MeshHandle, Texture};
-use bevy_ecs::prelude::Resource;
 
 #[derive(Resource, Default)]
 pub struct MeshPool(pub Vec<Mesh>);

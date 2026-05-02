@@ -2,7 +2,7 @@
 var<uniform> camera: CameraUniform;
 struct CameraUniform {
     view_proj: mat4x4<f32>,
-    camera_pos:  vec4<f32>,
+    position:  vec4<f32>,
 }
 
 @group(1) @binding(0)
@@ -60,7 +60,7 @@ in: VertexInput, @builtin(instance_index) instance_idx: u32
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let light_dir = normalize(-light.direction.xyz);
-    let view_dir = normalize(camera.camera_pos.xyz - in.world_pos);
+    let view_dir = normalize(camera.position.xyz - in.world_pos);
     let half_vec = normalize(light_dir + view_dir);
     let normal = normalize(in.normal);
     let specular = pow(max(dot(normal, half_vec), 0.0), 32.0);

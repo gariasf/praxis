@@ -1,4 +1,4 @@
-use bevy_ecs::prelude::Resource;
+use bevy_ecs::prelude::*;
 
 #[derive(Resource)]
 pub struct Time {
@@ -20,4 +20,8 @@ impl Time {
         self.delta_time = (now - self.last_frame).as_secs_f32();
         self.last_frame = now;
     }
+}
+
+pub fn tick_time(mut time: ResMut<Time>) {
+    time.tick();
 }
