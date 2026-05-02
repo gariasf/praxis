@@ -12,7 +12,7 @@ use crate::render::{
     create_depth_texture,
 };
 use crate::resources::{Camera, Input, MaterialPool, MeshPool, TexturePool, Time};
-use crate::systems::{camera_system, tick_time};
+use crate::systems::{fly_camera, tick_time};
 
 pub struct State {
     surface: wgpu::Surface<'static>,
@@ -237,7 +237,7 @@ impl State {
         world.insert_resource(Camera::new());
 
         let mut schedule = Schedule::default();
-        schedule.add_systems((tick_time, camera_system).chain());
+        schedule.add_systems((tick_time, fly_camera).chain());
 
         let model = crate::assets::load_model("assets/DamagedHelmet.glb")?;
         let mut primitives = Vec::new();

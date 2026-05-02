@@ -3,7 +3,7 @@ use winit::keyboard::KeyCode;
 
 use crate::resources::{Camera, Input, Time};
 
-pub fn camera_system(input: Res<Input>, time: Res<Time>, mut camera: ResMut<Camera>) {
+pub fn fly_camera(input: Res<Input>, time: Res<Time>, mut camera: ResMut<Camera>) {
     let forward_dir = camera.forward();
     let right_dir = camera.right();
     let speed = camera.speed * time.delta_time;
