@@ -11,8 +11,10 @@ use crate::render::{
     CameraUniform, INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData, LightUniform, Vertex,
     create_depth_texture,
 };
-use crate::resources::{Camera, Input, MaterialPool, MeshPool, TexturePool, Time};
-use crate::systems::{fly_camera, tick_time};
+use crate::resources::{
+    Camera, HelmetHandles, Input, MaterialPool, MeshPool, RuntimeHelmets, TexturePool, Time,
+};
+use crate::systems::{clear_just_pressed, despawn_helmet, fly_camera, spawn_helmet, tick_time};
 
 pub struct State {
     surface: wgpu::Surface<'static>,
@@ -235,11 +237,22 @@ impl State {
         world.insert_resource(Input::default());
         world.insert_resource(Time::new());
         world.insert_resource(Camera::new());
+        world.insert_resource(RuntimeHelmets::default());
 
         let mut schedule = Schedule::default();
-        schedule.add_systems((tick_time, fly_camera).chain());
+        schedule.add_systems(
+            (
+                tick_time,
+                fly_camera,
+                spawn_helmet,
+                despawn_helmet,
+                clear_just_pressed,
+            )
+                .chain(),
+        );
 
         let model = crate::assets::load_model("assets/DamagedHelmet.glb")?;
+
         let mut primitives = Vec::new();
         for prim in &model.primitives {
             let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -314,6 +327,7 @@ impl State {
         }
         let mesh = Mesh { primitives };
         let mesh_handle = world.resource_mut::<MeshPool>().insert(mesh);
+        world.insert_resource(HelmetHandles { mesh: mesh_handle });
 
         world.spawn((
             Transform(glam::Affine3A::from_translation(glam::vec3(0.0, 0.0, 0.0))),

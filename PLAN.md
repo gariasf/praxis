@@ -471,7 +471,7 @@ Where to look:
   `mod systems;`, sub-modules per system file (`camera.rs`,
   `prepare.rs`, etc.).
 
-- [ ] <!-- TODO -->
+- [x]
 
 Checkpoint: camera controls identical to Phase 4. `State::update()` is
 mostly a `Schedule::run` call.
@@ -519,22 +519,7 @@ Where to look:
   `camera_system` so they see this frame's input but before
   `prepare_renderables`.
 
-- [ ] <!-- TODO -->
+- [x]
 
 Checkpoint: can add and remove helmets live without crashes, leaks, or
 stale-entity rendering. Closing the app drops all pools cleanly.
-
----
-
-## Final shape (target)
-
-| Thing | Suggested path | Owned by |
-|---|---|---|
-| `bevy_ecs::World` | `State` field | `State` |
-| `Transform`, `MeshRef`, `MaterialRef`, `LightRef` components | `src/components.rs` | bevy entities in `World` |
-| `MeshPool`, `TexturePool`, `MaterialPool` resources | `src/render/resources.rs` | bevy world (as `Resource`s) |
-| Camera + light uniform buffers | `State` (unchanged from Phase 4) | `State` |
-| Single instance buffer (`Vec<InstanceData>` uploaded each frame) | `State` (new this phase, replaces per-entity `model_buffers`) | `State` |
-| Camera, input, prepare_renderables, render systems | `src/systems/` | free fns, registered in `Schedule` |
-
-<!-- TODO: adjust module layout if you settle on a different one — this is a starting sketch, not a contract -->

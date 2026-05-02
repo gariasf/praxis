@@ -57,14 +57,19 @@ impl ApplicationHandler for App {
                     KeyEvent {
                         physical_key: PhysicalKey::Code(code),
                         state: key_state,
+                        repeat,
                         ..
                     },
                 ..
             } => {
+                let mut input = state.world.resource_mut::<Input>();
                 if key_state.is_pressed() {
-                    state.world.resource_mut::<Input>().pressed.insert(code);
+                    input.pressed.insert(code);
+                    if !repeat {
+                        input.just_pressed.insert(code);
+                    }
                 } else {
-                    state.world.resource_mut::<Input>().pressed.remove(&code);
+                    input.pressed.remove(&code);
                 }
                 if code == KeyCode::Escape && key_state.is_pressed() {
                     event_loop.exit();
