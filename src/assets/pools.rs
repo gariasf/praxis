@@ -13,7 +13,8 @@ impl MeshPool {
         tracing::debug!(handle = handle.0, primitive_count, "mesh registered");
         handle
     }
-    pub fn get(&self, handle: MeshHandle) -> &Mesh {
-        &self.0[handle.0 as usize]
+    pub fn get(&self, handle: MeshHandle) -> Option<&Mesh> {
+        self.0.get(handle.0 as usize)
+    }
     }
 }

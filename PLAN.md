@@ -216,8 +216,8 @@ planning but aren't built yet.
 - **Pull-renderer.** Each frame, the renderer queries the world for
   what to draw (`world.query::<(&Transform, &MeshRef, &MaterialRef)>`)
   and pulls the data it needs. The opposite is a push model: ECS code
-  calls into the renderer to register draws. Pull keeps sim ignorant of
-  wgpu — Design Principle #3.
+  calls into the renderer to register draws. Pull keeps simulation code ignorant of
+  wgpu — Design Principle `#3`.
 - **Uber-shader.** One large shader with branches or feature flags for
   every material variant, instead of N specialized shaders. Trades
   runtime branching for build-time and binding simplicity. Phase 5 does
