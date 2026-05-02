@@ -4,7 +4,7 @@ use bevy_ecs::prelude::*;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
-use crate::assets::{MaterialHandle, MaterialPool, Mesh, MeshPool, Primitive, TexturePool};
+use crate::assets::{Mesh, MeshPool, Primitive};
 use crate::camera::{Camera, fly_camera};
 use crate::components::{MeshRef, Transform};
 use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
@@ -248,8 +248,6 @@ impl State {
 
         let mut world = World::new();
         world.insert_resource(MeshPool::default());
-        world.insert_resource(MaterialPool::default());
-        world.insert_resource(TexturePool::default());
         world.insert_resource(Input::default());
         world.insert_resource(Time::new());
         world.insert_resource(Camera::new());
@@ -347,7 +345,6 @@ impl State {
                 index_buffer,
                 num_indices: prim.indices.len() as u32,
                 texture_bind_group,
-                material: MaterialHandle(0), // Placeholder, as we don't have a material system implemented
             });
         }
         let mesh = Mesh { primitives };

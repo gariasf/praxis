@@ -1,15 +1,9 @@
 use bevy_ecs::prelude::*;
 
-use crate::assets::{Material, Mesh, MeshHandle, Texture};
+use crate::assets::{Mesh, MeshHandle};
 
 #[derive(Resource, Default)]
 pub struct MeshPool(pub Vec<Mesh>);
-
-#[derive(Resource, Default)]
-pub struct MaterialPool(pub Vec<Material>);
-
-#[derive(Resource, Default)]
-pub struct TexturePool(pub Vec<Texture>);
 
 impl MeshPool {
     pub fn insert(&mut self, mesh: Mesh) -> MeshHandle {

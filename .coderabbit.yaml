@@ -5,13 +5,13 @@
 # issues; ignore style (rustfmt + clippy own those). See CLAUDE.md for
 # durable conventions and ROADMAP.md for phase plan.
 
-language: en-US
+language: en-GB
 
 # 250-char limit — keep tight.
 tone_instructions: >-
-  Be terse and direct. Skip pleasantries. Learning pace,
-  production-bound foundations — flag correctness and load-bearing
-  issues. Skip style (rustfmt and clippy own that).
+  Be terse and direct. Skip pleasantries. Learning pace, production-bound
+  foundations — flag correctness and load-bearing issues. Skip style (rustfmt
+  and clippy own that).
 
 reviews:
   profile: chill
