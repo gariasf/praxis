@@ -594,9 +594,13 @@ impl State {
             for (entity_index, (_transform, mesh_ref)) in
                 renderable_query.iter(&self.world).enumerate()
             {
-                let mesh = mesh_pool.get(mesh_ref.0);
+                let handle = mesh_ref.0;
+                let Some(mesh) = mesh_pool.get(handle) else {
+                    tracing::warn!(handle = handle.0, "MeshHandle not in pool, skipping entity");
+                    continue;
+                };
 
-                for primitive in &mesh.unwrap().primitives {
+                for primitive in &mesh.primitives {
                     render_pass.set_bind_group(1, &primitive.texture_bind_group, &[]);
                     render_pass.set_vertex_buffer(0, primitive.vertex_buffer.slice(..));
                     render_pass.set_index_buffer(
