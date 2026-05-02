@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bevy_ecs::system::RunSystemOnce;
+use bevy_ecs::schedule::{IntoScheduleConfigs, Schedule};
 use bevy_ecs::world::World;
 use wgpu::{Buffer, util::DeviceExt};
 use winit::window::Window;
@@ -12,7 +12,7 @@ use crate::render::{
     create_depth_texture,
 };
 use crate::resources::{Camera, Input, MaterialPool, MeshPool, TexturePool, Time};
-use crate::systems::camera_system;
+use crate::systems::{camera_system, tick_time};
 
 pub struct State {
     surface: wgpu::Surface<'static>,
@@ -32,6 +32,7 @@ pub struct State {
     instance_buffer: wgpu::Buffer,
     instance_bind_group: wgpu::BindGroup,
     instance_capacity: u64,
+    schedule: Schedule,
 }
 
 impl State {
@@ -235,6 +236,9 @@ impl State {
         world.insert_resource(Time::new());
         world.insert_resource(Camera::new());
 
+        let mut schedule = Schedule::default();
+        schedule.add_systems((tick_time, camera_system).chain());
+
         let model = crate::assets::load_model("assets/DamagedHelmet.glb")?;
         let mut primitives = Vec::new();
         for prim in &model.primitives {
@@ -393,6 +397,7 @@ impl State {
             instance_buffer,
             instance_bind_group,
             instance_capacity,
+            schedule,
         })
     }
 
@@ -411,11 +416,7 @@ impl State {
             return;
         }
 
-        self.world.resource_mut::<Time>().tick();
-
-        self.world
-            .run_system_once(camera_system)
-            .expect("camera_system failed");
+        self.schedule.run(&mut self.world);
 
         let camera = self.world.resource::<Camera>();
 
