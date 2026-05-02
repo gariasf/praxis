@@ -10,10 +10,12 @@ and each material still has its own texture bind group.
 
 Phase 6 has two threads, equal weight, named in `ROADMAP.md`:
 
-**Thread A — Visible feature work (PBR rendering).** Replace Blinn-Phong
-with Cook-Torrance. Multi-texture surfaces (albedo, normal,
-metallic-roughness, AO, emissive). HDR linear render target with ACES
-tonemap. Image-based ambient lighting via the split-sum approximation.
+**Thread A — Visible feature work (physically-based rendering, PBR).**
+Replace Blinn-Phong with Cook-Torrance. Multi-texture surfaces (albedo,
+normal, metallic-roughness, ambient occlusion (AO), emissive). High
+dynamic range (HDR) linear render target with ACES (Academy Color
+Encoding System) tonemap. Image-based lighting (IBL) for ambient via
+the split-sum approximation.
 
 **Thread B — Architectural payload (data shapes).** Material-as-ID: one
 structured GPU buffer of `MaterialData`, indexed by `MaterialId`,
@@ -63,13 +65,13 @@ Order **B** wins because every checkpoint is "looks identical" or
 
 | # | Decision | Choice | Why |
 |---|---|---|---|
-| 1 | Texture array layout | One `texture_2d_array` per channel — albedo, normal, MR, AO, emissive | Simpler than unified atlas; bindless (Phase 10) merges later if useful |
+| 1 | Texture array layout | One `texture_2d_array` per channel — albedo, normal, metallic-roughness (MR), AO, emissive | Simpler than unified atlas; bindless (Phase 10) merges later if useful |
 | 2 | HDR target format | `Rgba16Float` | Half-precision sufficient for tone-mapped output; half the bandwidth of `Rgba32Float` |
 | 3 | Tone mapping | ACES filmic curve | Industry standard; matches Filament/UE/Unity defaults |
-| 4 | IBL scope | Full split-sum (irradiance cubemap + prefiltered specular + BRDF LUT) | Stop-gap ambient is throwaway; split-sum is canonical |
+| 4 | IBL scope | Full split-sum (irradiance cubemap + prefiltered specular + bidirectional reflectance distribution function (BRDF) lookup table (LUT)) | Stop-gap ambient is throwaway; split-sum is canonical |
 | 5 | IBL prefilter timing | Compute shaders at startup | Offline-baked is faster but adds tooling; runtime compute works for one HDR |
-| 6 | Tangent source | Load from glTF when present; defer mikktspace until a model lacks tangents | DamagedHelmet ships tangents; computing them is a yak shave we don't need yet |
-| 7 | Material storage | SSBO — `var<storage, read>` | Unbounded vs uniform's 16 KB cap; matches the GPU-driven shape coming later |
+| 6 | Tangent source | Load from glTF (GL Transmission Format) when present; defer mikktspace until a model lacks tangents | DamagedHelmet ships tangents; computing them is a yak shave we don't need yet |
+| 7 | Material storage | Shader storage buffer object (SSBO) — `var<storage, read>` | Unbounded vs uniform's 16 KB cap; matches the GPU-driven shape coming later |
 | 8 | Texture size constraint | All layers in an array must match dimensions; standardise on 2048×2048, scale-pad on load | Bindless (Phase 10) lifts this; for Phase 6 it's a real constraint |
 | 9 | Vertex layout addition | Add `tangent: vec4<f32>` (xyz = tangent, w = bitangent sign per glTF spec) | Required for normal maps; standard glTF shape |
 | 10 | Render pipeline split | Two passes — geometry → HDR target, tonemap → swap chain | Required for HDR; no shortcut |
@@ -78,7 +80,7 @@ Order **B** wins because every checkpoint is "looks identical" or
 
 ## Gotchas
 
-### `vec3<f32>` in WGSL uniform/storage structs
+### `vec3<f32>` in WGSL (WebGPU Shading Language) uniform/storage structs
 
 `MaterialData` will tempt `vec3<f32>` for colors. WGSL pads `vec3<f32>`
 to 16 bytes silently — the Rust-side `[f32; 3]` is 12 bytes and the
@@ -86,7 +88,7 @@ layouts mismatch with no error. Use `vec4<f32>` or explicit pad fields.
 Same trap `CLAUDE.md` flags. The recommended `MaterialData` layout in
 Step 2 is all `vec4`s for this reason.
 
-### sRGB confusion
+### sRGB (standard RGB) confusion
 
 The single most common bug class in PBR. Per-texture format must match
 content:
@@ -193,7 +195,7 @@ reflectance distribution function (BRDF). Cook-Torrance factorises the
 specular BRDF as `(D · F · G) / (4 · NdotV · NdotL)`:
 
 - **D — Normal distribution function.** What fraction of microfacets
-  point in the half-vector direction. GGX is the standard choice;
+  point in the half-vector direction. GGX (Trowbridge-Reitz distribution) is the standard choice;
   rougher surfaces spread the lobe wider.
 - **F — Fresnel.** What fraction of incoming light reflects vs
   transmits, as a function of viewing angle. Schlick approximation:
@@ -287,7 +289,7 @@ Why this shape:
   a buffer of `(index_count, instance_count, base_index, base_vertex,
   base_instance)` records. That requires every mesh's geometry to be
   in one buffer it can address by offset.
-- **BLAS construction.** Phase 17 ray-tracing wants per-mesh BLAS built
+- **BLAS construction.** Phase 17 ray-tracing wants per-mesh BLAS (bottom-level acceleration structure) built
   over a contiguous range of a mega-buffer. Buffer-per-mesh forces an
   extra copy.
 - **Bind churn.** With one shared vertex buffer, `set_vertex_buffer`
@@ -521,7 +523,7 @@ bindings. First visible change in Phase 6._
 intuition (rough surface = many tiny facets with normals near `N`).
 Why factorise the BRDF into `D · F · G / (4 · NdotV · NdotL)`. ASCII
 diagram of half-vector geometry. Schlick Fresnel derivation. GGX vs
-other NDFs (why GGX won — long tails match real surfaces). Smith
+other NDFs (normal distribution functions; why GGX won — long tails match real surfaces). Smith
 geometry. Energy conservation: `kD = (1 - F) · (1 - metallic)`. Why
 metals have no diffuse. The metallic/roughness workflow as a
 2-parameter physical encoding.
@@ -598,7 +600,7 @@ Vertex layout gains tangents._
 **Theory block (inline teaching, ~30–60 min).** Tangent space: why
 per-vertex tangent + bitangent + normal form an orthonormal frame that
 lets normal maps store *relative* perturbations independent of mesh
-orientation. ASCII diagram of TBN basis. `tangent.w` as the bitangent
+orientation. ASCII diagram of TBN (tangent, bitangent, normal) basis. `tangent.w` as the bitangent
 sign (handedness fix for mirrored UVs). Computing TBN in the vertex
 shader (transform tangent + normal by world matrix; reconstruct
 bitangent from `cross(N, T) * tangent.w`). Normal-map sampling: read
@@ -686,7 +688,7 @@ samples the HDR and writes to the sRGB swap chain._
 **Theory block (inline teaching, ~30–60 min).** Why HDR: real lighting
 exceeds `[0, 1]` (sun is ~10,000 in some normalisations; light bulbs
 are hundreds). Clipping at 1.0 destroys highlight detail. Tonemap
-curves compress linear HDR into displayable LDR while preserving
+curves compress linear HDR into displayable low dynamic range (LDR) while preserving
 perceptual contrast. ACES filmic curve as a standard choice. Gamma
 encoding (sRGB transfer function) as the final step — display expects
 ~2.2 power-law encoded values; hardware does this for sRGB swap chain
