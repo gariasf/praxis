@@ -4,9 +4,10 @@ use crate::{
 };
 use bevy_ecs::world::World;
 
-pub fn prepare_renderables(world: &mut World, queue: &wgpu::Queue, instance_buffer: &wgpu::Buffer) {
+pub fn prepare_renderables(world: &mut World) -> Vec<InstanceData> {
     let mut renderable_query = world.query::<(&Transform, &MeshRef)>();
-    let instance_data: Vec<InstanceData> = renderable_query
+
+    renderable_query
         .iter(world)
         .map(|(transform, _mesh_ref)| {
             let model_matrix = glam::Mat4::from(transform.0);
@@ -15,7 +16,5 @@ pub fn prepare_renderables(world: &mut World, queue: &wgpu::Queue, instance_buff
                 normal_matrix: model_matrix.inverse().transpose().to_cols_array_2d(),
             }
         })
-        .collect();
-
-    queue.write_buffer(instance_buffer, 0, bytemuck::cast_slice(&instance_data));
+        .collect()
 }

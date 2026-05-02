@@ -35,6 +35,7 @@ pub struct State {
     instance_bind_group: wgpu::BindGroup,
     instance_capacity: u64,
     schedule: Schedule,
+    storage_buffer_layout: wgpu::BindGroupLayout,
 }
 
 impl State {
@@ -412,6 +413,7 @@ impl State {
             instance_bind_group,
             instance_capacity,
             schedule,
+            storage_buffer_layout,
         })
     }
 
@@ -463,10 +465,12 @@ impl State {
             num_point_lights: [4.0, 0.0, 0.0, 0.0],
         };
 
-        crate::systems::prepare::prepare_renderables(
-            &mut self.world,
-            &self.queue,
+        let instance_data = crate::systems::prepare::prepare_renderables(&mut self.world);
+        self.ensure_instance_capacity(instance_data.len() as u64);
+        self.queue.write_buffer(
             &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(&instance_data),
         );
 
         self.queue.write_buffer(
@@ -590,5 +594,35 @@ impl State {
         output.present();
 
         Ok(())
+    }
+
+    fn ensure_instance_capacity(&mut self, needed: u64) {
+        if needed <= self.instance_capacity {
+            return;
+        }
+
+        let mut new_capacity = self.instance_capacity * 2;
+        while new_capacity < needed {
+            new_capacity *= 2;
+        }
+
+        self.instance_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Instance Buffer"),
+            size: new_capacity * std::mem::size_of::<InstanceData>() as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        self.instance_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Instance Bind Group"),
+            layout: &self.storage_buffer_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: self.instance_buffer.as_entire_binding(),
+            }],
+        });
+
+        self.instance_capacity = new_capacity;
+        tracing::info!("instance buffer resized to {} slots", new_capacity);
     }
 }
