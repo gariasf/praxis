@@ -36,7 +36,12 @@ pub fn spawn_helmet(
         .id();
 
     runtime_helmets.entities.push(entity);
-    tracing::info!("spawned helmet {entity:?} at {position:?}");
+    tracing::info!(
+        ?entity,
+        ?position,
+        runtime_count = runtime_helmets.entities.len(),
+        "helmet spawned"
+    );
 }
 
 pub fn despawn_helmet(
@@ -49,9 +54,14 @@ pub fn despawn_helmet(
     }
 
     let Some(entity) = runtime_helmets.entities.pop() else {
+        tracing::debug!("despawn requested but stack empty");
         return;
     };
 
     commands.entity(entity).despawn();
-    tracing::info!("despawned helmet {entity:?}");
+    tracing::info!(
+        ?entity,
+        runtime_count = runtime_helmets.entities.len(),
+        "helmet despawned"
+    );
 }

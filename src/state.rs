@@ -39,6 +39,8 @@ pub struct State {
 
 impl State {
     pub async fn new(window: Arc<Window>) -> anyhow::Result<State> {
+        let _span = tracing::info_span!("state_init").entered();
+
         // Device and queue setup
         let size = window.inner_size();
 
@@ -63,6 +65,14 @@ impl State {
             })
             .await?;
 
+        let adapter_info = adapter.get_info();
+        tracing::info!(
+            name = %adapter_info.name,
+            backend = ?adapter_info.backend,
+            device_type = ?adapter_info.device_type,
+            "adapter selected"
+        );
+
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: None,
@@ -85,6 +95,12 @@ impl State {
             .find(|f| f.is_srgb())
             .copied()
             .unwrap_or(surface_caps.formats[0]);
+
+        tracing::debug!(
+            ?surface_format,
+            srgb = surface_format.is_srgb(),
+            "surface format chosen"
+        );
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -254,7 +270,9 @@ impl State {
         let model = crate::assets::load_model("assets/DamagedHelmet.glb")?;
 
         let mut primitives = Vec::new();
-        for prim in &model.primitives {
+        for (primitive_index, prim) in model.primitives.iter().enumerate() {
+            let _prim_span = tracing::debug_span!("upload_primitive", primitive_index).entered();
+
             let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Vertex Buffer"),
                 contents: bytemuck::cast_slice(&prim.vertices),
@@ -316,6 +334,13 @@ impl State {
                     },
                 ],
             });
+
+            tracing::debug!(
+                vertices = prim.vertices.len(),
+                indices = prim.indices.len(),
+                texture = tex_width * tex_height > 1,
+                "primitive uploaded"
+            );
 
             primitives.push(Primitive {
                 vertex_buffer,
@@ -417,6 +442,7 @@ impl State {
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
+        tracing::debug!(width, height, "resize requested");
         if width > 0 && height > 0 {
             self.config.width = width;
             self.config.height = height;
@@ -496,6 +522,7 @@ impl State {
         let output = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
             wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => {
+                tracing::debug!("surface suboptimal, reconfiguring");
                 self.surface.configure(&self.device, &self.config);
                 surface_texture
             }
@@ -506,11 +533,12 @@ impl State {
                 return Ok(());
             }
             wgpu::CurrentSurfaceTexture::Outdated => {
+                tracing::warn!("surface outdated, reconfiguring");
                 self.surface.configure(&self.device, &self.config);
                 return Ok(());
             }
             wgpu::CurrentSurfaceTexture::Lost => {
-                // The surface texture was lost; bail with an accurate error.
+                tracing::error!("surface texture lost; bailing");
                 anyhow::bail!("Surface texture lost");
             }
         };
@@ -600,7 +628,8 @@ impl State {
             return;
         }
 
-        let mut new_capacity = self.instance_capacity * 2;
+        let old_capacity = self.instance_capacity;
+        let mut new_capacity = old_capacity * 2;
         while new_capacity < needed {
             new_capacity *= 2;
         }
@@ -622,6 +651,10 @@ impl State {
         });
 
         self.instance_capacity = new_capacity;
-        tracing::info!("instance buffer resized to {} slots", new_capacity);
+        tracing::info!(
+            old = old_capacity,
+            new = new_capacity,
+            "instance buffer resized"
+        );
     }
 }

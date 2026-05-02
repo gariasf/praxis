@@ -27,6 +27,8 @@ impl ApplicationHandler for App {
             Window::default_attributes().with_inner_size(winit::dpi::PhysicalSize::new(2560, 1440));
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        let size = window.inner_size();
+        tracing::info!(width = size.width, height = size.height, "window created");
         window
             .set_cursor_grab(winit::window::CursorGrabMode::Confined)
             .ok();
@@ -113,7 +115,11 @@ pub fn run() -> anyhow::Result<()> {
 }
 
 fn main() {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
+
+    tracing::info!(version = env!("CARGO_PKG_VERSION"), "praxis starting");
 
     let _app = run();
 }
