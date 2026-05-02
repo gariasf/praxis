@@ -112,6 +112,9 @@ When a feature folder grows past one file, split into
   `praxis=info,wgpu=warn,naga=warn` via `.cargo/config.toml`.
 - Bevy imports: `use bevy_ecs::prelude::*;` (not piecemeal).
 - WGPU types: full path (`wgpu::Buffer`), don't import individual types.
+- Asset pool lookups return `Option<&T>`. Callers handle `None`
+  gracefully (warn + skip in render path); never `.unwrap()` in a
+  hot loop.
 - Shaders are WGSL (`.wgsl` files in `src/`).
 - No `unsafe` unless absolutely necessary and clearly explained.
 - Keep dependencies minimal. Use feature flags

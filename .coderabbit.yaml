@@ -50,6 +50,8 @@ reviews:
           authoring data.
         - Throwaway shortcuts that would need rewriting at scale (see
           Project posture in CLAUDE.md).
+        - Pool lookups (e.g., `MeshPool::get` returning `Option<&T>`):
+          flag unchecked indexing or `.unwrap()` in render paths.
 
     - path: "src/**/*.wgsl"
       instructions: |

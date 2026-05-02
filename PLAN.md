@@ -1,525 +1,889 @@
-# Phase 5: Integrate bevy_ecs + handle pools
+# Phase 6: PBR Materials & load-bearing data shapes
 
 ## Context
 
-Phase 4 done. Three hardcoded `glam::Mat4` transforms plus a loaded
-`DamagedHelmet.glb` get rendered by `State::render()` via a nested loop over
-`self.transforms` and `self.primitives`. Camera, lights, model uniforms, and
-GPU buffers all live directly as fields on `State`.
+Phase 5 done. Three helmets render via `bevy_ecs` query →
+`prepare_renderables` → one persistent instance buffer → indexed draws.
+Per-entity uniform buffers are gone; per-material bind groups remain.
+Each `Mesh` still owns its own `wgpu::Buffer` for vertices and indices,
+and each material still has its own texture bind group.
 
-Replace ad-hoc scene data with `bevy_ecs`. Goal: the three helmets are still
-on screen at the end, but their `Transform` + `MeshHandle` + `MaterialHandle`
-now come from a `bevy_ecs::World` query instead of hardcoded `Vec`s on
-`State`.
+Phase 6 has two threads, equal weight, named in `ROADMAP.md`:
 
-## Decision: bevy_ecs over rolling own
+**Thread A — Visible feature work (PBR rendering).** Replace Blinn-Phong
+with Cook-Torrance. Multi-texture surfaces (albedo, normal,
+metallic-roughness, AO, emissive). HDR linear render target with ACES
+tonemap. Image-based ambient lighting via the split-sum approximation.
 
-Rolling a Pikuma-style sparse-set ECS was the prior plan — generational IDs,
-type erasure with `Any`, signature bitsets, query borrow gymnastics. Real
-Rust skill, weeks of work, ~1500 lines. Rejected on 2026-04-28 in favor of
-shipping rendering progress sooner. Rendering is this project's prize; ECS
-is plumbing.
+**Thread B — Architectural payload (data shapes).** Material-as-ID: one
+structured GPU buffer of `MaterialData`, indexed by `MaterialId`,
+replaces per-material bind groups. Mega-buffer mesh storage: one shared
+vertex buffer plus one shared index buffer for all meshes; meshes are
+`(vertex_offset, index_offset, index_count)` sub-allocations. Texture
+arrays (precursor to bindless): one `texture_2d_array` per channel;
+materials reference layers by index.
 
-`bevy_ecs` is used as a **sub-crate only** — no transitive dep on
-`bevy_render` / `bevy_app` / the full Bevy engine. The crate provides
-`World`, `Component`, `Query`, `Schedule`, `Commands`. Same shape a
-hand-rolled archetype ECS would expose, but production-grade and free.
+Thread B is the load-bearing story. Phase 7 (scene graph + persistent
+scene buffer), Phase 9 (frustum culling + frame-data snapshot), Phase 10
+(bindless), Phase 11 (GPU-driven), Phase 12 (shadows), Phase 13
+(streaming), and the RT phases all assume mega-buffer mesh storage and
+material-as-ID. Per-mesh `wgpu::Buffer` and per-material bind group are
+dead-end shapes — either rewritten now, or rewritten under five later
+phases at once.
 
-What you skip learning: generational IDs, sparse set vs archetype storage,
-type-erased component pools, query borrow patterns, system scheduling. What
-you still own: handle pools (mesh/texture/material), instance buffers,
-renderer pull-shape. The rendering-adjacent concerns survive.
+ROADMAP frames PBR as the *excuse* to introduce these shapes: PBR is
+the visible deliverable that motivates the architectural rewrite.
+Phase 6's result on screen — physically-grounded shading, surface
+detail, IBL-lit helmets — is a side effect of getting the data flow
+right.
+
+## Decision: data shapes first, then PBR
+
+Three orderings considered.
+
+**A — PBR first, refactor at end.** Build Cook-Torrance + textures with
+the current per-material bind groups and per-mesh buffers, then rewrite
+to the final shapes. *Rejected.* Massive throwaway. Violates `CLAUDE.md`
+"no throwaway code".
+
+**B — Data shapes first, PBR layered on top.** Migrate mesh storage to
+mega-buffers and material storage to material-as-ID with Blinn-Phong
+still rendering. Then layer Cook-Torrance, then textures, then HDR,
+then IBL. Every step preserves a working build. **Picked.**
+
+**C — Hybrid: minimum-viable PBR shape from Step 1.** Same end state as
+B but interleaves visible and architectural work. Acceptable but harder
+to reason about — each step touches both the shading model and the data
+flow.
+
+Order **B** wins because every checkpoint is "looks identical" or
+"looks visibly better". No step regresses, no step throws away.
 
 ## Architecture decisions
 
-| Decision | Choice | Why |
-|---|---|---|
-| ECS crate | `bevy_ecs` (current 0.x), sub-crate only | Just World/Component/Query/Schedule/Commands; no full Bevy app/render |
-| Components | `#[derive(Component)]` on `Transform`, `MeshRef`, `MaterialRef`, `LightRef` | Authoring shape: `glam::Affine3A` and handles, never GPU bytes |
-| Resource pools | `MeshPool`, `TexturePool`, `MaterialPool` as `#[derive(Resource)]` | Pools live in `World` as resources but their internals (handle-indexed `Vec<T>`) are still ours |
-| Handles | Plain `MeshHandle(u32)` etc. — no generational, no `Arc` | Phase 5 never unloads. Revisit at Phase 13 (streaming) |
-| Systems | Free fns with bevy params (`Query`, `Res`, `ResMut`, `Commands`) | Bevy auto-wires deps from signatures. No manual `&mut World` plumbing |
-| Scheduling | One `Schedule` with `chain()` for now | No need for parallel execution at Phase-5 scale |
+| # | Decision | Choice | Why |
+|---|---|---|---|
+| 1 | Texture array layout | One `texture_2d_array` per channel — albedo, normal, MR, AO, emissive | Simpler than unified atlas; bindless (Phase 10) merges later if useful |
+| 2 | HDR target format | `Rgba16Float` | Half-precision sufficient for tone-mapped output; half the bandwidth of `Rgba32Float` |
+| 3 | Tone mapping | ACES filmic curve | Industry standard; matches Filament/UE/Unity defaults |
+| 4 | IBL scope | Full split-sum (irradiance cubemap + prefiltered specular + BRDF LUT) | Stop-gap ambient is throwaway; split-sum is canonical |
+| 5 | IBL prefilter timing | Compute shaders at startup | Offline-baked is faster but adds tooling; runtime compute works for one HDR |
+| 6 | Tangent source | Load from glTF when present; defer mikktspace until a model lacks tangents | DamagedHelmet ships tangents; computing them is a yak shave we don't need yet |
+| 7 | Material storage | SSBO — `var<storage, read>` | Unbounded vs uniform's 16 KB cap; matches the GPU-driven shape coming later |
+| 8 | Texture size constraint | All layers in an array must match dimensions; standardise on 2048×2048, scale-pad on load | Bindless (Phase 10) lifts this; for Phase 6 it's a real constraint |
+| 9 | Vertex layout addition | Add `tangent: vec4<f32>` (xyz = tangent, w = bitangent sign per glTF spec) | Required for normal maps; standard glTF shape |
+| 10 | Render pipeline split | Two passes — geometry → HDR target, tonemap → swap chain | Required for HDR; no shortcut |
+| 11 | Mega-buffer growth | CPU re-upload to a larger buffer on overflow | Simple, slow at scale; revisit when streaming bites |
+| 12 | Material handle | Plain `MaterialHandle(u32)`, no generations | Phase 6 never deletes from `MaterialPool`; revisit at Phase 13 |
 
 ## Gotchas
 
-### Don't pull full Bevy
+### `vec3<f32>` in WGSL uniform/storage structs
 
-`bevy_ecs` is published as a separate crate from the umbrella `bevy` crate.
-Cargo `bevy_ecs = "..."`, **not** `bevy = "..."`. Confirm `cargo tree`
-shows no `bevy_render`, `bevy_app`, or `bevy_window` after adding it. If
-those appear, the wrong crate is in `Cargo.toml`.
+`MaterialData` will tempt `vec3<f32>` for colors. WGSL pads `vec3<f32>`
+to 16 bytes silently — the Rust-side `[f32; 3]` is 12 bytes and the
+layouts mismatch with no error. Use `vec4<f32>` or explicit pad fields.
+Same trap `CLAUDE.md` flags. The recommended `MaterialData` layout in
+Step 2 is all `vec4`s for this reason.
 
-### Bevy version churn
+### sRGB confusion
 
-`bevy_ecs` is 0.x and breaks across minor releases. Pin the exact version.
-Expect ~1–2 hours of migration work per minor bump (renamed types,
-schedule API tweaks). Read the bevy migration guide before bumping.
+The single most common bug class in PBR. Per-texture format must match
+content:
 
-### Resources vs Components
+| Texture | Storage format | Why |
+|---|---|---|
+| Albedo / base color | sRGB | Authored in sRGB; sampler auto-linearises on read |
+| Emissive | sRGB | Color values, treated as sRGB-encoded |
+| Normal | linear (`Rgba8Unorm`) | Vector data, not color |
+| Metallic-roughness | linear | Scalar parameters |
+| AO | linear | Scalar parameter |
 
-A `MeshPool` is a singleton — one per world. Use `#[derive(Resource)]`.
-Components are per-entity data: `MeshRef(handle)` on each helmet entity.
-Don't accidentally make pools components or vice versa — bevy will compile
-either way but the semantics break.
+HDR target is linear (`Rgba16Float`); swap chain target is sRGB
+(`Bgra8UnormSrgb` or similar) so the tonemap pass writes linear and the
+hardware encodes gamma on output. Document each texture's format on
+load.
 
-### Don't import `bevy_transform::Transform`
+### Texture array dimension constraint
 
-`bevy_transform` is a separate crate that ships its own `Transform` type
-(with parent/child hierarchy support). It's tempting but **don't pull it
-in** — that's a step toward the full Bevy stack. Define our own
-`Transform` as a `glam::Affine3A` newtype. Hierarchy lands in Phase 7 and
-will use our own pattern.
+Uploading a 1024×1024 image into a 2048×2048 array layer truncates or
+mis-aligns silently. Validate at load time: scale-pad to 2048×2048 (or
+whatever the array dimension is) before `queue.write_texture`. Mip
+count must also match across layers.
 
-### Query borrow rules
+### Cook-Torrance division-by-zero
 
-Bevy enforces disjoint mutable access via system parameters. Two systems
-that both write the same component must run sequentially (`chain()`) or
-read instead of write. At Phase 5 scale this never bites; it's worth
-knowing the rule before it does.
+`(D · F · G) / (4 · NdotV · NdotL)` blows up at grazing angles where
+`NdotV` or `NdotL` reach zero. Add `+ 0.001` to the denominator (or
+`max(NdotV * NdotL, 0.001)`). LearnOpenGL's reference shader does the
+same.
 
-### Authoring data, not GPU layout
+### HDR target + depth attachment
 
-ROADMAP Design Principle #2 still binds. `Transform` component =
-`glam::Affine3A`, not `[[f32;4];4]`. Renderer packs GPU bytes during a
-`prepare_renderables` system. The shape lesson here is: components
-describe the *world*, the instance buffer describes what the *GPU sees*,
-and the prepare system bridges them.
+Both are recreated on resize. Both must match sample count, dimensions,
+and the surface size. The depth view in the bind group used by any
+sampling pass (none in Phase 6, but coming in shadows) must also be
+recreated — bind groups snapshot views, not buffers.
 
-### `vec3<f32>` uniform trap (reminder)
+### IBL prefilter requires compute
 
-No new uniforms expected here, but if one slips in: no `vec3<f32>` in
-WGSL uniform structs. Use `vec4<f32>` or an explicit pad field.
+Prefilter passes run in a compute shader. Most desktops support
+compute; mobile and web back-ends may not. Check `Features::COMPUTE_SHADER`
+at adapter request time and fail fast if absent (Phase 6 doesn't need a
+no-compute fallback — that's a Phase-13+ portability concern).
+
+### Cubemap face winding
+
+wgpu cubemap layer order: +X, -X, +Y, -Y, +Z, -Z. Equirectangular →
+cubemap conversion must respect this. Easiest sanity check: render the
+cubemap as a skybox and look around — flipped axes are visually obvious.
+
+### Mega-buffer growth
+
+Grow strategy in Phase 6: when `MeshPool::insert` would exceed
+`vertex_capacity`, allocate a new buffer at 2× size, re-upload the
+existing data from CPU, swap. The CPU path is slow but simple. The fast
+path uses `CommandEncoder::copy_buffer_to_buffer`; it requires the
+existing buffer to have `COPY_SRC` usage and is a small change later.
+
+### Bind-group rebuild on buffer recreation
+
+Same pattern as Phase 5's instance buffer overflow. The material-buffer
+bind group references the materials buffer; when the buffer is
+recreated for growth, the bind group must be recreated too. Phase 5
+already understands this — re-apply.
+
+### Material handle stability
+
+`MaterialHandle` is a plain `u32` index into `MaterialPool::materials`.
+Stable as long as we never delete. Phase 6 doesn't delete. Generational
+handles arrive when Phase 13 (streaming) needs them.
+
+### glTF material → engine material translation
+
+A glTF `Material` carries factor values + texture references with their
+own UV coords + samplers. Translate at load:
+
+- `pbrMetallicRoughness.baseColorFactor` → `MaterialData::base_color`
+- `pbrMetallicRoughness.metallicFactor` / `.roughnessFactor` →
+  `MaterialData::metallic_roughness.x` / `.y`
+- `emissiveFactor` → `MaterialData::emissive.xyz`
+- Texture references → upload pixels into the per-channel arrays, store
+  layer index in `MaterialData::texture_indices`
+
+If a texture is absent, point at a default layer (1×1 white for
+albedo/MR/AO, flat normal for normals, black for emissive). Default
+layers live at fixed indices written into the arrays at startup.
 
 ---
 
 ## Mental models
 
-Cross-cutting concepts. Worth reading once before Step 1.
+Cross-cutting concepts. Read once before starting Step 1. The Phase 6
+reading contract: AI provides inline teaching at each substep that
+introduces new theory (Steps 3, 4, 5, 6). The condensed primers below
+are scaffolding; the deep dives happen at the substep, not now.
 
-### bevy_ecs primer
+### PBR / Cook-Torrance
 
-Five concepts cover almost everything in Phase 5:
+Physically-based rendering models surfaces as a microfacet
+distribution. The reflected radiance from a point is the integral of
+incoming light over the upper hemisphere, weighted by a bidirectional
+reflectance distribution function (BRDF). Cook-Torrance factorises the
+specular BRDF as `(D · F · G) / (4 · NdotV · NdotL)`:
 
-```rust
-use bevy_ecs::prelude::*;
+- **D — Normal distribution function.** What fraction of microfacets
+  point in the half-vector direction. GGX is the standard choice;
+  rougher surfaces spread the lobe wider.
+- **F — Fresnel.** What fraction of incoming light reflects vs
+  transmits, as a function of viewing angle. Schlick approximation:
+  `F0 + (1 - F0) · pow(1 - HdotV, 5)`. `F0` is the surface's reflectance
+  at normal incidence — 0.04 for non-metals, base color for metals.
+- **G — Geometry / shadowing-masking.** Microfacets shadow each other
+  at grazing angles. Smith function, separable into masking +
+  shadowing terms.
 
-#[derive(Component)] struct Transform(glam::Affine3A);
-#[derive(Component)] struct MeshRef(MeshHandle);
+Diffuse term: `(1 - F) · (1 - metallic) · baseColor / π`. Metals have
+no diffuse — they reflect entirely via the specular path, with `F0`
+tinted by the base color.
 
-#[derive(Resource, Default)]
-struct MeshPool { meshes: Vec<Mesh> }
+The metallic-roughness workflow encodes physically meaningful
+parameters in two scalar values per texel: `metallic` selects between
+dielectric (plastic, wood, fabric) and conductor (metal); `roughness`
+controls the microfacet distribution width.
 
-fn spawn_helmets(mut cmd: Commands) {
-    cmd.spawn((Transform(glam::Affine3A::IDENTITY), MeshRef(MeshHandle(0))));
-}
+References: LearnOpenGL PBR chapters; Filament design doc
+(google.github.io/filament/Filament.md.html). Step 3 expands this with
+intuition + diagrams + the actual WGSL.
 
-fn render(q: Query<(&Transform, &MeshRef)>, pool: Res<MeshPool>) {
-    for (xf, m) in &q { /* draw */ }
-}
+### Linear / sRGB / HDR pipeline
 
-let mut world = World::new();
-world.insert_resource(MeshPool::default());
-let mut sched = Schedule::default();
-sched.add_systems((spawn_helmets, render).chain());
-sched.run(&mut world);
+Where lighting math happens vs where pixels are stored, end to end:
+
+```
+sRGB albedo texture
+  → sampler auto-linearises on read (sRGB format)
+  → math in linear space
+  → write to Rgba16Float HDR target
+  → tonemap fragment shader reads HDR, applies ACES
+  → writes to sRGB swap chain target
+  → hardware auto-encodes gamma on present
+  → display
 ```
 
-- **Component** — pure-data marker on a struct. Components attach to
-  entities; queries find entities with the requested combination.
-- **Resource** — singleton in the world. Use for asset pools, render
-  context, frame counters, anything there's exactly one of.
-- **Query** — system parameter that iterates matching entities.
-  `Query<(&A, &mut B)>` reads `A`, writes `B`. An entity must have *all*
-  listed components to appear.
-- **Commands** — buffered mutations. `cmd.spawn(...)` and
-  `cmd.entity(e).despawn()` queue changes that flush at sync points
-  (between systems by default). Lets a system mutate the world while
-  iterating queries.
-- **Schedule** — list of systems with ordering rules.
-  `add_systems((a, b, c).chain())` runs strictly in order. `.before()` /
-  `.after()` add finer constraints when needed.
+Three rules that prevent 90% of PBR color bugs:
 
-Read `bevy_ecs`'s docs.rs page once, then come back. The crate's
-docstrings are excellent and cover the corner cases.
+1. **All shading math is linear.** No `pow(color, 2.2)` smuggled in;
+   the sampler does it for sRGB textures. Don't double-correct.
+2. **Color textures are sRGB; data textures are linear.** Albedo and
+   emissive are sRGB. Normal, MR, AO are linear. Tag at load.
+3. **HDR target is linear; swap chain is sRGB.** The tonemap pass
+   bridges them. The geometry pass writes linear values that may
+   exceed 1.0; the tonemap pass compresses them into [0, 1] for
+   display.
 
-### Handles as lightweight references (still ours)
+### IBL split-sum approximation
 
-Pool design is not bevy's job. Handles are plain integers indexing into a
-`Vec`. Many entities share one mesh by copying the handle. No `Arc`, no
-lifetimes, no borrow-checker pressure on game code.
+Image-based ambient lighting integrates incoming radiance from an
+environment cubemap over the hemisphere. The integral is too expensive
+per pixel; Karis (Unreal Engine 4) split it into two pre-computable
+terms:
 
-```rust
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-pub struct MeshHandle(pub u32);
-
-#[derive(Resource, Default)]
-pub struct MeshPool {
-    meshes: Vec<Mesh>,
-}
-
-impl MeshPool {
-    pub fn insert(&mut self, mesh: Mesh) -> MeshHandle {
-        let h = MeshHandle(self.meshes.len() as u32);
-        self.meshes.push(mesh);
-        h
-    }
-    pub fn get(&self, h: MeshHandle) -> &Mesh {
-        &self.meshes[h.0 as usize]
-    }
-}
+```
+ambientSpecular ≈ prefilteredEnv(R, roughness) · (F · brdf.x + brdf.y)
+ambientDiffuse  = irradiance(N) · (baseColor / π) · (1 - F) · (1 - metallic)
 ```
 
-Generational handles for resources are optional here — plain `u32` is
-fine while assets never unload. Revisit at Phase 13 (streaming).
+Three artifacts pre-computed once at startup:
 
-Note: handles are *not* `bevy_ecs::Entity`. Entities are game data and
-live in `World`. Resources are engine data — owned by `World` as
-`Resource`s but conceptually distinct. Keeping that line clean is Design
-Principle #1 in `ROADMAP.md`.
+- **Irradiance cubemap** (32×32 typical). Each face texel stores the
+  cosine-weighted hemisphere integral for that direction. Diffuse
+  ambient samples it by surface normal.
+- **Prefiltered specular cubemap** (mip chain, e.g. 5 levels from
+  128×128 down to 8×8). Each mip stores the GGX-importance-sampled
+  environment for a roughness value (mip 0 = mirror, max mip = fully
+  rough). Specular ambient samples by reflection vector with mip
+  selected from roughness.
+- **BRDF LUT** (256×256, `Rg16Float`). A 2D table indexed by
+  `(NdotV, roughness)` storing the precomputed Fresnel-weighted
+  microfacet integral. Per-pixel cost is one texture sample.
 
-### Instance buffers vs per-entity uniform buffers (Step 3 background)
+The split is approximate but visually convincing and standard across
+modern engines. Step 6 derives the math and walks through the
+prefilter compute shaders.
 
-Step 3 uses a **single instance buffer** rather than per-entity uniform
-buffers. Quick tour:
+### Mega-buffer mesh storage
 
-- **Per-entity uniform buffers** — each entity gets its own small
-  buffer; one `queue.write_buffer` call per entity per frame. Driver
-  overhead scales linearly with entity count. Easy to write but
-  architecturally a dead end — GPU-driven rendering, RT TLAS rebuilds,
-  and instancing all want their data consolidated. Phase 5 skips this
-  trap.
-- **Instance buffer** — one structured buffer holds every renderable's
-  transform end-to-end. Draws use `base_instance` +
-  `@builtin(instance_index)` to index into it. One `queue.write_buffer`
-  per frame total. **This is what Step 3 builds.** Same shape extends
-  cleanly to GPU-driven rendering, RT, and bindless.
-- **Single uniform buffer + dynamic offset** — older variant using
-  uniform buffers and per-draw dynamic offsets. Works fine but has
-  stricter alignment rules than storage buffers. The instance-buffer
-  pattern with `@builtin(instance_index)` is the modern default.
-- **GPU-driven rendering** — Phase-11 territory. CPU writes a
-  draw-command buffer; GPU consumes it via indirect draws. Per-instance
-  data is the same instance buffer Step 3 builds, plus a draw-command
-  buffer alongside it. Layering this on top of Step 3's architecture
-  is additive, not a rewrite.
+One shared `wgpu::Buffer` for vertex data, one for index data, holding
+every mesh's vertices/indices end-to-end. Meshes become offsets into
+those buffers. The renderer binds the vertex/index buffers once and
+issues `draw_indexed(indices_range, base_vertex, instance_range)` per
+mesh, where `indices_range` and `base_vertex` come from the mesh's
+sub-allocation record.
 
-Phase 5 ships the instance-buffer pattern with a simple "rewrite the
-whole buffer every frame" upload. Incremental updates (dirty flags) are
-Phase-7 scene-graph work; indirect draws are Phase 11.
+Why this shape:
 
-### Pull-renderer and uber-shader (forward look)
+- **Indirect draws.** Phase 11 needs the GPU to issue draws by reading
+  a buffer of `(index_count, instance_count, base_index, base_vertex,
+  base_instance)` records. That requires every mesh's geometry to be
+  in one buffer it can address by offset.
+- **BLAS construction.** Phase 17 ray-tracing wants per-mesh BLAS built
+  over a contiguous range of a mega-buffer. Buffer-per-mesh forces an
+  extra copy.
+- **Bind churn.** With one shared vertex buffer, `set_vertex_buffer`
+  is called once per frame. Buffer-per-mesh calls it per draw.
 
-Two terms from `ROADMAP.md`'s Design Principles that surface in phase
-planning but aren't built yet.
+Migration is local to `MeshPool` and `Primitive`. Renderer-side: drop
+`set_vertex_buffer` / `set_index_buffer` from the per-mesh loop, add
+them once before the loop. Indexed draw becomes
+`draw_indexed(prim.index_offset..prim.index_offset + prim.index_count,
+prim.vertex_offset as i32, instance_range)`.
 
-- **Pull-renderer.** Each frame, the renderer queries the world for
-  what to draw (`world.query::<(&Transform, &MeshRef, &MaterialRef)>`)
-  and pulls the data it needs. The opposite is a push model: ECS code
-  calls into the renderer to register draws. Pull keeps simulation code ignorant of
-  wgpu — Design Principle `#3`.
-- **Uber-shader.** One large shader with branches or feature flags for
-  every material variant, instead of N specialized shaders. Trades
-  runtime branching for build-time and binding simplicity. Phase 5 does
-  not write one; the seed is just "do not proliferate per-material
-  shaders without thinking".
+### Material-as-ID
 
-### GPU-driven rendering (forward look, post-Phase-5)
+Materials are entries in a structured GPU buffer indexed by
+`MaterialId` (a `u32`). One bind group serves all materials: the
+material buffer + the per-channel texture arrays + a sampler.
+Per-instance data carries the material ID; the fragment shader reads
+`materials[instance.material_id]` to get parameters and texture
+indices, then samples each texture array by index.
 
-"Everything on GPU" is the modern AAA pattern Spartan and UE5 advertise.
-It is a *renderer* concern, separate from the ECS choice in this phase.
-Praxis can adopt it later without revisiting Phase 5 work.
+Why this shape:
 
-Concretely, GPU-driven rendering replaces these CPU-side patterns:
+- **Bindless precursor.** Phase 10 swaps the per-channel texture
+  arrays for one big bindless descriptor array. The data flow — "look
+  up material by ID, then sample textures by index" — stays. The
+  bindless transition becomes additive.
+- **GPU-driven.** Phase 11 indirect draws want material parameters
+  reachable from the GPU without CPU-issued bind-group changes.
+  Material-as-ID delivers exactly that.
+- **One bind-group rebind, not many.** Per-material bind groups force
+  a `set_bind_group` call between every draw. Material-as-ID binds
+  once per frame.
 
-- **Per-entity uniform buffer** → **one persistent scene buffer**
-  holding every transform / material entry, updated incrementally via
-  dirty flags.
-- **Bind-group-per-material** → **bindless**: one giant descriptor array
-  of textures; shaders index into it by material ID. No per-material
-  bind-group churn.
-- **Submit-draw-per-mesh** → **indirect drawing**: CPU writes a command
-  buffer once; GPU reads it and dispatches every draw without further
-  CPU involvement.
-- **CPU-side frustum / occlusion culling** → **compute-shader culling**:
-  GPU tests visibility against camera + depth pyramid, builds the
-  visible-instance list the indirect draw consumes.
-- **One wgpu buffer per mesh** → **one mega-buffer**: meshes are
-  sub-allocations referenced by offset; helps streaming and reduces
-  bind churn.
-
-Where the threshold sits, roughly: CPU draw-call submission becomes the
-bottleneck around 3,000–5,000 visible draws per frame on modern
-hardware. A Skyrim-shape RPG with chunked streaming and aggressive
-culling typically lives in the hundreds to low thousands — well below
-the threshold.
-
-Phase-5 lock-in for going GPU-driven later: low. The lock-in lives in
-the renderer — per-entity uniform buffers, bind-group-per-material,
-immediate-mode draw submission. All of those are already on the rewrite
-list whenever a rendering-focused phase tackles bindless or indirect.
+The `texture_indices` field in `MaterialData` is a `[u32; 4]` packing
+albedo / normal / MR / AO indices. Emissive index lives in `extra.x`.
+Default layers (white-1×1 albedo, flat normal, etc.) live at fixed
+indices in each array so a missing texture has a valid fallback.
 
 ---
 
 ## Steps
 
-Each step ends with a visible or verifiable checkpoint. The rule: no step
-advances until its checkpoint holds.
+Six steps. Each ends with a visible or verifiable checkpoint. The rule:
+no step advances until its checkpoint holds.
 
-### Step 1: Add bevy_ecs, define components and pools
+Steps 1 and 2 are architectural; the rendered image must be
+**identical** to Phase 5 output at their checkpoints. Steps 3–6 are
+visible; each adds a measurable improvement.
 
-_Pin a current `bevy_ecs` 0.x version. Define `Transform`, `MeshRef`,
-`MaterialRef`, `LightRef` components. Define `MeshPool`, `TexturePool`,
-`MaterialPool` as resources._
+### Step 1: Mega-buffer mesh storage
 
-**Notes.** Sub-crate only — confirm `cargo tree | grep bevy` shows just
-`bevy_ecs` (and its small graph of internal deps), not `bevy_render` or
-`bevy_app`. Components are pure data: `Transform = glam::Affine3A`, refs
-wrap `MeshHandle(u32)`. Pools live in the world as resources, but their
-internals are still ours. No render changes yet.
+_One shared `wgpu::Buffer` for all vertex data, one for all index data.
+`Primitive` stores `(vertex_offset, vertex_count, index_offset,
+index_count)` — no per-primitive buffers. Visible behavior unchanged._
 
-Where to look:
+**Notes.** This step is invisible. The goal is the data flow, not the
+picture. The picture must look identical to Phase 5 at the checkpoint.
 
-- `Cargo.toml` — add `bevy_ecs = "0.x"` (check `cargo search bevy_ecs`
-  for current; pin exact). After `cargo build`, `cargo tree` should
-  show only `bevy_ecs` from the bevy family.
-- New `src/components.rs` — `#[derive(Component)]` types: `Transform`,
-  `MeshRef`, `MaterialRef`, `LightRef`. Wire with `mod components;`
-  in `main.rs`.
-- New `src/resources.rs` (or `src/render/resources.rs`) — handle
-  newtypes (`MeshHandle(pub u32)` etc.) and `#[derive(Resource)]`
-  pools. `MeshPool` wraps `Vec<Mesh>`; `Mesh` is the inner type.
-- Existing `GpuPrimitive` struct (`src/state.rs:12`) is the candidate
-  shape for `Mesh` — but decide first whether one `Mesh` = one
-  primitive or one mesh = many primitives (the helmet has several
-  primitives, so this is a real design call). Either is defensible;
-  note the reasoning.
-- Add a `world: bevy_ecs::World` field to `State` (`src/state.rs:19`),
-  initialized in `State::new`. Resources inserted right after via
-  `world.insert_resource(MeshPool::default())`.
+Final shape:
 
-- [x] Done
+```rust
+pub struct Primitive {
+    pub vertex_offset: u32,
+    pub vertex_count: u32,
+    pub index_offset: u32,
+    pub index_count: u32,
+    // material reference comes in Step 2
+}
 
-Checkpoint: `cargo build` passes. `World::new()` runs and resources
-register without panicking.
+pub struct Mesh {
+    pub primitives: Vec<Primitive>,
+}
 
-### Step 2: Migrate 3 helmets into ECS
+pub struct MeshPool {
+    meshes: Vec<Mesh>,
+    vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+    vertex_capacity: u64,
+    index_capacity: u64,
+    vertex_used: u64,
+    index_used: u64,
+}
+```
 
-_Replace `State.transforms` and `State.primitives` with ECS entities
-carrying `Transform` + `MeshRef` + `MaterialRef`. Old render path stays —
-for now the renderer still runs nested loops, but its data source is the
-world._
+`MeshPool::insert(vertices, indices, ...)` writes data at the current
+offsets, advances `vertex_used` / `index_used`, and returns the `Mesh`
+with `Primitive` records carrying the offsets. Growth path: when an
+`insert` would overflow capacity, allocate a new buffer at 2× size,
+re-upload existing data from CPU, swap the buffer handle.
 
-**Notes.** Spawn at startup via `cmd.spawn((Transform(...), MeshRef(h),
-MaterialRef(m)))`. The render path can iterate
-`world.query::<(&Transform, &MeshRef, &MaterialRef)>()` and look meshes /
-materials up in pools. It will look transitional — that's fine. The
-milestone is "data flow works", not "render is rewritten". The picture
-on screen must be identical.
+Render-loop change: bind shared vertex + index buffers **once** before
+iterating primitives. Per-primitive draw becomes:
 
-Where to look:
-
-- `src/state.rs:232` — `load_model("assets/DamagedHelmet.glb")` stays;
-  the loaded primitives feed `MeshPool::insert` (and texture data
-  feeds `TexturePool::insert`) instead of the local `primitives` Vec.
-- `src/state.rs:234-238` — hardcoded `transforms` Vec → 3
-  `cmd.spawn(...)` calls at the end of `State::new` (one per helmet
-  position). All three share the same `MeshHandle` and
-  `MaterialHandle`.
-- `src/state.rs:240-310` — per-primitive vertex/index/texture upload
-  moves inside `MeshPool::insert` (or a `load_model_into_pool`
-  helper). The pool returns one `MeshHandle` shared by all 3 spawns.
-- `src/state.rs:33` (`primitives` field) and `src/state.rs:37`
-  (`transforms` field) — **deleted from `State`**; their data lives
-  in the world now.
-- `src/state.rs:466-476` (per-transform model uniform write loop) and
-  `src/state.rs:568-578` (nested render loop) — **stay** for this
-  step; they read from `world.query` instead of `self.transforms` /
-  `self.primitives`. Ugly but transitional. Step 3 cleans them up.
-- `src/state.rs:36` (`model_buffers`) — **also stays** this step:
-  still one buffer per renderable. Deleted in Step 3.
-
-- [x] Done
-
-Checkpoint: **three helmets still on screen, unchanged**. `State` no
-longer owns `Vec<Transform>` or hardcoded primitive lists. Milestone
-commit.
-
-### Step 3: Renderer queries world via prepare pass + single instance buffer
-
-_Delete the hardcoded loops and per-index `State.model_buffers`. Add a
-`prepare_renderables` system that walks the query, builds
-`Vec<InstanceData>`, and uploads to one persistent instance buffer.
-Per-entity GPU buffers go away._
-
-**Notes.** Skip the `HashMap<Entity, wgpu::Buffer>` per-entity pattern.
-It is a dead end: GPU-driven rendering, RT TLAS rebuilds, and instancing
-all want one structured buffer of instance data, not many small uniform
-buffers. Bake the right shape now — see *Instance buffers vs per-entity
-uniform buffers* in Mental models for the full reasoning.
-
-Concrete shape:
-
-- `State` owns one `wgpu::Buffer` of `InstanceData` (model matrix for
-  now; normal matrix + material ID get added in later phases), sized
-  for an initial capacity and resized on overflow.
-- A `prepare_renderables` system each frame walks
-  `world.query::<(&Transform, &MeshRef, &MaterialRef)>()`, builds a
-  `Vec<InstanceData>`, and uploads it once via `queue.write_buffer`.
-  One write per frame, regardless of entity count.
-- Each draw call uses `base_instance` + instance count to span its
-  slice of the instance buffer. Vertex shader reads its
-  `@builtin(instance_index)` in WGSL and uses it to look up the model
-  matrix in the buffer.
-- `prepare_renderables` also produces the `(mesh, material,
-  instance_idx)` draw list the renderer iterates.
-
-Sub-decision: storage-buffer bind group vs vertex-step instance
-attribute for delivering per-instance data. **Recommend storage
-buffer** — extends cleanly to indirect draws and bindless later, and
-matches Load-bearing decisions #3 / #5 in `ROADMAP.md`.
-
-What this is **not** doing yet: bindless materials (Phase 10), indirect
-draws (Phase 11), persistent buffer with incremental dirty-flag updates
-(Phase 7 scene-graph work). The instance buffer is fully rewritten each
-frame here. Fine at Phase-5 entity counts; the architecture is right
-even if the implementation is the simple version.
+```rust
+pass.draw_indexed(
+    prim.index_offset..prim.index_offset + prim.index_count,
+    prim.vertex_offset as i32,
+    instance_range,
+);
+```
 
 Where to look:
 
-- New `src/render/instance.rs` (or similar) for `InstanceData`
-  (`#[repr(C)]`, `bytemuck::Pod + Zeroable`). Start with
-  `model: [[f32; 4]; 4]`; normal matrix joins later (Phase 6 lighting
-  work needs it).
-- `src/state.rs:36` (`model_buffers` field) — **deleted**. Replaced
-  by one `wgpu::Buffer` (the instance buffer) plus its bind group.
-- `src/state.rs:158-171` (`model_bind_group_layout`) — **repurpose**
-  as a storage-buffer layout. Single binding,
-  `BufferBindingType::Storage { read_only: true }`, visibility
-  `wgpu::ShaderStages::VERTEX`.
-- `src/state.rs:342-362` (`model_buffers` Vec creation) — **deleted**;
-  replaced by one `wgpu::Buffer` of size
-  `cap * size_of::<InstanceData>()` with `STORAGE | COPY_DST` usage,
-  and one bind group built from it. Track `cap` so you can detect
-  overflow and recreate.
-- `src/state.rs:466-476` (per-transform write loop in `update`) —
-  **deleted**; replaced by `prepare_renderables` building a
-  `Vec<InstanceData>` from the query and one `queue.write_buffer`.
-- `src/state.rs:568-578` (nested render loop) — **collapsed**:
-  `prepare_renderables` returns a draw list; render iterates that,
-  setting per-draw bindings (texture for the mesh's material) and
-  using `draw_indexed(idx_range, 0, instance_range)` where
-  `instance_range = instance_idx..instance_idx + 1` for now. (Real
-  instancing — multiple entities sharing a mesh collapsed into one
-  draw with `instance_count > 1` — is the natural follow-up once
-  this works.)
-- `src/shader.wgsl` — vertex shader stops reading from a uniform
-  `Model` and instead reads from
-  `@group(3) @binding(0) var<storage, read> instances:
-  array<InstanceData>;`, indexed by `@builtin(instance_index)`. The
-  uniform `Model` struct goes away. Match WGSL `InstanceData` layout
-  to the Rust side (16-byte alignment; column-major matrices).
+- `src/assets/mesh.rs` (current `Mesh` / `Primitive` types) — add the
+  offset/count fields, drop per-primitive `wgpu::Buffer` ownership.
+- `src/assets/pools.rs` (or wherever `MeshPool` lives) — add the two
+  shared buffers + capacity tracking + growth logic.
+- `src/assets/loaders/gltf.rs` (or equivalent) — `load_model` writes
+  vertex + index data into `MeshPool` instead of building per-primitive
+  buffers.
+- `src/render/...` — the render path drops `set_vertex_buffer` /
+  `set_index_buffer` from the per-mesh loop and binds the pool's
+  shared buffers once before iterating.
+- Initial capacity is a tuning call. Pick `1 MiB` of vertex + `256 KiB`
+  of index as a first guess; growth handles the rest. DamagedHelmet's
+  largest primitive is well under this.
 
-- [x] Done
+- [ ] Done
 
-Checkpoint: same 3 helmets, but `State` no longer owns `transforms` or
-any per-entity buffers. One instance buffer, one `queue.write_buffer`
-per frame, draws indexed into it. Render data flows from the world.
+Checkpoint: 3 helmets render identically. `MeshPool` exposes one vertex
+buffer and one index buffer. `cargo build && cargo run` shows the same
+pixels as end-of-Phase-5.
 
-### Step 4: Camera and input become systems
+### Step 2: Material-as-ID + structured material buffer + texture arrays
 
-_Extract the camera fly logic out of `State::update()` into a
-`fn camera_system(...)` registered in the schedule. Same for input
-handling. `State::update()` shrinks to `self.schedule.run(&mut
-self.world)`._
+_One bind group for all materials. Materials are entries in an SSBO
+indexed by `MaterialId`. Textures live in per-channel
+`texture_2d_array`s. Visible behavior unchanged: still Blinn-Phong, but
+data flows through the new shape._
 
-**Notes.** Free functions with bevy params:
-`fn camera_system(mut q: Query<&mut Transform, With<Camera>>, input:
-Res<Input>, time: Res<Time>) { ... }`. Decide whether the camera is an
-entity (with `Camera` + `Transform` components) or a `Camera` resource —
-both defensible. Pick one and note the reasoning. The systems list
-lives in the schedule; for now `chain()` enforces order.
+**Notes.** This step is also invisible. The existing Blinn-Phong shader
+keeps running but reads material params from the structured buffer
+instead of bind-group-per-material uniforms.
 
-Where to look:
+Final shape (CPU side):
 
-- `src/state.rs:30` (`keys_pressed: HashSet<KeyCode>` field) → `Input`
-  resource in the world. The winit event handler in `main.rs` writes
-  into it instead of into a `State` field. Keep `Input` minimal: the
-  pressed-key set + maybe a per-frame `just_pressed` set for Step 5.
-- `src/state.rs:32` (`pub camera: Camera` field) → either a `Camera`
-  resource or a camera entity with `Camera` + `Transform` components.
-  Resource is simpler; component shape matches what bigger engines
-  do. Pick one for now — switching later is local.
-- `src/state.rs:400-431` (input + camera fly logic in `update()`) →
-  `fn camera_system(...)` in new `src/systems/camera.rs`. Frame `dt`
-  comes from a `Time` resource a separate `tick_time` system updates
-  each frame.
-- `src/state.rs:432-489` (uniform packing for camera + lights) →
-  `prepare_camera_uniforms` and `prepare_light_uniforms` systems, or
-  fold into one `prepare_frame_uniforms`. They run before
-  `prepare_renderables` (chain ordering).
-- `src/state.rs:491-586` (`render`) — stays as a method on `State`
-  for now; the `prepare_renderables` system feeds it the draw list
-  via a `FrameData` resource (Load-bearing decision #4 in
-  `ROADMAP.md` — the renderer never reads `World` mid-frame, only
-  the snapshot a prepare system produced).
-- `State::update()` shrinks to roughly `self.schedule.run(&mut
-  self.world);`. Ordering enforced via
-  `add_systems((tick_time, camera_system, prepare_frame_uniforms,
-  prepare_renderables).chain())`.
-- New `src/systems/` module — declare in `main.rs` with
-  `mod systems;`, sub-modules per system file (`camera.rs`,
-  `prepare.rs`, etc.).
+```rust
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct MaterialData {
+    pub base_color: [f32; 4],
+    pub metallic_roughness: [f32; 4],   // x=metallic, y=roughness, zw=pad
+    pub emissive: [f32; 4],             // xyz=color, w=strength
+    pub texture_indices: [u32; 4],      // x=albedo, y=normal, z=MR, w=AO
+    pub extra: [u32; 4],                // x=emissive_idx, yzw=pad
+}
 
-- [x]
+pub struct MaterialPool {
+    materials: Vec<MaterialData>,
+    materials_buffer: wgpu::Buffer,           // SSBO
+    albedo_array: wgpu::Texture,              // texture_2d_array
+    normal_array: wgpu::Texture,
+    metallic_roughness_array: wgpu::Texture,
+    ao_array: wgpu::Texture,
+    emissive_array: wgpu::Texture,
+    sampler: wgpu::Sampler,
+    bind_group_layout: wgpu::BindGroupLayout, // material_buffer + 5 arrays + sampler
+    bind_group: wgpu::BindGroup,
+    capacity: u64,
+}
+```
 
-Checkpoint: camera controls identical to Phase 4. `State::update()` is
-mostly a `Schedule::run` call.
+WGSL side:
 
-### Step 5: Spawn / despawn at runtime
+```wgsl
+struct MaterialData {
+    base_color: vec4<f32>,
+    metallic_roughness: vec4<f32>,
+    emissive: vec4<f32>,
+    texture_indices: vec4<u32>,
+    extra: vec4<u32>,
+};
 
-_Keybind (e.g. `G`) spawns a new helmet at the camera's current position;
-another (e.g. `H`) despawns the most recently spawned. Verifies bevy's
-`Commands` deferred mutation works under real use, and that the instance
-buffer correctly reflects entity churn._
+@group(2) @binding(0) var<storage, read> materials: array<MaterialData>;
+@group(2) @binding(1) var albedo_array: texture_2d_array<f32>;
+@group(2) @binding(2) var normal_array: texture_2d_array<f32>;
+@group(2) @binding(3) var mr_array: texture_2d_array<f32>;
+@group(2) @binding(4) var ao_array: texture_2d_array<f32>;
+@group(2) @binding(5) var emissive_array: texture_2d_array<f32>;
+@group(2) @binding(6) var pbr_sampler: sampler;
+```
 
-**Notes.** Bevy handles deferred spawn / kill internally — `cmd.spawn`
-and `cmd.entity(e).despawn()` queue at the right sync points; you don't
-manage `pending_spawn` / `pending_kill` yourself. Test the nasty cases:
-spawn during iteration, spawn 100 entities in one frame, rapid spawn +
-kill, despawn then verify queries skip the entity. Confirm the instance
-buffer doesn't carry stale entries for dead entities.
+Per-instance data gains `material_id: u32`. Vertex shader passes it
+through to the fragment shader; the fragment reads
+`materials[instance.material_id]`.
+
+ECS side: `MaterialRef(MaterialHandle)` component (Phase 5 declared the
+marker; flesh out the handle here). `HelmetAssets` (or whatever the
+spawn-time bundle is called) gains `material: MaterialHandle`. The
+spawn system attaches `MaterialRef(assets.material)` on each entity.
+
+Texture array setup: standardise on 2048×2048 RGBA. Default layers at
+fixed indices (e.g. layer 0 = white 1×1 scaled to 2048; layer 1 = flat
+normal `(0.5, 0.5, 1.0)` scaled to 2048) so missing textures have valid
+fallbacks. glTF materials without an explicit texture point at the
+default layer.
 
 Where to look:
 
-- `Input` resource (Step 4) gains a `just_pressed: HashSet<KeyCode>`
-  set, populated by the winit event handler in `main.rs` on
-  `KeyboardInput { state: Pressed, .. }` and cleared at the end of
-  each frame (or by a system at the start of the next frame).
-- New `src/systems/spawn.rs` —
-  `fn spawn_helmet_system(mut cmd: Commands, input: Res<Input>,
-  camera: Res<Camera> /* or Query<&Transform, With<Camera>> */,
-  helmet_assets: Res<HelmetHandles>, mut spawned:
-  ResMut<RuntimeHelmets>)`. Reads `G`, calls `cmd.spawn(...)` with a
-  `Transform` at the camera position, pushes the new `Entity` into
-  `RuntimeHelmets`.
-- Keep mesh + material handles for the helmet in a small resource
-  (`HelmetHandles { mesh: MeshHandle, material: MaterialHandle }`)
-  inserted at startup, so the spawn system doesn't have to look
-  them up.
-- Despawn system: reads `H`, pops the last `Entity` from
-  `RuntimeHelmets`, calls `cmd.entity(e).despawn()`. Bevy flushes
-  between systems; the next frame's `prepare_renderables` query
-  won't see the dead entity.
-- Instance buffer cleanup is automatic — Step 3 rewrites it whole
-  each frame from the live query, so dead entities vanish
-  immediately. Confirm by spawning 5, despawning all 5, checking
-  `Vec<InstanceData>::len() == 3` (the original startup helmets).
-- Register the two new systems in the schedule, chained after
-  `camera_system` so they see this frame's input but before
-  `prepare_renderables`.
+- `src/assets/material.rs` — `MaterialData`, `MaterialHandle`,
+  `MaterialPool` definitions.
+- `src/components.rs` — `MaterialRef` already declared in Phase 5;
+  ensure it wraps `MaterialHandle`.
+- `src/render/instance.rs` — `InstanceData` gains `material_id: u32`.
+  Bump WGSL `InstanceData` layout to match (16-byte alignment).
+- `src/shader.wgsl` — switch from per-material uniform sample to
+  buffer-indexed lookup. Existing Blinn-Phong math stays; only the
+  parameter source changes.
+- `src/assets/loaders/gltf.rs` — translate glTF `Material` to
+  `MaterialData`. Upload textures to the per-channel arrays at load.
+  Track which layer each texture lives at; populate `texture_indices`
+  accordingly.
+- `src/state.rs` — drop the per-material `texture_bind_group` /
+  `texture_bind_group_layout` if they exist; the `MaterialPool` bind
+  group replaces them. Pipeline layout updated to reference the new
+  bind group.
 
-- [x]
+- [ ] Done
 
-Checkpoint: can add and remove helmets live without crashes, leaks, or
-stale-entity rendering. Closing the app drops all pools cleanly.
+Checkpoint: 3 helmets render identically (still Blinn-Phong). One bind
+group rebind per frame regardless of material count. Spawning a fourth
+helmet sharing the same `MaterialHandle` works without allocating a
+new bind group.
+
+### Step 3: Cook-Torrance BRDF
+
+_Replace Blinn-Phong with Cook-Torrance. Single shader, no new
+bindings. First visible change in Phase 6._
+
+**Theory block (inline teaching, ~30–60 min).** Microfacet model
+intuition (rough surface = many tiny facets with normals near `N`).
+Why factorise the BRDF into `D · F · G / (4 · NdotV · NdotL)`. ASCII
+diagram of half-vector geometry. Schlick Fresnel derivation. GGX vs
+other NDFs (why GGX won — long tails match real surfaces). Smith
+geometry. Energy conservation: `kD = (1 - F) · (1 - metallic)`. Why
+metals have no diffuse. The metallic/roughness workflow as a
+2-parameter physical encoding.
+
+WGSL functions to write:
+
+```wgsl
+fn fresnel_schlick(cos_theta: f32, F0: vec3<f32>) -> vec3<f32> {
+    return F0 + (vec3(1.0) - F0) * pow(1.0 - cos_theta, 5.0);
+}
+
+fn distribution_ggx(N: vec3<f32>, H: vec3<f32>, roughness: f32) -> f32 {
+    let a = roughness * roughness;
+    let a2 = a * a;
+    let NdotH = max(dot(N, H), 0.0);
+    let denom = NdotH * NdotH * (a2 - 1.0) + 1.0;
+    return a2 / (PI * denom * denom);
+}
+
+fn geometry_smith(N: vec3<f32>, V: vec3<f32>, L: vec3<f32>, roughness: f32) -> f32 {
+    let r = roughness + 1.0;
+    let k = (r * r) / 8.0;
+    let NdotV = max(dot(N, V), 0.0);
+    let NdotL = max(dot(N, L), 0.0);
+    let ggx_v = NdotV / (NdotV * (1.0 - k) + k);
+    let ggx_l = NdotL / (NdotL * (1.0 - k) + k);
+    return ggx_v * ggx_l;
+}
+```
+
+Per-light contribution:
+
+```wgsl
+let H = normalize(V + L);
+let F = fresnel_schlick(max(dot(H, V), 0.0), F0);
+let D = distribution_ggx(N, H, roughness);
+let G = geometry_smith(N, V, L, roughness);
+let specular = (D * F * G) / (4.0 * NdotV * NdotL + 0.001);
+let kD = (vec3(1.0) - F) * (1.0 - metallic);
+let diffuse = kD * baseColor / PI;
+Lo += (diffuse + specular) * radiance * NdotL;
+```
+
+`F0` for non-metals: `vec3(0.04)`. For metals:
+`mix(vec3(0.04), baseColor, metallic)`.
+
+Apply across the existing 1 directional + 4 point lights from
+`LightUniform`. Loop over all five.
+
+Where to look:
+
+- `src/shader.wgsl` — replace the Blinn-Phong fragment body with
+  Cook-Torrance. Keep ambient at constant `0.03 * baseColor` for now;
+  Step 6 replaces it with IBL.
+- Material-derived params: `baseColor` from `mat.base_color.rgb`,
+  `metallic` from `mat.metallic_roughness.x`, `roughness` from
+  `mat.metallic_roughness.y`. Textures don't apply yet (Step 4); use
+  the factor values directly.
+- Add `PI = 3.14159265` as a WGSL `const`.
+
+- [ ] Done
+
+Checkpoint: 3 helmets shaded with Cook-Torrance. Highlights are
+roughness-dependent (smooth = tight, rough = wide). Metallic surfaces
+tinted by base color in specular. Compared to Phase 5 Blinn-Phong, the
+shape of the highlights differs visibly. Helmets still recognisable;
+overall brightness and colors comparable.
+
+### Step 4: PBR texture maps + tangents
+
+_Apply albedo, normal, metallic-roughness, AO, and emissive textures.
+Vertex layout gains tangents._
+
+**Theory block (inline teaching, ~30–60 min).** Tangent space: why
+per-vertex tangent + bitangent + normal form an orthonormal frame that
+lets normal maps store *relative* perturbations independent of mesh
+orientation. ASCII diagram of TBN basis. `tangent.w` as the bitangent
+sign (handedness fix for mirrored UVs). Computing TBN in the vertex
+shader (transform tangent + normal by world matrix; reconstruct
+bitangent from `cross(N, T) * tangent.w`). Normal-map sampling: read
+RGB, expand from `[0, 1]` to `[-1, 1]` (`2.0 * sample - 1.0`), interpret
+as tangent-space vector, transform to world space via TBN. Why normal
+maps speed up surface detail — geometry resolution unchanged, shading
+resolution increased.
+
+Vertex layout:
+
+```rust
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Vertex {
+    pub position: [f32; 3],
+    pub normal: [f32; 3],
+    pub tangent: [f32; 4],   // xyz = tangent, w = bitangent sign
+    pub uv: [f32; 2],
+}
+```
+
+Loader (glTF) reads the `TANGENT` accessor when present; reject (or
+warn + skip) primitives without tangents in Phase 6. Mikktspace
+fallback is deferred — note in the plan, address only when a model
+breaks it.
+
+Vertex shader: transform `tangent.xyz` and `normal` by the model matrix
+(rotation only — drop translation), pass `T_world` and `N_world` plus
+the bitangent sign to the fragment shader; build TBN there.
+
+Fragment shader:
+
+```wgsl
+let T = normalize(in.tangent_world);
+let N_geom = normalize(in.normal_world);
+let B = cross(N_geom, T) * in.tangent_w;
+let TBN = mat3x3<f32>(T, B, N_geom);
+
+let n_sample = textureSample(normal_array, pbr_sampler, in.uv,
+                              i32(mat.texture_indices.y)).rgb;
+let n_tangent = n_sample * 2.0 - vec3(1.0);
+let N = normalize(TBN * n_tangent);
+
+let albedo = textureSample(albedo_array, pbr_sampler, in.uv,
+                           i32(mat.texture_indices.x)).rgb
+             * mat.base_color.rgb;
+let mr = textureSample(mr_array, pbr_sampler, in.uv,
+                       i32(mat.texture_indices.z)).rg;
+let metallic = mr.r * mat.metallic_roughness.x;
+let roughness = mr.g * mat.metallic_roughness.y;
+let ao = textureSample(ao_array, pbr_sampler, in.uv,
+                       i32(mat.texture_indices.w)).r;
+let emissive = textureSample(emissive_array, pbr_sampler, in.uv,
+                             i32(mat.extra.x)).rgb * mat.emissive.rgb;
+```
+
+glTF metallic-roughness convention: green = roughness, blue = metallic.
+The `.r` / `.g` sample above matches that convention when the texture
+is uploaded with the channel order. Verify against the asset.
+
+Where to look:
+
+- `src/assets/mesh.rs` (or wherever `Vertex` lives) — add the `tangent`
+  field. Update the vertex buffer layout descriptor.
+- `src/assets/loaders/gltf.rs` — read the `TANGENT` accessor; emit
+  warning if absent.
+- `src/shader.wgsl` — vertex stage passes `tangent_world` +
+  `bitangent_sign` to fragment. Fragment builds TBN, samples 5 texture
+  arrays, modulates Cook-Torrance inputs.
+- `MaterialPool` texture upload (Step 2) handles all 5 channels;
+  ensure the loader uploads each one.
+
+- [ ] Done
+
+Checkpoint: helmet surface shows damage in normals and AO. Metallic
+strips read distinctly from rough painted areas. Emissive areas (the
+helmet's visor edges) glow. Lighting unchanged in concept; surface
+detail dramatically improved.
+
+### Step 5: HDR target + ACES tonemap + gamma
+
+_Render geometry into a linear `Rgba16Float` HDR target. Tonemap pass
+samples the HDR and writes to the sRGB swap chain._
+
+**Theory block (inline teaching, ~30–60 min).** Why HDR: real lighting
+exceeds `[0, 1]` (sun is ~10,000 in some normalisations; light bulbs
+are hundreds). Clipping at 1.0 destroys highlight detail. Tonemap
+curves compress linear HDR into displayable LDR while preserving
+perceptual contrast. ACES filmic curve as a standard choice. Gamma
+encoding (sRGB transfer function) as the final step — display expects
+~2.2 power-law encoded values; hardware does this for sRGB swap chain
+formats.
+
+Two-pass pipeline:
+
+1. **Geometry pass.** Render to `Rgba16Float` HDR texture + depth.
+   Output values may exceed 1.0. Clear color stays in linear space.
+2. **Tonemap pass.** Fullscreen triangle samples HDR target, applies
+   ACES, writes to sRGB swap chain target. Hardware encodes gamma on
+   output.
+
+ACES curve (Krzysztof Narkowicz fit, the common "ACES filmic" used
+across engines):
+
+```wgsl
+fn aces_filmic(x: vec3<f32>) -> vec3<f32> {
+    let a = 2.51;
+    let b = 0.03;
+    let c = 2.43;
+    let d = 0.59;
+    let e = 0.14;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+}
+```
+
+New artifacts:
+
+- `hdr_color: wgpu::Texture` (`Rgba16Float`, swap chain dimensions,
+  recreated on resize).
+- `hdr_view: wgpu::TextureView`.
+- `tonemap_pipeline: wgpu::RenderPipeline` — fullscreen-triangle vertex
+  + ACES fragment.
+- `tonemap_bind_group_layout` — single sampled-texture binding for the
+  HDR view.
+- `tonemap_bind_group` — built from `hdr_view` + a sampler. Recreated
+  on resize (bind groups snapshot views).
+
+Geometry render pass color attachment switches to `hdr_view`. Tonemap
+pass color attachment is the swap chain texture view.
+
+Where to look:
+
+- `src/render/hdr.rs` — new module owning `hdr_color` /
+  `tonemap_pipeline` / `tonemap_bind_group`. Resize hook recreates
+  `hdr_color` + the bind group.
+- `src/state.rs` — wire the HDR module's resize callback into the
+  existing `resize()`. Both depth and HDR textures recreated together.
+- `src/render/passes.rs` (or the existing render entrypoint) — split
+  into two passes: geometry-into-HDR, tonemap-into-swapchain.
+- New `src/tonemap.wgsl` (or fold into `shader.wgsl` with separate
+  entrypoints) — fullscreen-triangle vertex + ACES fragment.
+- Verify the swap chain format is sRGB (`Bgra8UnormSrgb` or similar).
+  If currently `Bgra8Unorm`, switch — the tonemap shader writes linear
+  and the hardware encodes gamma.
+
+- [ ] Done
+
+Checkpoint: highlights no longer clip to white. A bright light close
+to a surface produces bright but tone-rolled-off response, not pure
+white. Overall image looks visually similar in mid-tones; differences
+concentrate at the bright end.
+
+### Step 6: IBL split-sum
+
+_Image-based ambient lighting. Equirectangular HDR loaded once,
+prefiltered into irradiance + specular cubemaps + BRDF LUT at startup.
+Shading samples them per-pixel for ambient diffuse + ambient specular._
+
+**Theory block (inline teaching, ~30–60 min).** Recap of the split-sum
+approximation (Mental models section). Walk through each prefilter:
+
+- **Equirect → cubemap.** Sample the equirectangular HDR using
+  `(theta, phi)` derived from the direction vector for each face
+  texel. Compute shader: 6 dispatches (one per face) or one dispatch
+  with a 3D output.
+- **Irradiance.** For each output texel direction `N`, integrate the
+  cosine-weighted hemisphere by sampling the input cubemap N×N times
+  with stratified angles. Output: small (32×32 per face) low-frequency
+  cubemap.
+- **Prefiltered specular.** For each mip, for each output texel
+  direction `R`, integrate using GGX importance sampling with
+  roughness derived from mip level. Output: full-mip cubemap (mip 0
+  mirror, max mip fully rough).
+- **BRDF LUT.** 2D table indexed by `(NdotV, roughness)`. Each texel
+  computes the Fresnel-weighted microfacet integral via importance
+  sampling. Output: `Rg16Float` 256×256.
+
+Apply in the geometry fragment shader:
+
+```wgsl
+let R = reflect(-V, N);
+let NdotV = max(dot(N, V), 0.0);
+
+let F_ibl = fresnel_schlick_roughness(NdotV, F0, roughness);
+let kD_ibl = (vec3(1.0) - F_ibl) * (1.0 - metallic);
+
+let irradiance = textureSample(irradiance_cube, pbr_sampler, N).rgb;
+let diffuse_ibl = irradiance * albedo;
+
+let MAX_REFLECTION_LOD = 4.0;   // matches mip count of prefiltered cube
+let prefilteredColor = textureSampleLevel(prefiltered_cube, pbr_sampler,
+                                          R, roughness * MAX_REFLECTION_LOD).rgb;
+let brdf = textureSample(brdf_lut, lut_sampler, vec2(NdotV, roughness)).rg;
+let specular_ibl = prefilteredColor * (F_ibl * brdf.x + brdf.y);
+
+let ambient = (kD_ibl * diffuse_ibl + specular_ibl) * ao;
+```
+
+`fresnel_schlick_roughness` is a roughness-aware variant — a roughness
+term is added inside the Fresnel to prevent ambient specular from
+blowing up at glancing angles on rough surfaces. Standard PBR
+addendum.
+
+New artifacts:
+
+- `assets/skybox.hdr` — equirectangular HDR file. Use any free HDRI
+  (polyhaven.com is a good source).
+- HDR loader (`image` crate's `OpenExr` or `Hdr` decoder). Pick one;
+  prefer Radiance HDR (`.hdr`) for compactness.
+- `EnvironmentMap` resource:
+  - `env_cube: wgpu::Texture` (cubemap, mip 0 only).
+  - `irradiance_cube: wgpu::Texture` (32×32 per face).
+  - `prefiltered_cube: wgpu::Texture` (128×128 base, 5 mips).
+  - `brdf_lut: wgpu::Texture` (256×256, `Rg16Float`).
+- Compute shaders (4 of them):
+  - `equirect_to_cubemap.wgsl`
+  - `prefilter_irradiance.wgsl`
+  - `prefilter_specular.wgsl` (per-mip dispatch)
+  - `brdf_lut.wgsl`
+- Bind group: extends the material bind group or sits in its own group
+  (group 3, say). Either works; per-group binding-count limits make
+  the choice — check device limits.
+
+Build at startup, in order:
+
+1. Load equirect HDR.
+2. Run `equirect_to_cubemap` compute → `env_cube`.
+3. Run `prefilter_irradiance` → `irradiance_cube`.
+4. Run `prefilter_specular` (per-mip) → `prefiltered_cube`.
+5. Run `brdf_lut` → `brdf_lut`. Cache to disk if the cost matters.
+
+The geometry fragment shader replaces the `0.03 * baseColor` ambient
+constant from Step 3 with the IBL contribution above.
+
+Optional: render the cubemap as a skybox behind the helmets. Gives an
+environment context and is also a good debug — if the skybox looks
+wrong (flipped axes, wrong colors) the IBL math is wrong too. Not
+load-bearing for Phase 6 but easy to add (5-line fullscreen draw +
+cubemap sample). Recommend including.
+
+Where to look:
+
+- `src/assets/environment.rs` — HDR loading + cube buffer setup.
+- `src/render/ibl.rs` — prefilter compute pipeline orchestration.
+- `src/shaders/ibl/*.wgsl` — the 4 compute shaders.
+- `src/shader.wgsl` — fragment ambient term replaced with IBL formula.
+- Material bind group layout extended (or new group) to include the 3
+  cubemap views + the LUT view.
+
+- [ ] Done
+
+Checkpoint: helmets exhibit plausible reflections (visible environment
+in metallic strips, reflection-direction-dependent). Diffuse ambient
+picks up environment color, not a constant grey. Toggling the HDR
+environment swaps the lighting visibly. Metallic vs dielectric
+distinct.
+
+---
+
+## Final shape
+
+Where the codebase ends after Phase 6.
+
+| Subsystem | Phase 5 | Phase 6 |
+|---|---|---|
+| Mesh storage | One `wgpu::Buffer` per primitive | One shared vertex buffer + one shared index buffer in `MeshPool`; primitives store offsets |
+| Material | Per-material `wgpu::BindGroup` | One `wgpu::BindGroup` for `MaterialPool` (SSBO + 5 texture arrays + sampler); materials are SSBO entries |
+| Texture binding | One bind group per texture | Per-channel `texture_2d_array`s; materials index by layer |
+| Shading | Blinn-Phong | Cook-Torrance + PBR maps |
+| Vertex layout | position + normal + uv | position + normal + tangent (vec4) + uv |
+| Render passes | One: geometry → swap chain | Two: geometry → HDR target, tonemap → swap chain |
+| Color pipeline | sRGB swap chain only | sRGB textures → linear math → `Rgba16Float` HDR → ACES → sRGB swap chain |
+| Ambient | Constant | IBL split-sum (irradiance + prefiltered specular + BRDF LUT) |
+| Instance data | `model_matrix` only | `model_matrix` + `material_id` |
+
+What stays from Phase 5: per-frame full-rewrite of the instance buffer
+(no dirty flags yet — Phase 7), per-entity draw call (instancing
+collapse — natural Phase-6 follow-up), Blinn-Phong-shaped 1 directional
++ 4 point lights structure (replaced by area lights + analytic shadows
+in much later phases).
+
+What's set up for Phase 7+: the persistent scene buffer (Phase 7) lays
+on top of the instance buffer with dirty flags. Frame-data snapshot
+(Phase 9) reads from `World` once per frame into a `FrameData` struct
+the renderer consumes. Bindless (Phase 10) collapses the per-channel
+texture arrays into one big descriptor array but keeps material-as-ID.
+GPU-driven (Phase 11) adds an indirect-draw buffer alongside the
+instance buffer. None of these require revisiting Phase 6 work.
