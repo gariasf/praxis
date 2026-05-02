@@ -16,5 +16,4 @@ impl MeshPool {
     pub fn get(&self, handle: MeshHandle) -> Option<&Mesh> {
         self.0.get(handle.0 as usize)
     }
-    }
 }

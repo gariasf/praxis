@@ -596,7 +596,7 @@ impl State {
             {
                 let mesh = mesh_pool.get(mesh_ref.0);
 
-                for primitive in &mesh.primitives {
+                for primitive in &mesh.unwrap().primitives {
                     render_pass.set_bind_group(1, &primitive.texture_bind_group, &[]);
                     render_pass.set_vertex_buffer(0, primitive.vertex_buffer.slice(..));
                     render_pass.set_index_buffer(
