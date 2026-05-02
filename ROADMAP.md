@@ -33,7 +33,7 @@ foundation is rendering.
 - **Graphics:** wgpu (Vulkan on Windows/Linux, DX12 on Windows, Metal on macOS) — long-term home; see "Target shape" above for the wgpu-permanent commitment
 - **Windowing:** winit
 - **Math:** glam
-- **ECS:** Custom (built as part of the project; sparse-set storage in Phase 5)
+- **ECS:** bevy_ecs sub-crate (no full Bevy engine dep) — adopted Phase 5
 - **Asset format:** glTF (via `gltf` crate)
 - **Debug UI:** egui + egui-wgpu (Phase 8)
 - **Logging:** tracing + tracing-subscriber
@@ -297,20 +297,34 @@ A lit scene with at least one light source.
 
 ---
 
-## Phase 5 — Build the ECS
+## Phase 5 — Integrate bevy_ecs + handle pools
 
-Replace ad-hoc game objects with a proper ECS. Done here instead of
-earlier because by now the data that flows through the engine is clear.
+Replace ad-hoc scene data with `bevy_ecs` (sub-crate only — no full Bevy
+engine dep). Rolling our own sparse-set ECS was considered and rejected
+on 2026-04-28: rendering is the project's prize, ECS is plumbing for it.
+Skipping the entity-layer learning trades weeks of foundational work for
+faster progress on rendering phases. See `PLAN.md` for the full
+phase-scratch plan.
 
-- [ ] Design the core: Entity (ID), Component (data), System (logic)
-- [ ] Implement a sparse set or archetype storage for components
-- [ ] Basic query API: "give me all entities with Transform + Mesh"
-- [ ] Central resource pools: MeshPool, TexturePool, MaterialPool — hand out handles
-- [ ] Components hold handles (MeshHandle, MaterialHandle), not owned GPU resources
-- [ ] Keep component data in authoring form (`glam::Affine3A`, etc.), not GPU bytes
-- [ ] Refactor the renderer to query ECS for renderable entities
-- [ ] Refactor input/camera to be systems
-- [ ] Add/remove entities at runtime
+- [x] Pin a current `bevy_ecs` 0.x version; confirm `cargo tree` shows
+      no transitive dep on `bevy_render` / `bevy_app` / `bevy_window`
+- [x] Define components: `Transform` (`glam::Affine3A` newtype),
+      `MeshRef`, `MaterialRef`, `LightRef` — pure data, no GPU bytes
+- [x] Don't import `bevy_transform::Transform`; keep our own
+- [x] Central resource pools: `MeshPool`, `TexturePool`, `MaterialPool`
+      as `#[derive(Resource)]`; pool internals (handle-indexed `Vec`s)
+      are still ours
+- [x] Components hold handles (`MeshHandle`, `MaterialHandle`), not
+      owned GPU resources
+- [x] Migrate 3 helmets via `commands.spawn((Transform(...),
+      MeshRef(h), MaterialRef(m)))`
+- [x] Renderer reads via `Query<(&Transform, &MeshRef, &MaterialRef)>`;
+      `prepare_renderables` system builds one persistent instance buffer
+      per frame (no per-entity uniform buffers)
+- [x] Refactor input/camera to be bevy systems registered in a
+      `Schedule`
+- [x] Add/remove entities at runtime via `Commands::spawn` /
+      `entity.despawn`
 
 ---
 

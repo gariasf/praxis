@@ -8,21 +8,27 @@ use winit::{
     window::{Window, WindowId},
 };
 
+use crate::camera::Camera;
+use crate::input::Input;
 use crate::state::State;
 
+mod assets;
 mod camera;
-mod light;
-mod model;
+mod components;
+mod helmet;
+mod input;
+mod render;
 mod state;
-mod texture;
-mod vertex;
+mod time;
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes =
-            Window::default_attributes().with_inner_size(winit::dpi::PhysicalSize::new(1280, 720));
+            Window::default_attributes().with_inner_size(winit::dpi::PhysicalSize::new(2560, 1440));
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        let size = window.inner_size();
+        tracing::info!(width = size.width, height = size.height, "window created");
         window
             .set_cursor_grab(winit::window::CursorGrabMode::Confined)
             .ok();
@@ -56,14 +62,19 @@ impl ApplicationHandler for App {
                     KeyEvent {
                         physical_key: PhysicalKey::Code(code),
                         state: key_state,
+                        repeat,
                         ..
                     },
                 ..
             } => {
+                let mut input = state.world.resource_mut::<Input>();
                 if key_state.is_pressed() {
-                    state.keys_pressed.insert(code);
+                    input.pressed.insert(code);
+                    if !repeat {
+                        input.just_pressed.insert(code);
+                    }
                 } else {
-                    state.keys_pressed.remove(&code);
+                    input.pressed.remove(&code);
                 }
                 if code == KeyCode::Escape && key_state.is_pressed() {
                     event_loop.exit();
@@ -82,9 +93,10 @@ impl ApplicationHandler for App {
         if let Some(state) = &mut self.state
             && let winit::event::DeviceEvent::MouseMotion { delta } = event
         {
-            state.camera.yaw += delta.0 as f32 * state.camera.sensitivity;
-            state.camera.pitch -= delta.1 as f32 * state.camera.sensitivity;
-            state.camera.pitch = state.camera.pitch.clamp(-1.5, 1.5); // ~86 degrees
+            let mut camera = state.world.resource_mut::<Camera>();
+            camera.yaw += delta.0 as f32 * camera.sensitivity;
+            camera.pitch -= delta.1 as f32 * camera.sensitivity;
+            camera.pitch = camera.pitch.clamp(-1.5, 1.5); // ~86 degrees
         }
     }
 }
@@ -103,7 +115,11 @@ pub fn run() -> anyhow::Result<()> {
 }
 
 fn main() {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
+
+    tracing::info!(version = env!("CARGO_PKG_VERSION"), "praxis starting");
 
     let _app = run();
 }

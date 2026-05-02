@@ -1,11 +1,4 @@
-use crate::vertex::Vertex;
-
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct ModelUniform {
-    pub model: [[f32; 4]; 4],
-    pub normal_matrix: [[f32; 4]; 4],
-}
+use crate::render::Vertex;
 
 pub struct LoadedPrimitive {
     pub vertices: Vec<Vertex>,
@@ -18,17 +11,33 @@ pub struct LoadedModel {
 }
 
 pub fn load_model(path: &str) -> anyhow::Result<LoadedModel> {
+    let _span = tracing::info_span!("load_model", path = %path).entered();
+
+    tracing::debug!("starting model load");
+
     let (document, buffers, images) = gltf::import(path)?;
 
     let meshes = document.meshes();
-    if meshes.len() == 0 {
+    let mesh_count = meshes.len();
+    tracing::debug!(
+        meshes = mesh_count,
+        buffers = buffers.len(),
+        images = images.len(),
+        "glTF parsed"
+    );
+
+    if mesh_count == 0 {
         return Err(anyhow::anyhow!("No meshes found"));
     }
 
     let mut primitives = Vec::new();
 
-    for mesh in meshes {
-        for primitive in mesh.primitives() {
+    for (mesh_index, mesh) in meshes.enumerate() {
+        let _mesh_span = tracing::debug_span!("mesh", mesh_index).entered();
+
+        for (primitive_index, primitive) in mesh.primitives().enumerate() {
+            let _prim_span = tracing::debug_span!("primitive", primitive_index).entered();
+
             if primitive.mode() != gltf::mesh::Mode::Triangles {
                 return Err(anyhow::anyhow!(
                     "Unsupported primitive mode: {:?}. Only triangle primitives are supported",
@@ -87,6 +96,13 @@ pub fn load_model(path: &str) -> anyhow::Result<LoadedModel> {
                 None
             };
 
+            tracing::debug!(
+                vertices = vertices.len(),
+                indices = indices.len(),
+                has_color_texture = base_color_image.is_some(),
+                "primitive loaded"
+            );
+
             primitives.push(LoadedPrimitive {
                 vertices,
                 indices,
@@ -94,6 +110,8 @@ pub fn load_model(path: &str) -> anyhow::Result<LoadedModel> {
             });
         }
     }
+
+    tracing::info!(primitives = primitives.len(), "model load complete");
 
     Ok(LoadedModel { primitives })
 }

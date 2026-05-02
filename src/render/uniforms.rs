@@ -9,3 +9,10 @@ pub struct LightUniform {
     pub point_colors: [[f32; 4]; 4],    // rgb = color, a = intensity
     pub num_point_lights: [f32; 4],     // x = count, yzw = padding
 }
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct CameraUniform {
+    pub view_proj: [[f32; 4]; 4],
+    pub position: [f32; 4], // w unused
+}

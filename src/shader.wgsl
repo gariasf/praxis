@@ -2,7 +2,7 @@
 var<uniform> camera: CameraUniform;
 struct CameraUniform {
     view_proj: mat4x4<f32>,
-    camera_pos:  vec4<f32>,
+    position:  vec4<f32>,
 }
 
 @group(1) @binding(0)
@@ -23,38 +23,44 @@ struct LightUniform {
     num_point_lights: vec4<f32>,
 }
 
-@group(3) @binding(0)
-var<uniform> model: ModelUniform;
-struct ModelUniform {
+struct InstanceData {
     model: mat4x4<f32>,
     normal_matrix: mat4x4<f32>,
 }
 
+@group(3) @binding(0)
+var<storage, read> instances: array<InstanceData>;
+
+struct VertexInput {
+    @location(0) position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) uv: vec2<f32>,
+}
+
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
+    @location(0) world_pos: vec3<f32>,
     @location(1) normal: vec3<f32>,
-    @location(2) world_pos: vec3<f32>,
+    @location(2) uv: vec2<f32>
 }
 
 @vertex
 fn vs_main(
-    @location(0) position: vec3<f32>,
-    @location(1) normal: vec3<f32>,
-    @location(2) uv: vec2<f32>,
+in: VertexInput, @builtin(instance_index) instance_idx: u32
 ) -> VertexOutput {
     var out: VertexOutput;
-    out.clip_position = camera.view_proj * model.model * vec4<f32>(position, 1.0);
-    out.uv = uv;
-    out.normal = (model.normal_matrix * vec4<f32>(normal, 0.0)).xyz;
-    out.world_pos = (model.model * vec4<f32>(position, 1.0)).xyz;
+    let instance = instances[instance_idx];
+    out.clip_position = camera.view_proj * instance.model * vec4<f32>(in.position, 1.0);
+    out.uv = in.uv;
+    out.normal = (instance.normal_matrix * vec4<f32>(in.normal, 0.0)).xyz;
+    out.world_pos = (instance.model * vec4<f32>(in.position, 1.0)).xyz;
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let light_dir = normalize(-light.direction.xyz);
-    let view_dir = normalize(camera.camera_pos.xyz - in.world_pos);
+    let view_dir = normalize(camera.position.xyz - in.world_pos);
     let half_vec = normalize(light_dir + view_dir);
     let normal = normalize(in.normal);
     let specular = pow(max(dot(normal, half_vec), 0.0), 32.0);

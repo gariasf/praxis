@@ -1,0 +1,93 @@
+# Code Rabbit configuration for Praxis.
+# Schema reference: https://docs.coderabbit.ai/reference/configuration
+#
+# Praxis is a learning-focused engine. Surface correctness and safety
+# issues; ignore style (rustfmt + clippy own those). See CLAUDE.md for
+# durable conventions and ROADMAP.md for phase plan.
+
+language: en-GB
+
+# 250-char limit — keep tight.
+tone_instructions: >-
+  Be terse and direct. Skip pleasantries. Learning pace, production-bound
+  foundations — flag correctness and load-bearing issues. Skip style (rustfmt
+  and clippy own that).
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  collapse_walkthrough: false
+  sequence_diagrams: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+
+  path_filters:
+    - "!target/**"
+    - "!**/*.glb"
+    - "!**/*.gltf"
+    - "!**/*.bin"
+    - "!**/*.png"
+    - "!**/*.jpg"
+    - "!**/*.jpeg"
+
+  path_instructions:
+    - path: "**/*.rs"
+      instructions: |
+        Follow CLAUDE.md (Project posture + Review checklist). Apply
+        both.
+
+        Additionally flag:
+        - Features ahead of the current phase (see ROADMAP.md). Phase
+          number is the highest fully-checked phase.
+        - println!, eprintln!, or `log` crate usage instead of tracing
+          macros.
+        - GPU resources (wgpu::Buffer, BindGroup, Texture, etc.) stored
+          inside #[derive(Component)] structs — components are pure
+          authoring data.
+        - Throwaway shortcuts that would need rewriting at scale (see
+          Project posture in CLAUDE.md).
+
+    - path: "src/**/*.wgsl"
+      instructions: |
+        Apply the WGSL rules in CLAUDE.md's review checklist:
+        - No bare vec3<f32> in uniform structs.
+        - Layout must match the corresponding Rust #[repr(C)] struct
+          field-by-field (16-byte alignment, column-major matrices).
+
+    - path: "Cargo.toml"
+      instructions: |
+        Flag new dependencies that don't have default-features = false
+        with an explicit features list, unless the crate's defaults are
+        already minimal. Justify version bumps in the PR description.
+
+    - path: "PLAN.md"
+      instructions: |
+        Phase-scratch document — meant to be replaced wholesale at
+        phase boundaries. Don't review for completeness or stylistic
+        consistency.
+
+    - path: "CLAUDE.md"
+      instructions: |
+        If this PR meaningfully changes folder structure, cross-cutting
+        conventions, or load-bearing decisions in ROADMAP.md but does
+        NOT update CLAUDE.md, flag the drift. Reference the specific
+        sections of CLAUDE.md that look stale.
+
+    - path: "ROADMAP.md"
+      instructions: |
+        If a load-bearing decision is added or modified, verify
+        CLAUDE.md still aligns. Flag drift if not.
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  opt_out: false
+  code_guidelines:
+    filePatterns:
+      - "CLAUDE.md"
+      - "ROADMAP.md"

@@ -1,20 +1,19 @@
 use std::sync::Arc;
 
-use wgpu::{Buffer, util::DeviceExt};
-use winit::{keyboard::KeyCode, window::Window};
+use bevy_ecs::prelude::*;
+use wgpu::util::DeviceExt;
+use winit::window::Window;
 
-use crate::camera::{Camera, CameraUniform};
-use crate::light::LightUniform;
-use crate::model::ModelUniform;
-use crate::texture::create_depth_texture;
-use crate::vertex::Vertex;
-
-pub struct GpuPrimitive {
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    num_indices: u32,
-    texture_bind_group: wgpu::BindGroup,
-}
+use crate::assets::{Mesh, MeshPool, Primitive};
+use crate::camera::{Camera, fly_camera};
+use crate::components::{MeshRef, Transform};
+use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
+use crate::input::{Input, clear_just_pressed};
+use crate::render::{
+    CameraUniform, INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData, LightUniform, Vertex,
+    create_depth_texture, prepare_renderables,
+};
+use crate::time::{Time, tick_time};
 
 pub struct State {
     surface: wgpu::Surface<'static>,
@@ -24,21 +23,25 @@ pub struct State {
     is_surface_configured: bool,
     window: Arc<Window>,
     render_pipeline: wgpu::RenderPipeline,
-    camera_buffer: Buffer,
+    camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     depth_texture_view: wgpu::TextureView,
-    pub keys_pressed: std::collections::HashSet<KeyCode>,
-    last_frame: std::time::Instant,
-    pub camera: Camera,
-    primitives: Vec<GpuPrimitive>,
-    light_buffer: Buffer,
+    light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
-    model_buffers: Vec<(Buffer, wgpu::BindGroup)>,
-    transforms: Vec<glam::Mat4>,
+    // World is an internal detail, it should not be public. But this will do for now.
+    pub world: World,
+    instance_buffer: wgpu::Buffer,
+    instance_bind_group: wgpu::BindGroup,
+    instance_capacity: u64,
+    schedule: Schedule,
+    instance_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl State {
     pub async fn new(window: Arc<Window>) -> anyhow::Result<State> {
+        let _span = tracing::info_span!("state_init").entered();
+
+        // Device and queue setup
         let size = window.inner_size();
 
         // The instance is a handle to our GPU
@@ -62,6 +65,14 @@ impl State {
             })
             .await?;
 
+        let adapter_info = adapter.get_info();
+        tracing::info!(
+            name = %adapter_info.name,
+            backend = ?adapter_info.backend,
+            device_type = ?adapter_info.device_type,
+            "adapter selected"
+        );
+
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: None,
@@ -84,6 +95,12 @@ impl State {
             .find(|f| f.is_srgb())
             .copied()
             .unwrap_or(surface_caps.formats[0]);
+
+        tracing::debug!(
+            ?surface_format,
+            srgb = surface_format.is_srgb(),
+            "surface format chosen"
+        );
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -155,14 +172,14 @@ impl State {
                 }],
             });
 
-        let model_bind_group_layout =
+        let instance_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Model Bind Group Layout"),
+                label: Some("Instance Bind Group Layout"),
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
@@ -177,7 +194,7 @@ impl State {
                     Some(&camera_bind_group_layout),
                     Some(&texture_bind_group_layout),
                     Some(&light_bind_group_layout),
-                    Some(&model_bind_group_layout),
+                    Some(&instance_bind_group_layout),
                 ],
                 immediate_size: 0,
             });
@@ -229,16 +246,31 @@ impl State {
             cache: None,
         });
 
-        let model = crate::model::load_model("assets/DamagedHelmet.glb")?;
+        let mut world = World::new();
+        world.insert_resource(MeshPool::default());
+        world.insert_resource(Input::default());
+        world.insert_resource(Time::new());
+        world.insert_resource(Camera::new());
+        world.insert_resource(RuntimeHelmets::default());
 
-        let transforms = vec![
-            glam::Mat4::from_translation(glam::vec3(0.0, 0.0, 0.0)),
-            glam::Mat4::from_translation(glam::vec3(2.0, 0.0, 0.0)),
-            glam::Mat4::from_translation(glam::vec3(-2.0, 0.0, 0.0)),
-        ];
+        let mut schedule = Schedule::default();
+        schedule.add_systems(
+            (
+                tick_time,
+                fly_camera,
+                spawn_helmet,
+                despawn_helmet,
+                clear_just_pressed,
+            )
+                .chain(),
+        );
+
+        let model = crate::assets::load_model("assets/DamagedHelmet.glb")?;
 
         let mut primitives = Vec::new();
-        for prim in &model.primitives {
+        for (primitive_index, prim) in model.primitives.iter().enumerate() {
+            let _prim_span = tracing::debug_span!("upload_primitive", primitive_index).entered();
+
             let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Vertex Buffer"),
                 contents: bytemuck::cast_slice(&prim.vertices),
@@ -301,13 +333,36 @@ impl State {
                 ],
             });
 
-            primitives.push(GpuPrimitive {
+            tracing::debug!(
+                vertices = prim.vertices.len(),
+                indices = prim.indices.len(),
+                texture = tex_width * tex_height > 1,
+                "primitive uploaded"
+            );
+
+            primitives.push(Primitive {
                 vertex_buffer,
                 index_buffer,
                 num_indices: prim.indices.len() as u32,
                 texture_bind_group,
             });
         }
+        let mesh = Mesh { primitives };
+        let mesh_handle = world.resource_mut::<MeshPool>().insert(mesh);
+        world.insert_resource(HelmetAssets { mesh: mesh_handle });
+
+        world.spawn((
+            Transform(glam::Affine3A::from_translation(glam::vec3(0.0, 0.0, 0.0))),
+            MeshRef(mesh_handle),
+        ));
+        world.spawn((
+            Transform(glam::Affine3A::from_translation(glam::vec3(2.0, 0.0, 0.0))),
+            MeshRef(mesh_handle),
+        ));
+        world.spawn((
+            Transform(glam::Affine3A::from_translation(glam::vec3(-2.0, 0.0, 0.0))),
+            MeshRef(mesh_handle),
+        ));
 
         let camera_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Camera Buffer"),
@@ -339,27 +394,23 @@ impl State {
             }],
         });
 
-        let model_buffers: Vec<(Buffer, wgpu::BindGroup)> = transforms
-            .iter()
-            .enumerate()
-            .map(|(i, _)| {
-                let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some(&format!("Model Buffer {i}")),
-                    size: std::mem::size_of::<ModelUniform>() as wgpu::BufferAddress,
-                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                });
-                let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some(&format!("Model Bind Group {i}")),
-                    layout: &model_bind_group_layout,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: buffer.as_entire_binding(),
-                    }],
-                });
-                (buffer, bind_group)
-            })
-            .collect();
+        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Instance Buffer"),
+            size: INSTANCE_BUFFER_INITIAL_CAPACITY * std::mem::size_of::<InstanceData>() as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let instance_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Instance Bind Group"),
+            layout: &instance_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: instance_buffer.as_entire_binding(),
+            }],
+        });
+
+        let instance_capacity = INSTANCE_BUFFER_INITIAL_CAPACITY;
 
         let depth_width = config.width.max(1);
         let depth_height = config.height.max(1);
@@ -376,18 +427,19 @@ impl State {
             camera_buffer,
             camera_bind_group,
             depth_texture_view,
-            camera: Camera::new(),
-            keys_pressed: std::collections::HashSet::new(),
-            last_frame: std::time::Instant::now(),
-            primitives,
             light_buffer,
             light_bind_group,
-            model_buffers,
-            transforms,
+            world,
+            instance_buffer,
+            instance_bind_group,
+            instance_capacity,
+            schedule,
+            instance_bind_group_layout,
         })
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
+        tracing::debug!(width, height, "resize requested");
         if width > 0 && height > 0 {
             self.config.width = width;
             self.config.height = height;
@@ -402,46 +454,18 @@ impl State {
             return;
         }
 
-        let now = std::time::Instant::now();
-        let dt = (now - self.last_frame).as_secs_f32();
-        self.last_frame = now;
+        self.schedule.run(&mut self.world);
 
-        let forward = self.camera.forward();
-        let right = self.camera.right();
-        let speed = self.camera.speed * dt;
-
-        if self.keys_pressed.contains(&KeyCode::KeyW) {
-            self.camera.position += forward * speed;
-        }
-        if self.keys_pressed.contains(&KeyCode::KeyS) {
-            self.camera.position -= forward * speed;
-        }
-        if self.keys_pressed.contains(&KeyCode::KeyD) {
-            self.camera.position += right * speed;
-        }
-        if self.keys_pressed.contains(&KeyCode::KeyA) {
-            self.camera.position -= right * speed;
-        }
-        if self.keys_pressed.contains(&KeyCode::Space) {
-            self.camera.position.y += speed;
-        }
-        if self.keys_pressed.contains(&KeyCode::ShiftLeft) {
-            self.camera.position.y -= speed;
-        }
+        let camera = self.world.resource::<Camera>();
 
         let aspect = self.config.width as f32 / self.config.height as f32;
-        let view = self.camera.view_matrix();
+        let view = camera.view_matrix();
         let proj = glam::Mat4::perspective_rh(45_f32.to_radians(), aspect, 0.1, 100.0);
 
         let view_proj = proj * view;
         let camera_uniform = CameraUniform {
             view_proj: view_proj.to_cols_array_2d(),
-            camera_pos: [
-                self.camera.position.x,
-                self.camera.position.y,
-                self.camera.position.z,
-                0.0,
-            ],
+            position: [camera.position.x, camera.position.y, camera.position.z, 0.0],
         };
 
         let light_uniform = LightUniform {
@@ -463,17 +487,13 @@ impl State {
             num_point_lights: [4.0, 0.0, 0.0, 0.0],
         };
 
-        for (i, &transform) in self.transforms.iter().enumerate() {
-            let model_uniform = ModelUniform {
-                model: transform.to_cols_array_2d(),
-                normal_matrix: transform.inverse().transpose().to_cols_array_2d(),
-            };
-            self.queue.write_buffer(
-                &self.model_buffers[i].0,
-                0,
-                bytemuck::cast_slice(&[model_uniform]),
-            );
-        }
+        let instance_data = prepare_renderables(&mut self.world);
+        self.ensure_instance_capacity(instance_data.len() as u64);
+        self.queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(&instance_data),
+        );
 
         self.queue.write_buffer(
             &self.camera_buffer,
@@ -499,6 +519,7 @@ impl State {
         let output = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
             wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => {
+                tracing::debug!("surface suboptimal, reconfiguring");
                 self.surface.configure(&self.device, &self.config);
                 surface_texture
             }
@@ -509,11 +530,12 @@ impl State {
                 return Ok(());
             }
             wgpu::CurrentSurfaceTexture::Outdated => {
+                tracing::warn!("surface outdated, reconfiguring");
                 self.surface.configure(&self.device, &self.config);
                 return Ok(());
             }
             wgpu::CurrentSurfaceTexture::Lost => {
-                // The surface texture was lost; bail with an accurate error.
+                tracing::error!("surface texture lost; bailing");
                 anyhow::bail!("Surface texture lost");
             }
         };
@@ -564,16 +586,33 @@ impl State {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_bind_group(2, &self.light_bind_group, &[]);
+            render_pass.set_bind_group(3, &self.instance_bind_group, &[]);
 
-            for (i, _) in self.transforms.iter().enumerate() {
-                render_pass.set_bind_group(3, &self.model_buffers[i].1, &[]);
+            let mut renderable_query = self.world.query::<(&Transform, &MeshRef)>();
+            let mesh_pool = self.world.resource::<MeshPool>();
 
-                for prim in &self.primitives {
-                    render_pass.set_bind_group(1, &prim.texture_bind_group, &[]);
-                    render_pass.set_vertex_buffer(0, prim.vertex_buffer.slice(..));
-                    render_pass
-                        .set_index_buffer(prim.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                    render_pass.draw_indexed(0..prim.num_indices, 0, 0..1);
+            for (entity_index, (_transform, mesh_ref)) in
+                renderable_query.iter(&self.world).enumerate()
+            {
+                let handle = mesh_ref.0;
+                let Some(mesh) = mesh_pool.get(handle) else {
+                    tracing::warn!(handle = handle.0, "MeshHandle not in pool, skipping entity");
+                    continue;
+                };
+
+                for primitive in &mesh.primitives {
+                    render_pass.set_bind_group(1, &primitive.texture_bind_group, &[]);
+                    render_pass.set_vertex_buffer(0, primitive.vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(
+                        primitive.index_buffer.slice(..),
+                        wgpu::IndexFormat::Uint32,
+                    );
+                    let instance_idx = entity_index as u32;
+                    render_pass.draw_indexed(
+                        0..primitive.num_indices,
+                        0,
+                        instance_idx..instance_idx + 1,
+                    );
                 }
             }
         }
@@ -583,5 +622,40 @@ impl State {
         output.present();
 
         Ok(())
+    }
+
+    fn ensure_instance_capacity(&mut self, needed: u64) {
+        if needed <= self.instance_capacity {
+            return;
+        }
+
+        let old_capacity = self.instance_capacity;
+        let mut new_capacity = old_capacity * 2;
+        while new_capacity < needed {
+            new_capacity *= 2;
+        }
+
+        self.instance_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Instance Buffer"),
+            size: new_capacity * std::mem::size_of::<InstanceData>() as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        self.instance_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Instance Bind Group"),
+            layout: &self.instance_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: self.instance_buffer.as_entire_binding(),
+            }],
+        });
+
+        self.instance_capacity = new_capacity;
+        tracing::info!(
+            old = old_capacity,
+            new = new_capacity,
+            "instance buffer resized"
+        );
     }
 }
