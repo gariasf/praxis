@@ -1,7 +1,8 @@
 pub struct Primitive {
-    pub vertex_buffer: wgpu::Buffer,
-    pub index_buffer: wgpu::Buffer,
-    pub num_indices: u32,
+    pub vertex_offset: u32,
+    pub vertex_count: u32,
+    pub index_offset: u32,
+    pub index_count: u32,
     pub texture_bind_group: wgpu::BindGroup,
 }
 

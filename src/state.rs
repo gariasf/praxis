@@ -247,7 +247,7 @@ impl State {
         });
 
         let mut world = World::new();
-        world.insert_resource(MeshPool::default());
+        world.insert_resource(MeshPool::new(&device, 1 << 20, 256 << 10));
         world.insert_resource(Input::default());
         world.insert_resource(Time::new());
         world.insert_resource(Camera::new());
@@ -267,27 +267,19 @@ impl State {
 
         let model = crate::assets::load_model("assets/DamagedHelmet.glb")?;
 
+        let mut mesh_pool = world.resource_mut::<MeshPool>();
         let mut primitives = Vec::new();
         for (primitive_index, prim) in model.primitives.iter().enumerate() {
             let _prim_span = tracing::debug_span!("upload_primitive", primitive_index).entered();
-
-            let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(&prim.vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-
-            let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Index Buffer"),
-                contents: bytemuck::cast_slice(&prim.indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
 
             // Fallback: 1x1 white texture if no base color image
             let (tex_data, tex_width, tex_height) = match &prim.base_color_image {
                 Some((data, w, h)) => (data.as_slice(), *w, *h),
                 None => (&[255u8, 255, 255, 255] as &[u8], 1, 1),
             };
+
+            let (vertex_offset, vertex_count, index_offset, index_count) =
+                mesh_pool.push_primitive(&device, &queue, &prim.vertices, &prim.indices);
 
             let texture = device.create_texture_with_data(
                 &queue,
@@ -341,14 +333,15 @@ impl State {
             );
 
             primitives.push(Primitive {
-                vertex_buffer,
-                index_buffer,
-                num_indices: prim.indices.len() as u32,
+                vertex_offset,
+                vertex_count,
+                index_offset,
+                index_count,
                 texture_bind_group,
             });
         }
         let mesh = Mesh { primitives };
-        let mesh_handle = world.resource_mut::<MeshPool>().insert(mesh);
+        let mesh_handle = mesh_pool.insert(mesh);
         world.insert_resource(HelmetAssets { mesh: mesh_handle });
 
         world.spawn((
@@ -591,6 +584,10 @@ impl State {
             let mut renderable_query = self.world.query::<(&Transform, &MeshRef)>();
             let mesh_pool = self.world.resource::<MeshPool>();
 
+            render_pass.set_vertex_buffer(0, mesh_pool.vertex_buffer.slice(..));
+            render_pass
+                .set_index_buffer(mesh_pool.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+
             for (entity_index, (_transform, mesh_ref)) in
                 renderable_query.iter(&self.world).enumerate()
             {
@@ -602,15 +599,11 @@ impl State {
 
                 for primitive in &mesh.primitives {
                     render_pass.set_bind_group(1, &primitive.texture_bind_group, &[]);
-                    render_pass.set_vertex_buffer(0, primitive.vertex_buffer.slice(..));
-                    render_pass.set_index_buffer(
-                        primitive.index_buffer.slice(..),
-                        wgpu::IndexFormat::Uint32,
-                    );
+
                     let instance_idx = entity_index as u32;
                     render_pass.draw_indexed(
-                        0..primitive.num_indices,
-                        0,
+                        primitive.index_offset..primitive.index_offset + primitive.index_count,
+                        primitive.vertex_offset as i32, // base_vertex
                         instance_idx..instance_idx + 1,
                     );
                 }
