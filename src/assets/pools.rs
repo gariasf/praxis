@@ -50,14 +50,14 @@ impl MeshPool {
     }
 
     /// Writes one primitive's geometry into the shared buffers.
-    /// Returns (vertex_offset, vertex_count, index_offset, index_count) in ELEMENTS.
+    /// Returns (vertex_offset, index_offset, index_count) in ELEMENTS.
     pub fn push_primitive(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         vertices: &[Vertex],
         indices: &[u32],
-    ) -> (u32, u32, u32, u32) {
+    ) -> (u32, u32, u32) {
         let vertex_bytes = std::mem::size_of_val(vertices) as u64;
         let index_bytes = std::mem::size_of_val(indices) as u64;
 
@@ -88,12 +88,7 @@ impl MeshPool {
         self.vertex_used += vertex_bytes;
         self.index_used += index_bytes;
 
-        (
-            vertex_offset,
-            vertices.len() as u32,
-            index_offset,
-            indices.len() as u32,
-        )
+        (vertex_offset, index_offset, indices.len() as u32)
     }
 
     /// Allocates a larger vertex buffer (at least `needed` bytes), replays the
@@ -110,7 +105,7 @@ impl MeshPool {
         queue.write_buffer(&new_buffer, 0, bytemuck::cast_slice(&self.vertex_data));
         self.vertex_buffer = new_buffer;
         self.vertex_capacity = new_capacity;
-        tracing::debug!(new_capacity, "vertex buffer grown");
+        tracing::info!(new_capacity, "vertex buffer grown");
     }
 
     /// Index-buffer counterpart of [`Self::grow_vertex`].
@@ -125,7 +120,7 @@ impl MeshPool {
         queue.write_buffer(&new_buffer, 0, bytemuck::cast_slice(&self.index_data));
         self.index_buffer = new_buffer;
         self.index_capacity = new_capacity;
-        tracing::debug!(new_capacity, "index buffer grown");
+        tracing::info!(new_capacity, "index buffer grown");
     }
 
     pub fn get(&self, handle: MeshHandle) -> Option<&Mesh> {

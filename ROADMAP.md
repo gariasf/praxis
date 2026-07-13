@@ -308,17 +308,20 @@ phase-scratch plan.
 
 - [x] Pin a current `bevy_ecs` 0.x version; confirm `cargo tree` shows
       no transitive dep on `bevy_render` / `bevy_app` / `bevy_window`
-- [x] Define components: `Transform` (`glam::Affine3A` newtype),
-      `MeshRef`, `MaterialRef`, `LightRef` — pure data, no GPU bytes
+- [x] Define components: `Transform` (`glam::Affine3A` newtype) and
+      `MeshRef` — pure data, no GPU bytes. (`MaterialRef` deferred to
+      Phase 6 Step 2; `LightRef` not built — lights are a uniform, not a
+      pooled handle yet.)
 - [x] Don't import `bevy_transform::Transform`; keep our own
-- [x] Central resource pools: `MeshPool`, `TexturePool`, `MaterialPool`
-      as `#[derive(Resource)]`; pool internals (handle-indexed `Vec`s)
-      are still ours
-- [x] Components hold handles (`MeshHandle`, `MaterialHandle`), not
-      owned GPU resources
-- [x] Migrate 3 helmets via `commands.spawn((Transform(...),
-      MeshRef(h), MaterialRef(m)))`
-- [x] Renderer reads via `Query<(&Transform, &MeshRef, &MaterialRef)>`;
+- [x] Central resource pool: `MeshPool` as `#[derive(Resource)]`; pool
+      internals (handle-indexed `Vec`s) are ours. (`MaterialPool` landed
+      in Phase 6 Step 2; no separate `TexturePool` — textures live in
+      `MaterialPool`'s per-channel arrays.)
+- [x] Components hold handles (`MeshHandle`); not owned GPU resources.
+      (`MaterialHandle` added in Phase 6 Step 2.)
+- [x] Migrate 3 helmets via `commands.spawn((Transform(...), MeshRef(h)))`
+      (`MaterialRef` attached from Phase 6 Step 2 onward)
+- [x] Renderer reads via `Query<(&Transform, &MeshRef)>`;
       `prepare_renderables` system builds one persistent instance buffer
       per frame (no per-entity uniform buffers)
 - [x] Refactor input/camera to be bevy systems registered in a

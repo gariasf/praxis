@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
 use bevy_ecs::prelude::*;
-use wgpu::util::DeviceExt;
 use winit::window::Window;
 
-use crate::assets::{Mesh, MeshPool, Primitive};
+use crate::assets::{MaterialData, MaterialPool, Mesh, MeshPool, Primitive};
 use crate::camera::{Camera, fly_camera};
-use crate::components::{MeshRef, Transform};
+use crate::components::{MaterialRef, MeshRef, Transform};
 use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
 use crate::input::{Input, clear_just_pressed};
 use crate::render::{
@@ -134,29 +133,6 @@ impl State {
                 }],
             });
 
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Texture Bind Group Layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-            });
-
         let light_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Light Bind Group Layout"),
@@ -187,12 +163,18 @@ impl State {
                 }],
             });
 
+        // Material-as-ID: one bind group (SSBO + per-channel texture arrays +
+        // sampler) serves every material. Created before the pipeline layout
+        // because the layout references its bind group layout; moved into the
+        // `World` after materials are uploaded.
+        let mut material_pool = MaterialPool::new(&device);
+
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
                 bind_group_layouts: &[
                     Some(&camera_bind_group_layout),
-                    Some(&texture_bind_group_layout),
+                    Some(&material_pool.bind_group_layout),
                     Some(&light_bind_group_layout),
                     Some(&instance_bind_group_layout),
                 ],
@@ -272,89 +254,77 @@ impl State {
         for (primitive_index, prim) in model.primitives.iter().enumerate() {
             let _prim_span = tracing::debug_span!("upload_primitive", primitive_index).entered();
 
-            // Fallback: 1x1 white texture if no base color image
-            let (tex_data, tex_width, tex_height) = match &prim.base_color_image {
-                Some((data, w, h)) => (data.as_slice(), *w, *h),
-                None => (&[255u8, 255, 255, 255] as &[u8], 1, 1),
-            };
-
-            let (vertex_offset, vertex_count, index_offset, index_count) =
+            let (vertex_offset, index_offset, index_count) =
                 mesh_pool.push_primitive(&device, &queue, &prim.vertices, &prim.indices);
-
-            let texture = device.create_texture_with_data(
-                &queue,
-                &wgpu::TextureDescriptor {
-                    label: Some("Diffuse Texture"),
-                    size: wgpu::Extent3d {
-                        width: tex_width,
-                        height: tex_height,
-                        depth_or_array_layers: 1,
-                    },
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                    usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                    view_formats: &[],
-                },
-                wgpu::util::TextureDataOrder::LayerMajor,
-                tex_data,
-            );
-
-            let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-            let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-                mag_filter: wgpu::FilterMode::Linear,
-                min_filter: wgpu::FilterMode::Linear,
-                address_mode_u: wgpu::AddressMode::Repeat,
-                address_mode_v: wgpu::AddressMode::Repeat,
-                ..Default::default()
-            });
-
-            let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("Texture Bind Group"),
-                layout: &texture_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&texture_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&sampler),
-                    },
-                ],
-            });
 
             tracing::debug!(
                 vertices = prim.vertices.len(),
                 indices = prim.indices.len(),
-                texture = tex_width * tex_height > 1,
                 "primitive uploaded"
             );
 
             primitives.push(Primitive {
                 vertex_offset,
-                vertex_count,
                 index_offset,
                 index_count,
-                texture_bind_group,
             });
         }
         let mesh = Mesh { primitives };
         let mesh_handle = mesh_pool.insert(mesh);
-        world.insert_resource(HelmetAssets { mesh: mesh_handle });
+
+        // Translate the model's material into the SSBO and upload its albedo
+        // into the channel array. DamagedHelmet is single-material; multi-
+        // material meshes (one MaterialRef per primitive) are deferred.
+        if model.primitives.len() > 1 {
+            tracing::warn!(
+                primitives = model.primitives.len(),
+                "multi-primitive model; only primitive 0's material is used (multi-material deferred)"
+            );
+        }
+        let prim0 = model
+            .primitives
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("model has no primitives"))?;
+        let albedo_index = match &prim0.base_color_image {
+            Some((pixels, w, h)) => material_pool.upload_albedo(&queue, pixels, *w, *h),
+            None => {
+                tracing::warn!("model has no base color texture; using albedo layer 0");
+                0
+            }
+        };
+        let material = MaterialData {
+            base_color: prim0.base_color_factor,
+            metallic_roughness: [prim0.metallic_factor, prim0.roughness_factor, 0.0, 0.0],
+            emissive: [
+                prim0.emissive_factor[0],
+                prim0.emissive_factor[1],
+                prim0.emissive_factor[2],
+                1.0,
+            ],
+            texture_indices: [albedo_index, 0, 0, 0],
+            extra: [0; 4],
+        };
+        let material_handle = material_pool.insert(&queue, material);
+        world.insert_resource(material_pool);
+        world.insert_resource(HelmetAssets {
+            mesh: mesh_handle,
+            material: material_handle,
+        });
 
         world.spawn((
             Transform(glam::Affine3A::from_translation(glam::vec3(0.0, 0.0, 0.0))),
             MeshRef(mesh_handle),
+            MaterialRef(material_handle),
         ));
         world.spawn((
             Transform(glam::Affine3A::from_translation(glam::vec3(2.0, 0.0, 0.0))),
             MeshRef(mesh_handle),
+            MaterialRef(material_handle),
         ));
         world.spawn((
             Transform(glam::Affine3A::from_translation(glam::vec3(-2.0, 0.0, 0.0))),
             MeshRef(mesh_handle),
+            MaterialRef(material_handle),
         ));
 
         let camera_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -576,19 +546,24 @@ impl State {
                 multiview_mask: None,
             });
 
+            let material_pool = self.world.resource::<MaterialPool>();
+
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            render_pass.set_bind_group(1, &material_pool.bind_group, &[]);
             render_pass.set_bind_group(2, &self.light_bind_group, &[]);
             render_pass.set_bind_group(3, &self.instance_bind_group, &[]);
 
-            let mut renderable_query = self.world.query::<(&Transform, &MeshRef)>();
+            // Same query signature as `prepare_renderables` so `entity_index`
+            // lines up with the instance buffer it built.
+            let mut renderable_query = self.world.query::<(&Transform, &MeshRef, &MaterialRef)>();
             let mesh_pool = self.world.resource::<MeshPool>();
 
             render_pass.set_vertex_buffer(0, mesh_pool.vertex_buffer.slice(..));
             render_pass
                 .set_index_buffer(mesh_pool.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
-            for (entity_index, (_transform, mesh_ref)) in
+            for (entity_index, (_transform, mesh_ref, _material_ref)) in
                 renderable_query.iter(&self.world).enumerate()
             {
                 let handle = mesh_ref.0;
@@ -598,8 +573,6 @@ impl State {
                 };
 
                 for primitive in &mesh.primitives {
-                    render_pass.set_bind_group(1, &primitive.texture_bind_group, &[]);
-
                     let instance_idx = entity_index as u32;
                     render_pass.draw_indexed(
                         primitive.index_offset..primitive.index_offset + primitive.index_count,

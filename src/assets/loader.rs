@@ -4,6 +4,10 @@ pub struct LoadedPrimitive {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
     pub base_color_image: Option<(Vec<u8>, u32, u32)>, // rgba pixels, width, height
+    pub base_color_factor: [f32; 4],
+    pub metallic_factor: f32,
+    pub roughness_factor: f32,
+    pub emissive_factor: [f32; 3],
 }
 
 pub struct LoadedModel {
@@ -76,11 +80,14 @@ pub fn load_model(path: &str) -> anyhow::Result<LoadedModel> {
                 })
                 .collect();
 
-            let base_color_image = if let Some(tex_info) = primitive
-                .material()
-                .pbr_metallic_roughness()
-                .base_color_texture()
-            {
+            let material = primitive.material();
+            let pbr_mr = material.pbr_metallic_roughness();
+            let base_color_factor = pbr_mr.base_color_factor();
+            let metallic_factor = pbr_mr.metallic_factor();
+            let roughness_factor = pbr_mr.roughness_factor();
+            let emissive_factor = material.emissive_factor();
+
+            let base_color_image = if let Some(tex_info) = pbr_mr.base_color_texture() {
                 let image = &images[tex_info.texture().source().index()];
                 let pixels = match image.format {
                     gltf::image::Format::R8G8B8A8 => image.pixels.clone(),
@@ -107,6 +114,10 @@ pub fn load_model(path: &str) -> anyhow::Result<LoadedModel> {
                 vertices,
                 indices,
                 base_color_image,
+                base_color_factor,
+                metallic_factor,
+                roughness_factor,
+                emissive_factor,
             });
         }
     }

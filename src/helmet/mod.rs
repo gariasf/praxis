@@ -1,14 +1,15 @@
 use bevy_ecs::prelude::*;
 use winit::keyboard::KeyCode;
 
-use crate::assets::MeshHandle;
+use crate::assets::{MaterialHandle, MeshHandle};
 use crate::camera::Camera;
-use crate::components::{MeshRef, Transform};
+use crate::components::{MaterialRef, MeshRef, Transform};
 use crate::input::Input;
 
 #[derive(Resource)]
 pub struct HelmetAssets {
     pub mesh: MeshHandle,
+    pub material: MaterialHandle,
 }
 
 #[derive(Resource, Default)]
@@ -32,6 +33,7 @@ pub fn spawn_helmet(
         .spawn((
             Transform(glam::Affine3A::from_translation(position)),
             MeshRef(assets.mesh),
+            MaterialRef(assets.material),
         ))
         .id();
 

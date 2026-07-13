@@ -5,10 +5,21 @@ struct CameraUniform {
     position:  vec4<f32>,
 }
 
-@group(1) @binding(0)
-var t_diffuse: texture_2d<f32>;
-@group(1) @binding(1)
-var s_diffuse: sampler;
+struct MaterialData {
+    base_color: vec4<f32>,
+    metallic_roughness: vec4<f32>,
+    emissive: vec4<f32>,
+    texture_indices: vec4<u32>,
+    extra: vec4<u32>,
+};
+
+@group(1) @binding(0) var<storage, read> materials: array<MaterialData>;
+@group(1) @binding(1) var albedo_array: texture_2d_array<f32>;
+@group(1) @binding(2) var normal_array: texture_2d_array<f32>;
+@group(1) @binding(3) var mr_array: texture_2d_array<f32>;
+@group(1) @binding(4) var ao_array: texture_2d_array<f32>;
+@group(1) @binding(5) var emissive_array: texture_2d_array<f32>;
+@group(1) @binding(6) var pbr_sampler: sampler;
 
 @group(2) @binding(0)
 var<uniform> light: LightUniform;
@@ -26,6 +37,7 @@ struct LightUniform {
 struct InstanceData {
     model: mat4x4<f32>,
     normal_matrix: mat4x4<f32>,
+    material_id: u32,
 }
 
 @group(3) @binding(0)
@@ -41,7 +53,8 @@ struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) world_pos: vec3<f32>,
     @location(1) normal: vec3<f32>,
-    @location(2) uv: vec2<f32>
+    @location(2) uv: vec2<f32>,
+    @location(3) @interpolate(flat) material_id: u32,
 }
 
 @vertex
@@ -54,6 +67,7 @@ in: VertexInput, @builtin(instance_index) instance_idx: u32
     out.uv = in.uv;
     out.normal = (instance.normal_matrix * vec4<f32>(in.normal, 0.0)).xyz;
     out.world_pos = (instance.model * vec4<f32>(in.position, 1.0)).xyz;
+    out.material_id = instance.material_id;
     return out;
 }
 
@@ -67,7 +81,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let ambient_color = light.ambient.rgb * light.ambient.a;
     let diffuse_strength = max(dot(normal, light_dir), 0.0);
     let diffuse_color = light.color.rgb * light.color.a * diffuse_strength;
-    let texture_color = textureSample(t_diffuse, s_diffuse, in.uv);
+
+    let mat = materials[in.material_id];
+    let albedo_sample = textureSample(albedo_array, pbr_sampler, in.uv, i32(mat.texture_indices.x));
+    let albedo = albedo_sample.rgb * mat.base_color.rgb;
 
 
     var point_total = vec3<f32>(0.0);
@@ -86,5 +103,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         point_total += (diffuse_strength + specular) * light.point_colors[i].rgb * light.point_colors[i].a * attenuation;
     }
 
-    return vec4<f32>((ambient_color + diffuse_color + specular + point_total) * texture_color.rgb, texture_color.a);
+    return vec4<f32>((ambient_color + diffuse_color + specular + point_total) * albedo, albedo_sample.a * mat.base_color.a);
 }
