@@ -107,9 +107,8 @@ When a feature folder grows past one file, split into
 - Prefer structured fields:
   `tracing::info!(field = value, "message")` over `format!`-style
   messages.
-- See `scripts/run-debug.{ps1,sh}` and `scripts/run-trace.{ps1,sh}` for
-  log-filter recipes. Project default is
-  `praxis=info,wgpu=warn,naga=warn` via `.cargo/config.toml`.
+- Default log filter is `praxis=debug,wgpu=warn,naga=warn` via
+  `.cargo/config.toml`; override per run with `RUST_LOG`.
 - Bevy imports: `use bevy_ecs::prelude::*;` (not piecemeal).
 - WGPU types: full path (`wgpu::Buffer`), don't import individual types.
 - Asset pool lookups return `Option<&T>`. Callers handle `None`
