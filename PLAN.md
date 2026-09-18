@@ -407,7 +407,7 @@ Where to look:
   of index as a first guess; growth handles the rest. DamagedHelmet's
   largest primitive is well under this.
 
-- [ ] Done
+- [x] Done
 
 Checkpoint: 3 helmets render identically. `MeshPool` exposes one vertex
 buffer and one index buffer. `cargo build && cargo run` shows the same
@@ -507,7 +507,7 @@ Where to look:
   group replaces them. Pipeline layout updated to reference the new
   bind group.
 
-- [ ] Done
+- [x] Done
 
 Checkpoint: 3 helmets render identically (still Blinn-Phong). One bind
 group rebind per frame regardless of material count. Spawning a fourth
@@ -584,7 +584,7 @@ Where to look:
   the factor values directly.
 - Add `PI = 3.14159265` as a WGSL `const`.
 
-- [ ] Done
+- [x] Done
 
 Checkpoint: 3 helmets shaded with Cook-Torrance. Highlights are
 roughness-dependent (smooth = tight, rough = wide). Metallic surfaces

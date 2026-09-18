@@ -305,27 +305,39 @@ impl State {
             extra: [0; 4],
         };
         let material_handle = material_pool.insert(&queue, material);
+
+        // Debug material sweep so Cook-Torrance can be judged by eye before Step 4
+        // brings per-pixel metallic/roughness textures. Top row dielectric, bottom
+        // row metal; roughness grows left to right. Every variant shares the glTF
+        // albedo, only the factors differ. Placed 6 units ahead of the default camera.
+        for (row_index, metallic) in [0.0_f32, 1.0].into_iter().enumerate() {
+            for (column_index, roughness) in [0.1_f32, 0.3, 0.5, 0.7, 0.9].into_iter().enumerate() {
+                let variant_handle = material_pool.insert(
+                    &queue,
+                    MaterialData {
+                        metallic_roughness: [metallic, roughness, 0.0, 0.0],
+                        ..material
+                    },
+                );
+                let column_offset = (column_index as f32 - 2.0) * 2.0;
+                let row_offset = 1.3 - row_index as f32 * 2.6;
+                world.spawn((
+                    Transform(glam::Affine3A::from_translation(glam::vec3(
+                        column_offset,
+                        row_offset,
+                        -6.0,
+                    ))),
+                    MeshRef(mesh_handle),
+                    MaterialRef(variant_handle),
+                ));
+            }
+        }
+
         world.insert_resource(material_pool);
         world.insert_resource(HelmetAssets {
             mesh: mesh_handle,
             material: material_handle,
         });
-
-        world.spawn((
-            Transform(glam::Affine3A::from_translation(glam::vec3(0.0, 0.0, 0.0))),
-            MeshRef(mesh_handle),
-            MaterialRef(material_handle),
-        ));
-        world.spawn((
-            Transform(glam::Affine3A::from_translation(glam::vec3(2.0, 0.0, 0.0))),
-            MeshRef(mesh_handle),
-            MaterialRef(material_handle),
-        ));
-        world.spawn((
-            Transform(glam::Affine3A::from_translation(glam::vec3(-2.0, 0.0, 0.0))),
-            MeshRef(mesh_handle),
-            MaterialRef(material_handle),
-        ));
 
         let camera_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Camera Buffer"),
