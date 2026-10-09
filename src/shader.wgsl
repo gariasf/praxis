@@ -16,8 +16,8 @@ struct MaterialData {
 @group(1) @binding(0) var<storage, read> materials: array<MaterialData>;
 @group(1) @binding(1) var albedo_array: texture_2d_array<f32>;
 @group(1) @binding(2) var normal_array: texture_2d_array<f32>;
-@group(1) @binding(3) var mr_array: texture_2d_array<f32>;
-@group(1) @binding(4) var ao_array: texture_2d_array<f32>;
+@group(1) @binding(3) var metallic_roughness_array: texture_2d_array<f32>;
+@group(1) @binding(4) var occlusion_array: texture_2d_array<f32>;
 @group(1) @binding(5) var emissive_array: texture_2d_array<f32>;
 @group(1) @binding(6) var pbr_sampler: sampler;
 
@@ -47,6 +47,7 @@ struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
+    @location(3) tangent: vec4<f32>, // xyz = tangent, w = bitangent sign
 }
 
 struct VertexOutput {
@@ -55,6 +56,7 @@ struct VertexOutput {
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
     @location(3) @interpolate(flat) material_id: u32,
+    @location(4) tangent_world: vec4<f32>, // xyz = world tangent, w = bitangent sign
 }
 
 @vertex
@@ -66,6 +68,12 @@ in: VertexInput, @builtin(instance_index) instance_idx: u32
     out.clip_position = camera.view_proj * instance.model * vec4<f32>(in.position, 1.0);
     out.uv = in.uv;
     out.normal = (instance.normal_matrix * vec4<f32>(in.normal, 0.0)).xyz;
+    // Tangents are directions along the surface, so they follow the model
+    // matrix; only normals need the inverse-transpose.
+    out.tangent_world = vec4<f32>(
+        (instance.model * vec4<f32>(in.tangent.xyz, 0.0)).xyz,
+        in.tangent.w
+    );
     out.world_pos = (instance.model * vec4<f32>(in.position, 1.0)).xyz;
     out.material_id = instance.material_id;
     return out;
@@ -132,11 +140,33 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let material = materials[in.material_id];
     let albedo_sample = textureSample(albedo_array, pbr_sampler, in.uv, i32(material.texture_indices.x));
     let base_color = albedo_sample.rgb * material.base_color.rgb;
-    let metallic = material.metallic_roughness.x;
-    // GGX collapses to 0/0 at roughness 0; clamp keeps the highlight finite.
-    let roughness = max(material.metallic_roughness.y, 0.04);
 
-    let normal = normalize(in.normal);
+    // glTF packs roughness in green and metallic in blue; factors multiply.
+    let metallic_roughness_sample = textureSample(metallic_roughness_array, pbr_sampler, in.uv, i32(material.texture_indices.z)).rgb;
+    let metallic = metallic_roughness_sample.b * material.metallic_roughness.x;
+    // GGX collapses to 0/0 at roughness 0; clamp keeps the highlight finite.
+    let roughness = max(metallic_roughness_sample.g * material.metallic_roughness.y, 0.04);
+
+    let ambient_occlusion = textureSample(occlusion_array, pbr_sampler, in.uv, i32(material.texture_indices.w)).r;
+    let emissive = textureSample(emissive_array, pbr_sampler, in.uv, i32(material.extra.x)).rgb
+        * material.emissive.rgb;
+
+    // Tangent frame. Interpolation bends the tangent off the normal, so
+    // re-orthogonalise it (Gram-Schmidt) before rebuilding the bitangent with
+    // the glTF handedness sign.
+    let geometric_normal = normalize(in.normal);
+    let interpolated_tangent = in.tangent_world.xyz;
+    let tangent = normalize(
+        interpolated_tangent - geometric_normal * dot(geometric_normal, interpolated_tangent)
+    );
+    let bitangent = cross(geometric_normal, tangent) * in.tangent_world.w;
+    let tangent_to_world = mat3x3<f32>(tangent, bitangent, geometric_normal);
+
+    // Normal map stores a tangent-space direction in [0, 1]; expand to [-1, 1].
+    let normal_sample = textureSample(normal_array, pbr_sampler, in.uv, i32(material.texture_indices.y)).rgb;
+    let tangent_space_normal = normal_sample * 2.0 - vec3<f32>(1.0);
+    let normal = normalize(tangent_to_world * tangent_space_normal);
+
     let view_direction = normalize(camera.position.xyz - in.world_pos);
 
     var outgoing_radiance = cook_torrance(
@@ -164,7 +194,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         );
     }
 
-    // Constant ambient stand-in until Step 6 replaces it with IBL.
-    let ambient = 0.03 * base_color;
-    return vec4<f32>(ambient + outgoing_radiance, albedo_sample.a * material.base_color.a);
+    // Constant ambient stand-in until Step 6 replaces it with IBL; occlusion darkens it.
+    let ambient = 0.03 * base_color * ambient_occlusion;
+    return vec4<f32>(
+        ambient + outgoing_radiance + emissive,
+        albedo_sample.a * material.base_color.a
+    );
 }

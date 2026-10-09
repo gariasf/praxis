@@ -3,7 +3,9 @@ use std::sync::Arc;
 use bevy_ecs::prelude::*;
 use winit::window::Window;
 
-use crate::assets::{MaterialData, MaterialPool, Mesh, MeshPool, Primitive};
+use crate::assets::{
+    LoadedImage, MaterialChannel, MaterialData, MaterialPool, Mesh, MeshPool, Primitive,
+};
 use crate::camera::{Camera, fly_camera};
 use crate::components::{MaterialRef, MeshRef, Transform};
 use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
@@ -167,7 +169,7 @@ impl State {
         // sampler) serves every material. Created before the pipeline layout
         // because the layout references its bind group layout; moved into the
         // `World` after materials are uploaded.
-        let mut material_pool = MaterialPool::new(&device);
+        let mut material_pool = MaterialPool::new(&device, &queue);
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -281,57 +283,102 @@ impl State {
                 "multi-primitive model; only primitive 0's material is used (multi-material deferred)"
             );
         }
-        let prim0 = model
+        let first_primitive = model
             .primitives
             .first()
             .ok_or_else(|| anyhow::anyhow!("model has no primitives"))?;
-        let albedo_index = match &prim0.base_color_image {
-            Some((pixels, w, h)) => material_pool.upload_albedo(&queue, pixels, *w, *h),
-            None => {
-                tracing::warn!("model has no base color texture; using albedo layer 0");
-                0
+        let mut upload_channel = |channel: MaterialChannel, image: Option<&LoadedImage>| -> u32 {
+            match image {
+                Some(image) => {
+                    material_pool.upload(&queue, channel, &image.pixels, image.width, image.height)
+                }
+                None => {
+                    tracing::debug!(
+                        ?channel,
+                        "model has no texture for channel; using the neutral layer"
+                    );
+                    MaterialPool::DEFAULT_LAYER
+                }
             }
         };
+        let albedo_layer = upload_channel(
+            MaterialChannel::Albedo,
+            first_primitive.base_color_image.as_ref(),
+        );
+        let normal_layer = upload_channel(
+            MaterialChannel::Normal,
+            first_primitive.normal_image.as_ref(),
+        );
+        let metallic_roughness_layer = upload_channel(
+            MaterialChannel::MetallicRoughness,
+            first_primitive.metallic_roughness_image.as_ref(),
+        );
+        let occlusion_layer = upload_channel(
+            MaterialChannel::Occlusion,
+            first_primitive.occlusion_image.as_ref(),
+        );
+        let emissive_layer = upload_channel(
+            MaterialChannel::Emissive,
+            first_primitive.emissive_image.as_ref(),
+        );
         let material = MaterialData {
-            base_color: prim0.base_color_factor,
-            metallic_roughness: [prim0.metallic_factor, prim0.roughness_factor, 0.0, 0.0],
+            base_color: first_primitive.base_color_factor,
+            metallic_roughness: [
+                first_primitive.metallic_factor,
+                first_primitive.roughness_factor,
+                0.0,
+                0.0,
+            ],
             emissive: [
-                prim0.emissive_factor[0],
-                prim0.emissive_factor[1],
-                prim0.emissive_factor[2],
+                first_primitive.emissive_factor[0],
+                first_primitive.emissive_factor[1],
+                first_primitive.emissive_factor[2],
                 1.0,
             ],
-            texture_indices: [albedo_index, 0, 0, 0],
-            extra: [0; 4],
+            texture_indices: [
+                albedo_layer,
+                normal_layer,
+                metallic_roughness_layer,
+                occlusion_layer,
+            ],
+            extra: [emissive_layer, 0, 0, 0],
         };
         let material_handle = material_pool.insert(&queue, material);
 
-        // Debug material sweep so Cook-Torrance can be judged by eye before Step 4
-        // brings per-pixel metallic/roughness textures. Top row dielectric, bottom
-        // row metal; roughness grows left to right. Every variant shares the glTF
-        // albedo, only the factors differ. Placed 6 units ahead of the default camera.
+        // Debug material sweep: a pure factor sweep over the neutral default
+        // layers with a white base color. Top row dielectric, bottom row metal;
+        // roughness grows left to right. The textured glTF helmet sits between
+        // the rows. Placed 8 units ahead of the default camera.
         for (row_index, metallic) in [0.0_f32, 1.0].into_iter().enumerate() {
             for (column_index, roughness) in [0.1_f32, 0.3, 0.5, 0.7, 0.9].into_iter().enumerate() {
                 let variant_handle = material_pool.insert(
                     &queue,
                     MaterialData {
+                        base_color: [1.0, 1.0, 1.0, 1.0],
                         metallic_roughness: [metallic, roughness, 0.0, 0.0],
-                        ..material
+                        emissive: [0.0, 0.0, 0.0, 1.0],
+                        texture_indices: [MaterialPool::DEFAULT_LAYER; 4],
+                        extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
                     },
                 );
                 let column_offset = (column_index as f32 - 2.0) * 2.0;
-                let row_offset = 1.3 - row_index as f32 * 2.6;
+                let row_offset = 2.6 - row_index as f32 * 5.2;
                 world.spawn((
                     Transform(glam::Affine3A::from_translation(glam::vec3(
                         column_offset,
                         row_offset,
-                        -6.0,
+                        -8.0,
                     ))),
                     MeshRef(mesh_handle),
                     MaterialRef(variant_handle),
                 ));
             }
         }
+        world.spawn((
+            Transform(glam::Affine3A::from_translation(glam::vec3(0.0, 0.0, -8.0))),
+            MeshRef(mesh_handle),
+            MaterialRef(material_handle),
+        ));
 
         world.insert_resource(material_pool);
         world.insert_resource(HelmetAssets {

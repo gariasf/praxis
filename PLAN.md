@@ -622,10 +622,13 @@ pub struct Vertex {
 }
 ```
 
-Loader (glTF) reads the `TANGENT` accessor when present; reject (or
-warn + skip) primitives without tangents in Phase 6. Mikktspace
-fallback is deferred — note in the plan, address only when a model
-breaks it.
+Loader (glTF) reads the `TANGENT` accessor when present. DamagedHelmet.glb
+ships none (`NORMAL`, `POSITION`, `TEXCOORD_0` only), so missing tangents
+are generated with MikkTSpace via the `bevy_mikktspace` crate, as the glTF
+spec recommends: the normal map was baked against MikkTSpace tangents, so
+any other tangent basis shows seams. Decided 2026-09-18, dependency approved.
+Normal-texture `scale` and occlusion `strength` are ignored in Phase 6
+(DamagedHelmet uses the defaults of 1.0).
 
 Vertex shader: transform `tangent.xyz` and `normal` by the model matrix
 (rotation only — drop translation), pass `T_world` and `N_world` plus
@@ -648,8 +651,8 @@ let albedo = textureSample(albedo_array, pbr_sampler, in.uv,
                            i32(mat.texture_indices.x)).rgb
              * mat.base_color.rgb;
 let mr = textureSample(mr_array, pbr_sampler, in.uv,
-                       i32(mat.texture_indices.z)).rg;
-let metallic = mr.r * mat.metallic_roughness.x;
+                       i32(mat.texture_indices.z)).rgb;
+let metallic = mr.b * mat.metallic_roughness.x;
 let roughness = mr.g * mat.metallic_roughness.y;
 let ao = textureSample(ao_array, pbr_sampler, in.uv,
                        i32(mat.texture_indices.w)).r;
@@ -658,20 +661,28 @@ let emissive = textureSample(emissive_array, pbr_sampler, in.uv,
 ```
 
 glTF metallic-roughness convention: green = roughness, blue = metallic.
-The `.r` / `.g` sample above matches that convention when the texture
-is uploaded with the channel order. Verify against the asset.
+The `.g` / `.b` reads above follow it. Verified against DamagedHelmet
+2026-09-18; an earlier draft of this plan read `.r` / `.g`, which was wrong.
 
 Where to look:
 
-- `src/assets/mesh.rs` (or wherever `Vertex` lives) — add the `tangent`
-  field. Update the vertex buffer layout descriptor.
-- `src/assets/loaders/gltf.rs` — read the `TANGENT` accessor; emit
-  warning if absent.
+- `src/render/vertex.rs` — add the `tangent` field. Update the vertex
+  buffer layout descriptor.
+- `src/assets/loader.rs` — read the `TANGENT` accessor; generate with
+  `bevy_mikktspace` when absent (debug-log which path ran). Decode all
+  five images through one shared helper.
 - `src/shader.wgsl` — vertex stage passes `tangent_world` +
   `bitangent_sign` to fragment. Fragment builds TBN, samples 5 texture
   arrays, modulates Cook-Torrance inputs.
-- `MaterialPool` texture upload (Step 2) handles all 5 channels;
-  ensure the loader uploads each one.
+- `MaterialPool` — Step 2 shipped albedo upload only. Generalise to one
+  per-channel upload with per-channel layer counters. Layer 0 of every
+  array is a neutral default (white for albedo / MR / AO / emissive, flat
+  `(0.5, 0.5, 1.0)` for normal) so a material missing a channel samples
+  a no-op and factors pass through unchanged.
+- Debug material sweep (Step 3) — factors multiply the textures, so the
+  sweep gets its own `MaterialData` pointing at the neutral layers with a
+  white base color: a pure factor sweep. One helmet with the real glTF
+  material returns to the scene for the checkpoint.
 
 - [ ] Done
 
