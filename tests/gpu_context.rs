@@ -2,9 +2,8 @@ use std::io::Write;
 
 use praxis::gpu::GpuContext;
 
-/// The planned features the capability report must name (M0 spec, #25).
-/// Written out here, apart from the report's own list, so a feature the
-/// report drops turns this test red.
+/// The planned features #25 lists. Written out here, apart from the
+/// report's own list, so a feature the report drops turns this test red.
 const PLANNED_FEATURES: [&str; 7] = [
     "binding arrays",
     "mesh shaders",
@@ -29,17 +28,17 @@ fn headless_context_reports_adapter_backend_and_planned_features() {
     };
 
     let report = context.capability_report();
-    let lines: Vec<&str> = report.lines().collect();
-    assert!(lines.len() <= 30, "{} lines:\n{report}", lines.len());
+    assert!(report.lines().count() <= 30, "over 30 lines:\n{report}");
 
-    for label in ["adapter", "backend"] {
-        assert!(
-            !value_of(&lines, label, &report).is_empty(),
-            "`{label}` has no value:\n{report}"
-        );
-    }
+    // The adapter's name is machine-specific: its line only has to exist.
+    value_of(&report, "adapter");
+    // The desktop members of `wgpu::Backends::PRIMARY` (ADR 0010).
+    assert!(
+        matches!(value_of(&report, "backend"), "vulkan" | "metal" | "dx12"),
+        "not a desktop backend:\n{report}"
+    );
     for feature in PLANNED_FEATURES {
-        let verdict = value_of(&lines, feature, &report).split_whitespace().next();
+        let verdict = value_of(&report, feature).split_whitespace().next();
         assert!(
             matches!(verdict, Some("yes" | "no")),
             "`{feature}` is not marked yes or no:\n{report}"
@@ -47,10 +46,10 @@ fn headless_context_reports_adapter_backend_and_planned_features() {
     }
 }
 
-/// The text after `label` on the one line that starts with it.
-fn value_of<'a>(lines: &[&'a str], label: &str, report: &str) -> &'a str {
-    let values: Vec<&str> = lines
-        .iter()
+/// The text after `label` on the report's one line that starts with it.
+fn value_of<'a>(report: &'a str, label: &str) -> &'a str {
+    let values: Vec<&str> = report
+        .lines()
         .filter_map(|line| line.strip_prefix(label))
         .collect();
     assert_eq!(values.len(), 1, "expected one `{label}` line:\n{report}");

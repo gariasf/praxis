@@ -78,8 +78,7 @@ decisions: propose them in the ticket, justify them in the PR.
 ```
 src/
   lib.rs, state.rs             # library root (window shell) + orchestrator
-  bin/praxis.rs                # thin binary: no command runs the app,
-                                 `capabilities` prints the adapter report
+  bin/praxis.rs                # thin binary: command dispatch
   gpu/                         # GPU context, windowed or headless
   shader.wgsl                  # WGSL shaders (split when justified)
   components.rs                # ECS components (Transform, MeshRef)
