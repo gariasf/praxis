@@ -55,22 +55,6 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends mesa-vulkan-drivers
 
-      - name: Record noise (bootstrap, removed before merge)
-        run: |
-          cargo test --test goldens --no-run
-          for run in $(seq 1 20); do
-            rm -rf tests/goldens/vulkan-cpu
-            PRAXIS_UPDATE_GOLDENS=1 cargo test -q --test goldens procedural 2>/dev/null
-            mkdir -p noise/$run && cp tests/goldens/vulkan-cpu/*.png noise/$run/
-          done
-          sha256sum noise/*/*.png | awk '{print $1, $2}' | sed 's|noise/[0-9]*/||' | sort | uniq -c
-          rm -rf tests/goldens/vulkan-cpu
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: noise
-          path: noise
-
       - name: Test
         env:
           PRAXIS_REQUIRE_GOLDENS: "1"
