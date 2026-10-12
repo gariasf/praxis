@@ -65,8 +65,12 @@ The playable space, divided into Chunks.
 _Avoid_: Level, map, world (unqualified)
 
 **Chunk**:
-A fixed-size region of the Game world that loads and unloads as a unit.
+A fixed-size vertical column of the Game world, addressed by integer coordinates, that loads and unloads as a unit.
 _Avoid_: Cell, tile, sector
+
+**World position**:
+A position in a Game world, in metres from its origin. Positions relative to the camera, a Chunk or a parent entity derive from it.
+_Avoid_: Global position, absolute position
 
 **Scene**:
 A serialisable set of entities and their hierarchy that loads into the ECS World. Not the whole Game world.
