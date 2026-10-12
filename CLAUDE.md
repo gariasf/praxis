@@ -9,7 +9,8 @@ update it in the same change. Don't let this file go stale.
 
 Praxis is a 3D engine built from scratch in Rust, aimed at a production
 open-world engine (Skyrim / RDR class) on cutting-edge hardware. The
-owner decides and merges; agents implement and open PRs.
+owner decides; agents implement, open PRs, and merge them once reviewed
+(`docs/agents/workflow.md`, Review).
 
 ## Project posture
 

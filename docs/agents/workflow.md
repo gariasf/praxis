@@ -2,7 +2,7 @@
 
 How work moves through this repo. Read before starting, closing, or reordering a ticket or milestone.
 
-The owner decides and merges. Agents implement and open PRs. A decision that lives only in chat is not made: it lands as an ADR (`docs/adr/`), a comment on the map issue, or a ticket comment.
+The owner decides. Agents implement, open PRs, and merge them (see Review). A decision that lives only in chat is not made: it lands as an ADR (`docs/adr/`), a comment on the map issue, or a ticket comment.
 
 ## The ladder
 
@@ -29,7 +29,7 @@ The owner decides and merges. Agents implement and open PRs. A decision that liv
 
 ## Review
 
-CI owns mechanical checks. Two semantic reviews follow, in this order. The agent reviews first, before the PR opens. CodeRabbit reviews second, as a second opinion that contrasts with what the agent may have missed. The agent owns every fix; CodeRabbit never writes to a branch. The owner merges on evidence.
+CI owns mechanical checks. Two semantic reviews follow, in this order. The agent reviews first, before the PR opens. CodeRabbit reviews second, as a second opinion that contrasts with what the agent may have missed. The agent owns every fix; CodeRabbit never writes to a branch. The agent merges on evidence.
 
 1. **Review first.** When the build is done and local checks pass, run `/code-review` against the base branch: a Standards axis (this repo's conventions) and a Spec axis (the ticket's acceptance criteria), in parallel sub-agents. Fix what it finds in one commit before the PR opens. A docs-only PR gets the agent's own read of the diff against the same two axes, without sub-agents.
 2. **Open as draft, ready when green.** Fill the PR template, with the local review's counts under Verification. Open the PR as a draft and run `gh pr ready` once CI passes. Drafts are skipped, so CodeRabbit's review is spent on a green diff.
@@ -40,7 +40,7 @@ CI owns mechanical checks. Two semantic reviews follow, in this order. The agent
    - *Defer*: true but outside the ticket. A note under *Not yet specified* with its revival trigger.
    - Mark a finding the local review already caught or answered as such. The findings it missed are the second opinion's value.
 5. **One fix commit, one summary.** Reply on each thread in two lines at most and resolve it. Post one PR comment: counts per disposition and the deferred list. Pushes do not start a review: the plan allows 5 reviews per rolling hour, so one review per PR starts on its own and the rest are spent on purpose. Request the verification pass of the same round with `@coderabbitai review`, once, and only when a fix touched correctness-critical logic. It may add one more fix commit, for Major or above only; everything else is declined or deferred.
-6. **Ready for the owner** when CI is green, both reviews have run, and the summary is posted. A rate-limited or skipped CodeRabbit review does not block: re-trigger with `@coderabbitai review` when the limit resets, or merge on the local review alone when the owner agrees and the summary says so.
+6. **Merge** when CI is green, both reviews have run or CodeRabbit's was skipped or rate-limited, the summary is posted and says which, and no Decide item is unanswered. Any agent squash-merges any such PR, its own or another session's, then removes the worktree and branch. A PR that needs the owner's visual judgement (a render to judge, an image to approve) waits for the owner instead.
 
 CodeRabbit reads `.coderabbit.yaml` from the PR's own branch, so a PR that edits it is reviewed under its own edit: name every change to it under Decide. A declined finding class that recurs becomes a path instruction there or a `CODING_STANDARDS.md` rule. Summary comments carry the numbers (findings, fixed, declined, deferred, and how many the local review had missed); after about ten PRs the owner decides from them whether CodeRabbit stays and whether its approval becomes a merge gate.
 
