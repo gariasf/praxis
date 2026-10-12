@@ -60,8 +60,8 @@ reviews:
         - correctness and safety bugs;
         - GPU lifetime mistakes: resources not recreated on resize, bind
           groups not rebuilt with the buffer they reference;
-        - Rust/WGSL layout mismatches (vertex layout, uniform and storage
-          structs);
+        - WGSL bind group bindings that differ from the Rust bind group
+          layouts (struct and vertex layouts are checked by cargo test);
         - budget risks in hot paths: per-frame allocation, per-entity GPU
           calls that could batch, CPU-GPU sync mid-frame, unbounded growth;
         - unwrap or expect on GPU or I/O results in render paths;
@@ -72,11 +72,9 @@ reviews:
     - path: "src/**/*.wgsl"
       instructions: |
         Apply the WGSL rules in CLAUDE.md's review checklist. Also flag:
-        vec3<f32> in uniform or storage structs; layout drift from the
-        Rust #[repr(C)] struct, field by field; sRGB/linear confusion;
-        divide-by-zero and NaN risks at grazing angles or zero roughness;
-        textureSample under non-uniform control flow; f32 precision loss
-        at large world coordinates.
+        sRGB/linear confusion; divide-by-zero and NaN risks at grazing
+        angles or zero roughness; textureSample under non-uniform control
+        flow; f32 precision loss at large world coordinates.
 
     - path: "Cargo.toml"
       instructions: |

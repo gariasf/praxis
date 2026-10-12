@@ -50,14 +50,6 @@ pub struct MaterialData {
     pub extra: [u32; 4],              // x=emissive_idx, yzw=pad
 }
 
-// Layout guard: must match the WGSL `MaterialData` struct (5 × vec4 = 80 bytes).
-// Catches a silent Rust/WGSL mismatch at compile time if a field is added or
-// the vec3-pads are dropped.
-const _: () = assert!(
-    std::mem::size_of::<MaterialData>() == 80,
-    "MaterialData must stay 80 bytes to match the WGSL layout"
-);
-
 /// A `texture_2d_array` for one channel plus how many layers hold data.
 struct ChannelArray {
     texture: wgpu::Texture,
