@@ -2,8 +2,8 @@
 
 Files in this directory keep their own licences. `manifest.json` records each file's source, SPDX licence expression, upstream version and SHA-256, and `cargo test` checks that every file is listed there and every credit appears here.
 
-## DamagedHelmet.glb
+## SciFiHelmet/
 
-Damaged Helmet: © 2018 ctxwing (rebuild and conversion to glTF), CC BY 4.0; © 2016 theblueturtle_ (earlier version of the model), CC BY-NC 4.0
+SciFi Helmet: © 2017 Michael Pavlovic, CC0 1.0
 
-From [Khronos glTF-Sample-Assets](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/5bad5aaa0bbb5d0f9cdc934e626f27d0df1e79b8/Models/DamagedHelmet), unmodified. Licences: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/legalcode), [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/legalcode). Non-commercial, so development only: never part of a shipped build.
+From [Khronos glTF-Sample-Assets](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/SciFiHelmet), unmodified. Licence: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/legalcode). Fetched by `scripts/fetch-assets.sh`, never committed.

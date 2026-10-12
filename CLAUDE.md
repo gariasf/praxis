@@ -89,6 +89,7 @@ src/
   render/                      # renderer-internal: instance, uniforms,
                                  vertex, depth, prepare
 tests/                         # integration tests at agreed seams
+scripts/fetch-assets.sh        # downloads the manifest's fetched assets
 ```
 
 Renderer **pulls** from `World` via queries (Design Principle #3 in

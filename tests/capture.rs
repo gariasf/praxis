@@ -19,6 +19,18 @@ fn capture_draws_the_scene_over_the_srgb_encoded_background() {
         Err(error) => panic!("headless GPU context failed: {error:#}"),
     };
 
+    // A fetched file, so absent from a fresh clone and from CI.
+    let model = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(praxis::DEFAULT_MODEL);
+    if !model.exists() {
+        writeln!(
+            std::io::stderr(),
+            "skipped: {} is not fetched; run scripts/fetch-assets.sh",
+            praxis::DEFAULT_MODEL
+        )
+        .ok();
+        return;
+    }
+
     let image = praxis::capture(&context, 160, 90).expect("capture failed");
 
     assert_eq!(image.dimensions(), (160, 90));

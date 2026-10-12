@@ -12,3 +12,6 @@
 *.swo
 
 .env
+
+# Fetched assets: pinned in assets/manifest.json, downloaded by scripts/fetch-assets.sh
+/assets/SciFiHelmet/

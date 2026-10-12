@@ -1,3 +1,4 @@
+use anyhow::Context;
 use bevy_ecs::prelude::*;
 
 use crate::assets::{
@@ -13,6 +14,10 @@ use crate::render::{
     create_depth_texture, prepare_renderables,
 };
 use crate::time::Time;
+
+/// The helmet-class model the Scene draws, relative to the crate root. It is
+/// fetched, not committed: `scripts/fetch-assets.sh` downloads it.
+pub const DEFAULT_MODEL: &str = "assets/SciFiHelmet/SciFiHelmet.gltf";
 
 /// The Scene in its ECS World and the renderer that draws it into a target
 /// view: the window's surface or an offscreen texture.
@@ -172,7 +177,9 @@ impl State {
         schedule
             .add_systems((fly_camera, spawn_helmet, despawn_helmet, clear_just_pressed).chain());
 
-        let model = crate::assets::load_model("assets/DamagedHelmet.glb")?;
+        let model = crate::assets::load_model(DEFAULT_MODEL).with_context(|| {
+            format!("load {DEFAULT_MODEL}; run scripts/fetch-assets.sh if it is missing")
+        })?;
 
         let mut mesh_pool = world.resource_mut::<MeshPool>();
         let mut primitives = Vec::new();
@@ -198,7 +205,7 @@ impl State {
         let mesh_handle = mesh_pool.insert(mesh);
 
         // Translate the model's material into the SSBO and upload its albedo
-        // into the channel array. DamagedHelmet is single-material; multi-
+        // into the channel array. SciFiHelmet is single-material; multi-
         // material meshes (one MaterialRef per primitive) are deferred.
         if model.primitives.len() > 1 {
             tracing::warn!(
@@ -271,7 +278,9 @@ impl State {
         // Debug material sweep: a pure factor sweep over the neutral default
         // layers with a white base color. Top row dielectric, bottom row metal;
         // roughness grows left to right. The textured glTF helmet sits between
-        // the rows. Placed 8 units ahead of the default camera.
+        // the rows. Placed 8 units ahead of the default camera. SciFiHelmet is
+        // 2.9 units tall, so the sweep copies are scaled to 3/4 to clear the
+        // middle helmet and stay in frame.
         for (row_index, metallic) in [0.0_f32, 1.0].into_iter().enumerate() {
             for (column_index, roughness) in [0.1_f32, 0.3, 0.5, 0.7, 0.9].into_iter().enumerate() {
                 let variant_handle = material_pool.insert(
@@ -287,11 +296,11 @@ impl State {
                 let column_offset = (column_index as f32 - 2.0) * 2.0;
                 let row_offset = 2.6 - row_index as f32 * 5.2;
                 world.spawn((
-                    Transform(glam::Affine3A::from_translation(glam::vec3(
-                        column_offset,
-                        row_offset,
-                        -8.0,
-                    ))),
+                    Transform(glam::Affine3A::from_scale_rotation_translation(
+                        glam::Vec3::splat(0.75),
+                        glam::Quat::IDENTITY,
+                        glam::vec3(column_offset, row_offset, -8.0),
+                    )),
                     MeshRef(mesh_handle),
                     MaterialRef(variant_handle),
                 ));

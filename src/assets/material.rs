@@ -1,7 +1,7 @@
 use bevy_ecs::prelude::*;
 
 /// All channel arrays are this square dimension. glTF assets are scale-padded
-/// to it on load (Phase 6 ships DamagedHelmet, already 2048², so the pad is a
+/// to it on load (the default SciFiHelmet is already 2048², so the pad is a
 /// no-op and not yet implemented — see `MaterialPool::upload`).
 pub const TEXTURE_DIM: u32 = 2048;
 
@@ -307,7 +307,7 @@ impl MaterialPool {
 
     /// Uploads RGBA8 pixels into the next free layer of `channel`, returning
     /// the layer index to store in `MaterialData`. Phase 6 requires
-    /// `TEXTURE_DIM`-square images (DamagedHelmet is 2048²); scale-padding for
+    /// `TEXTURE_DIM`-square images (SciFiHelmet is 2048²); scale-padding for
     /// off-size assets is deferred until one needs it. Any rejected upload
     /// falls back to `DEFAULT_LAYER` so the material still renders.
     pub fn upload(
