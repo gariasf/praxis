@@ -16,8 +16,8 @@ owner decides and merges; agents implement and open PRs.
 - **Efficiency and correctness are paramount**: CPU, GPU, memory, and
   tokens. Every change is validated; evidence beats assertion.
 - **Architecture is production-grade now.** Load-bearing decisions
-  (`ROADMAP.md`, migrating to `docs/adr/`) are made for the eventual
-  scope. Implementation depth follows the live milestone.
+  (`docs/adr/`) are made for the eventual scope. Implementation depth
+  follows the live milestone.
 - **No throwaway code.** Clean naming, structure, and conventions at
   every step.
 - **Goals are explicit.** Work traces to a ticket in the live milestone
@@ -29,10 +29,12 @@ owner decides and merges; agents implement and open PRs.
 - `docs/agents/workflow.md` — how work moves: ladder, tickets, PRs,
   budgets, session start. Read before starting, closing, or reordering
   work.
-- `CONTEXT.md`, `docs/adr/` — glossary and decisions, once present.
-- `ROADMAP.md` — long-range vision and load-bearing decisions. Being
-  migrated into ADRs and the map issue; its phase checklists are
-  superseded by milestones.
+- `CONTEXT.md` — glossary; its terms are the vocabulary of code,
+  tickets, and reviews.
+- `docs/adr/` — decisions that are hard to reverse; a change that
+  contradicts one says so.
+- `ROADMAP.md` — long-range vision. Its load-bearing decisions moved to
+  `docs/adr/`; its phase checklists are superseded by milestones.
 - `PLAN.md` — Phase 6 scratch, paused. Superseded by tickets once M0 is
   specified.
 
@@ -163,8 +165,7 @@ faster they drift.
 
 - Folder layout changes
 - A new cross-cutting convention is adopted
-- An ADR is added or superseded, or a "load-bearing decision" in
-  `ROADMAP.md` is revised
+- An ADR is added or superseded
 - A repeated correction emerges — same mistake twice means it's a rule
 
 **Don't update for:**
