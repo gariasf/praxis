@@ -1,6 +1,6 @@
 # World positions are f64; the GPU works camera-relative
 
-A Game world of 10 by 10 km or more must render, simulate and save without precision loss, and f32 positions lose it beyond 512 m from their origin. World positions are f64, right-handed, +Y up (gravity along −Y), in metres, with cameras looking down −Z: `Transform` holds translation as `DVec3` (relative to the parent for a child) with rotation (`Quat`) and scale (`Vec3`) in f32, 64 bytes like the `Affine3A` it replaces. The GPU never sees an absolute position: it reads an integer anchor on a 64 m grid plus an f32 offset, and shaders compose positions relative to the camera. Accepted 2026-10-12. Planned; today `Transform` is an f32 `Affine3A` and the shader multiplies absolute model matrices.
+A Game world of 10 by 10 km or more must render, simulate and save without precision loss, and f32 positions lose it beyond 512 m from their origin. World positions are f64, right-handed, +Y up (gravity along −Y), in metres, with cameras looking down −Z: `Transform` holds translation as `DVec3` (relative to the parent for a child) with rotation (`Quat`) and scale (`Vec3`) in f32, 64 bytes like the `Affine3A` it replaces. The GPU never holds a World position in f32: it reads an integer anchor on a 64 m grid plus an f32 offset, and shaders compose positions relative to the camera. Accepted 2026-10-12. Planned; today `Transform` is an f32 `Affine3A` and the shader multiplies model matrices that hold World positions in f32.
 
 ## Precision bar
 

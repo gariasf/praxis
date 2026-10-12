@@ -69,7 +69,7 @@ A fixed-size vertical column of the Game world, addressed by integer coordinates
 _Avoid_: Cell, tile, sector
 
 **World position**:
-An absolute position in a Game world, in metres. Positions relative to the camera, a Chunk or a parent entity derive from it.
+A position in a Game world, in metres from its origin. Positions relative to the camera, a Chunk or a parent entity derive from it.
 _Avoid_: Global position, absolute position
 
 **Scene**:
