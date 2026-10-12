@@ -12,6 +12,7 @@ fn capture_draws_the_scene_over_the_srgb_encoded_background() {
     let context = match pollster::block_on(GpuContext::headless()) {
         Ok(context) => context,
         Err(error) if error.is::<wgpu::RequestAdapterError>() => {
+            // Not `eprintln!`, which libtest captures from passing tests.
             writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
             return;
         }

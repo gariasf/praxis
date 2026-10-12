@@ -83,7 +83,7 @@ src/
   capture/                     # offscreen render read back as an image
   shader.wgsl                  # WGSL shaders (split when justified)
   components.rs                # ECS components (Transform, MeshRef)
-  camera/, time/, input/,      # feature modules: resource + system
+  camera/, time/, input/,      # feature modules: resource (+ systems)
     helmet/                       per domain in one mod.rs
   assets/                      # asset types, loaders, pools
   render/                      # renderer-internal: instance, uniforms,

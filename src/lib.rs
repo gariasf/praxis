@@ -40,21 +40,21 @@ impl ApplicationHandler for App {
             .ok();
         window.set_cursor_visible(false);
 
-        self.window = Some(pollster::block_on(AppWindow::new(window)).unwrap());
+        self.shell = Some(pollster::block_on(WindowShell::new(window)).unwrap());
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        let window = match &mut self.window {
-            Some(window) => window,
+        let shell = match &mut self.shell {
+            Some(shell) => shell,
             None => return,
         };
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::Resized(size) => window.resize(size.width, size.height),
+            WindowEvent::Resized(size) => shell.resize(size.width, size.height),
             WindowEvent::RedrawRequested => {
-                if let Err(e) = window.redraw() {
-                    tracing::error!("{e}");
+                if let Err(error) = shell.redraw() {
+                    tracing::error!(%error, "redraw failed");
                     event_loop.exit();
                 }
             }
@@ -68,7 +68,7 @@ impl ApplicationHandler for App {
                     },
                 ..
             } => {
-                let mut input = window.state.world.resource_mut::<Input>();
+                let mut input = shell.state.world.resource_mut::<Input>();
                 if key_state.is_pressed() {
                     input.pressed.insert(code);
                     if !repeat {
@@ -91,10 +91,10 @@ impl ApplicationHandler for App {
         _device_id: winit::event::DeviceId,
         event: winit::event::DeviceEvent,
     ) {
-        if let Some(window) = &mut self.window
+        if let Some(shell) = &mut self.shell
             && let winit::event::DeviceEvent::MouseMotion { delta } = event
         {
-            let mut camera = window.state.world.resource_mut::<Camera>();
+            let mut camera = shell.state.world.resource_mut::<Camera>();
             camera.yaw += delta.0 as f32 * camera.sensitivity;
             camera.pitch -= delta.1 as f32 * camera.sensitivity;
             camera.pitch = camera.pitch.clamp(-1.5, 1.5); // ~86 degrees
@@ -104,12 +104,12 @@ impl ApplicationHandler for App {
 
 #[derive(Default)]
 struct App {
-    window: Option<AppWindow>,
+    shell: Option<WindowShell>,
 }
 
 /// The window, the surface it presents through, and the State that renders
 /// into that surface on wall-clock time.
-struct AppWindow {
+struct WindowShell {
     window: Arc<Window>,
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
@@ -119,7 +119,7 @@ struct AppWindow {
     state: State,
 }
 
-impl AppWindow {
+impl WindowShell {
     async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
         let size = window.inner_size();
         let (context, surface) = GpuContext::with_surface(window.clone()).await?;
