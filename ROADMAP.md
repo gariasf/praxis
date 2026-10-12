@@ -89,7 +89,7 @@ doors open.
 
 ## Load-bearing decisions
 
-Recorded as ADRs in `docs/adr/`. 0001–0006 are the data-shape decisions: material as ID, mega-buffers, persistent scene transform buffer, frame-data snapshot, structured instance buffer, pure-data components. 0007–0013 cover the graphics API, rendering model, ECS, product scope, content formats, scripting boundary, and reference budgets.
+Recorded as ADRs in `docs/adr/`. 0001–0006 are the data-shape decisions: material as ID, mega-buffers, persistent scene transform buffer, frame-data snapshot, structured instance buffer, pure-data components. 0007–0015 cover the graphics API, rendering model, ECS, product scope, content formats, scripting boundary, reference budgets, world coordinates, and depth convention.
 
 Together, 0001–0005 are roughly the data architecture of GPU-driven rendering; 0006 extends the same shape to scripting and save/load. Built this way, the later phases (GPU-driven, the RT phases, Lua scripting) are mostly additive: wire new pipelines onto stable data flows rather than re-architect.
 
