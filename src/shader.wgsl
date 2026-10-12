@@ -195,7 +195,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     // Constant ambient stand-in until Step 6 replaces it with IBL; occlusion darkens it.
-    let ambient = 0.03 * base_color * ambient_occlusion;
+    let ambient = 0.3 * base_color * ambient_occlusion;
     return vec4<f32>(
         ambient + outgoing_radiance + emissive,
         albedo_sample.a * material.base_color.a
