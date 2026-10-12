@@ -26,8 +26,10 @@ No attribution file exists. CC BY requires attribution wherever the file is redi
 
 ### Khronos models by SPDX id (`REUSE.toml`, 2026-10-12)
 
-- `CC0-1.0`: `WaterBottle`, `BoomBox`, `FlightHelmet`, `Lantern`, `SciFiHelmet`, `MetalRoughSpheresNoTextures`, `NormalTangentTest`, `TextureTransformTest`, `SimpleInstancing`. The `Compare*` PBR sweeps are `CC0-1.0` with a Khronos trademark mark on the logo (`CompareMetallic` checked in `REUSE.toml`; Roughness, Normal, BaseColor and AmbientOcclusion in their READMEs).
-- `CC-BY-4.0`: `MetalRoughSpheres`, `NormalTangentMirrorTest`, `EmissiveStrengthTest`; `TextureSettingsTest`, `OrientationTest` and `MultiUVTest` per their READMEs.
+- `CC0-1.0`: `WaterBottle`, `BoomBox`, `FlightHelmet`, `Lantern`, `SciFiHelmet`, `MetalRoughSpheresNoTextures`, `NormalTangentTest`, `TextureTransformTest`, `SimpleInstancing`. `LicenseRef-LegalMark-Khronos AND CC0-1.0`: the `Compare*` PBR sweeps (`CompareMetallic`, `CompareRoughness`, `CompareNormal`, `CompareBaseColor`, `CompareAmbientOcclusion`).
+- `CC-BY-4.0`: `MetalRoughSpheres`, `NormalTangentMirrorTest`, `EmissiveStrengthTest`, `TextureSettingsTest`, `OrientationTest`. `CC-BY-4.0 AND LicenseRef-LegalMark-Khronos`: `MultiUVTest`.
+- Every id above was read from `REUSE.toml`, not from a README.
+- **`LicenseRef-LegalMark-*`** is a trademark notice on a logo inside the model. Its text: "Use in this model do not change the license of the model ... there is no right to use the Mark in any other context." The content licence is unchanged; the logo may not be reused elsewhere.
 - **Encumbered:** `DamagedHelmet` is `CC-BY-4.0 AND CC-BY-NC-4.0`. `Sponza` is `LicenseRef-CRYENGINE-Agreement`: © 2016 Crytek, "Cryengine Limited License Agreement" ([README](https://github.com/KhronosGroup/glTF-Sample-Assets/blob/main/Models/Sponza/README.md)). `ROADMAP.md` lists Sponza as a good test model; this copy is not freely redistributable.
 - **Sizes** (GLB, from the GitHub contents API): `WaterBottle` 8.97 MB, `BoomBox` 10.6 MB, `Lantern` 9.56 MB, `MetalRoughSpheres` 11.2 MB, `NormalTangentTest` 1.80 MB. `SciFiHelmet` and `FlightHelmet` have no binary variant in the repo; the current helmet is 3.77 MB.
 
@@ -41,11 +43,12 @@ No attribution file exists. CC BY requires attribution wherever the file is redi
 
 McGuire Computer Graphics Archive (page content not retrievable), Fab/Quixel Megascans, Sketchfab, Blender demo files, glTF-Validator.
 
-## Proposed sourcing strategy (owner decision)
+## Sourcing strategy (approved by the owner, 2026-10-12)
 
 1. **Tier 1, procedural and in-repo.** Analytic spheres, UV grids, normal-map patterns, instancing grids, seeded scatter, heightfields. No licence, deterministic, tiny. These are the CI-gated golden and scale-ladder scenes.
 2. **Tier 2, small curated set.** `CC0-1.0` and `CC-BY-4.0` Khronos models, one or two CC0 HDRIs and PBR texture sets (Poly Haven, ambientCG), each with a manifest entry. Commit a file only when it is about 2 MB or less (`NormalTangentTest` qualifies); the roughly 10 MB PBR models are fetched like Tier 3, so clones stay light. Per-model size is checked in the ticket that adds it.
 3. **Tier 3, large realism and stress scenes, fetched.** ORCA Bistro (after glTF conversion), IGN terrain tiles, and the roughly 10 MB PBR models. Pinned URL plus SHA-256, into a git-ignored cache; never committed. Used by local benches and milestone-exit visual checks. Intel Sponza stays unresolved: usable locally for experiments, never added to the manifest or redistributed until the package or Intel names the licence version.
-4. **Manifest and hygiene.** One manifest records path, source URL, SPDX licence expression, credit text, upstream version, and SHA-256, for committed and fetched files alike. CI fails on an `assets/` file without an entry. Credits are collected in an attribution file. Files whose expression includes an `NC` or `LicenseRef-` term are marked dev-only.
+4. **Manifest and hygiene.** One manifest records path, source URL, SPDX licence expression, credit text, upstream version, and SHA-256, for committed and fetched files alike. CI fails on an `assets/` file without an entry. Credits are collected in an attribution file. Files whose expression includes an `NC` term, or a restrictive `LicenseRef-` such as the CRYENGINE agreement, are marked dev-only. A `LicenseRef-LegalMark-*` term does not make a file dev-only: it forbids reusing the logo elsewhere, so the logo is replaced or kept out of shipped builds and marketing.
 5. **Cleanup.** Remove unreferenced `pikuma.png`, `BoxTextured*`, and `CesiumLogoFlat.png` unless a test adopts them.
-6. **Decide: the default test model.** `DamagedHelmet.glb` is the only mesh the app loads and it is non-commercial. A `CC0-1.0` helmet-class replacement (`SciFiHelmet`, `FlightHelmet`) would make the goldens redistributable. Changing it moves the Step 4 checkpoint basis, so it is a ticket with the owner's decision.
+6. **Default test model.** `DamagedHelmet.glb` is the only mesh the app loads and it is non-commercial. It is replaced by a `CC0-1.0` helmet-class model (`SciFiHelmet`, `FlightHelmet`) so the goldens are redistributable. This moves the Step 4 checkpoint basis, so it is a ticket.
+7. **Just in time.** Nothing is downloaded ahead of need. A ticket that needs an asset says what it needs (kind, licence class, size) and the owner supplies or approves the source at that point.
