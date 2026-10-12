@@ -168,6 +168,8 @@ When reviewing changes, check for:
       `?` or explicit handling
 - [ ] No GPU resources stored on ECS components — components are pure
       authoring data
+- [ ] Frame data holds no borrow into the ECS World, and only the
+      main thread submits, presents or polls (ADR 0016)
 - [ ] `cargo fmt` and `cargo clippy` pass
 
 ## Maintenance
