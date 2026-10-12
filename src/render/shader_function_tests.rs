@@ -99,13 +99,27 @@ fn distribution_ggx_integrates_to_one_over_the_hemisphere() {
             "roughness {roughness}: D integrates to {integral}, expected 1"
         );
     }
+
+    // Any normalised D passes the sum, so the peak pins the shape: at n·h = 1,
+    // D is 1/(π α²) with α = roughness² (Walter et al. 2007, eq. 33), which
+    // is 16/π at roughness 0.5.
+    let peak = evaluate(
+        &context,
+        "vec4<f32>(distribution_ggx(input.x, input.y))",
+        &[[1.0, 0.5, 0.0, 0.0]],
+    )[0][0];
+    assert!(
+        (f64::from(peak) - 16.0 / std::f64::consts::PI).abs() <= f64::from(TOLERANCE),
+        "D at n·h = 1, roughness 0.5, is {peak}, expected 16/π"
+    );
 }
 
 /// Smith's G is the fraction of microfacets both seen and lit, so it stays in
 /// [0, 1] and is 1 along the normal. At roughness 1 the shader's k is 1/2,
 /// where Schlick's form equals the exact Smith masking of GGX (Karis 2013).
-/// Disney's roughness remap for analytic lights, which Karis adopts, keeps k
-/// at 1/8 or more, so unlike exact Smith this G does not reach 1 as roughness
+/// Below that, k follows Disney's roughness remap for analytic lights, which
+/// Karis adopts, and a literal pins it at roughness 0.5. The remap keeps k at
+/// 1/8 or more, so unlike exact Smith this G does not reach 1 as roughness
 /// falls to 0.
 #[test]
 fn geometry_smith_stays_in_zero_to_one_and_is_exact_at_roughness_one() {
@@ -145,6 +159,15 @@ fn geometry_smith_stays_in_zero_to_one_and_is_exact_at_roughness_one() {
             assert!(
                 (f64::from(geometry) - expected).abs() <= f64::from(TOLERANCE),
                 "G({normal_dot_view}, {normal_dot_light}, 1) = {geometry}, expected {expected}"
+            );
+        }
+        if [normal_dot_view, normal_dot_light, roughness] == [0.5; 3] {
+            // k = (0.5 + 1)² / 8 = 9/32, so each term is
+            // 0.5 / (0.5 · 23/32 + 9/32) = 32/41.
+            let expected = 1024.0 / 1681.0;
+            assert!(
+                (f64::from(geometry) - expected).abs() <= f64::from(TOLERANCE),
+                "G(0.5, 0.5, 0.5) = {geometry}, expected 1024/1681"
             );
         }
     }
