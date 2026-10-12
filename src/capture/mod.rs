@@ -137,9 +137,11 @@ impl PassTimer {
         let nanoseconds_per_tick = f64::from(context.queue.get_timestamp_period());
         let ticks: Vec<u64> = bytemuck::pod_collect_to_vec(&read_back_buffer.get_mapped_range(..)?);
         Ok(ticks
-            .chunks_exact(2)
-            .map(|pass| {
-                let pass_ticks = pass[1].saturating_sub(pass[0]);
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&[begin, end]| {
+                let pass_ticks = end.saturating_sub(begin);
                 Duration::from_nanos((pass_ticks as f64 * nanoseconds_per_tick) as u64)
             })
             .collect())
