@@ -1,7 +1,4 @@
-use std::sync::Arc;
-
 use bevy_ecs::prelude::*;
-use winit::window::Window;
 
 use crate::assets::{
     LoadedImage, MaterialChannel, MaterialData, MaterialPool, Mesh, MeshPool, Primitive,
@@ -15,15 +12,14 @@ use crate::render::{
     CameraUniform, INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData, LightUniform, Vertex,
     create_depth_texture, prepare_renderables,
 };
-use crate::time::{Time, tick_time};
+use crate::time::Time;
 
+/// The Scene in its ECS World and the renderer that draws it into a target
+/// view: the window's surface or an offscreen texture.
 pub struct State {
-    surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    config: wgpu::SurfaceConfiguration,
-    is_surface_configured: bool,
-    window: Arc<Window>,
+    aspect_ratio: f32,
     render_pipeline: wgpu::RenderPipeline,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
@@ -40,53 +36,19 @@ pub struct State {
 }
 
 impl State {
-    pub async fn new(window: Arc<Window>) -> anyhow::Result<State> {
+    /// A State that renders into `width` × `height` views of `target_format`
+    /// textures, both non-zero, seen through `camera`.
+    pub fn new(
+        context: &GpuContext,
+        target_format: wgpu::TextureFormat,
+        width: u32,
+        height: u32,
+        camera: Camera,
+    ) -> anyhow::Result<State> {
         let _span = tracing::info_span!("state_init").entered();
 
-        let size = window.inner_size();
-
-        let (
-            GpuContext {
-                adapter,
-                device,
-                queue,
-            },
-            surface,
-        ) = GpuContext::with_surface(window.clone()).await?;
-
-        let surface_caps = surface.get_capabilities(&adapter);
-
-        // Assuming an sRGB surface texture. Using a different
-        // one will result in all the colors coming out darker. If you want to support non
-        // sRGB surfaces, you'll need to account for that when drawing to the frame.
-        let surface_format = surface_caps
-            .formats
-            .iter()
-            .find(|f| f.is_srgb())
-            .copied()
-            .unwrap_or(surface_caps.formats[0]);
-
-        tracing::debug!(
-            ?surface_format,
-            srgb = surface_format.is_srgb(),
-            "surface format chosen"
-        );
-
-        let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface_format,
-            width: size.width,
-            height: size.height,
-            present_mode: surface_caps.present_modes[0],
-            alpha_mode: surface_caps.alpha_modes[0],
-            view_formats: vec![],
-            desired_maximum_frame_latency: 2,
-        };
-
-        let is_surface_configured = size.width > 0 && size.height > 0;
-        if is_surface_configured {
-            surface.configure(&device, &config);
-        }
+        let device = context.device.clone();
+        let queue = context.queue.clone();
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
         let camera_bind_group_layout =
@@ -165,7 +127,7 @@ impl State {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
+                    format: target_format,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -202,21 +164,13 @@ impl State {
         let mut world = World::new();
         world.insert_resource(MeshPool::new(&device, 1 << 20, 256 << 10));
         world.insert_resource(Input::default());
-        world.insert_resource(Time::new());
-        world.insert_resource(Camera::new());
+        world.insert_resource(Time::default());
+        world.insert_resource(camera);
         world.insert_resource(RuntimeHelmets::default());
 
         let mut schedule = Schedule::default();
-        schedule.add_systems(
-            (
-                tick_time,
-                fly_camera,
-                spawn_helmet,
-                despawn_helmet,
-                clear_just_pressed,
-            )
-                .chain(),
-        );
+        schedule
+            .add_systems((fly_camera, spawn_helmet, despawn_helmet, clear_just_pressed).chain());
 
         let model = crate::assets::load_model("assets/DamagedHelmet.glb")?;
 
@@ -403,18 +357,13 @@ impl State {
 
         let instance_capacity = INSTANCE_BUFFER_INITIAL_CAPACITY;
 
-        let depth_width = config.width.max(1);
-        let depth_height = config.height.max(1);
-        let depth_texture_view = create_depth_texture(&device, depth_width, depth_height);
+        let depth_texture_view = create_depth_texture(&device, width, height);
 
         Ok(Self {
-            surface,
             device,
             queue,
-            config,
-            is_surface_configured,
+            aspect_ratio: width as f32 / height as f32,
             render_pipeline,
-            window,
             camera_buffer,
             camera_bind_group,
             depth_texture_view,
@@ -429,29 +378,21 @@ impl State {
         })
     }
 
+    /// Matches a new target size, both non-zero.
     pub fn resize(&mut self, width: u32, height: u32) {
-        tracing::debug!(width, height, "resize requested");
-        if width > 0 && height > 0 {
-            self.config.width = width;
-            self.config.height = height;
-            self.surface.configure(&self.device, &self.config);
-            self.depth_texture_view = create_depth_texture(&self.device, width, height);
-            self.is_surface_configured = true;
-        }
+        self.depth_texture_view = create_depth_texture(&self.device, width, height);
+        self.aspect_ratio = width as f32 / height as f32;
     }
 
-    pub fn update(&mut self) {
-        if !self.is_surface_configured {
-            return;
-        }
-
+    /// Advances the Scene by `delta_time` seconds and uploads the frame's data.
+    pub fn update(&mut self, delta_time: f32) {
+        self.world.resource_mut::<Time>().delta_time = delta_time;
         self.schedule.run(&mut self.world);
 
         let camera = self.world.resource::<Camera>();
 
-        let aspect = self.config.width as f32 / self.config.height as f32;
         let view = camera.view_matrix();
-        let proj = glam::Mat4::perspective_rh(45_f32.to_radians(), aspect, 0.1, 100.0);
+        let proj = glam::Mat4::perspective_rh(45_f32.to_radians(), self.aspect_ratio, 0.1, 100.0);
 
         let view_proj = proj * view;
         let camera_uniform = CameraUniform {
@@ -499,42 +440,9 @@ impl State {
         );
     }
 
-    pub fn render(&mut self) -> anyhow::Result<()> {
-        self.window.request_redraw();
-
-        // We can't render unless the surface is configured
-        if !self.is_surface_configured {
-            return Ok(());
-        }
-
-        let output = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
-            wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => {
-                tracing::debug!("surface suboptimal, reconfiguring");
-                self.surface.configure(&self.device, &self.config);
-                surface_texture
-            }
-            wgpu::CurrentSurfaceTexture::Timeout
-            | wgpu::CurrentSurfaceTexture::Occluded
-            | wgpu::CurrentSurfaceTexture::Validation => {
-                // Skip this frame
-                return Ok(());
-            }
-            wgpu::CurrentSurfaceTexture::Outdated => {
-                tracing::warn!("surface outdated, reconfiguring");
-                self.surface.configure(&self.device, &self.config);
-                return Ok(());
-            }
-            wgpu::CurrentSurfaceTexture::Lost => {
-                tracing::error!("surface texture lost; bailing");
-                anyhow::bail!("Surface texture lost");
-            }
-        };
-
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-
+    /// Draws the frame into `target`, a view in the format and size this
+    /// State renders to.
+    pub fn render(&mut self, target: &wgpu::TextureView) {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -547,7 +455,7 @@ impl State {
                 color_attachments: &[
                     // This is what @location(0) in the fragment shader targets
                     Some(wgpu::RenderPassColorAttachment {
-                        view: &view,
+                        view: target,
                         resolve_target: None,
                         depth_slice: None,
                         ops: wgpu::Operations {
@@ -613,9 +521,6 @@ impl State {
 
         // submit will accept anything that implements IntoIter
         self.queue.submit(std::iter::once(encoder.finish()));
-        output.present();
-
-        Ok(())
     }
 
     fn ensure_instance_capacity(&mut self, needed: u64) {

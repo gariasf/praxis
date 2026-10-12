@@ -80,6 +80,7 @@ src/
   lib.rs, state.rs             # library root (window shell) + orchestrator
   bin/praxis.rs                # thin binary: command dispatch
   gpu/                         # GPU context, windowed or headless
+  capture/                     # offscreen render read back as an image
   shader.wgsl                  # WGSL shaders (split when justified)
   components.rs                # ECS components (Transform, MeshRef)
   camera/, time/, input/,      # feature modules: resource + system
