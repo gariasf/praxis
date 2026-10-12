@@ -68,7 +68,7 @@ Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/ag
 - **Assets:** glTF via `gltf` crate, images via `image` crate,
   tangents via `bevy_mikktspace`
 - **Logging:** `tracing` + `tracing-subscriber` (with `env-filter`)
-- **Structure:** Single crate.
+- **Structure:** Single crate: a library plus a thin binary.
 
 Pinned in `Cargo.toml`. Version bumps and new dependencies are owner
 decisions: propose them in the ticket, justify them in the PR.
@@ -77,7 +77,10 @@ decisions: propose them in the ticket, justify them in the PR.
 
 ```
 src/
-  main.rs, state.rs            # entry + orchestrator
+  lib.rs, state.rs             # library root (window shell) + orchestrator
+  bin/praxis.rs                # thin binary: no command runs the app,
+                                 `capabilities` prints the adapter report
+  gpu/                         # GPU context, windowed or headless
   shader.wgsl                  # WGSL shaders (split when justified)
   components.rs                # ECS components (Transform, MeshRef)
   camera/, time/, input/,      # feature modules: resource + system
@@ -85,6 +88,7 @@ src/
   assets/                      # asset types, loaders, pools
   render/                      # renderer-internal: instance, uniforms,
                                  vertex, depth, prepare
+tests/                         # integration tests at agreed seams
 ```
 
 Renderer **pulls** from `World` via queries (Design Principle #3 in
