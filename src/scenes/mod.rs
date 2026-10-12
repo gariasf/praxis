@@ -1,0 +1,278 @@
+use std::f32::consts::{PI, TAU};
+
+use bevy_ecs::prelude::*;
+
+use crate::assets::loader::generate_tangents;
+use crate::assets::material::TEXTURE_DIM;
+use crate::assets::{
+    MaterialChannel, MaterialData, MaterialPool, Mesh, MeshHandle, MeshPool, Primitive,
+};
+use crate::camera::Camera;
+use crate::components::{MaterialRef, MeshRef, Transform};
+use crate::render::Vertex;
+
+/// The Scenes `capture` renders, each with a camera path in frames.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum ReferenceScene {
+    /// SciFiHelmet and a material sweep, fetched into `assets/`; local runs only.
+    Helmet,
+    /// Spheres across metallic (rows) and roughness (columns) on neutral Layers.
+    PbrSweep,
+    /// A ground plane with a generated grid texture, tiled twice.
+    UvGrid,
+}
+
+impl ReferenceScene {
+    pub const ALL: [Self; 3] = [Self::Helmet, Self::PbrSweep, Self::UvGrid];
+
+    /// The name the capture command selects the scene by.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Helmet => "helmet",
+            Self::PbrSweep => "pbr-sweep",
+            Self::UvGrid => "uv-grid",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|scene| scene.name() == name)
+    }
+
+    /// The camera at `frame`. The path is a function of the frame number, not
+    /// of time, so it does not depend on machine speed.
+    pub(crate) fn camera_at(self, frame: u32) -> Camera {
+        match self {
+            Self::Helmet => Camera::new(),
+            Self::PbrSweep => orbit(frame, 6.5, 1.0),
+            Self::UvGrid => orbit(frame, 9.0, 7.0),
+        }
+    }
+}
+
+/// A camera on a circle of `radius` at `height` around the origin, looking at
+/// it, starting a little left of +Z and moving a quarter degree per frame.
+fn orbit(frame: u32, radius: f32, height: f32) -> Camera {
+    let angle = (-7.5 + 0.25 * frame as f32).to_radians();
+    let position = glam::vec3(radius * angle.sin(), height, radius * angle.cos());
+    Camera::looking_at(position, glam::Vec3::ZERO)
+}
+
+/// Linear sRGB reflectance of gold at normal incidence: metals tint their
+/// highlight with it and dielectrics their diffuse, so the two rows differ.
+const SWEEP_BASE_COLOR: [f32; 4] = [1.0, 0.71, 0.29, 1.0];
+const SWEEP_ROUGHNESS: [f32; 5] = [0.1, 0.3, 0.5, 0.7, 0.9];
+const SPHERE_RADIUS: f32 = 0.5;
+const SPHERE_SPACING: f32 = 1.3;
+
+pub(crate) fn spawn_pbr_sweep(
+    world: &mut World,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    material_pool: &mut MaterialPool,
+) {
+    let sphere = insert_mesh(world, device, queue, &uv_sphere(SPHERE_RADIUS));
+    for (row, metallic) in [0.0_f32, 1.0].into_iter().enumerate() {
+        for (column, roughness) in SWEEP_ROUGHNESS.into_iter().enumerate() {
+            let material = material_pool.insert(
+                queue,
+                material(
+                    SWEEP_BASE_COLOR,
+                    metallic,
+                    roughness,
+                    MaterialPool::DEFAULT_LAYER,
+                ),
+            );
+            let position = glam::vec3(
+                (column as f32 - 2.0) * SPHERE_SPACING,
+                (0.5 - row as f32) * SPHERE_SPACING,
+                0.0,
+            );
+            world.spawn((
+                Transform(glam::Affine3A::from_translation(position)),
+                MeshRef(sphere),
+                MaterialRef(material),
+            ));
+        }
+    }
+}
+
+pub(crate) fn spawn_uv_grid(
+    world: &mut World,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    material_pool: &mut MaterialPool,
+) {
+    let plane = insert_mesh(world, device, queue, &ground_plane(4.0, 2.0));
+    let albedo_layer = material_pool.upload(
+        queue,
+        MaterialChannel::Albedo,
+        &grid_texture(),
+        TEXTURE_DIM,
+        TEXTURE_DIM,
+    );
+    // Rough so the highlight does not wash out the texture.
+    let material = material_pool.insert(queue, material([1.0; 4], 0.0, 0.8, albedo_layer));
+    world.spawn((
+        Transform(glam::Affine3A::IDENTITY),
+        MeshRef(plane),
+        MaterialRef(material),
+    ));
+}
+
+/// Factors only, with `albedo_layer` and the neutral Layer for every other
+/// Channel.
+fn material(
+    base_color: [f32; 4],
+    metallic: f32,
+    roughness: f32,
+    albedo_layer: u32,
+) -> MaterialData {
+    MaterialData {
+        base_color,
+        metallic_roughness: [metallic, roughness, 0.0, 0.0],
+        emissive: [0.0, 0.0, 0.0, 1.0],
+        texture_indices: [
+            albedo_layer,
+            MaterialPool::DEFAULT_LAYER,
+            MaterialPool::DEFAULT_LAYER,
+            MaterialPool::DEFAULT_LAYER,
+        ],
+        extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
+    }
+}
+
+/// An indexed triangle list, counter-clockwise when seen from outside.
+#[derive(Default)]
+struct Geometry {
+    positions: Vec<[f32; 3]>,
+    normals: Vec<[f32; 3]>,
+    uvs: Vec<[f32; 2]>,
+    indices: Vec<u32>,
+}
+
+/// Uploads `geometry` as a one-Primitive Mesh, with MikkTSpace tangents as a
+/// glTF file without tangents gets them.
+fn insert_mesh(
+    world: &mut World,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    geometry: &Geometry,
+) -> MeshHandle {
+    let tangents = generate_tangents(
+        &geometry.positions,
+        &geometry.normals,
+        &geometry.uvs,
+        &geometry.indices,
+    );
+    let vertices: Vec<Vertex> = (0..geometry.positions.len())
+        .map(|vertex_index| Vertex {
+            position: geometry.positions[vertex_index],
+            normal: geometry.normals[vertex_index],
+            uv: geometry.uvs[vertex_index],
+            tangent: tangents[vertex_index],
+        })
+        .collect();
+    let mut mesh_pool = world.resource_mut::<MeshPool>();
+    let (vertex_offset, index_offset, index_count) =
+        mesh_pool.push_primitive(device, queue, &vertices, &geometry.indices);
+    mesh_pool.insert(Mesh {
+        primitives: vec![Primitive {
+            vertex_offset,
+            index_offset,
+            index_count,
+        }],
+    })
+}
+
+/// A sphere of `radius` around the origin. `u` runs once around from +Z
+/// towards +X, `v` from the north pole to the south pole, as a glTF texture
+/// maps top row first.
+fn uv_sphere(radius: f32) -> Geometry {
+    const LONGITUDE_SEGMENTS: u32 = 48;
+    const LATITUDE_SEGMENTS: u32 = 24;
+
+    let mut geometry = Geometry::default();
+    for latitude in 0..=LATITUDE_SEGMENTS {
+        let v = latitude as f32 / LATITUDE_SEGMENTS as f32;
+        let polar_angle = PI * v;
+        for longitude in 0..=LONGITUDE_SEGMENTS {
+            let u = longitude as f32 / LONGITUDE_SEGMENTS as f32;
+            let azimuth = TAU * u;
+            let normal = [
+                polar_angle.sin() * azimuth.sin(),
+                polar_angle.cos(),
+                polar_angle.sin() * azimuth.cos(),
+            ];
+            geometry.positions.push(normal.map(|axis| axis * radius));
+            geometry.normals.push(normal);
+            geometry.uvs.push([u, v]);
+        }
+    }
+
+    let row_length = LONGITUDE_SEGMENTS + 1;
+    for latitude in 0..LATITUDE_SEGMENTS {
+        for longitude in 0..LONGITUDE_SEGMENTS {
+            let top_left = latitude * row_length + longitude;
+            let top_right = top_left + 1;
+            let bottom_left = top_left + row_length;
+            let bottom_right = bottom_left + 1;
+            // At a pole one edge of the quad collapses to a point; skip the
+            // triangle that would have no area.
+            if latitude != LATITUDE_SEGMENTS - 1 {
+                geometry
+                    .indices
+                    .extend([top_left, bottom_left, bottom_right]);
+            }
+            if latitude != 0 {
+                geometry.indices.extend([top_left, bottom_right, top_right]);
+            }
+        }
+    }
+    geometry
+}
+
+/// A square in the XZ plane, facing +Y, `half_size` metres from the origin
+/// to each edge. `u` grows along +X and `v` along +Z, both to `uv_repeat`.
+fn ground_plane(half_size: f32, uv_repeat: f32) -> Geometry {
+    Geometry {
+        positions: vec![
+            [-half_size, 0.0, -half_size],
+            [-half_size, 0.0, half_size],
+            [half_size, 0.0, half_size],
+            [half_size, 0.0, -half_size],
+        ],
+        normals: vec![[0.0, 1.0, 0.0]; 4],
+        uvs: vec![
+            [0.0, 0.0],
+            [0.0, uv_repeat],
+            [uv_repeat, uv_repeat],
+            [uv_repeat, 0.0],
+        ],
+        indices: vec![0, 1, 2, 0, 2, 3],
+    }
+}
+
+/// `TEXTURE_DIM`-square RGBA8 sRGB texture of 8 × 8 cells framed by dark
+/// lines. Red grows with the cell's column and green with its row, and blue
+/// alternates as a checker, so every cell shows where it sits in UV space.
+fn grid_texture() -> Vec<u8> {
+    const CELLS: u32 = 8;
+    const CELL_SIZE: u32 = TEXTURE_DIM / CELLS;
+    const LINE_WIDTH: u32 = 8;
+
+    let ramp = |cell: u32| (cell * 255 / (CELLS - 1)) as u8;
+    let mut pixels = Vec::with_capacity((TEXTURE_DIM * TEXTURE_DIM * 4) as usize);
+    for y in 0..TEXTURE_DIM {
+        for x in 0..TEXTURE_DIM {
+            let (column, row) = (x / CELL_SIZE, y / CELL_SIZE);
+            let texel = if x % CELL_SIZE < LINE_WIDTH || y % CELL_SIZE < LINE_WIDTH {
+                [16, 16, 16, 255]
+            } else {
+                let blue = if (column + row) % 2 == 0 { 224 } else { 64 };
+                [ramp(column), ramp(row), blue, 255]
+            };
+            pixels.extend(texel);
+        }
+    }
+    pixels
+}

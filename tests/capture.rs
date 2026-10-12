@@ -1,5 +1,6 @@
 use std::io::Write;
 
+use praxis::ReferenceScene;
 use praxis::gpu::GpuContext;
 
 /// The clear colour, linear (0.1, 0.2, 0.3), as an 8-bit sRGB target stores
@@ -31,7 +32,7 @@ fn capture_draws_the_scene_over_the_srgb_encoded_background() {
         return;
     }
 
-    let image = praxis::capture(&context, 160, 90).expect("capture failed");
+    let image = praxis::capture(&context, ReferenceScene::Helmet, 160, 90).expect("capture failed");
 
     assert_eq!(image.dimensions(), (160, 90));
     let corner = image.get_pixel(0, 0).0;
