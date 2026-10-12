@@ -4,7 +4,7 @@ Which skill starts which kind of session, and when. The owner types the slash co
 
 | Situation | Start with | Output | Next |
 |---|---|---|---|
-| Build a ticket (most sessions) | `/implement #<n>`, or "Work the frontier per docs/agents/workflow.md Session start" | draft PR, ready when CI is green, one CodeRabbit round | owner merges |
+| Build a ticket (most sessions) | `/implement #<n>`, or "Work the frontier per docs/agents/workflow.md Session start" | local `/code-review`, draft PR, ready when CI is green, then CodeRabbit's second opinion | owner merges |
 | Decide a map ticket | `/wayfinder #<map>`; name a ticket or take the first frontier one | resolution comment, ticket closed, map updated, ADR PR if hard to reverse | next ticket, new session |
 | Research ticket | "Resolve #<n>" (the agent uses `research`) | cited note under `docs/research/`, resolution on the map | none |
 | New feature or next milestone | `/grill-with-docs <idea>`, then `/to-spec`, then `/to-tickets`, in one window | CONTEXT.md and ADR PR, spec issue, ticket issues | `/clear`, then build |
@@ -17,7 +17,7 @@ Which skill starts which kind of session, and when. The owner types the slash co
 ## Rules of thumb
 
 - Build sessions start from a ticket and nothing else. Grilling and spec work (`/grill-with-docs`, `/to-spec`, `/to-tickets`) stay in their own sessions.
-- `/implement` closes with a local `/code-review`; here CodeRabbit reviews the PR instead, so skip it unless CodeRabbit is rate-limited (workflow.md, Review).
+- `/implement` closes with a local `/code-review`: run it before the PR opens. CodeRabbit's review is a second opinion on top of it, treated as suggestions (workflow.md, Review).
 - Mark at most two PRs ready within an hour: the plan includes 5 CodeRabbit reviews per rolling hour.
 - Do not chart a milestone before the one ahead of it nears exit (workflow.md, The ladder).
 - Two build sessions at once need separate worktrees and disjoint modules; open PRs stay at two.

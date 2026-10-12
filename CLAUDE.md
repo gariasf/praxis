@@ -100,9 +100,10 @@ When a feature folder grows past one file, split into
   recommendation attached.
 - Work the live milestone's frontier. Work that is not a ticket becomes
   a proposed ticket first.
-- `/implement` closes with a local `/code-review`; here CodeRabbit
-  reviews the PR instead. Run the local review only when CodeRabbit is
-  rate-limited (`docs/agents/workflow.md`, Review).
+- Review before the PR opens: `/implement` closes with a local
+  `/code-review`; run it and fix what it finds. CodeRabbit's review of
+  the PR is a second opinion, treated as suggestions
+  (`docs/agents/workflow.md`, Review).
 - A bug-fix is not a refactor and a feature is not a cleanup. Do what
   the ticket says; its acceptance criteria are the ceiling.
 - Don't add comments, docstrings, or type annotations to code you
