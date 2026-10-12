@@ -1,9 +1,9 @@
 //! Goldens: each procedural Reference scene's capture matches its committed
 //! image in `tests/goldens/<key>/<scene>.png`. The key is the backend, plus
 //! `-cpu` on a software driver: `metal` is recorded on the M4 Pro, and
-//! `vulkan-cpu` on CI's lavapipe (Mesa on the `ubuntu-24.04` runner). A Golden
-//! is a reviewed snapshot of `praxis::capture`, so it catches regressions, not
-//! errors already present when it was recorded.
+//! `vulkan-cpu` on CI's lavapipe (the Mesa pinned in `.github/workflows/ci.yml`).
+//! A Golden is a reviewed capture from `praxis::capture`, so it catches
+//! regressions, not errors already present when it was recorded.
 //!
 //! `PRAXIS_UPDATE_GOLDENS=1 cargo test --test goldens` rewrites the current
 //! key's Goldens and prints the scenes whose image changed. Without the
