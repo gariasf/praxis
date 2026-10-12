@@ -1,12 +1,11 @@
-//! Every WGSL file under `src/` is checked here without a GPU: naga parses
-//! and validates it the way wgpu does when it creates a shader module, and
+//! Every WGSL file under `src/` is checked here without a GPU, as wgpu checks
+//! it when it creates a shader module (backend code generation aside), and
 //! each struct whose bytes the CPU writes is compared with its Rust twin.
 
 use std::collections::BTreeSet;
 use std::path::Path;
 
 use wgpu::naga;
-use wgpu::naga::common::wgsl::TryToWgsl;
 
 use crate::assets::MaterialData;
 use crate::render::{CameraUniform, InstanceData, LightUniform, Vertex};
@@ -135,7 +134,7 @@ fn layout_check_reports_every_kind_of_mismatch() {
         position: [f32; 3],
     }
     const ATTRIBUTES: [wgpu::VertexAttribute; 2] =
-        wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3];
+        wgpu::vertex_attr_array![0 => Float32x3, 1 => Unorm16x4];
     let twins = [
         twin!(Light {
             color,
@@ -177,20 +176,41 @@ fn layout_check_reports_every_kind_of_mismatch() {
             "test.wgsl: VertexInput: Rust `uv` at offset 0: 8 bytes of f32",
             "test.wgsl: VertexInput: WGSL `position` at offset 0: 12 bytes of f32",
             "test.wgsl: VertexInput: WGSL `uv` at offset 12: 8 bytes of f32",
-            "test.wgsl: VertexInput: `uv` is 8 bytes, its vertex attribute is Float32x3",
+            "test.wgsl: VertexInput: `uv` is fed by a Unorm16x4 vertex attribute",
             "test.wgsl: VertexInput: no vertex attribute at location 2 (`weight`)",
         ]
     );
 }
 
-/// Parses and validates `source` as wgpu does, or returns naga's diagnostic
-/// after the path, which some validation errors do not mention.
+#[test]
+fn a_bind_group_past_the_device_limit_fails_validation() {
+    let source = "@group(4) @binding(0) var<uniform> value: vec4<f32>;";
+    assert_eq!(
+        validate("test.wgsl", source).err().as_deref(),
+        Some("test.wgsl: @group(4) exceeds the device's max_bind_groups of 4")
+    );
+}
+
+/// Parses and validates `source` as wgpu does, or returns the error after
+/// the path, which some naga diagnostics do not mention.
 fn validate(path: &str, source: &str) -> Result<naga::Module, String> {
     let mut options = naga::front::wgsl::Options::new();
     options.capabilities = CAPABILITIES;
     let module = naga::front::wgsl::Frontend::new_with_options(options)
         .parse(source)
         .map_err(|error| format!("{path}: {}", error.emit_to_string_with_path(source, path)))?;
+    // `GpuContext` requests the default limits.
+    let max_bind_groups = wgpu::Limits::default().max_bind_groups;
+    for (_, global) in module.global_variables.iter() {
+        if let Some(binding) = &global.binding
+            && binding.group >= max_bind_groups
+        {
+            return Err(format!(
+                "{path}: @group({}) exceeds the device's max_bind_groups of {max_bind_groups}",
+                binding.group
+            ));
+        }
+    }
     naga::valid::Validator::new(naga::valid::ValidationFlags::all(), CAPABILITIES)
         .validate(&module)
         .map_err(|error| format!("{path}: {}", error.emit_to_string_with_path(source, path)))?;
@@ -352,9 +372,18 @@ fn twin_problems(
                     ));
                     continue;
                 };
-                if attribute.format.size() as usize != size {
+                // Vertex data is unpacked f32s today, read as stored. A packed
+                // format needs the Rust field's type to pick its row.
+                let stored_format = match (wgsl_scalar(module, member.ty), size) {
+                    (Some(naga::Scalar::F32), 4) => Some(wgpu::VertexFormat::Float32),
+                    (Some(naga::Scalar::F32), 8) => Some(wgpu::VertexFormat::Float32x2),
+                    (Some(naga::Scalar::F32), 12) => Some(wgpu::VertexFormat::Float32x3),
+                    (Some(naga::Scalar::F32), 16) => Some(wgpu::VertexFormat::Float32x4),
+                    _ => None,
+                };
+                if stored_format != Some(attribute.format) {
                     problems.push(format!(
-                        "`{name}` is {size} bytes, its vertex attribute is {:?}",
+                        "`{name}` is fed by a {:?} vertex attribute",
                         attribute.format
                     ));
                 }
@@ -396,6 +425,8 @@ fn wgsl_scalar(
 }
 
 fn describe(name: &str, offset: usize, size: usize, scalar: Option<naga::Scalar>) -> String {
-    let scalar = scalar.and_then(TryToWgsl::try_to_wgsl).unwrap_or("?");
+    let scalar = scalar
+        .and_then(naga::common::wgsl::TryToWgsl::try_to_wgsl)
+        .unwrap_or("?");
     format!("`{name}` at offset {offset}: {size} bytes of {scalar}")
 }
