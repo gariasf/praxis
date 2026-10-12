@@ -22,7 +22,7 @@ The owner decides and merges. Agents implement and open PRs. A decision that liv
 ## PRs
 
 - One ticket per PR (`Closes #N`). At most two PRs open at once, on disjoint modules.
-- One review → fix round (see Review). Findings still open after it become tickets or fog notes.
+- One review round: initial review, one fix commit, one verification pass (see Review). Findings still open after it become tickets or fog notes.
 - Description follows `.github/pull_request_template.md`: what changed, how it was verified (command and output, 30 lines at most), metric deltas, decisions needed from the owner.
 - Commit subject 72 characters at most; the body says why, not what.
 
@@ -36,10 +36,10 @@ CI owns mechanical checks. CodeRabbit is the independent semantic reviewer: it r
    - *Fix*: verified, and a correctness, safety, budget, or ADR problem, or a quick win inside the changed lines.
    - *Decline*: wrong, or beyond the acceptance criteria. One-line reason.
    - *Defer*: true but outside the ticket. A note under *Not yet specified* with its revival trigger.
-4. **One fix commit, one summary.** Reply on each thread in two lines at most and resolve it. Post one PR comment: counts per disposition and the deferred list. The push triggers an incremental review; apply the same rules and fix only Major or above this time. Automatic reviews pause after five reviewed commits; resume with `@coderabbitai resume` only on purpose.
+4. **One fix commit, one summary.** Reply on each thread in two lines at most and resolve it. Post one PR comment: counts per disposition and the deferred list. The push triggers an incremental review: the verification pass of the same round. It may add one more fix commit, for Major or above only; everything else is declined or deferred. Automatic reviews pause after five reviewed commits; resume with `@coderabbitai resume` only on purpose.
 5. **Ready for the owner** when CI is green, the review has run, and the summary is posted. A rate-limited or skipped review counts as not reviewed: re-trigger with `@coderabbitai review` when the limit resets, or run `/code-review` locally. Docs-only PRs may merge unreviewed at the owner's call.
 
-A declined finding class that recurs becomes a path instruction in `.coderabbit.yaml` or a `CODING_STANDARDS.md` rule. Summary comments carry the numbers (findings, fixed, declined, deferred); after about ten PRs the owner decides whether CodeRabbit's approval becomes a merge gate.
+CodeRabbit reads `.coderabbit.yaml` from the PR's own branch, so a PR that edits it is reviewed under its own edit: name every change to it under Decide. A declined finding class that recurs becomes a path instruction there or a `CODING_STANDARDS.md` rule. Summary comments carry the numbers (findings, fixed, declined, deferred); after about ten PRs the owner decides whether CodeRabbit's approval becomes a merge gate.
 
 Pre-PR option: with the CLI authenticated (`cr auth login`), `cr review --agent` runs the same review locally before the push. Its allowance is separate from PR reviews.
 
