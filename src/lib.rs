@@ -15,6 +15,7 @@ use crate::state::State;
 mod assets;
 mod camera;
 mod components;
+pub mod gpu;
 mod helmet;
 mod input;
 mod render;
@@ -112,14 +113,4 @@ pub fn run() -> anyhow::Result<()> {
     event_loop.run_app(&mut app)?;
 
     Ok(())
-}
-
-fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
-
-    tracing::info!(version = env!("CARGO_PKG_VERSION"), "praxis starting");
-
-    let _app = run();
 }

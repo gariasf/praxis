@@ -8,6 +8,7 @@ use crate::assets::{
 };
 use crate::camera::{Camera, fly_camera};
 use crate::components::{MaterialRef, MeshRef, Transform};
+use crate::gpu::GpuContext;
 use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
 use crate::input::{Input, clear_just_pressed};
 use crate::render::{
@@ -42,48 +43,16 @@ impl State {
     pub async fn new(window: Arc<Window>) -> anyhow::Result<State> {
         let _span = tracing::info_span!("state_init").entered();
 
-        // Device and queue setup
         let size = window.inner_size();
 
-        // The instance is a handle to our GPU
-        // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            #[cfg(not(target_arch = "wasm32"))]
-            backends: wgpu::Backends::PRIMARY,
-            flags: Default::default(),
-            memory_budget_thresholds: Default::default(),
-            backend_options: Default::default(),
-            display: None,
-        });
-
-        let surface = instance.create_surface(window.clone())?;
-
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(),
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await?;
-
-        let adapter_info = adapter.get_info();
-        tracing::info!(
-            name = %adapter_info.name,
-            backend = ?adapter_info.backend,
-            device_type = ?adapter_info.device_type,
-            "adapter selected"
-        );
-
-        let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor {
-                label: None,
-                required_features: wgpu::Features::empty(),
-                experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                required_limits: wgpu::Limits::default(),
-                memory_hints: Default::default(),
-                trace: wgpu::Trace::Off,
-            })
-            .await?;
+        let (
+            GpuContext {
+                adapter,
+                device,
+                queue,
+            },
+            surface,
+        ) = GpuContext::with_surface(window.clone()).await?;
 
         let surface_caps = surface.get_capabilities(&adapter);
 
