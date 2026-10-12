@@ -2,7 +2,9 @@
 
 Researched 2026-10-12 against each source's own pages. Licenses are quoted as the source states them. "Unverified" marks claims the source page did not confirm. For Khronos models the authority is the repo's machine-readable [`REUSE.toml`](https://github.com/KhronosGroup/glTF-Sample-Assets/blob/main/REUSE.toml) (`precedence = "aggregate"`), which the per-model READMEs agree with.
 
-## What the repo ships today
+## What the repo shipped on 2026-10-12
+
+A snapshot; `assets/manifest.json` is the current inventory. Items 5 and 6 below have since removed every file in this table.
 
 | File | Provenance | License | Referenced in `src/` |
 |---|---|---|---|

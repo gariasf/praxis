@@ -22,6 +22,7 @@ jq -r '.[] | select(.fetched) | "\(.path) \(.source) \(.sha256)"' "$assets/manif
       echo "error    $file: sha256 is $actual, manifest says $sha256" >&2
       exit 1
     fi
+    chmod 644 "$download"
     mv "$download" "$target"
     echo "fetched  $file"
   done

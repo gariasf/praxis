@@ -15,8 +15,9 @@ use crate::render::{
 };
 use crate::time::Time;
 
-/// The helmet-class model the Scene draws, relative to the crate root. It is
-/// fetched, not committed: `scripts/fetch-assets.sh` downloads it.
+/// The helmet-class model the Scene draws, relative to the working directory
+/// (the crate root under `cargo run` and `cargo test`). It is fetched, not
+/// committed: `scripts/fetch-assets.sh` downloads it.
 pub const DEFAULT_MODEL: &str = "assets/SciFiHelmet/SciFiHelmet.gltf";
 
 /// The Scene in its ECS World and the renderer that draws it into a target
