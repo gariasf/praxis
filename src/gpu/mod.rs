@@ -46,7 +46,8 @@ impl GpuContext {
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: None,
-                required_features: wgpu::Features::empty(),
+                // Timestamp queries time render passes for frame stats.
+                required_features: adapter.features() & wgpu::Features::TIMESTAMP_QUERY,
                 experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 required_limits: wgpu::Limits::default(),
                 memory_hints: Default::default(),

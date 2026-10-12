@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use anyhow::Context;
 use bevy_ecs::prelude::*;
 
@@ -21,6 +23,9 @@ use crate::time::Time;
 /// (the crate root under `cargo run` and `cargo test`). It is fetched, not
 /// committed: `scripts/fetch-assets.sh` downloads it.
 pub const DEFAULT_MODEL: &str = "assets/SciFiHelmet/SciFiHelmet.gltf";
+
+/// The label of the State's one render pass, and its name in frame stats.
+pub(crate) const MAIN_PASS: &str = "main_pass";
 
 /// The Scene in its ECS World and the renderer that draws it into a target
 /// view: the window's surface or an offscreen texture.
@@ -179,15 +184,18 @@ impl State {
         world.insert_resource(scene.camera_at(0));
         world.insert_resource(RuntimeHelmets::default());
 
+        let recorder = FrameRecorder::new();
         let mut schedule = Schedule::default();
-        schedule.add_systems(
-            (
-                fly_camera,
-                (spawn_helmet, despawn_helmet).run_if(resource_exists::<HelmetAssets>),
-                clear_just_pressed,
-            )
-                .chain(),
-        );
+        recorder.systems.scope(|| {
+            schedule.add_systems(
+                (
+                    fly_camera,
+                    (spawn_helmet, despawn_helmet).run_if(resource_exists::<HelmetAssets>),
+                    clear_just_pressed,
+                )
+                    .chain(),
+            );
+        });
 
         match scene {
             ReferenceScene::Helmet => {
@@ -269,7 +277,7 @@ impl State {
             schedule,
             instance_bind_group_layout,
             transient_saves_memory: context.adapter.get_info().transient_saves_memory == Some(true),
-            recorder: FrameRecorder::default(),
+            recorder,
         })
     }
 
@@ -465,7 +473,11 @@ impl State {
             num_point_lights: [4.0, 0.0, 0.0, 0.0],
         };
 
+        let started = Instant::now();
         let instance_data = prepare_renderables(&mut self.world);
+        self.recorder.stage("prepare_renderables", started);
+
+        let started = Instant::now();
         self.ensure_instance_capacity(instance_data.len() as u64);
         let uploads: [(&wgpu::Buffer, &[u8]); 3] = [
             (&self.instance_buffer, bytemuck::cast_slice(&instance_data)),
@@ -476,11 +488,17 @@ impl State {
             self.queue.write_buffer(buffer, 0, bytes);
             self.recorder.uploaded_bytes += bytes.len() as u64;
         }
+        self.recorder.stage("upload", started);
     }
 
     /// Draws the frame into `target`, a view in the format and size this
-    /// State renders to.
-    pub fn render(&mut self, target: &wgpu::TextureView) {
+    /// State renders to, and times its one pass into `timestamp_writes`.
+    pub fn render(
+        &mut self,
+        target: &wgpu::TextureView,
+        timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
+    ) {
+        let started = Instant::now();
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -489,7 +507,7 @@ impl State {
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
+                label: Some(MAIN_PASS),
                 color_attachments: &[
                     // This is what @location(0) in the fragment shader targets
                     Some(wgpu::RenderPassColorAttachment {
@@ -516,7 +534,7 @@ impl State {
                     stencil_ops: None,
                 }),
                 occlusion_query_set: None,
-                timestamp_writes: None,
+                timestamp_writes,
                 multiview_mask: None,
             });
 
@@ -558,8 +576,13 @@ impl State {
             }
         }
 
+        let command_buffer = encoder.finish();
+        self.recorder.stage("encode", started);
+
+        let started = Instant::now();
         // submit will accept anything that implements IntoIter
-        self.queue.submit(std::iter::once(encoder.finish()));
+        self.queue.submit(std::iter::once(command_buffer));
+        self.recorder.stage("submit", started);
         self.recorder.end();
     }
 

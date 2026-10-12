@@ -237,7 +237,7 @@ impl WindowShell {
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        self.state.render(&view);
+        self.state.render(&view, None);
         self.queue.present(output);
 
         // Only after presenting: wgpu rejects a reconfigure while a texture

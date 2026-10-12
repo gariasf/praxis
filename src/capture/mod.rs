@@ -1,6 +1,8 @@
+use std::time::Duration;
+
 use crate::gpu::GpuContext;
 use crate::scenes::ReferenceScene;
-use crate::state::State;
+use crate::state::{MAIN_PASS, State};
 use crate::stats::FrameStats;
 
 /// 8-bit sRGB like the window's surface, which takes the first sRGB format
@@ -48,15 +50,102 @@ pub fn capture(
         view_formats: &[],
     });
     let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
+    let pass_timer = PassTimer::new(&context.device);
     let mut frame_stats = Vec::with_capacity(FRAME_COUNT as usize);
     for frame in 0..FRAME_COUNT {
         state.world.insert_resource(scene.camera_at(frame));
         state.update(FRAME_DELTA_TIME);
-        state.render(&target_view);
+        state.render(
+            &target_view,
+            pass_timer.as_ref().map(|timer| timer.writes(frame)),
+        );
         frame_stats.push(state.frame_stats());
     }
 
-    Ok((read_back(context, &target)?, frame_stats))
+    let image = read_back(context, &target)?;
+    if let Some(timer) = pass_timer {
+        for (stats, pass_time) in frame_stats.iter_mut().zip(timer.read(context)?) {
+            stats.gpu_times.push((MAIN_PASS, pass_time));
+        }
+    }
+    Ok((image, frame_stats))
+}
+
+/// GPU time of the State's pass in each frame of a capture, from timestamps
+/// at the pass's boundaries (Apple GPUs have none inside passes). Metal reads
+/// a timestamp as 0 or stale unless it is resolved after its pass's submission
+/// completed (`docs/research/wgpu-capability-matrix.md`), so `read` resolves
+/// every frame at once, after the last. Runs without end (the window) need a
+/// ring of sets instead, each resolved once its frame's submission completes.
+struct PassTimer {
+    query_set: wgpu::QuerySet,
+}
+
+impl PassTimer {
+    /// Begin and end timestamps per frame.
+    const QUERY_COUNT: u32 = 2 * FRAME_COUNT;
+
+    /// A timer, or `None` when the device has no timestamp queries.
+    fn new(device: &wgpu::Device) -> Option<Self> {
+        device
+            .features()
+            .contains(wgpu::Features::TIMESTAMP_QUERY)
+            .then(|| Self {
+                query_set: device.create_query_set(&wgpu::QuerySetDescriptor {
+                    label: Some("Pass Timestamps"),
+                    ty: wgpu::QueryType::Timestamp,
+                    count: Self::QUERY_COUNT,
+                }),
+            })
+    }
+
+    fn writes(&self, frame: u32) -> wgpu::RenderPassTimestampWrites<'_> {
+        wgpu::RenderPassTimestampWrites {
+            query_set: &self.query_set,
+            beginning_of_pass_write_index: Some(2 * frame),
+            end_of_pass_write_index: Some(2 * frame + 1),
+        }
+    }
+
+    /// Each frame's pass time, in frame order.
+    fn read(&self, context: &GpuContext) -> anyhow::Result<Vec<Duration>> {
+        let size = u64::from(Self::QUERY_COUNT) * u64::from(wgpu::QUERY_SIZE);
+        let resolve_buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Pass Timestamp Resolve Buffer"),
+            size,
+            usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let read_back_buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Pass Timestamp Read-back Buffer"),
+            size,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        // Every frame's submission completes before the resolve is recorded.
+        context.device.poll(wgpu::PollType::wait_indefinitely())?;
+        let mut encoder = context
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Pass Timestamp Resolve Encoder"),
+            });
+        encoder.resolve_query_set(&self.query_set, 0..Self::QUERY_COUNT, &resolve_buffer, 0);
+        encoder.copy_buffer_to_buffer(&resolve_buffer, 0, &read_back_buffer, 0, size);
+        submit_and_map(context, encoder, &read_back_buffer)?;
+
+        let nanoseconds_per_tick = f64::from(context.queue.get_timestamp_period());
+        let ticks: Vec<u64> = bytemuck::pod_collect_to_vec(&read_back_buffer.get_mapped_range(..)?);
+        Ok(ticks
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&[begin, end]| {
+                let pass_ticks = end.saturating_sub(begin);
+                Duration::from_nanos((pass_ticks as f64 * nanoseconds_per_tick) as u64)
+            })
+            .collect())
+    }
 }
 
 /// Copies an RGBA8 `texture` to the CPU, without the row padding the copy
@@ -89,14 +178,7 @@ fn read_back(context: &GpuContext, texture: &wgpu::Texture) -> anyhow::Result<im
         },
         texture.size(),
     );
-    context.queue.submit(std::iter::once(encoder.finish()));
-
-    let (sender, receiver) = std::sync::mpsc::channel();
-    buffer.map_async(wgpu::MapMode::Read, .., move |result| {
-        sender.send(result).ok();
-    });
-    context.device.poll(wgpu::PollType::wait_indefinitely())?;
-    receiver.recv()??;
+    submit_and_map(context, encoder, &buffer)?;
 
     let mut pixels = Vec::with_capacity((row_bytes * height) as usize);
     for row in buffer
@@ -107,4 +189,21 @@ fn read_back(context: &GpuContext, texture: &wgpu::Texture) -> anyhow::Result<im
     }
     Ok(image::RgbaImage::from_raw(width, height, pixels)
         .expect("the read-back holds width × height RGBA8 pixels"))
+}
+
+/// Submits `encoder` and waits until `buffer`, which it writes, is mapped for
+/// reading.
+fn submit_and_map(
+    context: &GpuContext,
+    encoder: wgpu::CommandEncoder,
+    buffer: &wgpu::Buffer,
+) -> anyhow::Result<()> {
+    context.queue.submit(std::iter::once(encoder.finish()));
+    let (sender, receiver) = std::sync::mpsc::channel();
+    buffer.map_async(wgpu::MapMode::Read, .., move |result| {
+        sender.send(result).ok();
+    });
+    context.device.poll(wgpu::PollType::wait_indefinitely())?;
+    receiver.recv()??;
+    Ok(())
 }
