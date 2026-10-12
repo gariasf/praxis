@@ -59,7 +59,7 @@ A unit the cooker produces and the runtime loads: a Mesh, Material, Texture or C
 _Avoid_: Resource, file
 
 **Asset ID**:
-The stable name of an Asset, derived from its source file's GUID. It survives moving and editing the source.
+The stable name of an Asset, derived from its source file's GUID. It survives moving and editing the source, except an edit that renames the Asset inside it.
 _Avoid_: Asset path, GUID (the GUID names a source file)
 
 **Blob**:
