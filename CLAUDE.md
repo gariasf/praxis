@@ -7,51 +7,52 @@ update it in the same change. Don't let this file go stale.
 
 # Praxis — AI Guidelines
 
-Praxis is a personal, learning-focused 3D rendering engine built from
-scratch. Solo developer. The goal is to understand every line — not to
-ship fast.
+Praxis is a 3D engine built from scratch in Rust, aimed at a production
+open-world engine (Skyrim / RDR class) on cutting-edge hardware. The
+owner decides and merges; agents implement and open PRs.
 
 ## Project posture
 
-**Learning sets the pace, not the bar.**
-
-Long-term destination: a production cutting-edge engine, foundations
-for a Skyrim-shape RPG on modern hardware. Today's small, unoptimised
-implementation reflects the early phase, not the eventual scope. See
-`ROADMAP.md` for the phase plan and load-bearing decisions.
-
-What this means in practice:
-
-- **Architectural decisions are production-grade.** Load-bearing
-  decisions in `ROADMAP.md` (ECS shape, asset pools, renderer pull,
-  GPU resource ownership) are made for the eventual scope, not the
-  current phase. Don't suggest shortcuts that would need rewriting at
-  scale.
-- **Implementation depth tracks the current phase.** Use the simplest
-  version of the right shape. Complexity arrives on schedule, not
-  speculation.
-- **No throwaway code.** "We'll fix it later" is rejected. Clean
-  naming, structure, conventions every step. If it's worth building,
-  build it right within the phase's scope.
-- **Performance optimisation waits its turn.** Profiling, batching,
-  GPU-driven rendering — all real, all scheduled, none premature.
-
-"Learning-focused" describes how the project is built (one person,
-weekends, understanding every line). It does not describe what the
-project is *for*.
+- **Efficiency and correctness are paramount**: CPU, GPU, memory, and
+  tokens. Every change is validated; evidence beats assertion.
+- **Architecture is production-grade now.** Load-bearing decisions
+  (`ROADMAP.md`, migrating to `docs/adr/`) are made for the eventual
+  scope. Implementation depth follows the live milestone.
+- **No throwaway code.** Clean naming, structure, and conventions at
+  every step.
+- **Goals are explicit.** Work traces to a ticket in the live milestone
+  (`docs/agents/workflow.md`).
+- Teaching happens on request.
 
 ## Documents
 
-Read in this order before assisting:
-
-- `ROADMAP.md` — phase plan, design principles, load-bearing decisions.
-  Authoritative on **what** to build and **when**.
-- `PLAN.md` — current phase scratch. Replaced each phase. Not durable.
-- `CLAUDE.md` (this file) — **how** to work in this codebase.
+- `docs/agents/workflow.md` — how work moves: ladder, tickets, PRs,
+  budgets, session start. Read before starting, closing, or reordering
+  work.
+- `CONTEXT.md`, `docs/adr/` — glossary and decisions, once present.
+- `ROADMAP.md` — long-range vision and load-bearing decisions. Being
+  migrated into ADRs and the map issue; its phase checklists are
+  superseded by milestones.
+- `PLAN.md` — Phase 6 scratch, paused. Superseded by tickets once M0 is
+  specified.
 
 If any of these conflicts with current code, **the code is the source
-of truth**. Flag the drift to the user explicitly; do not silently
+of truth**. Flag the drift to the owner explicitly; do not silently
 follow stale guidance.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues for this repo, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`); each label string equals its role name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
 ## Stack (frozen)
 
@@ -60,12 +61,13 @@ follow stale guidance.
 - **Windowing:** winit 0.30
 - **Math:** glam
 - **ECS:** `bevy_ecs` (sub-crate only — no full Bevy stack)
-- **Assets:** glTF via `gltf` crate, images via `image` crate
+- **Assets:** glTF via `gltf` crate, images via `image` crate,
+  tangents via `bevy_mikktspace`
 - **Logging:** `tracing` + `tracing-subscriber` (with `env-filter`)
 - **Structure:** Single crate.
 
-Pinned in `Cargo.toml`. Do not bump versions or add deps without
-discussion.
+Pinned in `Cargo.toml`. Version bumps and new dependencies are owner
+decisions: propose them in the ticket, justify them in the PR.
 
 ## Project shape (feature-based)
 
@@ -87,18 +89,21 @@ Renderer **pulls** from `World` via queries (Design Principle #3 in
 When a feature folder grows past one file, split into
 `feature/{resource,system,...}.rs`. Don't pre-split.
 
-## How to assist
+## How agents work here
 
-- **Guide, explain, review.** Don't generate entire systems or scaffold
-  modules. Write small, focused snippets when asked.
-- Prefer teaching the concept over writing the code.
-- Stay on the current phase. Don't suggest features from phases ahead.
-- A bug-fix request is not a refactor request. A feature request is not
-  a cleanup request. Do only what was asked.
+- Implement tickets end to end: code, tests, verification, PR. Bring
+  the owner decisions (scope, trade-offs, dependencies) with a
+  recommendation attached.
+- Work the live milestone's frontier. Work that is not a ticket becomes
+  a proposed ticket first.
+- A bug-fix is not a refactor and a feature is not a cleanup. Do what
+  the ticket says; its acceptance criteria are the ceiling.
 - Don't add comments, docstrings, or type annotations to code you
   didn't change.
-- If asked to review: flag correctness and safety issues, not style
-  preferences. `cargo fmt` and `clippy` own style.
+- Reviews flag correctness, safety, and budget regressions.
+  `cargo fmt` and `clippy` own style.
+- Prefer deep modules behind small interfaces, tested at those seams
+  (skills: `codebase-design`, `tdd`).
 
 ## Code conventions
 
@@ -111,6 +116,8 @@ When a feature folder grows past one file, split into
   `.cargo/config.toml`; override per run with `RUST_LOG`.
 - Bevy imports: `use bevy_ecs::prelude::*;` (not piecemeal).
 - WGPU types: full path (`wgpu::Buffer`), don't import individual types.
+- Identifiers are full words, WGSL included (`normal_dot_view`, not
+  `n_dot_v`). Put a textbook symbol in a comment where it helps.
 - Asset pool lookups return `Option<&T>`. Callers handle `None`
   gracefully (warn + skip in render path); never `.unwrap()` in a
   hot loop.
@@ -118,8 +125,8 @@ When a feature folder grows past one file, split into
 - No `unsafe` unless absolutely necessary and clearly explained.
 - Keep dependencies minimal. Use feature flags
   (`image = { version = "0.25", default-features = false, features = ["png"] }`).
-- No test framework yet. Verify changes by running the app — don't add
-  `#[cfg(test)]` scaffolding unless explicitly asked.
+- Tests use the built-in harness (`cargo test`) at the seams agreed in
+  the ticket. Test-framework crates are an owner decision.
 
 ## Review checklist
 
@@ -154,14 +161,15 @@ faster they drift.
 
 **Update this file in the same PR when:**
 
-- Folder layout changes (e.g., the Phase 5 feature-folder migration)
+- Folder layout changes
 - A new cross-cutting convention is adopted
-- A "load-bearing decision" in `ROADMAP.md` is added or revised
+- An ADR is added or superseded, or a "load-bearing decision" in
+  `ROADMAP.md` is revised
 - A repeated correction emerges — same mistake twice means it's a rule
 
 **Don't update for:**
 
-- Phase-specific work (lives in `PLAN.md`)
+- Ticket-specific work (lives in tickets and the map issue)
 - One-off bug fixes
 - Style nits
 
