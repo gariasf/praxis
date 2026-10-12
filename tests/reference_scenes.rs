@@ -19,7 +19,8 @@ fn procedural_scenes_render_identically_without_asset_files() {
 
     // The only test in this binary, so changing the process's directory
     // races with nothing.
-    let empty_directory = std::env::temp_dir().join("praxis-reference-scenes");
+    let empty_directory =
+        std::env::temp_dir().join(format!("praxis-reference-scenes-{}", std::process::id()));
     std::fs::create_dir_all(&empty_directory).expect("temporary directory");
     std::env::set_current_dir(&empty_directory).expect("change directory");
 
@@ -37,4 +38,5 @@ fn procedural_scenes_render_identically_without_asset_files() {
             scene.name()
         );
     }
+    std::fs::remove_dir(&empty_directory).ok();
 }

@@ -75,7 +75,7 @@ pub(crate) fn spawn_pbr_sweep(
         for (column, roughness) in SWEEP_ROUGHNESS.into_iter().enumerate() {
             let material = material_pool.insert(
                 queue,
-                material(
+                factor_material(
                     SWEEP_BASE_COLOR,
                     metallic,
                     roughness,
@@ -83,7 +83,7 @@ pub(crate) fn spawn_pbr_sweep(
                 ),
             );
             let position = glam::vec3(
-                (column as f32 - 2.0) * SPHERE_SPACING,
+                (column as f32 - (SWEEP_ROUGHNESS.len() - 1) as f32 / 2.0) * SPHERE_SPACING,
                 (0.5 - row as f32) * SPHERE_SPACING,
                 0.0,
             );
@@ -111,7 +111,7 @@ pub(crate) fn spawn_uv_grid(
         TEXTURE_DIM,
     );
     // Rough so the highlight does not wash out the texture.
-    let material = material_pool.insert(queue, material([1.0; 4], 0.0, 0.8, albedo_layer));
+    let material = material_pool.insert(queue, factor_material([1.0; 4], 0.0, 0.8, albedo_layer));
     world.spawn((
         Transform(glam::Affine3A::IDENTITY),
         MeshRef(plane),
@@ -121,7 +121,7 @@ pub(crate) fn spawn_uv_grid(
 
 /// Factors only, with `albedo_layer` and the neutral Layer for every other
 /// Channel.
-fn material(
+fn factor_material(
     base_color: [f32; 4],
     metallic: f32,
     roughness: f32,
