@@ -1,25 +1,36 @@
-# Code Rabbit configuration for Praxis.
-# Schema reference: https://docs.coderabbit.ai/reference/configuration
+# CodeRabbit configuration for Praxis.
+# Schema: https://coderabbit.ai/integrations/schema.v2.json
 #
-# Praxis is a learning-focused engine. Surface correctness and safety
-# issues; ignore style (rustfmt + clippy own those). See CLAUDE.md for
-# durable conventions and ROADMAP.md for phase plan.
+# Role: independent semantic reviewer (docs/agents/workflow.md, "Review").
+# CI owns mechanical checks; the agent owns every fix; CodeRabbit never
+# writes to a branch, so its finishing touches stay off.
+# Config is read from the PR's own branch, so a PR that edits this file is
+# reviewed under its own edit. Every change here is named under "Decide"
+# in the PR description.
 
 language: en-GB
 
-# 250-char limit — keep tight.
+# 250-char limit.
 tone_instructions: >-
-  Be terse and direct. Skip pleasantries. Learning pace, production-bound
-  foundations — flag correctness and load-bearing issues. Skip style (rustfmt
-  and clippy own that).
+  Terse. Report correctness, safety, budget regressions and ADR conflicts,
+  each as the change plus the reason in two lines. Style is owned by
+  rustfmt and clippy.
 
 reviews:
   profile: chill
   request_changes_workflow: false
-  high_level_summary: true
-  poem: false
-  collapse_walkthrough: false
+  # The PR description is the summary. With this on, CodeRabbit skips the
+  # description check.
+  high_level_summary: false
+  collapse_walkthrough: true
+  changed_files_summary: false
   sequence_diagrams: false
+  suggested_labels: false
+  suggested_reviewers: false
+  related_prs: false
+  in_progress_fortune: false
+  poem: false
+  enable_prompt_for_ai_agents: true
 
   auto_review:
     enabled: true
@@ -33,63 +44,159 @@ reviews:
     - "!**/*.png"
     - "!**/*.jpg"
     - "!**/*.jpeg"
+    - "!**/*.hdr"
+    - "!**/*.ktx2"
+    - "!docs/research/**"
 
   path_instructions:
     - path: "**/*.rs"
       instructions: |
-        Follow CLAUDE.md (Project posture + Review checklist). Apply
-        both.
-
-        Additionally flag:
-        - Features ahead of the current phase (see ROADMAP.md). Phase
-          number is the highest fully-checked phase.
-        - println!, eprintln!, or `log` crate usage instead of tracing
-          macros.
-        - GPU resources (wgpu::Buffer, BindGroup, Texture, etc.) stored
-          inside #[derive(Component)] structs — components are pure
-          authoring data.
-        - Throwaway shortcuts that would need rewriting at scale (see
-          Project posture in CLAUDE.md).
-        - Pool lookups (e.g., `MeshPool::get` returning `Option<&T>`):
-          flag unchecked indexing or `.unwrap()` in render paths.
+        Review against CLAUDE.md and docs/agents/workflow.md. Report only:
+        - correctness and safety bugs;
+        - GPU lifetime mistakes: resources not recreated on resize, bind
+          groups not rebuilt with the buffer they reference;
+        - Rust/WGSL layout mismatches (vertex layout, uniform and storage
+          structs);
+        - budget risks in hot paths: per-frame allocation, per-entity GPU
+          calls that could batch, CPU-GPU sync mid-frame, unbounded growth;
+        - unwrap or expect on GPU or I/O results in render paths;
+        - GPU data stored on ECS components;
+        - work beyond the linked ticket's acceptance criteria.
+        Skip style, naming taste, and comments on unchanged code.
 
     - path: "src/**/*.wgsl"
       instructions: |
-        Apply the WGSL rules in CLAUDE.md's review checklist:
-        - No bare vec3<f32> in uniform structs.
-        - Layout must match the corresponding Rust #[repr(C)] struct
-          field-by-field (16-byte alignment, column-major matrices).
+        Apply the WGSL rules in CLAUDE.md's review checklist. Also flag:
+        vec3<f32> in uniform or storage structs; layout drift from the
+        Rust #[repr(C)] struct, field by field; sRGB/linear confusion;
+        divide-by-zero and NaN risks at grazing angles or zero roughness;
+        textureSample under non-uniform control flow; f32 precision loss
+        at large world coordinates.
 
     - path: "Cargo.toml"
       instructions: |
-        Flag new dependencies that don't have default-features = false
-        with an explicit features list, unless the crate's defaults are
-        already minimal. Justify version bumps in the PR description.
+        A new or bumped dependency is an owner decision: it needs a
+        justification in the PR description. Flag dependencies without
+        default-features = false and an explicit features list, unless
+        the crate's defaults are already minimal.
+
+    - path: "docs/adr/**"
+      instructions: |
+        An ADR records a hard-to-reverse, surprising decision with a real
+        trade-off, in one to three sentences. Flag contradictions with
+        other ADRs and with CONTEXT.md vocabulary.
+
+    - path: "CONTEXT.md"
+      instructions: |
+        Glossary only. Flag implementation detail, general programming
+        terms, and words that appear under another term's _Avoid_ list.
+
+    - path: "docs/agents/**"
+      instructions: |
+        Instructions are positive, checkable, and consistent across
+        docs/agents. Flag commands that do not match real gh or git
+        behaviour, labels that do not exist, and drift from CLAUDE.md.
+
+    - path: ".github/workflows/**"
+      instructions: |
+        Least-privilege permissions, pinned action versions, deterministic
+        steps, and cache keys that cannot be poisoned.
+
+    - path: ".coderabbit.yaml"
+      instructions: |
+        This file configures the review of the PR that edits it. Flag any
+        change that loosens a check, narrows review scope, or turns a
+        feature off, and require the PR description to name it under
+        Decide.
 
     - path: "PLAN.md"
       instructions: |
-        Phase-scratch document — meant to be replaced wholesale at
-        phase boundaries. Don't review for completeness or stylistic
-        consistency.
+        Phase scratch, paused and superseded by tickets. Do not review for
+        completeness or stylistic consistency.
 
     - path: "CLAUDE.md"
       instructions: |
-        If this PR meaningfully changes folder structure, cross-cutting
-        conventions, or load-bearing decisions in ROADMAP.md but does
-        NOT update CLAUDE.md, flag the drift. Reference the specific
-        sections of CLAUDE.md that look stale.
+        If this PR changes folder structure, a cross-cutting convention,
+        or an ADR without updating CLAUDE.md, flag the drift and name the
+        stale sections.
 
     - path: "ROADMAP.md"
       instructions: |
-        If a load-bearing decision is added or modified, verify
-        CLAUDE.md still aligns. Flag drift if not.
+        Being migrated into ADRs and the map issue. Flag new load-bearing
+        decisions added here instead of docs/adr/.
+
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
+    title:
+      mode: "warning"
+      requirements: "Imperative mood, 72 characters at most, no ticket-number prefix."
+    description:
+      mode: "warning"
+    issue_assessment:
+      mode: "warning"
+    # Custom checks need Team, with an open-source exception for public
+    # repos. If the walkthrough never shows them, they are not running.
+    custom_checks:
+      - name: "One ticket per PR"
+        mode: "warning"
+        instructions: >-
+          Pass/fail criteria: pass when the description names exactly one
+          ticket as `Closes #<number>`, or says `Ticket: n/a` with a reason
+          (docs, ADR, process, or bootstrap PRs). Fail when it lists two or
+          more tickets, or has neither.
+      - name: "Evidence and metrics"
+        mode: "warning"
+        instructions: >-
+          Pass/fail criteria: pass when the description has a Verification
+          section holding the command run and its output. When the diff
+          touches src/render, src/assets, or .wgsl files, the Metrics
+          section must also state a delta against baseline or give a reason
+          none applies. Docs-only diffs pass with `n/a`. Fail otherwise.
+      - name: "Size ceiling"
+        mode: "warning"
+        instructions: >-
+          Pass/fail criteria: pass when the diff changes about 400 lines or
+          fewer, not counting goldens, lockfiles, and generated or cooked
+          data. Above that, report Inconclusive and ask whether the change
+          should split along a seam or be an expand-contract migration.
+
+  finishing_touches:
+    docstrings:
+      enabled: false
+    autofix:
+      enabled: false
+    resolve_merge_conflict:
+      enabled: false
+    simplify:
+      enabled: false
+
+  tools:
+    markdownlint:
+      enabled: false
+    languagetool:
+      enabled: false
+    vale:
+      enabled: false
+    clippy:
+      enabled: false
 
 chat:
-  auto_reply: true
+  auto_reply: false
+  art: false
 
 knowledge_base:
   opt_out: false
   code_guidelines:
     filePatterns:
       - "CLAUDE.md"
-      - "ROADMAP.md"
+      - "docs/agents/workflow.md"
+      - "CONTEXT.md"
+      - "docs/adr/*.md"
+      - "CODING_STANDARDS.md"
+  learnings:
+    scope: local
+  issues:
+    scope: local
+  pull_requests:
+    scope: local
