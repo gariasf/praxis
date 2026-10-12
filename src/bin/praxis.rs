@@ -9,12 +9,13 @@ fn main() -> anyhow::Result<()> {
 
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "praxis starting");
 
-    match std::env::args().nth(1).as_deref() {
-        None => praxis::run(),
-        Some("capabilities") => print_capabilities(),
-        Some(command) => {
-            anyhow::bail!("unknown command `{command}`: run with no command, or `capabilities`")
-        }
+    let arguments: Vec<String> = std::env::args().skip(1).collect();
+    match arguments.as_slice() {
+        [] => praxis::run(),
+        [command] if command == "capabilities" => print_capabilities(),
+        _ => anyhow::bail!(
+            "unexpected arguments {arguments:?}: run with no arguments, or `capabilities`"
+        ),
     }
 }
 
