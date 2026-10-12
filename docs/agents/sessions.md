@@ -11,7 +11,7 @@ Which skill starts which kind of session, and when. The owner types the slash co
 | Question that needs running code | `/handoff`, then `/prototype`, then `/handoff` back | prototype branch and the answer | resume grilling |
 | Broken or slow | "diagnose: <symptom>" (the agent runs `diagnosing-bugs`) | red loop, regression test at a real seam, fix PR | owner merges |
 | Outside report or idea | `/triage` | labelled issue with an agent brief | |
-| Milestone boundary | `/improve-codebase-architecture`, then `/grill-with-docs` on one candidate | HTML report, refactor ticket | |
+| Milestone boundary | `/improve-codebase-architecture`, then `/grill-with-docs` on one candidate; a literature scan of the next milestone's topics that checks whether new work challenges an existing ADR | HTML report, refactor ticket; "State of the art: …" tickets for the next milestone's technique decisions; an ADR challenge, if any, as a map comment | |
 | Unsure | `/ask-matt <situation>` | the flow that fits | |
 
 ## Rules of thumb
