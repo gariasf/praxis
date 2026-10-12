@@ -42,7 +42,9 @@ fn every_asset_is_listed_licensed_and_credited() {
 
 #[test]
 fn manifest_check_reports_every_kind_of_problem() {
-    let directory = Path::new(env!("CARGO_TARGET_TMPDIR")).join("asset_manifest");
+    // One directory per process: concurrent runs can share a target directory.
+    let directory = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("asset_manifest-{}", std::process::id()));
     if directory.exists() {
         fs::remove_dir_all(&directory).expect("clear the scratch directory");
     }
@@ -89,6 +91,7 @@ fn manifest_check_reports_every_kind_of_problem() {
             "unlisted.bin: no manifest entry".to_string(),
         ]
     );
+    fs::remove_dir_all(&directory).expect("remove the scratch directory");
 }
 
 /// SHA-256 of "abc" (FIPS 180-2, appendix B.1) and of the empty message
