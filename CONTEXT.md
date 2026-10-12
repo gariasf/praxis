@@ -30,6 +30,10 @@ _Avoid_: Map, slot
 One numbered texture within a Channel. Layer 0 of every Channel is a neutral default, so a Material without that Channel has no effect.
 _Avoid_: Slice, texture index
 
+**Resident tail**:
+The smallest mips of a texture, which stay in GPU memory for as long as the texture is loaded, so a texture whose finer mips are not loaded shows blurred, never missing.
+_Avoid_: Mip tail, packed mips
+
 ### Resources
 
 **Pool**:
