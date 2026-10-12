@@ -35,6 +35,10 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
+    # The plan includes 5 reviews per rolling hour. One review per PR
+    # starts automatically; a verification pass is requested with
+    # `@coderabbitai review` when a fix warrants it.
+    auto_incremental_review: false
 
   path_filters:
     - "!target/**"
