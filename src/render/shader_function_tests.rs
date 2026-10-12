@@ -4,8 +4,6 @@
 
 use std::io::Write;
 
-use wgpu::util::DeviceExt;
-
 use crate::gpu::GpuContext;
 
 /// Largest difference allowed between a result and its expectation. Results
@@ -15,7 +13,7 @@ const TOLERANCE: f32 = 1e-6;
 /// Schlick adds (1 − cos θ)⁵ of the light the base reflectance misses: none
 /// at normal incidence, 1/32 at cos θ = 0.5, and all of it at grazing.
 #[test]
-fn fresnel_schlick_reflects_the_base_reflectance_at_normal_incidence() {
+fn fresnel_schlick_rises_from_the_base_reflectance_to_one_at_grazing() {
     let Some(context) = gpu_context() else {
         return;
     };
@@ -49,27 +47,34 @@ fn fresnel_schlick_reflects_the_base_reflectance_at_normal_incidence() {
 
 /// A microfacet distribution weighted by projected area integrates to 1 over
 /// the hemisphere (Walter et al. 2007, eq. 4): 2π ∫ D(cos θ) cos θ sin θ dθ
-/// = 1 for θ from 0 to π/2, summed here by the midpoint rule.
+/// = 1 for θ from 0 to π/2. The sum takes θ = π/2 · u² at the midpoints of
+/// even steps in u, which crowds samples near the normal, where D peaks.
 #[test]
 fn distribution_ggx_integrates_to_one_over_the_hemisphere() {
     let Some(context) = gpu_context() else {
         return;
     };
-    // Smoother surfaces peak D too sharply for f32 and these samples to sum
-    // within the tolerance.
+    // Below 0.25, f32 rounding near D's peak costs the sum up to 2e-3, at the
+    // renderer's floor of 0.04.
     let roughnesses = [0.25, 0.5, 0.75, 1.0];
-    let samples = 4096;
-    let step = std::f64::consts::FRAC_PI_2 / samples as f64;
-    let angles: Vec<f64> = (0..samples)
-        .map(|sample| (sample as f64 + 0.5) * step)
+    let sample_count = 4096;
+    // Each sample's angle θ and the width dθ = π u du it stands for.
+    let samples: Vec<(f64, f64)> = (0..sample_count)
+        .map(|sample| {
+            let position = (sample as f64 + 0.5) / sample_count as f64;
+            (
+                std::f64::consts::FRAC_PI_2 * position * position,
+                std::f64::consts::PI * position / sample_count as f64,
+            )
+        })
         .collect();
 
     let inputs: Vec<[f32; 4]> = roughnesses
         .iter()
         .flat_map(|&roughness| {
-            angles
+            samples
                 .iter()
-                .map(move |angle| [angle.cos() as f32, roughness, 0.0, 0.0])
+                .map(move |(angle, _)| [angle.cos() as f32, roughness, 0.0, 0.0])
         })
         .collect();
     let results = evaluate(
@@ -78,16 +83,17 @@ fn distribution_ggx_integrates_to_one_over_the_hemisphere() {
         &inputs,
     );
 
-    for (roughness, distribution) in roughnesses.iter().zip(results.chunks(samples)) {
-        let integral = angles
+    for (roughness, distribution) in roughnesses.iter().zip(results.chunks(sample_count)) {
+        let integral = samples
             .iter()
             .zip(distribution)
-            .map(|(angle, result)| f64::from(result[0]) * angle.cos() * angle.sin())
+            .map(|((angle, width), result)| {
+                f64::from(result[0]) * angle.cos() * angle.sin() * width
+            })
             .sum::<f64>()
-            * std::f64::consts::TAU
-            * step;
-        // The sums land within 5e-6 of 1, nearly all of it the midpoint
-        // rule's error.
+            * std::f64::consts::TAU;
+        // The sums land within 2e-7 of 1 on the M4 Pro; the sampling alone
+        // is off by under 1e-7.
         assert!(
             (integral - 1.0).abs() <= 1e-5,
             "roughness {roughness}: D integrates to {integral}, expected 1"
@@ -98,18 +104,19 @@ fn distribution_ggx_integrates_to_one_over_the_hemisphere() {
 /// Smith's G is the fraction of microfacets both seen and lit, so it stays in
 /// [0, 1] and is 1 along the normal. At roughness 1 the shader's k is 1/2,
 /// where Schlick's form equals the exact Smith masking of GGX (Karis 2013).
-/// Karis's remap for analytic lights keeps k at 1/8 or more, so unlike exact
-/// Smith this G does not reach 1 as roughness falls to 0.
+/// Disney's roughness remap for analytic lights, which Karis adopts, keeps k
+/// at 1/8 or more, so unlike exact Smith this G does not reach 1 as roughness
+/// falls to 0.
 #[test]
 fn geometry_smith_stays_in_zero_to_one_and_is_exact_at_roughness_one() {
     let Some(context) = gpu_context() else {
         return;
     };
-    let steps: [f32; 11] = std::array::from_fn(|step| step as f32 / 10.0);
+    let tenths: [f32; 11] = std::array::from_fn(|tenth| tenth as f32 / 10.0);
     let mut inputs = Vec::new();
-    for normal_dot_view in steps {
-        for normal_dot_light in steps {
-            for roughness in steps {
+    for normal_dot_view in tenths {
+        for normal_dot_light in tenths {
+            for roughness in tenths {
                 inputs.push([normal_dot_view, normal_dot_light, roughness, 0.0]);
             }
         }
@@ -166,14 +173,15 @@ fn gpu_context() -> Option<GpuContext> {
 }
 
 /// The compute kernel appended to the main shader's source, so it calls the
-/// functions the renderer runs. `EXPRESSION` stands for the expression under
-/// test. Its bindings are ones the main shader leaves free, so no backend
-/// emits a main-shader resource beside the kernel's.
+/// functions the renderer runs. `EXPRESSION` and `WORKGROUP_SIZE` stand for
+/// the expression under test and the constant below. Its bindings are ones
+/// the main shader leaves free, so no backend emits a main-shader resource
+/// beside the kernel's.
 const KERNEL: &str = "
 @group(0) @binding(1) var<storage, read> test_vectors: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read_write> test_results: array<vec4<f32>>;
 
-@compute @workgroup_size(64)
+@compute @workgroup_size(WORKGROUP_SIZE)
 fn evaluate_test_vectors(@builtin(global_invocation_id) invocation: vec3<u32>) {
     let index = invocation.x;
     if index < arrayLength(&test_vectors) {
@@ -183,7 +191,7 @@ fn evaluate_test_vectors(@builtin(global_invocation_id) invocation: vec3<u32>) {
 }
 ";
 
-/// Invocations per workgroup, as `KERNEL` declares.
+/// Invocations per workgroup.
 const WORKGROUP_SIZE: u32 = 64;
 
 /// Evaluates `expression`, WGSL of type `vec4<f32>` that reads its test
@@ -191,11 +199,10 @@ const WORKGROUP_SIZE: u32 = 64;
 /// element of `inputs` in one compute dispatch; returns the results in order.
 fn evaluate(context: &GpuContext, expression: &str, inputs: &[[f32; 4]]) -> Vec<[f32; 4]> {
     let device = &context.device;
-    let source = format!(
-        "{}\n{}",
-        include_str!("../shader.wgsl"),
-        KERNEL.replace("EXPRESSION", expression)
-    );
+    let kernel = KERNEL
+        .replace("WORKGROUP_SIZE", &WORKGROUP_SIZE.to_string())
+        .replace("EXPRESSION", expression);
+    let source = format!("{}\n{kernel}", include_str!("../shader.wgsl"));
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Shader Function Harness"),
         source: wgpu::ShaderSource::Wgsl(source.into()),
@@ -209,12 +216,16 @@ fn evaluate(context: &GpuContext, expression: &str, inputs: &[[f32; 4]]) -> Vec<
         cache: None,
     });
 
-    let input_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    let size = size_of_val(inputs) as wgpu::BufferAddress;
+    let input_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Test Vectors"),
-        contents: bytemuck::cast_slice(inputs),
-        usage: wgpu::BufferUsages::STORAGE,
+        size,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
     });
-    let size = input_buffer.size();
+    context
+        .queue
+        .write_buffer(&input_buffer, 0, bytemuck::cast_slice(inputs));
     let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Test Results"),
         size,
