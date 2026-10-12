@@ -66,6 +66,10 @@ _Avoid_: Cluster, light cluster, tile
 A small fixed-size group of a Mesh's triangles, culled as a unit.
 _Avoid_: Cluster, chunk
 
+**Temporal class**:
+How a lighting term reaches its value over time: (a) complete each frame; (b) converging over frames in a world-space or probe-space cache, so it lags a change without smearing on screen; (c) reusing screen-space history (reprojection, temporal denoising).
+_Avoid_: Temporal stability, temporal tier
+
 **Input latency**:
 The time from the engine receiving an input event to the present of the first frame whose simulation consumed that event. Time the event spent in the OS before the engine received it, and time in the display queue after present, are not counted.
 _Avoid_: Input lag, motion-to-photon
