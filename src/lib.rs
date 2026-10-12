@@ -26,6 +26,7 @@ mod state;
 mod time;
 
 pub use capture::capture;
+pub use state::DEFAULT_MODEL;
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {

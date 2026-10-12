@@ -2,7 +2,9 @@
 
 Researched 2026-10-12 against each source's own pages. Licenses are quoted as the source states them. "Unverified" marks claims the source page did not confirm. For Khronos models the authority is the repo's machine-readable [`REUSE.toml`](https://github.com/KhronosGroup/glTF-Sample-Assets/blob/main/REUSE.toml) (`precedence = "aggregate"`), which the per-model READMEs agree with.
 
-## What the repo ships today
+## What the repo shipped on 2026-10-12
+
+A snapshot; `assets/manifest.json` is the current inventory. Items 5 and 6 below have since removed every file in this table.
 
 | File | Provenance | License | Referenced in `src/` |
 |---|---|---|---|
@@ -50,5 +52,5 @@ McGuire Computer Graphics Archive (page content not retrievable), Fab/Quixel Meg
 3. **Tier 3, large realism and stress scenes, fetched.** ORCA Bistro (after glTF conversion), IGN terrain tiles, and the roughly 10 MB PBR models. Pinned URL plus SHA-256, into a git-ignored cache; never committed. Used by local benches and milestone-exit visual checks. Intel Sponza stays unresolved: usable locally for experiments, never added to the manifest or redistributed until the package or Intel names the licence version.
 4. **Manifest and hygiene.** One manifest records path, source URL, SPDX licence expression, credit text, upstream version, and SHA-256, for committed and fetched files alike. CI fails on an `assets/` file without an entry. Credits are collected in an attribution file. Files whose expression includes an `NC` term, or a restrictive `LicenseRef-` such as the CRYENGINE agreement, are marked dev-only. A `LicenseRef-LegalMark-*` term does not make a file dev-only: it forbids reusing the logo elsewhere, so the logo is replaced or kept out of shipped builds and marketing.
 5. **Cleanup.** Remove unreferenced `pikuma.png`, `BoxTextured*`, and `CesiumLogoFlat.png` unless a test adopts them.
-6. **Default test model.** `DamagedHelmet.glb` is the only mesh the app loads and it is non-commercial. It is replaced by a `CC0-1.0` helmet-class model (`SciFiHelmet`, `FlightHelmet`) so the goldens are redistributable. This moves the Step 4 checkpoint basis, so it is a ticket.
+6. **Default test model.** Khronos `SciFiHelmet` (`CC0-1.0`, chosen by the owner on 2026-10-12, #37) replaces the non-commercial `DamagedHelmet.glb`, which is removed. One material, four 2048² maps (base colour, metallic-roughness, normal, occlusion), so the loader takes it as is. About 30 MB as `.gltf` plus `.bin` plus PNGs, so it is fetched (`scripts/fetch-assets.sh`), never committed, and no CI Golden depends on it. `FlightHelmet` was not chosen: its three 1024² lens textures fall back to the neutral layer. The second model, for later, is the Argus Camera (`CC0`, Virtual Museums of Małopolska on [Sketchfab](https://sketchfab.com/3d-models/argus-camera-f9112ea4c15043ebbb24fa121ffef920)): 110k faces, four maps up to 4096², GLB 30.3 MB. It waits for texture resizing and for re-hosting, since Sketchfab downloads need a login.
 7. **Just in time.** Nothing is downloaded ahead of need. A ticket that needs an asset says what it needs (kind, licence class, size) and the owner supplies or approves the source at that point.
