@@ -89,56 +89,9 @@ doors open.
 
 ## Load-bearing decisions
 
-Six architectural choices that, if locked in early, let RT, GI, GPU-driven
-rendering, bindless resources, and Lua scripting layer in cleanly later.
-These are the "get them right early or rewrite later" decisions. Everything
-else is either swappable or local enough to refactor without pain.
+Recorded as ADRs in `docs/adr/`. 0001–0006 are the data-shape decisions: material as ID, mega-buffers, persistent scene transform buffer, frame-data snapshot, structured instance buffer, pure-data components. 0007–0013 cover the graphics API, rendering model, ECS, product scope, content formats, scripting boundary, and reference budgets.
 
-1. **Material as ID, not bind group.** Materials are entries in a
-   structured GPU buffer indexed by `MaterialId`. Shaders read material
-   params + texture indices from the buffer. Even pre-bindless, the data
-   flow is "lookup by ID" — the bindless transition then swaps the
-   texture-sampling implementation, not the surrounding architecture.
-
-2. **One mega-buffer for vertex data, one for index data.** Meshes are
-   `(vertex_offset, index_offset, index_count)` sub-allocations in
-   `MeshPool`. Indirect draws need it; BLAS construction wants it;
-   instancing wants it. Going from buffer-per-mesh to mega-buffer later
-   is expensive because every renderer codepath bakes in the smaller
-   shape.
-
-3. **Persistent scene transform buffer.** Transform-propagation results
-   live in one GPU buffer indexed by renderable ID, updated incrementally
-   via dirty flags. No per-entity uniform buffers. This is what
-   GPU-driven rendering, RT TLAS rebuilds, and instancing all want.
-
-4. **Frame-data snapshot pattern.** The renderer never reads from
-   `World` mid-frame. Each frame, a `prepare` pass builds a `FrameData`
-   struct (visible renderables, lights, camera) and the renderer
-   consumes that. Render-thread split becomes trivial later (pass
-   `FrameData` across a channel); renderer testing becomes possible
-   without spinning up a `World`.
-
-5. **Instance data in a structured buffer; draws look up by index.**
-   No bind-group-per-mesh, no bind-group-per-instance. The draw's
-   `@builtin(instance_index)` is the lookup key into per-instance data
-   (transform index, material ID, etc.).
-
-6. **Components stay pure data.** Components contain only data — no
-   closures (`Box<dyn Fn(...)>`), no behavior methods smuggled in via
-   traits, no `Box<dyn Trait>` for polymorphism. Behavior lives in
-   systems (Rust) or, eventually, in script handlers (Lua). This rule
-   is load-bearing for two reasons: components serialize cleanly
-   (save/load works), and scripted behavior can hot-reload without
-   leaving dangling references inside ECS storage. Violating this rule
-   means every offending component must be refactored before save/load
-   or Lua scripting can ship.
-
-Together, decisions 1–5 are roughly the data architecture of GPU-driven
-rendering; decision 6 extends the same shape to scripting and save/load.
-Built this way, the later phases (Phase 11 GPU-driven, the RT phases,
-Lua scripting) are mostly additive — wire new pipelines onto stable
-data flows — rather than re-architectures.
+Together, 0001–0005 are roughly the data architecture of GPU-driven rendering; 0006 extends the same shape to scripting and save/load. Built this way, the later phases (GPU-driven, the RT phases, Lua scripting) are mostly additive: wire new pipelines onto stable data flows rather than re-architect.
 
 ---
 
@@ -222,7 +175,7 @@ by Phase 14):
 - **Lua REPL inside debug UI** (Phase 8 surface) for live inspection.
 
 **Hot-reload contract — the load-bearing rule:** components stay pure
-data (Load-bearing decision 6). No closures, no behavior methods on
+data (ADR 0006). No closures, no behavior methods on
 components. Behavior is always in systems or Lua handlers, never
 captured inside component storage. Without this discipline, hot-reloading
 a Lua script leaves dangling references inside ECS components and the
@@ -332,6 +285,8 @@ phase-scratch plan.
 ---
 
 ## Phase 6 — PBR Materials & load-bearing data shapes
+
+**Status 2026-10-12:** Steps 1–4 landed (mega-buffer meshes, material as ID, Cook-Torrance, tangents and the five PBR channels). Steps 5–6 (HDR + tonemap, IBL) are paused for the validation milestone. Milestones and tickets (`docs/agents/workflow.md`) supersede the checklist below.
 
 Physically-based rendering with metallic-roughness workflow. The PBR
 features themselves are well-trodden ground — the real work is wiring
