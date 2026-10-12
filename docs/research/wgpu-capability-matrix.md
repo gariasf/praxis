@@ -180,7 +180,7 @@ Apple M4 Pro (Apple9 per MFST p2), 24 GiB, macOS 27.0.1, wgpu 29.0.1 on Metal, 2
 8. `SHADER_PRIMITIVE_INDEX` no longer exists: it is `Features::PRIMITIVE_INDEX` with `enable primitive_index;`, and on Vulkan it switches on `geometryShader`.
 9. The Metal subgroup sizes (4, 64) and timestamp period (1.0) are constants, so a probe printing them measures nothing. Measured on the M4 Pro: subgroups are 32 wide, and the 1.0 period is right.
 10. Mesh shaders on Metal and DX12 need passthrough shaders; WGSL mesh shaders compile only for Vulkan. On Metal the feature bit is set, yet a WGSL mesh pipeline panics the process (measured). v30.0.0 adds WGSL mesh shaders on both (After 29.0.1).
-11. Metal exposes `TIMESTAMP_QUERY_INSIDE_ENCODERS` on Apple GPUs, but the sample can land at the next encoder boundary instead of the call site.
+11. Metal exposes `TIMESTAMP_QUERY_INSIDE_ENCODERS` on Apple GPUs, but the sample can land at the next encoder boundary instead of the call site. From v30.0.0 the bit needs blit-encoder sampling, so Apple GPUs no longer report it (After 29.0.1).
 12. DX12 and Linux non-NVIDIA Vulkan cap `max_buffer_size` at 2^31-1, and Vulkan and DX12 cap storage bindings at 2^31-1, so a mega-buffer (ADR 0002) above 2 GiB cannot be one buffer there.
 13. Only 4x MSAA is valid until `TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` is requested; Apple lists 4 as the render-pass maximum on Apple9.
 14. Reported limits that diverge from the vendor: DX12 sampler binding-array elements 2^20 against a 2048 heap (fixed in 29.0.2); Metal 1024 sampler elements on Apple7 and Apple8 against Apple's 996; Metal mesh grid 1024 on Apple9 against Apple's 1,048,575; Metal ray-tracing limits are constants.
@@ -191,7 +191,7 @@ Apple M4 Pro (Apple9 per MFST p2), 24 GiB, macOS 27.0.1, wgpu 29.0.1 on Metal, 2
 
 | Tier | Members | Excludes (source) | Fallback inside wgpu |
 |---|---|---|---|
-| 1. All three backends, stable | Texture, sampler and storage-texture binding arrays with non-uniform indexing and partial binding; `INDIRECT_FIRST_INSTANCE`; `multi_draw_indirect`; indirect dispatch; `TIMESTAMP_QUERY`, `_INSIDE_ENCODERS`; `IMMEDIATES` up to 128 B; `SUBGROUP`; `PRIMITIVE_INDEX`; `SHADER_F16`; `SHADER_INT64`; `TEXTURE_ATOMIC`; BC and BC sliced 3D; 4x MSAA; `MAPPABLE_PRIMARY_BUFFERS` | DX12 at Resource Binding Tier 2 (no binding arrays); DX12 on FXC (no `SUBGROUP`, `SHADER_F16`, `SHADER_INT64`); Vulkan devices missing a descriptor-indexing bit or `geometryShader`; macOS before 13 (binding arrays) or 14 (`TEXTURE_ATOMIC`); Apple6 and older lack SIMD reductions and primitive ID (MFST p4) | Metal multi-draw is a CPU loop; Metal encoder timestamps move to encoder boundaries; Metal pass timestamps read correctly only when resolved after their submission completes (measured) |
+| 1. All three backends, stable | Texture, sampler and storage-texture binding arrays with non-uniform indexing and partial binding; `INDIRECT_FIRST_INSTANCE`; `multi_draw_indirect`; indirect dispatch; `TIMESTAMP_QUERY`, `_INSIDE_ENCODERS` (not on Apple GPUs from v30.0.0; After 29.0.1); `IMMEDIATES` up to 128 B; `SUBGROUP`; `PRIMITIVE_INDEX`; `SHADER_F16`; `SHADER_INT64`; `TEXTURE_ATOMIC`; BC and BC sliced 3D; 4x MSAA; `MAPPABLE_PRIMARY_BUFFERS` | DX12 at Resource Binding Tier 2 (no binding arrays); DX12 on FXC (no `SUBGROUP`, `SHADER_F16`, `SHADER_INT64`); Vulkan devices missing a descriptor-indexing bit or `geometryShader`; macOS before 13 (binding arrays) or 14 (`TEXTURE_ATOMIC`); Apple6 and older lack SIMD reductions and primitive ID (MFST p4) | Metal multi-draw is a CPU loop; Metal encoder timestamps move to encoder boundaries; Metal pass timestamps read correctly only when resolved after their submission completes (measured) |
 | 2. All three, experimental opt-in | `EXPERIMENTAL_RAY_QUERY` with GPU acceleration-structure builds; `EXPERIMENTAL_MESH_SHADER` | macOS before 15 (ray query); about half of recent Vulkan reports (gpuinfo: `VK_KHR_ray_query` 48%, `VK_EXT_mesh_shader` 49%); DX12 below raytracing Tier 1.1 or SM 6.5, or on FXC (ray query); DX12 below mesh Tier 1; WGSL mesh shaders outside Vulkan until v30.0.0 | None |
 | 3. DX12 and Vulkan; not Metal on Apple silicon | `MULTI_DRAW_INDIRECT_COUNT`; `TIMESTAMP_QUERY_INSIDE_PASSES` (Metal only on GPUs sampling at draw and dispatch boundaries); `SHADER_INT64_ATOMIC_ALL_OPS`; `ACCELERATION_STRUCTURE_BINDING_ARRAY`; `EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS` | Metal, so the reference M4 Pro; for in-pass timestamps Apple states that Apple silicon samples at stage boundaries | None; the changelog calls count draws not efficiently emulable |
 | 4. Metal and Vulkan only | `SUBGROUP_BARRIER`; ASTC LDR, HDR, sliced 3D; ETC2 | DX12; Intel Macs for ASTC and ETC2 | None |
@@ -211,7 +211,7 @@ Options for the blocked decisions (no recommendation):
 
 ## After 29.0.1
 
-Praxis pins wgpu 29.0.1 (`Cargo.lock`); moving is an owner decision. Releases since then change these rows ([CHANGELOG at v30.0.1](https://github.com/gfx-rs/wgpu/blob/v30.0.1/CHANGELOG.md)):
+Praxis moved from 29.0.1 to 30.0.1 on 2026-10-12 ([#55](https://github.com/gariasf/praxis/issues/55)). Releases since 29.0.1 change these rows ([CHANGELOG at v30.0.1](https://github.com/gfx-rs/wgpu/blob/v30.0.1/CHANGELOG.md)):
 
 | Row | Change | Release |
 |---|---|---|
@@ -220,6 +220,8 @@ Praxis pins wgpu 29.0.1 (`Cargo.lock`); moving is an owner decision. Releases si
 | `BUFFER_BINDING_ARRAY` | Bindless storage buffers on Metal ([#9081](https://github.com/gfx-rs/wgpu/pull/9081)) | 30.0.0 |
 | `PARTIALLY_BOUND_BINDING_ARRAY` | DX12 no longer reads garbage in `create_bind_group` for partially bound texture arrays ([#9653](https://github.com/gfx-rs/wgpu/pull/9653), `dx12/device.rs` only) | 30.0.0 |
 | Query sets | Initialization tracking: unwritten slots resolve to 0 instead of undefined values ([#9664](https://github.com/gfx-rs/wgpu/pull/9664)) | 30.0.0 |
+| `TIMESTAMP_QUERY_INSIDE_ENCODERS` on Metal | Set only when the device samples on blit encoders ([mtl 1208 at v30.0.1](https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/adapter.rs#L1208-L1211), [#9664](https://github.com/gfx-rs/wgpu/pull/9664)); the M4 Pro no longer reports it (measured), so on 30.0.1 it leaves Tier 1 for Apple GPUs | 30.0.0 |
+| `max_immediate_size` | Capped at 256 bytes on every backend ([wgpu-hal auxil/mod.rs 198 at v30.0.1](https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/auxil/mod.rs#L198), [#9280](https://github.com/gfx-rs/wgpu/pull/9280)); the M4 Pro reports 256, down from 4096 (measured) | 30.0.0 |
 | Metal per-stage buffer slots | New `max_buffers_and_acceleration_structures_per_shader_stage`: storage, uniform and vertex buffers and acceleration structures share 29 slots ([#9709](https://github.com/gfx-rs/wgpu/pull/9709)) | 30.0.0 |
 | Ray queries | Metal uses `intersection_query`, so AABBs and non-opaque triangles work ([#9304](https://github.com/gfx-rs/wgpu/pull/9304)); BLAS AABB geometry ([#9290](https://github.com/gfx-rs/wgpu/pull/9290)) | 30.0.0 |
 
@@ -238,4 +240,4 @@ No release through 30.0.1 adds Metal memory reporting or budget thresholds, `ena
 - Indirect mesh draws on Apple7 and Apple8: Apple lists indirect mesh draw arguments from Apple9 (MFST p5); wgpu issues them on any mesh-capable Metal device; not tested.
 - Intel and AMD Macs (`Mac2` family): Apple's current tables no longer list `Mac2`.
 - Linux driver specifics (RADV, ANV, NVK, NVIDIA proprietary) beyond the gpuinfo aggregates.
-- Changes after 29.0.1 beyond their changelog entries; nothing above was measured on a later release.
+- Changes after 29.0.1 beyond their changelog entries. On 30.0.1 only the `praxis capabilities` output was measured again (the encoder-timestamp and immediates rows of After 29.0.1); the probe checks under Measured on the M4 Pro were not repeated.

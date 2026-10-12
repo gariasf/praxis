@@ -113,6 +113,7 @@ struct WindowShell {
     window: Arc<Window>,
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
+    queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     is_surface_configured: bool,
     last_frame: Option<Instant>,
@@ -151,6 +152,7 @@ impl WindowShell {
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
+            color_space: wgpu::SurfaceColorSpace::Auto,
         };
 
         let is_surface_configured = size.width > 0 && size.height > 0;
@@ -171,6 +173,7 @@ impl WindowShell {
             window,
             surface,
             device: context.device,
+            queue: context.queue,
             config,
             is_surface_configured,
             last_frame: None,
@@ -230,7 +233,7 @@ impl WindowShell {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
         self.state.render(&view);
-        output.present();
+        self.queue.present(output);
 
         // Only after presenting: wgpu rejects a reconfigure while a texture
         // acquired from the surface is alive.
