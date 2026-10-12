@@ -4,12 +4,12 @@ Which skill starts which kind of session, and when. The owner types the slash co
 
 | Situation | Start with | Output | Next |
 |---|---|---|---|
-| Build a ticket (most sessions) | `/implement #<n>`, or "Work the frontier per docs/agents/workflow.md Session start" | local `/code-review`, draft PR, ready when CI is green, then CodeRabbit's second opinion | owner merges |
+| Build a ticket (most sessions) | `/implement #<n>`, or "Work the frontier per docs/agents/workflow.md Session start" | local `/code-review`, draft PR, ready when CI is green, then CodeRabbit's second opinion | agent merges |
 | Decide a map ticket | `/wayfinder #<map>`; name a ticket or take the first frontier one | resolution comment, ticket closed, map updated, ADR PR if hard to reverse | next ticket, new session |
 | Research ticket | "Resolve #<n>" (the agent uses `research`) | cited note under `docs/research/`, resolution on the map | none |
 | New feature or next milestone | `/grill-with-docs <idea>`, then `/to-spec`, then `/to-tickets`, in one window | CONTEXT.md and ADR PR, spec issue, ticket issues | `/clear`, then build |
 | Question that needs running code | `/handoff`, then `/prototype`, then `/handoff` back | prototype branch and the answer | resume grilling |
-| Broken or slow | "diagnose: <symptom>" (the agent runs `diagnosing-bugs`) | red loop, regression test at a real seam, fix PR | owner merges |
+| Broken or slow | "diagnose: <symptom>" (the agent runs `diagnosing-bugs`) | red loop, regression test at a real seam, fix PR | agent merges |
 | Outside report or idea | `/triage` | labelled issue with an agent brief | |
 | Milestone boundary | `/improve-codebase-architecture`, then `/grill-with-docs` on one candidate; a literature scan of the next milestone's topics that checks whether new work challenges an existing ADR | HTML report, refactor ticket; "State of the art: …" tickets for the next milestone's technique decisions; an ADR challenge, if any, as a map comment | |
 | Unsure | `/ask-matt <situation>` | the flow that fits | |
