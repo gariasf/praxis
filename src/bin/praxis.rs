@@ -37,7 +37,8 @@ fn print_capabilities() -> anyhow::Result<()> {
 }
 
 /// Renders the Reference scene named `scene` headless at `size`,
-/// `<width>x<height>`, and writes the last frame to `output` as a PNG.
+/// `<width>x<height>`, writes the last frame to `output` as a PNG, and prints
+/// that frame's stats.
 fn capture(scene: &str, output: &str, size: &str) -> anyhow::Result<()> {
     let scene = ReferenceScene::from_name(scene).ok_or_else(|| {
         let names: Vec<_> = ReferenceScene::ALL.map(ReferenceScene::name).into();
@@ -48,8 +49,8 @@ fn capture(scene: &str, output: &str, size: &str) -> anyhow::Result<()> {
         .and_then(|(width, height)| Some((width.parse().ok()?, height.parse().ok()?)))
         .ok_or_else(|| anyhow::anyhow!("size {size:?} is not <width>x<height>"))?;
     let context = pollster::block_on(GpuContext::headless())?;
-    praxis::capture(&context, scene, width, height)?
-        .save_with_format(output, image::ImageFormat::Png)?;
+    let (image, frame_stats) = praxis::capture(&context, scene, width, height)?;
+    image.save_with_format(output, image::ImageFormat::Png)?;
     tracing::info!(
         scene = scene.name(),
         path = output,
@@ -57,5 +58,8 @@ fn capture(scene: &str, output: &str, size: &str) -> anyhow::Result<()> {
         height,
         "capture written"
     );
+    if let Some(last_frame) = frame_stats.last() {
+        std::io::stdout().write_all(last_frame.to_string().as_bytes())?;
+    }
     Ok(())
 }

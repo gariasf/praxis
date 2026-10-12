@@ -25,8 +25,8 @@ fn procedural_scenes_render_identically_without_asset_files() {
     std::env::set_current_dir(&empty_directory).expect("change directory");
 
     for scene in [ReferenceScene::PbrSweep, ReferenceScene::UvGrid] {
-        let first = praxis::capture(&context, scene, 160, 90).expect("first capture");
-        let second = praxis::capture(&context, scene, 160, 90).expect("second capture");
+        let (first, _) = praxis::capture(&context, scene, 160, 90).expect("first capture");
+        let (second, _) = praxis::capture(&context, scene, 160, 90).expect("second capture");
         assert!(
             first.as_raw() == second.as_raw(),
             "{} differs between two captures",

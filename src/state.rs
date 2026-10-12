@@ -14,6 +14,7 @@ use crate::render::{
     create_depth_texture, prepare_renderables,
 };
 use crate::scenes::{ReferenceScene, spawn_pbr_sweep, spawn_uv_grid};
+use crate::stats::{FrameRecorder, FrameStats, texture_bytes};
 use crate::time::Time;
 
 /// The helmet-class model the Scene draws, relative to the working directory
@@ -40,6 +41,8 @@ pub struct State {
     instance_capacity: u64,
     schedule: Schedule,
     instance_bind_group_layout: wgpu::BindGroupLayout,
+    transient_saves_memory: bool,
+    recorder: FrameRecorder,
 }
 
 impl State {
@@ -265,6 +268,8 @@ impl State {
             instance_capacity,
             schedule,
             instance_bind_group_layout,
+            transient_saves_memory: context.adapter.get_info().transient_saves_memory == Some(true),
+            recorder: FrameRecorder::default(),
         })
     }
 
@@ -426,6 +431,7 @@ impl State {
 
     /// Advances the Scene by `delta_time` seconds and uploads the frame's data.
     pub fn update(&mut self, delta_time: f32) {
+        self.recorder.begin();
         self.world.resource_mut::<Time>().delta_time = delta_time;
         self.schedule.run(&mut self.world);
 
@@ -461,23 +467,15 @@ impl State {
 
         let instance_data = prepare_renderables(&mut self.world);
         self.ensure_instance_capacity(instance_data.len() as u64);
-        self.queue.write_buffer(
-            &self.instance_buffer,
-            0,
-            bytemuck::cast_slice(&instance_data),
-        );
-
-        self.queue.write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[camera_uniform]),
-        );
-
-        self.queue.write_buffer(
-            &self.light_buffer,
-            0,
-            bytemuck::cast_slice(&[light_uniform]),
-        );
+        let uploads: [(&wgpu::Buffer, &[u8]); 3] = [
+            (&self.instance_buffer, bytemuck::cast_slice(&instance_data)),
+            (&self.camera_buffer, bytemuck::bytes_of(&camera_uniform)),
+            (&self.light_buffer, bytemuck::bytes_of(&light_uniform)),
+        ];
+        for (buffer, bytes) in uploads {
+            self.queue.write_buffer(buffer, 0, bytes);
+            self.recorder.uploaded_bytes += bytes.len() as u64;
+        }
     }
 
     /// Draws the frame into `target`, a view in the format and size this
@@ -555,12 +553,46 @@ impl State {
                         primitive.vertex_offset as i32, // base_vertex
                         instance_idx..instance_idx + 1,
                     );
+                    self.recorder.draw_calls += 1;
                 }
             }
         }
 
         // submit will accept anything that implements IntoIter
         self.queue.submit(std::iter::once(encoder.finish()));
+        self.recorder.end();
+    }
+
+    /// The stats of the last frame, from `update` through `render`.
+    pub fn frame_stats(&self) -> FrameStats {
+        FrameStats {
+            gpu_memory_bytes: self.gpu_memory_bytes(),
+            allocator_report_bytes: self
+                .device
+                .generate_allocator_report()
+                .map(|report| report.total_allocated_bytes),
+            ..self.recorder.stats()
+        }
+    }
+
+    /// Bytes of the buffers and textures this State created; the render
+    /// target is the caller's.
+    fn gpu_memory_bytes(&self) -> u64 {
+        let buffers = [
+            &self.camera_buffer,
+            &self.light_buffer,
+            &self.instance_buffer,
+        ];
+        buffers.iter().map(|buffer| buffer.size()).sum::<u64>()
+            + texture_bytes(
+                self.depth_texture_view.texture(),
+                self.transient_saves_memory,
+            )
+            + self.world.resource::<MeshPool>().gpu_memory_bytes()
+            + self
+                .world
+                .resource::<MaterialPool>()
+                .gpu_memory_bytes(self.transient_saves_memory)
     }
 
     fn ensure_instance_capacity(&mut self, needed: u64) {

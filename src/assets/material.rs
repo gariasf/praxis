@@ -1,5 +1,7 @@
 use bevy_ecs::prelude::*;
 
+use crate::stats::texture_bytes;
+
 /// All channel arrays are this square dimension. glTF assets are scale-padded
 /// to it on load (the default SciFiHelmet is already 2048², so the pad is a
 /// no-op and not yet implemented — see `MaterialPool::upload`).
@@ -286,6 +288,22 @@ impl MaterialPool {
             bind_group_layout,
             bind_group,
         }
+    }
+
+    /// Bytes of the SSBO and the Channel arrays.
+    pub fn gpu_memory_bytes(&self, transient_saves_memory: bool) -> u64 {
+        let channel_arrays = [
+            &self.albedo,
+            &self.normal,
+            &self.metallic_roughness,
+            &self.occlusion,
+            &self.emissive,
+        ];
+        let channel_array_bytes: u64 = channel_arrays
+            .iter()
+            .map(|channel_array| texture_bytes(&channel_array.texture, transient_saves_memory))
+            .sum();
+        self.materials_buffer.size() + channel_array_bytes
     }
 
     /// Registers a material in the SSBO, returning its handle.
