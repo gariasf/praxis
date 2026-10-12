@@ -156,6 +156,8 @@ When reviewing changes, check for:
 - [ ] Matrices reach WGSL column-major (glam `to_cols_array_2d`); a
       `mat3x3` or `array<vec3>` field is padded per column or element
       on the Rust side (the test compares sizes, not strides)
+- [ ] A new or changed shading function in WGSL has an oracle test
+      in `src/render/shader_function_tests.rs`
 - [ ] When a buffer is recreated, the bind group referencing it is
       also recreated (bind groups are snapshots, not pointers)
 - [ ] New bind groups are added to both the pipeline layout and set in

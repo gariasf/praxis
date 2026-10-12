@@ -5,6 +5,8 @@ pub mod uniforms;
 pub mod vertex;
 
 #[cfg(test)]
+mod shader_function_tests;
+#[cfg(test)]
 mod shader_tests;
 
 pub use depth::create_depth_texture;
