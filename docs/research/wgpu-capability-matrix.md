@@ -211,7 +211,7 @@ Options for the blocked decisions (no recommendation):
 
 ## After 29.0.1
 
-Praxis pins wgpu 29.0.1 (`Cargo.lock`); moving is an owner decision. Releases since then change these rows ([CHANGELOG at v30.0.1](https://github.com/gfx-rs/wgpu/blob/v30.0.1/CHANGELOG.md)):
+Praxis moved from 29.0.1 to 30.0.1 on 2026-10-12 ([#55](https://github.com/gariasf/praxis/issues/55)). Releases since 29.0.1 change these rows ([CHANGELOG at v30.0.1](https://github.com/gfx-rs/wgpu/blob/v30.0.1/CHANGELOG.md)):
 
 | Row | Change | Release |
 |---|---|---|
@@ -220,6 +220,8 @@ Praxis pins wgpu 29.0.1 (`Cargo.lock`); moving is an owner decision. Releases si
 | `BUFFER_BINDING_ARRAY` | Bindless storage buffers on Metal ([#9081](https://github.com/gfx-rs/wgpu/pull/9081)) | 30.0.0 |
 | `PARTIALLY_BOUND_BINDING_ARRAY` | DX12 no longer reads garbage in `create_bind_group` for partially bound texture arrays ([#9653](https://github.com/gfx-rs/wgpu/pull/9653), `dx12/device.rs` only) | 30.0.0 |
 | Query sets | Initialization tracking: unwritten slots resolve to 0 instead of undefined values ([#9664](https://github.com/gfx-rs/wgpu/pull/9664)) | 30.0.0 |
+| `TIMESTAMP_QUERY_INSIDE_ENCODERS` on Metal | Set only when the device samples on blit encoders ([mtl 1208 at v30.0.1](https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/adapter.rs#L1208-L1211), [#9664](https://github.com/gfx-rs/wgpu/pull/9664)); the M4 Pro no longer reports it (measured), so on 30.0.1 it leaves Tier 1 for Apple GPUs | 30.0.0 |
+| `max_immediate_size` | Capped at 256 bytes on every backend ([auxil 198 at v30.0.1](https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/auxil/mod.rs#L198), [#9280](https://github.com/gfx-rs/wgpu/pull/9280)); the M4 Pro reports 256, down from 4096 (measured) | 30.0.0 |
 | Metal per-stage buffer slots | New `max_buffers_and_acceleration_structures_per_shader_stage`: storage, uniform and vertex buffers and acceleration structures share 29 slots ([#9709](https://github.com/gfx-rs/wgpu/pull/9709)) | 30.0.0 |
 | Ray queries | Metal uses `intersection_query`, so AABBs and non-opaque triangles work ([#9304](https://github.com/gfx-rs/wgpu/pull/9304)); BLAS AABB geometry ([#9290](https://github.com/gfx-rs/wgpu/pull/9290)) | 30.0.0 |
 

@@ -90,7 +90,7 @@ fn read_back(context: &GpuContext, texture: &wgpu::Texture) -> anyhow::Result<im
 
     let mut pixels = Vec::with_capacity((row_bytes * height) as usize);
     for row in buffer
-        .get_mapped_range(..)
+        .get_mapped_range(..)?
         .chunks_exact(padded_row_bytes as usize)
     {
         pixels.extend_from_slice(&row[..row_bytes as usize]);

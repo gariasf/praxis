@@ -61,7 +61,7 @@ Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/ag
 ## Stack (frozen)
 
 - **Language:** Rust (edition 2024)
-- **Graphics:** wgpu 29, WGSL shaders
+- **Graphics:** wgpu 30, WGSL shaders
 - **Windowing:** winit 0.30
 - **Math:** glam
 - **ECS:** `bevy_ecs` (sub-crate only — no full Bevy stack)

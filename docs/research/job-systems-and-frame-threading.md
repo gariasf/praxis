@@ -128,6 +128,18 @@ wgpu-core records a pass as a command list and encodes it into the Metal encoder
 - Frame data: the per-frame packet passed between stage jobs, released when its GPU work completes.
 - ADRs: 0004 holds with Frame data as the packet; 0009's ECS becomes one stage of a larger graph and may need a dependency beyond bevy_tasks; 0013 needs critical path and summed CPU time stated separately.
 
+## After 29.0.1
+
+Praxis moved to wgpu 30.0.1 on 2026-10-12 ([#55](https://github.com/gariasf/praxis/issues/55)); the links above stay at `v29.0.1`. Changes in 30.0.0 that touch this note ([CHANGELOG at v30.0.1](https://github.com/gfx-rs/wgpu/blob/v30.0.1/CHANGELOG.md)):
+
+| Row | Change |
+|---|---|
+| Present | `SurfaceTexture::present()` became `Queue::present(surface_texture)` ([#9361](https://github.com/gfx-rs/wgpu/pull/9361)), so the thread that presents holds the `Queue` |
+| Submit and poll | A submission on one thread proceeds while another thread blocks in `Device::poll`; hal fences are internally synchronized ([#9475](https://github.com/gfx-rs/wgpu/pull/9475)) |
+| Metal completion | Waits on a condition variable instead of polling, and `poll(wait_indefinitely())` no longer hangs when a command buffer fails ([#9328](https://github.com/gfx-rs/wgpu/pull/9328)) |
+| Staging | `StagingBelt::finish_and_recall_on_submit` re-maps the belt's buffers at submit, so no `recall` call follows ([cl30 184](https://github.com/gfx-rs/wgpu/blob/v30.0.1/CHANGELOG.md#L184)) |
+| Encode cost, measured | Interleaved runs on the M4 Pro, 100k draws: one thread 73.5 to 73.8 ns per draw on 30.0.1 against 63.7 to 65.0 on 29.0.1 (13 to 15% more); 8 threads 1.64 to 1.66 ms against 1.45 to 1.47; bundles unchanged at 49 to 51 ns per draw; `multi_draw_indirect` 55.2 to 55.4 against 56.3 to 57.1. wgpu-core 30 adds a vertex-buffer flush to every draw ([core-render 3115 at v30.0.1](https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/render.rs#L3115), [763](https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/render.rs#L763)); the cause was not isolated |
+
 ## Not verified
 
 - Barry Genova's GDC 2015 talk on Destiny's threading: the GDC Vault page shows only its abstract (an engine-wide job graph, "job fibers"); slides and video are members-only and were not read.
