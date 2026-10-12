@@ -1,10 +1,12 @@
 //! Goldens: each procedural Reference scene's capture matches its committed
-//! image in `tests/goldens/<backend>/<scene>.png`.
+//! image in `tests/goldens/<backend>/<scene>.png`, recorded on the M4 Pro for
+//! `metal`. A Golden is a reviewed snapshot of `praxis::capture`, so it catches
+//! regressions, not errors already present when it was recorded.
 //!
 //! `PRAXIS_UPDATE_GOLDENS=1 cargo test --test goldens` rewrites the current
 //! backend's Goldens and prints the scenes whose image changed. Without the
-//! variable the test only compares; on a mismatch it writes a diff image and
-//! the capture under `target/tmp/golden-diffs/<backend>/`.
+//! variable the test only compares; on a mismatch it writes a difference
+//! image and the capture under `target/tmp/golden-differences/<backend>/`.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -14,7 +16,7 @@ use praxis::gpu::GpuContext;
 
 const SCENES: [ReferenceScene; 2] = [ReferenceScene::PbrSweep, ReferenceScene::UvGrid];
 
-/// The capture command's default size; each Golden is about 52 KB as PNG.
+/// The capture command's default size.
 const WIDTH: u32 = 640;
 const HEIGHT: u32 = 360;
 
@@ -25,7 +27,7 @@ const HEIGHT: u32 = 360;
 /// difference in any pixel fails.
 const TOLERANCE: u8 = 1;
 
-const UPDATE_VARIABLE: &str = "PRAXIS_UPDATE_GOLDENS";
+const UPDATE_GOLDENS_VARIABLE: &str = "PRAXIS_UPDATE_GOLDENS";
 
 #[derive(Debug, PartialEq)]
 struct Difference {
@@ -62,7 +64,7 @@ fn channel_delta(golden: &image::Rgba<u8>, actual: &image::Rgba<u8>) -> u8 {
 
 /// The capture dimmed to a third, with every pixel beyond `TOLERANCE` in
 /// opaque red.
-fn diff_image(golden: &image::RgbaImage, actual: &image::RgbaImage) -> image::RgbaImage {
+fn difference_image(golden: &image::RgbaImage, actual: &image::RgbaImage) -> image::RgbaImage {
     image::RgbaImage::from_fn(actual.width(), actual.height(), |x, y| {
         let actual_pixel = actual.get_pixel(x, y);
         if channel_delta(golden.get_pixel(x, y), actual_pixel) > TOLERANCE {
@@ -88,10 +90,10 @@ fn compare_counts_pixels_beyond_tolerance_and_marks_them_red() {
             max_channel_delta: 20,
         }
     );
-    let diff = diff_image(&golden, &actual);
-    assert_eq!(diff.get_pixel(0, 0).0, [30, 30, 30, 255]);
-    assert_eq!(diff.get_pixel(1, 0).0, [30, 30, 30, 255]);
-    assert_eq!(diff.get_pixel(2, 0).0, [255, 0, 0, 255]);
+    let difference_pixels = difference_image(&golden, &actual);
+    assert_eq!(difference_pixels.get_pixel(0, 0).0, [30, 30, 30, 255]);
+    assert_eq!(difference_pixels.get_pixel(1, 0).0, [30, 30, 30, 255]);
+    assert_eq!(difference_pixels.get_pixel(2, 0).0, [255, 0, 0, 255]);
 }
 
 #[test]
@@ -110,7 +112,7 @@ fn procedural_scenes_match_their_goldens() {
         .join("tests/goldens")
         .join(backend);
 
-    if std::env::var_os(UPDATE_VARIABLE).is_some_and(|value| value == "1") {
+    if std::env::var_os(UPDATE_GOLDENS_VARIABLE).is_some_and(|value| value == "1") {
         update_goldens(&context, &golden_directory);
         return;
     }
@@ -118,14 +120,14 @@ fn procedural_scenes_match_their_goldens() {
         writeln!(
             std::io::stderr(),
             "skipped: no Goldens for backend {backend}; record them with \
-             {UPDATE_VARIABLE}=1 cargo test --test goldens"
+             {UPDATE_GOLDENS_VARIABLE}=1 cargo test --test goldens"
         )
         .ok();
         return;
     }
 
-    let diff_directory = Path::new(env!("CARGO_TARGET_TMPDIR"))
-        .join("golden-diffs")
+    let difference_directory = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join("golden-differences")
         .join(backend);
     let mut failures = Vec::new();
     for scene in SCENES {
@@ -143,20 +145,21 @@ fn procedural_scenes_match_their_goldens() {
 
         let difference = compare(&golden, &actual);
         if difference.differing_pixels > 0 {
-            std::fs::create_dir_all(&diff_directory).expect("diff directory");
-            let diff_path = diff_directory.join(format!("{}-diff.png", scene.name()));
-            diff_image(&golden, &actual)
-                .save(&diff_path)
-                .expect("write diff image");
+            std::fs::create_dir_all(&difference_directory).expect("difference directory");
+            let difference_path =
+                difference_directory.join(format!("{}-difference.png", scene.name()));
+            difference_image(&golden, &actual)
+                .save(&difference_path)
+                .expect("write difference image");
             actual
-                .save(diff_directory.join(format!("{}-actual.png", scene.name())))
+                .save(difference_directory.join(format!("{}-actual.png", scene.name())))
                 .expect("write capture");
             failures.push(format!(
-                "{}: {} pixels differ by more than {TOLERANCE} (max channel delta {}); diff {}",
+                "{}: {} pixels differ by more than {TOLERANCE} (max channel delta {}); difference image {}",
                 scene.name(),
                 difference.differing_pixels,
                 difference.max_channel_delta,
-                diff_path.display()
+                difference_path.display()
             ));
         }
     }
