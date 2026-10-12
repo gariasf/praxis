@@ -82,8 +82,8 @@ src/
   bin/praxis.rs                # thin binary: command dispatch
   gpu/                         # GPU context, windowed or headless
   capture/                     # offscreen render read back as an image
-  stats/                       # frame stats: counts, GPU memory,
-                                 counting allocator
+  stats/                       # frame stats: CPU and GPU times, counts,
+                                 GPU memory, counting allocator
   scenes/                      # Reference scenes: generated content,
                                  camera paths in frames
   shader.wgsl                  # WGSL shaders (split when justified)
@@ -177,8 +177,9 @@ When reviewing changes, check for:
 - [ ] Frame data holds no borrow into the ECS World, and only the
       main thread submits, presents or polls (ADR 0016)
 - [ ] Frame stats still see new work: GPU buffers and textures join
-      their owner's `gpu_memory_bytes`, and per-frame GPU writes add to
-      `uploaded_bytes`
+      their owner's `gpu_memory_bytes`, per-frame GPU writes add to
+      `uploaded_bytes`, and systems are added inside
+      `SystemTimer::scope`
 - [ ] `cargo fmt` and `cargo clippy` pass
 
 ## Maintenance

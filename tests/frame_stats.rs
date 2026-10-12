@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::time::Duration;
 
 use praxis::ReferenceScene;
 use praxis::gpu::GpuContext;
@@ -38,6 +39,46 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         last.gpu_memory_bytes,
         640 * MEBIBYTE + MEBIBYTE + 256 * 1024 + 256 * 80 + 80 + 192 + 16 * 144 + 160 * 90 * 4
     );
+
+    let timed: Vec<&str> = last
+        .cpu_times
+        .iter()
+        .map(|(name, _)| name.as_str())
+        .collect();
+    for name in [
+        "fly_camera",
+        "clear_just_pressed",
+        "prepare_renderables",
+        "upload",
+        "encode",
+        "submit",
+    ] {
+        assert!(timed.contains(&name), "no CPU time for {name}: {timed:?}");
+    }
+    // The systems and stages run one after another inside the frame.
+    let summed: Duration = last.cpu_times.iter().map(|(_, time)| *time).sum();
+    assert!(
+        summed <= last.cpu_frame_time,
+        "{summed:?} of system and stage time in a {:?} frame",
+        last.cpu_frame_time
+    );
+
+    // With timestamp queries, every frame's pass took GPU time: Metal reads
+    // a timestamp resolved before its pass's submission completed as 0.
+    let has_timestamp_queries = context.capability_report().lines().any(|line| {
+        line.strip_prefix("timestamp queries")
+            .is_some_and(|verdict| verdict.trim_start().starts_with("yes"))
+    });
+    for (frame, stats) in frames.iter().enumerate() {
+        match stats.gpu_times.as_slice() {
+            [] => assert!(!has_timestamp_queries, "frame {frame} has no GPU time"),
+            [("main_pass", pass_time)] => assert!(
+                Duration::ZERO < *pass_time && *pass_time < Duration::from_secs(1),
+                "frame {frame} took {pass_time:?} on the GPU"
+            ),
+            other => panic!("frame {frame} has GPU times {other:?}"),
+        }
+    }
 
     // wgpu allocates for every command encoder, so a count of 0 would mean
     // the allocator is not counting.
