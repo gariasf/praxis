@@ -29,14 +29,16 @@ owner decides and merges; agents implement and open PRs.
 - `docs/agents/workflow.md` — how work moves: ladder, tickets, PRs,
   budgets, session start. Read before starting, closing, or reordering
   work.
+- `docs/agents/sessions.md` — which skill starts which kind of session.
+  Read when the owner asks what to run, or when unsure which flow fits.
 - `CONTEXT.md` — glossary; its terms are the vocabulary of code,
   tickets, and reviews.
 - `docs/adr/` — decisions that are hard to reverse; a change that
   contradicts one says so.
 - `ROADMAP.md` — long-range vision. Its load-bearing decisions moved to
   `docs/adr/`; its phase checklists are superseded by milestones.
-- `PLAN.md` — Phase 6 scratch, paused. Superseded by tickets once M0 is
-  specified.
+- `PLAN.md` — Phase 6 scratch, paused. Superseded by the M0 tickets;
+  Steps 5-6 return as tickets under a later milestone.
 
 If any of these conflicts with current code, **the code is the source
 of truth**. Flag the drift to the owner explicitly; do not silently
@@ -98,6 +100,10 @@ When a feature folder grows past one file, split into
   recommendation attached.
 - Work the live milestone's frontier. Work that is not a ticket becomes
   a proposed ticket first.
+- Review before the PR opens: `/implement` closes with a local
+  `/code-review`; run it and fix what it finds. CodeRabbit's review of
+  the PR is a second opinion, treated as suggestions
+  (`docs/agents/workflow.md`, Review).
 - A bug-fix is not a refactor and a feature is not a cleanup. Do what
   the ticket says; its acceptance criteria are the ceiling.
 - Don't add comments, docstrings, or type annotations to code you

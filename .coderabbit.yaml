@@ -1,9 +1,10 @@
 # CodeRabbit configuration for Praxis.
 # Schema: https://coderabbit.ai/integrations/schema.v2.json
 #
-# Role: independent semantic reviewer (docs/agents/workflow.md, "Review").
-# CI owns mechanical checks; the agent owns every fix; CodeRabbit never
-# writes to a branch, so its finishing touches stay off.
+# Role: second-opinion reviewer, after the agent's own review
+# (docs/agents/workflow.md, "Review"). CI owns mechanical checks; the agent
+# owns every fix; CodeRabbit never writes to a branch, so its finishing
+# touches stay off.
 # Config is read from the PR's own branch, so a PR that edits this file is
 # reviewed under its own edit. Every change here is named under "Decide"
 # in the PR description.
