@@ -58,6 +58,14 @@ _Avoid_: Object
 The per-frame collection of visible Renderables, lights and camera that the renderer consumes in place of reading the ECS World.
 _Avoid_: Scene data, render state
 
+**Froxel**:
+A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.
+_Avoid_: Cluster, light cluster, tile
+
+**Meshlet**:
+A small fixed-size group of a Mesh's triangles, culled as a unit.
+_Avoid_: Cluster, chunk
+
 **Input latency**:
 The time from the engine receiving an input event to the present of the first frame whose simulation consumed that event. Time the event spent in the OS before the engine received it, and time in the display queue after present, are not counted.
 _Avoid_: Input lag, motion-to-photon
