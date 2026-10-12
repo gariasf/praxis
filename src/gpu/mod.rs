@@ -67,6 +67,11 @@ impl GpuContext {
         self.adapter.get_info().backend
     }
 
+    /// Whether the adapter is a discrete, integrated, or software (CPU) GPU.
+    pub fn device_type(&self) -> wgpu::DeviceType {
+        self.adapter.get_info().device_type
+    }
+
     /// The adapter, its backend, and whether the adapter supports each
     /// feature the roadmap plans on, with the related features and limits.
     /// One line per entry.

@@ -1,12 +1,16 @@
 //! Goldens: each procedural Reference scene's capture matches its committed
-//! image in `tests/goldens/<backend>/<scene>.png`, recorded on the M4 Pro for
-//! `metal`. A Golden is a reviewed snapshot of `praxis::capture`, so it catches
-//! regressions, not errors already present when it was recorded.
+//! image in `tests/goldens/<key>/<scene>.png`. The key is the backend, plus
+//! `-cpu` on a software driver: `metal` is recorded on the M4 Pro, and
+//! `vulkan-cpu` on CI's lavapipe (Mesa on the `ubuntu-24.04` runner). A Golden
+//! is a reviewed snapshot of `praxis::capture`, so it catches regressions, not
+//! errors already present when it was recorded.
 //!
 //! `PRAXIS_UPDATE_GOLDENS=1 cargo test --test goldens` rewrites the current
-//! backend's Goldens and prints the scenes whose image changed. Without the
+//! key's Goldens and prints the scenes whose image changed. Without the
 //! variable the test only compares; on a mismatch it writes a difference
-//! image and the capture under `target/tmp/golden-differences/<backend>/`.
+//! image and the capture under `target/tmp/golden-differences/<key>/`. With
+//! `PRAXIS_REQUIRE_GOLDENS=1`, as on CI, a missing adapter or Golden directory
+//! fails instead of skipping.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -21,13 +25,39 @@ const WIDTH: u32 = 640;
 const HEIGHT: u32 = 360;
 
 /// The largest channel difference, in 8-bit steps, that still matches.
-/// Measured noise on the M4 Pro (Metal): 20 captures per scene, each in its
-/// own process, were byte-identical, so the noise is 0. One step above it
-/// absorbs a driver rounding a value on the other side of .5; any larger
-/// difference in any pixel fails.
+/// Measured noise on the M4 Pro (Metal) and on CI's lavapipe: 20 captures per
+/// scene, each in its own process, were byte-identical, so the noise is 0.
+/// One step above it absorbs a driver rounding a value on the other side of
+/// .5; any larger difference in any pixel fails.
 const TOLERANCE: u8 = 1;
 
 const UPDATE_GOLDENS_VARIABLE: &str = "PRAXIS_UPDATE_GOLDENS";
+const REQUIRE_GOLDENS_VARIABLE: &str = "PRAXIS_REQUIRE_GOLDENS";
+
+fn variable_is_set(name: &str) -> bool {
+    std::env::var_os(name).is_some_and(|value| value == "1")
+}
+
+/// Skips the test, or fails it when `PRAXIS_REQUIRE_GOLDENS=1`, so a CI
+/// runner that lost its driver cannot pass by comparing nothing.
+fn skip(reason: &str) {
+    assert!(
+        !variable_is_set(REQUIRE_GOLDENS_VARIABLE),
+        "{reason}, and {REQUIRE_GOLDENS_VARIABLE}=1"
+    );
+    // Not `eprintln!`, which libtest captures from passing tests.
+    writeln!(std::io::stderr(), "skipped: {reason}").ok();
+}
+
+/// The Golden directory for the context's adapter. A software rasterizer
+/// rounds differently from hardware on the same API, so it gets its own key.
+fn golden_key(context: &GpuContext) -> String {
+    let backend = context.backend().to_str();
+    match context.device_type() {
+        wgpu::DeviceType::Cpu => format!("{backend}-cpu"),
+        _ => backend.to_owned(),
+    }
+}
 
 #[derive(Debug, PartialEq)]
 struct Difference {
@@ -101,34 +131,31 @@ fn procedural_scenes_match_their_goldens() {
     let context = match pollster::block_on(GpuContext::headless()) {
         Ok(context) => context,
         Err(error) if error.is::<wgpu::RequestAdapterError>() => {
-            // Not `eprintln!`, which libtest captures from passing tests.
-            writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+            skip(&format!("no GPU adapter: {error}"));
             return;
         }
         Err(error) => panic!("headless GPU context failed: {error:#}"),
     };
-    let backend = context.backend().to_str();
+    let key = golden_key(&context);
     let golden_directory = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/goldens")
-        .join(backend);
+        .join(&key);
 
-    if std::env::var_os(UPDATE_GOLDENS_VARIABLE).is_some_and(|value| value == "1") {
+    if variable_is_set(UPDATE_GOLDENS_VARIABLE) {
         update_goldens(&context, &golden_directory);
         return;
     }
     if !golden_directory.exists() {
-        writeln!(
-            std::io::stderr(),
-            "skipped: no Goldens for backend {backend}; record them with \
+        skip(&format!(
+            "no Goldens for {key}; record them with \
              {UPDATE_GOLDENS_VARIABLE}=1 cargo test --test goldens"
-        )
-        .ok();
+        ));
         return;
     }
 
     let difference_directory = Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join("golden-differences")
-        .join(backend);
+        .join(&key);
     let mut failures = Vec::new();
     for scene in SCENES {
         let golden_path = golden_path(&golden_directory, scene);
