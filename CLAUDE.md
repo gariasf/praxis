@@ -180,6 +180,8 @@ When reviewing changes, check for:
       their owner's `gpu_memory_bytes`, per-frame GPU writes add to
       `uploaded_bytes`, and systems are added inside
       `SystemTimer::scope`
+- [ ] Streaming uploads go through the `StagingBelt`, never
+      `write_texture`, and GPU arenas never grow at runtime (ADR 0017)
 - [ ] `cargo fmt` and `cargo clippy` pass
 
 ## Maintenance
