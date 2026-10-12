@@ -56,7 +56,7 @@ impl ReferenceScene {
             Self::Helmet => Camera::new(),
             Self::PbrSweep => orbit(frame, 6.5, 1.0),
             Self::UvGrid => orbit(frame, 9.0, 7.0),
-            // Still: normal mapping holds up face on (the model's README).
+            // A fixed camera, face on: normal mapping holds up best there (README).
             Self::NormalTangent => Camera::looking_at(
                 glam::vec3(0.0, NORMAL_TANGENT_CENTRE_HEIGHT, 3.2),
                 glam::vec3(0.0, NORMAL_TANGENT_CENTRE_HEIGHT, 0.0),
@@ -137,7 +137,7 @@ pub(crate) fn spawn_uv_grid(
 
 /// Committed, so CI renders it; 1.8 MB, under the 2 MB commit ceiling
 /// (`docs/research/test-assets.md`).
-const NORMAL_TANGENT_MODEL: &str = "assets/NormalTangentTest/NormalTangentTest.glb";
+const NORMAL_TANGENT_ASSET: &str = "assets/NormalTangentTest/NormalTangentTest.glb";
 /// The middle of the model's bounds, which run from -1.2 to 0.95 in Y.
 const NORMAL_TANGENT_CENTRE_HEIGHT: f32 = -0.125;
 
@@ -147,7 +147,8 @@ pub(crate) fn spawn_normal_tangent(
     queue: &wgpu::Queue,
     material_pool: &mut MaterialPool,
 ) -> anyhow::Result<()> {
-    let (mesh, material) = insert_model(world, device, queue, material_pool, NORMAL_TANGENT_MODEL)?;
+    let (mesh, material) =
+        insert_gltf_asset(world, device, queue, material_pool, NORMAL_TANGENT_ASSET)?;
     world.spawn((
         Transform(glam::Affine3A::IDENTITY),
         MeshRef(mesh),
@@ -159,7 +160,7 @@ pub(crate) fn spawn_normal_tangent(
 /// Loads the glTF file at `path`, relative to the working directory, as one
 /// Mesh, and inserts the Material of its first Primitive with each of its
 /// textures uploaded to its Channel's array.
-pub(crate) fn insert_model(
+pub(crate) fn insert_gltf_asset(
     world: &mut World,
     device: &wgpu::Device,
     queue: &wgpu::Queue,

@@ -1,6 +1,7 @@
 //! Goldens: each Reference scene CI can render, procedural or from a
-//! committed asset, matches its committed image in `tests/goldens/<key>/<scene>.png`. The key is the backend, plus
-//! `-cpu` on a software driver: `metal` is recorded on the M4 Pro, and
+//! committed asset, matches its committed image in
+//! `tests/goldens/<key>/<scene>.png`. The key is the backend, plus `-cpu` on
+//! a software driver: `metal` is recorded on the M4 Pro, and
 //! `vulkan-cpu` on CI's lavapipe (the Mesa pinned in `.github/workflows/ci.yml`).
 //! A Golden is a reviewed capture from `praxis::capture`, so it catches
 //! regressions, not errors already present when it was recorded.

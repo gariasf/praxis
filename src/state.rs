@@ -14,7 +14,7 @@ use crate::render::{
     create_depth_texture, prepare_renderables,
 };
 use crate::scenes::{
-    ReferenceScene, insert_model, spawn_normal_tangent, spawn_pbr_sweep, spawn_uv_grid,
+    ReferenceScene, insert_gltf_asset, spawn_normal_tangent, spawn_pbr_sweep, spawn_uv_grid,
 };
 use crate::stats::{FrameRecorder, FrameStats, texture_bytes};
 use crate::time::Time;
@@ -293,7 +293,7 @@ impl State {
         material_pool: &mut MaterialPool,
     ) -> anyhow::Result<()> {
         let (mesh_handle, material_handle) =
-            insert_model(world, device, queue, material_pool, DEFAULT_MODEL)
+            insert_gltf_asset(world, device, queue, material_pool, DEFAULT_MODEL)
                 .context("run scripts/fetch-assets.sh if the model is missing")?;
 
         // Debug material sweep: a pure factor sweep over the neutral default
