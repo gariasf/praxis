@@ -206,13 +206,9 @@ impl WindowShell {
         self.last_frame = Some(now);
         self.state.update(delta_time);
 
-        let output = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
-            wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => {
-                tracing::debug!("surface suboptimal, reconfiguring");
-                self.surface.configure(&self.device, &self.config);
-                surface_texture
-            }
+        let (output, is_suboptimal) = match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(surface_texture) => (surface_texture, false),
+            wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => (surface_texture, true),
             wgpu::CurrentSurfaceTexture::Timeout
             | wgpu::CurrentSurfaceTexture::Occluded
             | wgpu::CurrentSurfaceTexture::Validation => {
@@ -235,6 +231,13 @@ impl WindowShell {
             .create_view(&wgpu::TextureViewDescriptor::default());
         self.state.render(&view);
         output.present();
+
+        // Only after presenting: wgpu rejects a reconfigure while a texture
+        // acquired from the surface is alive.
+        if is_suboptimal {
+            tracing::debug!("surface suboptimal, reconfiguring");
+            self.surface.configure(&self.device, &self.config);
+        }
 
         Ok(())
     }
