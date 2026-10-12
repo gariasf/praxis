@@ -3,9 +3,7 @@ use std::time::Instant;
 use anyhow::Context;
 use bevy_ecs::prelude::*;
 
-use crate::assets::{
-    LoadedImage, MaterialChannel, MaterialData, MaterialPool, Mesh, MeshPool, Primitive,
-};
+use crate::assets::{MaterialData, MaterialPool, MeshPool};
 use crate::camera::{Camera, fly_camera};
 use crate::components::{MaterialRef, MeshRef, Transform};
 use crate::gpu::GpuContext;
@@ -15,7 +13,9 @@ use crate::render::{
     CameraUniform, INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData, LightUniform, Vertex,
     create_depth_texture, prepare_renderables,
 };
-use crate::scenes::{ReferenceScene, spawn_pbr_sweep, spawn_uv_grid};
+use crate::scenes::{
+    ReferenceScene, insert_model, spawn_normal_tangent, spawn_pbr_sweep, spawn_uv_grid,
+};
 use crate::stats::{FrameRecorder, FrameStats, texture_bytes};
 use crate::time::Time;
 
@@ -207,6 +207,9 @@ impl State {
             ReferenceScene::UvGrid => {
                 spawn_uv_grid(&mut world, &device, &queue, &mut material_pool)
             }
+            ReferenceScene::NormalTangent => {
+                spawn_normal_tangent(&mut world, &device, &queue, &mut material_pool)?
+            }
         }
         world.insert_resource(material_pool);
 
@@ -289,103 +292,9 @@ impl State {
         queue: &wgpu::Queue,
         material_pool: &mut MaterialPool,
     ) -> anyhow::Result<()> {
-        let model = crate::assets::load_model(DEFAULT_MODEL).with_context(|| {
-            format!("load {DEFAULT_MODEL}; run scripts/fetch-assets.sh if it is missing")
-        })?;
-
-        let mut mesh_pool = world.resource_mut::<MeshPool>();
-        let mut primitives = Vec::new();
-        for (primitive_index, prim) in model.primitives.iter().enumerate() {
-            let _prim_span = tracing::debug_span!("upload_primitive", primitive_index).entered();
-
-            let (vertex_offset, index_offset, index_count) =
-                mesh_pool.push_primitive(device, queue, &prim.vertices, &prim.indices);
-
-            tracing::debug!(
-                vertices = prim.vertices.len(),
-                indices = prim.indices.len(),
-                "primitive uploaded"
-            );
-
-            primitives.push(Primitive {
-                vertex_offset,
-                index_offset,
-                index_count,
-            });
-        }
-        let mesh = Mesh { primitives };
-        let mesh_handle = mesh_pool.insert(mesh);
-
-        // Translate the model's material into the SSBO and upload its albedo
-        // into the channel array. SciFiHelmet is single-material; multi-
-        // material meshes (one MaterialRef per primitive) are deferred.
-        if model.primitives.len() > 1 {
-            tracing::warn!(
-                primitives = model.primitives.len(),
-                "multi-primitive model; only primitive 0's material is used (multi-material deferred)"
-            );
-        }
-        let first_primitive = model
-            .primitives
-            .first()
-            .ok_or_else(|| anyhow::anyhow!("model has no primitives"))?;
-        let mut upload_channel = |channel: MaterialChannel, image: Option<&LoadedImage>| -> u32 {
-            match image {
-                Some(image) => {
-                    material_pool.upload(queue, channel, &image.pixels, image.width, image.height)
-                }
-                None => {
-                    tracing::debug!(
-                        ?channel,
-                        "model has no texture for channel; using the neutral layer"
-                    );
-                    MaterialPool::DEFAULT_LAYER
-                }
-            }
-        };
-        let albedo_layer = upload_channel(
-            MaterialChannel::Albedo,
-            first_primitive.base_color_image.as_ref(),
-        );
-        let normal_layer = upload_channel(
-            MaterialChannel::Normal,
-            first_primitive.normal_image.as_ref(),
-        );
-        let metallic_roughness_layer = upload_channel(
-            MaterialChannel::MetallicRoughness,
-            first_primitive.metallic_roughness_image.as_ref(),
-        );
-        let occlusion_layer = upload_channel(
-            MaterialChannel::Occlusion,
-            first_primitive.occlusion_image.as_ref(),
-        );
-        let emissive_layer = upload_channel(
-            MaterialChannel::Emissive,
-            first_primitive.emissive_image.as_ref(),
-        );
-        let material = MaterialData {
-            base_color: first_primitive.base_color_factor,
-            metallic_roughness: [
-                first_primitive.metallic_factor,
-                first_primitive.roughness_factor,
-                0.0,
-                0.0,
-            ],
-            emissive: [
-                first_primitive.emissive_factor[0],
-                first_primitive.emissive_factor[1],
-                first_primitive.emissive_factor[2],
-                1.0,
-            ],
-            texture_indices: [
-                albedo_layer,
-                normal_layer,
-                metallic_roughness_layer,
-                occlusion_layer,
-            ],
-            extra: [emissive_layer, 0, 0, 0],
-        };
-        let material_handle = material_pool.insert(queue, material);
+        let (mesh_handle, material_handle) =
+            insert_model(world, device, queue, material_pool, DEFAULT_MODEL)
+                .context("run scripts/fetch-assets.sh if the model is missing")?;
 
         // Debug material sweep: a pure factor sweep over the neutral default
         // layers with a white base color. Top row dielectric, bottom row metal;

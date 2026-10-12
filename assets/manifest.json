@@ -58,5 +58,15 @@
     "sha256": "95823e77b0a6e45308b53be4fdf1b7a7b6ac085c190dc1c5ef47097d0e35eb2f",
     "dev_only": false,
     "fetched": true
+  },
+  {
+    "path": "NormalTangentTest/NormalTangentTest.glb",
+    "source": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/NormalTangentTest/glTF-Binary/NormalTangentTest.glb",
+    "license": "CC0-1.0",
+    "credit": "Normal-Tangent Test: © 2018 Analytical Graphics, Inc., by Ed Mackey, CC0 1.0",
+    "version": "edc7c9e67c639d230715049ee31f9a96a6babbbe",
+    "sha256": "5ac0932355ae1ea05a7485eeddcc3f1fbe56c678e00b519075feced80e9e9d6a",
+    "dev_only": false,
+    "fetched": false
   }
 ]
