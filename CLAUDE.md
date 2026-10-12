@@ -138,6 +138,9 @@ When a feature folder grows past one file, split into
   (`image = { version = "0.25", default-features = false, features = ["png"] }`).
 - Tests use the built-in harness (`cargo test`) at the seams agreed in
   the ticket. Test-framework crates are an owner decision.
+- Every file under `assets/` has an entry in `assets/manifest.json` and
+  its credit in `assets/ATTRIBUTION.md`; `cargo test` checks both.
+  Policy: `docs/research/test-assets.md`.
 
 ## Review checklist
 

@@ -1,0 +1,183 @@
+use std::collections::BTreeSet;
+use std::fs;
+use std::path::Path;
+
+use serde::Deserialize;
+use sha2::{Digest, Sha256};
+
+const MANIFEST: &str = "manifest.json";
+const ATTRIBUTION: &str = "ATTRIBUTION.md";
+
+/// One asset file. Policy: docs/research/test-assets.md.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Entry {
+    /// Relative to the assets directory, `/`-separated.
+    path: String,
+    /// Pinned download URL.
+    source: String,
+    /// SPDX licence expression.
+    license: String,
+    /// Repeated verbatim in the attribution file.
+    credit: String,
+    /// Upstream commit, release or date.
+    version: String,
+    sha256: String,
+    /// Kept out of shipped builds: non-commercial or otherwise restricted.
+    dev_only: bool,
+    /// Kept out of git and downloaded by pinned URL, so it may be absent.
+    fetched: bool,
+}
+
+#[test]
+fn every_asset_is_listed_licensed_and_credited() {
+    let problems = problems(&Path::new(env!("CARGO_MANIFEST_DIR")).join("assets"));
+    assert!(
+        problems.is_empty(),
+        "assets/ does not match {MANIFEST} and {ATTRIBUTION}:\n{}",
+        problems.join("\n")
+    );
+}
+
+#[test]
+fn manifest_check_reports_every_kind_of_problem() {
+    let directory = Path::new(env!("CARGO_TARGET_TMPDIR")).join("asset_manifest");
+    if directory.exists() {
+        fs::remove_dir_all(&directory).expect("clear the scratch directory");
+    }
+    let files: [(&str, &[u8]); 3] = [
+        ("good.bin", b"abc"),
+        ("nested/changed.bin", b""),
+        ("unlisted.bin", b""),
+    ];
+    for (path, contents) in files {
+        let path = directory.join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, contents).unwrap();
+    }
+    fs::write(directory.join(MANIFEST), SCRATCH_MANIFEST).unwrap();
+    fs::write(directory.join(ATTRIBUTION), SCRATCH_ATTRIBUTION).unwrap();
+
+    assert_eq!(
+        problems(&directory),
+        [
+            format!("nested/changed.bin: sha256 is {EMPTY_SHA256}, manifest says {ABC_SHA256}"),
+            "absent.bin: listed but not in the directory".to_string(),
+            "non-commercial.bin: non-commercial licence without dev_only".to_string(),
+            "uncredited.bin: credit missing from ATTRIBUTION.md".to_string(),
+            "blank.bin: empty version".to_string(),
+            "good.bin: listed twice".to_string(),
+            "unlisted.bin: no manifest entry".to_string(),
+        ]
+    );
+}
+
+/// FIPS 180-2 test vectors: SHA-256 of "abc" and of the empty message.
+const ABC_SHA256: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+const SCRATCH_MANIFEST: &str = r#"[
+{"path": "good.bin", "source": "https://example.com/good.bin", "license": "CC0-1.0", "credit": "Good credit", "version": "1", "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "dev_only": false, "fetched": false},
+{"path": "nested/changed.bin", "source": "https://example.com/changed.bin", "license": "CC0-1.0", "credit": "Changed credit", "version": "1", "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "dev_only": false, "fetched": false},
+{"path": "absent.bin", "source": "https://example.com/absent.bin", "license": "CC0-1.0", "credit": "Absent credit", "version": "1", "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "dev_only": false, "fetched": false},
+{"path": "fetched.bin", "source": "https://example.com/fetched.bin", "license": "CC0-1.0", "credit": "Fetched credit", "version": "1", "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "dev_only": false, "fetched": true},
+{"path": "non-commercial.bin", "source": "https://example.com/non-commercial.bin", "license": "CC-BY-4.0 AND CC-BY-NC-4.0", "credit": "Non-commercial credit", "version": "1", "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "dev_only": false, "fetched": true},
+{"path": "uncredited.bin", "source": "https://example.com/uncredited.bin", "license": "CC-BY-4.0", "credit": "Uncredited credit", "version": "1", "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "dev_only": false, "fetched": true},
+{"path": "blank.bin", "source": "https://example.com/blank.bin", "license": "CC0-1.0", "credit": "Blank credit", "version": " ", "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "dev_only": false, "fetched": true},
+{"path": "good.bin", "source": "https://example.com/good.bin", "license": "CC0-1.0", "credit": "Good credit", "version": "1", "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "dev_only": false, "fetched": false}
+]"#;
+
+const SCRATCH_ATTRIBUTION: &str = "Good credit
+Changed credit
+Absent credit
+Fetched credit
+Non-commercial credit
+Blank credit
+";
+
+/// Each way `assets` disagrees with its manifest and attribution file, as
+/// `path: problem`; empty when they agree.
+fn problems(assets: &Path) -> Vec<String> {
+    let mut on_disk = BTreeSet::new();
+    files_under(assets, assets, &mut on_disk);
+    on_disk.remove(MANIFEST);
+    on_disk.remove(ATTRIBUTION);
+
+    let manifest = fs::read_to_string(assets.join(MANIFEST)).expect("read the manifest");
+    let entries: Vec<Entry> =
+        serde_json::from_str(&manifest).unwrap_or_else(|error| panic!("{MANIFEST}: {error}"));
+    let attribution =
+        fs::read_to_string(assets.join(ATTRIBUTION)).expect("read the attribution file");
+
+    let mut problems = Vec::new();
+    let mut listed = BTreeSet::new();
+    for entry in &entries {
+        let path = &entry.path;
+        if !listed.insert(path.as_str()) {
+            problems.push(format!("{path}: listed twice"));
+            continue;
+        }
+        for (field, value) in [
+            ("source", &entry.source),
+            ("license", &entry.license),
+            ("credit", &entry.credit),
+            ("version", &entry.version),
+        ] {
+            if value.trim().is_empty() {
+                problems.push(format!("{path}: empty {field}"));
+            }
+        }
+        if entry.license.contains("-NC-") && !entry.dev_only {
+            problems.push(format!("{path}: non-commercial licence without dev_only"));
+        }
+        if !attribution.contains(entry.credit.as_str()) {
+            problems.push(format!("{path}: credit missing from {ATTRIBUTION}"));
+        }
+        if on_disk.contains(path) {
+            let actual = sha256_hex(&assets.join(path));
+            if actual != entry.sha256 {
+                problems.push(format!(
+                    "{path}: sha256 is {actual}, manifest says {}",
+                    entry.sha256
+                ));
+            }
+        } else if !entry.fetched {
+            problems.push(format!("{path}: listed but not in the directory"));
+        }
+    }
+    problems.extend(
+        on_disk
+            .iter()
+            .filter(|path| !listed.contains(path.as_str()))
+            .map(|path| format!("{path}: no manifest entry")),
+    );
+    problems
+}
+
+fn sha256_hex(path: &Path) -> String {
+    let contents =
+        fs::read(path).unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+    Sha256::digest(contents)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+/// Every file under `directory`, as `/`-separated paths relative to `root`.
+fn files_under(root: &Path, directory: &Path, files: &mut BTreeSet<String>) {
+    for dir_entry in fs::read_dir(directory).expect("read the assets directory") {
+        let dir_entry = dir_entry.expect("read an assets directory entry");
+        let path = dir_entry.path();
+        if dir_entry.file_type().expect("read a file type").is_dir() {
+            files_under(root, &path, files);
+        } else {
+            let components: Vec<_> = path
+                .strip_prefix(root)
+                .expect("a path under the assets root")
+                .components()
+                .map(|component| component.as_os_str().to_string_lossy())
+                .collect();
+            files.insert(components.join("/"));
+        }
+    }
+}
