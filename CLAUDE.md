@@ -148,14 +148,10 @@ When reviewing changes, check for:
 
 - [ ] GPU resources created in `State::new` are also recreated in
       `resize()`
-- [ ] Shader types match Rust-side types (vertex layout, bind group
-      bindings, uniforms)
-- [ ] No `vec3<f32>` in WGSL uniform structs — it pads to 16 bytes and
-      silently mismatches Rust-side layouts. Use `vec4<f32>` or
-      explicit pad
-- [ ] Rust-side uniform structs are `#[repr(C)]` with `bytemuck::Pod` +
-      `Zeroable`, match WGSL layout (16-byte alignment, column-major
-      matrices)
+- [ ] Shader bind group bindings match the Rust bind group layouts.
+      Struct and vertex layouts are checked by `cargo test`
+      (`src/render/shader_tests.rs`)
+- [ ] Matrices reach WGSL column-major (glam `to_cols_array_2d`)
 - [ ] When a buffer is recreated, the bind group referencing it is
       also recreated (bind groups are snapshots, not pointers)
 - [ ] New bind groups are added to both the pipeline layout and set in

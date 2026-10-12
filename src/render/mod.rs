@@ -4,6 +4,9 @@ pub mod prepare;
 pub mod uniforms;
 pub mod vertex;
 
+#[cfg(test)]
+mod shader_tests;
+
 pub use depth::create_depth_texture;
 pub use instance::{INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData};
 pub use prepare::prepare_renderables;
