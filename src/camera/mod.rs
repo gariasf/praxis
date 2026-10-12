@@ -24,6 +24,18 @@ impl Camera {
         }
     }
 
+    /// A camera at `position` facing `target`, which must not be straight
+    /// above or below it.
+    pub fn looking_at(position: glam::Vec3, target: glam::Vec3) -> Self {
+        let direction = (target - position).normalize();
+        Self {
+            position,
+            yaw: direction.z.atan2(direction.x),
+            pitch: direction.y.asin(),
+            ..Self::new()
+        }
+    }
+
     pub fn forward(&self) -> glam::Vec3 {
         glam::vec3(
             self.yaw.cos() * self.pitch.cos(),

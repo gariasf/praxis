@@ -22,10 +22,12 @@ pub mod gpu;
 mod helmet;
 mod input;
 mod render;
+mod scenes;
 mod state;
 mod time;
 
 pub use capture::capture;
+pub use scenes::ReferenceScene;
 pub use state::DEFAULT_MODEL;
 
 impl ApplicationHandler for App {
@@ -167,7 +169,7 @@ impl WindowShell {
             surface_format,
             size.width.max(1),
             size.height.max(1),
-            Camera::new(),
+            ReferenceScene::Helmet,
         )?;
 
         Ok(Self {

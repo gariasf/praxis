@@ -82,6 +82,8 @@ src/
   bin/praxis.rs                # thin binary: command dispatch
   gpu/                         # GPU context, windowed or headless
   capture/                     # offscreen render read back as an image
+  scenes/                      # Reference scenes: generated content,
+                                 camera paths in frames
   shader.wgsl                  # WGSL shaders (split when justified)
   components.rs                # ECS components (Transform, MeshRef)
   camera/, time/, input/,      # feature modules: resource (+ systems)

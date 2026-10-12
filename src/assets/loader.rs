@@ -236,7 +236,7 @@ impl bevy_mikktspace::Geometry for TangentGeometry<'_> {
 
 /// Generates glTF-convention tangents (`xyz` tangent, `w` bitangent sign) with
 /// MikkTSpace, the algorithm the glTF spec prescribes when `TANGENT` is absent.
-fn generate_tangents(
+pub(crate) fn generate_tangents(
     positions: &[[f32; 3]],
     normals: &[[f32; 3]],
     uvs: &[[f32; 2]],

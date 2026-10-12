@@ -1,5 +1,5 @@
-use crate::camera::Camera;
 use crate::gpu::GpuContext;
+use crate::scenes::ReferenceScene;
 use crate::state::State;
 
 /// 8-bit sRGB like the window's surface, which takes the first sRGB format
@@ -14,18 +14,24 @@ const FRAME_COUNT: u32 = 60;
 /// The injected time step in seconds, 60 Hz.
 const FRAME_DELTA_TIME: f32 = 1.0 / 60.0;
 
-/// Renders the Scene into a `width` × `height` offscreen texture for
+/// Renders `scene` into a `width` × `height` offscreen texture for
 /// `FRAME_COUNT` frames and returns the last one. Time and camera are
-/// injected (a fixed step, the window's start pose) and nothing reads the
-/// wall clock or input, so equal arguments give equal images on one machine.
-pub fn capture(context: &GpuContext, width: u32, height: u32) -> anyhow::Result<image::RgbaImage> {
+/// injected (a fixed step, the scene's camera path by frame) and nothing
+/// reads the wall clock or input, so equal arguments give equal images on one
+/// machine.
+pub fn capture(
+    context: &GpuContext,
+    scene: ReferenceScene,
+    width: u32,
+    height: u32,
+) -> anyhow::Result<image::RgbaImage> {
     let max_dimension = context.device.limits().max_texture_dimension_2d;
     anyhow::ensure!(
         (1..=max_dimension).contains(&width) && (1..=max_dimension).contains(&height),
         "capture size {width}x{height} is outside 1 to {max_dimension} per side"
     );
 
-    let mut state = State::new(context, TARGET_FORMAT, width, height, Camera::new())?;
+    let mut state = State::new(context, TARGET_FORMAT, width, height, scene)?;
     let target = context.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Capture Target"),
         size: wgpu::Extent3d {
@@ -41,7 +47,8 @@ pub fn capture(context: &GpuContext, width: u32, height: u32) -> anyhow::Result<
         view_formats: &[],
     });
     let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
-    for _ in 0..FRAME_COUNT {
+    for frame in 0..FRAME_COUNT {
+        state.world.insert_resource(scene.camera_at(frame));
         state.update(FRAME_DELTA_TIME);
         state.render(&target_view);
     }
