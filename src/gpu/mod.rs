@@ -62,6 +62,11 @@ impl GpuContext {
         })
     }
 
+    /// The graphics API the adapter runs on.
+    pub fn backend(&self) -> wgpu::Backend {
+        self.adapter.get_info().backend
+    }
+
     /// The adapter, its backend, and whether the adapter supports each
     /// feature the roadmap plans on, with the related features and limits.
     /// One line per entry.
