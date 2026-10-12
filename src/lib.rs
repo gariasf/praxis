@@ -24,11 +24,13 @@ mod input;
 mod render;
 mod scenes;
 mod state;
+mod stats;
 mod time;
 
 pub use capture::capture;
 pub use scenes::ReferenceScene;
 pub use state::DEFAULT_MODEL;
+pub use stats::FrameStats;
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {

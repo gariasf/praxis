@@ -123,6 +123,11 @@ impl MeshPool {
         tracing::info!(new_capacity, "index buffer grown");
     }
 
+    /// Bytes of the vertex and index buffers.
+    pub fn gpu_memory_bytes(&self) -> u64 {
+        self.vertex_buffer.size() + self.index_buffer.size()
+    }
+
     pub fn get(&self, handle: MeshHandle) -> Option<&Mesh> {
         self.meshes.get(handle.0 as usize)
     }

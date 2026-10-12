@@ -1,6 +1,7 @@
 use crate::gpu::GpuContext;
 use crate::scenes::ReferenceScene;
 use crate::state::State;
+use crate::stats::FrameStats;
 
 /// 8-bit sRGB like the window's surface, which takes the first sRGB format
 /// the surface offers (`Bgra8UnormSrgb` on Metal). RGBA order makes the
@@ -15,16 +16,16 @@ const FRAME_COUNT: u32 = 60;
 const FRAME_DELTA_TIME: f32 = 1.0 / 60.0;
 
 /// Renders `scene` into a `width` × `height` offscreen texture for
-/// `FRAME_COUNT` frames and returns the last one. Time and camera are
-/// injected (a fixed step, the scene's camera path by frame) and nothing
-/// reads the wall clock or input, so equal arguments give equal images on one
-/// machine.
+/// `FRAME_COUNT` frames and returns the last one, with every frame's stats.
+/// Time and camera are injected (a fixed step, the scene's camera path by
+/// frame) and nothing reads the wall clock or input, so equal arguments give
+/// equal images on one machine.
 pub fn capture(
     context: &GpuContext,
     scene: ReferenceScene,
     width: u32,
     height: u32,
-) -> anyhow::Result<image::RgbaImage> {
+) -> anyhow::Result<(image::RgbaImage, Vec<FrameStats>)> {
     let max_dimension = context.device.limits().max_texture_dimension_2d;
     anyhow::ensure!(
         (1..=max_dimension).contains(&width) && (1..=max_dimension).contains(&height),
@@ -47,13 +48,15 @@ pub fn capture(
         view_formats: &[],
     });
     let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
+    let mut frame_stats = Vec::with_capacity(FRAME_COUNT as usize);
     for frame in 0..FRAME_COUNT {
         state.world.insert_resource(scene.camera_at(frame));
         state.update(FRAME_DELTA_TIME);
         state.render(&target_view);
+        frame_stats.push(state.frame_stats());
     }
 
-    read_back(context, &target)
+    Ok((read_back(context, &target)?, frame_stats))
 }
 
 /// Copies an RGBA8 `texture` to the CPU, without the row padding the copy
