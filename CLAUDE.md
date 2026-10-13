@@ -9,8 +9,9 @@ update it in the same change. Don't let this file go stale.
 
 Praxis is a 3D engine built from scratch in Rust, aimed at a production
 open-world engine (Skyrim / RDR class) on cutting-edge hardware. The
-owner decides; agents implement, open PRs, and merge them once reviewed
-(`docs/agents/workflow.md`, Review).
+owner coordinates what is worked on; agents implement, commit, open PRs
+and merge them once reviewed, without asking, and only wait for visual
+or interactive checks and roadmap decisions (`docs/agents/workflow.md`).
 
 ## Project posture
 
@@ -121,9 +122,10 @@ When a feature folder grows past one file, split into
 
 ## How agents work here
 
-- Implement tickets end to end: code, tests, verification, PR. Bring
-  the owner decisions (scope, trade-offs, dependencies) with a
-  recommendation attached.
+- Implement tickets end to end: code, tests, verification, PR, merge.
+  Make routine calls yourself and state them in the PR; bring the owner
+  only roadmap decisions (milestones, ADRs, dependencies) and visual or
+  interactive checks, with a recommendation attached.
 - Work the live milestone's frontier. Work that is not a ticket becomes
   a proposed ticket first.
 - Review before the PR opens: `/implement` closes with a local
