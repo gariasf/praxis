@@ -10,8 +10,8 @@ use crate::gpu::GpuContext;
 use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
 use crate::input::{Input, clear_just_pressed};
 use crate::render::{
-    CameraUniform, FrameStaging, INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData, LightUniform,
-    Vertex, create_depth_texture, prepare_renderables,
+    CameraUniform, DEPTH_FORMAT, FrameStaging, INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData,
+    LightUniform, Vertex, create_depth_texture, prepare_renderables,
 };
 use crate::scenes::{
     ReferenceScene, insert_gltf_model, spawn_far_coplanar, spawn_normal_tangent, spawn_pbr_sweep,
@@ -167,7 +167,7 @@ impl State {
                 conservative: false,
             },
             depth_stencil: Some(wgpu::DepthStencilState {
-                format: wgpu::TextureFormat::Depth32Float,
+                format: DEPTH_FORMAT,
                 depth_write_enabled: Some(true),
                 depth_compare: Some(wgpu::CompareFunction::Greater),
                 stencil: wgpu::StencilState::default(),

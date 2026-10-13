@@ -46,7 +46,13 @@ impl ApplicationHandler for App {
             .ok();
         window.set_cursor_visible(false);
 
-        self.shell = Some(pollster::block_on(WindowShell::new(window)).unwrap());
+        match pollster::block_on(WindowShell::new(window)) {
+            Ok(shell) => self.shell = Some(shell),
+            Err(error) => {
+                self.error = Some(error);
+                event_loop.exit();
+            }
+        }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -111,6 +117,8 @@ impl ApplicationHandler for App {
 #[derive(Default)]
 struct App {
     shell: Option<WindowShell>,
+    /// Why the window could not start, returned once the event loop exits.
+    error: Option<anyhow::Error>,
 }
 
 /// Longest frame delta that advances the State (ADR 0022's clamp), so a
@@ -133,25 +141,8 @@ struct WindowShell {
 impl WindowShell {
     async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
         let size = window.inner_size();
-        let (context, surface) = GpuContext::with_surface(window.clone()).await?;
-
+        let (context, surface, surface_format) = GpuContext::with_surface(window.clone()).await?;
         let surface_caps = surface.get_capabilities(&context.adapter);
-
-        // Assuming an sRGB surface texture. Using a different
-        // one will result in all the colors coming out darker. If you want to support non
-        // sRGB surfaces, you'll need to account for that when drawing to the frame.
-        let surface_format = surface_caps
-            .formats
-            .iter()
-            .find(|f| f.is_srgb())
-            .copied()
-            .unwrap_or(surface_caps.formats[0]);
-
-        tracing::debug!(
-            ?surface_format,
-            srgb = surface_format.is_srgb(),
-            "surface format chosen"
-        );
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -266,5 +257,5 @@ pub fn run() -> anyhow::Result<()> {
     let mut app = App::default();
     event_loop.run_app(&mut app)?;
 
-    Ok(())
+    app.error.map_or(Ok(()), Err)
 }

@@ -1,33 +1,32 @@
 use std::io::Write;
 
-use praxis::gpu::GpuContext;
-
-/// The planned features #25 lists. Written out here, apart from the
-/// report's own list, so a feature the report drops turns this test red.
-const PLANNED_FEATURES: [&str; 7] = [
+/// The planned features #25 lists, and the Capability floor's features #93
+/// found unprinted. Written out here, apart from the report's own list, so a
+/// feature the report drops turns this test red.
+const PLANNED_FEATURES: [&str; 8] = [
     "binding arrays",
     "mesh shaders",
     "ray query",
     "timestamp queries",
     "BC compression",
+    "indirect first instance",
     "subgroups",
     "immediates",
 ];
 
 #[test]
-fn headless_context_reports_adapter_backend_and_planned_features() {
-    let context = match pollster::block_on(GpuContext::headless()) {
-        Ok(context) => context,
+fn capability_report_names_adapter_backend_planned_features_and_floor_items() {
+    let report = match pollster::block_on(praxis::gpu::capability_report()) {
+        Ok(report) => report,
         Err(error) if error.is::<wgpu::RequestAdapterError>() => {
             // libtest captures `eprintln!` from passing tests; write to the
             // stderr handle so the skip shows in a normal run.
             writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
             return;
         }
-        Err(error) => panic!("headless GPU context failed: {error:#}"),
+        Err(error) => panic!("capability report failed: {error:#}"),
     };
 
-    let report = context.capability_report();
     assert!(report.lines().count() <= 30, "over 30 lines:\n{report}");
 
     // The adapter's name is machine-specific: its line only has to exist.
@@ -42,6 +41,16 @@ fn headless_context_reports_adapter_backend_and_planned_features() {
         assert!(
             matches!(verdict, Some("yes" | "no")),
             "`{feature}` is not marked yes or no:\n{report}"
+        );
+    }
+    // The floor's limits and 4x MSAA per main-pass format, #93's other three.
+    assert!(value_of(&report, "max buffer size").ends_with(" bytes"));
+    assert!(value_of(&report, "acceleration structures").ends_with(" per stage"));
+    for format in ["Depth32Float", "Rgba8UnormSrgb"] {
+        let msaa_x4 = value_of(&report, "4x MSAA");
+        assert!(
+            msaa_x4.contains(&format!("{format} yes")) || msaa_x4.contains(&format!("{format} no")),
+            "4x MSAA not reported for {format}:\n{report}"
         );
     }
 }

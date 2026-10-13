@@ -72,15 +72,11 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         last.cpu_frame_time
     );
 
-    // With timestamp queries, every frame's pass took GPU time: Metal reads
-    // a timestamp resolved before its pass's submission completed as 0.
-    let has_timestamp_queries = context.capability_report().lines().any(|line| {
-        line.strip_prefix("timestamp queries")
-            .is_some_and(|verdict| verdict.trim_start().starts_with("yes"))
-    });
+    // Timestamp queries are in the Capability floor, so every frame's pass
+    // took GPU time: Metal reads a timestamp resolved before its pass's
+    // submission completed as 0.
     for (frame, stats) in frames.iter().enumerate() {
         match stats.gpu_times.as_slice() {
-            [] => assert!(!has_timestamp_queries, "frame {frame} has no GPU time"),
             [("main_pass", pass_time)] => assert!(
                 Duration::ZERO < *pass_time && *pass_time < Duration::from_secs(1),
                 "frame {frame} took {pass_time:?} on the GPU"
