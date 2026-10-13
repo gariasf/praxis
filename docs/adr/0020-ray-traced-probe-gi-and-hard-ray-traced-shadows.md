@@ -1,0 +1,23 @@
+# Ray-traced probe GI and hard ray-traced shadows
+
+Indirect diffuse light comes from ray-traced irradiance probes in camera-centred clipmap cascades (DDGI form: irradiance plus depth moments per probe, a Chebyshev visibility test against leaks), updated a subset per frame and shaded from position and normal in ADR 0019's lit pass. Direct light is one hard shadow ray per pixel per light. This is option C of `docs/research/global-illumination-and-lighting.md`, and it supersedes ADR 0008's lighting clause. Direct light is Temporal class (a); indirect light is class (b), and class (c) is used nowhere. The sun and sky change continuously (time of day, weather), every light bounces within the probe cascades, and moving geometry changes indirect light, because the probe rays read the same TLAS as the shadow rays. Accepted 2026-10-13 ([#65](https://github.com/gariasf/praxis/issues/65)). Planned; today the renderer has four fixed point lights, no shadows and no indirect light.
+
+## Considered options
+
+- A, ADR 0008 as written (baked lightmaps and probes, cascaded shadow maps, ray-traced GI for dynamic objects): time of day only through keyframe bakes (AC Shadows: 33 keyframes, 10 GB for 256 km²), moving lights do not bounce on static geometry, and correct lighting needs a 4 to 10 h bake per level.
+- B, relightable precomputed GI: sun and sky relight, but precomputed visibility ignores moving geometry (an opened door leaves the room dark), local lights bounce only through transfer data at 9× irradiance or more, and it needs a per-Chunk bake.
+- D, per-pixel ReSTIR path tracing: Temporal class (c), excluded by ADR 0019.
+- E, radiance cascades: class (a) for one bounce, but shown only in research scenes, memory unpublished, 8.6 to 11.5 ms on a laptop RTX 3080. Reopens when a 3D implementation fits 3 ms on the M4 Pro on a Reference scene.
+- Within C, surfels (GIBS) spawn from a G-buffer that ADR 0019 does not write; a world-space hash cache (id Tech 8) is sparser and finer but its shipped form adds class (c) passes for detail.
+- Soft sun shadows: jittered rays without a denoiser need about 4 rays per pixel, about 7 ms on the M4 Pro's open scene (one ray measured 1.8 to 2.0 ms); a denoiser is class (c). The sun's 0.53° gives about 0.9 cm of penumbra per metre of occluder distance, so contact shadows stay sharp either way.
+
+## Consequences
+
+- Ray queries are a required capability, not a high-preset path; cascaded shadow maps are dropped.
+- Indirect light converges to 90% of its value within 0.5 s of a step change (a light toggled, a door opened) and does not flicker at steady state, measured on a Reference scene; the probe update takes at most 2 ms of GPU on the dense Reference scene. Both are provisional, as ADR 0013's budgets are. If the update cannot meet both, this decision reopens.
+- No bake is needed for correct lighting. The one cooked lighting term is a per-Chunk sky-visibility field, with bounced sky visibility, for the far field beyond the probe cascades, relit by the current sky (ADR 0018's cooker).
+- Interiors are entered without a load. Walls thinner than the probe spacing leak past the Chebyshev test, so authored Interior volumes mask probes to their inside or outside, as Ghost of Tsushima did; a separate probe set per interior waits until a Reference scene shows the masks failing.
+- The TLAS holds the near field plus merged far proxies, so a 100k-Instance rebuild (6 to 8 ms of CPU on the M4 Pro, wgpu-core has no refit) stays out of the frame; its radius is decided when ADR 0019 is implemented. The near field splits in two: a static TLAS in an anchor-relative frame (ADR 0014), rebuilt only when a Chunk streams in or out or the anchor moves, and a dynamic TLAS of moving Instances rebuilt each frame and capped at 10k Instances (0.65 to 0.9 ms of CPU on the M4 Pro, recording plus submit, measured). Shadow and probe rays query both.
+- Rough specular reads the irradiance probes; glossy specular reads reflection cubemaps captured at runtime by ray tracing, amortised and relit with the sun (class b). Mirror reflections (one ray, class a) return with water.
+- Probes are smooth, so contact darkening is missing beyond what a Material's occlusion Channel authors (ADR 0018); a class (a) contact term is added when a Golden shows floating objects.
+- Sun penumbrae reopen when area lights arrive or a Golden shows hard sun edges at distance.
