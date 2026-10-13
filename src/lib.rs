@@ -15,6 +15,7 @@ use crate::input::Input;
 use crate::state::State;
 
 mod assets;
+pub mod bench;
 mod camera;
 mod capture;
 mod components;
@@ -237,7 +238,7 @@ impl WindowShell {
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        self.state.render(&view, None);
+        let _ = self.state.render(&view, None);
         self.queue.present(output);
 
         // Only after presenting: wgpu rejects a reconfigure while a texture

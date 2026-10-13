@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::path::Path;
 
 use praxis::ReferenceScene;
 use praxis::gpu::GpuContext;
@@ -22,9 +23,11 @@ fn main() -> anyhow::Result<()> {
             capture(scene, output, DEFAULT_CAPTURE_SIZE)
         }
         [command, scene, output, size] if command == "capture" => capture(scene, output, size),
+        [command, output, scenes @ ..] if command == "bench" => bench(output, scenes),
         _ => anyhow::bail!(
             "unexpected arguments {arguments:?}: run with no arguments, `capabilities`, \
-             or `capture <scene> <png path> [<width>x<height>]`"
+             `capture <scene> <png path> [<width>x<height>]`, \
+             or `bench <output directory> [<scene>...]`"
         ),
     }
 }
@@ -36,14 +39,48 @@ fn print_capabilities() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn parse_scene(name: &str) -> anyhow::Result<ReferenceScene> {
+    ReferenceScene::from_name(name).ok_or_else(|| {
+        let names: Vec<_> = ReferenceScene::ALL.map(ReferenceScene::name).into();
+        anyhow::anyhow!("no scene named {name:?}; scenes are {names:?}")
+    })
+}
+
+/// Benches the named Reference scenes, or with none every scene whose assets
+/// are present, prints one line per scene, and writes `<scene>.json` into
+/// `output`.
+fn bench(output: &str, scene_names: &[String]) -> anyhow::Result<()> {
+    let scenes = if scene_names.is_empty() {
+        let helmet_fetched = Path::new(praxis::DEFAULT_MODEL).exists();
+        if !helmet_fetched {
+            tracing::warn!("helmet skipped: run scripts/fetch-assets.sh to bench it");
+        }
+        ReferenceScene::ALL
+            .into_iter()
+            .filter(|&scene| scene != ReferenceScene::Helmet || helmet_fetched)
+            .collect()
+    } else {
+        scene_names
+            .iter()
+            .map(|name| parse_scene(name))
+            .collect::<anyhow::Result<Vec<_>>>()?
+    };
+    std::fs::create_dir_all(output)?;
+    let context = pollster::block_on(GpuContext::headless())?;
+    for scene in scenes {
+        let result = praxis::bench::run(&context, scene)?;
+        let path = Path::new(output).join(format!("{}.json", scene.name()));
+        std::fs::write(&path, serde_json::to_string_pretty(&result)? + "\n")?;
+        writeln!(std::io::stdout(), "{result}")?;
+    }
+    Ok(())
+}
+
 /// Renders the Reference scene named `scene` headless at `size`,
 /// `<width>x<height>`, writes the last frame to `output` as a PNG, and prints
 /// that frame's stats.
 fn capture(scene: &str, output: &str, size: &str) -> anyhow::Result<()> {
-    let scene = ReferenceScene::from_name(scene).ok_or_else(|| {
-        let names: Vec<_> = ReferenceScene::ALL.map(ReferenceScene::name).into();
-        anyhow::anyhow!("no scene named {scene:?}; scenes are {names:?}")
-    })?;
+    let scene = parse_scene(scene)?;
     let (width, height) = size
         .split_once('x')
         .and_then(|(width, height)| Some((width.parse().ok()?, height.parse().ok()?)))

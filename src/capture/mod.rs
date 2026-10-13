@@ -14,6 +14,11 @@ const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 /// one is read back.
 const FRAME_COUNT: u32 = 60;
 
+/// Frames submitted but not finished on the GPU before the next one starts,
+/// as a window's swapchain allows: the GPU stays busy, and the CPU never runs
+/// further ahead than a window would.
+const FRAMES_IN_FLIGHT: usize = 2;
+
 /// The injected time step in seconds, 60 Hz.
 const FRAME_DELTA_TIME: f32 = 1.0 / 60.0;
 
@@ -28,10 +33,28 @@ pub fn capture(
     width: u32,
     height: u32,
 ) -> anyhow::Result<(image::RgbaImage, Vec<FrameStats>)> {
+    let (target, frame_stats) = render_frames(context, scene, width, height, FRAME_COUNT)?;
+    Ok((read_back(context, &target)?, frame_stats))
+}
+
+/// Renders `frame_count` frames of `scene` as `capture` does and returns the
+/// target, holding the last frame, with every frame's stats.
+pub(crate) fn render_frames(
+    context: &GpuContext,
+    scene: ReferenceScene,
+    width: u32,
+    height: u32,
+    frame_count: u32,
+) -> anyhow::Result<(wgpu::Texture, Vec<FrameStats>)> {
     let max_dimension = context.device.limits().max_texture_dimension_2d;
     anyhow::ensure!(
         (1..=max_dimension).contains(&width) && (1..=max_dimension).contains(&height),
         "capture size {width}x{height} is outside 1 to {max_dimension} per side"
+    );
+    anyhow::ensure!(
+        (1..=PassTimer::MAX_FRAMES).contains(&frame_count),
+        "{frame_count} frames is outside 1 to {} per run",
+        PassTimer::MAX_FRAMES
     );
 
     let mut state = State::new(context, TARGET_FORMAT, width, height, scene)?;
@@ -50,43 +73,53 @@ pub fn capture(
         view_formats: &[],
     });
     let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
-    let pass_timer = PassTimer::new(&context.device);
-    let mut frame_stats = Vec::with_capacity(FRAME_COUNT as usize);
-    for frame in 0..FRAME_COUNT {
+    let pass_timer = PassTimer::new(&context.device, frame_count);
+    let mut frame_stats = Vec::with_capacity(frame_count as usize);
+    let mut in_flight = std::collections::VecDeque::with_capacity(FRAMES_IN_FLIGHT);
+    for frame in 0..frame_count {
+        if in_flight.len() == FRAMES_IN_FLIGHT {
+            let oldest = in_flight.pop_front();
+            context.device.poll(wgpu::PollType::Wait {
+                submission_index: oldest,
+                timeout: None,
+            })?;
+        }
         state.world.insert_resource(scene.camera_at(frame));
         state.update(FRAME_DELTA_TIME);
-        state.render(
+        let submission = state.render(
             &target_view,
             pass_timer.as_ref().map(|timer| timer.writes(frame)),
         );
+        in_flight.push_back(submission);
         frame_stats.push(state.frame_stats());
     }
 
-    let image = read_back(context, &target)?;
     if let Some(timer) = pass_timer {
         for (stats, pass_time) in frame_stats.iter_mut().zip(timer.read(context)?) {
             stats.gpu_times.push((MAIN_PASS, pass_time));
         }
     }
-    Ok((image, frame_stats))
+    Ok((target, frame_stats))
 }
 
 /// GPU time of the State's pass in each frame of a capture, from timestamps
 /// at the pass's boundaries (Apple GPUs have none inside passes). Metal reads
 /// a timestamp as 0 or stale unless it is resolved after its pass's submission
 /// completed (`docs/research/wgpu-capability-matrix.md`), so `read` resolves
-/// every frame at once, after the last. Runs without end (the window) need a
-/// ring of sets instead, each resolved once its frame's submission completes.
+/// every frame at once, after the last, and one set bounds a run's length.
+/// Runs without end (the window) need a ring of sets instead, each resolved
+/// once its frame's submission completes.
 struct PassTimer {
     query_set: wgpu::QuerySet,
 }
 
 impl PassTimer {
-    /// Begin and end timestamps per frame.
-    const QUERY_COUNT: u32 = 2 * FRAME_COUNT;
+    /// One set holds a begin and an end timestamp per frame.
+    const MAX_FRAMES: u32 = wgpu::QUERY_SET_MAX_QUERIES / 2;
 
-    /// A timer, or `None` when the device has no timestamp queries.
-    fn new(device: &wgpu::Device) -> Option<Self> {
+    /// A timer for `frame_count` frames, or `None` when the device has no
+    /// timestamp queries.
+    fn new(device: &wgpu::Device, frame_count: u32) -> Option<Self> {
         device
             .features()
             .contains(wgpu::Features::TIMESTAMP_QUERY)
@@ -94,7 +127,7 @@ impl PassTimer {
                 query_set: device.create_query_set(&wgpu::QuerySetDescriptor {
                     label: Some("Pass Timestamps"),
                     ty: wgpu::QueryType::Timestamp,
-                    count: Self::QUERY_COUNT,
+                    count: 2 * frame_count,
                 }),
             })
     }
@@ -109,7 +142,8 @@ impl PassTimer {
 
     /// Each frame's pass time, in frame order.
     fn read(&self, context: &GpuContext) -> anyhow::Result<Vec<Duration>> {
-        let size = u64::from(Self::QUERY_COUNT) * u64::from(wgpu::QUERY_SIZE);
+        let query_count = self.query_set.count();
+        let size = u64::from(query_count) * u64::from(wgpu::QUERY_SIZE);
         let resolve_buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Pass Timestamp Resolve Buffer"),
             size,
@@ -130,7 +164,7 @@ impl PassTimer {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Pass Timestamp Resolve Encoder"),
             });
-        encoder.resolve_query_set(&self.query_set, 0..Self::QUERY_COUNT, &resolve_buffer, 0);
+        encoder.resolve_query_set(&self.query_set, 0..query_count, &resolve_buffer, 0);
         encoder.copy_buffer_to_buffer(&resolve_buffer, 0, &read_back_buffer, 0, size);
         submit_and_map(context, encoder, &read_back_buffer)?;
 

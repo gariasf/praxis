@@ -402,11 +402,12 @@ impl State {
 
     /// Draws the frame into `target`, a view in the format and size this
     /// State renders to, and times its one pass into `timestamp_writes`.
+    /// Returns the frame's submission.
     pub fn render(
         &mut self,
         target: &wgpu::TextureView,
         timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
-    ) {
+    ) -> wgpu::SubmissionIndex {
         let started = Instant::now();
         let mut encoder = self
             .device
@@ -490,9 +491,10 @@ impl State {
 
         let started = Instant::now();
         // submit will accept anything that implements IntoIter
-        self.queue.submit(std::iter::once(command_buffer));
+        let submission = self.queue.submit(std::iter::once(command_buffer));
         self.recorder.stage("submit", started);
         self.recorder.end();
+        submission
     }
 
     /// The stats of the last frame, from `update` through `render`.

@@ -82,6 +82,7 @@ src/
   bin/praxis.rs                # thin binary: command dispatch
   gpu/                         # GPU context, windowed or headless
   capture/                     # offscreen render read back as an image
+  bench/                       # Reference scene medians and p95s at 1440p
   stats/                       # frame stats: CPU and GPU times, counts,
                                  GPU memory, counting allocator
   scenes/                      # Reference scenes: generated content,
