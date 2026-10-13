@@ -38,6 +38,9 @@ impl FrameStaging {
         uploads: &[(&wgpu::Buffer, &[u8])],
     ) -> u64 {
         let needed: u64 = uploads.iter().map(|(_, bytes)| bytes.len() as u64).sum();
+        if needed == 0 {
+            return 0;
+        }
         if needed > self.slot_size {
             self.resize(device, needed.next_power_of_two());
         }
