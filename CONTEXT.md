@@ -81,7 +81,7 @@ _Avoid_: Spawn, instance (an Instance is per frame)
 ### Frame
 
 **Instance**:
-One Renderable's data for one frame: its Transform and Material ID.
+One Renderable's data for one frame: its World transform and Material ID.
 _Avoid_: Object
 
 **Frame data**:
@@ -129,6 +129,10 @@ _Avoid_: Cell, tile, sector
 **World position**:
 A position in a Game world, in metres from its origin. Positions relative to the camera, a Chunk or a parent entity derive from it.
 _Avoid_: Global position, absolute position
+
+**World transform**:
+Where an entity sits in a Game world: its Transform composed with every ancestor's, in f64. Derived from the hierarchy, never authored.
+_Avoid_: Global transform, absolute transform
 
 **Scene**:
 A serialisable set of entities and their hierarchy that loads into the ECS World. Not the whole Game world.

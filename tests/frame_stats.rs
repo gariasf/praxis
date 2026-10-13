@@ -64,6 +64,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         .collect();
     for name in [
         "fly_camera",
+        "propagate_world_transforms",
         "clear_just_pressed",
         "prepare_frame",
         "upload",
