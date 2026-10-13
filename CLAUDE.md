@@ -159,6 +159,11 @@ When a feature folder grows past one file, split into
 - Every file under `assets/` has an entry in `assets/manifest.json` and
   its credit in `assets/ATTRIBUTION.md`; `cargo test` checks both.
   Policy: `docs/research/test-assets.md`.
+- Every dependency's licence expression is on the allowlist in
+  `tests/dependency_licences.rs`; `cargo test` checks it. A new
+  expression is read before it joins.
+- Docs, tickets and code comments name no patents and record no
+  patent searches (#91).
 
 ## Review checklist
 
@@ -185,6 +190,8 @@ When reviewing changes, check for:
       `?` or explicit handling
 - [ ] No GPU resources stored on ECS components — components are pure
       authoring data
+- [ ] Code adapted from elsewhere cites its source and licence;
+      noncommercial or unclear licences are never copied
 - [ ] Frame data holds no borrow into the ECS World, and only the
       main thread submits, presents or polls (ADR 0016)
 - [ ] Frame stats still see new work: GPU buffers and textures join
