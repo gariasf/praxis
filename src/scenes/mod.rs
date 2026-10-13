@@ -56,7 +56,8 @@ impl ReferenceScene {
             Self::Helmet => Camera::new(),
             Self::PbrSweep => orbit(frame, 6.5, 1.0),
             Self::UvGrid => orbit(frame, 9.0, 7.0),
-            // A fixed camera, face on: normal mapping holds up best there (README).
+            // A fixed camera, face on: normal mapping holds up best there, per
+            // github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/NormalTangentTest
             Self::NormalTangent => Camera::looking_at(
                 glam::vec3(0.0, NORMAL_TANGENT_CENTRE_HEIGHT, 3.2),
                 glam::vec3(0.0, NORMAL_TANGENT_CENTRE_HEIGHT, 0.0),
@@ -148,7 +149,7 @@ pub(crate) fn spawn_normal_tangent(
     material_pool: &mut MaterialPool,
 ) -> anyhow::Result<()> {
     let (mesh, material) =
-        insert_gltf_asset(world, device, queue, material_pool, NORMAL_TANGENT_ASSET)?;
+        insert_gltf_model(world, device, queue, material_pool, NORMAL_TANGENT_ASSET)?;
     world.spawn((
         Transform(glam::Affine3A::IDENTITY),
         MeshRef(mesh),
@@ -160,7 +161,7 @@ pub(crate) fn spawn_normal_tangent(
 /// Loads the glTF file at `path`, relative to the working directory, as one
 /// Mesh, and inserts the Material of its first Primitive with each of its
 /// textures uploaded to its Channel's array.
-pub(crate) fn insert_gltf_asset(
+pub(crate) fn insert_gltf_model(
     world: &mut World,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -171,15 +172,15 @@ pub(crate) fn insert_gltf_asset(
 
     let mut mesh_pool = world.resource_mut::<MeshPool>();
     let mut primitives = Vec::new();
-    for (primitive_index, prim) in model.primitives.iter().enumerate() {
-        let _prim_span = tracing::debug_span!("upload_primitive", primitive_index).entered();
+    for (primitive_index, primitive) in model.primitives.iter().enumerate() {
+        let _primitive_span = tracing::debug_span!("upload_primitive", primitive_index).entered();
 
         let (vertex_offset, index_offset, index_count) =
-            mesh_pool.push_primitive(device, queue, &prim.vertices, &prim.indices);
+            mesh_pool.push_primitive(device, queue, &primitive.vertices, &primitive.indices);
 
         tracing::debug!(
-            vertices = prim.vertices.len(),
-            indices = prim.indices.len(),
+            vertices = primitive.vertices.len(),
+            indices = primitive.indices.len(),
             "primitive uploaded"
         );
 
