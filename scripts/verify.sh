@@ -26,15 +26,16 @@ step() {
 }
 
 # Counters against their Baselines and the Budgets: counters repeat exactly
-# on every run, times do not. The scenes are the ones with a Baseline, so a
-# fetched helmet does not fail for lack of one; with no Baseline at all, every
-# scene runs and compare fails for each.
+# on every run, times do not. The scenes are the ones with a Baseline on any
+# adapter, so a fetched helmet does not fail for lack of one; a scene without
+# one for this adapter fails compare, and with no Baseline at all, every scene
+# runs and compare fails for each.
 bench() {
   local scenes=()
-  local baseline
+  local scene
   shopt -s nullglob
-  for baseline in bench/baselines/*.json; do
-    scenes+=("$(basename "$baseline" .json)")
+  for scene in $(printf '%s\n' bench/baselines/*/*.json | sed 's|.*/||; s|\.json$||' | sort -u); do
+    scenes+=("$scene")
   done
   target/release/praxis bench "$results" ${scenes[@]+"${scenes[@]}"} &&
     target/release/praxis compare "$results" --ci
