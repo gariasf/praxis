@@ -10,8 +10,8 @@ use crate::gpu::GpuContext;
 use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
 use crate::input::{Input, clear_just_pressed};
 use crate::render::{
-    CameraUniform, INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData, LightUniform, Vertex,
-    create_depth_texture, prepare_renderables,
+    CameraUniform, FrameStaging, INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData, LightUniform,
+    Vertex, create_depth_texture, prepare_renderables,
 };
 use crate::scenes::{
     ReferenceScene, insert_gltf_model, spawn_normal_tangent, spawn_pbr_sweep, spawn_uv_grid,
@@ -48,6 +48,10 @@ pub struct State {
     instance_bind_group_layout: wgpu::BindGroupLayout,
     transient_saves_memory: bool,
     recorder: FrameRecorder,
+    frame_staging: FrameStaging,
+    /// The frame's encoder from `update`, holding its upload copies, until
+    /// `render` records the pass into it and submits it.
+    frame_encoder: Option<wgpu::CommandEncoder>,
 }
 
 impl State {
@@ -281,6 +285,8 @@ impl State {
             instance_bind_group_layout,
             transient_saves_memory: context.adapter.get_info().transient_saves_memory == Some(true),
             recorder,
+            frame_staging: FrameStaging::default(),
+            frame_encoder: None,
         })
     }
 
@@ -393,10 +399,17 @@ impl State {
             (&self.camera_buffer, bytemuck::bytes_of(&camera_uniform)),
             (&self.light_buffer, bytemuck::bytes_of(&light_uniform)),
         ];
-        for (buffer, bytes) in uploads {
-            self.queue.write_buffer(buffer, 0, bytes);
-            self.recorder.uploaded_bytes += bytes.len() as u64;
+        // The window skips `render` while occluded or without a surface
+        // texture; submitting the unrendered frame's copies returns its
+        // staging slot.
+        if let Some(unrendered) = self.frame_encoder.take() {
+            self.queue.submit(std::iter::once(unrendered.finish()));
         }
+        let mut encoder = create_frame_encoder(&self.device);
+        self.recorder.uploaded_bytes +=
+            self.frame_staging
+                .write(&self.device, &mut encoder, &uploads);
+        self.frame_encoder = Some(encoder);
         self.recorder.stage("upload", started);
     }
 
@@ -410,10 +423,9 @@ impl State {
     ) -> wgpu::SubmissionIndex {
         let started = Instant::now();
         let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
+            .frame_encoder
+            .take()
+            .unwrap_or_else(|| create_frame_encoder(&self.device));
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -527,6 +539,7 @@ impl State {
                 .world
                 .resource::<MaterialPool>()
                 .gpu_memory_bytes(self.transient_saves_memory)
+            + self.frame_staging.gpu_memory_bytes()
     }
 
     fn ensure_instance_capacity(&mut self, needed: u64) {
@@ -563,4 +576,10 @@ impl State {
             "instance buffer resized"
         );
     }
+}
+
+fn create_frame_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
+    device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("Render Encoder"),
+    })
 }
