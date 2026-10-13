@@ -193,6 +193,8 @@ When reviewing changes, check for:
       Asset ID, never by source path (ADR 0018)
 - [ ] The main pass reads no screen-space history and keeps 4x MSAA
       working (ADRs 0008, 0019, 0020)
+- [ ] A newly used wgpu feature or limit joins the Capability floor,
+      or, outside Tiers 1-2, has a path for adapters without it (ADR 0021)
 - [ ] `cargo fmt` and `cargo clippy` pass
 
 ## Maintenance

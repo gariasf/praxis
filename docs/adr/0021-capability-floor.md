@@ -1,0 +1,20 @@
+# Capability floor
+
+Device creation requires a fixed set of wgpu features and limits, the Capability floor, and fails with every gap listed when the adapter falls short; nothing in the floor has a fallback. The floor holds only what an ADR or shipped code uses, drawn from Tiers 1 and 2 of `docs/research/wgpu-capability-matrix.md`; a Tier 3 to 6 feature is always optional, probed at runtime, with a path for adapters without it. Accepted 2026-10-13 ([#76](https://github.com/gariasf/praxis/issues/76)). Planned; today `GpuContext` requests `TIMESTAMP_QUERY` only when present and `wgpu::Limits::default()`.
+
+## Considered options
+
+- Tier 1 in full plus ray queries: adds `SUBGROUP`, `SHADER_F16`, `SHADER_INT64`, `TEXTURE_ATOMIC` and `PRIMITIVE_INDEX`, which nothing uses, and shuts out DX12 on FXC for them.
+- Tiers 1 and 2 in full (matrix option D): adds mesh shaders, which ADR 0019 does not use (Metal forbids ray queries in mesh-shaded pipelines).
+- Requesting the adapter's own limits: code would come to depend on what the M4 Pro allows (1,048,576 binding-array elements per stage, 256 bytes of immediates) and break only on other hardware.
+- A test-only floor for the software-Vulkan Goldens: Goldens would test a different engine. Mesa 25.2.8's `features.txt` lists lavapipe for `VK_KHR_ray_query`, `VK_KHR_acceleration_structure`, `VK_KHR_deferred_host_operations`, `VK_KHR_buffer_device_address` and `VK_EXT_descriptor_indexing`, so no carve-out is planned; its limits are not yet measured.
+
+## Consequences
+
+- Required features: `TEXTURE_BINDING_ARRAY`, `PARTIALLY_BOUND_BINDING_ARRAY` and `SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING` (ADR 0017; a Layer index varies per Instance), `TEXTURE_COMPRESSION_BC` (ADR 0018 cooks BC only), `EXPERIMENTAL_RAY_QUERY` (ADRs 0019 and 0020), `INDIRECT_FIRST_INSTANCE` (compacted indirect draws carry the Instance index, ADR 0019), `TIMESTAMP_QUERY` (ADR 0013 Budgets are GPU milliseconds), and 4x MSAA on every attachment format the main pass uses, read per format from the adapter's texture format features (`MULTISAMPLE_X4`), since no device feature covers it. `TIMESTAMP_QUERY_INSIDE_ENCODERS` and `_INSIDE_PASSES` stay optional: the M4 Pro reports neither on wgpu 30.0.1.
+- Ray queries need `ExperimentalFeatures::enabled()`, an `unsafe` call; it is the one `unsafe` this ADR adds, and its comment cites ADR 0020.
+- Required limits are `wgpu::Limits::default()` with `using_minimum_supported_acceleration_structure_values()` (2^24 − 1 TLAS instances), raised only where an ADR needs it: `max_buffer_size` at least 2^31 − 1 (ADR 0017 arenas), `max_binding_array_elements_per_shader_stage` at least 65,536 (Vulkan's descriptor-indexing minimum is 500,000, DX12 Tier 3 has 2^20), and `max_acceleration_structures_per_shader_stage` at least 2 (ADR 0020's static and dynamic TLAS; Metal has 29 shared buffer slots, Vulkan at least 16). A ticket that needs more raises the floor in its PR, and adds Tier 1 or 2 features the same way without a new ADR.
+- `GpuContext::new` checks the whole floor before requesting the device and returns one typed error naming each missing feature, each attachment format without 4x MSAA, and each limit with its required and adapter values; the binary logs it with `tracing::error!` and exits non-zero. `praxis capabilities` runs without the floor, since it diagnoses that failure.
+- Headless contexts, tests and Goldens included, use the same floor. If lavapipe misses part of it, the implementing PR stops and brings the gap to the owner.
+- Hardware out of scope follows from the floor: macOS before 15, DX12 below raytracing Tier 1.1 or SM 6.5 or on FXC, Resource Binding Tier 2, and Vulkan devices without `VK_KHR_ray_query` (48% of gpuinfo reports in the last year).
+- The full floor, ray queries included, is enforced in M1, before ray queries are first used in M3, so CI proves it on lavapipe early.
