@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use winit::{
     application::ApplicationHandler,
@@ -113,9 +113,9 @@ struct App {
     shell: Option<WindowShell>,
 }
 
-/// Longest frame delta, in seconds, that advances the State (ADR 0022's
-/// 250 ms clamp), so a stalled event loop resumes without a jump.
-const MAX_FRAME_DELTA: f32 = 0.25;
+/// Longest frame delta that advances the State (ADR 0022's clamp), so a
+/// stalled event loop resumes without a jump.
+const MAX_FRAME_DELTA: Duration = Duration::from_millis(250);
 
 /// The window, the surface it presents through, and the State that renders
 /// into that surface on wall-clock time.
@@ -203,8 +203,8 @@ impl WindowShell {
     }
 
     /// Advances the State by the wall-clock time since the previous frame and
-    /// presents its render; with no surface texture to draw into, does
-    /// neither.
+    /// presents its render; a redraw that acquires no surface texture skips
+    /// both.
     fn redraw(&mut self) -> anyhow::Result<()> {
         self.window.request_redraw();
 
@@ -217,7 +217,7 @@ impl WindowShell {
         // while no frame is drawn is dropped rather than replayed at once.
         let now = Instant::now();
         let delta_time = self.last_frame.map_or(0.0, |last_frame| {
-            (now - last_frame).as_secs_f32().min(MAX_FRAME_DELTA)
+            (now - last_frame).min(MAX_FRAME_DELTA).as_secs_f32()
         });
         self.last_frame = Some(now);
 
