@@ -8,7 +8,7 @@ use crate::stats::FrameStats;
 /// 8-bit sRGB like the window's surface, which takes the first sRGB format
 /// the surface offers (`Bgra8UnormSrgb` on Metal). RGBA order makes the
 /// read-back bytes the image's pixels.
-const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+pub(crate) const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
 /// Frames rendered per capture, one second at `FRAME_DELTA_TIME`; the last
 /// one is read back.

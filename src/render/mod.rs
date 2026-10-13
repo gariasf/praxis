@@ -10,7 +10,7 @@ mod shader_function_tests;
 #[cfg(test)]
 mod shader_tests;
 
-pub use depth::create_depth_texture;
+pub use depth::{DEPTH_FORMAT, create_depth_texture};
 pub use instance::{INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData};
 pub use prepare::prepare_renderables;
 pub use staging::FrameStaging;

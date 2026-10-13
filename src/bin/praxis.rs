@@ -1,5 +1,6 @@
 use std::io::Write;
 use std::path::Path;
+use std::process::ExitCode;
 
 use anyhow::Context;
 use praxis::ReferenceScene;
@@ -10,7 +11,7 @@ use praxis::gpu::GpuContext;
 /// window.
 const DEFAULT_CAPTURE_SIZE: &str = "640x360";
 
-fn main() -> anyhow::Result<()> {
+fn main() -> ExitCode {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
@@ -18,7 +19,17 @@ fn main() -> anyhow::Result<()> {
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "praxis starting");
 
     let arguments: Vec<String> = std::env::args().skip(1).collect();
-    match arguments.as_slice() {
+    match run_command(&arguments) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            tracing::error!(error = format!("{error:#}"), "praxis failed");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_command(arguments: &[String]) -> anyhow::Result<()> {
+    match arguments {
         [] => praxis::run(),
         [command] if command == "capabilities" => print_capabilities(),
         [command, scene, output] if command == "capture" => {
@@ -43,10 +54,10 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
-/// Prints the capability report of a headless context's adapter.
+/// Prints the capability report of the adapter a headless context would use.
 fn print_capabilities() -> anyhow::Result<()> {
-    let context = pollster::block_on(GpuContext::headless())?;
-    std::io::stdout().write_all(context.capability_report().as_bytes())?;
+    let report = pollster::block_on(praxis::gpu::capability_report())?;
+    std::io::stdout().write_all(report.as_bytes())?;
     Ok(())
 }
 

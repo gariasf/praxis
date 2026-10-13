@@ -1,6 +1,6 @@
 # Capability floor
 
-Device creation requires a fixed set of wgpu features and limits, the Capability floor, and fails with every gap listed when the adapter falls short; nothing in the floor has a fallback. The floor holds only what an ADR or shipped code uses, drawn from Tiers 1 and 2 of `docs/research/wgpu-capability-matrix.md`; a Tier 3 to 6 feature is always optional, probed at runtime, with a path for adapters without it. Accepted 2026-10-13 ([#76](https://github.com/gariasf/praxis/issues/76)). Planned; today `GpuContext` requests `TIMESTAMP_QUERY` only when present and `wgpu::Limits::default()`.
+Device creation requires a fixed set of wgpu features and limits, the Capability floor, and fails with every gap listed when the adapter falls short; nothing in the floor has a fallback. The floor holds only what an ADR or shipped code uses, drawn from Tiers 1 and 2 of `docs/research/wgpu-capability-matrix.md`; a Tier 3 to 6 feature is always optional, probed at runtime, with a path for adapters without it. Accepted 2026-10-13 ([#76](https://github.com/gariasf/praxis/issues/76)). Enforced since [#111](https://github.com/gariasf/praxis/issues/111): `GpuContext` checks the adapter against the floor, then requests exactly its features, limits and experimental opt-in.
 
 ## Considered options
 
