@@ -23,26 +23,17 @@ impl WorldTransform {
     }
 }
 
-impl Transform {
-    fn to_affine(self) -> glam::DAffine3 {
-        glam::DAffine3::from_scale_rotation_translation(
-            self.scale.as_dvec3(),
-            self.rotation.as_dquat(),
-            self.translation,
-        )
-    }
-}
-
 /// An entity whose Transform or parent changed.
 type Moved = Or<(Changed<Transform>, Changed<ChildOf>)>;
 
 /// Recomputes the World transform of every entity whose own or an
 /// ancestor's Transform or parent changed since this system last ran, and
-/// of no other entity.
+/// of no other entity. An entity without a Transform ends its branch, and
+/// a parent without one counts as the origin.
 #[allow(clippy::too_many_arguments)]
 pub fn propagate_world_transforms(
     moved: Query<Entity, Moved>,
-    mut orphaned: RemovedComponents<ChildOf>,
+    mut unparented: RemovedComponents<ChildOf>,
     parents: Query<&ChildOf>,
     transforms: Query<&Transform>,
     children: Query<&Children>,
@@ -52,7 +43,7 @@ pub fn propagate_world_transforms(
 ) {
     dirty.clear();
     dirty.extend(moved.iter());
-    dirty.extend(orphaned.read());
+    dirty.extend(unparented.read());
     dirty.sort_unstable();
     dirty.dedup();
 
@@ -77,10 +68,10 @@ pub fn propagate_world_transforms(
             else {
                 continue;
             };
-            let world = parent_world * transform.to_affine();
-            world_transform.0 = world;
+            let composed = parent_world * transform.to_affine();
+            world_transform.0 = composed;
             if let Ok(entity_children) = children.get(entity) {
-                stack.extend(entity_children.iter().map(|child| (child, world)));
+                stack.extend(entity_children.iter().map(|child| (child, composed)));
             }
         }
     }

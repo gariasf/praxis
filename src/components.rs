@@ -30,6 +30,14 @@ impl Transform {
             ..Self::IDENTITY
         }
     }
+
+    pub(crate) fn to_affine(self) -> glam::DAffine3 {
+        glam::DAffine3::from_scale_rotation_translation(
+            self.scale.as_dvec3(),
+            self.rotation.as_dquat(),
+            self.translation,
+        )
+    }
 }
 
 #[derive(Component)]

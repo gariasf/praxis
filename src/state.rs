@@ -201,6 +201,8 @@ impl State {
             &mut self.frame,
         );
         self.recorder.stage("prepare_frame", started);
+        // Drains the removals propagation has read, which otherwise pile up.
+        self.world.clear_trackers();
 
         self.renderer.upload(&self.frame, &mut self.recorder);
     }
