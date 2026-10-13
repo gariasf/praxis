@@ -12,7 +12,9 @@ per scene, one pass (the main pass), no MSAA yet. Load average 11 during the run
 ### Measurements
 
 Three runs of `praxis bench <dir>` (medians; counters identical on every
-run):
+run). The helmet Baseline is run 1 as written; the other Baselines predate
+these runs and pass `compare` against all three (CPU warns of 6–8%, under
+the 10 µs floor):
 
 | Scene | CPU µs (3 runs) | GPU main pass µs (3 runs) | Draws | Uploaded B | GPU memory B | Heap allocations |
 |---|---|---|---|---|---|---|
