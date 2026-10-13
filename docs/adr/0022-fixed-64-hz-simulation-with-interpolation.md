@@ -1,0 +1,24 @@
+# Fixed 64 Hz simulation with interpolation
+
+Simulation advances in fixed Ticks of 1/64 s (15.625 ms), decoupled from rendered frames; each frame draws a blend of the two newest Tick states, so the simulation is bit-reproducible across frame timings and a physics engine receives the constant step it expects, at the cost of one Tick of trail on simulated motion (`docs/research/simulation-stepping.md`, option C). Accepted 2026-10-13 ([#78](https://github.com/gariasf/praxis/issues/78)). Planned; today one schedule runs per frame with an f32 `delta_time`.
+
+## Considered options
+
+- Variable step (option A, today): no added latency, but frame-time noise reaches motion (p99 1.7 to 4.5 ms of simulated time per frame on the M4 Pro), results depend on frame timing (15.8 mm apart after 20 s in the survey's toy, against ADR 0014's 0.1 mm bar), and Box2D and PhysX advise against variable steps.
+- Semi-fixed step (option B): as A, with a variable remainder step; 9.7 mm apart in the toy.
+- Fixed step with extrapolation (option D): no trail for steady motion, but drawn positions snap back at contacts and direction changes, which breaks ADR 0008's stable image.
+- Fixed step at a multiple of the refresh rate, unsmoothed (option E): smooth only while the refresh rate divides the tick rate; a 144 Hz or variable-rate display breaks it.
+- 60 Hz Ticks: on a 60 Hz display, 4.0 to 4.4% of frames run no step, delaying input consumption by one frame, against 0 to 0.4% at 64 Hz, and 1/60 s is inexact in binary. 120 Hz: 8.3 ms of trail, but two steps on about 91% of frames double the simulation's CPU cost.
+
+## Consequences
+
+- The frame delta is measured with `Instant` at frame start, before surface acquire (sampling after acquire raised p99 jitter to as much as 16.3 ms), and clamped to 250 ms. The fixed loop runs at most 4 Ticks per frame; accumulated time past the cap is dropped, the game slows, and the dropped time is reported in frame stats. Snapping deltas to refresh periods waits for present timing in wgpu (#2869).
+- Simulated time is an integer Tick counter; systems read a per-Tick delta derived from it, never an f32 sum of seconds.
+- Praxis builds the fixed loop on bevy_ecs alone (ADR 0009): an accumulator resource, a fixed schedule run once per Tick, and the blend weight α as a resource. Everything that changes game state runs in the fixed schedule: gameplay, physics, AI and Lua event reactions (ADR 0012). Input sampling, the camera, the blend, prepare and presentation-only effects run once per frame.
+- The camera's rotation reads the newest input every frame, outside the fixed loop, so mouse-look keeps the frame's latency; its position follows whatever it is attached to, interpolated.
+- Entities the fixed schedule moves keep their previous Tick's Transform; prepare blends previous and current in f64 into Frame data, which stays one owned state (ADR 0016). Static Instances store nothing extra. A spawned entity starts with previous equal to current, and a teleport goes through an explicit marker that resets previous to current, so neither sweeps across the Game world. Blending 100k Instances costs 0.12 to 0.29 ms more than copying them on the M4 Pro.
+- Determinism: the same binary on the same machine, fed the same per-Tick inputs, reaches a bit-identical simulation state whatever the frame timing. Inside the fixed schedule, bevy_ecs ambiguity detection is `Error`, no system reads the wall clock, randomness comes from a seeded resource advanced per Tick, and no result depends on hash-map iteration order or on reduction order in a parallel iterator. Nothing is guaranteed across platforms or builds: `sin` and its kin are not bit-stable.
+- Input latency ends at the first present that shows the consumed state at full blend weight, so the Tick's trail counts. ADR 0013's budget splits, judged at p95 once Input latency is measured: input that drives the camera at most 2 frame periods (33.3 ms at 60 fps), input consumed by the simulation at most 2 frame periods plus one Tick (48.9 ms).
+- The blend reads two simulation states, never screen-space history, so it is not a temporal technique under ADR 0008.
+- Budgets stay judged at 60 Hz, the display the measurements ran on; the step model must also stay judder-free at refresh rates that do not divide 64 Hz (120, 144, variable).
+- A physics engine chosen in M7 steps once per Tick, substepping inside it if it needs to.

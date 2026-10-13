@@ -199,6 +199,8 @@ When reviewing changes, check for:
       working (ADRs 0008, 0019, 0020)
 - [ ] A newly used wgpu feature or limit joins the Capability floor,
       or, outside Tiers 1-2, has a path for adapters without it (ADR 0021)
+- [ ] Game-state changes run in the fixed schedule, which reads no
+      wall clock and has no ambiguous system order (ADR 0022)
 - [ ] `cargo fmt` and `cargo clippy` pass
 
 ## Maintenance
