@@ -184,6 +184,8 @@ When reviewing changes, check for:
       `SystemTimer::scope`
 - [ ] Streaming uploads go through the `StagingBelt`, never
       `write_texture`, and GPU arenas never grow at runtime (ADR 0017)
+- [ ] The runtime loads cooked Blobs only and references Assets by
+      Asset ID, never by source path (ADR 0018)
 - [ ] The main pass reads no screen-space history and keeps 4x MSAA
       working (ADRs 0008, 0019, 0020)
 - [ ] `cargo fmt` and `cargo clippy` pass

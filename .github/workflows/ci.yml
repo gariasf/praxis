@@ -36,3 +36,37 @@ jobs:
 
       - name: Test
         run: cargo test
+
+  software-goldens:
+    # Not a required check until two green weeks (#35).
+    name: Goldens (software Vulkan)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # The `vulkan-cpu` Goldens are this Mesa's lavapipe. When the archive
+      # drops the version, install fails here: re-record the Goldens with
+      # the new one rather than let them drift.
+      - name: Install lavapipe
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            mesa-vulkan-drivers=25.2.8-0ubuntu0.24.04.4
+
+      - name: Test
+        env:
+          PRAXIS_REQUIRE_GOLDENS: "1"
+        run: cargo test
+
+      - name: Upload Golden differences
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-differences
+          path: target/tmp/golden-differences
+          if-no-files-found: ignore

@@ -30,6 +30,10 @@ _Avoid_: Map, slot
 One numbered texture within a Channel. Layer 0 of every Channel is a neutral default, so a Material without that Channel has no effect.
 _Avoid_: Slice, texture index
 
+**Texture**:
+One Channel's image with its mips. A Layer refers to one Texture.
+_Avoid_: Map, image
+
 **Resident tail**:
 The smallest mips of a texture, which stay in GPU memory for as long as the texture is loaded, so a texture whose finer mips are not loaded shows blurred, never missing.
 _Avoid_: Mip tail, packed mips
@@ -47,6 +51,32 @@ _Avoid_: Pointer, resource ID
 **Material ID**:
 The number that identifies a Material to the GPU. Each Instance carries one.
 _Avoid_: Material index
+
+### Assets
+
+**Asset**:
+A unit the cooker produces and the runtime loads: a Mesh, Material, Texture or Chunk.
+_Avoid_: Resource, file
+
+**Asset ID**:
+The stable name of an Asset, derived from its source file's GUID. It survives moving and editing the source, except an edit that renames the Asset inside it.
+_Avoid_: Asset path, GUID (the GUID names a source file)
+
+**Blob**:
+One cooked Asset's bytes, named by their content hash.
+_Avoid_: Package, cooked file
+
+**Cook key**:
+The hash of everything that determines a Blob: source bytes, dependencies, settings and cooker versions. A changed Cook key means the Asset is cooked again.
+_Avoid_: Cache key, version
+
+**Cooked cache**:
+The store of Blobs plus the index from Asset ID to Blob. Disposable: it can always be rebuilt from sources.
+_Avoid_: Build output, derived data
+
+**Placement**:
+One Mesh Asset positioned inside a Chunk.
+_Avoid_: Spawn, instance (an Instance is per frame)
 
 ### Frame
 
