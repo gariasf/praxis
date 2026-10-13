@@ -29,16 +29,3 @@ pub(crate) fn single_threaded_schedule() -> Schedule {
     schedule.set_executor_kind(ExecutorKind::SingleThreaded);
     schedule
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn schedules_run_single_threaded() {
-        assert_eq!(
-            single_threaded_schedule().get_executor_kind(),
-            ExecutorKind::SingleThreaded
-        );
-    }
-}

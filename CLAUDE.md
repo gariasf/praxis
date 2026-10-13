@@ -65,7 +65,8 @@ Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/ag
 - **Graphics:** wgpu 30, WGSL shaders
 - **Windowing:** winit 0.30
 - **Math:** glam
-- **ECS:** `bevy_ecs` (sub-crate only — no full Bevy stack)
+- **ECS:** `bevy_ecs` (sub-crate only — no full Bevy stack), with
+  `bevy_tasks` for its compute pool
 - **Assets:** glTF via `gltf` crate, images via `image` crate,
   tangents via `bevy_mikktspace`
 - **Logging:** `tracing` + `tracing-subscriber` (with `env-filter`)
@@ -90,6 +91,7 @@ src/
                                  camera paths in frames
   shader.wgsl                  # WGSL shaders (split when justified)
   components.rs                # ECS components (Transform, MeshRef)
+  threading.rs                 # compute pool, schedule executor (ADR 0016)
   camera/, time/, input/,      # feature modules: resource (+ systems)
     helmet/                       per domain in one mod.rs
   assets/                      # asset types, loaders, pools

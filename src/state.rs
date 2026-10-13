@@ -192,17 +192,7 @@ impl State {
         world.insert_resource(RuntimeHelmets::default());
 
         let recorder = FrameRecorder::new();
-        let mut schedule = single_threaded_schedule();
-        recorder.systems.scope(|| {
-            schedule.add_systems(
-                (
-                    fly_camera,
-                    (spawn_helmet, despawn_helmet).run_if(resource_exists::<HelmetAssets>),
-                    clear_just_pressed,
-                )
-                    .chain(),
-            );
-        });
+        let schedule = simulation_schedule(&recorder);
 
         match scene {
             ReferenceScene::Helmet => {
@@ -584,8 +574,38 @@ impl State {
     }
 }
 
+/// The State's one schedule: its systems, timed by `recorder`, on the
+/// single-threaded executor.
+fn simulation_schedule(recorder: &FrameRecorder) -> Schedule {
+    let mut schedule = single_threaded_schedule();
+    recorder.systems.scope(|| {
+        schedule.add_systems(
+            (
+                fly_camera,
+                (spawn_helmet, despawn_helmet).run_if(resource_exists::<HelmetAssets>),
+                clear_just_pressed,
+            )
+                .chain(),
+        );
+    });
+    schedule
+}
+
 fn create_frame_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
     device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("Frame Encoder"),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use bevy_ecs::schedule::ExecutorKind;
+
+    use super::*;
+
+    #[test]
+    fn simulation_schedule_runs_single_threaded() {
+        let schedule = simulation_schedule(&FrameRecorder::new());
+        assert_eq!(schedule.get_executor_kind(), ExecutorKind::SingleThreaded);
+    }
 }
