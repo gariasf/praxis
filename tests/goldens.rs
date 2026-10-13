@@ -20,10 +20,11 @@ use std::path::{Path, PathBuf};
 use praxis::ReferenceScene;
 use praxis::gpu::GpuContext;
 
-const SCENES: [ReferenceScene; 3] = [
+const SCENES: [ReferenceScene; 4] = [
     ReferenceScene::PbrSweep,
     ReferenceScene::UvGrid,
     ReferenceScene::NormalTangent,
+    ReferenceScene::FarCoplanar,
 ];
 
 /// The capture command's default size.

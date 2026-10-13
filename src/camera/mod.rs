@@ -55,6 +55,19 @@ impl Camera {
     }
 }
 
+/// Vertical field of view, in radians.
+const FIELD_OF_VIEW: f32 = std::f32::consts::FRAC_PI_4;
+/// Distance to the near plane in metres. There is no far plane (ADR 0015).
+const NEAR_PLANE: f32 = 0.1;
+
+/// Infinite reversed perspective (ADR 0015): a point `distance` metres in
+/// front of the camera lands at depth `NEAR_PLANE / distance`, so depth is 1
+/// at the near plane and falls towards 0 at infinity. Pair it with a depth
+/// buffer cleared to 0 and compared with `Greater`.
+pub fn projection_matrix(aspect_ratio: f32) -> glam::Mat4 {
+    glam::Mat4::perspective_infinite_reverse_rh(FIELD_OF_VIEW, aspect_ratio, NEAR_PLANE)
+}
+
 pub fn fly_camera(input: Res<Input>, time: Res<Time>, mut camera: ResMut<Camera>) {
     let forward_dir = camera.forward();
     let right_dir = camera.right();
@@ -77,5 +90,38 @@ pub fn fly_camera(input: Res<Input>, time: Res<Time>, mut camera: ResMut<Camera>
     }
     if input.pressed.contains(&KeyCode::ShiftLeft) {
         camera.position.y -= speed;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Depth matches the analytic `near / distance` within f32 rounding from
+    /// the near plane to 10,000 km, and stays inside (0, 1], so no far plane
+    /// clips anything in front of the camera.
+    #[test]
+    fn reversed_depth_is_near_over_distance_with_no_far_plane() {
+        let projection = projection_matrix(16.0 / 9.0);
+        let mut distance = f64::from(NEAR_PLANE);
+        while distance <= 1e7 {
+            for direction in [glam::DVec3::NEG_Z, glam::dvec3(0.3, -0.2, -1.0).normalize()] {
+                let view_position = (direction * distance / -direction.z).as_vec3();
+                let clip = projection * view_position.extend(1.0);
+                let depth = f64::from(clip.z / clip.w);
+                let expected = f64::from(NEAR_PLANE) / -f64::from(view_position.z);
+                assert!(
+                    (depth - expected).abs() <= 4.0 * f64::from(f32::EPSILON) * expected,
+                    "distance {distance}: depth {depth}, expected {expected}"
+                );
+                assert!(
+                    0.0 <= clip.z && clip.z <= clip.w,
+                    "distance {distance}: clipped, z {} w {}",
+                    clip.z,
+                    clip.w
+                );
+            }
+            distance *= 1.5;
+        }
     }
 }

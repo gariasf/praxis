@@ -4,7 +4,7 @@ use anyhow::Context;
 use bevy_ecs::prelude::*;
 
 use crate::assets::{MaterialData, MaterialPool, MeshPool};
-use crate::camera::{Camera, fly_camera};
+use crate::camera::{Camera, fly_camera, projection_matrix};
 use crate::components::{MaterialRef, MeshRef, Transform};
 use crate::gpu::GpuContext;
 use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
@@ -14,7 +14,8 @@ use crate::render::{
     create_depth_texture, prepare_renderables,
 };
 use crate::scenes::{
-    ReferenceScene, insert_gltf_model, spawn_normal_tangent, spawn_pbr_sweep, spawn_uv_grid,
+    ReferenceScene, insert_gltf_model, spawn_far_coplanar, spawn_normal_tangent, spawn_pbr_sweep,
+    spawn_uv_grid,
 };
 use crate::stats::{FrameRecorder, FrameStats, texture_bytes};
 use crate::time::Time;
@@ -164,7 +165,7 @@ impl State {
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth32Float,
                 depth_write_enabled: Some(true),
-                depth_compare: Some(wgpu::CompareFunction::Less),
+                depth_compare: Some(wgpu::CompareFunction::Greater),
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),
@@ -209,6 +210,9 @@ impl State {
             }
             ReferenceScene::NormalTangent => {
                 spawn_normal_tangent(&mut world, &device, &queue, &mut material_pool)?
+            }
+            ReferenceScene::FarCoplanar => {
+                spawn_far_coplanar(&mut world, &device, &queue, &mut material_pool)
             }
         }
         world.insert_resource(material_pool);
@@ -355,7 +359,7 @@ impl State {
         let camera = self.world.resource::<Camera>();
 
         let view = camera.view_matrix();
-        let proj = glam::Mat4::perspective_rh(45_f32.to_radians(), self.aspect_ratio, 0.1, 100.0);
+        let proj = projection_matrix(self.aspect_ratio);
 
         let view_proj = proj * view;
         let camera_uniform = CameraUniform {
@@ -438,7 +442,7 @@ impl State {
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_texture_view,
                     depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
+                        load: wgpu::LoadOp::Clear(0.0),
                         store: wgpu::StoreOp::Store,
                     }),
                     stencil_ops: None,
