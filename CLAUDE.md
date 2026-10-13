@@ -99,7 +99,8 @@ tests/                         # integration tests at agreed seams
   goldens/<backend>/           # committed Goldens; PRAXIS_UPDATE_GOLDENS=1
                                  cargo test --test goldens rewrites them
 bench/                         # budgets.json (ADR 0013) and baselines/
-                                 <scene>.json from the M4 Pro; `praxis
+                                 <adapter>/<scene>.json: the M4 Pro's,
+                                 and CI's lavapipe (`--ci`); `praxis
                                  bench <dir>` then `praxis compare <dir>`
 scripts/fetch-assets.sh        # downloads the manifest's fetched assets
 ```

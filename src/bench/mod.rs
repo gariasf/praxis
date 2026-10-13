@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::capture::render_frames;
@@ -6,24 +7,57 @@ use crate::scenes::ReferenceScene;
 use crate::state::MAIN_PASS;
 use crate::stats::FrameStats;
 
-/// The Baselines `compare` reads, one `<scene>.json` each, recorded on the
-/// reference machine (ADR 0013).
+/// The Baselines `compare` reads, `<adapter key>/<scene>.json`: the reference
+/// machine's (ADR 0013), and CI's lavapipe for counters only. Keyed by
+/// adapter, so neither machine compares with the other's.
 pub const BASELINE_DIRECTORY: &str = "bench/baselines";
 
 /// The Budgets `compare` reads: ADR 0013's numbers.
 pub const BUDGETS_PATH: &str = "bench/budgets.json";
 
-/// ADR 0013 judges Budgets at 1440p.
-const WIDTH: u32 = 2560;
-const HEIGHT: u32 = 1440;
+/// A bench run's render size and frame counts. A run compares only with a
+/// Baseline of the same size and measured frames.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Configuration {
+    pub width: u32,
+    pub height: u32,
+    /// Frames rendered and discarded before measuring, while the first
+    /// frames' allocations and the GPU's clocks settle.
+    pub warm_up_frames: u32,
+    pub measured_frames: u32,
+}
 
-/// Frames rendered and discarded before measuring, while the first frames'
-/// allocations and the GPU's clocks settle.
-const WARM_UP_FRAMES: u32 = 248;
+impl Configuration {
+    /// ADR 0013 judges Budgets at 1440p. With the warm-up, as many frames as
+    /// one run can time on the GPU.
+    pub const REFERENCE: Self = Self {
+        width: 2560,
+        height: 1440,
+        warm_up_frames: 248,
+        measured_frames: 1800,
+    };
 
-/// Frames measured after the warm-up; with the warm-up, as many as one run
-/// can time on the GPU.
-const MEASURED_FRAMES: u32 = 1800;
+    /// CI's lavapipe renders on the CPU, so CI benches at the Goldens' size
+    /// and for fewer frames: `compare --ci` reads counters only.
+    pub const CI: Self = Self {
+        width: 640,
+        height: 360,
+        warm_up_frames: 248,
+        measured_frames: 256,
+    };
+}
+
+/// The Baseline directory of `adapter`: its name in lowercase, each run of
+/// other characters a hyphen (`Apple M4 Pro` is `apple-m4-pro`).
+pub fn baseline_directory(adapter: &str) -> PathBuf {
+    let key = adapter
+        .to_lowercase()
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    PathBuf::from(BASELINE_DIRECTORY).join(key)
+}
 
 /// A time warns above this ratio to its Baseline and fails above
 /// `FAIL_RATIO`; a counter fails on any increase, as it is the same on every
@@ -104,17 +138,21 @@ impl std::fmt::Display for Finding {
     }
 }
 
-/// Renders `scene` at 1440p for the warm-up and measured frames and returns
-/// the measured frames' medians and p95s.
-pub fn run(context: &GpuContext, scene: ReferenceScene) -> anyhow::Result<Measurements> {
+/// Renders `scene` for `configuration`'s warm-up and measured frames and
+/// returns the measured frames' medians and p95s.
+pub fn run(
+    context: &GpuContext,
+    scene: ReferenceScene,
+    configuration: Configuration,
+) -> anyhow::Result<Measurements> {
     let (_, frames) = render_frames(
         context,
         scene,
-        WIDTH,
-        HEIGHT,
-        WARM_UP_FRAMES + MEASURED_FRAMES,
+        configuration.width,
+        configuration.height,
+        configuration.warm_up_frames + configuration.measured_frames,
     )?;
-    let measured = &frames[WARM_UP_FRAMES as usize..];
+    let measured = &frames[configuration.warm_up_frames as usize..];
     let microseconds = |time: Duration| time.as_secs_f64() * 1e6;
     let main_pass_times: Vec<f64> = measured
         .iter()
@@ -141,9 +179,9 @@ pub fn run(context: &GpuContext, scene: ReferenceScene) -> anyhow::Result<Measur
             "release"
         }
         .to_owned(),
-        width: WIDTH,
-        height: HEIGHT,
-        measured_frames: MEASURED_FRAMES,
+        width: configuration.width,
+        height: configuration.height,
+        measured_frames: configuration.measured_frames,
         cpu_frame_microseconds: spread(
             measured
                 .iter()
@@ -368,9 +406,9 @@ mod tests {
             scene: "pbr-sweep".to_owned(),
             adapter: "Apple M4 Pro".to_owned(),
             profile: "release".to_owned(),
-            width: WIDTH,
-            height: HEIGHT,
-            measured_frames: MEASURED_FRAMES,
+            width: Configuration::REFERENCE.width,
+            height: Configuration::REFERENCE.height,
+            measured_frames: Configuration::REFERENCE.measured_frames,
             cpu_frame_microseconds: Spread {
                 median: 1000.0,
                 p95: 1200.0,
@@ -511,6 +549,18 @@ mod tests {
         let mut other_scene = baseline();
         other_scene.scene = "uv-grid".to_owned();
         assert!(compare(&other_scene, &baseline(), &BUDGETS, CompareMode::Ci).is_err());
+    }
+
+    #[test]
+    fn baseline_directories_are_keyed_by_adapter() {
+        assert_eq!(
+            baseline_directory("Apple M4 Pro"),
+            PathBuf::from("bench/baselines/apple-m4-pro")
+        );
+        assert_eq!(
+            baseline_directory("llvmpipe (LLVM 20.1.2, 256 bits)"),
+            PathBuf::from("bench/baselines/llvmpipe-llvm-20-1-2-256-bits")
+        );
     }
 
     #[test]

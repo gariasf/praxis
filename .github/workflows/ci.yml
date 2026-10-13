@@ -11,6 +11,10 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # The `vulkan-cpu` Goldens and the llvmpipe Baselines are this Mesa's
+  # lavapipe. When the archive drops the version, install fails: re-record
+  # both with the new one rather than let them drift.
+  LAVAPIPE_VERSION: 25.2.8-0ubuntu0.24.04.4
 
 jobs:
   check:
@@ -49,14 +53,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      # The `vulkan-cpu` Goldens are this Mesa's lavapipe. When the archive
-      # drops the version, install fails here: re-record the Goldens with
-      # the new one rather than let them drift.
       - name: Install lavapipe
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends \
-            mesa-vulkan-drivers=25.2.8-0ubuntu0.24.04.4
+            mesa-vulkan-drivers=$LAVAPIPE_VERSION
 
       - name: Test
         env:
@@ -69,4 +70,41 @@ jobs:
         with:
           name: golden-differences
           path: target/tmp/golden-differences
+          if-no-files-found: ignore
+
+  software-bench:
+    name: Bench counters (software Vulkan)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install lavapipe
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            mesa-vulkan-drivers=$LAVAPIPE_VERSION
+
+      - name: Build
+        run: cargo build --release
+
+      # Counters only: draw calls, uploaded bytes, GPU memory and heap
+      # allocations against the Baselines in bench/baselines/<llvmpipe key>.
+      - name: Bench and compare
+        run: |
+          target/release/praxis bench target/bench --ci pbr-sweep uv-grid normal-tangent
+          target/release/praxis compare target/bench --ci
+
+      # A new or changed Baseline is this artifact's file, copied into its
+      # adapter's directory.
+      - name: Upload bench results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results
+          path: target/bench
           if-no-files-found: ignore
