@@ -392,9 +392,9 @@ impl State {
 
         let started = Instant::now();
         let instance_data = prepare_renderables(&mut self.world, camera_position);
-        self.recorder.stage("prepare_renderables", started);
         let light_uniform =
             prepare_lights(&self.world, &mut self.point_light_query, camera_position);
+        self.recorder.stage("prepare_renderables", started);
 
         let started = Instant::now();
         self.ensure_instance_capacity(instance_data.len() as u64);

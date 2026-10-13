@@ -72,21 +72,21 @@ pub fn projection_matrix(aspect_ratio: f32) -> glam::Mat4 {
 }
 
 pub fn fly_camera(input: Res<Input>, time: Res<Time>, mut camera: ResMut<Camera>) {
-    let forward_dir = camera.forward().as_dvec3();
-    let right_dir = camera.right().as_dvec3();
+    let forward_direction = camera.forward().as_dvec3();
+    let right_direction = camera.right().as_dvec3();
     let speed = f64::from(camera.speed * time.delta_time);
 
     if input.pressed.contains(&KeyCode::KeyW) {
-        camera.position += forward_dir * speed;
+        camera.position += forward_direction * speed;
     }
     if input.pressed.contains(&KeyCode::KeyS) {
-        camera.position -= forward_dir * speed;
+        camera.position -= forward_direction * speed;
     }
     if input.pressed.contains(&KeyCode::KeyD) {
-        camera.position += right_dir * speed;
+        camera.position += right_direction * speed;
     }
     if input.pressed.contains(&KeyCode::KeyA) {
-        camera.position -= right_dir * speed;
+        camera.position -= right_direction * speed;
     }
     if input.pressed.contains(&KeyCode::Space) {
         camera.position.y += speed;

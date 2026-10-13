@@ -38,7 +38,8 @@ pub fn prepare_lights(
         num_point_lights: [0.0; 4],
     };
     let mut count = 0;
-    for (transform, point_light) in point_light_query.iter(world).take(4) {
+    let capacity = light_uniform.point_positions.len();
+    for (transform, point_light) in point_light_query.iter(world).take(capacity) {
         let position = (transform.translation - camera_position).as_vec3();
         light_uniform.point_positions[count] = position.extend(0.0).to_array();
         light_uniform.point_colors[count] =
