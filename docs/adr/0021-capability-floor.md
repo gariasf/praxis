@@ -6,7 +6,7 @@ Device creation requires a fixed set of wgpu features and limits, the Capability
 
 - Tier 1 in full plus ray queries: adds `SUBGROUP`, `SHADER_F16`, `SHADER_INT64`, `TEXTURE_ATOMIC` and `PRIMITIVE_INDEX`, which nothing uses, and shuts out DX12 on FXC for them.
 - Tiers 1 and 2 in full (matrix option D): adds mesh shaders, which ADR 0019 does not use (Metal forbids ray queries in mesh-shaded pipelines).
-- Requesting the adapter's own limits: code would come to depend on what the M4 Pro allows (1,048,576 binding-array elements per stage, 256 bytes of immediates) and break only on other hardware.
+- Requesting the adapter's own limits: code would come to depend on what the M4 Pro allows (1,000,000 binding-array elements per stage, 256 bytes of immediates) and break only on other hardware.
 - A test-only floor for the software-Vulkan Goldens: Goldens would test a different engine. Mesa 25.2.8's `features.txt` lists lavapipe for `VK_KHR_ray_query`, `VK_KHR_acceleration_structure`, `VK_KHR_deferred_host_operations`, `VK_KHR_buffer_device_address` and `VK_EXT_descriptor_indexing`, so no carve-out is planned; its limits are not yet measured.
 
 ## Consequences
@@ -16,5 +16,5 @@ Device creation requires a fixed set of wgpu features and limits, the Capability
 - Required limits are `wgpu::Limits::default()` with `using_minimum_supported_acceleration_structure_values()` (2^24 − 1 TLAS instances), raised only where an ADR needs it: `max_buffer_size` at least 2^31 − 1 (ADR 0017 arenas), `max_binding_array_elements_per_shader_stage` at least 65,536 (Vulkan's descriptor-indexing minimum is 500,000, DX12 Tier 3 has 2^20), and `max_acceleration_structures_per_shader_stage` at least 2 (ADR 0020's static and dynamic TLAS; Metal has 29 shared buffer slots, Vulkan at least 16). A ticket that needs more raises the floor in its PR, and adds Tier 1 or 2 features the same way without a new ADR.
 - `GpuContext::new` checks the whole floor before requesting the device and returns one typed error naming each missing feature, each attachment format without 4x MSAA, and each limit with its required and adapter values; the binary logs it with `tracing::error!` and exits non-zero. `praxis capabilities` runs without the floor, since it diagnoses that failure.
 - Headless contexts, tests and Goldens included, use the same floor. If lavapipe misses part of it, the implementing PR stops and brings the gap to the owner.
-- Hardware out of scope follows from the floor: macOS before 15, DX12 below raytracing Tier 1.1 or SM 6.5 or on FXC, Resource Binding Tier 2, and Vulkan devices without `VK_KHR_ray_query` (48% of gpuinfo reports in the last year).
+- Hardware out of scope follows from the floor: macOS before 15, DX12 below raytracing Tier 1.1 or SM 6.5 or on FXC, Resource Binding Tier 2, and Vulkan devices without `VK_KHR_ray_query` (52% of gpuinfo reports in the last year, read 2026-10-13; amended 2026-10-13, [#95](https://github.com/gariasf/praxis/issues/95)).
 - The full floor, ray queries included, is enforced in M1, before ray queries are first used in M3, so CI proves it on lavapipe early.
