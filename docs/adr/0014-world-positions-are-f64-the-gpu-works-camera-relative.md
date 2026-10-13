@@ -4,7 +4,7 @@ A Game world of 10 by 10 km or more must render, simulate and save without preci
 
 ## Precision bar
 
-Within 100 km of the origin: a point 0.3 m from the camera lands within 0.25 px at 1440p (0.043 mm) of its exact camera-relative position; simulated positions resolve to 0.1 mm; saves round-trip positions bit-exactly.
+Within 100 km of the origin: a point 0.3 m from the camera lands within 0.25 px at 1440p and a 45° vertical field of view (0.043 mm) of its exact camera-relative position; simulated positions resolve to 0.1 mm; saves round-trip positions bit-exactly.
 
 ## Considered options
 
