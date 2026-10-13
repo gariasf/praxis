@@ -17,6 +17,7 @@ use crate::scenes::{
 use crate::stats::{FrameRecorder, FrameStats};
 use crate::threading::{init_compute_pool, single_threaded_schedule};
 use crate::time::{FixedTime, Time, fixed_schedule, run_ticks};
+use crate::transform::{WorldTransform, propagate_world_transforms};
 
 /// The helmet-class model the Scene draws, relative to the working directory
 /// (the crate root under `cargo run` and `cargo test`). It is fetched, not
@@ -33,7 +34,7 @@ pub struct State {
     recorder: FrameRecorder,
     frame: FrameData,
     renderer: Renderer,
-    point_light_query: QueryState<(&'static Transform, &'static PointLight)>,
+    point_light_query: QueryState<(&'static WorldTransform, &'static PointLight)>,
 }
 
 impl State {
@@ -181,14 +182,15 @@ impl State {
         self.renderer.resize(width, height);
     }
 
-    /// Moves the camera by `frame_delta`, runs the Ticks it completes,
-    /// prepares the frame's Frame data and uploads it.
+    /// Runs the Ticks `frame_delta` completes, moves the camera by it,
+    /// propagates World transforms, prepares the frame's Frame data and
+    /// uploads it.
     pub fn update(&mut self, frame_delta: Duration) {
         self.recorder.begin();
-        self.world.resource_mut::<Time>().delta_time = frame_delta.as_secs_f32();
-        self.schedule.run(&mut self.world);
         self.recorder.dropped_time =
             run_ticks(&mut self.fixed_schedule, &mut self.world, frame_delta);
+        self.world.resource_mut::<Time>().delta_time = frame_delta.as_secs_f32();
+        self.schedule.run(&mut self.world);
 
         let started = Instant::now();
         prepare_frame(
@@ -235,7 +237,9 @@ fn simulation_schedules(recorder: &FrameRecorder) -> (Schedule, Schedule) {
     let mut schedule = single_threaded_schedule();
     let mut fixed_schedule = fixed_schedule();
     recorder.systems.scope(|| {
-        schedule.add_systems(fly_camera);
+        // After the Ticks, so prepare sees the World transforms of what
+        // they spawned and moved.
+        schedule.add_systems((fly_camera, propagate_world_transforms));
         // Presses wait in `Input` for the next Tick that runs, so a frame
         // that runs none loses none.
         fixed_schedule.add_systems(

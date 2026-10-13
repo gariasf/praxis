@@ -29,6 +29,7 @@ mod state;
 mod stats;
 mod threading;
 mod time;
+mod transform;
 
 pub use capture::capture;
 pub use scenes::ReferenceScene;

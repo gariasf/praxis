@@ -4,8 +4,9 @@ use bevy_ecs::prelude::*;
 
 use crate::assets::MeshPool;
 use crate::camera::{Camera, projection_matrix};
-use crate::components::{MaterialRef, MeshRef, PointLight, Transform};
+use crate::components::{MaterialRef, MeshRef, PointLight};
 use crate::render::{CameraUniform, InstanceData, LightUniform};
+use crate::transform::WorldTransform;
 
 /// Everything the renderer draws in one frame, owned, so it holds no borrow
 /// into the ECS World and can cross to another thread (ADRs 0004, 0016).
@@ -37,7 +38,7 @@ pub struct Draw {
 /// lists' memory. A Renderable whose Mesh is not in `mesh_pool` is skipped.
 pub fn prepare_frame(
     world: &mut World,
-    point_light_query: &mut QueryState<(&Transform, &PointLight)>,
+    point_light_query: &mut QueryState<(&WorldTransform, &PointLight)>,
     mesh_pool: &MeshPool,
     aspect_ratio: f32,
     frame: &mut FrameData,
@@ -52,7 +53,7 @@ pub fn prepare_frame(
 
     frame.instances.clear();
     frame.draws.clear();
-    let mut renderable_query = world.query::<(&Transform, &MeshRef, &MaterialRef)>();
+    let mut renderable_query = world.query::<(&WorldTransform, &MeshRef, &MaterialRef)>();
     for (transform, mesh_ref, material_ref) in renderable_query.iter(world) {
         let Some(mesh) = mesh_pool.get(mesh_ref.0) else {
             tracing::warn!(
@@ -84,7 +85,7 @@ pub fn prepare_frame(
 /// `point_light_query` across frames, so preparing allocates nothing.
 fn prepare_lights(
     world: &World,
-    point_light_query: &mut QueryState<(&Transform, &PointLight)>,
+    point_light_query: &mut QueryState<(&WorldTransform, &PointLight)>,
     camera_position: glam::DVec3,
 ) -> LightUniform {
     let mut light_uniform = LightUniform {
@@ -98,7 +99,7 @@ fn prepare_lights(
     let mut count = 0;
     let capacity = light_uniform.point_positions.len();
     for (transform, point_light) in point_light_query.iter(world).take(capacity) {
-        let position = (transform.translation - camera_position).as_vec3();
+        let position = (transform.translation() - camera_position).as_vec3();
         light_uniform.point_positions[count] = position.extend(0.0).to_array();
         light_uniform.point_colors[count] =
             point_light.color.extend(point_light.intensity).to_array();

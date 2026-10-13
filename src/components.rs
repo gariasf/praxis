@@ -1,10 +1,13 @@
 use bevy_ecs::prelude::*;
 
 use crate::assets::{MaterialHandle, MeshHandle};
+use crate::transform::WorldTransform;
 
 /// Where an entity sits in the World (ADR 0014): translation in f64 metres,
 /// rotation and scale in f32, 64 bytes like the `Affine3A` it replaced.
+/// A child's is relative to its parent (`ChildOf`).
 #[derive(Component, Copy, Clone, Debug, PartialEq)]
+#[require(WorldTransform)]
 pub struct Transform {
     pub translation: glam::DVec3,
     pub rotation: glam::Quat,
@@ -26,16 +29,6 @@ impl Transform {
             translation,
             ..Self::IDENTITY
         }
-    }
-
-    /// The model matrix relative to `origin`: the translation difference is
-    /// taken in f64, then cast, so the matrix holds no World position in f32.
-    pub fn matrix_relative_to(&self, origin: glam::DVec3) -> glam::Mat4 {
-        glam::Mat4::from_scale_rotation_translation(
-            self.scale,
-            self.rotation,
-            (self.translation - origin).as_vec3(),
-        )
     }
 }
 

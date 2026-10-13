@@ -93,7 +93,7 @@ src/
   components.rs                # ECS components (Transform, MeshRef)
   threading.rs                 # compute pool, schedule executor (ADR 0016)
   camera/, time/, input/,      # feature modules: resource (+ systems)
-    helmet/                       per domain in one mod.rs
+    helmet/, transform/           per domain in one mod.rs
   assets/                      # asset types, loaders, pools
   render/                      # Renderer (owns the Pools, reads no
                                  World), prepare (World to Frame data),
