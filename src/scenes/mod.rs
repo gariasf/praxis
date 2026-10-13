@@ -25,14 +25,19 @@ pub enum ReferenceScene {
     /// Khronos NormalTangentTest, committed in `assets/`, seen face on: real
     /// bumps beside normal-mapped quads that should shade the same.
     NormalTangent,
+    /// Two ground planes of contrasting colour 1 cm apart, 4 km square and
+    /// centred 2 km in front of the camera, seen at a grazing angle: the upper plane covers the lower one everywhere
+    /// under reversed depth, and they interleave under standard depth.
+    FarCoplanar,
 }
 
 impl ReferenceScene {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::Helmet,
         Self::PbrSweep,
         Self::UvGrid,
         Self::NormalTangent,
+        Self::FarCoplanar,
     ];
 
     /// The name the capture command selects the scene by.
@@ -42,6 +47,7 @@ impl ReferenceScene {
             Self::PbrSweep => "pbr-sweep",
             Self::UvGrid => "uv-grid",
             Self::NormalTangent => "normal-tangent",
+            Self::FarCoplanar => "far-coplanar",
         }
     }
 
@@ -61,6 +67,10 @@ impl ReferenceScene {
             Self::NormalTangent => Camera::looking_at(
                 glam::vec3(0.0, NORMAL_TANGENT_CENTRE_HEIGHT, 3.2),
                 glam::vec3(0.0, NORMAL_TANGENT_CENTRE_HEIGHT, 0.0),
+            ),
+            Self::FarCoplanar => Camera::looking_at(
+                glam::vec3(0.0, FAR_COPLANAR_CAMERA_HEIGHT, 0.0),
+                glam::vec3(0.0, 0.0, -FAR_COPLANAR_DISTANCE),
             ),
         }
     }
@@ -156,6 +166,45 @@ pub(crate) fn spawn_normal_tangent(
         MaterialRef(material),
     ));
     Ok(())
+}
+
+/// From the camera to the planes' centre, and from the centre to each edge.
+const FAR_COPLANAR_DISTANCE: f32 = 2000.0;
+/// Looks down about 8.5° at the planes' centre, so a ray crosses the 1 cm gap
+/// over about 7 cm.
+const FAR_COPLANAR_CAMERA_HEIGHT: f32 = 300.0;
+/// Between the two planes, in metres.
+const FAR_COPLANAR_GAP: f32 = 0.01;
+
+pub(crate) fn spawn_far_coplanar(
+    world: &mut World,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    material_pool: &mut MaterialPool,
+) {
+    let plane = insert_mesh(
+        world,
+        device,
+        queue,
+        &ground_plane(FAR_COPLANAR_DISTANCE, 1.0),
+    );
+    let centre = glam::vec3(0.0, 0.0, -FAR_COPLANAR_DISTANCE);
+    for (height, base_color) in [
+        (0.0, [0.8, 0.1, 0.1, 1.0]),
+        (-FAR_COPLANAR_GAP, [0.1, 0.8, 0.1, 1.0]),
+    ] {
+        let material = material_pool.insert(
+            queue,
+            factor_material(base_color, 0.0, 0.8, MaterialPool::DEFAULT_LAYER),
+        );
+        world.spawn((
+            Transform(glam::Affine3A::from_translation(
+                centre + glam::Vec3::Y * height,
+            )),
+            MeshRef(plane),
+            MaterialRef(material),
+        ));
+    }
 }
 
 /// Loads the glTF file at `path`, relative to the working directory, as one
