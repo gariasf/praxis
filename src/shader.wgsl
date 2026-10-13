@@ -1,9 +1,30 @@
 @group(0) @binding(0)
 var<uniform> camera: CameraUniform;
 // Positions reach the shaders relative to the camera (ADR 0014), so the
-// camera sits at the origin and view_proj holds no translation.
+// camera sits at the origin and view_proj holds no translation. The camera's
+// World position arrives as the anchor of its grid cell plus an offset.
 struct CameraUniform {
     view_proj: mat4x4<f32>,
+    anchor: vec3<i32>,
+    offset: vec3<f32>,
+}
+
+// Edge of the anchor grid in metres; ANCHOR_CELL_SIZE in Rust matches it.
+const ANCHOR_CELL_SIZE: f32 = 64.0;
+
+// A point's position relative to the camera, from its Instance's anchor and
+// offset, the camera's, and its position relative to the Instance's pivot
+// (ADR 0014). The anchor difference is exact in integers, so f32 only ever
+// holds magnitudes near the camera.
+fn camera_relative_position(
+    anchor: vec3<i32>,
+    offset: vec3<f32>,
+    camera_anchor: vec3<i32>,
+    camera_offset: vec3<f32>,
+    local_position: vec3<f32>
+) -> vec3<f32> {
+    let anchor_position = vec3<f32>(anchor - camera_anchor) * ANCHOR_CELL_SIZE;
+    return anchor_position + (offset - camera_offset) + local_position;
 }
 
 struct MaterialData {
@@ -35,10 +56,14 @@ struct LightUniform {
     num_point_lights: vec4<f32>,
 }
 
+// An Instance's pivot as anchor plus offset, so camera motion changes no
+// Instance, and its rotation-scale.
 struct InstanceData {
-    model: mat4x4<f32>,
-    normal_matrix: mat4x4<f32>,
+    rotation_scale: mat3x3<f32>,
+    normal_matrix: mat3x3<f32>,
+    anchor: vec3<i32>,
     material_id: u32,
+    offset: vec3<f32>,
 }
 
 @group(3) @binding(0)
@@ -66,16 +91,20 @@ in: VertexInput, @builtin(instance_index) instance_idx: u32
 ) -> VertexOutput {
     var out: VertexOutput;
     let instance = instances[instance_idx];
-    out.clip_position = camera.view_proj * instance.model * vec4<f32>(in.position, 1.0);
-    out.uv = in.uv;
-    out.normal = (instance.normal_matrix * vec4<f32>(in.normal, 0.0)).xyz;
-    // Tangents are directions along the surface, so they follow the model
-    // matrix; only normals need the inverse-transpose.
-    out.tangent_world = vec4<f32>(
-        (instance.model * vec4<f32>(in.tangent.xyz, 0.0)).xyz,
-        in.tangent.w
+    let position = camera_relative_position(
+        instance.anchor,
+        instance.offset,
+        camera.anchor,
+        camera.offset,
+        instance.rotation_scale * in.position
     );
-    out.camera_relative_position = (instance.model * vec4<f32>(in.position, 1.0)).xyz;
+    out.clip_position = camera.view_proj * vec4<f32>(position, 1.0);
+    out.uv = in.uv;
+    out.normal = instance.normal_matrix * in.normal;
+    // Tangents are directions along the surface, so they follow the
+    // rotation-scale; only normals need the inverse-transpose.
+    out.tangent_world = vec4<f32>(instance.rotation_scale * in.tangent.xyz, in.tangent.w);
+    out.camera_relative_position = position;
     out.material_id = instance.material_id;
     return out;
 }

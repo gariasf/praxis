@@ -182,6 +182,10 @@ When reviewing changes, check for:
       `cargo test` checks struct and vertex layouts field by field
       (`src/render/shader_tests.rs`); Rust-only padding fields start
       with `_`
+- [ ] No World position reaches the GPU in f32: only an anchor plus an
+      f32 offset, composed camera-relative (ADR 0014)
+- [ ] Depth is cleared to 0 and compared with `Greater`, with no far
+      plane; shadow and Hi-Z passes follow the same direction (ADR 0015)
 - [ ] Matrices reach WGSL column-major (glam `to_cols_array_2d`); a
       `mat3x3` or `array<vec3>` field is padded per column or element
       on the Rust side (the test compares sizes, not strides)

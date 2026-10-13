@@ -5,6 +5,7 @@
 use std::io::Write;
 
 use crate::gpu::GpuContext;
+use crate::render::instance::{ANCHOR_CELL_SIZE, anchor_and_offset};
 
 /// Largest difference allowed between a result and its expectation. Results
 /// land within 2e-7 of theirs on the M4 Pro.
@@ -181,6 +182,181 @@ fn smith_masking_ggx(cosine: f64, alpha: f64) -> f64 {
     2.0 / (1.0 + (1.0 + alpha * alpha * tangent_squared).sqrt())
 }
 
+/// ADR 0014's precision bar: 0.25 px at 1440p and a 45° vertical field of
+/// view, for a point 0.3 m from the camera, is 0.043 mm.
+const PRECISION_BAR: f64 = 4.3e-5;
+
+/// A point 0.3 m from the camera, anywhere within 100 km of the origin, is
+/// composed from its Instance's anchor and offset, the camera's, and its f32
+/// position relative to the Instance; it lands within the precision bar of
+/// its f64 position relative to the camera. The GPU runs one evaluation
+/// order; every other order the compiler may choose is summed on the CPU.
+/// The same points composed from f32 World positions miss the bar.
+#[test]
+fn camera_relative_position_meets_the_precision_bar_within_100_km() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    // Cell corners, points either side of them, and the 100 km edge.
+    let coordinates = [
+        -100_000.0,
+        -54_321.987_654,
+        -64.000_01,
+        0.0,
+        0.3,
+        63.999_99,
+        12_345.678_9,
+        99_999.999,
+    ];
+    let mut directions = Vec::new();
+    for x in [-1.0, 0.0, 1.0] {
+        for y in [-1.0, 0.0, 1.0] {
+            for z in [-1.0, 0.0, 1.0] {
+                if [x, y, z] != [0.0; 3] {
+                    directions.push(glam::DVec3::new(x, y, z).normalize());
+                }
+            }
+        }
+    }
+    // Vertices up to 128 m from their pivot, the most a cooked mesh holds.
+    let local_positions = [
+        glam::Vec3::ZERO,
+        glam::Vec3::new(100.0, -50.25, 20.125),
+        glam::Vec3::new(-127.9, 3.3, 64.7),
+    ];
+
+    let mut cases = Vec::new();
+    for x in coordinates {
+        for y in coordinates {
+            for z in coordinates {
+                let camera = glam::DVec3::new(x, y, z);
+                for direction in &directions {
+                    for local_position in local_positions {
+                        cases.push(Case::new(camera, direction * 0.3, local_position));
+                    }
+                }
+            }
+        }
+    }
+    let inputs: Vec<[[f32; 4]; 5]> = cases.iter().map(Case::test_vectors).collect();
+    let results = evaluate_cases(
+        &context,
+        "vec4<f32>(camera_relative_position(vec3<i32>(inputs[0].xyz), inputs[1].xyz, \
+         vec3<i32>(inputs[2].xyz), inputs[3].xyz, inputs[4].xyz), 0.0)",
+        &inputs,
+    );
+
+    let mut world_space_error: f64 = 0.0;
+    for (case, result) in cases.iter().zip(results) {
+        let gpu = glam::Vec3::from_slice(&result).as_dvec3();
+        let error = gpu.distance(case.expected);
+        assert!(
+            error <= PRECISION_BAR,
+            "{case:?}: GPU composes {gpu}, {error} m from the f64 reference"
+        );
+        let error = case.worst_error_in_any_order();
+        assert!(
+            error <= PRECISION_BAR,
+            "{case:?}: some evaluation order lands {error} m from the f64 reference"
+        );
+        world_space_error = world_space_error.max(case.world_space_error());
+    }
+    assert!(
+        world_space_error > PRECISION_BAR,
+        "f32 World positions met the bar ({world_space_error} m), so the oracle cannot fail"
+    );
+}
+
+/// A point at `camera + expected`, drawn at `local_position` from its
+/// Instance's pivot, both placed as the renderer places them.
+#[derive(Debug)]
+struct Case {
+    camera: glam::DVec3,
+    expected: glam::DVec3,
+    local_position: glam::Vec3,
+    pivot: glam::DVec3,
+}
+
+impl Case {
+    fn new(camera: glam::DVec3, expected: glam::DVec3, local_position: glam::Vec3) -> Self {
+        let pivot = camera + expected - local_position.as_dvec3();
+        Self {
+            camera,
+            expected,
+            local_position,
+            pivot,
+        }
+    }
+
+    /// Instance anchor, Instance offset, camera anchor, camera offset, local
+    /// position; anchors are small integers, exact in f32.
+    fn test_vectors(&self) -> [[f32; 4]; 5] {
+        let (anchor, offset) = anchor_and_offset(self.pivot);
+        let (camera_anchor, camera_offset) = anchor_and_offset(self.camera);
+        let anchor = anchor.map(|cell| cell as f32);
+        let camera_anchor = camera_anchor.map(|cell| cell as f32);
+        [
+            anchor,
+            offset,
+            camera_anchor,
+            camera_offset,
+            self.local_position.to_array(),
+        ]
+        .map(|vector| glam::Vec3::from_array(vector).extend(0.0).to_array())
+    }
+
+    /// The largest distance from the f64 reference of any order and grouping
+    /// in which f32 can sum the composition's four terms, per axis.
+    fn worst_error_in_any_order(&self) -> f64 {
+        let (anchor, offset) = anchor_and_offset(self.pivot);
+        let (camera_anchor, camera_offset) = anchor_and_offset(self.camera);
+        let worst_per_axis = glam::DVec3::from_array(std::array::from_fn(|axis| {
+            // Exact: the anchor difference times 64 is a small integer.
+            let anchor_term = (anchor[axis] - camera_anchor[axis]) as f32 * ANCHOR_CELL_SIZE as f32;
+            let terms = [
+                anchor_term,
+                offset[axis],
+                -camera_offset[axis],
+                self.local_position[axis],
+            ];
+            sums_in_every_order(&terms)
+                .into_iter()
+                .map(|sum| (f64::from(sum) - self.expected[axis]).abs())
+                .fold(0.0, f64::max)
+        }));
+        worst_per_axis.length()
+    }
+
+    /// The distance from the f64 reference of the point composed from f32
+    /// World positions, as before anchors.
+    fn world_space_error(&self) -> f64 {
+        let composed = self.pivot.as_vec3() + self.local_position - self.camera.as_vec3();
+        composed.as_dvec3().distance(self.expected)
+    }
+}
+
+/// Every f32 sum of `terms` a compiler free to reorder and regroup can
+/// produce: each step adds any two remaining terms.
+fn sums_in_every_order(terms: &[f32]) -> Vec<f32> {
+    if terms.len() == 1 {
+        return terms.to_vec();
+    }
+    let mut sums = Vec::new();
+    for first in 0..terms.len() {
+        for second in first + 1..terms.len() {
+            let mut remaining: Vec<f32> = terms
+                .iter()
+                .enumerate()
+                .filter(|&(index, _)| index != first && index != second)
+                .map(|(_, &term)| term)
+                .collect();
+            remaining.push(terms[first] + terms[second]);
+            sums.extend(sums_in_every_order(&remaining));
+        }
+    }
+    sums
+}
+
 /// A headless context, or `None` after saying so on a machine without a GPU
 /// adapter, where these tests skip.
 fn gpu_context() -> Option<GpuContext> {
@@ -196,19 +372,21 @@ fn gpu_context() -> Option<GpuContext> {
 }
 
 /// The compute kernel appended to the main shader's source, so it calls the
-/// functions the renderer runs. `EXPRESSION` and `WORKGROUP_SIZE` stand for
-/// the expression under test and the constant below. Its bindings are ones
+/// functions the renderer runs. `EXPRESSION`, `VECTORS_PER_CASE` and
+/// `WORKGROUP_SIZE` stand for the expression under test, the test vectors
+/// each case holds and the constant below. Its bindings are ones
 /// the main shader leaves free, so no backend emits a main-shader resource
 /// beside the kernel's.
 const KERNEL: &str = "
-@group(0) @binding(1) var<storage, read> test_vectors: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read> test_vectors: array<array<vec4<f32>, VECTORS_PER_CASE>>;
 @group(0) @binding(2) var<storage, read_write> test_results: array<vec4<f32>>;
 
 @compute @workgroup_size(WORKGROUP_SIZE)
 fn evaluate_test_vectors(@builtin(global_invocation_id) invocation: vec3<u32>) {
     let index = invocation.x;
     if index < arrayLength(&test_vectors) {
-        let input = test_vectors[index];
+        let inputs = test_vectors[index];
+        let input = inputs[0];
         test_results[index] = EXPRESSION;
     }
 }
@@ -221,9 +399,20 @@ const WORKGROUP_SIZE: u32 = 64;
 /// vector as `input` and may call any function of the main shader, once per
 /// element of `inputs` in one compute dispatch; returns the results in order.
 fn evaluate(context: &GpuContext, expression: &str, inputs: &[[f32; 4]]) -> Vec<[f32; 4]> {
+    evaluate_cases::<1>(context, expression, bytemuck::cast_slice(inputs))
+}
+
+/// As `evaluate`, for cases of `VECTORS` test vectors each, which
+/// `expression` reads as `inputs[0]` to `inputs[VECTORS - 1]`.
+fn evaluate_cases<const VECTORS: usize>(
+    context: &GpuContext,
+    expression: &str,
+    cases: &[[[f32; 4]; VECTORS]],
+) -> Vec<[f32; 4]> {
     let device = &context.device;
     let kernel = KERNEL
         .replace("WORKGROUP_SIZE", &WORKGROUP_SIZE.to_string())
+        .replace("VECTORS_PER_CASE", &VECTORS.to_string())
         .replace("EXPRESSION", expression);
     let source = format!("{}\n{kernel}", include_str!("../shader.wgsl"));
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -239,16 +428,16 @@ fn evaluate(context: &GpuContext, expression: &str, inputs: &[[f32; 4]]) -> Vec<
         cache: None,
     });
 
-    let size = size_of_val(inputs) as wgpu::BufferAddress;
     let input_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Test Vectors"),
-        size,
+        size: size_of_val(cases) as wgpu::BufferAddress,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
     context
         .queue
-        .write_buffer(&input_buffer, 0, bytemuck::cast_slice(inputs));
+        .write_buffer(&input_buffer, 0, bytemuck::cast_slice(cases));
+    let size = (cases.len() * size_of::<[f32; 4]>()) as wgpu::BufferAddress;
     let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Test Results"),
         size,
@@ -283,7 +472,7 @@ fn evaluate(context: &GpuContext, expression: &str, inputs: &[[f32; 4]]) -> Vec<
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        pass.dispatch_workgroups((inputs.len() as u32).div_ceil(WORKGROUP_SIZE), 1, 1);
+        pass.dispatch_workgroups((cases.len() as u32).div_ceil(WORKGROUP_SIZE), 1, 1);
     }
     encoder.copy_buffer_to_buffer(&output_buffer, 0, &read_back_buffer, 0, size);
     context.queue.submit(std::iter::once(encoder.finish()));

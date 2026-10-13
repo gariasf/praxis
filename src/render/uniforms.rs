@@ -16,4 +16,10 @@ pub struct CameraUniform {
     /// Projection times the view rotation: positions reach it relative to
     /// the camera (ADR 0014).
     pub view_proj: [[f32; 4]; 4],
+    /// The camera's position as an anchor plus offset (`anchor_and_offset`),
+    /// from which the shader composes Instances relative to the camera.
+    pub anchor: [i32; 3],
+    pub _pad_anchor: u32,
+    pub offset: [f32; 3],
+    pub _pad_offset: u32,
 }

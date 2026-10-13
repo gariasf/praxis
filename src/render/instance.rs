@@ -1,11 +1,34 @@
 pub const INSTANCE_BUFFER_INITIAL_CAPACITY: u64 = 16;
 
+/// Edge of the grid World positions are anchored to on the GPU, in metres
+/// (ADR 0014); `ANCHOR_CELL_SIZE` in the shader matches it.
+pub const ANCHOR_CELL_SIZE: f64 = 64.0;
+
+/// Splits a World position into the integer anchor of its grid cell and its
+/// f32 offset from that anchor's corner, so no World position reaches the GPU
+/// in f32 (ADR 0014).
+pub fn anchor_and_offset(position: glam::DVec3) -> ([i32; 3], [f32; 3]) {
+    let anchor = (position / ANCHOR_CELL_SIZE).floor();
+    let offset = position - anchor * ANCHOR_CELL_SIZE;
+    (anchor.as_ivec3().to_array(), offset.as_vec3().to_array())
+}
+
+/// The columns of `matrix`, each padded to the 16 bytes WGSL gives a `vec3`
+/// column of a `mat3x3`.
+pub fn padded_columns(matrix: glam::Mat3) -> [[f32; 4]; 3] {
+    [matrix.x_axis, matrix.y_axis, matrix.z_axis].map(|column| column.extend(0.0).to_array())
+}
+
+/// One Instance where its Transform puts it: the anchor and offset of its
+/// pivot, which do not change as the camera moves, and its rotation-scale.
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct InstanceData {
-    pub model: [[f32; 4]; 4],
-    pub normal_matrix: [[f32; 4]; 4],
+    pub rotation_scale: [[f32; 4]; 3],
+    pub normal_matrix: [[f32; 4]; 3],
+    pub anchor: [i32; 3],
     pub material_id: u32,
-    // WGSL rounds the storage stride to 16; pad so Rust matches (128 + 16 = 144).
-    pub _pad: [u32; 3],
+    pub offset: [f32; 3],
+    // WGSL rounds the storage stride to 16; pad so Rust matches (124 + 4 = 128).
+    pub _pad: u32,
 }

@@ -5,6 +5,7 @@ use bevy_ecs::prelude::*;
 use crate::assets::MeshPool;
 use crate::camera::{Camera, projection_matrix};
 use crate::components::{MaterialRef, MeshRef, PointLight};
+use crate::render::instance::{anchor_and_offset, padded_columns};
 use crate::render::{CameraUniform, InstanceData, LightUniform};
 use crate::transform::WorldTransform;
 
@@ -34,7 +35,8 @@ pub struct Draw {
 }
 
 /// Fills `frame` from the World's camera, lights and Renderables, seen at
-/// `aspect_ratio` and placed relative to the camera (ADR 0014), reusing its
+/// `aspect_ratio`, Instances anchored and lights placed relative to the
+/// camera (ADR 0014), reusing its
 /// lists' memory. A Renderable whose Mesh is not in `mesh_pool` is skipped.
 pub fn prepare_frame(
     world: &mut World,
@@ -46,8 +48,12 @@ pub fn prepare_frame(
     let camera = world.resource::<Camera>();
     let camera_position = camera.position;
     let view_proj = projection_matrix(aspect_ratio) * camera.view_matrix();
+    let (anchor, offset) = anchor_and_offset(camera_position);
     frame.camera = CameraUniform {
         view_proj: view_proj.to_cols_array_2d(),
+        anchor,
+        offset,
+        ..CameraUniform::default()
     };
     frame.light = prepare_lights(world, point_light_query, camera_position);
 
@@ -63,12 +69,15 @@ pub fn prepare_frame(
             continue;
         };
         let instance_index = frame.instances.len() as u32;
-        let model_matrix = transform.matrix_relative_to(camera_position);
+        let rotation_scale = transform.0.matrix3.as_mat3();
+        let (anchor, offset) = anchor_and_offset(transform.translation());
         frame.instances.push(InstanceData {
-            model: model_matrix.to_cols_array_2d(),
-            normal_matrix: model_matrix.inverse().transpose().to_cols_array_2d(),
+            rotation_scale: padded_columns(rotation_scale),
+            normal_matrix: padded_columns(rotation_scale.inverse().transpose()),
+            anchor,
             material_id: material_ref.0.index(),
-            _pad: [0; 3],
+            offset,
+            _pad: 0,
         });
         frame
             .draws
