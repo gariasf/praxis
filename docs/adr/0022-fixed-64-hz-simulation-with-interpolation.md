@@ -4,7 +4,7 @@ Simulation advances in fixed Ticks of 1/64 s (15.625 ms), decoupled from rendere
 
 ## Considered options
 
-- Variable step (option A, today): no added latency, but frame-time noise reaches motion (p99 1.7 to 4.5 ms of simulated time per frame on the M4 Pro), results depend on frame timing (15.8 mm apart after 20 s in the survey's toy, against ADR 0014's 0.1 mm bar), and Box2D and PhysX advise against variable steps.
+- Variable step (option A, used until #118): no added latency, but frame-time noise reaches motion (p99 1.7 to 4.5 ms of simulated time per frame on the M4 Pro), results depend on frame timing (15.8 mm apart after 20 s in the survey's toy, against ADR 0014's 0.1 mm bar), and Box2D and PhysX advise against variable steps.
 - Semi-fixed step (option B): as A, with a variable remainder step; 9.7 mm apart in the toy.
 - Fixed step with extrapolation (option D): no trail for steady motion, but drawn positions snap back at contacts and direction changes, which breaks ADR 0008's stable image.
 - Fixed step at a multiple of the refresh rate, unsmoothed (option E): smooth only while the refresh rate divides the tick rate; a 144 Hz or variable-rate display breaks it.
