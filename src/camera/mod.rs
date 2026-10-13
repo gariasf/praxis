@@ -6,7 +6,8 @@ use crate::time::Time;
 
 #[derive(Resource)]
 pub struct Camera {
-    pub position: glam::Vec3,
+    /// World position in f64 metres (ADR 0014).
+    pub position: glam::DVec3,
     pub yaw: f32,   // radians, left-right
     pub pitch: f32, // radians, up-down
     pub speed: f32,
@@ -16,7 +17,7 @@ pub struct Camera {
 impl Camera {
     pub fn new() -> Self {
         Self {
-            position: glam::vec3(0.0, 0.0, 2.0),
+            position: glam::dvec3(0.0, 0.0, 2.0),
             yaw: -std::f32::consts::FRAC_PI_2, // look towards -Z
             pitch: 0.0,
             speed: 2.0,
@@ -26,8 +27,8 @@ impl Camera {
 
     /// A camera at `position` facing `target`, which must not be straight
     /// above or below it.
-    pub fn looking_at(position: glam::Vec3, target: glam::Vec3) -> Self {
-        let direction = (target - position).normalize();
+    pub fn looking_at(position: glam::DVec3, target: glam::DVec3) -> Self {
+        let direction = (target - position).as_vec3().normalize();
         Self {
             position,
             yaw: direction.z.atan2(direction.x),
@@ -49,9 +50,11 @@ impl Camera {
         self.forward().cross(glam::Vec3::Y).normalize()
     }
 
+    /// The view rotation alone: the GPU works relative to the camera
+    /// (ADR 0014), so the camera sits at the origin of view space and of
+    /// every position the shaders see.
     pub fn view_matrix(&self) -> glam::Mat4 {
-        let target = self.position + self.forward();
-        glam::Mat4::look_at_rh(self.position, target, glam::Vec3::Y)
+        glam::Mat4::look_at_rh(glam::Vec3::ZERO, self.forward(), glam::Vec3::Y)
     }
 }
 
@@ -69,21 +72,21 @@ pub fn projection_matrix(aspect_ratio: f32) -> glam::Mat4 {
 }
 
 pub fn fly_camera(input: Res<Input>, time: Res<Time>, mut camera: ResMut<Camera>) {
-    let forward_dir = camera.forward();
-    let right_dir = camera.right();
-    let speed = camera.speed * time.delta_time;
+    let forward_direction = camera.forward().as_dvec3();
+    let right_direction = camera.right().as_dvec3();
+    let speed = f64::from(camera.speed * time.delta_time);
 
     if input.pressed.contains(&KeyCode::KeyW) {
-        camera.position += forward_dir * speed;
+        camera.position += forward_direction * speed;
     }
     if input.pressed.contains(&KeyCode::KeyS) {
-        camera.position -= forward_dir * speed;
+        camera.position -= forward_direction * speed;
     }
     if input.pressed.contains(&KeyCode::KeyD) {
-        camera.position += right_dir * speed;
+        camera.position += right_direction * speed;
     }
     if input.pressed.contains(&KeyCode::KeyA) {
-        camera.position -= right_dir * speed;
+        camera.position -= right_direction * speed;
     }
     if input.pressed.contains(&KeyCode::Space) {
         camera.position.y += speed;

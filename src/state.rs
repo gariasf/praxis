@@ -5,13 +5,13 @@ use bevy_ecs::prelude::*;
 
 use crate::assets::{MaterialData, MaterialPool, MeshPool};
 use crate::camera::{Camera, fly_camera, projection_matrix};
-use crate::components::{MaterialRef, MeshRef, Transform};
+use crate::components::{MaterialRef, MeshRef, PointLight, Transform};
 use crate::gpu::GpuContext;
 use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
 use crate::input::{Input, clear_just_pressed};
 use crate::render::{
     CameraUniform, DEPTH_FORMAT, FrameStaging, INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData,
-    LightUniform, Vertex, create_depth_texture, prepare_renderables,
+    LightUniform, Vertex, create_depth_texture, prepare_lights, prepare_renderables,
 };
 use crate::scenes::{
     ReferenceScene, insert_gltf_model, spawn_far_coplanar, spawn_normal_tangent, spawn_pbr_sweep,
@@ -55,6 +55,7 @@ pub struct State {
     /// The frame's encoder from `update`, holding its upload copies, until
     /// `render` records the pass into it and submits it.
     frame_encoder: Option<wgpu::CommandEncoder>,
+    point_light_query: QueryState<(&'static Transform, &'static PointLight)>,
 }
 
 impl State {
@@ -213,6 +214,20 @@ impl State {
                 spawn_far_coplanar(&mut world, &device, &queue, &mut material_pool)
             }
         }
+        for (position, color) in [
+            (glam::dvec3(2.0, 2.0, 2.0), glam::Vec3::X),
+            (glam::dvec3(-2.0, 2.0, 2.0), glam::Vec3::Y),
+            (glam::dvec3(2.0, 2.0, -2.0), glam::Vec3::Z),
+            (glam::dvec3(-2.0, 2.0, -2.0), glam::vec3(1.0, 1.0, 0.0)),
+        ] {
+            world.spawn((
+                Transform::from_translation(position),
+                PointLight {
+                    color,
+                    intensity: 1.0,
+                },
+            ));
+        }
         world.insert_resource(material_pool);
         fixed_schedule
             .initialize(&mut world)
@@ -267,6 +282,7 @@ impl State {
         let instance_capacity = INSTANCE_BUFFER_INITIAL_CAPACITY;
 
         let depth_texture_view = create_depth_texture(&device, width, height);
+        let point_light_query = world.query();
 
         Ok(Self {
             device,
@@ -289,6 +305,7 @@ impl State {
             recorder,
             frame_staging: FrameStaging::default(),
             frame_encoder: None,
+            point_light_query,
         })
     }
 
@@ -325,18 +342,21 @@ impl State {
                 let column_offset = (column_index as f32 - 2.0) * 2.0;
                 let row_offset = 2.6 - row_index as f32 * 5.2;
                 world.spawn((
-                    Transform(glam::Affine3A::from_scale_rotation_translation(
-                        glam::Vec3::splat(0.75),
-                        glam::Quat::IDENTITY,
-                        glam::vec3(column_offset, row_offset, -8.0),
-                    )),
+                    Transform {
+                        scale: glam::Vec3::splat(0.75),
+                        ..Transform::from_translation(glam::dvec3(
+                            column_offset.into(),
+                            row_offset.into(),
+                            -8.0,
+                        ))
+                    },
                     MeshRef(mesh_handle),
                     MaterialRef(variant_handle),
                 ));
             }
         }
         world.spawn((
-            Transform(glam::Affine3A::from_translation(glam::vec3(0.0, 0.0, -8.0))),
+            Transform::from_translation(glam::dvec3(0.0, 0.0, -8.0)),
             MeshRef(mesh_handle),
             MaterialRef(material_handle),
         ));
@@ -364,37 +384,16 @@ impl State {
             run_ticks(&mut self.fixed_schedule, &mut self.world, frame_delta);
 
         let camera = self.world.resource::<Camera>();
-
-        let view = camera.view_matrix();
-        let projection = projection_matrix(self.aspect_ratio);
-
-        let view_proj = projection * view;
+        let camera_position = camera.position;
+        let view_proj = projection_matrix(self.aspect_ratio) * camera.view_matrix();
         let camera_uniform = CameraUniform {
             view_proj: view_proj.to_cols_array_2d(),
-            position: [camera.position.x, camera.position.y, camera.position.z, 0.0],
-        };
-
-        let light_uniform = LightUniform {
-            direction: [0.5, -1.0, -0.3, 0.0],
-            color: [1.0, 1.0, 1.0, 1.0],
-            ambient: [1.0, 1.0, 1.0, 0.1],
-            point_positions: [
-                [2.0, 2.0, 2.0, 0.0],
-                [-2.0, 2.0, 2.0, 0.0],
-                [2.0, 2.0, -2.0, 0.0],
-                [-2.0, 2.0, -2.0, 0.0],
-            ],
-            point_colors: [
-                [1.0, 0.0, 0.0, 1.0],
-                [0.0, 1.0, 0.0, 1.0],
-                [0.0, 0.0, 1.0, 1.0],
-                [1.0, 1.0, 0.0, 1.0],
-            ],
-            num_point_lights: [4.0, 0.0, 0.0, 0.0],
         };
 
         let started = Instant::now();
-        let instance_data = prepare_renderables(&mut self.world);
+        let instance_data = prepare_renderables(&mut self.world, camera_position);
+        let light_uniform =
+            prepare_lights(&self.world, &mut self.point_light_query, camera_position);
         self.recorder.stage("prepare_renderables", started);
 
         let started = Instant::now();

@@ -179,7 +179,7 @@ fn capture(scene: &str, output: &str, size: &str) -> anyhow::Result<()> {
         .and_then(|(width, height)| Some((width.parse().ok()?, height.parse().ok()?)))
         .ok_or_else(|| anyhow::anyhow!("size {size:?} is not <width>x<height>"))?;
     let context = pollster::block_on(GpuContext::headless())?;
-    let (image, frame_stats) = praxis::capture(&context, scene, width, height)?;
+    let (image, frame_stats) = praxis::capture(&context, scene, glam::DVec3::ZERO, width, height)?;
     image.save_with_format(output, image::ImageFormat::Png)?;
     tracing::info!(
         scene = scene.name(),

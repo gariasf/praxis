@@ -1,5 +1,8 @@
 use std::time::Duration;
 
+use bevy_ecs::prelude::*;
+
+use crate::components::Transform;
 use crate::gpu::GpuContext;
 use crate::scenes::ReferenceScene;
 use crate::state::{MAIN_PASS, State};
@@ -22,18 +25,20 @@ const FRAMES_IN_FLIGHT: usize = 2;
 /// The injected frame delta, 60 Hz in whole nanoseconds.
 const FRAME_DELTA: Duration = Duration::from_nanos(16_666_667);
 
-/// Renders `scene` into a `width` × `height` offscreen texture for
-/// `FRAME_COUNT` frames and returns the last one, with every frame's stats.
+/// Renders `scene`, moved with its camera by `shift` metres, into a `width` ×
+/// `height` offscreen texture for `FRAME_COUNT` frames and returns the last
+/// one, with every frame's stats.
 /// Time and camera are injected (a fixed step, the scene's camera path by
 /// frame) and nothing reads the wall clock or input, so equal arguments give
 /// equal images on one machine.
 pub fn capture(
     context: &GpuContext,
     scene: ReferenceScene,
+    shift: glam::DVec3,
     width: u32,
     height: u32,
 ) -> anyhow::Result<(image::RgbaImage, Vec<FrameStats>)> {
-    let (target, frame_stats) = render_frames(context, scene, width, height, FRAME_COUNT)?;
+    let (target, frame_stats) = render_frames(context, scene, shift, width, height, FRAME_COUNT)?;
     Ok((read_back(context, &target)?, frame_stats))
 }
 
@@ -42,6 +47,7 @@ pub fn capture(
 pub(crate) fn render_frames(
     context: &GpuContext,
     scene: ReferenceScene,
+    shift: glam::DVec3,
     width: u32,
     height: u32,
     frame_count: u32,
@@ -58,6 +64,13 @@ pub(crate) fn render_frames(
     );
 
     let mut state = State::new(context, TARGET_FORMAT, width, height, scene)?;
+    // A child's translation is relative to its parent, so only roots move.
+    let mut root_query = state
+        .world
+        .query_filtered::<&mut Transform, Without<ChildOf>>();
+    for mut transform in root_query.iter_mut(&mut state.world) {
+        transform.translation += shift;
+    }
     let target = context.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Capture Target"),
         size: wgpu::Extent3d {
@@ -84,7 +97,9 @@ pub(crate) fn render_frames(
                 timeout: None,
             })?;
         }
-        state.world.insert_resource(scene.camera_at(frame));
+        let mut camera = scene.camera_at(frame);
+        camera.position += shift;
+        state.world.insert_resource(camera);
         state.update(FRAME_DELTA);
         let submission = state.render(&target_view, Some(pass_timer.writes(frame)));
         in_flight.push_back(submission);

@@ -1,8 +1,9 @@
 @group(0) @binding(0)
 var<uniform> camera: CameraUniform;
+// Positions reach the shaders relative to the camera (ADR 0014), so the
+// camera sits at the origin and view_proj holds no translation.
 struct CameraUniform {
     view_proj: mat4x4<f32>,
-    position:  vec4<f32>,
 }
 
 struct MaterialData {
@@ -52,7 +53,7 @@ struct VertexInput {
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) world_pos: vec3<f32>,
+    @location(0) camera_relative_position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
     @location(3) @interpolate(flat) material_id: u32,
@@ -74,7 +75,7 @@ in: VertexInput, @builtin(instance_index) instance_idx: u32
         (instance.model * vec4<f32>(in.tangent.xyz, 0.0)).xyz,
         in.tangent.w
     );
-    out.world_pos = (instance.model * vec4<f32>(in.position, 1.0)).xyz;
+    out.camera_relative_position = (instance.model * vec4<f32>(in.position, 1.0)).xyz;
     out.material_id = instance.material_id;
     return out;
 }
@@ -167,7 +168,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let tangent_space_normal = normal_sample * 2.0 - vec3<f32>(1.0);
     let normal = normalize(tangent_to_world * tangent_space_normal);
 
-    let view_direction = normalize(camera.position.xyz - in.world_pos);
+    let view_direction = normalize(-in.camera_relative_position);
 
     var outgoing_radiance = cook_torrance(
         normal,
@@ -180,7 +181,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     );
 
     for (var light_index = 0u; light_index < u32(light.num_point_lights.x); light_index++) {
-        let light_vector = light.point_positions[light_index].xyz - in.world_pos;
+        let light_vector = light.point_positions[light_index].xyz - in.camera_relative_position;
         let distance = length(light_vector);
         let attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * distance * distance);
         outgoing_radiance += cook_torrance(

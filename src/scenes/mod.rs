@@ -65,12 +65,12 @@ impl ReferenceScene {
             // A fixed camera, face on: normal mapping holds up best there, per
             // github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/NormalTangentTest
             Self::NormalTangent => Camera::looking_at(
-                glam::vec3(0.0, NORMAL_TANGENT_CENTRE_HEIGHT, 3.2),
-                glam::vec3(0.0, NORMAL_TANGENT_CENTRE_HEIGHT, 0.0),
+                glam::dvec3(0.0, NORMAL_TANGENT_CENTRE_HEIGHT, 3.2),
+                glam::dvec3(0.0, NORMAL_TANGENT_CENTRE_HEIGHT, 0.0),
             ),
             Self::FarCoplanar => Camera::looking_at(
-                glam::vec3(0.0, FAR_COPLANAR_CAMERA_HEIGHT, 0.0),
-                glam::vec3(0.0, 0.0, -FAR_COPLANAR_DISTANCE),
+                glam::dvec3(0.0, FAR_COPLANAR_CAMERA_HEIGHT, 0.0),
+                glam::dvec3(0.0, 0.0, -FAR_COPLANAR_DISTANCE),
             ),
         }
     }
@@ -81,7 +81,7 @@ impl ReferenceScene {
 fn orbit(frame: u32, radius: f32, height: f32) -> Camera {
     let angle = (-7.5 + 0.25 * frame as f32).to_radians();
     let position = glam::vec3(radius * angle.sin(), height, radius * angle.cos());
-    Camera::looking_at(position, glam::Vec3::ZERO)
+    Camera::looking_at(position.as_dvec3(), glam::DVec3::ZERO)
 }
 
 /// Linear sRGB reflectance of gold at normal incidence: metals tint their
@@ -115,7 +115,7 @@ pub(crate) fn spawn_pbr_sweep(
                 0.0,
             );
             world.spawn((
-                Transform(glam::Affine3A::from_translation(position)),
+                Transform::from_translation(position.as_dvec3()),
                 MeshRef(sphere),
                 MaterialRef(material),
             ));
@@ -139,18 +139,14 @@ pub(crate) fn spawn_uv_grid(
     );
     // Rough so the highlight does not wash out the texture.
     let material = material_pool.insert(queue, factor_material([1.0; 4], 0.0, 0.8, albedo_layer));
-    world.spawn((
-        Transform(glam::Affine3A::IDENTITY),
-        MeshRef(plane),
-        MaterialRef(material),
-    ));
+    world.spawn((Transform::IDENTITY, MeshRef(plane), MaterialRef(material)));
 }
 
 /// Committed, so CI renders it; 1.8 MB, under the 2 MB commit ceiling
 /// (`docs/research/test-assets.md`).
 const NORMAL_TANGENT_ASSET: &str = "assets/NormalTangentTest/NormalTangentTest.glb";
 /// The middle of the model's bounds, which run from -1.2 to 0.95 in Y.
-const NORMAL_TANGENT_CENTRE_HEIGHT: f32 = -0.125;
+const NORMAL_TANGENT_CENTRE_HEIGHT: f64 = -0.125;
 
 pub(crate) fn spawn_normal_tangent(
     world: &mut World,
@@ -160,21 +156,17 @@ pub(crate) fn spawn_normal_tangent(
 ) -> anyhow::Result<()> {
     let (mesh, material) =
         insert_gltf_model(world, device, queue, material_pool, NORMAL_TANGENT_ASSET)?;
-    world.spawn((
-        Transform(glam::Affine3A::IDENTITY),
-        MeshRef(mesh),
-        MaterialRef(material),
-    ));
+    world.spawn((Transform::IDENTITY, MeshRef(mesh), MaterialRef(material)));
     Ok(())
 }
 
 /// From the camera to the planes' centre, and from the centre to each edge.
-const FAR_COPLANAR_DISTANCE: f32 = 2000.0;
+const FAR_COPLANAR_DISTANCE: f64 = 2000.0;
 /// Looks down about 8.5° at the planes' centre, so a ray crosses the 1 cm gap
 /// over about 7 cm.
-const FAR_COPLANAR_CAMERA_HEIGHT: f32 = 300.0;
+const FAR_COPLANAR_CAMERA_HEIGHT: f64 = 300.0;
 /// Between the two planes, in metres.
-const FAR_COPLANAR_GAP: f32 = 0.01;
+const FAR_COPLANAR_GAP: f64 = 0.01;
 
 pub(crate) fn spawn_far_coplanar(
     world: &mut World,
@@ -186,9 +178,9 @@ pub(crate) fn spawn_far_coplanar(
         world,
         device,
         queue,
-        &ground_plane(FAR_COPLANAR_DISTANCE, 1.0),
+        &ground_plane(FAR_COPLANAR_DISTANCE as f32, 1.0),
     );
-    let centre = glam::vec3(0.0, 0.0, -FAR_COPLANAR_DISTANCE);
+    let centre = glam::dvec3(0.0, 0.0, -FAR_COPLANAR_DISTANCE);
     for (height, base_color) in [
         (0.0, [0.8, 0.1, 0.1, 1.0]),
         (-FAR_COPLANAR_GAP, [0.1, 0.8, 0.1, 1.0]),
@@ -198,9 +190,7 @@ pub(crate) fn spawn_far_coplanar(
             factor_material(base_color, 0.0, 0.8, MaterialPool::DEFAULT_LAYER),
         );
         world.spawn((
-            Transform(glam::Affine3A::from_translation(
-                centre + glam::Vec3::Y * height,
-            )),
+            Transform::from_translation(centre + glam::DVec3::Y * height),
             MeshRef(plane),
             MaterialRef(material),
         ));

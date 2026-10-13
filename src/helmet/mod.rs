@@ -28,10 +28,10 @@ pub fn spawn_helmet(
         return;
     }
 
-    let position = camera.position + camera.forward() * 3.0;
+    let position = camera.position + camera.forward().as_dvec3() * 3.0;
     let entity = commands
         .spawn((
-            Transform(glam::Affine3A::from_translation(position)),
+            Transform::from_translation(position),
             MeshRef(assets.mesh),
             MaterialRef(assets.material),
         ))
