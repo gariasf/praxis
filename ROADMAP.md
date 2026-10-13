@@ -73,7 +73,8 @@ How new systems are built. Distinct from the coding principles at the bottom
    upload. Keeps ECS readable and independent of wgpu specifics.
 
 3. **Renderer pulls, entities don't push.** No `entity.draw()`. The renderer
-   queries the ECS for renderables, sorts and batches, then issues draws.
+   side queries the ECS for renderables (prepare, into Frame data: ADR 0004),
+   sorts and batches, then issues draws.
    Prerequisite for culling, instancing, and (eventually) GPU-driven rendering.
 
 4. **One uber-shader, features behind flags.** Resist the urge to spawn a new

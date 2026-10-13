@@ -4,8 +4,9 @@ use bevy_ecs::prelude::*;
 
 use crate::components::Transform;
 use crate::gpu::GpuContext;
+use crate::render::MAIN_PASS;
 use crate::scenes::ReferenceScene;
-use crate::state::{MAIN_PASS, State};
+use crate::state::State;
 use crate::stats::FrameStats;
 
 /// 8-bit sRGB like the window's surface, which takes the first sRGB format
@@ -191,7 +192,10 @@ impl PassTimer {
 
 /// Copies an RGBA8 `texture` to the CPU, without the row padding the copy
 /// needs.
-fn read_back(context: &GpuContext, texture: &wgpu::Texture) -> anyhow::Result<image::RgbaImage> {
+pub(crate) fn read_back(
+    context: &GpuContext,
+    texture: &wgpu::Texture,
+) -> anyhow::Result<image::RgbaImage> {
     let (width, height) = (texture.width(), texture.height());
     let row_bytes = width * 4;
     let padded_row_bytes = row_bytes.next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);

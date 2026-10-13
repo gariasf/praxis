@@ -95,8 +95,9 @@ src/
   camera/, time/, input/,      # feature modules: resource (+ systems)
     helmet/                       per domain in one mod.rs
   assets/                      # asset types, loaders, pools
-  render/                      # renderer-internal: instance, uniforms,
-                                 vertex, depth, prepare, staging
+  render/                      # Renderer (owns the Pools, reads no
+                                 World), prepare (World to Frame data),
+                                 instance, uniforms, vertex, depth, staging
 tests/                         # integration tests at agreed seams
   goldens/<backend>/           # committed Goldens; PRAXIS_UPDATE_GOLDENS=1
                                  cargo test --test goldens rewrites them
@@ -110,8 +111,10 @@ scripts/verify.sh              # the verify command: fmt, clippy, build,
                                  against Baselines and Budgets
 ```
 
-Renderer **pulls** from `World` via queries (Design Principle #3 in
-`ROADMAP.md`). ECS types never hold GPU buffers (Design Principle #2).
+Rendering **pulls** from `World` (Design Principle #3 in `ROADMAP.md`):
+prepare queries it into owned Frame data, and the Renderer draws only
+that, reading no `World` (ADR 0004). ECS types never hold GPU buffers
+(Design Principle #2).
 
 When a feature folder grows past one file, split into
 `feature/{resource,system,...}.rs`. Don't pre-split.
@@ -171,7 +174,7 @@ When a feature folder grows past one file, split into
 
 When reviewing changes, check for:
 
-- [ ] GPU resources created in `State::new` are also recreated in
+- [ ] GPU resources created in `Renderer::new` are also recreated in
       `resize()`
 - [ ] Shader bind group bindings match the Rust bind group layouts.
       `cargo test` checks struct and vertex layouts field by field

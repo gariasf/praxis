@@ -1,11 +1,8 @@
-use bevy_ecs::prelude::*;
-
 use crate::{
     assets::{Mesh, MeshHandle},
     render::Vertex,
 };
 
-#[derive(Resource)]
 pub struct MeshPool {
     meshes: Vec<Mesh>,
     pub vertex_buffer: wgpu::Buffer,

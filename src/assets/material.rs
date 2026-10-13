@@ -1,5 +1,3 @@
-use bevy_ecs::prelude::*;
-
 use crate::stats::texture_bytes;
 
 /// All channel arrays are this square dimension. glTF assets are scale-padded
@@ -131,7 +129,6 @@ impl ChannelArray {
 /// one `texture_2d_array` per channel. A single bind group serves every
 /// material; the fragment shader looks up `materials[instance.material_id]` and
 /// samples each array by the layer index stored in `texture_indices`.
-#[derive(Resource)]
 pub struct MaterialPool {
     materials: Vec<MaterialData>,
     materials_buffer: wgpu::Buffer,

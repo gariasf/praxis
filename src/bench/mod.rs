@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use crate::capture::render_frames;
 use crate::gpu::GpuContext;
+use crate::render::MAIN_PASS;
 use crate::scenes::ReferenceScene;
-use crate::state::MAIN_PASS;
 use crate::stats::FrameStats;
 
 /// The Baselines `compare` reads, `<adapter key>/<scene>.json`: the reference
