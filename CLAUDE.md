@@ -95,8 +95,9 @@ src/
   camera/, time/, input/,      # feature modules: resource (+ systems)
     helmet/                       per domain in one mod.rs
   assets/                      # asset types, loaders, pools
-  render/                      # renderer-internal: instance, uniforms,
-                                 vertex, depth, prepare, staging
+  render/                      # Renderer (owns the Pools, reads no
+                                 World), prepare (World to Frame data),
+                                 instance, uniforms, vertex, depth, staging
 tests/                         # integration tests at agreed seams
   goldens/<backend>/           # committed Goldens; PRAXIS_UPDATE_GOLDENS=1
                                  cargo test --test goldens rewrites them

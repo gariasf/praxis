@@ -95,9 +95,10 @@ pub(crate) fn spawn_pbr_sweep(
     world: &mut World,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
+    mesh_pool: &mut MeshPool,
     material_pool: &mut MaterialPool,
 ) {
-    let sphere = insert_mesh(world, device, queue, &uv_sphere(SPHERE_RADIUS));
+    let sphere = insert_mesh(device, queue, mesh_pool, &uv_sphere(SPHERE_RADIUS));
     for (row, metallic) in [0.0_f32, 1.0].into_iter().enumerate() {
         for (column, roughness) in SWEEP_ROUGHNESS.into_iter().enumerate() {
             let material = material_pool.insert(
@@ -127,9 +128,10 @@ pub(crate) fn spawn_uv_grid(
     world: &mut World,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
+    mesh_pool: &mut MeshPool,
     material_pool: &mut MaterialPool,
 ) {
-    let plane = insert_mesh(world, device, queue, &ground_plane(4.0, 2.0));
+    let plane = insert_mesh(device, queue, mesh_pool, &ground_plane(4.0, 2.0));
     let albedo_layer = material_pool.upload(
         queue,
         MaterialChannel::Albedo,
@@ -152,10 +154,16 @@ pub(crate) fn spawn_normal_tangent(
     world: &mut World,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
+    mesh_pool: &mut MeshPool,
     material_pool: &mut MaterialPool,
 ) -> anyhow::Result<()> {
-    let (mesh, material) =
-        insert_gltf_model(world, device, queue, material_pool, NORMAL_TANGENT_ASSET)?;
+    let (mesh, material) = insert_gltf_model(
+        device,
+        queue,
+        mesh_pool,
+        material_pool,
+        NORMAL_TANGENT_ASSET,
+    )?;
     world.spawn((Transform::IDENTITY, MeshRef(mesh), MaterialRef(material)));
     Ok(())
 }
@@ -172,12 +180,13 @@ pub(crate) fn spawn_far_coplanar(
     world: &mut World,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
+    mesh_pool: &mut MeshPool,
     material_pool: &mut MaterialPool,
 ) {
     let plane = insert_mesh(
-        world,
         device,
         queue,
+        mesh_pool,
         &ground_plane(FAR_COPLANAR_DISTANCE as f32, 1.0),
     );
     let centre = glam::dvec3(0.0, 0.0, -FAR_COPLANAR_DISTANCE);
@@ -201,15 +210,14 @@ pub(crate) fn spawn_far_coplanar(
 /// Mesh, and inserts the Material of its first Primitive with each of its
 /// textures uploaded to its Channel's array.
 pub(crate) fn insert_gltf_model(
-    world: &mut World,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
+    mesh_pool: &mut MeshPool,
     material_pool: &mut MaterialPool,
     path: &str,
 ) -> anyhow::Result<(MeshHandle, MaterialHandle)> {
     let model = load_model(path).with_context(|| format!("load {path}"))?;
 
-    let mut mesh_pool = world.resource_mut::<MeshPool>();
     let mut primitives = Vec::new();
     for (primitive_index, primitive) in model.primitives.iter().enumerate() {
         let _primitive_span = tracing::debug_span!("upload_primitive", primitive_index).entered();
@@ -338,9 +346,9 @@ struct Geometry {
 /// Uploads `geometry` as a one-Primitive Mesh, with MikkTSpace tangents as a
 /// glTF file without tangents gets them.
 fn insert_mesh(
-    world: &mut World,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
+    mesh_pool: &mut MeshPool,
     geometry: &Geometry,
 ) -> MeshHandle {
     let tangents = generate_tangents(
@@ -357,7 +365,6 @@ fn insert_mesh(
             tangent: tangents[vertex_index],
         })
         .collect();
-    let mut mesh_pool = world.resource_mut::<MeshPool>();
     let (vertex_offset, index_offset, index_count) =
         mesh_pool.push_primitive(device, queue, &vertices, &geometry.indices);
     mesh_pool.insert(Mesh {

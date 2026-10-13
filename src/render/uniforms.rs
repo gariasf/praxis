@@ -1,5 +1,5 @@
 #[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Clone, Default, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct LightUniform {
     pub direction: [f32; 4], // xyz = direction, w = unused
     pub color: [f32; 4],     // rgb = color, a = intensity
@@ -11,7 +11,7 @@ pub struct LightUniform {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Clone, Default, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct CameraUniform {
     /// Projection times the view rotation: positions reach it relative to
     /// the camera (ADR 0014).

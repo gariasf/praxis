@@ -65,7 +65,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     for name in [
         "fly_camera",
         "clear_just_pressed",
-        "prepare_renderables",
+        "prepare_frame",
         "upload",
         "encode",
         "submit",
