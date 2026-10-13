@@ -26,12 +26,14 @@ mod render;
 mod scenes;
 mod state;
 mod stats;
+mod threading;
 mod time;
 
 pub use capture::capture;
 pub use scenes::ReferenceScene;
 pub use state::DEFAULT_MODEL;
 pub use stats::FrameStats;
+pub use threading::init_compute_pool;
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
