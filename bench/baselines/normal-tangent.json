@@ -1,0 +1,20 @@
+{
+  "scene": "normal-tangent",
+  "adapter": "Apple M4 Pro",
+  "profile": "release",
+  "width": 2560,
+  "height": 1440,
+  "measured_frames": 1800,
+  "cpu_frame_microseconds": {
+    "median": 31.25,
+    "p95": 58.167
+  },
+  "gpu_main_pass_microseconds": {
+    "median": 213.583,
+    "p95": 216.583
+  },
+  "draw_calls": 1,
+  "uploaded_bytes": 416,
+  "gpu_memory_bytes": 687168016,
+  "heap_allocations": 81
+}

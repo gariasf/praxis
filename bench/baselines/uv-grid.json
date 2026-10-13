@@ -1,0 +1,20 @@
+{
+  "scene": "uv-grid",
+  "adapter": "Apple M4 Pro",
+  "profile": "release",
+  "width": 2560,
+  "height": 1440,
+  "measured_frames": 1800,
+  "cpu_frame_microseconds": {
+    "median": 32.5,
+    "p95": 62.834
+  },
+  "gpu_main_pass_microseconds": {
+    "median": 264.58299999999997,
+    "p95": 278.166
+  },
+  "draw_calls": 1,
+  "uploaded_bytes": 416,
+  "gpu_memory_bytes": 687168016,
+  "heap_allocations": 81
+}

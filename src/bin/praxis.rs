@@ -2,6 +2,7 @@ use std::io::Write;
 use std::path::Path;
 
 use praxis::ReferenceScene;
+use praxis::bench::{Budgets, CompareMode, Measurements, Verdict};
 use praxis::gpu::GpuContext;
 
 /// The capture size when the command names none: small, and 16:9 like the
@@ -24,10 +25,14 @@ fn main() -> anyhow::Result<()> {
         }
         [command, scene, output, size] if command == "capture" => capture(scene, output, size),
         [command, output, scenes @ ..] if command == "bench" => bench(output, scenes),
+        [command, results] if command == "compare" => compare(results, CompareMode::Local),
+        [command, results, flag] if command == "compare" && flag == "--ci" => {
+            compare(results, CompareMode::Ci)
+        }
         _ => anyhow::bail!(
             "unexpected arguments {arguments:?}: run with no arguments, `capabilities`, \
              `capture <scene> <png path> [<width>x<height>]`, \
-             or `bench <output directory> [<scene>...]`"
+             `bench <output directory> [<scene>...]`, or `compare <bench directory> [--ci]`"
         ),
     }
 }
@@ -73,6 +78,55 @@ fn bench(output: &str, scene_names: &[String]) -> anyhow::Result<()> {
         std::fs::write(&path, serde_json::to_string_pretty(&result)? + "\n")?;
         writeln!(std::io::stdout(), "{result}")?;
     }
+    Ok(())
+}
+
+/// Compares every `<scene>.json` in `results` with its Baseline and the
+/// Budgets, prints one line per scene and finding, and fails on any failed
+/// metric.
+fn compare(results: &str, mode: CompareMode) -> anyhow::Result<()> {
+    let budgets: Budgets = serde_json::from_slice(&std::fs::read(praxis::bench::BUDGETS_PATH)?)?;
+    let mut paths: Vec<_> = std::fs::read_dir(results)?
+        .map(|entry| entry.map(|entry| entry.path()))
+        .collect::<std::io::Result<_>>()?;
+    paths.retain(|path| {
+        path.extension()
+            .is_some_and(|extension| extension == "json")
+    });
+    paths.sort();
+    anyhow::ensure!(!paths.is_empty(), "no bench results in {results}");
+    let mut failed = 0;
+    let mut stdout = std::io::stdout();
+    for path in paths {
+        let current: Measurements = serde_json::from_slice(&std::fs::read(&path)?)?;
+        let baseline_path = Path::new(praxis::bench::BASELINE_DIRECTORY)
+            .join(path.file_name().expect("a read_dir entry has a file name"));
+        if !baseline_path.exists() {
+            failed += 1;
+            writeln!(
+                stdout,
+                "{} FAIL no Baseline at {}; record one with `praxis bench {} {}`",
+                current.scene,
+                baseline_path.display(),
+                praxis::bench::BASELINE_DIRECTORY,
+                current.scene
+            )?;
+            continue;
+        }
+        let baseline: Measurements = serde_json::from_slice(&std::fs::read(&baseline_path)?)?;
+        let findings = praxis::bench::compare(&current, &baseline, &budgets, mode)?;
+        if findings.is_empty() {
+            writeln!(stdout, "{} ok", current.scene)?;
+        }
+        for finding in findings {
+            failed += usize::from(finding.verdict == Verdict::Fail);
+            writeln!(stdout, "{} {finding}", current.scene)?;
+        }
+    }
+    anyhow::ensure!(
+        failed == 0,
+        "{failed} metrics failed against their Baseline or Budget"
+    );
     Ok(())
 }
 
