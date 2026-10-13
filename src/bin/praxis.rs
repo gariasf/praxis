@@ -1,6 +1,7 @@
 use std::io::Write;
 use std::path::Path;
 
+use anyhow::Context;
 use praxis::ReferenceScene;
 use praxis::bench::{Budgets, CompareMode, Measurements, Verdict};
 use praxis::gpu::GpuContext;
@@ -85,7 +86,7 @@ fn bench(output: &str, scene_names: &[String]) -> anyhow::Result<()> {
 /// Budgets, prints one line per scene and finding, and fails on any failed
 /// metric.
 fn compare(results: &str, mode: CompareMode) -> anyhow::Result<()> {
-    let budgets: Budgets = serde_json::from_slice(&std::fs::read(praxis::bench::BUDGETS_PATH)?)?;
+    let budgets: Budgets = read_json(Path::new(praxis::bench::BUDGETS_PATH))?;
     let mut paths: Vec<_> = std::fs::read_dir(results)?
         .map(|entry| entry.map(|entry| entry.path()))
         .collect::<std::io::Result<_>>()?;
@@ -98,7 +99,7 @@ fn compare(results: &str, mode: CompareMode) -> anyhow::Result<()> {
     let mut failed = 0;
     let mut stdout = std::io::stdout();
     for path in paths {
-        let current: Measurements = serde_json::from_slice(&std::fs::read(&path)?)?;
+        let current: Measurements = read_json(&path)?;
         let baseline_path = Path::new(praxis::bench::BASELINE_DIRECTORY)
             .join(path.file_name().expect("a read_dir entry has a file name"));
         if !baseline_path.exists() {
@@ -113,7 +114,7 @@ fn compare(results: &str, mode: CompareMode) -> anyhow::Result<()> {
             )?;
             continue;
         }
-        let baseline: Measurements = serde_json::from_slice(&std::fs::read(&baseline_path)?)?;
+        let baseline: Measurements = read_json(&baseline_path)?;
         let findings = praxis::bench::compare(&current, &baseline, &budgets, mode)?;
         if findings.is_empty() {
             writeln!(stdout, "{} ok", current.scene)?;
@@ -128,6 +129,11 @@ fn compare(results: &str, mode: CompareMode) -> anyhow::Result<()> {
         "{failed} metrics failed against their Baseline or Budget"
     );
     Ok(())
+}
+
+fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> anyhow::Result<T> {
+    let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+    serde_json::from_slice(&bytes).with_context(|| format!("parsing {}", path.display()))
 }
 
 /// Renders the Reference scene named `scene` headless at `size`,

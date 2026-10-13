@@ -192,22 +192,25 @@ pub fn compare(
 ) -> anyhow::Result<Vec<Finding>> {
     anyhow::ensure!(
         (
+            &current.scene,
             &current.profile,
             current.width,
             current.height,
             current.measured_frames
         ) == (
+            &baseline.scene,
             &baseline.profile,
             baseline.width,
             baseline.height,
             baseline.measured_frames
         ),
-        "{} ran {} at {}x{} for {} frames, its Baseline {} at {}x{} for {}",
+        "{} ran {} at {}x{} for {} frames, its Baseline is {} {} at {}x{} for {}",
         current.scene,
         current.profile,
         current.width,
         current.height,
         current.measured_frames,
+        baseline.scene,
         baseline.profile,
         baseline.width,
         baseline.height,
@@ -501,6 +504,13 @@ mod tests {
         let mut debug = baseline();
         debug.profile = "debug".to_owned();
         assert!(compare(&debug, &baseline(), &BUDGETS, CompareMode::Ci).is_err());
+    }
+
+    #[test]
+    fn another_scenes_baseline_is_refused() {
+        let mut other_scene = baseline();
+        other_scene.scene = "uv-grid".to_owned();
+        assert!(compare(&other_scene, &baseline(), &BUDGETS, CompareMode::Ci).is_err());
     }
 
     #[test]
