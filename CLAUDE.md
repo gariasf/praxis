@@ -102,6 +102,8 @@ bench/                         # budgets.json (ADR 0013) and baselines/
                                  <scene>.json from the M4 Pro; `praxis
                                  bench <dir>` then `praxis compare <dir>`
 scripts/fetch-assets.sh        # downloads the manifest's fetched assets
+scripts/verify.sh              # the verify command: fmt, clippy, build,
+                                 tests with Goldens, counter Budgets
 ```
 
 Renderer **pulls** from `World` via queries (Design Principle #3 in
