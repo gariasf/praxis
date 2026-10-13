@@ -103,6 +103,9 @@ bench/                         # budgets.json (ADR 0013) and baselines/
                                  and CI's lavapipe (`--ci`); `praxis
                                  bench <dir>` then `praxis compare <dir>`
 scripts/fetch-assets.sh        # downloads the manifest's fetched assets
+scripts/verify.sh              # the verify command: fmt, clippy, build,
+                                 tests with Goldens, bench counters
+                                 against Baselines and Budgets
 ```
 
 Renderer **pulls** from `World` via queries (Design Principle #3 in

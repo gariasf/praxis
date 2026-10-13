@@ -10,7 +10,7 @@ The owner decides. Agents implement, open PRs, and merge them (see Review). A de
 - Only the live milestone has tickets. Later milestones are **fog**: one line each under *Not yet specified* on the map issue (label `wayfinder:map`). Fog is charted into tickets when the milestone before it nears exit.
 - A milestone's exit criteria are commands plus numbers, written on the milestone before its first ticket opens. It closes when every criterion has been run and its output pasted on the milestone. "Looks done" never closes a milestone.
 - The ladder's order, each milestone's one-line goal and its provisional exit criteria are recorded in the [ladder decision](https://github.com/gariasf/praxis/issues/75#issuecomment-6141801746). A milestone implements one or two ADRs in their dependency order. Provisional criteria become firm at the boundary, when the milestone is created.
-- Every milestone's exit also includes the standard clause: the verify command exits 0 within 30 lines; a new or extended Reference scene shows the milestone's work, with its Goldens committed on Metal and software Vulkan; Baselines are re-recorded and no Budget regresses unless an ADR or map comment moved it; a profile of the Reference scenes is recorded and the top three offenders are ticketed; a literature scan for the next milestone's topics is checked against the ADRs.
+- Every milestone's exit also includes the standard clause: the verify command (`scripts/verify.sh`) exits 0 within 30 lines; a new or extended Reference scene shows the milestone's work, with its Goldens committed on Metal and software Vulkan; Baselines are re-recorded and no Budget regresses unless an ADR or map comment moved it; a profile of the Reference scenes is recorded and the top three offenders are ticketed; a literature scan for the next milestone's topics is checked against the ADRs.
 - Reordering is a decision comment on the map issue: what moved, why, and what it displaces. The rail numbers in this file (PR count, size ceiling, review rounds) change the same way: a decision comment, then an edit here.
 
 ## Tickets
@@ -26,6 +26,7 @@ The owner decides. Agents implement, open PRs, and merge them (see Review). A de
 
 - One ticket per PR (`Closes #N`). At most two PRs open at once, on disjoint modules.
 - Two reviews, each once: the agent's own before the PR opens, CodeRabbit's after (see Review). One fix commit per review, and a verification pass only when a fix touched correctness-critical logic. Findings still open after that become tickets or fog notes.
+- The verify command, `scripts/verify.sh`, exits 0 before the PR opens: formatting, lint, build, tests (Goldens required) and the bench counters against Baselines and Budgets, one line per step, about a minute from a fresh worktree. Its output is the Verification block.
 - Description follows `.github/pull_request_template.md`: what changed, how it was verified (command and output, 30 lines at most), metric deltas, decisions needed from the owner.
 - Commit subject 72 characters at most; the body says why, not what.
 
@@ -65,6 +66,7 @@ Pre-PR option: with the CLI authenticated (`cr auth login`), `cr review --agent`
 2. Find the live milestone: `gh api repos/gariasf/praxis/milestones --jq '.[] | "\(.title) open=\(.open_issues) closed=\(.closed_issues)"'`.
 3. Take the frontier: `gh issue list --milestone <live> --label ready-for-agent --state open --limit 200 --json number,title --jq 'sort_by(.number)'`. Tickets are published blockers-first, so ascending number is a valid order. Take the lowest number whose `gh api repos/gariasf/praxis/issues/<n> --jq .issue_dependencies_summary.blocked_by` is 0.
 4. Claim it (assign) before any work.
+5. In the ticket's fresh worktree, run `scripts/verify.sh`. A red start is reported on the ticket before work begins; the failing step's log is in `target/verify/`.
 
 ## Context hygiene
 
