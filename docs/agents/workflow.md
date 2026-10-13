@@ -9,6 +9,8 @@ The owner decides. Agents implement, open PRs, and merge them (see Review). A de
 - Work is ordered as GitHub milestones (`M0`, `M1`, …). Exactly one is **live**: the lowest-numbered open milestone.
 - Only the live milestone has tickets. Later milestones are **fog**: one line each under *Not yet specified* on the map issue (label `wayfinder:map`). Fog is charted into tickets when the milestone before it nears exit.
 - A milestone's exit criteria are commands plus numbers, written on the milestone before its first ticket opens. It closes when every criterion has been run and its output pasted on the milestone. "Looks done" never closes a milestone.
+- The ladder's order, each milestone's one-line goal and its provisional exit criteria are recorded in the [ladder decision](https://github.com/gariasf/praxis/issues/75#issuecomment-6141801746). A milestone implements one or two ADRs in their dependency order. Provisional criteria become firm at the boundary, when the milestone is created.
+- Every milestone's exit also includes the standard clause: the verify command exits 0 within 30 lines; a new or extended Reference scene shows the milestone's work, with its Goldens committed on Metal and software Vulkan; Baselines are re-recorded and no Budget regresses unless an ADR or map comment moved it; a profile of the Reference scenes is recorded and the top three offenders are ticketed; a literature scan for the next milestone's topics is checked against the ADRs.
 - Reordering is a decision comment on the map issue: what moved, why, and what it displaces. The rail numbers in this file (PR count, size ceiling, review rounds) change the same way: a decision comment, then an edit here.
 
 ## Tickets
@@ -50,7 +52,6 @@ Pre-PR option: with the CLI authenticated (`cr auth login`), `cr review --agent`
 
 - Budgets and baselines live in the repo beside the benches (M0 creates them). A render or hot-path change reports its delta against baseline.
 - A budget moves down freely and moves up only through an ADR or map comment.
-- Milestone exit includes a profile of the reference scenes and the top three offenders ticketed.
 - Measurement is always on; optimisation is evidence-driven: fix what measurement names, in the order it names them.
 
 ## Correctness

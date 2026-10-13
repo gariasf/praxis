@@ -38,8 +38,9 @@ owner decides; agents implement, open PRs, and merge them once reviewed
   contradicts one says so.
 - `ROADMAP.md` — long-range vision. Its load-bearing decisions moved to
   `docs/adr/`; its phase checklists are superseded by milestones.
-- `PLAN.md` — Phase 6 scratch, paused. Superseded by the M0 tickets;
-  Steps 5-6 return as tickets under a later milestone.
+- `PLAN.md` — Phase 6 scratch, paused. Superseded by the milestones:
+  Step 5 (HDR) returns in M3; Step 6 (IBL) is dropped for ADR 0020's
+  ray-traced cubemaps.
 
 If any of these conflicts with current code, **the code is the source
 of truth**. Flag the drift to the owner explicitly; do not silently
