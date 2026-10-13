@@ -10,7 +10,7 @@ use crate::stats::FrameStats;
 /// read-back bytes the image's pixels.
 pub(crate) const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
-/// Frames rendered per capture, one second at `FRAME_DELTA_TIME`; the last
+/// Frames rendered per capture, one second at `FRAME_DELTA`; the last
 /// one is read back.
 const FRAME_COUNT: u32 = 60;
 
@@ -19,8 +19,8 @@ const FRAME_COUNT: u32 = 60;
 /// further ahead than a window would.
 const FRAMES_IN_FLIGHT: usize = 2;
 
-/// The injected time step in seconds, 60 Hz.
-const FRAME_DELTA_TIME: f32 = 1.0 / 60.0;
+/// The injected frame delta, 60 Hz in whole nanoseconds.
+const FRAME_DELTA: Duration = Duration::from_nanos(16_666_667);
 
 /// Renders `scene` into a `width` × `height` offscreen texture for
 /// `FRAME_COUNT` frames and returns the last one, with every frame's stats.
@@ -85,7 +85,7 @@ pub(crate) fn render_frames(
             })?;
         }
         state.world.insert_resource(scene.camera_at(frame));
-        state.update(FRAME_DELTA_TIME);
+        state.update(FRAME_DELTA);
         let submission = state.render(&target_view, Some(pass_timer.writes(frame)));
         in_flight.push_back(submission);
         frame_stats.push(state.frame_stats());

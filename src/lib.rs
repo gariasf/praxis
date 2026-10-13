@@ -13,6 +13,7 @@ use crate::camera::Camera;
 use crate::gpu::GpuContext;
 use crate::input::Input;
 use crate::state::State;
+use crate::time::clamp_frame_delta;
 
 mod assets;
 pub mod bench;
@@ -123,10 +124,6 @@ struct App {
     error: Option<anyhow::Error>,
 }
 
-/// Longest frame delta that advances the State (ADR 0022's clamp), so a
-/// stalled event loop resumes without a jump.
-const MAX_FRAME_DELTA: Duration = Duration::from_millis(250);
-
 /// The window, the surface it presents through, and the State that renders
 /// into that surface on wall-clock time.
 struct WindowShell {
@@ -209,8 +206,8 @@ impl WindowShell {
         // Measured before acquire (ADR 0022) and on every redraw, so time
         // while no frame is drawn is dropped rather than replayed at once.
         let now = Instant::now();
-        let delta_time = self.last_frame.map_or(0.0, |last_frame| {
-            (now - last_frame).min(MAX_FRAME_DELTA).as_secs_f32()
+        let frame_delta = self.last_frame.map_or(Duration::ZERO, |last_frame| {
+            clamp_frame_delta(now - last_frame)
         });
         self.last_frame = Some(now);
 
@@ -235,7 +232,7 @@ impl WindowShell {
         };
 
         // Only a frame that will be drawn advances and uploads.
-        self.state.update(delta_time);
+        self.state.update(frame_delta);
 
         let view = output
             .texture

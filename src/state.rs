@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use bevy_ecs::prelude::*;
@@ -19,7 +19,7 @@ use crate::scenes::{
 };
 use crate::stats::{FrameRecorder, FrameStats, texture_bytes};
 use crate::threading::{init_compute_pool, single_threaded_schedule};
-use crate::time::Time;
+use crate::time::{FixedTime, Time, fixed_schedule, run_ticks};
 
 /// The helmet-class model the Scene draws, relative to the working directory
 /// (the crate root under `cargo run` and `cargo test`). It is fetched, not
@@ -47,6 +47,7 @@ pub struct State {
     instance_bind_group: wgpu::BindGroup,
     instance_capacity: u64,
     schedule: Schedule,
+    fixed_schedule: Schedule,
     instance_bind_group_layout: wgpu::BindGroupLayout,
     transient_saves_memory: bool,
     recorder: FrameRecorder,
@@ -188,11 +189,12 @@ impl State {
         world.insert_resource(MeshPool::new(&device, 1 << 20, 256 << 10));
         world.insert_resource(Input::default());
         world.insert_resource(Time::default());
+        world.insert_resource(FixedTime::default());
         world.insert_resource(scene.camera_at(0));
         world.insert_resource(RuntimeHelmets::default());
 
         let recorder = FrameRecorder::new();
-        let schedule = simulation_schedule(&recorder);
+        let (schedule, mut fixed_schedule) = simulation_schedules(&recorder);
 
         match scene {
             ReferenceScene::Helmet => {
@@ -212,6 +214,9 @@ impl State {
             }
         }
         world.insert_resource(material_pool);
+        fixed_schedule
+            .initialize(&mut world)
+            .context("fixed schedule build")?;
 
         let camera_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Camera Buffer"),
@@ -278,6 +283,7 @@ impl State {
             instance_bind_group,
             instance_capacity,
             schedule,
+            fixed_schedule,
             instance_bind_group_layout,
             transient_saves_memory: context.adapter.get_info().transient_saves_memory == Some(true),
             recorder,
@@ -348,11 +354,14 @@ impl State {
         self.aspect_ratio = width as f32 / height as f32;
     }
 
-    /// Advances the Scene by `delta_time` seconds and uploads the frame's data.
-    pub fn update(&mut self, delta_time: f32) {
+    /// Moves the camera by `frame_delta`, runs the Ticks it completes and
+    /// uploads the frame's data.
+    pub fn update(&mut self, frame_delta: Duration) {
         self.recorder.begin();
-        self.world.resource_mut::<Time>().delta_time = delta_time;
+        self.world.resource_mut::<Time>().delta_time = frame_delta.as_secs_f32();
         self.schedule.run(&mut self.world);
+        self.recorder.dropped_time =
+            run_ticks(&mut self.fixed_schedule, &mut self.world, frame_delta);
 
         let camera = self.world.resource::<Camera>();
 
@@ -576,19 +585,25 @@ impl State {
 
 /// The State's one schedule: its systems, timed by `recorder`, on the
 /// single-threaded executor.
-fn simulation_schedule(recorder: &FrameRecorder) -> Schedule {
+/// The schedule run once per frame and the fixed schedule run once per Tick.
+fn simulation_schedules(recorder: &FrameRecorder) -> (Schedule, Schedule) {
     let mut schedule = single_threaded_schedule();
+    let mut fixed_schedule = fixed_schedule();
     recorder.systems.scope(|| {
-        schedule.add_systems(
+        schedule.add_systems(fly_camera);
+        // Presses wait in `Input` for the next Tick that runs, so a frame
+        // that runs none loses none.
+        fixed_schedule.add_systems(
             (
-                fly_camera,
-                (spawn_helmet, despawn_helmet).run_if(resource_exists::<HelmetAssets>),
+                (spawn_helmet, despawn_helmet)
+                    .chain()
+                    .run_if(resource_exists::<HelmetAssets>),
                 clear_just_pressed,
             )
                 .chain(),
         );
     });
-    schedule
+    (schedule, fixed_schedule)
 }
 
 fn create_frame_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
@@ -604,8 +619,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn simulation_schedule_runs_single_threaded() {
-        let schedule = simulation_schedule(&FrameRecorder::new());
+    fn simulation_schedules_run_single_threaded() {
+        let (schedule, fixed_schedule) = simulation_schedules(&FrameRecorder::new());
         assert_eq!(schedule.get_executor_kind(), ExecutorKind::SingleThreaded);
+        assert_eq!(
+            fixed_schedule.get_executor_kind(),
+            ExecutorKind::SingleThreaded
+        );
     }
 }
