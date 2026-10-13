@@ -13,7 +13,9 @@ env:
   CARGO_TERM_COLOR: always
   # The `vulkan-cpu` Goldens and the llvmpipe Baselines are this Mesa's
   # lavapipe. When the archive drops the version, install fails: re-record
-  # both with the new one rather than let them drift.
+  # both with the new one rather than let them drift. The Baselines'
+  # directory names lavapipe's LLVM and vector width, so a runner that
+  # changes either fails with "no Baseline" until they are re-recorded.
   LAVAPIPE_VERSION: 25.2.8-0ubuntu0.24.04.4
 
 jobs:

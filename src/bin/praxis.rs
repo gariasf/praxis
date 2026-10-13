@@ -110,14 +110,29 @@ fn compare(results: &str, mode: CompareMode) -> anyhow::Result<()> {
             baseline_directory.join(path.file_name().expect("a read_dir entry has a file name"));
         if !baseline_path.exists() {
             failed += 1;
+            let ci_run = (current.width, current.height, current.measured_frames)
+                == (
+                    Configuration::CI.width,
+                    Configuration::CI.height,
+                    Configuration::CI.measured_frames,
+                );
+            let record = if ci_run {
+                format!(
+                    "copy {}.json from CI's bench-results artifact",
+                    current.scene
+                )
+            } else {
+                format!(
+                    "record one with `praxis bench {} {}`",
+                    baseline_directory.display(),
+                    current.scene
+                )
+            };
             writeln!(
                 stdout,
-                "{} FAIL no Baseline at {}; record one with `praxis bench {}{} {}`",
+                "{} FAIL no Baseline at {}; {record}",
                 current.scene,
                 baseline_path.display(),
-                baseline_directory.display(),
-                if mode == CompareMode::Ci { " --ci" } else { "" },
-                current.scene
             )?;
             continue;
         }

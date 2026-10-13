@@ -17,7 +17,7 @@ pub const BUDGETS_PATH: &str = "bench/budgets.json";
 
 /// A bench run's render size and frame counts. A run compares only with a
 /// Baseline of the same size and measured frames.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 pub struct Configuration {
     pub width: u32,
     pub height: u32,
