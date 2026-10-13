@@ -16,4 +16,4 @@ Closes #
 
 ## Decide
 
-<!-- Decisions needed from the owner, each with a recommendation. `None` if none. -->
+<!-- Owner items only (visual or interactive checks, roadmap decisions; docs/agents/workflow.md), each with a recommendation. `None` if none. -->

@@ -2,7 +2,7 @@
 
 How work moves through this repo. Read before starting, closing, or reordering a ticket or milestone.
 
-The owner decides. Agents implement, open PRs, and merge them (see Review). A decision that lives only in chat is not made: it lands as an ADR (`docs/adr/`), a comment on the map issue, or a ticket comment.
+The owner decides what is worked on. Agents implement, commit, open PRs and merge them without asking (see Review), then take the next frontier ticket. A PR waits for the owner only for visual or interactive judgement (a render or Golden to judge, a check only the owner can run) or an important roadmap decision: milestone order or exit criteria, a new or superseded ADR, a new dependency or version bump ([decision](https://github.com/gariasf/praxis/issues/17#issuecomment-6154239897)). Any other choice the agent makes itself and states with its reason in the PR body. A decision that lives only in chat is not made: it lands as an ADR (`docs/adr/`), a comment on the map issue, or a ticket comment.
 
 ## The ladder
 
@@ -27,7 +27,7 @@ The owner decides. Agents implement, open PRs, and merge them (see Review). A de
 - One ticket per PR (`Closes #N`). At most two PRs open at once, on disjoint modules.
 - Two reviews, each once: the agent's own before the PR opens, CodeRabbit's after (see Review). One fix commit per review, and a verification pass only when a fix touched correctness-critical logic. Findings still open after that become tickets or fog notes.
 - The verify command, `scripts/verify.sh`, exits 0 before the PR opens: formatting, lint, build, tests (Goldens required) and the bench counters against Baselines and Budgets, one line per step, about a minute from a fresh worktree. Its output is the Verification block.
-- Description follows `.github/pull_request_template.md`: what changed, how it was verified (command and output, 30 lines at most), metric deltas, decisions needed from the owner.
+- Description follows `.github/pull_request_template.md`: what changed, how it was verified (command and output, 30 lines at most), metric deltas, and under Decide only the owner items named above.
 - Commit subject 72 characters at most; the body says why, not what.
 
 ## Review
@@ -43,7 +43,7 @@ CI owns mechanical checks. Two semantic reviews follow, in this order. The agent
    - *Defer*: true but outside the ticket. A note under *Not yet specified* with its revival trigger.
    - Mark a finding the local review already caught or answered as such. The findings it missed are the second opinion's value.
 5. **One fix commit, one summary.** Reply on each thread in two lines at most and resolve it. Post one PR comment: counts per disposition and the deferred list. Pushes do not start a review: the plan allows 5 reviews per rolling hour, so one review per PR starts on its own and the rest are spent on purpose. Request the verification pass of the same round with `@coderabbitai review`, once, and only when a fix touched correctness-critical logic. It may add one more fix commit, for Major or above only; everything else is declined or deferred.
-6. **Merge** when CI is green, both reviews have run or CodeRabbit's was skipped or rate-limited, the summary is posted and says which, and no Decide item is unanswered. Any agent squash-merges any such PR, its own or another session's, then removes the worktree and branch. A PR that needs the owner's visual judgement (a render to judge, an image to approve) waits for the owner instead.
+6. **Merge** when CI is green, both reviews have run or CodeRabbit's was skipped or rate-limited, the summary is posted and says which, and no Decide item is unanswered. Any agent squash-merges any such PR, its own or another session's, without asking, then removes the worktree and branch. A PR that needs the owner's visual or interactive judgement, or carries a roadmap decision, waits for the owner instead.
 
 CodeRabbit reads `.coderabbit.yaml` from the PR's own branch, so a PR that edits it is reviewed under its own edit: name every change to it under Decide. A declined finding class that recurs becomes a path instruction there or a `CODING_STANDARDS.md` rule. Summary comments carry the numbers (findings, fixed, declined, deferred, and how many the local review had missed); after about ten PRs the owner decides from them whether CodeRabbit stays and whether its approval becomes a merge gate.
 
