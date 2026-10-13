@@ -222,11 +222,7 @@ impl State {
     pub fn frame_stats(&self) -> FrameStats {
         FrameStats {
             gpu_memory_bytes: self.renderer.gpu_memory_bytes(),
-            allocator_report_bytes: self
-                .renderer
-                .device
-                .generate_allocator_report()
-                .map(|report| report.total_allocated_bytes),
+            allocator_report_bytes: self.renderer.allocator_report_bytes(),
             ..self.recorder.stats()
         }
     }

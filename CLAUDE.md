@@ -172,7 +172,7 @@ When a feature folder grows past one file, split into
 
 When reviewing changes, check for:
 
-- [ ] GPU resources created in `State::new` are also recreated in
+- [ ] GPU resources created in `Renderer::new` are also recreated in
       `resize()`
 - [ ] Shader bind group bindings match the Rust bind group layouts.
       `cargo test` checks struct and vertex layouts field by field

@@ -29,7 +29,7 @@ pub struct Draw {
     /// The Primitive's first vertex in the Mesh pool's vertex buffer.
     pub base_vertex: i32,
     /// The Instance's index in `FrameData::instances`.
-    pub instance: u32,
+    pub instance_index: u32,
 }
 
 /// Fills `frame` from the World's camera, lights and Renderables, seen at
@@ -61,7 +61,7 @@ pub fn prepare_frame(
             );
             continue;
         };
-        let instance = frame.instances.len() as u32;
+        let instance_index = frame.instances.len() as u32;
         let model_matrix = transform.matrix_relative_to(camera_position);
         frame.instances.push(InstanceData {
             model: model_matrix.to_cols_array_2d(),
@@ -74,7 +74,7 @@ pub fn prepare_frame(
             .extend(mesh.primitives.iter().map(|primitive| Draw {
                 indices: primitive.index_offset..primitive.index_offset + primitive.index_count,
                 base_vertex: primitive.vertex_offset as i32,
-                instance,
+                instance_index,
             }));
     }
 }

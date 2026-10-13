@@ -334,7 +334,7 @@ impl Renderer {
                 render_pass.draw_indexed(
                     draw.indices.clone(),
                     draw.base_vertex,
-                    draw.instance..draw.instance + 1,
+                    draw.instance_index..draw.instance_index + 1,
                 );
             }
             recorder.draw_calls += frame.draws.len() as u32;
@@ -348,6 +348,13 @@ impl Renderer {
         let submission = self.queue.submit(std::iter::once(command_buffer));
         recorder.stage("submit", started);
         submission
+    }
+
+    /// wgpu's allocator report total, a diagnostic only; Metal has none.
+    pub fn allocator_report_bytes(&self) -> Option<u64> {
+        self.device
+            .generate_allocator_report()
+            .map(|report| report.total_allocated_bytes)
     }
 
     /// Bytes of the buffers and textures this Renderer created, its Pools
@@ -419,7 +426,7 @@ mod tests {
     use super::*;
     use crate::assets::{MaterialData, Mesh, Primitive};
     use crate::capture::read_back;
-    use crate::render::Draw;
+    use crate::render::prepare::Draw;
 
     const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
     const SIZE: u32 = 16;
@@ -487,7 +494,7 @@ mod tests {
             draws: vec![Draw {
                 indices: index_offset..index_offset + index_count,
                 base_vertex: vertex_offset as i32,
-                instance: 0,
+                instance_index: 0,
             }],
         };
 
