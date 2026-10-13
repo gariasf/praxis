@@ -15,3 +15,6 @@
 
 # Fetched assets: pinned in assets/manifest.json, downloaded by scripts/fetch-assets.sh
 /assets/SciFiHelmet/
+
+# The helmet's Baseline is local-only, like its asset (#34)
+/bench/baselines/helmet.json

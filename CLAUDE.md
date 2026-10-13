@@ -82,7 +82,8 @@ src/
   bin/praxis.rs                # thin binary: command dispatch
   gpu/                         # GPU context, windowed or headless
   capture/                     # offscreen render read back as an image
-  bench/                       # Reference scene medians and p95s at 1440p
+  bench/                       # Reference scene medians, compared with
+                                 Baselines and Budgets
   stats/                       # frame stats: CPU and GPU times, counts,
                                  GPU memory, counting allocator
   scenes/                      # Reference scenes: generated content,
@@ -97,6 +98,9 @@ src/
 tests/                         # integration tests at agreed seams
   goldens/<backend>/           # committed Goldens; PRAXIS_UPDATE_GOLDENS=1
                                  cargo test --test goldens rewrites them
+bench/                         # budgets.json (ADR 0013) and baselines/
+                                 <scene>.json from the M4 Pro; `praxis
+                                 bench <dir>` then `praxis compare <dir>`
 scripts/fetch-assets.sh        # downloads the manifest's fetched assets
 ```
 
