@@ -148,6 +148,7 @@ pub fn run(
     let (_, frames) = render_frames(
         context,
         scene,
+        glam::DVec3::ZERO,
         configuration.width,
         configuration.height,
         configuration.warm_up_frames + configuration.measured_frames,

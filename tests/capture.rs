@@ -32,8 +32,8 @@ fn capture_draws_the_scene_over_the_srgb_encoded_background() {
         return;
     }
 
-    let (image, _) =
-        praxis::capture(&context, ReferenceScene::Helmet, 160, 90).expect("capture failed");
+    let (image, _) = praxis::capture(&context, ReferenceScene::Helmet, glam::DVec3::ZERO, 160, 90)
+        .expect("capture failed");
 
     assert_eq!(image.dimensions(), (160, 90));
     let corner = image.get_pixel(0, 0).0;

@@ -58,10 +58,7 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
         })
         .collect();
     let twins = [
-        twin!(CameraUniform {
-            view_proj,
-            position
-        }),
+        twin!(CameraUniform { view_proj }),
         twin!(LightUniform {
             direction,
             color,

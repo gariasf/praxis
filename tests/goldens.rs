@@ -3,6 +3,7 @@
 //! `tests/goldens/<key>/<scene>.png`. The key is the backend, plus `-cpu` on
 //! a software driver: `metal` is recorded on the M4 Pro, and
 //! `vulkan-cpu` on CI's lavapipe (the Mesa pinned in `.github/workflows/ci.yml`).
+//! Each scene shifted by 100 km must also match its origin Golden.
 //! A Golden is a reviewed capture from `praxis::capture`, so it catches
 //! regressions, not errors already present when it was recorded.
 //!
@@ -37,6 +38,11 @@ const HEIGHT: u32 = 360;
 /// One step above it absorbs a driver rounding a value on the other side of
 /// .5; any larger difference in any pixel fails.
 const TOLERANCE: u8 = 1;
+
+/// The 100 km check (ADR 0014): each scene, shifted with its camera by this
+/// much, matches its origin Golden, so no World position reaches the GPU in
+/// f32.
+const FAR_SHIFT: glam::DVec3 = glam::DVec3::new(100_000.0, 0.0, 100_000.0);
 
 const UPDATE_GOLDENS_VARIABLE: &str = "PRAXIS_UPDATE_GOLDENS";
 const REQUIRE_GOLDENS_VARIABLE: &str = "PRAXIS_REQUIRE_GOLDENS";
@@ -166,7 +172,8 @@ fn reference_scenes_match_their_goldens() {
     let mut failures = Vec::new();
     for scene in SCENES {
         let golden_path = golden_path(&golden_directory, scene);
-        let (actual, _) = praxis::capture(&context, scene, WIDTH, HEIGHT).expect("capture failed");
+        let (actual, _) = praxis::capture(&context, scene, glam::DVec3::ZERO, WIDTH, HEIGHT)
+            .expect("capture failed");
         if !golden_path.exists() {
             // Saved so a Golden for a machine one cannot run locally (CI's
             // lavapipe) can be taken from the job's artifact.
@@ -184,34 +191,57 @@ fn reference_scenes_match_their_goldens() {
         let golden = image::open(&golden_path)
             .unwrap_or_else(|error| panic!("Golden {} unreadable: {error}", golden_path.display()))
             .into_rgba8();
-        assert_eq!(
-            golden.dimensions(),
-            actual.dimensions(),
-            "{} Golden size differs from the capture",
-            scene.name()
-        );
+        failures.extend(mismatch(
+            &golden,
+            &actual,
+            scene.name(),
+            &difference_directory,
+        ));
 
-        let difference = compare(&golden, &actual);
-        if difference.differing_pixels > 0 {
-            std::fs::create_dir_all(&difference_directory).expect("difference directory");
-            let difference_path =
-                difference_directory.join(format!("{}-difference.png", scene.name()));
-            difference_image(&golden, &actual)
-                .save(&difference_path)
-                .expect("write difference image");
-            actual
-                .save(difference_directory.join(format!("{}-actual.png", scene.name())))
-                .expect("write capture");
-            failures.push(format!(
-                "{}: {} pixels differ by more than {TOLERANCE} (max channel delta {}); difference image {}",
-                scene.name(),
-                difference.differing_pixels,
-                difference.max_channel_delta,
-                difference_path.display()
-            ));
-        }
+        let (shifted, _) = praxis::capture(&context, scene, FAR_SHIFT, WIDTH, HEIGHT)
+            .expect("shifted capture failed");
+        failures.extend(mismatch(
+            &golden,
+            &shifted,
+            &format!("{}-100km", scene.name()),
+            &difference_directory,
+        ));
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Compares `actual` with `golden`; on a mismatch writes the difference image
+/// and the capture under `directory` as `<label>-difference.png` and
+/// `<label>-actual.png`, and describes it.
+fn mismatch(
+    golden: &image::RgbaImage,
+    actual: &image::RgbaImage,
+    label: &str,
+    directory: &Path,
+) -> Option<String> {
+    assert_eq!(
+        golden.dimensions(),
+        actual.dimensions(),
+        "{label} Golden size differs from the capture"
+    );
+    let difference = compare(golden, actual);
+    if difference.differing_pixels == 0 {
+        return None;
+    }
+    std::fs::create_dir_all(directory).expect("difference directory");
+    let difference_path = directory.join(format!("{label}-difference.png"));
+    difference_image(golden, actual)
+        .save(&difference_path)
+        .expect("write difference image");
+    actual
+        .save(directory.join(format!("{label}-actual.png")))
+        .expect("write capture");
+    Some(format!(
+        "{label}: {} pixels differ by more than {TOLERANCE} (max channel delta {}); difference image {}",
+        difference.differing_pixels,
+        difference.max_channel_delta,
+        difference_path.display()
+    ))
 }
 
 fn golden_path(directory: &Path, scene: ReferenceScene) -> PathBuf {
@@ -224,7 +254,8 @@ fn update_goldens(context: &GpuContext, directory: &Path) {
     std::fs::create_dir_all(directory).expect("Golden directory");
     for scene in SCENES {
         let path = golden_path(directory, scene);
-        let (actual, _) = praxis::capture(context, scene, WIDTH, HEIGHT).expect("capture failed");
+        let (actual, _) = praxis::capture(context, scene, glam::DVec3::ZERO, WIDTH, HEIGHT)
+            .expect("capture failed");
         let unchanged =
             image::open(&path).is_ok_and(|golden| golden.into_rgba8().as_raw() == actual.as_raw());
         if unchanged {
