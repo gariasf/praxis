@@ -1,0 +1,20 @@
+{
+  "scene": "helmet",
+  "adapter": "Apple M4 Pro",
+  "profile": "release",
+  "width": 2560,
+  "height": 1440,
+  "measured_frames": 1800,
+  "cpu_frame_microseconds": {
+    "median": 36.916,
+    "p95": 83.5
+  },
+  "gpu_main_pass_microseconds": {
+    "median": 602.625,
+    "p95": 659.833
+  },
+  "draw_calls": 11,
+  "uploaded_bytes": 1856,
+  "gpu_memory_bytes": 689745136,
+  "heap_allocations": 83
+}
