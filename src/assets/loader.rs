@@ -218,8 +218,11 @@ impl bevy_mikktspace::Geometry for TangentGeometry<'_> {
         self.normals[self.vertex_index(face, vert)]
     }
 
+    /// MikkTSpace puts the bitangent along +v. glTF's `v` runs down the
+    /// image while its normal maps take +Y as up, so `v` is flipped.
     fn tex_coord(&self, face: usize, vert: usize) -> [f32; 2] {
-        self.uvs[self.vertex_index(face, vert)]
+        let [u, v] = self.uvs[self.vertex_index(face, vert)];
+        [u, 1.0 - v]
     }
 
     fn set_tangent(
@@ -253,4 +256,35 @@ pub(crate) fn generate_tangents(
         tracing::error!("MikkTSpace tangent generation failed; falling back to +X tangents");
     }
     geometry.tangents
+}
+
+#[cfg(test)]
+mod tests {
+    use super::generate_tangents;
+
+    /// A quad facing +Z, its texture upright: `u` grows along +X and glTF's `v`
+    /// grows down the image, along −Y. glTF normal maps take +Y as up the
+    /// image, so the bitangent, cross(normal, tangent) × w, must be +Y.
+    #[test]
+    fn generated_bitangent_points_up_the_image() {
+        let positions = [
+            [-1.0, -1.0, 0.0],
+            [1.0, -1.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [-1.0, 1.0, 0.0],
+        ];
+        let normals = [[0.0, 0.0, 1.0]; 4];
+        let uvs = [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
+        let indices = [0, 1, 2, 0, 2, 3];
+
+        for tangent in generate_tangents(&positions, &normals, &uvs, &indices) {
+            let [x, y, z, handedness] = tangent;
+            let bitangent = glam::Vec3::Z.cross(glam::vec3(x, y, z)) * handedness;
+            assert!(
+                glam::vec3(x, y, z).abs_diff_eq(glam::Vec3::X, 1e-6)
+                    && bitangent.abs_diff_eq(glam::Vec3::Y, 1e-6),
+                "tangent {tangent:?} gives bitangent {bitangent}, expected tangent +X and bitangent +Y"
+            );
+        }
+    }
 }

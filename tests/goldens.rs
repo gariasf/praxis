@@ -1,6 +1,7 @@
-//! Goldens: each procedural Reference scene's capture matches its committed
-//! image in `tests/goldens/<key>/<scene>.png`. The key is the backend, plus
-//! `-cpu` on a software driver: `metal` is recorded on the M4 Pro, and
+//! Goldens: each Reference scene CI can render, procedural or from a
+//! committed asset, matches its committed image in
+//! `tests/goldens/<key>/<scene>.png`. The key is the backend, plus `-cpu` on
+//! a software driver: `metal` is recorded on the M4 Pro, and
 //! `vulkan-cpu` on CI's lavapipe (the Mesa pinned in `.github/workflows/ci.yml`).
 //! A Golden is a reviewed capture from `praxis::capture`, so it catches
 //! regressions, not errors already present when it was recorded.
@@ -8,7 +9,8 @@
 //! `PRAXIS_UPDATE_GOLDENS=1 cargo test --test goldens` rewrites the current
 //! key's Goldens and prints the scenes whose image changed. Without the
 //! variable the test only compares; on a mismatch it writes a difference
-//! image and the capture under `target/tmp/golden-differences/<key>/`. With
+//! image and the capture under `target/tmp/golden-differences/<key>/`, and a
+//! scene with no Golden yet writes its capture there. With
 //! `PRAXIS_REQUIRE_GOLDENS=1`, as on CI, a missing adapter or Golden directory
 //! fails instead of skipping.
 
@@ -18,7 +20,11 @@ use std::path::{Path, PathBuf};
 use praxis::ReferenceScene;
 use praxis::gpu::GpuContext;
 
-const SCENES: [ReferenceScene; 2] = [ReferenceScene::PbrSweep, ReferenceScene::UvGrid];
+const SCENES: [ReferenceScene; 3] = [
+    ReferenceScene::PbrSweep,
+    ReferenceScene::UvGrid,
+    ReferenceScene::NormalTangent,
+];
 
 /// The capture command's default size.
 const WIDTH: u32 = 640;
@@ -127,7 +133,7 @@ fn compare_counts_pixels_beyond_tolerance_and_marks_them_red() {
 }
 
 #[test]
-fn procedural_scenes_match_their_goldens() {
+fn reference_scenes_match_their_goldens() {
     let context = match pollster::block_on(GpuContext::headless()) {
         Ok(context) => context,
         Err(error) if error.is::<wgpu::RequestAdapterError>() => {
@@ -159,10 +165,24 @@ fn procedural_scenes_match_their_goldens() {
     let mut failures = Vec::new();
     for scene in SCENES {
         let golden_path = golden_path(&golden_directory, scene);
+        let (actual, _) = praxis::capture(&context, scene, WIDTH, HEIGHT).expect("capture failed");
+        if !golden_path.exists() {
+            // Saved so a Golden for a machine one cannot run locally (CI's
+            // lavapipe) can be taken from the job's artifact.
+            std::fs::create_dir_all(&difference_directory).expect("difference directory");
+            let actual_path = difference_directory.join(format!("{}-actual.png", scene.name()));
+            actual.save(&actual_path).expect("write capture");
+            failures.push(format!(
+                "{}: no Golden at {}; capture {}",
+                scene.name(),
+                golden_path.display(),
+                actual_path.display()
+            ));
+            continue;
+        }
         let golden = image::open(&golden_path)
             .unwrap_or_else(|error| panic!("Golden {} unreadable: {error}", golden_path.display()))
             .into_rgba8();
-        let (actual, _) = praxis::capture(&context, scene, WIDTH, HEIGHT).expect("capture failed");
         assert_eq!(
             golden.dimensions(),
             actual.dimensions(),

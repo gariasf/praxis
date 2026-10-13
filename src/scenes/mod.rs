@@ -1,11 +1,13 @@
 use std::f32::consts::{PI, TAU};
 
+use anyhow::Context;
 use bevy_ecs::prelude::*;
 
 use crate::assets::loader::generate_tangents;
 use crate::assets::material::TEXTURE_DIM;
 use crate::assets::{
-    MaterialChannel, MaterialData, MaterialPool, Mesh, MeshHandle, MeshPool, Primitive,
+    LoadedImage, MaterialChannel, MaterialData, MaterialHandle, MaterialPool, Mesh, MeshHandle,
+    MeshPool, Primitive, load_model,
 };
 use crate::camera::Camera;
 use crate::components::{MaterialRef, MeshRef, Transform};
@@ -20,10 +22,18 @@ pub enum ReferenceScene {
     PbrSweep,
     /// A ground plane with a generated grid texture, tiled twice.
     UvGrid,
+    /// Khronos NormalTangentTest, committed in `assets/`, seen face on: real
+    /// bumps beside normal-mapped quads that should shade the same.
+    NormalTangent,
 }
 
 impl ReferenceScene {
-    pub const ALL: [Self; 3] = [Self::Helmet, Self::PbrSweep, Self::UvGrid];
+    pub const ALL: [Self; 4] = [
+        Self::Helmet,
+        Self::PbrSweep,
+        Self::UvGrid,
+        Self::NormalTangent,
+    ];
 
     /// The name the capture command selects the scene by.
     pub fn name(self) -> &'static str {
@@ -31,6 +41,7 @@ impl ReferenceScene {
             Self::Helmet => "helmet",
             Self::PbrSweep => "pbr-sweep",
             Self::UvGrid => "uv-grid",
+            Self::NormalTangent => "normal-tangent",
         }
     }
 
@@ -45,6 +56,12 @@ impl ReferenceScene {
             Self::Helmet => Camera::new(),
             Self::PbrSweep => orbit(frame, 6.5, 1.0),
             Self::UvGrid => orbit(frame, 9.0, 7.0),
+            // A fixed camera, face on: normal mapping holds up best there, per
+            // github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/NormalTangentTest
+            Self::NormalTangent => Camera::looking_at(
+                glam::vec3(0.0, NORMAL_TANGENT_CENTRE_HEIGHT, 3.2),
+                glam::vec3(0.0, NORMAL_TANGENT_CENTRE_HEIGHT, 0.0),
+            ),
         }
     }
 }
@@ -117,6 +134,135 @@ pub(crate) fn spawn_uv_grid(
         MeshRef(plane),
         MaterialRef(material),
     ));
+}
+
+/// Committed, so CI renders it; 1.8 MB, under the 2 MB commit ceiling
+/// (`docs/research/test-assets.md`).
+const NORMAL_TANGENT_ASSET: &str = "assets/NormalTangentTest/NormalTangentTest.glb";
+/// The middle of the model's bounds, which run from -1.2 to 0.95 in Y.
+const NORMAL_TANGENT_CENTRE_HEIGHT: f32 = -0.125;
+
+pub(crate) fn spawn_normal_tangent(
+    world: &mut World,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    material_pool: &mut MaterialPool,
+) -> anyhow::Result<()> {
+    let (mesh, material) =
+        insert_gltf_model(world, device, queue, material_pool, NORMAL_TANGENT_ASSET)?;
+    world.spawn((
+        Transform(glam::Affine3A::IDENTITY),
+        MeshRef(mesh),
+        MaterialRef(material),
+    ));
+    Ok(())
+}
+
+/// Loads the glTF file at `path`, relative to the working directory, as one
+/// Mesh, and inserts the Material of its first Primitive with each of its
+/// textures uploaded to its Channel's array.
+pub(crate) fn insert_gltf_model(
+    world: &mut World,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    material_pool: &mut MaterialPool,
+    path: &str,
+) -> anyhow::Result<(MeshHandle, MaterialHandle)> {
+    let model = load_model(path).with_context(|| format!("load {path}"))?;
+
+    let mut mesh_pool = world.resource_mut::<MeshPool>();
+    let mut primitives = Vec::new();
+    for (primitive_index, primitive) in model.primitives.iter().enumerate() {
+        let _primitive_span = tracing::debug_span!("upload_primitive", primitive_index).entered();
+
+        let (vertex_offset, index_offset, index_count) =
+            mesh_pool.push_primitive(device, queue, &primitive.vertices, &primitive.indices);
+
+        tracing::debug!(
+            vertices = primitive.vertices.len(),
+            indices = primitive.indices.len(),
+            "primitive uploaded"
+        );
+
+        primitives.push(Primitive {
+            vertex_offset,
+            index_offset,
+            index_count,
+        });
+    }
+    let mesh = Mesh { primitives };
+    let mesh_handle = mesh_pool.insert(mesh);
+
+    // Multi-material meshes (one MaterialRef per primitive) are deferred.
+    if model.primitives.len() > 1 {
+        tracing::warn!(
+            primitives = model.primitives.len(),
+            "multi-primitive model; only primitive 0's material is used (multi-material deferred)"
+        );
+    }
+    let first_primitive = model
+        .primitives
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("model has no primitives"))?;
+    let mut upload_channel = |channel: MaterialChannel, image: Option<&LoadedImage>| -> u32 {
+        match image {
+            Some(image) => {
+                material_pool.upload(queue, channel, &image.pixels, image.width, image.height)
+            }
+            None => {
+                tracing::debug!(
+                    ?channel,
+                    "model has no texture for channel; using the neutral layer"
+                );
+                MaterialPool::DEFAULT_LAYER
+            }
+        }
+    };
+    let albedo_layer = upload_channel(
+        MaterialChannel::Albedo,
+        first_primitive.base_color_image.as_ref(),
+    );
+    let normal_layer = upload_channel(
+        MaterialChannel::Normal,
+        first_primitive.normal_image.as_ref(),
+    );
+    let metallic_roughness_layer = upload_channel(
+        MaterialChannel::MetallicRoughness,
+        first_primitive.metallic_roughness_image.as_ref(),
+    );
+    let occlusion_layer = upload_channel(
+        MaterialChannel::Occlusion,
+        first_primitive.occlusion_image.as_ref(),
+    );
+    let emissive_layer = upload_channel(
+        MaterialChannel::Emissive,
+        first_primitive.emissive_image.as_ref(),
+    );
+    let material = MaterialData {
+        base_color: first_primitive.base_color_factor,
+        metallic_roughness: [
+            first_primitive.metallic_factor,
+            first_primitive.roughness_factor,
+            0.0,
+            0.0,
+        ],
+        emissive: [
+            first_primitive.emissive_factor[0],
+            first_primitive.emissive_factor[1],
+            first_primitive.emissive_factor[2],
+            1.0,
+        ],
+        texture_indices: [
+            albedo_layer,
+            normal_layer,
+            metallic_roughness_layer,
+            occlusion_layer,
+        ],
+        extra: [emissive_layer, 0, 0, 0],
+    };
+    let material_handle = material_pool.insert(queue, material);
+
+    Ok((mesh_handle, material_handle))
 }
 
 /// Factors only, with `albedo_layer` and the neutral Layer for every other
