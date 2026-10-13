@@ -191,6 +191,9 @@ const PRECISION_BAR: f64 = 4.3e-5;
 /// position relative to the Instance; it lands within the precision bar of
 /// its f64 position relative to the camera. The GPU runs one evaluation
 /// order; every other order the compiler may choose is summed on the CPU.
+/// The point's position relative to its pivot arrives rotated and rounded,
+/// so error from rotating it, fused into the sum or not, is outside this
+/// oracle (ADR 0014 measures it separately).
 /// The same points composed from f32 World positions miss the bar.
 #[test]
 fn camera_relative_position_meets_the_precision_bar_within_100_km() {
@@ -249,7 +252,7 @@ fn camera_relative_position_meets_the_precision_bar_within_100_km() {
     let mut world_space_error: f64 = 0.0;
     for (case, result) in cases.iter().zip(results) {
         let gpu = glam::Vec3::from_slice(&result).as_dvec3();
-        let error = gpu.distance(case.expected);
+        let error = gpu.distance(case.camera_relative);
         assert!(
             error <= PRECISION_BAR,
             "{case:?}: GPU composes {gpu}, {error} m from the f64 reference"
@@ -267,22 +270,22 @@ fn camera_relative_position_meets_the_precision_bar_within_100_km() {
     );
 }
 
-/// A point at `camera + expected`, drawn at `local_position` from its
+/// A point at `camera + camera_relative`, drawn at `local_position` from its
 /// Instance's pivot, both placed as the renderer places them.
 #[derive(Debug)]
 struct Case {
     camera: glam::DVec3,
-    expected: glam::DVec3,
+    camera_relative: glam::DVec3,
     local_position: glam::Vec3,
     pivot: glam::DVec3,
 }
 
 impl Case {
-    fn new(camera: glam::DVec3, expected: glam::DVec3, local_position: glam::Vec3) -> Self {
-        let pivot = camera + expected - local_position.as_dvec3();
+    fn new(camera: glam::DVec3, camera_relative: glam::DVec3, local_position: glam::Vec3) -> Self {
+        let pivot = camera + camera_relative - local_position.as_dvec3();
         Self {
             camera,
-            expected,
+            camera_relative,
             local_position,
             pivot,
         }
@@ -321,7 +324,7 @@ impl Case {
             ];
             sums_in_every_order(&terms)
                 .into_iter()
-                .map(|sum| (f64::from(sum) - self.expected[axis]).abs())
+                .map(|sum| (f64::from(sum) - self.camera_relative[axis]).abs())
                 .fold(0.0, f64::max)
         }));
         worst_per_axis.length()
@@ -331,7 +334,7 @@ impl Case {
     /// World positions, as before anchors.
     fn world_space_error(&self) -> f64 {
         let composed = self.pivot.as_vec3() + self.local_position - self.camera.as_vec3();
-        composed.as_dvec3().distance(self.expected)
+        composed.as_dvec3().distance(self.camera_relative)
     }
 }
 

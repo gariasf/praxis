@@ -36,8 +36,7 @@ pub struct Draw {
 
 /// Fills `frame` from the World's camera, lights and Renderables, seen at
 /// `aspect_ratio`, Instances anchored and lights placed relative to the
-/// camera (ADR 0014), reusing its
-/// lists' memory. A Renderable whose Mesh is not in `mesh_pool` is skipped.
+/// camera (ADR 0014), reusing its lists' memory. A Renderable whose Mesh is not in `mesh_pool` is skipped.
 pub fn prepare_frame(
     world: &mut World,
     point_light_query: &mut QueryState<(&WorldTransform, &PointLight)>,
