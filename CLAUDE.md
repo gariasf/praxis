@@ -111,8 +111,10 @@ scripts/verify.sh              # the verify command: fmt, clippy, build,
                                  against Baselines and Budgets
 ```
 
-Renderer **pulls** from `World` via queries (Design Principle #3 in
-`ROADMAP.md`). ECS types never hold GPU buffers (Design Principle #2).
+Rendering **pulls** from `World` (Design Principle #3 in `ROADMAP.md`):
+prepare queries it into owned Frame data, and the Renderer draws only
+that, reading no `World` (ADR 0004). ECS types never hold GPU buffers
+(Design Principle #2).
 
 When a feature folder grows past one file, split into
 `feature/{resource,system,...}.rs`. Don't pre-split.
