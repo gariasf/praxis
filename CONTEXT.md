@@ -105,8 +105,12 @@ An authored region of a Game world marking a space as inside, so lighting sample
 _Avoid_: Room, portal, light blocker
 
 **Input latency**:
-The time from the engine receiving an input event to the present of the first frame whose simulation consumed that event. Time the event spent in the OS before the engine received it, and time in the display queue after present, are not counted.
+The time from the engine receiving an input event to the present of the first frame that shows the state consuming that event at full blend weight. Time the event spent in the OS before the engine received it, and time in the display queue after present, are not counted.
 _Avoid_: Input lag, motion-to-photon
+
+**Tick**:
+One fixed step of the simulation, 1/64 s; rendered frames draw a blend of the two newest Ticks.
+_Avoid_: Physics frame, fixed update, step (unqualified)
 
 ### Worlds
 
