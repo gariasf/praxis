@@ -23,7 +23,7 @@ impl GpuContext {
         let wgpu_instance = create_wgpu_instance();
         let surface = wgpu_instance.create_surface(target)?;
         let adapter = request_adapter(&wgpu_instance, Some(&surface)).await?;
-        let surface_format = choose_surface_format(&surface.get_capabilities(&adapter));
+        let surface_format = choose_surface_format(&surface.get_capabilities(&adapter))?;
         let context = Self::request_device(adapter, Some(surface_format)).await?;
         Ok((context, surface, surface_format))
     }
@@ -338,19 +338,22 @@ async fn request_adapter(
 /// The first sRGB format the surface offers, else its first format: the
 /// main pass writes linear colour and relies on an sRGB target to encode it,
 /// so a non-sRGB surface comes out darker.
-fn choose_surface_format(surface_capabilities: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
-    let surface_format = surface_capabilities
-        .formats
+fn choose_surface_format(
+    surface_capabilities: &wgpu::SurfaceCapabilities,
+) -> anyhow::Result<wgpu::TextureFormat> {
+    let formats = &surface_capabilities.formats;
+    let surface_format = formats
         .iter()
         .find(|format| format.is_srgb())
+        .or_else(|| formats.first())
         .copied()
-        .unwrap_or(surface_capabilities.formats[0]);
+        .ok_or_else(|| anyhow::anyhow!("the surface offers no formats on the selected adapter"))?;
     tracing::debug!(
         ?surface_format,
         srgb = surface_format.is_srgb(),
         "surface format chosen"
     );
-    surface_format
+    Ok(surface_format)
 }
 
 fn create_wgpu_instance() -> wgpu::Instance {
