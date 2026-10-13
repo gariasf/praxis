@@ -48,9 +48,11 @@ pub fn propagate_world_transforms(
     dirty.dedup();
 
     for &entity in dirty.iter() {
-        // A dirty ancestor recomputes this entity's whole subtree.
+        // A dirty ancestor recomputes this entity's whole subtree, unless an
+        // ancestor without a Transform ends its branch first.
         if parents
             .iter_ancestors(entity)
+            .take_while(|&ancestor| transforms.contains(ancestor))
             .any(|ancestor| dirty.binary_search(&ancestor).is_ok())
         {
             continue;
@@ -202,6 +204,24 @@ mod tests {
         schedule.run(&mut world);
         assert_eq!(world.resource::<Propagated>().0, 2);
         assert_near(world_position(&world, chain[3]), glam::DVec3::X);
+    }
+
+    #[test]
+    fn a_parent_without_a_transform_counts_as_the_origin() {
+        let (mut world, mut schedule) = propagation();
+        let root = world.spawn(Transform::from_translation(ROOT)).id();
+        let group = world.spawn(ChildOf(root)).id();
+        let child = world
+            .spawn((Transform::from_translation(glam::DVec3::X), ChildOf(group)))
+            .id();
+        schedule.run(&mut world);
+        assert_near(world_position(&world, child), glam::DVec3::X);
+
+        // Moved with the root, it is still recomputed.
+        world.get_mut::<Transform>(root).unwrap().translation = glam::DVec3::Y;
+        world.get_mut::<Transform>(child).unwrap().translation = glam::DVec3::Z;
+        schedule.run(&mut world);
+        assert_near(world_position(&world, child), glam::DVec3::Z);
     }
 
     #[test]
