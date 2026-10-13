@@ -33,11 +33,20 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     assert_eq!(last.uploaded_bytes, 10 * 144 + 80 + 192);
     // 640 MiB of material arrays (5 Channels of 8 Layers, 2048² RGBA8), the
     // 1 MiB vertex and 256 KiB index buffers, 256 Materials of 80 bytes, the
-    // camera and light uniforms, 16 Instances of 144 bytes, and the 160×90
-    // Depth32Float texture.
+    // camera and light uniforms, 16 Instances of 144 bytes, the 160×90
+    // Depth32Float texture, and three staging slots of the frame's 1712
+    // uploaded bytes rounded up to 2048.
     assert_eq!(
         last.gpu_memory_bytes,
-        640 * MEBIBYTE + MEBIBYTE + 256 * 1024 + 256 * 80 + 80 + 192 + 16 * 144 + 160 * 90 * 4
+        640 * MEBIBYTE
+            + MEBIBYTE
+            + 256 * 1024
+            + 256 * 80
+            + 80
+            + 192
+            + 16 * 144
+            + 160 * 90 * 4
+            + 3 * 2048
     );
 
     let timed: Vec<&str> = last

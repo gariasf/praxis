@@ -6,15 +6,15 @@
   "height": 1440,
   "measured_frames": 1800,
   "cpu_frame_microseconds": {
-    "median": 36.916,
-    "p95": 83.5
+    "median": 31.958999999999996,
+    "p95": 91.833
   },
   "gpu_main_pass_microseconds": {
-    "median": 602.625,
-    "p95": 659.833
+    "median": 601.875,
+    "p95": 629.917
   },
   "draw_calls": 11,
   "uploaded_bytes": 1856,
-  "gpu_memory_bytes": 689745136,
-  "heap_allocations": 83
+  "gpu_memory_bytes": 689751280,
+  "heap_allocations": 82
 }
