@@ -147,3 +147,7 @@ _Avoid_: Benchmark result
 **Budget**:
 A numeric limit on one metric of a Reference scene (CPU ms, GPU ms per pass, number of draw calls, bytes uploaded, GPU memory) that a change must not regress.
 _Avoid_: Target, threshold
+
+**Capability floor**:
+The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.
+_Avoid_: Minimum spec, requirements, baseline
