@@ -359,9 +359,9 @@ impl State {
         let camera = self.world.resource::<Camera>();
 
         let view = camera.view_matrix();
-        let proj = projection_matrix(self.aspect_ratio);
+        let projection = projection_matrix(self.aspect_ratio);
 
-        let view_proj = proj * view;
+        let view_proj = projection * view;
         let camera_uniform = CameraUniform {
             view_proj: view_proj.to_cols_array_2d(),
             position: [camera.position.x, camera.position.y, camera.position.z, 0.0],

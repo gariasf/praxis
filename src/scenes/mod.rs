@@ -25,8 +25,8 @@ pub enum ReferenceScene {
     /// Khronos NormalTangentTest, committed in `assets/`, seen face on: real
     /// bumps beside normal-mapped quads that should shade the same.
     NormalTangent,
-    /// Two ground planes of contrasting colour 1 cm apart, seen at a grazing
-    /// angle about 2 km away: the upper plane covers the lower one everywhere
+    /// Two ground planes of contrasting colour 1 cm apart, 4 km square and
+    /// centred 2 km in front of the camera, seen at a grazing angle: the upper plane covers the lower one everywhere
     /// under reversed depth, and they interleave under standard depth.
     FarCoplanar,
 }
@@ -168,10 +168,12 @@ pub(crate) fn spawn_normal_tangent(
     Ok(())
 }
 
+/// From the camera to the planes' centre, and from the centre to each edge.
 const FAR_COPLANAR_DISTANCE: f32 = 2000.0;
 /// Looks down about 8.5° at the planes' centre, so a ray crosses the 1 cm gap
 /// over about 7 cm.
 const FAR_COPLANAR_CAMERA_HEIGHT: f32 = 300.0;
+/// Between the two planes, in metres.
 const FAR_COPLANAR_GAP: f32 = 0.01;
 
 pub(crate) fn spawn_far_coplanar(
