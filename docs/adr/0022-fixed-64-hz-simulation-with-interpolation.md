@@ -1,10 +1,10 @@
 # Fixed 64 Hz simulation with interpolation
 
-Simulation advances in fixed Ticks of 1/64 s (15.625 ms), decoupled from rendered frames; each frame draws a blend of the two newest Tick states, so the simulation is bit-reproducible across frame timings and a physics engine receives the constant step it expects, at the cost of one Tick of trail on simulated motion (`docs/research/simulation-stepping.md`, option C). Accepted 2026-10-13 ([#78](https://github.com/gariasf/praxis/issues/78)). Planned; today one schedule runs per frame with an f32 `delta_time`.
+Simulation advances in fixed Ticks of 1/64 s (15.625 ms), decoupled from rendered frames; each frame draws a blend of the two newest Tick states, so the simulation is bit-reproducible across frame timings and a physics engine receives the constant step it expects, at the cost of one Tick of trail on simulated motion (`docs/research/simulation-stepping.md`, option C). Accepted 2026-10-13 ([#78](https://github.com/gariasf/praxis/issues/78)). The fixed loop is implemented in #118: `src/time/` runs the fixed schedule once per Tick, at most 4 per frame, with ambiguity detection at `Error`, the Tick counter and blend weight α in `FixedTime`, and the dropped time in frame stats; the helmet spawn and despawn run in it. Planned: entities the fixed schedule moves keep their previous Tick's Transform and are drawn blended (#122); today nothing moves per Tick, so frames draw the newest Tick.
 
 ## Considered options
 
-- Variable step (option A, today): no added latency, but frame-time noise reaches motion (p99 1.7 to 4.5 ms of simulated time per frame on the M4 Pro), results depend on frame timing (15.8 mm apart after 20 s in the survey's toy, against ADR 0014's 0.1 mm bar), and Box2D and PhysX advise against variable steps.
+- Variable step (option A, used until #118): no added latency, but frame-time noise reaches motion (p99 1.7 to 4.5 ms of simulated time per frame on the M4 Pro), results depend on frame timing (15.8 mm apart after 20 s in the survey's toy, against ADR 0014's 0.1 mm bar), and Box2D and PhysX advise against variable steps.
 - Semi-fixed step (option B): as A, with a variable remainder step; 9.7 mm apart in the toy.
 - Fixed step with extrapolation (option D): no trail for steady motion, but drawn positions snap back at contacts and direction changes, which breaks ADR 0008's stable image.
 - Fixed step at a multiple of the refresh rate, unsmoothed (option E): smooth only while the refresh rate divides the tick rate; a 144 Hz or variable-rate display breaks it.

@@ -26,6 +26,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     assert_eq!(frames.len(), FRAME_COUNT);
     let last = frames.last().expect("no frame stats");
 
+    // 60 Hz frames run one or two Ticks each, under the cap.
+    assert!(frames.iter().all(|frame| frame.dropped_time.is_zero()));
     // Two rows of five spheres, one Primitive each.
     assert_eq!(last.draw_calls, 10);
     // Each frame writes ten 144-byte Instances and the 80-byte camera and

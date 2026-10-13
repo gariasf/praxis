@@ -26,6 +26,9 @@ pub struct FrameStats {
     pub allocator_report_bytes: Option<u64>,
     /// Heap allocations and reallocations on the thread that ran the frame.
     pub heap_allocations: u64,
+    /// Simulated time the frame skipped past its Tick cap (ADR 0022): the
+    /// game slowed by this much.
+    pub dropped_time: Duration,
 }
 
 /// One line per group, each a label and then `key=value` pairs, so the text
@@ -51,8 +54,11 @@ impl std::fmt::Display for FrameStats {
         }
         writeln!(
             formatter,
-            "counts draw_calls={} uploaded_bytes={} heap_allocations={}",
-            self.draw_calls, self.uploaded_bytes, self.heap_allocations
+            "counts draw_calls={} uploaded_bytes={} heap_allocations={} dropped_us={:.1}",
+            self.draw_calls,
+            self.uploaded_bytes,
+            self.heap_allocations,
+            microseconds(&self.dropped_time)
         )?;
         let allocator_report_bytes = self
             .allocator_report_bytes
@@ -96,6 +102,7 @@ pub(crate) struct FrameRecorder {
     heap_allocations: u64,
     pub(crate) draw_calls: u32,
     pub(crate) uploaded_bytes: u64,
+    pub(crate) dropped_time: Duration,
 }
 
 impl FrameRecorder {
@@ -109,6 +116,7 @@ impl FrameRecorder {
             heap_allocations: 0,
             draw_calls: 0,
             uploaded_bytes: 0,
+            dropped_time: Duration::ZERO,
         }
     }
 
@@ -118,6 +126,7 @@ impl FrameRecorder {
         self.stages.clear();
         self.draw_calls = 0;
         self.uploaded_bytes = 0;
+        self.dropped_time = Duration::ZERO;
         self.allocations_at_start = thread_allocations();
         self.started = Instant::now();
     }
@@ -150,6 +159,7 @@ impl FrameRecorder {
             draw_calls: self.draw_calls,
             uploaded_bytes: self.uploaded_bytes,
             heap_allocations: self.heap_allocations,
+            dropped_time: self.dropped_time,
             ..FrameStats::default()
         }
     }
