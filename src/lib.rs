@@ -113,6 +113,10 @@ struct App {
     shell: Option<WindowShell>,
 }
 
+/// Longest frame delta, in seconds, that advances the State (ADR 0022's
+/// 250 ms clamp), so a stalled event loop resumes without a jump.
+const MAX_FRAME_DELTA: f32 = 0.25;
+
 /// The window, the surface it presents through, and the State that renders
 /// into that surface on wall-clock time.
 struct WindowShell {
@@ -199,7 +203,8 @@ impl WindowShell {
     }
 
     /// Advances the State by the wall-clock time since the previous frame and
-    /// presents its render.
+    /// presents its render; with no surface texture to draw into, does
+    /// neither.
     fn redraw(&mut self) -> anyhow::Result<()> {
         self.window.request_redraw();
 
@@ -208,12 +213,13 @@ impl WindowShell {
             return Ok(());
         }
 
+        // Measured before acquire (ADR 0022) and on every redraw, so time
+        // while no frame is drawn is dropped rather than replayed at once.
         let now = Instant::now();
-        let delta_time = self
-            .last_frame
-            .map_or(0.0, |last_frame| (now - last_frame).as_secs_f32());
+        let delta_time = self.last_frame.map_or(0.0, |last_frame| {
+            (now - last_frame).as_secs_f32().min(MAX_FRAME_DELTA)
+        });
         self.last_frame = Some(now);
-        self.state.update(delta_time);
 
         let (output, is_suboptimal) = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(surface_texture) => (surface_texture, false),
@@ -234,6 +240,9 @@ impl WindowShell {
                 anyhow::bail!("Surface texture lost");
             }
         };
+
+        // Only a frame that will be drawn advances and uploads.
+        self.state.update(delta_time);
 
         let view = output
             .texture
