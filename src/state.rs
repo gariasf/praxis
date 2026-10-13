@@ -580,6 +580,6 @@ impl State {
 
 fn create_frame_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
     device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("Render Encoder"),
+        label: Some("Frame Encoder"),
     })
 }

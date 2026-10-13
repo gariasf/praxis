@@ -29,8 +29,8 @@ struct StagingSlot {
 impl FrameStaging {
     /// Writes `uploads`, each a target buffer and the bytes for its start,
     /// into the next slot and records their copies into `encoder`, which must
-    /// be submitted. Returns the bytes uploaded: 0 when the slot never maps
-    /// again, after an error is logged.
+    /// be submitted. Returns the bytes uploaded: 0 when the slot failed to
+    /// map again, after an error is logged and the map retried.
     pub fn write(
         &mut self,
         device: &wgpu::Device,
@@ -49,14 +49,18 @@ impl FrameStaging {
             if let Err(error) = device.poll(wgpu::PollType::wait_indefinitely()) {
                 tracing::error!(%error, "waiting for a frame staging slot failed");
             }
+            if !slot.is_mapped.load(Ordering::Acquire) {
+                // Its map failed, so the buffer is unmapped: map it again.
+                tracing::error!("frame staging slot not mapped; skipping the frame's uploads");
+                slot.buffer
+                    .map_async(wgpu::MapMode::Write, .., mark_mapped(&slot.is_mapped));
+                return 0;
+            }
         }
         {
-            let mut mapped = match slot.buffer.slice(..).get_mapped_range_mut() {
-                Ok(mapped) => mapped,
-                Err(error) => {
-                    tracing::error!(%error, "frame staging slot not mapped; skipping the frame's uploads");
-                    return 0;
-                }
+            let Ok(mut mapped) = slot.buffer.slice(..).get_mapped_range_mut() else {
+                tracing::error!("frame staging slot not mapped; skipping the frame's uploads");
+                return 0;
             };
             // An empty transition sizes the encoder's buffer tracking to
             // every buffer at once. The copies alone grow it buffer by buffer
@@ -66,6 +70,7 @@ impl FrameStaging {
             let mut offset = 0;
             for (target, bytes) in uploads {
                 let size = bytes.len() as u64;
+                debug_assert!(size.is_multiple_of(wgpu::COPY_BUFFER_ALIGNMENT));
                 mapped
                     .slice(offset as usize..(offset + size) as usize)
                     .copy_from_slice(bytes);
@@ -75,13 +80,12 @@ impl FrameStaging {
         }
         slot.buffer.unmap();
         slot.is_mapped.store(false, Ordering::Release);
-        let is_mapped = slot.is_mapped.clone();
-        encoder.map_buffer_on_submit(&slot.buffer, wgpu::MapMode::Write, .., move |result| {
-            match result {
-                Ok(()) => is_mapped.store(true, Ordering::Release),
-                Err(error) => tracing::error!(%error, "frame staging slot failed to map"),
-            }
-        });
+        encoder.map_buffer_on_submit(
+            &slot.buffer,
+            wgpu::MapMode::Write,
+            ..,
+            mark_mapped(&slot.is_mapped),
+        );
         needed
     }
 
@@ -110,5 +114,19 @@ impl FrameStaging {
             "frame staging slots resized"
         );
         self.slot_size = slot_size;
+    }
+}
+
+/// A map callback that sets `is_mapped` on success. A failure leaves it unset
+/// for `write` to report; dropping a slot whose map is pending, as `resize`
+/// does, fails it too.
+fn mark_mapped(
+    is_mapped: &Arc<AtomicBool>,
+) -> impl FnOnce(Result<(), wgpu::BufferAsyncError>) + use<> {
+    let is_mapped = is_mapped.clone();
+    move |result| {
+        if result.is_ok() {
+            is_mapped.store(true, Ordering::Release);
+        }
     }
 }
