@@ -22,7 +22,7 @@ fn main() -> ExitCode {
     match run_command(&arguments) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            tracing::error!(error = format!("{error:#}"), "praxis failed");
+            tracing::error!(error = %format_args!("{error:#}"), "praxis failed");
             ExitCode::FAILURE
         }
     }

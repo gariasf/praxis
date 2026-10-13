@@ -86,18 +86,13 @@ pub(crate) fn render_frames(
         }
         state.world.insert_resource(scene.camera_at(frame));
         state.update(FRAME_DELTA_TIME);
-        let submission = state.render(
-            &target_view,
-            pass_timer.as_ref().map(|timer| timer.writes(frame)),
-        );
+        let submission = state.render(&target_view, Some(pass_timer.writes(frame)));
         in_flight.push_back(submission);
         frame_stats.push(state.frame_stats());
     }
 
-    if let Some(timer) = pass_timer {
-        for (stats, pass_time) in frame_stats.iter_mut().zip(timer.read(context)?) {
-            stats.gpu_times.push((MAIN_PASS, pass_time));
-        }
+    for (stats, pass_time) in frame_stats.iter_mut().zip(pass_timer.read(context)?) {
+        stats.gpu_times.push((MAIN_PASS, pass_time));
     }
     Ok((target, frame_stats))
 }
@@ -117,19 +112,16 @@ impl PassTimer {
     /// One set holds a begin and an end timestamp per frame.
     const MAX_FRAMES: u32 = wgpu::QUERY_SET_MAX_QUERIES / 2;
 
-    /// A timer for `frame_count` frames, or `None` when the device has no
-    /// timestamp queries.
-    fn new(device: &wgpu::Device, frame_count: u32) -> Option<Self> {
-        device
-            .features()
-            .contains(wgpu::Features::TIMESTAMP_QUERY)
-            .then(|| Self {
-                query_set: device.create_query_set(&wgpu::QuerySetDescriptor {
-                    label: Some("Pass Timestamps"),
-                    ty: wgpu::QueryType::Timestamp,
-                    count: 2 * frame_count,
-                }),
-            })
+    /// A timer for `frame_count` frames. Timestamp queries are in the
+    /// Capability floor (ADR 0021).
+    fn new(device: &wgpu::Device, frame_count: u32) -> Self {
+        Self {
+            query_set: device.create_query_set(&wgpu::QuerySetDescriptor {
+                label: Some("Pass Timestamps"),
+                ty: wgpu::QueryType::Timestamp,
+                count: 2 * frame_count,
+            }),
+        }
     }
 
     fn writes(&self, frame: u32) -> wgpu::RenderPassTimestampWrites<'_> {

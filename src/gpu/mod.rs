@@ -176,11 +176,7 @@ fn adapter_report(adapter: &wgpu::Adapter) -> String {
         .into_iter()
         .map(|format| {
             let flags = adapter.get_texture_format_features(format).flags;
-            let verdict = if flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4) {
-                "yes"
-            } else {
-                "no"
-            };
+            let verdict = if has_msaa_x4(flags) { "yes" } else { "no" };
             format!("{format:?} {verdict}")
         })
         .collect();
@@ -250,7 +246,7 @@ fn check_floor(
         missing_features: floor_features() - features,
         formats_without_msaa_x4: attachment_formats
             .iter()
-            .filter(|(_, flags)| !flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4))
+            .filter(|&&(_, flags)| !has_msaa_x4(flags))
             .map(|&(format, _)| format)
             .collect(),
         limits: limit_gaps,
@@ -263,6 +259,12 @@ fn check_floor(
     } else {
         Err(gaps)
     }
+}
+
+/// Whether a format's adapter flags allow 4x MSAA, which the floor requires
+/// on every main-pass attachment format.
+fn has_msaa_x4(flags: wgpu::TextureFormatFeatureFlags) -> bool {
+    flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4)
 }
 
 /// Every way an adapter falls short of the Capability floor, so one run
