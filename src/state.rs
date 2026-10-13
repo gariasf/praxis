@@ -383,6 +383,7 @@ impl State {
         };
 
         let started = Instant::now();
+        std::hint::black_box(Box::new(0_u64));
         let instance_data = prepare_renderables(&mut self.world);
         self.recorder.stage("prepare_renderables", started);
 
