@@ -21,7 +21,7 @@ pub const MAX_FRAME_DELTA: Duration = Duration::from_millis(250);
 pub const TICK: Duration = Duration::from_nanos(15_625_000);
 
 /// The per-Tick delta systems in the fixed schedule integrate with.
-pub const TICK_SECONDS: f64 = 1.0 / 64.0;
+pub const TICK_SECONDS: f64 = TICK.as_secs_f64();
 
 /// Ticks run per frame at most; accumulated time past them is dropped.
 pub const MAX_TICKS_PER_FRAME: u32 = 4;
@@ -85,7 +85,10 @@ pub fn run_ticks(schedule: &mut Schedule, world: &mut World, frame_delta: Durati
 
 #[cfg(test)]
 mod tests {
+    use winit::keyboard::KeyCode;
+
     use super::*;
+    use crate::input::{Input, clear_just_pressed};
 
     /// 60 Hz, as the window measures it in whole nanoseconds.
     const SIXTY_HERTZ: Duration = Duration::from_nanos(16_666_667);
@@ -249,5 +252,32 @@ mod tests {
         run_ticks(&mut schedule, &mut world, TICK / 2);
         assert_eq!(world.resource::<Counter>().0, 1);
         assert_eq!(world.resource::<FixedTime>().tick, 1);
+    }
+
+    #[derive(Resource, Default)]
+    struct Presses(u32);
+
+    fn count_presses(input: Res<Input>, mut presses: ResMut<Presses>) {
+        presses.0 += input.just_pressed.len() as u32;
+    }
+
+    #[test]
+    fn a_press_in_a_frame_that_runs_no_tick_is_consumed_by_the_next_tick() {
+        let mut world = world_with_fixed_time();
+        world.insert_resource(Input::default());
+        world.insert_resource(Presses::default());
+        let mut schedule = fixed_schedule();
+        schedule.add_systems((count_presses, clear_just_pressed).chain());
+
+        // Pressed and released within a frame too short for a Tick.
+        world
+            .resource_mut::<Input>()
+            .just_pressed
+            .insert(KeyCode::KeyG);
+        run_ticks(&mut schedule, &mut world, TICK / 2);
+        assert_eq!(world.resource::<Presses>().0, 0);
+        // The next frame runs two Ticks; only the first sees the press.
+        run_ticks(&mut schedule, &mut world, TICK * 3 / 2);
+        assert_eq!(world.resource::<Presses>().0, 1);
     }
 }
