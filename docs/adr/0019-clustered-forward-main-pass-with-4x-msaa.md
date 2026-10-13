@@ -1,0 +1,20 @@
+# Clustered forward main pass with 4x MSAA
+
+The opaque main pass is clustered forward: a 4x MSAA reverse-Z depth pre-pass, then a lit pass at depth equal that loops over its Froxel's lights and traces shadow rays inline. Geometric edges get 4x MSAA (the Apple9 maximum), with alpha-to-coverage for masked materials. This is option A of `docs/research/visibility-and-gpu-driven-main-pass.md`: the only shapes with MSAA at no extra memory are the forward ones (SMAA 1x cannot reconstruct sub-pixel geometry), and A writes nothing that no decided pass reads. Accepted 2026-10-12 ([#22](https://github.com/gariasf/praxis/issues/22)). Planned; today the renderer issues one `draw_indexed` per Primitive per Instance in one forward pass with `Depth32Float` cleared to 1, no MSAA and four fixed point lights.
+
+## Considered options
+
+- Forward with a visibility pre-pass (option B): A plus a 32-bit Instance-and-triangle ID per sample (59 MB at 4x and 1440p), and `primitive_index` made the ID pass 19 to 24% slower on the M4 Pro. Nothing decided reads the IDs; it is A plus one attachment, so it is taken when a compute pass needs per-pixel geometry.
+- Deferred G-buffer (option C) and visibility buffer with compute materials (option D): MSAA only with per-sample storage or per-sample shading at edges, otherwise SMAA 1x. Lighting every sample at 4x cost deferred 1.2 to 3.7 times forward 4x on the M4 Pro.
+- Virtual geometry beside A (option E): no MSAA in Nanite or Bevy, Nanite hides its LOD switches with TAA, and wgpu 30 cannot build an acceleration structure that follows the cut, so shadow rays against proxy geometry self-shadow. Reopens only when wgpu can build or refit one that follows the cut and a non-temporal method keeps sub-pixel switches stable. Dense static meshes use discrete LOD.
+- Per-pixel class-c lighting (ReSTIR, Lumen, MegaLights), which needs a G-buffer or visibility buffer, motion vectors and a temporal denoiser: excluded by ADR 0008. The remaining lighting choice is [Lighting and GI strategy](https://github.com/gariasf/praxis/issues/65); its open options shade from position and normal.
+- Tiled 2.5D light culling and Z-binning: AMD's US12136165B2 (active to 2033-05-13) claims per-tile light lists built by intersecting a tile depth mask with a light depth mask, shaded in a GPU forward pipeline (claims 1, 11 and 18, read 2026-10-12; not a legal opinion). Froxels with their own lists do not use that step; Z-binning intersects tile and depth at shading time, closer to it. Counsel reviews before any release.
+
+## Consequences
+
+- One compute culling pass composes each Instance's camera-relative transform (ADR 0014), tests the frustum and a two-phase Hi-Z pyramid of minimum reverse-Z depth (ADR 0015), and writes a compacted index buffer drawn with one `draw_indexed_indirect` per pipeline, one native call on every backend. No count draws: Metal has none, and runs `multi_draw_indirect` as a CPU loop.
+- The depth pre-pass writes 4x MSAA depth only; it seeds the Hi-Z pyramid and the lit pass's depth-equal test, and restores front-to-back cost when the culling pass writes draws out of order.
+- Lights are culled into Froxels, each with its own light list built against the Froxel's bounds; the four fixed point lights become a light buffer.
+- Transparency is a sorted forward pass after the opaque pass, sharing the Froxel lists, MSAA and the opaque depth. Order-independent transparency waits for content that per-object sorting cannot fix.
+- Render pipelines are vertex pipelines. Metal forbids ray queries in mesh-shaded pipelines, so the lit pass cannot be one; a mesh-shaded pre-pass returns with Meshlet culling, which needs the cooked format (ADR 0011).
+- Reopen when either holds: on a Reference scene at 1440p with 4x MSAA, the opaque main pass (culling, pre-pass and lit pass) takes more than 6 ms of GPU, half of ADR 0013's 12 ms; then B and D are prototyped on that scene before anything changes. Or the lighting decision needs per-pixel G-buffer inputs. The 6 ms is provisional, as ADR 0013's budgets are.

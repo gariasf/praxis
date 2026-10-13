@@ -186,6 +186,8 @@ When reviewing changes, check for:
       `write_texture`, and GPU arenas never grow at runtime (ADR 0017)
 - [ ] The runtime loads cooked Blobs only and references Assets by
       Asset ID, never by source path (ADR 0018)
+- [ ] The main pass reads no screen-space history and keeps 4x MSAA
+      working (ADRs 0008, 0019)
 - [ ] `cargo fmt` and `cargo clippy` pass
 
 ## Maintenance
