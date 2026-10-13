@@ -18,6 +18,7 @@ use crate::scenes::{
     spawn_uv_grid,
 };
 use crate::stats::{FrameRecorder, FrameStats, texture_bytes};
+use crate::threading::{init_compute_pool, single_threaded_schedule};
 use crate::time::Time;
 
 /// The helmet-class model the Scene draws, relative to the working directory
@@ -67,6 +68,7 @@ impl State {
         scene: ReferenceScene,
     ) -> anyhow::Result<State> {
         let _span = tracing::info_span!("state_init").entered();
+        init_compute_pool();
 
         let device = context.device.clone();
         let queue = context.queue.clone();
@@ -190,7 +192,7 @@ impl State {
         world.insert_resource(RuntimeHelmets::default());
 
         let recorder = FrameRecorder::new();
-        let mut schedule = Schedule::default();
+        let mut schedule = single_threaded_schedule();
         recorder.systems.scope(|| {
             schedule.add_systems(
                 (

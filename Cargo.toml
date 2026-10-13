@@ -14,7 +14,8 @@ anyhow = "1"
 bytemuck = "1.25.0"
 image = { version = "0.25", default-features = false, features = ["png"] }
 gltf = { version = "1.4.1", default-features = false, features = ["import", "utils"] }
-bevy_ecs = { version = "0.18.1", features = ["trace", "debug"] }
+bevy_ecs = { version = "0.18.1", features = ["trace", "debug", "multi_threaded"] }
+bevy_tasks = { version = "0.18.1", default-features = false }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 bevy_mikktspace = "1.0.0"
 serde = { version = "1", features = ["derive"] }
