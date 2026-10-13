@@ -141,7 +141,7 @@ A committed image that a Reference scene must reproduce within tolerance.
 _Avoid_: Snapshot, screenshot
 
 **Baseline**:
-The recorded measurements of a Reference scene on the reference machine. Budgets are judged against it.
+The recorded measurements of a Reference scene on one adapter: the reference machine, where Budgets are judged against it, or CI's lavapipe, whose Baselines hold its counters only.
 _Avoid_: Benchmark result
 
 **Budget**:

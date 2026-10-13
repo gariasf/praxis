@@ -3,7 +3,7 @@ use std::path::Path;
 
 use anyhow::Context;
 use praxis::ReferenceScene;
-use praxis::bench::{Budgets, CompareMode, Measurements, Verdict};
+use praxis::bench::{Budgets, CompareMode, Configuration, Measurements, Verdict};
 use praxis::gpu::GpuContext;
 
 /// The capture size when the command names none: small, and 16:9 like the
@@ -25,7 +25,12 @@ fn main() -> anyhow::Result<()> {
             capture(scene, output, DEFAULT_CAPTURE_SIZE)
         }
         [command, scene, output, size] if command == "capture" => capture(scene, output, size),
-        [command, output, scenes @ ..] if command == "bench" => bench(output, scenes),
+        [command, output, flag, scenes @ ..] if command == "bench" && flag == "--ci" => {
+            bench(output, Configuration::CI, scenes)
+        }
+        [command, output, scenes @ ..] if command == "bench" => {
+            bench(output, Configuration::REFERENCE, scenes)
+        }
         [command, results] if command == "compare" => compare(results, CompareMode::Local),
         [command, results, flag] if command == "compare" && flag == "--ci" => {
             compare(results, CompareMode::Ci)
@@ -33,7 +38,7 @@ fn main() -> anyhow::Result<()> {
         _ => anyhow::bail!(
             "unexpected arguments {arguments:?}: run with no arguments, `capabilities`, \
              `capture <scene> <png path> [<width>x<height>]`, \
-             `bench <output directory> [<scene>...]`, or `compare <bench directory> [--ci]`"
+             `bench <output directory> [--ci] [<scene>...]`, or `compare <bench directory> [--ci]`"
         ),
     }
 }
@@ -55,7 +60,7 @@ fn parse_scene(name: &str) -> anyhow::Result<ReferenceScene> {
 /// Benches the named Reference scenes, or with none every scene whose assets
 /// are present, prints one line per scene, and writes `<scene>.json` into
 /// `output`.
-fn bench(output: &str, scene_names: &[String]) -> anyhow::Result<()> {
+fn bench(output: &str, configuration: Configuration, scene_names: &[String]) -> anyhow::Result<()> {
     let scenes = if scene_names.is_empty() {
         let helmet_fetched = Path::new(praxis::DEFAULT_MODEL).exists();
         if !helmet_fetched {
@@ -74,7 +79,7 @@ fn bench(output: &str, scene_names: &[String]) -> anyhow::Result<()> {
     std::fs::create_dir_all(output)?;
     let context = pollster::block_on(GpuContext::headless())?;
     for scene in scenes {
-        let result = praxis::bench::run(&context, scene)?;
+        let result = praxis::bench::run(&context, scene, configuration)?;
         let path = Path::new(output).join(format!("{}.json", scene.name()));
         std::fs::write(&path, serde_json::to_string_pretty(&result)? + "\n")?;
         writeln!(std::io::stdout(), "{result}")?;
@@ -82,7 +87,7 @@ fn bench(output: &str, scene_names: &[String]) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Compares every `<scene>.json` in `results` with its Baseline and the
+/// Compares every `<scene>.json` in `results` with its adapter's Baseline and the
 /// Budgets, prints one line per scene and finding, and fails on any failed
 /// metric.
 fn compare(results: &str, mode: CompareMode) -> anyhow::Result<()> {
@@ -100,17 +105,34 @@ fn compare(results: &str, mode: CompareMode) -> anyhow::Result<()> {
     let mut stdout = std::io::stdout();
     for path in paths {
         let current: Measurements = read_json(&path)?;
-        let baseline_path = Path::new(praxis::bench::BASELINE_DIRECTORY)
-            .join(path.file_name().expect("a read_dir entry has a file name"));
+        let baseline_directory = praxis::bench::baseline_directory(&current.adapter);
+        let baseline_path =
+            baseline_directory.join(path.file_name().expect("a read_dir entry has a file name"));
         if !baseline_path.exists() {
             failed += 1;
+            let ci_run = (current.width, current.height, current.measured_frames)
+                == (
+                    Configuration::CI.width,
+                    Configuration::CI.height,
+                    Configuration::CI.measured_frames,
+                );
+            let record = if ci_run {
+                format!(
+                    "copy {}.json from CI's bench-results artifact",
+                    current.scene
+                )
+            } else {
+                format!(
+                    "record one with `praxis bench {} {}`",
+                    baseline_directory.display(),
+                    current.scene
+                )
+            };
             writeln!(
                 stdout,
-                "{} FAIL no Baseline at {}; record one with `praxis bench {} {}`",
+                "{} FAIL no Baseline at {}; {record}",
                 current.scene,
                 baseline_path.display(),
-                praxis::bench::BASELINE_DIRECTORY,
-                current.scene
             )?;
             continue;
         }

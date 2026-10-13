@@ -1,0 +1,20 @@
+{
+  "scene": "pbr-sweep",
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "profile": "release",
+  "width": 640,
+  "height": 360,
+  "measured_frames": 256,
+  "cpu_frame_microseconds": {
+    "median": 14686.101999999999,
+    "p95": 16217.410000000002
+  },
+  "gpu_main_pass_microseconds": {
+    "median": 14592.134,
+    "p95": 16135.569999999998
+  },
+  "draw_calls": 10,
+  "uploaded_bytes": 1712,
+  "gpu_memory_bytes": 673344016,
+  "heap_allocations": 94
+}
