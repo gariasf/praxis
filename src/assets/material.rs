@@ -1,19 +1,15 @@
 use crate::stats::texture_bytes;
 
-/// All channel arrays are this square dimension. glTF assets are scale-padded
-/// to it on load (the default SciFiHelmet is already 2048², so the pad is a
-/// no-op and not yet implemented — see `MaterialPool::upload`).
-pub const TEXTURE_DIM: u32 = 2048;
-
-/// Layers pre-allocated per channel array. Eagerly sized; array-layer growth
-/// (realloc + re-copy) is deferred until an asset needs more than this.
-const LAYER_CAPACITY: u32 = 8;
+/// Textures each Channel's binding array can hold. Five Channels of 8192 stay
+/// under the Capability floor's 65,536 binding-array elements per stage
+/// (ADR 0021).
+const TEXTURES_PER_CHANNEL: u32 = 8192;
 
 /// Materials the SSBO holds. Materials are few and never deleted in Phase 6,
 /// so a fixed cap avoids growth + bind-group rebuilds for now.
 const MATERIAL_CAPACITY: u64 = 256;
 
-/// Every channel array is RGBA8.
+/// Every Texture is RGBA8 until cooked BC Textures arrive (#150).
 const BYTES_PER_PIXEL: u32 = 4;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -27,15 +23,26 @@ impl MaterialHandle {
     }
 }
 
-/// One texture channel of a material. Each channel has its own
-/// `texture_2d_array`; a material stores one layer index per channel.
+/// One texture channel of a material. Each channel has its own binding array;
+/// a material stores one Layer index per channel. The discriminant is the
+/// Channel's position in `MaterialPool::channels` and its binding minus one.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum MaterialChannel {
-    Albedo,
-    Normal,
-    MetallicRoughness,
-    Occlusion,
-    Emissive,
+    Albedo = 0,
+    Normal = 1,
+    MetallicRoughness = 2,
+    Occlusion = 3,
+    Emissive = 4,
+}
+
+impl MaterialChannel {
+    const ALL: [Self; 5] = [
+        Self::Albedo,
+        Self::Normal,
+        Self::MetallicRoughness,
+        Self::Occlusion,
+        Self::Emissive,
+    ];
 }
 
 /// One entry in the material SSBO. All-`vec4` layout: WGSL pads `vec3<f32>` to
@@ -50,102 +57,90 @@ pub struct MaterialData {
     pub extra: [u32; 4],              // x=emissive_idx, yzw=pad
 }
 
-/// A `texture_2d_array` for one channel plus how many layers hold data.
-struct ChannelArray {
-    texture: wgpu::Texture,
-    layers_used: u32,
+/// One Channel's Textures, each sized to its source, bound as one partially
+/// bound binding array (ADR 0017). A Layer is an index into `views`.
+struct ChannelTextures {
+    label: &'static str,
+    format: wgpu::TextureFormat,
+    textures: Vec<wgpu::Texture>,
+    views: Vec<wgpu::TextureView>,
 }
 
-impl ChannelArray {
-    fn new(device: &wgpu::Device, label: &str, format: wgpu::TextureFormat) -> Self {
+impl ChannelTextures {
+    fn new(label: &'static str, format: wgpu::TextureFormat) -> Self {
+        Self {
+            label,
+            format,
+            textures: Vec::new(),
+            views: Vec::new(),
+        }
+    }
+
+    /// Creates a `width` × `height` RGBA8 Texture from `pixels` and returns
+    /// its Layer, or `None` when the Channel is full.
+    fn push(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        pixels: &[u8],
+        width: u32,
+        height: u32,
+    ) -> Option<u32> {
+        if self.views.len() as u32 >= TEXTURES_PER_CHANNEL {
+            tracing::error!(
+                channel = self.label,
+                capacity = TEXTURES_PER_CHANNEL,
+                "channel full; using the neutral default layer"
+            );
+            return None;
+        }
+        let layer = self.views.len() as u32;
+        let size = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some(label),
-            size: wgpu::Extent3d {
-                width: TEXTURE_DIM,
-                height: TEXTURE_DIM,
-                depth_or_array_layers: LAYER_CAPACITY,
-            },
+            label: Some(self.label),
+            size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format,
+            format: self.format,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        Self {
-            texture,
-            layers_used: 0,
-        }
-    }
-
-    fn view(&self) -> wgpu::TextureView {
-        self.texture.create_view(&wgpu::TextureViewDescriptor {
-            dimension: Some(wgpu::TextureViewDimension::D2Array),
-            ..Default::default()
-        })
-    }
-
-    /// Writes one `TEXTURE_DIM`-square RGBA8 image into the next free layer and
-    /// returns that layer, or `MaterialPool::DEFAULT_LAYER` when the array is full.
-    fn push_layer(&mut self, queue: &wgpu::Queue, channel: MaterialChannel, pixels: &[u8]) -> u32 {
-        if self.layers_used >= LAYER_CAPACITY {
-            tracing::error!(
-                ?channel,
-                capacity = LAYER_CAPACITY,
-                "channel array full; using the neutral default layer"
-            );
-            return MaterialPool::DEFAULT_LAYER;
-        }
-        let layer = self.layers_used;
         queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &self.texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d {
-                    x: 0,
-                    y: 0,
-                    z: layer,
-                },
-                aspect: wgpu::TextureAspect::All,
-            },
+            texture.as_image_copy(),
             pixels,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(BYTES_PER_PIXEL * TEXTURE_DIM),
-                rows_per_image: Some(TEXTURE_DIM),
+                bytes_per_row: Some(BYTES_PER_PIXEL * width),
+                rows_per_image: Some(height),
             },
-            wgpu::Extent3d {
-                width: TEXTURE_DIM,
-                height: TEXTURE_DIM,
-                depth_or_array_layers: 1,
-            },
+            size,
         );
-        self.layers_used += 1;
-        layer
+        self.views.push(texture.create_view(&Default::default()));
+        self.textures.push(texture);
+        Some(layer)
     }
 }
 
 /// Material-as-ID: one SSBO of `MaterialData` indexed by `MaterialHandle`, plus
-/// one `texture_2d_array` per channel. A single bind group serves every
+/// one texture binding array per Channel. A single bind group serves every
 /// material; the fragment shader looks up `materials[instance.material_id]` and
-/// samples each array by the layer index stored in `texture_indices`.
+/// samples each Channel's array at the Layer stored in `texture_indices`.
 pub struct MaterialPool {
     materials: Vec<MaterialData>,
     materials_buffer: wgpu::Buffer,
-    albedo: ChannelArray,
-    normal: ChannelArray,
-    metallic_roughness: ChannelArray,
-    occlusion: ChannelArray,
-    emissive: ChannelArray,
-    // Referenced by the bind group, which keeps it alive; never read again.
-    #[allow(dead_code)]
+    channels: [ChannelTextures; 5],
     sampler: wgpu::Sampler,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
 }
 
 impl MaterialPool {
-    /// Layer 0 of every channel array holds a neutral texture: white for
+    /// Layer 0 of every Channel holds a 1×1 neutral texture: white for
     /// albedo / metallic-roughness / occlusion / emissive, the flat normal
     /// `(0.5, 0.5, 1.0)` for normal. A material without a channel points here,
     /// samples a no-op, and its factors pass through unchanged.
@@ -160,37 +155,26 @@ impl MaterialPool {
         });
 
         // Color channels are sRGB; data channels (vectors / scalars) are linear.
-        let mut albedo =
-            ChannelArray::new(device, "albedo_array", wgpu::TextureFormat::Rgba8UnormSrgb);
-        let mut normal = ChannelArray::new(device, "normal_array", wgpu::TextureFormat::Rgba8Unorm);
-        let mut metallic_roughness = ChannelArray::new(
-            device,
-            "metallic_roughness_array",
-            wgpu::TextureFormat::Rgba8Unorm,
-        );
-        let mut occlusion =
-            ChannelArray::new(device, "occlusion_array", wgpu::TextureFormat::Rgba8Unorm);
-        let mut emissive = ChannelArray::new(
-            device,
-            "emissive_array",
-            wgpu::TextureFormat::Rgba8UnormSrgb,
-        );
+        // Ordered as `MaterialChannel`.
+        let mut channels = [
+            ChannelTextures::new("albedo", wgpu::TextureFormat::Rgba8UnormSrgb),
+            ChannelTextures::new("normal", wgpu::TextureFormat::Rgba8Unorm),
+            ChannelTextures::new("metallic_roughness", wgpu::TextureFormat::Rgba8Unorm),
+            ChannelTextures::new("occlusion", wgpu::TextureFormat::Rgba8Unorm),
+            ChannelTextures::new("emissive", wgpu::TextureFormat::Rgba8UnormSrgb),
+        ];
 
-        // Neutral defaults into layer 0 of every array (see DEFAULT_LAYER).
-        let pixel_count = (TEXTURE_DIM * TEXTURE_DIM) as usize;
-        let white = vec![255u8; pixel_count * BYTES_PER_PIXEL as usize];
-        let flat_normal = [128u8, 128, 255, 255].repeat(pixel_count);
-        albedo.push_layer(queue, MaterialChannel::Albedo, &white);
-        normal.push_layer(queue, MaterialChannel::Normal, &flat_normal);
-        metallic_roughness.push_layer(queue, MaterialChannel::MetallicRoughness, &white);
-        occlusion.push_layer(queue, MaterialChannel::Occlusion, &white);
-        emissive.push_layer(queue, MaterialChannel::Emissive, &white);
-
-        let albedo_view = albedo.view();
-        let normal_view = normal.view();
-        let metallic_roughness_view = metallic_roughness.view();
-        let occlusion_view = occlusion.view();
-        let emissive_view = emissive.view();
+        // Neutral defaults into Layer 0 of every Channel (see DEFAULT_LAYER).
+        let white = [255u8; 4];
+        let flat_normal = [128u8, 128, 255, 255];
+        for channel in MaterialChannel::ALL {
+            let pixel = if channel == MaterialChannel::Normal {
+                &flat_normal
+            } else {
+                &white
+            };
+            channels[channel as usize].push(device, queue, pixel, 1, 1);
+        }
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             mag_filter: wgpu::FilterMode::Linear,
@@ -205,10 +189,10 @@ impl MaterialPool {
             visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Texture {
                 sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                view_dimension: wgpu::TextureViewDimension::D2Array,
+                view_dimension: wgpu::TextureViewDimension::D2,
                 multisampled: false,
             },
-            count: None,
+            count: std::num::NonZeroU32::new(TEXTURES_PER_CHANNEL),
         };
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -238,69 +222,33 @@ impl MaterialPool {
             ],
         });
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Material Bind Group"),
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: materials_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&albedo_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&normal_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(&metallic_roughness_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::TextureView(&occlusion_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 5,
-                    resource: wgpu::BindingResource::TextureView(&emissive_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 6,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-            ],
-        });
+        let bind_group = create_bind_group(
+            device,
+            &bind_group_layout,
+            &materials_buffer,
+            &channels,
+            &sampler,
+        );
 
         Self {
             materials: Vec::new(),
             materials_buffer,
-            albedo,
-            normal,
-            metallic_roughness,
-            occlusion,
-            emissive,
+            channels,
             sampler,
             bind_group_layout,
             bind_group,
         }
     }
 
-    /// Bytes of the SSBO and the Channel arrays.
+    /// Bytes of the SSBO and every Channel's Textures.
     pub fn gpu_memory_bytes(&self, transient_saves_memory: bool) -> u64 {
-        let channel_arrays = [
-            &self.albedo,
-            &self.normal,
-            &self.metallic_roughness,
-            &self.occlusion,
-            &self.emissive,
-        ];
-        let channel_array_bytes: u64 = channel_arrays
+        let texture_bytes: u64 = self
+            .channels
             .iter()
-            .map(|channel_array| texture_bytes(&channel_array.texture, transient_saves_memory))
+            .flat_map(|channel| &channel.textures)
+            .map(|texture| texture_bytes(texture, transient_saves_memory))
             .sum();
-        self.materials_buffer.size() + channel_array_bytes
+        self.materials_buffer.size() + texture_bytes
     }
 
     /// Registers a material in the SSBO, returning its handle.
@@ -320,30 +268,31 @@ impl MaterialPool {
         handle
     }
 
-    /// Uploads RGBA8 pixels into the next free layer of `channel`, returning
-    /// the layer index to store in `MaterialData`. Phase 6 requires
-    /// `TEXTURE_DIM`-square images (SciFiHelmet is 2048²); scale-padding for
-    /// off-size assets is deferred until one needs it. Any rejected upload
-    /// falls back to `DEFAULT_LAYER` so the material still renders.
+    /// Uploads a `width` × `height` RGBA8 image as a new Texture of `channel`
+    /// and rebuilds the bind group, returning the Layer to store in
+    /// `MaterialData`. Any rejected upload falls back to `DEFAULT_LAYER` so the
+    /// material still renders.
     pub fn upload(
         &mut self,
+        device: &wgpu::Device,
         queue: &wgpu::Queue,
         channel: MaterialChannel,
         pixels: &[u8],
         width: u32,
         height: u32,
     ) -> u32 {
-        if width != TEXTURE_DIM || height != TEXTURE_DIM {
+        let max_dimension = device.limits().max_texture_dimension_2d;
+        if width == 0 || height == 0 || width > max_dimension || height > max_dimension {
             tracing::error!(
                 ?channel,
                 width,
                 height,
-                expected = TEXTURE_DIM,
-                "texture is not TEXTURE_DIM-square; using the neutral default layer"
+                max_dimension,
+                "texture size is zero or above the device limit; using the neutral default layer"
             );
             return Self::DEFAULT_LAYER;
         }
-        let expected_bytes = (BYTES_PER_PIXEL * TEXTURE_DIM * TEXTURE_DIM) as usize;
+        let expected_bytes = BYTES_PER_PIXEL as usize * width as usize * height as usize;
         if pixels.len() != expected_bytes {
             tracing::error!(
                 ?channel,
@@ -353,15 +302,59 @@ impl MaterialPool {
             );
             return Self::DEFAULT_LAYER;
         }
-        let channel_array = match channel {
-            MaterialChannel::Albedo => &mut self.albedo,
-            MaterialChannel::Normal => &mut self.normal,
-            MaterialChannel::MetallicRoughness => &mut self.metallic_roughness,
-            MaterialChannel::Occlusion => &mut self.occlusion,
-            MaterialChannel::Emissive => &mut self.emissive,
+        let Some(layer) =
+            self.channels[channel as usize].push(device, queue, pixels, width, height)
+        else {
+            return Self::DEFAULT_LAYER;
         };
-        let layer = channel_array.push_layer(queue, channel, pixels);
-        tracing::debug!(?channel, layer, "texture uploaded");
+        // One rebuild per upload is fine at load; streaming batches residency
+        // changes into one rebuild per frame (ADR 0017).
+        self.bind_group = create_bind_group(
+            device,
+            &self.bind_group_layout,
+            &self.materials_buffer,
+            &self.channels,
+            &self.sampler,
+        );
+        tracing::debug!(?channel, layer, width, height, "texture uploaded");
         layer
     }
+}
+
+/// The material bind group: the SSBO, each Channel's Textures as bindings 1
+/// to 5, and the sampler. Bind groups are snapshots, so a new Texture needs a
+/// new one.
+fn create_bind_group(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    materials_buffer: &wgpu::Buffer,
+    channels: &[ChannelTextures; 5],
+    sampler: &wgpu::Sampler,
+) -> wgpu::BindGroup {
+    let views: Vec<Vec<&wgpu::TextureView>> = channels
+        .iter()
+        .map(|channel| channel.views.iter().collect())
+        .collect();
+    let mut entries = vec![wgpu::BindGroupEntry {
+        binding: 0,
+        resource: materials_buffer.as_entire_binding(),
+    }];
+    entries.extend(
+        views
+            .iter()
+            .zip(1..)
+            .map(|(channel_views, binding)| wgpu::BindGroupEntry {
+                binding,
+                resource: wgpu::BindingResource::TextureViewArray(channel_views),
+            }),
+    );
+    entries.push(wgpu::BindGroupEntry {
+        binding: 6,
+        resource: wgpu::BindingResource::Sampler(sampler),
+    });
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Material Bind Group"),
+        layout,
+        entries: &entries,
+    })
 }

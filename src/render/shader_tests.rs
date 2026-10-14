@@ -10,10 +10,13 @@ use wgpu::naga;
 use crate::assets::MaterialData;
 use crate::render::{CameraUniform, InstanceData, LightUniform, Vertex};
 
-/// Shader capabilities Praxis requires of every adapter. None today: a
-/// shader that needs one fails validation until it is added here, so a new
+/// Shader capabilities Praxis requires of every adapter: the Capability
+/// floor's binding arrays, indexed per Instance (ADRs 0017, 0021). A shader
+/// that needs another fails validation until it is added here, so a new
 /// hardware requirement is a visible decision.
-const CAPABILITIES: naga::valid::Capabilities = naga::valid::Capabilities::empty();
+const CAPABILITIES: naga::valid::Capabilities =
+    naga::valid::Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+        .union(naga::valid::Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING);
 
 #[test]
 fn every_wgsl_file_parses_and_validates() {
