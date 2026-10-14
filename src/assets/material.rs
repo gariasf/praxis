@@ -25,7 +25,8 @@ impl MaterialHandle {
 
 /// One texture channel of a material. Each channel has its own binding array;
 /// a material stores one Layer index per channel. The discriminant is the
-/// Channel's position in `MaterialPool::channels` and its binding minus one.
+/// Channel's position in `MaterialPool::channels` and its binding minus one,
+/// and is part of every Texture's Asset ID: never renumber.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum MaterialChannel {
     Albedo = 0,
@@ -36,7 +37,7 @@ pub enum MaterialChannel {
 }
 
 impl MaterialChannel {
-    const ALL: [Self; 5] = [
+    pub const ALL: [Self; 5] = [
         Self::Albedo,
         Self::Normal,
         Self::MetallicRoughness,

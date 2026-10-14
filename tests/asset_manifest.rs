@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
@@ -15,6 +15,9 @@ const ATTRIBUTION: &str = "ATTRIBUTION.md";
 struct Entry {
     /// Relative to the assets directory, `/`-separated.
     path: String,
+    /// 128 bits in lowercase hex, written once: Asset IDs derive from it,
+    /// so it survives moving and renaming the file (ADR 0018).
+    guid: Option<String>,
     /// Pinned download URL.
     source: String,
     /// SPDX licence expression.
@@ -74,6 +77,15 @@ fn manifest_check_reports_every_kind_of_problem() {
         entry("blank.bin", json!({"fetched": true, "version": " "})),
         entry("unpinned.bin", json!({"fetched": true, "sha256": ""})),
         entry("good.bin", json!({})),
+        entry("no-guid.bin", json!({"fetched": true, "guid": null})),
+        entry(
+            "short-guid.bin",
+            json!({"fetched": true, "guid": "0123abcd"})
+        ),
+        entry(
+            "same-guid.bin",
+            json!({"fetched": true, "guid": guid_for("good.bin")})
+        ),
     ]);
     fs::write(directory.join(MANIFEST), manifest.to_string()).unwrap();
     fs::write(directory.join(ATTRIBUTION), "Credited author\n").unwrap();
@@ -88,6 +100,9 @@ fn manifest_check_reports_every_kind_of_problem() {
             "blank.bin: empty version".to_string(),
             "unpinned.bin: sha256 is not 64 lowercase hex digits".to_string(),
             "good.bin: listed twice".to_string(),
+            "no-guid.bin: no guid".to_string(),
+            "short-guid.bin: guid is not 32 lowercase hex digits".to_string(),
+            "same-guid.bin: guid also names good.bin".to_string(),
             "unlisted.bin: no manifest entry".to_string(),
         ]
     );
@@ -104,6 +119,7 @@ const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495
 fn entry(path: &str, changes: Value) -> Value {
     let mut entry = json!({
         "path": path,
+        "guid": guid_for(path),
         "source": "https://example.com/asset.bin",
         "license": "CC0-1.0",
         "credit": "Credited author",
@@ -116,6 +132,11 @@ fn entry(path: &str, changes: Value) -> Value {
         entry[field] = value.clone();
     }
     entry
+}
+
+/// A GUID unique to `path`.
+fn guid_for(path: &str) -> String {
+    sha256_hex_of(path.as_bytes())[..32].to_string()
 }
 
 /// Each way `assets` disagrees with its manifest and attribution file, as
@@ -134,6 +155,7 @@ fn manifest_problems(assets: &Path) -> Vec<String> {
 
     let mut problems = Vec::new();
     let mut listed = BTreeSet::new();
+    let mut guids = BTreeMap::new();
     for entry in &entries {
         let path = &entry.path;
         if !listed.insert(path.as_str()) {
@@ -151,12 +173,18 @@ fn manifest_problems(assets: &Path) -> Vec<String> {
                 problems.push(format!("{path}: empty {field}"));
             }
         }
-        let is_sha256 = entry.sha256.len() == 64
-            && entry
-                .sha256
-                .bytes()
-                .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'));
-        if !is_sha256 {
+        match &entry.guid {
+            None => problems.push(format!("{path}: no guid")),
+            Some(guid) if !is_lowercase_hex(guid, 32) => {
+                problems.push(format!("{path}: guid is not 32 lowercase hex digits"))
+            }
+            Some(guid) => {
+                if let Some(first) = guids.insert(guid.as_str(), path.as_str()) {
+                    problems.push(format!("{path}: guid also names {first}"));
+                }
+            }
+        }
+        if !is_lowercase_hex(&entry.sha256, 64) {
             problems.push(format!("{path}: sha256 is not 64 lowercase hex digits"));
         }
         // SPDX licence identifiers match case-insensitively.
@@ -187,9 +215,20 @@ fn manifest_problems(assets: &Path) -> Vec<String> {
     problems
 }
 
+fn is_lowercase_hex(text: &str, digits: usize) -> bool {
+    text.len() == digits
+        && text
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+}
+
 fn sha256_hex(path: &Path) -> String {
     let contents =
         fs::read(path).unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+    sha256_hex_of(&contents)
+}
+
+fn sha256_hex_of(contents: &[u8]) -> String {
     Sha256::digest(contents)
         .iter()
         .map(|byte| format!("{byte:02x}"))

@@ -18,3 +18,6 @@
 
 # The helmet's Baseline is local-only, like its asset (#34)
 /bench/baselines/helmet.json
+
+# The Cooked cache: disposable, rebuilt by `praxis cook` (ADR 0018)
+/cooked/

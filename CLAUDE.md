@@ -96,7 +96,12 @@ src/
   threading.rs                 # compute pool, schedule executor (ADR 0016)
   camera/, time/, input/,      # feature modules: resource (+ systems)
     helmet/, transform/           per domain in one mod.rs
-  assets/                      # asset types, loaders, pools
+  assets/                      # asset types, loaders, pools, and the
+                                 Cooked cache reader (Asset IDs, Blobs)
+  cook/                        # the cooker behind the default-on `cook`
+                                 feature: `praxis cook` turns manifest
+                                 sources and Reference scenes into Blobs
+                                 in git-ignored `cooked/` (ADR 0018)
   render/                      # Renderer (owns the Pools, reads no
                                  World), prepare (World to Frame data),
                                  instance, uniforms, vertex, depth, staging
