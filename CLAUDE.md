@@ -206,6 +206,8 @@ When reviewing changes, check for:
       noncommercial or unclear licences are never copied
 - [ ] Frame data holds no borrow into the ECS World, and only the
       main thread submits, presents or polls (ADR 0016)
+- [ ] Whatever changes what an Instance holds makes prepare write its
+      slot; other slots keep what earlier frames wrote (ADR 0003)
 - [ ] Frame stats still see new work: GPU buffers and textures join
       their owner's `gpu_memory_bytes`, per-frame GPU writes add to
       `uploaded_bytes`, and systems are added inside

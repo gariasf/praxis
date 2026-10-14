@@ -10,7 +10,7 @@ use crate::components::{MaterialRef, MeshRef, PointLight, Transform};
 use crate::gpu::GpuContext;
 use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
 use crate::input::{Input, clear_just_pressed};
-use crate::render::{FrameData, PointLightQuery, Renderer, prepare_frame};
+use crate::render::{FrameData, InstanceSlots, PointLightQuery, Renderer, prepare_frame};
 use crate::scenes::{
     ReferenceScene, insert_gltf_model, spawn_far_coplanar, spawn_normal_tangent, spawn_orrery,
     spawn_pbr_sweep, spawn_uv_grid, spin,
@@ -38,6 +38,7 @@ pub struct State {
     frame: FrameData,
     renderer: Renderer,
     point_light_query: PointLightQuery,
+    instance_slots: InstanceSlots,
 }
 
 impl State {
@@ -131,6 +132,7 @@ impl State {
             frame: FrameData::default(),
             renderer,
             point_light_query,
+            instance_slots: InstanceSlots::default(),
         })
     }
 
@@ -210,15 +212,21 @@ impl State {
         self.schedule.run(&mut self.world);
 
         let started = Instant::now();
+        // Writes a failed upload lost are written again, with every Instance.
+        if self.renderer.take_lost_instance_writes() {
+            self.instance_slots = InstanceSlots::default();
+        }
         prepare_frame(
             &mut self.world,
             &mut self.point_light_query,
+            &mut self.instance_slots,
             &self.renderer.mesh_pool,
             self.renderer.aspect_ratio(),
             &mut self.frame,
         );
         self.recorder.stage("prepare_frame", started);
-        // Drains the removals propagation has read, which otherwise pile up.
+        // Ends the window in which prepare sees changes and removals, and
+        // drains the removals, which otherwise pile up.
         self.world.clear_trackers();
 
         self.renderer.upload(&self.frame, &mut self.recorder);

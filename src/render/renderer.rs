@@ -29,6 +29,9 @@ pub struct Renderer {
     instance_bind_group: wgpu::BindGroup,
     instance_capacity: u64,
     instance_bind_group_layout: wgpu::BindGroupLayout,
+    /// Set when a frame's uploads failed after it queued Instance writes,
+    /// which then never landed: the next prepare must write every Instance.
+    lost_instance_writes: bool,
     transient_saves_memory: bool,
     frame_staging: FrameStaging,
     /// The frame's encoder from `update`, holding its upload copies, until
@@ -221,6 +224,7 @@ impl Renderer {
             instance_bind_group,
             instance_capacity,
             instance_bind_group_layout,
+            lost_instance_writes: false,
             transient_saves_memory: context.adapter.get_info().transient_saves_memory == Some(true),
             frame_staging: FrameStaging::default(),
             frame_encoder: None,
@@ -264,9 +268,17 @@ impl Renderer {
         ]
         .into_iter()
         .chain(instance_uploads);
-        recorder.uploaded_bytes += self
+        let uploaded_bytes = self
             .frame_staging
             .write(&self.device, &mut encoder, uploads);
+        recorder.uploaded_bytes += uploaded_bytes;
+        // 0 bytes: the staging slot failed to map, as logged, and the
+        // frame's Instance writes never land.
+        if uploaded_bytes == 0 {
+            self.lost_instance_writes |= !frame.instances.is_empty();
+        } else {
+            recorder.instances_written += frame.instances.len() as u32;
+        }
         self.frame_encoder = Some(encoder);
         recorder.stage("upload", started);
     }
@@ -349,6 +361,12 @@ impl Renderer {
         let submission = self.queue.submit(std::iter::once(command_buffer));
         recorder.stage("submit", started);
         submission
+    }
+
+    /// Whether Instance writes were lost since the last call; if so, the
+    /// next prepare must write every Instance again.
+    pub fn take_lost_instance_writes(&mut self) -> bool {
+        std::mem::take(&mut self.lost_instance_writes)
     }
 
     /// wgpu's allocator report total, a diagnostic only; Metal has none.
