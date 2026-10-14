@@ -27,17 +27,20 @@ struct StagingSlot {
 }
 
 impl FrameStaging {
-    /// Writes `uploads`, each a target buffer and the bytes for its start,
-    /// into the next slot and records their copies into `encoder`, which must
-    /// be submitted. Returns the bytes uploaded: 0 when the slot failed to
-    /// map again, after an error is logged and the map retried.
-    pub fn write(
+    /// Writes `uploads`, each a target buffer, an offset in it and the bytes
+    /// for there, into the next slot and records their copies into `encoder`,
+    /// which must be submitted. Returns the bytes uploaded: 0 when the slot
+    /// failed to map again, after an error is logged and the map retried.
+    pub fn write<'a>(
         &mut self,
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
-        uploads: &[(&wgpu::Buffer, &[u8])],
+        uploads: impl Iterator<Item = (&'a wgpu::Buffer, wgpu::BufferAddress, &'a [u8])> + Clone,
     ) -> u64 {
-        let needed: u64 = uploads.iter().map(|(_, bytes)| bytes.len() as u64).sum();
+        let needed: u64 = uploads
+            .clone()
+            .map(|(_, _, bytes)| bytes.len() as u64)
+            .sum();
         if needed == 0 {
             return 0;
         }
@@ -71,13 +74,13 @@ impl FrameStaging {
             // created and dropped, so the frame's heap allocations would too.
             encoder.transition_resources(std::iter::empty(), std::iter::empty());
             let mut offset = 0;
-            for (target, bytes) in uploads {
+            for (target, target_offset, bytes) in uploads {
                 let size = bytes.len() as u64;
                 debug_assert!(size.is_multiple_of(wgpu::COPY_BUFFER_ALIGNMENT));
                 mapped
                     .slice(offset as usize..(offset + size) as usize)
                     .copy_from_slice(bytes);
-                encoder.copy_buffer_to_buffer(&slot.buffer, offset, target, 0, size);
+                encoder.copy_buffer_to_buffer(&slot.buffer, offset, target, target_offset, size);
                 offset += size;
             }
         }

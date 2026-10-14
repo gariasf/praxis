@@ -16,7 +16,11 @@ use crate::transform::{PreviousWorldTransform, WorldTransform};
 pub struct FrameData {
     pub camera: CameraUniform,
     pub light: LightUniform,
+    /// Slots the Instance buffer holds.
+    pub instance_slot_count: u32,
+    /// The Instances this frame writes, in `instance_writes` order.
     pub instances: Vec<InstanceData>,
+    pub instance_writes: Vec<InstanceWrite>,
     pub draws: Vec<Draw>,
 }
 
@@ -33,13 +37,37 @@ pub type PointLightQuery = QueryState<(
     &'static PointLight,
 )>;
 
+impl FrameData {
+    /// Queues `instance` for `slot`, in the last write when `slot` follows it.
+    fn write_instance(&mut self, slot: u32, instance: InstanceData) {
+        let index = self.instances.len();
+        self.instances.push(instance);
+        match self.instance_writes.last_mut() {
+            Some(write) if write.first_slot + write.instances.len() as u32 == slot => {
+                write.instances.end += 1;
+            }
+            _ => self.instance_writes.push(InstanceWrite {
+                first_slot: slot,
+                instances: index..index + 1,
+            }),
+        }
+    }
+}
+
+/// Instances for consecutive slots from `first_slot`, one copy on the GPU.
+pub struct InstanceWrite {
+    pub first_slot: u32,
+    /// The Instances' range in `FrameData::instances`.
+    pub instances: Range<usize>,
+}
+
 /// One Primitive drawn for one Instance.
 pub struct Draw {
     /// The Primitive's range in the Mesh pool's index buffer.
     pub indices: Range<u32>,
     /// The Primitive's first vertex in the Mesh pool's vertex buffer.
     pub base_vertex: i32,
-    /// The Instance's index in `FrameData::instances`.
+    /// The Instance's slot in the Instance buffer.
     pub instance_index: u32,
 }
 
@@ -69,6 +97,7 @@ pub fn prepare_frame(
     frame.light = prepare_lights(world, point_light_query, camera_position, blend_weight);
 
     frame.instances.clear();
+    frame.instance_writes.clear();
     frame.draws.clear();
     let mut renderable_query = world.query::<(
         &WorldTransform,
@@ -88,14 +117,17 @@ pub fn prepare_frame(
         let transform = current.drawn(previous, blend_weight);
         let rotation_scale = transform.0.matrix3.as_mat3();
         let (anchor, offset) = anchor_and_offset(transform.translation());
-        frame.instances.push(InstanceData {
-            rotation_scale: padded_columns(rotation_scale),
-            normal_matrix: padded_columns(rotation_scale.inverse().transpose()),
-            anchor,
-            material_id: material_ref.0.index(),
-            offset,
-            _pad: 0,
-        });
+        frame.write_instance(
+            instance_index,
+            InstanceData {
+                rotation_scale: padded_columns(rotation_scale),
+                normal_matrix: padded_columns(rotation_scale.inverse().transpose()),
+                anchor,
+                material_id: material_ref.0.index(),
+                offset,
+                _pad: 0,
+            },
+        );
         frame
             .draws
             .extend(mesh.primitives.iter().map(|primitive| Draw {
@@ -104,6 +136,7 @@ pub fn prepare_frame(
                 instance_index,
             }));
     }
+    frame.instance_slot_count = frame.instances.len() as u32;
 }
 
 /// The lights, point lights at their position relative to `camera_position`;
