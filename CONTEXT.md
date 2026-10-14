@@ -7,7 +7,7 @@ A 3D engine in Rust for large open-world games, built on data shapes that a GPU-
 ### Scene content
 
 **Renderable**:
-An entity that has a Transform, a Mesh Handle, and a Material Handle. The renderer pulls Renderables; entities never render themselves.
+An entity that has a Transform and a Mesh Handle, and optionally a Material Handle that overrides the Materials of its Mesh's Primitives. The renderer pulls Renderables; entities never render themselves.
 _Avoid_: Drawable, object, model
 
 **Mesh**:
@@ -19,7 +19,7 @@ One contiguous range of a Mesh's vertices and indices.
 _Avoid_: Submesh, surface
 
 **Material**:
-The appearance of a Renderable: PBR factors plus one Layer per Channel.
+The appearance of a Primitive: PBR factors plus one Layer per Channel.
 _Avoid_: Shader, texture set, bind group
 
 **Channel**:
@@ -47,6 +47,10 @@ _Avoid_: Manager, cache, registry
 **Handle**:
 A typed index into a Pool, held by components in place of the resource.
 _Avoid_: Pointer, resource ID
+
+**Arena**:
+A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; one holds vertices, one holds indices.
+_Avoid_: Mega-buffer, heap
 
 **Material ID**:
 The number that identifies a Material to the GPU. Each Instance carries one.
