@@ -89,6 +89,7 @@ pub struct Measurements {
     pub draw_calls: u64,
     pub uploaded_bytes: u64,
     pub gpu_memory_bytes: u64,
+    pub arena_bytes_in_use: u64,
     pub heap_allocations: u64,
 }
 
@@ -197,6 +198,7 @@ pub fn run(
         draw_calls: counter(|stats| u64::from(stats.draw_calls)),
         uploaded_bytes: counter(|stats| stats.uploaded_bytes),
         gpu_memory_bytes: counter(|stats| stats.gpu_memory_bytes),
+        arena_bytes_in_use: counter(|stats| stats.arena_bytes_in_use),
         heap_allocations: counter(|stats| stats.heap_allocations),
     })
 }
@@ -218,8 +220,13 @@ impl std::fmt::Display for Measurements {
         }
         write!(
             formatter,
-            " draw_calls={} uploaded_bytes={} gpu_memory_bytes={} heap_allocations={}",
-            self.draw_calls, self.uploaded_bytes, self.gpu_memory_bytes, self.heap_allocations
+            " draw_calls={} uploaded_bytes={} gpu_memory_bytes={} arena_bytes_in_use={} \
+             heap_allocations={}",
+            self.draw_calls,
+            self.uploaded_bytes,
+            self.gpu_memory_bytes,
+            self.arena_bytes_in_use,
+            self.heap_allocations
         )
     }
 }
@@ -270,6 +277,11 @@ pub fn compare(
             "gpu_memory_bytes",
             current.gpu_memory_bytes,
             baseline.gpu_memory_bytes,
+        ),
+        (
+            "arena_bytes_in_use",
+            current.arena_bytes_in_use,
+            baseline.arena_bytes_in_use,
         ),
         (
             "heap_allocations",
@@ -424,6 +436,7 @@ mod tests {
             draw_calls: 10,
             uploaded_bytes: 1712,
             gpu_memory_bytes: 1 << 30,
+            arena_bytes_in_use: 85_296,
             heap_allocations: 100,
         }
     }
@@ -499,12 +512,14 @@ mod tests {
         current.draw_calls = 11;
         current.uploaded_bytes = 1712 * 2;
         current.gpu_memory_bytes = (1 << 30) + 1;
+        current.arena_bytes_in_use += 1;
         assert_eq!(
             verdicts(&current, &baseline(), CompareMode::Ci),
             [
                 ("draw_calls", Verdict::Fail),
                 ("uploaded_bytes", Verdict::Fail),
-                ("gpu_memory_bytes", Verdict::Fail)
+                ("gpu_memory_bytes", Verdict::Fail),
+                ("arena_bytes_in_use", Verdict::Fail)
             ]
         );
     }

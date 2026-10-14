@@ -10,7 +10,9 @@ use crate::components::{MaterialRef, MeshRef, PointLight, Transform};
 use crate::gpu::GpuContext;
 use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
 use crate::input::{Input, clear_just_pressed};
-use crate::render::{FrameData, InstanceSlots, PointLightQuery, Renderer, prepare_frame};
+use crate::render::{
+    FrameData, InstanceSlots, LoadStaging, PointLightQuery, Renderer, prepare_frame,
+};
 use crate::scenes::{
     HELMET_SWEEP_BASE_COLOR, ReferenceScene, SWEEP_METALLIC, SWEEP_ROUGHNESS, insert_gltf_model,
     spawn_far_coplanar, spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep, spawn_uv_grid, spin,
@@ -62,6 +64,7 @@ impl State {
             queue,
             mesh_pool,
             material_pool,
+            load_staging,
             ..
         } = &mut renderer;
 
@@ -76,25 +79,45 @@ impl State {
         let (schedule, mut fixed_schedule) = simulation_schedules(&recorder);
 
         match scene {
-            ReferenceScene::Helmet => {
-                Self::spawn_helmet_scene(&mut world, device, queue, mesh_pool, material_pool)?
-            }
+            ReferenceScene::Helmet => Self::spawn_helmet_scene(
+                &mut world,
+                device,
+                queue,
+                load_staging,
+                mesh_pool,
+                material_pool,
+            ),
             ReferenceScene::PbrSweep => {
-                spawn_pbr_sweep(&mut world, device, queue, mesh_pool, material_pool)
+                spawn_pbr_sweep(&mut world, queue, load_staging, mesh_pool, material_pool)
             }
-            ReferenceScene::UvGrid => {
-                spawn_uv_grid(&mut world, device, queue, mesh_pool, material_pool)
-            }
-            ReferenceScene::NormalTangent => {
-                spawn_normal_tangent(&mut world, device, queue, mesh_pool, material_pool)?
-            }
+            ReferenceScene::UvGrid => spawn_uv_grid(
+                &mut world,
+                device,
+                queue,
+                load_staging,
+                mesh_pool,
+                material_pool,
+            ),
+            ReferenceScene::NormalTangent => spawn_normal_tangent(
+                &mut world,
+                device,
+                queue,
+                load_staging,
+                mesh_pool,
+                material_pool,
+            ),
             ReferenceScene::FarCoplanar => {
-                spawn_far_coplanar(&mut world, device, queue, mesh_pool, material_pool)
+                spawn_far_coplanar(&mut world, queue, load_staging, mesh_pool, material_pool)
             }
-            ReferenceScene::Orrery => {
-                spawn_orrery(&mut world, device, queue, mesh_pool, material_pool)
-            }
-        }
+            ReferenceScene::Orrery => spawn_orrery(
+                &mut world,
+                device,
+                queue,
+                load_staging,
+                mesh_pool,
+                material_pool,
+            ),
+        }?;
         for (position, color) in [
             (glam::dvec3(2.0, 2.0, 2.0), glam::Vec3::X),
             (glam::dvec3(-2.0, 2.0, 2.0), glam::Vec3::Y),
@@ -142,12 +165,19 @@ impl State {
         world: &mut World,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        load_staging: &mut LoadStaging,
         mesh_pool: &mut MeshPool,
         material_pool: &mut MaterialPool,
     ) -> anyhow::Result<()> {
-        let (mesh_handle, material_handle) =
-            insert_gltf_model(device, queue, mesh_pool, material_pool, DEFAULT_MODEL)
-                .context("run scripts/fetch-assets.sh if the model is missing")?;
+        let (mesh_handle, material_handle) = insert_gltf_model(
+            device,
+            queue,
+            load_staging,
+            mesh_pool,
+            material_pool,
+            DEFAULT_MODEL,
+        )
+        .context("run scripts/fetch-assets.sh if the model is missing")?;
 
         // Debug material sweep: a pure factor sweep over the neutral default
         // layers with a white base color. Top row dielectric, bottom row metal;
@@ -251,6 +281,7 @@ impl State {
     pub fn frame_stats(&self) -> FrameStats {
         FrameStats {
             gpu_memory_bytes: self.renderer.gpu_memory_bytes(),
+            arena_bytes_in_use: self.renderer.mesh_pool.arena_bytes_in_use(),
             allocator_report_bytes: self.renderer.allocator_report_bytes(),
             ..self.recorder.stats()
         }
