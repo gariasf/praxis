@@ -28,11 +28,21 @@ impl MaterialHandle {
 /// Channel's position in `MaterialPool::channels` and its binding minus one.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum MaterialChannel {
-    Albedo,
-    Normal,
-    MetallicRoughness,
-    Occlusion,
-    Emissive,
+    Albedo = 0,
+    Normal = 1,
+    MetallicRoughness = 2,
+    Occlusion = 3,
+    Emissive = 4,
+}
+
+impl MaterialChannel {
+    const ALL: [Self; 5] = [
+        Self::Albedo,
+        Self::Normal,
+        Self::MetallicRoughness,
+        Self::Occlusion,
+        Self::Emissive,
+    ];
 }
 
 /// One entry in the material SSBO. All-`vec4` layout: WGSL pads `vec3<f32>` to
@@ -49,14 +59,14 @@ pub struct MaterialData {
 
 /// One Channel's Textures, each sized to its source, bound as one partially
 /// bound binding array (ADR 0017). A Layer is an index into `views`.
-struct Channel {
+struct ChannelTextures {
     label: &'static str,
     format: wgpu::TextureFormat,
     textures: Vec<wgpu::Texture>,
     views: Vec<wgpu::TextureView>,
 }
 
-impl Channel {
+impl ChannelTextures {
     fn new(label: &'static str, format: wgpu::TextureFormat) -> Self {
         Self {
             label,
@@ -67,7 +77,7 @@ impl Channel {
     }
 
     /// Creates a `width` × `height` RGBA8 Texture from `pixels` and returns
-    /// its Layer, or `MaterialPool::DEFAULT_LAYER` when the Channel is full.
+    /// its Layer, or `None` when the Channel is full.
     fn push(
         &mut self,
         device: &wgpu::Device,
@@ -75,14 +85,14 @@ impl Channel {
         pixels: &[u8],
         width: u32,
         height: u32,
-    ) -> u32 {
+    ) -> Option<u32> {
         if self.views.len() as u32 >= TEXTURES_PER_CHANNEL {
             tracing::error!(
                 channel = self.label,
                 capacity = TEXTURES_PER_CHANNEL,
                 "channel full; using the neutral default layer"
             );
-            return MaterialPool::DEFAULT_LAYER;
+            return None;
         }
         let layer = self.views.len() as u32;
         let size = wgpu::Extent3d {
@@ -112,7 +122,7 @@ impl Channel {
         );
         self.views.push(texture.create_view(&Default::default()));
         self.textures.push(texture);
-        layer
+        Some(layer)
     }
 }
 
@@ -123,7 +133,7 @@ impl Channel {
 pub struct MaterialPool {
     materials: Vec<MaterialData>,
     materials_buffer: wgpu::Buffer,
-    channels: [Channel; 5],
+    channels: [ChannelTextures; 5],
     sampler: wgpu::Sampler,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
@@ -147,23 +157,17 @@ impl MaterialPool {
         // Color channels are sRGB; data channels (vectors / scalars) are linear.
         // Ordered as `MaterialChannel`.
         let mut channels = [
-            Channel::new("albedo", wgpu::TextureFormat::Rgba8UnormSrgb),
-            Channel::new("normal", wgpu::TextureFormat::Rgba8Unorm),
-            Channel::new("metallic_roughness", wgpu::TextureFormat::Rgba8Unorm),
-            Channel::new("occlusion", wgpu::TextureFormat::Rgba8Unorm),
-            Channel::new("emissive", wgpu::TextureFormat::Rgba8UnormSrgb),
+            ChannelTextures::new("albedo", wgpu::TextureFormat::Rgba8UnormSrgb),
+            ChannelTextures::new("normal", wgpu::TextureFormat::Rgba8Unorm),
+            ChannelTextures::new("metallic_roughness", wgpu::TextureFormat::Rgba8Unorm),
+            ChannelTextures::new("occlusion", wgpu::TextureFormat::Rgba8Unorm),
+            ChannelTextures::new("emissive", wgpu::TextureFormat::Rgba8UnormSrgb),
         ];
 
         // Neutral defaults into Layer 0 of every Channel (see DEFAULT_LAYER).
         let white = [255u8; 4];
         let flat_normal = [128u8, 128, 255, 255];
-        for channel in [
-            MaterialChannel::Albedo,
-            MaterialChannel::Normal,
-            MaterialChannel::MetallicRoughness,
-            MaterialChannel::Occlusion,
-            MaterialChannel::Emissive,
-        ] {
+        for channel in MaterialChannel::ALL {
             let pixel = if channel == MaterialChannel::Normal {
                 &flat_normal
             } else {
@@ -298,9 +302,13 @@ impl MaterialPool {
             );
             return Self::DEFAULT_LAYER;
         }
-        let layer = self.channels[channel as usize].push(device, queue, pixels, width, height);
-        // ponytail: one rebuild per upload, fine at load; ADR 0017's streaming
-        // batches residency changes into one rebuild per frame.
+        let Some(layer) =
+            self.channels[channel as usize].push(device, queue, pixels, width, height)
+        else {
+            return Self::DEFAULT_LAYER;
+        };
+        // One rebuild per upload is fine at load; streaming batches residency
+        // changes into one rebuild per frame (ADR 0017).
         self.bind_group = create_bind_group(
             device,
             &self.bind_group_layout,
@@ -320,7 +328,7 @@ fn create_bind_group(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
     materials_buffer: &wgpu::Buffer,
-    channels: &[Channel; 5],
+    channels: &[ChannelTextures; 5],
     sampler: &wgpu::Sampler,
 ) -> wgpu::BindGroup {
     let views: Vec<Vec<&wgpu::TextureView>> = channels
