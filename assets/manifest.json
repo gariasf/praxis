@@ -1,6 +1,7 @@
 [
   {
     "path": "SciFiHelmet/SciFiHelmet.gltf",
+    "guid": "3b67bb0196a34daa9d4389cb09aa9a27",
     "source": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/SciFiHelmet/glTF/SciFiHelmet.gltf",
     "license": "CC0-1.0",
     "credit": "SciFi Helmet: © 2017 Michael Pavlovic, CC0 1.0",
@@ -11,6 +12,7 @@
   },
   {
     "path": "SciFiHelmet/SciFiHelmet.bin",
+    "guid": "1a6b5156bc66457c89651ddd74164735",
     "source": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/SciFiHelmet/glTF/SciFiHelmet.bin",
     "license": "CC0-1.0",
     "credit": "SciFi Helmet: © 2017 Michael Pavlovic, CC0 1.0",
@@ -21,6 +23,7 @@
   },
   {
     "path": "SciFiHelmet/SciFiHelmet_BaseColor.png",
+    "guid": "59f5a9add9d3436ca4f06b68ea75fd9e",
     "source": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/SciFiHelmet/glTF/SciFiHelmet_BaseColor.png",
     "license": "CC0-1.0",
     "credit": "SciFi Helmet: © 2017 Michael Pavlovic, CC0 1.0",
@@ -31,6 +34,7 @@
   },
   {
     "path": "SciFiHelmet/SciFiHelmet_Normal.png",
+    "guid": "974612654856463497173ab005796887",
     "source": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/SciFiHelmet/glTF/SciFiHelmet_Normal.png",
     "license": "CC0-1.0",
     "credit": "SciFi Helmet: © 2017 Michael Pavlovic, CC0 1.0",
@@ -41,6 +45,7 @@
   },
   {
     "path": "SciFiHelmet/SciFiHelmet_MetallicRoughness.png",
+    "guid": "7ff106e43fb74b0a96a4c66fa4bb1db1",
     "source": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/SciFiHelmet/glTF/SciFiHelmet_MetallicRoughness.png",
     "license": "CC0-1.0",
     "credit": "SciFi Helmet: © 2017 Michael Pavlovic, CC0 1.0",
@@ -51,6 +56,7 @@
   },
   {
     "path": "SciFiHelmet/SciFiHelmet_AmbientOcclusion.png",
+    "guid": "4983d1f9de9b4e7d9b79f70f8d51f509",
     "source": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/SciFiHelmet/glTF/SciFiHelmet_AmbientOcclusion.png",
     "license": "CC0-1.0",
     "credit": "SciFi Helmet: © 2017 Michael Pavlovic, CC0 1.0",
@@ -61,6 +67,7 @@
   },
   {
     "path": "NormalTangentTest/NormalTangentTest.glb",
+    "guid": "c750a32dc879478eaca4748dbc82645a",
     "source": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/NormalTangentTest/glTF-Binary/NormalTangentTest.glb",
     "license": "CC0-1.0",
     "credit": "Normal-Tangent Test: © 2018 Analytical Graphics, Inc., by Ed Mackey, CC0 1.0",

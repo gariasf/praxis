@@ -32,6 +32,8 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
     match arguments {
         [] => praxis::run(),
         [command] if command == "capabilities" => print_capabilities(),
+        #[cfg(feature = "cook")]
+        [command] if command == "cook" => cook(),
         [command, scene, output] if command == "capture" => {
             capture(scene, output, DEFAULT_CAPTURE_SIZE)
         }
@@ -48,7 +50,7 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
         }
         _ => anyhow::bail!(
             "unexpected arguments {arguments:?}: run with no arguments, `capabilities`, \
-             `capture <scene> <png path> [<width>x<height>]`, \
+             `cook`, `capture <scene> <png path> [<width>x<height>]`, \
              `bench <output directory> [--ci] [<scene>...]`, or `compare <bench directory> [--ci]`"
         ),
     }
@@ -58,6 +60,22 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
 fn print_capabilities() -> anyhow::Result<()> {
     let report = pollster::block_on(praxis::gpu::capability_report())?;
     std::io::stdout().write_all(report.as_bytes())?;
+    Ok(())
+}
+
+/// Cooks `assets/` and every procedural Reference scene into `cooked/`.
+#[cfg(feature = "cook")]
+fn cook() -> anyhow::Result<()> {
+    let report = praxis::cook::cook(
+        Path::new("assets"),
+        &praxis::cooked::CookedCache::new("cooked"),
+    )?;
+    writeln!(
+        std::io::stdout(),
+        "cooked {}, unchanged {}",
+        report.cooked.len(),
+        report.unchanged.len()
+    )?;
     Ok(())
 }
 

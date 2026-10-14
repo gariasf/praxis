@@ -13,13 +13,16 @@ pollster = "0.4"
 anyhow = "1"
 bytemuck = "1.25.0"
 image = { version = "0.25", default-features = false, features = ["png"] }
-gltf = { version = "1.4.1", default-features = false, features = ["import", "utils"] }
+gltf = { version = "1.4.1", default-features = false, features = ["import", "names", "utils"] }
 bevy_ecs = { version = "0.18.1", features = ["trace", "debug", "multi_threaded"] }
 bevy_tasks = { version = "0.18.1", default-features = false, features = ["multi_threaded"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 bevy_mikktspace = "1.0.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
-[dev-dependencies]
 sha2 = { version = "0.11", default-features = false }
+
+[features]
+default = ["cook"]
+# The cooker and `praxis cook`; a shipping build turns it off (ADR 0018).
+cook = []

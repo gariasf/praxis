@@ -12,8 +12,8 @@ use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
 use crate::input::{Input, clear_just_pressed};
 use crate::render::{FrameData, InstanceSlots, PointLightQuery, Renderer, prepare_frame};
 use crate::scenes::{
-    ReferenceScene, insert_gltf_model, spawn_far_coplanar, spawn_normal_tangent, spawn_orrery,
-    spawn_pbr_sweep, spawn_uv_grid, spin,
+    HELMET_SWEEP_BASE_COLOR, ReferenceScene, SWEEP_METALLIC, SWEEP_ROUGHNESS, insert_gltf_model,
+    spawn_far_coplanar, spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep, spawn_uv_grid, spin,
 };
 use crate::stats::{FrameRecorder, FrameStats};
 use crate::threading::{init_compute_pool, single_threaded_schedule};
@@ -155,12 +155,12 @@ impl State {
         // the rows. Placed 8 units ahead of the default camera. SciFiHelmet is
         // 2.9 units tall, so the sweep copies are scaled to 3/4 to clear the
         // middle helmet and stay in frame.
-        for (row_index, metallic) in [0.0_f32, 1.0].into_iter().enumerate() {
-            for (column_index, roughness) in [0.1_f32, 0.3, 0.5, 0.7, 0.9].into_iter().enumerate() {
+        for (row_index, metallic) in SWEEP_METALLIC.into_iter().enumerate() {
+            for (column_index, roughness) in SWEEP_ROUGHNESS.into_iter().enumerate() {
                 let variant_handle = material_pool.insert(
                     queue,
                     MaterialData {
-                        base_color: [1.0, 1.0, 1.0, 1.0],
+                        base_color: HELMET_SWEEP_BASE_COLOR,
                         metallic_roughness: [metallic, roughness, 0.0, 0.0],
                         emissive: [0.0, 0.0, 0.0, 1.0],
                         texture_indices: [MaterialPool::DEFAULT_LAYER; 4],

@@ -11,6 +11,8 @@ use crate::assets::{
 };
 use crate::camera::Camera;
 use crate::components::{MaterialRef, MeshRef, Transform};
+#[cfg(feature = "cook")]
+use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource, CookedMaterial};
 use crate::render::Vertex;
 use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
 use crate::transform::PreviousWorldTransform;
@@ -61,6 +63,58 @@ impl ReferenceScene {
 
     pub fn from_name(name: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|scene| scene.name() == name)
+    }
+
+    /// The scene's procedural Materials by name; glTF Materials cook from
+    /// their manifest source.
+    #[cfg(feature = "cook")]
+    pub(crate) fn materials(self) -> Vec<(String, CookedMaterial)> {
+        let factors = |base_color, metallic, roughness, albedo: Option<&str>| CookedMaterial {
+            base_color,
+            metallic,
+            roughness,
+            emissive: [0.0; 3],
+            textures: [
+                albedo.map(|name| {
+                    let source = AssetSource::Scene(self.name());
+                    let kind = AssetKind::Texture(MaterialChannel::Albedo);
+                    AssetId::new(source, kind, AssetName::Name(name))
+                }),
+                None,
+                None,
+                None,
+                None,
+            ],
+        };
+        let sweep = |base_color| {
+            SWEEP_METALLIC.into_iter().flat_map(move |metallic| {
+                SWEEP_ROUGHNESS.into_iter().map(move |roughness| {
+                    let name = format!("metallic-{metallic}-roughness-{roughness}");
+                    (name, factors(base_color, metallic, roughness, None))
+                })
+            })
+        };
+        match self {
+            Self::Helmet => sweep(HELMET_SWEEP_BASE_COLOR).collect(),
+            Self::PbrSweep => sweep(SWEEP_BASE_COLOR).collect(),
+            Self::UvGrid => vec![(
+                "grid".into(),
+                factors([1.0; 4], 0.0, UV_GRID_ROUGHNESS, Some("grid")),
+            )],
+            Self::NormalTangent => Vec::new(),
+            Self::FarCoplanar => ["upper", "lower"]
+                .into_iter()
+                .zip(FAR_COPLANAR_COLORS)
+                .map(|(name, base_color)| {
+                    let material = factors(base_color, 0.0, FAR_COPLANAR_ROUGHNESS, None);
+                    (name.into(), material)
+                })
+                .collect(),
+            Self::Orrery => vec![(
+                "grid".into(),
+                factors([1.0; 4], 0.0, ORRERY_ROUGHNESS, Some("grid")),
+            )],
+        }
     }
 
     /// The camera at `frame`, moved by `shift` metres. The path is a function
@@ -115,7 +169,10 @@ fn orbit(frame: u32, radius: f32, height: f32) -> Camera {
 /// Linear sRGB reflectance of gold at normal incidence: metals tint their
 /// highlight with it and dielectrics their diffuse, so the two rows differ.
 const SWEEP_BASE_COLOR: [f32; 4] = [1.0, 0.71, 0.29, 1.0];
-const SWEEP_ROUGHNESS: [f32; 5] = [0.1, 0.3, 0.5, 0.7, 0.9];
+/// The helmet scene's sweep is white, so the factors alone show.
+pub(crate) const HELMET_SWEEP_BASE_COLOR: [f32; 4] = [1.0; 4];
+pub(crate) const SWEEP_METALLIC: [f32; 2] = [0.0, 1.0];
+pub(crate) const SWEEP_ROUGHNESS: [f32; 5] = [0.1, 0.3, 0.5, 0.7, 0.9];
 const SPHERE_RADIUS: f32 = 0.5;
 const SPHERE_SPACING: f32 = 1.3;
 
@@ -127,7 +184,7 @@ pub(crate) fn spawn_pbr_sweep(
     material_pool: &mut MaterialPool,
 ) {
     let sphere = insert_mesh(device, queue, mesh_pool, &uv_sphere(SPHERE_RADIUS));
-    for (row, metallic) in [0.0_f32, 1.0].into_iter().enumerate() {
+    for (row, metallic) in SWEEP_METALLIC.into_iter().enumerate() {
         for (column, roughness) in SWEEP_ROUGHNESS.into_iter().enumerate() {
             let material = material_pool.insert(
                 queue,
@@ -152,6 +209,9 @@ pub(crate) fn spawn_pbr_sweep(
     }
 }
 
+/// Rough so the highlight does not wash out the texture.
+const UV_GRID_ROUGHNESS: f32 = 0.8;
+
 pub(crate) fn spawn_uv_grid(
     world: &mut World,
     device: &wgpu::Device,
@@ -168,8 +228,10 @@ pub(crate) fn spawn_uv_grid(
         GRID_TEXTURE_SIZE,
         GRID_TEXTURE_SIZE,
     );
-    // Rough so the highlight does not wash out the texture.
-    let material = material_pool.insert(queue, factor_material([1.0; 4], 0.0, 0.8, albedo_layer));
+    let material = material_pool.insert(
+        queue,
+        factor_material([1.0; 4], 0.0, UV_GRID_ROUGHNESS, albedo_layer),
+    );
     world.spawn((Transform::IDENTITY, MeshRef(plane), MaterialRef(material)));
 }
 
@@ -204,6 +266,9 @@ const FAR_COPLANAR_DISTANCE: f64 = 2000.0;
 const FAR_COPLANAR_CAMERA_HEIGHT: f64 = 300.0;
 /// Between the two planes, in metres.
 const FAR_COPLANAR_GAP: f64 = 0.01;
+/// The upper plane's base colour, then the lower one's.
+const FAR_COPLANAR_COLORS: [[f32; 4]; 2] = [[0.8, 0.1, 0.1, 1.0], [0.1, 0.8, 0.1, 1.0]];
+const FAR_COPLANAR_ROUGHNESS: f32 = 0.8;
 
 pub(crate) fn spawn_far_coplanar(
     world: &mut World,
@@ -219,13 +284,18 @@ pub(crate) fn spawn_far_coplanar(
         &ground_plane(FAR_COPLANAR_DISTANCE as f32, 1.0),
     );
     let centre = glam::dvec3(0.0, 0.0, -FAR_COPLANAR_DISTANCE);
-    for (height, base_color) in [
-        (0.0, [0.8, 0.1, 0.1, 1.0]),
-        (-FAR_COPLANAR_GAP, [0.1, 0.8, 0.1, 1.0]),
-    ] {
+    for (height, base_color) in [0.0, -FAR_COPLANAR_GAP]
+        .into_iter()
+        .zip(FAR_COPLANAR_COLORS)
+    {
         let material = material_pool.insert(
             queue,
-            factor_material(base_color, 0.0, 0.8, MaterialPool::DEFAULT_LAYER),
+            factor_material(
+                base_color,
+                0.0,
+                FAR_COPLANAR_ROUGHNESS,
+                MaterialPool::DEFAULT_LAYER,
+            ),
         );
         world.spawn((
             Transform::from_translation(centre + glam::DVec3::Y * height),
@@ -242,6 +312,7 @@ const ORRERY_SPIN_RATES: [f64; 5] = [0.5, 1.5, 2.5, 3.5, 4.5];
 const ORRERY_SCALE: f32 = 0.7;
 /// Each orrery body's distance from its parent, in its parent's diameters.
 const ORRERY_ORBIT_RADIUS: f64 = 1.6;
+const ORRERY_ROUGHNESS: f32 = 0.5;
 
 /// A chain of five spheres from a root at the origin, each a child of the
 /// one before, on its parent's +X axis, and all spinning about their own +Y
@@ -263,7 +334,10 @@ pub(crate) fn spawn_orrery(
         GRID_TEXTURE_SIZE,
         GRID_TEXTURE_SIZE,
     );
-    let material = material_pool.insert(queue, factor_material([1.0; 4], 0.0, 0.5, albedo_layer));
+    let material = material_pool.insert(
+        queue,
+        factor_material([1.0; 4], 0.0, ORRERY_ROUGHNESS, albedo_layer),
+    );
     let body = |radians_per_second| {
         (
             MeshRef(sphere),

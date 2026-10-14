@@ -20,6 +20,8 @@ pub mod bench;
 mod camera;
 mod capture;
 mod components;
+#[cfg(feature = "cook")]
+pub mod cook;
 pub mod gpu;
 mod helmet;
 mod input;
@@ -31,6 +33,7 @@ mod threading;
 mod time;
 mod transform;
 
+pub use assets::cooked;
 pub use capture::capture;
 pub use scenes::ReferenceScene;
 pub use state::DEFAULT_MODEL;
