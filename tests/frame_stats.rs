@@ -36,13 +36,14 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     assert!(frames.iter().all(|frame| frame.dropped_time.is_zero()));
     // Two rows of five spheres, one Primitive each.
     assert_eq!(last.draw_calls, 10);
-    // Each frame writes ten 128-byte Instances and the 96-byte camera and
-    // 192-byte light uniforms.
-    assert_eq!(last.uploaded_bytes, 10 * 128 + 96 + 192);
+    // Every frame writes the 96-byte camera and 192-byte light uniforms; only
+    // the first also writes the ten 128-byte Instances.
+    assert_eq!(frames[0].uploaded_bytes, 10 * 128 + 96 + 192);
+    assert_eq!(last.uploaded_bytes, 96 + 192);
     // 640 MiB of material arrays (5 Channels of 8 Layers, 2048² RGBA8), the
     // 1 MiB vertex and 256 KiB index buffers, 256 Materials of 80 bytes, the
     // camera and light uniforms, 16 Instances of 128 bytes, the 160×90
-    // Depth32Float texture, and three staging slots of the frame's 1568
+    // Depth32Float texture, and three staging slots of the first frame's 1568
     // uploaded bytes rounded up to 2048.
     assert_eq!(
         last.gpu_memory_bytes,
@@ -100,4 +101,32 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
 
     let printed = last.to_string();
     assert!(printed.lines().count() <= 5, "over 5 lines:\n{printed}");
+}
+
+/// On the Reference scenes whose camera moves every frame, the first frame
+/// writes every Instance and the camera's motion writes none after it
+/// (ADR 0003).
+#[test]
+fn camera_motion_writes_no_instances() {
+    let context = match pollster::block_on(GpuContext::headless()) {
+        Ok(context) => context,
+        Err(error) if error.is::<wgpu::RequestAdapterError>() => {
+            // Not `eprintln!`, which libtest captures from passing tests.
+            writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+            return;
+        }
+        Err(error) => panic!("headless GPU context failed: {error:#}"),
+    };
+
+    for (scene, instances) in [(ReferenceScene::PbrSweep, 10), (ReferenceScene::UvGrid, 1)] {
+        let (_, frames) =
+            praxis::capture(&context, scene, glam::DVec3::ZERO, 160, 90).expect("capture failed");
+        let written: Vec<u32> = frames.iter().map(|frame| frame.instances_written).collect();
+        assert_eq!(written[0], instances, "{}", scene.name());
+        assert!(
+            written[1..].iter().all(|&count| count == 0),
+            "{} wrote Instances after its first frame: {written:?}",
+            scene.name()
+        );
+    }
 }

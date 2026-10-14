@@ -76,16 +76,16 @@ _Avoid_: Build output, derived data
 
 **Placement**:
 One Mesh Asset positioned inside a Chunk.
-_Avoid_: Spawn, instance (an Instance is per frame)
+_Avoid_: Spawn, instance (an Instance is a Renderable's data on the GPU)
 
 ### Frame
 
 **Instance**:
-One Renderable's data for one frame: its World transform and Material ID.
+One Renderable's data on the GPU: its World transform and Material ID, in a slot of the Instance buffer that the Renderable keeps while it is one.
 _Avoid_: Object
 
 **Frame data**:
-The per-frame collection of visible Renderables, lights and camera that the renderer consumes in place of reading the ECS World.
+The per-frame collection of draws, changed Instances, lights and camera that the renderer consumes in place of reading the ECS World.
 _Avoid_: Scene data, render state
 
 **Froxel**:

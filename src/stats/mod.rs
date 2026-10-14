@@ -15,9 +15,12 @@ pub struct FrameStats {
     /// empty when the device has no timestamp queries.
     pub gpu_times: Vec<(&'static str, Duration)>,
     pub draw_calls: u32,
-    /// Bytes the frame's uploads wrote to GPU buffers: Instances and uniforms.
-    /// Pools upload only while a Scene loads.
+    /// Bytes the frame's uploads wrote to GPU buffers: the Instances it wrote
+    /// and the uniforms. Pools upload only while a Scene loads.
     pub uploaded_bytes: u64,
+    /// Instances the frame wrote: those of new Renderables and of those whose
+    /// World transform or Material changed (ADR 0003).
+    pub instances_written: u32,
     /// Bytes of the GPU buffers and textures the State created, its Pools
     /// included, summed by the engine on every backend (ADR 0013). The
     /// render target and capture's own buffers are the caller's.
@@ -54,9 +57,10 @@ impl std::fmt::Display for FrameStats {
         }
         writeln!(
             formatter,
-            "counts draw_calls={} uploaded_bytes={} heap_allocations={} dropped_us={:.1}",
+            "counts draw_calls={} uploaded_bytes={} instances_written={} heap_allocations={} dropped_us={:.1}",
             self.draw_calls,
             self.uploaded_bytes,
+            self.instances_written,
             self.heap_allocations,
             microseconds(&self.dropped_time)
         )?;
@@ -102,6 +106,7 @@ pub(crate) struct FrameRecorder {
     heap_allocations: u64,
     pub(crate) draw_calls: u32,
     pub(crate) uploaded_bytes: u64,
+    pub(crate) instances_written: u32,
     pub(crate) dropped_time: Duration,
 }
 
@@ -116,6 +121,7 @@ impl FrameRecorder {
             heap_allocations: 0,
             draw_calls: 0,
             uploaded_bytes: 0,
+            instances_written: 0,
             dropped_time: Duration::ZERO,
         }
     }
@@ -126,6 +132,7 @@ impl FrameRecorder {
         self.stages.clear();
         self.draw_calls = 0;
         self.uploaded_bytes = 0;
+        self.instances_written = 0;
         self.dropped_time = Duration::ZERO;
         self.allocations_at_start = thread_allocations();
         self.started = Instant::now();
@@ -158,6 +165,7 @@ impl FrameRecorder {
             cpu_frame_time: self.frame_time,
             draw_calls: self.draw_calls,
             uploaded_bytes: self.uploaded_bytes,
+            instances_written: self.instances_written,
             heap_allocations: self.heap_allocations,
             dropped_time: self.dropped_time,
             ..FrameStats::default()
