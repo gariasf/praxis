@@ -13,7 +13,7 @@ mod shader_tests;
 
 pub use depth::{DEPTH_FORMAT, create_depth_texture};
 pub use instance::{INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData};
-pub use prepare::{FrameData, InstanceSlots, PointLightQuery, prepare_frame};
+pub use prepare::{FrameData, FramePreparer};
 pub(crate) use renderer::MAIN_PASS;
 pub use renderer::Renderer;
 pub use staging::{FrameStaging, LoadStaging};

@@ -31,9 +31,8 @@ const _: () = {
     assert_send_static::<FrameData>()
 };
 
-/// The point lights, with what blends the moving ones. The caller keeps it
-/// across frames, so preparing allocates nothing.
-pub type PointLightQuery = QueryState<(
+/// The point lights, with what blends the moving ones.
+type PointLightQuery = QueryState<(
     &'static WorldTransform,
     Option<&'static PreviousWorldTransform>,
     &'static PointLight,
@@ -76,7 +75,7 @@ pub struct Draw {
 /// Each Renderable's slot in the Instance buffer, kept until it stops being a
 /// Renderable; a freed slot is taken again before the buffer grows.
 #[derive(Default)]
-pub struct InstanceSlots {
+struct InstanceSlots {
     by_entity: bevy_ecs::entity::EntityHashMap<u32>,
     free: Vec<u32>,
     /// One past the highest slot taken.
@@ -102,94 +101,131 @@ impl InstanceSlots {
     }
 }
 
-/// Fills `frame` from the World's camera, lights and Renderables, seen at
-/// `aspect_ratio`, Instances anchored and lights placed relative to the
-/// camera (ADR 0014), reusing its lists' memory. Whatever the fixed schedule
-/// moves is drawn blended between its two newest Ticks (ADR 0022). A
-/// Renderable whose Mesh is not in `mesh_pool` is skipped.
-///
-/// Only new Renderables, blended ones and those whose World transform or
-/// Material changed since the last `World::clear_trackers` write their
-/// Instance, so the caller clears the trackers once per frame, after
-/// preparing it.
-pub fn prepare_frame(
-    world: &mut World,
-    point_light_query: &mut PointLightQuery,
-    instance_slots: &mut InstanceSlots,
-    mesh_pool: &MeshPool,
-    aspect_ratio: f32,
-    frame: &mut FrameData,
-) {
-    let camera = world.resource::<Camera>();
-    let camera_position = camera.position;
-    let view_proj = projection_matrix(aspect_ratio) * camera.view_matrix();
-    let (anchor, offset) = anchor_and_offset(camera_position);
-    frame.camera = CameraUniform {
-        view_proj: view_proj.to_cols_array_2d(),
-        anchor,
-        offset,
-        ..CameraUniform::default()
-    };
-    let blend_weight = world.resource::<FixedTime>().blend_weight;
-    frame.light = prepare_lights(world, point_light_query, camera_position, blend_weight);
+/// Prepares each frame's Frame data from the World, keeping across frames
+/// what makes that cheap: the Renderables' Instance slots, the point-light
+/// query and the Frame data's memory.
+pub struct FramePreparer {
+    point_light_query: PointLightQuery,
+    instance_slots: InstanceSlots,
+    frame: FrameData,
+}
 
-    frame.instances.clear();
-    frame.instance_writes.clear();
-    frame.draws.clear();
-    let mut renderable_query = world.query::<(
-        Entity,
-        Ref<WorldTransform>,
-        Option<&PreviousWorldTransform>,
-        &MeshRef,
-        Ref<MaterialRef>,
-    )>();
-    let renderables = renderable_query.query(world);
-    // Slots of entities that stopped being Renderables are freed before new
-    // Renderables take slots.
-    for entity in world
-        .removed::<WorldTransform>()
-        .chain(world.removed::<MeshRef>())
-        .chain(world.removed::<MaterialRef>())
-    {
-        if !renderables.contains(entity) {
-            instance_slots.free(entity);
+impl FramePreparer {
+    pub fn new(world: &mut World) -> Self {
+        Self {
+            point_light_query: world.query(),
+            instance_slots: InstanceSlots::default(),
+            frame: FrameData::default(),
         }
     }
-    for (entity, current, previous, mesh_ref, material_ref) in renderables.iter() {
-        let (slot, is_new) = instance_slots.get_or_take(entity);
-        // A blended Renderable moves every frame, between Ticks too.
-        if is_new || current.is_changed() || previous.is_some() || material_ref.is_changed() {
-            let transform = current.drawn(previous, blend_weight);
-            let rotation_scale = transform.0.matrix3.as_mat3();
-            let (anchor, offset) = anchor_and_offset(transform.translation());
-            frame.write_instance(
-                slot,
-                InstanceData {
-                    rotation_scale: padded_columns(rotation_scale),
-                    normal_matrix: padded_columns(rotation_scale.inverse().transpose()),
-                    anchor,
-                    material_id: material_ref.0.index(),
-                    offset,
-                    _pad: 0,
-                },
-            );
-        }
-        let Some(mesh) = mesh_pool.get(mesh_ref.0) else {
-            tracing::warn!(
-                handle = mesh_ref.0.0,
-                "MeshHandle not in pool, skipping entity"
-            );
-            continue;
+
+    /// Fills the Frame data from the World's camera, lights and Renderables,
+    /// seen at `aspect_ratio`, Instances anchored and lights placed relative
+    /// to the camera (ADR 0014). Whatever the fixed schedule moves is drawn
+    /// blended between its two newest Ticks (ADR 0022). A Renderable whose
+    /// Mesh is not in `mesh_pool` is skipped.
+    ///
+    /// Only new Renderables, blended ones and those whose World transform or
+    /// Material changed since the last `prepare` write their Instance. It
+    /// ends the World's change window (`World::clear_trackers`), so it is the
+    /// frame's last World read, once per frame.
+    pub fn prepare(
+        &mut self,
+        world: &mut World,
+        mesh_pool: &MeshPool,
+        aspect_ratio: f32,
+    ) -> &FrameData {
+        let Self {
+            point_light_query,
+            instance_slots,
+            frame,
+        } = self;
+        let camera = world.resource::<Camera>();
+        let camera_position = camera.position;
+        let view_proj = projection_matrix(aspect_ratio) * camera.view_matrix();
+        let (anchor, offset) = anchor_and_offset(camera_position);
+        frame.camera = CameraUniform {
+            view_proj: view_proj.to_cols_array_2d(),
+            anchor,
+            offset,
+            ..CameraUniform::default()
         };
+        let blend_weight = world.resource::<FixedTime>().blend_weight;
+        frame.light = prepare_lights(world, point_light_query, camera_position, blend_weight);
+
+        frame.instances.clear();
+        frame.instance_writes.clear();
+        frame.draws.clear();
+        let mut renderable_query = world.query::<(
+            Entity,
+            Ref<WorldTransform>,
+            Option<&PreviousWorldTransform>,
+            &MeshRef,
+            Ref<MaterialRef>,
+        )>();
+        let renderables = renderable_query.query(world);
+        // Slots of entities that stopped being Renderables are freed before new
+        // Renderables take slots.
+        for entity in world
+            .removed::<WorldTransform>()
+            .chain(world.removed::<MeshRef>())
+            .chain(world.removed::<MaterialRef>())
+        {
+            if !renderables.contains(entity) {
+                instance_slots.free(entity);
+            }
+        }
+        for (entity, current, previous, mesh_ref, material_ref) in renderables.iter() {
+            let (slot, is_new) = instance_slots.get_or_take(entity);
+            // A blended Renderable moves every frame, between Ticks too.
+            if is_new || current.is_changed() || previous.is_some() || material_ref.is_changed() {
+                let transform = current.drawn(previous, blend_weight);
+                let rotation_scale = transform.0.matrix3.as_mat3();
+                let (anchor, offset) = anchor_and_offset(transform.translation());
+                frame.write_instance(
+                    slot,
+                    InstanceData {
+                        rotation_scale: padded_columns(rotation_scale),
+                        normal_matrix: padded_columns(rotation_scale.inverse().transpose()),
+                        anchor,
+                        material_id: material_ref.0.index(),
+                        offset,
+                        _pad: 0,
+                    },
+                );
+            }
+            let Some(mesh) = mesh_pool.get(mesh_ref.0) else {
+                tracing::warn!(
+                    handle = mesh_ref.0.0,
+                    "MeshHandle not in pool, skipping entity"
+                );
+                continue;
+            };
+            frame
+                .draws
+                .extend(mesh.primitives.iter().map(|primitive| Draw {
+                    indices: primitive.index_offset..primitive.index_offset + primitive.index_count,
+                    base_vertex: primitive.vertex_offset as i32,
+                    instance_index: slot,
+                }));
+        }
+        frame.instance_slot_count = instance_slots.end;
+        // Ends the window in which prepare sees changes and removals, and
+        // drains the removals, which otherwise pile up.
+        world.clear_trackers();
         frame
-            .draws
-            .extend(mesh.primitives.iter().map(|primitive| Draw {
-                indices: primitive.index_offset..primitive.index_offset + primitive.index_count,
-                base_vertex: primitive.vertex_offset as i32,
-                instance_index: slot,
-            }));
     }
-    frame.instance_slot_count = instance_slots.end;
+
+    /// The Frame data the last `prepare` filled.
+    pub fn frame(&self) -> &FrameData {
+        &self.frame
+    }
+
+    /// Makes the next `prepare` write every Renderable's Instance, for when
+    /// the Renderer lost Instance writes.
+    pub fn rewrite_all_instances(&mut self) {
+        self.instance_slots = InstanceSlots::default();
+    }
 }
 
 /// The lights, point lights at their position relative to `camera_position`;
@@ -237,11 +273,9 @@ mod tests {
     struct Frames {
         world: World,
         propagation: Schedule,
-        point_light_query: PointLightQuery,
-        instance_slots: InstanceSlots,
         mesh_pool: MeshPool,
         mesh: MeshHandle,
-        frame: FrameData,
+        preparer: FramePreparer,
     }
 
     impl Frames {
@@ -267,17 +301,15 @@ mod tests {
             let mut world = World::new();
             world.insert_resource(Camera::new());
             world.insert_resource(FixedTime::default());
-            let point_light_query = world.query();
+            let preparer = FramePreparer::new(&mut world);
             let mut propagation = Schedule::default();
             propagation.add_systems(propagate_world_transforms);
             Some(Self {
                 world,
                 propagation,
-                point_light_query,
-                instance_slots: InstanceSlots::default(),
                 mesh_pool,
                 mesh,
-                frame: FrameData::default(),
+                preparer,
             })
         }
 
@@ -293,16 +325,8 @@ mod tests {
         /// Prepares the next frame and returns the slots it wrote, in order.
         fn prepare(&mut self) -> Vec<u32> {
             self.propagation.run(&mut self.world);
-            prepare_frame(
-                &mut self.world,
-                &mut self.point_light_query,
-                &mut self.instance_slots,
-                &self.mesh_pool,
-                1.0,
-                &mut self.frame,
-            );
-            self.world.clear_trackers();
-            self.frame
+            self.preparer
+                .prepare(&mut self.world, &self.mesh_pool, 1.0)
                 .instance_writes
                 .iter()
                 .flat_map(|write| write.first_slot..write.first_slot + write.instances.len() as u32)
@@ -318,8 +342,8 @@ mod tests {
         let [first, second, third] = [0.0, 1.0, 2.0].map(|x| frames.spawn(x));
         assert_eq!(frames.prepare(), [0, 1, 2]);
         // Consecutive slots go to the GPU as one copy.
-        assert_eq!(frames.frame.instance_writes.len(), 1);
-        assert_eq!(frames.frame.instance_slot_count, 3);
+        assert_eq!(frames.preparer.frame().instance_writes.len(), 1);
+        assert_eq!(frames.preparer.frame().instance_slot_count, 3);
         assert!(frames.prepare().is_empty());
 
         frames.world.despawn(second);
@@ -328,8 +352,8 @@ mod tests {
         // The freed slot is taken again; the others keep theirs.
         frames.spawn(3.0);
         assert_eq!(frames.prepare(), [1]);
-        assert_eq!(frames.frame.instances[0].offset, [3.0, 0.0, 0.0]);
-        assert_eq!(frames.frame.instance_slot_count, 3);
+        assert_eq!(frames.preparer.frame().instances[0].offset, [3.0, 0.0, 0.0]);
+        assert_eq!(frames.preparer.frame().instance_slot_count, 3);
         for (entity, slot) in [(first, 0), (third, 2)] {
             frames
                 .world
@@ -348,7 +372,7 @@ mod tests {
         // With no slot free, a spawn grows the buffer by one.
         frames.spawn(5.0);
         assert_eq!(frames.prepare(), [3]);
-        assert_eq!(frames.frame.instance_slot_count, 4);
+        assert_eq!(frames.preparer.frame().instance_slot_count, 4);
     }
 
     #[test]
@@ -374,7 +398,8 @@ mod tests {
         written.sort_unstable();
         assert_eq!(written, [1, 3]);
         let offsets: Vec<[f32; 3]> = frames
-            .frame
+            .preparer
+            .frame()
             .instances
             .iter()
             .map(|instance| instance.offset)
@@ -383,7 +408,7 @@ mod tests {
 
         frames.world.get_mut::<MaterialRef>(third).unwrap().0 = MaterialHandle(7);
         assert_eq!(frames.prepare(), [2]);
-        assert_eq!(frames.frame.instances[0].material_id, 7);
+        assert_eq!(frames.preparer.frame().instances[0].material_id, 7);
 
         // A blended Renderable is written every frame: it moves between Ticks.
         let blended = frames.spawn(6.0);
@@ -393,5 +418,22 @@ mod tests {
             .insert(PreviousWorldTransform::default());
         assert_eq!(frames.prepare(), [4]);
         assert_eq!(frames.prepare(), [4]);
+    }
+
+    #[test]
+    fn rewriting_all_instances_writes_every_slot_once() {
+        let Some(mut frames) = Frames::new() else {
+            return;
+        };
+        for x in [0.0, 1.0, 2.0] {
+            frames.spawn(x);
+        }
+        frames.prepare();
+        assert!(frames.prepare().is_empty());
+
+        frames.preparer.rewrite_all_instances();
+        assert_eq!(frames.prepare(), [0, 1, 2]);
+        assert_eq!(frames.preparer.frame().instance_slot_count, 3);
+        assert!(frames.prepare().is_empty());
     }
 }
