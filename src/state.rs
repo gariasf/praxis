@@ -12,8 +12,8 @@ use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
 use crate::input::{Input, clear_just_pressed};
 use crate::render::{FrameData, PointLightQuery, Renderer, prepare_frame};
 use crate::scenes::{
-    ReferenceScene, insert_gltf_model, spawn_far_coplanar, spawn_normal_tangent, spawn_pbr_sweep,
-    spawn_uv_grid,
+    ReferenceScene, insert_gltf_model, spawn_far_coplanar, spawn_normal_tangent, spawn_orrery,
+    spawn_pbr_sweep, spawn_uv_grid, spin,
 };
 use crate::stats::{FrameRecorder, FrameStats};
 use crate::threading::{init_compute_pool, single_threaded_schedule};
@@ -89,6 +89,9 @@ impl State {
             }
             ReferenceScene::FarCoplanar => {
                 spawn_far_coplanar(&mut world, device, queue, mesh_pool, material_pool)
+            }
+            ReferenceScene::Orrery => {
+                spawn_orrery(&mut world, device, queue, mesh_pool, material_pool)
             }
         }
         for (position, color) in [
@@ -266,6 +269,7 @@ fn simulation_schedules(recorder: &FrameRecorder) -> (Schedule, Schedule) {
                 (spawn_helmet, despawn_helmet)
                     .chain()
                     .run_if(resource_exists::<HelmetAssets>),
+                spin,
                 clear_just_pressed,
                 reset_teleported,
                 propagate_world_transforms,

@@ -11,8 +11,7 @@ use crate::stats::FrameStats;
 /// read-back bytes the image's pixels.
 pub(crate) const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
-/// Frames rendered per capture, one second at `FRAME_DELTA`; the last
-/// one is read back.
+/// Frames rendered per capture; the last one is read back.
 const FRAME_COUNT: u32 = 60;
 
 /// Frames submitted but not finished on the GPU before the next one starts,
@@ -20,15 +19,12 @@ const FRAME_COUNT: u32 = 60;
 /// further ahead than a window would.
 const FRAMES_IN_FLIGHT: usize = 2;
 
-/// The injected frame delta, 60 Hz in whole nanoseconds.
-const FRAME_DELTA: Duration = Duration::from_nanos(16_666_667);
-
 /// Renders `scene`, moved with its camera by `shift` metres, into a `width` ×
 /// `height` offscreen texture for `FRAME_COUNT` frames and returns the last
 /// one, with every frame's stats.
-/// Time and camera are injected (a fixed step, the scene's camera path by
-/// frame) and nothing reads the wall clock or input, so equal arguments give
-/// equal images on one machine.
+/// Time and camera are injected (the scene's frame delta and its camera path
+/// by frame) and nothing reads the wall clock or input, so equal arguments
+/// give equal images on one machine.
 pub fn capture(
     context: &GpuContext,
     scene: ReferenceScene,
@@ -36,12 +32,21 @@ pub fn capture(
     width: u32,
     height: u32,
 ) -> anyhow::Result<(image::RgbaImage, Vec<FrameStats>)> {
-    let (target, frame_stats) = render_frames(context, scene, shift, width, height, FRAME_COUNT)?;
+    let (target, frame_stats) = render_frames(
+        context,
+        scene,
+        shift,
+        width,
+        height,
+        FRAME_COUNT,
+        scene.frame_delta(),
+    )?;
     Ok((read_back(context, &target)?, frame_stats))
 }
 
-/// Renders `frame_count` frames of `scene` as `capture` does and returns the
-/// target, holding the last frame, with every frame's stats.
+/// Renders `frame_count` frames of `scene` as `capture` does, each advancing
+/// by `frame_delta`, and returns the target, holding the last frame, with
+/// every frame's stats.
 pub(crate) fn render_frames(
     context: &GpuContext,
     scene: ReferenceScene,
@@ -49,6 +54,7 @@ pub(crate) fn render_frames(
     width: u32,
     height: u32,
     frame_count: u32,
+    frame_delta: Duration,
 ) -> anyhow::Result<(wgpu::Texture, Vec<FrameStats>)> {
     let max_dimension = context.device.limits().max_texture_dimension_2d;
     anyhow::ensure!(
@@ -89,7 +95,7 @@ pub(crate) fn render_frames(
             })?;
         }
         state.world.insert_resource(scene.camera_at(frame, shift));
-        state.update(FRAME_DELTA);
+        state.update(frame_delta);
         let submission = state.render(&target_view, Some(pass_timer.writes(frame)));
         in_flight.push_back(submission);
         frame_stats.push(state.frame_stats());

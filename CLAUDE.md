@@ -89,7 +89,8 @@ src/
   stats/                       # frame stats: CPU and GPU times, counts,
                                  GPU memory, counting allocator
   scenes/                      # Reference scenes: generated content,
-                                 camera paths in frames
+                                 camera paths in frames, frame deltas,
+                                 the orrery's Spin system
   shader.wgsl                  # WGSL shaders (split when justified)
   components.rs                # ECS components (Transform, MeshRef)
   threading.rs                 # compute pool, schedule executor (ADR 0016)

@@ -26,6 +26,9 @@ pub const TICK_SECONDS: f64 = TICK.as_secs_f64();
 /// Ticks run per frame at most; accumulated time past them is dropped.
 pub const MAX_TICKS_PER_FRAME: u32 = 4;
 
+/// A 60 Hz frame, as the window measures it in whole nanoseconds.
+pub(crate) const SIXTY_HERTZ: Duration = Duration::from_nanos(16_666_667);
+
 /// The wall-clock time since the previous frame, as the State may advance by.
 pub fn clamp_frame_delta(elapsed: Duration) -> Duration {
     elapsed.min(MAX_FRAME_DELTA)
@@ -89,9 +92,6 @@ mod tests {
 
     use super::*;
     use crate::input::{Input, clear_just_pressed};
-
-    /// 60 Hz, as the window measures it in whole nanoseconds.
-    const SIXTY_HERTZ: Duration = Duration::from_nanos(16_666_667);
 
     fn world_with_fixed_time() -> World {
         let mut world = World::new();

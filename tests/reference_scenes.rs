@@ -24,7 +24,11 @@ fn procedural_scenes_render_identically_without_asset_files() {
     std::fs::create_dir_all(&empty_directory).expect("temporary directory");
     std::env::set_current_dir(&empty_directory).expect("change directory");
 
-    for scene in [ReferenceScene::PbrSweep, ReferenceScene::UvGrid] {
+    for scene in [
+        ReferenceScene::PbrSweep,
+        ReferenceScene::UvGrid,
+        ReferenceScene::Orrery,
+    ] {
         let (first, _) =
             praxis::capture(&context, scene, glam::DVec3::ZERO, 160, 90).expect("first capture");
         let (second, _) =
