@@ -6,8 +6,6 @@ use crate::{
 /// Bytes of each Arena: one provisional capacity for the app, tests, bench
 /// and CI until M4's Budget split replaces it (decision on #17, item 4).
 pub const ARENA_CAPACITY_BYTES: u64 = 16 << 20;
-// The DX12 and Linux non-NVIDIA Vulkan buffer limit (ADR 0017).
-const _: () = assert!(ARENA_CAPACITY_BYTES < 1 << 31);
 
 pub struct MeshPool {
     meshes: Vec<Mesh>,
@@ -40,8 +38,8 @@ impl MeshPool {
 
     /// Writes a Mesh of `primitives`, each its vertices and its indices into
     /// them, through `staging` into one range of each Arena. Returns its
-    /// Handle, or None after logging when an Arena has no free range that
-    /// long; a refused Mesh leaves the Arenas as they were.
+    /// Handle, or None after logging when an Arena's longest free range is
+    /// too short; a refused Mesh leaves the Arenas as they were.
     pub fn load(
         &mut self,
         staging: &mut LoadStaging,
@@ -91,7 +89,7 @@ impl MeshPool {
             indices = index_count,
             longest_free_vertex_range = self.vertex_arena.longest_free_range(),
             longest_free_index_range = self.index_arena.longest_free_range(),
-            "Mesh refused: an Arena has no free range that long"
+            "Mesh refused: an Arena's longest free range is too short"
         );
         None
     }
@@ -136,6 +134,11 @@ impl Arena {
         element_bytes: u64,
         capacity_bytes: u64,
     ) -> Self {
+        // The DX12 and Linux non-NVIDIA Vulkan buffer limit (ADR 0017).
+        assert!(
+            capacity_bytes < 1 << 31,
+            "an Arena of {capacity_bytes} bytes is past 2^31 - 1"
+        );
         Self {
             buffer: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some(label),
@@ -149,10 +152,12 @@ impl Arena {
         }
     }
 
-    /// A range of `count` elements, or None when no free range is that long.
+    /// A range of `count` elements, or None when `longest_free_range` is
+    /// shorter.
     fn allocate(&mut self, count: usize) -> Option<offset_allocator::Allocation> {
         let allocation = self.allocator.allocate(u32::try_from(count).ok()?)?;
-        self.bytes_in_use += count as u64 * self.element_bytes;
+        self.bytes_in_use +=
+            u64::from(self.allocator.allocation_size(allocation)) * self.element_bytes;
         Some(allocation)
     }
 
@@ -213,7 +218,10 @@ mod tests {
             let (handle, log) = logged(|| pool.load(&mut staging, &[primitive]));
             assert!(handle.is_none(), "a Mesh past capacity loaded");
             assert!(log.contains("Mesh refused"), "not logged: {log:?}");
-            assert!((pool.vertex_buffer(), pool.index_buffer()) == (&buffers.0, &buffers.1));
+            assert_eq!(
+                (pool.vertex_buffer(), pool.index_buffer()),
+                (&buffers.0, &buffers.1)
+            );
             assert_eq!(pool.gpu_memory_bytes(), gpu_memory_bytes);
             assert_eq!(pool.arena_bytes_in_use(), arena_bytes_in_use);
         }

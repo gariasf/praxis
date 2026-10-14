@@ -227,7 +227,7 @@ mod tests {
     use std::io::Write;
 
     use super::*;
-    use crate::assets::{MaterialHandle, MeshHandle};
+    use crate::assets::{ARENA_CAPACITY_BYTES, MaterialHandle, MeshHandle};
     use crate::components::Transform;
     use crate::gpu::GpuContext;
     use crate::render::LoadStaging;
@@ -256,7 +256,7 @@ mod tests {
                 }
                 Err(error) => panic!("headless GPU context failed: {error:#}"),
             };
-            let mut mesh_pool = MeshPool::new(&context.device, 1024);
+            let mut mesh_pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
             let triangle = [bytemuck::Zeroable::zeroed(); 3];
             let mesh = mesh_pool
                 .load(

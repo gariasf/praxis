@@ -244,13 +244,10 @@ impl Renderer {
         self.aspect_ratio
     }
 
-    /// Submits the loads staged since the last call, so they land before the
-    /// frame draws them, then records the copies of `frame`'s uniforms and
-    /// the Instances it writes into the frame's encoder, which `render`
-    /// submits.
+    /// Records the copies of `frame`'s uniforms and the Instances it writes
+    /// into the frame's encoder, which `render` submits.
     pub fn upload(&mut self, frame: &FrameData, recorder: &mut FrameRecorder) {
         let started = Instant::now();
-        self.load_staging.submit(&self.queue);
         // The window skips `render` while occluded or without a surface
         // texture; submitting the unrendered frame's copies returns its
         // staging slot.
@@ -362,6 +359,8 @@ impl Renderer {
         recorder.stage("encode", started);
 
         let started = Instant::now();
+        // Loads staged since the last frame land before its draws.
+        self.load_staging.submit(&self.queue);
         // submit will accept anything that implements IntoIter
         let submission = self.queue.submit(std::iter::once(command_buffer));
         recorder.stage("submit", started);
