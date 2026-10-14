@@ -7,7 +7,8 @@ use crate::camera::{Camera, projection_matrix};
 use crate::components::{MaterialRef, MeshRef, PointLight};
 use crate::render::instance::{anchor_and_offset, padded_columns};
 use crate::render::{CameraUniform, InstanceData, LightUniform};
-use crate::transform::WorldTransform;
+use crate::time::FixedTime;
+use crate::transform::{PreviousWorldTransform, WorldTransform};
 
 /// Everything the renderer draws in one frame, owned, so it holds no borrow
 /// into the ECS World and can cross to another thread (ADRs 0004, 0016).
@@ -24,6 +25,14 @@ const _: () = {
     assert_send_static::<FrameData>()
 };
 
+/// The point lights, with what blends the moving ones. The caller keeps it
+/// across frames, so preparing allocates nothing.
+pub type PointLightQuery = QueryState<(
+    &'static WorldTransform,
+    Option<&'static PreviousWorldTransform>,
+    &'static PointLight,
+)>;
+
 /// One Primitive drawn for one Instance.
 pub struct Draw {
     /// The Primitive's range in the Mesh pool's index buffer.
@@ -36,10 +45,12 @@ pub struct Draw {
 
 /// Fills `frame` from the World's camera, lights and Renderables, seen at
 /// `aspect_ratio`, Instances anchored and lights placed relative to the
-/// camera (ADR 0014), reusing its lists' memory. A Renderable whose Mesh is not in `mesh_pool` is skipped.
+/// camera (ADR 0014), reusing its lists' memory. Whatever the fixed schedule
+/// moves is drawn blended between its two newest Ticks (ADR 0022). A
+/// Renderable whose Mesh is not in `mesh_pool` is skipped.
 pub fn prepare_frame(
     world: &mut World,
-    point_light_query: &mut QueryState<(&WorldTransform, &PointLight)>,
+    point_light_query: &mut PointLightQuery,
     mesh_pool: &MeshPool,
     aspect_ratio: f32,
     frame: &mut FrameData,
@@ -54,12 +65,18 @@ pub fn prepare_frame(
         offset,
         ..CameraUniform::default()
     };
-    frame.light = prepare_lights(world, point_light_query, camera_position);
+    let blend_weight = world.resource::<FixedTime>().blend_weight;
+    frame.light = prepare_lights(world, point_light_query, camera_position, blend_weight);
 
     frame.instances.clear();
     frame.draws.clear();
-    let mut renderable_query = world.query::<(&WorldTransform, &MeshRef, &MaterialRef)>();
-    for (transform, mesh_ref, material_ref) in renderable_query.iter(world) {
+    let mut renderable_query = world.query::<(
+        &WorldTransform,
+        Option<&PreviousWorldTransform>,
+        &MeshRef,
+        &MaterialRef,
+    )>();
+    for (current, previous, mesh_ref, material_ref) in renderable_query.iter(world) {
         let Some(mesh) = mesh_pool.get(mesh_ref.0) else {
             tracing::warn!(
                 handle = mesh_ref.0.0,
@@ -68,6 +85,7 @@ pub fn prepare_frame(
             continue;
         };
         let instance_index = frame.instances.len() as u32;
+        let transform = current.drawn(previous, blend_weight);
         let rotation_scale = transform.0.matrix3.as_mat3();
         let (anchor, offset) = anchor_and_offset(transform.translation());
         frame.instances.push(InstanceData {
@@ -89,12 +107,12 @@ pub fn prepare_frame(
 }
 
 /// The lights, point lights at their position relative to `camera_position`;
-/// past the uniform's four, the rest are dropped. The caller keeps
-/// `point_light_query` across frames, so preparing allocates nothing.
+/// past the uniform's four, the rest are dropped.
 fn prepare_lights(
     world: &World,
-    point_light_query: &mut QueryState<(&WorldTransform, &PointLight)>,
+    point_light_query: &mut PointLightQuery,
     camera_position: glam::DVec3,
+    blend_weight: f32,
 ) -> LightUniform {
     let mut light_uniform = LightUniform {
         direction: [0.5, -1.0, -0.3, 0.0],
@@ -106,7 +124,8 @@ fn prepare_lights(
     };
     let mut count = 0;
     let capacity = light_uniform.point_positions.len();
-    for (transform, point_light) in point_light_query.iter(world).take(capacity) {
+    for (current, previous, point_light) in point_light_query.iter(world).take(capacity) {
+        let transform = current.drawn(previous, blend_weight);
         let position = (transform.translation() - camera_position).as_vec3();
         light_uniform.point_positions[count] = position.extend(0.0).to_array();
         light_uniform.point_colors[count] =
