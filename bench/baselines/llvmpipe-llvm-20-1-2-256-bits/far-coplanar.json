@@ -1,0 +1,20 @@
+{
+  "scene": "far-coplanar",
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "profile": "release",
+  "width": 640,
+  "height": 360,
+  "measured_frames": 256,
+  "cpu_frame_microseconds": {
+    "median": 4187.505,
+    "p95": 4734.7789999999995
+  },
+  "gpu_main_pass_microseconds": {
+    "median": 4116.257,
+    "p95": 4687.829
+  },
+  "draw_calls": 2,
+  "uploaded_bytes": 288,
+  "gpu_memory_bytes": 673346848,
+  "heap_allocations": 80
+}
