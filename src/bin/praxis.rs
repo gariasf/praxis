@@ -69,6 +69,7 @@ fn cook() -> anyhow::Result<()> {
     let report = praxis::cook::cook(
         Path::new("assets"),
         &praxis::cooked::CookedCache::new("cooked"),
+        &praxis::cook::CookSettings::default(),
     )?;
     writeln!(
         std::io::stdout(),

@@ -117,6 +117,22 @@ impl ReferenceScene {
         }
     }
 
+    /// The scene's generated Textures by name, with their Channel.
+    #[cfg(feature = "cook")]
+    pub(crate) fn textures(self) -> Vec<(&'static str, MaterialChannel, LoadedImage)> {
+        match self {
+            Self::UvGrid | Self::Orrery => {
+                let grid = LoadedImage {
+                    pixels: grid_texture(),
+                    width: GRID_TEXTURE_SIZE,
+                    height: GRID_TEXTURE_SIZE,
+                };
+                vec![("grid", MaterialChannel::Albedo, grid)]
+            }
+            Self::Helmet | Self::PbrSweep | Self::NormalTangent | Self::FarCoplanar => Vec::new(),
+        }
+    }
+
     /// The camera at `frame`, moved by `shift` metres. The path is a function
     /// of the frame number, not of time, so it does not depend on machine
     /// speed.

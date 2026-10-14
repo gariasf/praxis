@@ -3,13 +3,20 @@
 #![cfg(feature = "cook")]
 
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
-use praxis::cook::cook;
+use praxis::cook::{CookSettings, texture_sources};
 use praxis::cooked::{
-    AssetId, AssetKind, AssetName, AssetSource, CookedCache, CookedMaterial, MaterialChannel,
+    AssetId, AssetKind, AssetName, AssetSource, CookedCache, CookedMaterial, CookedTexture,
+    MaterialChannel,
 };
 use serde_json::json;
+
+fn cook(assets: &Path, cache: &CookedCache) -> anyhow::Result<praxis::cook::CookReport> {
+    praxis::cook::cook(assets, cache, &CookSettings::default())
+}
 
 const GUID: u128 = 0x5ca1ab1e_0000_4000_8000_00000000c00c;
 
@@ -48,14 +55,42 @@ fn write_sources(assets: &Path, path: &str, gltf: &str) {
     fs::write(assets.join("manifest.json"), manifest.to_string()).unwrap();
 }
 
-/// An empty directory for one test in one process.
+/// A directory for one test in one process, holding only `cooked/`: a copy
+/// of `scene_cache`, so a test cooks only its own sources.
 fn scratch(test: &str) -> PathBuf {
     let directory =
         Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("cook-{test}-{}", std::process::id()));
     if directory.exists() {
         fs::remove_dir_all(&directory).unwrap();
     }
+    for part in ["blobs", "index"] {
+        let (from, to) = (
+            scene_cache().join(part),
+            directory.join("cooked").join(part),
+        );
+        fs::create_dir_all(&to).unwrap();
+        for file in fs::read_dir(from).unwrap() {
+            let file = file.unwrap();
+            fs::copy(file.path(), to.join(file.file_name())).unwrap();
+        }
+    }
     directory
+}
+
+/// A Cooked cache of the procedural Reference scenes alone, kept across
+/// runs: cooks are safe to run concurrently, and one whose scenes changed
+/// re-cooks them.
+fn scene_cache() -> &'static Path {
+    static CACHE: OnceLock<PathBuf> = OnceLock::new();
+    CACHE.get_or_init(|| {
+        let directory = Path::new(env!("CARGO_TARGET_TMPDIR")).join("cook-scenes");
+        let assets = directory.join("assets");
+        fs::create_dir_all(&assets).unwrap();
+        fs::write(assets.join("manifest.json"), "[]").unwrap();
+        let cache = directory.join("cooked");
+        cook(&assets, &CookedCache::new(&cache)).unwrap();
+        cache
+    })
 }
 
 fn material_id(name: AssetName) -> AssetId {
@@ -64,6 +99,62 @@ fn material_id(name: AssetName) -> AssetId {
 
 const PAINTED: AssetName = AssetName::Name("painted");
 const UNNAMED: AssetName = AssetName::Index(1);
+
+/// The Asset ID of the image `paint` in the albedo Channel.
+fn paint_id() -> AssetId {
+    AssetId::new(
+        AssetSource::File(GUID),
+        AssetKind::Texture(MaterialChannel::Albedo),
+        AssetName::Name("paint"),
+    )
+}
+
+/// Writes `paint.png` beside `box.gltf`: `width` × `height` RGBA8 from
+/// `texel(x, y)`.
+fn write_paint(assets: &Path, width: u32, height: u32, texel: impl Fn(u32, u32) -> [u8; 4]) {
+    let image = image::RgbaImage::from_fn(width, height, |x, y| image::Rgba(texel(x, y)));
+    image.save(assets.join("paint.png")).unwrap();
+}
+
+/// Every texel of `texture`'s mip `level`, decoded, as RGBA8.
+fn decode(texture: &CookedTexture, level: usize) -> Vec<[u8; 4]> {
+    let width = (texture.width >> level).max(1) as usize;
+    let height = (texture.height >> level).max(1) as usize;
+    let blocks = &texture.levels[level];
+    let mut texels = vec![0u32; width * height];
+    match texture.format {
+        wgpu::TextureFormat::Bc7RgbaUnormSrgb => {
+            texture2ddecoder::decode_bc7(blocks, width, height, &mut texels)
+        }
+        wgpu::TextureFormat::Bc5RgUnorm => {
+            texture2ddecoder::decode_bc5(blocks, width, height, &mut texels)
+        }
+        wgpu::TextureFormat::Bc4RUnorm => {
+            texture2ddecoder::decode_bc4(blocks, width, height, &mut texels)
+        }
+        other => panic!("unexpected format {other:?}"),
+    }
+    .unwrap();
+    // The decoder packs B, G, R, A from the low byte up.
+    texels
+        .into_iter()
+        .map(|texel| {
+            let [blue, green, red, alpha] = texel.to_le_bytes();
+            [red, green, blue, alpha]
+        })
+        .collect()
+}
+
+/// Peak signal-to-noise ratio in dB of 8-bit samples against their source.
+fn psnr(pairs: impl Iterator<Item = (u8, u8)>) -> f64 {
+    let (mut squared_error, mut count) = (0.0, 0.0);
+    for (decoded, source) in pairs {
+        squared_error += (decoded as f64 - source as f64).powi(2);
+        count += 1.0;
+    }
+    let mean_squared_error = squared_error / count;
+    10.0 * (255.0f64.powi(2) / mean_squared_error).log10()
+}
 
 fn blob_count(cache: &Path) -> usize {
     fs::read_dir(cache.join("blobs")).unwrap().count()
@@ -165,7 +256,7 @@ fn concurrent_cooks_leave_a_valid_cache() {
     let report = cook(&assets, &cache).unwrap();
     assert_eq!(report.cooked, [], "the concurrent cooks left every entry");
     for id in report.unchanged {
-        cache.material(id).unwrap();
+        cache.read(id).unwrap();
     }
     let temporary_files = fs::read_dir(cache_path.join("index"))
         .unwrap()
@@ -180,5 +271,120 @@ fn concurrent_cooks_leave_a_valid_cache() {
         })
         .count();
     assert_eq!(temporary_files, 0);
+    fs::remove_dir_all(&directory).unwrap();
+}
+
+#[test]
+fn reference_scene_textures_cook_every_mip_and_keep_their_quality() {
+    let directory = scratch("reference");
+    let assets = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets");
+    let cache = CookedCache::new(directory.join("cooked"));
+    cook(&assets, &cache).unwrap();
+
+    let sources = texture_sources(&assets).unwrap();
+    assert!(!sources.is_empty());
+    for source in sources {
+        let texture = cache.texture(source.id).unwrap();
+        let mips = texture.width.max(texture.height).ilog2() as usize + 1;
+        assert_eq!(texture.levels.len(), mips, "{}", source.name);
+
+        let image = source.decode().unwrap();
+        let decoded = decode(&texture, 0);
+        let texels = decoded.iter().zip(image.pixels.as_chunks::<4>().0);
+        // The source channels each stored channel holds (ADR 0018).
+        let stored: &[(usize, usize)] = match source.channel {
+            MaterialChannel::Albedo | MaterialChannel::Emissive => {
+                &[(0, 0), (1, 1), (2, 2), (3, 3)]
+            }
+            MaterialChannel::Normal => &[(0, 0), (1, 1)],
+            MaterialChannel::MetallicRoughness => &[(0, 1), (1, 2)],
+            MaterialChannel::Occlusion => &[(0, 0)],
+        };
+        let decibels = psnr(texels.flat_map(|(decoded, source)| {
+            stored
+                .iter()
+                .map(|&(stored, from)| (decoded[stored], source[from]))
+        }));
+        // Not `eprintln!`, which libtest captures from passing tests.
+        writeln!(
+            std::io::stderr(),
+            "{} {:?}: {decibels:.2} dB",
+            source.name,
+            source.channel
+        )
+        .ok();
+        if texture.format == wgpu::TextureFormat::Bc7RgbaUnormSrgb {
+            assert!(decibels >= 44.0, "{}: {decibels:.2} dB", source.name);
+        }
+    }
+    fs::remove_dir_all(&directory).unwrap();
+}
+
+#[test]
+fn a_black_and_white_checker_filters_in_linear_light() {
+    let directory = scratch("checker");
+    let (assets, cache) = (directory.join("assets"), directory.join("cooked"));
+    let cache = CookedCache::new(&cache);
+    write_sources(&assets, "box.gltf", &gltf(0.75));
+    write_paint(&assets, 8, 8, |x, y| {
+        let value = if (x + y) % 2 == 0 { 0 } else { 255 };
+        [value, value, value, 255]
+    });
+    cook(&assets, &cache).unwrap();
+
+    let texture = cache.texture(paint_id()).unwrap();
+    assert_eq!(texture.levels.len(), 4);
+    // Half of full intensity in linear light is 187.5 in sRGB; an average
+    // of the encoded values would be 128.
+    for [red, green, blue, alpha] in decode(&texture, 1) {
+        for value in [red, green, blue] {
+            assert!(value.abs_diff(188) <= 2, "{value}");
+        }
+        assert_eq!(alpha, 255);
+    }
+    fs::remove_dir_all(&directory).unwrap();
+}
+
+#[test]
+fn a_texture_size_not_a_multiple_of_4_or_above_8192_is_refused() {
+    let directory = scratch("refuse");
+    let (assets, cache) = (directory.join("assets"), directory.join("cooked"));
+    let cache = CookedCache::new(&cache);
+    for ((width, height), reason) in [((6, 4), "multiple of 4"), ((8196, 4), "8192")] {
+        write_sources(&assets, "box.gltf", &gltf(0.75));
+        write_paint(&assets, width, height, |_, _| [255; 4]);
+        let error = format!("{:#}", cook(&assets, &cache).unwrap_err());
+        assert!(error.contains(reason), "{width}x{height}: {error}");
+    }
+    fs::remove_dir_all(&directory).unwrap();
+}
+
+#[test]
+fn a_changed_cook_setting_re_cooks_exactly_the_assets_it_covers() {
+    let directory = scratch("setting");
+    let (assets, cache) = (directory.join("assets"), directory.join("cooked"));
+    let cache = CookedCache::new(&cache);
+    write_sources(&assets, "box.gltf", &gltf(0.75));
+    write_paint(&assets, 8, 8, |x, y| [x as u8 * 32, y as u8 * 32, 0, 255]);
+    let settings = CookSettings::default();
+    praxis::cook::cook(&assets, &cache, &settings).unwrap();
+    let levels = cache.texture(paint_id()).unwrap().levels;
+
+    let changed = CookSettings {
+        texture_zstd_level: settings.texture_zstd_level + 1,
+    };
+    let mut cooked = praxis::cook::cook(&assets, &cache, &changed)
+        .unwrap()
+        .cooked;
+    cooked.sort();
+    let mut textures: Vec<_> = texture_sources(&assets)
+        .unwrap()
+        .into_iter()
+        .map(|source| source.id)
+        .collect();
+    textures.sort();
+    assert!(textures.contains(&paint_id()));
+    assert_eq!(cooked, textures, "every Texture and no Material");
+    assert_eq!(cache.texture(paint_id()).unwrap().levels, levels);
     fs::remove_dir_all(&directory).unwrap();
 }
