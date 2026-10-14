@@ -227,9 +227,10 @@ mod tests {
     use std::io::Write;
 
     use super::*;
-    use crate::assets::{MaterialHandle, Mesh, MeshHandle, Primitive};
+    use crate::assets::{ARENA_CAPACITY_BYTES, MaterialHandle, MeshHandle};
     use crate::components::Transform;
     use crate::gpu::GpuContext;
+    use crate::render::LoadStaging;
     use crate::transform::propagate_world_transforms;
 
     /// A World of Renderables prepared frame by frame, as `State` does.
@@ -255,14 +256,14 @@ mod tests {
                 }
                 Err(error) => panic!("headless GPU context failed: {error:#}"),
             };
-            let mut mesh_pool = MeshPool::new(&context.device, 1024, 1024);
-            let mesh = mesh_pool.insert(Mesh {
-                primitives: vec![Primitive {
-                    vertex_offset: 0,
-                    index_offset: 0,
-                    index_count: 3,
-                }],
-            });
+            let mut mesh_pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
+            let triangle = [bytemuck::Zeroable::zeroed(); 3];
+            let mesh = mesh_pool
+                .load(
+                    &mut LoadStaging::new(context.device.clone()),
+                    &[(&triangle, &[0, 1, 2])],
+                )
+                .expect("a triangle fits");
             let mut world = World::new();
             world.insert_resource(Camera::new());
             world.insert_resource(FixedTime::default());

@@ -6,14 +6,14 @@ use bevy_ecs::prelude::*;
 
 use crate::assets::loader::generate_tangents;
 use crate::assets::{
-    LoadedImage, MaterialChannel, MaterialData, MaterialHandle, MaterialPool, Mesh, MeshHandle,
-    MeshPool, Primitive, load_model,
+    LoadedImage, MaterialChannel, MaterialData, MaterialHandle, MaterialPool, MeshHandle, MeshPool,
+    load_model,
 };
 use crate::camera::Camera;
 use crate::components::{MaterialRef, MeshRef, Transform};
 #[cfg(feature = "cook")]
 use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource, CookedMaterial};
-use crate::render::Vertex;
+use crate::render::{LoadStaging, Vertex};
 use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
 use crate::transform::PreviousWorldTransform;
 
@@ -194,12 +194,12 @@ const SPHERE_SPACING: f32 = 1.3;
 
 pub(crate) fn spawn_pbr_sweep(
     world: &mut World,
-    device: &wgpu::Device,
     queue: &wgpu::Queue,
+    load_staging: &mut LoadStaging,
     mesh_pool: &mut MeshPool,
     material_pool: &mut MaterialPool,
-) {
-    let sphere = insert_mesh(device, queue, mesh_pool, &uv_sphere(SPHERE_RADIUS));
+) -> anyhow::Result<()> {
+    let sphere = insert_mesh(load_staging, mesh_pool, &uv_sphere(SPHERE_RADIUS))?;
     for (row, metallic) in SWEEP_METALLIC.into_iter().enumerate() {
         for (column, roughness) in SWEEP_ROUGHNESS.into_iter().enumerate() {
             let material = material_pool.insert(
@@ -223,6 +223,7 @@ pub(crate) fn spawn_pbr_sweep(
             ));
         }
     }
+    Ok(())
 }
 
 /// Rough so the highlight does not wash out the texture.
@@ -232,10 +233,11 @@ pub(crate) fn spawn_uv_grid(
     world: &mut World,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
+    load_staging: &mut LoadStaging,
     mesh_pool: &mut MeshPool,
     material_pool: &mut MaterialPool,
-) {
-    let plane = insert_mesh(device, queue, mesh_pool, &ground_plane(4.0, 2.0));
+) -> anyhow::Result<()> {
+    let plane = insert_mesh(load_staging, mesh_pool, &ground_plane(4.0, 2.0))?;
     let albedo_layer = material_pool.upload(
         device,
         queue,
@@ -249,6 +251,7 @@ pub(crate) fn spawn_uv_grid(
         factor_material([1.0; 4], 0.0, UV_GRID_ROUGHNESS, albedo_layer),
     );
     world.spawn((Transform::IDENTITY, MeshRef(plane), MaterialRef(material)));
+    Ok(())
 }
 
 /// Committed, so CI renders it; 1.8 MB, under the 2 MB commit ceiling
@@ -261,12 +264,14 @@ pub(crate) fn spawn_normal_tangent(
     world: &mut World,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
+    load_staging: &mut LoadStaging,
     mesh_pool: &mut MeshPool,
     material_pool: &mut MaterialPool,
 ) -> anyhow::Result<()> {
     let (mesh, material) = insert_gltf_model(
         device,
         queue,
+        load_staging,
         mesh_pool,
         material_pool,
         NORMAL_TANGENT_ASSET,
@@ -288,17 +293,16 @@ const FAR_COPLANAR_ROUGHNESS: f32 = 0.8;
 
 pub(crate) fn spawn_far_coplanar(
     world: &mut World,
-    device: &wgpu::Device,
     queue: &wgpu::Queue,
+    load_staging: &mut LoadStaging,
     mesh_pool: &mut MeshPool,
     material_pool: &mut MaterialPool,
-) {
+) -> anyhow::Result<()> {
     let plane = insert_mesh(
-        device,
-        queue,
+        load_staging,
         mesh_pool,
         &ground_plane(FAR_COPLANAR_DISTANCE as f32, 1.0),
-    );
+    )?;
     let centre = glam::dvec3(0.0, 0.0, -FAR_COPLANAR_DISTANCE);
     for (height, base_color) in [0.0, -FAR_COPLANAR_GAP]
         .into_iter()
@@ -319,6 +323,7 @@ pub(crate) fn spawn_far_coplanar(
             MaterialRef(material),
         ));
     }
+    Ok(())
 }
 
 /// Each orrery body's spin about its own +Y, the root's first, in radians per
@@ -337,10 +342,11 @@ pub(crate) fn spawn_orrery(
     world: &mut World,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
+    load_staging: &mut LoadStaging,
     mesh_pool: &mut MeshPool,
     material_pool: &mut MaterialPool,
-) {
-    let sphere = insert_mesh(device, queue, mesh_pool, &uv_sphere(SPHERE_RADIUS));
+) -> anyhow::Result<()> {
+    let sphere = insert_mesh(load_staging, mesh_pool, &uv_sphere(SPHERE_RADIUS))?;
     // The grid shows each sphere's own spin.
     let albedo_layer = material_pool.upload(
         device,
@@ -374,6 +380,7 @@ pub(crate) fn spawn_orrery(
             .spawn((transform, ChildOf(parent), body(radians_per_second)))
             .id();
     }
+    Ok(())
 }
 
 /// Turns an entity about its own +Y axis at a constant rate from angle 0 at
@@ -399,33 +406,21 @@ pub(crate) fn spin(fixed_time: Res<FixedTime>, mut spinning: Query<(&Spin, &mut 
 pub(crate) fn insert_gltf_model(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
+    load_staging: &mut LoadStaging,
     mesh_pool: &mut MeshPool,
     material_pool: &mut MaterialPool,
     path: &str,
 ) -> anyhow::Result<(MeshHandle, MaterialHandle)> {
     let model = load_model(path).with_context(|| format!("load {path}"))?;
 
-    let mut primitives = Vec::new();
-    for (primitive_index, primitive) in model.primitives.iter().enumerate() {
-        let _primitive_span = tracing::debug_span!("upload_primitive", primitive_index).entered();
-
-        let (vertex_offset, index_offset, index_count) =
-            mesh_pool.push_primitive(device, queue, &primitive.vertices, &primitive.indices);
-
-        tracing::debug!(
-            vertices = primitive.vertices.len(),
-            indices = primitive.indices.len(),
-            "primitive uploaded"
-        );
-
-        primitives.push(Primitive {
-            vertex_offset,
-            index_offset,
-            index_count,
-        });
-    }
-    let mesh = Mesh { primitives };
-    let mesh_handle = mesh_pool.insert(mesh);
+    let primitives: Vec<_> = model
+        .primitives
+        .iter()
+        .map(|primitive| (primitive.vertices.as_slice(), primitive.indices.as_slice()))
+        .collect();
+    let mesh_handle = mesh_pool
+        .load(load_staging, &primitives)
+        .with_context(|| format!("{path}: the Arenas refused its Mesh"))?;
 
     // Multi-material meshes (one MaterialRef per primitive) are deferred.
     if model.primitives.len() > 1 {
@@ -535,14 +530,13 @@ struct Geometry {
     indices: Vec<u32>,
 }
 
-/// Uploads `geometry` as a one-Primitive Mesh, with MikkTSpace tangents as a
+/// Loads `geometry` as a one-Primitive Mesh, with MikkTSpace tangents as a
 /// glTF file without tangents gets them.
 fn insert_mesh(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
+    load_staging: &mut LoadStaging,
     mesh_pool: &mut MeshPool,
     geometry: &Geometry,
-) -> MeshHandle {
+) -> anyhow::Result<MeshHandle> {
     let tangents = generate_tangents(
         &geometry.positions,
         &geometry.normals,
@@ -557,15 +551,9 @@ fn insert_mesh(
             tangent: tangents[vertex_index],
         })
         .collect();
-    let (vertex_offset, index_offset, index_count) =
-        mesh_pool.push_primitive(device, queue, &vertices, &geometry.indices);
-    mesh_pool.insert(Mesh {
-        primitives: vec![Primitive {
-            vertex_offset,
-            index_offset,
-            index_count,
-        }],
-    })
+    mesh_pool
+        .load(load_staging, &[(&vertices, &geometry.indices)])
+        .context("the Arenas refused a generated Mesh")
 }
 
 /// A sphere of `radius` around the origin. `u` runs once around from +Z

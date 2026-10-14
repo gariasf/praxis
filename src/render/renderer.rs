@@ -1,10 +1,10 @@
 use std::time::Instant;
 
-use crate::assets::{MaterialPool, MeshPool};
+use crate::assets::{ARENA_CAPACITY_BYTES, MaterialPool, MeshPool};
 use crate::gpu::GpuContext;
 use crate::render::{
     CameraUniform, DEPTH_FORMAT, FrameData, FrameStaging, INSTANCE_BUFFER_INITIAL_CAPACITY,
-    InstanceData, LightUniform, Vertex, create_depth_texture,
+    InstanceData, LightUniform, LoadStaging, Vertex, create_depth_texture,
 };
 use crate::stats::{FrameRecorder, texture_bytes};
 
@@ -25,6 +25,7 @@ pub struct Renderer {
     light_bind_group: wgpu::BindGroup,
     pub(crate) mesh_pool: MeshPool,
     pub(crate) material_pool: MaterialPool,
+    pub(crate) load_staging: LoadStaging,
     instance_buffer: wgpu::Buffer,
     instance_bind_group: wgpu::BindGroup,
     instance_capacity: u64,
@@ -209,8 +210,9 @@ impl Renderer {
         let depth_texture_view = create_depth_texture(&device, width, height);
 
         Self {
-            mesh_pool: MeshPool::new(&device, 1 << 20, 256 << 10),
+            mesh_pool: MeshPool::new(&device, ARENA_CAPACITY_BYTES),
             material_pool,
+            load_staging: LoadStaging::new(device.clone()),
             device,
             queue,
             aspect_ratio: width as f32 / height as f32,
@@ -337,9 +339,9 @@ impl Renderer {
             render_pass.set_bind_group(1, &self.material_pool.bind_group, &[]);
             render_pass.set_bind_group(2, &self.light_bind_group, &[]);
             render_pass.set_bind_group(3, &self.instance_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.mesh_pool.vertex_buffer.slice(..));
+            render_pass.set_vertex_buffer(0, self.mesh_pool.vertex_buffer().slice(..));
             render_pass.set_index_buffer(
-                self.mesh_pool.index_buffer.slice(..),
+                self.mesh_pool.index_buffer().slice(..),
                 wgpu::IndexFormat::Uint32,
             );
 
@@ -357,6 +359,8 @@ impl Renderer {
         recorder.stage("encode", started);
 
         let started = Instant::now();
+        // Loads staged since the last frame land before its draws.
+        self.load_staging.submit(&self.queue);
         // submit will accept anything that implements IntoIter
         let submission = self.queue.submit(std::iter::once(command_buffer));
         recorder.stage("submit", started);
@@ -460,7 +464,7 @@ mod tests {
     use std::io::Write;
 
     use super::*;
-    use crate::assets::{MaterialData, Mesh, Primitive};
+    use crate::assets::{MaterialData, Primitive};
     use crate::capture::read_back;
     use crate::render::instance::padded_columns;
     use crate::render::prepare::{Draw, InstanceWrite};
@@ -489,19 +493,16 @@ mod tests {
             uv: [0.0, 0.0],
             tangent: [1.0, 0.0, 0.0, 1.0],
         };
-        let (vertex_offset, index_offset, index_count) = renderer.mesh_pool.push_primitive(
-            &renderer.device,
-            &renderer.queue,
-            &[vertex(-0.5, -0.5), vertex(0.5, -0.5), vertex(0.0, 0.5)],
-            &[0, 1, 2],
-        );
-        renderer.mesh_pool.insert(Mesh {
-            primitives: vec![Primitive {
-                vertex_offset,
-                index_offset,
-                index_count,
-            }],
-        });
+        let triangle = [vertex(-0.5, -0.5), vertex(0.5, -0.5), vertex(0.0, 0.5)];
+        let mesh = renderer
+            .mesh_pool
+            .load(&mut renderer.load_staging, &[(&triangle, &[0, 1, 2])])
+            .expect("the triangle fits");
+        let &Primitive {
+            vertex_offset,
+            index_offset,
+            index_count,
+        } = &renderer.mesh_pool.get(mesh).expect("loaded").primitives[0];
         // Black and unlit, so only the red emissive reaches the target.
         let material = renderer.material_pool.insert(
             &renderer.queue,

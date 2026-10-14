@@ -1,13 +1,13 @@
 # Textures stream by mip, geometry lives in fixed arenas
 
-Textures are ordinary mip chains streamed whole mip at a time in wgpu's safe API, chosen by CPU heuristics; vertices and indices live in fixed arenas sized from the Budget at device creation and sub-allocated by an offset allocator. This is option A of `docs/research/gpu-memory-residency-streaming.md`: the only option that keeps hardware trilinear and anisotropic filtering unchanged and adds no new artefact class (a late mip shows as blur, never as a crack or a capped anisotropy), and it needs only Tier 1 bindless. Accepted 2026-10-12 ([#21](https://github.com/gariasf/praxis/issues/21)). Partly implemented: each Channel is a partially bound binding array of RGBA8 Textures sized to their source, still without mips or streaming (#101), and the mega-buffers grow by CPU re-upload.
+Textures are ordinary mip chains streamed whole mip at a time in wgpu's safe API, chosen by CPU heuristics; vertices and indices live in fixed arenas sized from the Budget at device creation and sub-allocated by an offset allocator. This is option A of `docs/research/gpu-memory-residency-streaming.md`: the only option that keeps hardware trilinear and anisotropic filtering unchanged and adds no new artefact class (a late mip shows as blur, never as a crack or a capped anisotropy), and it needs only Tier 1 bindless. Accepted 2026-10-12 ([#21](https://github.com/gariasf/praxis/issues/21)). Partly implemented: each Channel is a partially bound binding array of RGBA8 Textures sized to their source, still without mips or streaming (#101), and geometry loads through a `StagingBelt` into one vertex and one index arena of a provisional 16 MiB each, which refuse a Mesh that does not fit (#145).
 
 ## Considered options
 
 - Software virtual texturing: a fixed page cache, but the tile border caps anisotropy (a 4-texel border allows 8x), mips smaller than a tile are missing, and pages arrive a frame or more late.
 - Hardware sparse textures through wgpu-hal: per-backend native code that wgpu-core does not track, never tried, and Intel's sample shows black cracks where anisotropic sampling reaches unmapped tiles. It stays the fallback if the bind-group cost below fails its gate.
 - Virtual geometry pages: they depend on the rasterization path, so they belong to [Visibility strategy for the main pass](https://github.com/gariasf/praxis/issues/22); if it picks virtual geometry, the vertex arena becomes a page pool there.
-- Arena growth, by CPU re-upload (today) or GPU copy: growth briefly holds the old and new buffers, and the CPU re-upload keeps a shadow of every vertex.
+- Arena growth, by CPU re-upload (as before #145) or GPU copy: growth briefly holds the old and new buffers, and the CPU re-upload keeps a shadow of every vertex.
 
 ## Consequences
 

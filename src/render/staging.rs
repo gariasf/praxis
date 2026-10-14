@@ -123,6 +123,55 @@ impl FrameStaging {
     }
 }
 
+/// The `StagingBelt`'s allocation unit at load: a larger write gets a chunk
+/// of its own.
+const LOAD_CHUNK_BYTES: u64 = 1 << 20;
+
+/// Staging for load-time uploads (ADR 0017): each write goes through a
+/// `StagingBelt` into a copy on one encoder, which `submit` sends ahead of
+/// the next frame's. The belt goes with it, so its staging buffers live only
+/// until the GPU has run the copies and never count in `gpu_memory_bytes`.
+pub struct LoadStaging {
+    device: wgpu::Device,
+    pending: Option<(wgpu::util::StagingBelt, wgpu::CommandEncoder)>,
+}
+
+impl LoadStaging {
+    pub fn new(device: wgpu::Device) -> Self {
+        Self {
+            device,
+            pending: None,
+        }
+    }
+
+    /// Records a copy of `bytes` to `target` at `offset`; the length and the
+    /// offset are multiples of `wgpu::COPY_BUFFER_ALIGNMENT`.
+    pub fn write(&mut self, target: &wgpu::Buffer, offset: wgpu::BufferAddress, bytes: &[u8]) {
+        let Some(size) = wgpu::BufferSize::new(bytes.len() as u64) else {
+            return;
+        };
+        let device = &self.device;
+        let (belt, encoder) = self.pending.get_or_insert_with(|| {
+            (
+                wgpu::util::StagingBelt::new(device.clone(), LOAD_CHUNK_BYTES),
+                device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Load Encoder"),
+                }),
+            )
+        });
+        belt.write_buffer(encoder, target, offset, size)
+            .copy_from_slice(bytes);
+    }
+
+    /// Submits the copies recorded since the last call, if any.
+    pub fn submit(&mut self, queue: &wgpu::Queue) {
+        if let Some((mut belt, encoder)) = self.pending.take() {
+            belt.finish();
+            queue.submit(std::iter::once(encoder.finish()));
+        }
+    }
+}
+
 /// A map callback that sets `is_mapped` on success. A failure leaves it unset
 /// for `write` to report; dropping a slot whose map is pending, as `resize`
 /// does, fails it too.
