@@ -100,7 +100,9 @@ fn store(
 }
 
 /// Every Material of the glTF file `source`, with the Asset IDs of the
-/// Textures it samples.
+/// Textures it samples: the glTF file's GUID, the image's name (or index)
+/// and the Channel, whether the image is embedded or a file of its own.
+/// The Texture cook must name its Assets the same way.
 fn gltf_materials(guid: u128, source: &[u8]) -> anyhow::Result<Vec<(AssetId, CookedMaterial)>> {
     let document = gltf::Gltf::from_slice(source)?.document;
     let source = AssetSource::File(guid);

@@ -14,7 +14,9 @@ pub use super::MaterialChannel;
 
 /// Starts every Material Blob, followed by `MATERIAL_FORMAT_VERSION`.
 pub(crate) const MATERIAL_MAGIC: [u8; 4] = *b"PXMA";
-/// Bumped whenever the Material Blob layout changes; old Blobs are refused.
+/// Bumped whenever the Material Blob layout, or how the cooker fills it,
+/// changes: it stands in for the cooker version in the Cook key, and old
+/// Blobs are refused.
 pub(crate) const MATERIAL_FORMAT_VERSION: u32 = 1;
 
 /// What an Asset is. Its number, and a Texture's Channel, are part of every
@@ -48,8 +50,8 @@ pub enum AssetName<'a> {
 pub struct AssetId(pub u128);
 
 impl AssetId {
-    /// The first 128 bits of SHA-256 over the source, the kind and the
-    /// name. Each part is tagged and each string length-prefixed, so no two
+    /// The first 128 bits of SHA-256 over the source, the kind, the name
+    /// and a Texture's Channel, in ADR 0018's order. Each part is tagged and each string length-prefixed, so no two
     /// inputs share an encoding.
     pub fn new(source: AssetSource, kind: AssetKind, name: AssetName) -> Self {
         let mut hasher = Sha256::new();
@@ -66,7 +68,7 @@ impl AssetId {
         match kind {
             AssetKind::Mesh => hasher.update([0]),
             AssetKind::Material => hasher.update([1]),
-            AssetKind::Texture(channel) => hasher.update([2, channel as u8]),
+            AssetKind::Texture(_) => hasher.update([2]),
         }
         match name {
             AssetName::Name(name) => {
@@ -77,6 +79,9 @@ impl AssetId {
                 hasher.update(b"I");
                 hasher.update((index as u64).to_le_bytes());
             }
+        }
+        if let AssetKind::Texture(channel) = kind {
+            hasher.update([channel as u8]);
         }
         let digest = hasher.finalize();
         Self(u128::from_be_bytes(
@@ -270,7 +275,13 @@ fn write_atomically(path: &std::path::Path, bytes: &[u8]) -> anyhow::Result<()> 
         std::process::id(),
         NEXT_TEMPORARY.fetch_add(1, Ordering::Relaxed)
     ));
-    fs::write(&temporary, bytes).with_context(|| format!("writing {}", temporary.display()))?;
+    // Synced before the rename, so a crash cannot leave an empty file under
+    // a name the next cook trusts.
+    let mut file = fs::File::create(&temporary)
+        .with_context(|| format!("creating {}", temporary.display()))?;
+    std::io::Write::write_all(&mut file, bytes)
+        .and_then(|()| file.sync_all())
+        .with_context(|| format!("writing {}", temporary.display()))?;
     fs::rename(&temporary, path).with_context(|| format!("renaming into {}", path.display()))
 }
 
@@ -301,11 +312,16 @@ mod tests {
             emissive: [1.0, 0.0, 2.0],
             textures: [Some(AssetId(7)), None, None, Some(AssetId(u128::MAX)), None],
         };
-        let mut blob = material.to_blob();
+        let blob = material.to_blob();
         assert_eq!(CookedMaterial::from_blob(&blob).unwrap(), material);
 
-        blob[4] += 1;
-        let error = CookedMaterial::from_blob(&blob).unwrap_err().to_string();
-        assert!(error.contains("re-cook with `praxis cook`"), "{error}");
+        for byte in [0, 4] {
+            let mut mismatched = blob.clone();
+            mismatched[byte] += 1;
+            let error = CookedMaterial::from_blob(&mismatched)
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("re-cook with `praxis cook`"), "{error}");
+        }
     }
 }

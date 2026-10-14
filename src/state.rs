@@ -12,8 +12,8 @@ use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
 use crate::input::{Input, clear_just_pressed};
 use crate::render::{FrameData, InstanceSlots, PointLightQuery, Renderer, prepare_frame};
 use crate::scenes::{
-    ReferenceScene, SWEEP_METALLIC, SWEEP_ROUGHNESS, insert_gltf_model, spawn_far_coplanar,
-    spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep, spawn_uv_grid, spin,
+    HELMET_SWEEP_BASE_COLOR, ReferenceScene, SWEEP_METALLIC, SWEEP_ROUGHNESS, insert_gltf_model,
+    spawn_far_coplanar, spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep, spawn_uv_grid, spin,
 };
 use crate::stats::{FrameRecorder, FrameStats};
 use crate::threading::{init_compute_pool, single_threaded_schedule};
@@ -160,7 +160,7 @@ impl State {
                 let variant_handle = material_pool.insert(
                     queue,
                     MaterialData {
-                        base_color: [1.0, 1.0, 1.0, 1.0],
+                        base_color: HELMET_SWEEP_BASE_COLOR,
                         metallic_roughness: [metallic, roughness, 0.0, 0.0],
                         emissive: [0.0, 0.0, 0.0, 1.0],
                         texture_indices: [MaterialPool::DEFAULT_LAYER; 4],

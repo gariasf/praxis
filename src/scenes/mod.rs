@@ -95,7 +95,7 @@ impl ReferenceScene {
             })
         };
         match self {
-            Self::Helmet => sweep([1.0; 4]).collect(),
+            Self::Helmet => sweep(HELMET_SWEEP_BASE_COLOR).collect(),
             Self::PbrSweep => sweep(SWEEP_BASE_COLOR).collect(),
             Self::UvGrid => vec![(
                 "grid".into(),
@@ -169,6 +169,8 @@ fn orbit(frame: u32, radius: f32, height: f32) -> Camera {
 /// Linear sRGB reflectance of gold at normal incidence: metals tint their
 /// highlight with it and dielectrics their diffuse, so the two rows differ.
 const SWEEP_BASE_COLOR: [f32; 4] = [1.0, 0.71, 0.29, 1.0];
+/// The helmet scene's sweep is white, so the factors alone show.
+pub(crate) const HELMET_SWEEP_BASE_COLOR: [f32; 4] = [1.0; 4];
 pub(crate) const SWEEP_METALLIC: [f32; 2] = [0.0, 1.0];
 pub(crate) const SWEEP_ROUGHNESS: [f32; 5] = [0.1, 0.3, 0.5, 0.7, 0.9];
 const SPHERE_RADIUS: f32 = 0.5;
