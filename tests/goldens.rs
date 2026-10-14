@@ -41,8 +41,11 @@ const TOLERANCE: u8 = 1;
 
 /// The 100 km check (ADR 0014): each scene, shifted with its camera by this
 /// much, matches its origin Golden, so no World position reaches the GPU in
-/// f32.
-const FAR_SHIFT: glam::DVec3 = glam::DVec3::new(100_000.0, 0.0, 100_000.0);
+/// f32. The shift is whole 64 m anchor cells (1563 of them), so the shifted
+/// scene keeps its offsets and composes bit for bit as at the origin; a
+/// shift within a cell rounds offsets differently, which the shader-function
+/// oracle bounds instead.
+const FAR_SHIFT: glam::DVec3 = glam::DVec3::new(100_032.0, 0.0, 100_032.0);
 
 const UPDATE_GOLDENS_VARIABLE: &str = "PRAXIS_UPDATE_GOLDENS";
 const REQUIRE_GOLDENS_VARIABLE: &str = "PRAXIS_REQUIRE_GOLDENS";

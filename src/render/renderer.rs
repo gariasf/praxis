@@ -426,6 +426,7 @@ mod tests {
     use super::*;
     use crate::assets::{MaterialData, Mesh, Primitive};
     use crate::capture::read_back;
+    use crate::render::instance::padded_columns;
     use crate::render::prepare::Draw;
 
     const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -476,20 +477,23 @@ mod tests {
                 extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
             },
         );
-        let identity = glam::Mat4::IDENTITY.to_cols_array_2d();
+        let identity = padded_columns(glam::Mat3::IDENTITY);
         let frame = FrameData {
             camera: CameraUniform {
-                view_proj: identity,
+                view_proj: glam::Mat4::IDENTITY.to_cols_array_2d(),
+                ..CameraUniform::default()
             },
             light: LightUniform {
                 direction: [0.0, 0.0, -1.0, 0.0],
                 ..LightUniform::default()
             },
             instances: vec![InstanceData {
-                model: identity,
+                rotation_scale: identity,
                 normal_matrix: identity,
+                anchor: [0; 3],
                 material_id: material.index(),
-                _pad: [0; 3],
+                offset: [0.0; 3],
+                _pad: 0,
             }],
             draws: vec![Draw {
                 indices: index_offset..index_offset + index_count,

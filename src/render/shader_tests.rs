@@ -58,7 +58,13 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
         })
         .collect();
     let twins = [
-        twin!(CameraUniform { view_proj }),
+        twin!(CameraUniform {
+            view_proj,
+            anchor,
+            _pad_anchor,
+            offset,
+            _pad_offset,
+        }),
         twin!(LightUniform {
             direction,
             color,
@@ -68,10 +74,12 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
             num_point_lights,
         }),
         twin!(InstanceData {
-            model,
+            rotation_scale,
             normal_matrix,
+            anchor,
             material_id,
-            _pad
+            offset,
+            _pad,
         }),
         twin!(MaterialData {
             base_color,
@@ -265,6 +273,10 @@ trait ShaderScalar {
 
 impl ShaderScalar for f32 {
     const SCALAR: naga::Scalar = naga::Scalar::F32;
+}
+
+impl ShaderScalar for i32 {
+    const SCALAR: naga::Scalar = naga::Scalar::I32;
 }
 
 impl ShaderScalar for u32 {

@@ -12,15 +12,6 @@ impl WorldTransform {
     pub fn translation(&self) -> glam::DVec3 {
         self.0.translation
     }
-
-    /// The model matrix relative to `origin`: the translation difference is
-    /// taken in f64, then cast, so the matrix holds no World position in f32.
-    pub fn matrix_relative_to(&self, origin: glam::DVec3) -> glam::Mat4 {
-        glam::Mat4::from_mat3_translation(
-            self.0.matrix3.as_mat3(),
-            (self.0.translation - origin).as_vec3(),
-        )
-    }
 }
 
 /// An entity whose Transform or parent changed.
