@@ -6,6 +6,7 @@ use crate::gpu::GpuContext;
 use crate::render::MAIN_PASS;
 use crate::scenes::ReferenceScene;
 use crate::stats::FrameStats;
+use crate::time::SIXTY_HERTZ;
 
 /// The Baselines `compare` reads, `<adapter key>/<scene>.json`: the reference
 /// machine's (ADR 0013), and CI's lavapipe for counters only. Keyed by
@@ -152,6 +153,8 @@ pub fn run(
         configuration.width,
         configuration.height,
         configuration.warm_up_frames + configuration.measured_frames,
+        // ADR 0022 judges Budgets at 60 Hz.
+        SIXTY_HERTZ,
     )?;
     let measured = &frames[configuration.warm_up_frames as usize..];
     let microseconds = |time: Duration| time.as_secs_f64() * 1e6;

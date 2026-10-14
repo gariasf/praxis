@@ -1,4 +1,5 @@
 use std::f32::consts::{PI, TAU};
+use std::time::Duration;
 
 use anyhow::Context;
 use bevy_ecs::prelude::*;
@@ -12,8 +13,11 @@ use crate::assets::{
 use crate::camera::Camera;
 use crate::components::{MaterialRef, MeshRef, Transform};
 use crate::render::Vertex;
+use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
+use crate::transform::PreviousWorldTransform;
 
-/// The Scenes `capture` renders, each with a camera path in frames.
+/// The Reference scenes `capture` renders, each with a camera path in frames
+/// and a frame delta.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum ReferenceScene {
     /// SciFiHelmet and a material sweep, fetched into `assets/`; local runs only.
@@ -29,15 +33,19 @@ pub enum ReferenceScene {
     /// centred 2 km in front of the camera, seen at a grazing angle: the upper plane covers the lower one everywhere
     /// under reversed depth, and they interleave under standard depth.
     FarCoplanar,
+    /// Five textured spheres, each circling and spinning in its parent's
+    /// frame, moved per Tick and drawn blended between Ticks (ADR 0022).
+    Orrery,
 }
 
 impl ReferenceScene {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Helmet,
         Self::PbrSweep,
         Self::UvGrid,
         Self::NormalTangent,
         Self::FarCoplanar,
+        Self::Orrery,
     ];
 
     /// The name the capture command selects the scene by.
@@ -48,6 +56,7 @@ impl ReferenceScene {
             Self::UvGrid => "uv-grid",
             Self::NormalTangent => "normal-tangent",
             Self::FarCoplanar => "far-coplanar",
+            Self::Orrery => "orrery",
         }
     }
 
@@ -73,9 +82,26 @@ impl ReferenceScene {
                 glam::dvec3(0.0, FAR_COPLANAR_CAMERA_HEIGHT, 0.0),
                 glam::dvec3(0.0, 0.0, -FAR_COPLANAR_DISTANCE),
             ),
+            Self::Orrery => {
+                Camera::looking_at(glam::dvec3(0.5, 3.6, 4.2), glam::dvec3(1.1, 0.0, -0.7))
+            }
         };
         camera.position += shift;
         camera
+    }
+
+    /// The time each frame of a capture advances by. The orrery's frames, at
+    /// 144 Hz, land at a different point between Ticks each time, and the
+    /// last lands two thirds of the way from one Tick to the next.
+    pub(crate) fn frame_delta(self) -> Duration {
+        match self {
+            Self::Orrery => Duration::from_nanos(6_944_444),
+            Self::Helmet
+            | Self::PbrSweep
+            | Self::UvGrid
+            | Self::NormalTangent
+            | Self::FarCoplanar => SIXTY_HERTZ,
+        }
     }
 }
 
@@ -206,6 +232,73 @@ pub(crate) fn spawn_far_coplanar(
             MeshRef(plane),
             MaterialRef(material),
         ));
+    }
+}
+
+/// Each orrery body's spin about its own +Y, the root's first, in radians per
+/// second: its child circles it at that rate.
+const ORRERY_SPIN_RATES: [f64; 5] = [0.5, 1.5, 2.5, 3.5, 4.5];
+/// Each orrery body's size relative to its parent's.
+const ORRERY_SCALE: f32 = 0.7;
+/// Each orrery body's distance from its parent, in its parent's diameters.
+const ORRERY_ORBIT_RADIUS: f64 = 1.6;
+
+/// A chain of five spheres from a root at the origin, each a child of the
+/// one before, on its parent's +X axis, and all spinning about their own +Y
+/// in the fixed schedule, so each circles its parent.
+pub(crate) fn spawn_orrery(
+    world: &mut World,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    mesh_pool: &mut MeshPool,
+    material_pool: &mut MaterialPool,
+) {
+    let sphere = insert_mesh(device, queue, mesh_pool, &uv_sphere(SPHERE_RADIUS));
+    // The grid shows each sphere's own spin.
+    let albedo_layer = material_pool.upload(
+        queue,
+        MaterialChannel::Albedo,
+        &grid_texture(),
+        TEXTURE_DIM,
+        TEXTURE_DIM,
+    );
+    let material = material_pool.insert(queue, factor_material([1.0; 4], 0.0, 0.5, albedo_layer));
+    let body = |radians_per_second| {
+        (
+            MeshRef(sphere),
+            MaterialRef(material),
+            Spin { radians_per_second },
+            PreviousWorldTransform::default(),
+        )
+    };
+    let mut parent = world
+        .spawn((Transform::IDENTITY, body(ORRERY_SPIN_RATES[0])))
+        .id();
+    for &radians_per_second in &ORRERY_SPIN_RATES[1..] {
+        let transform = Transform {
+            scale: glam::Vec3::splat(ORRERY_SCALE),
+            ..Transform::from_translation(glam::DVec3::X * ORRERY_ORBIT_RADIUS)
+        };
+        parent = world
+            .spawn((transform, ChildOf(parent), body(radians_per_second)))
+            .id();
+    }
+}
+
+/// Turns an entity about its own +Y axis at a constant rate from angle 0 at
+/// Tick 0.
+#[derive(Component)]
+pub(crate) struct Spin {
+    pub(crate) radians_per_second: f64,
+}
+
+/// Sets each spinning entity's rotation for the end of the running Tick, from
+/// the Tick count, so no rounding accumulates over Ticks.
+pub(crate) fn spin(fixed_time: Res<FixedTime>, mut spinning: Query<(&Spin, &mut Transform)>) {
+    let seconds = (fixed_time.tick + 1) as f64 * TICK_SECONDS;
+    for (spin, mut transform) in &mut spinning {
+        let angle = (spin.radians_per_second * seconds).rem_euclid(std::f64::consts::TAU);
+        transform.rotation = glam::Quat::from_rotation_y(angle as f32);
     }
 }
 
