@@ -154,12 +154,14 @@ impl CookedMaterial {
         );
         let (factor_bytes, texture_bytes) = payload.split_at(9 * 4);
         let factors: Vec<f32> = factor_bytes
-            .chunks_exact(4)
-            .map(|bytes| f32::from_le_bytes(bytes.try_into().expect("4-byte chunk")))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|bytes| f32::from_le_bytes(*bytes))
             .collect();
         let mut textures = [None; 5];
-        for (texture, bytes) in textures.iter_mut().zip(texture_bytes.chunks_exact(16)) {
-            let id = u128::from_be_bytes(bytes.try_into().expect("16-byte chunk"));
+        for (texture, bytes) in textures.iter_mut().zip(texture_bytes.as_chunks::<16>().0) {
+            let id = u128::from_be_bytes(*bytes);
             *texture = (id != 0).then_some(AssetId(id));
         }
         Ok(Self {
