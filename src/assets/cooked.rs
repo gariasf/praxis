@@ -18,6 +18,12 @@ pub(crate) const MATERIAL_MAGIC: [u8; 4] = *b"PXMA";
 /// changes: it stands in for the cooker version in the Cook key, and old
 /// Blobs are refused.
 pub(crate) const MATERIAL_FORMAT_VERSION: u32 = 1;
+/// The KTX2 key of a Texture Blob's one key-value entry, whose value is
+/// `TEXTURE_FORMAT_VERSION` as a little-endian u32.
+pub(crate) const TEXTURE_MAGIC: &str = "PXTX";
+/// Bumped whenever the Texture Blob layout, or how the cooker fills it,
+/// changes, like `MATERIAL_FORMAT_VERSION`.
+pub(crate) const TEXTURE_FORMAT_VERSION: u32 = 1;
 
 /// What an Asset is. Its number, and a Texture's Channel, are part of every
 /// Asset ID: never renumber.
@@ -174,6 +180,173 @@ impl CookedMaterial {
     }
 }
 
+/// A Texture Asset: one BC format per Channel (ADR 0018), with its full mip
+/// chain.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CookedTexture {
+    pub format: wgpu::TextureFormat,
+    pub width: u32,
+    pub height: u32,
+    /// Each mip level's blocks, mip 0 first, rows unpadded.
+    pub levels: Vec<Vec<u8>>,
+}
+
+/// The formats a Texture Blob holds, with their KTX2 names.
+const TEXTURE_FORMATS: [(wgpu::TextureFormat, ktx2::Format); 3] = [
+    (
+        wgpu::TextureFormat::Bc7RgbaUnormSrgb,
+        ktx2::Format::BC7_SRGB_BLOCK,
+    ),
+    (
+        wgpu::TextureFormat::Bc5RgUnorm,
+        ktx2::Format::BC5_UNORM_BLOCK,
+    ),
+    (
+        wgpu::TextureFormat::Bc4RUnorm,
+        ktx2::Format::BC4_UNORM_BLOCK,
+    ),
+];
+
+/// The bytes of mip `level` of a `width` × `height` Texture in `format`.
+pub(crate) fn level_bytes(
+    format: wgpu::TextureFormat,
+    width: u32,
+    height: u32,
+    level: usize,
+) -> usize {
+    let (block_width, block_height) = format.block_dimensions();
+    let blocks_wide = (width >> level).max(1).div_ceil(block_width);
+    let blocks_high = (height >> level).max(1).div_ceil(block_height);
+    let block_bytes = format.block_copy_size(None).expect("a colour format");
+    (blocks_wide * blocks_high * block_bytes) as usize
+}
+
+impl CookedTexture {
+    /// KTX2: the header, level index and data format descriptor through
+    /// `ktx2`'s serialisers, then the key-value data, then each level
+    /// zstd-compressed at `zstd_level`, smallest mip first, so the smallest
+    /// mips are one contiguous byte range (ADR 0017).
+    #[cfg(feature = "cook")]
+    pub fn to_blob(&self, zstd_level: i32) -> anyhow::Result<Vec<u8>> {
+        let (_, format) = TEXTURE_FORMATS
+            .into_iter()
+            .find(|(format, _)| *format == self.format)
+            .context("not a Texture Blob format")?;
+        let (descriptor, type_size) =
+            ktx2::dfd::Basic::from_format(format).expect("BC formats have a descriptor");
+        let descriptor = ktx2::dfd::Block::Basic(descriptor).to_vec();
+        // One entry: its length, the key, a NUL, the value, padded to 4.
+        let mut key_value_entry = Vec::new();
+        key_value_entry.extend((TEXTURE_MAGIC.len() as u32 + 1 + 4).to_le_bytes());
+        key_value_entry.extend(TEXTURE_MAGIC.as_bytes());
+        key_value_entry.push(0);
+        key_value_entry.extend(TEXTURE_FORMAT_VERSION.to_le_bytes());
+        key_value_entry.resize(key_value_entry.len().next_multiple_of(4), 0);
+
+        let index_bytes = self.levels.len() * ktx2::LevelIndex::LENGTH;
+        let descriptor_offset = ktx2::Header::LENGTH + index_bytes;
+        let descriptor_bytes = 4 + descriptor.len();
+        let key_value_offset = descriptor_offset + descriptor_bytes;
+        let mut level_index = vec![[0; ktx2::LevelIndex::LENGTH]; self.levels.len()];
+        let mut data = Vec::new();
+        let data_offset = key_value_offset + key_value_entry.len();
+        for (level, texels) in self.levels.iter().enumerate().rev() {
+            let compressed = zstd::bulk::compress(texels, zstd_level)?;
+            level_index[level] = ktx2::LevelIndex {
+                byte_offset: (data_offset + data.len()) as u64,
+                byte_length: compressed.len() as u64,
+                uncompressed_byte_length: texels.len() as u64,
+            }
+            .as_bytes();
+            data.extend(compressed);
+        }
+        let header = ktx2::Header {
+            format: Some(format),
+            type_size,
+            pixel_width: self.width,
+            pixel_height: self.height,
+            pixel_depth: 0,
+            layer_count: 0,
+            face_count: 1,
+            level_count: self.levels.len() as u32,
+            supercompression_scheme: Some(ktx2::SupercompressionScheme::Zstandard),
+            index: ktx2::Index {
+                dfd_byte_offset: descriptor_offset as u32,
+                dfd_byte_length: descriptor_bytes as u32,
+                kvd_byte_offset: key_value_offset as u32,
+                kvd_byte_length: key_value_entry.len() as u32,
+                sgd_byte_offset: 0,
+                sgd_byte_length: 0,
+            },
+        };
+        let mut blob = header.as_bytes().to_vec();
+        blob.extend(level_index.concat());
+        blob.extend((descriptor_bytes as u32).to_le_bytes());
+        blob.extend(descriptor);
+        blob.extend(key_value_entry);
+        blob.extend(data);
+        Ok(blob)
+    }
+
+    /// Parses a Texture Blob back into its levels, refusing one from another
+    /// format version, in another format or without its full mip chain.
+    pub fn from_blob(blob: &[u8]) -> anyhow::Result<Self> {
+        let reader = ktx2::Reader::new(blob).map_err(|error| {
+            anyhow::anyhow!("Texture Blob is not KTX2 ({error}): re-cook with `praxis cook`")
+        })?;
+        let version = reader
+            .key_value_data()
+            .find(|(key, _)| *key == TEXTURE_MAGIC)
+            .and_then(|(_, value)| value.try_into().ok())
+            .map(u32::from_le_bytes);
+        anyhow::ensure!(
+            version == Some(TEXTURE_FORMAT_VERSION),
+            "Blob is not a {TEXTURE_MAGIC} version {TEXTURE_FORMAT_VERSION} Blob: re-cook with `praxis cook`"
+        );
+        let header = reader.header();
+        anyhow::ensure!(
+            header.supercompression_scheme == Some(ktx2::SupercompressionScheme::Zstandard),
+            "Texture Blob levels are not zstd-compressed"
+        );
+        let (format, _) = TEXTURE_FORMATS
+            .into_iter()
+            .find(|(_, format)| Some(*format) == header.format)
+            .with_context(|| {
+                format!(
+                    "Texture Blob format {:?} is not a Texture format",
+                    header.format
+                )
+            })?;
+        let mips = header.pixel_width.max(header.pixel_height).ilog2() + 1;
+        anyhow::ensure!(
+            header.level_count == mips,
+            "Texture Blob has {} mips, expected {mips}",
+            header.level_count
+        );
+        let levels = reader
+            .levels()
+            .enumerate()
+            .map(|(level, data)| {
+                let expected = level_bytes(format, header.pixel_width, header.pixel_height, level);
+                let texels = zstd::bulk::decompress(data.data, expected)
+                    .with_context(|| format!("decompressing mip {level}"))?;
+                anyhow::ensure!(
+                    texels.len() == expected,
+                    "mip {level} is {} bytes, expected {expected}",
+                    texels.len()
+                );
+                Ok(texels)
+            })
+            .collect::<anyhow::Result<_>>()?;
+        Ok(Self {
+            format,
+            width: header.pixel_width,
+            height: header.pixel_height,
+            levels,
+        })
+    }
+}
+
 /// `blob` after its magic and format version, or a refusal asking for a
 /// re-cook when either does not match: there is no migration code.
 fn payload(blob: &[u8], magic: [u8; 4], version: u32) -> anyhow::Result<&[u8]> {
@@ -240,6 +413,10 @@ impl CookedCache {
 
     pub fn material(&self, id: AssetId) -> anyhow::Result<CookedMaterial> {
         CookedMaterial::from_blob(&self.read(id)?).with_context(|| format!("reading Material {id}"))
+    }
+
+    pub fn texture(&self, id: AssetId) -> anyhow::Result<CookedTexture> {
+        CookedTexture::from_blob(&self.read(id)?).with_context(|| format!("reading Texture {id}"))
     }
 
     /// Stores `blob` under its hash and points `id` at it with `cook_key`.
@@ -325,5 +502,46 @@ mod tests {
                 .to_string();
             assert!(error.contains("re-cook with `praxis cook`"), "{error}");
         }
+    }
+
+    #[cfg(feature = "cook")]
+    #[test]
+    fn texture_blob_round_trips_smallest_mip_first_and_refuses_another_version() {
+        // 8 × 4 BC4: two blocks at mip 0, one at mips 1 to 3.
+        let texture = CookedTexture {
+            format: wgpu::TextureFormat::Bc4RUnorm,
+            width: 8,
+            height: 4,
+            levels: (0..4u8)
+                .map(|mip| vec![mip; if mip == 0 { 16 } else { 8 }])
+                .collect(),
+        };
+        let blob = texture.to_blob(3).unwrap();
+        assert_eq!(CookedTexture::from_blob(&blob).unwrap(), texture);
+
+        let reader = ktx2::Reader::new(&blob[..]).unwrap();
+        let offsets: Vec<u64> = (0..4)
+            .map(|level| {
+                let entry = &blob[ktx2::Header::LENGTH + level * ktx2::LevelIndex::LENGTH..];
+                u64::from_le_bytes(entry[..8].try_into().unwrap())
+            })
+            .collect();
+        assert!(
+            offsets.is_sorted_by(|larger, smaller| larger > smaller),
+            "{offsets:?}"
+        );
+        assert_eq!(reader.levels().len(), 4);
+
+        let mut other_version = blob.clone();
+        let version_at = blob
+            .windows(5)
+            .position(|window| window == b"PXTX\0")
+            .unwrap()
+            + 5;
+        other_version[version_at] += 1;
+        let error = CookedTexture::from_blob(&other_version)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("re-cook with `praxis cook`"), "{error}");
     }
 }
