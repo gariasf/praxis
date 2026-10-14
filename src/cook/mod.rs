@@ -2,17 +2,38 @@
 //! Reference scene into Blobs in the Cooked cache, cooking only the Assets
 //! whose Cook key changed.
 
+mod texture;
+
+use std::collections::HashSet;
 use std::path::Path;
 
 use anyhow::Context;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
+pub use texture::TextureSource;
+
 use crate::ReferenceScene;
 use crate::cooked::{
     AssetId, AssetKind, AssetName, AssetSource, CookedCache, CookedMaterial,
-    MATERIAL_FORMAT_VERSION, MATERIAL_MAGIC, MaterialChannel, hex,
+    MATERIAL_FORMAT_VERSION, MATERIAL_MAGIC, MaterialChannel, TEXTURE_FORMAT_VERSION, hex,
 };
+
+/// The cook settings a Cook key covers besides sources, formats and
+/// encoders.
+#[derive(Copy, Clone, Debug)]
+pub struct CookSettings {
+    /// The zstd level of every Texture mip.
+    pub texture_zstd_level: i32,
+}
+
+impl Default for CookSettings {
+    fn default() -> Self {
+        Self {
+            texture_zstd_level: zstd::DEFAULT_COMPRESSION_LEVEL,
+        }
+    }
+}
 
 /// The Asset IDs one cook wrote, and those it found up to date.
 #[derive(Debug, Default)]
@@ -28,9 +49,83 @@ struct ManifestEntry {
     guid: String,
 }
 
+/// Every Material and Texture the sources define.
+#[derive(Default)]
+struct Sources {
+    /// Each Material with its Cook key.
+    materials: Vec<(AssetId, String, CookedMaterial)>,
+    textures: Vec<TextureSource>,
+}
+
 /// Cooks the sources `assets/manifest.json` lists that are present, and
 /// every procedural Reference scene, into `cache`.
-pub fn cook(assets: &Path, cache: &CookedCache) -> anyhow::Result<CookReport> {
+pub fn cook(
+    assets: &Path,
+    cache: &CookedCache,
+    settings: &CookSettings,
+) -> anyhow::Result<CookReport> {
+    let sources = read_sources(assets)?;
+    let mut report = CookReport::default();
+    for (id, cook_key, material) in &sources.materials {
+        if is_fresh(cache, *id, cook_key) {
+            report.unchanged.push(*id);
+        } else {
+            cache.write(*id, cook_key, &material.to_blob())?;
+            report.cooked.push(*id);
+        }
+    }
+    let mut stale = Vec::new();
+    for texture in &sources.textures {
+        let cook_key = texture.cook_key(settings, TEXTURE_FORMAT_VERSION);
+        if is_fresh(cache, texture.id, &cook_key) {
+            report.unchanged.push(texture.id);
+        } else {
+            stale.push((texture, cook_key));
+        }
+    }
+    // One Texture per core at a time: its filtering runs on its own thread,
+    // and memory holds at most that many Textures' working sets. The cores
+    // split among a batch's encoders.
+    let threads = std::thread::available_parallelism().map_or(1, |threads| threads.get());
+    for batch in stale.chunks(threads) {
+        let encode_threads = threads.div_ceil(batch.len());
+        let blobs: Vec<_> = std::thread::scope(|scope| {
+            let cooks: Vec<_> = batch
+                .iter()
+                .map(|(texture, _)| scope.spawn(|| texture.cook(settings, encode_threads)))
+                .collect();
+            cooks
+                .into_iter()
+                .map(|cook| cook.join().expect("a Texture cook panicked"))
+                .collect()
+        });
+        for ((texture, cook_key), blob) in batch.iter().zip(blobs) {
+            cache.write(texture.id, cook_key, &blob?)?;
+            report.cooked.push(texture.id);
+        }
+    }
+    for (id, _, material) in &sources.materials {
+        for texture in material.textures.iter().flatten() {
+            if cache.entry(*texture).is_none() {
+                tracing::warn!(material = %id, %texture, "Material samples a Texture the Cooked cache lacks");
+            }
+        }
+    }
+    tracing::info!(
+        cooked = report.cooked.len(),
+        unchanged = report.unchanged.len(),
+        "cook complete"
+    );
+    Ok(report)
+}
+
+/// Every Texture the cook reads: each image a glTF Material samples, per
+/// Channel, and each procedural Reference scene's generated image.
+pub fn texture_sources(assets: &Path) -> anyhow::Result<Vec<TextureSource>> {
+    Ok(read_sources(assets)?.textures)
+}
+
+fn read_sources(assets: &Path) -> anyhow::Result<Sources> {
     let manifest_path = assets.join("manifest.json");
     let manifest: Vec<ManifestEntry> = serde_json::from_slice(
         &std::fs::read(&manifest_path)
@@ -38,7 +133,7 @@ pub fn cook(assets: &Path, cache: &CookedCache) -> anyhow::Result<CookReport> {
     )
     .with_context(|| format!("parsing {}", manifest_path.display()))?;
 
-    let mut report = CookReport::default();
+    let mut sources = Sources::default();
     for entry in &manifest {
         if !(entry.path.ends_with(".gltf") || entry.path.ends_with(".glb")) {
             continue;
@@ -50,97 +145,132 @@ pub fn cook(assets: &Path, cache: &CookedCache) -> anyhow::Result<CookReport> {
         };
         let guid = u128::from_str_radix(&entry.guid, 16)
             .with_context(|| format!("{}: guid {:?} is not hex", entry.path, entry.guid))?;
-        let materials = gltf_materials(guid, &source)
-            .with_context(|| format!("reading the Materials of {}", path.display()))?;
-        for (id, material) in materials {
-            store(cache, id, &source, &material, &mut report)?;
-        }
+        read_gltf(guid, &path, &source, &mut sources)
+            .with_context(|| format!("reading {}", path.display()))?;
     }
     for scene in ReferenceScene::ALL {
+        let source = AssetSource::Scene(scene.name());
         for (name, material) in scene.materials() {
-            let source = AssetSource::Scene(scene.name());
             let id = AssetId::new(source, AssetKind::Material, AssetName::Name(&name));
             // A procedural Asset's source bytes are its generated bytes.
-            store(cache, id, &material.to_blob(), &material, &mut report)?;
+            let cook_key = material_cook_key(&material.to_blob());
+            sources.materials.push((id, cook_key, material));
+        }
+        for (name, channel, image) in scene.textures() {
+            let id = AssetId::new(source, AssetKind::Texture(channel), AssetName::Name(name));
+            let name = format!("{} {name}", scene.name());
+            sources
+                .textures
+                .push(TextureSource::generated(id, channel, name, image));
         }
     }
-    tracing::info!(
-        cooked = report.cooked.len(),
-        unchanged = report.unchanged.len(),
-        "cook complete"
-    );
-    Ok(report)
+    Ok(sources)
 }
 
-/// Writes `material` unless the index already holds `id` under the Cook key
-/// of `source`. A Material has no cook settings and no encoder, so its Cook
-/// key covers its source bytes and its format.
-fn store(
-    cache: &CookedCache,
-    id: AssetId,
-    source: &[u8],
-    material: &CookedMaterial,
-    report: &mut CookReport,
-) -> anyhow::Result<()> {
+/// A Material has no cook settings and no encoder, so its Cook key covers
+/// its source bytes and its format.
+fn material_cook_key(source: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(MATERIAL_MAGIC);
     hasher.update(MATERIAL_FORMAT_VERSION.to_le_bytes());
     hasher.update(source);
-    let cook_key = hex(&hasher.finalize());
-    if cache
-        .entry(id)
-        .is_some_and(|entry| entry.cook_key == cook_key)
-    {
-        report.unchanged.push(id);
-        return Ok(());
-    }
-    cache.write(id, &cook_key, &material.to_blob())?;
-    report.cooked.push(id);
-    Ok(())
+    hex(&hasher.finalize())
 }
 
-/// Every Material of the glTF file `source`, with the Asset IDs of the
-/// Textures it samples: the glTF file's GUID, the image's name (or index)
-/// and the Channel, whether the image is embedded or a file of its own.
-/// The Texture cook must name its Assets the same way.
-fn gltf_materials(guid: u128, source: &[u8]) -> anyhow::Result<Vec<(AssetId, CookedMaterial)>> {
-    let document = gltf::Gltf::from_slice(source)?.document;
-    let source = AssetSource::File(guid);
+/// Whether the index holds `id` under `cook_key`, its Blob present.
+fn is_fresh(cache: &CookedCache, id: AssetId, cook_key: &str) -> bool {
+    cache
+        .entry(id)
+        .is_some_and(|entry| entry.cook_key == cook_key)
+}
+
+/// The Textures `material` samples, indexed by `MaterialChannel`.
+fn material_textures<'a>(material: &gltf::Material<'a>) -> [Option<gltf::Texture<'a>>; 5] {
+    let pbr = material.pbr_metallic_roughness();
+    [
+        pbr.base_color_texture().map(|info| info.texture()),
+        material.normal_texture().map(|normal| normal.texture()),
+        pbr.metallic_roughness_texture().map(|info| info.texture()),
+        material
+            .occlusion_texture()
+            .map(|occlusion| occlusion.texture()),
+        material.emissive_texture().map(|info| info.texture()),
+    ]
+}
+
+/// Every Material of the glTF file `source` at `path`, and every image its
+/// Materials sample, once per Channel. A Texture's Asset ID is the glTF
+/// file's GUID, the image's name (or index) and the Channel, whether the
+/// image is embedded or a file of its own.
+fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> anyhow::Result<()> {
+    let gltf = gltf::Gltf::from_slice(source)?;
+    let document = &gltf.document;
+    let asset_source = AssetSource::File(guid);
     let image_names = asset_names(document.images().map(|image| image.name()));
-    let texture_id = |channel, texture: gltf::Texture| {
+    let texture_id = |channel, texture: &gltf::Texture| {
         let name = image_names[texture.source().index()];
-        AssetId::new(source, AssetKind::Texture(channel), name)
+        AssetId::new(asset_source, AssetKind::Texture(channel), name)
     };
+    let cook_key = material_cook_key(source);
     let material_names = asset_names(document.materials().map(|material| material.name()));
-    let materials = document
-        .materials()
-        .zip(material_names)
-        .map(|(material, name)| {
-            let pbr = material.pbr_metallic_roughness();
-            let textures = [
-                pbr.base_color_texture().map(|info| info.texture()),
-                material.normal_texture().map(|normal| normal.texture()),
-                pbr.metallic_roughness_texture().map(|info| info.texture()),
-                material
-                    .occlusion_texture()
-                    .map(|occlusion| occlusion.texture()),
-                material.emissive_texture().map(|info| info.texture()),
-            ];
-            let mut texture_ids = [None; 5];
-            for (channel, texture) in MaterialChannel::ALL.into_iter().zip(textures) {
-                texture_ids[channel as usize] = texture.map(|texture| texture_id(channel, texture));
+    let mut buffers = None;
+    let mut cooked_images = HashSet::new();
+    for (material, name) in document.materials().zip(material_names) {
+        let textures = material_textures(&material);
+        let mut texture_ids = [None; 5];
+        for (channel, texture) in MaterialChannel::ALL.into_iter().zip(textures) {
+            let Some(texture) = texture else { continue };
+            let id = texture_id(channel, &texture);
+            texture_ids[channel as usize] = Some(id);
+            if !cooked_images.insert(id) {
+                continue;
             }
-            let id = AssetId::new(source, AssetKind::Material, name);
-            let material = CookedMaterial {
-                base_color: pbr.base_color_factor(),
-                metallic: pbr.metallic_factor(),
-                roughness: pbr.roughness_factor(),
-                emissive: material.emissive_factor(),
-                textures: texture_ids,
+            let image = texture.source();
+            let name = format!("{} image {:?}", path.display(), image_names[image.index()]);
+            let bytes = match image.source() {
+                gltf::image::Source::View { view, .. } => {
+                    if buffers.is_none() {
+                        buffers = Some(gltf::import_buffers(
+                            document,
+                            path.parent(),
+                            gltf.blob.clone(),
+                        )?);
+                    }
+                    let buffer = &buffers.as_ref().expect("imported above")[view.buffer().index()];
+                    buffer
+                        .get(view.offset()..view.offset() + view.length())
+                        .with_context(|| format!("{name}: buffer view out of bounds"))?
+                        .to_vec()
+                }
+                gltf::image::Source::Uri { uri, .. } if uri.starts_with("data:") => {
+                    tracing::warn!(image = name, "data URI images are not cooked");
+                    continue;
+                }
+                gltf::image::Source::Uri { uri, .. } => {
+                    let image_path = path.parent().unwrap_or(Path::new("")).join(uri);
+                    let Ok(bytes) = std::fs::read(&image_path) else {
+                        tracing::warn!(path = %image_path.display(), "image absent; its cooked Texture stays as it is");
+                        continue;
+                    };
+                    bytes
+                }
             };
-            (id, material)
-        });
-    Ok(materials.collect())
+            sources
+                .textures
+                .push(TextureSource::encoded(id, channel, name, bytes));
+        }
+        let pbr = material.pbr_metallic_roughness();
+        let id = AssetId::new(asset_source, AssetKind::Material, name);
+        let material = CookedMaterial {
+            base_color: pbr.base_color_factor(),
+            metallic: pbr.metallic_factor(),
+            roughness: pbr.roughness_factor(),
+            emissive: material.emissive_factor(),
+            textures: texture_ids,
+        };
+        sources.materials.push((id, cook_key.clone(), material));
+    }
+    Ok(())
 }
 
 /// Each item's Asset name: its glTF name, or its index when the name is
