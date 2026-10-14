@@ -11,7 +11,7 @@ The owner decides what is worked on. Agents implement, commit, open PRs and merg
 - A milestone's exit criteria are commands plus numbers, written on the milestone before its first ticket opens. It closes when every criterion has been run and its output pasted on the milestone. "Looks done" never closes a milestone.
 - The ladder's order, each milestone's one-line goal and its provisional exit criteria are recorded in the [ladder decision](https://github.com/gariasf/praxis/issues/75#issuecomment-6141801746). A milestone implements one or two ADRs in their dependency order. Provisional criteria become firm at the boundary, when the milestone is created.
 - Every milestone's exit also includes the standard clause: the verify command (`scripts/verify.sh`) exits 0 within 30 lines; a new or extended Reference scene shows the milestone's work, with its Goldens committed on Metal and software Vulkan; Baselines are re-recorded and no Budget regresses unless an ADR or map comment moved it; a profile of the Reference scenes is recorded in `docs/performance.md` and the top three offenders are ticketed; a literature scan for the next milestone's topics is checked against the ADRs.
-- Reordering is a decision comment on the map issue: what moved, why, and what it displaces. The rail numbers in this file (PR count, size ceiling, review rounds) change the same way: a decision comment, then an edit here.
+- Reordering is a decision comment on the map issue: what moved, why, and what it displaces. The rail numbers in this file (size ceiling, review rounds) and the rule for PRs in flight change the same way: a decision comment, then an edit here.
 
 ## Tickets
 
@@ -24,7 +24,7 @@ The owner decides what is worked on. Agents implement, commit, open PRs and merg
 
 ## PRs
 
-- One ticket per PR (`Closes #N`). At most two PRs open at once, on disjoint modules.
+- One ticket per PR (`Closes #N`). Any number may be in flight; PRs that share a module need their tickets to name the merge order, and the later one rebases onto the earlier ([decision](https://github.com/gariasf/praxis/issues/17#issuecomment-6172436344)). A ticket that records Baselines does so while no other session loads the machine, or takes them from CI's artifact.
 - One review, the agent's own, before the PR opens (see Review). One fix commit, and a verification pass only when a fix touched correctness-critical logic. Findings still open after that become tickets or fog notes.
 - The verify command, `scripts/verify.sh`, exits 0 before the PR opens: formatting, lint, build, tests (Goldens required) and the bench counters against Baselines and Budgets, one line per step, about a minute from a fresh worktree. Its output is the Verification block.
 - Description follows `.github/pull_request_template.md`: what changed, how it was verified (command and output, 30 lines at most), metric deltas, and under Decide only the owner items named above.
