@@ -1,8 +1,5 @@
 use std::time::Duration;
 
-use bevy_ecs::prelude::*;
-
-use crate::components::Transform;
 use crate::gpu::GpuContext;
 use crate::render::MAIN_PASS;
 use crate::scenes::ReferenceScene;
@@ -64,14 +61,7 @@ pub(crate) fn render_frames(
         PassTimer::MAX_FRAMES
     );
 
-    let mut state = State::new(context, TARGET_FORMAT, width, height, scene)?;
-    // A child's translation is relative to its parent, so only roots move.
-    let mut root_query = state
-        .world
-        .query_filtered::<&mut Transform, Without<ChildOf>>();
-    for mut transform in root_query.iter_mut(&mut state.world) {
-        transform.translation += shift;
-    }
+    let mut state = State::new(context, TARGET_FORMAT, width, height, scene, shift)?;
     let target = context.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Capture Target"),
         size: wgpu::Extent3d {
@@ -98,9 +88,7 @@ pub(crate) fn render_frames(
                 timeout: None,
             })?;
         }
-        let mut camera = scene.camera_at(frame);
-        camera.position += shift;
-        state.world.insert_resource(camera);
+        state.world.insert_resource(scene.camera_at(frame, shift));
         state.update(FRAME_DELTA);
         let submission = state.render(&target_view, Some(pass_timer.writes(frame)));
         in_flight.push_back(submission);

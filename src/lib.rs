@@ -168,6 +168,7 @@ impl WindowShell {
             size.width.max(1),
             size.height.max(1),
             ReferenceScene::Helmet,
+            glam::DVec3::ZERO,
         )?;
 
         Ok(Self {

@@ -218,7 +218,10 @@ When reviewing changes, check for:
 - [ ] A newly used wgpu feature or limit joins the Capability floor,
       or, outside Tiers 1-2, has a path for adapters without it (ADR 0021)
 - [ ] Game-state changes run in the fixed schedule, which reads no
-      wall clock and has no ambiguous system order (ADR 0022)
+      wall clock and has no ambiguous system order (ADR 0022); every
+      entity whose World transform it changes, children included,
+      carries `PreviousWorldTransform`, and a jump inserts `Teleported`
+      before `reset_teleported` runs
 - [ ] `cargo fmt` and `cargo clippy` pass
 
 ## Maintenance

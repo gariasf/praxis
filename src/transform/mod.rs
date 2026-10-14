@@ -12,6 +12,67 @@ impl WorldTransform {
     pub fn translation(&self) -> glam::DVec3 {
         self.0.translation
     }
+
+    /// What a frame draws: this World transform, or, for an entity the fixed
+    /// schedule moves, the blend `blend_weight` of the way to it from the
+    /// previous Tick's (ADR 0022). The blend is linear in every entry, in
+    /// f64: exact for translation, while a rotation of θ per Tick shrinks the
+    /// entity by up to 1 − cos(θ/2) mid-Tick, 0.1% at 0.09 rad (5.8 rad/s).
+    pub fn drawn(&self, previous: Option<&PreviousWorldTransform>, blend_weight: f32) -> Self {
+        let Some(previous) = previous.and_then(|previous| previous.0) else {
+            return *self;
+        };
+        let weight = f64::from(blend_weight);
+        Self(glam::DAffine3 {
+            matrix3: previous.matrix3 + (self.0.matrix3 - previous.matrix3) * weight,
+            translation: previous.translation
+                + (self.0.translation - previous.translation) * weight,
+        })
+    }
+}
+
+/// The World transform an entity had after the previous Tick, kept by every
+/// entity whose World transform the fixed schedule changes, children of a
+/// moving entity included, so frames draw it blended; other entities store
+/// nothing extra. `None` from its spawn until the next Tick starts, and
+/// after a teleport: frames then draw its current World transform, so a
+/// child of a moving parent runs up to a Tick ahead of the parent until then.
+#[derive(Component, Copy, Clone, Debug, Default, PartialEq)]
+pub struct PreviousWorldTransform(pub Option<glam::DAffine3>);
+
+/// Marks an entity the fixed schedule moved by a jump this Tick, such as a
+/// respawn, so frames draw it and its descendants at their new place, never
+/// between the old and the new. Inserted by a system that runs before
+/// `reset_teleported`, which removes it.
+#[derive(Component)]
+pub struct Teleported;
+
+/// Starts a Tick: each moving entity's World transform becomes its previous
+/// one, before the Tick moves it.
+pub fn record_previous_world_transforms(
+    mut moving: Query<(&WorldTransform, &mut PreviousWorldTransform)>,
+) {
+    for (current, mut previous) in &mut moving {
+        previous.0 = Some(current.0);
+    }
+}
+
+/// Drops the previous World transform of each entity teleported this Tick and
+/// of its descendants, and removes the marker.
+pub fn reset_teleported(
+    mut commands: Commands,
+    teleported: Query<Entity, With<Teleported>>,
+    children: Query<&Children>,
+    mut previous_world_transforms: Query<&mut PreviousWorldTransform>,
+) {
+    for entity in &teleported {
+        for jumped in std::iter::once(entity).chain(children.iter_descendants(entity)) {
+            if let Ok(mut previous) = previous_world_transforms.get_mut(jumped) {
+                previous.0 = None;
+            }
+        }
+        commands.entity(entity).remove::<Teleported>();
+    }
 }
 
 /// An entity whose Transform or parent changed.
@@ -213,6 +274,28 @@ mod tests {
         world.get_mut::<Transform>(child).unwrap().translation = glam::DVec3::Z;
         schedule.run(&mut world);
         assert_near(world_position(&world, child), glam::DVec3::Z);
+    }
+
+    #[test]
+    fn a_moving_entity_is_drawn_at_the_linear_blend_of_its_two_newest_ticks() {
+        let previous = PreviousWorldTransform(Some(glam::DAffine3::from_translation(ROOT)));
+        let current = WorldTransform(glam::DAffine3::from_scale_rotation_translation(
+            glam::DVec3::splat(2.0),
+            glam::DQuat::IDENTITY,
+            ROOT + glam::dvec3(4.0, -2.0, 8.0),
+        ));
+
+        let drawn = current.drawn(Some(&previous), 0.25);
+        assert_near(drawn.translation(), ROOT + glam::dvec3(1.0, -0.5, 2.0));
+        assert_eq!(
+            drawn.0.matrix3,
+            glam::DMat3::from_diagonal(glam::DVec3::splat(1.25))
+        );
+        // After a spawn or a teleport, or with no previous kept, it is drawn
+        // where it is.
+        let reset = PreviousWorldTransform(None);
+        assert_eq!(current.drawn(Some(&reset), 0.25), current);
+        assert_eq!(current.drawn(None, 0.25), current);
     }
 
     #[test]

@@ -55,10 +55,11 @@ impl ReferenceScene {
         Self::ALL.into_iter().find(|scene| scene.name() == name)
     }
 
-    /// The camera at `frame`. The path is a function of the frame number, not
-    /// of time, so it does not depend on machine speed.
-    pub(crate) fn camera_at(self, frame: u32) -> Camera {
-        match self {
+    /// The camera at `frame`, moved by `shift` metres. The path is a function
+    /// of the frame number, not of time, so it does not depend on machine
+    /// speed.
+    pub(crate) fn camera_at(self, frame: u32, shift: glam::DVec3) -> Camera {
+        let mut camera = match self {
             Self::Helmet => Camera::new(),
             Self::PbrSweep => orbit(frame, 6.5, 1.0),
             Self::UvGrid => orbit(frame, 9.0, 7.0),
@@ -72,7 +73,9 @@ impl ReferenceScene {
                 glam::dvec3(0.0, FAR_COPLANAR_CAMERA_HEIGHT, 0.0),
                 glam::dvec3(0.0, 0.0, -FAR_COPLANAR_DISTANCE),
             ),
-        }
+        };
+        camera.position += shift;
+        camera
     }
 }
 
