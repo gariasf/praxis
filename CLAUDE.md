@@ -130,9 +130,8 @@ When a feature folder grows past one file, split into
 - Work the live milestone's frontier. Work that is not a ticket becomes
   a proposed ticket first.
 - Review before the PR opens: `/implement` closes with a local
-  `/code-review`; run it and fix what it finds. CodeRabbit's review of
-  the PR is a second opinion, treated as suggestions
-  (`docs/agents/workflow.md`, Review).
+  `/code-review`; run it and fix what it finds. It is the only
+  semantic review (`docs/agents/workflow.md`, Review).
 - A bug-fix is not a refactor and a feature is not a cleanup. Do what
   the ticket says; its acceptance criteria are the ceiling.
 - Don't add comments, docstrings, or type annotations to code you
@@ -225,6 +224,11 @@ When reviewing changes, check for:
       entity whose World transform it changes, children included,
       carries `PreviousWorldTransform`, and a jump inserts `Teleported`
       before `reset_teleported` runs
+- [ ] WGSL keeps sRGB and linear apart, has no divide-by-zero or NaN
+      at grazing angles or zero roughness, and calls no `textureSample`
+      under non-uniform control flow
+- [ ] Workflows keep least-privilege permissions and pinned action
+      versions
 - [ ] `cargo fmt` and `cargo clippy` pass
 
 ## Maintenance
@@ -251,8 +255,7 @@ guidance.
 
 ### Agent fleet
 
-Two agents read this file: Claude Code (interactive) and Code Rabbit
-(PR review, configured via `.coderabbit.yaml`). No `AGENTS.md`,
+One agent reads this file: Claude Code. No `AGENTS.md`,
 `.cursor/rules/`, `.junie/guidelines.md`, or similar — the project
 doesn't use those tools. If a new agent is onboarded later, extract
 shared content into `AGENTS.md` and have `CLAUDE.md` carry only the
