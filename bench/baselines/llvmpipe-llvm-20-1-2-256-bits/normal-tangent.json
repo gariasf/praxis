@@ -1,0 +1,20 @@
+{
+  "scene": "normal-tangent",
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "profile": "release",
+  "width": 640,
+  "height": 360,
+  "measured_frames": 256,
+  "cpu_frame_microseconds": {
+    "median": 7711.221,
+    "p95": 9684.19
+  },
+  "gpu_main_pass_microseconds": {
+    "median": 7658.264,
+    "p95": 9531.077000000001
+  },
+  "draw_calls": 1,
+  "uploaded_bytes": 288,
+  "gpu_memory_bytes": 69365556,
+  "heap_allocations": 79
+}

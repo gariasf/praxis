@@ -1,0 +1,20 @@
+{
+  "scene": "uv-grid",
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "profile": "release",
+  "width": 640,
+  "height": 360,
+  "measured_frames": 256,
+  "cpu_frame_microseconds": {
+    "median": 2672.009,
+    "p95": 3049.368
+  },
+  "gpu_main_pass_microseconds": {
+    "median": 2614.864,
+    "p95": 2986.4610000000002
+  },
+  "draw_calls": 1,
+  "uploaded_bytes": 288,
+  "gpu_memory_bytes": 19033908,
+  "heap_allocations": 79
+}
