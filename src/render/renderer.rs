@@ -190,12 +190,7 @@ impl Renderer {
             }],
         });
 
-        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Instance Buffer"),
-            size: INSTANCE_BUFFER_INITIAL_CAPACITY * std::mem::size_of::<InstanceData>() as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let instance_buffer = create_instance_buffer(&device, INSTANCE_BUFFER_INITIAL_CAPACITY);
 
         let instance_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Instance Bind Group"),
@@ -243,19 +238,10 @@ impl Renderer {
         self.aspect_ratio
     }
 
-    /// Records the copies of `frame`'s Instances and uniforms into the
-    /// frame's encoder, which `render` submits.
+    /// Records the copies of `frame`'s uniforms and the Instances it writes
+    /// into the frame's encoder, which `render` submits.
     pub fn upload(&mut self, frame: &FrameData, recorder: &mut FrameRecorder) {
         let started = Instant::now();
-        self.ensure_instance_capacity(frame.instances.len() as u64);
-        let uploads: [(&wgpu::Buffer, &[u8]); 3] = [
-            (
-                &self.instance_buffer,
-                bytemuck::cast_slice(&frame.instances),
-            ),
-            (&self.camera_buffer, bytemuck::bytes_of(&frame.camera)),
-            (&self.light_buffer, bytemuck::bytes_of(&frame.light)),
-        ];
         // The window skips `render` while occluded or without a surface
         // texture; submitting the unrendered frame's copies returns its
         // staging slot.
@@ -263,9 +249,24 @@ impl Renderer {
             self.queue.submit(std::iter::once(unrendered.finish()));
         }
         let mut encoder = create_frame_encoder(&self.device);
+        self.ensure_instance_capacity(&mut encoder, u64::from(frame.instance_slot_count));
+        let instance_size = std::mem::size_of::<InstanceData>() as wgpu::BufferAddress;
+        let instance_uploads = frame.instance_writes.iter().map(|write| {
+            (
+                &self.instance_buffer,
+                u64::from(write.first_slot) * instance_size,
+                bytemuck::cast_slice(&frame.instances[write.instances.clone()]),
+            )
+        });
+        let uploads = [
+            (&self.camera_buffer, 0, bytemuck::bytes_of(&frame.camera)),
+            (&self.light_buffer, 0, bytemuck::bytes_of(&frame.light)),
+        ]
+        .into_iter()
+        .chain(instance_uploads);
         recorder.uploaded_bytes += self
             .frame_staging
-            .write(&self.device, &mut encoder, &uploads);
+            .write(&self.device, &mut encoder, uploads);
         self.frame_encoder = Some(encoder);
         recorder.stage("upload", started);
     }
@@ -377,7 +378,9 @@ impl Renderer {
             + self.frame_staging.gpu_memory_bytes()
     }
 
-    fn ensure_instance_capacity(&mut self, needed: u64) {
+    /// Grows the Instance buffer to hold `needed` Instances, copying the slots
+    /// earlier frames wrote into the new buffer through `encoder`.
+    fn ensure_instance_capacity(&mut self, encoder: &mut wgpu::CommandEncoder, needed: u64) {
         if needed <= self.instance_capacity {
             return;
         }
@@ -388,12 +391,15 @@ impl Renderer {
             new_capacity *= 2;
         }
 
-        self.instance_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Instance Buffer"),
-            size: new_capacity * std::mem::size_of::<InstanceData>() as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let instance_buffer = create_instance_buffer(&self.device, new_capacity);
+        encoder.copy_buffer_to_buffer(
+            &self.instance_buffer,
+            0,
+            &instance_buffer,
+            0,
+            self.instance_buffer.size(),
+        );
+        self.instance_buffer = instance_buffer;
 
         self.instance_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Instance Bind Group"),
@@ -413,6 +419,18 @@ impl Renderer {
     }
 }
 
+/// An Instance buffer of `capacity` slots; a copy source, so it can grow.
+fn create_instance_buffer(device: &wgpu::Device, capacity: u64) -> wgpu::Buffer {
+    device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Instance Buffer"),
+        size: capacity * std::mem::size_of::<InstanceData>() as u64,
+        usage: wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_DST
+            | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    })
+}
+
 fn create_frame_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
     device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("Frame Encoder"),
@@ -427,7 +445,7 @@ mod tests {
     use crate::assets::{MaterialData, Mesh, Primitive};
     use crate::capture::read_back;
     use crate::render::instance::padded_columns;
-    use crate::render::prepare::Draw;
+    use crate::render::prepare::{Draw, InstanceWrite};
 
     const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
     const SIZE: u32 = 16;
@@ -487,6 +505,7 @@ mod tests {
                 direction: [0.0, 0.0, -1.0, 0.0],
                 ..LightUniform::default()
             },
+            instance_slot_count: 1,
             instances: vec![InstanceData {
                 rotation_scale: identity,
                 normal_matrix: identity,
@@ -494,6 +513,10 @@ mod tests {
                 material_id: material.index(),
                 offset: [0.0; 3],
                 _pad: 0,
+            }],
+            instance_writes: vec![InstanceWrite {
+                first_slot: 0,
+                instances: 0..1,
             }],
             draws: vec![Draw {
                 indices: index_offset..index_offset + index_count,
@@ -535,5 +558,28 @@ mod tests {
             corner[0] == 89 && corner[1].abs_diff(124) <= 1 && corner[2] == 149,
             "corner {corner:?}"
         );
+
+        // A frame that needs one slot past the Instance buffer's capacity
+        // writes only that slot: the triangle, still drawn from slot 0, stays
+        // red only if the grown buffer kept what slot 0 held.
+        let past_capacity = INSTANCE_BUFFER_INITIAL_CAPACITY as u32;
+        let frame = FrameData {
+            instance_slot_count: past_capacity + 1,
+            instance_writes: vec![InstanceWrite {
+                first_slot: past_capacity,
+                instances: 0..1,
+            }],
+            ..frame
+        };
+        renderer.upload(&frame, &mut recorder);
+        renderer.render(
+            &frame,
+            &target.create_view(&wgpu::TextureViewDescriptor::default()),
+            None,
+            &mut recorder,
+        );
+        let image = read_back(&context, &target).expect("read back failed");
+        assert!(renderer.instance_capacity > INSTANCE_BUFFER_INITIAL_CAPACITY);
+        assert_eq!(image.get_pixel(SIZE / 2, SIZE / 2).0, [255, 0, 0, 255]);
     }
 }
