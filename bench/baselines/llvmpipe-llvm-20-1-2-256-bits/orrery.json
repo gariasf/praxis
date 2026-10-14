@@ -1,0 +1,20 @@
+{
+  "scene": "orrery",
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "profile": "release",
+  "width": 640,
+  "height": 360,
+  "measured_frames": 256,
+  "cpu_frame_microseconds": {
+    "median": 5528.383000000001,
+    "p95": 6557.384
+  },
+  "gpu_main_pass_microseconds": {
+    "median": 5453.634,
+    "p95": 6423.378000000001
+  },
+  "draw_calls": 5,
+  "uploaded_bytes": 928,
+  "gpu_memory_bytes": 673346848,
+  "heap_allocations": 81
+}
