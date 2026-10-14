@@ -18,10 +18,10 @@ const OVERDRAW_THRESHOLD: f32 = 1.05;
 
 /// Every encoder version and setting a Mesh Blob depends on, for its Cook key.
 /// The meshoptimizer version is the one `meshopt` 0.6.2 vendors: update it
-/// with the dependency.
+/// and the `bevy_mikktspace` version with their dependencies.
 pub(super) fn encoder_settings() -> String {
     format!(
-        "meshoptimizer 0.25, vertex codec 0, overdraw {OVERDRAW_THRESHOLD}, zstd {} level {}",
+        "bevy_mikktspace 1.0.0, meshoptimizer 0.25, vertex codec 0, overdraw {OVERDRAW_THRESHOLD}, zstd {} level {}",
         zstd::zstd_safe::version_number(),
         CookedMesh::ZSTD_LEVEL
     )
@@ -258,22 +258,20 @@ mod tests {
     #[test]
     fn a_triangle_soup_plane_welds_to_four_vertices() {
         let plane = crate::scenes::ground_plane(1.0, 1.0);
-        let corner = |index: u32| index as usize;
+        let corners = |attribute: &[[f32; 3]]| -> Vec<[f32; 3]> {
+            plane
+                .indices
+                .iter()
+                .map(|&index| attribute[index as usize])
+                .collect()
+        };
         let soup = Geometry {
-            positions: plane
-                .indices
-                .iter()
-                .map(|&i| plane.positions[corner(i)])
-                .collect(),
-            normals: plane
-                .indices
-                .iter()
-                .map(|&i| plane.normals[corner(i)])
-                .collect(),
+            positions: corners(&plane.positions),
+            normals: corners(&plane.normals),
             uvs: plane
                 .indices
                 .iter()
-                .map(|&i| plane.uvs[corner(i)])
+                .map(|&index| plane.uvs[index as usize])
                 .collect(),
             indices: (0..6).collect(),
         };
@@ -306,8 +304,8 @@ mod tests {
             "assets/NormalTangentTest/NormalTangentTest.glb",
             "assets/SciFiHelmet/SciFiHelmet.gltf",
         ] {
+            // SciFiHelmet is fetched, so absent from some checkouts.
             let Ok(gltf) = gltf::Gltf::open(path) else {
-                eprintln!("{path} absent; skipped");
                 continue;
             };
             let base = std::path::Path::new(path).parent();

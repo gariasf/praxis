@@ -372,7 +372,9 @@ mod tests {
 
     #[test]
     fn a_material_missing_from_the_cache_is_unresolved() {
-        let cache = CookedCache::new(std::env::temp_dir().join("praxis-empty-cooked-cache"));
+        let cache = CookedCache::new(
+            std::env::temp_dir().join(format!("praxis-empty-cache-{}", std::process::id())),
+        );
         let reference = (AssetId(1), AssetId(2));
         assert_eq!(unresolved_materials(&cache, &[reference]), [reference]);
     }

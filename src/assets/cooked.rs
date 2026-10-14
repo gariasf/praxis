@@ -422,6 +422,11 @@ impl CookedMesh {
         let rest = &mut rest;
         let vertex_count = take_u32(rest)? as usize;
         let index_count = take_u32(rest)? as usize;
+        // meshopt's index decoder writes whole triangles and checks neither.
+        anyhow::ensure!(
+            index_count.is_multiple_of(3),
+            "Mesh Blob's index count is not whole triangles"
+        );
         let primitive_count = take_u32(rest)?;
         let mut primitives = Vec::new();
         for _ in 0..primitive_count {
@@ -440,6 +445,12 @@ impl CookedMesh {
         }
         let vertex_bytes = take_u32(rest)? as usize;
         let vertices = meshopt::decode_vertex_buffer(take(rest, vertex_bytes)?, vertex_count)?;
+        // The index codec spends at least a byte per triangle, so a count
+        // past that is corrupt and must not size an allocation.
+        anyhow::ensure!(
+            index_count / 3 <= rest.len(),
+            "Mesh Blob has more indices than its encoded bytes hold"
+        );
         let indices: Vec<u32> = meshopt::decode_index_buffer(rest, index_count)?;
         // meshopt's decoder may turn corrupt input into any index.
         anyhow::ensure!(
@@ -669,5 +680,23 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(error.contains("re-cook with `praxis cook`"), "{error}");
+    }
+
+    #[cfg(feature = "cook")]
+    #[test]
+    fn mesh_blob_with_a_partial_triangle_is_refused() {
+        let mesh = CookedMesh {
+            vertices: vec![CookedVertex::default(); 3],
+            indices: vec![0, 1, 2],
+            primitives: Vec::new(),
+        };
+        let blob = mesh.to_blob().unwrap();
+        let mut payload = zstd::decode_all(&blob[8..]).unwrap();
+        // The index count, after the vertex count.
+        payload[4..8].copy_from_slice(&4u32.to_le_bytes());
+        let mut corrupt = blob[..8].to_vec();
+        corrupt.extend(zstd::bulk::compress(&payload, 1).unwrap());
+        let error = CookedMesh::from_blob(&corrupt).unwrap_err().to_string();
+        assert!(error.contains("not whole triangles"), "{error}");
     }
 }
