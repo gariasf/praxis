@@ -8,6 +8,13 @@ use super::CookSettings;
 use crate::assets::LoadedImage;
 use crate::cooked::{AssetId, CookedTexture, MaterialChannel, TEXTURE_MAGIC, hex, level_bytes};
 
+// intel_tex_2 0.5.0 links a prebuilt C++ library (its ASTC helpers) but not
+// the C++ runtime that library needs; Linux links fail without it, and
+// macOS links libc++ already. Declares no items: a link directive only.
+#[cfg(target_os = "linux")]
+#[link(name = "stdc++")]
+unsafe extern "C" {}
+
 /// The encoder and its profile, part of every Texture's Cook key.
 const ENCODER: &str = "intel_tex_2 0.5.0 basic";
 /// The largest side the cooker accepts; larger sources are refused rather
