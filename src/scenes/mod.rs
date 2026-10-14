@@ -5,7 +5,6 @@ use anyhow::Context;
 use bevy_ecs::prelude::*;
 
 use crate::assets::loader::generate_tangents;
-use crate::assets::material::TEXTURE_DIM;
 use crate::assets::{
     LoadedImage, MaterialChannel, MaterialData, MaterialHandle, MaterialPool, Mesh, MeshHandle,
     MeshPool, Primitive, load_model,
@@ -162,11 +161,12 @@ pub(crate) fn spawn_uv_grid(
 ) {
     let plane = insert_mesh(device, queue, mesh_pool, &ground_plane(4.0, 2.0));
     let albedo_layer = material_pool.upload(
+        device,
         queue,
         MaterialChannel::Albedo,
         &grid_texture(),
-        TEXTURE_DIM,
-        TEXTURE_DIM,
+        GRID_TEXTURE_SIZE,
+        GRID_TEXTURE_SIZE,
     );
     // Rough so the highlight does not wash out the texture.
     let material = material_pool.insert(queue, factor_material([1.0; 4], 0.0, 0.8, albedo_layer));
@@ -256,11 +256,12 @@ pub(crate) fn spawn_orrery(
     let sphere = insert_mesh(device, queue, mesh_pool, &uv_sphere(SPHERE_RADIUS));
     // The grid shows each sphere's own spin.
     let albedo_layer = material_pool.upload(
+        device,
         queue,
         MaterialChannel::Albedo,
         &grid_texture(),
-        TEXTURE_DIM,
-        TEXTURE_DIM,
+        GRID_TEXTURE_SIZE,
+        GRID_TEXTURE_SIZE,
     );
     let material = material_pool.insert(queue, factor_material([1.0; 4], 0.0, 0.5, albedo_layer));
     let body = |radians_per_second| {
@@ -349,9 +350,14 @@ pub(crate) fn insert_gltf_model(
         .ok_or_else(|| anyhow::anyhow!("model has no primitives"))?;
     let mut upload_channel = |channel: MaterialChannel, image: Option<&LoadedImage>| -> u32 {
         match image {
-            Some(image) => {
-                material_pool.upload(queue, channel, &image.pixels, image.width, image.height)
-            }
+            Some(image) => material_pool.upload(
+                device,
+                queue,
+                channel,
+                &image.pixels,
+                image.width,
+                image.height,
+            ),
             None => {
                 tracing::debug!(
                     ?channel,
@@ -540,18 +546,21 @@ fn ground_plane(half_size: f32, uv_repeat: f32) -> Geometry {
     }
 }
 
-/// `TEXTURE_DIM`-square RGBA8 sRGB texture of 8 × 8 cells framed by dark
+/// Side of the grid texture, in texels.
+const GRID_TEXTURE_SIZE: u32 = 2048;
+
+/// `GRID_TEXTURE_SIZE`-square RGBA8 sRGB texture of 8 × 8 cells framed by dark
 /// lines. Red grows with the cell's column and green with its row, and blue
 /// alternates as a checker, so every cell shows where it sits in UV space.
 fn grid_texture() -> Vec<u8> {
     const CELLS: u32 = 8;
-    const CELL_SIZE: u32 = TEXTURE_DIM / CELLS;
+    const CELL_SIZE: u32 = GRID_TEXTURE_SIZE / CELLS;
     const LINE_WIDTH: u32 = 8;
 
     let ramp = |cell: u32| (cell * 255 / (CELLS - 1)) as u8;
-    let mut pixels = Vec::with_capacity((TEXTURE_DIM * TEXTURE_DIM * 4) as usize);
-    for y in 0..TEXTURE_DIM {
-        for x in 0..TEXTURE_DIM {
+    let mut pixels = Vec::with_capacity((GRID_TEXTURE_SIZE * GRID_TEXTURE_SIZE * 4) as usize);
+    for y in 0..GRID_TEXTURE_SIZE {
+        for x in 0..GRID_TEXTURE_SIZE {
             let (column, row) = (x / CELL_SIZE, y / CELL_SIZE);
             let texel = if x % CELL_SIZE < LINE_WIDTH || y % CELL_SIZE < LINE_WIDTH {
                 [16, 16, 16, 255]

@@ -1,3 +1,6 @@
+// Each Channel is a binding array indexed by Layer (ADR 0017).
+enable wgpu_binding_array;
+
 @group(0) @binding(0)
 var<uniform> camera: CameraUniform;
 // Positions reach the shaders relative to the camera (ADR 0014), so the
@@ -36,11 +39,11 @@ struct MaterialData {
 };
 
 @group(1) @binding(0) var<storage, read> materials: array<MaterialData>;
-@group(1) @binding(1) var albedo_array: texture_2d_array<f32>;
-@group(1) @binding(2) var normal_array: texture_2d_array<f32>;
-@group(1) @binding(3) var metallic_roughness_array: texture_2d_array<f32>;
-@group(1) @binding(4) var occlusion_array: texture_2d_array<f32>;
-@group(1) @binding(5) var emissive_array: texture_2d_array<f32>;
+@group(1) @binding(1) var albedo_textures: binding_array<texture_2d<f32>>;
+@group(1) @binding(2) var normal_textures: binding_array<texture_2d<f32>>;
+@group(1) @binding(3) var metallic_roughness_textures: binding_array<texture_2d<f32>>;
+@group(1) @binding(4) var occlusion_textures: binding_array<texture_2d<f32>>;
+@group(1) @binding(5) var emissive_textures: binding_array<texture_2d<f32>>;
 @group(1) @binding(6) var pbr_sampler: sampler;
 
 @group(2) @binding(0)
@@ -168,17 +171,17 @@ fn cook_torrance(
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let material = materials[in.material_id];
-    let albedo_sample = textureSample(albedo_array, pbr_sampler, in.uv, i32(material.texture_indices.x));
+    let albedo_sample = textureSample(albedo_textures[material.texture_indices.x], pbr_sampler, in.uv);
     let base_color = albedo_sample.rgb * material.base_color.rgb;
 
     // glTF packs roughness in green and metallic in blue; factors multiply.
-    let metallic_roughness_sample = textureSample(metallic_roughness_array, pbr_sampler, in.uv, i32(material.texture_indices.z)).rgb;
+    let metallic_roughness_sample = textureSample(metallic_roughness_textures[material.texture_indices.z], pbr_sampler, in.uv).rgb;
     let metallic = metallic_roughness_sample.b * material.metallic_roughness.x;
     // GGX collapses to 0/0 at roughness 0; clamp keeps the highlight finite.
     let roughness = max(metallic_roughness_sample.g * material.metallic_roughness.y, 0.04);
 
-    let ambient_occlusion = textureSample(occlusion_array, pbr_sampler, in.uv, i32(material.texture_indices.w)).r;
-    let emissive = textureSample(emissive_array, pbr_sampler, in.uv, i32(material.extra.x)).rgb
+    let ambient_occlusion = textureSample(occlusion_textures[material.texture_indices.w], pbr_sampler, in.uv).r;
+    let emissive = textureSample(emissive_textures[material.extra.x], pbr_sampler, in.uv).rgb
         * material.emissive.rgb;
 
     // Tangent frame. Interpolation bends the tangent off the normal, so
@@ -193,7 +196,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let tangent_to_world = mat3x3<f32>(tangent, bitangent, geometric_normal);
 
     // Normal map stores a tangent-space direction in [0, 1]; expand to [-1, 1].
-    let normal_sample = textureSample(normal_array, pbr_sampler, in.uv, i32(material.texture_indices.y)).rgb;
+    let normal_sample = textureSample(normal_textures[material.texture_indices.y], pbr_sampler, in.uv).rgb;
     let tangent_space_normal = normal_sample * 2.0 - vec3<f32>(1.0);
     let normal = normalize(tangent_to_world * tangent_space_normal);
 
