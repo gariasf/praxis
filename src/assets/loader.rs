@@ -184,9 +184,7 @@ fn decode_rgba(
 }
 
 /// Indexed triangle mesh viewed through the MikkTSpace `Geometry` interface.
-/// MikkTSpace works per face-vertex; results land on the shared vertex through
-/// the index buffer, so for a vertex shared by several faces the last face
-/// written wins. Fine for well-formed meshes; a UV seam already splits vertices.
+/// MikkTSpace works per face-vertex, so the tangents land per corner.
 struct TangentGeometry<'a> {
     positions: &'a [[f32; 3]],
     normals: &'a [[f32; 3]],
@@ -232,14 +230,32 @@ impl bevy_mikktspace::Geometry for TangentGeometry<'_> {
         vert: usize,
     ) {
         // `None` means a degenerate face with no neighbour to borrow from.
-        let vertex_index = self.vertex_index(face, vert);
-        self.tangents[vertex_index] = tangent_space.unwrap_or_default().tangent_encoded();
+        self.tangents[face * 3 + vert] = tangent_space.unwrap_or_default().tangent_encoded();
     }
 }
 
 /// Generates glTF-convention tangents (`xyz` tangent, `w` bitangent sign) with
 /// MikkTSpace, the algorithm the glTF spec prescribes when `TANGENT` is absent.
+/// For a vertex shared by several faces the last face written wins. Fine for
+/// well-formed meshes; a UV seam already splits vertices.
 pub(crate) fn generate_tangents(
+    positions: &[[f32; 3]],
+    normals: &[[f32; 3]],
+    uvs: &[[f32; 2]],
+    indices: &[u32],
+) -> Vec<[f32; 4]> {
+    let mut tangents = vec![[1.0, 0.0, 0.0, 1.0]; positions.len()];
+    for (index, tangent) in indices
+        .iter()
+        .zip(corner_tangents(positions, normals, uvs, indices))
+    {
+        tangents[*index as usize] = tangent;
+    }
+    tangents
+}
+
+/// MikkTSpace tangents in glTF's convention, one per index: each corner's own.
+pub(crate) fn corner_tangents(
     positions: &[[f32; 3]],
     normals: &[[f32; 3]],
     uvs: &[[f32; 2]],
@@ -250,7 +266,7 @@ pub(crate) fn generate_tangents(
         normals,
         uvs,
         indices,
-        tangents: vec![[1.0, 0.0, 0.0, 1.0]; positions.len()],
+        tangents: vec![[1.0, 0.0, 0.0, 1.0]; indices.len()],
     };
     if bevy_mikktspace::generate_tangents(&mut geometry).is_err() {
         tracing::error!("MikkTSpace tangent generation failed; falling back to +X tangents");
