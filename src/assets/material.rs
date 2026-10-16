@@ -1,3 +1,4 @@
+use crate::render::LoadStaging;
 use crate::stats::texture_bytes;
 
 /// Textures each Channel's binding array can hold. Five Channels of 8192 stay
@@ -77,12 +78,13 @@ impl ChannelTextures {
         }
     }
 
-    /// Creates a `width` × `height` RGBA8 Texture from `pixels` and returns
-    /// its Layer, or `None` when the Channel is full.
+    /// Creates a `width` × `height` RGBA8 Texture from `pixels`, written
+    /// through `staging`, and returns its Layer, or `None` when the Channel is
+    /// full.
     fn push(
         &mut self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        staging: &mut LoadStaging,
         pixels: &[u8],
         width: u32,
         height: u32,
@@ -111,16 +113,7 @@ impl ChannelTextures {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        queue.write_texture(
-            texture.as_image_copy(),
-            pixels,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(BYTES_PER_PIXEL * width),
-                rows_per_image: Some(height),
-            },
-            size,
-        );
+        staging.write_texture(&texture, 0, pixels);
         self.views.push(texture.create_view(&Default::default()));
         self.textures.push(texture);
         Some(layer)
@@ -147,7 +140,7 @@ impl MaterialPool {
     /// samples a no-op, and its factors pass through unchanged.
     pub const DEFAULT_LAYER: u32 = 0;
 
-    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
+    pub fn new(device: &wgpu::Device, staging: &mut LoadStaging) -> Self {
         let materials_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("materials_buffer"),
             size: MATERIAL_CAPACITY * std::mem::size_of::<MaterialData>() as u64,
@@ -174,7 +167,7 @@ impl MaterialPool {
             } else {
                 &white
             };
-            channels[channel as usize].push(device, queue, pixel, 1, 1);
+            channels[channel as usize].push(device, staging, pixel, 1, 1);
         }
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -269,14 +262,14 @@ impl MaterialPool {
         handle
     }
 
-    /// Uploads a `width` × `height` RGBA8 image as a new Texture of `channel`
-    /// and rebuilds the bind group, returning the Layer to store in
-    /// `MaterialData`. Any rejected upload falls back to `DEFAULT_LAYER` so the
-    /// material still renders.
+    /// Uploads a `width` × `height` RGBA8 image through `staging` as a new
+    /// Texture of `channel` and rebuilds the bind group, returning the Layer
+    /// to store in `MaterialData`. Any rejected upload falls back to
+    /// `DEFAULT_LAYER` so the material still renders.
     pub fn upload(
         &mut self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        staging: &mut LoadStaging,
         channel: MaterialChannel,
         pixels: &[u8],
         width: u32,
@@ -304,7 +297,7 @@ impl MaterialPool {
             return Self::DEFAULT_LAYER;
         }
         let Some(layer) =
-            self.channels[channel as usize].push(device, queue, pixels, width, height)
+            self.channels[channel as usize].push(device, staging, pixels, width, height)
         else {
             return Self::DEFAULT_LAYER;
         };

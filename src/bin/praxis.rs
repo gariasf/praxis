@@ -67,8 +67,8 @@ fn print_capabilities() -> anyhow::Result<()> {
 #[cfg(feature = "cook")]
 fn cook() -> anyhow::Result<()> {
     let report = praxis::cook::cook(
-        Path::new("assets"),
-        &praxis::cooked::CookedCache::new("cooked"),
+        Path::new(praxis::cook::ASSETS_DIRECTORY),
+        &praxis::cooked::CookedCache::new(praxis::cooked::COOKED_CACHE_DIRECTORY),
         &praxis::cook::CookSettings::default(),
     )?;
     writeln!(

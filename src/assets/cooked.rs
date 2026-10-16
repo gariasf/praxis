@@ -495,6 +495,9 @@ fn payload(blob: &[u8], magic: [u8; 4], version: u32) -> anyhow::Result<&[u8]> {
     Ok(&blob[8..])
 }
 
+/// The Cooked cache a launch loads from, relative to the working directory.
+pub const COOKED_CACHE_DIRECTORY: &str = "cooked";
+
 /// The Cooked cache in a directory: `blobs/<SHA-256 of the Blob>` and
 /// `index/<Asset ID>`, which holds the Blob's hash and the Cook key.
 pub struct CookedCache {

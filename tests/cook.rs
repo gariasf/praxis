@@ -7,6 +7,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+use praxis::ReferenceScene;
 use praxis::cook::{CookSettings, texture_sources};
 use praxis::cooked::{
     AssetId, AssetKind, AssetName, AssetSource, CookedCache, CookedMaterial, CookedTexture,
@@ -567,8 +568,12 @@ fn touch_embedded_normal_map(path: &Path) {
     fs::write(path, glb.to_vec().unwrap()).unwrap();
 }
 
+/// A dev launch of the normal-tangent scene cooks its source and nothing
+/// else, cooks nothing when nothing changed, and after a touch of its
+/// normal map re-cooks exactly that and the metallic-roughness Texture
+/// widened by it.
 #[test]
-fn touching_a_normal_map_re_cooks_exactly_it_and_its_metallic_roughness() {
+fn a_dev_launch_re_cooks_exactly_a_touched_normal_map_and_its_metallic_roughness() {
     let directory = scratch("touch-embedded-image");
     let (assets, cache) = (directory.join("assets"), directory.join("cooked"));
     let cache = CookedCache::new(&cache);
@@ -585,10 +590,24 @@ fn touching_a_normal_map_re_cooks_exactly_it_and_its_metallic_roughness() {
         "guid": format!("{NORMAL_TANGENT_TEST_GUID:032x}"),
     }]);
     fs::write(assets.join("manifest.json"), manifest.to_string()).unwrap();
-    cook(&assets, &cache).unwrap();
+    let launch = || {
+        let settings = CookSettings::default();
+        praxis::cook::cook_scene(ReferenceScene::NormalTangent, &assets, &cache, &settings).unwrap()
+    };
+    let first = launch();
+    // The scratch cache holds every procedural scene: a full cook would
+    // find this one unchanged.
+    let other_scene = AssetId::new(
+        AssetSource::Scene("pbr-sweep"),
+        AssetKind::Mesh,
+        AssetName::Name("sphere"),
+    );
+    assert!(!first.cooked.is_empty());
+    assert!(!first.cooked.contains(&other_scene) && !first.unchanged.contains(&other_scene));
+    assert_eq!(launch().cooked, [], "nothing changed, yet a launch cooked");
 
     touch_embedded_normal_map(&glb);
-    let mut cooked = cook(&assets, &cache).unwrap().cooked;
+    let mut cooked = launch().cooked;
     cooked.sort();
     // Unnamed, NormalTangentTest's images are named by their index; image 1
     // is its metallic-roughness and its occlusion.

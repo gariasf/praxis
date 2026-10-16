@@ -39,7 +39,12 @@ impl GpuContext {
             .chain(surface_format)
             .map(|format| (format, adapter.get_texture_format_features(format).flags))
             .collect();
-        check_floor(adapter.features(), &adapter.limits(), &attachment_formats)?;
+        check_floor(
+            adapter.features(),
+            adapter.get_downlevel_capabilities().flags,
+            &adapter.limits(),
+            &attachment_formats,
+        )?;
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
@@ -85,8 +90,8 @@ pub async fn capability_report() -> anyhow::Result<String> {
 
 /// The adapter, its backend, and whether the adapter supports each
 /// feature the roadmap plans on, with the related features and limits.
-/// One line per entry, followed by the Capability floor's limits and 4x
-/// MSAA on the main pass's attachment formats.
+/// One line per entry, followed by the Capability floor's limits, 4x MSAA on
+/// the main pass's attachment formats, and anisotropic filtering.
 fn adapter_report(adapter: &wgpu::Adapter) -> String {
     let info = adapter.get_info();
     let features = adapter.features();
@@ -181,13 +186,23 @@ fn adapter_report(adapter: &wgpu::Adapter) -> String {
         })
         .collect();
     report.push_str(&format!(
-        "{:<24} {} bytes\n{:<24} max {} per stage\n{:<24} {}\n",
+        "{:<24} {} bytes\n{:<24} max {} per stage\n{:<24} {}\n{:<24} {}\n",
         "max buffer size",
         limits.max_buffer_size,
         "acceleration structures",
         limits.max_acceleration_structures_per_shader_stage,
         "4x MSAA",
         msaa_x4.join(", "),
+        "anisotropic filtering",
+        if adapter
+            .get_downlevel_capabilities()
+            .flags
+            .contains(wgpu::DownlevelFlags::ANISOTROPIC_FILTERING)
+        {
+            "yes"
+        } else {
+            "no"
+        },
     ));
     report
 }
@@ -214,6 +229,14 @@ fn floor_features() -> wgpu::Features {
         | wgpu::Features::TIMESTAMP_QUERY
 }
 
+/// The Capability floor's downlevel flags (ADR 0021), which an adapter has
+/// or lacks with no request.
+fn floor_downlevel_flags() -> wgpu::DownlevelFlags {
+    // Material Channels sample at 16x (ADR 0018); without the flag, wgpu
+    // silently clamps every sampler's anisotropy to 1.
+    wgpu::DownlevelFlags::ANISOTROPIC_FILTERING
+}
+
 /// The Capability floor's limits (ADR 0021): the defaults, raised only where
 /// an ADR needs it.
 fn floor_limits() -> wgpu::Limits {
@@ -227,10 +250,12 @@ fn floor_limits() -> wgpu::Limits {
     }
 }
 
-/// Checks an adapter's `features`, `limits`, and the flags of each main-pass
-/// attachment format against the Capability floor, and names every gap.
+/// Checks an adapter's `features`, `downlevel_flags`, `limits`, and the flags
+/// of each main-pass attachment format against the Capability floor, and
+/// names every gap.
 fn check_floor(
     features: wgpu::Features,
+    downlevel_flags: wgpu::DownlevelFlags,
     limits: &wgpu::Limits,
     attachment_formats: &[(wgpu::TextureFormat, wgpu::TextureFormatFeatureFlags)],
 ) -> Result<(), BelowCapabilityFloor> {
@@ -244,6 +269,7 @@ fn check_floor(
     });
     let gaps = BelowCapabilityFloor {
         missing_features: floor_features() - features,
+        missing_downlevel_flags: floor_downlevel_flags() - downlevel_flags,
         formats_without_msaa_x4: attachment_formats
             .iter()
             .filter(|&&(_, flags)| !has_msaa_x4(flags))
@@ -252,6 +278,7 @@ fn check_floor(
         limits: limit_gaps,
     };
     if gaps.missing_features.is_empty()
+        && gaps.missing_downlevel_flags.is_empty()
         && gaps.formats_without_msaa_x4.is_empty()
         && gaps.limits.is_empty()
     {
@@ -272,6 +299,7 @@ fn has_msaa_x4(flags: wgpu::TextureFormatFeatureFlags) -> bool {
 #[derive(Debug, PartialEq)]
 pub struct BelowCapabilityFloor {
     pub missing_features: wgpu::Features,
+    pub missing_downlevel_flags: wgpu::DownlevelFlags,
     pub formats_without_msaa_x4: Vec<wgpu::TextureFormat>,
     pub limits: Vec<LimitGap>,
 }
@@ -291,6 +319,11 @@ impl fmt::Display for BelowCapabilityFloor {
             .iter_names()
             .map(|(name, _)| format!("missing feature {name}"))
             .collect();
+        gaps.extend(
+            self.missing_downlevel_flags
+                .iter_names()
+                .map(|(name, _)| format!("missing downlevel flag {name}")),
+        );
         gaps.extend(
             self.formats_without_msaa_x4
                 .iter()
@@ -385,6 +418,10 @@ mod tests {
             | wgpu::Features::IMMEDIATES
     }
 
+    /// Metal reports anisotropic filtering on every adapter (wgpu-hal 30.0.1).
+    const M4_PRO_DOWNLEVEL_FLAGS: wgpu::DownlevelFlags =
+        wgpu::DownlevelFlags::ANISOTROPIC_FILTERING;
+
     /// The Apple M4 Pro's limits on wgpu 30.0.1.
     fn m4_pro_limits() -> wgpu::Limits {
         wgpu::Limits {
@@ -462,6 +499,7 @@ mod tests {
         assert_eq!(
             check_floor(
                 m4_pro_features(),
+                M4_PRO_DOWNLEVEL_FLAGS,
                 &m4_pro_limits(),
                 &m4_pro_attachment_formats()
             ),
@@ -480,6 +518,7 @@ mod tests {
 
         let error = check_floor(
             m4_pro_features() - wgpu::Features::INDIRECT_FIRST_INSTANCE,
+            M4_PRO_DOWNLEVEL_FLAGS - wgpu::DownlevelFlags::ANISOTROPIC_FILTERING,
             &limits,
             &formats,
         )
@@ -489,6 +528,7 @@ mod tests {
             error,
             BelowCapabilityFloor {
                 missing_features: wgpu::Features::INDIRECT_FIRST_INSTANCE,
+                missing_downlevel_flags: wgpu::DownlevelFlags::ANISOTROPIC_FILTERING,
                 formats_without_msaa_x4: vec![wgpu::TextureFormat::Depth32Float],
                 limits: vec![LimitGap {
                     name: "max_buffer_size",
@@ -500,7 +540,8 @@ mod tests {
         assert_eq!(
             error.to_string(),
             "adapter below the Capability floor (ADR 0021): \
-             missing feature INDIRECT_FIRST_INSTANCE; no 4x MSAA on Depth32Float; \
+             missing feature INDIRECT_FIRST_INSTANCE; missing downlevel flag ANISOTROPIC_FILTERING; \
+             no 4x MSAA on Depth32Float; \
              max_buffer_size 2147483647 required, adapter has 268435456"
         );
     }
@@ -514,7 +555,12 @@ mod tests {
             ..wgpu::Limits::default().using_minimum_supported_acceleration_structure_values()
         };
         assert_eq!(
-            check_floor(floor_features(), &limits, &m4_pro_attachment_formats()),
+            check_floor(
+                floor_features(),
+                floor_downlevel_flags(),
+                &limits,
+                &m4_pro_attachment_formats()
+            ),
             Ok(())
         );
     }

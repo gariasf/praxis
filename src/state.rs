@@ -74,6 +74,16 @@ impl State {
         let recorder = FrameRecorder::new();
         let (schedule, mut fixed_schedule) = simulation_schedules(&recorder);
 
+        // A dev launch cooks what the scene loads and has changed (ADR 0018).
+        #[cfg(feature = "cook")]
+        crate::cook::cook_scene(
+            scene,
+            std::path::Path::new(crate::cook::ASSETS_DIRECTORY),
+            &crate::cooked::CookedCache::new(crate::cooked::COOKED_CACHE_DIRECTORY),
+            &crate::cook::CookSettings::default(),
+        )
+        .with_context(|| format!("cooking {}", scene.name()))?;
+
         match scene {
             ReferenceScene::Helmet => Self::spawn_helmet_scene(
                 &mut world,

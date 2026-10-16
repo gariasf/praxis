@@ -63,6 +63,10 @@ struct Sources {
     meshes: Vec<(AssetId, String, Vec<mesh::SourcePrimitive>)>,
 }
 
+/// The source directory a launch cooks from, relative to the working
+/// directory.
+pub const ASSETS_DIRECTORY: &str = "assets";
+
 /// Cooks the sources `assets/manifest.json` lists that are present, and
 /// every procedural Reference scene, into `cache`.
 pub fn cook(
@@ -70,7 +74,31 @@ pub fn cook(
     cache: &CookedCache,
     settings: &CookSettings,
 ) -> anyhow::Result<CookReport> {
-    let sources = read_sources(assets)?;
+    cook_sources(
+        &read_sources(assets, &ReferenceScene::ALL, None)?,
+        cache,
+        settings,
+    )
+}
+
+/// What a dev launch of `scene` cooks before it loads: the manifest
+/// sources the scene references, those present, and its procedural Assets.
+/// Without a manifest, every cached Blob is used as it is.
+pub fn cook_scene(
+    scene: ReferenceScene,
+    assets: &Path,
+    cache: &CookedCache,
+    settings: &CookSettings,
+) -> anyhow::Result<CookReport> {
+    let sources = read_sources(assets, &[scene], Some(scene.source_files()))?;
+    cook_sources(&sources, cache, settings)
+}
+
+fn cook_sources(
+    sources: &Sources,
+    cache: &CookedCache,
+    settings: &CookSettings,
+) -> anyhow::Result<CookReport> {
     let mut report = CookReport::default();
     for (id, cook_key, material) in &sources.materials {
         if is_fresh(cache, *id, cook_key) {
@@ -150,20 +178,38 @@ pub fn cook(
 /// Every Texture the cook reads: each image a glTF Material samples, per
 /// Channel, and each procedural Reference scene's generated image.
 pub fn texture_sources(assets: &Path) -> anyhow::Result<Vec<TextureSource>> {
-    Ok(read_sources(assets)?.textures)
+    Ok(read_sources(assets, &ReferenceScene::ALL, None)?.textures)
 }
 
-fn read_sources(assets: &Path) -> anyhow::Result<Sources> {
+/// The sources of `scenes` and of the manifest files whose GUID is in
+/// `files`, or of every manifest file when `files` is None.
+fn read_sources(
+    assets: &Path,
+    scenes: &[ReferenceScene],
+    files: Option<&[u128]>,
+) -> anyhow::Result<Sources> {
     let manifest_path = assets.join("manifest.json");
-    let manifest: Vec<ManifestEntry> = serde_json::from_slice(
-        &std::fs::read(&manifest_path)
-            .with_context(|| format!("reading {}", manifest_path.display()))?,
-    )
-    .with_context(|| format!("parsing {}", manifest_path.display()))?;
+    let manifest: Vec<ManifestEntry> = match std::fs::read(&manifest_path) {
+        Ok(manifest) => serde_json::from_slice(&manifest)
+            .with_context(|| format!("parsing {}", manifest_path.display()))?,
+        // A dev launch without sources loads its cached Blobs as they are.
+        Err(error) if files.is_some() && error.kind() == std::io::ErrorKind::NotFound => {
+            tracing::warn!(path = %manifest_path.display(), "manifest absent; cooked Blobs stay as they are");
+            Vec::new()
+        }
+        Err(error) => {
+            return Err(error).with_context(|| format!("reading {}", manifest_path.display()));
+        }
+    };
 
     let mut sources = Sources::default();
     for entry in &manifest {
         if !(entry.path.ends_with(".gltf") || entry.path.ends_with(".glb")) {
+            continue;
+        }
+        let guid = u128::from_str_radix(&entry.guid, 16)
+            .with_context(|| format!("{}: guid {:?} is not hex", entry.path, entry.guid))?;
+        if files.is_some_and(|files| !files.contains(&guid)) {
             continue;
         }
         let path = assets.join(&entry.path);
@@ -171,12 +217,10 @@ fn read_sources(assets: &Path) -> anyhow::Result<Sources> {
             tracing::warn!(path = %path.display(), "source absent; its cooked Blobs stay as they are");
             continue;
         };
-        let guid = u128::from_str_radix(&entry.guid, 16)
-            .with_context(|| format!("{}: guid {:?} is not hex", entry.path, entry.guid))?;
         read_gltf(guid, &path, &source, &mut sources)
             .with_context(|| format!("reading {}", path.display()))?;
     }
-    for scene in ReferenceScene::ALL {
+    for &scene in scenes {
         let source = AssetSource::Scene(scene.name());
         for (name, material) in scene.materials() {
             let id = AssetId::new(source, AssetKind::Material, AssetName::Name(&name));

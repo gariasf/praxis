@@ -150,17 +150,75 @@ impl LoadStaging {
         let Some(size) = wgpu::BufferSize::new(bytes.len() as u64) else {
             return;
         };
+        let (belt, encoder) = self.pending();
+        belt.write_buffer(encoder, target, offset, size)
+            .copy_from_slice(bytes);
+    }
+
+    /// Records a copy of `bytes`, mip `level` of `texture` as rows of blocks
+    /// without padding, re-pitching each row to
+    /// `wgpu::COPY_BYTES_PER_ROW_ALIGNMENT` as it is written into the belt.
+    pub fn write_texture(&mut self, texture: &wgpu::Texture, level: u32, bytes: &[u8]) {
+        let format = texture.format();
+        let (block_width, block_height) = format.block_dimensions();
+        let block_bytes = format.block_copy_size(None).expect("a colour format");
+        // A mip smaller than a block still copies a whole one.
+        let size = texture
+            .size()
+            .mip_level_size(level, texture.dimension())
+            .physical_size(format);
+        let row_bytes = (size.width / block_width * block_bytes) as usize;
+        let rows = size.height / block_height;
+        let pitch = row_bytes.next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize);
+        debug_assert_eq!(bytes.len(), row_bytes * rows as usize);
+        let Some(staged_bytes) = wgpu::BufferSize::new((pitch * rows as usize) as u64) else {
+            return;
+        };
+        let (belt, encoder) = self.pending();
+        // A copy's offset is a multiple of the block size, which divides 256.
+        let alignment = wgpu::BufferSize::new(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT.into())
+            .expect("256 is not zero");
+        let staged = belt.allocate(staged_bytes, alignment);
+        {
+            // The belt maps every chunk before handing out a slice of it.
+            let mut view = staged
+                .get_mapped_range_mut()
+                .expect("a StagingBelt slice is mapped");
+            for (index, row) in bytes.chunks(row_bytes).enumerate() {
+                view.slice(index * pitch..index * pitch + row_bytes)
+                    .copy_from_slice(row);
+            }
+        }
+        encoder.copy_buffer_to_texture(
+            wgpu::TexelCopyBufferInfo {
+                buffer: staged.buffer(),
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: staged.offset(),
+                    bytes_per_row: Some(pitch as u32),
+                    rows_per_image: Some(rows),
+                },
+            },
+            wgpu::TexelCopyTextureInfo {
+                texture,
+                mip_level: level,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            size,
+        );
+    }
+
+    /// The belt and encoder of the copies not yet submitted.
+    fn pending(&mut self) -> &mut (wgpu::util::StagingBelt, wgpu::CommandEncoder) {
         let device = &self.device;
-        let (belt, encoder) = self.pending.get_or_insert_with(|| {
+        self.pending.get_or_insert_with(|| {
             (
                 wgpu::util::StagingBelt::new(device.clone(), LOAD_CHUNK_BYTES),
                 device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("Load Encoder"),
                 }),
             )
-        });
-        belt.write_buffer(encoder, target, offset, size)
-            .copy_from_slice(bytes);
+        })
     }
 
     /// Submits the copies recorded since the last call, if any.
@@ -182,6 +240,103 @@ fn mark_mapped(
     move |result| {
         if result.is_ok() {
             is_mapped.store(true, Ordering::Release);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+
+    use super::*;
+    use crate::capture::submit_and_map;
+    use crate::gpu::GpuContext;
+
+    /// Every mip of an 8 × 8 BC4 Texture written through the belt reads back
+    /// as written: mip 0's two block rows of 16 bytes each sit 256 bytes
+    /// apart in the belt, and mips smaller than a block copy one whole block.
+    #[test]
+    fn every_mip_reads_back_as_written() {
+        let context = match pollster::block_on(GpuContext::headless()) {
+            Ok(context) => context,
+            Err(error) if error.is::<wgpu::RequestAdapterError>() => {
+                // Not `eprintln!`, which libtest captures from passing tests.
+                writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+                return;
+            }
+            Err(error) => panic!("headless GPU context failed: {error:#}"),
+        };
+        let texture = context.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Staging Test Texture"),
+            size: wgpu::Extent3d {
+                width: 8,
+                height: 8,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 4,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Bc4RUnorm,
+            usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        // Blocks across and down per mip, of 8 bytes each, every byte distinct.
+        let blocks: [(u32, u32); 4] = [(2, 2), (1, 1), (1, 1), (1, 1)];
+        let levels: Vec<Vec<u8>> = blocks
+            .iter()
+            .enumerate()
+            .map(|(level, (across, down))| {
+                (0..across * down * 8)
+                    .map(|byte| (level as u32 * 64 + byte) as u8)
+                    .collect()
+            })
+            .collect();
+        let mut staging = LoadStaging::new(context.device.clone());
+        for (level, bytes) in levels.iter().enumerate() {
+            staging.write_texture(&texture, level as u32, bytes);
+        }
+        staging.submit(&context.queue);
+
+        for (level, (bytes, (across, down))) in levels.iter().zip(blocks).enumerate() {
+            let pitch = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+            let read_back = context.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Staging Test Read-back"),
+                size: u64::from(pitch * down),
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            });
+            let mut encoder = context
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            encoder.copy_texture_to_buffer(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &texture,
+                    mip_level: level as u32,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::TexelCopyBufferInfo {
+                    buffer: &read_back,
+                    layout: wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(pitch),
+                        rows_per_image: None,
+                    },
+                },
+                wgpu::Extent3d {
+                    width: 4 * across,
+                    height: 4 * down,
+                    depth_or_array_layers: 1,
+                },
+            );
+            submit_and_map(&context, encoder, &read_back).expect("read-back mapped");
+            let mapped = read_back.get_mapped_range(..).expect("read-back range");
+            let rows: Vec<u8> = mapped
+                .chunks(pitch as usize)
+                .flat_map(|row| &row[..across as usize * 8])
+                .copied()
+                .collect();
+            assert_eq!(rows, *bytes, "mip {level}");
         }
     }
 }

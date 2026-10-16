@@ -103,7 +103,8 @@ impl Renderer {
         // Material-as-ID: one bind group (SSBO + per-channel texture arrays +
         // sampler) serves every material. Created before the pipeline layout
         // because the layout references its bind group layout.
-        let material_pool = MaterialPool::new(&device, &queue);
+        let mut load_staging = LoadStaging::new(device.clone());
+        let material_pool = MaterialPool::new(&device, &mut load_staging);
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -212,7 +213,7 @@ impl Renderer {
         Self {
             mesh_pool: MeshPool::new(&device, ARENA_CAPACITY_BYTES),
             material_pool,
-            load_staging: LoadStaging::new(device.clone()),
+            load_staging,
             device,
             queue,
             aspect_ratio: width as f32 / height as f32,

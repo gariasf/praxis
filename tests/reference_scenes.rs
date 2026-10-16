@@ -44,5 +44,5 @@ fn procedural_scenes_render_identically_without_asset_files() {
             scene.name()
         );
     }
-    std::fs::remove_dir(&empty_directory).ok();
+    std::fs::remove_dir_all(&empty_directory).ok();
 }
