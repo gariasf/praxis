@@ -197,43 +197,43 @@ fn read_sources(assets: &Path) -> anyhow::Result<Sources> {
             let material = material.map(|material| {
                 AssetId::new(source, AssetKind::Material, AssetName::Name(material))
             });
-            let material_bytes = material.map_or(0, |material| material.0).to_be_bytes();
-            let cook_key = mesh_cook_key(&[
-                bytemuck::cast_slice(&geometry.positions),
-                bytemuck::cast_slice(&geometry.normals),
-                bytemuck::cast_slice(&geometry.uvs),
-                bytemuck::cast_slice(&geometry.indices),
-                &material_bytes,
-            ]);
+            let primitives = vec![(geometry, material)];
             sources
                 .meshes
-                .push((id, cook_key, vec![(geometry, material)]));
+                .push((id, mesh_cook_key(&primitives), primitives));
         }
     }
     Ok(sources)
 }
 
 /// A Material has no cook settings and no encoder, so its Cook key covers
-/// its source bytes and its format.
-fn material_cook_key(source: &[u8]) -> String {
+/// its Blob, which is all it cooks from, and its format.
+fn material_cook_key(blob: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(MATERIAL_MAGIC);
     hasher.update(MATERIAL_FORMAT_VERSION.to_le_bytes());
-    hasher.update(source);
+    hasher.update(blob);
     hex(&hasher.finalize())
 }
 
 /// A Mesh's Cook key: SHA-256 over its format, its encoders' versions and
-/// settings, and its source parts, each length-prefixed so no two sources
-/// share an encoding.
-fn mesh_cook_key(source: &[&[u8]]) -> String {
+/// settings, and each Primitive's geometry and Material, which are all it
+/// cooks from, each part length-prefixed so no two Meshes share an encoding.
+fn mesh_cook_key(primitives: &[mesh::SourcePrimitive]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(MESH_MAGIC);
     hasher.update(MESH_FORMAT_VERSION.to_le_bytes());
-    let settings = mesh::encoder_settings();
-    for part in std::iter::once(settings.as_bytes()).chain(source.iter().copied()) {
+    let mut hash_part = |part: &[u8]| {
         hasher.update((part.len() as u64).to_le_bytes());
         hasher.update(part);
+    };
+    hash_part(mesh::encoder_settings().as_bytes());
+    for (geometry, material) in primitives {
+        hash_part(bytemuck::cast_slice(&geometry.positions));
+        hash_part(bytemuck::cast_slice(&geometry.normals));
+        hash_part(bytemuck::cast_slice(&geometry.uvs));
+        hash_part(bytemuck::cast_slice(&geometry.indices));
+        hash_part(&material.map_or(0, |material| material.0).to_be_bytes());
     }
     hex(&hasher.finalize())
 }
@@ -279,8 +279,9 @@ fn material_textures<'a>(material: &gltf::Material<'a>) -> [Option<gltf::Texture
 /// Every Material and Mesh of the glTF file `source` at `path`, and every
 /// image its Materials sample, once per Channel. A Texture's Asset ID is the
 /// glTF file's GUID, the image's name (or index) and the Channel, whether the
-/// image is embedded or a file of its own. The Meshes' Cook key covers the
-/// file and every buffer it loads.
+/// image is embedded or a file of its own. Each Material and Mesh is keyed
+/// by what it cooks from, so that a change elsewhere in the file, to an
+/// embedded image say, re-cooks neither.
 fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> anyhow::Result<()> {
     let gltf::Gltf { document, blob } = gltf::Gltf::from_slice(source)?;
     let buffers =
@@ -291,7 +292,6 @@ fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> a
         let name = image_names[texture.source().index()];
         AssetId::new(asset_source, AssetKind::Texture(channel), name)
     };
-    let cook_key = material_cook_key(source);
     let material_names = asset_names(document.materials().map(|material| material.name()));
     let mut cooked_images = HashSet::new();
     for (material, name) in document.materials().zip(material_names) {
@@ -340,13 +340,13 @@ fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> a
             emissive: material.emissive_factor(),
             textures: texture_ids,
         };
-        sources.materials.push((id, cook_key.clone(), material));
+        let cook_key = material_cook_key(&material.to_blob());
+        sources.materials.push((id, cook_key, material));
     }
-    let mut mesh_source = vec![source];
-    mesh_source.extend(buffers.iter().map(|buffer| &buffer[..]));
-    let mesh_key = mesh_cook_key(&mesh_source);
     for (id, primitives) in mesh::gltf_meshes(guid, &document, &buffers)? {
-        sources.meshes.push((id, mesh_key.clone(), primitives));
+        sources
+            .meshes
+            .push((id, mesh_cook_key(&primitives), primitives));
     }
     Ok(())
 }

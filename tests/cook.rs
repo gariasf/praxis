@@ -202,7 +202,7 @@ fn moving_and_renaming_a_source_keeps_its_asset_ids() {
 }
 
 #[test]
-fn a_changed_source_re_cooks_exactly_its_assets() {
+fn a_changed_source_re_cooks_exactly_the_assets_it_changes() {
     let directory = scratch("change");
     let (assets, cache) = (directory.join("assets"), directory.join("cooked"));
     let cache = CookedCache::new(&cache);
@@ -210,11 +210,10 @@ fn a_changed_source_re_cooks_exactly_its_assets() {
     cook(&assets, &cache).unwrap();
 
     write_sources(&assets, "box.gltf", &gltf(0.5));
-    let mut cooked = cook(&assets, &cache).unwrap().cooked;
-    cooked.sort();
-    let mut expected = vec![material_id(PAINTED), material_id(UNNAMED)];
-    expected.sort();
-    assert_eq!(cooked, expected);
+    assert_eq!(
+        cook(&assets, &cache).unwrap().cooked,
+        [material_id(PAINTED)]
+    );
     assert_eq!(cache.material(material_id(PAINTED)).unwrap().roughness, 0.5);
     fs::remove_dir_all(&directory).unwrap();
 }
@@ -386,6 +385,70 @@ fn a_changed_cook_setting_re_cooks_exactly_the_assets_it_covers() {
     assert!(textures.contains(&paint_id()));
     assert_eq!(cooked, textures, "every Texture and no Material");
     assert_eq!(cache.texture(paint_id()).unwrap().levels, levels);
+    fs::remove_dir_all(&directory).unwrap();
+}
+
+const NORMAL_TANGENT_TEST_GUID: u128 = 0xc750a32dc879478eaca4748dbc82645a;
+
+/// Changes one texel of the normal map embedded in NormalTangentTest's .glb
+/// at `path` (its image 2): the edited image is appended to the binary
+/// chunk, and the image's buffer view moves onto it.
+fn touch_embedded_normal_map(path: &Path) {
+    let glb = fs::read(path).unwrap();
+    let gltf::Glb { header, json, bin } = gltf::Glb::from_slice(&glb).unwrap();
+    let mut binary_chunk = bin.unwrap().into_owned();
+    let mut document: serde_json::Value = serde_json::from_slice(&json).unwrap();
+    let view = document["images"][2]["bufferView"].as_u64().unwrap() as usize;
+    let offset = document["bufferViews"][view]["byteOffset"]
+        .as_u64()
+        .unwrap_or(0) as usize;
+    let length = document["bufferViews"][view]["byteLength"]
+        .as_u64()
+        .unwrap() as usize;
+    let mut normal_map = image::load_from_memory(&binary_chunk[offset..][..length])
+        .unwrap()
+        .into_rgba8();
+    normal_map.get_pixel_mut(0, 0).0[0] ^= 0x10;
+    let mut png = std::io::Cursor::new(Vec::new());
+    normal_map
+        .write_to(&mut png, image::ImageFormat::Png)
+        .unwrap();
+    let offset = binary_chunk.len().next_multiple_of(4);
+    binary_chunk.resize(offset, 0);
+    binary_chunk.extend(png.get_ref());
+    document["bufferViews"][view] =
+        json!({"buffer": 0, "byteOffset": offset, "byteLength": png.get_ref().len()});
+    document["buffers"][0]["byteLength"] = json!(binary_chunk.len());
+    let glb = gltf::Glb {
+        header,
+        json: document.to_string().into_bytes().into(),
+        bin: Some(binary_chunk.into()),
+    };
+    fs::write(path, glb.to_vec().unwrap()).unwrap();
+}
+
+#[test]
+fn touching_an_embedded_image_re_cooks_exactly_its_texture() {
+    let directory = scratch("touch-embedded-image");
+    let (assets, cache) = (directory.join("assets"), directory.join("cooked"));
+    let cache = CookedCache::new(&cache);
+    let glb = assets.join("NormalTangentTest/NormalTangentTest.glb");
+    fs::create_dir_all(glb.parent().unwrap()).unwrap();
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets");
+    fs::copy(source.join("NormalTangentTest/NormalTangentTest.glb"), &glb).unwrap();
+    let manifest = json!([{
+        "path": "NormalTangentTest/NormalTangentTest.glb",
+        "guid": format!("{NORMAL_TANGENT_TEST_GUID:032x}"),
+    }]);
+    fs::write(assets.join("manifest.json"), manifest.to_string()).unwrap();
+    cook(&assets, &cache).unwrap();
+
+    touch_embedded_normal_map(&glb);
+    // Unnamed, NormalTangentTest's images are named by their index.
+    let source = AssetSource::File(NORMAL_TANGENT_TEST_GUID);
+    let kind = AssetKind::Texture(MaterialChannel::Normal);
+    let normal_map = AssetId::new(source, kind, AssetName::Index(2));
+    assert_eq!(cook(&assets, &cache).unwrap().cooked, [normal_map]);
     fs::remove_dir_all(&directory).unwrap();
 }
 
