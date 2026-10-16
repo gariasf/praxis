@@ -83,7 +83,8 @@ pub fn cook(
 
 /// What a dev launch of `scene` cooks before it loads: the manifest
 /// sources the scene references, those present, and its procedural Assets.
-/// Without a manifest, every cached Blob is used as it is.
+/// The Blobs of an absent source, or of every source when the manifest is
+/// absent, stay as they are.
 pub fn cook_scene(
     scene: ReferenceScene,
     assets: &Path,
@@ -181,20 +182,20 @@ pub fn texture_sources(assets: &Path) -> anyhow::Result<Vec<TextureSource>> {
     Ok(read_sources(assets, &ReferenceScene::ALL, None)?.textures)
 }
 
-/// The sources of `scenes` and of the manifest files whose GUID is in
-/// `files`, or of every manifest file when `files` is None.
+/// The sources of `scenes` and of every manifest file, or with
+/// `source_guids`, a dev launch's, only of the files with those GUIDs; a dev
+/// launch also runs without a manifest.
 fn read_sources(
     assets: &Path,
     scenes: &[ReferenceScene],
-    files: Option<&[u128]>,
+    source_guids: Option<&[u128]>,
 ) -> anyhow::Result<Sources> {
     let manifest_path = assets.join("manifest.json");
     let manifest: Vec<ManifestEntry> = match std::fs::read(&manifest_path) {
         Ok(manifest) => serde_json::from_slice(&manifest)
             .with_context(|| format!("parsing {}", manifest_path.display()))?,
-        // A dev launch without sources loads its cached Blobs as they are.
-        Err(error) if files.is_some() && error.kind() == std::io::ErrorKind::NotFound => {
-            tracing::warn!(path = %manifest_path.display(), "manifest absent; cooked Blobs stay as they are");
+        // A dev launch's GUIDs then all warn as unlisted, below.
+        Err(error) if source_guids.is_some() && error.kind() == std::io::ErrorKind::NotFound => {
             Vec::new()
         }
         Err(error) => {
@@ -203,13 +204,15 @@ fn read_sources(
     };
 
     let mut sources = Sources::default();
+    let mut unlisted: Vec<u128> = source_guids.unwrap_or_default().to_vec();
     for entry in &manifest {
         if !(entry.path.ends_with(".gltf") || entry.path.ends_with(".glb")) {
             continue;
         }
         let guid = u128::from_str_radix(&entry.guid, 16)
             .with_context(|| format!("{}: guid {:?} is not hex", entry.path, entry.guid))?;
-        if files.is_some_and(|files| !files.contains(&guid)) {
+        unlisted.retain(|listed| *listed != guid);
+        if source_guids.is_some_and(|guids| !guids.contains(&guid)) {
             continue;
         }
         let path = assets.join(&entry.path);
@@ -219,6 +222,9 @@ fn read_sources(
         };
         read_gltf(guid, &path, &source, &mut sources)
             .with_context(|| format!("reading {}", path.display()))?;
+    }
+    for guid in unlisted {
+        tracing::warn!(manifest = %manifest_path.display(), guid = %format!("{guid:032x}"), "no source listed with this GUID; its cooked Blobs stay as they are");
     }
     for &scene in scenes {
         let source = AssetSource::Scene(scene.name());
@@ -416,5 +422,24 @@ mod tests {
         );
         let reference = (AssetId(1), AssetId(2));
         assert_eq!(unresolved_materials(&cache, &[reference]), [reference]);
+    }
+
+    /// Each scene's dev launch finds the sources it references.
+    #[test]
+    fn every_source_a_reference_scene_references_is_in_the_manifest() {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/manifest.json");
+        let manifest: Vec<ManifestEntry> =
+            serde_json::from_slice(&std::fs::read(manifest).unwrap()).unwrap();
+        for scene in ReferenceScene::ALL {
+            for guid in scene.source_files() {
+                assert!(
+                    manifest
+                        .iter()
+                        .any(|entry| entry.guid == format!("{guid:032x}")),
+                    "{}: no manifest source has GUID {guid:032x}",
+                    scene.name()
+                );
+            }
+        }
     }
 }

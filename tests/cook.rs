@@ -569,11 +569,11 @@ fn touch_embedded_normal_map(path: &Path) {
 }
 
 /// A dev launch of the normal-tangent scene cooks its source and nothing
-/// else, cooks nothing when nothing changed, and after a touch of its
-/// normal map re-cooks exactly that and the metallic-roughness Texture
-/// widened by it.
+/// else, cooks nothing when nothing changed, re-cooks exactly a touched
+/// normal map and the metallic-roughness Texture widened by it, and keeps
+/// the Blobs of a source, or a manifest, gone absent.
 #[test]
-fn a_dev_launch_re_cooks_exactly_a_touched_normal_map_and_its_metallic_roughness() {
+fn a_dev_launch_cooks_exactly_what_its_scene_references_and_changed() {
     let directory = scratch("touch-embedded-image");
     let (assets, cache) = (directory.join("assets"), directory.join("cooked"));
     let cache = CookedCache::new(&cache);
@@ -585,10 +585,15 @@ fn a_dev_launch_re_cooks_exactly_a_touched_normal_map_and_its_metallic_roughness
         &glb,
     )
     .unwrap();
-    let manifest = json!([{
-        "path": "NormalTangentTest/NormalTangentTest.glb",
-        "guid": format!("{NORMAL_TANGENT_TEST_GUID:032x}"),
-    }]);
+    // Another source beside it, which the scene does not reference.
+    fs::write(assets.join("box.gltf"), gltf(0.75)).unwrap();
+    let manifest = json!([
+        {
+            "path": "NormalTangentTest/NormalTangentTest.glb",
+            "guid": format!("{NORMAL_TANGENT_TEST_GUID:032x}"),
+        },
+        {"path": "box.gltf", "guid": format!("{GUID:032x}")},
+    ]);
     fs::write(assets.join("manifest.json"), manifest.to_string()).unwrap();
     let launch = || {
         let settings = CookSettings::default();
@@ -603,7 +608,9 @@ fn a_dev_launch_re_cooks_exactly_a_touched_normal_map_and_its_metallic_roughness
         AssetName::Name("sphere"),
     );
     assert!(!first.cooked.is_empty());
-    assert!(!first.cooked.contains(&other_scene) && !first.unchanged.contains(&other_scene));
+    for other in [other_scene, material_id(PAINTED)] {
+        assert!(!first.cooked.contains(&other) && !first.unchanged.contains(&other));
+    }
     assert_eq!(launch().cooked, [], "nothing changed, yet a launch cooked");
 
     touch_embedded_normal_map(&glb);
@@ -621,6 +628,14 @@ fn a_dev_launch_re_cooks_exactly_a_touched_normal_map_and_its_metallic_roughness
     ];
     expected.sort();
     assert_eq!(cooked, expected);
+
+    // A Blob stays as it is once its source, then the manifest, is gone.
+    let kept = cache.texture(expected[0]).unwrap();
+    for absent in [glb, assets.join("manifest.json")] {
+        fs::remove_file(absent).unwrap();
+        assert_eq!(launch().cooked, []);
+        assert_eq!(cache.texture(expected[0]).unwrap(), kept);
+    }
     fs::remove_dir_all(&directory).unwrap();
 }
 

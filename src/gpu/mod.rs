@@ -232,8 +232,9 @@ fn floor_features() -> wgpu::Features {
 /// The Capability floor's downlevel flags (ADR 0021), which an adapter has
 /// or lacks with no request.
 fn floor_downlevel_flags() -> wgpu::DownlevelFlags {
-    // Material Channels sample at 16x (ADR 0018); without the flag, wgpu
-    // silently clamps every sampler's anisotropy to 1.
+    // ADR 0017 keeps hardware anisotropic filtering, and Material Channels
+    // sample at 16x (#144); without the flag, wgpu silently clamps every
+    // sampler's anisotropy to 1.
     wgpu::DownlevelFlags::ANISOTROPIC_FILTERING
 }
 

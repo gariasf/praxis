@@ -170,7 +170,12 @@ impl LoadStaging {
         let row_bytes = (size.width / block_width * block_bytes) as usize;
         let rows = size.height / block_height;
         let pitch = row_bytes.next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize);
-        debug_assert_eq!(bytes.len(), row_bytes * rows as usize);
+        assert_eq!(size.depth_or_array_layers, 1, "one layer per Texture");
+        assert_eq!(
+            bytes.len(),
+            row_bytes * rows as usize,
+            "mip {level} of a {format:?} Texture"
+        );
         let Some(staged_bytes) = wgpu::BufferSize::new((pitch * rows as usize) as u64) else {
             return;
         };
@@ -252,9 +257,10 @@ mod tests {
     use crate::capture::submit_and_map;
     use crate::gpu::GpuContext;
 
-    /// Every mip of an 8 × 8 BC4 Texture written through the belt reads back
-    /// as written: mip 0's two block rows of 16 bytes each sit 256 bytes
-    /// apart in the belt, and mips smaller than a block copy one whole block.
+    /// Every mip of an 8 × 8 BC5 Texture written through the belt after a
+    /// 4-byte buffer write reads back as written: each mip starts at a
+    /// multiple of its 16-byte blocks, mip 0's two block rows of 32 bytes
+    /// sit 256 bytes apart, and mips smaller than a block copy one block.
     #[test]
     fn every_mip_reads_back_as_written() {
         let context = match pollster::block_on(GpuContext::headless()) {
@@ -276,22 +282,30 @@ mod tests {
             mip_level_count: 4,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Bc4RUnorm,
+            format: wgpu::TextureFormat::Bc5RgUnorm,
             usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
-        // Blocks across and down per mip, of 8 bytes each, every byte distinct.
+        // Blocks across and down per mip, of 16 bytes each, every byte
+        // distinct.
         let blocks: [(u32, u32); 4] = [(2, 2), (1, 1), (1, 1), (1, 1)];
         let levels: Vec<Vec<u8>> = blocks
             .iter()
             .enumerate()
             .map(|(level, (across, down))| {
-                (0..across * down * 8)
+                (0..across * down * 16)
                     .map(|byte| (level as u32 * 64 + byte) as u8)
                     .collect()
             })
             .collect();
         let mut staging = LoadStaging::new(context.device.clone());
+        let word = context.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Staging Test Word"),
+            size: 4,
+            usage: wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        staging.write(&word, 0, &[1, 2, 3, 4]);
         for (level, bytes) in levels.iter().enumerate() {
             staging.write_texture(&texture, level as u32, bytes);
         }
@@ -333,7 +347,7 @@ mod tests {
             let mapped = read_back.get_mapped_range(..).expect("read-back range");
             let rows: Vec<u8> = mapped
                 .chunks(pitch as usize)
-                .flat_map(|row| &row[..across as usize * 8])
+                .flat_map(|row| &row[..across as usize * 16])
                 .copied()
                 .collect();
             assert_eq!(rows, *bytes, "mip {level}");

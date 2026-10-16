@@ -44,5 +44,10 @@ fn procedural_scenes_render_identically_without_asset_files() {
             scene.name()
         );
     }
+    // Each launch cooked its scene into the directory's Cooked cache.
+    if cfg!(feature = "cook") {
+        let index = std::fs::read_dir("cooked/index").expect("a launch cooked");
+        assert!(index.count() > 0, "a launch cooked an empty index");
+    }
     std::fs::remove_dir_all(&empty_directory).ok();
 }
