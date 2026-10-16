@@ -270,43 +270,61 @@ fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> a
         AssetId::new(asset_source, AssetKind::Texture(channel), name)
     };
     let material_names = asset_names(document.materials().map(|material| material.name()));
+    // The image `texture` samples, as a Texture of `channel`; none when the
+    // image is absent or a data URI.
+    let texture_source = |channel, texture: &gltf::Texture| -> anyhow::Result<_> {
+        let image = texture.source();
+        let name = format!("{} image {:?}", path.display(), image_names[image.index()]);
+        let bytes = match image.source() {
+            gltf::image::Source::View { view, .. } => {
+                let buffer = &buffers[view.buffer().index()];
+                buffer
+                    .get(view.offset()..view.offset() + view.length())
+                    .with_context(|| format!("{name}: buffer view out of bounds"))?
+                    .to_vec()
+            }
+            gltf::image::Source::Uri { uri, .. } if uri.starts_with("data:") => {
+                tracing::warn!(image = name, "data URI images are not cooked");
+                return Ok(None);
+            }
+            gltf::image::Source::Uri { uri, .. } => {
+                let image_path = path.parent().unwrap_or(Path::new("")).join(uri);
+                let Ok(bytes) = std::fs::read(&image_path) else {
+                    tracing::warn!(path = %image_path.display(), "image absent; its cooked Texture stays as it is");
+                    return Ok(None);
+                };
+                bytes
+            }
+        };
+        let id = texture_id(channel, texture);
+        Ok(Some(TextureSource::encoded(id, channel, name, bytes)))
+    };
     let mut cooked_images = HashSet::new();
     for (material, name) in document.materials().zip(material_names) {
         let textures = material_textures(&material);
         let mut texture_ids = [None; 5];
-        for (channel, texture) in MaterialChannel::ALL.into_iter().zip(textures) {
+        for (channel, texture) in MaterialChannel::ALL.into_iter().zip(&textures) {
             let Some(texture) = texture else { continue };
-            let id = texture_id(channel, &texture);
+            let id = texture_id(channel, texture);
             texture_ids[channel as usize] = Some(id);
             if !cooked_images.insert(id) {
                 continue;
             }
-            let image = texture.source();
-            let name = format!("{} image {:?}", path.display(), image_names[image.index()]);
-            let bytes = match image.source() {
-                gltf::image::Source::View { view, .. } => {
-                    let buffer = &buffers[view.buffer().index()];
-                    buffer
-                        .get(view.offset()..view.offset() + view.length())
-                        .with_context(|| format!("{name}: buffer view out of bounds"))?
-                        .to_vec()
-                }
-                gltf::image::Source::Uri { uri, .. } if uri.starts_with("data:") => {
-                    tracing::warn!(image = name, "data URI images are not cooked");
-                    continue;
-                }
-                gltf::image::Source::Uri { uri, .. } => {
-                    let image_path = path.parent().unwrap_or(Path::new("")).join(uri);
-                    let Ok(bytes) = std::fs::read(&image_path) else {
-                        tracing::warn!(path = %image_path.display(), "image absent; its cooked Texture stays as it is");
-                        continue;
-                    };
-                    bytes
-                }
+            let Some(mut source) = texture_source(channel, texture)? else {
+                continue;
             };
-            sources
-                .textures
-                .push(TextureSource::encoded(id, channel, name, bytes));
+            // Toksvig: metallic-roughness cooks from its Material's normal
+            // map too (the first Material's, when several share the image),
+            // and stays as it is while that is absent.
+            if channel == MaterialChannel::MetallicRoughness
+                && let Some(normal) = &textures[MaterialChannel::Normal as usize]
+            {
+                let Some(normal_map) = texture_source(MaterialChannel::Normal, normal)? else {
+                    continue;
+                };
+                source = source.with_normal_map(normal_map);
+            }
+            sources.textures.push(source);
         }
         let pbr = material.pbr_metallic_roughness();
         let id = AssetId::new(asset_source, AssetKind::Material, name);

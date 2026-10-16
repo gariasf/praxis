@@ -100,20 +100,30 @@ fn material_id(name: AssetName) -> AssetId {
 const PAINTED: AssetName = AssetName::Name("painted");
 const UNNAMED: AssetName = AssetName::Index(1);
 
-/// The Asset ID of the image `paint` in the albedo Channel.
-fn paint_id() -> AssetId {
+/// The Asset ID of the image `name` in `channel`.
+fn texture_id(channel: MaterialChannel, name: &str) -> AssetId {
     AssetId::new(
         AssetSource::File(GUID),
-        AssetKind::Texture(MaterialChannel::Albedo),
-        AssetName::Name("paint"),
+        AssetKind::Texture(channel),
+        AssetName::Name(name),
     )
+}
+
+/// The Asset ID of the image `paint` in the albedo Channel.
+fn paint_id() -> AssetId {
+    texture_id(MaterialChannel::Albedo, "paint")
+}
+
+/// Writes `path`: `width` × `height` RGBA8 from `texel(x, y)`.
+fn write_png(path: &Path, width: u32, height: u32, texel: impl Fn(u32, u32) -> [u8; 4]) {
+    let image = image::RgbaImage::from_fn(width, height, |x, y| image::Rgba(texel(x, y)));
+    image.save(path).unwrap();
 }
 
 /// Writes `paint.png` beside `box.gltf`: `width` × `height` RGBA8 from
 /// `texel(x, y)`.
 fn write_paint(assets: &Path, width: u32, height: u32, texel: impl Fn(u32, u32) -> [u8; 4]) {
-    let image = image::RgbaImage::from_fn(width, height, |x, y| image::Rgba(texel(x, y)));
-    image.save(assets.join("paint.png")).unwrap();
+    write_png(&assets.join("paint.png"), width, height, texel);
 }
 
 /// Every texel of `texture`'s mip `level`, decoded, as RGBA8.
@@ -388,6 +398,129 @@ fn a_changed_cook_setting_re_cooks_exactly_the_assets_it_covers() {
     fs::remove_dir_all(&directory).unwrap();
 }
 
+/// The side and mip count of the Toksvig sources' images.
+const TOKSVIG_SIDE: u32 = 16;
+const TOKSVIG_MIPS: usize = 5;
+/// In the normal map's top half, each low bit of a texel's x tilts its
+/// normal about y by this much, one way when the bit is clear and the other
+/// when it is set; the bottom half is flat. A tilted box 2^m texels wide
+/// then holds every sign combination of m tilts, so its normals' mean has
+/// length cos(tilt)^m.
+const TILT_DEGREES: f32 = 10.0;
+/// The roughness both metallic-roughness images hold at every texel.
+const ROUGHNESS_BYTE: u8 = 77;
+/// Covers BC5's error on these blocks of one or two values, and the 8-bit
+/// rounding of the source normals.
+const ROUGHNESS_TOLERANCE: f32 = 0.01;
+
+/// `bumpy` samples a tilted normal map and a metallic-roughness image;
+/// `smooth` samples another metallic-roughness image and no normal map.
+fn write_toksvig_sources(assets: &Path) {
+    let gltf = json!({
+        "asset": {"version": "2.0"},
+        "images": [
+            {"name": "bumps", "uri": "bumps.png"},
+            {"name": "bumpy-roughness", "uri": "bumpy-roughness.png"},
+            {"name": "smooth-roughness", "uri": "smooth-roughness.png"},
+        ],
+        "textures": [{"source": 0}, {"source": 1}, {"source": 2}],
+        "materials": [
+            {
+                "name": "bumpy",
+                "normalTexture": {"index": 0},
+                "pbrMetallicRoughness": {"metallicRoughnessTexture": {"index": 1}},
+            },
+            {
+                "name": "smooth",
+                "pbrMetallicRoughness": {"metallicRoughnessTexture": {"index": 2}},
+            },
+        ],
+    });
+    write_sources(assets, "toksvig.gltf", &gltf.to_string());
+    let tilt = TILT_DEGREES.to_radians();
+    write_png(
+        &assets.join("bumps.png"),
+        TOKSVIG_SIDE,
+        TOKSVIG_SIDE,
+        |x, y| {
+            let angle: f32 = (0..TOKSVIG_MIPS - 1)
+                .map(|bit| if x >> bit & 1 == 0 { tilt } else { -tilt })
+                .sum();
+            let angle = if y < TOKSVIG_SIDE / 2 { angle } else { 0.0 };
+            let byte = |value: f32| ((value + 1.0) / 2.0 * 255.0).round() as u8;
+            [byte(angle.sin()), byte(0.0), byte(angle.cos()), 255]
+        },
+    );
+    for name in ["bumpy-roughness", "smooth-roughness"] {
+        write_png(
+            &assets.join(format!("{name}.png")),
+            TOKSVIG_SIDE,
+            TOKSVIG_SIDE,
+            |_, _| [0, ROUGHNESS_BYTE, 0, 255],
+        );
+    }
+}
+
+#[test]
+fn toksvig_widens_each_metallic_roughness_mip_by_its_normal_maps_variance() {
+    let directory = scratch("toksvig");
+    let (assets, cache) = (directory.join("assets"), directory.join("cooked"));
+    let cache = CookedCache::new(&cache);
+    write_toksvig_sources(&assets);
+    cook(&assets, &cache).unwrap();
+
+    let id = texture_id(MaterialChannel::MetallicRoughness, "bumpy-roughness");
+    let texture = cache.texture(id).unwrap();
+    assert_eq!(texture.levels.len(), TOKSVIG_MIPS);
+    let (roughness, tilt) = (ROUGHNESS_BYTE as f32 / 255.0, TILT_DEGREES.to_radians());
+    for mip in 0..TOKSVIG_MIPS {
+        let side = TOKSVIG_SIDE >> mip;
+        // Roughness is the stored red channel (ADR 0018).
+        for (texel, [cooked, ..]) in decode(&texture, mip).into_iter().enumerate() {
+            // The tilted share of the rows this texel covers. Only the last
+            // mip covers both halves, where the tilted mean points straight
+            // up, so the two lengths average by share.
+            let row = texel as u32 / side;
+            let rows = (row << mip)..((row + 1) << mip);
+            let tilted =
+                rows.filter(|row| *row < TOKSVIG_SIDE / 2).count() as f32 / (1 << mip) as f32;
+            let mean_length = tilted * tilt.cos().powi(mip as i32) + 1.0 - tilted;
+            // Toksvig's variance from the mean's length, then GGX's alpha
+            // (roughness squared) widened by it, as src/cook/texture.rs cites.
+            let angular_variance = (1.0 - mean_length) / mean_length;
+            let expected = (roughness.powi(4) + 2.0 * angular_variance).powf(0.25);
+            if mip > 0 && tilted > 0.0 {
+                assert!(expected - roughness > 10.0 * ROUGHNESS_TOLERANCE);
+            }
+            let cooked = cooked as f32 / 255.0;
+            assert!(
+                (cooked - expected).abs() <= ROUGHNESS_TOLERANCE,
+                "mip {mip}, texel {texel}: roughness {cooked}, Toksvig {expected}"
+            );
+        }
+    }
+    fs::remove_dir_all(&directory).unwrap();
+}
+
+#[test]
+fn a_material_without_a_normal_map_cooks_its_roughness_unchanged() {
+    let directory = scratch("no-normal-map");
+    let (assets, cache) = (directory.join("assets"), directory.join("cooked"));
+    let cache = CookedCache::new(&cache);
+    write_toksvig_sources(&assets);
+    cook(&assets, &cache).unwrap();
+
+    let id = texture_id(MaterialChannel::MetallicRoughness, "smooth-roughness");
+    let texture = cache.texture(id).unwrap();
+    assert_eq!(texture.levels.len(), TOKSVIG_MIPS);
+    for mip in 0..TOKSVIG_MIPS {
+        for [roughness, ..] in decode(&texture, mip) {
+            assert_eq!(roughness, ROUGHNESS_BYTE, "mip {mip}");
+        }
+    }
+    fs::remove_dir_all(&directory).unwrap();
+}
+
 const NORMAL_TANGENT_TEST_GUID: u128 = 0xc750a32dc879478eaca4748dbc82645a;
 
 /// Changes one texel of the normal map embedded in NormalTangentTest's .glb
@@ -435,7 +568,7 @@ fn touch_embedded_normal_map(path: &Path) {
 }
 
 #[test]
-fn touching_an_embedded_image_re_cooks_exactly_its_texture() {
+fn touching_a_normal_map_re_cooks_exactly_it_and_its_metallic_roughness() {
     let directory = scratch("touch-embedded-image");
     let (assets, cache) = (directory.join("assets"), directory.join("cooked"));
     let cache = CookedCache::new(&cache);
@@ -455,11 +588,20 @@ fn touching_an_embedded_image_re_cooks_exactly_its_texture() {
     cook(&assets, &cache).unwrap();
 
     touch_embedded_normal_map(&glb);
-    // Unnamed, NormalTangentTest's images are named by their index.
-    let source = AssetSource::File(NORMAL_TANGENT_TEST_GUID);
-    let kind = AssetKind::Texture(MaterialChannel::Normal);
-    let normal_map = AssetId::new(source, kind, AssetName::Index(2));
-    assert_eq!(cook(&assets, &cache).unwrap().cooked, [normal_map]);
+    let mut cooked = cook(&assets, &cache).unwrap().cooked;
+    cooked.sort();
+    // Unnamed, NormalTangentTest's images are named by their index; image 1
+    // is its metallic-roughness and its occlusion.
+    let texture = |channel, image| {
+        let source = AssetSource::File(NORMAL_TANGENT_TEST_GUID);
+        AssetId::new(source, AssetKind::Texture(channel), AssetName::Index(image))
+    };
+    let mut expected = vec![
+        texture(MaterialChannel::Normal, 2),
+        texture(MaterialChannel::MetallicRoughness, 1),
+    ];
+    expected.sort();
+    assert_eq!(cooked, expected);
     fs::remove_dir_all(&directory).unwrap();
 }
 
