@@ -4,12 +4,14 @@ use std::time::Duration;
 use anyhow::Context;
 use bevy_ecs::prelude::*;
 
-use crate::assets::loader::generate_tangents;
 #[cfg(feature = "cook")]
-use crate::assets::{LoadedImage, MaterialChannel};
+use crate::assets::MaterialChannel;
+use crate::assets::loader::generate_tangents;
 use crate::assets::{MaterialPool, MeshHandle, MeshPool, load_model};
 use crate::camera::Camera;
 use crate::components::{MaterialRef, MeshRef, Transform};
+#[cfg(feature = "cook")]
+use crate::cook::LoadedImage;
 #[cfg(feature = "cook")]
 use crate::cooked::CookedMaterial;
 use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource, CookedCache};
@@ -105,7 +107,7 @@ impl ReferenceScene {
         let sweep = |base_color| {
             SWEEP_METALLIC.into_iter().flat_map(move |metallic| {
                 SWEEP_ROUGHNESS.into_iter().map(move |roughness| {
-                    let name = sweep_material(metallic, roughness);
+                    let name = sweep_material_name(metallic, roughness);
                     (name, factors(base_color, metallic, roughness, None))
                 })
             })
@@ -234,7 +236,7 @@ const SPHERE_RADIUS: f32 = 0.5;
 const SPHERE_SPACING: f32 = 1.3;
 
 /// The name of a sweep's Material of `metallic` and `roughness`.
-pub(crate) fn sweep_material(metallic: f32, roughness: f32) -> String {
+pub(crate) fn sweep_material_name(metallic: f32, roughness: f32) -> String {
     format!("metallic-{metallic}-roughness-{roughness}")
 }
 
@@ -249,7 +251,7 @@ pub(crate) fn spawn_pbr_sweep(
     let sphere = insert_mesh(load_staging, mesh_pool, &uv_sphere(SPHERE_RADIUS))?;
     for (row, metallic) in SWEEP_METALLIC.into_iter().enumerate() {
         for (column, roughness) in SWEEP_ROUGHNESS.into_iter().enumerate() {
-            let name = sweep_material(metallic, roughness);
+            let name = sweep_material_name(metallic, roughness);
             let id = ReferenceScene::PbrSweep.material_id(&name);
             let material = material_pool.load(device, load_staging, cache, id)?;
             let position = glam::vec3(

@@ -17,7 +17,7 @@ use crate::render::{FramePreparer, LoadStaging, Renderer};
 use crate::scenes::{
     ReferenceScene, SCI_FI_HELMET, SWEEP_METALLIC, SWEEP_ROUGHNESS, insert_gltf_mesh,
     spawn_far_coplanar, spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep, spawn_uv_grid, spin,
-    sweep_material,
+    sweep_material_name,
 };
 use crate::stats::{FrameRecorder, FrameStats};
 use crate::threading::{init_compute_pool, single_threaded_schedule};
@@ -78,15 +78,19 @@ impl State {
         let (schedule, mut fixed_schedule) = simulation_schedules(&recorder);
 
         let cache = CookedCache::new(COOKED_CACHE_DIRECTORY);
-        // A dev launch cooks what the scene loads and has changed (ADR 0018).
+        // A dev launch cooks what the scene loads and has changed (ADR 0018);
+        // a load that then fails names the sources it found absent.
         #[cfg(feature = "cook")]
-        crate::cook::cook_scene(
+        let absent_sources = crate::cook::cook_scene(
             scene,
             std::path::Path::new(crate::cook::ASSETS_DIRECTORY),
             &cache,
             &crate::cook::CookSettings::default(),
         )
-        .with_context(|| format!("cooking {}", scene.name()))?;
+        .with_context(|| format!("cooking {}", scene.name()))?
+        .absent_sources;
+        #[cfg(not(feature = "cook"))]
+        let absent_sources: Vec<String> = Vec::new();
 
         let spawn: fn(
             &mut World,
@@ -111,7 +115,11 @@ impl State {
             mesh_pool,
             material_pool,
         )
-        .with_context(|| format!("loading {}", scene.name()))?;
+        .with_context(|| format!("loading {}", scene.name()))
+        .map_err(|error| match absent_sources.as_slice() {
+            [] => error,
+            absent => error.context(format!("absent sources: {}", absent.join(", "))),
+        })?;
         for (position, color) in [
             (glam::dvec3(2.0, 2.0, 2.0), glam::Vec3::X),
             (glam::dvec3(-2.0, 2.0, 2.0), glam::Vec3::Y),
@@ -177,7 +185,8 @@ impl State {
         // middle helmet and stay in frame.
         for (row_index, metallic) in SWEEP_METALLIC.into_iter().enumerate() {
             for (column_index, roughness) in SWEEP_ROUGHNESS.into_iter().enumerate() {
-                let id = ReferenceScene::Helmet.material_id(&sweep_material(metallic, roughness));
+                let id =
+                    ReferenceScene::Helmet.material_id(&sweep_material_name(metallic, roughness));
                 let variant_handle = material_pool.load(device, load_staging, cache, id)?;
                 let column_offset = (column_index as f32 - 2.0) * 2.0;
                 let row_offset = 2.6 - row_index as f32 * 5.2;

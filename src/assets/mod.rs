@@ -4,8 +4,6 @@ pub mod material;
 pub mod mesh;
 pub mod pools;
 
-#[cfg(feature = "cook")]
-pub use loader::LoadedImage;
 pub use loader::load_model;
 pub use material::{MaterialChannel, MaterialHandle, MaterialPool};
 pub use mesh::{Mesh, MeshHandle, Primitive};

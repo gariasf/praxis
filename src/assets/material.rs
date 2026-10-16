@@ -133,6 +133,8 @@ pub struct MaterialPool {
     sampler: wgpu::Sampler,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
+    /// Set when a load adds a Texture the bind group lacks.
+    bind_group_is_stale: bool,
 }
 
 impl MaterialPool {
@@ -248,6 +250,7 @@ impl MaterialPool {
             sampler,
             bind_group_layout,
             bind_group,
+            bind_group_is_stale: false,
         }
     }
 
@@ -292,33 +295,24 @@ impl MaterialPool {
     ) -> anyhow::Result<MaterialHandle> {
         let material = cache.material(id)?;
         let mut layers = [Self::DEFAULT_LAYER; 5];
-        let mut new_textures = false;
-        for (channel, texture) in MaterialChannel::ALL.into_iter().zip(material.textures) {
-            let Some(texture) = texture else { continue };
-            if let Some(&layer) = self.texture_layers.get(&texture) {
+        for (channel, texture_id) in MaterialChannel::ALL.into_iter().zip(material.textures) {
+            let Some(texture_id) = texture_id else {
+                continue;
+            };
+            if let Some(&layer) = self.texture_layers.get(&texture_id) {
                 layers[channel as usize] = layer;
                 continue;
             }
-            let cooked = cache
-                .texture(texture)
+            let texture = cache
+                .texture(texture_id)
                 .with_context(|| format!("loading Material {id}"))?;
-            let Some(layer) = self.channels[channel as usize].push(device, staging, &cooked) else {
+            let Some(layer) = self.channels[channel as usize].push(device, staging, &texture)
+            else {
                 continue;
             };
-            self.texture_layers.insert(texture, layer);
+            self.texture_layers.insert(texture_id, layer);
+            self.bind_group_is_stale = true;
             layers[channel as usize] = layer;
-            new_textures = true;
-        }
-        // ponytail: one rebuild per Material that brings new Textures; batch
-        // them per load when a scene loads many (texture-wall, #153).
-        if new_textures {
-            self.bind_group = create_bind_group(
-                device,
-                &self.bind_group_layout,
-                &self.materials_buffer,
-                &self.channels,
-                &self.sampler,
-            );
         }
         let [red, green, blue] = material.emissive;
         let data = MaterialData {
@@ -330,6 +324,21 @@ impl MaterialPool {
         };
         tracing::debug!(material = %id, ?layers, "Material loaded");
         Ok(self.insert(staging, data))
+    }
+
+    /// Rebuilds the bind group when loads since the last call added
+    /// Textures, so a scene's loads build it once: bind groups are
+    /// snapshots.
+    pub fn refresh_bind_group(&mut self, device: &wgpu::Device) {
+        if std::mem::take(&mut self.bind_group_is_stale) {
+            self.bind_group = create_bind_group(
+                device,
+                &self.bind_group_layout,
+                &self.materials_buffer,
+                &self.channels,
+                &self.sampler,
+            );
+        }
     }
 }
 
@@ -369,4 +378,69 @@ fn create_bind_group(
         layout,
         entries: &entries,
     })
+}
+
+#[cfg(all(test, feature = "cook"))]
+mod tests {
+    use std::io::Write;
+
+    use super::*;
+    use crate::cooked::CookedMaterial;
+    use crate::gpu::GpuContext;
+
+    /// Two Materials sampling one Texture load it once, and a Material
+    /// without that Channel samples Layer 0.
+    #[test]
+    fn a_texture_two_materials_share_loads_once() {
+        let context = match pollster::block_on(GpuContext::headless()) {
+            Ok(context) => context,
+            Err(error) if error.is::<wgpu::RequestAdapterError>() => {
+                // Not `eprintln!`, which libtest captures from passing tests.
+                writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+                return;
+            }
+            Err(error) => panic!("headless GPU context failed: {error:#}"),
+        };
+        let directory =
+            std::env::temp_dir().join(format!("praxis-material-pool-{}", std::process::id()));
+        let cache = CookedCache::new(&directory);
+        // 4 × 4 BC4: one 8-byte block at each of its three mips.
+        let occlusion = CookedTexture {
+            format: wgpu::TextureFormat::Bc4RUnorm,
+            width: 4,
+            height: 4,
+            levels: vec![vec![255; 8]; 3],
+        };
+        cache
+            .write(AssetId(10), "key", &occlusion.to_blob(1).unwrap())
+            .unwrap();
+        let shared = [None, None, None, Some(AssetId(10)), None];
+        for (id, textures) in [(1, shared), (2, shared), (3, [None; 5])] {
+            let material = CookedMaterial {
+                base_color: [1.0; 4],
+                metallic: 0.0,
+                roughness: 1.0,
+                emissive: [0.0; 3],
+                textures,
+            };
+            cache
+                .write(AssetId(id), "key", &material.to_blob())
+                .unwrap();
+        }
+
+        let mut staging = LoadStaging::new(context.device.clone());
+        let mut pool = MaterialPool::new(&context.device, &mut staging);
+        let neutral_bytes = pool.gpu_memory_bytes(false);
+        let occlusion_layers: Vec<u32> = (1..=3)
+            .map(|id| {
+                let handle = pool
+                    .load(&context.device, &mut staging, &cache, AssetId(id))
+                    .unwrap();
+                pool.materials[handle.index() as usize].texture_indices[3]
+            })
+            .collect();
+        assert_eq!(pool.gpu_memory_bytes(false) - neutral_bytes, 3 * 8);
+        assert_eq!(occlusion_layers, [1, 1, MaterialPool::DEFAULT_LAYER]);
+        std::fs::remove_dir_all(&directory).ok();
+    }
 }

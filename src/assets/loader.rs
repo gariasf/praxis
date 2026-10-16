@@ -1,13 +1,5 @@
 use crate::render::Vertex;
 
-/// RGBA8 pixels, row-major, top row first.
-#[cfg(feature = "cook")]
-pub struct LoadedImage {
-    pub pixels: Vec<u8>,
-    pub width: u32,
-    pub height: u32,
-}
-
 pub struct LoadedPrimitive {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,

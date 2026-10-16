@@ -5,7 +5,6 @@ use anyhow::Context;
 use sha2::{Digest, Sha256};
 
 use super::CookSettings;
-use crate::assets::LoadedImage;
 use crate::cooked::{
     AssetId, CookedTexture, MAX_TEXTURE_SIDE, MaterialChannel, TEXTURE_MAGIC, hex, level_bytes,
 };
@@ -19,6 +18,13 @@ unsafe extern "C" {}
 
 /// The encoder and its profile, part of every Texture's Cook key.
 const ENCODER: &str = "intel_tex_2 0.5.0 basic";
+
+/// RGBA8 pixels, row-major, top row first.
+pub struct LoadedImage {
+    pub pixels: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+}
 
 /// One Texture to cook: an image a Material samples in one Channel.
 pub struct TextureSource {

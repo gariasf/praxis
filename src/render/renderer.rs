@@ -301,6 +301,7 @@ impl Renderer {
             .frame_encoder
             .take()
             .unwrap_or_else(|| create_frame_encoder(&self.device));
+        self.material_pool.refresh_bind_group(&self.device);
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
