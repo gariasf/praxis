@@ -28,6 +28,9 @@ pub struct TextureSource {
     /// Where the image comes from, for messages.
     pub name: String,
     image: SourceImage,
+    /// A metallic-roughness Texture's normal map, whose variance widens its
+    /// roughness (Toksvig).
+    normal_map: Option<Box<TextureSource>>,
 }
 
 enum SourceImage {
@@ -50,6 +53,7 @@ impl TextureSource {
             channel,
             name,
             image,
+            normal_map: None,
         }
     }
 
@@ -65,6 +69,16 @@ impl TextureSource {
             channel,
             name,
             image,
+            normal_map: None,
+        }
+    }
+
+    /// This metallic-roughness Texture with its roughness widened by
+    /// `normal_map`'s variance, a dependency its Cook key then covers.
+    pub(super) fn with_normal_map(self, normal_map: TextureSource) -> Self {
+        Self {
+            normal_map: Some(Box::new(normal_map)),
+            ..self
         }
     }
 
@@ -89,8 +103,9 @@ impl TextureSource {
         }
     }
 
-    /// SHA-256 over the format, the encoder, the settings, the Channel and
-    /// the source bytes; a generated image's bytes are its pixels and size.
+    /// SHA-256 over the format, the encoder, the settings, the Channel, the
+    /// source bytes and a normal map's Cook key; a generated image's bytes
+    /// are its pixels and size.
     pub(super) fn cook_key(&self, settings: &CookSettings, format_version: u32) -> String {
         let mut hasher = Sha256::new();
         hasher.update(TEXTURE_MAGIC);
@@ -105,6 +120,9 @@ impl TextureSource {
                 hasher.update(image.height.to_le_bytes());
                 hasher.update(&image.pixels);
             }
+        }
+        if let Some(normal_map) = &self.normal_map {
+            hasher.update(normal_map.cook_key(settings, format_version));
         }
         hex(&hasher.finalize())
     }
@@ -139,6 +157,10 @@ impl TextureSource {
         };
         let mips = width.max(height).ilog2() as usize + 1;
         let mut level = linearise(&image, self.channel);
+        let mut spread = match &self.normal_map {
+            Some(normal_map) => Some(Level::spread(&normal_map.decode()?)),
+            None => None,
+        };
         let mut levels = Vec::with_capacity(mips);
         for mip in 0..mips {
             if mip > 0 {
@@ -147,6 +169,16 @@ impl TextureSource {
             if self.channel == MaterialChannel::Normal {
                 level.renormalise();
             }
+            // The normal map's level whose texels cover this level's; one
+            // coarser than this level, or of another aspect ratio, widens
+            // nothing here.
+            let widened = spread.as_mut().and_then(|spread| {
+                while spread.width > level.width || spread.height > level.height {
+                    *spread = spread.downsample_spread();
+                }
+                (spread.width == level.width && spread.height == level.height)
+                    .then(|| level.widened(spread))
+            });
             let texels = match (mip, self.channel) {
                 // The source's own bytes, without a round trip through
                 // linear light.
@@ -155,7 +187,7 @@ impl TextureSource {
                     height,
                     bytes: image.pixels.clone(),
                 },
-                _ => level.to_texels(self.channel),
+                _ => widened.as_ref().unwrap_or(&level).to_texels(self.channel),
             };
             let blocks = encode(self.channel, format, &texels, encode_threads);
             debug_assert_eq!(blocks.len(), level_bytes(format, width, height, mip));
@@ -232,11 +264,60 @@ fn linearise(image: &LoadedImage, channel: MaterialChannel) -> Level {
 }
 
 impl Level {
-    /// The next mip: each texel the mean of a 2×2 box, a side of 1
-    /// repeating its row or column.
+    /// A normal map's spread at its finest level: per texel the unit normal,
+    /// and the variance about it of the normals the texel covers, zero.
+    fn spread(normal_map: &LoadedImage) -> Level {
+        let mut normals = linearise(normal_map, MaterialChannel::Normal);
+        normals.renormalise();
+        let values = normals
+            .values
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .flat_map(|&[x, y, z]| [x, y, z, 0.0])
+            .collect();
+        Level {
+            width: normals.width,
+            height: normals.height,
+            components: 4,
+            values,
+        }
+    }
+
+    /// The next mip: each texel the mean of a 2×2 box.
+    fn downsample(&self) -> Level {
+        self.reduce(|box_texels, values| {
+            values.extend((0..self.components).map(|component| {
+                box_texels.iter().map(|texel| texel[component]).sum::<f32>() / 4.0
+            }));
+        })
+    }
+
+    /// The next level of a spread: per texel the unnormalised mean of the
+    /// normals it covers and their variance about it, 1 - |mean|², which is
+    /// its box's variances plus the box means' own about it. Carried so,
+    /// rather than read off the mean's length, the variance of normals that
+    /// agree stays zero.
+    fn downsample_spread(&self) -> Level {
+        self.reduce(|box_texels, values| {
+            let means = box_texels.map(glam::Vec3::from_slice);
+            let mean = means.iter().sum::<glam::Vec3>() / 4.0;
+            let variance = box_texels
+                .iter()
+                .zip(means)
+                .map(|(texel, texel_mean)| texel[3] + texel_mean.distance_squared(mean))
+                .sum::<f32>()
+                / 4.0;
+            values.extend(mean.to_array());
+            values.push(variance);
+        })
+    }
+
+    /// The next mip, each texel `combine`d into `values` from a 2×2 box, a
+    /// side of 1 repeating its row or column.
     // An odd side drops its last row or column; a 3-tap filter there if
     // non-power-of-two Textures show it.
-    fn downsample(&self) -> Level {
+    fn reduce(&self, combine: impl Fn([&[f32]; 4], &mut Vec<f32>)) -> Level {
         let (width, height) = ((self.width / 2).max(1), (self.height / 2).max(1));
         let components = self.components;
         let at = |x: u32, y: u32| {
@@ -252,15 +333,34 @@ impl Level {
                     at(2 * x, 2 * y + 1),
                     at(2 * x + 1, 2 * y + 1),
                 ];
-                values.extend((0..components).map(|component| {
-                    box_texels.iter().map(|texel| texel[component]).sum::<f32>() / 4.0
-                }));
+                combine(box_texels, &mut values);
             }
         }
         Level {
             width,
             height,
             components,
+            values,
+        }
+    }
+
+    /// This metallic-roughness level with each texel's roughness widened by
+    /// the variance in `spread`, a level of the same size.
+    fn widened(&self, spread: &Level) -> Level {
+        let values = self
+            .values
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .zip(spread.values.as_chunks::<4>().0)
+            .flat_map(|(&[roughness, metallic], &[.., variance])| {
+                [widened_roughness(roughness, variance), metallic]
+            })
+            .collect();
+        Level {
+            width: self.width,
+            height: self.height,
+            components: self.components,
             values,
         }
     }
@@ -317,6 +417,30 @@ impl Level {
             bytes,
         }
     }
+}
+
+/// `roughness`, glTF's (GGX's alpha is its square), widened for normals
+/// whose variance about their mean is `variance` (Toksvig). It widens the
+/// Texture's own roughness, as if its Material's roughness factor were 1: a
+/// factor f scales the widening's share of alpha² by f⁴.
+fn widened_roughness(roughness: f32, variance: f32) -> f32 {
+    if variance <= 0.0 {
+        return roughness;
+    }
+    // Toksvig, "Mipmapping Normal Maps" (NVIDIA, 2004; JGT 10(3), 2005),
+    // eq. 1: the normals' angular variance from their mean's length,
+    // (1 - |mean|) / |mean|, with |mean| = sqrt(1 - variance) and the
+    // difference written so that it cancels nothing.
+    let mean_length = (1.0 - variance.min(1.0)).sqrt();
+    let angular_variance = variance / ((1.0 + mean_length) * mean_length);
+    // A GGX lobe filtered by normals of that slope variance adds twice it to
+    // alpha²: Kaplanyan, Hill, Patney and Lefohn, "Filtering Distributions
+    // of Normals for Shading Antialiasing" (HPG 2016), eqs. 14 and 15, which
+    // Tokuyoshi and Kaplanyan, "Improved Geometric Specular Antialiasing"
+    // (I3D 2019), section 2.2, apply to GGX. Equations only; no code copied.
+    (roughness.powi(4) + 2.0 * angular_variance)
+        .min(1.0)
+        .powf(0.25)
 }
 
 /// Encoder input: tightly packed rows, each side a multiple of 4.
