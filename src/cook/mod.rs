@@ -63,6 +63,10 @@ struct Sources {
     meshes: Vec<(AssetId, String, Vec<mesh::SourcePrimitive>)>,
 }
 
+/// The source directory a launch cooks from, relative to the working
+/// directory.
+pub const ASSETS_DIRECTORY: &str = "assets";
+
 /// Cooks the sources `assets/manifest.json` lists that are present, and
 /// every procedural Reference scene, into `cache`.
 pub fn cook(
@@ -70,7 +74,32 @@ pub fn cook(
     cache: &CookedCache,
     settings: &CookSettings,
 ) -> anyhow::Result<CookReport> {
-    let sources = read_sources(assets)?;
+    cook_sources(
+        &read_sources(assets, &ReferenceScene::ALL, None)?,
+        cache,
+        settings,
+    )
+}
+
+/// What a dev launch of `scene` cooks before it loads: the manifest
+/// sources the scene references, those present, and its procedural Assets.
+/// The Blobs of an absent source, or of every source when the manifest is
+/// absent, stay as they are.
+pub fn cook_scene(
+    scene: ReferenceScene,
+    assets: &Path,
+    cache: &CookedCache,
+    settings: &CookSettings,
+) -> anyhow::Result<CookReport> {
+    let sources = read_sources(assets, &[scene], Some(scene.source_files()))?;
+    cook_sources(&sources, cache, settings)
+}
+
+fn cook_sources(
+    sources: &Sources,
+    cache: &CookedCache,
+    settings: &CookSettings,
+) -> anyhow::Result<CookReport> {
     let mut report = CookReport::default();
     for (id, cook_key, material) in &sources.materials {
         if is_fresh(cache, *id, cook_key) {
@@ -150,20 +179,40 @@ pub fn cook(
 /// Every Texture the cook reads: each image a glTF Material samples, per
 /// Channel, and each procedural Reference scene's generated image.
 pub fn texture_sources(assets: &Path) -> anyhow::Result<Vec<TextureSource>> {
-    Ok(read_sources(assets)?.textures)
+    Ok(read_sources(assets, &ReferenceScene::ALL, None)?.textures)
 }
 
-fn read_sources(assets: &Path) -> anyhow::Result<Sources> {
+/// The sources of `scenes` and of every manifest file, or with
+/// `source_guids`, a dev launch's, only of the files with those GUIDs; a dev
+/// launch also runs without a manifest.
+fn read_sources(
+    assets: &Path,
+    scenes: &[ReferenceScene],
+    source_guids: Option<&[u128]>,
+) -> anyhow::Result<Sources> {
     let manifest_path = assets.join("manifest.json");
-    let manifest: Vec<ManifestEntry> = serde_json::from_slice(
-        &std::fs::read(&manifest_path)
-            .with_context(|| format!("reading {}", manifest_path.display()))?,
-    )
-    .with_context(|| format!("parsing {}", manifest_path.display()))?;
+    let manifest: Vec<ManifestEntry> = match std::fs::read(&manifest_path) {
+        Ok(manifest) => serde_json::from_slice(&manifest)
+            .with_context(|| format!("parsing {}", manifest_path.display()))?,
+        // A dev launch's GUIDs then all warn as unlisted, below.
+        Err(error) if source_guids.is_some() && error.kind() == std::io::ErrorKind::NotFound => {
+            Vec::new()
+        }
+        Err(error) => {
+            return Err(error).with_context(|| format!("reading {}", manifest_path.display()));
+        }
+    };
 
     let mut sources = Sources::default();
+    let mut unlisted: Vec<u128> = source_guids.unwrap_or_default().to_vec();
     for entry in &manifest {
         if !(entry.path.ends_with(".gltf") || entry.path.ends_with(".glb")) {
+            continue;
+        }
+        let guid = u128::from_str_radix(&entry.guid, 16)
+            .with_context(|| format!("{}: guid {:?} is not hex", entry.path, entry.guid))?;
+        unlisted.retain(|listed| *listed != guid);
+        if source_guids.is_some_and(|guids| !guids.contains(&guid)) {
             continue;
         }
         let path = assets.join(&entry.path);
@@ -171,12 +220,13 @@ fn read_sources(assets: &Path) -> anyhow::Result<Sources> {
             tracing::warn!(path = %path.display(), "source absent; its cooked Blobs stay as they are");
             continue;
         };
-        let guid = u128::from_str_radix(&entry.guid, 16)
-            .with_context(|| format!("{}: guid {:?} is not hex", entry.path, entry.guid))?;
         read_gltf(guid, &path, &source, &mut sources)
             .with_context(|| format!("reading {}", path.display()))?;
     }
-    for scene in ReferenceScene::ALL {
+    for guid in unlisted {
+        tracing::warn!(manifest = %manifest_path.display(), guid = %format!("{guid:032x}"), "no source listed with this GUID; its cooked Blobs stay as they are");
+    }
+    for &scene in scenes {
         let source = AssetSource::Scene(scene.name());
         for (name, material) in scene.materials() {
             let id = AssetId::new(source, AssetKind::Material, AssetName::Name(&name));
@@ -372,5 +422,24 @@ mod tests {
         );
         let reference = (AssetId(1), AssetId(2));
         assert_eq!(unresolved_materials(&cache, &[reference]), [reference]);
+    }
+
+    /// Each scene's dev launch finds the sources it references.
+    #[test]
+    fn every_source_a_reference_scene_references_is_in_the_manifest() {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/manifest.json");
+        let manifest: Vec<ManifestEntry> =
+            serde_json::from_slice(&std::fs::read(manifest).unwrap()).unwrap();
+        for scene in ReferenceScene::ALL {
+            for guid in scene.source_files() {
+                assert!(
+                    manifest
+                        .iter()
+                        .any(|entry| entry.guid == format!("{guid:032x}")),
+                    "{}: no manifest source has GUID {guid:032x}",
+                    scene.name()
+                );
+            }
+        }
     }
 }

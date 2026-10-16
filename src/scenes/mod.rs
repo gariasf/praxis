@@ -65,6 +65,16 @@ impl ReferenceScene {
         Self::ALL.into_iter().find(|scene| scene.name() == name)
     }
 
+    /// The manifest sources the scene references, by GUID.
+    #[cfg(feature = "cook")]
+    pub(crate) fn source_files(self) -> &'static [u128] {
+        match self {
+            Self::Helmet => &[SCI_FI_HELMET],
+            Self::NormalTangent => &[NORMAL_TANGENT_TEST],
+            Self::PbrSweep | Self::UvGrid | Self::FarCoplanar | Self::Orrery => &[],
+        }
+    }
+
     /// The scene's procedural Materials by name; glTF Materials cook from
     /// their manifest source.
     #[cfg(feature = "cook")]
@@ -192,6 +202,13 @@ impl ReferenceScene {
     }
 }
 
+/// SciFiHelmet's glTF file, by its manifest GUID.
+#[cfg(feature = "cook")]
+const SCI_FI_HELMET: u128 = 0x3b67bb0196a34daa9d4389cb09aa9a27;
+/// NormalTangentTest's glTF file, by its manifest GUID.
+#[cfg(feature = "cook")]
+const NORMAL_TANGENT_TEST: u128 = 0xc750a32dc879478eaca4748dbc82645a;
+
 /// A camera on a circle of `radius` at `height` around the origin, looking at
 /// it, starting a little left of +Z and moving a quarter degree per frame.
 fn orbit(frame: u32, radius: f32, height: f32) -> Camera {
@@ -258,7 +275,7 @@ pub(crate) fn spawn_uv_grid(
     let plane = insert_mesh(load_staging, mesh_pool, &ground_plane(4.0, 2.0))?;
     let albedo_layer = material_pool.upload(
         device,
-        queue,
+        load_staging,
         MaterialChannel::Albedo,
         &grid_texture(),
         GRID_TEXTURE_SIZE,
@@ -368,7 +385,7 @@ pub(crate) fn spawn_orrery(
     // The grid shows each sphere's own spin.
     let albedo_layer = material_pool.upload(
         device,
-        queue,
+        load_staging,
         MaterialChannel::Albedo,
         &grid_texture(),
         GRID_TEXTURE_SIZE,
@@ -455,7 +472,7 @@ pub(crate) fn insert_gltf_model(
         match image {
             Some(image) => material_pool.upload(
                 device,
-                queue,
+                load_staging,
                 channel,
                 &image.pixels,
                 image.width,

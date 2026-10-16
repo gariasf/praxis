@@ -61,6 +61,11 @@ jobs:
           sudo apt-get install -y -q --no-install-recommends \
             mesa-vulkan-drivers=$LAVAPIPE_VERSION
 
+      # The Goldens' launches then find every Asset they load cooked, as
+      # after `praxis cook` on a dev machine (ADR 0018).
+      - name: Cook
+        run: cargo run -- cook
+
       - name: Test
         env:
           PRAXIS_REQUIRE_GOLDENS: "1"

@@ -232,7 +232,7 @@ pub(crate) fn read_back(
 
 /// Submits `encoder` and waits until `buffer`, which it writes, is mapped for
 /// reading.
-fn submit_and_map(
+pub(crate) fn submit_and_map(
     context: &GpuContext,
     encoder: wgpu::CommandEncoder,
     buffer: &wgpu::Buffer,

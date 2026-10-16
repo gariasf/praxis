@@ -7,6 +7,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+use praxis::ReferenceScene;
 use praxis::cook::{CookSettings, texture_sources};
 use praxis::cooked::{
     AssetId, AssetKind, AssetName, AssetSource, CookedCache, CookedMaterial, CookedTexture,
@@ -567,8 +568,12 @@ fn touch_embedded_normal_map(path: &Path) {
     fs::write(path, glb.to_vec().unwrap()).unwrap();
 }
 
+/// A dev launch of the normal-tangent scene cooks its source and nothing
+/// else, cooks nothing when nothing changed, re-cooks exactly a touched
+/// normal map and the metallic-roughness Texture widened by it, and keeps
+/// the Blobs of a source, or a manifest, gone absent.
 #[test]
-fn touching_a_normal_map_re_cooks_exactly_it_and_its_metallic_roughness() {
+fn a_dev_launch_cooks_exactly_what_its_scene_references_and_changed() {
     let directory = scratch("touch-embedded-image");
     let (assets, cache) = (directory.join("assets"), directory.join("cooked"));
     let cache = CookedCache::new(&cache);
@@ -580,15 +585,36 @@ fn touching_a_normal_map_re_cooks_exactly_it_and_its_metallic_roughness() {
         &glb,
     )
     .unwrap();
-    let manifest = json!([{
-        "path": "NormalTangentTest/NormalTangentTest.glb",
-        "guid": format!("{NORMAL_TANGENT_TEST_GUID:032x}"),
-    }]);
+    // Another source beside it, which the scene does not reference.
+    fs::write(assets.join("box.gltf"), gltf(0.75)).unwrap();
+    let manifest = json!([
+        {
+            "path": "NormalTangentTest/NormalTangentTest.glb",
+            "guid": format!("{NORMAL_TANGENT_TEST_GUID:032x}"),
+        },
+        {"path": "box.gltf", "guid": format!("{GUID:032x}")},
+    ]);
     fs::write(assets.join("manifest.json"), manifest.to_string()).unwrap();
-    cook(&assets, &cache).unwrap();
+    let launch = || {
+        let settings = CookSettings::default();
+        praxis::cook::cook_scene(ReferenceScene::NormalTangent, &assets, &cache, &settings).unwrap()
+    };
+    let first = launch();
+    // The scratch cache holds every procedural scene: a full cook would
+    // find this one unchanged.
+    let other_scene = AssetId::new(
+        AssetSource::Scene("pbr-sweep"),
+        AssetKind::Mesh,
+        AssetName::Name("sphere"),
+    );
+    assert!(!first.cooked.is_empty());
+    for other in [other_scene, material_id(PAINTED)] {
+        assert!(!first.cooked.contains(&other) && !first.unchanged.contains(&other));
+    }
+    assert_eq!(launch().cooked, [], "nothing changed, yet a launch cooked");
 
     touch_embedded_normal_map(&glb);
-    let mut cooked = cook(&assets, &cache).unwrap().cooked;
+    let mut cooked = launch().cooked;
     cooked.sort();
     // Unnamed, NormalTangentTest's images are named by their index; image 1
     // is its metallic-roughness and its occlusion.
@@ -602,6 +628,14 @@ fn touching_a_normal_map_re_cooks_exactly_it_and_its_metallic_roughness() {
     ];
     expected.sort();
     assert_eq!(cooked, expected);
+
+    // A Blob stays as it is once its source, then the manifest, is gone.
+    let kept = cache.texture(expected[0]).unwrap();
+    for absent in [glb, assets.join("manifest.json")] {
+        fs::remove_file(absent).unwrap();
+        assert_eq!(launch().cooked, []);
+        assert_eq!(cache.texture(expected[0]).unwrap(), kept);
+    }
     fs::remove_dir_all(&directory).unwrap();
 }
 
