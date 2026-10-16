@@ -401,14 +401,16 @@ fn a_changed_cook_setting_re_cooks_exactly_the_assets_it_covers() {
 /// The side and mip count of the Toksvig sources' images.
 const TOKSVIG_SIDE: u32 = 16;
 const TOKSVIG_MIPS: usize = 5;
-/// Each low bit of a texel's x tilts its normal about y by this much, one
-/// way when the bit is clear and the other when it is set. A box 2^m
-/// texels wide then holds every sign combination of m tilts, so its
-/// normals' mean has length cos(tilt)^m.
+/// In the normal map's top half, each low bit of a texel's x tilts its
+/// normal about y by this much, one way when the bit is clear and the other
+/// when it is set; the bottom half is flat. A tilted box 2^m texels wide
+/// then holds every sign combination of m tilts, so its normals' mean has
+/// length cos(tilt)^m.
 const TILT_DEGREES: f32 = 10.0;
 /// The roughness both metallic-roughness images hold at every texel.
 const ROUGHNESS_BYTE: u8 = 77;
-/// Covers BC5's error on these near-constant blocks.
+/// Covers BC5's error on these blocks of one or two values, and the 8-bit
+/// rounding of the source normals.
 const ROUGHNESS_TOLERANCE: f32 = 0.01;
 
 /// `bumpy` samples a tilted normal map and a metallic-roughness image;
@@ -440,10 +442,11 @@ fn write_toksvig_sources(assets: &Path) {
         &assets.join("bumps.png"),
         TOKSVIG_SIDE,
         TOKSVIG_SIDE,
-        |x, _| {
+        |x, y| {
             let angle: f32 = (0..TOKSVIG_MIPS - 1)
                 .map(|bit| if x >> bit & 1 == 0 { tilt } else { -tilt })
                 .sum();
+            let angle = if y < TOKSVIG_SIDE / 2 { angle } else { 0.0 };
             let byte = |value: f32| ((value + 1.0) / 2.0 * 255.0).round() as u8;
             [byte(angle.sin()), byte(0.0), byte(angle.cos()), 255]
         },
@@ -469,22 +472,30 @@ fn toksvig_widens_each_metallic_roughness_mip_by_its_normal_maps_variance() {
     let id = texture_id(MaterialChannel::MetallicRoughness, "bumpy-roughness");
     let texture = cache.texture(id).unwrap();
     assert_eq!(texture.levels.len(), TOKSVIG_MIPS);
-    let roughness = ROUGHNESS_BYTE as f32 / 255.0;
+    let (roughness, tilt) = (ROUGHNESS_BYTE as f32 / 255.0, TILT_DEGREES.to_radians());
     for mip in 0..TOKSVIG_MIPS {
-        // Toksvig's variance from the mean's length, then GGX's alpha
-        // (roughness squared) widened by it, as src/cook/texture.rs cites.
-        let mean_length = TILT_DEGREES.to_radians().cos().powi(mip as i32);
-        let variance = (1.0 - mean_length) / mean_length;
-        let expected = (roughness.powi(4) + 2.0 * variance).powf(0.25);
-        if mip > 0 {
-            assert!(expected - roughness > 10.0 * ROUGHNESS_TOLERANCE);
-        }
+        let side = TOKSVIG_SIDE >> mip;
         // Roughness is the stored red channel (ADR 0018).
-        for [cooked, ..] in decode(&texture, mip) {
+        for (texel, [cooked, ..]) in decode(&texture, mip).into_iter().enumerate() {
+            // The tilted share of the rows this texel covers. Only the last
+            // mip covers both halves, where the tilted mean points straight
+            // up, so the two lengths average by share.
+            let row = texel as u32 / side;
+            let rows = (row << mip)..((row + 1) << mip);
+            let tilted =
+                rows.filter(|row| *row < TOKSVIG_SIDE / 2).count() as f32 / (1 << mip) as f32;
+            let mean_length = tilted * tilt.cos().powi(mip as i32) + 1.0 - tilted;
+            // Toksvig's variance from the mean's length, then GGX's alpha
+            // (roughness squared) widened by it, as src/cook/texture.rs cites.
+            let angular_variance = (1.0 - mean_length) / mean_length;
+            let expected = (roughness.powi(4) + 2.0 * angular_variance).powf(0.25);
+            if mip > 0 && tilted > 0.0 {
+                assert!(expected - roughness > 10.0 * ROUGHNESS_TOLERANCE);
+            }
             let cooked = cooked as f32 / 255.0;
             assert!(
                 (cooked - expected).abs() <= ROUGHNESS_TOLERANCE,
-                "mip {mip}: roughness {cooked}, Toksvig {expected}"
+                "mip {mip}, texel {texel}: roughness {cooked}, Toksvig {expected}"
             );
         }
     }

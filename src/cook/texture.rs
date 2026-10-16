@@ -76,6 +76,7 @@ impl TextureSource {
     /// This metallic-roughness Texture with its roughness widened by
     /// `normal_map`'s variance, a dependency its Cook key then covers.
     pub(super) fn with_normal_map(self, normal_map: TextureSource) -> Self {
+        debug_assert_eq!(self.channel, MaterialChannel::MetallicRoughness);
         Self {
             normal_map: Some(Box::new(normal_map)),
             ..self
@@ -103,8 +104,8 @@ impl TextureSource {
         }
     }
 
-    /// SHA-256 over the format, the encoder, the settings, the Channel, the
-    /// source bytes and a normal map's Cook key; a generated image's bytes
+    /// SHA-256 over the format, the encoder, the settings, the Channel, a
+    /// normal map's Cook key and the source bytes; a generated image's bytes
     /// are its pixels and size.
     pub(super) fn cook_key(&self, settings: &CookSettings, format_version: u32) -> String {
         let mut hasher = Sha256::new();
@@ -113,6 +114,12 @@ impl TextureSource {
         hasher.update(ENCODER);
         hasher.update(settings.texture_zstd_level.to_le_bytes());
         hasher.update([self.channel as u8]);
+        // Tagged, and ahead of the source bytes, whose length varies, so that
+        // no source's bytes can stand in for it.
+        if let Some(normal_map) = &self.normal_map {
+            hasher.update(b"N");
+            hasher.update(normal_map.cook_key(settings, format_version));
+        }
         match &self.image {
             SourceImage::Encoded(bytes) => hasher.update(bytes),
             SourceImage::Generated(image) => {
@@ -120,9 +127,6 @@ impl TextureSource {
                 hasher.update(image.height.to_le_bytes());
                 hasher.update(&image.pixels);
             }
-        }
-        if let Some(normal_map) = &self.normal_map {
-            hasher.update(normal_map.cook_key(settings, format_version));
         }
         hex(&hasher.finalize())
     }
@@ -347,6 +351,8 @@ impl Level {
     /// This metallic-roughness level with each texel's roughness widened by
     /// the variance in `spread`, a level of the same size.
     fn widened(&self, spread: &Level) -> Level {
+        debug_assert_eq!((self.components, spread.components), (2, 4));
+        debug_assert_eq!((self.width, self.height), (spread.width, spread.height));
         let values = self
             .values
             .as_chunks::<2>()

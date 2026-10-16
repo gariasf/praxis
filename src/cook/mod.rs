@@ -307,8 +307,6 @@ fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> a
             let Some(texture) = texture else { continue };
             let id = texture_id(channel, texture);
             texture_ids[channel as usize] = Some(id);
-            // A metallic-roughness image two Materials share is widened by
-            // the first one's normal map.
             if !cooked_images.insert(id) {
                 continue;
             }
@@ -316,7 +314,8 @@ fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> a
                 continue;
             };
             // Toksvig: metallic-roughness cooks from its Material's normal
-            // map too, and stays as it is while that is absent.
+            // map too (the first Material's, when several share the image),
+            // and stays as it is while that is absent.
             if channel == MaterialChannel::MetallicRoughness
                 && let Some(normal) = &textures[MaterialChannel::Normal as usize]
             {
