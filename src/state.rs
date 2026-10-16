@@ -4,16 +4,20 @@ use anyhow::Context;
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::RunSystemOnce;
 
-use crate::assets::{MaterialData, MaterialPool, MeshPool};
+use crate::assets::{MaterialPool, MeshPool};
 use crate::camera::fly_camera;
 use crate::components::{MaterialRef, MeshRef, PointLight, Transform};
+use crate::cooked::{
+    AssetId, AssetKind, AssetName, AssetSource, COOKED_CACHE_DIRECTORY, CookedCache,
+};
 use crate::gpu::GpuContext;
 use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
 use crate::input::{Input, clear_just_pressed};
 use crate::render::{FramePreparer, LoadStaging, Renderer};
 use crate::scenes::{
-    HELMET_SWEEP_BASE_COLOR, ReferenceScene, SWEEP_METALLIC, SWEEP_ROUGHNESS, insert_gltf_model,
+    ReferenceScene, SCI_FI_HELMET, SWEEP_METALLIC, SWEEP_ROUGHNESS, insert_gltf_mesh,
     spawn_far_coplanar, spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep, spawn_uv_grid, spin,
+    sweep_material,
 };
 use crate::stats::{FrameRecorder, FrameStats};
 use crate::threading::{init_compute_pool, single_threaded_schedule};
@@ -57,7 +61,6 @@ impl State {
         let mut renderer = Renderer::new(context, target_format, width, height);
         let Renderer {
             device,
-            queue,
             mesh_pool,
             material_pool,
             load_staging,
@@ -74,56 +77,41 @@ impl State {
         let recorder = FrameRecorder::new();
         let (schedule, mut fixed_schedule) = simulation_schedules(&recorder);
 
+        let cache = CookedCache::new(COOKED_CACHE_DIRECTORY);
         // A dev launch cooks what the scene loads and has changed (ADR 0018).
         #[cfg(feature = "cook")]
         crate::cook::cook_scene(
             scene,
             std::path::Path::new(crate::cook::ASSETS_DIRECTORY),
-            &crate::cooked::CookedCache::new(crate::cooked::COOKED_CACHE_DIRECTORY),
+            &cache,
             &crate::cook::CookSettings::default(),
         )
         .with_context(|| format!("cooking {}", scene.name()))?;
 
-        match scene {
-            ReferenceScene::Helmet => Self::spawn_helmet_scene(
-                &mut world,
-                device,
-                queue,
-                load_staging,
-                mesh_pool,
-                material_pool,
-            ),
-            ReferenceScene::PbrSweep => {
-                spawn_pbr_sweep(&mut world, queue, load_staging, mesh_pool, material_pool)
-            }
-            ReferenceScene::UvGrid => spawn_uv_grid(
-                &mut world,
-                device,
-                queue,
-                load_staging,
-                mesh_pool,
-                material_pool,
-            ),
-            ReferenceScene::NormalTangent => spawn_normal_tangent(
-                &mut world,
-                device,
-                queue,
-                load_staging,
-                mesh_pool,
-                material_pool,
-            ),
-            ReferenceScene::FarCoplanar => {
-                spawn_far_coplanar(&mut world, queue, load_staging, mesh_pool, material_pool)
-            }
-            ReferenceScene::Orrery => spawn_orrery(
-                &mut world,
-                device,
-                queue,
-                load_staging,
-                mesh_pool,
-                material_pool,
-            ),
-        }?;
+        let spawn: fn(
+            &mut World,
+            &wgpu::Device,
+            &mut LoadStaging,
+            &CookedCache,
+            &mut MeshPool,
+            &mut MaterialPool,
+        ) -> anyhow::Result<()> = match scene {
+            ReferenceScene::Helmet => Self::spawn_helmet_scene,
+            ReferenceScene::PbrSweep => spawn_pbr_sweep,
+            ReferenceScene::UvGrid => spawn_uv_grid,
+            ReferenceScene::NormalTangent => spawn_normal_tangent,
+            ReferenceScene::FarCoplanar => spawn_far_coplanar,
+            ReferenceScene::Orrery => spawn_orrery,
+        };
+        spawn(
+            &mut world,
+            device,
+            load_staging,
+            &cache,
+            mesh_pool,
+            material_pool,
+        )
+        .with_context(|| format!("loading {}", scene.name()))?;
         for (position, color) in [
             (glam::dvec3(2.0, 2.0, 2.0), glam::Vec3::X),
             (glam::dvec3(-2.0, 2.0, 2.0), glam::Vec3::Y),
@@ -168,20 +156,18 @@ impl State {
     fn spawn_helmet_scene(
         world: &mut World,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
         load_staging: &mut LoadStaging,
+        cache: &CookedCache,
         mesh_pool: &mut MeshPool,
         material_pool: &mut MaterialPool,
     ) -> anyhow::Result<()> {
-        let (mesh_handle, material_handle) = insert_gltf_model(
-            device,
-            queue,
-            load_staging,
-            mesh_pool,
-            material_pool,
-            DEFAULT_MODEL,
-        )
-        .context("run scripts/fetch-assets.sh if the model is missing")?;
+        let mesh_handle = insert_gltf_mesh(load_staging, mesh_pool, DEFAULT_MODEL)
+            .context("run scripts/fetch-assets.sh if the model is missing")?;
+        let source = AssetSource::File(SCI_FI_HELMET);
+        let id = AssetId::new(source, AssetKind::Material, AssetName::Name("SciFiHelmet"));
+        let material_handle = material_pool
+            .load(device, load_staging, cache, id)
+            .with_context(|| format!("loading the Material of {DEFAULT_MODEL}"))?;
 
         // Debug material sweep: a pure factor sweep over the neutral default
         // layers with a white base color. Top row dielectric, bottom row metal;
@@ -191,16 +177,8 @@ impl State {
         // middle helmet and stay in frame.
         for (row_index, metallic) in SWEEP_METALLIC.into_iter().enumerate() {
             for (column_index, roughness) in SWEEP_ROUGHNESS.into_iter().enumerate() {
-                let variant_handle = material_pool.insert(
-                    queue,
-                    MaterialData {
-                        base_color: HELMET_SWEEP_BASE_COLOR,
-                        metallic_roughness: [metallic, roughness, 0.0, 0.0],
-                        emissive: [0.0, 0.0, 0.0, 1.0],
-                        texture_indices: [MaterialPool::DEFAULT_LAYER; 4],
-                        extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
-                    },
-                );
+                let id = ReferenceScene::Helmet.material_id(&sweep_material(metallic, roughness));
+                let variant_handle = material_pool.load(device, load_staging, cache, id)?;
                 let column_offset = (column_index as f32 - 2.0) * 2.0;
                 let row_offset = 2.6 - row_index as f32 * 5.2;
                 world.spawn((

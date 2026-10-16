@@ -5,14 +5,14 @@ use anyhow::Context;
 use bevy_ecs::prelude::*;
 
 use crate::assets::loader::generate_tangents;
-use crate::assets::{
-    LoadedImage, MaterialChannel, MaterialData, MaterialHandle, MaterialPool, MeshHandle, MeshPool,
-    load_model,
-};
+#[cfg(feature = "cook")]
+use crate::assets::{LoadedImage, MaterialChannel};
+use crate::assets::{MaterialPool, MeshHandle, MeshPool, load_model};
 use crate::camera::Camera;
 use crate::components::{MaterialRef, MeshRef, Transform};
 #[cfg(feature = "cook")]
-use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource, CookedMaterial};
+use crate::cooked::CookedMaterial;
+use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource, CookedCache};
 use crate::render::{LoadStaging, Vertex};
 use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
 use crate::transform::PreviousWorldTransform;
@@ -65,6 +65,12 @@ impl ReferenceScene {
         Self::ALL.into_iter().find(|scene| scene.name() == name)
     }
 
+    /// The Asset ID of the scene's procedural Material `name`.
+    pub(crate) fn material_id(self, name: &str) -> AssetId {
+        let source = AssetSource::Scene(self.name());
+        AssetId::new(source, AssetKind::Material, AssetName::Name(name))
+    }
+
     /// The manifest sources the scene references, by GUID.
     #[cfg(feature = "cook")]
     pub(crate) fn source_files(self) -> &'static [u128] {
@@ -99,7 +105,7 @@ impl ReferenceScene {
         let sweep = |base_color| {
             SWEEP_METALLIC.into_iter().flat_map(move |metallic| {
                 SWEEP_ROUGHNESS.into_iter().map(move |roughness| {
-                    let name = format!("metallic-{metallic}-roughness-{roughness}");
+                    let name = sweep_material(metallic, roughness);
                     (name, factors(base_color, metallic, roughness, None))
                 })
             })
@@ -203,10 +209,8 @@ impl ReferenceScene {
 }
 
 /// SciFiHelmet's glTF file, by its manifest GUID.
-#[cfg(feature = "cook")]
-const SCI_FI_HELMET: u128 = 0x3b67bb0196a34daa9d4389cb09aa9a27;
+pub(crate) const SCI_FI_HELMET: u128 = 0x3b67bb0196a34daa9d4389cb09aa9a27;
 /// NormalTangentTest's glTF file, by its manifest GUID.
-#[cfg(feature = "cook")]
 const NORMAL_TANGENT_TEST: u128 = 0xc750a32dc879478eaca4748dbc82645a;
 
 /// A camera on a circle of `radius` at `height` around the origin, looking at
@@ -219,33 +223,35 @@ fn orbit(frame: u32, radius: f32, height: f32) -> Camera {
 
 /// Linear sRGB reflectance of gold at normal incidence: metals tint their
 /// highlight with it and dielectrics their diffuse, so the two rows differ.
+#[cfg(feature = "cook")]
 const SWEEP_BASE_COLOR: [f32; 4] = [1.0, 0.71, 0.29, 1.0];
 /// The helmet scene's sweep is white, so the factors alone show.
-pub(crate) const HELMET_SWEEP_BASE_COLOR: [f32; 4] = [1.0; 4];
+#[cfg(feature = "cook")]
+const HELMET_SWEEP_BASE_COLOR: [f32; 4] = [1.0; 4];
 pub(crate) const SWEEP_METALLIC: [f32; 2] = [0.0, 1.0];
 pub(crate) const SWEEP_ROUGHNESS: [f32; 5] = [0.1, 0.3, 0.5, 0.7, 0.9];
 const SPHERE_RADIUS: f32 = 0.5;
 const SPHERE_SPACING: f32 = 1.3;
 
+/// The name of a sweep's Material of `metallic` and `roughness`.
+pub(crate) fn sweep_material(metallic: f32, roughness: f32) -> String {
+    format!("metallic-{metallic}-roughness-{roughness}")
+}
+
 pub(crate) fn spawn_pbr_sweep(
     world: &mut World,
-    queue: &wgpu::Queue,
+    device: &wgpu::Device,
     load_staging: &mut LoadStaging,
+    cache: &CookedCache,
     mesh_pool: &mut MeshPool,
     material_pool: &mut MaterialPool,
 ) -> anyhow::Result<()> {
     let sphere = insert_mesh(load_staging, mesh_pool, &uv_sphere(SPHERE_RADIUS))?;
     for (row, metallic) in SWEEP_METALLIC.into_iter().enumerate() {
         for (column, roughness) in SWEEP_ROUGHNESS.into_iter().enumerate() {
-            let material = material_pool.insert(
-                queue,
-                factor_material(
-                    SWEEP_BASE_COLOR,
-                    metallic,
-                    roughness,
-                    MaterialPool::DEFAULT_LAYER,
-                ),
-            );
+            let name = sweep_material(metallic, roughness);
+            let id = ReferenceScene::PbrSweep.material_id(&name);
+            let material = material_pool.load(device, load_staging, cache, id)?;
             let position = glam::vec3(
                 (column as f32 - (SWEEP_ROUGHNESS.len() - 1) as f32 / 2.0) * SPHERE_SPACING,
                 (0.5 - row as f32) * SPHERE_SPACING,
@@ -262,29 +268,20 @@ pub(crate) fn spawn_pbr_sweep(
 }
 
 /// Rough so the highlight does not wash out the texture.
+#[cfg(feature = "cook")]
 const UV_GRID_ROUGHNESS: f32 = 0.8;
 
 pub(crate) fn spawn_uv_grid(
     world: &mut World,
     device: &wgpu::Device,
-    queue: &wgpu::Queue,
     load_staging: &mut LoadStaging,
+    cache: &CookedCache,
     mesh_pool: &mut MeshPool,
     material_pool: &mut MaterialPool,
 ) -> anyhow::Result<()> {
     let plane = insert_mesh(load_staging, mesh_pool, &ground_plane(4.0, 2.0))?;
-    let albedo_layer = material_pool.upload(
-        device,
-        load_staging,
-        MaterialChannel::Albedo,
-        &grid_texture(),
-        GRID_TEXTURE_SIZE,
-        GRID_TEXTURE_SIZE,
-    );
-    let material = material_pool.insert(
-        queue,
-        factor_material([1.0; 4], 0.0, UV_GRID_ROUGHNESS, albedo_layer),
-    );
+    let id = ReferenceScene::UvGrid.material_id("grid");
+    let material = material_pool.load(device, load_staging, cache, id)?;
     world.spawn((Transform::IDENTITY, MeshRef(plane), MaterialRef(material)));
     Ok(())
 }
@@ -298,19 +295,18 @@ const NORMAL_TANGENT_CENTRE_HEIGHT: f64 = -0.125;
 pub(crate) fn spawn_normal_tangent(
     world: &mut World,
     device: &wgpu::Device,
-    queue: &wgpu::Queue,
     load_staging: &mut LoadStaging,
+    cache: &CookedCache,
     mesh_pool: &mut MeshPool,
     material_pool: &mut MaterialPool,
 ) -> anyhow::Result<()> {
-    let (mesh, material) = insert_gltf_model(
-        device,
-        queue,
-        load_staging,
-        mesh_pool,
-        material_pool,
-        NORMAL_TANGENT_ASSET,
-    )?;
+    let mesh = insert_gltf_mesh(load_staging, mesh_pool, NORMAL_TANGENT_ASSET)?;
+    // Unnamed in the file, so named by its index (ADR 0018).
+    let source = AssetSource::File(NORMAL_TANGENT_TEST);
+    let id = AssetId::new(source, AssetKind::Material, AssetName::Index(0));
+    let material = material_pool
+        .load(device, load_staging, cache, id)
+        .with_context(|| format!("loading the Material of {NORMAL_TANGENT_ASSET}"))?;
     world.spawn((Transform::IDENTITY, MeshRef(mesh), MaterialRef(material)));
     Ok(())
 }
@@ -323,13 +319,16 @@ const FAR_COPLANAR_CAMERA_HEIGHT: f64 = 300.0;
 /// Between the two planes, in metres.
 const FAR_COPLANAR_GAP: f64 = 0.01;
 /// The upper plane's base colour, then the lower one's.
+#[cfg(feature = "cook")]
 const FAR_COPLANAR_COLORS: [[f32; 4]; 2] = [[0.8, 0.1, 0.1, 1.0], [0.1, 0.8, 0.1, 1.0]];
+#[cfg(feature = "cook")]
 const FAR_COPLANAR_ROUGHNESS: f32 = 0.8;
 
 pub(crate) fn spawn_far_coplanar(
     world: &mut World,
-    queue: &wgpu::Queue,
+    device: &wgpu::Device,
     load_staging: &mut LoadStaging,
+    cache: &CookedCache,
     mesh_pool: &mut MeshPool,
     material_pool: &mut MaterialPool,
 ) -> anyhow::Result<()> {
@@ -339,19 +338,9 @@ pub(crate) fn spawn_far_coplanar(
         &ground_plane(FAR_COPLANAR_DISTANCE as f32, 1.0),
     )?;
     let centre = glam::dvec3(0.0, 0.0, -FAR_COPLANAR_DISTANCE);
-    for (height, base_color) in [0.0, -FAR_COPLANAR_GAP]
-        .into_iter()
-        .zip(FAR_COPLANAR_COLORS)
-    {
-        let material = material_pool.insert(
-            queue,
-            factor_material(
-                base_color,
-                0.0,
-                FAR_COPLANAR_ROUGHNESS,
-                MaterialPool::DEFAULT_LAYER,
-            ),
-        );
+    for (height, name) in [(0.0, "upper"), (-FAR_COPLANAR_GAP, "lower")] {
+        let id = ReferenceScene::FarCoplanar.material_id(name);
+        let material = material_pool.load(device, load_staging, cache, id)?;
         world.spawn((
             Transform::from_translation(centre + glam::DVec3::Y * height),
             MeshRef(plane),
@@ -368,6 +357,7 @@ const ORRERY_SPIN_RATES: [f64; 5] = [0.5, 1.5, 2.5, 3.5, 4.5];
 const ORRERY_SCALE: f32 = 0.7;
 /// Each orrery body's distance from its parent, in its parent's diameters.
 const ORRERY_ORBIT_RADIUS: f64 = 1.6;
+#[cfg(feature = "cook")]
 const ORRERY_ROUGHNESS: f32 = 0.5;
 
 /// A chain of five spheres from a root at the origin, each a child of the
@@ -376,25 +366,15 @@ const ORRERY_ROUGHNESS: f32 = 0.5;
 pub(crate) fn spawn_orrery(
     world: &mut World,
     device: &wgpu::Device,
-    queue: &wgpu::Queue,
     load_staging: &mut LoadStaging,
+    cache: &CookedCache,
     mesh_pool: &mut MeshPool,
     material_pool: &mut MaterialPool,
 ) -> anyhow::Result<()> {
     let sphere = insert_mesh(load_staging, mesh_pool, &uv_sphere(SPHERE_RADIUS))?;
     // The grid shows each sphere's own spin.
-    let albedo_layer = material_pool.upload(
-        device,
-        load_staging,
-        MaterialChannel::Albedo,
-        &grid_texture(),
-        GRID_TEXTURE_SIZE,
-        GRID_TEXTURE_SIZE,
-    );
-    let material = material_pool.insert(
-        queue,
-        factor_material([1.0; 4], 0.0, ORRERY_ROUGHNESS, albedo_layer),
-    );
+    let id = ReferenceScene::Orrery.material_id("grid");
+    let material = material_pool.load(device, load_staging, cache, id)?;
     let body = |radians_per_second| {
         (
             MeshRef(sphere),
@@ -435,125 +415,22 @@ pub(crate) fn spin(fixed_time: Res<FixedTime>, mut spinning: Query<(&Spin, &mut 
     }
 }
 
-/// Loads the glTF file at `path`, relative to the working directory, as one
-/// Mesh, and inserts the Material of its first Primitive with each of its
-/// textures uploaded to its Channel's array.
-pub(crate) fn insert_gltf_model(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
+/// Loads every Primitive of the glTF file at `path`, relative to the working
+/// directory, as one Mesh.
+pub(crate) fn insert_gltf_mesh(
     load_staging: &mut LoadStaging,
     mesh_pool: &mut MeshPool,
-    material_pool: &mut MaterialPool,
     path: &str,
-) -> anyhow::Result<(MeshHandle, MaterialHandle)> {
+) -> anyhow::Result<MeshHandle> {
     let model = load_model(path).with_context(|| format!("load {path}"))?;
-
     let primitives: Vec<_> = model
         .primitives
         .iter()
         .map(|primitive| (primitive.vertices.as_slice(), primitive.indices.as_slice()))
         .collect();
-    let mesh_handle = mesh_pool
+    mesh_pool
         .load(load_staging, &primitives)
-        .with_context(|| format!("{path}: the Arenas refused its Mesh"))?;
-
-    // Multi-material meshes (one MaterialRef per primitive) are deferred.
-    if model.primitives.len() > 1 {
-        tracing::warn!(
-            primitives = model.primitives.len(),
-            "multi-primitive model; only primitive 0's material is used (multi-material deferred)"
-        );
-    }
-    let first_primitive = model
-        .primitives
-        .first()
-        .ok_or_else(|| anyhow::anyhow!("model has no primitives"))?;
-    let mut upload_channel = |channel: MaterialChannel, image: Option<&LoadedImage>| -> u32 {
-        match image {
-            Some(image) => material_pool.upload(
-                device,
-                load_staging,
-                channel,
-                &image.pixels,
-                image.width,
-                image.height,
-            ),
-            None => {
-                tracing::debug!(
-                    ?channel,
-                    "model has no texture for channel; using the neutral layer"
-                );
-                MaterialPool::DEFAULT_LAYER
-            }
-        }
-    };
-    let albedo_layer = upload_channel(
-        MaterialChannel::Albedo,
-        first_primitive.base_color_image.as_ref(),
-    );
-    let normal_layer = upload_channel(
-        MaterialChannel::Normal,
-        first_primitive.normal_image.as_ref(),
-    );
-    let metallic_roughness_layer = upload_channel(
-        MaterialChannel::MetallicRoughness,
-        first_primitive.metallic_roughness_image.as_ref(),
-    );
-    let occlusion_layer = upload_channel(
-        MaterialChannel::Occlusion,
-        first_primitive.occlusion_image.as_ref(),
-    );
-    let emissive_layer = upload_channel(
-        MaterialChannel::Emissive,
-        first_primitive.emissive_image.as_ref(),
-    );
-    let material = MaterialData {
-        base_color: first_primitive.base_color_factor,
-        metallic_roughness: [
-            first_primitive.metallic_factor,
-            first_primitive.roughness_factor,
-            0.0,
-            0.0,
-        ],
-        emissive: [
-            first_primitive.emissive_factor[0],
-            first_primitive.emissive_factor[1],
-            first_primitive.emissive_factor[2],
-            1.0,
-        ],
-        texture_indices: [
-            albedo_layer,
-            normal_layer,
-            metallic_roughness_layer,
-            occlusion_layer,
-        ],
-        extra: [emissive_layer, 0, 0, 0],
-    };
-    let material_handle = material_pool.insert(queue, material);
-
-    Ok((mesh_handle, material_handle))
-}
-
-/// Factors only, with `albedo_layer` and the neutral Layer for every other
-/// Channel.
-fn factor_material(
-    base_color: [f32; 4],
-    metallic: f32,
-    roughness: f32,
-    albedo_layer: u32,
-) -> MaterialData {
-    MaterialData {
-        base_color,
-        metallic_roughness: [metallic, roughness, 0.0, 0.0],
-        emissive: [0.0, 0.0, 0.0, 1.0],
-        texture_indices: [
-            albedo_layer,
-            MaterialPool::DEFAULT_LAYER,
-            MaterialPool::DEFAULT_LAYER,
-            MaterialPool::DEFAULT_LAYER,
-        ],
-        extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
-    }
+        .with_context(|| format!("{path}: the Arenas refused its Mesh"))
 }
 
 /// An indexed triangle list, counter-clockwise when seen from outside.
@@ -660,11 +537,13 @@ pub(crate) fn ground_plane(half_size: f32, uv_repeat: f32) -> Geometry {
 }
 
 /// Side of the grid texture, in texels.
+#[cfg(feature = "cook")]
 const GRID_TEXTURE_SIZE: u32 = 2048;
 
 /// `GRID_TEXTURE_SIZE`-square RGBA8 sRGB texture of 8 × 8 cells framed by dark
 /// lines. Red grows with the cell's column and green with its row, and blue
 /// alternates as a checker, so every cell shows where it sits in UV space.
+#[cfg(feature = "cook")]
 fn grid_texture() -> Vec<u8> {
     const CELLS: u32 = 8;
     const CELL_SIZE: u32 = GRID_TEXTURE_SIZE / CELLS;
