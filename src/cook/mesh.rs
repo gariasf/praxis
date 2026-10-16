@@ -4,9 +4,13 @@
 //! them for vertex cache, overdraw and vertex fetch.
 
 use glam::{Mat3, Quat, Vec3};
+use sha2::{Digest, Sha256};
 
 use crate::assets::loader::corner_tangents;
-use crate::cooked::{AssetId, AssetKind, AssetSource, CookedMesh, CookedPrimitive, CookedVertex};
+use crate::cooked::{
+    AssetId, AssetKind, AssetSource, CookedMesh, CookedPrimitive, CookedVertex,
+    MESH_FORMAT_VERSION, MESH_MAGIC, hex,
+};
 use crate::scenes::Geometry;
 
 /// A Primitive's geometry and the Asset ID of its Material, if it names one.
@@ -25,6 +29,37 @@ pub(super) fn encoder_settings() -> String {
         zstd::zstd_safe::version_number(),
         CookedMesh::ZSTD_LEVEL
     )
+}
+
+/// A Mesh's Cook key: SHA-256 over its format, its encoders' versions and
+/// settings, and each Primitive's geometry and Material, which are all
+/// `cook` reads, each part length-prefixed so no two Meshes share an
+/// encoding.
+pub(super) fn cook_key(primitives: &[SourcePrimitive]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(MESH_MAGIC);
+    hasher.update(MESH_FORMAT_VERSION.to_le_bytes());
+    let mut hash_part = |part: &[u8]| {
+        hasher.update((part.len() as u64).to_le_bytes());
+        hasher.update(part);
+    };
+    hash_part(encoder_settings().as_bytes());
+    for (geometry, material) in primitives {
+        // Every field by name, so that one added to `Geometry` fails to
+        // compile here until the key covers it.
+        let Geometry {
+            positions,
+            normals,
+            uvs,
+            indices,
+        } = geometry;
+        hash_part(bytemuck::cast_slice(positions));
+        hash_part(bytemuck::cast_slice(normals));
+        hash_part(bytemuck::cast_slice(uvs));
+        hash_part(bytemuck::cast_slice(indices));
+        hash_part(&material.map_or(0, |material| material.0).to_be_bytes());
+    }
+    hex(&hasher.finalize())
 }
 
 /// Cooks one Mesh from its Primitives' geometry and Material Asset IDs.
@@ -203,6 +238,32 @@ pub(super) fn gltf_meshes(
 mod tests {
     use super::*;
     use crate::ReferenceScene;
+
+    #[test]
+    fn the_cook_key_covers_every_part_a_mesh_cooks_from() {
+        let triangle = || {
+            let geometry = Geometry {
+                positions: vec![[0.0; 3]; 3],
+                normals: vec![[0.0, 0.0, 1.0]; 3],
+                uvs: vec![[0.0; 2]; 3],
+                indices: vec![0, 1, 2],
+            };
+            (geometry, None)
+        };
+        let key = cook_key(&[triangle()]);
+        let changes: [fn(&mut SourcePrimitive); 5] = [
+            |(geometry, _)| geometry.positions[0][0] = 1.0,
+            |(geometry, _)| geometry.normals[0][2] = -1.0,
+            |(geometry, _)| geometry.uvs[0][0] = 1.0,
+            |(geometry, _)| geometry.indices[0] = 2,
+            |(_, material)| *material = Some(AssetId(1)),
+        ];
+        for change in changes {
+            let mut primitive = triangle();
+            change(&mut primitive);
+            assert_ne!(cook_key(&[primitive]), key);
+        }
+    }
 
     /// One Snorm16 step of a component.
     const STEP: f32 = 1.0 / i16::MAX as f32;
