@@ -182,6 +182,49 @@ fn smith_masking_ggx(cosine: f64, alpha: f64) -> f64 {
     2.0 / (1.0 + (1.0 + alpha * alpha * tangent_squared).sqrt())
 }
 
+/// A cooked normal map stores a unit normal's x and y, each mapped to
+/// [0, 1], and the shader rebuilds z = √(1 − x² − y²), the cosine between the
+/// normal and the surface's, which falls to 0 at grazing slopes. On a lattice
+/// of encodings 1/512 apart, whose x, y and squares f32 holds exactly, every
+/// result matches that closed form, evaluated in f64, within sqrt's rounding.
+/// Past the unit circle, where BC5's error can carry an encoding, z is 0, not
+/// NaN.
+#[test]
+fn tangent_space_normal_rebuilds_z_from_x_and_y() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let steps: Vec<f64> = (0..=1024)
+        .step_by(2)
+        .map(|step| f64::from(step) / 1024.0)
+        .collect();
+    let inputs: Vec<[f32; 4]> = steps
+        .iter()
+        .flat_map(|&x| steps.iter().map(move |&y| [x as f32, y as f32, 0.0, 0.0]))
+        .collect();
+    let results = evaluate(
+        &context,
+        "vec4<f32>(tangent_space_normal(input.xy), 0.0)",
+        &inputs,
+    );
+
+    let mut grazing = 0;
+    for (input, result) in inputs.iter().zip(results) {
+        let [x, y] = [input[0], input[1]].map(|encoded| f64::from(encoded) * 2.0 - 1.0);
+        let expected = (1.0 - x * x - y * y).max(0.0).sqrt();
+        let [result_x, result_y, result_z, _] = result.map(f64::from);
+        assert!(
+            (result_x, result_y) == (x, y) && (result_z - expected).abs() <= 1e-6 * expected,
+            "encoded ({}, {}) rebuilds {result:?}, expected ({x}, {y}, {expected})",
+            input[0],
+            input[1]
+        );
+        grazing += usize::from(expected > 0.0 && expected < 1.0f64.to_radians().sin());
+    }
+    // Normals within 1° of grazing are among the cases.
+    assert!(grazing > 0);
+}
+
 /// ADR 0014's precision bar: 0.25 px at 1440p and a 45° vertical field of
 /// view, for a point 0.3 m from the camera, is 0.043 mm.
 const PRECISION_BAR: f64 = 4.3e-5;

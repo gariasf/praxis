@@ -7,7 +7,7 @@ use std::path::Path;
 
 use wgpu::naga;
 
-use crate::assets::MaterialData;
+use crate::assets::material::MaterialData;
 use crate::render::{CameraUniform, InstanceData, LightUniform, Vertex};
 
 /// Shader capabilities Praxis requires of every adapter: the Capability

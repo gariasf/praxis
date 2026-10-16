@@ -1,45 +1,27 @@
 use crate::render::Vertex;
 
-/// RGBA8 pixels, row-major, top row first.
-pub struct LoadedImage {
-    pub pixels: Vec<u8>,
-    pub width: u32,
-    pub height: u32,
-}
-
 pub struct LoadedPrimitive {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
-    pub base_color_image: Option<LoadedImage>,
-    pub normal_image: Option<LoadedImage>,
-    pub metallic_roughness_image: Option<LoadedImage>,
-    pub occlusion_image: Option<LoadedImage>,
-    pub emissive_image: Option<LoadedImage>,
-    pub base_color_factor: [f32; 4],
-    pub metallic_factor: f32,
-    pub roughness_factor: f32,
-    pub emissive_factor: [f32; 3],
 }
 
 pub struct LoadedModel {
     pub primitives: Vec<LoadedPrimitive>,
 }
 
+/// The vertices and indices of every Primitive of the glTF file at `path`;
+/// its images are not read, since Textures load cooked.
 pub fn load_model(path: &str) -> anyhow::Result<LoadedModel> {
     let _span = tracing::info_span!("load_model", path = %path).entered();
 
     tracing::debug!("starting model load");
 
-    let (document, buffers, images) = gltf::import(path)?;
+    let gltf::Gltf { document, blob } = gltf::Gltf::open(path)?;
+    let buffers = gltf::import_buffers(&document, std::path::Path::new(path).parent(), blob)?;
 
     let meshes = document.meshes();
     let mesh_count = meshes.len();
-    tracing::debug!(
-        meshes = mesh_count,
-        buffers = buffers.len(),
-        images = images.len(),
-        "glTF parsed"
-    );
+    tracing::debug!(meshes = mesh_count, buffers = buffers.len(), "glTF parsed");
 
     if mesh_count == 0 {
         return Err(anyhow::anyhow!("No meshes found"));
@@ -101,86 +83,19 @@ pub fn load_model(path: &str) -> anyhow::Result<LoadedModel> {
                 })
                 .collect();
 
-            let material = primitive.material();
-            let pbr_metallic_roughness = material.pbr_metallic_roughness();
-            let base_color_factor = pbr_metallic_roughness.base_color_factor();
-            let metallic_factor = pbr_metallic_roughness.metallic_factor();
-            let roughness_factor = pbr_metallic_roughness.roughness_factor();
-            let emissive_factor = material.emissive_factor();
-
-            let base_color_image = pbr_metallic_roughness
-                .base_color_texture()
-                .map(|info| decode_rgba(&images, info.texture()))
-                .transpose()?;
-            let metallic_roughness_image = pbr_metallic_roughness
-                .metallic_roughness_texture()
-                .map(|info| decode_rgba(&images, info.texture()))
-                .transpose()?;
-            let normal_image = material
-                .normal_texture()
-                .map(|normal_texture| decode_rgba(&images, normal_texture.texture()))
-                .transpose()?;
-            let occlusion_image = material
-                .occlusion_texture()
-                .map(|occlusion_texture| decode_rgba(&images, occlusion_texture.texture()))
-                .transpose()?;
-            let emissive_image = material
-                .emissive_texture()
-                .map(|info| decode_rgba(&images, info.texture()))
-                .transpose()?;
-
             tracing::debug!(
                 vertices = vertices.len(),
                 indices = indices.len(),
-                has_base_color = base_color_image.is_some(),
-                has_normal = normal_image.is_some(),
-                has_metallic_roughness = metallic_roughness_image.is_some(),
-                has_occlusion = occlusion_image.is_some(),
-                has_emissive = emissive_image.is_some(),
                 "primitive loaded"
             );
 
-            primitives.push(LoadedPrimitive {
-                vertices,
-                indices,
-                base_color_image,
-                normal_image,
-                metallic_roughness_image,
-                occlusion_image,
-                emissive_image,
-                base_color_factor,
-                metallic_factor,
-                roughness_factor,
-                emissive_factor,
-            });
+            primitives.push(LoadedPrimitive { vertices, indices });
         }
     }
 
     tracing::info!(primitives = primitives.len(), "model load complete");
 
     Ok(LoadedModel { primitives })
-}
-
-/// Decodes a glTF texture's image into RGBA8, expanding RGB sources.
-fn decode_rgba(
-    images: &[gltf::image::Data],
-    texture: gltf::Texture,
-) -> anyhow::Result<LoadedImage> {
-    let image = &images[texture.source().index()];
-    let pixels = match image.format {
-        gltf::image::Format::R8G8B8A8 => image.pixels.clone(),
-        gltf::image::Format::R8G8B8 => image
-            .pixels
-            .chunks(3)
-            .flat_map(|rgb| [rgb[0], rgb[1], rgb[2], 255])
-            .collect(),
-        other => anyhow::bail!("Unsupported texture format: {:?}", other),
-    };
-    Ok(LoadedImage {
-        pixels,
-        width: image.width,
-        height: image.height,
-    })
 }
 
 /// Indexed triangle mesh viewed through the MikkTSpace `Geometry` interface.

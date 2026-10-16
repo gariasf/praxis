@@ -301,6 +301,7 @@ impl Renderer {
             .frame_encoder
             .take()
             .unwrap_or_else(|| create_frame_encoder(&self.device));
+        self.material_pool.refresh_bind_group(&self.device);
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -465,7 +466,8 @@ mod tests {
     use std::io::Write;
 
     use super::*;
-    use crate::assets::{MaterialData, Primitive};
+    use crate::assets::Primitive;
+    use crate::assets::material::MaterialData;
     use crate::capture::read_back;
     use crate::render::instance::padded_columns;
     use crate::render::prepare::{Draw, InstanceWrite};
@@ -506,7 +508,7 @@ mod tests {
         } = &renderer.mesh_pool.get(mesh).expect("loaded").primitives[0];
         // Black and unlit, so only the red emissive reaches the target.
         let material = renderer.material_pool.insert(
-            &renderer.queue,
+            &mut renderer.load_staging,
             MaterialData {
                 base_color: [0.0, 0.0, 0.0, 1.0],
                 metallic_roughness: [0.0, 1.0, 0.0, 0.0],

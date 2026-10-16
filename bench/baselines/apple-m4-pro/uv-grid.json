@@ -6,16 +6,16 @@
   "height": 1440,
   "measured_frames": 1800,
   "cpu_frame_microseconds": {
-    "median": 22.625,
-    "p95": 30.458
+    "median": 30.166,
+    "p95": 53.375
   },
   "gpu_main_pass_microseconds": {
-    "median": 219.083,
-    "p95": 222.209
+    "median": 218.166,
+    "p95": 220.458
   },
   "draw_calls": 1,
   "uploaded_bytes": 288,
-  "gpu_memory_bytes": 65101620,
+  "gpu_memory_bytes": 53916836,
   "arena_bytes_in_use": 216,
   "heap_allocations": 73
 }

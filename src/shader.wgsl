@@ -139,6 +139,14 @@ fn geometry_smith(normal_dot_view: f32, normal_dot_light: f32, roughness: f32) -
     return view_masking * light_shadowing;
 }
 
+// A cooked normal map stores a unit normal's x and y in [0, 1], in BC5's two
+// channels (ADR 0018); z is rebuilt as the positive root of x² + y² + z² = 1,
+// and is 0 where block error carries x and y past the unit circle.
+fn tangent_space_normal(encoded: vec2<f32>) -> vec3<f32> {
+    let x_and_y = encoded * 2.0 - vec2<f32>(1.0);
+    return vec3<f32>(x_and_y, sqrt(max(1.0 - dot(x_and_y, x_and_y), 0.0)));
+}
+
 // Outgoing radiance toward view_direction from one light arriving along light_direction.
 fn cook_torrance(
     normal: vec3<f32>,
@@ -174,11 +182,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let albedo_sample = textureSample(albedo_textures[material.texture_indices.x], pbr_sampler, in.uv);
     let base_color = albedo_sample.rgb * material.base_color.rgb;
 
-    // glTF packs roughness in green and metallic in blue; factors multiply.
-    let metallic_roughness_sample = textureSample(metallic_roughness_textures[material.texture_indices.z], pbr_sampler, in.uv).rgb;
-    let metallic = metallic_roughness_sample.b * material.metallic_roughness.x;
+    // Cooked metallic-roughness holds roughness in red and metallic in green
+    // (BC5, ADR 0018); factors multiply.
+    let metallic_roughness_sample = textureSample(metallic_roughness_textures[material.texture_indices.z], pbr_sampler, in.uv).rg;
+    let metallic = metallic_roughness_sample.g * material.metallic_roughness.x;
     // GGX collapses to 0/0 at roughness 0; clamp keeps the highlight finite.
-    let roughness = max(metallic_roughness_sample.g * material.metallic_roughness.y, 0.04);
+    let roughness = max(metallic_roughness_sample.r * material.metallic_roughness.y, 0.04);
 
     let ambient_occlusion = textureSample(occlusion_textures[material.texture_indices.w], pbr_sampler, in.uv).r;
     let emissive = textureSample(emissive_textures[material.extra.x], pbr_sampler, in.uv).rgb
@@ -195,10 +204,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let bitangent = cross(geometric_normal, tangent) * in.tangent_world.w;
     let tangent_to_world = mat3x3<f32>(tangent, bitangent, geometric_normal);
 
-    // Normal map stores a tangent-space direction in [0, 1]; expand to [-1, 1].
-    let normal_sample = textureSample(normal_textures[material.texture_indices.y], pbr_sampler, in.uv).rgb;
-    let tangent_space_normal = normal_sample * 2.0 - vec3<f32>(1.0);
-    let normal = normalize(tangent_to_world * tangent_space_normal);
+    let normal_sample = textureSample(normal_textures[material.texture_indices.y], pbr_sampler, in.uv).rg;
+    let normal = normalize(tangent_to_world * tangent_space_normal(normal_sample));
 
     let view_direction = normalize(-in.camera_relative_position);
 

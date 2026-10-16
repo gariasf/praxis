@@ -547,6 +547,12 @@ mod tests {
         );
     }
 
+    /// Every Texture a Blob holds is one the floor's devices can create.
+    #[test]
+    fn the_largest_cooked_texture_fits_the_floor() {
+        assert!(crate::cooked::MAX_TEXTURE_SIDE <= floor_limits().max_texture_dimension_2d);
+    }
+
     #[test]
     fn limits_exactly_at_the_floor_pass() {
         let limits = wgpu::Limits {

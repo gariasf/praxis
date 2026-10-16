@@ -24,6 +24,9 @@ pub(crate) const TEXTURE_MAGIC: &str = "PXTX";
 /// Bumped whenever the Texture Blob layout, or how the cooker fills it,
 /// changes, like `MATERIAL_FORMAT_VERSION`.
 pub(crate) const TEXTURE_FORMAT_VERSION: u32 = 1;
+/// The largest side the cooker accepts; larger sources are refused rather
+/// than resized (ADR 0018).
+pub(crate) const MAX_TEXTURE_SIDE: u32 = 8192;
 /// Starts every Mesh Blob, followed by `MESH_FORMAT_VERSION`.
 pub(crate) const MESH_MAGIC: [u8; 4] = *b"PXME";
 /// As `MATERIAL_FORMAT_VERSION`, for Mesh Blobs.
@@ -321,7 +324,17 @@ impl CookedTexture {
                     header.format
                 )
             })?;
-        let mips = header.pixel_width.max(header.pixel_height).ilog2() + 1;
+        // As the cooker writes them, so that every Texture a Blob holds is
+        // one wgpu creates.
+        let (width, height) = (header.pixel_width, header.pixel_height);
+        anyhow::ensure!(
+            height > 0
+                && width.is_multiple_of(4)
+                && height.is_multiple_of(4)
+                && width.max(height) <= MAX_TEXTURE_SIDE,
+            "Texture Blob is {width}x{height}: re-cook with `praxis cook`"
+        );
+        let mips = width.max(height).ilog2() + 1;
         anyhow::ensure!(
             header.level_count == mips,
             "Texture Blob has {} mips, expected {mips}",
@@ -683,6 +696,18 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(error.contains("re-cook with `praxis cook`"), "{error}");
+
+        // wgpu creates no BC Texture 6 texels wide.
+        let unaligned = CookedTexture {
+            width: 6,
+            ..texture
+        }
+        .to_blob(3)
+        .unwrap();
+        let error = CookedTexture::from_blob(&unaligned)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("6x4: re-cook"), "{error}");
     }
 
     #[cfg(feature = "cook")]

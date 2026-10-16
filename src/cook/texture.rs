@@ -5,8 +5,9 @@ use anyhow::Context;
 use sha2::{Digest, Sha256};
 
 use super::CookSettings;
-use crate::assets::LoadedImage;
-use crate::cooked::{AssetId, CookedTexture, MaterialChannel, TEXTURE_MAGIC, hex, level_bytes};
+use crate::cooked::{
+    AssetId, CookedTexture, MAX_TEXTURE_SIDE, MaterialChannel, TEXTURE_MAGIC, hex, level_bytes,
+};
 
 // intel_tex_2 0.5.0 links a prebuilt C++ library (its ASTC helpers) but not
 // the C++ runtime that library needs; Linux links fail without it, and
@@ -17,9 +18,13 @@ unsafe extern "C" {}
 
 /// The encoder and its profile, part of every Texture's Cook key.
 const ENCODER: &str = "intel_tex_2 0.5.0 basic";
-/// The largest side the cooker accepts; larger sources are refused rather
-/// than resized (ADR 0018).
-const MAX_SIDE: u32 = 8192;
+
+/// RGBA8 pixels, row-major, top row first.
+pub struct LoadedImage {
+    pub pixels: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+}
 
 /// One Texture to cook: an image a Material samples in one Channel.
 pub struct TextureSource {
@@ -146,8 +151,8 @@ impl TextureSource {
             self.name
         );
         anyhow::ensure!(
-            width <= MAX_SIDE && height <= MAX_SIDE,
-            "{}: {width}x{height} exceeds {MAX_SIDE} on a side",
+            width <= MAX_TEXTURE_SIDE && height <= MAX_TEXTURE_SIDE,
+            "{}: {width}x{height} exceeds {MAX_TEXTURE_SIDE} on a side",
             self.name
         );
         let format = match self.channel {

@@ -4,7 +4,8 @@ use praxis::ReferenceScene;
 use praxis::gpu::GpuContext;
 
 /// Each procedural Reference scene renders the same image twice, from a
-/// working directory with no `assets/`, so no scene can read an asset file.
+/// working directory with no `assets/`, so no scene can read an asset file;
+/// a scene whose source is absent there, with no Blob, fails naming it.
 #[test]
 fn procedural_scenes_render_identically_without_asset_files() {
     let context = match pollster::block_on(GpuContext::headless()) {
@@ -48,6 +49,20 @@ fn procedural_scenes_render_identically_without_asset_files() {
     if cfg!(feature = "cook") {
         let index = std::fs::read_dir("cooked/index").expect("a launch cooked");
         assert!(index.count() > 0, "a launch cooked an empty index");
+        let error = praxis::capture(
+            &context,
+            ReferenceScene::NormalTangent,
+            glam::DVec3::ZERO,
+            160,
+            90,
+        )
+        .expect_err("NormalTangentTest is absent");
+        // Its manifest GUID: no manifest lists it here.
+        let message = format!("{error:#}");
+        assert!(
+            message.contains("c750a32dc879478eaca4748dbc82645a"),
+            "{message}"
+        );
     }
     std::fs::remove_dir_all(&empty_directory).ok();
 }

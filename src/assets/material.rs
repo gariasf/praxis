@@ -1,3 +1,8 @@
+use std::collections::HashMap;
+
+use anyhow::Context;
+
+use crate::cooked::{AssetId, CookedCache, CookedTexture};
 use crate::render::LoadStaging;
 use crate::stats::texture_bytes;
 
@@ -9,9 +14,6 @@ const TEXTURES_PER_CHANNEL: u32 = 8192;
 /// Materials the SSBO holds. Materials are few and never deleted in Phase 6,
 /// so a fixed cap avoids growth + bind-group rebuilds for now.
 const MATERIAL_CAPACITY: u64 = 256;
-
-/// Every Texture is RGBA8 until cooked BC Textures arrive (#150).
-const BYTES_PER_PIXEL: u32 = 4;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub struct MaterialHandle(pub u32);
@@ -63,31 +65,26 @@ pub struct MaterialData {
 /// bound binding array (ADR 0017). A Layer is an index into `views`.
 struct ChannelTextures {
     label: &'static str,
-    format: wgpu::TextureFormat,
     textures: Vec<wgpu::Texture>,
     views: Vec<wgpu::TextureView>,
 }
 
 impl ChannelTextures {
-    fn new(label: &'static str, format: wgpu::TextureFormat) -> Self {
+    fn new(label: &'static str) -> Self {
         Self {
             label,
-            format,
             textures: Vec::new(),
             views: Vec::new(),
         }
     }
 
-    /// Creates a `width` × `height` RGBA8 Texture from `pixels`, written
-    /// through `staging`, and returns its Layer, or `None` when the Channel is
-    /// full.
+    /// Creates `texture` with its full mip chain, written through `staging`,
+    /// and returns its Layer, or `None` when the Channel is full.
     fn push(
         &mut self,
         device: &wgpu::Device,
         staging: &mut LoadStaging,
-        pixels: &[u8],
-        width: u32,
-        height: u32,
+        texture: &CookedTexture,
     ) -> Option<u32> {
         if self.views.len() as u32 >= TEXTURES_PER_CHANNEL {
             tracing::error!(
@@ -99,23 +96,26 @@ impl ChannelTextures {
         }
         let layer = self.views.len() as u32;
         let size = wgpu::Extent3d {
-            width,
-            height,
+            width: texture.width,
+            height: texture.height,
             depth_or_array_layers: 1,
         };
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
+        let gpu_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(self.label),
             size,
-            mip_level_count: 1,
+            mip_level_count: texture.levels.len() as u32,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: self.format,
+            format: texture.format,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        staging.write_texture(&texture, 0, pixels);
-        self.views.push(texture.create_view(&Default::default()));
-        self.textures.push(texture);
+        for (level, bytes) in texture.levels.iter().enumerate() {
+            staging.write_texture(&gpu_texture, level as u32, bytes);
+        }
+        self.views
+            .push(gpu_texture.create_view(&Default::default()));
+        self.textures.push(gpu_texture);
         Some(layer)
     }
 }
@@ -128,15 +128,19 @@ pub struct MaterialPool {
     materials: Vec<MaterialData>,
     materials_buffer: wgpu::Buffer,
     channels: [ChannelTextures; 5],
+    /// Each loaded Texture's Layer in its Channel, which its Asset ID names.
+    texture_layers: HashMap<AssetId, u32>,
     sampler: wgpu::Sampler,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
+    /// Set when a load adds a Texture the bind group lacks.
+    bind_group_is_stale: bool,
 }
 
 impl MaterialPool {
     /// Layer 0 of every Channel holds a 1×1 neutral texture: white for
-    /// albedo / metallic-roughness / occlusion / emissive, the flat normal
-    /// `(0.5, 0.5, 1.0)` for normal. A material without a channel points here,
+    /// albedo / metallic-roughness / occlusion / emissive, the flat normal,
+    /// x and y at 0.5, for normal. A material without a channel points here,
     /// samples a no-op, and its factors pass through unchanged.
     pub const DEFAULT_LAYER: u32 = 0;
 
@@ -148,33 +152,47 @@ impl MaterialPool {
             mapped_at_creation: false,
         });
 
-        // Color channels are sRGB; data channels (vectors / scalars) are linear.
         // Ordered as `MaterialChannel`.
         let mut channels = [
-            ChannelTextures::new("albedo", wgpu::TextureFormat::Rgba8UnormSrgb),
-            ChannelTextures::new("normal", wgpu::TextureFormat::Rgba8Unorm),
-            ChannelTextures::new("metallic_roughness", wgpu::TextureFormat::Rgba8Unorm),
-            ChannelTextures::new("occlusion", wgpu::TextureFormat::Rgba8Unorm),
-            ChannelTextures::new("emissive", wgpu::TextureFormat::Rgba8UnormSrgb),
-        ];
+            "albedo",
+            "normal",
+            "metallic_roughness",
+            "occlusion",
+            "emissive",
+        ]
+        .map(ChannelTextures::new);
 
-        // Neutral defaults into Layer 0 of every Channel (see DEFAULT_LAYER).
-        let white = [255u8; 4];
-        let flat_normal = [128u8, 128, 255, 255];
+        // Neutral defaults into Layer 0 of every Channel (see DEFAULT_LAYER):
+        // colour Channels are sRGB, data Channels linear.
         for channel in MaterialChannel::ALL {
-            let pixel = if channel == MaterialChannel::Normal {
-                &flat_normal
-            } else {
-                &white
+            let (format, pixel) = match channel {
+                MaterialChannel::Albedo | MaterialChannel::Emissive => {
+                    (wgpu::TextureFormat::Rgba8UnormSrgb, [255; 4])
+                }
+                MaterialChannel::Normal => (wgpu::TextureFormat::Rgba8Unorm, [128, 128, 255, 255]),
+                MaterialChannel::MetallicRoughness | MaterialChannel::Occlusion => {
+                    (wgpu::TextureFormat::Rgba8Unorm, [255; 4])
+                }
             };
-            channels[channel as usize].push(device, staging, pixel, 1, 1);
+            let neutral = CookedTexture {
+                format,
+                width: 1,
+                height: 1,
+                levels: vec![pixel.to_vec()],
+            };
+            channels[channel as usize].push(device, staging, &neutral);
         }
 
+        // One sampler serves every Channel (#144): trilinear, at the
+        // anisotropy the Capability floor guarantees (ADR 0021).
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
+            label: Some("Material Sampler"),
             address_mode_u: wgpu::AddressMode::Repeat,
             address_mode_v: wgpu::AddressMode::Repeat,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
+            anisotropy_clamp: 16,
             ..Default::default()
         });
 
@@ -228,9 +246,11 @@ impl MaterialPool {
             materials: Vec::new(),
             materials_buffer,
             channels,
+            texture_layers: HashMap::new(),
             sampler,
             bind_group_layout,
             bind_group,
+            bind_group_is_stale: false,
         }
     }
 
@@ -245,8 +265,9 @@ impl MaterialPool {
         self.materials_buffer.size() + texture_bytes
     }
 
-    /// Registers a material in the SSBO, returning its handle.
-    pub fn insert(&mut self, queue: &wgpu::Queue, data: MaterialData) -> MaterialHandle {
+    /// Registers a material in the SSBO through `staging`, returning its
+    /// handle.
+    pub fn insert(&mut self, staging: &mut LoadStaging, data: MaterialData) -> MaterialHandle {
         if self.materials.len() as u64 >= MATERIAL_CAPACITY {
             tracing::error!(
                 capacity = MATERIAL_CAPACITY,
@@ -256,62 +277,68 @@ impl MaterialPool {
         }
         let handle = MaterialHandle(self.materials.len() as u32);
         let offset = handle.0 as u64 * std::mem::size_of::<MaterialData>() as u64;
-        queue.write_buffer(&self.materials_buffer, offset, bytemuck::bytes_of(&data));
+        staging.write(&self.materials_buffer, offset, bytemuck::bytes_of(&data));
         self.materials.push(data);
         tracing::debug!(handle = handle.0, "material registered");
         handle
     }
 
-    /// Uploads a `width` × `height` RGBA8 image through `staging` as a new
-    /// Texture of `channel` and rebuilds the bind group, returning the Layer
-    /// to store in `MaterialData`. Any rejected upload falls back to
-    /// `DEFAULT_LAYER` so the material still renders.
-    pub fn upload(
+    /// Loads the Material `id` from `cache`, and each Texture it samples once
+    /// per Asset ID, written through `staging`, and returns its Handle. A
+    /// Channel the Material lacks samples Layer 0, as does one already full.
+    pub fn load(
         &mut self,
         device: &wgpu::Device,
         staging: &mut LoadStaging,
-        channel: MaterialChannel,
-        pixels: &[u8],
-        width: u32,
-        height: u32,
-    ) -> u32 {
-        let max_dimension = device.limits().max_texture_dimension_2d;
-        if width == 0 || height == 0 || width > max_dimension || height > max_dimension {
-            tracing::error!(
-                ?channel,
-                width,
-                height,
-                max_dimension,
-                "texture size is zero or above the device limit; using the neutral default layer"
-            );
-            return Self::DEFAULT_LAYER;
+        cache: &CookedCache,
+        id: AssetId,
+    ) -> anyhow::Result<MaterialHandle> {
+        let material = cache.material(id)?;
+        let mut layers = [Self::DEFAULT_LAYER; 5];
+        for (channel, texture_id) in MaterialChannel::ALL.into_iter().zip(material.textures) {
+            let Some(texture_id) = texture_id else {
+                continue;
+            };
+            if let Some(&layer) = self.texture_layers.get(&texture_id) {
+                layers[channel as usize] = layer;
+                continue;
+            }
+            let texture = cache
+                .texture(texture_id)
+                .with_context(|| format!("loading Material {id}"))?;
+            let Some(layer) = self.channels[channel as usize].push(device, staging, &texture)
+            else {
+                continue;
+            };
+            self.texture_layers.insert(texture_id, layer);
+            self.bind_group_is_stale = true;
+            layers[channel as usize] = layer;
         }
-        let expected_bytes = BYTES_PER_PIXEL as usize * width as usize * height as usize;
-        if pixels.len() != expected_bytes {
-            tracing::error!(
-                ?channel,
-                bytes = pixels.len(),
-                expected_bytes,
-                "texture byte length does not match RGBA8 layout; using the neutral default layer"
-            );
-            return Self::DEFAULT_LAYER;
-        }
-        let Some(layer) =
-            self.channels[channel as usize].push(device, staging, pixels, width, height)
-        else {
-            return Self::DEFAULT_LAYER;
+        let [red, green, blue] = material.emissive;
+        let data = MaterialData {
+            base_color: material.base_color,
+            metallic_roughness: [material.metallic, material.roughness, 0.0, 0.0],
+            emissive: [red, green, blue, 1.0],
+            texture_indices: [layers[0], layers[1], layers[2], layers[3]],
+            extra: [layers[4], 0, 0, 0],
         };
-        // One rebuild per upload is fine at load; streaming batches residency
-        // changes into one rebuild per frame (ADR 0017).
-        self.bind_group = create_bind_group(
-            device,
-            &self.bind_group_layout,
-            &self.materials_buffer,
-            &self.channels,
-            &self.sampler,
-        );
-        tracing::debug!(?channel, layer, width, height, "texture uploaded");
-        layer
+        tracing::debug!(material = %id, ?layers, "Material loaded");
+        Ok(self.insert(staging, data))
+    }
+
+    /// Rebuilds the bind group when loads since the last call added
+    /// Textures, so a scene's loads build it once: bind groups are
+    /// snapshots.
+    pub fn refresh_bind_group(&mut self, device: &wgpu::Device) {
+        if std::mem::take(&mut self.bind_group_is_stale) {
+            self.bind_group = create_bind_group(
+                device,
+                &self.bind_group_layout,
+                &self.materials_buffer,
+                &self.channels,
+                &self.sampler,
+            );
+        }
     }
 }
 
@@ -351,4 +378,69 @@ fn create_bind_group(
         layout,
         entries: &entries,
     })
+}
+
+#[cfg(all(test, feature = "cook"))]
+mod tests {
+    use std::io::Write;
+
+    use super::*;
+    use crate::cooked::CookedMaterial;
+    use crate::gpu::GpuContext;
+
+    /// Two Materials sampling one Texture load it once, and a Material
+    /// without that Channel samples Layer 0.
+    #[test]
+    fn a_texture_two_materials_share_loads_once() {
+        let context = match pollster::block_on(GpuContext::headless()) {
+            Ok(context) => context,
+            Err(error) if error.is::<wgpu::RequestAdapterError>() => {
+                // Not `eprintln!`, which libtest captures from passing tests.
+                writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+                return;
+            }
+            Err(error) => panic!("headless GPU context failed: {error:#}"),
+        };
+        let directory =
+            std::env::temp_dir().join(format!("praxis-material-pool-{}", std::process::id()));
+        let cache = CookedCache::new(&directory);
+        // 4 × 4 BC4: one 8-byte block at each of its three mips.
+        let occlusion = CookedTexture {
+            format: wgpu::TextureFormat::Bc4RUnorm,
+            width: 4,
+            height: 4,
+            levels: vec![vec![255; 8]; 3],
+        };
+        cache
+            .write(AssetId(10), "key", &occlusion.to_blob(1).unwrap())
+            .unwrap();
+        let shared = [None, None, None, Some(AssetId(10)), None];
+        for (id, textures) in [(1, shared), (2, shared), (3, [None; 5])] {
+            let material = CookedMaterial {
+                base_color: [1.0; 4],
+                metallic: 0.0,
+                roughness: 1.0,
+                emissive: [0.0; 3],
+                textures,
+            };
+            cache
+                .write(AssetId(id), "key", &material.to_blob())
+                .unwrap();
+        }
+
+        let mut staging = LoadStaging::new(context.device.clone());
+        let mut pool = MaterialPool::new(&context.device, &mut staging);
+        let neutral_bytes = pool.gpu_memory_bytes(false);
+        let occlusion_layers: Vec<u32> = (1..=3)
+            .map(|id| {
+                let handle = pool
+                    .load(&context.device, &mut staging, &cache, AssetId(id))
+                    .unwrap();
+                pool.materials[handle.index() as usize].texture_indices[3]
+            })
+            .collect();
+        assert_eq!(pool.gpu_memory_bytes(false) - neutral_bytes, 3 * 8);
+        assert_eq!(occlusion_layers, [1, 1, MaterialPool::DEFAULT_LAYER]);
+        std::fs::remove_dir_all(&directory).ok();
+    }
 }
