@@ -10,9 +10,7 @@ use crate::components::{MaterialRef, MeshRef, PointLight, Transform};
 use crate::gpu::GpuContext;
 use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
 use crate::input::{Input, clear_just_pressed};
-use crate::render::{
-    FrameData, InstanceSlots, LoadStaging, PointLightQuery, Renderer, prepare_frame,
-};
+use crate::render::{FramePreparer, LoadStaging, Renderer};
 use crate::scenes::{
     HELMET_SWEEP_BASE_COLOR, ReferenceScene, SWEEP_METALLIC, SWEEP_ROUGHNESS, insert_gltf_model,
     spawn_far_coplanar, spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep, spawn_uv_grid, spin,
@@ -37,10 +35,8 @@ pub struct State {
     schedule: Schedule,
     fixed_schedule: Schedule,
     recorder: FrameRecorder,
-    frame: FrameData,
+    preparer: FramePreparer,
     renderer: Renderer,
-    point_light_query: PointLightQuery,
-    instance_slots: InstanceSlots,
 }
 
 impl State {
@@ -145,17 +141,15 @@ impl State {
         fixed_schedule
             .initialize(&mut world)
             .context("fixed schedule build")?;
-        let point_light_query = world.query();
+        let preparer = FramePreparer::new(&mut world);
 
         Ok(Self {
             world,
             schedule,
             fixed_schedule,
             recorder,
-            frame: FrameData::default(),
+            preparer,
             renderer,
-            point_light_query,
-            instance_slots: InstanceSlots::default(),
         })
     }
 
@@ -244,22 +238,16 @@ impl State {
         let started = Instant::now();
         // Writes a failed upload lost are written again, with every Instance.
         if self.renderer.take_lost_instance_writes() {
-            self.instance_slots = InstanceSlots::default();
+            self.preparer.rewrite_all_instances();
         }
-        prepare_frame(
+        let frame = self.preparer.prepare(
             &mut self.world,
-            &mut self.point_light_query,
-            &mut self.instance_slots,
             &self.renderer.mesh_pool,
             self.renderer.aspect_ratio(),
-            &mut self.frame,
         );
         self.recorder.stage("prepare_frame", started);
-        // Ends the window in which prepare sees changes and removals, and
-        // drains the removals, which otherwise pile up.
-        self.world.clear_trackers();
 
-        self.renderer.upload(&self.frame, &mut self.recorder);
+        self.renderer.upload(frame, &mut self.recorder);
     }
 
     /// Draws the frame into `target`, a view in the format and size this
@@ -270,9 +258,12 @@ impl State {
         target: &wgpu::TextureView,
         timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
     ) -> wgpu::SubmissionIndex {
-        let submission =
-            self.renderer
-                .render(&self.frame, target, timestamp_writes, &mut self.recorder);
+        let submission = self.renderer.render(
+            self.preparer.frame(),
+            target,
+            timestamp_writes,
+            &mut self.recorder,
+        );
         self.recorder.end();
         submission
     }
