@@ -133,6 +133,24 @@ impl ReferenceScene {
         }
     }
 
+    /// The scene's procedural Meshes by name, each one Primitive with the
+    /// name of its Material, if its Renderables do not each override it;
+    /// glTF Meshes cook from their manifest source.
+    #[cfg(feature = "cook")]
+    pub(crate) fn meshes(self) -> Vec<(&'static str, Geometry, Option<&'static str>)> {
+        match self {
+            Self::Helmet | Self::NormalTangent => Vec::new(),
+            Self::PbrSweep => vec![("sphere", uv_sphere(SPHERE_RADIUS), None)],
+            Self::UvGrid => vec![("plane", ground_plane(4.0, 2.0), Some("grid"))],
+            Self::FarCoplanar => vec![(
+                "plane",
+                ground_plane(FAR_COPLANAR_DISTANCE as f32, 1.0),
+                None,
+            )],
+            Self::Orrery => vec![("sphere", uv_sphere(SPHERE_RADIUS), Some("grid"))],
+        }
+    }
+
     /// The camera at `frame`, moved by `shift` metres. The path is a function
     /// of the frame number, not of time, so it does not depend on machine
     /// speed.
@@ -522,12 +540,12 @@ fn factor_material(
 }
 
 /// An indexed triangle list, counter-clockwise when seen from outside.
-#[derive(Default)]
-struct Geometry {
-    positions: Vec<[f32; 3]>,
-    normals: Vec<[f32; 3]>,
-    uvs: Vec<[f32; 2]>,
-    indices: Vec<u32>,
+#[derive(Clone, Default)]
+pub(crate) struct Geometry {
+    pub(crate) positions: Vec<[f32; 3]>,
+    pub(crate) normals: Vec<[f32; 3]>,
+    pub(crate) uvs: Vec<[f32; 2]>,
+    pub(crate) indices: Vec<u32>,
 }
 
 /// Loads `geometry` as a one-Primitive Mesh, with MikkTSpace tangents as a
@@ -605,7 +623,7 @@ fn uv_sphere(radius: f32) -> Geometry {
 
 /// A square in the XZ plane, facing +Y, `half_size` metres from the origin
 /// to each edge. `u` grows along +X and `v` along +Z, both to `uv_repeat`.
-fn ground_plane(half_size: f32, uv_repeat: f32) -> Geometry {
+pub(crate) fn ground_plane(half_size: f32, uv_repeat: f32) -> Geometry {
     Geometry {
         positions: vec![
             [-half_size, 0.0, -half_size],

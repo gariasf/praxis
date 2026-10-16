@@ -388,3 +388,48 @@ fn a_changed_cook_setting_re_cooks_exactly_the_assets_it_covers() {
     assert_eq!(cache.texture(paint_id()).unwrap().levels, levels);
     fs::remove_dir_all(&directory).unwrap();
 }
+
+/// SciFiHelmet's cooked Mesh Blob bytes per triangle, at most: the M2
+/// milestone's mesh-size ceiling (#149). A lower figure re-records it.
+const HELMET_MESH_BYTES_PER_TRIANGLE: f64 = 13.81;
+const HELMET_TRIANGLES: usize = 23_358;
+
+#[test]
+fn every_reference_scene_mesh_cooks_and_reads_back() {
+    let directory = scratch("meshes");
+    let cache = CookedCache::new(directory.join("cooked"));
+    let assets = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets");
+    let report = cook(&assets, &cache).unwrap();
+    assert_eq!(report.unresolved_materials, []);
+
+    let mesh_id = |source, name| AssetId::new(source, AssetKind::Mesh, AssetName::Name(name));
+    let scene = |name| AssetSource::Scene(name);
+    let normal_tangent = AssetSource::File(0xc750a32dc879478eaca4748dbc82645a);
+    for id in [
+        mesh_id(scene("pbr-sweep"), "sphere"),
+        mesh_id(scene("uv-grid"), "plane"),
+        mesh_id(scene("far-coplanar"), "plane"),
+        mesh_id(scene("orrery"), "sphere"),
+        mesh_id(normal_tangent, "NormalTangentTest_low"),
+    ] {
+        let mesh = cache.mesh(id).unwrap();
+        assert!(!mesh.primitives.is_empty(), "Mesh {id} has no Primitives");
+    }
+
+    let helmet = mesh_id(
+        AssetSource::File(0x3b67bb0196a34daa9d4389cb09aa9a27),
+        "SciFiHelmet",
+    );
+    if assets.join("SciFiHelmet/SciFiHelmet.gltf").exists() {
+        assert_eq!(
+            cache.mesh(helmet).unwrap().indices.len(),
+            HELMET_TRIANGLES * 3
+        );
+        let bytes_per_triangle = cache.read(helmet).unwrap().len() as f64 / HELMET_TRIANGLES as f64;
+        assert!(
+            bytes_per_triangle <= HELMET_MESH_BYTES_PER_TRIANGLE,
+            "SciFiHelmet's Mesh Blob is {bytes_per_triangle:.2} bytes per triangle, over the {HELMET_MESH_BYTES_PER_TRIANGLE} ceiling"
+        );
+    }
+    fs::remove_dir_all(&directory).unwrap();
+}

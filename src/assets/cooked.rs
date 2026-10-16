@@ -24,6 +24,10 @@ pub(crate) const TEXTURE_MAGIC: &str = "PXTX";
 /// Bumped whenever the Texture Blob layout, or how the cooker fills it,
 /// changes, like `MATERIAL_FORMAT_VERSION`.
 pub(crate) const TEXTURE_FORMAT_VERSION: u32 = 1;
+/// Starts every Mesh Blob, followed by `MESH_FORMAT_VERSION`.
+pub(crate) const MESH_MAGIC: [u8; 4] = *b"PXME";
+/// As `MATERIAL_FORMAT_VERSION`, for Mesh Blobs.
+pub(crate) const MESH_FORMAT_VERSION: u32 = 1;
 
 /// What an Asset is. Its number, and a Texture's Channel, are part of every
 /// Asset ID: never renumber.
@@ -347,6 +351,135 @@ impl CookedTexture {
     }
 }
 
+/// A cooked vertex: 28 bytes (ADR 0018).
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct CookedVertex {
+    pub position: [f32; 3],
+    pub uv: [f32; 2],
+    /// The rotation from tangent space (tangent, bitangent, normal) to mesh
+    /// space as a unit quaternion `xyzw` in Snorm16. Its w is never zero, and
+    /// its sign is the bitangent sign.
+    pub qtangent: [i16; 4],
+}
+
+/// One Material's run of a Mesh's indices.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CookedPrimitive {
+    pub first_index: u32,
+    pub index_count: u32,
+    pub material: Option<AssetId>,
+}
+
+/// A Mesh Asset in mesh-local space: welded vertices, u32 indices into them
+/// and the Primitives that split the indices by Material.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CookedMesh {
+    pub vertices: Vec<CookedVertex>,
+    pub indices: Vec<u32>,
+    pub primitives: Vec<CookedPrimitive>,
+}
+
+impl CookedMesh {
+    /// The zstd level the cooker compresses at; part of the Cook key.
+    #[cfg(feature = "cook")]
+    pub(crate) const ZSTD_LEVEL: i32 = 19;
+
+    /// After the magic and version, one zstd frame holding the vertex,
+    /// index and Primitive counts as little-endian u32s, each Primitive's
+    /// first index, index count and Material Asset ID (zero for none), the
+    /// byte length of the encoded vertices, then meshopt's encoded vertices
+    /// and indices.
+    #[cfg(feature = "cook")]
+    pub(crate) fn to_blob(&self) -> anyhow::Result<Vec<u8>> {
+        let vertices = meshopt::encode_vertex_buffer(&self.vertices)?;
+        let indices = meshopt::encode_index_buffer(&self.indices, self.vertices.len())?;
+        let mut payload = Vec::new();
+        for count in [
+            self.vertices.len(),
+            self.indices.len(),
+            self.primitives.len(),
+        ] {
+            payload.extend((count as u32).to_le_bytes());
+        }
+        for primitive in &self.primitives {
+            payload.extend(primitive.first_index.to_le_bytes());
+            payload.extend(primitive.index_count.to_le_bytes());
+            payload.extend(primitive.material.map_or(0, |id| id.0).to_be_bytes());
+        }
+        payload.extend((vertices.len() as u32).to_le_bytes());
+        payload.extend(vertices);
+        payload.extend(indices);
+        let mut blob = Vec::from(MESH_MAGIC);
+        blob.extend(MESH_FORMAT_VERSION.to_le_bytes());
+        blob.extend(zstd::bulk::compress(&payload, Self::ZSTD_LEVEL)?);
+        Ok(blob)
+    }
+
+    pub fn from_blob(blob: &[u8]) -> anyhow::Result<Self> {
+        let payload = zstd::decode_all(payload(blob, MESH_MAGIC, MESH_FORMAT_VERSION)?)?;
+        let mut rest = payload.as_slice();
+        let rest = &mut rest;
+        let vertex_count = take_u32(rest)? as usize;
+        let index_count = take_u32(rest)? as usize;
+        // meshopt's index decoder writes whole triangles and checks neither.
+        anyhow::ensure!(
+            index_count.is_multiple_of(3),
+            "Mesh Blob's index count is not whole triangles"
+        );
+        let primitive_count = take_u32(rest)?;
+        let mut primitives = Vec::new();
+        for _ in 0..primitive_count {
+            let first_index = take_u32(rest)?;
+            let primitive_index_count = take_u32(rest)?;
+            let material = u128::from_be_bytes(take(rest, 16)?.try_into().expect("16 bytes"));
+            anyhow::ensure!(
+                first_index as usize + primitive_index_count as usize <= index_count,
+                "Mesh Blob has a Primitive past its indices"
+            );
+            primitives.push(CookedPrimitive {
+                first_index,
+                index_count: primitive_index_count,
+                material: (material != 0).then_some(AssetId(material)),
+            });
+        }
+        let vertex_bytes = take_u32(rest)? as usize;
+        let vertices = meshopt::decode_vertex_buffer(take(rest, vertex_bytes)?, vertex_count)?;
+        // The index codec spends at least a byte per triangle, so a count
+        // past that is corrupt and must not size an allocation.
+        anyhow::ensure!(
+            index_count / 3 <= rest.len(),
+            "Mesh Blob has more indices than its encoded bytes hold"
+        );
+        let indices: Vec<u32> = meshopt::decode_index_buffer(rest, index_count)?;
+        // meshopt's decoder may turn corrupt input into any index.
+        anyhow::ensure!(
+            indices.iter().all(|&index| (index as usize) < vertex_count),
+            "Mesh Blob has an index past its vertices"
+        );
+        Ok(Self {
+            vertices,
+            indices,
+            primitives,
+        })
+    }
+}
+
+/// The first `length` bytes of `rest`, which then starts after them.
+fn take<'a>(rest: &mut &'a [u8], length: usize) -> anyhow::Result<&'a [u8]> {
+    let (taken, after) = rest
+        .split_at_checked(length)
+        .context("Mesh Blob is truncated")?;
+    *rest = after;
+    Ok(taken)
+}
+
+fn take_u32(rest: &mut &[u8]) -> anyhow::Result<u32> {
+    Ok(u32::from_le_bytes(
+        take(rest, 4)?.try_into().expect("4 bytes"),
+    ))
+}
+
 /// `blob` after its magic and format version, or a refusal asking for a
 /// re-cook when either does not match: there is no migration code.
 fn payload(blob: &[u8], magic: [u8; 4], version: u32) -> anyhow::Result<&[u8]> {
@@ -417,6 +550,10 @@ impl CookedCache {
 
     pub fn texture(&self, id: AssetId) -> anyhow::Result<CookedTexture> {
         CookedTexture::from_blob(&self.read(id)?).with_context(|| format!("reading Texture {id}"))
+    }
+
+    pub fn mesh(&self, id: AssetId) -> anyhow::Result<CookedMesh> {
+        CookedMesh::from_blob(&self.read(id)?).with_context(|| format!("reading Mesh {id}"))
     }
 
     /// Stores `blob` under its hash and points `id` at it with `cook_key`.
@@ -543,5 +680,23 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(error.contains("re-cook with `praxis cook`"), "{error}");
+    }
+
+    #[cfg(feature = "cook")]
+    #[test]
+    fn mesh_blob_with_a_partial_triangle_is_refused() {
+        let mesh = CookedMesh {
+            vertices: vec![CookedVertex::default(); 3],
+            indices: vec![0, 1, 2],
+            primitives: Vec::new(),
+        };
+        let blob = mesh.to_blob().unwrap();
+        let mut payload = zstd::decode_all(&blob[8..]).unwrap();
+        // The index count, after the vertex count.
+        payload[4..8].copy_from_slice(&4u32.to_le_bytes());
+        let mut corrupt = blob[..8].to_vec();
+        corrupt.extend(zstd::bulk::compress(&payload, 1).unwrap());
+        let error = CookedMesh::from_blob(&corrupt).unwrap_err().to_string();
+        assert!(error.contains("not whole triangles"), "{error}");
     }
 }
