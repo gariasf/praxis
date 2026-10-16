@@ -17,8 +17,7 @@ pub use texture::TextureSource;
 use crate::ReferenceScene;
 use crate::cooked::{
     AssetId, AssetKind, AssetName, AssetSource, CookedCache, CookedMaterial,
-    MATERIAL_FORMAT_VERSION, MATERIAL_MAGIC, MESH_FORMAT_VERSION, MESH_MAGIC, MaterialChannel,
-    TEXTURE_FORMAT_VERSION, hex,
+    MATERIAL_FORMAT_VERSION, MATERIAL_MAGIC, MaterialChannel, TEXTURE_FORMAT_VERSION, hex,
 };
 
 /// The cook settings a Cook key covers besides sources, formats and
@@ -200,41 +199,19 @@ fn read_sources(assets: &Path) -> anyhow::Result<Sources> {
             let primitives = vec![(geometry, material)];
             sources
                 .meshes
-                .push((id, mesh_cook_key(&primitives), primitives));
+                .push((id, mesh::cook_key(&primitives), primitives));
         }
     }
     Ok(sources)
 }
 
-/// A Material has no cook settings and no encoder, so its Cook key covers
-/// its Blob, which is all it cooks from, and its format.
+/// A Material's cook only serialises it, with no settings and no encoder,
+/// so its Cook key covers its Blob and its format.
 fn material_cook_key(blob: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(MATERIAL_MAGIC);
     hasher.update(MATERIAL_FORMAT_VERSION.to_le_bytes());
     hasher.update(blob);
-    hex(&hasher.finalize())
-}
-
-/// A Mesh's Cook key: SHA-256 over its format, its encoders' versions and
-/// settings, and each Primitive's geometry and Material, which are all it
-/// cooks from, each part length-prefixed so no two Meshes share an encoding.
-fn mesh_cook_key(primitives: &[mesh::SourcePrimitive]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(MESH_MAGIC);
-    hasher.update(MESH_FORMAT_VERSION.to_le_bytes());
-    let mut hash_part = |part: &[u8]| {
-        hasher.update((part.len() as u64).to_le_bytes());
-        hasher.update(part);
-    };
-    hash_part(mesh::encoder_settings().as_bytes());
-    for (geometry, material) in primitives {
-        hash_part(bytemuck::cast_slice(&geometry.positions));
-        hash_part(bytemuck::cast_slice(&geometry.normals));
-        hash_part(bytemuck::cast_slice(&geometry.uvs));
-        hash_part(bytemuck::cast_slice(&geometry.indices));
-        hash_part(&material.map_or(0, |material| material.0).to_be_bytes());
-    }
     hex(&hasher.finalize())
 }
 
@@ -346,7 +323,7 @@ fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> a
     for (id, primitives) in mesh::gltf_meshes(guid, &document, &buffers)? {
         sources
             .meshes
-            .push((id, mesh_cook_key(&primitives), primitives));
+            .push((id, mesh::cook_key(&primitives), primitives));
     }
     Ok(())
 }

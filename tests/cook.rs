@@ -395,8 +395,12 @@ const NORMAL_TANGENT_TEST_GUID: u128 = 0xc750a32dc879478eaca4748dbc82645a;
 /// chunk, and the image's buffer view moves onto it.
 fn touch_embedded_normal_map(path: &Path) {
     let glb = fs::read(path).unwrap();
-    let gltf::Glb { header, json, bin } = gltf::Glb::from_slice(&glb).unwrap();
-    let mut binary_chunk = bin.unwrap().into_owned();
+    let gltf::Glb {
+        header,
+        json,
+        bin: binary_chunk,
+    } = gltf::Glb::from_slice(&glb).unwrap();
+    let mut binary_chunk = binary_chunk.unwrap().into_owned();
     let mut document: serde_json::Value = serde_json::from_slice(&json).unwrap();
     let view = document["images"][2]["bufferView"].as_u64().unwrap() as usize;
     let offset = document["bufferViews"][view]["byteOffset"]
@@ -413,11 +417,14 @@ fn touch_embedded_normal_map(path: &Path) {
     normal_map
         .write_to(&mut png, image::ImageFormat::Png)
         .unwrap();
-    let offset = binary_chunk.len().next_multiple_of(4);
-    binary_chunk.resize(offset, 0);
+    let appended_offset = binary_chunk.len().next_multiple_of(4);
+    binary_chunk.resize(appended_offset, 0);
     binary_chunk.extend(png.get_ref());
-    document["bufferViews"][view] =
-        json!({"buffer": 0, "byteOffset": offset, "byteLength": png.get_ref().len()});
+    document["bufferViews"][view] = json!({
+        "buffer": 0,
+        "byteOffset": appended_offset,
+        "byteLength": png.get_ref().len(),
+    });
     document["buffers"][0]["byteLength"] = json!(binary_chunk.len());
     let glb = gltf::Glb {
         header,
@@ -434,8 +441,12 @@ fn touching_an_embedded_image_re_cooks_exactly_its_texture() {
     let cache = CookedCache::new(&cache);
     let glb = assets.join("NormalTangentTest/NormalTangentTest.glb");
     fs::create_dir_all(glb.parent().unwrap()).unwrap();
-    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets");
-    fs::copy(source.join("NormalTangentTest/NormalTangentTest.glb"), &glb).unwrap();
+    let repository_assets = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets");
+    fs::copy(
+        repository_assets.join("NormalTangentTest/NormalTangentTest.glb"),
+        &glb,
+    )
+    .unwrap();
     let manifest = json!([{
         "path": "NormalTangentTest/NormalTangentTest.glb",
         "guid": format!("{NORMAL_TANGENT_TEST_GUID:032x}"),
@@ -467,7 +478,7 @@ fn every_reference_scene_mesh_cooks_and_reads_back() {
 
     let mesh_id = |source, name| AssetId::new(source, AssetKind::Mesh, AssetName::Name(name));
     let scene = |name| AssetSource::Scene(name);
-    let normal_tangent = AssetSource::File(0xc750a32dc879478eaca4748dbc82645a);
+    let normal_tangent = AssetSource::File(NORMAL_TANGENT_TEST_GUID);
     for id in [
         mesh_id(scene("pbr-sweep"), "sphere"),
         mesh_id(scene("uv-grid"), "plane"),
