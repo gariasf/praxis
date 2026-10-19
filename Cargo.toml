@@ -31,6 +31,8 @@ offset-allocator = "0.2.0"
 # Goldens are PNGs, read and written in tests with or without `cook`.
 image = { version = "0.25", default-features = false, features = ["png"] }
 texture2ddecoder = "0.1.2"
+# shader_tests validates WGSL with the Capability floor, mapped as wgpu maps it.
+wgpu-naga-bridge = "30"
 
 [features]
 default = ["cook"]

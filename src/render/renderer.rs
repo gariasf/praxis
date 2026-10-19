@@ -5,7 +5,7 @@ use crate::cooked::CookedVertex;
 use crate::gpu::GpuContext;
 use crate::render::{
     CameraUniform, DEPTH_FORMAT, FrameData, FrameStaging, INSTANCE_BUFFER_INITIAL_CAPACITY,
-    InstanceData, LightUniform, LoadStaging, create_depth_texture,
+    InstanceData, LightUniform, LoadStaging, create_depth_texture, shaders,
 };
 use crate::stats::{FrameRecorder, texture_bytes};
 
@@ -54,7 +54,7 @@ impl Renderer {
 
         let device = context.device.clone();
         let queue = context.queue.clone();
-        let shader = device.create_shader_module(wgpu::include_wgsl!("../shader.wgsl"));
+        let shader = device.create_shader_module(shaders::MAIN.descriptor());
 
         let camera_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

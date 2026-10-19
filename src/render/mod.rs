@@ -2,6 +2,7 @@ pub mod depth;
 pub mod instance;
 pub mod prepare;
 pub mod renderer;
+pub mod shaders;
 pub mod staging;
 pub mod uniforms;
 pub mod vertex;
