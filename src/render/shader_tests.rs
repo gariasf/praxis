@@ -294,16 +294,15 @@ fn a_bind_group_past_the_device_limit_fails_validation() {
         path: "test.wgsl",
         source: "\n@group(4) @binding(0) var<uniform> value: vec4<f32>;\n",
     };
-    let error = validate(&ShaderModule {
-        name: "test",
-        enables: &[],
-        parts: &[PART],
-    })
-    .unwrap_err();
-    assert!(
-        error.starts_with("test module: test.wgsl:2:")
-            && error.ends_with(": @group(4) exceeds the device's max_bind_groups of 4"),
-        "{error}"
+    assert_eq!(
+        validate(&ShaderModule {
+            name: "test",
+            enables: &[],
+            parts: &[PART],
+        })
+        .err()
+        .as_deref(),
+        Some("test module: test.wgsl:2:23: @group(4) exceeds the device's max_bind_groups of 4")
     );
 }
 
@@ -313,13 +312,12 @@ fn a_bind_group_past_the_device_limit_fails_validation() {
 /// and the part and line it is in.
 fn validate(module: &ShaderModule) -> Result<naga::Module, String> {
     let source = module.source();
+    let label = format!("{} module", module.name);
     let error = |location: Option<naga::SourceLocation>, message: &str| match location
         .and_then(|location| module.locate(location.offset as usize))
     {
-        Some((path, line, column)) => {
-            format!("{} module: {path}:{line}:{column}: {message}", module.name)
-        }
-        None => format!("{} module: {message}", module.name),
+        Some((path, line, column)) => format!("{label}: {path}:{line}:{column}: {message}"),
+        None => format!("{label}: {message}"),
     };
     let capabilities =
         wgpu_naga_bridge::features_to_naga_capabilities(floor_features(), floor_downlevel_flags());
@@ -433,12 +431,12 @@ fn scalar_of<T: ShaderScalar>(_: &T) -> naga::Scalar {
     T::SCALAR
 }
 
-/// Each way a struct shared with the CPU in `modules` disagrees with its
-/// twin, as `path: struct: problem`; empty when all agree.
+/// Each way a struct shared with the CPU in `modules`, each after its label,
+/// disagrees with its twin, as `label: struct: problem`; empty when all agree.
 fn layout_problems(modules: &[(String, naga::Module)], twins: &[Twin]) -> Vec<String> {
     let mut problems = Vec::new();
     let mut matched = BTreeSet::new();
-    for (path, module) in modules {
+    for (label, module) in modules {
         for struct_type in structs_shared_with_the_cpu(module) {
             let name = module.types[struct_type]
                 .name
@@ -446,7 +444,7 @@ fn layout_problems(modules: &[(String, naga::Module)], twins: &[Twin]) -> Vec<St
                 .unwrap_or_default();
             let Some(twin) = twins.iter().find(|twin| twin.wgsl_name == name) else {
                 problems.push(format!(
-                    "{path}: {name}: shared with the CPU but has no twin"
+                    "{label}: {name}: shared with the CPU but has no twin"
                 ));
                 continue;
             };
@@ -454,7 +452,7 @@ fn layout_problems(modules: &[(String, naga::Module)], twins: &[Twin]) -> Vec<St
             problems.extend(
                 twin_problems(module, struct_type, twin)
                     .into_iter()
-                    .map(|problem| format!("{path}: {name}: {problem}")),
+                    .map(|problem| format!("{label}: {name}: {problem}")),
             );
         }
     }
