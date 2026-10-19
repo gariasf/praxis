@@ -104,7 +104,7 @@ src/
                                  in git-ignored `cooked/` (ADR 0018)
   render/                      # Renderer (owns the Pools, reads no
                                  ECS World), prepare (ECS World to Frame
-                                 data), instance, uniforms, vertex, depth,
+                                 data), instance, uniforms, depth,
                                  staging, shaders/ (WGSL parts and the
                                  modules each pipeline assembles from them)
 tests/                         # integration tests at agreed seams
@@ -189,7 +189,7 @@ When reviewing changes, check for:
 - [ ] GPU resources created in `Renderer::new` are also recreated in
       `resize()`
 - [ ] Shader bind group bindings match the Rust bind group layouts.
-      `cargo test` checks struct and vertex layouts field by field
+      `cargo test` checks struct layouts field by field
       (`src/render/shader_tests.rs`); Rust-only padding fields start
       with `_`
 - [ ] No World position reaches the GPU in f32: only an anchor plus an

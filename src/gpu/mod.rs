@@ -236,6 +236,9 @@ pub(crate) fn floor_downlevel_flags() -> wgpu::DownlevelFlags {
     // sample at 16x (#144); without the flag, wgpu silently clamps every
     // sampler's anisotropy to 1.
     wgpu::DownlevelFlags::ANISOTROPIC_FILTERING
+        // The vertex shader reads Instances and pulls vertices from the
+        // vertex Arena as storage buffers (ADRs 0005, 0019).
+        | wgpu::DownlevelFlags::VERTEX_STORAGE
 }
 
 /// The binding-array elements per shader stage the Capability floor
@@ -423,9 +426,10 @@ mod tests {
             | wgpu::Features::IMMEDIATES
     }
 
-    /// Metal reports anisotropic filtering on every adapter (wgpu-hal 30.0.1).
+    /// Metal reports anisotropic filtering and vertex-stage storage buffers
+    /// on every adapter (wgpu-hal 30.0.1).
     const M4_PRO_DOWNLEVEL_FLAGS: wgpu::DownlevelFlags =
-        wgpu::DownlevelFlags::ANISOTROPIC_FILTERING;
+        wgpu::DownlevelFlags::ANISOTROPIC_FILTERING.union(wgpu::DownlevelFlags::VERTEX_STORAGE);
 
     /// The Apple M4 Pro's limits on wgpu 30.0.1.
     fn m4_pro_limits() -> wgpu::Limits {
@@ -523,7 +527,7 @@ mod tests {
 
         let error = check_floor(
             m4_pro_features() - wgpu::Features::INDIRECT_FIRST_INSTANCE,
-            M4_PRO_DOWNLEVEL_FLAGS - wgpu::DownlevelFlags::ANISOTROPIC_FILTERING,
+            wgpu::DownlevelFlags::empty(),
             &limits,
             &formats,
         )
@@ -533,7 +537,8 @@ mod tests {
             error,
             BelowCapabilityFloor {
                 missing_features: wgpu::Features::INDIRECT_FIRST_INSTANCE,
-                missing_downlevel_flags: wgpu::DownlevelFlags::ANISOTROPIC_FILTERING,
+                missing_downlevel_flags: wgpu::DownlevelFlags::VERTEX_STORAGE
+                    | wgpu::DownlevelFlags::ANISOTROPIC_FILTERING,
                 formats_without_msaa_x4: vec![wgpu::TextureFormat::Depth32Float],
                 limits: vec![LimitGap {
                     name: "max_buffer_size",
@@ -545,8 +550,8 @@ mod tests {
         assert_eq!(
             error.to_string(),
             "adapter below the Capability floor (ADR 0021): \
-             missing feature INDIRECT_FIRST_INSTANCE; missing downlevel flag ANISOTROPIC_FILTERING; \
-             no 4x MSAA on Depth32Float; \
+             missing feature INDIRECT_FIRST_INSTANCE; missing downlevel flag VERTEX_STORAGE; \
+             missing downlevel flag ANISOTROPIC_FILTERING; no 4x MSAA on Depth32Float; \
              max_buffer_size 2147483647 required, adapter has 268435456"
         );
     }
@@ -555,6 +560,16 @@ mod tests {
     #[test]
     fn the_largest_cooked_texture_fits_the_floor() {
         assert!(crate::cooked::MAX_TEXTURE_SIDE <= floor_limits().max_texture_dimension_2d);
+    }
+
+    /// The vertex shader reads the whole vertex Arena through one storage
+    /// binding (ADR 0019), which the floor holds to the default 128 MiB:
+    /// Vulkan's minimum and lavapipe's `maxStorageBufferRange`.
+    #[test]
+    fn the_vertex_arena_fits_one_storage_binding_of_the_floor() {
+        assert!(
+            crate::assets::ARENA_CAPACITY_BYTES <= floor_limits().max_storage_buffer_binding_size
+        );
     }
 
     #[test]
