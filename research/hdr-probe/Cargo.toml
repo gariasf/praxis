@@ -1,0 +1,18 @@
+[package]
+name = "hdr-probe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Throwaway probe for #189, never merged: its own workspace, outside Praxis.
+[workspace]
+
+[dependencies]
+wgpu = { version = "=30.0.1", default-features = false, features = ["std", "parking_lot", "metal", "wgsl"] }
+pollster = "0.4"
+anyhow = "1"
+bytemuck = "1.25.0"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[profile.release]
+debug = false

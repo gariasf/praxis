@@ -204,14 +204,13 @@ fn capture(scene: &str, output: &str, size: &str) -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("size {size:?} is not <width>x<height>"))?;
     let context = pollster::block_on(GpuContext::headless())?;
     let (pixels, frame_stats) = praxis::capture(&context, scene, glam::DVec3::ZERO, width, height)?;
-    image::save_buffer_with_format(
-        output,
-        &pixels,
-        width,
-        height,
-        image::ExtendedColorType::Rgba8,
-        image::ImageFormat::Png,
-    )?;
+    // Throwaway (#189, never merged): width and height as little-endian u32,
+    // then linear RGBA f32 texels, rows top first.
+    let mut file = Vec::with_capacity(8 + pixels.len());
+    file.extend_from_slice(&width.to_le_bytes());
+    file.extend_from_slice(&height.to_le_bytes());
+    file.extend_from_slice(&pixels);
+    std::fs::write(output, file)?;
     tracing::info!(
         scene = scene.name(),
         path = output,

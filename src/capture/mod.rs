@@ -11,6 +11,9 @@ use crate::stats::FrameStats;
 /// read-back bytes the image's pixels.
 pub(crate) const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
+/// Throwaway (#189, never merged): captures keep linear radiance unclamped.
+pub(crate) const HDR_TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
+
 /// Frames rendered per capture; the last one is read back.
 const FRAME_COUNT: u32 = 60;
 
@@ -67,7 +70,7 @@ pub(crate) fn render_frames(
         PassTimer::MAX_FRAMES
     );
 
-    let mut state = State::new(context, TARGET_FORMAT, width, height, scene, shift)?;
+    let mut state = State::new(context, HDR_TARGET_FORMAT, width, height, scene, shift)?;
     let target = context.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Capture Target"),
         size: wgpu::Extent3d {
@@ -78,7 +81,7 @@ pub(crate) fn render_frames(
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: TARGET_FORMAT,
+        format: HDR_TARGET_FORMAT,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
     });
@@ -188,7 +191,7 @@ impl PassTimer {
 /// row padding the copy needs.
 pub(crate) fn read_back(context: &GpuContext, texture: &wgpu::Texture) -> anyhow::Result<Vec<u8>> {
     let (width, height) = (texture.width(), texture.height());
-    let row_bytes = width * 4;
+    let row_bytes = width * 16;
     let padded_row_bytes = row_bytes.next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
     let buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Capture Read-back Buffer"),
