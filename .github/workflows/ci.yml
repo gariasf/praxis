@@ -156,7 +156,7 @@ jobs:
       - name: Bench and compare
         run: |
           target/release/praxis bench target/bench --ci pbr-sweep uv-grid normal-tangent far-coplanar orrery \
-            minification
+            minification texture-wall
           target/release/praxis compare target/bench --ci
 
       # A new or changed Baseline is this artifact's file, copied into its

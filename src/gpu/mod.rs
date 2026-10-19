@@ -238,13 +238,17 @@ fn floor_downlevel_flags() -> wgpu::DownlevelFlags {
     wgpu::DownlevelFlags::ANISOTROPIC_FILTERING
 }
 
+/// The binding-array elements per shader stage the Capability floor
+/// guarantees (ADR 0021), which the Material Channels share.
+pub(crate) const FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE: u32 = 65_536;
+
 /// The Capability floor's limits (ADR 0021): the defaults, raised only where
 /// an ADR needs it.
 fn floor_limits() -> wgpu::Limits {
     wgpu::Limits {
         // ADR 0017's arenas.
         max_buffer_size: (1 << 31) - 1,
-        max_binding_array_elements_per_shader_stage: 65_536,
+        max_binding_array_elements_per_shader_stage: FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE,
         // ADR 0020's static and dynamic TLAS.
         max_acceleration_structures_per_shader_stage: 2,
         ..wgpu::Limits::default().using_minimum_supported_acceleration_structure_values()

@@ -4,9 +4,7 @@ use std::time::Duration;
 
 use bevy_ecs::prelude::*;
 
-use crate::assets::AssetLoader;
-#[cfg(feature = "cook")]
-use crate::assets::MaterialChannel;
+use crate::assets::{AssetLoader, MaterialChannel};
 use crate::camera::Camera;
 use crate::components::{MaterialRef, MeshRef, PointLight, Transform};
 #[cfg(feature = "cook")]
@@ -41,10 +39,14 @@ pub enum ReferenceScene {
     /// raking point light: its fine checks and high-frequency bumps show
     /// mips, 16x anisotropy and Toksvig.
     Minification,
+    /// 10,000 4×4 Textures resident in the albedo Channel, each one colour
+    /// that encodes its index, and a 10 × 10 grid of quads, each with its own
+    /// Material, sampling Layers across the whole range.
+    TextureWall,
 }
 
 impl ReferenceScene {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Helmet,
         Self::PbrSweep,
         Self::UvGrid,
@@ -52,6 +54,7 @@ impl ReferenceScene {
         Self::FarCoplanar,
         Self::Orrery,
         Self::Minification,
+        Self::TextureWall,
     ];
 
     /// The name the capture command selects the scene by.
@@ -64,6 +67,7 @@ impl ReferenceScene {
             Self::FarCoplanar => "far-coplanar",
             Self::Orrery => "orrery",
             Self::Minification => "minification",
+            Self::TextureWall => "texture-wall",
         }
     }
 
@@ -84,7 +88,6 @@ impl ReferenceScene {
     }
 
     /// The Asset ID of the scene's procedural Texture `name` in `channel`.
-    #[cfg(feature = "cook")]
     pub(crate) fn texture_id(self, channel: MaterialChannel, name: &str) -> AssetId {
         let source = AssetSource::Scene(self.name());
         AssetId::new(source, AssetKind::Texture(channel), AssetName::Name(name))
@@ -100,7 +103,8 @@ impl ReferenceScene {
             | Self::UvGrid
             | Self::FarCoplanar
             | Self::Orrery
-            | Self::Minification => &[],
+            | Self::Minification
+            | Self::TextureWall => &[],
         }
     }
 
@@ -166,6 +170,13 @@ impl ReferenceScene {
                     ],
                 },
             )],
+            Self::TextureWall => (0..TEXTURE_WALL_QUADS)
+                .map(|quad| {
+                    let texture = wall_texture_name(quad * TEXTURE_WALL_TEXTURE_STRIDE);
+                    let material = factors([1.0; 4], 0.0, TEXTURE_WALL_ROUGHNESS, Some(&texture));
+                    (wall_material_name(quad), material)
+                })
+                .collect(),
         }
     }
 
@@ -173,7 +184,7 @@ impl ReferenceScene {
     /// metallic-roughness Texture cooks widened by the normal map of the
     /// Material that samples it (Toksvig).
     #[cfg(feature = "cook")]
-    pub(crate) fn textures(self) -> Vec<(&'static str, MaterialChannel, LoadedImage)> {
+    pub(crate) fn textures(self) -> Vec<(String, MaterialChannel, LoadedImage)> {
         match self {
             Self::UvGrid | Self::Orrery => {
                 let grid = LoadedImage {
@@ -181,13 +192,23 @@ impl ReferenceScene {
                     width: GRID_TEXTURE_SIZE,
                     height: GRID_TEXTURE_SIZE,
                 };
-                vec![("grid", MaterialChannel::Albedo, grid)]
+                vec![("grid".into(), MaterialChannel::Albedo, grid)]
             }
             Self::Minification => vec![
-                ("checker", MaterialChannel::Albedo, checker_texture()),
-                ("bumps", MaterialChannel::Normal, bump_texture()),
-                ("gloss", MaterialChannel::MetallicRoughness, gloss_texture()),
+                ("checker".into(), MaterialChannel::Albedo, checker_texture()),
+                ("bumps".into(), MaterialChannel::Normal, bump_texture()),
+                (
+                    "gloss".into(),
+                    MaterialChannel::MetallicRoughness,
+                    gloss_texture(),
+                ),
             ],
+            Self::TextureWall => (0..TEXTURE_WALL_TEXTURES)
+                .map(|index| {
+                    let texture = wall_texture(index);
+                    (wall_texture_name(index), MaterialChannel::Albedo, texture)
+                })
+                .collect(),
             Self::Helmet | Self::PbrSweep | Self::NormalTangent | Self::FarCoplanar => Vec::new(),
         }
     }
@@ -212,6 +233,9 @@ impl ReferenceScene {
                 ground_plane(MINIFICATION_HALF_SIZE, MINIFICATION_UV_REPEAT),
                 Some("ground"),
             )],
+            Self::TextureWall => {
+                vec![("quad", ground_plane(TEXTURE_WALL_QUAD_HALF_SIZE, 1.0), None)]
+            }
         }
     }
 
@@ -239,6 +263,7 @@ impl ReferenceScene {
             Self::Minification => {
                 Camera::looking_at(MINIFICATION_CAMERA, MINIFICATION_CAMERA_TARGET)
             }
+            Self::TextureWall => Camera::looking_at(TEXTURE_WALL_CAMERA, glam::DVec3::ZERO),
         };
         camera.position += shift;
         camera
@@ -255,7 +280,8 @@ impl ReferenceScene {
             | Self::UvGrid
             | Self::NormalTangent
             | Self::FarCoplanar
-            | Self::Minification => SIXTY_HERTZ,
+            | Self::Minification
+            | Self::TextureWall => SIXTY_HERTZ,
         }
     }
 
@@ -269,6 +295,9 @@ impl ReferenceScene {
                     intensity: MINIFICATION_LIGHT_INTENSITY,
                 },
             )],
+            // The directional light alone, white, so each quad shows its
+            // Texture's colour.
+            Self::TextureWall => &[],
             Self::Helmet
             | Self::PbrSweep
             | Self::UvGrid
@@ -562,6 +591,82 @@ fn bump_texture() -> LoadedImage {
 fn gloss_texture() -> LoadedImage {
     let roughness = (MINIFICATION_GLOSS_ROUGHNESS * 255.0).round() as u8;
     minification_image(|_, _| [0, roughness, 0, 255])
+}
+
+/// texture-wall's Textures, all in the albedo Channel.
+const TEXTURE_WALL_TEXTURES: u32 = 10_000;
+/// The quads: 10 rows of 10, 1 m apart.
+const TEXTURE_WALL_QUADS: u32 = 100;
+const TEXTURE_WALL_COLUMNS: u32 = 10;
+const TEXTURE_WALL_SPACING: f64 = 1.0;
+#[cfg(feature = "cook")]
+const TEXTURE_WALL_QUAD_HALF_SIZE: f32 = 0.4;
+/// Quad k samples Texture 101 k, 0 to 9,999: both ends of the range, and
+/// a colour whose red grows with the quad's column, green with its row and
+/// blue with k.
+#[cfg(feature = "cook")]
+const TEXTURE_WALL_TEXTURE_STRIDE: u32 = 101;
+/// Matte, so no highlight hides a colour.
+#[cfg(feature = "cook")]
+const TEXTURE_WALL_ROUGHNESS: f32 = 1.0;
+/// 12 m up and 7 m back from the grid's centre, looking down about 60° at
+/// it.
+const TEXTURE_WALL_CAMERA: glam::DVec3 = glam::DVec3::new(0.0, 12.0, 7.0);
+
+fn wall_texture_name(index: u32) -> String {
+    format!("texture-{index}")
+}
+
+fn wall_material_name(quad: u32) -> String {
+    format!("quad-{quad}")
+}
+
+/// Loads every Texture in index order, so Texture i is Layer i + 1 of the
+/// albedo Channel, then the quads, row 0 farthest from the camera and
+/// column 0 on its left, each with its own Material.
+pub(crate) fn spawn_texture_wall(
+    world: &mut World,
+    loader: &mut AssetLoader,
+) -> anyhow::Result<()> {
+    let (scene, channel) = (ReferenceScene::TextureWall, MaterialChannel::Albedo);
+    for index in 0..TEXTURE_WALL_TEXTURES {
+        loader.texture(
+            channel,
+            scene.texture_id(channel, &wall_texture_name(index)),
+        )?;
+    }
+    let mesh = loader.mesh(scene.mesh_id("quad"))?;
+    let centre = f64::from(TEXTURE_WALL_COLUMNS - 1) / 2.0;
+    for quad_index in 0..TEXTURE_WALL_QUADS {
+        let material = loader.material(scene.material_id(&wall_material_name(quad_index)))?;
+        let (row, column) = (
+            quad_index / TEXTURE_WALL_COLUMNS,
+            quad_index % TEXTURE_WALL_COLUMNS,
+        );
+        let position = glam::dvec3(f64::from(column) - centre, 0.0, f64::from(row) - centre)
+            * TEXTURE_WALL_SPACING;
+        world.spawn((
+            Transform::from_translation(position),
+            MeshRef(mesh),
+            MaterialRef(material),
+        ));
+    }
+    Ok(())
+}
+
+/// texture-wall's Texture `index`, 4×4 texels of one colour that encodes
+/// it: red is its units digit and green its tens, 28 steps each, and blue
+/// its hundreds, 0 to 99 scaled to 255. Neighbouring indices differ by at
+/// least 28 steps in red.
+#[cfg(feature = "cook")]
+fn wall_texture(index: u32) -> LoadedImage {
+    let digit_steps = |place: u32| (index / place % 10 * 28) as u8;
+    let blue = (index / 100 * 255 / 99) as u8;
+    LoadedImage {
+        pixels: [digit_steps(1), digit_steps(10), blue, 255].repeat(16),
+        width: 4,
+        height: 4,
+    }
 }
 
 /// An indexed triangle list, counter-clockwise when seen from outside.

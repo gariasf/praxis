@@ -15,8 +15,19 @@ use praxis::cooked::{
 };
 use serde_json::json;
 
+/// The Reference scenes this seam cooks: all but texture-wall, whose 10,000
+/// Textures are 20,000 files, each flushed to the drive as it is written
+/// (84 s cold on the M4 Pro). Its Goldens cover its cook, not its PSNR: each
+/// of its Textures is one colour.
+fn scenes() -> Vec<ReferenceScene> {
+    ReferenceScene::ALL
+        .into_iter()
+        .filter(|&scene| scene != ReferenceScene::TextureWall)
+        .collect()
+}
+
 fn cook(assets: &Path, cache: &CookedCache) -> anyhow::Result<praxis::cook::CookReport> {
-    praxis::cook::cook(assets, cache, &CookSettings::default())
+    praxis::cook::cook(assets, &scenes(), cache, &CookSettings::default())
 }
 
 const GUID: u128 = 0x5ca1ab1e_0000_4000_8000_00000000c00c;
@@ -291,7 +302,7 @@ fn reference_scene_textures_cook_every_mip_and_keep_their_quality() {
     let cache = CookedCache::new(directory.join("cooked"));
     cook(&assets, &cache).unwrap();
 
-    let sources = texture_sources(&assets).unwrap();
+    let sources = texture_sources(&assets, &scenes()).unwrap();
     assert!(!sources.is_empty());
     for source in sources {
         let texture = cache.texture(source.id).unwrap();
@@ -377,17 +388,17 @@ fn a_changed_cook_setting_re_cooks_exactly_the_assets_it_covers() {
     write_sources(&assets, "box.gltf", &gltf(0.75));
     write_paint(&assets, 8, 8, |x, y| [x as u8 * 32, y as u8 * 32, 0, 255]);
     let settings = CookSettings::default();
-    praxis::cook::cook(&assets, &cache, &settings).unwrap();
+    praxis::cook::cook(&assets, &scenes(), &cache, &settings).unwrap();
     let levels = cache.texture(paint_id()).unwrap().levels;
 
     let changed = CookSettings {
         texture_zstd_level: settings.texture_zstd_level + 1,
     };
-    let mut cooked = praxis::cook::cook(&assets, &cache, &changed)
+    let mut cooked = praxis::cook::cook(&assets, &scenes(), &cache, &changed)
         .unwrap()
         .cooked;
     cooked.sort();
-    let mut textures: Vec<_> = texture_sources(&assets)
+    let mut textures: Vec<_> = texture_sources(&assets, &scenes())
         .unwrap()
         .into_iter()
         .map(|source| source.id)

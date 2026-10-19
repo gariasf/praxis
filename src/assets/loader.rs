@@ -1,6 +1,6 @@
 use anyhow::Context;
 
-use crate::assets::{MaterialHandle, MaterialPool, MeshHandle, MeshPool};
+use crate::assets::{MaterialChannel, MaterialHandle, MaterialPool, MeshHandle, MeshPool};
 use crate::cooked::{AssetId, CookedCache};
 use crate::render::LoadStaging;
 
@@ -19,6 +19,13 @@ impl AssetLoader<'_> {
     pub fn material(&mut self, id: AssetId) -> anyhow::Result<MaterialHandle> {
         self.material_pool
             .load(self.device, self.staging, self.cache, id)
+    }
+
+    /// Loads the Texture `id` into `channel`, as a Material sampling it
+    /// would, and returns its Layer.
+    pub fn texture(&mut self, channel: MaterialChannel, id: AssetId) -> anyhow::Result<u32> {
+        self.material_pool
+            .load_texture(self.device, self.staging, self.cache, channel, id)
     }
 
     /// Loads the Mesh `id` into the Arenas with the Material its Primitives

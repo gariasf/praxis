@@ -71,6 +71,7 @@ fn print_capabilities() -> anyhow::Result<()> {
 fn cook() -> anyhow::Result<()> {
     let report = praxis::cook::cook(
         Path::new(praxis::cook::ASSETS_DIRECTORY),
+        &ReferenceScene::ALL,
         &praxis::cooked::CookedCache::new(praxis::cooked::COOKED_CACHE_DIRECTORY),
         &praxis::cook::CookSettings::default(),
     )?;
