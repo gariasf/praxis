@@ -291,9 +291,9 @@ mod tests {
     use std::io::Write;
 
     use super::*;
+    use crate::assets::pools::tests::mesh;
     use crate::assets::{ARENA_CAPACITY_BYTES, MaterialHandle, MeshHandle};
     use crate::components::Transform;
-    use crate::cooked::{CookedMesh, CookedPrimitive, CookedVertex};
     use crate::gpu::GpuContext;
     use crate::render::LoadStaging;
     use crate::transform::propagate_world_transforms;
@@ -312,19 +312,6 @@ mod tests {
         preparer: FramePreparer,
     }
 
-    /// A one-Primitive triangle.
-    fn triangle() -> CookedMesh {
-        CookedMesh {
-            vertices: vec![CookedVertex::default(); 3],
-            indices: vec![0, 1, 2],
-            primitives: vec![CookedPrimitive {
-                first_index: 0,
-                index_count: 3,
-                material: None,
-            }],
-        }
-    }
-
     impl Frames {
         /// None, after saying so, when there is no GPU for the Mesh pool.
         fn new() -> Option<Self> {
@@ -340,7 +327,7 @@ mod tests {
             let mut staging = LoadStaging::new(context.device.clone());
             let mut mesh_pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
             let mesh = mesh_pool
-                .load(&mut staging, &triangle(), Some(MESH_MATERIAL))
+                .load(&mut staging, &mesh(3, vec![0, 1, 2]), Some(MESH_MATERIAL))
                 .expect("a triangle fits");
             let mut world = World::new();
             world.insert_resource(Camera::new());
@@ -471,9 +458,10 @@ mod tests {
             return;
         };
         let [other_mesh, bare_mesh] = [Some(MaterialHandle(6)), None].map(|material| {
-            let mesh = frames
-                .mesh_pool
-                .load(&mut frames.staging, &triangle(), material);
+            let mesh =
+                frames
+                    .mesh_pool
+                    .load(&mut frames.staging, &mesh(3, vec![0, 1, 2]), material);
             mesh.expect("a triangle fits")
         });
         let entity = frames

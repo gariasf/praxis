@@ -280,7 +280,7 @@ pub(crate) fn spawn_uv_grid(world: &mut World, loader: &mut AssetLoader) -> anyh
 /// The middle of the model's bounds, which run from -1.2 to 0.95 in Y.
 const NORMAL_TANGENT_CENTRE_HEIGHT: f64 = -0.125;
 
-/// The model draws with the Material its Primitive names.
+/// The Mesh draws with the Material its Primitive names.
 pub(crate) fn spawn_normal_tangent(
     world: &mut World,
     loader: &mut AssetLoader,

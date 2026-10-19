@@ -130,11 +130,14 @@ in: VertexInput, @builtin(instance_index) instance_idx: u32
     );
     out.clip_position = camera.view_proj * vec4<f32>(position, 1.0);
     out.uv = in.uv;
-    let frame = decode_qtangent(in.qtangent);
-    out.normal = instance.normal_matrix * frame.normal;
+    let tangent_frame = decode_qtangent(in.qtangent);
+    out.normal = instance.normal_matrix * tangent_frame.normal;
     // Tangents are directions along the surface, so they follow the
     // rotation-scale; only normals need the inverse-transpose.
-    out.tangent_world = vec4<f32>(instance.rotation_scale * frame.tangent, frame.bitangent_sign);
+    out.tangent_world = vec4<f32>(
+        instance.rotation_scale * tangent_frame.tangent,
+        tangent_frame.bitangent_sign
+    );
     out.camera_relative_position = position;
     out.material_id = instance.material_id;
     return out;

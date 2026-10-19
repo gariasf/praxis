@@ -198,7 +198,7 @@ pub(crate) mod tests {
     const CAPACITY: u64 = 4 * 28;
 
     /// A one-Primitive Mesh of `vertex_count` vertices and `indices`.
-    fn mesh(vertex_count: usize, indices: Vec<u32>) -> CookedMesh {
+    pub(crate) fn mesh(vertex_count: usize, indices: Vec<u32>) -> CookedMesh {
         CookedMesh {
             vertices: vec![CookedVertex::default(); vertex_count],
             primitives: vec![CookedPrimitive {

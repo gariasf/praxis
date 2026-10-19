@@ -84,8 +84,9 @@ mod tests {
                 .write(AssetId(id), "key", &material.to_blob())
                 .unwrap();
         }
-        // Mesh 3's Primitives both name Material 1; Mesh 4's name 2, then 1.
-        for (id, materials) in [(3, [1, 1]), (4, [2, 1])] {
+        // Mesh 3's Primitives both name Material 1; Mesh 4's name 2, then 9,
+        // which the cache lacks.
+        for (id, materials) in [(3, [1, 1]), (4, [2, 9])] {
             let mesh = CookedMesh {
                 vertices: vec![CookedVertex::default(); 3],
                 indices: vec![0, 1, 2],
@@ -120,7 +121,7 @@ mod tests {
             "{uniform_log}"
         );
         assert!(mixed_log.contains("different Materials"), "{mixed_log}");
-        // Each loaded the first Material its Primitives name: 1, then 2.
+        // Each loaded only the first Material its Primitives name: 1, then 2.
         let materials = [uniform, mixed].map(|mesh| {
             let material = mesh_pool.get(mesh).unwrap().material;
             material.map(MaterialHandle::index)

@@ -157,8 +157,8 @@ struct TangentGeometry<'a> {
 }
 
 impl TangentGeometry<'_> {
-    fn vertex_index(&self, face: usize, vert: usize) -> usize {
-        self.indices[face * 3 + vert] as usize
+    fn vertex_index(&self, face: usize, vertex: usize) -> usize {
+        self.indices[face * 3 + vertex] as usize
     }
 }
 
@@ -171,18 +171,18 @@ impl bevy_mikktspace::Geometry for TangentGeometry<'_> {
         3
     }
 
-    fn position(&self, face: usize, vert: usize) -> [f32; 3] {
-        self.positions[self.vertex_index(face, vert)]
+    fn position(&self, face: usize, vertex: usize) -> [f32; 3] {
+        self.positions[self.vertex_index(face, vertex)]
     }
 
-    fn normal(&self, face: usize, vert: usize) -> [f32; 3] {
-        self.normals[self.vertex_index(face, vert)]
+    fn normal(&self, face: usize, vertex: usize) -> [f32; 3] {
+        self.normals[self.vertex_index(face, vertex)]
     }
 
     /// MikkTSpace puts the bitangent along +v. glTF's `v` runs down the
     /// image while its normal maps take +Y as up, so `v` is flipped.
-    fn tex_coord(&self, face: usize, vert: usize) -> [f32; 2] {
-        let [u, v] = self.uvs[self.vertex_index(face, vert)];
+    fn tex_coord(&self, face: usize, vertex: usize) -> [f32; 2] {
+        let [u, v] = self.uvs[self.vertex_index(face, vertex)];
         [u, 1.0 - v]
     }
 
@@ -190,10 +190,10 @@ impl bevy_mikktspace::Geometry for TangentGeometry<'_> {
         &mut self,
         tangent_space: Option<bevy_mikktspace::TangentSpace>,
         face: usize,
-        vert: usize,
+        vertex: usize,
     ) {
         // `None` means a degenerate face with no neighbour to borrow from.
-        self.tangents[face * 3 + vert] = tangent_space.unwrap_or_default().tangent_encoded();
+        self.tangents[face * 3 + vertex] = tangent_space.unwrap_or_default().tangent_encoded();
     }
 }
 

@@ -25,8 +25,8 @@ use crate::transform::{
     propagate_world_transforms, record_previous_world_transforms, reset_teleported,
 };
 
-/// The source of the helmet-class model the helmet scene draws, relative to
-/// the working directory (the crate root under `cargo run` and `cargo test`),
+/// The source file of the helmet scene's Mesh and Material, relative to the
+/// working directory (the crate root under `cargo run` and `cargo test`),
 /// which a dev launch cooks. It is fetched, not committed:
 /// `scripts/fetch-assets.sh` downloads it.
 pub const DEFAULT_MODEL: &str = "assets/SciFiHelmet/SciFiHelmet.gltf";

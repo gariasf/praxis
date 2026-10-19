@@ -69,7 +69,7 @@ Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/ag
 - **ECS:** `bevy_ecs` (sub-crate only — no full Bevy stack), with
   `bevy_tasks` for its compute pool
 - **Assets:** glTF via `gltf` crate, images via `image` crate,
-  tangents via `bevy_mikktspace`, all three in the cooker only
+  tangents via `bevy_mikktspace`, all three behind the `cook` feature
 - **Logging:** `tracing` + `tracing-subscriber` (with `env-filter`)
 - **Structure:** Single crate: a library plus a thin binary.
 
