@@ -4,6 +4,156 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## M2 exit (2026-10-19, #154)
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release build of
+`507cff5`. `praxis bench` at 1440p, 248 warm-up and 1800 measured frames
+per scene, one pass (the main pass), no MSAA yet. Load average 2.4 to 3.2
+during the runs.
+
+### Measurements
+
+Three runs of `praxis bench <dir>` (medians; counters identical on every
+run). The Baselines are a fourth run, the quietest (load 2.4 to 2.6). The
+llvmpipe Baselines are CI's `bench-results` artifact from run
+39276496878, with every counter unchanged.
+
+| Scene | CPU median µs (3 runs) | CPU p95 µs (3 runs) | GPU main pass µs (3 runs) | Draws | Uploaded B | GPU memory B | Arena B in use | Heap allocations |
+|---|---|---|---|---|---|---|---|---|
+| helmet | 24.8 / 24.6 / 24.8 | 34.1 / 29.0 / 28.4 | 355.6 / 357.1 / 357.1 | 11 | 288 | 67,902,524 | 675,852 | 62 |
+| pbr-sweep | 27.7 / 23.1 / 23.4 | 37.7 / 31.3 / 29.8 | 166.1 / 168.8 / 169.4 | 10 | 288 | 48,329,012 | 60,740 | 62 |
+| uv-grid | 26.5 / 22.7 / 22.3 | 38.9 / 34.8 / 29.7 | 218.0 / 219.1 / 220.8 | 1 | 288 | 53,916,836 | 136 | 60 |
+| normal-tangent | 28.0 / 22.5 / 22.1 | 48.3 / 27.0 / 26.8 | 199.2 / 202.5 / 202.3 | 1 | 288 | 67,897,916 | 204,812 | 60 |
+| far-coplanar | 21.8 / 23.4 / 23.4 | 34.0 / 29.9 / 27.6 | 400.7 / 403.9 / 403.8 | 2 | 288 | 48,325,940 | 136 | 61 |
+| orrery | 28.6 / 24.8 / 24.9 | 40.7 / 37.2 / 38.2 | 80.7 / 80.7 / 80.9 | 5 | 928 | 53,918,372 | 60,740 | 62 |
+| minification | 24.3 / 22.9 / 23.0 | 40.4 / 39.5 / 31.5 | 474.9 / 475.7 / 478.1 | 1 | 288 | 48,586,628 | 136 | 60 |
+| texture-wall | 1,782.9 / 1,373.7 / 1,139.2 | 2,054.9 / 1,851.0 / 1,772.7 | 445.1 / 444.8 / 444.6 | 100 | 288 | 48,866,356 | 136 | 64 |
+
+Against M1's Baselines: GPU memory fell from 687–690 MB to 48–68 MB (90
+to 93% less), with the 640 MiB of Channel arrays gone (#101). The
+helmet's main pass fell from 598 to 357 µs (the cooked Mesh, #102 and
+#151); pbr-sweep's, uv-grid's and orrery's fell 15 to 17%,
+normal-tangent's 5% and far-coplanar's 1%. Heap allocations fell from
+73–75 to 60–64; uploaded bytes are unchanged.
+
+Noise floor across the three runs: GPU medians within 2.0% (pbr-sweep);
+CPU medians within 5.9 µs on every scene but texture-wall, whose median
+fell from 1,783 to 1,139 µs over the three runs (1,156 µs in the fourth).
+texture-wall's GPU p95 jumps to 1.6–3.5 ms, against a 445 µs median, in
+four of six runs: runs 1 and 2 here, this exit's verify and #153's
+Baseline.
+
+Against ADR 0013's Budgets, texture-wall's CPU frame is 19–30% of 6 ms
+at the median and 30–34% at p95. Every other scene's is at most 28.6 µs
+median and 48.3 µs p95 (0.5% and 0.8%). The worst GPU main pass,
+minification's, uses 4.0% of 12 ms, and the worst GPU memory, the
+helmet's, 0.85% of 8 GB.
+
+### ADR 0017's gate, quiet
+
+The four runs also log texture-wall's 10,005-entry bind-group build:
+
+| Run | Build ms | Frame median / p95 ms | Build + frame median / p95 ms |
+|---|---|---|---|
+| 1 | 2.96 | 1.78 / 2.05 | 4.74 / 5.01 |
+| 2 | 2.55 | 1.37 / 1.85 | 3.93 / 4.40 |
+| 3 | 2.97 | 1.14 / 1.77 | 4.11 / 4.74 |
+| 4 | 2.64 | 1.16 / 1.81 | 3.80 / 4.45 |
+
+On a quiet machine the build plus one frame fits the 6 ms critical path
+in every run, median and p95: at most 4.74 ms at the median and 5.01 ms
+at p95. At load 6 to 10 (#153) it sat at the line.
+
+### Scene setup after cooking
+
+`State::new` per scene, from its `state_init` span (a local patch logs
+span closes; not committed): the median of five launches of `praxis
+bench <dir> --ci <scene>` per build, interleaved, at load 1.9 to 2.7.
+M1's build (`610fb4f`) decodes glTF and PNG sources. M2's dev launch
+checks the Cook keys of what the scene loads, then loads its Blobs. M2's
+shipping build (`--no-default-features`) only loads Blobs.
+
+| Scene | M1, from sources ms | M2 dev launch ms | M2 shipping build ms |
+|---|---|---|---|
+| helmet | 146.0 | 39.7 | 19.8 |
+| pbr-sweep | 12.5 | 5.3 | 4.1 |
+| uv-grid | 16.1 | 14.5 | 3.7 |
+| normal-tangent | 81.3 | 11.0 | 8.1 |
+| far-coplanar | 11.3 | 2.9 | 2.6 |
+| orrery | 17.6 | 14.5 | 3.6 |
+| minification | | 4.7 | 3.1 |
+| texture-wall | | 1,330 | 904 |
+
+The shipping build sets the helmet up in 86% less time than M1 and
+normal-tangent in 90% less: no PNG decode. `Renderer::new`, which at M1
+created the 640 MiB of Channel arrays, fell from 10–11 ms to 1.7 ms. The
+dev launch's Cook-key check costs the rest: about 20 ms to re-read and
+hash SciFiHelmet's 30 MB of sources, 11 ms to regenerate and hash the
+procedural 2048² grid (uv-grid, orrery), and 426 ms for texture-wall's
+10,101 Assets.
+
+texture-wall's setup is file opens. In `sample` (below), 1,546 of its
+2,070 setup samples are in `open`: an index entry and a Blob for each of
+its 10,000 Textures, and each index entry again in the dev launch's
+check. Texture creation is 80 samples.
+
+### Where the cost goes
+
+- **GPU memory.** The two fixed Arenas (`ARENA_CAPACITY_BYTES`, 16 MiB
+  each, 33,554,432 B) are 49% (helmet) to 69% (pbr-sweep) of each scene's
+  GPU memory, with at most 675,852 B in use (helmet). The 1440p
+  Depth32Float target is 14,745,600 B. BC Textures with full mip chains
+  are 19.6 MB for the helmet's or NormalTangentTest's four 2048²
+  Textures, 5.6 MB for the grid and 0.5 MB for texture-wall's 10,000.
+- **GPU time.** minification's main pass is the most expensive, at
+  478 µs. An interleaved A/B, three rounds, with the material sampler's
+  anisotropy clamped to 1 (local patch): minification 478 → 256 µs,
+  helmet 357 → 356 µs, normal-tangent 202 → 202 µs. 16x anisotropic
+  filtering of the grazing ground costs 222 µs, 47% of the pass.
+  texture-wall's 445 µs includes 347 µs for its 10,005 bound Textures
+  (#153). far-coplanar's 401 µs is two planes covering most of the frame,
+  as at M1.
+- **CPU, per frame.** `sample` at 1 ms over `praxis bench` runs, at load
+  2.6 to 5.3:
+  - every scene but texture-wall, four runs, 11,128 main-thread samples:
+    9,278 (83%) wait in `Device::poll`, outside the CPU frame time. About
+    1,605 are per-frame work. `CommandEncoder::finish` is 1,096 of them
+    (68%): 776 encode the render pass (273 open Metal's render encoder,
+    116 reset the bench's timestamp queries), and 228 are the frame's
+    upload copies (153 open a blit encoder, #140). `Queue::submit` is 304
+    (19%) and `State::update` 134 (8%);
+  - texture-wall, two runs, 7,342 main-thread samples: 4,424 (60%) are
+    `Renderer::render`, about 1.1 ms a frame. Metal's `set_bind_group`
+    adds every bound Texture to the command buffer's resource list
+    (`useResource`): 2,205 (50%). wgpu-core's per-Texture tracking
+    (usage-scope merges, barriers, initialisation) is 1,252 (28%), and
+    `Queue::submit` 503 (11%).
+
+### Top three offenders
+
+Ranked by their share of a Budget, one per budgeted metric:
+
+1. **texture-wall's 10,005 bound Textures, 1.1–1.8 ms of CPU per frame**
+   (19–30% of the 6 ms Budget at the median, up to 34% at p95), half of
+   it Metal's per-Texture `useResource`. They also cost 347 µs of its GPU
+   main pass, and texture-wall alone shows GPU p95 jumps. #183
+2. **minification's 16x anisotropic filtering, 222 µs of GPU time** (47%
+   of its 478 µs main pass, the costliest; 1.9% of the 12 ms Budget).
+   #184
+3. **The fixed Arenas, 33.5 MB of GPU memory** (0.42% of the 8 GB Budget;
+   49–69% of each scene's GPU memory), at most 2% in use. Their capacity
+   is provisional until M4's Budget split. #185
+
+M1's third offender, the frame's upload copies (#140), is still 14% of
+the per-frame CPU of every scene but texture-wall: about 3 µs a frame.
+
+### Also seen
+
+- The bench sums every Texture's mip chain for the frame stats each frame
+  (`MaterialPool::gpu_memory_bytes`): 613 of texture-wall's samples, about
+  150 µs a frame. It runs outside the CPU frame time, and only the bench
+  and capture call it, but it grows with the Textures resident.
+
 ## ADR 0017's gate: 10,000 bound Textures (2026-10-19, #153)
 
 Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release build of the
