@@ -6,12 +6,12 @@
   "height": 1440,
   "measured_frames": 1800,
   "cpu_frame_microseconds": {
-    "median": 25.709,
-    "p95": 47.791
+    "median": 22.458000000000002,
+    "p95": 28.167
   },
   "gpu_main_pass_microseconds": {
-    "median": 400.917,
-    "p95": 410.417
+    "median": 401.0,
+    "p95": 405.334
   },
   "draw_calls": 2,
   "uploaded_bytes": 288,
