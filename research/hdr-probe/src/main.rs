@@ -10,7 +10,7 @@
 
 use std::path::Path;
 
-const OPERATORS: [(&str, u32); 8] = [
+const OPERATORS: [(&str, u32); 9] = [
     ("clamp", 0),
     ("reinhard", 1),
     ("hable", 2),
@@ -19,6 +19,7 @@ const OPERATORS: [(&str, u32); 8] = [
     ("agx", 5),
     ("pbr-neutral", 6),
     ("tony-mcmapface", 7),
+    ("gt7", 8),
 ];
 const PBR_NEUTRAL: u32 = 6;
 const AGX: u32 = 5;
@@ -966,19 +967,28 @@ impl Timer {
             query_set: gpu.device.create_query_set(&wgpu::QuerySetDescriptor {
                 label: Some("Timestamps"),
                 ty: wgpu::QueryType::Timestamp,
-                count: 2 * SUBMISSIONS * REPETITIONS,
+                count: 2 * SUBMISSIONS,
             }),
         }
     }
 
-    /// Runs `record` `REPETITIONS` times per submission and returns the
-    /// milliseconds of each repetition after the warm-up submissions,
-    /// leaving out each submission's first repetition.
-    fn measure(&self, gpu: &Gpu, record: &mut dyn FnMut(&mut wgpu::CommandEncoder, &wgpu::QuerySet, u32)) -> anyhow::Result<Vec<f64>> {
+    /// Runs `record` `REPETITIONS` times per submission, with a timestamp
+    /// before the first repetition's first pass and after the last
+    /// repetition's last pass, and returns each submission's milliseconds
+    /// per repetition after the warm-up submissions. Timing whole
+    /// submissions keeps the overlap of consecutive passes on a tile-based
+    /// GPU out of the figure.
+    fn measure(
+        &self,
+        gpu: &Gpu,
+        record: &mut dyn FnMut(&mut wgpu::CommandEncoder, &wgpu::QuerySet, Option<u32>, Option<u32>),
+    ) -> anyhow::Result<Vec<f64>> {
         for submission in 0..SUBMISSIONS {
             let mut encoder = gpu.device.create_command_encoder(&Default::default());
             for repetition in 0..REPETITIONS {
-                record(&mut encoder, &self.query_set, 2 * (submission * REPETITIONS + repetition));
+                let begin = (repetition == 0).then_some(2 * submission);
+                let end = (repetition == REPETITIONS - 1).then_some(2 * submission + 1);
+                record(&mut encoder, &self.query_set, begin, end);
             }
             let index = gpu.queue.submit([encoder.finish()]);
             gpu.device.poll(wgpu::PollType::Wait {
@@ -986,7 +996,7 @@ impl Timer {
                 timeout: None,
             })?;
         }
-        let count = 2 * SUBMISSIONS * REPETITIONS;
+        let count = 2 * SUBMISSIONS;
         let size = u64::from(count) * u64::from(wgpu::QUERY_SIZE);
         let resolve = gpu.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Resolve"),
@@ -1006,15 +1016,13 @@ impl Timer {
         gpu.queue.submit([encoder.finish()]);
         let ticks: Vec<u64> = bytemuck::pod_collect_to_vec(&gpu.read_buffer(&read)?);
         let nanoseconds_per_tick = f64::from(gpu.queue.get_timestamp_period());
-        let mut milliseconds = Vec::new();
-        for submission in WARM_UP_SUBMISSIONS..SUBMISSIONS {
-            for repetition in 1..REPETITIONS {
-                let index = 2 * (submission * REPETITIONS + repetition) as usize;
+        Ok((WARM_UP_SUBMISSIONS..SUBMISSIONS)
+            .map(|submission| {
+                let index = 2 * submission as usize;
                 let elapsed = ticks[index + 1].saturating_sub(ticks[index]);
-                milliseconds.push(elapsed as f64 * nanoseconds_per_tick / 1e6);
-            }
-        }
-        Ok(milliseconds)
+                elapsed as f64 * nanoseconds_per_tick / 1e6 / f64::from(REPETITIONS)
+            })
+            .collect())
     }
 }
 
@@ -1032,11 +1040,11 @@ fn report(name: &str, mut milliseconds: Vec<f64>) {
     );
 }
 
-fn render_timestamps(query_set: &wgpu::QuerySet, index: u32, begin: bool, end: bool) -> Option<wgpu::RenderPassTimestampWrites<'_>> {
-    Some(wgpu::RenderPassTimestampWrites {
+fn render_timestamps(query_set: &wgpu::QuerySet, begin: Option<u32>, end: Option<u32>) -> Option<wgpu::RenderPassTimestampWrites<'_>> {
+    (begin.is_some() || end.is_some()).then_some(wgpu::RenderPassTimestampWrites {
         query_set,
-        beginning_of_pass_write_index: begin.then_some(index),
-        end_of_pass_write_index: end.then_some(index + 1),
+        beginning_of_pass_write_index: begin,
+        end_of_pass_write_index: end,
     })
 }
 
@@ -1094,15 +1102,37 @@ fn bench(gpu: &Gpu, tony_lut: &Path) -> anyhow::Result<()> {
     ));
     let plain_bind_group = post.bind_group(gpu, &hdr_view, None);
     let bloom_bind_group = post.bind_group(gpu, &hdr_view, Some(&bloom_16[0]));
+    // Bring the GPU's clock up before the first measurement.
+    let warm_up = post.pipeline(gpu, PostVariant::operator(0));
+    let started = std::time::Instant::now();
+    while started.elapsed() < std::time::Duration::from_secs(2) {
+        let mut encoder = gpu.device.create_command_encoder(&Default::default());
+        for _ in 0..REPETITIONS {
+            let mut pass = render_pass(
+                &mut encoder,
+                color_attachment(&target_view, None, wgpu::LoadOp::Clear(wgpu::Color::BLACK), wgpu::StoreOp::Store),
+                None,
+                None,
+            );
+            pass.set_pipeline(&warm_up);
+            pass.set_bind_group(0, &plain_bind_group, &[]);
+            pass.draw(0..3, 0..1);
+        }
+        let index = gpu.queue.submit([encoder.finish()]);
+        gpu.device.poll(wgpu::PollType::Wait {
+            submission_index: Some(index),
+            timeout: None,
+        })?;
+    }
     for (name, variant) in &variants {
         let pipeline = post.pipeline(gpu, *variant);
         let bind_group = if variant.bloom { &bloom_bind_group } else { &plain_bind_group };
-        let milliseconds = timer.measure(gpu, &mut |encoder, query_set, index| {
+        let milliseconds = timer.measure(gpu, &mut |encoder, query_set, begin, end| {
             let mut pass = render_pass(
                 encoder,
                 color_attachment(&target_view, None, wgpu::LoadOp::Clear(wgpu::Color::BLACK), wgpu::StoreOp::Store),
                 None,
-                render_timestamps(query_set, index, true, true),
+                render_timestamps(query_set, begin, end),
             );
             pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, bind_group, &[]);
@@ -1189,18 +1219,19 @@ fn bench(gpu: &Gpu, tony_lut: &Path) -> anyhow::Result<()> {
                 },
             ],
         });
-        let milliseconds = timer.measure(gpu, &mut |encoder, query_set, index| {
-            for (pipeline, workgroups, begin, end) in [
-                (&build, (width.div_ceil(16), height.div_ceil(16)), true, false),
-                (&average, (1, 1), false, true),
+        let milliseconds = timer.measure(gpu, &mut |encoder, query_set, begin, end| {
+            for (pipeline, workgroups, pass_begin, pass_end) in [
+                (&build, (width.div_ceil(16), height.div_ceil(16)), begin, None),
+                (&average, (1, 1), None, end),
             ] {
+                let timestamp_writes = (pass_begin.is_some() || pass_end.is_some()).then_some(wgpu::ComputePassTimestampWrites {
+                    query_set,
+                    beginning_of_pass_write_index: pass_begin,
+                    end_of_pass_write_index: pass_end,
+                });
                 let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                     label: None,
-                    timestamp_writes: Some(wgpu::ComputePassTimestampWrites {
-                        query_set,
-                        beginning_of_pass_write_index: begin.then_some(index),
-                        end_of_pass_write_index: end.then_some(index + 1),
-                    }),
+                    timestamp_writes,
                 });
                 pass.set_pipeline(pipeline);
                 pass.set_bind_group(0, &bind_group, &[]);
@@ -1283,13 +1314,15 @@ fn bench(gpu: &Gpu, tony_lut: &Path) -> anyhow::Result<()> {
                 passes.push((&upsample, level + 2, level, wgpu::LoadOp::Load));
             }
             let pass_count = passes.len();
-            let milliseconds = timer.measure(gpu, &mut |encoder, query_set, index| {
+            let milliseconds = timer.measure(gpu, &mut |encoder, query_set, begin, end| {
                 for (pass_index, (pipeline, source, target_level, load)) in passes.iter().enumerate() {
+                    let pass_begin = begin.filter(|_| pass_index == 0);
+                    let pass_end = end.filter(|_| pass_index == pass_count - 1);
                     let mut pass = render_pass(
                         encoder,
                         color_attachment(&levels[*target_level], None, *load, wgpu::StoreOp::Store),
                         None,
-                        render_timestamps(query_set, index, pass_index == 0, pass_index == pass_count - 1),
+                        render_timestamps(query_set, pass_begin, pass_end),
                     );
                     pass.set_pipeline(pipeline);
                     pass.set_bind_group(0, &source_groups[*source], &[]);
@@ -1319,8 +1352,8 @@ fn bench(gpu: &Gpu, tony_lut: &Path) -> anyhow::Result<()> {
         for (name, format, sample_count, weighting) in cases {
             let targets = SceneTargets::new(gpu, width, height, format, sample_count);
             let pipeline = scene.pipeline(gpu, format, sample_count, weighting);
-            let milliseconds = timer.measure(gpu, &mut |encoder, query_set, index| {
-                targets.draw(encoder, &pipeline, &vertices, vertex_count, 0.02, render_timestamps(query_set, index, true, true));
+            let milliseconds = timer.measure(gpu, &mut |encoder, query_set, begin, end| {
+                targets.draw(encoder, &pipeline, &vertices, vertex_count, 0.02, render_timestamps(query_set, begin, end));
             })?;
             report(name, milliseconds);
         }
@@ -1335,6 +1368,177 @@ fn main() -> anyhow::Result<()> {
     match arguments.as_slice() {
         [command, input, output] if command == "images" => images(&gpu, Path::new(input), Path::new(output), Path::new(&tony_lut)),
         [command] if command == "bench" => bench(&gpu, Path::new(&tony_lut)),
-        _ => anyhow::bail!("usage: images <directory of .f32 captures> <output directory> | bench"),
+        [command] if command == "overflow" => overflow(&gpu),
+        _ => anyhow::bail!("usage: images <directory of .f32 captures> <output directory> | bench | overflow"),
     }
+}
+
+/// IEEE 754 binary16 to f32.
+fn f16_to_f32(bits: u16) -> f32 {
+    let sign = if bits & 0x8000 != 0 { -1.0f32 } else { 1.0 };
+    let exponent = i32::from((bits >> 10) & 0x1f);
+    let mantissa = f32::from(bits & 0x3ff);
+    match exponent {
+        0 => sign * mantissa * 2f32.powi(-24),
+        0x1f if mantissa == 0.0 => sign * f32::INFINITY,
+        0x1f => f32::NAN,
+        _ => sign * (1.0 + mantissa / 1024.0) * 2f32.powi(exponent - 15),
+    }
+}
+
+/// What an `Rgba16Float` attachment stores for values past 65504, at 1x and
+/// as one of four samples under the hardware resolve.
+fn overflow(gpu: &Gpu) -> anyhow::Result<()> {
+    let module = gpu.device.create_shader_module(wgpu::include_wgsl!("overflow.wgsl"));
+    let layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("Overflow"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    });
+    let pipeline_layout = gpu.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("Overflow"),
+        bind_group_layouts: &[Some(&layout)],
+        immediate_size: 0,
+    });
+    let pipeline = |vertex_entry: &str, sample_count: u32| {
+        gpu.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Overflow"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &module,
+                entry_point: Some(vertex_entry),
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &module,
+                entry_point: Some("fs_value"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: wgpu::TextureFormat::Rgba16Float,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: sample_count,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview_mask: None,
+            cache: None,
+        })
+    };
+    let written = [65504.0f32, 65519.0, 65520.0, 70000.0, 1.0e6, 3.0e9, f32::INFINITY, -1.0e6];
+    let uniform = gpu.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Values"),
+        size: 8 * 16,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Overflow"),
+        layout: &layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: uniform.as_entire_binding(),
+        }],
+    });
+    let read_texels = |texture: &wgpu::Texture| -> anyhow::Result<Vec<f32>> {
+        let buffer = gpu.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Read-back"),
+            size: 256,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let mut encoder = gpu.device.create_command_encoder(&Default::default());
+        encoder.copy_texture_to_buffer(
+            texture.as_image_copy(),
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(256),
+                    rows_per_image: None,
+                },
+            },
+            texture.size(),
+        );
+        gpu.queue.submit([encoder.finish()]);
+        let bytes = gpu.read_buffer(&buffer)?;
+        let halves: Vec<u16> = bytemuck::pod_collect_to_vec(&bytes);
+        Ok(halves.iter().step_by(4).take(texture.width() as usize).map(|&bits| f16_to_f32(bits)).collect())
+    };
+    let target_usage = wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC;
+
+    // 1x: pixel x writes written[x] to every channel.
+    gpu.queue.write_buffer(&uniform, 0, bytemuck::cast_slice(&written.map(|value| [value; 4])));
+    let target = gpu.texture_2d("Overflow 1x", 8, 1, wgpu::TextureFormat::Rgba16Float, target_usage);
+    let view = target.create_view(&Default::default());
+    let mut encoder = gpu.device.create_command_encoder(&Default::default());
+    {
+        let mut pass = render_pass(
+            &mut encoder,
+            color_attachment(&view, None, wgpu::LoadOp::Clear(wgpu::Color::BLACK), wgpu::StoreOp::Store),
+            None,
+            None,
+        );
+        pass.set_pipeline(&pipeline("vs_triangle", 1));
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.draw(0..3, 0..1);
+    }
+    gpu.queue.submit([encoder.finish()]);
+    for (value, stored) in written.iter().zip(read_texels(&target)?) {
+        println!("1x Rgba16Float: wrote {value:e}, stored {stored:e}");
+    }
+
+    // 4x: the clear covers every sample with 0.5; one sample gets the value;
+    // the hardware resolves into a 1x texture.
+    let multisampled = gpu.texture(
+        "Overflow 4x",
+        (1, 1, 1),
+        wgpu::TextureFormat::Rgba16Float,
+        wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
+        4,
+        wgpu::TextureDimension::D2,
+    );
+    let multisampled_view = multisampled.create_view(&Default::default());
+    let resolved = gpu.texture_2d("Overflow resolved", 1, 1, wgpu::TextureFormat::Rgba16Float, target_usage);
+    let resolved_view = resolved.create_view(&Default::default());
+    let sample_pipeline = pipeline("vs_sample_zero", 4);
+    for value in [100.0f32, 65504.0, 1.0e6, f32::INFINITY] {
+        gpu.queue.write_buffer(&uniform, 0, bytemuck::cast_slice(&[[value; 4]; 8]));
+        let mut encoder = gpu.device.create_command_encoder(&Default::default());
+        {
+            let clear = wgpu::Color {
+                r: 0.5,
+                g: 0.5,
+                b: 0.5,
+                a: 0.5,
+            };
+            let mut pass = render_pass(
+                &mut encoder,
+                color_attachment(&multisampled_view, Some(&resolved_view), wgpu::LoadOp::Clear(clear), wgpu::StoreOp::Discard),
+                None,
+                None,
+            );
+            pass.set_pipeline(&sample_pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.draw(0..3, 0..1);
+        }
+        gpu.queue.submit([encoder.finish()]);
+        let stored = read_texels(&resolved)?[0];
+        println!("4x Rgba16Float, one sample {value:e} over three of 0.5: resolved {stored:e}");
+    }
+    Ok(())
 }

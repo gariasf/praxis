@@ -5,7 +5,7 @@
 // compiles one path.
 
 // 0 clamp (today), 1 Reinhard on luminance, 2 Hable, 3 ACES (Narkowicz fit),
-// 4 ACES (Hill fit), 5 AgX, 6 Khronos PBR Neutral, 7 Tony McMapface.
+// 4 ACES (Hill fit), 5 AgX, 6 Khronos PBR Neutral, 7 Tony McMapface, 8 GT7.
 override OPERATOR: u32 = 0u;
 override DITHER: bool = false;
 override INVERT_WEIGHTING: bool = false;
@@ -168,8 +168,97 @@ fn tonemap_tony(color: vec3<f32>) -> vec3<f32> {
     return textureSampleLevel(tony_lut, linear_clamp, coordinates, 0.0).rgb;
 }
 
+// GT7's SDR path (Yasutomi, Suzuki and Uchimura, SIGGRAPH 2025; Polyphony
+// Digital's gt7_tone_mapping.cpp 1.0, MIT): frame-buffer 1.0 is 100 cd/m^2
+// and SDR paper white 250 cd/m^2. The probe reads its input's 1.0 as that
+// paper white, converts Rec. 709 to Rec. 2020 and back, and clips.
+const GT7_PAPER_WHITE: f32 = 2.5;
+const PQ_M1: f32 = 0.1593017578125;
+const PQ_M2: f32 = 78.84375;
+const PQ_C1: f32 = 0.8359375;
+const PQ_C2: f32 = 18.8515625;
+const PQ_C3: f32 = 18.6875;
+
+fn gt7_curve(x: f32) -> f32 {
+    let peak = GT7_PAPER_WHITE;
+    let alpha = 0.25;
+    let mid_point = 0.538;
+    let linear_section = 0.444;
+    let toe_strength = 1.280;
+    let k = (linear_section - 1.0) / (alpha - 1.0);
+    let k_a = peak * linear_section + peak * k;
+    let k_b = -peak * k * exp(linear_section / k);
+    let k_c = -1.0 / (k * peak);
+    if x < 0.0 {
+        return 0.0;
+    }
+    if x < linear_section * peak {
+        let weight_linear = smoothstep(0.0, mid_point, x);
+        let toe_mapped = mid_point * pow(x / mid_point, toe_strength);
+        return (1.0 - weight_linear) * toe_mapped + weight_linear * x;
+    }
+    return k_a + k_b * exp(x * k_c);
+}
+
+fn pq_inverse_eotf(frame_buffer: f32) -> f32 {
+    let normalized = pow(frame_buffer * 100.0 / 10000.0, PQ_M1);
+    return exp2(PQ_M2 * (log2(PQ_C1 + PQ_C2 * normalized) - log2(1.0 + PQ_C3 * normalized)));
+}
+
+fn pq_eotf(signal: f32) -> f32 {
+    let power = pow(clamp(signal, 0.0, 1.0), 1.0 / PQ_M2);
+    let linear = max(power - PQ_C1, 0.0) / (PQ_C2 - PQ_C3 * power);
+    return pow(linear, 1.0 / PQ_M1) * 10000.0 / 100.0;
+}
+
+fn rec2020_to_ictcp(rgb: vec3<f32>) -> vec3<f32> {
+    let l = pq_inverse_eotf((rgb.r * 1688.0 + rgb.g * 2146.0 + rgb.b * 262.0) / 4096.0);
+    let m = pq_inverse_eotf((rgb.r * 683.0 + rgb.g * 2951.0 + rgb.b * 462.0) / 4096.0);
+    let s = pq_inverse_eotf((rgb.r * 99.0 + rgb.g * 309.0 + rgb.b * 3688.0) / 4096.0);
+    return vec3<f32>(
+        (2048.0 * l + 2048.0 * m) / 4096.0,
+        (6610.0 * l - 13613.0 * m + 7003.0 * s) / 4096.0,
+        (17933.0 * l - 17390.0 * m - 543.0 * s) / 4096.0,
+    );
+}
+
+fn ictcp_to_rec2020(ictcp: vec3<f32>) -> vec3<f32> {
+    let l = pq_eotf(ictcp.x + 0.00860904 * ictcp.y + 0.11103 * ictcp.z);
+    let m = pq_eotf(ictcp.x - 0.00860904 * ictcp.y - 0.11103 * ictcp.z);
+    let s = pq_eotf(ictcp.x + 0.560031 * ictcp.y - 0.320627 * ictcp.z);
+    return max(vec3<f32>(
+        3.43661 * l - 2.50645 * m + 0.0698454 * s,
+        -0.79133 * l + 1.9836 * m - 0.192271 * s,
+        -0.0259499 * l - 0.0989137 * m + 1.12486 * s,
+    ), vec3<f32>(0.0));
+}
+
+fn tonemap_gt7(color: vec3<f32>) -> vec3<f32> {
+    let srgb_to_rec2020 = mat3x3<f32>(
+        vec3<f32>(0.6274, 0.0691, 0.0164),
+        vec3<f32>(0.3293, 0.9195, 0.0880),
+        vec3<f32>(0.0433, 0.0113, 0.8956),
+    );
+    let rec2020_to_srgb = mat3x3<f32>(
+        vec3<f32>(1.6605, -0.1246, -0.0182),
+        vec3<f32>(-0.5876, 1.1329, -0.1006),
+        vec3<f32>(-0.0728, -0.0083, 1.1187),
+    );
+    let rgb = srgb_to_rec2020 * color * GT7_PAPER_WHITE;
+    let ucs = rec2020_to_ictcp(rgb);
+    let skewed = vec3<f32>(gt7_curve(rgb.r), gt7_curve(rgb.g), gt7_curve(rgb.b));
+    let skewed_ucs = rec2020_to_ictcp(skewed);
+    let target_intensity = rec2020_to_ictcp(vec3<f32>(GT7_PAPER_WHITE)).x;
+    let chroma_scale = 1.0 - smoothstep(0.98, 1.16, ucs.x / target_intensity);
+    let scaled = ictcp_to_rec2020(vec3<f32>(skewed_ucs.x, ucs.y * chroma_scale, ucs.z * chroma_scale));
+    let blended = 0.4 * skewed + 0.6 * scaled;
+    let display = min(blended, vec3<f32>(GT7_PAPER_WHITE)) / GT7_PAPER_WHITE;
+    return clamp(rec2020_to_srgb * display, vec3<f32>(0.0), vec3<f32>(1.0));
+}
+
 fn tonemap(color: vec3<f32>) -> vec3<f32> {
     switch OPERATOR {
+        case 8u: { return tonemap_gt7(color); }
         case 1u: { return tonemap_reinhard_luminance(color); }
         case 2u: { return tonemap_hable(color); }
         case 3u: { return tonemap_aces_narkowicz(color); }
