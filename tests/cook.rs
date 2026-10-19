@@ -660,6 +660,7 @@ fn every_reference_scene_mesh_cooks_and_reads_back() {
         mesh_id(scene("uv-grid"), "plane"),
         mesh_id(scene("far-coplanar"), "plane"),
         mesh_id(scene("orrery"), "sphere"),
+        mesh_id(scene("minification"), "ground"),
         mesh_id(normal_tangent, "NormalTangentTest_low"),
     ] {
         let mesh = cache.mesh(id).unwrap();

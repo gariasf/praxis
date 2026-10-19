@@ -6,7 +6,7 @@ use bevy_ecs::system::RunSystemOnce;
 
 use crate::assets::AssetLoader;
 use crate::camera::fly_camera;
-use crate::components::{MaterialRef, MeshRef, PointLight, Transform};
+use crate::components::{MaterialRef, MeshRef, Transform};
 use crate::cooked::{
     AssetId, AssetKind, AssetName, AssetSource, COOKED_CACHE_DIRECTORY, CookedCache,
 };
@@ -16,7 +16,8 @@ use crate::input::{Input, clear_just_pressed};
 use crate::render::{FramePreparer, Renderer};
 use crate::scenes::{
     ReferenceScene, SCI_FI_HELMET, SWEEP_METALLIC, SWEEP_ROUGHNESS, spawn_far_coplanar,
-    spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep, spawn_uv_grid, spin, sweep_material_name,
+    spawn_minification, spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep, spawn_uv_grid, spin,
+    sweep_material_name,
 };
 use crate::stats::{FrameRecorder, FrameStats};
 use crate::threading::{init_compute_pool, single_threaded_schedule};
@@ -99,6 +100,7 @@ impl State {
             ReferenceScene::NormalTangent => spawn_normal_tangent,
             ReferenceScene::FarCoplanar => spawn_far_coplanar,
             ReferenceScene::Orrery => spawn_orrery,
+            ReferenceScene::Minification => spawn_minification,
         };
         let mut loader = AssetLoader {
             device,
@@ -113,19 +115,8 @@ impl State {
                 [] => error,
                 absent => error.context(format!("absent sources: {}", absent.join(", "))),
             })?;
-        for (position, color) in [
-            (glam::dvec3(2.0, 2.0, 2.0), glam::Vec3::X),
-            (glam::dvec3(-2.0, 2.0, 2.0), glam::Vec3::Y),
-            (glam::dvec3(2.0, 2.0, -2.0), glam::Vec3::Z),
-            (glam::dvec3(-2.0, 2.0, -2.0), glam::vec3(1.0, 1.0, 0.0)),
-        ] {
-            world.spawn((
-                Transform::from_translation(position),
-                PointLight {
-                    color,
-                    intensity: 1.0,
-                },
-            ));
+        for &(position, light) in scene.point_lights() {
+            world.spawn((Transform::from_translation(position), light));
         }
         // A child's translation is relative to its parent, so only roots move.
         let mut root_query = world.query_filtered::<&mut Transform, Without<ChildOf>>();
