@@ -269,10 +269,8 @@ fn read_sources(
             })
             .collect();
         for (texture, normal_map) in textures.into_iter().zip(normal_maps) {
-            sources.textures.push(match normal_map {
-                Some(normal_map) => texture.with_normal_map(normal_map),
-                None => texture,
-            });
+            let _ = normal_map;
+            sources.textures.push(texture);
         }
         for (name, geometry, material) in scene.meshes() {
             let id = scene.mesh_id(name);
