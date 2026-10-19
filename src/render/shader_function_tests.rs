@@ -270,15 +270,17 @@ fn cooked_vertices_decode_to_their_position_uv_and_tangent_frame() {
         .rev()
         .map(|index| [[index as f32, 0.0, 0.0, 0.0]])
         .collect();
-    let decode = |expression| evaluate_cases(&context, expression, &inputs, &vertices);
-    let positions = decode("vec4<f32>(decode_vertex(test_vertices[u32(input.x)]).position, 0.0)");
-    let uvs = decode("vec4<f32>(decode_vertex(test_vertices[u32(input.x)]).uv, 0.0, 0.0)");
-    let normals_and_signs = decode(
-        "vec4<f32>(decode_vertex(test_vertices[u32(input.x)]).tangent_frame.normal, \
-         decode_vertex(test_vertices[u32(input.x)]).tangent_frame.bitangent_sign)",
-    );
-    let tangents =
-        decode("vec4<f32>(decode_vertex(test_vertices[u32(input.x)]).tangent_frame.tangent, 0.0)");
+    // `{vertex}` in an expression stands for the decoded vertex.
+    let decode = |expression: &str| {
+        let expression =
+            expression.replace("{vertex}", "decode_vertex(test_vertices[u32(input.x)])");
+        evaluate_cases(&context, &expression, &inputs, &vertices)
+    };
+    let positions = decode("vec4<f32>({vertex}.position, 0.0)");
+    let uvs = decode("vec4<f32>({vertex}.uv, 0.0, 0.0)");
+    let normals_and_signs =
+        decode("vec4<f32>({vertex}.tangent_frame.normal, {vertex}.tangent_frame.bitangent_sign)");
+    let tangents = decode("vec4<f32>({vertex}.tangent_frame.tangent, 0.0)");
 
     let decoded = positions
         .into_iter()
@@ -579,7 +581,7 @@ fn evaluate_cases<const VECTORS: usize>(
         mapped_at_creation: false,
     });
     // As the vertex Arena holds them.
-    let vertex_buffer = (!vertices.is_empty()).then(|| {
+    let test_vertices = (!vertices.is_empty()).then(|| {
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Test Vertices"),
             size: size_of_val(vertices) as wgpu::BufferAddress,
@@ -601,7 +603,7 @@ fn evaluate_cases<const VECTORS: usize>(
             resource: output_buffer.as_entire_binding(),
         },
     ];
-    entries.extend(vertex_buffer.as_ref().map(|buffer| wgpu::BindGroupEntry {
+    entries.extend(test_vertices.as_ref().map(|buffer| wgpu::BindGroupEntry {
         binding: 2,
         resource: buffer.as_entire_binding(),
     }));

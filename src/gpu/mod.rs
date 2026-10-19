@@ -237,7 +237,7 @@ pub(crate) fn floor_downlevel_flags() -> wgpu::DownlevelFlags {
     // sampler's anisotropy to 1.
     wgpu::DownlevelFlags::ANISOTROPIC_FILTERING
         // The vertex shader reads Instances and pulls vertices from the
-        // vertex Arena as storage buffers (ADR 0019).
+        // vertex Arena as storage buffers (ADRs 0005, 0019).
         | wgpu::DownlevelFlags::VERTEX_STORAGE
 }
 

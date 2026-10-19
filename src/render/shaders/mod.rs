@@ -22,7 +22,7 @@ macro_rules! part {
     };
 }
 
-/// The structs the CPU writes, the Anchor composition and the QTangent
+/// The structs the CPU writes, the Anchor composition and the vertex
 /// decode.
 const COMMON: Part = part!("common.wgsl");
 

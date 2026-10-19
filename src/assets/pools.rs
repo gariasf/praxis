@@ -101,7 +101,7 @@ impl MeshPool {
         None
     }
 
-    pub fn vertex_buffer(&self) -> &wgpu::Buffer {
+    pub fn vertex_arena(&self) -> &wgpu::Buffer {
         &self.vertex_arena.buffer
     }
 
@@ -226,7 +226,7 @@ pub(crate) mod tests {
         let mut pool = MeshPool::new(&context.device, CAPACITY);
         pool.load(&mut staging, &mesh(3, vec![0, 1, 2]), None)
             .expect("a triangle fits");
-        let buffers = (pool.vertex_buffer().clone(), pool.index_buffer().clone());
+        let buffers = (pool.vertex_arena().clone(), pool.index_buffer().clone());
         let gpu_memory_bytes = pool.gpu_memory_bytes();
         let arena_bytes_in_use = pool.arena_bytes_in_use();
 
@@ -237,7 +237,7 @@ pub(crate) mod tests {
             assert!(handle.is_none(), "a Mesh past capacity loaded");
             assert!(log.contains("Mesh refused"), "not logged: {log:?}");
             assert_eq!(
-                (pool.vertex_buffer(), pool.index_buffer()),
+                (pool.vertex_arena(), pool.index_buffer()),
                 (&buffers.0, &buffers.1)
             );
             assert_eq!(pool.gpu_memory_bytes(), gpu_memory_bytes);

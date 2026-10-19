@@ -202,7 +202,7 @@ impl Renderer {
             &device,
             &instance_bind_group_layout,
             &instance_buffer,
-            mesh_pool.vertex_buffer(),
+            mesh_pool.vertex_arena(),
         );
 
         let instance_capacity = INSTANCE_BUFFER_INITIAL_CAPACITY;
@@ -427,7 +427,7 @@ impl Renderer {
             &self.device,
             &self.instance_bind_group_layout,
             &self.instance_buffer,
-            self.mesh_pool.vertex_buffer(),
+            self.mesh_pool.vertex_arena(),
         );
 
         self.instance_capacity = new_capacity;
@@ -526,6 +526,16 @@ mod tests {
                 material: None,
             }],
         };
+        // Loaded first, outside the target, so the triangle's draw finds its
+        // vertices only past its base vertex.
+        let outside = CookedMesh {
+            vertices: vec![vertex(2.0, 2.0), vertex(3.0, 2.0), vertex(2.0, 3.0)],
+            ..triangle.clone()
+        };
+        renderer
+            .mesh_pool
+            .load(&mut renderer.load_staging, &outside, None)
+            .expect("the outside triangle fits");
         let mesh = renderer
             .mesh_pool
             .load(&mut renderer.load_staging, &triangle, None)
@@ -535,6 +545,7 @@ mod tests {
             index_offset,
             index_count,
         } = &renderer.mesh_pool.get(mesh).expect("loaded").primitives[0];
+        assert!(vertex_offset > 0 && index_offset > 0);
         // Black and unlit, so only the red emissive reaches the target.
         let material = renderer.material_pool.insert(
             &mut renderer.load_staging,
