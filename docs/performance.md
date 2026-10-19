@@ -4,6 +4,50 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## ADR 0017's gate: 10,000 bound Textures (2026-10-19, #153)
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release build of the
+#153 branch. `praxis bench <dir> texture-wall` at 1440p, three rounds,
+each also running two variants built from local patches, not committed:
+*rebuild every frame* rebuilds the material bind group in every frame,
+and *sampled only* loads just the 100 Textures the quads sample. Load
+average 6.3 to 9.9, from other processes.
+
+texture-wall binds 10,005 Textures: its 10,000 in the albedo Channel and
+each Channel's Layer 0. The variant binds 105 and renders the same image.
+The build is timed once per process, as the scene loads (`material bind
+group built` in the log).
+
+| Round | Build at load ms | Frame median / p95 ms | Build + frame median / p95 ms | Rebuild every frame, median / p95 ms | Sampled only: frame median µs, GPU main pass µs |
+|---|---|---|---|---|---|
+| 1 | 2.90 | 2.20 / 3.12 | 5.10 / 6.02 | 3.14 / 3.75 | 41.9, 97.6 |
+| 2 | 3.02 | 2.09 / 2.53 | 5.11 / 5.55 | 2.89 / 3.57 | 40.6, 97.5 |
+| 3 | 2.53 | 2.12 / 3.40 | 4.65 / 5.93 | 3.83 / 7.61 | 38.4, 97.7 |
+
+**The gate is at the line.** The build plus one frame fits ADR 0013's
+6 ms critical path at the median in every round, and at p95 in two of
+three (6.02 ms in round 1). An earlier set of three rounds, at load 6 to
+12, gave builds of 3.3 to 4.4 ms and p95 sums of 6.8 to 9.3 ms, all over.
+The decision on ADR 0017's fallbacks is on #173.
+
+Binding the Textures costs more than rebuilding them. With no rebuild,
+10,005 bound Textures cost 2.1 to 2.2 ms of CPU per frame (35 to 37% of
+6 ms) against 38 to 42 µs with 105, about 0.21 µs per Texture per frame,
+and 347 µs of GPU per main pass (445 against 98). A build costs 0.25 to
+0.30 µs per Texture.
+
+Where the frame goes, from `sample` at 1 ms over 3 s of the bench, 400
+main-thread samples recording and submitting frames: 181 (45%) in
+wgpu-hal's Metal `set_bind_group`, which calls `useResource` once per
+bound Texture; 66 (17%) in wgpu-core merging each Texture into the
+pass's usage scope and tracking its barriers; 37 (9%) in
+`Queue::submit`.
+
+Cooking texture-wall cold writes 20,202 files (its 10,101 Assets), each
+flushed to the drive before it is renamed into place (`File::sync_all`,
+`F_FULLFSYNC` on macOS, 3 to 5 ms per file here): 84 s on the M4 Pro.
+CI's `praxis cook` of every scene takes 40 s on Linux.
+
 ## Helmet main pass: the Mesh, not the Textures (2026-10-19, #102)
 
 Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
