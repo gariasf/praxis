@@ -683,3 +683,62 @@ fn every_reference_scene_mesh_cooks_and_reads_back() {
     }
     fs::remove_dir_all(&directory).unwrap();
 }
+
+/// The identity criterion's render half: NormalTangentTest moved and renamed
+/// in a scratch copy, its GUID kept and its Cooked cache deleted, re-cooks
+/// to the same Asset IDs and renders its Reference scene identically. Each
+/// capture is a `praxis capture` process in the scratch directory, so its
+/// launch cooks from that directory's `assets/`.
+#[test]
+fn a_moved_and_renamed_source_renders_its_scene_identically() {
+    if let Err(error) = pollster::block_on(praxis::gpu::GpuContext::headless()) {
+        assert!(error.is::<wgpu::RequestAdapterError>(), "{error:#}");
+        // Not `eprintln!`, which libtest captures from passing tests.
+        writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+        return;
+    }
+    let directory =
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("cook-render-{}", std::process::id()));
+    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("assets/NormalTangentTest/NormalTangentTest.glb");
+    let render = |path: &str| {
+        if directory.exists() {
+            fs::remove_dir_all(&directory).unwrap();
+        }
+        let assets = directory.join("assets");
+        fs::create_dir_all(assets.join(path).parent().unwrap()).unwrap();
+        fs::copy(&source, assets.join(path)).unwrap();
+        let manifest = json!([{"path": path, "guid": format!("{NORMAL_TANGENT_TEST_GUID:032x}")}]);
+        fs::write(assets.join("manifest.json"), manifest.to_string()).unwrap();
+        let capture = std::process::Command::new(env!("CARGO_BIN_EXE_praxis"))
+            .args(["capture", "normal-tangent", "capture.png", "160x90"])
+            .current_dir(&directory)
+            .output()
+            .unwrap();
+        assert!(
+            capture.status.success(),
+            "capturing from {path} failed: {}{}",
+            String::from_utf8_lossy(&capture.stdout),
+            String::from_utf8_lossy(&capture.stderr)
+        );
+        let mut ids: Vec<_> = fs::read_dir(directory.join("cooked/index"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        ids.sort();
+        let pixels = image::open(directory.join("capture.png"))
+            .unwrap()
+            .into_rgba8();
+        (ids, pixels)
+    };
+
+    let (ids, pixels) = render("NormalTangentTest/NormalTangentTest.glb");
+    let (moved_ids, moved_pixels) = render("moved/renamed.glb");
+    assert!(!ids.is_empty(), "the launch cooked nothing");
+    assert_eq!(moved_ids, ids, "the moved source cooked other Asset IDs");
+    assert!(
+        moved_pixels == pixels,
+        "the moved source renders differently"
+    );
+    fs::remove_dir_all(&directory).unwrap();
+}
