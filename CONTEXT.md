@@ -85,7 +85,7 @@ _Avoid_: Spawn, instance (an Instance is a Renderable's data on the GPU)
 ### Frame
 
 **Instance**:
-One Renderable's data on the GPU: its World transform and Material ID, in a slot of the Instance buffer that the Renderable keeps while it is one.
+One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, and its Material ID, in a slot of the Instance buffer that the Renderable keeps while it is one.
 _Avoid_: Object
 
 **Frame data**:
@@ -138,6 +138,10 @@ _Avoid_: Global position, absolute position
 Where an entity sits in a Game world: its Transform composed with every ancestor's, in f64. Derived from the hierarchy, never authored.
 _Avoid_: Global transform, absolute transform
 
+**Anchor**:
+The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell's corner, never as one f32 position.
+_Avoid_: Origin
+
 **Scene**:
 A serialisable set of entities and their hierarchy that loads into the ECS World. Not the whole Game world.
 _Avoid_: Level, prefab
@@ -152,12 +156,16 @@ _Avoid_: Test scene, benchmark
 A committed image that a Reference scene must reproduce within tolerance.
 _Avoid_: Snapshot, screenshot
 
+**Frame stats**:
+What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, draw calls, Instances written, bytes uploaded, heap allocations, GPU memory, Arena bytes in use and dropped time.
+_Avoid_: Metrics, telemetry
+
 **Baseline**:
-The recorded measurements of a Reference scene on one adapter: the reference machine, where Budgets are judged against it, or CI's lavapipe, whose Baselines hold its counters only.
+The recorded measurements of a Reference scene on one adapter: the reference machine, where Budgets are judged against it, or CI's lavapipe, where only its counters are judged.
 _Avoid_: Benchmark result
 
 **Budget**:
-A numeric limit on one metric of a Reference scene (CPU ms, GPU ms per pass, number of draw calls, bytes uploaded, GPU memory) that a change must not regress.
+A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. Counters such as draw calls and bytes uploaded are held to their Baselines instead.
 _Avoid_: Target, threshold
 
 **Capability floor**:

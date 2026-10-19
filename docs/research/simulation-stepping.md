@@ -85,7 +85,7 @@ Common to every option: the camera's rotation reads the newest input every frame
 - Frame data: one owned state, as today.
 - bevy_ecs scheduling: the current single `Schedule`; `Time` stays a per-frame resource.
 - Image stability: frame-time noise reaches motion directly (measured p99 1.7 to 4.5 ms of simulated time per frame) unless deltas are snapped.
-- ADR 0014 bar: positions stay f64; results are not reproducible across frame timings (15.8 mm apart in the toy), so no simulation Golden can assert to 0.1 mm across runs with different timing.
+- ADR 0014 bar: positions stay f64; results are not reproducible across frame timings (15.8 mm apart in the toy), so no simulation test can assert to 0.1 mm across runs with different timing.
 - Determinism guarantee: none across runs.
 
 ### B. Semi-fixed step
@@ -101,7 +101,7 @@ Common to every option: the camera's rotation reads the newest input every frame
 ### C. Fixed step with interpolation
 
 - Step model, rate, cap: fixed h at 60, 64 or 120 Hz; the cap (Godot uses 8) or the clamp decides when the game slows; display at α between the two newest states.
-- Input latency: the frame that consumes an event shows its effect at weight α, full weight up to h later: the image trails real time by one step, 16.7 ms at 60 Hz, 15.6 ms at 64 Hz, 8.3 ms at 120 Hz (Godot says 1 to 2 ticks). Whether that trail counts against ADR 0013's 33.3 ms depends on the Input latency definition, which counts the frame that consumed the event, not the frame showing it at full weight. A frame with 0 steps also delays consumption by one frame: 4.0 to 4.4% of frames at 60 Hz, at most 0.4% at 64 Hz.
+- Input latency: the frame that consumes an event shows its effect at weight α, full weight up to h later: the image trails real time by one step, 16.7 ms at 60 Hz, 15.6 ms at 64 Hz, 8.3 ms at 120 Hz (Godot says 1 to 2 ticks). Whether that trail counts against ADR 0013's 33.3 ms depends on the Input latency definition, which counts the frame that consumed the event, not the frame showing it at full weight. ADR 0022 has since settled it: the trail counts, against 49.0 ms for simulated input. A frame with 0 steps also delays consumption by one frame: 4.0 to 4.4% of frames at 60 Hz, at most 0.4% at 64 Hz.
 - Frame data: two states per moving Instance (previous and current Transform, 128 bytes) or the renderer's interpolated copy built in prepare; 0.12 to 0.29 ms more than a plain copy at 100k Instances on one thread, and 6.4 MB more memory. Teleports and spawns need a reset flag so they do not interpolate (Godot's `reset_physics_interpolation`, [ProjectSettings 2689](https://github.com/godotengine/godot/blob/4.7.2-stable/doc/classes/ProjectSettings.xml#L2689-L2694)).
 - bevy_ecs scheduling: rebuild Bevy's split in bevy_ecs: a fixed schedule run while an accumulator resource holds a step, a fixed-time resource the systems read, a before-loop set for input and camera, an after-loop set for the blend.
 - Image stability: tick and refresh alignment no longer shows; the residual is the delta jitter shared with A unless deltas are snapped.

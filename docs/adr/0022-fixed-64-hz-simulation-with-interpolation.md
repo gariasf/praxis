@@ -8,11 +8,11 @@ Simulation advances in fixed Ticks of 1/64 s (15.625 ms), decoupled from rendere
 - Semi-fixed step (option B): as A, with a variable remainder step; 9.7 mm apart in the toy.
 - Fixed step with extrapolation (option D): no trail for steady motion, but drawn positions snap back at contacts and direction changes, which breaks ADR 0008's stable image.
 - Fixed step at a multiple of the refresh rate, unsmoothed (option E): smooth only while the refresh rate divides the tick rate; a 144 Hz or variable-rate display breaks it.
-- 60 Hz Ticks: on a 60 Hz display, 4.0 to 4.4% of frames run no step, delaying input consumption by one frame, against 0 to 0.4% at 64 Hz, and 1/60 s is inexact in binary. 120 Hz: 8.3 ms of trail, but two steps on about 91% of frames double the simulation's CPU cost.
+- 60 Hz Ticks: on a 60 Hz display, 4.0 to 4.4% of frames run no Tick, delaying input consumption by one frame, against 0 to 0.4% at 64 Hz, and 1/60 s is inexact in binary. 120 Hz: 8.3 ms of trail, but two Ticks on about 91% of frames double the simulation's CPU cost.
 
 ## Consequences
 
-- The frame delta is measured with `Instant` at frame start, before surface acquire (sampling after acquire raised p99 jitter to as much as 16.3 ms), and clamped to 250 ms. The fixed loop runs at most 4 Ticks per frame; accumulated time past the cap is dropped, the game slows, and the dropped time is reported in frame stats. Snapping deltas to refresh periods waits for present timing in wgpu (#2869).
+- The frame delta is measured with `Instant` at frame start, before surface acquire (sampling after acquire raised p99 jitter to as much as 16.3 ms), and clamped to 250 ms. The fixed loop runs at most 4 Ticks per frame; accumulated time past the cap is dropped, the game slows, and the dropped time is reported in frame stats. Snapping deltas to refresh periods waits for present timing in wgpu ([wgpu #2869](https://github.com/gfx-rs/wgpu/issues/2869)).
 - Simulated time is an integer Tick counter; systems read a per-Tick delta derived from it, never an f32 sum of seconds.
 - Praxis builds the fixed loop on bevy_ecs alone (ADR 0009): an accumulator resource, a fixed schedule run once per Tick, and the blend weight α as a resource. Everything that changes game state runs in the fixed schedule: gameplay, physics, AI and Lua event reactions (ADR 0012). Input sampling, the camera, the blend, prepare and presentation-only effects run once per frame.
 - The camera's rotation reads the newest input every frame, outside the fixed loop, so mouse-look keeps the frame's latency; its position follows whatever it is attached to, interpolated.

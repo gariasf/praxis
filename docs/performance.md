@@ -71,8 +71,9 @@ pixels the helmets cover.
 
 The helmet's main pass is within 0.7% across RGBA8, mip 0 and the full
 chain, so mips are not its cost. M1's RGBA8 Baseline was 598.2 µs, at
-higher load (M1 exit). The cooked Mesh (#160: welded to 14,127
-vertices, ordered for vertex cache and overdraw) takes 224 µs off, 38.5%.
+higher load (M1 exit). The cooked Mesh (#160: welded, then re-split where
+tangents differ, to 14,127 vertices, ordered for vertex cache and
+overdraw) takes 224 µs off, 38.5%.
 
 Where the time goes, from a second interleaved set of three rounds (full
 chain 581.7 / 580.8 / 582.2). *Flat* returns the Material's base colour
@@ -225,8 +226,8 @@ Ranked by their share of a Budget, one per budgeted metric:
    2.3–3.0× the other scenes). #102
 3. **Per-frame `write_buffer` uploads, 35% of per-frame CPU** (the largest
    cost the engine controls: encoder finish and submit are one pass's fixed
-   cost inside wgpu and Metal). ADR 0017 routes uploads through a
-   `StagingBelt`. #103
+   cost inside wgpu and Metal). ADR 0017's `StagingBelt` is for streaming
+   uploads only ([decision](https://github.com/gariasf/praxis/issues/17#issuecomment-6150843518)). #103
 
 ### Also seen
 

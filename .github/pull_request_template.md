@@ -12,11 +12,11 @@ Closes #
 
 ## Metrics
 
-<!-- Render or hot-path change: the delta against baseline. Otherwise `n/a`. -->
+<!-- Render or hot-path change: the delta against its Baselines. Otherwise `n/a`. -->
 
 ## Images
 
-<!-- A rendering change, or something the owner must look at: each affected scene before and after, with a difference image where the change is subtle (docs/agents/workflow.md, PRs). Otherwise `n/a`. -->
+<!-- A rendering change, or something the owner must look at: each affected Reference scene before and after, with a difference image where the change is subtle (docs/agents/workflow.md, PRs). Otherwise `n/a`. -->
 
 ## Decide
 
