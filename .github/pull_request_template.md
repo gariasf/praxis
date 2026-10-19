@@ -14,6 +14,10 @@ Closes #
 
 <!-- Render or hot-path change: the delta against baseline. Otherwise `n/a`. -->
 
+## Images
+
+<!-- A rendering change, or something the owner must look at: each affected scene before and after, with a difference image where the change is subtle (docs/agents/workflow.md, PRs). Otherwise `n/a`. -->
+
 ## Decide
 
 <!-- Owner items only (visual or interactive checks, roadmap decisions; docs/agents/workflow.md), each with a recommendation. `None` if none. -->

@@ -28,6 +28,7 @@ The owner decides what is worked on. Agents implement, commit, open PRs and merg
 - One review, the agent's own, before the PR opens (see Review). One fix commit, and a verification pass only when a fix touched correctness-critical logic. Findings still open after that become tickets or fog notes.
 - The verify command, `scripts/verify.sh`, exits 0 before the PR opens: formatting, lint, build, tests (Goldens required) and the bench counters against Baselines and Budgets, one line per step, about a minute from a fresh worktree. Its output is the Verification block.
 - Description follows `.github/pull_request_template.md`: what changed, how it was verified (command and output, 30 lines at most), metric deltas, and under Decide only the owner items named above.
+- A PR that changes what a Reference scene renders, or that asks the owner to look at something, shows images in its description whenever they can be made ([decision](https://github.com/gariasf/praxis/issues/17#issuecomment-6262013466)): each affected scene before and after, a difference image where the change is subtle, a zoom where it is small. `praxis capture <scene> <png> [<width>x<height>]` renders a scene headless. The images go on the `pr-images` branch, one directory per PR, never merged, and the description links them by commit SHA. Where no image can be made, the description says why.
 - Commit subject 72 characters at most; the body says why, not what.
 
 ## Review
