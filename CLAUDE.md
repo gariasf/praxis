@@ -37,10 +37,8 @@ or interactive checks and roadmap decisions (`docs/agents/workflow.md`).
   tickets, and reviews.
 - `docs/adr/` — decisions that are hard to reverse; a change that
   contradicts one says so.
-- `ROADMAP.md` — long-range vision. Its load-bearing decisions moved to
-  `docs/adr/`; its phase checklists are superseded by milestones.
-- `PLAN.md` — Phase 6 scratch, paused. Superseded by the milestones
-  (`docs/agents/workflow.md`, The ladder).
+- `ROADMAP.md` — long-range vision: target shape, design principles,
+  scripting plan. Decisions are ADRs; the order of work is the ladder.
 
 If any of these conflicts with current code, **the code is the source
 of truth**. Flag the drift to the owner explicitly; do not silently
