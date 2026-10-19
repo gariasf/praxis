@@ -8,7 +8,8 @@ use std::path::Path;
 use wgpu::naga;
 
 use crate::assets::material::MaterialData;
-use crate::render::{CameraUniform, InstanceData, LightUniform, Vertex};
+use crate::cooked::CookedVertex;
+use crate::render::{CameraUniform, InstanceData, LightUniform};
 
 /// Shader capabilities Praxis requires of every adapter: the Capability
 /// floor's binding arrays, indexed per Instance (ADRs 0017, 0021). A shader
@@ -93,12 +94,11 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
         }),
         Twin {
             wgsl_name: "VertexInput",
-            vertex_buffer: Some(Vertex::desc()),
-            ..twin!(Vertex {
+            vertex_buffer: Some(CookedVertex::desc()),
+            ..twin!(CookedVertex {
                 position,
-                normal,
                 uv,
-                tangent
+                qtangent
             })
         },
     ];

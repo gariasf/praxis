@@ -1,6 +1,7 @@
 use crate::{
     assets::{MaterialHandle, Mesh, MeshHandle, Primitive},
-    render::{LoadStaging, Vertex},
+    cooked::{CookedMesh, CookedVertex},
+    render::LoadStaging,
 };
 
 /// Bytes of each Arena: one provisional capacity for the app, tests, bench
@@ -23,7 +24,7 @@ impl MeshPool {
                 device,
                 "Vertex Arena",
                 wgpu::BufferUsages::VERTEX,
-                std::mem::size_of::<Vertex>() as u64,
+                std::mem::size_of::<CookedVertex>() as u64,
                 arena_bytes,
             ),
             index_arena: Arena::new(
@@ -36,19 +37,17 @@ impl MeshPool {
         }
     }
 
-    /// Writes a Mesh of `primitives`, each its vertices and its indices into
-    /// them, through `staging` into one range of each Arena, drawn with
-    /// `material` where no Renderable overrides it. Returns its Handle, or
-    /// None after logging when an Arena's longest free range is too short; a
-    /// refused Mesh leaves the Arenas as they were.
+    /// Writes `mesh`'s vertices and indices through `staging` into one range
+    /// of each Arena, drawn with `material` where no Renderable overrides
+    /// it. Returns its Handle, or None after logging when an Arena's longest
+    /// free range is too short; a refused Mesh leaves the Arenas as they were.
     pub fn load(
         &mut self,
         staging: &mut LoadStaging,
-        primitives: &[(&[Vertex], &[u32])],
+        mesh: &CookedMesh,
         material: Option<MaterialHandle>,
     ) -> Option<MeshHandle> {
-        let vertex_count = primitives.iter().map(|(vertices, _)| vertices.len()).sum();
-        let index_count = primitives.iter().map(|(_, indices)| indices.len()).sum();
+        let (vertex_count, index_count) = (mesh.vertices.len(), mesh.indices.len());
         let Some(vertex_range) = self.vertex_arena.allocate(vertex_count) else {
             return self.refuse(vertex_count, index_count);
         };
@@ -56,25 +55,26 @@ impl MeshPool {
             self.vertex_arena.free(vertex_range);
             return self.refuse(vertex_count, index_count);
         };
-
-        let mut mesh = Mesh {
-            primitives: Vec::with_capacity(primitives.len()),
-            material,
-        };
-        let (mut vertex_offset, mut index_offset) = (vertex_range.offset, index_range.offset);
-        for &(vertices, indices) in primitives {
-            self.vertex_arena
-                .write(staging, vertex_offset, bytemuck::cast_slice(vertices));
-            self.index_arena
-                .write(staging, index_offset, bytemuck::cast_slice(indices));
-            mesh.primitives.push(Primitive {
-                vertex_offset,
-                index_offset,
-                index_count: indices.len() as u32,
-            });
-            vertex_offset += vertices.len() as u32;
-            index_offset += indices.len() as u32;
-        }
+        self.vertex_arena.write(
+            staging,
+            vertex_range.offset,
+            bytemuck::cast_slice(&mesh.vertices),
+        );
+        self.index_arena.write(
+            staging,
+            index_range.offset,
+            bytemuck::cast_slice(&mesh.indices),
+        );
+        // A Primitive's indices count from the Mesh's first vertex.
+        let primitives = mesh
+            .primitives
+            .iter()
+            .map(|primitive| Primitive {
+                vertex_offset: vertex_range.offset,
+                index_offset: index_range.offset + primitive.first_index,
+                index_count: primitive.index_count,
+            })
+            .collect();
         tracing::debug!(
             vertices = vertex_count,
             indices = index_count,
@@ -82,7 +82,10 @@ impl MeshPool {
         );
 
         let handle = MeshHandle(self.meshes.len() as u32);
-        self.meshes.push(mesh);
+        self.meshes.push(Mesh {
+            primitives,
+            material,
+        });
         Some(handle)
     }
 
@@ -183,15 +186,29 @@ impl Arena {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::io::Write;
     use std::sync::{Arc, Mutex};
 
     use super::*;
+    use crate::cooked::CookedPrimitive;
     use crate::gpu::GpuContext;
 
-    /// Room for four 48-byte vertices, or 48 indices.
-    const CAPACITY: u64 = 4 * 48;
+    /// Room for four 28-byte vertices, or 28 indices.
+    const CAPACITY: u64 = 4 * 28;
+
+    /// A one-Primitive Mesh of `vertex_count` vertices and `indices`.
+    fn mesh(vertex_count: usize, indices: Vec<u32>) -> CookedMesh {
+        CookedMesh {
+            vertices: vec![CookedVertex::default(); vertex_count],
+            primitives: vec![CookedPrimitive {
+                first_index: 0,
+                index_count: indices.len() as u32,
+                material: None,
+            }],
+            indices,
+        }
+    }
 
     #[test]
     fn a_mesh_past_capacity_is_refused_and_logged_and_changes_nothing() {
@@ -206,8 +223,7 @@ mod tests {
         };
         let mut staging = LoadStaging::new(context.device.clone());
         let mut pool = MeshPool::new(&context.device, CAPACITY);
-        let vertices = [bytemuck::Zeroable::zeroed(); 4];
-        pool.load(&mut staging, &[(&vertices[..3], &[0, 1, 2])], None)
+        pool.load(&mut staging, &mesh(3, vec![0, 1, 2]), None)
             .expect("a triangle fits");
         let buffers = (pool.vertex_buffer().clone(), pool.index_buffer().clone());
         let gpu_memory_bytes = pool.gpu_memory_bytes();
@@ -215,10 +231,8 @@ mod tests {
 
         // One vertex past the vertex Arena, then one index past the index
         // Arena while the vertices fit.
-        let past_capacity: [(&[Vertex], &[u32]); 2] =
-            [(&vertices[..2], &[0, 1, 0]), (&vertices[..1], &[0; 46])];
-        for primitive in past_capacity {
-            let (handle, log) = logged(|| pool.load(&mut staging, &[primitive], None));
+        for past_capacity in [mesh(2, vec![0, 1, 0]), mesh(1, vec![0; 26])] {
+            let (handle, log) = logged(|| pool.load(&mut staging, &past_capacity, None));
             assert!(handle.is_none(), "a Mesh past capacity loaded");
             assert!(log.contains("Mesh refused"), "not logged: {log:?}");
             assert_eq!(
@@ -229,12 +243,12 @@ mod tests {
             assert_eq!(pool.arena_bytes_in_use(), arena_bytes_in_use);
         }
         // The second refusal gave back the last vertex it took.
-        pool.load(&mut staging, &[(&vertices[..1], &[0, 0, 0])], None)
+        pool.load(&mut staging, &mesh(1, vec![0, 0, 0]), None)
             .expect("the last vertex fits");
     }
 
     /// What `run` returns, and the text of the events it logged.
-    fn logged<T>(run: impl FnOnce() -> T) -> (T, String) {
+    pub(crate) fn logged<T>(run: impl FnOnce() -> T) -> (T, String) {
         #[derive(Clone, Default)]
         struct Log(Arc<Mutex<Vec<u8>>>);
         impl Write for Log {

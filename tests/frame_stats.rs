@@ -50,11 +50,13 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         last.gpu_memory_bytes,
         5 * 4 + 2 * 16 * MEBIBYTE + 256 * 80 + 96 + 192 + 16 * 128 + 160 * 90 * 4 + 3 * 2048
     );
-    // One UV sphere in the Arenas: 25 rings of 49 vertices of 48 bytes, and
-    // 48 × 24 quads of two triangles but one at each pole, of three u32s.
+    // One UV sphere in the Arenas: 48 × 24 quads of two triangles but one at
+    // each pole, of three u32s, and 25 rings of 49 vertices of 28 bytes, less
+    // the one vertex at each pole that only a dropped triangle used, which
+    // the cook's weld drops.
     assert_eq!(
         last.arena_bytes_in_use,
-        25 * 49 * 48 + (48 * 24 * 2 - 2 * 48) * 3 * 4
+        (25 * 49 - 2) * 28 + (48 * 24 * 2 - 2 * 48) * 3 * 4
     );
 
     let timed: Vec<&str> = last

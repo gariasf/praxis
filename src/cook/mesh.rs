@@ -6,7 +6,6 @@
 use glam::{Mat3, Quat, Vec3};
 use sha2::{Digest, Sha256};
 
-use crate::assets::loader::corner_tangents;
 use crate::cooked::{
     AssetId, AssetKind, AssetSource, CookedMesh, CookedPrimitive, CookedVertex,
     MESH_FORMAT_VERSION, MESH_MAGIC, hex,
@@ -145,6 +144,77 @@ pub(crate) fn weld(geometry: &Geometry) -> Geometry {
         normals: keys.iter().map(|key| [key[5], key[6], key[7]]).collect(),
         indices: meshopt::remap_index_buffer(Some(&geometry.indices), vertex_count, &remap),
     }
+}
+
+/// Indexed triangle mesh viewed through the MikkTSpace `Geometry` interface.
+/// MikkTSpace works per face-vertex, so the tangents land per corner.
+struct TangentGeometry<'a> {
+    positions: &'a [[f32; 3]],
+    normals: &'a [[f32; 3]],
+    uvs: &'a [[f32; 2]],
+    indices: &'a [u32],
+    tangents: Vec<[f32; 4]>,
+}
+
+impl TangentGeometry<'_> {
+    fn vertex_index(&self, face: usize, vert: usize) -> usize {
+        self.indices[face * 3 + vert] as usize
+    }
+}
+
+impl bevy_mikktspace::Geometry for TangentGeometry<'_> {
+    fn num_faces(&self) -> usize {
+        self.indices.len() / 3
+    }
+
+    fn num_vertices_of_face(&self, _face: usize) -> usize {
+        3
+    }
+
+    fn position(&self, face: usize, vert: usize) -> [f32; 3] {
+        self.positions[self.vertex_index(face, vert)]
+    }
+
+    fn normal(&self, face: usize, vert: usize) -> [f32; 3] {
+        self.normals[self.vertex_index(face, vert)]
+    }
+
+    /// MikkTSpace puts the bitangent along +v. glTF's `v` runs down the
+    /// image while its normal maps take +Y as up, so `v` is flipped.
+    fn tex_coord(&self, face: usize, vert: usize) -> [f32; 2] {
+        let [u, v] = self.uvs[self.vertex_index(face, vert)];
+        [u, 1.0 - v]
+    }
+
+    fn set_tangent(
+        &mut self,
+        tangent_space: Option<bevy_mikktspace::TangentSpace>,
+        face: usize,
+        vert: usize,
+    ) {
+        // `None` means a degenerate face with no neighbour to borrow from.
+        self.tangents[face * 3 + vert] = tangent_space.unwrap_or_default().tangent_encoded();
+    }
+}
+
+/// MikkTSpace tangents in glTF's convention, one per index: each corner's own.
+fn corner_tangents(
+    positions: &[[f32; 3]],
+    normals: &[[f32; 3]],
+    uvs: &[[f32; 2]],
+    indices: &[u32],
+) -> Vec<[f32; 4]> {
+    let mut geometry = TangentGeometry {
+        positions,
+        normals,
+        uvs,
+        indices,
+        tangents: vec![[1.0, 0.0, 0.0, 1.0]; indices.len()],
+    };
+    if bevy_mikktspace::generate_tangents(&mut geometry).is_err() {
+        tracing::error!("MikkTSpace tangent generation failed; falling back to +X tangents");
+    }
+    geometry.tangents
 }
 
 /// The smallest QTangent w, one Snorm16 step, so the w that carries the

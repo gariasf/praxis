@@ -1,10 +1,11 @@
 use std::time::Instant;
 
 use crate::assets::{ARENA_CAPACITY_BYTES, MaterialPool, MeshPool};
+use crate::cooked::CookedVertex;
 use crate::gpu::GpuContext;
 use crate::render::{
     CameraUniform, DEPTH_FORMAT, FrameData, FrameStaging, INSTANCE_BUFFER_INITIAL_CAPACITY,
-    InstanceData, LightUniform, LoadStaging, Vertex, create_depth_texture,
+    InstanceData, LightUniform, LoadStaging, create_depth_texture,
 };
 use crate::stats::{FrameRecorder, texture_bytes};
 
@@ -124,7 +125,7 @@ impl Renderer {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[Some(Vertex::desc())],
+                buffers: &[Some(CookedVertex::desc())],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -469,6 +470,7 @@ mod tests {
     use crate::assets::Primitive;
     use crate::assets::material::MaterialData;
     use crate::capture::read_back;
+    use crate::cooked::{CookedMesh, CookedPrimitive};
     use crate::render::instance::padded_columns;
     use crate::render::prepare::{Draw, InstanceWrite};
 
@@ -489,17 +491,25 @@ mod tests {
         let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE);
 
         // A triangle around the target's centre, counter-clockwise towards
-        // the camera, drawn with an identity view-projection.
-        let vertex = |x: f32, y: f32| Vertex {
+        // the camera, drawn with an identity view-projection; its QTangent is
+        // the identity, so its normal is +Z.
+        let vertex = |x: f32, y: f32| CookedVertex {
             position: [x, y, 0.5],
-            normal: [0.0, 0.0, 1.0],
             uv: [0.0, 0.0],
-            tangent: [1.0, 0.0, 0.0, 1.0],
+            qtangent: [0, 0, 0, i16::MAX],
         };
-        let triangle = [vertex(-0.5, -0.5), vertex(0.5, -0.5), vertex(0.0, 0.5)];
+        let triangle = CookedMesh {
+            vertices: vec![vertex(-0.5, -0.5), vertex(0.5, -0.5), vertex(0.0, 0.5)],
+            indices: vec![0, 1, 2],
+            primitives: vec![CookedPrimitive {
+                first_index: 0,
+                index_count: 3,
+                material: None,
+            }],
+        };
         let mesh = renderer
             .mesh_pool
-            .load(&mut renderer.load_staging, &[(&triangle, &[0, 1, 2])], None)
+            .load(&mut renderer.load_staging, &triangle, None)
             .expect("the triangle fits");
         let &Primitive {
             vertex_offset,
