@@ -699,7 +699,7 @@ fn a_moved_and_renamed_source_renders_its_scene_identically() {
     }
     let directory =
         Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("cook-render-{}", std::process::id()));
-    let glb = Path::new(env!("CARGO_MANIFEST_DIR"))
+    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("assets/NormalTangentTest/NormalTangentTest.glb");
     let render = |path: &str| {
         if directory.exists() {
@@ -707,7 +707,7 @@ fn a_moved_and_renamed_source_renders_its_scene_identically() {
         }
         let assets = directory.join("assets");
         fs::create_dir_all(assets.join(path).parent().unwrap()).unwrap();
-        fs::copy(&glb, assets.join(path)).unwrap();
+        fs::copy(&source, assets.join(path)).unwrap();
         let manifest = json!([{"path": path, "guid": format!("{NORMAL_TANGENT_TEST_GUID:032x}")}]);
         fs::write(assets.join("manifest.json"), manifest.to_string()).unwrap();
         let capture = std::process::Command::new(env!("CARGO_BIN_EXE_praxis"))
@@ -717,8 +717,9 @@ fn a_moved_and_renamed_source_renders_its_scene_identically() {
             .unwrap();
         assert!(
             capture.status.success(),
-            "capturing from {path} failed: {}",
-            String::from_utf8_lossy(&capture.stdout)
+            "capturing from {path} failed: {}{}",
+            String::from_utf8_lossy(&capture.stdout),
+            String::from_utf8_lossy(&capture.stderr)
         );
         let mut ids: Vec<_> = fs::read_dir(directory.join("cooked/index"))
             .unwrap()

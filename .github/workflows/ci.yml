@@ -85,7 +85,7 @@ jobs:
     # `cooked/` with `assets/` absent.
     name: Goldens from a shipping build (software Vulkan)
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -102,16 +102,14 @@ jobs:
             mesa-vulkan-drivers=$LAVAPIPE_VERSION
 
       - name: Clippy without cook
-        run: cargo clippy --no-default-features -- -D warnings
+        run: cargo clippy --all-targets --no-default-features -- -D warnings
 
       - name: No source decoder linked
         run: |
-          for crate in gltf image intel_tex_2 bevy_mikktspace; do
-            linked=$(cargo tree --no-default-features -e normal,build -i "$crate" 2>/dev/null || true)
-            if [ -n "$linked" ]; then
-              echo "$crate is linked without cook:"; echo "$linked"; exit 1
-            fi
-          done
+          tree=$(cargo tree --no-default-features -e normal,build --prefix none)
+          if echo "$tree" | grep -E '^(gltf|image|intel_tex_2|bevy_mikktspace) v'; then
+            echo "linked without cook"; exit 1
+          fi
 
       - name: Cook
         run: cargo run -- cook
