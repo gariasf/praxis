@@ -79,6 +79,59 @@ jobs:
           path: target/tmp/golden-differences
           if-no-files-found: ignore
 
+  shipping-goldens:
+    # The runtime opens no source path (ADR 0018): a build without `cook`
+    # links no source decoder, and renders every CI Golden from a cooked
+    # `cooked/` with `assets/` absent.
+    name: Goldens from a shipping build (software Vulkan)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install lavapipe
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            mesa-vulkan-drivers=$LAVAPIPE_VERSION
+
+      - name: Clippy without cook
+        run: cargo clippy --no-default-features -- -D warnings
+
+      - name: No source decoder linked
+        run: |
+          for crate in gltf image intel_tex_2 bevy_mikktspace; do
+            linked=$(cargo tree --no-default-features -e normal,build -i "$crate" 2>/dev/null || true)
+            if [ -n "$linked" ]; then
+              echo "$crate is linked without cook:"; echo "$linked"; exit 1
+            fi
+          done
+
+      - name: Cook
+        run: cargo run -- cook
+
+      - name: Remove sources
+        run: rm -r assets
+
+      - name: Goldens
+        env:
+          PRAXIS_REQUIRE_GOLDENS: "1"
+        run: cargo test --no-default-features --test goldens
+
+      - name: Upload Golden differences
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shipping-golden-differences
+          path: target/tmp/golden-differences
+          if-no-files-found: ignore
+
   software-bench:
     name: Bench counters (software Vulkan)
     runs-on: ubuntu-24.04
