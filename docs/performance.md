@@ -1,7 +1,57 @@
 # Performance notes
 
-Profiles of the Reference scenes, one section per milestone exit, newest
-first. Each names its top three offenders and the tickets that take them.
+Profiles of the Reference scenes, one section per milestone exit, and
+measurements that name an offender's cause, newest first. Each exit names
+its top three offenders and the tickets that take them.
+
+## Helmet main pass: the Mesh, not the Textures (2026-10-19, #102)
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
+`7d271dc` plus one local measurement patch per variant, none committed.
+`praxis bench <dir> helmet` at 1440p, as M1 exit, run interleaved: each
+round runs every variant once. Load average 9 to 18.
+
+The helmet scene draws SciFiHelmet 11 times: the textured helmet and a
+factor sweep of 10 copies on 1×1 neutral Layers. Only one draw samples the
+2048² Textures. The runtime still loads the Mesh from glTF: 23,358
+triangles on 70,074 vertices, three per triangle, so no vertex is shared.
+pbr-sweep draws a 2,304-triangle indexed sphere 10 times, covering 0.64× the
+pixels the helmets cover.
+
+| Variant | Patch | GPU main pass µs (3 runs) |
+|---|---|---|
+| RGBA8, no mips | the build before #150 (`da8c5e9`) | 578.4 / 578.3 / 578.1 |
+| Full mip chain | none: BC7, BC5, BC4 with mips (#150) | 581.9 / 581.7 / 581.0 |
+| Mip 0 only | sampler `lod_max_clamp: 0.0` | 579.7 / 579.8 / 579.4 |
+| Cooked Mesh | the helmet's Mesh Blob decoded into today's vertex | 357.8 / 357.4 / 357.7 |
+
+The helmet's main pass is within 0.7% across RGBA8, mip 0 and the full
+chain, so mips are not its cost. M1's RGBA8 Baseline was 598.2 µs, at
+higher load (M1 exit). The cooked Mesh (#160: welded to 14,127
+vertices, ordered for vertex cache and overdraw) takes 224 µs off, 38.5%.
+
+Where the time goes, from a second interleaved set of three rounds (full
+chain 581.7 / 580.8 / 582.2). *Flat* returns the Material's base colour
+before any Texture sample or light; *vertex only* moves every vertex
+outside the clip volume, so nothing rasterises. The floor is the vertex-only
+variant on pbr-sweep (48.7 / 54.8 / 48.7, run after the first set): clears
+and draw overhead.
+
+| Stage, µs (round-1 medians) | glTF Mesh | Cooked Mesh |
+|---|---|---|
+| Whole pass | 581.7 | 356.5 |
+| Floor | 49 | 49 |
+| Vertex (vertex only − floor) | 161 | 45 |
+| Raster and depth (flat − vertex only) | 172 | 68 |
+| Shading (whole − flat) | 200 | 195 |
+
+Welding and the cooker's ordering remove 116 µs of vertex work and 104 µs of
+raster and depth. Shading is unchanged. With the cooked Mesh the helmet
+pass is still 2.1× pbr-sweep (169 µs), most of it shading.
+
+**Cause:** the runtime's unwelded glTF Mesh, drawn 11 times. #151, which
+renders every Reference scene from its Mesh Blob, takes it. #151 also packs
+the vertex to 28 bytes, which this measurement does not include.
 
 ## M1 exit (2026-10-14, #123)
 
