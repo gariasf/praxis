@@ -33,6 +33,7 @@ shasum -a 256 /tmp/tony_mc_mapface.dds  # a492a9f4dd981e05ff5f1edbf6775ac26b8c8b
 cd research/hdr-probe
 TONY_LUT=/tmp/tony_mc_mapface.dds cargo run --release --offline -- images /tmp/hdr-in /tmp/hdr-out
 TONY_LUT=/tmp/tony_mc_mapface.dds cargo run --release --offline -- bench
+cargo run --release --offline -- overflow
 ```
 
 `images` writes one PNG per input and operator (a synthetic hue and exposure
@@ -40,6 +41,10 @@ sweep plus every capture), a dim gradient without and with the static dither,
 and the resolve comparison: 4x MSAA box-resolved, weighted, and two 64-sample
 references averaged in scene-linear and in display-linear space.
 
-`bench` times each pass at 2560×1440 with pass timestamps: 45 submissions of
-8 repetitions each, waited on one by one and resolved after the last, the
-first 5 submissions and each submission's first repetition left out.
+`bench` times each pass at 2560×1440: 45 submissions of 8 back-to-back
+repetitions each, timed from the first repetition's first pass to the last
+repetition's last pass and divided by 8, waited on one by one and resolved
+after the last, the first 5 submissions left out, after 2 s of warm-up.
+
+`overflow` writes values past 65504 to an `Rgba16Float` attachment, at 1x and
+as one sample of a 4x hardware resolve, and prints what is stored.
