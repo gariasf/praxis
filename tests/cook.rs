@@ -650,9 +650,10 @@ fn a_dev_launch_cooks_exactly_what_its_scene_references_and_changed() {
     fs::remove_dir_all(&directory).unwrap();
 }
 
-/// SciFiHelmet's cooked Mesh Blob bytes per triangle, at most: the M2
-/// milestone's mesh-size ceiling (#149). A lower figure re-records it.
-const HELMET_MESH_BYTES_PER_TRIANGLE: f64 = 13.81;
+/// SciFiHelmet's cooked Mesh Blob bytes per triangle, Meshlets included, at
+/// most: the M3 milestone's mesh-size ceiling (#192). A lower figure
+/// re-records it.
+const HELMET_MESH_BYTES_PER_TRIANGLE: f64 = 13.83;
 const HELMET_TRIANGLES: usize = 23_358;
 
 #[test]

@@ -30,7 +30,14 @@ pub(crate) const MAX_TEXTURE_SIDE: u32 = 8192;
 /// Starts every Mesh Blob, followed by `MESH_FORMAT_VERSION`.
 pub(crate) const MESH_MAGIC: [u8; 4] = *b"PXME";
 /// As `MATERIAL_FORMAT_VERSION`, for Mesh Blobs.
-pub(crate) const MESH_FORMAT_VERSION: u32 = 1;
+pub(crate) const MESH_FORMAT_VERSION: u32 = 2;
+/// The most vertices a Meshlet holds: a packed index carries the vertex
+/// within its Meshlet in six bits (ADR 0019).
+pub(crate) const MESHLET_MAX_VERTICES: usize = 64;
+/// The most triangles a Meshlet holds: as many as a closed mesh of
+/// `MESHLET_MAX_VERTICES` vertices has (2V − 4), so that on manifold
+/// geometry the vertex limit binds first.
+pub(crate) const MESHLET_MAX_TRIANGLES: usize = 124;
 
 /// What an Asset is. Its number, and a Texture's Channel, are part of every
 /// Asset ID: never renumber.
@@ -384,6 +391,80 @@ pub struct CookedPrimitive {
     pub first_index: u32,
     pub index_count: u32,
     pub material: Option<AssetId>,
+    /// Its triangles in index order, each in exactly one Meshlet.
+    pub meshlets: Vec<CookedMeshlet>,
+}
+
+/// The next run of its Primitive's triangles, on at most
+/// `MESHLET_MAX_VERTICES` vertices.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CookedMeshlet {
+    /// The Mesh vertices its triangles use: its vertex remap.
+    pub vertices: Vec<u32>,
+    /// Its triangles as indices into `vertices`.
+    pub triangles: Vec<[u8; 3]>,
+}
+
+impl CookedMeshlet {
+    /// The Meshlets of `triangles`, one per run of `triangle_counts`. Each
+    /// numbers its vertices in order of first use, each triangle's corners
+    /// taken lowest first, so that the numbering survives the index codec
+    /// rotating a triangle.
+    pub(crate) fn split(
+        triangles: &[[u32; 3]],
+        triangle_counts: impl IntoIterator<Item = usize>,
+    ) -> anyhow::Result<Vec<Self>> {
+        // Each vertex's number in the current Meshlet, or u8::MAX, from the
+        // lowest vertex the triangles use to the highest.
+        let corners = triangles.as_flattened();
+        let lowest = corners.iter().copied().min().unwrap_or(0);
+        let highest = corners.iter().copied().max().unwrap_or(0);
+        let mut local = vec![u8::MAX; (highest - lowest) as usize + 1];
+        let slot = |vertex: u32| (vertex - lowest) as usize;
+        let mut rest = triangles;
+        let mut meshlets = Vec::new();
+        for triangle_count in triangle_counts {
+            anyhow::ensure!(
+                (1..=MESHLET_MAX_TRIANGLES).contains(&triangle_count),
+                "Mesh Blob has a Meshlet of {triangle_count} triangles"
+            );
+            let (run, after) = rest
+                .split_at_checked(triangle_count)
+                .context("Mesh Blob has a Meshlet past its Primitive's triangles")?;
+            rest = after;
+            let mut vertices = Vec::new();
+            for triangle in run {
+                let mut corners = *triangle;
+                corners.sort_unstable();
+                for vertex in corners {
+                    if local[slot(vertex)] == u8::MAX {
+                        anyhow::ensure!(
+                            vertices.len() < MESHLET_MAX_VERTICES,
+                            "Mesh Blob has a Meshlet of more than {MESHLET_MAX_VERTICES} vertices"
+                        );
+                        local[slot(vertex)] = vertices.len() as u8;
+                        vertices.push(vertex);
+                    }
+                }
+            }
+            let triangles = run
+                .iter()
+                .map(|triangle| triangle.map(|vertex| local[slot(vertex)]))
+                .collect();
+            for &vertex in &vertices {
+                local[slot(vertex)] = u8::MAX;
+            }
+            meshlets.push(Self {
+                vertices,
+                triangles,
+            });
+        }
+        anyhow::ensure!(
+            rest.is_empty(),
+            "Mesh Blob has a Primitive's triangle in no Meshlet"
+        );
+        Ok(meshlets)
+    }
 }
 
 /// A Mesh Asset in mesh-local space: welded vertices, u32 indices into them
@@ -393,6 +474,8 @@ pub struct CookedMesh {
     pub vertices: Vec<CookedVertex>,
     pub indices: Vec<u32>,
     pub primitives: Vec<CookedPrimitive>,
+    /// The box that holds every vertex: its lowest corner, then its highest.
+    pub bounds: [[f32; 3]; 2],
 }
 
 impl CookedMesh {
@@ -401,10 +484,12 @@ impl CookedMesh {
     pub(crate) const ZSTD_LEVEL: i32 = 19;
 
     /// After the magic and version, one zstd frame holding the vertex,
-    /// index and Primitive counts as little-endian u32s, each Primitive's
-    /// first index, index count and Material Asset ID (zero for none), the
-    /// byte length of the encoded vertices, then meshopt's encoded vertices
-    /// and indices.
+    /// index and Primitive counts as little-endian u32s, the bounds as six
+    /// little-endian f32s, each Primitive's first index, index count,
+    /// Material Asset ID (zero for none) and Meshlet count, then a byte per
+    /// Meshlet, its triangle count, the byte length of the encoded vertices,
+    /// then meshopt's encoded vertices and indices. Each Meshlet's vertices
+    /// and triangles are its run of the indices, rebuilt on reading.
     #[cfg(feature = "cook")]
     pub(crate) fn to_blob(&self) -> anyhow::Result<Vec<u8>> {
         let vertices = meshopt::encode_vertex_buffer(&self.vertices)?;
@@ -417,10 +502,21 @@ impl CookedMesh {
         ] {
             payload.extend((count as u32).to_le_bytes());
         }
+        for coordinate in self.bounds.as_flattened() {
+            payload.extend(coordinate.to_le_bytes());
+        }
         for primitive in &self.primitives {
             payload.extend(primitive.first_index.to_le_bytes());
             payload.extend(primitive.index_count.to_le_bytes());
             payload.extend(primitive.material.map_or(0, |id| id.0).to_be_bytes());
+            payload.extend((primitive.meshlets.len() as u32).to_le_bytes());
+        }
+        for meshlet in self
+            .primitives
+            .iter()
+            .flat_map(|primitive| &primitive.meshlets)
+        {
+            payload.push(meshlet.triangles.len() as u8);
         }
         payload.extend((vertices.len() as u32).to_le_bytes());
         payload.extend(vertices);
@@ -443,7 +539,12 @@ impl CookedMesh {
             "Mesh Blob's index count is not whole triangles"
         );
         let primitive_count = take_u32(rest)?;
+        let mut bounds = [[0.0; 3]; 2];
+        for coordinate in bounds.as_flattened_mut() {
+            *coordinate = f32::from_le_bytes(take(rest, 4)?.try_into().expect("4 bytes"));
+        }
         let mut primitives = Vec::new();
+        let mut meshlet_counts = Vec::new();
         for _ in 0..primitive_count {
             let first_index = take_u32(rest)?;
             let primitive_index_count = take_u32(rest)?;
@@ -452,12 +553,18 @@ impl CookedMesh {
                 first_index as usize + primitive_index_count as usize <= index_count,
                 "Mesh Blob has a Primitive past its indices"
             );
+            meshlet_counts.push(take_u32(rest)? as usize);
             primitives.push(CookedPrimitive {
                 first_index,
                 index_count: primitive_index_count,
                 material: (material != 0).then_some(AssetId(material)),
+                meshlets: Vec::new(),
             });
         }
+        let triangle_counts: Vec<&[u8]> = meshlet_counts
+            .into_iter()
+            .map(|meshlet_count| take(rest, meshlet_count))
+            .collect::<anyhow::Result<_>>()?;
         let vertex_bytes = take_u32(rest)? as usize;
         let vertices = meshopt::decode_vertex_buffer(take(rest, vertex_bytes)?, vertex_count)?;
         // The index codec spends at least a byte per triangle, so a count
@@ -472,10 +579,22 @@ impl CookedMesh {
             indices.iter().all(|&index| (index as usize) < vertex_count),
             "Mesh Blob has an index past its vertices"
         );
+        for (primitive, triangle_counts) in primitives.iter_mut().zip(triangle_counts) {
+            let first_index = primitive.first_index as usize;
+            let (triangles, partial) =
+                indices[first_index..][..primitive.index_count as usize].as_chunks::<3>();
+            anyhow::ensure!(
+                partial.is_empty(),
+                "Mesh Blob has a Primitive of partial triangles"
+            );
+            let triangle_counts = triangle_counts.iter().map(|&count| count as usize);
+            primitive.meshlets = CookedMeshlet::split(triangles, triangle_counts)?;
+        }
         Ok(Self {
             vertices,
             indices,
             primitives,
+            bounds,
         })
     }
 }
@@ -712,6 +831,22 @@ mod tests {
         assert!(error.contains("6x4: re-cook"), "{error}");
     }
 
+    /// M2's Mesh Blobs, which hold no Meshlets.
+    #[cfg(feature = "cook")]
+    #[test]
+    fn mesh_blob_of_format_version_1_is_refused_with_a_re_cook_message() {
+        let mesh = CookedMesh {
+            vertices: Vec::new(),
+            indices: Vec::new(),
+            primitives: Vec::new(),
+            bounds: [[0.0; 3]; 2],
+        };
+        let mut blob = mesh.to_blob().unwrap();
+        blob[4..8].copy_from_slice(&1u32.to_le_bytes());
+        let error = CookedMesh::from_blob(&blob).unwrap_err().to_string();
+        assert!(error.contains("re-cook with `praxis cook`"), "{error}");
+    }
+
     #[cfg(feature = "cook")]
     #[test]
     fn mesh_blob_with_a_partial_triangle_is_refused() {
@@ -719,6 +854,7 @@ mod tests {
             vertices: vec![CookedVertex::default(); 3],
             indices: vec![0, 1, 2],
             primitives: Vec::new(),
+            bounds: [[0.0; 3]; 2],
         };
         let blob = mesh.to_blob().unwrap();
         let mut payload = zstd::decode_all(&blob[8..]).unwrap();

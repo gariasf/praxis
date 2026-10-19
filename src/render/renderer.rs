@@ -505,7 +505,9 @@ mod tests {
                 first_index: 0,
                 index_count: 3,
                 material: None,
+                meshlets: Vec::new(),
             }],
+            bounds: [[-0.5, -0.5, 0.5], [0.5, 0.5, 0.5]],
         };
         let mesh = renderer
             .mesh_pool

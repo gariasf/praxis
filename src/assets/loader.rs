@@ -62,7 +62,7 @@ mod tests {
     use super::*;
     use crate::assets::ARENA_CAPACITY_BYTES;
     use crate::assets::pools::tests::logged;
-    use crate::cooked::{CookedMaterial, CookedMesh, CookedPrimitive, CookedVertex};
+    use crate::cooked::{CookedMaterial, CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex};
     use crate::gpu::GpuContext;
 
     #[test]
@@ -102,8 +102,13 @@ mod tests {
                         first_index: 0,
                         index_count: 3,
                         material: Some(AssetId(material)),
+                        meshlets: vec![CookedMeshlet {
+                            vertices: vec![0, 1, 2],
+                            triangles: vec![[0, 1, 2]],
+                        }],
                     })
                     .into(),
+                bounds: [[0.0; 3]; 2],
             };
             cache
                 .write(AssetId(id), "key", &mesh.to_blob().unwrap())
