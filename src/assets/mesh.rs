@@ -8,8 +8,9 @@ pub struct Primitive {
 
 pub struct Mesh {
     pub primitives: Vec<Primitive>,
-    /// What a Renderable without a Material Handle draws it with: the
-    /// Material its Primitives name, if any.
+    /// The Material its first Primitive names, if any, which a Renderable
+    /// without a Material Handle draws every Primitive with until M3's draw
+    /// path draws each with its own.
     pub material: Option<MaterialHandle>,
 }
 

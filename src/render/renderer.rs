@@ -569,8 +569,8 @@ mod tests {
             None,
             &mut recorder,
         );
-        let image = image::RgbaImage::from_raw(SIZE, SIZE, read_back(&context, &target).unwrap())
-            .expect("SIZE × SIZE pixels");
+        let pixels = read_back(&context, &target).expect("read back failed");
+        let image = image::RgbaImage::from_raw(SIZE, SIZE, pixels).expect("SIZE × SIZE pixels");
 
         assert_eq!(recorder.draw_calls, 1);
         assert_eq!(image.get_pixel(SIZE / 2, SIZE / 2).0, [255, 0, 0, 255]);
@@ -601,8 +601,8 @@ mod tests {
             None,
             &mut recorder,
         );
-        let image = image::RgbaImage::from_raw(SIZE, SIZE, read_back(&context, &target).unwrap())
-            .expect("SIZE × SIZE pixels");
+        let pixels = read_back(&context, &target).expect("read back failed");
+        let image = image::RgbaImage::from_raw(SIZE, SIZE, pixels).expect("SIZE × SIZE pixels");
         assert!(renderer.instance_capacity > INSTANCE_BUFFER_INITIAL_CAPACITY);
         assert_eq!(image.get_pixel(SIZE / 2, SIZE / 2).0, [255, 0, 0, 255]);
     }

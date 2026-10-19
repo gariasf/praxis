@@ -240,17 +240,14 @@ fn qtangents_from_the_cooker_decode_to_their_frame() {
         return;
     };
     let step = 1.0 / f32::from(i16::MAX);
-    let mut frames = Vec::new();
+    let mut tangent_frames = Vec::new();
     for rotation in sample_rotations() {
         for bitangent_sign in [1.0, -1.0] {
-            frames.push((
-                rotation * glam::Vec3::Z,
-                rotation * glam::Vec3::X,
-                bitangent_sign,
-            ));
+            let (normal, tangent) = (rotation * glam::Vec3::Z, rotation * glam::Vec3::X);
+            tangent_frames.push((normal, tangent, bitangent_sign));
         }
     }
-    let inputs: Vec<[f32; 4]> = frames
+    let inputs: Vec<[f32; 4]> = tangent_frames
         .iter()
         .map(|&(normal, tangent, bitangent_sign)| {
             qtangent(normal.into(), tangent.extend(bitangent_sign).into())
@@ -268,7 +265,9 @@ fn qtangents_from_the_cooker_decode_to_their_frame() {
         &inputs,
     );
 
-    for ((frame, normal_and_sign), tangent) in frames.iter().zip(normals_and_signs).zip(tangents) {
+    for ((frame, normal_and_sign), tangent) in
+        tangent_frames.iter().zip(normals_and_signs).zip(tangents)
+    {
         let &(normal, tangent_expected, bitangent_sign) = frame;
         let decoded_normal = glam::Vec3::from_slice(&normal_and_sign);
         let decoded_tangent = glam::Vec3::from_slice(&tangent);

@@ -463,13 +463,12 @@ fn wgsl_scalar(
 /// shader reads it as. A format no vertex uses yet has none, so it fails the
 /// check until it is added here.
 fn vertex_format_scalars(format: wgpu::VertexFormat) -> Option<(naga::Scalar, naga::Scalar)> {
-    use wgpu::VertexFormat;
     match format {
-        VertexFormat::Float32
-        | VertexFormat::Float32x2
-        | VertexFormat::Float32x3
-        | VertexFormat::Float32x4 => Some((naga::Scalar::F32, naga::Scalar::F32)),
-        VertexFormat::Snorm16x4 => Some((naga::Scalar::I16, naga::Scalar::F32)),
+        wgpu::VertexFormat::Float32
+        | wgpu::VertexFormat::Float32x2
+        | wgpu::VertexFormat::Float32x3
+        | wgpu::VertexFormat::Float32x4 => Some((naga::Scalar::F32, naga::Scalar::F32)),
+        wgpu::VertexFormat::Snorm16x4 => Some((naga::Scalar::I16, naga::Scalar::F32)),
         _ => None,
     }
 }

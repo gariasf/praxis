@@ -135,8 +135,9 @@ impl FramePreparer {
     /// seen at `aspect_ratio`, Instances anchored and lights placed relative
     /// to the camera (ADR 0014). Whatever the fixed schedule moves is drawn
     /// blended between its two newest Ticks (ADR 0022). A Renderable draws
-    /// with its Material Handle, else with its Mesh's Material; one whose
-    /// Mesh is not in `mesh_pool`, or that has neither Material, is skipped.
+    /// with its Material Handle, else with the Material its Mesh's Primitives
+    /// name (`Mesh::material`); one whose Mesh is not in `mesh_pool`, or that
+    /// has neither, is skipped.
     ///
     /// Only new Renderables, blended ones and those whose World transform,
     /// Mesh or Material changed since the last `prepare` write their
@@ -181,8 +182,9 @@ impl FramePreparer {
                 instance_slots.free(entity);
             }
         }
-        // Those that lost their Material Handle draw with their Mesh's now.
-        let lost_material: bevy_ecs::entity::EntityHashSet =
+        // Those that lost their Material Handle now draw with their Mesh's
+        // Material.
+        let lost_material_handle: bevy_ecs::entity::EntityHashSet =
             world.removed::<MaterialRef>().collect();
         for (entity, current, previous, mesh_ref, material_ref) in renderables.iter() {
             let Some(mesh) = mesh_pool.get(mesh_ref.0) else {
@@ -199,7 +201,7 @@ impl FramePreparer {
             else {
                 tracing::warn!(
                     ?entity,
-                    "Renderable has no Material Handle and its Mesh no Material, skipping it"
+                    "Renderable has no Material Handle and its Mesh's Primitives name no Material, skipping it"
                 );
                 continue;
             };
@@ -208,9 +210,9 @@ impl FramePreparer {
             if is_new
                 || current.is_changed()
                 || previous.is_some()
-                || mesh_ref.is_changed()
+                || (mesh_ref.is_changed() && material_ref.is_none())
                 || material_ref.is_some_and(|material_ref| material_ref.is_changed())
-                || lost_material.contains(&entity)
+                || lost_material_handle.contains(&entity)
             {
                 let transform = current.drawn(previous, blend_weight);
                 let rotation_scale = transform.0.matrix3.as_mat3();
@@ -459,12 +461,20 @@ mod tests {
         let Some(mut frames) = Frames::new() else {
             return;
         };
+        let triangle = [bytemuck::Zeroable::zeroed(); 3];
+        let [other_mesh, bare_mesh] = [Some(MaterialHandle(6)), None].map(|material| {
+            let mesh =
+                frames
+                    .mesh_pool
+                    .load(&mut frames.staging, &[(&triangle, &[0, 1, 2])], material);
+            mesh.expect("a triangle fits")
+        });
         let entity = frames
             .world
             .spawn((Transform::IDENTITY, MeshRef(frames.mesh)))
             .id();
         // The Material IDs of the Instances the next frame writes.
-        let written = |frames: &mut Frames| -> Vec<u32> {
+        let written_material_ids = |frames: &mut Frames| -> Vec<u32> {
             frames.prepare();
             let instances = &frames.preparer.frame().instances;
             instances
@@ -472,30 +482,25 @@ mod tests {
                 .map(|instance| instance.material_id)
                 .collect()
         };
-        assert_eq!(written(&mut frames), [MESH_MATERIAL.index()]);
+        assert_eq!(written_material_ids(&mut frames), [MESH_MATERIAL.index()]);
 
         frames
             .world
             .entity_mut(entity)
             .insert(MaterialRef(MaterialHandle(7)));
-        assert_eq!(written(&mut frames), [7]);
-        frames.world.entity_mut(entity).remove::<MaterialRef>();
-        assert_eq!(written(&mut frames), [MESH_MATERIAL.index()]);
-
-        let triangle = [bytemuck::Zeroable::zeroed(); 3];
-        let mut load = |material| {
-            let mesh =
-                frames
-                    .mesh_pool
-                    .load(&mut frames.staging, &[(&triangle, &[0, 1, 2])], material);
-            mesh.expect("a triangle fits")
-        };
-        let (other_mesh, bare_mesh) = (load(Some(MaterialHandle(6))), load(None));
+        assert_eq!(written_material_ids(&mut frames), [7]);
+        // Under its Handle, another Mesh leaves its Instance as it was.
         frames.world.entity_mut(entity).insert(MeshRef(other_mesh));
-        assert_eq!(written(&mut frames), [6]);
-        // With no Material of its own or its Mesh's, it is not drawn.
+        assert!(written_material_ids(&mut frames).is_empty());
+        // Without it, it draws with its Mesh's Material, and so after a
+        // change of Mesh.
+        frames.world.entity_mut(entity).remove::<MaterialRef>();
+        assert_eq!(written_material_ids(&mut frames), [6]);
+        frames.world.entity_mut(entity).insert(MeshRef(frames.mesh));
+        assert_eq!(written_material_ids(&mut frames), [MESH_MATERIAL.index()]);
+        // With neither Material, it is not drawn.
         frames.world.entity_mut(entity).insert(MeshRef(bare_mesh));
-        assert!(written(&mut frames).is_empty());
+        assert!(written_material_ids(&mut frames).is_empty());
         assert!(frames.preparer.frame().draws.is_empty());
     }
 
