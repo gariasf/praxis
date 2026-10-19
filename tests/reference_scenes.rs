@@ -35,12 +35,13 @@ fn procedural_scenes_render_identically_without_asset_files() {
         let (second, _) =
             praxis::capture(&context, scene, glam::DVec3::ZERO, 160, 90).expect("second capture");
         assert!(
-            first.as_raw() == second.as_raw(),
+            first == second,
             "{} differs between two captures",
             scene.name()
         );
+        let pixels = first.as_chunks::<4>().0;
         assert!(
-            first.pixels().any(|pixel| pixel != first.get_pixel(0, 0)),
+            pixels.iter().any(|pixel| pixel != &pixels[0]),
             "{} is a single colour",
             scene.name()
         );

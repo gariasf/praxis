@@ -225,6 +225,63 @@ fn tangent_space_normal_rebuilds_z_from_x_and_y() {
     assert!(grazing > 0);
 }
 
+/// The cooker's QTangents, unpacked as a `Snorm16x4` vertex attribute is
+/// (each component over 32,767, clamped at −1), decode on the GPU to the
+/// normal, tangent and bitangent sign they were cooked from, both signs and
+/// frames near the half turns whose w rounds towards zero included. A rotated
+/// axis is a product of two quaternions, each component off by at most half a
+/// Snorm16 step, plus the nudge that keeps w a whole step: within 4 steps.
+#[cfg(feature = "cook")]
+#[test]
+fn qtangents_from_the_cooker_decode_to_their_frame() {
+    use crate::cook::mesh::{qtangent, tests::sample_rotations};
+
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let step = 1.0 / f32::from(i16::MAX);
+    let mut tangent_frames = Vec::new();
+    for rotation in sample_rotations() {
+        for bitangent_sign in [1.0, -1.0] {
+            let (normal, tangent) = (rotation * glam::Vec3::Z, rotation * glam::Vec3::X);
+            tangent_frames.push((normal, tangent, bitangent_sign));
+        }
+    }
+    let inputs: Vec<[f32; 4]> = tangent_frames
+        .iter()
+        .map(|&(normal, tangent, bitangent_sign)| {
+            qtangent(normal.into(), tangent.extend(bitangent_sign).into())
+                .map(|component| (f32::from(component) * step).max(-1.0))
+        })
+        .collect();
+    let normals_and_signs = evaluate(
+        &context,
+        "vec4<f32>(decode_qtangent(input).normal, decode_qtangent(input).bitangent_sign)",
+        &inputs,
+    );
+    let tangents = evaluate(
+        &context,
+        "vec4<f32>(decode_qtangent(input).tangent, 0.0)",
+        &inputs,
+    );
+
+    for ((frame, normal_and_sign), tangent) in
+        tangent_frames.iter().zip(normals_and_signs).zip(tangents)
+    {
+        let &(normal, tangent_expected, bitangent_sign) = frame;
+        let decoded_normal = glam::Vec3::from_slice(&normal_and_sign);
+        let decoded_tangent = glam::Vec3::from_slice(&tangent);
+        assert!(
+            normal_and_sign[3] == bitangent_sign
+                && decoded_normal.abs_diff_eq(normal, 4.0 * step)
+                && decoded_tangent.abs_diff_eq(tangent_expected, 4.0 * step),
+            "normal {normal}, tangent {tangent_expected}, bitangent sign {bitangent_sign} decode \
+             to {decoded_normal}, {decoded_tangent}, {}",
+            normal_and_sign[3]
+        );
+    }
+}
+
 /// ADR 0014's precision bar: 0.25 px at 1440p and a 45° vertical field of
 /// view, for a point 0.3 m from the camera, is 0.043 mm.
 const PRECISION_BAR: f64 = 4.3e-5;

@@ -2,7 +2,7 @@
 //! Reference scene into Blobs in the Cooked cache, cooking only the Assets
 //! whose Cook key changed.
 
-mod mesh;
+pub(crate) mod mesh;
 mod texture;
 
 use std::collections::HashSet;

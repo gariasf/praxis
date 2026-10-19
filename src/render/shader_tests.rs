@@ -117,6 +117,7 @@ fn layout_check_reports_every_kind_of_mismatch() {
             @location(0) position: vec3<f32>,
             @location(1) uv: vec2<f32>,
             @location(2) weight: f32,
+            @location(3) qtangent: vec4<f32>,
         }
         @group(0) @binding(0) var<uniform> light: Light;
         @group(0) @binding(1) var<storage, read> materials: array<Material>;
@@ -140,9 +141,11 @@ fn layout_check_reports_every_kind_of_mismatch() {
     struct TestVertex {
         uv: [f32; 2],
         position: [f32; 3],
+        // Snorm16 below stores i16s.
+        qtangent: [u16; 4],
     }
-    const ATTRIBUTES: [wgpu::VertexAttribute; 2] =
-        wgpu::vertex_attr_array![0 => Float32x3, 1 => Unorm16x4];
+    const ATTRIBUTES: [wgpu::VertexAttribute; 3] =
+        wgpu::vertex_attr_array![0 => Float32x3, 1 => Unorm16x4, 3 => Snorm16x4];
     let twins = [
         twin!(Light {
             color,
@@ -160,11 +163,19 @@ fn layout_check_reports_every_kind_of_mismatch() {
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &ATTRIBUTES,
             }),
-            ..twin!(TestVertex { uv, position })
+            ..twin!(TestVertex {
+                uv,
+                position,
+                qtangent
+            })
         },
         Twin {
             wgsl_name: "Missing",
-            ..twin!(TestVertex { uv, position })
+            ..twin!(TestVertex {
+                uv,
+                position,
+                qtangent
+            })
         },
     ];
     let module = validate("test.wgsl", SOURCE).unwrap_or_else(|error| panic!("{error}"));
@@ -181,9 +192,10 @@ fn layout_check_reports_every_kind_of_mismatch() {
             "test.wgsl: Material: WGSL size: 32 bytes",
             "test.wgsl: Orphan: shared with the CPU but has no twin",
             "test.wgsl: VertexInput: Rust `position` at offset 8: 12 bytes of f32",
+            "test.wgsl: VertexInput: Rust `qtangent` at offset 20: 8 bytes of u16",
             "test.wgsl: VertexInput: Rust `uv` at offset 0: 8 bytes of f32",
             "test.wgsl: VertexInput: WGSL `position` at offset 0: 12 bytes of f32",
-            "test.wgsl: VertexInput: WGSL `uv` at offset 12: 8 bytes of f32",
+            "test.wgsl: VertexInput: WGSL `qtangent` at offset 20: 8 bytes of i16",
             "test.wgsl: VertexInput: `uv` is fed by a Unorm16x4 vertex attribute",
             "test.wgsl: VertexInput: no vertex attribute at location 2 (`weight`)",
         ]
@@ -286,6 +298,14 @@ impl ShaderScalar for u32 {
     const SCALAR: naga::Scalar = naga::Scalar::U32;
 }
 
+impl ShaderScalar for i16 {
+    const SCALAR: naga::Scalar = naga::Scalar::I16;
+}
+
+impl ShaderScalar for u16 {
+    const SCALAR: naga::Scalar = naga::Scalar::U16;
+}
+
 impl<T: ShaderScalar, const LENGTH: usize> ShaderScalar for [T; LENGTH] {
     const SCALAR: naga::Scalar = T::SCALAR;
 }
@@ -369,9 +389,8 @@ fn twin_problems(
     for member in members {
         let name = member.name.as_deref().unwrap_or_default();
         let size = module.types[member.ty].inner.size(module.to_ctx()) as usize;
-        // A vertex input has no memory layout in WGSL: its bytes sit where
-        // the vertex buffer layout puts its location.
-        let offset = match (&member.binding, &twin.vertex_buffer) {
+        let scalar = wgsl_scalar(module, member.ty);
+        match (&member.binding, &twin.vertex_buffer) {
             (Some(naga::Binding::BuiltIn(_)), _) => continue,
             (Some(naga::Binding::Location { location, .. }), Some(vertex_buffer)) => {
                 let Some(attribute) = vertex_buffer
@@ -384,26 +403,30 @@ fn twin_problems(
                     ));
                     continue;
                 };
-                // Vertex data is unpacked f32s today, read as stored. A packed
-                // format needs the Rust field's type to pick its row.
-                let stored_format = match (wgsl_scalar(module, member.ty), size) {
-                    (Some(naga::Scalar::F32), 4) => Some(wgpu::VertexFormat::Float32),
-                    (Some(naga::Scalar::F32), 8) => Some(wgpu::VertexFormat::Float32x2),
-                    (Some(naga::Scalar::F32), 12) => Some(wgpu::VertexFormat::Float32x3),
-                    (Some(naga::Scalar::F32), 16) => Some(wgpu::VertexFormat::Float32x4),
-                    _ => None,
-                };
-                if stored_format != Some(attribute.format) {
-                    problems.push(format!(
+                // A vertex input has no memory layout in WGSL: its bytes sit
+                // where the vertex buffer layout puts its location, stored as
+                // its format stores them, and the format sets what the
+                // shader reads.
+                let format_bytes = attribute.format.size() as usize;
+                match vertex_format_scalars(attribute.format) {
+                    Some((stored, read))
+                        if scalar == Some(read)
+                            && size / usize::from(read.width)
+                                == format_bytes / usize::from(stored.width) =>
+                    {
+                        let offset = attribute.offset as usize;
+                        wgsl.insert(describe(name, offset, format_bytes, Some(stored)));
+                    }
+                    _ => problems.push(format!(
                         "`{name}` is fed by a {:?} vertex attribute",
                         attribute.format
-                    ));
+                    )),
                 }
-                attribute.offset as usize
             }
-            _ => member.offset as usize,
-        };
-        wgsl.insert(describe(name, offset, size, wgsl_scalar(module, member.ty)));
+            _ => {
+                wgsl.insert(describe(name, member.offset as usize, size, scalar));
+            }
+        }
     }
     let wgsl_size = twin
         .vertex_buffer
@@ -436,9 +459,31 @@ fn wgsl_scalar(
     }
 }
 
+/// The scalar a vertex format stores each component as, and the one the
+/// shader reads it as. A format no vertex uses yet has none, so it fails the
+/// check until it is added here.
+fn vertex_format_scalars(format: wgpu::VertexFormat) -> Option<(naga::Scalar, naga::Scalar)> {
+    match format {
+        wgpu::VertexFormat::Float32
+        | wgpu::VertexFormat::Float32x2
+        | wgpu::VertexFormat::Float32x3
+        | wgpu::VertexFormat::Float32x4 => Some((naga::Scalar::F32, naga::Scalar::F32)),
+        wgpu::VertexFormat::Snorm16x4 => Some((naga::Scalar::I16, naga::Scalar::F32)),
+        _ => None,
+    }
+}
+
+/// A field's place and type, its scalar named as Rust names it (`i16`), so
+/// that a scalar WGSL lacks is still told apart.
 fn describe(name: &str, offset: usize, size: usize, scalar: Option<naga::Scalar>) -> String {
-    let scalar = scalar
-        .and_then(naga::common::wgsl::TryToWgsl::try_to_wgsl)
-        .unwrap_or("?");
+    let scalar = scalar.map_or("?".to_string(), |scalar| {
+        let kind = match scalar.kind {
+            naga::ScalarKind::Sint => "i",
+            naga::ScalarKind::Uint => "u",
+            naga::ScalarKind::Float => "f",
+            _ => "?",
+        };
+        format!("{kind}{}", u32::from(scalar.width) * 8)
+    });
     format!("`{name}` at offset {offset}: {size} bytes of {scalar}")
 }

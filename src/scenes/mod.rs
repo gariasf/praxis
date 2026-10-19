@@ -431,7 +431,7 @@ pub(crate) fn insert_gltf_mesh(
         .map(|primitive| (primitive.vertices.as_slice(), primitive.indices.as_slice()))
         .collect();
     mesh_pool
-        .load(load_staging, &primitives)
+        .load(load_staging, &primitives, None)
         .with_context(|| format!("{path}: the Arenas refused its Mesh"))
 }
 
@@ -466,7 +466,7 @@ fn insert_mesh(
         })
         .collect();
     mesh_pool
-        .load(load_staging, &[(&vertices, &geometry.indices)])
+        .load(load_staging, &[(&vertices, &geometry.indices)], None)
         .context("the Arenas refused a generated Mesh")
 }
 

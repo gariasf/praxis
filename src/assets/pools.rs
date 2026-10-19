@@ -1,5 +1,5 @@
 use crate::{
-    assets::{Mesh, MeshHandle, Primitive},
+    assets::{MaterialHandle, Mesh, MeshHandle, Primitive},
     render::{LoadStaging, Vertex},
 };
 
@@ -37,13 +37,15 @@ impl MeshPool {
     }
 
     /// Writes a Mesh of `primitives`, each its vertices and its indices into
-    /// them, through `staging` into one range of each Arena. Returns its
-    /// Handle, or None after logging when an Arena's longest free range is
-    /// too short; a refused Mesh leaves the Arenas as they were.
+    /// them, through `staging` into one range of each Arena, drawn with
+    /// `material` where no Renderable overrides it. Returns its Handle, or
+    /// None after logging when an Arena's longest free range is too short; a
+    /// refused Mesh leaves the Arenas as they were.
     pub fn load(
         &mut self,
         staging: &mut LoadStaging,
         primitives: &[(&[Vertex], &[u32])],
+        material: Option<MaterialHandle>,
     ) -> Option<MeshHandle> {
         let vertex_count = primitives.iter().map(|(vertices, _)| vertices.len()).sum();
         let index_count = primitives.iter().map(|(_, indices)| indices.len()).sum();
@@ -57,6 +59,7 @@ impl MeshPool {
 
         let mut mesh = Mesh {
             primitives: Vec::with_capacity(primitives.len()),
+            material,
         };
         let (mut vertex_offset, mut index_offset) = (vertex_range.offset, index_range.offset);
         for &(vertices, indices) in primitives {
@@ -204,7 +207,7 @@ mod tests {
         let mut staging = LoadStaging::new(context.device.clone());
         let mut pool = MeshPool::new(&context.device, CAPACITY);
         let vertices = [bytemuck::Zeroable::zeroed(); 4];
-        pool.load(&mut staging, &[(&vertices[..3], &[0, 1, 2])])
+        pool.load(&mut staging, &[(&vertices[..3], &[0, 1, 2])], None)
             .expect("a triangle fits");
         let buffers = (pool.vertex_buffer().clone(), pool.index_buffer().clone());
         let gpu_memory_bytes = pool.gpu_memory_bytes();
@@ -215,7 +218,7 @@ mod tests {
         let past_capacity: [(&[Vertex], &[u32]); 2] =
             [(&vertices[..2], &[0, 1, 0]), (&vertices[..1], &[0; 46])];
         for primitive in past_capacity {
-            let (handle, log) = logged(|| pool.load(&mut staging, &[primitive]));
+            let (handle, log) = logged(|| pool.load(&mut staging, &[primitive], None));
             assert!(handle.is_none(), "a Mesh past capacity loaded");
             assert!(log.contains("Mesh refused"), "not logged: {log:?}");
             assert_eq!(
@@ -226,7 +229,7 @@ mod tests {
             assert_eq!(pool.arena_bytes_in_use(), arena_bytes_in_use);
         }
         // The second refusal gave back the last vertex it took.
-        pool.load(&mut staging, &[(&vertices[..1], &[0, 0, 0])])
+        pool.load(&mut staging, &[(&vertices[..1], &[0, 0, 0])], None)
             .expect("the last vertex fits");
     }
 

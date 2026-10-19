@@ -499,7 +499,7 @@ mod tests {
         let triangle = [vertex(-0.5, -0.5), vertex(0.5, -0.5), vertex(0.0, 0.5)];
         let mesh = renderer
             .mesh_pool
-            .load(&mut renderer.load_staging, &[(&triangle, &[0, 1, 2])])
+            .load(&mut renderer.load_staging, &[(&triangle, &[0, 1, 2])], None)
             .expect("the triangle fits");
         let &Primitive {
             vertex_offset,
@@ -569,7 +569,8 @@ mod tests {
             None,
             &mut recorder,
         );
-        let image = read_back(&context, &target).expect("read back failed");
+        let pixels = read_back(&context, &target).expect("read back failed");
+        let image = image::RgbaImage::from_raw(SIZE, SIZE, pixels).expect("SIZE × SIZE pixels");
 
         assert_eq!(recorder.draw_calls, 1);
         assert_eq!(image.get_pixel(SIZE / 2, SIZE / 2).0, [255, 0, 0, 255]);
@@ -600,7 +601,8 @@ mod tests {
             None,
             &mut recorder,
         );
-        let image = read_back(&context, &target).expect("read back failed");
+        let pixels = read_back(&context, &target).expect("read back failed");
+        let image = image::RgbaImage::from_raw(SIZE, SIZE, pixels).expect("SIZE × SIZE pixels");
         assert!(renderer.instance_capacity > INSTANCE_BUFFER_INITIAL_CAPACITY);
         assert_eq!(image.get_pixel(SIZE / 2, SIZE / 2).0, [255, 0, 0, 255]);
     }
