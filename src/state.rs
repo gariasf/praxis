@@ -4,7 +4,7 @@ use anyhow::Context;
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::RunSystemOnce;
 
-use crate::assets::{MaterialPool, MeshPool};
+use crate::assets::AssetLoader;
 use crate::camera::fly_camera;
 use crate::components::{MaterialRef, MeshRef, PointLight, Transform};
 use crate::cooked::{
@@ -13,11 +13,10 @@ use crate::cooked::{
 use crate::gpu::GpuContext;
 use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
 use crate::input::{Input, clear_just_pressed};
-use crate::render::{FramePreparer, LoadStaging, Renderer};
+use crate::render::{FramePreparer, Renderer};
 use crate::scenes::{
-    ReferenceScene, SCI_FI_HELMET, SWEEP_METALLIC, SWEEP_ROUGHNESS, insert_gltf_mesh,
-    spawn_far_coplanar, spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep, spawn_uv_grid, spin,
-    sweep_material_name,
+    ReferenceScene, SCI_FI_HELMET, SWEEP_METALLIC, SWEEP_ROUGHNESS, spawn_far_coplanar,
+    spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep, spawn_uv_grid, spin, sweep_material_name,
 };
 use crate::stats::{FrameRecorder, FrameStats};
 use crate::threading::{init_compute_pool, single_threaded_schedule};
@@ -26,9 +25,10 @@ use crate::transform::{
     propagate_world_transforms, record_previous_world_transforms, reset_teleported,
 };
 
-/// The helmet-class model the Scene draws, relative to the working directory
-/// (the crate root under `cargo run` and `cargo test`). It is fetched, not
-/// committed: `scripts/fetch-assets.sh` downloads it.
+/// The source file of the helmet scene's Mesh and Material, relative to the
+/// working directory (the crate root under `cargo run` and `cargo test`),
+/// which a dev launch cooks. It is fetched, not committed:
+/// `scripts/fetch-assets.sh` downloads it.
 pub const DEFAULT_MODEL: &str = "assets/SciFiHelmet/SciFiHelmet.gltf";
 
 /// The Scene in its ECS World, the Frame data prepared from it, and the
@@ -92,14 +92,7 @@ impl State {
         #[cfg(not(feature = "cook"))]
         let absent_sources: Vec<String> = Vec::new();
 
-        let spawn: fn(
-            &mut World,
-            &wgpu::Device,
-            &mut LoadStaging,
-            &CookedCache,
-            &mut MeshPool,
-            &mut MaterialPool,
-        ) -> anyhow::Result<()> = match scene {
+        let spawn: fn(&mut World, &mut AssetLoader) -> anyhow::Result<()> = match scene {
             ReferenceScene::Helmet => Self::spawn_helmet_scene,
             ReferenceScene::PbrSweep => spawn_pbr_sweep,
             ReferenceScene::UvGrid => spawn_uv_grid,
@@ -107,19 +100,19 @@ impl State {
             ReferenceScene::FarCoplanar => spawn_far_coplanar,
             ReferenceScene::Orrery => spawn_orrery,
         };
-        spawn(
-            &mut world,
+        let mut loader = AssetLoader {
             device,
-            load_staging,
-            &cache,
+            staging: load_staging,
+            cache: &cache,
             mesh_pool,
             material_pool,
-        )
-        .with_context(|| format!("loading {}", scene.name()))
-        .map_err(|error| match absent_sources.as_slice() {
-            [] => error,
-            absent => error.context(format!("absent sources: {}", absent.join(", "))),
-        })?;
+        };
+        spawn(&mut world, &mut loader)
+            .with_context(|| format!("loading {}", scene.name()))
+            .map_err(|error| match absent_sources.as_slice() {
+                [] => error,
+                absent => error.context(format!("absent sources: {}", absent.join(", "))),
+            })?;
         for (position, color) in [
             (glam::dvec3(2.0, 2.0, 2.0), glam::Vec3::X),
             (glam::dvec3(-2.0, 2.0, 2.0), glam::Vec3::Y),
@@ -159,23 +152,14 @@ impl State {
         })
     }
 
-    /// Spawns `DEFAULT_MODEL` and a factor sweep of helmets
-    /// around it, and records the helmet's Handles for the spawn systems.
-    fn spawn_helmet_scene(
-        world: &mut World,
-        device: &wgpu::Device,
-        load_staging: &mut LoadStaging,
-        cache: &CookedCache,
-        mesh_pool: &mut MeshPool,
-        material_pool: &mut MaterialPool,
-    ) -> anyhow::Result<()> {
-        let mesh_handle = insert_gltf_mesh(load_staging, mesh_pool, DEFAULT_MODEL)
-            .context("run scripts/fetch-assets.sh if the model is missing")?;
+    /// Spawns `DEFAULT_MODEL`'s helmet and a factor sweep of helmets around
+    /// it, and records the helmet's Mesh for the spawn systems.
+    fn spawn_helmet_scene(world: &mut World, loader: &mut AssetLoader) -> anyhow::Result<()> {
         let source = AssetSource::File(SCI_FI_HELMET);
-        let id = AssetId::new(source, AssetKind::Material, AssetName::Name("SciFiHelmet"));
-        let material_handle = material_pool
-            .load(device, load_staging, cache, id)
-            .with_context(|| format!("loading the Material of {DEFAULT_MODEL}"))?;
+        let id = AssetId::new(source, AssetKind::Mesh, AssetName::Name("SciFiHelmet"));
+        let mesh_handle = loader.mesh(id).with_context(|| {
+            format!("loading {DEFAULT_MODEL}; run scripts/fetch-assets.sh if it is missing")
+        })?;
 
         // Debug material sweep: a pure factor sweep over the neutral default
         // layers with a white base color. Top row dielectric, bottom row metal;
@@ -187,7 +171,7 @@ impl State {
             for (column_index, roughness) in SWEEP_ROUGHNESS.into_iter().enumerate() {
                 let id =
                     ReferenceScene::Helmet.material_id(&sweep_material_name(metallic, roughness));
-                let variant_handle = material_pool.load(device, load_staging, cache, id)?;
+                let variant_handle = loader.material(id)?;
                 let column_offset = (column_index as f32 - 2.0) * 2.0;
                 let row_offset = 2.6 - row_index as f32 * 5.2;
                 world.spawn((
@@ -204,16 +188,14 @@ impl State {
                 ));
             }
         }
+        // Drawn with the Material its Primitive names, which the sweep's
+        // helmets override.
         world.spawn((
             Transform::from_translation(glam::dvec3(0.0, 0.0, -8.0)),
             MeshRef(mesh_handle),
-            MaterialRef(material_handle),
         ));
 
-        world.insert_resource(HelmetAssets {
-            mesh: mesh_handle,
-            material: material_handle,
-        });
+        world.insert_resource(HelmetAssets { mesh: mesh_handle });
         Ok(())
     }
 

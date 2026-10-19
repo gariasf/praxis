@@ -1,221 +1,132 @@
-use crate::render::Vertex;
+use anyhow::Context;
 
-pub struct LoadedPrimitive {
-    pub vertices: Vec<Vertex>,
-    pub indices: Vec<u32>,
+use crate::assets::{MaterialHandle, MaterialPool, MeshHandle, MeshPool};
+use crate::cooked::{AssetId, CookedCache};
+use crate::render::LoadStaging;
+
+/// What a scene load reads Assets with: a Cooked cache, and the Pools they
+/// load into through the load's staging (ADR 0018).
+pub struct AssetLoader<'a> {
+    pub device: &'a wgpu::Device,
+    pub staging: &'a mut LoadStaging,
+    pub cache: &'a CookedCache,
+    pub mesh_pool: &'a mut MeshPool,
+    pub material_pool: &'a mut MaterialPool,
 }
 
-pub struct LoadedModel {
-    pub primitives: Vec<LoadedPrimitive>,
-}
-
-/// The vertices and indices of every Primitive of the glTF file at `path`;
-/// its images are not read, since Textures load cooked.
-pub fn load_model(path: &str) -> anyhow::Result<LoadedModel> {
-    let _span = tracing::info_span!("load_model", path = %path).entered();
-
-    tracing::debug!("starting model load");
-
-    let gltf::Gltf { document, blob } = gltf::Gltf::open(path)?;
-    let buffers = gltf::import_buffers(&document, std::path::Path::new(path).parent(), blob)?;
-
-    let meshes = document.meshes();
-    let mesh_count = meshes.len();
-    tracing::debug!(meshes = mesh_count, buffers = buffers.len(), "glTF parsed");
-
-    if mesh_count == 0 {
-        return Err(anyhow::anyhow!("No meshes found"));
+impl AssetLoader<'_> {
+    /// Loads the Material `id` with the Textures it samples.
+    pub fn material(&mut self, id: AssetId) -> anyhow::Result<MaterialHandle> {
+        self.material_pool
+            .load(self.device, self.staging, self.cache, id)
     }
 
-    let mut primitives = Vec::new();
-
-    for (mesh_index, mesh) in meshes.enumerate() {
-        let _mesh_span = tracing::debug_span!("mesh", mesh_index).entered();
-
-        for (primitive_index, primitive) in mesh.primitives().enumerate() {
-            let _prim_span = tracing::debug_span!("primitive", primitive_index).entered();
-
-            if primitive.mode() != gltf::mesh::Mode::Triangles {
-                return Err(anyhow::anyhow!(
-                    "Unsupported primitive mode: {:?}. Only triangle primitives are supported",
-                    primitive.mode()
-                ));
-            }
-            let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
-
-            let positions: Vec<[f32; 3]> = reader
-                .read_positions()
-                .ok_or(anyhow::anyhow!("Mesh has no positions"))?
-                .collect();
-
-            let normals: Vec<[f32; 3]> = reader
-                .read_normals()
-                .map(|iter| iter.collect())
-                .unwrap_or_else(|| vec![[0.0, 1.0, 0.0]; positions.len()]);
-
-            let uvs: Vec<[f32; 2]> = reader
-                .read_tex_coords(0)
-                .map(|iter| iter.into_f32().collect())
-                .unwrap_or_else(|| vec![[0.0, 0.0]; positions.len()]);
-
-            let indices: Vec<u32> = reader
-                .read_indices()
-                .map(|iter| iter.into_u32().collect())
-                .unwrap_or_else(|| (0..positions.len() as u32).collect());
-
-            let tangents: Vec<[f32; 4]> = match reader.read_tangents() {
-                Some(tangent_iter) => {
-                    tracing::debug!("tangents read from TANGENT accessor");
-                    tangent_iter.collect()
-                }
-                None => {
-                    tracing::debug!("no TANGENT accessor; generating tangents with MikkTSpace");
-                    generate_tangents(&positions, &normals, &uvs, &indices)
-                }
-            };
-
-            let vertices: Vec<Vertex> = (0..positions.len())
-                .map(|vertex_index| Vertex {
-                    position: positions[vertex_index],
-                    normal: normals[vertex_index],
-                    uv: uvs[vertex_index],
-                    tangent: tangents[vertex_index],
-                })
-                .collect();
-
-            tracing::debug!(
-                vertices = vertices.len(),
-                indices = indices.len(),
-                "primitive loaded"
-            );
-
-            primitives.push(LoadedPrimitive { vertices, indices });
+    /// Loads the Mesh `id` into the Arenas with the Material its Primitives
+    /// name. Until M3's draw path draws each Primitive with its own, a Mesh
+    /// draws with its first Primitive's, after a warning when another
+    /// Primitive names a different one.
+    pub fn mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
+        let mesh = self.cache.mesh(id)?;
+        let material = mesh
+            .primitives
+            .first()
+            .and_then(|primitive| primitive.material);
+        if mesh
+            .primitives
+            .iter()
+            .any(|primitive| primitive.material != material)
+        {
+            tracing::warn!(mesh = %id, "the Mesh's Primitives name different Materials; it draws with the first's");
         }
-    }
-
-    tracing::info!(primitives = primitives.len(), "model load complete");
-
-    Ok(LoadedModel { primitives })
-}
-
-/// Indexed triangle mesh viewed through the MikkTSpace `Geometry` interface.
-/// MikkTSpace works per face-vertex, so the tangents land per corner.
-struct TangentGeometry<'a> {
-    positions: &'a [[f32; 3]],
-    normals: &'a [[f32; 3]],
-    uvs: &'a [[f32; 2]],
-    indices: &'a [u32],
-    tangents: Vec<[f32; 4]>,
-}
-
-impl TangentGeometry<'_> {
-    fn vertex_index(&self, face: usize, vert: usize) -> usize {
-        self.indices[face * 3 + vert] as usize
+        let material = material
+            .map(|material| self.material(material))
+            .transpose()
+            .with_context(|| format!("loading the Material of Mesh {id}"))?;
+        self.mesh_pool
+            .load(self.staging, &mesh, material)
+            .with_context(|| format!("the Arenas refused Mesh {id}"))
     }
 }
 
-impl bevy_mikktspace::Geometry for TangentGeometry<'_> {
-    fn num_faces(&self) -> usize {
-        self.indices.len() / 3
-    }
-
-    fn num_vertices_of_face(&self, _face: usize) -> usize {
-        3
-    }
-
-    fn position(&self, face: usize, vert: usize) -> [f32; 3] {
-        self.positions[self.vertex_index(face, vert)]
-    }
-
-    fn normal(&self, face: usize, vert: usize) -> [f32; 3] {
-        self.normals[self.vertex_index(face, vert)]
-    }
-
-    /// MikkTSpace puts the bitangent along +v. glTF's `v` runs down the
-    /// image while its normal maps take +Y as up, so `v` is flipped.
-    fn tex_coord(&self, face: usize, vert: usize) -> [f32; 2] {
-        let [u, v] = self.uvs[self.vertex_index(face, vert)];
-        [u, 1.0 - v]
-    }
-
-    fn set_tangent(
-        &mut self,
-        tangent_space: Option<bevy_mikktspace::TangentSpace>,
-        face: usize,
-        vert: usize,
-    ) {
-        // `None` means a degenerate face with no neighbour to borrow from.
-        self.tangents[face * 3 + vert] = tangent_space.unwrap_or_default().tangent_encoded();
-    }
-}
-
-/// Generates glTF-convention tangents (`xyz` tangent, `w` bitangent sign) with
-/// MikkTSpace, the algorithm the glTF spec prescribes when `TANGENT` is absent.
-/// For a vertex shared by several faces the last face written wins. Fine for
-/// well-formed meshes; a UV seam already splits vertices.
-pub(crate) fn generate_tangents(
-    positions: &[[f32; 3]],
-    normals: &[[f32; 3]],
-    uvs: &[[f32; 2]],
-    indices: &[u32],
-) -> Vec<[f32; 4]> {
-    let mut tangents = vec![[1.0, 0.0, 0.0, 1.0]; positions.len()];
-    for (index, tangent) in indices
-        .iter()
-        .zip(corner_tangents(positions, normals, uvs, indices))
-    {
-        tangents[*index as usize] = tangent;
-    }
-    tangents
-}
-
-/// MikkTSpace tangents in glTF's convention, one per index: each corner's own.
-pub(crate) fn corner_tangents(
-    positions: &[[f32; 3]],
-    normals: &[[f32; 3]],
-    uvs: &[[f32; 2]],
-    indices: &[u32],
-) -> Vec<[f32; 4]> {
-    let mut geometry = TangentGeometry {
-        positions,
-        normals,
-        uvs,
-        indices,
-        tangents: vec![[1.0, 0.0, 0.0, 1.0]; indices.len()],
-    };
-    if bevy_mikktspace::generate_tangents(&mut geometry).is_err() {
-        tracing::error!("MikkTSpace tangent generation failed; falling back to +X tangents");
-    }
-    geometry.tangents
-}
-
-#[cfg(test)]
+#[cfg(all(test, feature = "cook"))]
 mod tests {
-    use super::generate_tangents;
+    use std::io::Write;
 
-    /// A quad facing +Z, its texture upright: `u` grows along +X and glTF's `v`
-    /// grows down the image, along −Y. glTF normal maps take +Y as up the
-    /// image, so the bitangent, cross(normal, tangent) × w, must be +Y.
+    use super::*;
+    use crate::assets::ARENA_CAPACITY_BYTES;
+    use crate::assets::pools::tests::logged;
+    use crate::cooked::{CookedMaterial, CookedMesh, CookedPrimitive, CookedVertex};
+    use crate::gpu::GpuContext;
+
     #[test]
-    fn generated_bitangent_points_up_the_image() {
-        let positions = [
-            [-1.0, -1.0, 0.0],
-            [1.0, -1.0, 0.0],
-            [1.0, 1.0, 0.0],
-            [-1.0, 1.0, 0.0],
-        ];
-        let normals = [[0.0, 0.0, 1.0]; 4];
-        let uvs = [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
-        let indices = [0, 1, 2, 0, 2, 3];
-
-        for tangent in generate_tangents(&positions, &normals, &uvs, &indices) {
-            let [x, y, z, handedness] = tangent;
-            let bitangent = glam::Vec3::Z.cross(glam::vec3(x, y, z)) * handedness;
-            assert!(
-                glam::vec3(x, y, z).abs_diff_eq(glam::Vec3::X, 1e-6)
-                    && bitangent.abs_diff_eq(glam::Vec3::Y, 1e-6),
-                "tangent {tangent:?} gives bitangent {bitangent}, expected tangent +X and bitangent +Y"
-            );
+    fn a_mesh_whose_primitives_name_different_materials_warns_and_draws_with_the_first() {
+        let context = match pollster::block_on(GpuContext::headless()) {
+            Ok(context) => context,
+            Err(error) if error.is::<wgpu::RequestAdapterError>() => {
+                // Not `eprintln!`, which libtest captures from passing tests.
+                writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+                return;
+            }
+            Err(error) => panic!("headless GPU context failed: {error:#}"),
+        };
+        let directory =
+            std::env::temp_dir().join(format!("praxis-asset-loader-{}", std::process::id()));
+        let cache = CookedCache::new(&directory);
+        let material = CookedMaterial {
+            base_color: [1.0; 4],
+            metallic: 0.0,
+            roughness: 1.0,
+            emissive: [0.0; 3],
+            textures: [None; 5],
+        };
+        for id in [1, 2] {
+            cache
+                .write(AssetId(id), "key", &material.to_blob())
+                .unwrap();
         }
+        // Mesh 3's Primitives both name Material 1; Mesh 4's name 2, then 9,
+        // which the cache lacks.
+        for (id, materials) in [(3, [1, 1]), (4, [2, 9])] {
+            let mesh = CookedMesh {
+                vertices: vec![CookedVertex::default(); 3],
+                indices: vec![0, 1, 2],
+                primitives: materials
+                    .map(|material| CookedPrimitive {
+                        first_index: 0,
+                        index_count: 3,
+                        material: Some(AssetId(material)),
+                    })
+                    .into(),
+            };
+            cache
+                .write(AssetId(id), "key", &mesh.to_blob().unwrap())
+                .unwrap();
+        }
+
+        let mut staging = LoadStaging::new(context.device.clone());
+        let mut mesh_pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
+        let mut material_pool = MaterialPool::new(&context.device, &mut staging);
+        let mut loader = AssetLoader {
+            device: &context.device,
+            staging: &mut staging,
+            cache: &cache,
+            mesh_pool: &mut mesh_pool,
+            material_pool: &mut material_pool,
+        };
+        let (uniform, uniform_log) = logged(|| loader.mesh(AssetId(3)).unwrap());
+        let (mixed, mixed_log) = logged(|| loader.mesh(AssetId(4)).unwrap());
+
+        assert!(
+            !uniform_log.contains("different Materials"),
+            "{uniform_log}"
+        );
+        assert!(mixed_log.contains("different Materials"), "{mixed_log}");
+        // Each loaded only the first Material its Primitives name: 1, then 2.
+        let materials = [uniform, mixed].map(|mesh| {
+            let material = mesh_pool.get(mesh).unwrap().material;
+            material.map(MaterialHandle::index)
+        });
+        assert_eq!(materials, [Some(0), Some(1)]);
+        std::fs::remove_dir_all(&directory).ok();
     }
 }

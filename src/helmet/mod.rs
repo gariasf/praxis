@@ -1,15 +1,15 @@
 use bevy_ecs::prelude::*;
 use winit::keyboard::KeyCode;
 
-use crate::assets::{MaterialHandle, MeshHandle};
+use crate::assets::MeshHandle;
 use crate::camera::Camera;
-use crate::components::{MaterialRef, MeshRef, Transform};
+use crate::components::{MeshRef, Transform};
 use crate::input::Input;
 
+/// The helmet's Mesh, which spawned helmets draw with its own Material.
 #[derive(Resource)]
 pub struct HelmetAssets {
     pub mesh: MeshHandle,
-    pub material: MaterialHandle,
 }
 
 #[derive(Resource, Default)]
@@ -30,11 +30,7 @@ pub fn spawn_helmet(
 
     let position = camera.position + camera.forward().as_dvec3() * 3.0;
     let entity = commands
-        .spawn((
-            Transform::from_translation(position),
-            MeshRef(assets.mesh),
-            MaterialRef(assets.material),
-        ))
+        .spawn((Transform::from_translation(position), MeshRef(assets.mesh)))
         .id();
 
     runtime_helmets.entities.push(entity);

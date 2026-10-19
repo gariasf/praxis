@@ -69,7 +69,7 @@ Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/ag
 - **ECS:** `bevy_ecs` (sub-crate only — no full Bevy stack), with
   `bevy_tasks` for its compute pool
 - **Assets:** glTF via `gltf` crate, images via `image` crate,
-  tangents via `bevy_mikktspace`
+  tangents via `bevy_mikktspace`, all three behind the `cook` feature
 - **Logging:** `tracing` + `tracing-subscriber` (with `env-filter`)
 - **Structure:** Single crate: a library plus a thin binary.
 
@@ -96,8 +96,9 @@ src/
   threading.rs                 # compute pool, schedule executor (ADR 0016)
   camera/, time/, input/,      # feature modules: resource (+ systems)
     helmet/, transform/           per domain in one mod.rs
-  assets/                      # asset types, loaders, pools, and the
-                                 Cooked cache reader (Asset IDs, Blobs)
+  assets/                      # asset types, pools, the Cooked cache
+                                 reader (Asset IDs, Blobs), and the
+                                 loader from one into the other
   cook/                        # the cooker behind the default-on `cook`
                                  feature: `praxis cook` turns manifest
                                  sources and Reference scenes into Blobs

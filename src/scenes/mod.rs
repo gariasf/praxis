@@ -1,21 +1,19 @@
+#[cfg(feature = "cook")]
 use std::f32::consts::{PI, TAU};
 use std::time::Duration;
 
-use anyhow::Context;
 use bevy_ecs::prelude::*;
 
+use crate::assets::AssetLoader;
 #[cfg(feature = "cook")]
 use crate::assets::MaterialChannel;
-use crate::assets::loader::generate_tangents;
-use crate::assets::{MaterialPool, MeshHandle, MeshPool, load_model};
 use crate::camera::Camera;
 use crate::components::{MaterialRef, MeshRef, Transform};
 #[cfg(feature = "cook")]
 use crate::cook::LoadedImage;
 #[cfg(feature = "cook")]
 use crate::cooked::CookedMaterial;
-use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource, CookedCache};
-use crate::render::{LoadStaging, Vertex};
+use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource};
 use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
 use crate::transform::PreviousWorldTransform;
 
@@ -71,6 +69,12 @@ impl ReferenceScene {
     pub(crate) fn material_id(self, name: &str) -> AssetId {
         let source = AssetSource::Scene(self.name());
         AssetId::new(source, AssetKind::Material, AssetName::Name(name))
+    }
+
+    /// The Asset ID of the scene's procedural Mesh `name`.
+    pub(crate) fn mesh_id(self, name: &str) -> AssetId {
+        let source = AssetSource::Scene(self.name());
+        AssetId::new(source, AssetKind::Mesh, AssetName::Name(name))
     }
 
     /// The manifest sources the scene references, by GUID.
@@ -232,6 +236,7 @@ const SWEEP_BASE_COLOR: [f32; 4] = [1.0, 0.71, 0.29, 1.0];
 const HELMET_SWEEP_BASE_COLOR: [f32; 4] = [1.0; 4];
 pub(crate) const SWEEP_METALLIC: [f32; 2] = [0.0, 1.0];
 pub(crate) const SWEEP_ROUGHNESS: [f32; 5] = [0.1, 0.3, 0.5, 0.7, 0.9];
+#[cfg(feature = "cook")]
 const SPHERE_RADIUS: f32 = 0.5;
 const SPHERE_SPACING: f32 = 1.3;
 
@@ -240,20 +245,12 @@ pub(crate) fn sweep_material_name(metallic: f32, roughness: f32) -> String {
     format!("metallic-{metallic}-roughness-{roughness}")
 }
 
-pub(crate) fn spawn_pbr_sweep(
-    world: &mut World,
-    device: &wgpu::Device,
-    load_staging: &mut LoadStaging,
-    cache: &CookedCache,
-    mesh_pool: &mut MeshPool,
-    material_pool: &mut MaterialPool,
-) -> anyhow::Result<()> {
-    let sphere = insert_mesh(load_staging, mesh_pool, &uv_sphere(SPHERE_RADIUS))?;
+pub(crate) fn spawn_pbr_sweep(world: &mut World, loader: &mut AssetLoader) -> anyhow::Result<()> {
+    let sphere = loader.mesh(ReferenceScene::PbrSweep.mesh_id("sphere"))?;
     for (row, metallic) in SWEEP_METALLIC.into_iter().enumerate() {
         for (column, roughness) in SWEEP_ROUGHNESS.into_iter().enumerate() {
             let name = sweep_material_name(metallic, roughness);
-            let id = ReferenceScene::PbrSweep.material_id(&name);
-            let material = material_pool.load(device, load_staging, cache, id)?;
+            let material = loader.material(ReferenceScene::PbrSweep.material_id(&name))?;
             let position = glam::vec3(
                 (column as f32 - (SWEEP_ROUGHNESS.len() - 1) as f32 / 2.0) * SPHERE_SPACING,
                 (0.5 - row as f32) * SPHERE_SPACING,
@@ -273,43 +270,25 @@ pub(crate) fn spawn_pbr_sweep(
 #[cfg(feature = "cook")]
 const UV_GRID_ROUGHNESS: f32 = 0.8;
 
-pub(crate) fn spawn_uv_grid(
-    world: &mut World,
-    device: &wgpu::Device,
-    load_staging: &mut LoadStaging,
-    cache: &CookedCache,
-    mesh_pool: &mut MeshPool,
-    material_pool: &mut MaterialPool,
-) -> anyhow::Result<()> {
-    let plane = insert_mesh(load_staging, mesh_pool, &ground_plane(4.0, 2.0))?;
-    let id = ReferenceScene::UvGrid.material_id("grid");
-    let material = material_pool.load(device, load_staging, cache, id)?;
-    world.spawn((Transform::IDENTITY, MeshRef(plane), MaterialRef(material)));
+/// The plane draws with the grid Material its Primitive names.
+pub(crate) fn spawn_uv_grid(world: &mut World, loader: &mut AssetLoader) -> anyhow::Result<()> {
+    let plane = loader.mesh(ReferenceScene::UvGrid.mesh_id("plane"))?;
+    world.spawn((Transform::IDENTITY, MeshRef(plane)));
     Ok(())
 }
 
-/// Committed, so CI renders it; 1.8 MB, under the 2 MB commit ceiling
-/// (`docs/research/test-assets.md`).
-const NORMAL_TANGENT_ASSET: &str = "assets/NormalTangentTest/NormalTangentTest.glb";
 /// The middle of the model's bounds, which run from -1.2 to 0.95 in Y.
 const NORMAL_TANGENT_CENTRE_HEIGHT: f64 = -0.125;
 
+/// The Mesh draws with the Material its Primitive names.
 pub(crate) fn spawn_normal_tangent(
     world: &mut World,
-    device: &wgpu::Device,
-    load_staging: &mut LoadStaging,
-    cache: &CookedCache,
-    mesh_pool: &mut MeshPool,
-    material_pool: &mut MaterialPool,
+    loader: &mut AssetLoader,
 ) -> anyhow::Result<()> {
-    let mesh = insert_gltf_mesh(load_staging, mesh_pool, NORMAL_TANGENT_ASSET)?;
-    // Unnamed in the file, so named by its index (ADR 0018).
     let source = AssetSource::File(NORMAL_TANGENT_TEST);
-    let id = AssetId::new(source, AssetKind::Material, AssetName::Index(0));
-    let material = material_pool
-        .load(device, load_staging, cache, id)
-        .with_context(|| format!("loading the Material of {NORMAL_TANGENT_ASSET}"))?;
-    world.spawn((Transform::IDENTITY, MeshRef(mesh), MaterialRef(material)));
+    let name = AssetName::Name("NormalTangentTest_low");
+    let mesh = loader.mesh(AssetId::new(source, AssetKind::Mesh, name))?;
+    world.spawn((Transform::IDENTITY, MeshRef(mesh)));
     Ok(())
 }
 
@@ -328,21 +307,12 @@ const FAR_COPLANAR_ROUGHNESS: f32 = 0.8;
 
 pub(crate) fn spawn_far_coplanar(
     world: &mut World,
-    device: &wgpu::Device,
-    load_staging: &mut LoadStaging,
-    cache: &CookedCache,
-    mesh_pool: &mut MeshPool,
-    material_pool: &mut MaterialPool,
+    loader: &mut AssetLoader,
 ) -> anyhow::Result<()> {
-    let plane = insert_mesh(
-        load_staging,
-        mesh_pool,
-        &ground_plane(FAR_COPLANAR_DISTANCE as f32, 1.0),
-    )?;
+    let plane = loader.mesh(ReferenceScene::FarCoplanar.mesh_id("plane"))?;
     let centre = glam::dvec3(0.0, 0.0, -FAR_COPLANAR_DISTANCE);
     for (height, name) in [(0.0, "upper"), (-FAR_COPLANAR_GAP, "lower")] {
-        let id = ReferenceScene::FarCoplanar.material_id(name);
-        let material = material_pool.load(device, load_staging, cache, id)?;
+        let material = loader.material(ReferenceScene::FarCoplanar.material_id(name))?;
         world.spawn((
             Transform::from_translation(centre + glam::DVec3::Y * height),
             MeshRef(plane),
@@ -364,23 +334,13 @@ const ORRERY_ROUGHNESS: f32 = 0.5;
 
 /// A chain of five spheres from a root at the origin, each a child of the
 /// one before, on its parent's +X axis, and all spinning about their own +Y
-/// in the fixed schedule, so each circles its parent.
-pub(crate) fn spawn_orrery(
-    world: &mut World,
-    device: &wgpu::Device,
-    load_staging: &mut LoadStaging,
-    cache: &CookedCache,
-    mesh_pool: &mut MeshPool,
-    material_pool: &mut MaterialPool,
-) -> anyhow::Result<()> {
-    let sphere = insert_mesh(load_staging, mesh_pool, &uv_sphere(SPHERE_RADIUS))?;
-    // The grid shows each sphere's own spin.
-    let id = ReferenceScene::Orrery.material_id("grid");
-    let material = material_pool.load(device, load_staging, cache, id)?;
+/// in the fixed schedule, so each circles its parent. The spheres draw with
+/// the grid Material their Primitive names, which shows each one's spin.
+pub(crate) fn spawn_orrery(world: &mut World, loader: &mut AssetLoader) -> anyhow::Result<()> {
+    let sphere = loader.mesh(ReferenceScene::Orrery.mesh_id("sphere"))?;
     let body = |radians_per_second| {
         (
             MeshRef(sphere),
-            MaterialRef(material),
             Spin { radians_per_second },
             PreviousWorldTransform::default(),
         )
@@ -417,25 +377,8 @@ pub(crate) fn spin(fixed_time: Res<FixedTime>, mut spinning: Query<(&Spin, &mut 
     }
 }
 
-/// Loads every Primitive of the glTF file at `path`, relative to the working
-/// directory, as one Mesh.
-pub(crate) fn insert_gltf_mesh(
-    load_staging: &mut LoadStaging,
-    mesh_pool: &mut MeshPool,
-    path: &str,
-) -> anyhow::Result<MeshHandle> {
-    let model = load_model(path).with_context(|| format!("load {path}"))?;
-    let primitives: Vec<_> = model
-        .primitives
-        .iter()
-        .map(|primitive| (primitive.vertices.as_slice(), primitive.indices.as_slice()))
-        .collect();
-    mesh_pool
-        .load(load_staging, &primitives, None)
-        .with_context(|| format!("{path}: the Arenas refused its Mesh"))
-}
-
 /// An indexed triangle list, counter-clockwise when seen from outside.
+#[cfg(feature = "cook")]
 #[derive(Clone, Default)]
 pub(crate) struct Geometry {
     pub(crate) positions: Vec<[f32; 3]>,
@@ -444,35 +387,10 @@ pub(crate) struct Geometry {
     pub(crate) indices: Vec<u32>,
 }
 
-/// Loads `geometry` as a one-Primitive Mesh, with MikkTSpace tangents as a
-/// glTF file without tangents gets them.
-fn insert_mesh(
-    load_staging: &mut LoadStaging,
-    mesh_pool: &mut MeshPool,
-    geometry: &Geometry,
-) -> anyhow::Result<MeshHandle> {
-    let tangents = generate_tangents(
-        &geometry.positions,
-        &geometry.normals,
-        &geometry.uvs,
-        &geometry.indices,
-    );
-    let vertices: Vec<Vertex> = (0..geometry.positions.len())
-        .map(|vertex_index| Vertex {
-            position: geometry.positions[vertex_index],
-            normal: geometry.normals[vertex_index],
-            uv: geometry.uvs[vertex_index],
-            tangent: tangents[vertex_index],
-        })
-        .collect();
-    mesh_pool
-        .load(load_staging, &[(&vertices, &geometry.indices)], None)
-        .context("the Arenas refused a generated Mesh")
-}
-
 /// A sphere of `radius` around the origin. `u` runs once around from +Z
 /// towards +X, `v` from the north pole to the south pole, as a glTF texture
 /// maps top row first.
+#[cfg(feature = "cook")]
 fn uv_sphere(radius: f32) -> Geometry {
     const LONGITUDE_SEGMENTS: u32 = 48;
     const LATITUDE_SEGMENTS: u32 = 24;
@@ -519,6 +437,7 @@ fn uv_sphere(radius: f32) -> Geometry {
 
 /// A square in the XZ plane, facing +Y, `half_size` metres from the origin
 /// to each edge. `u` grows along +X and `v` along +Z, both to `uv_repeat`.
+#[cfg(feature = "cook")]
 pub(crate) fn ground_plane(half_size: f32, uv_repeat: f32) -> Geometry {
     Geometry {
         positions: vec![

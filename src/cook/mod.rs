@@ -249,7 +249,7 @@ fn read_sources(
                 .push(TextureSource::generated(id, channel, name, image));
         }
         for (name, geometry, material) in scene.meshes() {
-            let id = AssetId::new(source, AssetKind::Mesh, AssetName::Name(name));
+            let id = scene.mesh_id(name);
             let material = material.map(|material| scene.material_id(material));
             let primitives = vec![(geometry, material)];
             sources

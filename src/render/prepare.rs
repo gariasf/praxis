@@ -291,6 +291,7 @@ mod tests {
     use std::io::Write;
 
     use super::*;
+    use crate::assets::pools::tests::mesh;
     use crate::assets::{ARENA_CAPACITY_BYTES, MaterialHandle, MeshHandle};
     use crate::components::Transform;
     use crate::gpu::GpuContext;
@@ -325,13 +326,8 @@ mod tests {
             };
             let mut staging = LoadStaging::new(context.device.clone());
             let mut mesh_pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
-            let triangle = [bytemuck::Zeroable::zeroed(); 3];
             let mesh = mesh_pool
-                .load(
-                    &mut staging,
-                    &[(&triangle, &[0, 1, 2])],
-                    Some(MESH_MATERIAL),
-                )
+                .load(&mut staging, &mesh(3, vec![0, 1, 2]), Some(MESH_MATERIAL))
                 .expect("a triangle fits");
             let mut world = World::new();
             world.insert_resource(Camera::new());
@@ -461,12 +457,11 @@ mod tests {
         let Some(mut frames) = Frames::new() else {
             return;
         };
-        let triangle = [bytemuck::Zeroable::zeroed(); 3];
         let [other_mesh, bare_mesh] = [Some(MaterialHandle(6)), None].map(|material| {
             let mesh =
                 frames
                     .mesh_pool
-                    .load(&mut frames.staging, &[(&triangle, &[0, 1, 2])], material);
+                    .load(&mut frames.staging, &mesh(3, vec![0, 1, 2]), material);
             mesh.expect("a triangle fits")
         });
         let entity = frames

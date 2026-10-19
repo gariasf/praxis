@@ -18,4 +18,3 @@ pub(crate) use renderer::MAIN_PASS;
 pub use renderer::Renderer;
 pub use staging::{FrameStaging, LoadStaging};
 pub use uniforms::{CameraUniform, LightUniform};
-pub use vertex::Vertex;

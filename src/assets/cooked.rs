@@ -376,6 +376,8 @@ pub struct CookedVertex {
     pub qtangent: [i16; 4],
 }
 
+const _: () = assert!(size_of::<CookedVertex>() == 28);
+
 /// One Material's run of a Mesh's indices.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CookedPrimitive {
