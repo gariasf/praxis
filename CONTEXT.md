@@ -53,7 +53,7 @@ A GPU buffer of fixed capacity, created at startup and never grown, from which a
 _Avoid_: Mega-buffer, heap
 
 **Material ID**:
-The number that identifies a Material to the GPU. Each Instance carries one.
+The number that identifies a Material to the GPU. A Primitive's Material has one; an Instance carries one only when its Renderable overrides its Mesh's Materials.
 _Avoid_: Material index
 
 ### Assets
@@ -85,11 +85,15 @@ _Avoid_: Spawn, instance (an Instance is a Renderable's data on the GPU)
 ### Frame
 
 **Instance**:
-One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, and its Material ID, in a slot of the Instance buffer that the Renderable keeps while it is one.
+One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.
 _Avoid_: Object
 
+**Moving Instance**:
+An Instance whose entity the fixed schedule moves, so it carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.
+_Avoid_: Dynamic Instance, movable
+
 **Frame data**:
-The per-frame collection of draws, changed Instances, lights and camera that the renderer consumes in place of reading the ECS World.
+The per-frame collection of changed Instances, lights and camera that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.
 _Avoid_: Scene data, render state
 
 **Froxel**:
@@ -97,7 +101,7 @@ A cell of the view frustum, bounded in screen space and depth, that holds the li
 _Avoid_: Cluster, light cluster, tile
 
 **Meshlet**:
-A small fixed-size group of a Mesh's triangles, culled as a unit.
+A small group of one Primitive's triangles, bounded in vertex and triangle count, that the GPU draws as a unit and can cull as one.
 _Avoid_: Cluster, chunk
 
 **Temporal class**:
@@ -157,7 +161,7 @@ A committed image that a Reference scene must reproduce within tolerance.
 _Avoid_: Snapshot, screenshot
 
 **Frame stats**:
-What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, draw calls, Instances written, bytes uploaded, heap allocations, GPU memory, Arena bytes in use and dropped time.
+What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, draw calls, Instances and triangles drawn, Instances written, bytes uploaded, heap allocations, GPU memory, Arena bytes in use and dropped time.
 _Avoid_: Metrics, telemetry
 
 **Baseline**:
