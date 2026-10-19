@@ -1,11 +1,12 @@
-//! Functions of the main shader run on the GPU over test vectors and are
-//! compared with oracles written apart from the shader: literals, analytic
+//! Functions of the shared shader parts run on the GPU over test vectors and
+//! are compared with oracles written apart from the shader: literals, analytic
 //! results and CPU references.
 
 use std::io::Write;
 
 use crate::gpu::GpuContext;
 use crate::render::instance::{ANCHOR_CELL_SIZE, anchor_and_offset};
+use crate::render::shaders;
 
 /// Largest difference allowed between a result and its expectation. Results
 /// land within 2e-7 of theirs on the M4 Pro.
@@ -474,15 +475,13 @@ fn gpu_context() -> Option<GpuContext> {
     }
 }
 
-/// The compute kernel appended to the main shader's source, so it calls the
-/// functions the renderer runs. `EXPRESSION`, `VECTORS_PER_CASE` and
+/// The compute kernel appended to the shared shader parts, so it calls the
+/// functions the passes run. `EXPRESSION`, `VECTORS_PER_CASE` and
 /// `WORKGROUP_SIZE` stand for the expression under test, the test vectors
-/// each case holds and the constant below. Its bindings are ones
-/// the main shader leaves free, so no backend emits a main-shader resource
-/// beside the kernel's.
+/// each case holds and the constant below.
 const KERNEL: &str = "
-@group(0) @binding(1) var<storage, read> test_vectors: array<array<vec4<f32>, VECTORS_PER_CASE>>;
-@group(0) @binding(2) var<storage, read_write> test_results: array<vec4<f32>>;
+@group(0) @binding(0) var<storage, read> test_vectors: array<array<vec4<f32>, VECTORS_PER_CASE>>;
+@group(0) @binding(1) var<storage, read_write> test_results: array<vec4<f32>>;
 
 @compute @workgroup_size(WORKGROUP_SIZE)
 fn evaluate_test_vectors(@builtin(global_invocation_id) invocation: vec3<u32>) {
@@ -499,7 +498,7 @@ fn evaluate_test_vectors(@builtin(global_invocation_id) invocation: vec3<u32>) {
 const WORKGROUP_SIZE: u32 = 64;
 
 /// Evaluates `expression`, WGSL of type `vec4<f32>` that reads its test
-/// vector as `input` and may call any function of the main shader, once per
+/// vector as `input` and may call any function of the shared parts, once per
 /// element of `inputs` in one compute dispatch; returns the results in order.
 fn evaluate(context: &GpuContext, expression: &str, inputs: &[[f32; 4]]) -> Vec<[f32; 4]> {
     evaluate_cases::<1>(context, expression, bytemuck::cast_slice(inputs))
@@ -517,7 +516,7 @@ fn evaluate_cases<const VECTORS: usize>(
         .replace("WORKGROUP_SIZE", &WORKGROUP_SIZE.to_string())
         .replace("VECTORS_PER_CASE", &VECTORS.to_string())
         .replace("EXPRESSION", expression);
-    let source = format!("{}\n{kernel}", include_str!("../shader.wgsl"));
+    let source = format!("{}\n{kernel}", shaders::SHARED.source());
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Shader Function Harness"),
         source: wgpu::ShaderSource::Wgsl(source.into()),
@@ -558,11 +557,11 @@ fn evaluate_cases<const VECTORS: usize>(
         layout: &pipeline.get_bind_group_layout(0),
         entries: &[
             wgpu::BindGroupEntry {
-                binding: 1,
+                binding: 0,
                 resource: input_buffer.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
-                binding: 2,
+                binding: 1,
                 resource: output_buffer.as_entire_binding(),
             },
         ],

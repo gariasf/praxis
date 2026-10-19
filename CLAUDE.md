@@ -91,7 +91,6 @@ src/
   scenes/                      # Reference scenes: generated content,
                                  camera paths in frames, frame deltas,
                                  the orrery's Spin system
-  shader.wgsl                  # WGSL shaders (split when justified)
   components.rs                # ECS components (Transform, MeshRef)
   threading.rs                 # compute pool, schedule executor (ADR 0016)
   camera/, time/, input/,      # feature modules: resource (+ systems)
@@ -106,7 +105,8 @@ src/
   render/                      # Renderer (owns the Pools, reads no
                                  ECS World), prepare (ECS World to Frame
                                  data), instance, uniforms, vertex, depth,
-                                 staging
+                                 staging, shaders/ (WGSL parts and the
+                                 modules each pipeline assembles from them)
 tests/                         # integration tests at agreed seams
   goldens/<backend>[-cpu]/     # committed Goldens; PRAXIS_UPDATE_GOLDENS=1
                                  cargo test --test goldens rewrites them
@@ -166,7 +166,8 @@ When a feature folder grows past one file, split into
 - Pool lookups return `Option<&T>`. Callers handle `None`
   gracefully (warn + skip in render path); never `.unwrap()` in a
   hot loop.
-- Shaders are WGSL (`.wgsl` files in `src/`).
+- Shaders are WGSL parts in `src/render/shaders/`, assembled into modules
+  by its `mod.rs`; a function under an oracle lives in a shared part.
 - No `unsafe` unless absolutely necessary and clearly explained.
 - Keep dependencies minimal. Use feature flags
   (`image = { version = "0.25", default-features = false, features = ["png"] }`).

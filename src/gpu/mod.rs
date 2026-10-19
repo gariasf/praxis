@@ -214,7 +214,7 @@ const MAIN_PASS_FORMATS: [wgpu::TextureFormat; 2] =
 
 /// The Capability floor's features (ADR 0021): exactly what every device
 /// requests.
-fn floor_features() -> wgpu::Features {
+pub(crate) fn floor_features() -> wgpu::Features {
     // ADR 0017: a Layer index varies per Instance.
     wgpu::Features::TEXTURE_BINDING_ARRAY
         | wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY
@@ -231,7 +231,7 @@ fn floor_features() -> wgpu::Features {
 
 /// The Capability floor's downlevel flags (ADR 0021), which an adapter has
 /// or lacks with no request.
-fn floor_downlevel_flags() -> wgpu::DownlevelFlags {
+pub(crate) fn floor_downlevel_flags() -> wgpu::DownlevelFlags {
     // ADR 0017 keeps hardware anisotropic filtering, and Material Channels
     // sample at 16x (#144); without the flag, wgpu silently clamps every
     // sampler's anisotropy to 1.
@@ -244,7 +244,7 @@ pub(crate) const FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE: u32 = 65_536;
 
 /// The Capability floor's limits (ADR 0021): the defaults, raised only where
 /// an ADR needs it.
-fn floor_limits() -> wgpu::Limits {
+pub(crate) fn floor_limits() -> wgpu::Limits {
     wgpu::Limits {
         // ADR 0017's arenas.
         max_buffer_size: (1 << 31) - 1,

@@ -1,33 +1,110 @@
-//! Every WGSL file under `src/` is checked here without a GPU, as wgpu checks
-//! it when it creates a shader module (backend code generation aside), and
-//! each struct whose bytes the CPU writes is compared with its Rust twin.
+//! Every shader module is checked here without a GPU, as wgpu checks it when
+//! it creates a shader module (backend code generation aside), every WGSL
+//! file under `src/` is a part of some module, and each struct whose bytes
+//! the CPU writes is compared with its Rust twin.
 
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use wgpu::naga;
 
 use crate::assets::material::MaterialData;
 use crate::cooked::CookedVertex;
+use crate::gpu::{floor_downlevel_flags, floor_features, floor_limits};
+use crate::render::shaders::{MODULES, Part, ShaderModule};
 use crate::render::{CameraUniform, InstanceData, LightUniform};
 
-/// Shader capabilities Praxis requires of every adapter: the Capability
-/// floor's binding arrays, indexed per Instance (ADRs 0017, 0021). A shader
-/// that needs another fails validation until it is added here, so a new
-/// hardware requirement is a visible decision.
-const CAPABILITIES: naga::valid::Capabilities =
-    naga::valid::Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
-        .union(naga::valid::Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING);
-
 #[test]
-fn every_wgsl_file_parses_and_validates() {
-    let files = wgsl_files();
-    assert!(!files.is_empty(), "no .wgsl file under src/");
-    let errors: Vec<String> = files
+fn every_module_parses_and_validates() {
+    let errors: Vec<String> = MODULES
         .iter()
-        .filter_map(|(path, source)| validate(path, source).err())
+        .filter_map(|module| validate(module).err())
         .collect();
     assert!(errors.is_empty(), "{}", errors.join("\n"));
+}
+
+#[test]
+fn every_wgsl_file_is_a_part_of_some_module() {
+    let parts: BTreeSet<&Path> = MODULES
+        .iter()
+        .flat_map(|module| module.parts)
+        .map(|part| Path::new(part.path))
+        .collect();
+    let unused: Vec<String> = wgsl_files()
+        .iter()
+        .filter(|file| !parts.contains(file.as_path()))
+        .map(|file| format!("{}: no shader module uses it", file.display()))
+        .collect();
+    assert!(unused.is_empty(), "{}", unused.join("\n"));
+}
+
+/// The floor requires ray queries (ADRs 0020, 0021), so a module that
+/// traces them validates.
+#[test]
+fn a_module_with_ray_queries_validates() {
+    const SHADOW: Part = Part {
+        path: "shadow.wgsl",
+        source: "
+            @group(0) @binding(0) var scene: acceleration_structure;
+
+            fn occluded(origin: vec3<f32>, direction: vec3<f32>) -> bool {
+                var query: ray_query;
+                rayQueryInitialize(
+                    &query,
+                    scene,
+                    RayDesc(RAY_FLAG_TERMINATE_ON_FIRST_HIT, 0xFFu, 0.001, 100.0, origin, direction)
+                );
+                rayQueryProceed(&query);
+                return rayQueryGetCommittedIntersection(&query).kind != RAY_QUERY_INTERSECTION_NONE;
+            }
+        ",
+    };
+    let module = ShaderModule {
+        name: "shadow",
+        enables: &["wgpu_ray_query"],
+        parts: &[SHADOW],
+    };
+    assert_eq!(validate(&module).err(), None);
+}
+
+/// A parse error, and a validation error found after parsing, each name
+/// their module, their part and their line within it, past the module's
+/// `enable` directives and earlier parts.
+#[test]
+fn an_error_names_its_module_part_and_line() {
+    const LIGHT: Part = Part {
+        path: "light.wgsl",
+        source: "struct Light {\n    color: vec4<f32>,\n}\n",
+    };
+    const MISSPELT: Part = Part {
+        path: "intensity.wgsl",
+        source: "// A misspelt member, line 4.\n\nfn intensity(light: Light) -> f32 {\n    return light.colour.a;\n}\n",
+    };
+    const UNALIGNED_UNIFORM: Part = Part {
+        path: "counts.wgsl",
+        source: "// A uniform array with a 4-byte stride, line 3.\n\n\
+                 @group(0) @binding(0) var<uniform> counts: array<u32>;\n",
+    };
+    let parse_error = validate(&ShaderModule {
+        name: "test",
+        enables: &["wgpu_binding_array"],
+        parts: &[LIGHT, MISSPELT],
+    })
+    .unwrap_err();
+    let validation_error = validate(&ShaderModule {
+        name: "test",
+        enables: &["wgpu_binding_array"],
+        parts: &[LIGHT, UNALIGNED_UNIFORM],
+    })
+    .unwrap_err();
+    assert!(
+        parse_error.starts_with("test module: intensity.wgsl:4:"),
+        "{parse_error}"
+    );
+    assert!(
+        validation_error.starts_with("test module: counts.wgsl:3:"),
+        "{validation_error}"
+    );
 }
 
 /// The `Twin` of `$type`, matched to the WGSL struct of the same name. The
@@ -54,11 +131,11 @@ macro_rules! twin {
 
 #[test]
 fn structs_shared_with_the_cpu_match_their_rust_twins() {
-    let modules: Vec<(String, naga::Module)> = wgsl_files()
-        .into_iter()
-        .map(|(path, source)| {
-            let module = validate(&path, &source).unwrap_or_else(|error| panic!("{error}"));
-            (path, module)
+    let modules: Vec<(String, naga::Module)> = MODULES
+        .iter()
+        .map(|module| {
+            let parsed = validate(module).unwrap_or_else(|error| panic!("{error}"));
+            (format!("{} module", module.name), parsed)
         })
         .collect();
     let twins = [
@@ -178,67 +255,111 @@ fn layout_check_reports_every_kind_of_mismatch() {
             })
         },
     ];
-    let module = validate("test.wgsl", SOURCE).unwrap_or_else(|error| panic!("{error}"));
+    const PART: Part = Part {
+        path: "test.wgsl",
+        source: SOURCE,
+    };
+    let module = validate(&ShaderModule {
+        name: "test",
+        enables: &[],
+        parts: &[PART],
+    })
+    .unwrap_or_else(|error| panic!("{error}"));
 
-    let mut problems = layout_problems(&[("test.wgsl".to_string(), module)], &twins);
+    let mut problems = layout_problems(&[("test module".to_string(), module)], &twins);
     problems.sort();
     assert_eq!(
         problems,
         [
-            "Missing: no WGSL file shares it",
-            "test.wgsl: Light: Rust `count` at offset 12: 4 bytes of f32",
-            "test.wgsl: Light: WGSL `count` at offset 12: 4 bytes of u32",
-            "test.wgsl: Material: Rust size: 20 bytes",
-            "test.wgsl: Material: WGSL size: 32 bytes",
-            "test.wgsl: Orphan: shared with the CPU but has no twin",
-            "test.wgsl: VertexInput: Rust `position` at offset 8: 12 bytes of f32",
-            "test.wgsl: VertexInput: Rust `qtangent` at offset 20: 8 bytes of u16",
-            "test.wgsl: VertexInput: Rust `uv` at offset 0: 8 bytes of f32",
-            "test.wgsl: VertexInput: WGSL `position` at offset 0: 12 bytes of f32",
-            "test.wgsl: VertexInput: WGSL `qtangent` at offset 20: 8 bytes of i16",
-            "test.wgsl: VertexInput: `uv` is fed by a Unorm16x4 vertex attribute",
-            "test.wgsl: VertexInput: no vertex attribute at location 2 (`weight`)",
+            "Missing: no shader module shares it",
+            "test module: Light: Rust `count` at offset 12: 4 bytes of f32",
+            "test module: Light: WGSL `count` at offset 12: 4 bytes of u32",
+            "test module: Material: Rust size: 20 bytes",
+            "test module: Material: WGSL size: 32 bytes",
+            "test module: Orphan: shared with the CPU but has no twin",
+            "test module: VertexInput: Rust `position` at offset 8: 12 bytes of f32",
+            "test module: VertexInput: Rust `qtangent` at offset 20: 8 bytes of u16",
+            "test module: VertexInput: Rust `uv` at offset 0: 8 bytes of f32",
+            "test module: VertexInput: WGSL `position` at offset 0: 12 bytes of f32",
+            "test module: VertexInput: WGSL `qtangent` at offset 20: 8 bytes of i16",
+            "test module: VertexInput: `uv` is fed by a Unorm16x4 vertex attribute",
+            "test module: VertexInput: no vertex attribute at location 2 (`weight`)",
         ]
     );
 }
 
 #[test]
 fn a_bind_group_past_the_device_limit_fails_validation() {
-    let source = "@group(4) @binding(0) var<uniform> value: vec4<f32>;";
-    assert_eq!(
-        validate("test.wgsl", source).err().as_deref(),
-        Some("test.wgsl: @group(4) exceeds the device's max_bind_groups of 4")
+    const PART: Part = Part {
+        path: "test.wgsl",
+        source: "\n@group(4) @binding(0) var<uniform> value: vec4<f32>;\n",
+    };
+    let error = validate(&ShaderModule {
+        name: "test",
+        enables: &[],
+        parts: &[PART],
+    })
+    .unwrap_err();
+    assert!(
+        error.starts_with("test module: test.wgsl:2:")
+            && error.ends_with(": @group(4) exceeds the device's max_bind_groups of 4"),
+        "{error}"
     );
 }
 
-/// Parses and validates `source` as wgpu does, or returns the error after
-/// the path, which some naga diagnostics do not mention.
-fn validate(path: &str, source: &str) -> Result<naga::Module, String> {
+/// Parses and validates `module` as wgpu does on a device that requests
+/// exactly the Capability floor, as `GpuContext` does, so a shader that needs
+/// more fails until the floor gains it (ADR 0021). An error names the module,
+/// and the part and line it is in.
+fn validate(module: &ShaderModule) -> Result<naga::Module, String> {
+    let source = module.source();
+    let error = |location: Option<naga::SourceLocation>, message: &str| match location
+        .and_then(|location| module.locate(location.offset as usize))
+    {
+        Some((path, line, column)) => {
+            format!("{} module: {path}:{line}:{column}: {message}", module.name)
+        }
+        None => format!("{} module: {message}", module.name),
+    };
+    let capabilities =
+        wgpu_naga_bridge::features_to_naga_capabilities(floor_features(), floor_downlevel_flags());
     let mut options = naga::front::wgsl::Options::new();
-    options.capabilities = CAPABILITIES;
-    let module = naga::front::wgsl::Frontend::new_with_options(options)
-        .parse(source)
-        .map_err(|error| format!("{path}: {}", error.emit_to_string_with_path(source, path)))?;
-    // `GpuContext` requests the default limits.
-    let max_bind_groups = wgpu::Limits::default().max_bind_groups;
-    for (_, global) in module.global_variables.iter() {
+    options.capabilities = capabilities;
+    let parsed = naga::front::wgsl::Frontend::new_with_options(options)
+        .parse(&source)
+        .map_err(|parse_error| error(parse_error.location(&source), parse_error.message()))?;
+    let max_bind_groups = floor_limits().max_bind_groups;
+    for (handle, global) in parsed.global_variables.iter() {
         if let Some(binding) = &global.binding
             && binding.group >= max_bind_groups
         {
-            return Err(format!(
-                "{path}: @group({}) exceeds the device's max_bind_groups of {max_bind_groups}",
-                binding.group
+            let span = parsed.global_variables.get_span(handle);
+            return Err(error(
+                Some(span.location(&source)),
+                &format!(
+                    "@group({}) exceeds the device's max_bind_groups of {max_bind_groups}",
+                    binding.group
+                ),
             ));
         }
     }
-    naga::valid::Validator::new(naga::valid::ValidationFlags::all(), CAPABILITIES)
-        .validate(&module)
-        .map_err(|error| format!("{path}: {}", error.emit_to_string_with_path(source, path)))?;
-    Ok(module)
+    naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
+        .validate(&parsed)
+        .map_err(|validation_error| {
+            // The outermost error names the item; its sources say why.
+            let causes: Vec<String> = std::iter::successors(
+                Some(validation_error.as_inner() as &dyn std::error::Error),
+                |cause| cause.source(),
+            )
+            .map(ToString::to_string)
+            .collect();
+            error(validation_error.location(&source), &causes.join(": "))
+        })?;
+    Ok(parsed)
 }
 
-/// Every `.wgsl` file under `src/`, as (path relative to the crate, source).
-fn wgsl_files() -> Vec<(String, String)> {
+/// Every `.wgsl` file under `src/`, by its path from the crate root.
+fn wgsl_files() -> Vec<PathBuf> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut files = Vec::new();
     let mut directories = vec![root.join("src")];
@@ -253,10 +374,8 @@ fn wgsl_files() -> Vec<(String, String)> {
                 .extension()
                 .is_some_and(|extension| extension == "wgsl")
             {
-                let source = std::fs::read_to_string(&path)
-                    .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
                 let relative = path.strip_prefix(root).expect("under the crate root");
-                files.push((relative.display().to_string(), source));
+                files.push(relative.to_path_buf());
             }
         }
     }
@@ -341,7 +460,7 @@ fn layout_problems(modules: &[(String, naga::Module)], twins: &[Twin]) -> Vec<St
     }
     for twin in twins {
         if !matched.contains(twin.wgsl_name) {
-            problems.push(format!("{}: no WGSL file shares it", twin.wgsl_name));
+            problems.push(format!("{}: no shader module shares it", twin.wgsl_name));
         }
     }
     problems
