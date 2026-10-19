@@ -6,7 +6,7 @@ use crate::assets::MeshPool;
 use crate::camera::{Camera, projection_matrix};
 use crate::components::{MaterialRef, MeshRef, PointLight};
 use crate::render::instance::{anchor_and_offset, padded_columns};
-use crate::render::{CameraUniform, InstanceData, LightUniform};
+use crate::render::{CameraUniform, INSTANCE_CAPACITY, InstanceData, LightUniform};
 use crate::time::FixedTime;
 use crate::transform::{PreviousWorldTransform, WorldTransform};
 
@@ -16,9 +16,6 @@ use crate::transform::{PreviousWorldTransform, WorldTransform};
 pub struct FrameData {
     pub camera: CameraUniform,
     pub light: LightUniform,
-    /// Slots the Instance buffer holds: one past the highest any Renderable
-    /// has taken.
-    pub instance_slot_count: u32,
     /// The Instances this frame writes, in `instance_writes` order; every
     /// other slot keeps what an earlier frame wrote (ADR 0003).
     pub instances: Vec<InstanceData>,
@@ -83,28 +80,45 @@ pub struct Draw {
 }
 
 /// Each Renderable's slot in the Instance buffer, kept until it stops being a
-/// Renderable; a freed slot is taken again before the buffer grows.
+/// Renderable; a freed slot is taken again before a fresh one, and once all
+/// `INSTANCE_CAPACITY` are taken a Renderable is refused one.
 #[derive(Default)]
 struct InstanceSlots {
     by_entity: bevy_ecs::entity::EntityHashMap<u32>,
     free: Vec<u32>,
     /// One past the highest slot taken.
     end: u32,
+    /// Renderables refused a slot and not yet given one, each warned about
+    /// once.
+    refused: bevy_ecs::entity::EntityHashSet,
 }
 
 impl InstanceSlots {
-    /// `entity`'s slot, taking one if it has none, and whether it is new.
-    fn get_or_take(&mut self, entity: Entity) -> (u32, bool) {
+    /// `entity`'s slot, taking one if it has none, and whether it is new; None
+    /// when none is left, warned about the first time `entity` is refused.
+    fn get_or_take(&mut self, entity: Entity) -> Option<(u32, bool)> {
         if let Some(&slot) = self.by_entity.get(&entity) {
-            return (slot, false);
+            return Some((slot, false));
         }
-        let slot = self.free.pop().unwrap_or(self.end);
+        let fresh = (self.end < INSTANCE_CAPACITY).then_some(self.end);
+        let Some(slot) = self.free.pop().or(fresh) else {
+            if self.refused.insert(entity) {
+                tracing::warn!(
+                    ?entity,
+                    capacity = INSTANCE_CAPACITY,
+                    "Renderable refused: the Instance buffer is full"
+                );
+            }
+            return None;
+        };
         self.end = self.end.max(slot + 1);
         self.by_entity.insert(entity, slot);
-        (slot, true)
+        self.refused.remove(&entity);
+        Some((slot, true))
     }
 
     fn free(&mut self, entity: Entity) {
+        self.refused.remove(&entity);
         if let Some(slot) = self.by_entity.remove(&entity) {
             self.free.push(slot);
         }
@@ -118,6 +132,9 @@ pub struct FramePreparer {
     point_light_query: PointLightQuery,
     renderable_query: RenderableQuery,
     instance_slots: InstanceSlots,
+    /// Set by `rewrite_all_instances` until the next `prepare`.
+    rewrite_every_instance: bool,
+    renderables_refused: u32,
     frame: FrameData,
 }
 
@@ -127,6 +144,8 @@ impl FramePreparer {
             point_light_query: world.query(),
             renderable_query: world.query(),
             instance_slots: InstanceSlots::default(),
+            rewrite_every_instance: false,
+            renderables_refused: 0,
             frame: FrameData::default(),
         }
     }
@@ -137,7 +156,9 @@ impl FramePreparer {
     /// blended between its two newest Ticks (ADR 0022). A Renderable draws
     /// with its Material Handle, else with the Material its Mesh's Primitives
     /// name (`Mesh::material`); one whose Mesh is not in `mesh_pool`, or that
-    /// has neither, is skipped.
+    /// has neither, is skipped. One that finds the Instance buffer full is
+    /// refused, warned about once and counted every frame, and neither
+    /// written nor drawn until a slot frees.
     ///
     /// Only new Renderables, blended ones and those whose World transform,
     /// Mesh or Material changed since the last `prepare` write their
@@ -153,6 +174,8 @@ impl FramePreparer {
             point_light_query,
             renderable_query,
             instance_slots,
+            rewrite_every_instance,
+            renderables_refused,
             frame,
         } = self;
         let camera = world.resource::<Camera>();
@@ -171,6 +194,7 @@ impl FramePreparer {
         frame.instances.clear();
         frame.instance_writes.clear();
         frame.draws.clear();
+        *renderables_refused = 0;
         let renderables = renderable_query.query(world);
         // Slots of entities that stopped being Renderables are freed before new
         // Renderables take slots.
@@ -205,9 +229,13 @@ impl FramePreparer {
                 );
                 continue;
             };
-            let (slot, is_new) = instance_slots.get_or_take(entity);
+            let Some((slot, is_new)) = instance_slots.get_or_take(entity) else {
+                *renderables_refused += 1;
+                continue;
+            };
             // A blended Renderable moves every frame, between Ticks too.
-            if is_new
+            if *rewrite_every_instance
+                || is_new
                 || current.is_changed()
                 || previous.is_some()
                 || (mesh_ref.is_changed() && material_ref.is_none())
@@ -237,7 +265,7 @@ impl FramePreparer {
                     instance_index: slot,
                 }));
         }
-        frame.instance_slot_count = instance_slots.end;
+        *rewrite_every_instance = false;
         // Ends the window in which prepare sees changes and removals, and
         // drains the removals, which otherwise pile up.
         world.clear_trackers();
@@ -249,10 +277,17 @@ impl FramePreparer {
         &self.frame
     }
 
-    /// Makes the next `prepare` write every Renderable's Instance, for when
-    /// the Renderer lost Instance writes.
+    /// Renderables the last `prepare` refused a slot because the Instance
+    /// buffer is full, so neither written nor drawn; each is retried every
+    /// frame.
+    pub fn renderables_refused(&self) -> u32 {
+        self.renderables_refused
+    }
+
+    /// Makes the next `prepare` write every Renderable's Instance into the
+    /// slot it keeps, for when the Renderer lost Instance writes.
     pub fn rewrite_all_instances(&mut self) {
-        self.instance_slots = InstanceSlots::default();
+        self.rewrite_every_instance = true;
     }
 }
 
@@ -291,7 +326,7 @@ mod tests {
     use std::io::Write;
 
     use super::*;
-    use crate::assets::pools::tests::mesh;
+    use crate::assets::pools::tests::{logged, mesh};
     use crate::assets::{ARENA_CAPACITY_BYTES, MaterialHandle, MeshHandle};
     use crate::components::Transform;
     use crate::gpu::GpuContext;
@@ -375,7 +410,6 @@ mod tests {
         assert_eq!(frames.prepare(), [0, 1, 2]);
         // Consecutive slots go to the GPU as one copy.
         assert_eq!(frames.preparer.frame().instance_writes.len(), 1);
-        assert_eq!(frames.preparer.frame().instance_slot_count, 3);
         assert!(frames.prepare().is_empty());
 
         frames.world.despawn(second);
@@ -385,7 +419,6 @@ mod tests {
         frames.spawn(3.0);
         assert_eq!(frames.prepare(), [1]);
         assert_eq!(frames.preparer.frame().instances[0].offset, [3.0, 0.0, 0.0]);
-        assert_eq!(frames.preparer.frame().instance_slot_count, 3);
         for (entity, slot) in [(first, 0), (third, 2)] {
             frames
                 .world
@@ -401,10 +434,46 @@ mod tests {
         frames.spawn(4.0);
         assert_eq!(frames.prepare(), [0]);
 
-        // With no slot free, a spawn grows the buffer by one.
+        // With no slot free, a spawn takes a fresh one.
         frames.spawn(5.0);
         assert_eq!(frames.prepare(), [3]);
-        assert_eq!(frames.preparer.frame().instance_slot_count, 4);
+    }
+
+    #[test]
+    fn a_renderable_past_capacity_is_refused_and_warned_about_once_until_a_slot_frees() {
+        let Some(mut frames) = Frames::new() else {
+            return;
+        };
+        let filled: Vec<Entity> = (0..INSTANCE_CAPACITY).map(|_| frames.spawn(0.0)).collect();
+        let slots: Vec<u32> = (0..INSTANCE_CAPACITY).collect();
+        assert_eq!(frames.prepare(), slots);
+
+        // Refused frame after frame: warned about once, counted every frame,
+        // and given no slot, so neither written nor drawn.
+        let past_capacity = frames.spawn(3.0);
+        let ((), log) = logged(|| {
+            for _ in 0..3 {
+                let written = frames.prepare();
+                assert!(written.is_empty(), "past capacity, wrote slots {written:?}");
+                assert_eq!(frames.preparer.renderables_refused(), 1);
+                assert_eq!(
+                    frames.preparer.frame().draws.len(),
+                    INSTANCE_CAPACITY as usize
+                );
+            }
+            // Rewriting every Instance keeps every slot where it was.
+            frames.preparer.rewrite_all_instances();
+            assert_eq!(frames.prepare(), slots);
+            assert_eq!(frames.preparer.renderables_refused(), 1);
+        });
+        assert_eq!(log.matches("Renderable refused").count(), 1, "{log:?}");
+        assert!(log.contains(&format!("{past_capacity:?}")), "{log:?}");
+
+        // It takes the slot another Renderable leaves.
+        frames.world.despawn(filled[7]);
+        assert_eq!(frames.prepare(), [7]);
+        assert_eq!(frames.preparer.frame().instances[0].offset, [3.0, 0.0, 0.0]);
+        assert_eq!(frames.preparer.renderables_refused(), 0);
     }
 
     #[test]
@@ -512,7 +581,6 @@ mod tests {
 
         frames.preparer.rewrite_all_instances();
         assert_eq!(frames.prepare(), [0, 1, 2]);
-        assert_eq!(frames.preparer.frame().instance_slot_count, 3);
         assert!(frames.prepare().is_empty());
     }
 }

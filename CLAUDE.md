@@ -222,8 +222,10 @@ When reviewing changes, check for:
       `uploaded_bytes`, and systems are added inside
       `SystemTimer::scope`
 - [ ] Streaming uploads go through the `StagingBelt`, never
-      `Queue::write_texture`, and GPU arenas never grow at runtime
-      (ADR 0017)
+      `Queue::write_texture`; no GPU buffer grows at runtime, and a
+      request past a buffer's capacity is refused and logged. Only
+      per-frame staging grows, up to the buffers a frame writes, which
+      it asserts (ADRs 0003, 0017)
 - [ ] The runtime loads cooked Blobs only and references Assets by
       Asset ID, never by source path (ADR 0018)
 - [ ] The main pass reads no screen-space history, and no change rules
