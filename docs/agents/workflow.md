@@ -62,7 +62,7 @@ A declined finding class that recurs becomes a line in the `CLAUDE.md` review ch
 2. Find the live milestone: `gh api repos/gariasf/praxis/milestones --jq '.[] | "\(.title) open=\(.open_issues) closed=\(.closed_issues)"'`.
 3. Take the frontier: `gh issue list --milestone <live> --label ready-for-agent --state open --limit 200 --json number,title --jq 'sort_by(.number)'`. Tickets are published blockers-first, so ascending number is a valid order. Take the lowest number whose `gh api repos/gariasf/praxis/issues/<n> --jq .issue_dependencies_summary.blocked_by` is 0.
 4. Claim it (assign) before any work.
-5. In the ticket's fresh worktree, run `scripts/verify.sh`. A red start is reported on the ticket before work begins; the failing step's log is in `target/verify/`.
+5. In the ticket's fresh worktree, run `scripts/fetch-assets.sh`, then `scripts/verify.sh`: a new worktree has no fetched assets, and verify benches the helmet. A red start is reported on the ticket before work begins; the failing step's log is in `target/verify/`.
 
 ## Context hygiene
 
