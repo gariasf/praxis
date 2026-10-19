@@ -3,7 +3,7 @@ use bevy_ecs::prelude::*;
 use crate::assets::{MaterialHandle, MeshHandle};
 use crate::transform::WorldTransform;
 
-/// Where an entity sits in the World (ADR 0014): translation in f64 metres,
+/// Where an entity sits in the Game world (ADR 0014): translation in f64 metres,
 /// rotation and scale in f32, 64 bytes like the `Affine3A` it replaced.
 /// A child's is relative to its parent (`ChildOf`).
 #[derive(Component, Copy, Clone, Debug, PartialEq)]

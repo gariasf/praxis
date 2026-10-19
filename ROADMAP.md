@@ -6,17 +6,16 @@ Each milestone ends with something visible and runnable.
 **Target shape:** a big-world, lore-heavy RPG (Skyrim-style) targeting
 **cutting-edge hardware**, not mass-market scalability. The engine prioritizes
 image quality and rendering correctness over breadth of compatibility — no
-PS4-class baseline, no aggressive low-spec fallbacks. This anchors which
-rendering features are core: PBR, hybrid baked + ray-traced lighting,
-GPU-driven rendering, streaming, LOD, scene hierarchy, long view distances.
-"Polish" is reserved for genuinely optional things (HDR10 metadata, color
-grading) — not RT, not bindless, not GI.
+PS4-class floor, no aggressive low-spec fallbacks. This anchors which
+rendering features are core: PBR, ray-traced lighting, GPU-driven rendering,
+streaming, LOD, scene hierarchy, long view distances. "Polish" is reserved
+for genuinely optional things (HDR10 metadata, color grading) — not RT, not
+bindless, not GI.
 
-**Lighting model:** hybrid. Baked GI for static environments (sharp, stable,
-no temporal smear, no convergence delay). Ray-traced direct shadows + RT GI
-for dynamic objects on the high preset. Cascaded shadow maps as a baseline
-fallback. Forward+ rendering with stable AA (MSAA / SMAA) — no mandatory TAA,
-no upscaling stack, no frame generation. Native resolution is the default.
+**Lighting model:** ray-traced irradiance probes and hard ray-traced shadows
+(ADR 0020). Clustered forward rendering with 4x MSAA (ADR 0019) — no
+mandatory TAA, no upscaling stack, no frame generation (ADR 0008). Native
+resolution is the default.
 
 **Graphics API:** wgpu, long-term. wgpu's experimental ray tracing (inline
 ray queries) is sufficient for the planned RT features — no full ray
@@ -63,14 +62,15 @@ they're actually needed. No empty scaffolding.
 How new systems are built. Distinct from the coding principles at the bottom
 (those are about process: small commits, run-it-see-it, etc.).
 
-1. **Handle-based resources.** Meshes, textures, materials, lights live in
-   central pools and are referenced by `u32` or generational handles. ECS
-   components carry handles, never owned GPU buffers. Lets the renderer batch,
-   instance, or move to bindless later without rewriting components.
+1. **Handle-based resources.** Meshes and Materials, with their Textures,
+   live in central Pools and are referenced by `u32` or generational Handles.
+   ECS components carry Handles, never owned GPU buffers. Lets the renderer
+   batch, instance and go bindless (ADR 0017) without rewriting components.
 
-2. **Authoring data in components, not GPU byte layout.** `Transform` is
-   `glam::Affine3A`, not `[[f32; 4]; 4]`. The renderer packs GPU bytes on
-   upload. Keeps ECS readable and independent of wgpu specifics.
+2. **Authoring data in components, not GPU byte layout.** `Transform` is an
+   f64 translation with f32 rotation and scale (ADR 0014), not
+   `[[f32; 4]; 4]`. The renderer packs GPU bytes on upload. Keeps ECS
+   readable and independent of wgpu specifics.
 
 3. **Renderer pulls, entities don't push.** No `entity.draw()`. The renderer
    side queries the ECS for renderables (prepare, into Frame data: ADR 0004),
@@ -78,13 +78,10 @@ How new systems are built. Distinct from the coding principles at the bottom
    Prerequisite for culling, instancing, and (eventually) GPU-driven rendering.
 
 4. **One uber-shader, features behind flags.** Resist the urge to spawn a new
-   pipeline per effect. Add shader branches, push constants, or uniforms.
+   pipeline per effect. Add shader branches, immediates, or uniforms.
    Fewer PSOs, fewer state changes, less to reason about.
 
-Inspired by modern AAA renderers (Spartan Engine, id Tech). Scoped to what a
-learning engine on wgpu can actually benefit from. Even if bindless and
-GPU-driven draws never happen here, designing around these shapes keeps those
-doors open.
+Inspired by modern AAA renderers (Spartan Engine, id Tech).
 
 ---
 
@@ -155,14 +152,14 @@ considered and rejected as overkill for gameplay scripting.
   events the engine fires. Per-frame logic stays in Rust. This rule is
   what makes the boundary scale.
 
-**Required engine subsystems** (built up over multiple phases, anchored
-by Phase 14):
+**Required engine subsystems** (built in M7, Gameplay core, on the
+milestone ladder):
 
 - **Event bus.** Engine systems fire events; Lua handlers subscribe
   and react. pcall-protected dispatch; tracing-integrated error
   logging so a broken script never crashes the engine.
 - **Coroutine task scheduler.** Lua coroutines yield on engine
-  primitives (timers, events, predicates); engine resumes them when
+  timers, events and predicates; engine resumes them when
   conditions are satisfied. Frame-budget aware so a Lua loop can't
   starve the renderer.
 - **Hot-reload.** File watcher reloads changed `.lua` modules; Lua VM
@@ -173,7 +170,7 @@ by Phase 14):
 - **Component bindings.** Core components (Transform, Health, etc.)
   get typed Rust → Lua accessors. A `LuaComponent` Rust type wraps an
   opaque Lua table for game-content components defined in Lua.
-- **Lua REPL inside debug UI** (Phase 8 surface) for live inspection.
+- **Lua REPL inside the debug UI** for live inspection.
 
 **Hot-reload contract — the load-bearing rule:** components stay pure
 data (ADR 0006). No closures, no behavior methods on

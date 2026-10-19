@@ -19,5 +19,5 @@ Which skill starts which kind of session, and when. The owner types the slash co
 - Build sessions start from a ticket and nothing else. Grilling and spec work (`/grill-with-docs`, `/to-spec`, `/to-tickets`) stay in their own sessions.
 - `/implement` closes with a local `/code-review`: run it before the PR opens. It is the only semantic review (workflow.md, Review).
 - Do not chart a milestone before the one ahead of it nears exit (workflow.md, The ladder).
-- Two build sessions at once need separate worktrees and disjoint modules; open PRs stay at two.
+- Build sessions running at once need separate worktrees; PRs that share a module name their merge order (workflow.md, PRs).
 - Status at any time: "Status: frontier, open PRs, review state."

@@ -47,13 +47,13 @@ A declined finding class that recurs becomes a line in the `CLAUDE.md` review ch
 
 ## Performance and memory
 
-- Budgets and baselines live in the repo beside the benches (M0 creates them). A render or hot-path change reports its delta against baseline.
+- Budgets and Baselines live in the repo beside the benches (`bench/`, since M0). A render or hot-path change reports its delta against its Baselines.
 - A budget moves down freely and moves up only through an ADR or map comment.
 - Measurement is always on; optimisation is evidence-driven: fix what measurement names, in the order it names them.
 
 ## Correctness
 
-- Tests live at pre-agreed seams. Expected values come from an independent source: a literal, an analytic oracle, a reference tool, a golden produced by a different path.
+- Tests live at pre-agreed seams. Expected values come from an independent source: a literal, an analytic oracle, a reference tool, a reference output produced by a different path.
 - Mechanical rules belong in CI. `CODING_STANDARDS.md`, when it exists, carries judgement calls only.
 
 ## Session start

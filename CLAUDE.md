@@ -69,7 +69,9 @@ Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/ag
 - **ECS:** `bevy_ecs` (sub-crate only — no full Bevy stack), with
   `bevy_tasks` for its compute pool
 - **Assets:** glTF via `gltf` crate, images via `image` crate,
-  tangents via `bevy_mikktspace`, all three behind the `cook` feature
+  tangents via `bevy_mikktspace`, BC encoding via `intel_tex_2`, all
+  four behind the `cook` feature; Blobs via `ktx2`, `zstd`, `meshopt`
+  and `sha2`, Arenas via `offset-allocator` (ADRs 0017, 0018)
 - **Logging:** `tracing` + `tracing-subscriber` (with `env-filter`)
 - **Structure:** Single crate: a library plus a thin binary.
 
@@ -104,10 +106,11 @@ src/
                                  sources and Reference scenes into Blobs
                                  in git-ignored `cooked/` (ADR 0018)
   render/                      # Renderer (owns the Pools, reads no
-                                 World), prepare (World to Frame data),
-                                 instance, uniforms, vertex, depth, staging
+                                 ECS World), prepare (ECS World to Frame
+                                 data), instance, uniforms, vertex, depth,
+                                 staging
 tests/                         # integration tests at agreed seams
-  goldens/<backend>/           # committed Goldens; PRAXIS_UPDATE_GOLDENS=1
+  goldens/<backend>[-cpu]/     # committed Goldens; PRAXIS_UPDATE_GOLDENS=1
                                  cargo test --test goldens rewrites them
 bench/                         # budgets.json (ADR 0013) and baselines/
                                  <adapter>/<scene>.json: the M4 Pro's,
@@ -122,7 +125,7 @@ scripts/verify.sh              # the verify command: fmt, clippy, build,
 Rendering **pulls** from `World` (Design Principle #3 in `ROADMAP.md`):
 prepare queries it into owned Frame data, and the Renderer draws only
 that, reading no `World` (ADR 0004). ECS types never hold GPU buffers
-(Design Principle #2).
+(Design Principle #1).
 
 When a feature folder grows past one file, split into
 `feature/{resource,system,...}.rs`. Don't pre-split.
@@ -162,7 +165,7 @@ When a feature folder grows past one file, split into
 - WGPU types: full path (`wgpu::Buffer`), don't import individual types.
 - Identifiers are full words, WGSL included (`normal_dot_view`, not
   `n_dot_v`). Put a textbook symbol in a comment where it helps.
-- Asset pool lookups return `Option<&T>`. Callers handle `None`
+- Pool lookups return `Option<&T>`. Callers handle `None`
   gracefully (warn + skip in render path); never `.unwrap()` in a
   hot loop.
 - Shaders are WGSL (`.wgsl` files in `src/`).
@@ -220,13 +223,15 @@ When reviewing changes, check for:
       `uploaded_bytes`, and systems are added inside
       `SystemTimer::scope`
 - [ ] Streaming uploads go through the `StagingBelt`, never
-      `write_texture`, and GPU arenas never grow at runtime (ADR 0017)
+      `Queue::write_texture`, and GPU arenas never grow at runtime
+      (ADR 0017)
 - [ ] The runtime loads cooked Blobs only and references Assets by
       Asset ID, never by source path (ADR 0018)
-- [ ] The main pass reads no screen-space history and keeps 4x MSAA
-      working (ADRs 0008, 0019, 0020)
+- [ ] The main pass reads no screen-space history, and no change rules
+      out its 4x MSAA, which M3 turns on (ADRs 0008, 0019, 0020)
 - [ ] A newly used wgpu feature or limit joins the Capability floor,
-      or, outside Tiers 1-2, has a path for adapters without it (ADR 0021)
+      or, outside the capability matrix's Tiers 1-2, has a path for
+      adapters without it (ADR 0021)
 - [ ] Game-state changes run in the fixed schedule, which reads no
       wall clock and has no ambiguous system order (ADR 0022); every
       entity whose World transform it changes, children included,

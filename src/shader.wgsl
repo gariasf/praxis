@@ -265,7 +265,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         );
     }
 
-    // Constant ambient stand-in until Step 6 replaces it with IBL; occlusion darkens it.
+    // Constant ambient stand-in until ADR 0020's irradiance probes (M5); occlusion darkens it.
     let ambient = 0.03 * base_color * ambient_occlusion;
     return vec4<f32>(
         ambient + outgoing_radiance + emissive,

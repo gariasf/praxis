@@ -14,7 +14,7 @@ use crate::stats::texture_bytes;
 const TEXTURES_PER_CHANNEL: u32 =
     FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE / MaterialChannel::ALL.len() as u32;
 
-/// Materials the SSBO holds. Materials are few and never deleted in Phase 6,
+/// Materials the SSBO holds. Materials are few and never deleted yet,
 /// so a fixed cap avoids growth + bind-group rebuilds for now.
 const MATERIAL_CAPACITY: u64 = 256;
 

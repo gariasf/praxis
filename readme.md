@@ -1,6 +1,6 @@
 # Praxis
 
-A 3D rendering and video game engine built in Rust, for learning purposes.
+A 3D engine in Rust for large open-world games on cutting-edge hardware.
 
 ## License
 

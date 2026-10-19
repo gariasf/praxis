@@ -1,3 +1,3 @@
-# One mega-buffer for vertices, one for indices
+# One shared buffer for vertices, one for indices
 
 Meshes are (vertex offset, index offset, index count) sub-allocations of one shared vertex buffer and one shared index buffer in the Mesh pool. Indirect draws, BLAS construction and instancing all need geometry addressable by offset in a single buffer, and going from buffer-per-mesh later is expensive because every render path bakes in the smaller shape. Implemented in Phase 6 Step 1, growing by CPU re-upload; ADR 0017 replaces growth with fixed arenas sized from the Budget, sub-allocated by an offset allocator, each at most 2^31 − 1 bytes (amended 2026-10-12, [#21](https://github.com/gariasf/praxis/issues/21)), implemented in [#145](https://github.com/gariasf/praxis/issues/145) at a provisional 16 MiB each until the Budget split.
