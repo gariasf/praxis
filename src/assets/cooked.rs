@@ -414,13 +414,13 @@ impl CookedMeshlet {
         triangles: &[[u32; 3]],
         triangle_counts: impl IntoIterator<Item = usize>,
     ) -> anyhow::Result<Vec<Self>> {
-        // Each vertex's number in the current Meshlet, or u8::MAX, from the
+        // Each vertex's index in the current Meshlet, or u8::MAX, from the
         // lowest vertex the triangles use to the highest.
-        let corners = triangles.as_flattened();
-        let lowest = corners.iter().copied().min().unwrap_or(0);
-        let highest = corners.iter().copied().max().unwrap_or(0);
-        let mut local = vec![u8::MAX; (highest - lowest) as usize + 1];
-        let slot = |vertex: u32| (vertex - lowest) as usize;
+        let mesh_vertices = triangles.as_flattened();
+        let lowest = mesh_vertices.iter().copied().min().unwrap_or(0);
+        let highest = mesh_vertices.iter().copied().max().unwrap_or(0);
+        let mut index_in_meshlet = vec![u8::MAX; (highest - lowest) as usize + 1];
+        let offset = |vertex: u32| (vertex - lowest) as usize;
         let mut rest = triangles;
         let mut meshlets = Vec::new();
         for triangle_count in triangle_counts {
@@ -437,26 +437,26 @@ impl CookedMeshlet {
                 let mut corners = *triangle;
                 corners.sort_unstable();
                 for vertex in corners {
-                    if local[slot(vertex)] == u8::MAX {
+                    if index_in_meshlet[offset(vertex)] == u8::MAX {
                         anyhow::ensure!(
                             vertices.len() < MESHLET_MAX_VERTICES,
                             "Mesh Blob has a Meshlet of more than {MESHLET_MAX_VERTICES} vertices"
                         );
-                        local[slot(vertex)] = vertices.len() as u8;
+                        index_in_meshlet[offset(vertex)] = vertices.len() as u8;
                         vertices.push(vertex);
                     }
                 }
             }
-            let triangles = run
+            let local_triangles = run
                 .iter()
-                .map(|triangle| triangle.map(|vertex| local[slot(vertex)]))
+                .map(|triangle| triangle.map(|vertex| index_in_meshlet[offset(vertex)]))
                 .collect();
             for &vertex in &vertices {
-                local[slot(vertex)] = u8::MAX;
+                index_in_meshlet[offset(vertex)] = u8::MAX;
             }
             meshlets.push(Self {
                 vertices,
-                triangles,
+                triangles: local_triangles,
             });
         }
         anyhow::ensure!(
@@ -516,7 +516,7 @@ impl CookedMesh {
             .iter()
             .flat_map(|primitive| &primitive.meshlets)
         {
-            payload.push(meshlet.triangles.len() as u8);
+            payload.push(u8::try_from(meshlet.triangles.len())?);
         }
         payload.extend((vertices.len() as u32).to_le_bytes());
         payload.extend(vertices);
@@ -541,7 +541,7 @@ impl CookedMesh {
         let primitive_count = take_u32(rest)?;
         let mut bounds = [[0.0; 3]; 2];
         for coordinate in bounds.as_flattened_mut() {
-            *coordinate = f32::from_le_bytes(take(rest, 4)?.try_into().expect("4 bytes"));
+            *coordinate = f32::from_bits(take_u32(rest)?);
         }
         let mut primitives = Vec::new();
         let mut meshlet_counts = Vec::new();
@@ -561,7 +561,8 @@ impl CookedMesh {
                 meshlets: Vec::new(),
             });
         }
-        let triangle_counts: Vec<&[u8]> = meshlet_counts
+        // Each Primitive's Meshlets' triangle counts.
+        let meshlet_triangle_counts: Vec<&[u8]> = meshlet_counts
             .into_iter()
             .map(|meshlet_count| take(rest, meshlet_count))
             .collect::<anyhow::Result<_>>()?;
@@ -579,7 +580,7 @@ impl CookedMesh {
             indices.iter().all(|&index| (index as usize) < vertex_count),
             "Mesh Blob has an index past its vertices"
         );
-        for (primitive, triangle_counts) in primitives.iter_mut().zip(triangle_counts) {
+        for (primitive, triangle_counts) in primitives.iter_mut().zip(meshlet_triangle_counts) {
             let first_index = primitive.first_index as usize;
             let (triangles, partial) =
                 indices[first_index..][..primitive.index_count as usize].as_chunks::<3>();
@@ -587,8 +588,10 @@ impl CookedMesh {
                 partial.is_empty(),
                 "Mesh Blob has a Primitive of partial triangles"
             );
-            let triangle_counts = triangle_counts.iter().map(|&count| count as usize);
-            primitive.meshlets = CookedMeshlet::split(triangles, triangle_counts)?;
+            primitive.meshlets = CookedMeshlet::split(
+                triangles,
+                triangle_counts.iter().map(|&count| count as usize),
+            )?;
         }
         Ok(Self {
             vertices,

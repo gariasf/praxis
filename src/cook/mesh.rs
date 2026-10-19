@@ -68,7 +68,7 @@ pub(crate) fn cook(primitives: &[SourcePrimitive]) -> CookedMesh {
         vertices: Vec::new(),
         indices: Vec::new(),
         primitives: Vec::new(),
-        bounds: [[f32::INFINITY; 3], [f32::NEG_INFINITY; 3]],
+        bounds: [[0.0; 3]; 2],
     };
     let mut triangle_counts = Vec::new();
     for (geometry, material) in primitives {
@@ -94,13 +94,14 @@ pub(crate) fn cook(primitives: &[SourcePrimitive]) -> CookedMesh {
         primitive.meshlets = CookedMeshlet::split(indices.as_chunks::<3>().0, triangle_counts)
             .expect("the cut keeps to the Meshlet limits");
     }
-    for vertex in &mesh.vertices {
-        let [minimum, maximum] = &mut mesh.bounds;
-        for axis in 0..3 {
-            minimum[axis] = minimum[axis].min(vertex.position[axis]);
-            maximum[axis] = maximum[axis].max(vertex.position[axis]);
-        }
-    }
+    let positions = mesh
+        .vertices
+        .iter()
+        .map(|vertex| Vec3::from(vertex.position));
+    mesh.bounds = [
+        positions.clone().fold(Vec3::INFINITY, Vec3::min).into(),
+        positions.fold(Vec3::NEG_INFINITY, Vec3::max).into(),
+    ];
     mesh
 }
 
@@ -144,9 +145,10 @@ fn cook_primitive(geometry: &Geometry) -> (Vec<CookedVertex>, Vec<u32>) {
 
 /// Each Meshlet's triangle count when `triangles`, indexing `vertex_count`
 /// vertices, are cut in order into the longest runs the Meshlet limits
-/// allow, as meshoptimizer's `meshopt_buildMeshletsScan` cuts them, which
-/// `meshopt` does not bind. Kept in order, the indices stay as the vertex
-/// cache and overdraw passes left them, and so does every image.
+/// allow, like meshoptimizer's `meshopt_buildMeshletsScan`, which `meshopt`
+/// binds only as an `unsafe` call and which counts a degenerate triangle's
+/// repeated corner twice. Kept in order, the indices stay as the vertex cache
+/// and overdraw passes left them, and so does every image.
 fn meshlet_triangle_counts(triangles: &[[u32; 3]], vertex_count: usize) -> Vec<usize> {
     let mut in_run = vec![false; vertex_count];
     let mut run_vertices = Vec::new();
@@ -562,15 +564,16 @@ pub(crate) mod tests {
     }
 
     /// Checks `mesh`, as read back, against the Primitives it cooked from:
-    /// each Primitive's Meshlets, within the limits, hold its triangles in
-    /// index stream order, each once, through their vertices; those are the
-    /// source's triangles; the bounds are the source's.
+    /// each Primitive's Meshlets, of at most 64 vertices and 124 triangles,
+    /// hold its triangles in index stream order, each once, through their
+    /// vertices; those are the source's triangles; the bounds are the box
+    /// around the source's vertices, so they hold every vertex.
     fn check_meshlets(name: &str, mesh: &CookedMesh, sources: &[SourcePrimitive]) {
         let corner = |vertex: u32| {
             let CookedVertex { position, uv, .. } = mesh.vertices[vertex as usize];
             (position, uv)
         };
-        let mut bounds = [[f32::INFINITY; 3], [f32::NEG_INFINITY; 3]];
+        let mut bounds = [Vec3::INFINITY, Vec3::NEG_INFINITY];
         for (primitive, (geometry, _)) in mesh.primitives.iter().zip(sources) {
             let first_index = primitive.first_index as usize;
             let indices = &mesh.indices[first_index..][..primitive.index_count as usize];
@@ -580,8 +583,7 @@ pub(crate) mod tests {
                 let (vertex_count, triangle_count) =
                     (meshlet.vertices.len(), meshlet.triangles.len());
                 assert!(
-                    vertex_count <= MESHLET_MAX_VERTICES
-                        && (1..=MESHLET_MAX_TRIANGLES).contains(&triangle_count),
+                    vertex_count <= 64 && (1..=124).contains(&triangle_count),
                     "{name}: a Meshlet of {vertex_count} vertices and {triangle_count} triangles"
                 );
                 for local in &meshlet.triangles {
@@ -607,11 +609,9 @@ pub(crate) mod tests {
                     })
                 })
                 .collect();
-            for (position, _) in source.iter().flatten() {
-                for axis in 0..3 {
-                    bounds[0][axis] = bounds[0][axis].min(position[axis]);
-                    bounds[1][axis] = bounds[1][axis].max(position[axis]);
-                }
+            for &(position, _) in source.iter().flatten() {
+                let position = Vec3::from(position);
+                bounds = [bounds[0].min(position), bounds[1].max(position)];
             }
             assert_eq!(
                 corner_triangles(triangles.into_iter()),
@@ -620,19 +620,10 @@ pub(crate) mod tests {
             );
         }
         assert_eq!(
-            mesh.bounds, bounds,
-            "{name}: the bounds are not the source's"
+            mesh.bounds,
+            bounds.map(|corner| corner.to_array()),
+            "{name}: the bounds are not the box around the source's vertices"
         );
-        for vertex in &mesh.vertices {
-            let [minimum, maximum] = mesh.bounds;
-            assert!(
-                (0..3).all(|axis| {
-                    (minimum[axis]..=maximum[axis]).contains(&vertex.position[axis])
-                }),
-                "{name}: vertex {:?} outside the bounds",
-                vertex.position
-            );
-        }
     }
 
     /// The cook seam: every Reference scene Mesh cooked into a scratch
