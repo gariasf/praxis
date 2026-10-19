@@ -5,7 +5,6 @@ pub mod renderer;
 pub mod shaders;
 pub mod staging;
 pub mod uniforms;
-pub mod vertex;
 
 #[cfg(test)]
 mod shader_function_tests;

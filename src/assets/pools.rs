@@ -20,10 +20,11 @@ impl MeshPool {
     pub fn new(device: &wgpu::Device, arena_bytes: u64) -> Self {
         Self {
             meshes: Vec::new(),
+            // The vertex shader pulls from it (ADR 0019).
             vertex_arena: Arena::new(
                 device,
                 "Vertex Arena",
-                wgpu::BufferUsages::VERTEX,
+                wgpu::BufferUsages::STORAGE,
                 std::mem::size_of::<CookedVertex>() as u64,
                 arena_bytes,
             ),

@@ -1,5 +1,5 @@
 // Shared by every shader module: the structs the CPU writes, the Anchor
-// composition and the QTangent decode (src/render/shaders/mod.rs).
+// composition and the vertex decode (src/render/shaders/mod.rs).
 
 // Positions reach the shaders relative to the camera (ADR 0014), so the
 // camera sits at the origin and view_proj holds no translation. The camera's
@@ -57,11 +57,13 @@ struct InstanceData {
     offset: vec3<f32>,
 }
 
-struct VertexInput {
-    @location(0) position: vec3<f32>,
-    @location(1) uv: vec2<f32>,
-    // Snorm16x4, decoded by decode_qtangent.
-    @location(2) qtangent: vec4<f32>,
+// A vertex as the vertex Arena stores it, 28 bytes (ADR 0018). Arrays of
+// scalars keep vector alignment out of its layout, and WGSL has no 16-bit
+// integers, so the QTangent's Snorm16 components arrive in u32 pairs.
+struct CookedVertex {
+    position: array<f32, 3>,
+    uv: array<f32, 2>,
+    qtangent: array<u32, 2>,
 }
 
 // A vertex's normal, tangent and bitangent sign (glTF's convention).
@@ -89,4 +91,25 @@ fn decode_qtangent(qtangent: vec4<f32>) -> TangentFrame {
 fn rotate(rotation: vec4<f32>, vector: vec3<f32>) -> vec3<f32> {
     let vector_part = rotation.xyz;
     return vector + 2.0 * cross(vector_part, cross(vector_part, vector) + rotation.w * vector);
+}
+
+// A vertex in mesh space, as the vertex shader uses it.
+struct Vertex {
+    position: vec3<f32>,
+    uv: vec2<f32>,
+    tangent_frame: TangentFrame,
+}
+
+// `vertex` decoded, its QTangent unpacked from Snorm16 (each component over
+// 32,767, clamped at −1).
+fn decode_vertex(vertex: CookedVertex) -> Vertex {
+    let qtangent = vec4<f32>(
+        unpack2x16snorm(vertex.qtangent[0]),
+        unpack2x16snorm(vertex.qtangent[1])
+    );
+    return Vertex(
+        vec3<f32>(vertex.position[0], vertex.position[1], vertex.position[2]),
+        vec2<f32>(vertex.uv[0], vertex.uv[1]),
+        decode_qtangent(qtangent),
+    );
 }

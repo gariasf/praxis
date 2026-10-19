@@ -76,7 +76,7 @@ pub struct InstanceWrite {
 pub struct Draw {
     /// The Primitive's range in the Mesh pool's index buffer.
     pub indices: Range<u32>,
-    /// The Primitive's first vertex in the Mesh pool's vertex buffer.
+    /// The Primitive's first vertex in the Mesh pool's vertex Arena.
     pub base_vertex: i32,
     /// The Instance's slot in the Instance buffer.
     pub instance_index: u32,

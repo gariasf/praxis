@@ -104,7 +104,7 @@ src/
                                  in git-ignored `cooked/` (ADR 0018)
   render/                      # Renderer (owns the Pools, reads no
                                  ECS World), prepare (ECS World to Frame
-                                 data), instance, uniforms, vertex, depth,
+                                 data), instance, uniforms, depth,
                                  staging, shaders/ (WGSL parts and the
                                  modules each pipeline assembles from them)
 tests/                         # integration tests at agreed seams

@@ -1,7 +1,6 @@
 use std::time::Instant;
 
 use crate::assets::{ARENA_CAPACITY_BYTES, MaterialPool, MeshPool};
-use crate::cooked::CookedVertex;
 use crate::gpu::GpuContext;
 use crate::render::{
     CameraUniform, DEPTH_FORMAT, FrameData, FrameStaging, INSTANCE_BUFFER_INITIAL_CAPACITY,
@@ -86,11 +85,12 @@ impl Renderer {
                 }],
             });
 
+        // The Instance buffer and the vertex Arena.
         let instance_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Instance Bind Group Layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
+                entries: &[0, 1].map(|binding| wgpu::BindGroupLayoutEntry {
+                    binding,
                     visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -98,7 +98,7 @@ impl Renderer {
                         min_binding_size: None,
                     },
                     count: None,
-                }],
+                }),
             });
 
         // Material-as-ID: one bind group (SSBO + per-channel texture arrays +
@@ -125,7 +125,7 @@ impl Renderer {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[Some(CookedVertex::desc())],
+                buffers: &[],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -197,22 +197,20 @@ impl Renderer {
         });
 
         let instance_buffer = create_instance_buffer(&device, INSTANCE_BUFFER_INITIAL_CAPACITY);
-
-        let instance_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Instance Bind Group"),
-            layout: &instance_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: instance_buffer.as_entire_binding(),
-            }],
-        });
+        let mesh_pool = MeshPool::new(&device, ARENA_CAPACITY_BYTES);
+        let instance_bind_group = create_instance_bind_group(
+            &device,
+            &instance_bind_group_layout,
+            &instance_buffer,
+            mesh_pool.vertex_buffer(),
+        );
 
         let instance_capacity = INSTANCE_BUFFER_INITIAL_CAPACITY;
 
         let depth_texture_view = create_depth_texture(&device, width, height);
 
         Self {
-            mesh_pool: MeshPool::new(&device, ARENA_CAPACITY_BYTES),
+            mesh_pool,
             material_pool,
             load_staging,
             device,
@@ -342,7 +340,6 @@ impl Renderer {
             render_pass.set_bind_group(1, &self.material_pool.bind_group, &[]);
             render_pass.set_bind_group(2, &self.light_bind_group, &[]);
             render_pass.set_bind_group(3, &self.instance_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.mesh_pool.vertex_buffer().slice(..));
             render_pass.set_index_buffer(
                 self.mesh_pool.index_buffer().slice(..),
                 wgpu::IndexFormat::Uint32,
@@ -426,14 +423,12 @@ impl Renderer {
         );
         self.instance_buffer = instance_buffer;
 
-        self.instance_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Instance Bind Group"),
-            layout: &self.instance_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: self.instance_buffer.as_entire_binding(),
-            }],
-        });
+        self.instance_bind_group = create_instance_bind_group(
+            &self.device,
+            &self.instance_bind_group_layout,
+            &self.instance_buffer,
+            self.mesh_pool.vertex_buffer(),
+        );
 
         self.instance_capacity = new_capacity;
         tracing::info!(
@@ -456,6 +451,30 @@ fn create_instance_buffer(device: &wgpu::Device, capacity: u64) -> wgpu::Buffer 
     })
 }
 
+/// The bind group of the Instance buffer and the vertex Arena, which the
+/// vertex shader reads.
+fn create_instance_bind_group(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    instance_buffer: &wgpu::Buffer,
+    vertex_arena: &wgpu::Buffer,
+) -> wgpu::BindGroup {
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Instance Bind Group"),
+        layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: instance_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: vertex_arena.as_entire_binding(),
+            },
+        ],
+    })
+}
+
 fn create_frame_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
     device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("Frame Encoder"),
@@ -470,7 +489,7 @@ mod tests {
     use crate::assets::Primitive;
     use crate::assets::material::MaterialData;
     use crate::capture::read_back;
-    use crate::cooked::{CookedMesh, CookedPrimitive};
+    use crate::cooked::{CookedMesh, CookedPrimitive, CookedVertex};
     use crate::render::instance::padded_columns;
     use crate::render::prepare::{Draw, InstanceWrite};
 
