@@ -70,18 +70,16 @@ struct Sources {
 /// directory.
 pub const ASSETS_DIRECTORY: &str = "assets";
 
-/// Cooks the sources `assets/manifest.json` lists that are present, and
-/// every procedural Reference scene, into `cache`.
+/// Cooks the sources `assets/manifest.json` lists that are present, and the
+/// procedural Assets of `scenes`, into `cache`; `praxis cook` cooks every
+/// Reference scene's.
 pub fn cook(
     assets: &Path,
+    scenes: &[ReferenceScene],
     cache: &CookedCache,
     settings: &CookSettings,
 ) -> anyhow::Result<CookReport> {
-    cook_sources(
-        &read_sources(assets, &ReferenceScene::ALL, None)?,
-        cache,
-        settings,
-    )
+    cook_sources(&read_sources(assets, scenes, None)?, cache, settings)
 }
 
 /// What a dev launch of `scene` cooks before it loads: the manifest
@@ -180,10 +178,13 @@ fn cook_sources(
     Ok(report)
 }
 
-/// Every Texture the cook reads: each image a glTF Material samples, per
-/// Channel, and each procedural Reference scene's generated image.
-pub fn texture_sources(assets: &Path) -> anyhow::Result<Vec<TextureSource>> {
-    Ok(read_sources(assets, &ReferenceScene::ALL, None)?.textures)
+/// Every Texture a cook of `scenes` reads: each image a glTF Material
+/// samples, per Channel, and each of the scenes' generated images.
+pub fn texture_sources(
+    assets: &Path,
+    scenes: &[ReferenceScene],
+) -> anyhow::Result<Vec<TextureSource>> {
+    Ok(read_sources(assets, scenes, None)?.textures)
 }
 
 /// The sources of `scenes` and of every manifest file, or with
@@ -245,7 +246,7 @@ fn read_sources(
             .textures()
             .into_iter()
             .map(|(name, channel, image)| {
-                let id = scene.texture_id(channel, name);
+                let id = scene.texture_id(channel, &name);
                 let name = format!("{} {name}", scene.name());
                 TextureSource::generated(id, channel, name, image)
             })

@@ -1,15 +1,18 @@
 use std::collections::HashMap;
+use std::time::Instant;
 
 use anyhow::Context;
 
 use crate::cooked::{AssetId, CookedCache, CookedTexture};
+use crate::gpu::FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE;
 use crate::render::LoadStaging;
 use crate::stats::texture_bytes;
 
-/// Textures each Channel's binding array can hold. Five Channels of 8192 stay
-/// under the Capability floor's 65,536 binding-array elements per stage
-/// (ADR 0021).
-const TEXTURES_PER_CHANNEL: u32 = 8192;
+/// Textures each Channel's binding array can hold: the Channels split the
+/// Capability floor's binding-array elements per stage (ADR 0021), 13,107
+/// each, room for texture-wall's 10,000 and Layer 0.
+const TEXTURES_PER_CHANNEL: u32 =
+    FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE / MaterialChannel::ALL.len() as u32;
 
 /// Materials the SSBO holds. Materials are few and never deleted in Phase 6,
 /// so a fixed cap avoids growth + bind-group rebuilds for now.
@@ -296,23 +299,11 @@ impl MaterialPool {
         let material = cache.material(id)?;
         let mut layers = [Self::DEFAULT_LAYER; 5];
         for (channel, texture_id) in MaterialChannel::ALL.into_iter().zip(material.textures) {
-            let Some(texture_id) = texture_id else {
-                continue;
-            };
-            if let Some(&layer) = self.texture_layers.get(&texture_id) {
-                layers[channel as usize] = layer;
-                continue;
+            if let Some(texture_id) = texture_id {
+                layers[channel as usize] = self
+                    .load_texture(device, staging, cache, channel, texture_id)
+                    .with_context(|| format!("loading Material {id}"))?;
             }
-            let texture = cache
-                .texture(texture_id)
-                .with_context(|| format!("loading Material {id}"))?;
-            let Some(layer) = self.channels[channel as usize].push(device, staging, &texture)
-            else {
-                continue;
-            };
-            self.texture_layers.insert(texture_id, layer);
-            self.bind_group_is_stale = true;
-            layers[channel as usize] = layer;
         }
         let [red, green, blue] = material.emissive;
         let data = MaterialData {
@@ -326,17 +317,51 @@ impl MaterialPool {
         Ok(self.insert(staging, data))
     }
 
+    /// Loads the Texture `id` from `cache` into `channel` once per Asset ID,
+    /// written through `staging`, and returns its Layer: the next free one,
+    /// or Layer 0 when the Channel is full.
+    pub fn load_texture(
+        &mut self,
+        device: &wgpu::Device,
+        staging: &mut LoadStaging,
+        cache: &CookedCache,
+        channel: MaterialChannel,
+        id: AssetId,
+    ) -> anyhow::Result<u32> {
+        if let Some(&layer) = self.texture_layers.get(&id) {
+            return Ok(layer);
+        }
+        let texture = cache.texture(id)?;
+        let Some(layer) = self.channels[channel as usize].push(device, staging, &texture) else {
+            return Ok(Self::DEFAULT_LAYER);
+        };
+        self.texture_layers.insert(id, layer);
+        self.bind_group_is_stale = true;
+        Ok(layer)
+    }
+
     /// Rebuilds the bind group when loads since the last call added
     /// Textures, so a scene's loads build it once: bind groups are
     /// snapshots.
     pub fn refresh_bind_group(&mut self, device: &wgpu::Device) {
         if std::mem::take(&mut self.bind_group_is_stale) {
+            let started = Instant::now();
             self.bind_group = create_bind_group(
                 device,
                 &self.bind_group_layout,
                 &self.materials_buffer,
                 &self.channels,
                 &self.sampler,
+            );
+            // ADR 0017's gate: the build's cost at the bound Textures' count.
+            tracing::info!(
+                textures = self
+                    .channels
+                    .iter()
+                    .map(|channel| channel.views.len())
+                    .sum::<usize>(),
+                microseconds = started.elapsed().as_secs_f64() * 1e6,
+                "material bind group built"
             );
         }
     }
