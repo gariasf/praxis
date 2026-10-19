@@ -9,6 +9,7 @@ use praxis::gpu::GpuContext;
 
 /// The capture size when the command names none: small, and 16:9 like the
 /// window.
+#[cfg(feature = "cook")]
 const DEFAULT_CAPTURE_SIZE: &str = "640x360";
 
 fn main() -> ExitCode {
@@ -34,9 +35,11 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
         [command] if command == "capabilities" => print_capabilities(),
         #[cfg(feature = "cook")]
         [command] if command == "cook" => cook(),
+        #[cfg(feature = "cook")]
         [command, scene, output] if command == "capture" => {
             capture(scene, output, DEFAULT_CAPTURE_SIZE)
         }
+        #[cfg(feature = "cook")]
         [command, scene, output, size] if command == "capture" => capture(scene, output, size),
         [command, output, flag, scenes @ ..] if command == "bench" && flag == "--ci" => {
             bench(output, Configuration::CI, scenes)
@@ -190,7 +193,8 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> anyhow::Result<T> {
 
 /// Renders the Reference scene named `scene` headless at `size`,
 /// `<width>x<height>`, writes the last frame to `output` as a PNG, and prints
-/// that frame's stats.
+/// that frame's stats. The PNG encoder comes with `cook`.
+#[cfg(feature = "cook")]
 fn capture(scene: &str, output: &str, size: &str) -> anyhow::Result<()> {
     let scene = parse_scene(scene)?;
     let (width, height) = size
@@ -198,8 +202,15 @@ fn capture(scene: &str, output: &str, size: &str) -> anyhow::Result<()> {
         .and_then(|(width, height)| Some((width.parse().ok()?, height.parse().ok()?)))
         .ok_or_else(|| anyhow::anyhow!("size {size:?} is not <width>x<height>"))?;
     let context = pollster::block_on(GpuContext::headless())?;
-    let (image, frame_stats) = praxis::capture(&context, scene, glam::DVec3::ZERO, width, height)?;
-    image.save_with_format(output, image::ImageFormat::Png)?;
+    let (pixels, frame_stats) = praxis::capture(&context, scene, glam::DVec3::ZERO, width, height)?;
+    image::save_buffer_with_format(
+        output,
+        &pixels,
+        width,
+        height,
+        image::ExtendedColorType::Rgba8,
+        image::ImageFormat::Png,
+    )?;
     tracing::info!(
         scene = scene.name(),
         path = output,

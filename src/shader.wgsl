@@ -88,6 +88,33 @@ struct VertexOutput {
     @location(4) tangent_world: vec4<f32>, // xyz = world tangent, w = bitangent sign
 }
 
+// A vertex's normal, tangent and bitangent sign (glTF's convention).
+struct TangentFrame {
+    normal: vec3<f32>,
+    tangent: vec3<f32>,
+    bitangent_sign: f32,
+}
+
+// A QTangent is the unit quaternion that turns tangent space (tangent,
+// bitangent, normal) into the mesh's, its w's sign the bitangent sign; the
+// cooker keeps w off zero so the sign survives (ADR 0018). Snorm16 leaves the
+// quaternion just off unit length, never near zero.
+fn decode_qtangent(qtangent: vec4<f32>) -> TangentFrame {
+    let rotation = normalize(qtangent);
+    return TangentFrame(
+        rotate(rotation, vec3<f32>(0.0, 0.0, 1.0)),
+        rotate(rotation, vec3<f32>(1.0, 0.0, 0.0)),
+        select(1.0, -1.0, rotation.w < 0.0),
+    );
+}
+
+// `vector` turned by the unit quaternion `rotation` (q v q*), expanded as
+// v + 2 r × (r × v + w v), with r its vector part and w its scalar part.
+fn rotate(rotation: vec4<f32>, vector: vec3<f32>) -> vec3<f32> {
+    let vector_part = rotation.xyz;
+    return vector + 2.0 * cross(vector_part, cross(vector_part, vector) + rotation.w * vector);
+}
+
 @vertex
 fn vs_main(
 in: VertexInput, @builtin(instance_index) instance_idx: u32

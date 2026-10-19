@@ -235,7 +235,7 @@ pub(super) fn gltf_meshes(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::ReferenceScene;
 
@@ -277,10 +277,9 @@ mod tests {
         (rotation * Vec3::Z, rotation * Vec3::X, rotation.w.signum())
     }
 
-    #[test]
-    fn qtangents_decode_to_their_frame_within_snorm16_precision() {
-        // Frames from rotations of the identity: about each axis, about
-        // skewed axes, and near the half turns whose w is near zero.
+    /// Frames to encode, as rotations of the identity: about each axis,
+    /// about skewed axes, and near the half turns whose w is near zero.
+    pub(crate) fn sample_rotations() -> Vec<Quat> {
         let mut rotations: Vec<Quat> = Vec::new();
         for step in 0..=64 {
             let angle = std::f32::consts::TAU * step as f32 / 64.0;
@@ -297,8 +296,13 @@ mod tests {
             let angle = std::f32::consts::PI - near_half_turn;
             rotations.push(Quat::from_axis_angle(Vec3::new(0.6, 0.0, 0.8), angle));
         }
+        rotations
+    }
+
+    #[test]
+    fn qtangents_decode_to_their_frame_within_snorm16_precision() {
         let mut worst = 0.0f32;
-        for rotation in rotations {
+        for rotation in sample_rotations() {
             for bitangent_sign in [1.0, -1.0] {
                 let (normal, tangent) = (rotation * Vec3::Z, rotation * Vec3::X);
                 let (decoded_normal, decoded_tangent, decoded_sign) = decode(qtangent(

@@ -21,7 +21,7 @@ const FRAMES_IN_FLIGHT: usize = 2;
 
 /// Renders `scene`, moved with its camera by `shift` metres, into a `width` ×
 /// `height` offscreen texture for `FRAME_COUNT` frames and returns the last
-/// one, with every frame's stats.
+/// one's RGBA8 pixels, rows top first, with every frame's stats.
 /// Time and camera are injected (the scene's frame delta and its camera path
 /// by frame) and nothing reads the wall clock or input, so equal arguments
 /// give equal images on one machine.
@@ -31,7 +31,7 @@ pub fn capture(
     shift: glam::DVec3,
     width: u32,
     height: u32,
-) -> anyhow::Result<(image::RgbaImage, Vec<FrameStats>)> {
+) -> anyhow::Result<(Vec<u8>, Vec<FrameStats>)> {
     let (target, frame_stats) = render_frames(
         context,
         scene,
@@ -184,12 +184,9 @@ impl PassTimer {
     }
 }
 
-/// Copies an RGBA8 `texture` to the CPU, without the row padding the copy
-/// needs.
-pub(crate) fn read_back(
-    context: &GpuContext,
-    texture: &wgpu::Texture,
-) -> anyhow::Result<image::RgbaImage> {
+/// Copies an RGBA8 `texture`'s pixels to the CPU, rows top first, without the
+/// row padding the copy needs.
+pub(crate) fn read_back(context: &GpuContext, texture: &wgpu::Texture) -> anyhow::Result<Vec<u8>> {
     let (width, height) = (texture.width(), texture.height());
     let row_bytes = width * 4;
     let padded_row_bytes = row_bytes.next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
@@ -226,8 +223,7 @@ pub(crate) fn read_back(
     {
         pixels.extend_from_slice(&row[..row_bytes as usize]);
     }
-    Ok(image::RgbaImage::from_raw(width, height, pixels)
-        .expect("the read-back holds width × height RGBA8 pixels"))
+    Ok(pixels)
 }
 
 /// Submits `encoder` and waits until `buffer`, which it writes, is mapped for

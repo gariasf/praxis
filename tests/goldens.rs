@@ -176,8 +176,7 @@ fn reference_scenes_match_their_goldens() {
     let mut failures = Vec::new();
     for scene in SCENES {
         let golden_path = golden_path(&golden_directory, scene);
-        let (actual, _) = praxis::capture(&context, scene, glam::DVec3::ZERO, WIDTH, HEIGHT)
-            .expect("capture failed");
+        let actual = capture(&context, scene, glam::DVec3::ZERO);
         if !golden_path.exists() {
             // Saved so a Golden for a machine one cannot run locally (CI's
             // lavapipe) can be taken from the job's artifact.
@@ -202,8 +201,7 @@ fn reference_scenes_match_their_goldens() {
             &difference_directory,
         ));
 
-        let (shifted, _) = praxis::capture(&context, scene, FAR_SHIFT, WIDTH, HEIGHT)
-            .expect("shifted capture failed");
+        let shifted = capture(&context, scene, FAR_SHIFT);
         failures.extend(mismatch(
             &golden,
             &shifted,
@@ -248,6 +246,14 @@ fn mismatch(
     ))
 }
 
+/// The last frame `praxis::capture` renders of `scene`, moved by `shift`, at
+/// the Goldens' size.
+fn capture(context: &GpuContext, scene: ReferenceScene, shift: glam::DVec3) -> image::RgbaImage {
+    let (pixels, _) =
+        praxis::capture(context, scene, shift, WIDTH, HEIGHT).expect("capture failed");
+    image::RgbaImage::from_raw(WIDTH, HEIGHT, pixels).expect("WIDTH × HEIGHT pixels")
+}
+
 fn golden_path(directory: &Path, scene: ReferenceScene) -> PathBuf {
     directory.join(format!("{}.png", scene.name()))
 }
@@ -258,8 +264,7 @@ fn update_goldens(context: &GpuContext, directory: &Path) {
     std::fs::create_dir_all(directory).expect("Golden directory");
     for scene in SCENES {
         let path = golden_path(directory, scene);
-        let (actual, _) = praxis::capture(context, scene, glam::DVec3::ZERO, WIDTH, HEIGHT)
-            .expect("capture failed");
+        let actual = capture(context, scene, glam::DVec3::ZERO);
         let unchanged =
             image::open(&path).is_ok_and(|golden| golden.into_rgba8().as_raw() == actual.as_raw());
         if unchanged {
