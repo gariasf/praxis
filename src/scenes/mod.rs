@@ -8,7 +8,7 @@ use crate::assets::AssetLoader;
 #[cfg(feature = "cook")]
 use crate::assets::MaterialChannel;
 use crate::camera::Camera;
-use crate::components::{MaterialRef, MeshRef, Transform};
+use crate::components::{MaterialRef, MeshRef, PointLight, Transform};
 #[cfg(feature = "cook")]
 use crate::cook::LoadedImage;
 #[cfg(feature = "cook")]
@@ -37,16 +37,21 @@ pub enum ReferenceScene {
     /// Five textured spheres, each circling and spinning in its parent's
     /// frame, moved per Tick and drawn blended between Ticks (ADR 0022).
     Orrery,
+    /// A glossy checker floor 100 m long, seen at a grazing angle under one
+    /// raking point light: its fine checks and high-frequency bumps show
+    /// mips, 16x anisotropy and Toksvig.
+    Minification,
 }
 
 impl ReferenceScene {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Helmet,
         Self::PbrSweep,
         Self::UvGrid,
         Self::NormalTangent,
         Self::FarCoplanar,
         Self::Orrery,
+        Self::Minification,
     ];
 
     /// The name the capture command selects the scene by.
@@ -58,6 +63,7 @@ impl ReferenceScene {
             Self::NormalTangent => "normal-tangent",
             Self::FarCoplanar => "far-coplanar",
             Self::Orrery => "orrery",
+            Self::Minification => "minification",
         }
     }
 
@@ -77,13 +83,24 @@ impl ReferenceScene {
         AssetId::new(source, AssetKind::Mesh, AssetName::Name(name))
     }
 
+    /// The Asset ID of the scene's procedural Texture `name` in `channel`.
+    #[cfg(feature = "cook")]
+    pub(crate) fn texture_id(self, channel: MaterialChannel, name: &str) -> AssetId {
+        let source = AssetSource::Scene(self.name());
+        AssetId::new(source, AssetKind::Texture(channel), AssetName::Name(name))
+    }
+
     /// The manifest sources the scene references, by GUID.
     #[cfg(feature = "cook")]
     pub(crate) fn source_files(self) -> &'static [u128] {
         match self {
             Self::Helmet => &[SCI_FI_HELMET],
             Self::NormalTangent => &[NORMAL_TANGENT_TEST],
-            Self::PbrSweep | Self::UvGrid | Self::FarCoplanar | Self::Orrery => &[],
+            Self::PbrSweep
+            | Self::UvGrid
+            | Self::FarCoplanar
+            | Self::Orrery
+            | Self::Minification => &[],
         }
     }
 
@@ -97,11 +114,7 @@ impl ReferenceScene {
             roughness,
             emissive: [0.0; 3],
             textures: [
-                albedo.map(|name| {
-                    let source = AssetSource::Scene(self.name());
-                    let kind = AssetKind::Texture(MaterialChannel::Albedo);
-                    AssetId::new(source, kind, AssetName::Name(name))
-                }),
+                albedo.map(|name| self.texture_id(MaterialChannel::Albedo, name)),
                 None,
                 None,
                 None,
@@ -136,10 +149,29 @@ impl ReferenceScene {
                 "grid".into(),
                 factors([1.0; 4], 0.0, ORRERY_ROUGHNESS, Some("grid")),
             )],
+            Self::Minification => vec![(
+                "ground".into(),
+                CookedMaterial {
+                    // Factors of 1 pass the Textures' values through.
+                    base_color: [1.0; 4],
+                    metallic: 1.0,
+                    roughness: 1.0,
+                    emissive: [0.0; 3],
+                    textures: [
+                        Some(self.texture_id(MaterialChannel::Albedo, "checker")),
+                        Some(self.texture_id(MaterialChannel::Normal, "bumps")),
+                        Some(self.texture_id(MaterialChannel::MetallicRoughness, "gloss")),
+                        None,
+                        None,
+                    ],
+                },
+            )],
         }
     }
 
-    /// The scene's generated Textures by name, with their Channel.
+    /// The scene's generated Textures by name, with their Channel. A
+    /// metallic-roughness Texture cooks widened by the normal map of the
+    /// Material that samples it (Toksvig).
     #[cfg(feature = "cook")]
     pub(crate) fn textures(self) -> Vec<(&'static str, MaterialChannel, LoadedImage)> {
         match self {
@@ -151,6 +183,11 @@ impl ReferenceScene {
                 };
                 vec![("grid", MaterialChannel::Albedo, grid)]
             }
+            Self::Minification => vec![
+                ("checker", MaterialChannel::Albedo, checker_texture()),
+                ("bumps", MaterialChannel::Normal, bump_texture()),
+                ("gloss", MaterialChannel::MetallicRoughness, gloss_texture()),
+            ],
             Self::Helmet | Self::PbrSweep | Self::NormalTangent | Self::FarCoplanar => Vec::new(),
         }
     }
@@ -170,6 +207,11 @@ impl ReferenceScene {
                 None,
             )],
             Self::Orrery => vec![("sphere", uv_sphere(SPHERE_RADIUS), Some("grid"))],
+            Self::Minification => vec![(
+                "ground",
+                ground_plane(MINIFICATION_HALF_SIZE, MINIFICATION_UV_REPEAT),
+                Some("ground"),
+            )],
         }
     }
 
@@ -194,6 +236,9 @@ impl ReferenceScene {
             Self::Orrery => {
                 Camera::looking_at(glam::dvec3(0.5, 3.6, 4.2), glam::dvec3(1.1, 0.0, -0.7))
             }
+            Self::Minification => {
+                Camera::looking_at(MINIFICATION_CAMERA, MINIFICATION_CAMERA_TARGET)
+            }
         };
         camera.position += shift;
         camera
@@ -209,8 +254,55 @@ impl ReferenceScene {
             | Self::PbrSweep
             | Self::UvGrid
             | Self::NormalTangent
-            | Self::FarCoplanar => SIXTY_HERTZ,
+            | Self::FarCoplanar
+            | Self::Minification => SIXTY_HERTZ,
         }
+    }
+
+    /// The scene's point lights: position, colour and intensity.
+    pub(crate) fn point_lights(self) -> &'static [(glam::DVec3, PointLight)] {
+        match self {
+            Self::Minification => &[(
+                MINIFICATION_LIGHT,
+                PointLight {
+                    color: glam::Vec3::ONE,
+                    intensity: MINIFICATION_LIGHT_INTENSITY,
+                },
+            )],
+            Self::Helmet
+            | Self::PbrSweep
+            | Self::UvGrid
+            | Self::NormalTangent
+            | Self::FarCoplanar
+            | Self::Orrery => &COLOURED_LIGHTS,
+        }
+    }
+}
+
+/// Red, green, blue and yellow, 2 m up and 2 m from the origin along X and Z.
+const COLOURED_LIGHTS: [(glam::DVec3, PointLight); 4] = [
+    (
+        glam::DVec3::new(2.0, 2.0, 2.0),
+        coloured_light(glam::Vec3::X),
+    ),
+    (
+        glam::DVec3::new(-2.0, 2.0, 2.0),
+        coloured_light(glam::Vec3::Y),
+    ),
+    (
+        glam::DVec3::new(2.0, 2.0, -2.0),
+        coloured_light(glam::Vec3::Z),
+    ),
+    (
+        glam::DVec3::new(-2.0, 2.0, -2.0),
+        coloured_light(glam::vec3(1.0, 1.0, 0.0)),
+    ),
+];
+
+const fn coloured_light(color: glam::Vec3) -> PointLight {
+    PointLight {
+        color,
+        intensity: 1.0,
     }
 }
 
@@ -375,6 +467,101 @@ pub(crate) fn spin(fixed_time: Res<FixedTime>, mut spinning: Query<(&Spin, &mut 
         let angle = (spin.radians_per_second * seconds).rem_euclid(std::f64::consts::TAU);
         transform.rotation = glam::Quat::from_rotation_y(angle as f32);
     }
+}
+
+/// minification's floor: half its side, in metres, and its UV range, so
+/// each Texture repeats every metre.
+#[cfg(feature = "cook")]
+const MINIFICATION_HALF_SIZE: f32 = 50.0;
+#[cfg(feature = "cook")]
+const MINIFICATION_UV_REPEAT: f32 = 100.0;
+/// 1.2 m above the floor, 4 m in from its near edge, looking down about
+/// 8.5° along it.
+const MINIFICATION_CAMERA: glam::DVec3 = glam::DVec3::new(0.0, 1.2, 46.0);
+const MINIFICATION_CAMERA_TARGET: glam::DVec3 = glam::DVec3::new(0.0, 0.0, 38.0);
+/// 1 m over the floor 30 m ahead: the floor mirrors it about 16 m out, in
+/// the minified distance, so Toksvig shapes its reflection.
+const MINIFICATION_LIGHT: glam::DVec3 = glam::DVec3::new(0.0, 1.0, 16.0);
+const MINIFICATION_LIGHT_INTENSITY: f32 = 30.0;
+/// Side of minification's Textures, in texels.
+#[cfg(feature = "cook")]
+const MINIFICATION_TEXTURE_SIZE: u32 = 256;
+/// Checks of 16 texels, so each 4×4 block is one colour.
+#[cfg(feature = "cook")]
+const MINIFICATION_CHECK_SIZE: u32 = 16;
+/// A bump every 8 texels, with slopes up to 0.5 (27°).
+#[cfg(feature = "cook")]
+const MINIFICATION_BUMP_PERIOD: u32 = 8;
+#[cfg(feature = "cook")]
+const MINIFICATION_BUMP_SLOPE: f32 = 0.5;
+/// The gloss before Toksvig widens it.
+#[cfg(feature = "cook")]
+const MINIFICATION_GLOSS_ROUGHNESS: f32 = 0.2;
+
+/// The floor draws with the Material its Primitive names.
+pub(crate) fn spawn_minification(
+    world: &mut World,
+    loader: &mut AssetLoader,
+) -> anyhow::Result<()> {
+    let ground = loader.mesh(ReferenceScene::Minification.mesh_id("ground"))?;
+    world.spawn((Transform::IDENTITY, MeshRef(ground)));
+    Ok(())
+}
+
+/// A `MINIFICATION_TEXTURE_SIZE`-square image of `texel(x, y)`, top row
+/// first.
+#[cfg(feature = "cook")]
+fn minification_image(texel: impl Fn(u32, u32) -> [u8; 4]) -> LoadedImage {
+    let side = MINIFICATION_TEXTURE_SIZE;
+    LoadedImage {
+        pixels: (0..side * side)
+            .flat_map(|index| texel(index % side, index / side))
+            .collect(),
+        width: side,
+        height: side,
+    }
+}
+
+/// Light and dark grey checks of `MINIFICATION_CHECK_SIZE` texels, sRGB.
+#[cfg(feature = "cook")]
+fn checker_texture() -> LoadedImage {
+    minification_image(|x, y| {
+        let check = x / MINIFICATION_CHECK_SIZE + y / MINIFICATION_CHECK_SIZE;
+        let value = if check.is_multiple_of(2) { 200 } else { 40 };
+        [value, value, value, 255]
+    })
+}
+
+/// A tangent-space normal map of the height sin(x) sin(y), one bump every
+/// `MINIFICATION_BUMP_PERIOD` texels each way with slopes up to
+/// `MINIFICATION_BUMP_SLOPE`: a box of a period or more holds normals tilted
+/// every way, whose variance Toksvig widens the gloss by.
+#[cfg(feature = "cook")]
+fn bump_texture() -> LoadedImage {
+    let frequency = TAU / MINIFICATION_BUMP_PERIOD as f32;
+    // The height's slope along one axis, at a texel's centre.
+    let slope = |along: f32, across: f32| {
+        MINIFICATION_BUMP_SLOPE * (frequency * along).cos() * (frequency * across).sin()
+    };
+    minification_image(|x, y| {
+        let (x, y) = (x as f32 + 0.5, y as f32 + 0.5);
+        // The image's y runs down and tangent space's +Y up (glTF), so the
+        // y slope's sign flips.
+        let normal = glam::vec3(-slope(x, y), slope(y, x), 1.0).normalize();
+        let [red, green, blue] = normal
+            .to_array()
+            .map(|component| ((component * 0.5 + 0.5) * 255.0).round() as u8);
+        [red, green, blue, 255]
+    })
+}
+
+/// Roughness `MINIFICATION_GLOSS_ROUGHNESS` and metallic 0 at every texel
+/// (glTF's green and blue), the size of the normal map, so Toksvig widens
+/// every mip.
+#[cfg(feature = "cook")]
+fn gloss_texture() -> LoadedImage {
+    let roughness = (MINIFICATION_GLOSS_ROUGHNESS * 255.0).round() as u8;
+    minification_image(|_, _| [0, roughness, 0, 255])
 }
 
 /// An indexed triangle list, counter-clockwise when seen from outside.

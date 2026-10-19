@@ -20,6 +20,7 @@ unsafe extern "C" {}
 const ENCODER: &str = "intel_tex_2 0.5.0 basic";
 
 /// RGBA8 pixels, row-major, top row first.
+#[derive(Clone)]
 pub struct LoadedImage {
     pub pixels: Vec<u8>,
     pub width: u32,
@@ -27,6 +28,7 @@ pub struct LoadedImage {
 }
 
 /// One Texture to cook: an image a Material samples in one Channel.
+#[derive(Clone)]
 pub struct TextureSource {
     pub id: AssetId,
     pub channel: MaterialChannel,
@@ -38,6 +40,7 @@ pub struct TextureSource {
     normal_map: Option<Box<TextureSource>>,
 }
 
+#[derive(Clone)]
 enum SourceImage {
     /// An image file (PNG or JPEG), decoded only when its Texture is stale.
     Encoded(Vec<u8>),

@@ -47,7 +47,7 @@ pub struct MeshRef(pub MeshHandle);
 pub struct MaterialRef(pub MaterialHandle);
 
 /// A point light at its entity's `Transform`.
-#[derive(Component)]
+#[derive(Component, Clone, Copy)]
 pub struct PointLight {
     pub color: glam::Vec3,
     pub intensity: f32,
