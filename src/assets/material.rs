@@ -274,7 +274,7 @@ impl MaterialPool {
         if self.materials.len() as u64 >= MATERIAL_CAPACITY {
             tracing::error!(
                 capacity = MATERIAL_CAPACITY,
-                "material SSBO full; reusing material 0 (raise MATERIAL_CAPACITY or add growth)"
+                "material SSBO full; reusing material 0 (raise MATERIAL_CAPACITY)"
             );
             return MaterialHandle(0);
         }

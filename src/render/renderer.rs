@@ -3,8 +3,8 @@ use std::time::Instant;
 use crate::assets::{ARENA_CAPACITY_BYTES, MaterialPool, MeshPool};
 use crate::gpu::GpuContext;
 use crate::render::{
-    CameraUniform, DEPTH_FORMAT, FrameData, FrameStaging, INSTANCE_BUFFER_INITIAL_CAPACITY,
-    InstanceData, LightUniform, LoadStaging, create_depth_texture, shaders,
+    CameraUniform, DEPTH_FORMAT, FrameData, FrameStaging, INSTANCE_CAPACITY, InstanceData,
+    LightUniform, LoadStaging, create_depth_texture, shaders,
 };
 use crate::stats::{FrameRecorder, texture_bytes};
 
@@ -28,8 +28,6 @@ pub struct Renderer {
     pub(crate) load_staging: LoadStaging,
     instance_buffer: wgpu::Buffer,
     instance_bind_group: wgpu::BindGroup,
-    instance_capacity: u64,
-    instance_bind_group_layout: wgpu::BindGroupLayout,
     /// Set when a frame's uploads failed after it queued Instance writes,
     /// which then never landed: the next prepare must write every Instance.
     lost_instance_writes: bool,
@@ -196,7 +194,21 @@ impl Renderer {
             }],
         });
 
-        let instance_buffer = create_instance_buffer(&device, INSTANCE_BUFFER_INITIAL_CAPACITY);
+        // Created at its fixed capacity; it never grows.
+        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Instance Buffer"),
+            size: u64::from(INSTANCE_CAPACITY) * std::mem::size_of::<InstanceData>() as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        // The most a frame uploads: every buffer `upload` writes, in full.
+        let frame_staging = FrameStaging::new(
+            [&camera_buffer, &light_buffer, &instance_buffer]
+                .iter()
+                .map(|buffer| buffer.size())
+                .sum(),
+        );
+
         let mesh_pool = MeshPool::new(&device, ARENA_CAPACITY_BYTES);
         let instance_bind_group = create_instance_bind_group(
             &device,
@@ -204,8 +216,6 @@ impl Renderer {
             &instance_buffer,
             mesh_pool.vertex_arena(),
         );
-
-        let instance_capacity = INSTANCE_BUFFER_INITIAL_CAPACITY;
 
         let depth_texture_view = create_depth_texture(&device, width, height);
 
@@ -224,11 +234,9 @@ impl Renderer {
             light_bind_group,
             instance_buffer,
             instance_bind_group,
-            instance_capacity,
-            instance_bind_group_layout,
             lost_instance_writes: false,
             transient_saves_memory: context.adapter.get_info().transient_saves_memory == Some(true),
-            frame_staging: FrameStaging::default(),
+            frame_staging,
             frame_encoder: None,
         }
     }
@@ -255,7 +263,6 @@ impl Renderer {
             self.queue.submit(std::iter::once(unrendered.finish()));
         }
         let mut encoder = create_frame_encoder(&self.device);
-        self.ensure_instance_capacity(&mut encoder, u64::from(frame.instance_slot_count));
         let instance_size = std::mem::size_of::<InstanceData>() as wgpu::BufferAddress;
         let instance_uploads = frame.instance_writes.iter().map(|write| {
             (
@@ -399,56 +406,6 @@ impl Renderer {
                 .gpu_memory_bytes(self.transient_saves_memory)
             + self.frame_staging.gpu_memory_bytes()
     }
-
-    /// Grows the Instance buffer to hold `needed` Instances, copying the slots
-    /// earlier frames wrote into the new buffer through `encoder`.
-    fn ensure_instance_capacity(&mut self, encoder: &mut wgpu::CommandEncoder, needed: u64) {
-        if needed <= self.instance_capacity {
-            return;
-        }
-
-        let old_capacity = self.instance_capacity;
-        let mut new_capacity = old_capacity * 2;
-        while new_capacity < needed {
-            new_capacity *= 2;
-        }
-
-        let instance_buffer = create_instance_buffer(&self.device, new_capacity);
-        encoder.copy_buffer_to_buffer(
-            &self.instance_buffer,
-            0,
-            &instance_buffer,
-            0,
-            self.instance_buffer.size(),
-        );
-        self.instance_buffer = instance_buffer;
-
-        self.instance_bind_group = create_instance_bind_group(
-            &self.device,
-            &self.instance_bind_group_layout,
-            &self.instance_buffer,
-            self.mesh_pool.vertex_arena(),
-        );
-
-        self.instance_capacity = new_capacity;
-        tracing::info!(
-            old = old_capacity,
-            new = new_capacity,
-            "instance buffer resized"
-        );
-    }
-}
-
-/// An Instance buffer of `capacity` slots; a copy source, so it can grow.
-fn create_instance_buffer(device: &wgpu::Device, capacity: u64) -> wgpu::Buffer {
-    device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("Instance Buffer"),
-        size: capacity * std::mem::size_of::<InstanceData>() as u64,
-        usage: wgpu::BufferUsages::STORAGE
-            | wgpu::BufferUsages::COPY_DST
-            | wgpu::BufferUsages::COPY_SRC,
-        mapped_at_creation: false,
-    })
 }
 
 /// The bind group of the Instance buffer and the vertex Arena, which the
@@ -567,7 +524,6 @@ mod tests {
                 direction: [0.0, 0.0, -1.0, 0.0],
                 ..LightUniform::default()
             },
-            instance_slot_count: 1,
             instances: vec![InstanceData {
                 rotation_scale: identity,
                 normal_matrix: identity,
@@ -621,29 +577,5 @@ mod tests {
             corner[0] == 89 && corner[1].abs_diff(124) <= 1 && corner[2] == 149,
             "corner {corner:?}"
         );
-
-        // A frame that needs one slot past the Instance buffer's capacity
-        // writes only that slot: the triangle, still drawn from slot 0, stays
-        // red only if the grown buffer kept what slot 0 held.
-        let past_capacity = INSTANCE_BUFFER_INITIAL_CAPACITY as u32;
-        let frame = FrameData {
-            instance_slot_count: past_capacity + 1,
-            instance_writes: vec![InstanceWrite {
-                first_slot: past_capacity,
-                instances: 0..1,
-            }],
-            ..frame
-        };
-        renderer.upload(&frame, &mut recorder);
-        renderer.render(
-            &frame,
-            &target.create_view(&wgpu::TextureViewDescriptor::default()),
-            None,
-            &mut recorder,
-        );
-        let pixels = read_back(&context, &target).expect("read back failed");
-        let image = image::RgbaImage::from_raw(SIZE, SIZE, pixels).expect("SIZE × SIZE pixels");
-        assert!(renderer.instance_capacity > INSTANCE_BUFFER_INITIAL_CAPACITY);
-        assert_eq!(image.get_pixel(SIZE / 2, SIZE / 2).0, [255, 0, 0, 255]);
     }
 }

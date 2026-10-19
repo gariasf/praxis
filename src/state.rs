@@ -219,6 +219,7 @@ impl State {
         self.recorder.stage("prepare_frame", started);
 
         self.renderer.upload(frame, &mut self.recorder);
+        self.recorder.renderables_refused = self.preparer.renderables_refused();
     }
 
     /// Draws the frame into `target`, a view in the format and size this
