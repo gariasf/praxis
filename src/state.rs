@@ -91,6 +91,10 @@ impl State {
         .absent_sources;
         #[cfg(not(feature = "cook"))]
         let absent_sources: Vec<String> = Vec::new();
+        // Demonstration for #152, reverted before merge: a source read in
+        // the shipping runtime fails the shipping Goldens job.
+        #[cfg(not(feature = "cook"))]
+        std::fs::read("assets/manifest.json").context("reading a source")?;
 
         let spawn: fn(&mut World, &mut AssetLoader) -> anyhow::Result<()> = match scene {
             ReferenceScene::Helmet => Self::spawn_helmet_scene,
