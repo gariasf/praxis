@@ -334,7 +334,7 @@ impl CookedTexture {
                 && width.max(height) <= MAX_TEXTURE_SIDE,
             "Texture Blob is {width}x{height}: re-cook with `praxis cook`"
         );
-        let mips = width.max(height).ilog2() + 1;
+        let mips = header.level_count;
         anyhow::ensure!(
             header.level_count == mips,
             "Texture Blob has {} mips, expected {mips}",

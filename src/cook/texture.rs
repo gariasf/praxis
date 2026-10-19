@@ -167,7 +167,7 @@ impl TextureSource {
             }
             MaterialChannel::Occlusion => wgpu::TextureFormat::Bc4RUnorm,
         };
-        let mips = width.max(height).ilog2() as usize + 1;
+        let mips = 1;
         let mut level = linearise(&image, self.channel);
         let mut spread = match &self.normal_map {
             Some(normal_map) => Some(Level::spread(&normal_map.decode()?)),
