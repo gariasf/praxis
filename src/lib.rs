@@ -37,7 +37,7 @@ pub use assets::cooked;
 pub use capture::capture;
 pub use scenes::ReferenceScene;
 pub use state::DEFAULT_MODEL;
-pub use stats::FrameStats;
+pub use stats::{FrameStats, GpuFrameStats};
 pub use threading::init_compute_pool;
 
 impl ApplicationHandler for App {
@@ -155,7 +155,7 @@ impl WindowShell {
             present_mode: surface_caps.present_modes[0],
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
-            desired_maximum_frame_latency: 2,
+            desired_maximum_frame_latency: render::FRAMES_IN_FLIGHT as u32,
             color_space: wgpu::SurfaceColorSpace::Auto,
         };
 
@@ -242,7 +242,7 @@ impl WindowShell {
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        let _ = self.state.render(&view, None);
+        let _ = self.state.render(&view);
         self.queue.present(output);
 
         // Only after presenting: wgpu rejects a reconfigure while a texture

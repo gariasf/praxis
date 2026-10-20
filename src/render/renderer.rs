@@ -3,14 +3,19 @@ use std::time::Instant;
 use crate::assets::{ARENA_CAPACITY_BYTES, MaterialPool, MeshPool};
 use crate::gpu::GpuContext;
 use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
-use crate::render::culling_pass::{CullingPass, DrawCapacity};
-use crate::render::main_pass::MainPass;
+use crate::render::culling_pass::{CULLING_PASS, CullingPass, DrawCapacity};
+use crate::render::main_pass::{MAIN_PASS, MainPass};
+use crate::render::readback::GpuStatsReadback;
 use crate::render::targets::RenderTargets;
 use crate::render::{
     CameraUniform, FrameData, FrameStaging, INSTANCE_CAPACITY, InstanceData, LightUniform,
     LoadStaging,
 };
-use crate::stats::FrameRecorder;
+use crate::stats::{FrameRecorder, GpuFrameStats};
+
+/// The passes `render` records, in order, each timed from its start to its
+/// end.
+pub(crate) const TIMED_PASSES: [&str; 2] = [CULLING_PASS, MAIN_PASS];
 
 /// The Render switches a Renderer is created with and keeps. The defaults are
 /// what ships.
@@ -66,6 +71,7 @@ pub struct Renderer {
     /// The frame's encoder from `update`, holding its upload copies, until
     /// `render` records the pass into it and submits it.
     frame_encoder: Option<wgpu::CommandEncoder>,
+    gpu_stats: GpuStatsReadback,
 }
 
 impl Renderer {
@@ -192,6 +198,7 @@ impl Renderer {
         );
 
         let render_targets = RenderTargets::new(&device, width, height);
+        let gpu_stats = GpuStatsReadback::new(&device, queue.get_timestamp_period());
 
         Self {
             mesh_pool,
@@ -213,6 +220,7 @@ impl Renderer {
             transient_saves_memory: context.adapter.get_info().transient_saves_memory == Some(true),
             frame_staging,
             frame_encoder: None,
+            gpu_stats,
         }
     }
 
@@ -231,15 +239,13 @@ impl Renderer {
 
     /// Records the copies of `frame`'s uniforms, the Instances it writes and
     /// its Instance slot count, if it changed, into the frame's encoder, which
-    /// `render` submits.
+    /// `render` submits; every upload is followed by a render.
     pub fn upload(&mut self, frame: &FrameData, recorder: &mut FrameRecorder) {
         let started = Instant::now();
-        // The window skips `render` while occluded or without a surface
-        // texture; submitting the unrendered frame's copies returns its
-        // staging slot.
-        if let Some(unrendered) = self.frame_encoder.take() {
-            self.queue.submit(std::iter::once(unrendered.finish()));
-        }
+        debug_assert!(
+            self.frame_encoder.is_none(),
+            "an upload whose frame was not rendered"
+        );
         let mut encoder = create_frame_encoder(&self.device);
         let instance_size = std::mem::size_of::<InstanceData>() as wgpu::BufferAddress;
         let instance_uploads = frame.instance_writes.iter().map(|write| {
@@ -278,14 +284,13 @@ impl Renderer {
     }
 
     /// Draws `frame`, uploaded by `upload`, into `target`, a view in the
-    /// format and size this Renderer renders to, and times its passes into
-    /// `timestamp_writes`, from the start of the first to the end of the
-    /// last. Returns the frame's submission.
+    /// format and size this Renderer renders to, timing its passes for
+    /// `gpu_frame_stats`, which reads them back a few frames later. Returns
+    /// the frame's submission.
     pub fn render(
         &mut self,
         frame: &FrameData,
         target: &wgpu::TextureView,
-        timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
         recorder: &mut FrameRecorder,
     ) -> wgpu::SubmissionIndex {
         let started = Instant::now();
@@ -295,19 +300,7 @@ impl Renderer {
             .unwrap_or_else(|| create_frame_encoder(&self.device));
         self.material_pool.refresh_bind_group(&self.device);
 
-        let culling_timestamp_writes =
-            timestamp_writes
-                .as_ref()
-                .map(|writes| wgpu::ComputePassTimestampWrites {
-                    query_set: writes.query_set,
-                    beginning_of_pass_write_index: writes.beginning_of_pass_write_index,
-                    end_of_pass_write_index: None,
-                });
-        let main_timestamp_writes =
-            timestamp_writes.map(|writes| wgpu::RenderPassTimestampWrites {
-                beginning_of_pass_write_index: None,
-                ..writes
-            });
+        let timestamps = self.gpu_stats.begin_frame(&mut encoder, recorder);
         self.culling_pass.record(
             &mut encoder,
             &[
@@ -315,7 +308,7 @@ impl Renderer {
                 (&SCENE_GEOMETRY, &self.scene_geometry_bind_group),
             ],
             frame,
-            culling_timestamp_writes,
+            timestamps.map(|timestamps| timestamps.compute_pass(CULLING_PASS)),
         );
         self.main_pass.record(
             &mut encoder,
@@ -328,10 +321,11 @@ impl Renderer {
             ],
             self.culling_pass.packed_indices(),
             self.culling_pass.frame_draw(),
-            main_timestamp_writes,
+            timestamps.map(|timestamps| timestamps.render_pass(MAIN_PASS)),
         );
         // The frame's draw is one indirect call.
         recorder.draw_calls += 1;
+        self.gpu_stats.end_frame(&mut encoder);
 
         let command_buffer = encoder.finish();
         recorder.stage("encode", started);
@@ -343,6 +337,18 @@ impl Renderer {
         let submission = self.queue.submit(std::iter::once(command_buffer));
         recorder.stage("submit", started);
         submission
+    }
+
+    /// The GPU stats of earlier frames that the last `render` or
+    /// `flush_gpu_frame_stats` read back, by frame number, counted from 0.
+    pub fn gpu_frame_stats(&self) -> &[GpuFrameStats] {
+        self.gpu_stats.read_back()
+    }
+
+    /// Waits until the GPU stats of every frame rendered are read back,
+    /// for `gpu_frame_stats`: the end of a run.
+    pub fn flush_gpu_frame_stats(&mut self) -> anyhow::Result<()> {
+        self.gpu_stats.flush(&self.device, &self.queue)
     }
 
     /// Whether Instance writes were lost since the last call; if so, the
@@ -376,6 +382,7 @@ impl Renderer {
                 .material_pool
                 .gpu_memory_bytes(self.transient_saves_memory)
             + self.frame_staging.gpu_memory_bytes()
+            + self.gpu_stats.gpu_memory_bytes()
     }
 }
 
@@ -912,7 +919,6 @@ mod tests {
         renderer.render(
             frame,
             &target.create_view(&wgpu::TextureViewDescriptor::default()),
-            None,
             &mut recorder,
         );
         let pixels = read_back(context, &target).expect("read back failed");

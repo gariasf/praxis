@@ -51,8 +51,9 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // 4-byte Instance slot count and 8-byte offsets for each slot and block
     // of 256 slots, the frame's draw of 2^20 Meshlet records of 12 bytes,
     // 2^24 packed indices of 4 bytes and 20 bytes of indirect arguments, the
-    // 160×90 Depth32Float texture, and three staging slots of the first
-    // frame's 1572 uploaded bytes rounded up to 2048. The load's staging is
+    // 160×90 Depth32Float texture, three staging slots of the first frame's
+    // 1572 uploaded bytes rounded up to 2048, and the GPU stats readback: its
+    // 32-byte resolve buffer and six slots of 32 bytes. The load's staging is
     // gone.
     assert_eq!(
         last.gpu_memory_bytes,
@@ -70,6 +71,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + 20
             + 160 * 90 * 4
             + 3 * 2048
+            + 32
+            + 6 * 32
     );
     // One UV sphere in the Arenas: 48 × 24 quads of two triangles but one at
     // each pole, of three u32s, and 25 rings of 49 vertices of 28 bytes, less
@@ -124,16 +127,25 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         last.cpu_frame_time
     );
 
-    // Timestamp queries are in the Capability floor, so every frame's pass
-    // took GPU time: Metal reads a timestamp resolved before its pass's
-    // submission completed as 0.
+    // Timestamp queries are in the Capability floor, so every frame read
+    // back its passes' GPU time, none skipped: Metal reads a timestamp
+    // resolved before its pass's submission completed as 0. The frame spans
+    // its passes.
     for (frame, stats) in frames.iter().enumerate() {
-        match stats.gpu_times.as_slice() {
-            [("main_pass", pass_time)] => assert!(
-                Duration::ZERO < *pass_time && *pass_time < Duration::from_secs(1),
-                "frame {frame} took {pass_time:?} on the GPU"
-            ),
-            other => panic!("frame {frame} has GPU times {other:?}"),
+        assert_eq!(stats.gpu_readbacks_skipped, 0, "frame {frame}");
+        let Some(gpu) = stats.gpu else {
+            panic!("frame {frame} read back no GPU stats");
+        };
+        let passes: Vec<&str> = gpu.pass_times.iter().map(|&(pass, _)| pass).collect();
+        assert_eq!(passes, ["culling_pass", "main_pass"], "frame {frame}");
+        for (pass, time) in gpu.pass_times {
+            assert!(
+                Duration::ZERO < time
+                    && time <= gpu.frame_time
+                    && gpu.frame_time < Duration::from_secs(1),
+                "frame {frame}: {pass} took {time:?} of {:?} on the GPU",
+                gpu.frame_time
+            );
         }
     }
 
