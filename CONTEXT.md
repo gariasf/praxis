@@ -63,7 +63,7 @@ A unit the cooker produces and the runtime loads: a Mesh, Material, Texture or C
 _Avoid_: Resource, file
 
 **Asset ID**:
-The stable name of an Asset, derived from its source file's GUID. It survives moving and editing the source, except an edit that renames the Asset inside it.
+The stable name of an Asset, derived from its source file's GUID, or a procedural Reference scene's name. It survives moving and editing the source, except an edit that renames the Asset inside it, gives another item its name, or moves it while its name is missing or shared (the glTF index then names it).
 _Avoid_: Asset path, GUID (the GUID names a source file)
 
 **Blob**:
@@ -71,7 +71,7 @@ One cooked Asset's bytes, named by their content hash.
 _Avoid_: Package, cooked file
 
 **Cook key**:
-The hash of everything that determines a Blob: source bytes, dependencies, settings and cooker versions. A changed Cook key means the Asset is cooked again.
+The hash of everything that determines a Blob: what it cooks from, dependencies, settings and cooker versions. A changed Cook key means the Asset is cooked again.
 _Avoid_: Cache key, version
 
 **Cooked cache**:
@@ -89,7 +89,7 @@ One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 
 _Avoid_: Object
 
 **Moving Instance**:
-An Instance whose entity the fixed schedule moves, so it carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.
+An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.
 _Avoid_: Dynamic Instance, movable
 
 **Frame data**:
@@ -173,7 +173,7 @@ The recorded measurements of a Reference scene on one adapter: the reference mac
 _Avoid_: Benchmark result
 
 **Budget**:
-A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. Counters such as draw calls and bytes uploaded are held to their Baselines instead.
+A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, which caps what that kind may hold (ADR 0017). Counters such as draw calls and bytes uploaded are held to their Baselines instead.
 _Avoid_: Target, threshold
 
 **Capability floor**:
