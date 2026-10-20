@@ -3,6 +3,7 @@ use std::time::Instant;
 use crate::assets::{ARENA_CAPACITY_BYTES, MaterialPool, MeshPool};
 use crate::gpu::GpuContext;
 use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
+use crate::render::culling_pass::{CullingPass, DrawCapacity};
 use crate::render::main_pass::MainPass;
 use crate::render::targets::RenderTargets;
 use crate::render::{
@@ -20,6 +21,7 @@ pub struct Renderer {
     pub(crate) queue: wgpu::Queue,
     aspect_ratio: f32,
     render_targets: RenderTargets,
+    culling_pass: CullingPass,
     main_pass: MainPass,
     camera_buffer: wgpu::Buffer,
     light_buffer: wgpu::Buffer,
@@ -34,6 +36,8 @@ pub struct Renderer {
     /// Set when a frame's uploads failed after it queued Instance writes,
     /// which then never landed: the next prepare must write every Instance.
     lost_instance_writes: bool,
+    /// The Instance slot count the culling pass reads, as last uploaded.
+    uploaded_instance_slot_count: u32,
     transient_saves_memory: bool,
     frame_staging: FrameStaging,
     /// The frame's encoder from `update`, holding its upload copies, until
@@ -50,6 +54,23 @@ impl Renderer {
         width: u32,
         height: u32,
     ) -> Renderer {
+        Self::with_draw_capacity(
+            context,
+            target_format,
+            width,
+            height,
+            DrawCapacity::PROVISIONAL,
+        )
+    }
+
+    /// As `new`, with a frame's draw of `draw_capacity`.
+    fn with_draw_capacity(
+        context: &GpuContext,
+        target_format: wgpu::TextureFormat,
+        width: u32,
+        height: u32,
+        draw_capacity: DrawCapacity,
+    ) -> Renderer {
         let _span = tracing::info_span!("renderer_init").entered();
 
         let device = context.device.clone();
@@ -63,6 +84,11 @@ impl Renderer {
         let mut load_staging = LoadStaging::new(device.clone());
         let material_pool = MaterialPool::new(&device, &mut load_staging);
 
+        let culling_pass = CullingPass::new(
+            &device,
+            &[(&SCENE_GEOMETRY, &scene_geometry_bind_group_layout)],
+            draw_capacity,
+        );
         let main_pass = MainPass::new(
             &device,
             target_format,
@@ -71,6 +97,7 @@ impl Renderer {
                 (&MATERIALS, &material_pool.bind_group_layout),
                 (&SCENE_GEOMETRY, &scene_geometry_bind_group_layout),
             ],
+            culling_pass.meshlet_records(),
         );
 
         let camera_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -103,10 +130,15 @@ impl Renderer {
         });
         // The most a frame uploads: every buffer `upload` writes, in full.
         let frame_staging = FrameStaging::new(
-            [&camera_buffer, &light_buffer, &instance_buffer]
-                .iter()
-                .map(|buffer| buffer.size())
-                .sum(),
+            [
+                &camera_buffer,
+                &light_buffer,
+                &instance_buffer,
+                culling_pass.instance_slot_count(),
+            ]
+            .iter()
+            .map(|buffer| buffer.size())
+            .sum(),
         );
 
         let mesh_pool = MeshPool::new(&device, ARENA_CAPACITY_BYTES);
@@ -116,6 +148,16 @@ impl Renderer {
             [
                 ("instances", instance_buffer.as_entire_binding()),
                 ("vertices", mesh_pool.vertex_arena().as_entire_binding()),
+                ("meshes", mesh_pool.mesh_table().as_entire_binding()),
+                ("meshlets", mesh_pool.meshlet_arena().as_entire_binding()),
+                (
+                    "meshlet_vertices",
+                    mesh_pool.meshlet_vertex_arena().as_entire_binding(),
+                ),
+                (
+                    "meshlet_triangles",
+                    mesh_pool.meshlet_triangle_arena().as_entire_binding(),
+                ),
             ],
         );
 
@@ -129,6 +171,7 @@ impl Renderer {
             queue,
             aspect_ratio: width as f32 / height as f32,
             render_targets,
+            culling_pass,
             main_pass,
             camera_buffer,
             light_buffer,
@@ -136,6 +179,7 @@ impl Renderer {
             instance_buffer,
             scene_geometry_bind_group,
             lost_instance_writes: false,
+            uploaded_instance_slot_count: 0,
             transient_saves_memory: context.adapter.get_info().transient_saves_memory == Some(true),
             frame_staging,
             frame_encoder: None,
@@ -155,8 +199,9 @@ impl Renderer {
         self.aspect_ratio
     }
 
-    /// Records the copies of `frame`'s uniforms and the Instances it writes
-    /// into the frame's encoder, which `render` submits.
+    /// Records the copies of `frame`'s uniforms, the Instances it writes and
+    /// its Instance slot count, if it changed, into the frame's encoder, which
+    /// `render` submits.
     pub fn upload(&mut self, frame: &FrameData, recorder: &mut FrameRecorder) {
         let started = Instant::now();
         // The window skips `render` while occluded or without a surface
@@ -174,30 +219,38 @@ impl Renderer {
                 bytemuck::cast_slice(&frame.instances[write.instances.clone()]),
             )
         });
+        let slot_count_upload = (frame.instance_slot_count != self.uploaded_instance_slot_count)
+            .then(|| {
+                let buffer = self.culling_pass.instance_slot_count();
+                (buffer, 0, bytemuck::bytes_of(&frame.instance_slot_count))
+            });
         let uploads = [
             (&self.camera_buffer, 0, bytemuck::bytes_of(&frame.camera)),
             (&self.light_buffer, 0, bytemuck::bytes_of(&frame.light)),
         ]
         .into_iter()
-        .chain(instance_uploads);
+        .chain(instance_uploads)
+        .chain(slot_count_upload);
         let uploaded_bytes = self
             .frame_staging
             .write(&self.device, &mut encoder, uploads);
         recorder.uploaded_bytes += uploaded_bytes;
         // 0 bytes: the staging slot failed to map, as logged, and the
-        // frame's Instance writes never land.
+        // frame's writes never land.
         if uploaded_bytes == 0 {
             self.lost_instance_writes |= !frame.instances.is_empty();
         } else {
             recorder.instances_written += frame.instances.len() as u32;
+            self.uploaded_instance_slot_count = frame.instance_slot_count;
         }
         self.frame_encoder = Some(encoder);
         recorder.stage("upload", started);
     }
 
     /// Draws `frame`, uploaded by `upload`, into `target`, a view in the
-    /// format and size this Renderer renders to, and times its one pass into
-    /// `timestamp_writes`. Returns the frame's submission.
+    /// format and size this Renderer renders to, and times its passes into
+    /// `timestamp_writes`, from the start of the first to the end of the
+    /// last. Returns the frame's submission.
     pub fn render(
         &mut self,
         frame: &FrameData,
@@ -212,6 +265,25 @@ impl Renderer {
             .unwrap_or_else(|| create_frame_encoder(&self.device));
         self.material_pool.refresh_bind_group(&self.device);
 
+        let culling_timestamp_writes =
+            timestamp_writes
+                .as_ref()
+                .map(|writes| wgpu::ComputePassTimestampWrites {
+                    query_set: writes.query_set,
+                    beginning_of_pass_write_index: writes.beginning_of_pass_write_index,
+                    end_of_pass_write_index: None,
+                });
+        let main_timestamp_writes =
+            timestamp_writes.map(|writes| wgpu::RenderPassTimestampWrites {
+                beginning_of_pass_write_index: None,
+                ..writes
+            });
+        self.culling_pass.record(
+            &mut encoder,
+            &[(&SCENE_GEOMETRY, &self.scene_geometry_bind_group)],
+            frame,
+            culling_timestamp_writes,
+        );
         self.main_pass.record(
             &mut encoder,
             target,
@@ -221,11 +293,12 @@ impl Renderer {
                 (&MATERIALS, &self.material_pool.bind_group),
                 (&SCENE_GEOMETRY, &self.scene_geometry_bind_group),
             ],
-            self.mesh_pool.index_buffer(),
-            &frame.draws,
-            timestamp_writes,
+            self.culling_pass.packed_indices(),
+            self.culling_pass.frame_draw(),
+            main_timestamp_writes,
         );
-        recorder.draw_calls += frame.draws.len() as u32;
+        // The frame's draw is one indirect call.
+        recorder.draw_calls += 1;
 
         let command_buffer = encoder.finish();
         recorder.stage("encode", started);
@@ -264,6 +337,7 @@ impl Renderer {
             + self
                 .render_targets
                 .gpu_memory_bytes(self.transient_saves_memory)
+            + self.culling_pass.gpu_memory_bytes()
             + self.mesh_pool.gpu_memory_bytes()
             + self
                 .material_pool
@@ -282,16 +356,28 @@ fn create_frame_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
 mod tests {
     use std::io::Write;
 
+    use bevy_ecs::prelude::*;
+    use bevy_ecs::system::RunSystemOnce;
+
     use super::*;
-    use crate::assets::Primitive;
     use crate::assets::material::MaterialData;
+    use crate::assets::pools::tests::logged;
+    use crate::assets::{MaterialHandle, MeshHandle};
+    use crate::camera::Camera;
     use crate::capture::read_back;
+    use crate::components::{MeshRef, Transform};
     use crate::cooked::{CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex};
     use crate::render::instance::padded_columns;
-    use crate::render::prepare::{Draw, InstanceWrite};
+    use crate::render::prepare::InstanceWrite;
+    use crate::render::{FramePreparer, NO_MATERIAL};
+    use crate::time::FixedTime;
+    use crate::transform::propagate_world_transforms;
 
     const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
     const SIZE: u32 = 16;
+    const RED: [u8; 4] = [255, 0, 0, 255];
+    const GREEN: [u8; 4] = [0, 255, 0, 255];
+    const BLUE: [u8; 4] = [0, 0, 255, 255];
 
     #[test]
     fn renders_hand_built_frame_data_without_a_world() {
@@ -342,6 +428,115 @@ mod tests {
         );
     }
 
+    /// Two Instances of a Mesh whose Primitives name a red and a green
+    /// Material, the upper one drawn with them, the lower one overriding them
+    /// with blue: the Mesh pool's tables give each Primitive's Meshlets its
+    /// Material ID, unless its Instance overrides it.
+    #[test]
+    fn each_primitive_draws_with_its_own_material_unless_its_instance_overrides_it() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE);
+        let [red, green, blue] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+            .map(|emissive| emissive_material(&mut renderer, emissive));
+        let mesh = load_triangles(
+            &mut renderer,
+            &[[-0.5, 0.0], [0.5, 0.0]],
+            &[Some(red), Some(green)],
+        );
+        let frame = frame_of(
+            vec![
+                instance(mesh, NO_MATERIAL, [0.0, 0.5]),
+                instance(mesh, blue.index(), [0.0, -0.5]),
+            ],
+            4,
+            12,
+        );
+        let (image, recorder) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
+
+        assert_eq!(recorder.draw_calls, 1);
+        let quarters = [(4, 4), (12, 4), (4, 12), (12, 12)].map(|(x, y)| image.get_pixel(x, y).0);
+        assert_eq!(quarters, [RED, GREEN, BLUE, BLUE]);
+    }
+
+    /// Instances past a block of the culling pass's scans, and past a row of
+    /// its dispatches, where the draw holds the indices of all but the last:
+    /// each draws from its own offsets until the draw is full, then none do,
+    /// with a warning.
+    #[test]
+    fn a_frame_past_the_draws_capacity_draws_the_instances_that_fit_and_warns() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        const INSTANCES: u32 = 70_000;
+        let capacity = DrawCapacity {
+            meshlet_records: INSTANCES,
+            packed_indices: 3 * (INSTANCES - 1),
+        };
+        let mut renderer =
+            Renderer::with_draw_capacity(&context, TARGET_FORMAT, SIZE, SIZE, capacity);
+        let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
+        let mesh = load_triangles(&mut renderer, &[[0.0, 0.0]], &[Some(red)]);
+        // Every Instance but the last two is outside the target; those two
+        // are drawn above and below its centre.
+        let instances = (0..INSTANCES)
+            .map(|slot| {
+                let offset = match INSTANCES - slot {
+                    2 => [0.0, 0.5],
+                    1 => [0.0, -0.5],
+                    _ => [5.0, 5.0],
+                };
+                instance(mesh, NO_MATERIAL, offset)
+            })
+            .collect();
+        let frame = frame_of(instances, INSTANCES.into(), 3 * u64::from(INSTANCES));
+        let ((image, _), log) =
+            logged(|| render_frame(&context, &mut renderer, &frame, SIZE, SIZE));
+
+        assert_eq!(image.get_pixel(SIZE / 2, 4).0, RED);
+        assert_ne!(image.get_pixel(SIZE / 2, 12).0, RED);
+        assert!(log.contains("The frame's draw is full"), "{log}");
+    }
+
+    /// Two Renderables, the right one then despawned: its slot, which still
+    /// holds its last Instance, draws nothing from the next frame.
+    #[test]
+    fn a_despawned_renderables_freed_slot_draws_nothing() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE);
+        let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
+        // A triangle facing the camera, 2 m ahead of it.
+        let mesh = load_triangles(&mut renderer, &[[0.0, 0.0]], &[Some(red)]);
+        let mut world = World::new();
+        world.insert_resource(Camera::new());
+        world.insert_resource(FixedTime::default());
+        let mut preparer = FramePreparer::new(&mut world);
+        let [_, right] = [-0.5, 0.5].map(|x| {
+            let transform = Transform::from_translation(glam::dvec3(x, 0.0, 0.0));
+            world.spawn((transform, MeshRef(mesh))).id()
+        });
+        // The red pixels of each half of the frame `prepare` makes.
+        let mut red_pixels = |world: &mut World, renderer: &mut Renderer| -> [usize; 2] {
+            world.run_system_once(propagate_world_transforms).unwrap();
+            let frame = preparer.prepare(world, &renderer.mesh_pool, 1.0);
+            let (image, _) = render_frame(&context, renderer, frame, SIZE, SIZE);
+            [0..SIZE / 2, SIZE / 2..SIZE].map(|columns| {
+                image
+                    .enumerate_pixels()
+                    .filter(|(x, _, pixel)| columns.contains(x) && pixel.0 == RED)
+                    .count()
+            })
+        };
+
+        let [left, before] = red_pixels(&mut world, &mut renderer);
+        assert!(left > 0 && before > 0, "{left} and {before} red pixels");
+        world.despawn(right);
+        assert_eq!(red_pixels(&mut world, &mut renderer), [left, 0]);
+    }
+
     /// A headless context, or `None` after saying so on a machine without a
     /// GPU adapter, where these tests skip.
     fn gpu_context() -> Option<GpuContext> {
@@ -357,83 +552,110 @@ mod tests {
     }
 
     /// Frame data that draws a triangle around the target's centre, black,
-    /// unlit and red emissive, loaded into `renderer`'s Pools.
+    /// unlit and red emissive, loaded into `renderer`'s Pools after a
+    /// triangle outside the target, so it is drawn only from past the first
+    /// entry of every table.
     fn triangle_frame(renderer: &mut Renderer) -> FrameData {
-        // Counter-clockwise towards the camera, drawn with an identity
-        // view-projection; its QTangent is the identity, so its normal is +Z.
+        load_triangles(renderer, &[[3.0, 3.0]], &[None]);
+        let mesh = load_triangles(renderer, &[[0.0, 0.0]], &[None]);
+        let red = emissive_material(renderer, [1.0, 0.0, 0.0]);
+        frame_of(vec![instance(mesh, red.index(), [0.0, 0.0])], 1, 3)
+    }
+
+    /// A Material that is black and unlit, so only its `emissive` colour
+    /// reaches the target.
+    fn emissive_material(renderer: &mut Renderer, emissive: [f32; 3]) -> MaterialHandle {
+        let [red, green, blue] = emissive;
+        renderer.material_pool.insert(
+            &mut renderer.load_staging,
+            MaterialData {
+                base_color: [0.0, 0.0, 0.0, 1.0],
+                metallic_roughness: [0.0, 1.0, 0.0, 0.0],
+                emissive: [red, green, blue, 1.0],
+                texture_indices: [MaterialPool::DEFAULT_LAYER; 4],
+                extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
+            },
+        )
+    }
+
+    /// Loads a Mesh of a triangle 0.6 wide about each of `centres`, each its
+    /// own Primitive drawn with its Material of `materials`, counter-clockwise
+    /// towards -Z; its QTangents are the identity, so its normals are +Z.
+    fn load_triangles(
+        renderer: &mut Renderer,
+        centres: &[[f32; 2]],
+        materials: &[Option<MaterialHandle>],
+    ) -> MeshHandle {
         let vertex = |x: f32, y: f32| CookedVertex {
             position: [x, y, 0.5],
             uv: [0.0, 0.0],
             qtangent: [0, 0, 0, i16::MAX],
         };
-        let triangle = CookedMesh {
-            vertices: vec![vertex(-0.5, -0.5), vertex(0.5, -0.5), vertex(0.0, 0.5)],
-            indices: vec![0, 1, 2],
-            primitives: vec![CookedPrimitive {
-                first_index: 0,
+        let vertices = centres
+            .iter()
+            .flat_map(|&[x, y]| {
+                [
+                    vertex(x - 0.3, y - 0.3),
+                    vertex(x + 0.3, y - 0.3),
+                    vertex(x, y + 0.3),
+                ]
+            })
+            .collect();
+        let primitives = (0..centres.len() as u32)
+            .map(|primitive| CookedPrimitive {
+                first_index: 3 * primitive,
                 index_count: 3,
                 material: None,
                 meshlets: vec![CookedMeshlet {
-                    vertices: vec![0, 1, 2],
+                    vertices: (3 * primitive..3 * primitive + 3).collect(),
                     triangles: vec![[0, 1, 2]],
                 }],
-            }],
-            bounds: [[-0.5, -0.5, 0.5], [0.5, 0.5, 0.5]],
-        };
-        // Loaded first, outside the target, so the triangle's draw finds its
-        // vertices only past its base vertex.
-        let outside = CookedMesh {
-            vertices: vec![vertex(2.0, 2.0), vertex(3.0, 2.0), vertex(2.0, 3.0)],
-            ..triangle.clone()
+            })
+            .collect();
+        let mesh = CookedMesh {
+            vertices,
+            indices: (0..3 * centres.len() as u32).collect(),
+            primitives,
+            bounds: [[-1.0, -1.0, 0.5], [1.0, 1.0, 0.5]],
         };
         renderer
             .mesh_pool
-            .load(&mut renderer.load_staging, &outside, &[None])
-            .expect("the outside triangle fits");
-        let mesh = renderer
-            .mesh_pool
-            .load(&mut renderer.load_staging, &triangle, &[None])
-            .expect("the triangle fits");
-        let &Primitive {
-            vertex_offset,
-            index_offset,
-            index_count,
-        } = &renderer.mesh_pool.get(mesh).expect("loaded").primitives[0];
-        assert!(vertex_offset > 0 && index_offset > 0);
-        // Black and unlit, so only the red emissive reaches the target.
-        let material = renderer.material_pool.insert(
-            &mut renderer.load_staging,
-            MaterialData {
-                base_color: [0.0, 0.0, 0.0, 1.0],
-                metallic_roughness: [0.0, 1.0, 0.0, 0.0],
-                emissive: [1.0, 0.0, 0.0, 1.0],
-                texture_indices: [MaterialPool::DEFAULT_LAYER; 4],
-                extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
-            },
-        );
+            .load(&mut renderer.load_staging, &mesh, materials)
+            .expect("the triangles fit")
+    }
+
+    /// An Instance of `mesh` moved by `offset` in x and y.
+    fn instance(mesh: MeshHandle, material_id: u32, offset: [f32; 2]) -> InstanceData {
         let identity = padded_columns(glam::Mat3::IDENTITY);
+        let [x, y] = offset;
+        InstanceData {
+            rotation_scale: identity,
+            normal_matrix: identity,
+            anchor: [0; 3],
+            material_id,
+            offset: [x, y, 0.0],
+            mesh: mesh.0,
+        }
+    }
+
+    /// Frame data that writes `instances` into the first slots, seen with an
+    /// identity view-projection, whose Meshes hold `meshlet_count` Meshlets
+    /// and `index_count` indices in all.
+    fn frame_of(instances: Vec<InstanceData>, meshlet_count: u64, index_count: u64) -> FrameData {
+        let slots = instances.len();
         FrameData {
             camera: CameraUniform {
                 view_proj: glam::Mat4::IDENTITY.to_cols_array_2d(),
                 ..CameraUniform::default()
             },
             light: LightUniform::default(),
-            instances: vec![InstanceData {
-                rotation_scale: identity,
-                normal_matrix: identity,
-                anchor: [0; 3],
-                material_id: material.index(),
-                offset: [0.0; 3],
-                mesh: mesh.0,
-            }],
+            instance_slot_count: slots as u32,
+            meshlet_count,
+            index_count,
+            instances,
             instance_writes: vec![InstanceWrite {
                 first_slot: 0,
-                instances: 0..1,
-            }],
-            draws: vec![Draw {
-                indices: index_offset..index_offset + index_count,
-                base_vertex: vertex_offset as i32,
-                instance_index: 0,
+                instances: 0..slots,
             }],
         }
     }

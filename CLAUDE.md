@@ -104,8 +104,10 @@ src/
                                  in git-ignored `cooked/` (ADR 0018)
   render/                      # Renderer (owns the Pools, reads no
                                  ECS World, calls the passes in order),
-                                 a module per pass (main_pass: its
-                                 pipeline and recording), targets (every
+                                 a module per pass (culling_pass: the
+                                 compute pass that builds the frame's
+                                 draw; main_pass: its pipeline and
+                                 recording), targets (every
                                  size-dependent target, the depth
                                  conventions), prepare (ECS World to
                                  Frame data), bind_groups (each defined
@@ -232,6 +234,10 @@ When reviewing changes, check for:
       main thread submits, presents or polls (ADR 0016)
 - [ ] Whatever changes what an Instance holds makes prepare write its
       slot; other slots keep what earlier frames wrote (ADR 0003)
+- [ ] The GPU builds the frame's draw in slot order, never in the order
+      atomics land: on the M4 Pro, which triangles precede others in a
+      draw changes implicit derivatives, so captures would differ run to
+      run
 - [ ] Frame stats still see new work: GPU buffers and textures join
       their owner's `gpu_memory_bytes`, per-frame GPU writes add to
       `uploaded_bytes`, and systems are added inside

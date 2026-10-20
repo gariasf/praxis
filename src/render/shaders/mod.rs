@@ -1,12 +1,19 @@
 //! The WGSL shader modules, each assembled from ordered parts in this
 //! directory, so passes share structs and functions without copying them,
 //! after the constants Rust shares with WGSL and its bindings' declarations,
-//! both generated from Rust (`render::instance`, `render::bind_groups`). A
+//! both generated from Rust (`assemble`, `render::bind_groups`). A
 //! function under an oracle lives in a shared part, which the oracle harness
 //! assembles with its kernel alone.
 
-use crate::render::bind_groups::{BindGroupDefinition, FRAME, MATERIALS, SCENE_GEOMETRY};
-use crate::render::instance::ANCHOR_CELL_SIZE;
+use crate::cooked::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
+use crate::render::bind_groups::{
+    BindGroupDefinition, FRAME, FRAME_DRAW, MATERIALS, MESHLET_RECORDS, SCENE_GEOMETRY,
+};
+use crate::render::culling_pass::SCAN_BLOCK_SIZE;
+use crate::render::instance::{ANCHOR_CELL_SIZE, INSTANCE_CAPACITY, NO_MATERIAL, NO_MESH};
+
+// A packed index holds a Meshlet vertex in whole bits.
+const _: () = assert!(MESHLET_MAX_VERTICES.is_power_of_two());
 
 /// One WGSL file of this directory.
 #[derive(Clone, Copy)]
@@ -27,8 +34,8 @@ macro_rules! part {
     };
 }
 
-/// The structs the CPU writes, the Anchor composition and the vertex
-/// decode.
+/// The structs more than one pass reads, the Anchor composition, the packed
+/// index and the vertex decode.
 const COMMON: Part = part!("common.wgsl");
 
 /// The shading terms.
@@ -49,8 +56,16 @@ pub const MAIN: ShaderModule = ShaderModule {
     name: "main",
     // Each Channel is a binding array indexed by Layer (ADR 0017).
     enables: &["wgpu_binding_array"],
-    bind_groups: &[&FRAME, &MATERIALS, &SCENE_GEOMETRY],
+    bind_groups: &[&FRAME, &MATERIALS, &SCENE_GEOMETRY, &MESHLET_RECORDS],
     parts: &[COMMON, SHADING, part!("main.wgsl")],
+};
+
+/// The culling pass.
+pub const CULLING: ShaderModule = ShaderModule {
+    name: "culling",
+    enables: &[],
+    bind_groups: &[&SCENE_GEOMETRY, &FRAME_DRAW],
+    parts: &[COMMON, part!("culling.wgsl")],
 };
 
 /// The shared parts alone, which the oracle harness appends its kernel to.
@@ -64,7 +79,7 @@ pub const SHARED: ShaderModule = ShaderModule {
 
 /// Every module, which `shader_tests` validates.
 #[cfg(test)]
-pub const MODULES: [ShaderModule; 2] = [SHARED, MAIN];
+pub const MODULES: [ShaderModule; 3] = [SHARED, MAIN, CULLING];
 
 impl ShaderModule {
     /// The descriptor that compiles the module, labelled with its name.
@@ -108,8 +123,15 @@ impl ShaderModule {
             .map(|extension| format!("enable {extension};\n"))
             .collect();
         source.push_str(&format!(
-            "const ANCHOR_CELL_SIZE: f32 = {:?};\n",
-            ANCHOR_CELL_SIZE as f32
+            "const ANCHOR_CELL_SIZE: f32 = {:?};\n\
+             const MESHLET_VERTEX_BITS: u32 = {}u;\n\
+             const MESHLET_MAX_TRIANGLES: u32 = {MESHLET_MAX_TRIANGLES}u;\n\
+             const NO_MESH: u32 = {NO_MESH}u;\n\
+             const NO_MATERIAL: u32 = {NO_MATERIAL}u;\n\
+             const SCAN_BLOCK_SIZE: u32 = {SCAN_BLOCK_SIZE}u;\n\
+             const INSTANCE_CAPACITY: u32 = {INSTANCE_CAPACITY}u;\n",
+            ANCHOR_CELL_SIZE as f32,
+            MESHLET_MAX_VERTICES.ilog2()
         ));
         for bind_group in self.bind_groups {
             source.push_str(&bind_group.declarations());

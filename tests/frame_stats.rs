@@ -37,18 +37,23 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
 
     // 60 Hz frames run one or two Ticks each, under the cap.
     assert!(frames.iter().all(|frame| frame.dropped_time.is_zero()));
-    // Two rows of five spheres, one Primitive each.
-    assert_eq!(last.draw_calls, 10);
+    // Two rows of five spheres in one indirect draw.
+    assert_eq!(last.draw_calls, 1);
     // Every frame writes the 96-byte camera and 192-byte light uniforms; only
-    // the first also writes the ten 128-byte Instances.
-    assert_eq!(frames[0].uploaded_bytes, 10 * 128 + 96 + 192);
+    // the first also writes the ten 128-byte Instances and the 4-byte count
+    // of Instance slots in use.
+    assert_eq!(frames[0].uploaded_bytes, 10 * 128 + 96 + 192 + 4);
     assert_eq!(last.uploaded_bytes, 96 + 192);
     // Five 1×1 RGBA8 neutral Textures, one per Channel (the spheres sample
     // no other), the Mesh pool's five 16 MiB Arenas and its Mesh table of
     // 65,536 Meshes of 40 bytes, 256 Materials of 80 bytes, the camera and
-    // light uniforms, 524,288 Instances of 128 bytes, the 160×90
-    // Depth32Float texture, and three staging slots of the first frame's
-    // 1568 uploaded bytes rounded up to 2048. The load's staging is gone.
+    // light uniforms, 524,288 Instances of 128 bytes, the culling pass's
+    // 4-byte Instance slot count and 8-byte offsets for each slot and block
+    // of 256 slots, the frame's draw of 2^20 Meshlet records of 12 bytes,
+    // 2^24 packed indices of 4 bytes and 20 bytes of indirect arguments, the
+    // 160×90 Depth32Float texture, and three staging slots of the first
+    // frame's 1572 uploaded bytes rounded up to 2048. The load's staging is
+    // gone.
     assert_eq!(
         last.gpu_memory_bytes,
         5 * 4
@@ -58,6 +63,11 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + 96
             + 192
             + 524_288 * 128
+            + 4
+            + (524_288 + 2048) * 8
+            + (1 << 20) * 12
+            + (1 << 24) * 4
+            + 20
             + 160 * 90 * 4
             + 3 * 2048
     );

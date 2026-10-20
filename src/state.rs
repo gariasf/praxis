@@ -224,7 +224,7 @@ impl State {
     }
 
     /// Draws the frame into `target`, a view in the format and size this
-    /// State renders to, and times its one pass into `timestamp_writes`.
+    /// State renders to, and times its passes into `timestamp_writes`.
     /// Returns the frame's submission.
     pub fn render(
         &mut self,

@@ -25,12 +25,14 @@ pub fn padded_columns(matrix: glam::Mat3) -> [[f32; 4]; 3] {
 /// The Mesh reference of a freed slot's Instance, which draws nothing.
 pub const NO_MESH: u32 = u32::MAX;
 
-/// The Material ID of a Primitive that names no Material.
+/// The Material ID of an Instance that overrides none of its Mesh's
+/// Materials, and of a Primitive that names none.
 pub const NO_MATERIAL: u32 = u32::MAX;
 
 /// One Instance where its Transform puts it: the anchor and offset of its
 /// pivot, which do not change as the camera moves, and its rotation-scale;
-/// and its Mesh's Handle, or `NO_MESH`.
+/// its Mesh's Handle, or `NO_MESH`; and the Material ID that overrides its
+/// Mesh's Materials, or `NO_MATERIAL`.
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct InstanceData {
