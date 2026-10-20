@@ -26,7 +26,8 @@ step() {
 }
 
 # Counters against their Baselines and the Budgets: counters repeat exactly
-# on every run, times do not. The scenes are the ones with a Baseline on any
+# on every run, times do not, so each scene renders only the frames counters
+# come from (`--counters`). The scenes are the ones with a Baseline on any
 # adapter, so a fetched helmet does not fail for lack of one; a scene without
 # one for this adapter fails compare, and with no Baseline at all, every scene
 # runs and compare fails for each.
@@ -37,7 +38,7 @@ bench() {
   for scene in $(printf '%s\n' bench/baselines/*/*.json | sed 's|.*/||; s|\.json$||' | sort -u); do
     scenes+=("$scene")
   done
-  target/release/praxis bench "$results" ${scenes[@]+"${scenes[@]}"} &&
+  target/release/praxis bench "$results" --counters ${scenes[@]+"${scenes[@]}"} &&
     target/release/praxis compare "$results" --ci
 }
 

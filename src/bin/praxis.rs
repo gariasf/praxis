@@ -44,6 +44,9 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
         [command, output, flag, scenes @ ..] if command == "bench" && flag == "--ci" => {
             bench(output, Configuration::CI, scenes)
         }
+        [command, output, flag, scenes @ ..] if command == "bench" && flag == "--counters" => {
+            bench(output, Configuration::COUNTERS, scenes)
+        }
         [command, output, scenes @ ..] if command == "bench" => {
             bench(output, Configuration::REFERENCE, scenes)
         }
@@ -54,7 +57,8 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
         _ => anyhow::bail!(
             "unexpected arguments {arguments:?}: run with no arguments, `capabilities`, \
              `cook`, `capture <scene> <png path> [<width>x<height>]`, \
-             `bench <output directory> [--ci] [<scene>...]`, or `compare <bench directory> [--ci]`"
+             `bench <output directory> [--ci | --counters] [<scene>...]`, or \
+             `compare <bench directory> [--ci]`"
         ),
     }
 }

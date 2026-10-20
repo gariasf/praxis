@@ -46,7 +46,24 @@ impl Configuration {
         warm_up_frames: 248,
         measured_frames: 256,
     };
+
+    /// The reference size, rendering no frame past the counter frames: the
+    /// verify command's bench, whose `compare --ci` reads counters only.
+    pub const COUNTERS: Self = Self {
+        width: Self::REFERENCE.width,
+        height: Self::REFERENCE.height,
+        warm_up_frames: COUNTER_FRAMES.start,
+        measured_frames: COUNTER_FRAMES.end - COUNTER_FRAMES.start,
+    };
 }
+
+/// The frames every run takes its counters from, whatever its length.
+/// Counters repeat exactly on every run, so a run that stops after these
+/// frames counts as a longer one does, and `compare --ci` holds it to the
+/// longer run's Baseline. By the eighth frame the Scene's uploads and the
+/// first frames' allocations are over (#178). Moving these frames moves
+/// every Baseline's counters: re-record them.
+const COUNTER_FRAMES: std::ops::Range<u32> = 8..72;
 
 /// The Baseline directory of `adapter`: its name in lowercase, each run of
 /// other characters a hyphen (`Apple M4 Pro` is `apple-m4-pro`).
@@ -72,8 +89,9 @@ const FAIL_RATIO: f64 = 1.10;
 /// runs, so a CPU time fails only when it also grows by more than this.
 const CPU_NOISE_FLOOR_MICROSECONDS: f64 = 10.0;
 
-/// The steady-state cost of one Reference scene: medians over the measured
-/// frames, plus p95 for times. Bench output and Baselines share this form.
+/// The steady-state cost of one Reference scene: medians and p95s of times
+/// over the measured frames, medians of counters over the counter frames.
+/// Bench output and Baselines share this form.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Measurements {
     pub scene: String,
@@ -141,23 +159,46 @@ impl std::fmt::Display for Finding {
 }
 
 /// Renders `scene` for `configuration`'s warm-up and measured frames and
-/// returns the measured frames' medians and p95s.
+/// returns the measured frames' times and the counter frames' counters.
 pub fn run(
     context: &GpuContext,
     scene: ReferenceScene,
     configuration: Configuration,
 ) -> anyhow::Result<Measurements> {
+    let frame_count = configuration.warm_up_frames + configuration.measured_frames;
+    anyhow::ensure!(
+        frame_count >= COUNTER_FRAMES.end,
+        "a run of {frame_count} frames stops before the counter frames {COUNTER_FRAMES:?} end"
+    );
     let (_, frames) = render_frames(
         context,
         scene,
         glam::DVec3::ZERO,
         configuration.width,
         configuration.height,
-        configuration.warm_up_frames + configuration.measured_frames,
+        frame_count,
         // ADR 0022 judges Budgets at 60 Hz.
         SIXTY_HERTZ,
     )?;
+    Ok(measure(
+        scene,
+        context.adapter.get_info().name,
+        configuration,
+        &frames,
+    ))
+}
+
+/// The medians and p95s of `frames`, a `configuration` run of `scene` on
+/// `adapter`: times over its measured frames, counters over the counter
+/// frames.
+fn measure(
+    scene: ReferenceScene,
+    adapter: String,
+    configuration: Configuration,
+    frames: &[FrameStats],
+) -> Measurements {
     let measured = &frames[configuration.warm_up_frames as usize..];
+    let counted = &frames[COUNTER_FRAMES.start as usize..COUNTER_FRAMES.end as usize];
     let microseconds = |time: Duration| time.as_secs_f64() * 1e6;
     let main_pass_times: Vec<f64> = measured
         .iter()
@@ -171,13 +212,13 @@ pub fn run(
         .collect();
     let counter = |value: fn(&FrameStats) -> u64| {
         percentile(
-            measured.iter().map(|stats| value(stats) as f64).collect(),
+            counted.iter().map(|stats| value(stats) as f64).collect(),
             0.5,
         ) as u64
     };
-    Ok(Measurements {
+    Measurements {
         scene: scene.name().to_owned(),
-        adapter: context.adapter.get_info().name,
+        adapter,
         profile: if cfg!(debug_assertions) {
             "debug"
         } else {
@@ -200,7 +241,7 @@ pub fn run(
         gpu_memory_bytes: counter(|stats| stats.gpu_memory_bytes),
         arena_bytes_in_use: counter(|stats| stats.arena_bytes_in_use),
         heap_allocations: counter(|stats| stats.heap_allocations),
-    })
+    }
 }
 
 /// One line, `key=value` pairs after the scene name.
@@ -232,7 +273,8 @@ impl std::fmt::Display for Measurements {
 }
 
 /// Compares `current` with its `baseline` and the Budgets. Medians count;
-/// p95s are reported only, as they move with one slow frame.
+/// p95s are reported only, as they move with one slow frame. Counters
+/// compare between runs of any length, times only between runs of one.
 pub fn compare(
     current: &Measurements,
     baseline: &Measurements,
@@ -244,26 +286,22 @@ pub fn compare(
             &current.scene,
             &current.profile,
             current.width,
-            current.height,
-            current.measured_frames
+            current.height
         ) == (
             &baseline.scene,
             &baseline.profile,
             baseline.width,
-            baseline.height,
-            baseline.measured_frames
+            baseline.height
         ),
-        "{} ran {} at {}x{} for {} frames, its Baseline is {} {} at {}x{} for {}",
+        "{} ran {} at {}x{}, its Baseline is {} {} at {}x{}",
         current.scene,
         current.profile,
         current.width,
         current.height,
-        current.measured_frames,
         baseline.scene,
         baseline.profile,
         baseline.width,
-        baseline.height,
-        baseline.measured_frames
+        baseline.height
     );
     let mut findings = Vec::new();
     let counters = [
@@ -308,6 +346,14 @@ pub fn compare(
         return Ok(findings);
     }
 
+    anyhow::ensure!(
+        current.measured_frames == baseline.measured_frames,
+        "{} measured {} frames, its Baseline {}: compare times between runs of one length, \
+         or counters only with --ci",
+        current.scene,
+        current.measured_frames,
+        baseline.measured_frames
+    );
     anyhow::ensure!(
         current.adapter == baseline.adapter,
         "{} ran on {:?}, its Baseline on {:?}: compare times on the Baseline's machine, \
@@ -561,6 +607,58 @@ mod tests {
         let mut debug = baseline();
         debug.profile = "debug".to_owned();
         assert!(compare(&debug, &baseline(), &BUDGETS, CompareMode::Ci).is_err());
+    }
+
+    /// Frames of a `configuration` run: draw calls 10 and heap allocations 50
+    /// in the counter frames and more elsewhere, a CPU time of 900 µs in the
+    /// warm-up and 100 µs after it.
+    fn frames(configuration: Configuration) -> Vec<FrameStats> {
+        (0..configuration.warm_up_frames + configuration.measured_frames)
+            .map(|frame| {
+                let counted = COUNTER_FRAMES.contains(&frame);
+                let warming_up = frame < configuration.warm_up_frames;
+                FrameStats {
+                    cpu_frame_time: Duration::from_micros(if warming_up { 900 } else { 100 }),
+                    gpu_times: vec![(MAIN_PASS, Duration::from_micros(200))],
+                    draw_calls: if counted { 10 } else { 99 },
+                    heap_allocations: if counted { 50 } else { 999 },
+                    ..FrameStats::default()
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn counters_come_from_the_counter_frames_whatever_the_run_length() {
+        let run = |configuration| {
+            measure(
+                ReferenceScene::PbrSweep,
+                "Apple M4 Pro".to_owned(),
+                configuration,
+                &frames(configuration),
+            )
+        };
+        let reference = run(Configuration::REFERENCE);
+        assert_eq!((reference.draw_calls, reference.heap_allocations), (10, 50));
+        assert_eq!(reference.cpu_frame_microseconds.median, 100.0);
+        let counters = run(Configuration::COUNTERS);
+        assert_eq!((counters.draw_calls, counters.heap_allocations), (10, 50));
+    }
+
+    #[test]
+    fn a_shorter_run_compares_counters_only() {
+        let mut shorter = baseline();
+        shorter.measured_frames = 64;
+        assert_eq!(verdicts(&shorter, &baseline(), CompareMode::Ci), []);
+        shorter.uploaded_bytes += 1;
+        assert_eq!(
+            verdicts(&shorter, &baseline(), CompareMode::Ci),
+            [("uploaded_bytes", Verdict::Fail)]
+        );
+        assert!(compare(&shorter, &baseline(), &BUDGETS, CompareMode::Local).is_err());
+        let mut smaller = shorter.clone();
+        smaller.width /= 2;
+        assert!(compare(&smaller, &baseline(), &BUDGETS, CompareMode::Ci).is_err());
     }
 
     #[test]
