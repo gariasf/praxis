@@ -52,3 +52,11 @@ pub struct PointLight {
     pub color: glam::Vec3,
     pub intensity: f32,
 }
+
+/// A directional light shining along its entity's forward axis: -Z turned by
+/// its `Transform`, the way a camera looks.
+#[derive(Component, Clone, Copy)]
+pub struct DirectionalLight {
+    pub color: glam::Vec3,
+    pub intensity: f32,
+}
