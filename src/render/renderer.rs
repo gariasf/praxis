@@ -424,7 +424,7 @@ mod tests {
                 anchor: [0; 3],
                 material_id: material.index(),
                 offset: [0.0; 3],
-                _pad: 0,
+                mesh: mesh.0,
             }],
             instance_writes: vec![InstanceWrite {
                 first_slot: 0,

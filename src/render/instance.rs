@@ -22,11 +22,15 @@ pub fn padded_columns(matrix: glam::Mat3) -> [[f32; 4]; 3] {
     [matrix.x_axis, matrix.y_axis, matrix.z_axis].map(|column| column.extend(0.0).to_array())
 }
 
+/// The Mesh reference of a freed slot's Instance, which draws nothing.
+pub const NO_MESH: u32 = u32::MAX;
+
 /// The Material ID of a Primitive that names no Material.
 pub const NO_MATERIAL: u32 = u32::MAX;
 
 /// One Instance where its Transform puts it: the anchor and offset of its
-/// pivot, which do not change as the camera moves, and its rotation-scale.
+/// pivot, which do not change as the camera moves, and its rotation-scale;
+/// and its Mesh's Handle, or `NO_MESH`.
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct InstanceData {
@@ -35,6 +39,5 @@ pub struct InstanceData {
     pub anchor: [i32; 3],
     pub material_id: u32,
     pub offset: [f32; 3],
-    // WGSL rounds the storage stride to 16; pad so Rust matches (124 + 4 = 128).
-    pub _pad: u32,
+    pub mesh: u32,
 }

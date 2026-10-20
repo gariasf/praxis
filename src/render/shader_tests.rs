@@ -234,7 +234,7 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
             anchor,
             material_id,
             offset,
-            _pad,
+            mesh,
         }),
         twin!(MaterialData {
             base_color,
