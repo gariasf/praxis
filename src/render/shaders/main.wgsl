@@ -98,7 +98,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let view_direction = normalize(-in.camera_relative_position);
 
     var outgoing_radiance = vec3<f32>(0.0);
-    if light.light_counts.y > 0u {
+    if light.directional_light_count > 0u {
         outgoing_radiance += cook_torrance(
             normal,
             view_direction,
@@ -110,7 +110,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         );
     }
 
-    for (var light_index = 0u; light_index < light.light_counts.x; light_index++) {
+    for (var light_index = 0u; light_index < light.point_light_count; light_index++) {
         let light_vector = light.point_positions[light_index].xyz - in.camera_relative_position;
         let distance = length(light_vector);
         let attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * distance * distance);

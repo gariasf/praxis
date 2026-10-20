@@ -17,7 +17,7 @@ use crate::render::{FramePreparer, Renderer};
 use crate::scenes::{
     ReferenceScene, SCI_FI_HELMET, SWEEP_METALLIC, SWEEP_ROUGHNESS, spawn_far_coplanar,
     spawn_minification, spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep, spawn_texture_wall,
-    spawn_uv_grid, spin, sun, sweep_material_name,
+    spawn_uv_grid, spin, sweep_material_name,
 };
 use crate::stats::{FrameRecorder, FrameStats};
 use crate::threading::{init_compute_pool, single_threaded_schedule};
@@ -116,7 +116,7 @@ impl State {
                 [] => error,
                 absent => error.context(format!("absent sources: {}", absent.join(", "))),
             })?;
-        world.spawn(sun());
+        world.spawn(scene.sun());
         for &(position, light) in scene.point_lights() {
             world.spawn((Transform::from_translation(position), light));
         }

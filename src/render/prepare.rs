@@ -131,8 +131,8 @@ impl InstanceSlots {
 pub struct FramePreparer {
     directional_light_query: LightQuery<DirectionalLight>,
     point_light_query: LightQuery<PointLight>,
-    /// Set while the World holds directional lights past the first, which
-    /// were warned about when it was set.
+    /// Set while the ECS World holds directional lights past the first,
+    /// which were warned about when it was set.
     warned_of_undrawn_directional_lights: bool,
     renderable_query: RenderableQuery,
     instance_slots: InstanceSlots,
@@ -306,10 +306,10 @@ impl FramePreparer {
     }
 }
 
-/// The lights: the first directional light, shining along its entity's
-/// forward axis, the others not drawn and warned about when they appear; and
-/// point lights at their position relative to `camera_position`, past the
-/// uniform's four dropped.
+/// The lights: the first directional light the query yields, shining along
+/// its entity's forward axis, the others not drawn and warned about when they
+/// appear; and point lights at their position relative to `camera_position`,
+/// past the uniform's four dropped.
 fn prepare_lights(
     world: &World,
     directional_light_query: &mut LightQuery<DirectionalLight>,
@@ -325,13 +325,16 @@ fn prepare_lights(
     let mut directional_lights = directional_light_query.iter(world);
     if let Some((current, previous, directional_light)) = directional_lights.next() {
         let transform = current.drawn(previous, blend_weight);
-        let direction = (transform.0.matrix3 * glam::DVec3::NEG_Z).normalize();
-        light_uniform.direction = direction.as_vec3().extend(0.0).to_array();
-        light_uniform.color = directional_light
-            .color
-            .extend(directional_light.intensity)
-            .to_array();
-        light_uniform.light_counts[1] = 1;
+        // A zero scale, or a blend half way through a half turn, leaves no
+        // direction to shade with, so the light is not drawn.
+        if let Some(direction) = (transform.0.matrix3 * glam::DVec3::NEG_Z).try_normalize() {
+            light_uniform.direction = direction.as_vec3().extend(0.0).to_array();
+            light_uniform.color = directional_light
+                .color
+                .extend(directional_light.intensity)
+                .to_array();
+            light_uniform.directional_light_count = 1;
+        }
     }
     let undrawn = directional_lights.count();
     if undrawn > 0 && !*warned_of_undrawn_directional_lights {
@@ -351,7 +354,7 @@ fn prepare_lights(
             point_light.color.extend(point_light.intensity).to_array();
         count += 1;
     }
-    light_uniform.light_counts[0] = count as u32;
+    light_uniform.point_light_count = count as u32;
     light_uniform
 }
 
@@ -603,12 +606,30 @@ mod tests {
     }
 
     #[test]
-    fn a_world_without_a_directional_light_puts_none_in_frame_data() {
+    fn a_scene_without_a_directional_light_puts_none_in_frame_data() {
         let Some(mut frames) = Frames::new() else {
             return;
         };
         frames.prepare();
-        assert_eq!(frames.preparer.frame().light.light_counts[1], 0);
+        assert_eq!(frames.preparer.frame().light.directional_light_count, 0);
+    }
+
+    #[test]
+    fn a_directional_light_scaled_to_nothing_is_not_drawn() {
+        let Some(mut frames) = Frames::new() else {
+            return;
+        };
+        let flattened = Transform {
+            scale: glam::Vec3::ZERO,
+            ..Transform::IDENTITY
+        };
+        let light = DirectionalLight {
+            color: glam::Vec3::ONE,
+            intensity: 1.0,
+        };
+        frames.world.spawn((flattened, light));
+        frames.prepare();
+        assert_eq!(frames.preparer.frame().light.directional_light_count, 0);
     }
 
     #[test]
@@ -627,7 +648,7 @@ mod tests {
             for _ in 0..3 {
                 frames.prepare();
                 let light = &frames.preparer.frame().light;
-                assert_eq!(light.light_counts[1], 1);
+                assert_eq!(light.directional_light_count, 1);
                 assert_eq!(light.color, [1.0, 0.0, 0.0, 2.0]);
             }
         });

@@ -306,21 +306,30 @@ impl ReferenceScene {
             | Self::Orrery => &COLOURED_LIGHTS,
         }
     }
-}
 
-/// The directional light every Reference scene spawns: white, of intensity
-/// 1, its forward axis turned to shine along (0.5, -1, -0.3).
-pub(crate) fn sun() -> (Transform, DirectionalLight) {
-    let direction = glam::vec3(0.5, -1.0, -0.3).normalize();
-    let transform = Transform {
-        rotation: glam::Quat::from_rotation_arc(glam::Vec3::NEG_Z, direction),
-        ..Transform::IDENTITY
-    };
-    let light = DirectionalLight {
-        color: glam::Vec3::ONE,
-        intensity: 1.0,
-    };
-    (transform, light)
+    /// The scene's sun, white and of intensity 1: a directional light whose
+    /// forward axis is turned to shine along the scene's direction.
+    pub(crate) fn sun(self) -> (Transform, DirectionalLight) {
+        let direction = match self {
+            Self::Helmet
+            | Self::PbrSweep
+            | Self::UvGrid
+            | Self::NormalTangent
+            | Self::FarCoplanar
+            | Self::Orrery
+            | Self::Minification
+            | Self::TextureWall => glam::vec3(0.5, -1.0, -0.3),
+        };
+        let transform = Transform {
+            rotation: glam::Quat::from_rotation_arc(glam::Vec3::NEG_Z, direction.normalize()),
+            ..Transform::IDENTITY
+        };
+        let light = DirectionalLight {
+            color: glam::Vec3::ONE,
+            intensity: 1.0,
+        };
+        (transform, light)
+    }
 }
 
 /// Red, green, blue and yellow, 2 m up and 2 m from the origin along X and Z.

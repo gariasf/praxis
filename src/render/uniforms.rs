@@ -7,7 +7,9 @@ pub struct LightUniform {
 
     pub point_positions: [[f32; 4]; 4], // xyz = position relative to the camera, w = unused
     pub point_colors: [[f32; 4]; 4],    // rgb = color, a = intensity
-    pub light_counts: [u32; 4],         // x = point lights, y = directional lights, zw = padding
+    pub point_light_count: u32,
+    pub directional_light_count: u32, // 0 or 1: the uniform holds one directional light
+    pub _pad: [u32; 2],
 }
 
 #[repr(C)]
