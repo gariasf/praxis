@@ -245,7 +245,9 @@ impl Renderer {
 
     /// Records the copies of `frame`'s uniforms, the Instances it writes and
     /// its Instance slot count, if it changed, into the frame's encoder, which
-    /// `render` submits; every upload is followed by a render.
+    /// `render` submits; every upload is followed by a render. First it
+    /// submits the loads staged since the last frame, and, when they loaded
+    /// Meshes, waits for the GPU to build their BLASes and compacts them.
     pub fn upload(&mut self, frame: &FrameData, recorder: &mut FrameRecorder) {
         let started = Instant::now();
         debug_assert!(
@@ -389,14 +391,21 @@ impl Renderer {
                 .render_targets
                 .gpu_memory_bytes(self.transient_saves_memory)
             + self.culling_pass.gpu_memory_bytes()
-            + self
-                .mesh_pool
-                .gpu_memory_bytes(&self.acceleration_structure_bytes)
+            + self.mesh_pool.gpu_memory_bytes()
+            + self.estimated_acceleration_structure_bytes()
             + self
                 .material_pool
                 .gpu_memory_bytes(self.transient_saves_memory)
             + self.frame_staging.gpu_memory_bytes()
             + self.gpu_stats.gpu_memory_bytes()
+    }
+
+    /// Bytes of its acceleration structures, estimated from the bytes
+    /// measured on its backend, since wgpu exposes no acceleration-structure
+    /// size (ADR 0017).
+    pub fn estimated_acceleration_structure_bytes(&self) -> u64 {
+        self.mesh_pool
+            .estimated_blas_bytes(&self.acceleration_structure_bytes)
     }
 }
 

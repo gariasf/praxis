@@ -26,9 +26,14 @@ pub struct FrameStats {
     /// Renderables the full Instance buffer refused a slot, so not drawn.
     pub renderables_refused: u32,
     /// Bytes of the GPU buffers and textures the State created, its Pools
-    /// included, summed by the engine on every backend (ADR 0013). The
-    /// render target and capture's own buffers are the caller's.
+    /// included, summed by the engine on every backend (ADR 0013), and of
+    /// its acceleration structures, estimated. The render target and
+    /// capture's own buffers are the caller's.
     pub gpu_memory_bytes: u64,
+    /// Of `gpu_memory_bytes`, the acceleration structures', estimated from
+    /// the bytes measured on the backend, since wgpu exposes no
+    /// acceleration-structure size (ADR 0017).
+    pub estimated_acceleration_structure_bytes: u64,
     /// Bytes of the Arenas that hold Meshes, which `gpu_memory_bytes`
     /// counts whole whatever they hold.
     pub arena_bytes_in_use: u64,
@@ -110,8 +115,10 @@ impl std::fmt::Display for FrameStats {
             .map_or("none".to_owned(), |bytes| bytes.to_string());
         writeln!(
             formatter,
-            "gpu_memory bytes={} arena_bytes_in_use={} allocator_report_bytes={allocator_report_bytes}",
-            self.gpu_memory_bytes, self.arena_bytes_in_use
+            "gpu_memory bytes={} estimated_acceleration_structure_bytes={} arena_bytes_in_use={} allocator_report_bytes={allocator_report_bytes}",
+            self.gpu_memory_bytes,
+            self.estimated_acceleration_structure_bytes,
+            self.arena_bytes_in_use
         )
     }
 }

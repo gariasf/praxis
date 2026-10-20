@@ -20,8 +20,9 @@ pub struct MeshPool {
     /// Each Mesh's BLAS, at its Handle's index, built at load from its
     /// ranges of the vertex and index Arenas.
     blases: Vec<wgpu::Blas>,
-    /// The Meshes whose BLAS is built but not yet compacted.
-    uncompacted: Vec<MeshHandle>,
+    /// The Meshes whose BLAS is built but not yet compacted, with its
+    /// triangles.
+    awaiting_compaction: Vec<(MeshHandle, u64)>,
     /// Triangles of the BLASes compacted, and of the others.
     compacted_blas_triangles: u64,
     uncompacted_blas_triangles: u64,
@@ -44,7 +45,7 @@ impl MeshPool {
             device: device.clone(),
             meshes: Vec::new(),
             blases: Vec::new(),
-            uncompacted: Vec::new(),
+            awaiting_compaction: Vec::new(),
             compacted_blas_triangles: 0,
             uncompacted_blas_triangles: 0,
             // The vertex shader pulls from it (ADR 0019), BLAS builds read it.
@@ -259,9 +260,10 @@ impl MeshPool {
             "Mesh loaded"
         );
 
+        let blas_triangles = mesh.indices.len() as u64 / 3;
         self.blases.push(blas);
-        self.uncompacted.push(handle);
-        self.uncompacted_blas_triangles += triangle_count as u64;
+        self.awaiting_compaction.push((handle, blas_triangles));
+        self.uncompacted_blas_triangles += blas_triangles;
 
         self.meshes.push(Mesh {
             needs_material_handle: materials.contains(&None),
@@ -269,20 +271,21 @@ impl MeshPool {
         Some(handle)
     }
 
-    /// Compacts the BLASes built since the last call, after waiting for the
-    /// GPU to build them. A Mesh keeps its compacted BLAS, or the one built
-    /// where compaction failed, as logged.
+    /// Compacts the BLASes of the Meshes loaded since the last call, once
+    /// the staging their builds were recorded into is submitted: it waits
+    /// for the GPU to build them. A Mesh keeps its compacted BLAS, or the one
+    /// built where compaction failed, as logged.
     pub fn compact_blases(&mut self, queue: &wgpu::Queue) {
-        if self.uncompacted.is_empty() {
+        if self.awaiting_compaction.is_empty() {
             return;
         }
-        for handle in &self.uncompacted {
+        for &(handle, _) in &self.awaiting_compaction {
             self.blases[handle.0 as usize].prepare_compaction_async(|_| {});
         }
         if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
             tracing::error!(%error, "waiting for BLAS builds failed");
         }
-        for handle in self.uncompacted.drain(..) {
+        for (handle, triangles) in self.awaiting_compaction.drain(..) {
             let blas = &mut self.blases[handle.0 as usize];
             if !blas.ready_for_compaction() {
                 tracing::warn!(
@@ -292,7 +295,6 @@ impl MeshPool {
                 continue;
             }
             *blas = queue.compact_blas(blas);
-            let triangles = u64::from(self.meshes[handle.0 as usize].index_count / 3);
             self.uncompacted_blas_triangles -= triangles;
             self.compacted_blas_triangles += triangles;
         }
@@ -330,22 +332,25 @@ impl MeshPool {
         ]
     }
 
-    /// Bytes of the Arenas and the Mesh table, whatever they hold, and of the
-    /// BLASes, as `acceleration_structure_bytes` estimates them.
-    pub fn gpu_memory_bytes(
-        &self,
-        acceleration_structure_bytes: &AccelerationStructureBytes,
-    ) -> u64 {
-        let blas_bytes = self.compacted_blas_triangles as f64
-            * acceleration_structure_bytes.per_compacted_blas_triangle
-            + self.uncompacted_blas_triangles as f64
-                * acceleration_structure_bytes.per_blas_triangle;
+    /// Bytes of the Arenas and the Mesh table, whatever they hold.
+    pub fn gpu_memory_bytes(&self) -> u64 {
         self.arenas()
             .iter()
             .map(|arena| arena.buffer.size())
             .sum::<u64>()
             + self.mesh_table.size()
-            + blas_bytes.round() as u64
+    }
+
+    /// Bytes of the BLASes, as `acceleration_structure_bytes` estimates
+    /// them.
+    pub fn estimated_blas_bytes(
+        &self,
+        acceleration_structure_bytes: &AccelerationStructureBytes,
+    ) -> u64 {
+        acceleration_structure_bytes.blases(
+            self.compacted_blas_triangles,
+            self.uncompacted_blas_triangles,
+        )
     }
 
     /// Bytes of the Arenas that hold Meshes.
@@ -542,10 +547,11 @@ pub(crate) mod tests {
         assert_eq!(pulled, indices);
     }
 
-    /// A Mesh loaded after another, so that its ranges of the vertex and
-    /// index Arenas start past their first elements, is traced where its
-    /// triangle is once its BLAS is built and compacted; its BLAS counts by
-    /// the estimate's bytes per triangle, then per compacted triangle.
+    /// A Mesh loaded after one whose triangle is degenerate, so that its
+    /// ranges of the vertex and index Arenas start past their first elements,
+    /// is traced where its triangle is once its BLAS is built and compacted;
+    /// its BLAS counts by the estimate's bytes per triangle, then per
+    /// compacted triangle.
     #[test]
     fn a_meshs_blas_holds_its_triangle_from_its_arena_ranges_and_is_compacted() {
         let Some(context) = gpu_context() else {
@@ -557,16 +563,15 @@ pub(crate) mod tests {
         };
         let mut staging = LoadStaging::new(context.device.clone());
         let mut pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
-        let empty = pool.gpu_memory_bytes(&bytes);
-        pool.load(&mut staging, &mesh(3, vec![0, 1, 2]), &[None])
+        pool.load(&mut staging, &mesh(3, vec![0, 0, 0]), &[None])
             .expect("a triangle fits");
         let handle = pool
             .load(&mut staging, &triangle_about_x(), &[None])
             .expect("a triangle fits");
-        assert_eq!(pool.gpu_memory_bytes(&bytes), empty + 2 * 100);
+        assert_eq!(pool.estimated_blas_bytes(&bytes), 2 * 100);
         staging.submit(&context.queue);
         pool.compact_blases(&context.queue);
-        assert_eq!(pool.gpu_memory_bytes(&bytes), empty + 2 * 50);
+        assert_eq!(pool.estimated_blas_bytes(&bytes), 2 * 50);
 
         let mut tlas = context.device.create_tlas(&wgpu::CreateTlasDescriptor {
             label: Some("Test TLAS"),
@@ -590,7 +595,7 @@ pub(crate) mod tests {
 
     /// A one-Primitive Mesh of a triangle about (0.8, 0) in mesh space, at
     /// z 0.
-    pub(crate) fn triangle_about_x() -> CookedMesh {
+    fn triangle_about_x() -> CookedMesh {
         let mut triangle = mesh(3, vec![0, 1, 2]);
         triangle.vertices = [[0.6, -0.2], [1.0, -0.2], [0.8, 0.2]]
             .map(|[x, y]| CookedVertex {
@@ -603,7 +608,7 @@ pub(crate) mod tests {
 
     /// What a ray down -Z from 1 m above each of `points`, in `tlas`'s
     /// frame, hits within 2 m: the tag of the Instance it hits.
-    pub(crate) fn trace_down(
+    fn trace_down(
         context: &GpuContext,
         tlas: &wgpu::Tlas,
         points: &[[f32; 3]],
@@ -620,8 +625,9 @@ pub(crate) mod tests {
                 fn trace_down(@builtin(global_invocation_id) invocation: vec3<u32>) {
                     let origin = points[invocation.x].xyz + vec3(0.0, 0.0, 1.0);
                     let down = vec3(0.0, 0.0, -1.0);
+                    let ray = RayDesc(RAY_FLAG_NONE, 0xffu, 0.0, 2.0, origin, down);
                     var query: ray_query;
-                    rayQueryInitialize(&query, tlas, RayDesc(RAY_FLAG_NONE, 0xffu, 0.0, 2.0, origin, down));
+                    rayQueryInitialize(&query, tlas, ray);
                     while rayQueryProceed(&query) {}
                     let hit = rayQueryGetCommittedIntersection(&query);
                     let missed = hit.kind == RAY_QUERY_INTERSECTION_NONE;
@@ -789,8 +795,7 @@ pub(crate) mod tests {
         let mut pool = MeshPool::new(&context.device, CAPACITY);
         pool.load(&mut staging, &mesh(3, vec![0, 1, 2]), &[None])
             .expect("a triangle fits");
-        let bytes = AccelerationStructureBytes::estimate(context.backend());
-        let gpu_memory_bytes = pool.gpu_memory_bytes(&bytes);
+        let gpu_memory_bytes = pool.gpu_memory_bytes();
         let arena_bytes_in_use = pool.arena_bytes_in_use();
 
         // One vertex past the vertex Arena, then one index past the index
@@ -799,7 +804,7 @@ pub(crate) mod tests {
             let (handle, log) = logged(|| pool.load(&mut staging, &past_capacity, &[None]));
             assert!(handle.is_none(), "a Mesh past capacity loaded");
             assert!(log.contains("Mesh refused"), "not logged: {log:?}");
-            assert_eq!(pool.gpu_memory_bytes(&bytes), gpu_memory_bytes);
+            assert_eq!(pool.gpu_memory_bytes(), gpu_memory_bytes);
             assert_eq!(pool.arena_bytes_in_use(), arena_bytes_in_use);
         }
         // The second refusal gave back the last vertex it took.

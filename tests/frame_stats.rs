@@ -55,30 +55,36 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         wgpu::Backend::Vulkan => 104.0,
         _ => 45.5,
     };
-    // Five 1×1 RGBA8 neutral Textures, one per Channel (the spheres sample
-    // no other), the Mesh pool's five 16 MiB Arenas and its Mesh table of
-    // 65,536 Meshes of 40 bytes, the sphere's BLAS, 256 Materials of 80
-    // bytes, the camera and light uniforms, 524,288 Instances of 128 bytes,
-    // the culling pass's 4-byte Instance slot count and 8-byte offsets for
-    // each slot and block of 256 slots, the frame's draw of 2^20 Meshlet
-    // records of 12 bytes, 2^24 packed indices of 4 bytes and 28 bytes of
-    // indirect arguments and counts, the 160×90 Depth32Float texture at 4
-    // samples, its 4x RGBA8 colour, which Apple GPUs keep in tile memory, so
-    // it counts nothing on Metal, three staging slots of the first frame's
-    // 1572 uploaded bytes rounded up to 2048, and the GPU stats readback: its
-    // resolve buffer of a begin and an end timestamp of 8 bytes for each of
-    // the three passes, and six slots of 80 bytes. The load's staging is
-    // gone.
+    let acceleration_structure_bytes =
+        (triangles as f64 * compacted_blas_bytes_per_triangle).round() as u64;
+    assert_eq!(
+        last.estimated_acceleration_structure_bytes,
+        acceleration_structure_bytes
+    );
+    // The acceleration structures, five 1×1 RGBA8 neutral Textures, one per
+    // Channel (the spheres sample no other), the Mesh pool's five 16 MiB
+    // Arenas and its Mesh table of 65,536 Meshes of 40 bytes, 256 Materials
+    // of 80 bytes, the camera and light uniforms, 524,288 Instances of 128
+    // bytes, the culling pass's 4-byte Instance slot count and 8-byte
+    // offsets for each slot and block of 256 slots, the frame's draw of 2^20
+    // Meshlet records of 12 bytes, 2^24 packed indices of 4 bytes and 28
+    // bytes of indirect arguments and counts, the 160×90 Depth32Float
+    // texture at 4 samples, its 4x RGBA8 colour, which Apple GPUs keep in
+    // tile memory, so it counts nothing on Metal, three staging slots of the
+    // first frame's 1572 uploaded bytes rounded up to 2048, and the GPU stats
+    // readback: its resolve buffer of a begin and an end timestamp of 8 bytes
+    // for each of the three passes, and six slots of 80 bytes. The load's
+    // staging is gone.
     let multisampled_color = match context.backend() {
         wgpu::Backend::Metal => 0,
         _ => 160 * 90 * 4 * 4,
     };
     assert_eq!(
         last.gpu_memory_bytes,
-        5 * 4
+        acceleration_structure_bytes
+            + 5 * 4
             + 5 * 16 * MEBIBYTE
             + 65_536 * 40
-            + (triangles as f64 * compacted_blas_bytes_per_triangle).round() as u64
             + 256 * 80
             + 96
             + 192
