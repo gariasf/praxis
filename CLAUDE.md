@@ -211,6 +211,10 @@ When reviewing changes, check for:
       f32 offset, composed camera-relative (ADR 0014)
 - [ ] Depth is cleared to 0 and compared with `Greater`, with no far
       plane; shadow and Hi-Z passes follow the same direction (ADR 0015)
+- [ ] Light values are photometric as glTF defines them (lux, candela,
+      cd/m²) and exposure is an EV100; HDR colour is pre-exposed before
+      fp16 stores it and clamped to 65504, so no backend sees infinity
+      (ADR 0023)
 - [ ] Matrices reach WGSL column-major (glam `to_cols_array_2d`); a
       `mat3x3` or `array<vec3>` field is padded per column or element
       on the Rust side (the test compares sizes, not strides)
