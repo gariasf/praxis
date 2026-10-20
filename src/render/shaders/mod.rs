@@ -1,9 +1,9 @@
 //! The WGSL shader modules, each assembled from ordered parts in this
 //! directory, so passes share structs and functions without copying them,
-//! after the constants Rust shares with WGSL and its bindings' declarations,
-//! both generated from Rust (`assemble`, `render::bind_groups`). A
-//! function under an oracle lives in a shared part, which the oracle harness
-//! assembles with its kernel alone.
+//! after the constants Rust shares with WGSL, the Render switches' overrides
+//! and its bindings' declarations, all generated from Rust (`assemble`,
+//! `render::bind_groups`). A function under an oracle lives in a shared
+//! part, which the oracle harness assembles with its kernel alone.
 
 use crate::cooked::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use crate::render::bind_groups::{
@@ -11,6 +11,7 @@ use crate::render::bind_groups::{
 };
 use crate::render::culling_pass::SCAN_BLOCK_SIZE;
 use crate::render::instance::{ANCHOR_CELL_SIZE, INSTANCE_CAPACITY, NO_MATERIAL, NO_MESH};
+use crate::render::renderer::RenderSwitches;
 
 // A packed index holds a Meshlet vertex in whole bits.
 const _: () = assert!(MESHLET_MAX_VERTICES.is_power_of_two());
@@ -64,7 +65,7 @@ pub const MAIN: ShaderModule = ShaderModule {
 pub const CULLING: ShaderModule = ShaderModule {
     name: "culling",
     enables: &[],
-    bind_groups: &[&SCENE_GEOMETRY, &FRAME_DRAW],
+    bind_groups: &[&FRAME, &SCENE_GEOMETRY, &FRAME_DRAW],
     parts: &[COMMON, part!("culling.wgsl")],
 };
 
@@ -113,9 +114,11 @@ impl ShaderModule {
     }
 
     /// The module's WGSL, an `enable` directive per extension first, since
-    /// directives precede every declaration, then the constants Rust shares
-    /// and the declarations of its bind groups' bindings, then each part on
-    /// lines of its own; and the byte offset where each part starts.
+    /// directives precede every declaration, then the constants Rust shares,
+    /// an `override` per Render switch, which has no default so a pipeline
+    /// that uses it must set it, and the declarations of its bind groups'
+    /// bindings, then each part on lines of its own; and the byte offset
+    /// where each part starts.
     fn assemble(&self) -> (String, Vec<usize>) {
         let mut source: String = self
             .enables
@@ -133,6 +136,9 @@ impl ShaderModule {
             ANCHOR_CELL_SIZE as f32,
             MESHLET_MAX_VERTICES.ilog2()
         ));
+        for (switch, _) in RenderSwitches::default().constants() {
+            source.push_str(&format!("override {switch}: bool;\n"));
+        }
         for bind_group in self.bind_groups {
             source.push_str(&bind_group.declarations());
         }

@@ -1,13 +1,14 @@
 //! The culling pass: a compute pass that builds the frame's draw from the
 //! Instances, a Meshlet record per Meshlet of each Instance and a packed
 //! index per triangle corner, in slot order, which the main pass draws with
-//! one indirect call (ADR 0019). It appends every Instance in use; culling
-//! them is #196's.
+//! one indirect call (ADR 0019). With the `culling` Render switch on, it
+//! draws only the Instances whose Mesh bounds reach into the view frustum.
 
 use crate::cooked::MESHLET_MAX_VERTICES;
 use crate::render::INSTANCE_CAPACITY;
 use crate::render::bind_groups::{BindGroupDefinition, FRAME_DRAW, pipeline_layout};
 use crate::render::prepare::FrameData;
+use crate::render::renderer::RenderSwitches;
 use crate::render::shaders;
 
 /// The culling pass's label.
@@ -61,11 +62,12 @@ pub struct CullingPass {
 
 impl CullingPass {
     /// The pass, given the layouts of the shared bind groups its shader
-    /// module declares, with its draw of `capacity`.
+    /// module declares, with its draw of `capacity`, as `switches` set.
     pub fn new(
         device: &wgpu::Device,
         bind_group_layouts: &[(&BindGroupDefinition, &wgpu::BindGroupLayout)],
         capacity: DrawCapacity,
+        switches: RenderSwitches,
     ) -> CullingPass {
         // A record above its Meshlet vertex's bits, short of the all-ones
         // index.
@@ -128,13 +130,17 @@ impl CullingPass {
         let mut layouts = bind_group_layouts.to_vec();
         layouts.push((&FRAME_DRAW, &frame_draw_layout));
         let layout = pipeline_layout(device, "Culling Pass Pipeline Layout", &layouts);
+        let constants = switches.constants();
         let pipeline = |entry_point| {
             device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                 label: Some(entry_point),
                 layout: Some(&layout),
                 module: &shader,
                 entry_point: Some(entry_point),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &constants,
+                    ..wgpu::PipelineCompilationOptions::default()
+                },
                 cache: None,
             })
         };
@@ -155,10 +161,11 @@ impl CullingPass {
     }
 
     /// Records the pass into `encoder`: clears the frame's draw, then
-    /// appends the Meshlets of the Instances in `frame`'s slots in use, with
-    /// `bind_groups` set, timed into `timestamp_writes`. Where they need more
-    /// Meshlet records or packed indices than the draw holds, it draws the
-    /// Instances that fit, warned about once until they all fit again.
+    /// appends the Meshlets of the Instances it draws among `frame`'s slots
+    /// in use, with `bind_groups` set, timed into `timestamp_writes`. Where
+    /// they need more Meshlet records or packed indices than the draw holds,
+    /// it draws the Instances that fit. It warns, once until they fit again,
+    /// where every Instance in use, culled or not, would need more.
     pub fn record(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,

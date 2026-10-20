@@ -13,7 +13,7 @@ use crate::cooked::{
 use crate::gpu::GpuContext;
 use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
 use crate::input::{Input, clear_just_pressed};
-use crate::render::{FramePreparer, Renderer};
+use crate::render::{FramePreparer, RenderSwitches, Renderer};
 use crate::scenes::{
     ReferenceScene, SCI_FI_HELMET, SWEEP_METALLIC, SWEEP_ROUGHNESS, spawn_far_coplanar,
     spawn_minification, spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep, spawn_texture_wall,
@@ -59,7 +59,13 @@ impl State {
         let _span = tracing::info_span!("state_init").entered();
         init_compute_pool();
 
-        let mut renderer = Renderer::new(context, target_format, width, height);
+        let mut renderer = Renderer::new(
+            context,
+            target_format,
+            width,
+            height,
+            RenderSwitches::default(),
+        );
         let Renderer {
             device,
             mesh_pool,

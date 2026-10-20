@@ -454,7 +454,7 @@ pub(crate) mod tests {
 
     /// The first `count` elements of `buffer`, a storage buffer, as a shader
     /// reads them.
-    fn read_storage<T: bytemuck::Pod>(
+    pub(crate) fn read_storage<T: bytemuck::Pod>(
         context: &GpuContext,
         buffer: &wgpu::Buffer,
         count: usize,

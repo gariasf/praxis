@@ -23,7 +23,8 @@ pub struct FrameData {
     /// has taken. The GPU draws each, but a freed one.
     pub instance_slot_count: u32,
     /// The Meshlets of the Instances in those slots, and their triangles'
-    /// indices: the Meshlet records and packed indices of the frame's draw.
+    /// indices: the most Meshlet records and packed indices the frame's draw
+    /// holds, where culling leaves every Instance in.
     pub meshlet_count: u64,
     pub index_count: u64,
     /// The Instances this frame writes, in `instance_writes` order; every
