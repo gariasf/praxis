@@ -151,7 +151,7 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
             ambient,
             point_positions,
             point_colors,
-            num_point_lights,
+            light_counts,
         }),
         twin!(InstanceData {
             rotation_scale,

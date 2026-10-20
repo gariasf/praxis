@@ -44,7 +44,8 @@ struct LightUniform {
     // Point light
     point_positions: array<vec4<f32>, 4>,
     point_colors: array<vec4<f32>, 4>,
-    num_point_lights: vec4<f32>,
+    // x = point lights, y = directional lights
+    light_counts: vec4<u32>,
 }
 
 // An Instance's pivot as anchor plus offset, so camera motion changes no

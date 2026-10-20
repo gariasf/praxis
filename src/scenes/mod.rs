@@ -6,7 +6,7 @@ use bevy_ecs::prelude::*;
 
 use crate::assets::{AssetLoader, MaterialChannel};
 use crate::camera::Camera;
-use crate::components::{MaterialRef, MeshRef, PointLight, Transform};
+use crate::components::{DirectionalLight, MaterialRef, MeshRef, PointLight, Transform};
 #[cfg(feature = "cook")]
 use crate::cook::LoadedImage;
 #[cfg(feature = "cook")]
@@ -306,6 +306,21 @@ impl ReferenceScene {
             | Self::Orrery => &COLOURED_LIGHTS,
         }
     }
+}
+
+/// The directional light every Reference scene spawns: white, of intensity
+/// 1, its forward axis turned to shine along (0.5, -1, -0.3).
+pub(crate) fn sun() -> (Transform, DirectionalLight) {
+    let direction = glam::vec3(0.5, -1.0, -0.3).normalize();
+    let transform = Transform {
+        rotation: glam::Quat::from_rotation_arc(glam::Vec3::NEG_Z, direction),
+        ..Transform::IDENTITY
+    };
+    let light = DirectionalLight {
+        color: glam::Vec3::ONE,
+        intensity: 1.0,
+    };
+    (transform, light)
 }
 
 /// Red, green, blue and yellow, 2 m up and 2 m from the origin along X and Z.

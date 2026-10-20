@@ -4,7 +4,7 @@ use bevy_ecs::prelude::*;
 
 use crate::assets::MeshPool;
 use crate::camera::{Camera, projection_matrix};
-use crate::components::{MaterialRef, MeshRef, PointLight};
+use crate::components::{DirectionalLight, MaterialRef, MeshRef, PointLight};
 use crate::render::instance::{anchor_and_offset, padded_columns};
 use crate::render::{CameraUniform, INSTANCE_CAPACITY, InstanceData, LightUniform};
 use crate::time::FixedTime;
@@ -28,11 +28,11 @@ const _: () = {
     assert_send_static::<FrameData>()
 };
 
-/// The point lights, with what blends the moving ones.
-type PointLightQuery = QueryState<(
+/// The lights of one kind, with what blends the moving ones.
+type LightQuery<Light> = QueryState<(
     &'static WorldTransform,
     Option<&'static PreviousWorldTransform>,
-    &'static PointLight,
+    &'static Light,
 )>;
 
 /// The Renderables, with what blends the moving ones and the changes that
@@ -129,7 +129,11 @@ impl InstanceSlots {
 /// what makes that cheap: the Renderables' Instance slots, the queries and
 /// the Frame data's memory.
 pub struct FramePreparer {
-    point_light_query: PointLightQuery,
+    directional_light_query: LightQuery<DirectionalLight>,
+    point_light_query: LightQuery<PointLight>,
+    /// Set while the World holds directional lights past the first, which
+    /// were warned about when it was set.
+    warned_of_undrawn_directional_lights: bool,
     renderable_query: RenderableQuery,
     instance_slots: InstanceSlots,
     /// Set by `rewrite_all_instances` until the next `prepare`.
@@ -141,7 +145,9 @@ pub struct FramePreparer {
 impl FramePreparer {
     pub fn new(world: &mut World) -> Self {
         Self {
+            directional_light_query: world.query(),
             point_light_query: world.query(),
+            warned_of_undrawn_directional_lights: false,
             renderable_query: world.query(),
             instance_slots: InstanceSlots::default(),
             rewrite_every_instance: false,
@@ -171,7 +177,9 @@ impl FramePreparer {
         aspect_ratio: f32,
     ) -> &FrameData {
         let Self {
+            directional_light_query,
             point_light_query,
+            warned_of_undrawn_directional_lights,
             renderable_query,
             instance_slots,
             rewrite_every_instance,
@@ -189,7 +197,14 @@ impl FramePreparer {
             ..CameraUniform::default()
         };
         let blend_weight = world.resource::<FixedTime>().blend_weight;
-        frame.light = prepare_lights(world, point_light_query, camera_position, blend_weight);
+        frame.light = prepare_lights(
+            world,
+            directional_light_query,
+            point_light_query,
+            warned_of_undrawn_directional_lights,
+            camera_position,
+            blend_weight,
+        );
 
         frame.instances.clear();
         frame.instance_writes.clear();
@@ -291,22 +306,41 @@ impl FramePreparer {
     }
 }
 
-/// The lights, point lights at their position relative to `camera_position`;
-/// past the uniform's four, the rest are dropped.
+/// The lights: the first directional light, shining along its entity's
+/// forward axis, the others not drawn and warned about when they appear; and
+/// point lights at their position relative to `camera_position`, past the
+/// uniform's four dropped.
 fn prepare_lights(
     world: &World,
-    point_light_query: &mut PointLightQuery,
+    directional_light_query: &mut LightQuery<DirectionalLight>,
+    point_light_query: &mut LightQuery<PointLight>,
+    warned_of_undrawn_directional_lights: &mut bool,
     camera_position: glam::DVec3,
     blend_weight: f32,
 ) -> LightUniform {
     let mut light_uniform = LightUniform {
-        direction: [0.5, -1.0, -0.3, 0.0],
-        color: [1.0, 1.0, 1.0, 1.0],
         ambient: [1.0, 1.0, 1.0, 0.1],
-        point_positions: [[0.0; 4]; 4],
-        point_colors: [[0.0; 4]; 4],
-        num_point_lights: [0.0; 4],
+        ..LightUniform::default()
     };
+    let mut directional_lights = directional_light_query.iter(world);
+    if let Some((current, previous, directional_light)) = directional_lights.next() {
+        let transform = current.drawn(previous, blend_weight);
+        let direction = (transform.0.matrix3 * glam::DVec3::NEG_Z).normalize();
+        light_uniform.direction = direction.as_vec3().extend(0.0).to_array();
+        light_uniform.color = directional_light
+            .color
+            .extend(directional_light.intensity)
+            .to_array();
+        light_uniform.light_counts[1] = 1;
+    }
+    let undrawn = directional_lights.count();
+    if undrawn > 0 && !*warned_of_undrawn_directional_lights {
+        tracing::warn!(
+            undrawn,
+            "Directional lights past the first are not drawn: the light uniform holds one"
+        );
+    }
+    *warned_of_undrawn_directional_lights = undrawn > 0;
     let mut count = 0;
     let capacity = light_uniform.point_positions.len();
     for (current, previous, point_light) in point_light_query.iter(world).take(capacity) {
@@ -317,7 +351,7 @@ fn prepare_lights(
             point_light.color.extend(point_light.intensity).to_array();
         count += 1;
     }
-    light_uniform.num_point_lights[0] = count as f32;
+    light_uniform.light_counts[0] = count as u32;
     light_uniform
 }
 
@@ -566,6 +600,69 @@ mod tests {
         frames.world.entity_mut(entity).insert(MeshRef(bare_mesh));
         assert!(written_material_ids(&mut frames).is_empty());
         assert!(frames.preparer.frame().draws.is_empty());
+    }
+
+    #[test]
+    fn a_world_without_a_directional_light_puts_none_in_frame_data() {
+        let Some(mut frames) = Frames::new() else {
+            return;
+        };
+        frames.prepare();
+        assert_eq!(frames.preparer.frame().light.light_counts[1], 0);
+    }
+
+    #[test]
+    fn a_second_directional_light_is_warned_about_once_and_not_drawn() {
+        let Some(mut frames) = Frames::new() else {
+            return;
+        };
+        for color in [glam::Vec3::X, glam::Vec3::Y] {
+            let light = DirectionalLight {
+                color,
+                intensity: 2.0,
+            };
+            frames.world.spawn((Transform::IDENTITY, light));
+        }
+        let ((), log) = logged(|| {
+            for _ in 0..3 {
+                frames.prepare();
+                let light = &frames.preparer.frame().light;
+                assert_eq!(light.light_counts[1], 1);
+                assert_eq!(light.color, [1.0, 0.0, 0.0, 2.0]);
+            }
+        });
+        assert_eq!(log.matches("not drawn").count(), 1, "{log:?}");
+    }
+
+    #[test]
+    fn a_directional_light_shines_along_its_forward_axis_blended_between_ticks() {
+        let Some(mut frames) = Frames::new() else {
+            return;
+        };
+        // A quarter turn about +X takes the forward axis (-Z) straight down;
+        // half a Tick on from an unturned Tick, it is drawn half way there.
+        frames.world.resource_mut::<FixedTime>().blend_weight = 0.5;
+        let turned = Transform {
+            rotation: glam::Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
+            ..Transform::IDENTITY
+        };
+        let light = DirectionalLight {
+            color: glam::Vec3::ONE,
+            intensity: 1.0,
+        };
+        let previous = PreviousWorldTransform(Some(glam::DAffine3::IDENTITY));
+        frames.world.spawn((turned, light, previous));
+        frames.prepare();
+        let direction = frames.preparer.frame().light.direction;
+        let half_way = -std::f32::consts::FRAC_1_SQRT_2;
+        let expected = [0.0, half_way, half_way, 0.0];
+        assert!(
+            direction
+                .iter()
+                .zip(expected)
+                .all(|(component, expected)| (component - expected).abs() <= 1e-6),
+            "{direction:?}, not {expected:?}"
+        );
     }
 
     #[test]
