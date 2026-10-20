@@ -22,6 +22,9 @@ pub fn padded_columns(matrix: glam::Mat3) -> [[f32; 4]; 3] {
     [matrix.x_axis, matrix.y_axis, matrix.z_axis].map(|column| column.extend(0.0).to_array())
 }
 
+/// The Material ID of a Primitive that names no Material.
+pub const NO_MATERIAL: u32 = u32::MAX;
+
 /// One Instance where its Transform puts it: the anchor and offset of its
 /// pivot, which do not change as the camera moves, and its rotation-scale.
 #[repr(C)]

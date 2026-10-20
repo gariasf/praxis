@@ -399,7 +399,11 @@ mod tests {
             let mut staging = LoadStaging::new(context.device.clone());
             let mut mesh_pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
             let mesh = mesh_pool
-                .load(&mut staging, &mesh(3, vec![0, 1, 2]), Some(MESH_MATERIAL))
+                .load(
+                    &mut staging,
+                    &mesh(3, vec![0, 1, 2]),
+                    &[Some(MESH_MATERIAL)],
+                )
                 .expect("a triangle fits");
             let mut world = World::new();
             world.insert_resource(Camera::new());
@@ -567,7 +571,7 @@ mod tests {
             let mesh =
                 frames
                     .mesh_pool
-                    .load(&mut frames.staging, &mesh(3, vec![0, 1, 2]), material);
+                    .load(&mut frames.staging, &mesh(3, vec![0, 1, 2]), &[material]);
             mesh.expect("a triangle fits")
         });
         let entity = frames

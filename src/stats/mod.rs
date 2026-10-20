@@ -27,8 +27,8 @@ pub struct FrameStats {
     /// included, summed by the engine on every backend (ADR 0013). The
     /// render target and capture's own buffers are the caller's.
     pub gpu_memory_bytes: u64,
-    /// Bytes of the vertex and index Arenas that hold Meshes, which
-    /// `gpu_memory_bytes` counts whole whatever they hold.
+    /// Bytes of the Arenas that hold Meshes, which `gpu_memory_bytes`
+    /// counts whole whatever they hold.
     pub arena_bytes_in_use: u64,
     /// wgpu's allocator report, a diagnostic only; Metal has none.
     pub allocator_report_bytes: Option<u64>,

@@ -2,6 +2,9 @@ use std::io::Write;
 use std::time::Duration;
 
 use praxis::ReferenceScene;
+use praxis::cooked::{
+    AssetId, AssetKind, AssetName, AssetSource, COOKED_CACHE_DIRECTORY, CookedCache,
+};
 use praxis::gpu::GpuContext;
 
 const MEBIBYTE: u64 = 1 << 20;
@@ -41,22 +44,50 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     assert_eq!(frames[0].uploaded_bytes, 10 * 128 + 96 + 192);
     assert_eq!(last.uploaded_bytes, 96 + 192);
     // Five 1×1 RGBA8 neutral Textures, one per Channel (the spheres sample
-    // no other), the 16 MiB vertex and index Arenas, 256 Materials of 80
-    // bytes, the camera and light uniforms, 524,288 Instances of 128 bytes,
-    // the 160×90 Depth32Float texture, and three staging slots of the first
-    // frame's 1568 uploaded bytes rounded up to 2048. The load's staging is
-    // gone.
+    // no other), the Mesh pool's five 16 MiB Arenas and its Mesh table of
+    // 65,536 Meshes of 40 bytes, 256 Materials of 80 bytes, the camera and
+    // light uniforms, 524,288 Instances of 128 bytes, the 160×90
+    // Depth32Float texture, and three staging slots of the first frame's
+    // 1568 uploaded bytes rounded up to 2048. The load's staging is gone.
     assert_eq!(
         last.gpu_memory_bytes,
-        5 * 4 + 2 * 16 * MEBIBYTE + 256 * 80 + 96 + 192 + 524_288 * 128 + 160 * 90 * 4 + 3 * 2048
+        5 * 4
+            + 5 * 16 * MEBIBYTE
+            + 65_536 * 40
+            + 256 * 80
+            + 96
+            + 192
+            + 524_288 * 128
+            + 160 * 90 * 4
+            + 3 * 2048
     );
     // One UV sphere in the Arenas: 48 × 24 quads of two triangles but one at
     // each pole, of three u32s, and 25 rings of 49 vertices of 28 bytes, less
     // the one vertex at each pole that only a dropped triangle used, which
-    // the cook's weld drops.
+    // the cook's weld drops; and its Meshlets as its Blob holds them, 16
+    // bytes each, with a u32 per triangle and per Meshlet vertex.
+    let triangles = 48 * 24 * 2 - 2 * 48;
+    let sphere = CookedCache::new(COOKED_CACHE_DIRECTORY)
+        .mesh(AssetId::new(
+            AssetSource::Scene(ReferenceScene::PbrSweep.name()),
+            AssetKind::Mesh,
+            AssetName::Name("sphere"),
+        ))
+        .expect("capture cooked the sphere");
+    let meshlets = || {
+        sphere
+            .primitives
+            .iter()
+            .flat_map(|primitive| &primitive.meshlets)
+    };
+    let meshlet_vertices: usize = meshlets().map(|meshlet| meshlet.vertices.len()).sum();
     assert_eq!(
         last.arena_bytes_in_use,
-        (25 * 49 - 2) * 28 + (48 * 24 * 2 - 2 * 48) * 3 * 4
+        (25 * 49 - 2) * 28
+            + triangles * 3 * 4
+            + meshlets().count() as u64 * 16
+            + meshlet_vertices as u64 * 4
+            + triangles * 4
     );
 
     let timed: Vec<&str> = last
