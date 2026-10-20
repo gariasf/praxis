@@ -1,8 +1,9 @@
-// The culling pass's entry points, after the shared parts: they append every
-// Instance's Meshlets to the frame's draw in slot order, which the main pass
-// draws with one indirect call (ADR 0019); culling them first is #196's. Its
-// bindings are declared from their bind groups' definitions
-// (src/render/bind_groups.rs).
+// The culling pass's entry points, after the shared parts: they append the
+// Meshlets of the Instances they draw to the frame's draw in slot order,
+// which the main pass draws with one indirect call (ADR 0019). With the
+// CULLING Render switch on, they draw only the Instances whose Mesh bounds
+// reach into the view frustum. Its bindings are declared from their bind
+// groups' definitions (src/render/bind_groups.rs).
 //
 // Slot order keeps the draw the same from run to run: on the M4 Pro, which
 // triangles a draw holds before another changes the derivatives some pixels
@@ -19,6 +20,10 @@ struct FrameDraw {
 }
 
 var<workgroup> scan: array<vec2<u32>, SCAN_BLOCK_SIZE>;
+
+// The offsets of a slot the pass does not draw, freed or culled: past every
+// capacity, as a sum past a u32 saturates to.
+const NOT_DRAWN = vec2<u32>(0xffffffffu);
 
 // `sum + addend`, or the most a u32 holds where that would pass it: past
 // every capacity, as the sum it stands for is.
@@ -47,23 +52,71 @@ fn exclusive_scan(invocation: u32, value: vec2<u32>) -> vec2<u32> {
     return before;
 }
 
+// Whether an Instance's Mesh bounds reach into the view frustum, which clip
+// space bounds by −w ≤ x ≤ w, −w ≤ y ≤ w and the near plane, z ≤ w; with
+// reverse-Z and no far plane, every point past the near plane lands at
+// z ≥ 0, so there is no fifth plane (ADR 0015). The box, its centre composed
+// relative to the camera as its vertices are (ADR 0014), is outside only
+// where it lies wholly beyond one plane: where its centre's distance from
+// the plane, less its half axes' distances summed whole, is negative.
+fn in_view_frustum(instance: InstanceData, mesh: MeshData) -> bool {
+    let bounds_min = vec3<f32>(mesh.bounds_min[0], mesh.bounds_min[1], mesh.bounds_min[2]);
+    let bounds_max = vec3<f32>(mesh.bounds_max[0], mesh.bounds_max[1], mesh.bounds_max[2]);
+    let half_extent = 0.5 * (bounds_max - bounds_min);
+    let center = camera_relative_position(
+        instance.anchor,
+        instance.offset,
+        camera.anchor,
+        camera.offset,
+        instance.rotation_scale * (0.5 * (bounds_min + bounds_max))
+    );
+    let clip_center = camera.view_proj * vec4<f32>(center, 1.0);
+    let clip_half_axes = camera.view_proj * mat3x4<f32>(
+        vec4<f32>(instance.rotation_scale[0] * half_extent.x, 0.0),
+        vec4<f32>(instance.rotation_scale[1] * half_extent.y, 0.0),
+        vec4<f32>(instance.rotation_scale[2] * half_extent.z, 0.0),
+    );
+    // Each plane as the coefficients of a clip position that is inside it
+    // where their product is positive.
+    var planes = array<vec4<f32>, 5>(
+        vec4<f32>(1.0, 0.0, 0.0, 1.0),
+        vec4<f32>(-1.0, 0.0, 0.0, 1.0),
+        vec4<f32>(0.0, 1.0, 0.0, 1.0),
+        vec4<f32>(0.0, -1.0, 0.0, 1.0),
+        vec4<f32>(0.0, 0.0, -1.0, 1.0),
+    );
+    for (var plane = 0u; plane < 5u; plane++) {
+        let reach = dot(abs(planes[plane] * clip_half_axes), vec3<f32>(1.0));
+        if dot(planes[plane], clip_center) + reach < 0.0 {
+            return false;
+        }
+    }
+    return true;
+}
+
 // A workgroup per block of SCAN_BLOCK_SIZE slots: each slot's Meshlet
-// records and packed indices, its Instance's or none, summed over the block's
-// earlier slots into its offsets, and the block's sum after every slot's.
+// records and packed indices, its Instance's where the pass draws it or none,
+// summed over the block's earlier slots into its offsets, NOT_DRAWN in their
+// place where it is not drawn, and the block's sum after every slot's.
 @compute @workgroup_size(SCAN_BLOCK_SIZE)
 fn offset_slots(
     @builtin(workgroup_id) block: vec3<u32>,
     @builtin(local_invocation_index) invocation: u32
 ) {
     let slot = block.x * SCAN_BLOCK_SIZE + invocation;
+    var drawn = false;
     var counts = vec2<u32>(0u);
     if slot < instance_slot_count && instances[slot].mesh != NO_MESH {
-        let mesh = meshes[instances[slot].mesh];
-        counts = vec2<u32>(mesh.meshlet_count, 3u * mesh.triangle_count);
+        let instance = instances[slot];
+        let mesh = meshes[instance.mesh];
+        drawn = !CULLING || in_view_frustum(instance, mesh);
+        if drawn {
+            counts = vec2<u32>(mesh.meshlet_count, 3u * mesh.triangle_count);
+        }
     }
     let offset = exclusive_scan(invocation, counts);
     if slot < instance_slot_count {
-        instance_offsets[slot] = offset;
+        instance_offsets[slot] = select(NOT_DRAWN, offset, drawn);
     }
     if invocation == SCAN_BLOCK_SIZE - 1u {
         instance_offsets[INSTANCE_CAPACITY + block.x] = saturating_add(offset, counts);
@@ -101,9 +154,10 @@ fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
 
 // A workgroup per Instance slot, dispatched in rows of at most 65,535, and
 // an invocation per triangle of a Meshlet: writes the Instance's Meshlet
-// records and packed indices from its offsets. Where they would pass either
-// buffer's end, neither it nor any Instance after it is drawn, so the draw
-// ends at the last Instance that fits, and every index before is written.
+// records and packed indices from its offsets, unless they are NOT_DRAWN.
+// Where they would pass either buffer's end, neither it nor any Instance
+// after it is drawn, so the draw ends at the last Instance that fits, and
+// every index before is written.
 // ponytail: a workgroup per Instance idles most invocations on small Meshes;
 // split it into a pass per Instance and one per Meshlet when a profile of a
 // dense scene names it.
@@ -114,7 +168,7 @@ fn append_meshlets(
     @builtin(local_invocation_index) triangle: u32
 ) {
     let slot = workgroup.y * workgroups.x + workgroup.x;
-    if slot >= instance_slot_count || instances[slot].mesh == NO_MESH {
+    if slot >= instance_slot_count || all(instance_offsets[slot] == NOT_DRAWN) {
         return;
     }
     let instance = instances[slot];

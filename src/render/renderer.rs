@@ -12,6 +12,29 @@ use crate::render::{
 };
 use crate::stats::FrameRecorder;
 
+/// The Render switches a Renderer is created with and keeps. The defaults are
+/// what ships; only capture and bench pass others.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RenderSwitches {
+    /// Whether the culling pass draws only the Instances whose Mesh bounds
+    /// reach into the view frustum, rather than every Instance in use.
+    pub culling: bool,
+}
+
+impl Default for RenderSwitches {
+    fn default() -> Self {
+        Self { culling: true }
+    }
+}
+
+impl RenderSwitches {
+    /// Each switch by the name of the WGSL `override` that every shader
+    /// module declares for it, with its value as a pipeline sets it.
+    pub(crate) fn constants(&self) -> [(&'static str, f64); 1] {
+        [("CULLING", f64::from(u8::from(self.culling)))]
+    }
+}
+
 /// Draws Frame data into a target view, the window's surface or an offscreen
 /// texture, from GPU resources and Pools it owns; it reads no ECS World. It
 /// holds the bind groups passes share and the render targets, and calls the
@@ -47,18 +70,20 @@ pub struct Renderer {
 
 impl Renderer {
     /// A Renderer with empty Pools that draws into `width` × `height` views of
-    /// `target_format` textures, both non-zero.
+    /// `target_format` textures, both non-zero, as `switches` set.
     pub fn new(
         context: &GpuContext,
         target_format: wgpu::TextureFormat,
         width: u32,
         height: u32,
+        switches: RenderSwitches,
     ) -> Renderer {
         Self::with_draw_capacity(
             context,
             target_format,
             width,
             height,
+            switches,
             DrawCapacity::PROVISIONAL,
         )
     }
@@ -69,6 +94,7 @@ impl Renderer {
         target_format: wgpu::TextureFormat,
         width: u32,
         height: u32,
+        switches: RenderSwitches,
         draw_capacity: DrawCapacity,
     ) -> Renderer {
         let _span = tracing::info_span!("renderer_init").entered();
@@ -86,8 +112,12 @@ impl Renderer {
 
         let culling_pass = CullingPass::new(
             &device,
-            &[(&SCENE_GEOMETRY, &scene_geometry_bind_group_layout)],
+            &[
+                (&FRAME, &frame_bind_group_layout),
+                (&SCENE_GEOMETRY, &scene_geometry_bind_group_layout),
+            ],
             draw_capacity,
+            switches,
         );
         let main_pass = MainPass::new(
             &device,
@@ -280,7 +310,10 @@ impl Renderer {
             });
         self.culling_pass.record(
             &mut encoder,
-            &[(&SCENE_GEOMETRY, &self.scene_geometry_bind_group)],
+            &[
+                (&FRAME, &self.frame_bind_group),
+                (&SCENE_GEOMETRY, &self.scene_geometry_bind_group),
+            ],
             frame,
             culling_timestamp_writes,
         );
@@ -361,15 +394,15 @@ mod tests {
 
     use super::*;
     use crate::assets::material::MaterialData;
-    use crate::assets::pools::tests::logged;
+    use crate::assets::pools::tests::{logged, read_storage};
     use crate::assets::{MaterialHandle, MeshHandle};
-    use crate::camera::Camera;
+    use crate::camera::{Camera, projection_matrix};
     use crate::capture::read_back;
     use crate::components::{MeshRef, Transform};
     use crate::cooked::{CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex};
-    use crate::render::instance::padded_columns;
+    use crate::render::instance::{anchor_and_offset, padded_columns};
     use crate::render::prepare::InstanceWrite;
-    use crate::render::{FramePreparer, NO_MATERIAL};
+    use crate::render::{FramePreparer, NO_MATERIAL, NO_MESH};
     use crate::time::FixedTime;
     use crate::transform::propagate_world_transforms;
 
@@ -384,7 +417,13 @@ mod tests {
         let Some(context) = gpu_context() else {
             return;
         };
-        let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE);
+        let mut renderer = Renderer::new(
+            &context,
+            TARGET_FORMAT,
+            SIZE,
+            SIZE,
+            RenderSwitches::default(),
+        );
         let frame = triangle_frame(&mut renderer);
         let (image, recorder) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
 
@@ -406,14 +445,26 @@ mod tests {
         };
         // Wider than tall, so swapped sides would show.
         let (width, height) = (24, 20);
-        let mut resized = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE);
+        let mut resized = Renderer::new(
+            &context,
+            TARGET_FORMAT,
+            SIZE,
+            SIZE,
+            RenderSwitches::default(),
+        );
         let frame = triangle_frame(&mut resized);
         // A frame at the first size before the resize, as a window draws.
         render_frame(&context, &mut resized, &frame, SIZE, SIZE);
         resized.resize(width, height);
         let (resized_image, _) = render_frame(&context, &mut resized, &frame, width, height);
 
-        let mut created = Renderer::new(&context, TARGET_FORMAT, width, height);
+        let mut created = Renderer::new(
+            &context,
+            TARGET_FORMAT,
+            width,
+            height,
+            RenderSwitches::default(),
+        );
         let frame = triangle_frame(&mut created);
         let (created_image, _) = render_frame(&context, &mut created, &frame, width, height);
 
@@ -437,7 +488,13 @@ mod tests {
         let Some(context) = gpu_context() else {
             return;
         };
-        let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE);
+        let mut renderer = Renderer::new(
+            &context,
+            TARGET_FORMAT,
+            SIZE,
+            SIZE,
+            RenderSwitches::default(),
+        );
         let [red, green, blue] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
             .map(|emissive| emissive_material(&mut renderer, emissive));
         let mesh = load_triangles(
@@ -461,9 +518,9 @@ mod tests {
     }
 
     /// Instances past a block of the culling pass's scans, and past a row of
-    /// its dispatches, where the draw holds the indices of all but the last:
-    /// each draws from its own offsets until the draw is full, then none do,
-    /// with a warning.
+    /// its dispatches, where the draw holds the indices of all but the last,
+    /// none culled: each draws from its own offsets until the draw is full,
+    /// then none do, with a warning.
     #[test]
     fn a_frame_past_the_draws_capacity_draws_the_instances_that_fit_and_warns() {
         let Some(context) = gpu_context() else {
@@ -474,8 +531,14 @@ mod tests {
             meshlet_records: INSTANCES,
             packed_indices: 3 * (INSTANCES - 1),
         };
-        let mut renderer =
-            Renderer::with_draw_capacity(&context, TARGET_FORMAT, SIZE, SIZE, capacity);
+        let mut renderer = Renderer::with_draw_capacity(
+            &context,
+            TARGET_FORMAT,
+            SIZE,
+            SIZE,
+            RenderSwitches { culling: false },
+            capacity,
+        );
         let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
         let mesh = load_triangles(&mut renderer, &[[0.0, 0.0]], &[Some(red)]);
         // Every Instance but the last two is outside the target; those two
@@ -506,7 +569,13 @@ mod tests {
         let Some(context) = gpu_context() else {
             return;
         };
-        let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE);
+        let mut renderer = Renderer::new(
+            &context,
+            TARGET_FORMAT,
+            SIZE,
+            SIZE,
+            RenderSwitches::default(),
+        );
         let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
         // A triangle facing the camera, 2 m ahead of it.
         let mesh = load_triangles(&mut renderer, &[[0.0, 0.0]], &[Some(red)]);
@@ -535,6 +604,159 @@ mod tests {
         assert!(left > 0 && before > 0, "{left} and {before} red pixels");
         world.despawn(right);
         assert_eq!(red_pixels(&mut world, &mut renderer), [left, 0]);
+    }
+
+    /// The cooked bounds of every Mesh `load_triangles` loads.
+    const TRIANGLE_BOUNDS: [[f32; 3]; 2] = [[-1.0, -1.0, 0.5], [1.0, 1.0, 0.5]];
+
+    /// Instances about a camera 100 km out, turned and scaled: inside the
+    /// view frustum, beyond each of its planes alone, across them, around
+    /// the camera, and freed, over blocks of the culling pass's scans. With
+    /// culling on, the frame's draw holds the Meshlets of exactly those
+    /// whose Mesh bounds reach into the frustum by their corners in f64, in
+    /// slot order; with it off, of every Instance in use.
+    #[test]
+    fn the_culling_pass_draws_the_instances_whose_bounds_reach_into_the_frustum() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let camera = Camera {
+            position: glam::dvec3(100_000.3, 20.0, -70_000.6),
+            yaw: 0.4,
+            pitch: -0.2,
+            ..Camera::new()
+        };
+        let view_proj = projection_matrix(1.0) * camera.view_matrix();
+        let [forward, right] = [camera.forward(), camera.right()].map(glam::Vec3::as_dvec3);
+        // Per plane of the frustum, x ≥ −w, x ≤ w, y ≥ −w, y ≤ w and the near
+        // plane z ≤ w, with no far plane (ADR 0015), how far inside it in
+        // clip space the box's corner farthest inside lies: the box is
+        // outside where one is negative.
+        let planes = [
+            [1.0, 0.0, 0.0],
+            [-1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, -1.0, 0.0],
+            [0.0, 0.0, -1.0],
+        ];
+        let reaches = |pivot: glam::DVec3, rotation_scale: glam::Mat3| {
+            planes.map(|[x, y, z]| {
+                (0..8)
+                    .map(|corner: usize| {
+                        let bound = |axis: usize| TRIANGLE_BOUNDS[(corner >> axis) & 1][axis];
+                        let local = glam::vec3(bound(0), bound(1), bound(2)).as_dvec3();
+                        let position = rotation_scale.as_dmat3() * local + pivot - camera.position;
+                        glam::dvec4(x, y, z, 1.0).dot(view_proj.as_dmat4() * position.extend(1.0))
+                    })
+                    .fold(f64::MIN, f64::max)
+            })
+        };
+        // Uniform in [0, 1), from a fixed-seed generator.
+        let mut seed: u64 = 0x5eed;
+        let mut random = move || {
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (seed >> 11) as f64 / (1u64 << 53) as f64
+        };
+        let placed: Vec<(glam::DVec3, glam::Mat3, [f64; 5])> = [
+            // Within the near plane alone, 5 cm ahead.
+            (camera.position + forward * 0.05, 0.01),
+            // Around the camera, its centre behind it.
+            (camera.position - forward, 8.0),
+        ]
+        .map(|(pivot, scale)| (pivot, glam::Mat3::from_diagonal(glam::Vec3::splat(scale))))
+        .into_iter()
+        .chain(std::iter::from_fn(|| {
+            let distance = 46.0 * random() - 6.0;
+            let [across, along_up] =
+                [(); 2].map(|_| (0.7 * distance.abs() + 3.0) * (2.0 * random() - 1.0));
+            let pivot = camera.position
+                + forward * distance
+                + right * across
+                + right.cross(forward) * along_up;
+            let [axis, scale] =
+                [(); 2].map(|_| glam::Vec3::from_array([(); 3].map(|_| random() as f32)));
+            let rotation = glam::Quat::from_axis_angle(
+                (2.0 * axis - 1.0).try_normalize().unwrap_or(glam::Vec3::Y),
+                std::f32::consts::TAU * random() as f32,
+            );
+            Some((
+                pivot,
+                glam::Mat3::from_quat(rotation) * glam::Mat3::from_diagonal(0.2 + 2.8 * scale),
+            ))
+        }))
+        .map(|(pivot, rotation_scale)| (pivot, rotation_scale, reaches(pivot, rotation_scale)))
+        // At least 1e-3 from every plane, past what f32 rounding moves, so
+        // no verdict is a tie.
+        .filter(|(_, _, reaches)| reaches.iter().all(|reach| reach.abs() > 1e-3))
+        .take(1000)
+        .collect();
+        // Every 97th slot freed.
+        let freed = |slot: usize| slot % 97 == 50;
+        let culled_by_each_plane_alone = (0..5).map(|plane| {
+            (0..placed.len())
+                .filter(|&slot| {
+                    !freed(slot)
+                        && (0..5).all(|other| (placed[slot].2[other] < 0.0) == (other == plane))
+                })
+                .count()
+        });
+        assert!(
+            culled_by_each_plane_alone.clone().all(|count| count > 0),
+            "{:?}",
+            culled_by_each_plane_alone.collect::<Vec<_>>()
+        );
+
+        let (anchor, offset) = anchor_and_offset(camera.position);
+        for switches in [RenderSwitches::default(), RenderSwitches { culling: false }] {
+            let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE, switches);
+            let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
+            let mesh = load_triangles(&mut renderer, &[[0.0, 0.0]], &[Some(red)]);
+            let instances = (0..placed.len())
+                .map(|slot| {
+                    let (pivot, rotation_scale, _) = placed[slot];
+                    let (anchor, offset) = anchor_and_offset(pivot);
+                    InstanceData {
+                        rotation_scale: padded_columns(rotation_scale),
+                        anchor,
+                        offset,
+                        mesh: if freed(slot) { NO_MESH } else { mesh.0 },
+                        ..instance(mesh, NO_MATERIAL, [0.0, 0.0])
+                    }
+                })
+                .collect();
+            let in_use = (0..placed.len()).filter(|&slot| !freed(slot)).count() as u64;
+            let frame = FrameData {
+                camera: CameraUniform {
+                    view_proj: view_proj.to_cols_array_2d(),
+                    anchor,
+                    offset,
+                    ..CameraUniform::default()
+                },
+                ..frame_of(instances, in_use, 3 * in_use)
+            };
+            render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
+
+            // The draw's index count, its first indirect argument, holds a
+            // triangle per Instance drawn, each a Meshlet record naming its
+            // slot.
+            let drawn = read_storage::<u32>(&context, renderer.culling_pass.frame_draw(), 1)[0] / 3;
+            let records = read_storage::<[u32; 3]>(
+                &context,
+                renderer.culling_pass.meshlet_records(),
+                drawn as usize,
+            );
+            let expected: Vec<u32> = (0..placed.len())
+                .filter(|&slot| {
+                    !freed(slot)
+                        && (!switches.culling || placed[slot].2.iter().all(|&reach| reach > 0.0))
+                })
+                .map(|slot| slot as u32)
+                .collect();
+            let drawn_slots: Vec<u32> = records.iter().map(|record| record[0]).collect();
+            assert_eq!(drawn_slots, expected, "{switches:?}");
+        }
     }
 
     /// A headless context, or `None` after saying so on a machine without a
@@ -616,7 +838,7 @@ mod tests {
             vertices,
             indices: (0..3 * centres.len() as u32).collect(),
             primitives,
-            bounds: [[-1.0, -1.0, 0.5], [1.0, 1.0, 0.5]],
+            bounds: TRIANGLE_BOUNDS,
         };
         renderer
             .mesh_pool

@@ -17,7 +17,7 @@ mod shader_tests;
 pub use instance::{INSTANCE_CAPACITY, InstanceData, NO_MATERIAL, NO_MESH};
 pub(crate) use main_pass::MAIN_PASS;
 pub use prepare::{FrameData, FramePreparer};
-pub use renderer::Renderer;
+pub use renderer::{RenderSwitches, Renderer};
 pub use staging::{FrameStaging, LoadStaging};
 pub use targets::DEPTH_FORMAT;
 pub use uniforms::{CameraUniform, LightUniform};
