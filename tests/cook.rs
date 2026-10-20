@@ -168,17 +168,18 @@ fn decode(texture: &CookedTexture, level: usize) -> Vec<[u8; 4]> {
 }
 
 /// Peak signal-to-noise ratio in dB of `decoded` texels against their
-/// `source` texels, over each stored channel and the source channel it
-/// holds. A plain loop: iterator adapters cost seconds per Texture unoptimised.
-fn psnr(decoded: &[[u8; 4]], source: &[[u8; 4]], stored: &[(usize, usize)]) -> f64 {
+/// `source` texels, over each pair of a stored channel and the source
+/// channel it holds. Nested loops, not a `flat_map` chain, which costs
+/// seconds per Texture unoptimised.
+fn psnr(decoded: &[[u8; 4]], source: &[[u8; 4]], channels: &[(usize, usize)]) -> f64 {
     assert_eq!(decoded.len(), source.len());
     let mut squared_error = 0u64;
-    for (decoded, source) in decoded.iter().zip(source) {
-        for &(stored, from) in stored {
-            squared_error += u64::from(decoded[stored].abs_diff(source[from])).pow(2);
+    for (decoded_texel, source_texel) in decoded.iter().zip(source) {
+        for &(stored, from) in channels {
+            squared_error += u64::from(decoded_texel[stored].abs_diff(source_texel[from])).pow(2);
         }
     }
-    let mean_squared_error = squared_error as f64 / (decoded.len() * stored.len()) as f64;
+    let mean_squared_error = squared_error as f64 / (decoded.len() * channels.len()) as f64;
     10.0 * (255.0f64.powi(2) / mean_squared_error).log10()
 }
 

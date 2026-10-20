@@ -26,11 +26,11 @@ step() {
 }
 
 # Counters against their Baselines and the Budgets: counters repeat exactly
-# on every run, times do not, so each scene renders only the frames counters
-# come from (`--counters`). The scenes are the ones with a Baseline on any
-# adapter, so a fetched helmet does not fail for lack of one; a scene without
-# one for this adapter fails compare, and with no Baseline at all, every scene
-# runs and compare fails for each.
+# on every run, times do not, so each scene renders only the counter frames
+# (`--counters`), which compare with a full run's Baseline. The scenes are
+# the ones with a Baseline on any adapter, so a fetched helmet does not fail
+# for lack of one; a scene without one for this adapter fails compare, and
+# with no Baseline at all, every scene runs and compare fails for each.
 bench() {
   local scenes=()
   local scene
