@@ -148,6 +148,13 @@ pub enum Writer {
 }
 
 impl BindGroupDefinition {
+    /// Whether `stage` sees any of the group's bindings.
+    pub fn visible_to(&self, stage: wgpu::ShaderStages) -> bool {
+        self.bindings
+            .iter()
+            .any(|binding| binding.stages.contains(stage))
+    }
+
     pub fn layout(&self, device: &wgpu::Device) -> wgpu::BindGroupLayout {
         let entries: Vec<wgpu::BindGroupLayoutEntry> = (0..)
             .zip(self.bindings)
