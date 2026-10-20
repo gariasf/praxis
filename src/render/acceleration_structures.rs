@@ -69,8 +69,9 @@ impl AccelerationStructureBytes {
 /// The static TLAS (ADR 0020): each static Instance in its slot's entry,
 /// tagged with its slot, in a frame whose origin is the corner of the
 /// camera's Anchor in the first Frame data it takes, never re-anchored in M3
-/// (decision on #17, item 3). A frame that changes a static Instance or
-/// frees one's slot rebuilds it.
+/// (decision on #17, item 3). It is built from that Frame data, empty or
+/// not, so rays can always query it, and rebuilt in a frame that changes a
+/// static Instance or frees one's slot.
 pub struct StaticTlas {
     tlas: wgpu::Tlas,
     anchor: Option<[i32; 3]>,
@@ -95,17 +96,18 @@ impl StaticTlas {
     }
 
     /// Takes `frame`'s Instance writes, each static one's BLAS from
-    /// `mesh_pool`, and records its rebuild into `encoder` when they change a
-    /// static Instance or free one's slot. Returns whether they did.
+    /// `mesh_pool`, and records its build into `encoder` for the first Frame
+    /// data and when they change a static Instance or free one's slot.
+    /// Returns whether it did.
     pub fn update(
         &mut self,
         frame: &FrameData,
         mesh_pool: &MeshPool,
         encoder: &mut wgpu::CommandEncoder,
     ) -> bool {
+        let mut changed = self.anchor.is_none();
         let anchor = *self.anchor.get_or_insert(frame.camera.anchor);
         let was_leaving_out = !self.left_out.is_empty();
-        let mut changed = false;
         for write in &frame.instance_writes {
             let instances = &frame.instances[write.instances.clone()];
             for (slot, instance) in (write.first_slot..).zip(instances) {
@@ -126,6 +128,7 @@ impl StaticTlas {
                         blas,
                         anchored_transform(instance, anchor),
                         slot,
+                        // Every ray's cull mask.
                         0xff,
                     )),
                     None if entry.is_none() => continue,
@@ -302,6 +305,16 @@ mod tests {
         let Some(triangle) = Triangle::new() else {
             return;
         };
+        // The first Frame data builds it, even with only Moving Instances.
+        let mut empty = StaticTlas::new(&triangle.context.device, 8);
+        let moving = triangle.instance(LOAD_ANCHOR, [0.0; 3], glam::Mat3::IDENTITY);
+        assert!(triangle.update(&mut empty, LOAD_ANCHOR, vec![(0, moving, true)]));
+        assert_eq!(
+            trace_down(&triangle.context, &empty.tlas, &[[0.8, 0.0, 0.0]]),
+            [None]
+        );
+        assert!(!triangle.update(&mut empty, LOAD_ANCHOR, vec![(0, moving, true)]));
+
         let mut tlas = StaticTlas::new(&triangle.context.device, 8);
         // A quarter turn about +Z, then a scale by 2: +X goes to +2Y.
         let turned_and_doubled = glam::Mat3::from_cols(
