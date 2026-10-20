@@ -32,8 +32,15 @@ fn capture_draws_the_scene_over_the_srgb_encoded_background() {
         return;
     }
 
-    let (pixels, _) = praxis::capture(&context, ReferenceScene::Helmet, glam::DVec3::ZERO, 160, 90)
-        .expect("capture failed");
+    let (pixels, _) = praxis::capture(
+        &context,
+        ReferenceScene::Helmet,
+        glam::DVec3::ZERO,
+        160,
+        90,
+        praxis::RenderSwitches::default(),
+    )
+    .expect("capture failed");
 
     assert_eq!(pixels.len(), 160 * 90 * 4);
     let image = image::RgbaImage::from_raw(160, 90, pixels).expect("160 × 90 pixels");

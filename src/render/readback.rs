@@ -52,6 +52,9 @@ pub struct GpuStatsReadback {
     nanoseconds_per_tick: f64,
     /// The stats the last `begin_frame` or `flush` read back, by frame.
     read_back: Vec<GpuFrameStats>,
+    /// Set while the frames read back had Instances the frame's draw had no
+    /// room for, which was warned about when it was set.
+    warned_of_overflow: bool,
 }
 
 struct Slot {
@@ -120,6 +123,7 @@ impl GpuStatsReadback {
             frame: 0,
             nanoseconds_per_tick: f64::from(nanoseconds_per_tick),
             read_back: Vec::with_capacity(SLOT_COUNT as usize),
+            warned_of_overflow: false,
         }
     }
 
@@ -236,7 +240,9 @@ impl GpuStatsReadback {
     }
 
     /// Reads slot `index` back if it is mapped, and frees it. Returns whether
-    /// it is free; one still mapping is not.
+    /// it is free; one still mapping is not. A frame whose draw had no room
+    /// for some Instances is warned about, once until a frame read back has
+    /// room for all; a skipped readback neither warns nor clears it.
     fn read(&mut self, index: usize) -> bool {
         let slot = &mut self.slots[index];
         let SlotState::Mapping { frame } = slot.state else {
@@ -249,6 +255,15 @@ impl GpuStatsReadback {
                     Ok(view) => {
                         let draw: FrameDraw =
                             bytemuck::pod_read_unaligned(&view[..size_of::<FrameDraw>()]);
+                        let overflowed = draw.instances_overflowed > 0;
+                        if overflowed && !self.warned_of_overflow {
+                            tracing::warn!(
+                                frame,
+                                instances_overflowed = draw.instances_overflowed,
+                                "The frame's draw is full: Instances whose Meshlets do not fit are not drawn"
+                            );
+                        }
+                        self.warned_of_overflow = overflowed;
                         let ticks: [u64; QUERIES_PER_FRAME] = bytemuck::pod_read_unaligned(
                             &view[TIMESTAMP_OFFSET as usize..][..TIMESTAMP_BYTES as usize],
                         );

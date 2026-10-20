@@ -22,11 +22,6 @@ pub struct FrameData {
     /// Slots the Instance buffer holds: one past the highest any Renderable
     /// has taken. The GPU draws each, but a freed one.
     pub instance_slot_count: u32,
-    /// The Meshlets of the Instances in those slots, and their triangles'
-    /// indices: the most Meshlet records and packed indices the frame's draw
-    /// holds, where culling leaves every Instance in.
-    pub meshlet_count: u64,
-    pub index_count: u64,
     /// The Instances this frame writes, in `instance_writes` order; every
     /// other slot keeps what an earlier frame wrote (ADR 0003).
     pub instances: Vec<InstanceData>,
@@ -214,8 +209,6 @@ impl FramePreparer {
 
         frame.instances.clear();
         frame.instance_writes.clear();
-        frame.meshlet_count = 0;
-        frame.index_count = 0;
         *renderables_refused = 0;
         let renderables = renderable_query.query(world);
         // Slots of entities that stopped being Renderables are freed before new
@@ -280,8 +273,6 @@ impl FramePreparer {
                     },
                 );
             }
-            frame.meshlet_count += u64::from(mesh.meshlet_count);
-            frame.index_count += u64::from(mesh.index_count);
         }
         // A slot freed this frame, or every free slot when every Instance is
         // written again, takes an Instance with no Mesh, so the GPU no longer
@@ -523,10 +514,6 @@ mod tests {
                 let written = frames.prepare();
                 assert!(written.is_empty(), "past capacity, wrote slots {written:?}");
                 assert_eq!(frames.preparer.renderables_refused(), 1);
-                assert_eq!(
-                    frames.preparer.frame().meshlet_count,
-                    u64::from(INSTANCE_CAPACITY)
-                );
             }
             // Rewriting every Instance keeps every slot where it was.
             frames.preparer.rewrite_all_instances();
@@ -636,7 +623,6 @@ mod tests {
         // slot draws nothing.
         frames.world.entity_mut(entity).insert(MeshRef(bare_mesh));
         assert_eq!(written(&mut frames), [(NO_MESH, 0)]);
-        assert_eq!(frames.preparer.frame().meshlet_count, 0);
     }
 
     #[test]

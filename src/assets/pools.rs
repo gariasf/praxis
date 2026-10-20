@@ -210,8 +210,6 @@ impl MeshPool {
         );
 
         self.meshes.push(Mesh {
-            meshlet_count: meshlet_count as u32,
-            index_count: 3 * triangle_count as u32,
             needs_material_handle: materials.contains(&None),
         });
         Some(handle)

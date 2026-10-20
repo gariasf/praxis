@@ -30,10 +30,18 @@ fn procedural_scenes_render_identically_without_asset_files() {
         ReferenceScene::UvGrid,
         ReferenceScene::Orrery,
     ] {
-        let (first, _) =
-            praxis::capture(&context, scene, glam::DVec3::ZERO, 160, 90).expect("first capture");
-        let (second, _) =
-            praxis::capture(&context, scene, glam::DVec3::ZERO, 160, 90).expect("second capture");
+        let capture = || {
+            praxis::capture(
+                &context,
+                scene,
+                glam::DVec3::ZERO,
+                160,
+                90,
+                praxis::RenderSwitches::default(),
+            )
+        };
+        let (first, _) = capture().expect("first capture");
+        let (second, _) = capture().expect("second capture");
         assert!(
             first == second,
             "{} differs between two captures",
@@ -56,6 +64,7 @@ fn procedural_scenes_render_identically_without_asset_files() {
             glam::DVec3::ZERO,
             160,
             90,
+            praxis::RenderSwitches::default(),
         )
         .expect_err("NormalTangentTest is absent");
         // Its manifest GUID: no manifest lists it here.

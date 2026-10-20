@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use crate::capture::render_frames;
 use crate::gpu::GpuContext;
+use crate::render::RenderSwitches;
 use crate::scenes::ReferenceScene;
 use crate::stats::FrameStats;
 use crate::time::SIXTY_HERTZ;
@@ -202,13 +203,14 @@ impl std::fmt::Display for Finding {
     }
 }
 
-/// Renders `scene` for `configuration`'s warm-up and measured frames and
-/// returns the measured frames' medians and p95s, and the counter frames'
-/// counters.
+/// Renders `scene` for `configuration`'s warm-up and measured frames, as
+/// `switches` set, and returns the measured frames' medians and p95s, and
+/// the counter frames' counters.
 pub fn run(
     context: &GpuContext,
     scene: ReferenceScene,
     configuration: Configuration,
+    switches: RenderSwitches,
 ) -> anyhow::Result<Measurements> {
     let frame_count = configuration.warm_up_frames + configuration.measured_frames;
     anyhow::ensure!(
@@ -224,6 +226,7 @@ pub fn run(
         frame_count,
         // ADR 0022 judges Budgets at 60 Hz.
         SIXTY_HERTZ,
+        switches,
     )?;
     Ok(measure(
         scene,
