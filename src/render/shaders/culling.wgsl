@@ -52,46 +52,53 @@ fn exclusive_scan(invocation: u32, value: vec2<u32>) -> vec2<u32> {
     return before;
 }
 
+// How far inside each side plane of the view frustum, x ≥ −w, x ≤ w,
+// y ≥ −w and y ≤ w, a clip-space position lies, or a clip-space direction
+// moves.
+fn side_plane_distances(clip: vec4<f32>) -> vec4<f32> {
+    return clip.w + vec4<f32>(clip.x, -clip.x, clip.y, -clip.y);
+}
+
+// How far inside the view frustum's near plane, z ≤ w, a clip-space
+// position lies, or a clip-space direction moves.
+fn near_plane_distance(clip: vec4<f32>) -> f32 {
+    return clip.w - clip.z;
+}
+
 // Whether an Instance's Mesh bounds reach into the view frustum, which clip
-// space bounds by −w ≤ x ≤ w, −w ≤ y ≤ w and the near plane, z ≤ w; with
-// reverse-Z and no far plane, every point past the near plane lands at
-// z ≥ 0, so there is no fifth plane (ADR 0015). The box, its centre composed
-// relative to the camera as its vertices are (ADR 0014), is outside only
-// where it lies wholly beyond one plane: where its centre's distance from
-// the plane, less its half axes' distances summed whole, is negative.
+// space bounds by its four side planes and its near plane; with reverse-Z
+// and no far plane, every point past the near plane lands at z ≥ 0, so
+// there is no sixth plane (ADR 0015). The box, its centre composed relative
+// to the camera as its vertices are (ADR 0014), is outside only where it
+// lies wholly beyond one plane. A plane's distance is linear in clip space,
+// so the box reaches furthest inside it by its centre's distance plus each
+// half axis's, whole.
 fn in_view_frustum(instance: InstanceData, mesh: MeshData) -> bool {
     let bounds_min = vec3<f32>(mesh.bounds_min[0], mesh.bounds_min[1], mesh.bounds_min[2]);
     let bounds_max = vec3<f32>(mesh.bounds_max[0], mesh.bounds_max[1], mesh.bounds_max[2]);
     let half_extent = 0.5 * (bounds_max - bounds_min);
-    let center = camera_relative_position(
+    let centre = camera_relative_position(
         instance.anchor,
         instance.offset,
         camera.anchor,
         camera.offset,
         instance.rotation_scale * (0.5 * (bounds_min + bounds_max))
     );
-    let clip_center = camera.view_proj * vec4<f32>(center, 1.0);
+    let clip_centre = camera.view_proj * vec4<f32>(centre, 1.0);
     let clip_half_axes = camera.view_proj * mat3x4<f32>(
         vec4<f32>(instance.rotation_scale[0] * half_extent.x, 0.0),
         vec4<f32>(instance.rotation_scale[1] * half_extent.y, 0.0),
         vec4<f32>(instance.rotation_scale[2] * half_extent.z, 0.0),
     );
-    // Each plane as the coefficients of a clip position that is inside it
-    // where their product is positive.
-    var planes = array<vec4<f32>, 5>(
-        vec4<f32>(1.0, 0.0, 0.0, 1.0),
-        vec4<f32>(-1.0, 0.0, 0.0, 1.0),
-        vec4<f32>(0.0, 1.0, 0.0, 1.0),
-        vec4<f32>(0.0, -1.0, 0.0, 1.0),
-        vec4<f32>(0.0, 0.0, -1.0, 1.0),
-    );
-    for (var plane = 0u; plane < 5u; plane++) {
-        let reach = dot(abs(planes[plane] * clip_half_axes), vec3<f32>(1.0));
-        if dot(planes[plane], clip_center) + reach < 0.0 {
-            return false;
-        }
-    }
-    return true;
+    let side_reach = side_plane_distances(clip_centre)
+        + abs(side_plane_distances(clip_half_axes[0]))
+        + abs(side_plane_distances(clip_half_axes[1]))
+        + abs(side_plane_distances(clip_half_axes[2]));
+    let near_reach = near_plane_distance(clip_centre)
+        + abs(near_plane_distance(clip_half_axes[0]))
+        + abs(near_plane_distance(clip_half_axes[1]))
+        + abs(near_plane_distance(clip_half_axes[2]));
+    return all(side_reach >= vec4<f32>(0.0)) && near_reach >= 0.0;
 }
 
 // A workgroup per block of SCAN_BLOCK_SIZE slots: each slot's Meshlet

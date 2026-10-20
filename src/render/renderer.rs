@@ -13,7 +13,7 @@ use crate::render::{
 use crate::stats::FrameRecorder;
 
 /// The Render switches a Renderer is created with and keeps. The defaults are
-/// what ships; only capture and bench pass others.
+/// what ships.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RenderSwitches {
     /// Whether the culling pass draws only the Instances whose Mesh bounds
@@ -606,8 +606,10 @@ mod tests {
         assert_eq!(red_pixels(&mut world, &mut renderer), [left, 0]);
     }
 
-    /// The cooked bounds of every Mesh `load_triangles` loads.
-    const TRIANGLE_BOUNDS: [[f32; 3]; 2] = [[-1.0, -1.0, 0.5], [1.0, 1.0, 0.5]];
+    /// The cooked bounds of every Mesh `load_triangles` loads: a box that
+    /// holds its triangles, off their pivot, its three sides unequal, so a
+    /// culling test reads each axis apart.
+    const TRIANGLE_BOUNDS: [[f32; 3]; 2] = [[-1.0, -1.5, -0.5], [2.0, 1.0, 1.5]];
 
     /// Instances about a camera 100 km out, turned and scaled: inside the
     /// view frustum, beyond each of its planes alone, across them, around
