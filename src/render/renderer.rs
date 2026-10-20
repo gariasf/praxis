@@ -286,7 +286,7 @@ mod tests {
     use crate::assets::Primitive;
     use crate::assets::material::MaterialData;
     use crate::capture::read_back;
-    use crate::cooked::{CookedMesh, CookedPrimitive, CookedVertex};
+    use crate::cooked::{CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex};
     use crate::render::instance::padded_columns;
     use crate::render::prepare::{Draw, InstanceWrite};
 
@@ -373,7 +373,10 @@ mod tests {
                 first_index: 0,
                 index_count: 3,
                 material: None,
-                meshlets: Vec::new(),
+                meshlets: vec![CookedMeshlet {
+                    vertices: vec![0, 1, 2],
+                    triangles: vec![[0, 1, 2]],
+                }],
             }],
             bounds: [[-0.5, -0.5, 0.5], [0.5, 0.5, 0.5]],
         };
@@ -385,11 +388,11 @@ mod tests {
         };
         renderer
             .mesh_pool
-            .load(&mut renderer.load_staging, &outside, None)
+            .load(&mut renderer.load_staging, &outside, &[None])
             .expect("the outside triangle fits");
         let mesh = renderer
             .mesh_pool
-            .load(&mut renderer.load_staging, &triangle, None)
+            .load(&mut renderer.load_staging, &triangle, &[None])
             .expect("the triangle fits");
         let &Primitive {
             vertex_offset,

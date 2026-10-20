@@ -28,30 +28,33 @@ impl AssetLoader<'_> {
             .load_texture(self.device, self.staging, self.cache, channel, id)
     }
 
-    /// Loads the Mesh `id` into the Arenas with the Material its Primitives
-    /// name. Until M3's draw path draws each Primitive with its own, a Mesh
-    /// draws with its first Primitive's, after a warning when another
-    /// Primitive names a different one.
+    /// Loads the Mesh `id` into the Mesh pool with the Materials its
+    /// Primitives name, each loaded once. Until M3's draw path draws each
+    /// Primitive with its own, a Mesh draws with its first Primitive's, after
+    /// a warning when another Primitive names a different one.
     pub fn mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
         let mesh = self.cache.mesh(id)?;
-        let material = mesh
-            .primitives
-            .first()
-            .and_then(|primitive| primitive.material);
-        if mesh
-            .primitives
-            .iter()
-            .any(|primitive| primitive.material != material)
-        {
+        let mut materials = Vec::with_capacity(mesh.primitives.len());
+        for (index, primitive) in mesh.primitives.iter().enumerate() {
+            let earlier = mesh.primitives[..index]
+                .iter()
+                .position(|earlier| earlier.material == primitive.material);
+            let material = match (earlier, primitive.material) {
+                (Some(earlier), _) => materials[earlier],
+                (None, Some(material)) => Some(
+                    self.material(material)
+                        .with_context(|| format!("loading a Material of Mesh {id}"))?,
+                ),
+                (None, None) => None,
+            };
+            materials.push(material);
+        }
+        if materials.iter().any(|material| *material != materials[0]) {
             tracing::warn!(mesh = %id, "the Mesh's Primitives name different Materials; it draws with the first's");
         }
-        let material = material
-            .map(|material| self.material(material))
-            .transpose()
-            .with_context(|| format!("loading the Material of Mesh {id}"))?;
         self.mesh_pool
-            .load(self.staging, &mesh, material)
-            .with_context(|| format!("the Arenas refused Mesh {id}"))
+            .load(self.staging, &mesh, &materials)
+            .with_context(|| format!("the Mesh pool refused Mesh {id}"))
     }
 }
 
@@ -66,7 +69,7 @@ mod tests {
     use crate::gpu::GpuContext;
 
     #[test]
-    fn a_mesh_whose_primitives_name_different_materials_warns_and_draws_with_the_first() {
+    fn a_mesh_loads_each_primitives_material_once_and_warns_it_draws_with_the_first() {
         let context = match pollster::block_on(GpuContext::headless()) {
             Ok(context) => context,
             Err(error) if error.is::<wgpu::RequestAdapterError>() => {
@@ -91,9 +94,9 @@ mod tests {
                 .write(AssetId(id), "key", &material.to_blob())
                 .unwrap();
         }
-        // Mesh 3's Primitives both name Material 1; Mesh 4's name 2, then 9,
-        // which the cache lacks.
-        for (id, materials) in [(3, [1, 1]), (4, [2, 9])] {
+        // Mesh 3's Primitives both name Material 1; Mesh 4's name 2, then 1;
+        // Mesh 5's 2, then 9, which the cache lacks.
+        for (id, materials) in [(3, [1, 1]), (4, [2, 1]), (5, [2, 9])] {
             let mesh = CookedMesh {
                 vertices: vec![CookedVertex::default(); 3],
                 indices: vec![0, 1, 2],
@@ -133,7 +136,15 @@ mod tests {
             "{uniform_log}"
         );
         assert!(mixed_log.contains("different Materials"), "{mixed_log}");
-        // Each loaded only the first Material its Primitives name: 1, then 2.
+        // Each Primitive's Material loads, a Mesh's repeated one once:
+        // Material 1 for Mesh 3, then 2 and 1 for Mesh 4, and 2 for Mesh 5,
+        // before its second Primitive's fails.
+        let Err(missing) = loader.mesh(AssetId(5)) else {
+            panic!("Mesh 5 loaded without its second Primitive's Material");
+        };
+        assert!(format!("{missing:#}").contains("loading a Material of Mesh"));
+        assert_eq!(loader.material(AssetId(1)).unwrap().index(), 4);
+        // Each draws with the first Material its Primitives name: 1, then 2.
         let materials = [uniform, mixed].map(|mesh| {
             let material = mesh_pool.get(mesh).unwrap().material;
             material.map(MaterialHandle::index)

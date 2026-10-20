@@ -49,7 +49,7 @@ A typed index into a Pool, held by components in place of the resource.
 _Avoid_: Pointer, resource ID
 
 **Arena**:
-A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; one holds vertices, one holds indices.
+A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool's hold vertices, indices, and Meshlets with their vertices and triangles.
 _Avoid_: Mega-buffer, heap
 
 **Material ID**:

@@ -6,5 +6,5 @@ pub mod pools;
 
 pub use loader::AssetLoader;
 pub use material::{MaterialChannel, MaterialHandle, MaterialPool};
-pub use mesh::{Mesh, MeshHandle, Primitive};
+pub use mesh::{Mesh, MeshData, MeshHandle, MeshletData, Primitive};
 pub use pools::{ARENA_CAPACITY_BYTES, MeshPool};
