@@ -8,8 +8,8 @@ use crate::render::main_pass::{DEPTH_PREPASS, LIT_PASS, MainPass};
 use crate::render::readback::GpuStatsReadback;
 use crate::render::targets::RenderTargets;
 use crate::render::{
-    CameraUniform, FrameData, FrameStaging, INSTANCE_CAPACITY, InstanceData, LightUniform,
-    LoadStaging,
+    AccelerationStructureBytes, CameraUniform, FrameData, FrameStaging, INSTANCE_CAPACITY,
+    InstanceData, LightUniform, LoadStaging,
 };
 use crate::stats::{FrameRecorder, GpuFrameStats};
 
@@ -63,6 +63,8 @@ pub struct Renderer {
     instance_buffer: wgpu::Buffer,
     /// The Instances and the vertex Arena (`SCENE_GEOMETRY`).
     scene_geometry_bind_group: wgpu::BindGroup,
+    /// What its acceleration structures are estimated to take.
+    acceleration_structure_bytes: AccelerationStructureBytes,
     /// Set when a frame's uploads failed after it queued Instance writes,
     /// which then never landed: the next prepare must write every Instance.
     lost_instance_writes: bool,
@@ -218,6 +220,7 @@ impl Renderer {
             frame_bind_group,
             instance_buffer,
             scene_geometry_bind_group,
+            acceleration_structure_bytes: AccelerationStructureBytes::estimate(context.backend()),
             lost_instance_writes: false,
             uploaded_instance_slot_count: 0,
             transient_saves_memory: context.adapter.get_info().transient_saves_memory == Some(true),
@@ -249,6 +252,10 @@ impl Renderer {
             self.frame_encoder.is_none(),
             "an upload whose frame was not rendered"
         );
+        // Loads staged since the last frame land before its copies and
+        // draws, and their BLASes are compacted before any TLAS takes them.
+        self.load_staging.submit(&self.queue);
+        self.mesh_pool.compact_blases(&self.queue);
         let mut encoder = create_frame_encoder(&self.device);
         let instance_size = std::mem::size_of::<InstanceData>() as wgpu::BufferAddress;
         let instance_uploads = frame.instance_writes.iter().map(|write| {
@@ -337,8 +344,6 @@ impl Renderer {
         recorder.stage("encode", started);
 
         let started = Instant::now();
-        // Loads staged since the last frame land before its draws.
-        self.load_staging.submit(&self.queue);
         // submit will accept anything that implements IntoIter
         let submission = self.queue.submit(std::iter::once(command_buffer));
         recorder.stage("submit", started);
@@ -371,7 +376,8 @@ impl Renderer {
     }
 
     /// Bytes of the buffers and textures this Renderer created, its Pools
-    /// included; the render target is the caller's.
+    /// included, and of its acceleration structures, estimated; the render
+    /// target is the caller's.
     pub fn gpu_memory_bytes(&self) -> u64 {
         let buffers = [
             &self.camera_buffer,
@@ -383,7 +389,9 @@ impl Renderer {
                 .render_targets
                 .gpu_memory_bytes(self.transient_saves_memory)
             + self.culling_pass.gpu_memory_bytes()
-            + self.mesh_pool.gpu_memory_bytes()
+            + self
+                .mesh_pool
+                .gpu_memory_bytes(&self.acceleration_structure_bytes)
             + self
                 .material_pool
                 .gpu_memory_bytes(self.transient_saves_memory)

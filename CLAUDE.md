@@ -114,9 +114,10 @@ src/
                                  Frame data), bind_groups (each defined
                                  once), readback (each frame's GPU stats
                                  through a ring of mapped buffers),
-                                 instance, uniforms, staging, shaders/
-                                 (WGSL parts and the modules each
-                                 pipeline assembles from them)
+                                 acceleration_structures (their memory
+                                 estimates), instance, uniforms, staging,
+                                 shaders/ (WGSL parts and the modules
+                                 each pipeline assembles from them)
 tests/                         # integration tests at agreed seams
   goldens/<backend>[-cpu]/     # committed Goldens; PRAXIS_UPDATE_GOLDENS=1
                                  cargo test --test goldens rewrites them
@@ -242,7 +243,9 @@ When reviewing changes, check for:
       draw changes implicit derivatives, so captures would differ run to
       run
 - [ ] Frame stats still see new work: GPU buffers and textures join
-      their owner's `gpu_memory_bytes`, per-frame GPU writes add to
+      their owner's `gpu_memory_bytes`, and so do acceleration
+      structures, by the measured per-backend estimate
+      (`AccelerationStructureBytes`); per-frame GPU writes add to
       `uploaded_bytes`, and systems are added inside
       `SystemTimer::scope`
 - [ ] Streaming uploads go through the `StagingBelt`, never

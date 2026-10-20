@@ -1,7 +1,7 @@
 use crate::{
     assets::{MaterialHandle, Mesh, MeshData, MeshHandle, MeshletData},
     cooked::{CookedMesh, CookedVertex},
-    render::{LoadStaging, NO_MATERIAL},
+    render::{AccelerationStructureBytes, LoadStaging, NO_MATERIAL},
 };
 
 /// Bytes of each Arena: one provisional capacity for the app, tests, bench
@@ -12,9 +12,19 @@ pub const ARENA_CAPACITY_BYTES: u64 = 16 << 20;
 pub const MESH_CAPACITY: u32 = 1 << 16;
 
 /// The Meshes, and the GPU tables they are drawn from: Arenas of vertices
-/// and indices, the Meshlet Arenas and the Mesh table (ADRs 0017, 0019).
+/// and indices, the Meshlet Arenas and the Mesh table (ADRs 0017, 0019);
+/// and a BLAS per Mesh, which rays trace (ADR 0020).
 pub struct MeshPool {
+    device: wgpu::Device,
     meshes: Vec<Mesh>,
+    /// Each Mesh's BLAS, at its Handle's index, built at load from its
+    /// ranges of the vertex and index Arenas.
+    blases: Vec<wgpu::Blas>,
+    /// The Meshes whose BLAS is built but not yet compacted.
+    uncompacted: Vec<MeshHandle>,
+    /// Triangles of the BLASes compacted, and of the others.
+    compacted_blas_triangles: u64,
+    uncompacted_blas_triangles: u64,
     vertex_arena: Arena,
     index_arena: Arena,
     meshlet_arena: Arena,
@@ -31,16 +41,21 @@ impl MeshPool {
         };
         let u32_bytes = size_of::<u32>() as u64;
         Self {
+            device: device.clone(),
             meshes: Vec::new(),
-            // The vertex shader pulls from it (ADR 0019).
+            blases: Vec::new(),
+            uncompacted: Vec::new(),
+            compacted_blas_triangles: 0,
+            uncompacted_blas_triangles: 0,
+            // The vertex shader pulls from it (ADR 0019), BLAS builds read it.
             vertex_arena: arena(
                 "Vertex Arena",
-                wgpu::BufferUsages::STORAGE,
+                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::BLAS_INPUT,
                 size_of::<CookedVertex>() as u64,
             ),
-            // The cooked index stream, which no pass draws from: ADR 0020's
-            // BLAS builds read it.
-            index_arena: arena("Index Arena", wgpu::BufferUsages::INDEX, u32_bytes),
+            // The cooked index stream, which no pass draws from: BLAS builds
+            // read it.
+            index_arena: arena("Index Arena", wgpu::BufferUsages::BLAS_INPUT, u32_bytes),
             meshlet_arena: arena(
                 "Meshlet Arena",
                 wgpu::BufferUsages::STORAGE,
@@ -67,10 +82,12 @@ impl MeshPool {
 
     /// Writes `mesh` through `staging` into one range of each Arena, and its
     /// entry into the Mesh table, each Primitive drawn with its Material of
-    /// `materials`, in Primitive order, where no Renderable overrides it.
-    /// Returns its Handle, or None after logging when the Mesh table is full
-    /// or an Arena's longest free range is too short; a refused Mesh leaves
-    /// the pool as it was.
+    /// `materials`, in Primitive order, where no Renderable overrides it; and
+    /// records its BLAS's build from its vertex and index ranges, which
+    /// `compact_blases` compacts once `staging` is submitted. Returns its
+    /// Handle, or None after logging when the Mesh table is full or an
+    /// Arena's longest free range is too short; a refused Mesh leaves the
+    /// pool as it was.
     pub fn load(
         &mut self,
         staging: &mut LoadStaging,
@@ -202,6 +219,39 @@ impl MeshPool {
             u64::from(handle.0) * size_of::<MeshData>() as u64,
             bytemuck::bytes_of(&mesh_data),
         );
+        let geometry = wgpu::BlasTriangleGeometrySizeDescriptor {
+            vertex_format: wgpu::VertexFormat::Float32x3,
+            vertex_count: mesh.vertices.len() as u32,
+            index_format: Some(wgpu::IndexFormat::Uint32),
+            index_count: Some(mesh.indices.len() as u32),
+            flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
+        };
+        let blas = self.device.create_blas(
+            &wgpu::CreateBlasDescriptor {
+                label: Some("Mesh BLAS"),
+                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
+                    | wgpu::AccelerationStructureFlags::ALLOW_COMPACTION,
+                update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+            },
+            wgpu::BlasGeometrySizeDescriptors::Triangles {
+                descriptors: vec![geometry.clone()],
+            },
+        );
+        // The position leads each vertex; the cooked indices count from the
+        // Mesh's first vertex.
+        staging.build_blas(&wgpu::BlasBuildEntry {
+            blas: &blas,
+            geometry: wgpu::BlasGeometries::TriangleGeometries(vec![wgpu::BlasTriangleGeometry {
+                size: &geometry,
+                vertex_buffer: &self.vertex_arena.buffer,
+                first_vertex: vertices.offset,
+                vertex_stride: size_of::<CookedVertex>() as u64,
+                index_buffer: Some(&self.index_arena.buffer),
+                first_index: Some(indices.offset),
+                transform_buffer: None,
+                transform_buffer_offset: None,
+            }]),
+        });
         tracing::debug!(
             vertices = mesh.vertices.len(),
             indices = mesh.indices.len(),
@@ -209,10 +259,43 @@ impl MeshPool {
             "Mesh loaded"
         );
 
+        self.blases.push(blas);
+        self.uncompacted.push(handle);
+        self.uncompacted_blas_triangles += triangle_count as u64;
+
         self.meshes.push(Mesh {
             needs_material_handle: materials.contains(&None),
         });
         Some(handle)
+    }
+
+    /// Compacts the BLASes built since the last call, after waiting for the
+    /// GPU to build them. A Mesh keeps its compacted BLAS, or the one built
+    /// where compaction failed, as logged.
+    pub fn compact_blases(&mut self, queue: &wgpu::Queue) {
+        if self.uncompacted.is_empty() {
+            return;
+        }
+        for handle in &self.uncompacted {
+            self.blases[handle.0 as usize].prepare_compaction_async(|_| {});
+        }
+        if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
+            tracing::error!(%error, "waiting for BLAS builds failed");
+        }
+        for handle in self.uncompacted.drain(..) {
+            let blas = &mut self.blases[handle.0 as usize];
+            if !blas.ready_for_compaction() {
+                tracing::warn!(
+                    mesh = handle.0,
+                    "BLAS not compacted: not ready after its build"
+                );
+                continue;
+            }
+            *blas = queue.compact_blas(blas);
+            let triangles = u64::from(self.meshes[handle.0 as usize].index_count / 3);
+            self.uncompacted_blas_triangles -= triangles;
+            self.compacted_blas_triangles += triangles;
+        }
     }
 
     pub fn vertex_arena(&self) -> &wgpu::Buffer {
@@ -247,13 +330,22 @@ impl MeshPool {
         ]
     }
 
-    /// Bytes of the Arenas and the Mesh table, whatever they hold.
-    pub fn gpu_memory_bytes(&self) -> u64 {
+    /// Bytes of the Arenas and the Mesh table, whatever they hold, and of the
+    /// BLASes, as `acceleration_structure_bytes` estimates them.
+    pub fn gpu_memory_bytes(
+        &self,
+        acceleration_structure_bytes: &AccelerationStructureBytes,
+    ) -> u64 {
+        let blas_bytes = self.compacted_blas_triangles as f64
+            * acceleration_structure_bytes.per_compacted_blas_triangle
+            + self.uncompacted_blas_triangles as f64
+                * acceleration_structure_bytes.per_blas_triangle;
         self.arenas()
             .iter()
             .map(|arena| arena.buffer.size())
             .sum::<u64>()
             + self.mesh_table.size()
+            + blas_bytes.round() as u64
     }
 
     /// Bytes of the Arenas that hold Meshes.
@@ -450,6 +542,156 @@ pub(crate) mod tests {
         assert_eq!(pulled, indices);
     }
 
+    /// A Mesh loaded after another, so that its ranges of the vertex and
+    /// index Arenas start past their first elements, is traced where its
+    /// triangle is once its BLAS is built and compacted; its BLAS counts by
+    /// the estimate's bytes per triangle, then per compacted triangle.
+    #[test]
+    fn a_meshs_blas_holds_its_triangle_from_its_arena_ranges_and_is_compacted() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let bytes = AccelerationStructureBytes {
+            per_blas_triangle: 100.0,
+            per_compacted_blas_triangle: 50.0,
+        };
+        let mut staging = LoadStaging::new(context.device.clone());
+        let mut pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
+        let empty = pool.gpu_memory_bytes(&bytes);
+        pool.load(&mut staging, &mesh(3, vec![0, 1, 2]), &[None])
+            .expect("a triangle fits");
+        let handle = pool
+            .load(&mut staging, &triangle_about_x(), &[None])
+            .expect("a triangle fits");
+        assert_eq!(pool.gpu_memory_bytes(&bytes), empty + 2 * 100);
+        staging.submit(&context.queue);
+        pool.compact_blases(&context.queue);
+        assert_eq!(pool.gpu_memory_bytes(&bytes), empty + 2 * 50);
+
+        let mut tlas = context.device.create_tlas(&wgpu::CreateTlasDescriptor {
+            label: Some("Test TLAS"),
+            max_instances: 1,
+            flags: wgpu::AccelerationStructureFlags::empty(),
+            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+        });
+        let identity = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0];
+        tlas[0] = Some(wgpu::TlasInstance::new(
+            &pool.blases[handle.0 as usize],
+            identity,
+            7,
+            0xff,
+        ));
+        let mut encoder = context.device.create_command_encoder(&Default::default());
+        encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&tlas));
+        context.queue.submit(std::iter::once(encoder.finish()));
+        let points = [[0.8, 0.0, 0.0], [0.0, 0.0, 0.0], [0.8, 0.5, 0.0]];
+        assert_eq!(trace_down(&context, &tlas, &points), [Some(7), None, None]);
+    }
+
+    /// A one-Primitive Mesh of a triangle about (0.8, 0) in mesh space, at
+    /// z 0.
+    pub(crate) fn triangle_about_x() -> CookedMesh {
+        let mut triangle = mesh(3, vec![0, 1, 2]);
+        triangle.vertices = [[0.6, -0.2], [1.0, -0.2], [0.8, 0.2]]
+            .map(|[x, y]| CookedVertex {
+                position: [x, y, 0.0],
+                ..CookedVertex::default()
+            })
+            .to_vec();
+        triangle
+    }
+
+    /// What a ray down -Z from 1 m above each of `points`, in `tlas`'s
+    /// frame, hits within 2 m: the tag of the Instance it hits.
+    pub(crate) fn trace_down(
+        context: &GpuContext,
+        tlas: &wgpu::Tlas,
+        points: &[[f32; 3]],
+    ) -> Vec<Option<u32>> {
+        let device = &context.device;
+        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Trace Down"),
+            source: wgpu::ShaderSource::Wgsl(
+                "enable wgpu_ray_query;
+                @group(0) @binding(0) var tlas: acceleration_structure;
+                @group(0) @binding(1) var<storage, read> points: array<vec4<f32>>;
+                @group(0) @binding(2) var<storage, read_write> tags: array<u32>;
+                @compute @workgroup_size(1)
+                fn trace_down(@builtin(global_invocation_id) invocation: vec3<u32>) {
+                    let origin = points[invocation.x].xyz + vec3(0.0, 0.0, 1.0);
+                    let down = vec3(0.0, 0.0, -1.0);
+                    var query: ray_query;
+                    rayQueryInitialize(&query, tlas, RayDesc(RAY_FLAG_NONE, 0xffu, 0.0, 2.0, origin, down));
+                    while rayQueryProceed(&query) {}
+                    let hit = rayQueryGetCommittedIntersection(&query);
+                    let missed = hit.kind == RAY_QUERY_INTERSECTION_NONE;
+                    tags[invocation.x] = select(hit.instance_custom_data, 0xffffffffu, missed);
+                }"
+                .into(),
+            ),
+        });
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Trace Down"),
+            layout: None,
+            module: &module,
+            entry_point: Some("trace_down"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        });
+        let points: Vec<[f32; 4]> = points.iter().map(|&[x, y, z]| [x, y, z, 0.0]).collect();
+        let point_buffer = wgpu::util::DeviceExt::create_buffer_init(
+            device,
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Trace Down Points"),
+                contents: bytemuck::cast_slice(&points),
+                usage: wgpu::BufferUsages::STORAGE,
+            },
+        );
+        let size = (points.len() * size_of::<u32>()) as wgpu::BufferAddress;
+        let buffer_of = |usage| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Trace Down Tags"),
+                size,
+                usage,
+                mapped_at_creation: false,
+            })
+        };
+        let tags = buffer_of(wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC);
+        let read = buffer_of(wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ);
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Trace Down"),
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: tlas.as_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: point_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: tags.as_entire_binding(),
+                },
+            ],
+        });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.dispatch_workgroups(points.len() as u32, 1, 1);
+        }
+        encoder.copy_buffer_to_buffer(&tags, 0, &read, 0, size);
+        submit_and_map(context, encoder, &read).expect("read the tags back");
+        let words = read.get_mapped_range(..).expect("mapped");
+        bytemuck::cast_slice::<u8, u32>(&words)
+            .iter()
+            .map(|&tag| (tag != u32::MAX).then_some(tag))
+            .collect()
+    }
+
     /// The first `count` elements of `buffer`, a storage buffer, as a shader
     /// reads them.
     pub(crate) fn read_storage<T: bytemuck::Pod>(
@@ -547,7 +789,8 @@ pub(crate) mod tests {
         let mut pool = MeshPool::new(&context.device, CAPACITY);
         pool.load(&mut staging, &mesh(3, vec![0, 1, 2]), &[None])
             .expect("a triangle fits");
-        let gpu_memory_bytes = pool.gpu_memory_bytes();
+        let bytes = AccelerationStructureBytes::estimate(context.backend());
+        let gpu_memory_bytes = pool.gpu_memory_bytes(&bytes);
         let arena_bytes_in_use = pool.arena_bytes_in_use();
 
         // One vertex past the vertex Arena, then one index past the index
@@ -556,7 +799,7 @@ pub(crate) mod tests {
             let (handle, log) = logged(|| pool.load(&mut staging, &past_capacity, &[None]));
             assert!(handle.is_none(), "a Mesh past capacity loaded");
             assert!(log.contains("Mesh refused"), "not logged: {log:?}");
-            assert_eq!(pool.gpu_memory_bytes(), gpu_memory_bytes);
+            assert_eq!(pool.gpu_memory_bytes(&bytes), gpu_memory_bytes);
             assert_eq!(pool.arena_bytes_in_use(), arena_bytes_in_use);
         }
         // The second refusal gave back the last vertex it took.
