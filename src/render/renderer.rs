@@ -18,7 +18,8 @@ use crate::stats::{FrameRecorder, GpuFrameStats};
 pub(crate) const TIMED_PASSES: [&str; 2] = [CULLING_PASS, MAIN_PASS];
 
 /// The Render switches a Renderer is created with and keeps. The defaults are
-/// what ships; only capture and bench pass others.
+/// what ships; capture and bench take others, for equivalence checks and
+/// A/Bs.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RenderSwitches {
     /// Whether the culling pass draws only the Instances whose Mesh bounds
@@ -550,11 +551,14 @@ mod tests {
     }
 
     /// Instances past a block of the culling pass's scans, and past a row of
-    /// its dispatches, where the draw holds the indices of all but the last,
-    /// none culled: each draws from its own offsets until the draw is full,
+    /// its dispatches, where the draw holds the indices of all but the last.
+    /// None culled, each draws from its own offsets until the draw is full,
     /// then none do, with a warning, and the last is counted as overflowed.
+    /// Culled, the off-screen ones leave room for the last two, so none
+    /// overflows and nothing warns, though the Instances in use would not
+    /// fit.
     #[test]
-    fn a_frame_past_the_draws_capacity_draws_the_instances_that_fit_and_warns() {
+    fn a_frame_past_the_draws_capacity_draws_what_fits_and_warns_only_of_drawn_overflow() {
         let Some(context) = gpu_context() else {
             return;
         };
@@ -563,41 +567,49 @@ mod tests {
             meshlet_records: INSTANCES,
             packed_indices: 3 * (INSTANCES - 1),
         };
-        let mut renderer = Renderer::with_draw_capacity(
-            &context,
-            TARGET_FORMAT,
-            SIZE,
-            SIZE,
-            RenderSwitches { culling: false },
-            capacity,
-        );
-        let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
-        let mesh = load_triangles(&mut renderer, &[[0.0, 0.0]], &[Some(red)]);
-        // Every Instance but the last two is outside the target; those two
-        // are drawn above and below its centre.
-        let instances = (0..INSTANCES)
-            .map(|slot| {
-                let offset = match INSTANCES - slot {
-                    2 => [0.0, 0.5],
-                    1 => [0.0, -0.5],
-                    _ => [5.0, 5.0],
-                };
-                instance(mesh, NO_MATERIAL, offset)
-            })
-            .collect();
-        let frame = frame_of(instances);
-        let ((image, _, gpu), log) =
-            logged(|| render_frame(&context, &mut renderer, &frame, SIZE, SIZE));
+        for switches in [RenderSwitches { culling: false }, RenderSwitches::default()] {
+            let mut renderer = Renderer::with_draw_capacity(
+                &context,
+                TARGET_FORMAT,
+                SIZE,
+                SIZE,
+                switches,
+                capacity,
+            );
+            let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
+            let mesh = load_triangles(&mut renderer, &[[0.0, 0.0]], &[Some(red)]);
+            // Every Instance but the last two is outside the target; those
+            // two are drawn above and below its centre.
+            let instances = (0..INSTANCES)
+                .map(|slot| {
+                    let offset = match INSTANCES - slot {
+                        2 => [0.0, 0.5],
+                        1 => [0.0, -0.5],
+                        _ => [5.0, 5.0],
+                    };
+                    instance(mesh, NO_MATERIAL, offset)
+                })
+                .collect();
+            let frame = frame_of(instances);
+            let ((image, _, gpu), log) =
+                logged(|| render_frame(&context, &mut renderer, &frame, SIZE, SIZE));
 
-        assert_eq!(image.get_pixel(SIZE / 2, 4).0, RED);
-        assert_ne!(image.get_pixel(SIZE / 2, 12).0, RED);
-        assert!(log.contains("The frame's draw is full"), "{log}");
-        let drawn = (
-            gpu.instances_drawn,
-            gpu.triangles_drawn,
-            gpu.instances_overflowed,
-        );
-        assert_eq!(drawn, (INSTANCES - 1, INSTANCES - 1, 1));
+            let culled = switches.culling;
+            assert_eq!(image.get_pixel(SIZE / 2, 4).0, RED);
+            assert_eq!(image.get_pixel(SIZE / 2, 12).0 == RED, culled);
+            assert_eq!(log.contains("The frame's draw is full"), !culled, "{log}");
+            let drawn = (
+                gpu.instances_drawn,
+                gpu.triangles_drawn,
+                gpu.instances_overflowed,
+            );
+            let expected = if culled {
+                (2, 2, 0)
+            } else {
+                (INSTANCES - 1, INSTANCES - 1, 1)
+            };
+            assert_eq!(drawn, expected, "{switches:?}");
+        }
     }
 
     /// Two Renderables, the right one then despawned: its slot, which still

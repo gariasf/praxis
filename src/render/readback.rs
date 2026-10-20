@@ -240,7 +240,9 @@ impl GpuStatsReadback {
     }
 
     /// Reads slot `index` back if it is mapped, and frees it. Returns whether
-    /// it is free; one still mapping is not.
+    /// it is free; one still mapping is not. A frame whose draw had no room
+    /// for some Instances is warned about, once until a frame read back has
+    /// room for all; a skipped readback neither warns nor clears it.
     fn read(&mut self, index: usize) -> bool {
         let slot = &mut self.slots[index];
         let SlotState::Mapping { frame } = slot.state else {

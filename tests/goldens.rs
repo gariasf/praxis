@@ -5,8 +5,8 @@
 //! `vulkan-cpu` on CI's lavapipe (the Mesa pinned in `.github/workflows/ci.yml`).
 //! Each scene shifted by 100 km must also match its origin Golden, and each
 //! with culling off must match its capture with culling on, so culling
-//! removes no visible Instance; so must the helmet scene, fetched and so
-//! without a Golden, where it is fetched.
+//! removes no visible Instance. The helmet scene has no Golden, since its
+//! source is fetched, and takes the culling check where it is fetched.
 //! A Golden is a reviewed capture from `praxis::capture`, so it catches
 //! regressions, not errors already present when it was recorded.
 //!
@@ -182,10 +182,13 @@ fn reference_scenes_match_their_goldens() {
     let helmet_is_fetched = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join(praxis::DEFAULT_MODEL)
         .exists();
+    if !helmet_is_fetched {
+        writeln!(std::io::stderr(), "skipped helmet: assets not fetched").ok();
+    }
     let helmet = helmet_is_fetched.then_some(ReferenceScene::Helmet);
     for scene in SCENES.into_iter().chain(helmet) {
         let golden_path = golden_path(&golden_directory, scene);
-        let actual = capture(
+        let culled = capture(
             &context,
             scene,
             glam::DVec3::ZERO,
@@ -198,7 +201,7 @@ fn reference_scenes_match_their_goldens() {
             RenderSwitches { culling: false },
         );
         failures.extend(mismatch(
-            &actual,
+            &culled,
             &unculled,
             &format!("{}-unculled", scene.name()),
             &difference_directory,
@@ -211,7 +214,7 @@ fn reference_scenes_match_their_goldens() {
             // lavapipe) can be taken from the job's artifact.
             std::fs::create_dir_all(&difference_directory).expect("difference directory");
             let actual_path = difference_directory.join(format!("{}-actual.png", scene.name()));
-            actual.save(&actual_path).expect("write capture");
+            culled.save(&actual_path).expect("write capture");
             failures.push(format!(
                 "{}: no Golden at {}; capture {}",
                 scene.name(),
@@ -225,7 +228,7 @@ fn reference_scenes_match_their_goldens() {
             .into_rgba8();
         failures.extend(mismatch(
             &golden,
-            &actual,
+            &culled,
             scene.name(),
             &difference_directory,
         ));
