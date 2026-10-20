@@ -2,25 +2,26 @@ use std::time::Instant;
 
 use crate::assets::{ARENA_CAPACITY_BYTES, MaterialPool, MeshPool};
 use crate::gpu::GpuContext;
-use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY, pipeline_layout};
+use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
+use crate::render::main_pass::MainPass;
+use crate::render::targets::RenderTargets;
 use crate::render::{
-    CameraUniform, DEPTH_FORMAT, FrameData, FrameStaging, INSTANCE_CAPACITY, InstanceData,
-    LightUniform, LoadStaging, create_depth_texture, shaders,
+    CameraUniform, FrameData, FrameStaging, INSTANCE_CAPACITY, InstanceData, LightUniform,
+    LoadStaging,
 };
-use crate::stats::{FrameRecorder, texture_bytes};
-
-/// The label of the Renderer's one render pass, and its name in frame stats.
-pub(crate) const MAIN_PASS: &str = "main_pass";
+use crate::stats::FrameRecorder;
 
 /// Draws Frame data into a target view, the window's surface or an offscreen
-/// texture, from GPU resources and Pools it owns; it reads no ECS World.
+/// texture, from GPU resources and Pools it owns; it reads no ECS World. It
+/// holds the bind groups passes share and the render targets, and calls the
+/// passes in ADR 0019's order.
 pub struct Renderer {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     aspect_ratio: f32,
-    render_pipeline: wgpu::RenderPipeline,
+    render_targets: RenderTargets,
+    main_pass: MainPass,
     camera_buffer: wgpu::Buffer,
-    depth_texture_view: wgpu::TextureView,
     light_buffer: wgpu::Buffer,
     /// The camera and the lights (`FRAME`).
     frame_bind_group: wgpu::BindGroup,
@@ -53,72 +54,24 @@ impl Renderer {
 
         let device = context.device.clone();
         let queue = context.queue.clone();
-        let shader = device.create_shader_module(shaders::MAIN.descriptor());
         let frame_bind_group_layout = FRAME.layout(&device);
         let scene_geometry_bind_group_layout = SCENE_GEOMETRY.layout(&device);
 
         // Material-as-ID: one bind group (SSBO + per-channel texture arrays +
-        // sampler) serves every material. Created before the pipeline layout
-        // because the layout references its bind group layout.
+        // sampler) serves every material. Created before the main pass
+        // because its pipeline layout references its bind group layout.
         let mut load_staging = LoadStaging::new(device.clone());
         let material_pool = MaterialPool::new(&device, &mut load_staging);
 
-        let render_pipeline_layout = pipeline_layout(
+        let main_pass = MainPass::new(
             &device,
-            "Render Pipeline Layout",
+            target_format,
             &[
                 (&FRAME, &frame_bind_group_layout),
                 (&MATERIALS, &material_pool.bind_group_layout),
                 (&SCENE_GEOMETRY, &scene_geometry_bind_group_layout),
             ],
         );
-
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: target_format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON
-                polygon_mode: wgpu::PolygonMode::Fill,
-                // Requires Features::DEPTH_CLIP_CONTROL
-                unclipped_depth: false,
-                // Requires Features::CONSERVATIVE_RASTERIZATION
-                conservative: false,
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: Some(true),
-                depth_compare: Some(wgpu::CompareFunction::Greater),
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview_mask: None,
-            cache: None,
-        });
 
         let camera_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Camera Buffer"),
@@ -166,7 +119,7 @@ impl Renderer {
             ],
         );
 
-        let depth_texture_view = create_depth_texture(&device, width, height);
+        let render_targets = RenderTargets::new(&device, width, height);
 
         Self {
             mesh_pool,
@@ -175,9 +128,9 @@ impl Renderer {
             device,
             queue,
             aspect_ratio: width as f32 / height as f32,
-            render_pipeline,
+            render_targets,
+            main_pass,
             camera_buffer,
-            depth_texture_view,
             light_buffer,
             frame_bind_group,
             instance_buffer,
@@ -191,7 +144,9 @@ impl Renderer {
 
     /// Matches a new target size, both non-zero.
     pub fn resize(&mut self, width: u32, height: u32) {
-        self.depth_texture_view = create_depth_texture(&self.device, width, height);
+        // A pass whose bind groups read a target rebuilds them here, after
+        // the render targets.
+        self.render_targets = RenderTargets::new(&self.device, width, height);
         self.aspect_ratio = width as f32 / height as f32;
     }
 
@@ -257,57 +212,20 @@ impl Renderer {
             .unwrap_or_else(|| create_frame_encoder(&self.device));
         self.material_pool.refresh_bind_group(&self.device);
 
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some(MAIN_PASS),
-                color_attachments: &[
-                    // This is what @location(0) in the fragment shader targets
-                    Some(wgpu::RenderPassColorAttachment {
-                        view: target,
-                        resolve_target: None,
-                        depth_slice: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color {
-                                r: 0.1,
-                                g: 0.2,
-                                b: 0.3,
-                                a: 1.0,
-                            }),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    }),
-                ],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(0.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
-                occlusion_query_set: None,
-                timestamp_writes,
-                multiview_mask: None,
-            });
-
-            render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(FRAME.index, &self.frame_bind_group, &[]);
-            render_pass.set_bind_group(MATERIALS.index, &self.material_pool.bind_group, &[]);
-            render_pass.set_bind_group(SCENE_GEOMETRY.index, &self.scene_geometry_bind_group, &[]);
-            render_pass.set_index_buffer(
-                self.mesh_pool.index_buffer().slice(..),
-                wgpu::IndexFormat::Uint32,
-            );
-
-            for draw in &frame.draws {
-                render_pass.draw_indexed(
-                    draw.indices.clone(),
-                    draw.base_vertex,
-                    draw.instance_index..draw.instance_index + 1,
-                );
-            }
-            recorder.draw_calls += frame.draws.len() as u32;
-        }
+        self.main_pass.record(
+            &mut encoder,
+            target,
+            &self.render_targets,
+            &[
+                (&FRAME, &self.frame_bind_group),
+                (&MATERIALS, &self.material_pool.bind_group),
+                (&SCENE_GEOMETRY, &self.scene_geometry_bind_group),
+            ],
+            self.mesh_pool.index_buffer(),
+            &frame.draws,
+            timestamp_writes,
+        );
+        recorder.draw_calls += frame.draws.len() as u32;
 
         let command_buffer = encoder.finish();
         recorder.stage("encode", started);
@@ -343,10 +261,9 @@ impl Renderer {
             &self.instance_buffer,
         ];
         buffers.iter().map(|buffer| buffer.size()).sum::<u64>()
-            + texture_bytes(
-                self.depth_texture_view.texture(),
-                self.transient_saves_memory,
-            )
+            + self
+                .render_targets
+                .gpu_memory_bytes(self.transient_saves_memory)
             + self.mesh_pool.gpu_memory_bytes()
             + self
                 .material_pool
@@ -378,20 +295,72 @@ mod tests {
 
     #[test]
     fn renders_hand_built_frame_data_without_a_world() {
-        let context = match pollster::block_on(GpuContext::headless()) {
-            Ok(context) => context,
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE);
+        let frame = triangle_frame(&mut renderer);
+        let (image, recorder) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
+
+        assert_eq!(recorder.draw_calls, 1);
+        assert_eq!(image.get_pixel(SIZE / 2, SIZE / 2).0, [255, 0, 0, 255]);
+        // The clear colour, linear (0.1, 0.2, 0.3), sRGB-encoded as in
+        // tests/capture.rs; the GPU may round its green either way.
+        let corner = image.get_pixel(0, 0).0;
+        assert!(
+            corner[0] == 89 && corner[1].abs_diff(124) <= 1 && corner[2] == 149,
+            "corner {corner:?}"
+        );
+    }
+
+    #[test]
+    fn a_resized_renderer_draws_as_one_created_at_its_new_size() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        // Wider than tall, so swapped sides would show.
+        let (width, height) = (24, 20);
+        let mut resized = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE);
+        let frame = triangle_frame(&mut resized);
+        // A frame at the first size before the resize, as a window draws.
+        render_frame(&context, &mut resized, &frame, SIZE, SIZE);
+        resized.resize(width, height);
+        let (resized_image, _) = render_frame(&context, &mut resized, &frame, width, height);
+
+        let mut created = Renderer::new(&context, TARGET_FORMAT, width, height);
+        let frame = triangle_frame(&mut created);
+        let (created_image, _) = render_frame(&context, &mut created, &frame, width, height);
+
+        assert_eq!(resized.aspect_ratio(), 1.2);
+        assert_eq!(
+            resized_image.get_pixel(width / 2, height / 2).0,
+            [255, 0, 0, 255]
+        );
+        assert!(
+            resized_image == created_image,
+            "the resized Renderer drew another image than one created at its size"
+        );
+    }
+
+    /// A headless context, or `None` after saying so on a machine without a
+    /// GPU adapter, where these tests skip.
+    fn gpu_context() -> Option<GpuContext> {
+        match pollster::block_on(GpuContext::headless()) {
+            Ok(context) => Some(context),
             Err(error) if error.is::<wgpu::RequestAdapterError>() => {
                 // Not `eprintln!`, which libtest captures from passing tests.
                 writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
-                return;
+                None
             }
             Err(error) => panic!("headless GPU context failed: {error:#}"),
-        };
-        let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE);
+        }
+    }
 
-        // A triangle around the target's centre, counter-clockwise towards
-        // the camera, drawn with an identity view-projection; its QTangent is
-        // the identity, so its normal is +Z.
+    /// Frame data that draws a triangle around the target's centre, black,
+    /// unlit and red emissive, loaded into `renderer`'s Pools.
+    fn triangle_frame(renderer: &mut Renderer) -> FrameData {
+        // Counter-clockwise towards the camera, drawn with an identity
+        // view-projection; its QTangent is the identity, so its normal is +Z.
         let vertex = |x: f32, y: f32| CookedVertex {
             position: [x, y, 0.5],
             uv: [0.0, 0.0],
@@ -440,7 +409,7 @@ mod tests {
             },
         );
         let identity = padded_columns(glam::Mat3::IDENTITY);
-        let frame = FrameData {
+        FrameData {
             camera: CameraUniform {
                 view_proj: glam::Mat4::IDENTITY.to_cols_array_2d(),
                 ..CameraUniform::default()
@@ -463,13 +432,23 @@ mod tests {
                 base_vertex: vertex_offset as i32,
                 instance_index: 0,
             }],
-        };
+        }
+    }
 
+    /// Uploads and renders `frame` into a new `width` × `height` target, and
+    /// reads it back, with what the frame recorded.
+    fn render_frame(
+        context: &GpuContext,
+        renderer: &mut Renderer,
+        frame: &FrameData,
+        width: u32,
+        height: u32,
+    ) -> (image::RgbaImage, FrameRecorder) {
         let target = context.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Frame Data Test Target"),
             size: wgpu::Extent3d {
-                width: SIZE,
-                height: SIZE,
+                width,
+                height,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -480,24 +459,16 @@ mod tests {
             view_formats: &[],
         });
         let mut recorder = FrameRecorder::new();
-        renderer.upload(&frame, &mut recorder);
+        renderer.upload(frame, &mut recorder);
         renderer.render(
-            &frame,
+            frame,
             &target.create_view(&wgpu::TextureViewDescriptor::default()),
             None,
             &mut recorder,
         );
-        let pixels = read_back(&context, &target).expect("read back failed");
-        let image = image::RgbaImage::from_raw(SIZE, SIZE, pixels).expect("SIZE × SIZE pixels");
-
-        assert_eq!(recorder.draw_calls, 1);
-        assert_eq!(image.get_pixel(SIZE / 2, SIZE / 2).0, [255, 0, 0, 255]);
-        // The clear colour, linear (0.1, 0.2, 0.3), sRGB-encoded as in
-        // tests/capture.rs; the GPU may round its green either way.
-        let corner = image.get_pixel(0, 0).0;
-        assert!(
-            corner[0] == 89 && corner[1].abs_diff(124) <= 1 && corner[2] == 149,
-            "corner {corner:?}"
-        );
+        let pixels = read_back(context, &target).expect("read back failed");
+        let image =
+            image::RgbaImage::from_raw(width, height, pixels).expect("width × height pixels");
+        (image, recorder)
     }
 }
