@@ -1,8 +1,11 @@
-// The main pass's entry points, after the shared parts; its bindings are
-// declared from their bind groups' definitions (src/render/bind_groups.rs).
+// The main pass's entry points, the depth pre-pass's and the lit pass's,
+// after the shared parts; its bindings are declared from their bind groups'
+// definitions (src/render/bind_groups.rs).
 
 struct VertexOutput {
-    @builtin(position) clip_position: vec4<f32>,
+    // Invariant in both passes, which compute it alike, so the lit pass's
+    // depth-equal test meets exactly the depths the pre-pass kept.
+    @builtin(position) @invariant clip_position: vec4<f32>,
     @location(0) camera_relative_position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
@@ -11,7 +14,16 @@ struct VertexOutput {
 }
 
 @vertex
+fn vs_depth_prepass(@builtin(vertex_index) packed_index: u32) -> @builtin(position) @invariant vec4<f32> {
+    return vertex_output(packed_index).clip_position;
+}
+
+@vertex
 fn vs_main(@builtin(vertex_index) packed_index: u32) -> VertexOutput {
+    return vertex_output(packed_index);
+}
+
+fn vertex_output(packed_index: u32) -> VertexOutput {
     var out: VertexOutput;
     // The frame's draw has no base vertex, so the vertex index is the packed
     // index: a Meshlet record, which names the Instance, the Meshlet and the

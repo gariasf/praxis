@@ -4,7 +4,7 @@ use crate::assets::{ARENA_CAPACITY_BYTES, MaterialPool, MeshPool};
 use crate::gpu::GpuContext;
 use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
 use crate::render::culling_pass::{CULLING_PASS, CullingPass, DrawCapacity};
-use crate::render::main_pass::{MAIN_PASS, MainPass};
+use crate::render::main_pass::{DEPTH_PREPASS, LIT_PASS, MainPass};
 use crate::render::readback::GpuStatsReadback;
 use crate::render::targets::RenderTargets;
 use crate::render::{
@@ -15,7 +15,7 @@ use crate::stats::{FrameRecorder, GpuFrameStats};
 
 /// The passes `render` records, in order, each timed from its start to its
 /// end.
-pub(crate) const TIMED_PASSES: [&str; 2] = [CULLING_PASS, MAIN_PASS];
+pub(crate) const TIMED_PASSES: [&str; 3] = [CULLING_PASS, DEPTH_PREPASS, LIT_PASS];
 
 /// The Render switches a Renderer is created with and keeps. The defaults are
 /// what ships; capture and bench take others, for equivalence checks and
@@ -48,6 +48,7 @@ impl RenderSwitches {
 pub struct Renderer {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
+    target_format: wgpu::TextureFormat,
     aspect_ratio: f32,
     render_targets: RenderTargets,
     culling_pass: CullingPass,
@@ -198,7 +199,7 @@ impl Renderer {
             ],
         );
 
-        let render_targets = RenderTargets::new(&device, width, height);
+        let render_targets = RenderTargets::new(&device, target_format, width, height);
         let gpu_stats = GpuStatsReadback::new(&device, queue.get_timestamp_period());
 
         Self {
@@ -207,6 +208,7 @@ impl Renderer {
             load_staging,
             device,
             queue,
+            target_format,
             aspect_ratio: width as f32 / height as f32,
             render_targets,
             culling_pass,
@@ -229,7 +231,7 @@ impl Renderer {
     pub fn resize(&mut self, width: u32, height: u32) {
         // A pass whose bind groups read a target rebuilds them here, after
         // the render targets.
-        self.render_targets = RenderTargets::new(&self.device, width, height);
+        self.render_targets = RenderTargets::new(&self.device, self.target_format, width, height);
         self.aspect_ratio = width as f32 / height as f32;
     }
 
@@ -322,10 +324,12 @@ impl Renderer {
             ],
             self.culling_pass.packed_indices(),
             self.culling_pass.frame_draw(),
-            timestamps.map(|timestamps| timestamps.render_pass(MAIN_PASS)),
+            timestamps.map(|timestamps| timestamps.render_pass(DEPTH_PREPASS)),
+            timestamps.map(|timestamps| timestamps.render_pass(LIT_PASS)),
         );
-        // The frame's draw is one indirect call.
-        recorder.draw_calls += 1;
+        // The depth pre-pass and the lit pass each draw the frame's draw with
+        // one indirect call.
+        recorder.draw_calls += 2;
         self.gpu_stats
             .end_frame(&mut encoder, self.culling_pass.frame_draw());
 
@@ -436,7 +440,7 @@ mod tests {
         let frame = triangle_frame(&mut renderer);
         let (image, recorder, _) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
 
-        assert_eq!(recorder.draw_calls, 1);
+        assert_eq!(recorder.draw_calls, 2);
         assert_eq!(image.get_pixel(SIZE / 2, SIZE / 2).0, [255, 0, 0, 255]);
         // The clear colour, linear (0.1, 0.2, 0.3), sRGB-encoded as in
         // tests/capture.rs; the GPU may round its green either way.
@@ -517,7 +521,7 @@ mod tests {
         ]);
         let (image, recorder, _) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
 
-        assert_eq!(recorder.draw_calls, 1);
+        assert_eq!(recorder.draw_calls, 2);
         let quarters = [(4, 4), (12, 4), (4, 12), (12, 12)].map(|(x, y)| image.get_pixel(x, y).0);
         assert_eq!(quarters, [RED, GREEN, BLUE, BLUE]);
     }

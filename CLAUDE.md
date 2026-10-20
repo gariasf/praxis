@@ -106,10 +106,11 @@ src/
                                  ECS World, calls the passes in order),
                                  a module per pass (culling_pass: the
                                  compute pass that builds the frame's
-                                 draw; main_pass: its pipeline and
-                                 recording), targets (every
-                                 size-dependent target, the depth
-                                 conventions), prepare (ECS World to
+                                 draw; main_pass: the depth pre-pass
+                                 and the lit pass that draw it, their
+                                 pipelines and recording), targets
+                                 (every size-dependent target, the
+                                 depth conventions), prepare (ECS World to
                                  Frame data), bind_groups (each defined
                                  once), readback (each frame's GPU stats
                                  through a ring of mapped buffers),
@@ -252,7 +253,7 @@ When reviewing changes, check for:
 - [ ] The runtime loads cooked Blobs only and references Assets by
       Asset ID, never by source path (ADR 0018)
 - [ ] The main pass reads no screen-space history, and no change rules
-      out its 4x MSAA, which M3 turns on (ADRs 0008, 0019, 0020)
+      out its 4x MSAA (ADRs 0008, 0019, 0020)
 - [ ] A newly used wgpu feature or limit joins the Capability floor,
       or, outside the capability matrix's Tiers 1-2, has a path for
       adapters without it (ADR 0021)

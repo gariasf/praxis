@@ -1,18 +1,31 @@
-//! The main pass: one forward render pass that clears the target and the
-//! depth target, then draws the culling pass's frame's draw with one
-//! indirect call, each Meshlet with its record's Material. ADR 0019 plans it
-//! as a depth pre-pass and a lit pass.
+//! The main pass, ADR 0019's two render passes, each drawing the culling
+//! pass's frame's draw with one indirect call: a depth pre-pass that clears
+//! the depth target and keeps the nearest depth, then a lit pass that draws
+//! at depth equal, each Meshlet with its record's Material, into the
+//! multisampled colour, which it resolves into the target.
 
 use crate::render::bind_groups::{BindGroupDefinition, MESHLET_RECORDS, pipeline_layout};
 use crate::render::shaders;
 use crate::render::targets::{self, RenderTargets};
 
-/// The main pass's label, and its name in frame stats.
-pub(crate) const MAIN_PASS: &str = "main_pass";
+/// The depth pre-pass's label, and its name in frame stats.
+pub(crate) const DEPTH_PREPASS: &str = "depth_prepass";
 
-/// The main pass's pipeline, which draws into views of one format.
+/// The lit pass's label, and its name in frame stats.
+pub(crate) const LIT_PASS: &str = "lit_pass";
+
+/// The colour the lit pass clears to, linear.
+const BACKGROUND: wgpu::Color = wgpu::Color {
+    r: 0.1,
+    g: 0.2,
+    b: 0.3,
+    a: 1.0,
+};
+
+/// The main pass's pipelines, which draw into views of one format.
 pub struct MainPass {
-    pipeline: wgpu::RenderPipeline,
+    depth_prepass_pipeline: wgpu::RenderPipeline,
+    lit_pipeline: wgpu::RenderPipeline,
     /// Its group 3 (`MESHLET_RECORDS`).
     meshlet_records: wgpu::BindGroup,
 }
@@ -36,10 +49,52 @@ impl MainPass {
         let shader = device.create_shader_module(shaders::MAIN.descriptor());
         let mut layouts = bind_group_layouts.to_vec();
         layouts.push((&MESHLET_RECORDS, &meshlet_records_layout));
-        let layout = pipeline_layout(device, "Main Pass Pipeline Layout", &layouts);
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Main Pass Pipeline"),
-            layout: Some(&layout),
+        let lit_layout = pipeline_layout(device, "Lit Pass Pipeline Layout", &layouts);
+        // The pre-pass has no fragment stage, so it reads only the groups its
+        // vertex stage sees, as `record` sets them.
+        layouts.retain(|&(definition, _)| definition.visible_to(wgpu::ShaderStages::VERTEX));
+        let depth_prepass_layout =
+            pipeline_layout(device, "Depth Pre-pass Pipeline Layout", &layouts);
+
+        // Both pipelines rasterise alike, so the lit pass meets at each
+        // sample the depth the pre-pass kept there.
+        let primitive = wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: Some(wgpu::Face::Back),
+            // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON
+            polygon_mode: wgpu::PolygonMode::Fill,
+            // Requires Features::DEPTH_CLIP_CONTROL
+            unclipped_depth: false,
+            // Requires Features::CONSERVATIVE_RASTERIZATION
+            conservative: false,
+        };
+        let multisample = wgpu::MultisampleState {
+            count: targets::SAMPLE_COUNT,
+            mask: !0,
+            alpha_to_coverage_enabled: false,
+        };
+        let depth_prepass_pipeline =
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Depth Pre-pass Pipeline"),
+                layout: Some(&depth_prepass_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs_depth_prepass"),
+                    buffers: &[],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                },
+                fragment: None,
+                primitive,
+                depth_stencil: Some(targets::depth_stencil_state()),
+                multisample,
+                multiview_mask: None,
+                cache: None,
+            });
+        let lit_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Lit Pass Pipeline"),
+            layout: Some(&lit_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
@@ -56,38 +111,25 @@ impl MainPass {
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON
-                polygon_mode: wgpu::PolygonMode::Fill,
-                // Requires Features::DEPTH_CLIP_CONTROL
-                unclipped_depth: false,
-                // Requires Features::CONSERVATIVE_RASTERIZATION
-                conservative: false,
-            },
-            depth_stencil: Some(targets::depth_stencil_state()),
-            multisample: wgpu::MultisampleState {
-                count: targets::SAMPLE_COUNT,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
+            primitive,
+            depth_stencil: Some(targets::depth_equal_state()),
+            multisample,
             multiview_mask: None,
             cache: None,
         });
         MainPass {
-            pipeline,
+            depth_prepass_pipeline,
+            lit_pipeline,
             meshlet_records,
         }
     }
 
-    /// Records the pass into `encoder`: clears `target`, a view in this
-    /// pass's format and the render targets' size, and the depth target,
-    /// then draws the frame's draw, its packed indices `packed_indices` and
-    /// its indirect arguments `frame_draw`, with `bind_groups` set, timed
-    /// into `timestamp_writes`.
+    /// Records the depth pre-pass and the lit pass into `encoder`: clears the
+    /// render targets, draws the frame's draw, its packed indices
+    /// `packed_indices` and its indirect arguments `frame_draw`, in each pass,
+    /// with `bind_groups` set where it reads them, and resolves the colour
+    /// into `target`, a view in this pass's format and the render targets'
+    /// size. Each pass is timed into its own timestamp writes.
     #[expect(clippy::too_many_arguments)]
     pub fn record(
         &self,
@@ -97,35 +139,59 @@ impl MainPass {
         bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
         packed_indices: &wgpu::Buffer,
         frame_draw: &wgpu::Buffer,
-        timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
+        depth_prepass_timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
+        lit_pass_timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
     ) {
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some(MAIN_PASS),
-            color_attachments: &[
-                // This is what @location(0) in the fragment shader targets
-                Some(wgpu::RenderPassColorAttachment {
-                    view: target,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                }),
-            ],
+        let mut depth_prepass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some(DEPTH_PREPASS),
+            color_attachments: &[],
             depth_stencil_attachment: Some(render_targets.depth_attachment()),
             occlusion_query_set: None,
-            timestamp_writes,
+            timestamp_writes: depth_prepass_timestamps,
             multiview_mask: None,
         });
+        depth_prepass.set_pipeline(&self.depth_prepass_pipeline);
+        self.draw(
+            &mut depth_prepass,
+            bind_groups
+                .iter()
+                .copied()
+                .filter(|&(definition, _)| definition.visible_to(wgpu::ShaderStages::VERTEX)),
+            packed_indices,
+            frame_draw,
+        );
+        drop(depth_prepass);
 
-        render_pass.set_pipeline(&self.pipeline);
-        for &(definition, bind_group) in bind_groups {
+        let mut lit_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some(LIT_PASS),
+            color_attachments: &[
+                // This is what @location(0) in the fragment shader targets
+                Some(render_targets.color_attachment(target, BACKGROUND)),
+            ],
+            depth_stencil_attachment: Some(render_targets.read_only_depth_attachment()),
+            occlusion_query_set: None,
+            timestamp_writes: lit_pass_timestamps,
+            multiview_mask: None,
+        });
+        lit_pass.set_pipeline(&self.lit_pipeline);
+        self.draw(
+            &mut lit_pass,
+            bind_groups.iter().copied(),
+            packed_indices,
+            frame_draw,
+        );
+    }
+
+    /// Sets `bind_groups` and this pass's own group into `render_pass`, then
+    /// draws the frame's draw with one indirect call.
+    fn draw<'a>(
+        &self,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        bind_groups: impl IntoIterator<Item = (&'a BindGroupDefinition, &'a wgpu::BindGroup)>,
+        packed_indices: &wgpu::Buffer,
+        frame_draw: &wgpu::Buffer,
+    ) {
+        for (definition, bind_group) in bind_groups {
             render_pass.set_bind_group(definition.index, bind_group, &[]);
         }
         render_pass.set_bind_group(MESHLET_RECORDS.index, &self.meshlet_records, &[]);

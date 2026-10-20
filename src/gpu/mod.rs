@@ -91,7 +91,8 @@ pub async fn capability_report() -> anyhow::Result<String> {
 /// The adapter, its backend, and whether the adapter supports each
 /// feature the roadmap plans on, with the related features and limits.
 /// One line per entry, followed by the Capability floor's limits, 4x MSAA on
-/// the main pass's attachment formats, and anisotropic filtering.
+/// the main pass's attachment formats, resolved on colour ones, and
+/// anisotropic filtering.
 fn adapter_report(adapter: &wgpu::Adapter) -> String {
     let info = adapter.get_info();
     let features = adapter.features();
@@ -181,8 +182,15 @@ fn adapter_report(adapter: &wgpu::Adapter) -> String {
         .into_iter()
         .map(|format| {
             let flags = adapter.get_texture_format_features(format).flags;
-            let verdict = if has_msaa_x4(flags) { "yes" } else { "no" };
-            format!("{format:?} {verdict}")
+            let missing: Vec<_> = (floor_format_features(format) - flags)
+                .iter_names()
+                .map(|(name, _)| name)
+                .collect();
+            if missing.is_empty() {
+                format!("{format:?} yes")
+            } else {
+                format!("{format:?} no ({})", missing.join(", "))
+            }
         })
         .collect();
     report.push_str(&format!(
@@ -280,16 +288,16 @@ fn check_floor(
     let gaps = BelowCapabilityFloor {
         missing_features: floor_features() - features,
         missing_downlevel_flags: floor_downlevel_flags() - downlevel_flags,
-        formats_without_msaa_x4: attachment_formats
+        missing_format_features: attachment_formats
             .iter()
-            .filter(|&&(_, flags)| !has_msaa_x4(flags))
-            .map(|&(format, _)| format)
+            .map(|&(format, flags)| (format, floor_format_features(format) - flags))
+            .filter(|(_, missing)| !missing.is_empty())
             .collect(),
         limits: limit_gaps,
     };
     if gaps.missing_features.is_empty()
         && gaps.missing_downlevel_flags.is_empty()
-        && gaps.formats_without_msaa_x4.is_empty()
+        && gaps.missing_format_features.is_empty()
         && gaps.limits.is_empty()
     {
         Ok(())
@@ -298,10 +306,16 @@ fn check_floor(
     }
 }
 
-/// Whether a format's adapter flags allow 4x MSAA, which the floor requires
-/// on every main-pass attachment format.
-fn has_msaa_x4(flags: wgpu::TextureFormatFeatureFlags) -> bool {
-    flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4)
+/// The format features the floor requires of a main-pass attachment format:
+/// 4x MSAA, and on a colour format its resolve, since the lit pass resolves
+/// its multisampled colour into the target (ADR 0019).
+fn floor_format_features(format: wgpu::TextureFormat) -> wgpu::TextureFormatFeatureFlags {
+    let msaa_x4 = wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4;
+    if format.is_depth_stencil_format() {
+        msaa_x4
+    } else {
+        msaa_x4 | wgpu::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE
+    }
 }
 
 /// Every way an adapter falls short of the Capability floor, so one run
@@ -310,7 +324,9 @@ fn has_msaa_x4(flags: wgpu::TextureFormatFeatureFlags) -> bool {
 pub struct BelowCapabilityFloor {
     pub missing_features: wgpu::Features,
     pub missing_downlevel_flags: wgpu::DownlevelFlags,
-    pub formats_without_msaa_x4: Vec<wgpu::TextureFormat>,
+    /// Each main-pass attachment format with the floor's format features it
+    /// lacks.
+    pub missing_format_features: Vec<(wgpu::TextureFormat, wgpu::TextureFormatFeatureFlags)>,
     pub limits: Vec<LimitGap>,
 }
 
@@ -335,9 +351,13 @@ impl fmt::Display for BelowCapabilityFloor {
                 .map(|(name, _)| format!("missing downlevel flag {name}")),
         );
         gaps.extend(
-            self.formats_without_msaa_x4
+            self.missing_format_features
                 .iter()
-                .map(|format| format!("no 4x MSAA on {format:?}")),
+                .flat_map(|(format, missing)| {
+                    missing.iter_names().map(move |(name, _)| {
+                        format!("missing format feature {name} on {format:?}")
+                    })
+                }),
         );
         gaps.extend(self.limits.iter().map(|gap| {
             format!(
@@ -530,6 +550,7 @@ mod tests {
         };
         let mut formats = m4_pro_attachment_formats();
         formats[0].1 = wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X2;
+        formats[1].1 = MSAA_X4 - wgpu::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE;
 
         let error = check_floor(
             m4_pro_features() - wgpu::Features::TIMESTAMP_QUERY,
@@ -547,7 +568,16 @@ mod tests {
                     | wgpu::DownlevelFlags::INDIRECT_EXECUTION
                     | wgpu::DownlevelFlags::VERTEX_STORAGE
                     | wgpu::DownlevelFlags::ANISOTROPIC_FILTERING,
-                formats_without_msaa_x4: vec![wgpu::TextureFormat::Depth32Float],
+                missing_format_features: vec![
+                    (
+                        wgpu::TextureFormat::Depth32Float,
+                        wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4
+                    ),
+                    (
+                        wgpu::TextureFormat::Rgba8UnormSrgb,
+                        wgpu::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE
+                    ),
+                ],
                 limits: vec![LimitGap {
                     name: "max_buffer_size",
                     required: 2_147_483_647,
@@ -560,7 +590,9 @@ mod tests {
             "adapter below the Capability floor (ADR 0021): \
              missing feature TIMESTAMP_QUERY; missing downlevel flag COMPUTE_SHADERS; \
              missing downlevel flag INDIRECT_EXECUTION; missing downlevel flag VERTEX_STORAGE; \
-             missing downlevel flag ANISOTROPIC_FILTERING; no 4x MSAA on Depth32Float; \
+             missing downlevel flag ANISOTROPIC_FILTERING; \
+             missing format feature MULTISAMPLE_X4 on Depth32Float; \
+             missing format feature MULTISAMPLE_RESOLVE on Rgba8UnormSrgb; \
              max_buffer_size 2147483647 required, adapter has 268435456"
         );
     }
