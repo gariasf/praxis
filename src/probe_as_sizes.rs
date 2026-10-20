@@ -6,20 +6,31 @@ mod tests {
 
     use crate::gpu::GpuContext;
 
-    fn allocated(device: &wgpu::Device, prefix: &str) -> Option<u64> {
+    fn allocated(device: &wgpu::Device, name: &str) -> Option<u64> {
         let report = device.generate_allocator_report()?;
         Some(
             report
                 .allocations
                 .iter()
-                .filter(|allocation| allocation.name.starts_with(prefix))
+                .filter(|allocation| allocation.name == name)
                 .map(|allocation| allocation.size)
                 .sum(),
         )
     }
 
-    fn total(device: &wgpu::Device) -> Option<u64> {
-        Some(device.generate_allocator_report()?.total_allocated_bytes)
+    fn total(device: &wgpu::Device) -> Option<i64> {
+        Some(device.generate_allocator_report()?.total_allocated_bytes as i64)
+    }
+
+    fn names(device: &wgpu::Device) -> Vec<(String, u64)> {
+        let report = device.generate_allocator_report().unwrap();
+        let mut names: Vec<_> = report
+            .allocations
+            .iter()
+            .map(|allocation| (allocation.name.clone(), allocation.size))
+            .collect();
+        names.sort();
+        names
     }
 
     #[test]
@@ -35,10 +46,23 @@ mod tests {
         let queue = &context.queue;
         let info = context.adapter.get_info();
         if device.generate_allocator_report().is_none() {
-            writeln!(std::io::stderr(), "AS-PROBE {} has no allocator report", info.name).ok();
+            writeln!(
+                std::io::stderr(),
+                "AS-PROBE {} has no allocator report",
+                info.name
+            )
+            .ok();
             return;
         }
-        writeln!(std::io::stderr(), "AS-PROBE adapter {} {:?} driver {} {}", info.name, info.backend, info.driver, info.driver_info).ok();
+        writeln!(
+            std::io::stderr(),
+            "AS-PROBE adapter {} {:?} driver {} {}",
+            info.name,
+            info.backend,
+            info.driver,
+            info.driver_info
+        )
+        .ok();
         let wait = || device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
         for quads_per_side in [1u32, 32, 128, 256] {
             // A grid of quads_per_side^2 quads, two triangles each, in 28-byte vertices.
@@ -55,7 +79,14 @@ mod tests {
             for z in 0..quads_per_side {
                 for x in 0..quads_per_side {
                     let corner = z * side + x;
-                    indices.extend_from_slice(&[corner, corner + side, corner + 1, corner + 1, corner + side, corner + side + 1]);
+                    indices.extend_from_slice(&[
+                        corner,
+                        corner + side,
+                        corner + 1,
+                        corner + 1,
+                        corner + side,
+                        corner + side + 1,
+                    ]);
                 }
             }
             let triangles = indices.len() as u64 / 3;
@@ -92,6 +123,14 @@ mod tests {
             );
             let created = total(device).unwrap() - before;
             let built_blas_bytes = allocated(device, "Probe BLAS").unwrap();
+            if quads_per_side == 32 {
+                writeln!(
+                    std::io::stderr(),
+                    "AS-PROBE after BLAS creation {:?}",
+                    names(device)
+                )
+                .ok();
+            }
             let mut encoder = device.create_command_encoder(&Default::default());
             encoder.build_acceleration_structures(
                 [&wgpu::BlasBuildEntry {
@@ -125,7 +164,7 @@ mod tests {
             writeln!(
                 std::io::stderr(),
                 "AS-PROBE BLAS triangles={triangles} created_delta={created} blas_alloc={built_blas_bytes} ({:.2} B/tri) ready={ready} compacted_alloc={compacted_bytes} ({:.2} B/tri)",
-                (built_blas_bytes - compacted_bytes) as f64 / triangles as f64,
+                built_blas_bytes as f64 / triangles as f64,
                 compacted_bytes as f64 / triangles as f64,
             )
             .ok();
@@ -144,6 +183,14 @@ mod tests {
             });
             let delta = total(device).unwrap() - before;
             let named = allocated(device, "Probe TLAS").unwrap();
+            if instances == 1024 {
+                writeln!(
+                    std::io::stderr(),
+                    "AS-PROBE after TLAS creation {:?}",
+                    names(device)
+                )
+                .ok();
+            }
             writeln!(
                 std::io::stderr(),
                 "AS-PROBE TLAS max_instances={instances} total_delta={delta} ({:.2} B/instance) tlas_alloc={named} ({:.2} B/instance)",
@@ -155,9 +202,11 @@ mod tests {
             queue.submit([]);
             wait();
         }
-        let report = device.generate_allocator_report().unwrap();
-        let mut names: Vec<_> = report.allocations.iter().map(|allocation| (&allocation.name, allocation.size)).collect();
-        names.sort();
-        writeln!(std::io::stderr(), "AS-PROBE remaining allocations {names:?}").ok();
+        writeln!(
+            std::io::stderr(),
+            "AS-PROBE remaining allocations {:?}",
+            names(device)
+        )
+        .ok();
     }
 }

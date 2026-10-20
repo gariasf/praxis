@@ -25,12 +25,12 @@ pub mod cook;
 pub mod gpu;
 mod helmet;
 mod input;
+mod probe_as_sizes;
 mod render;
 mod scenes;
 mod state;
 mod stats;
 mod threading;
-mod probe_as_sizes;
 mod time;
 mod transform;
 
