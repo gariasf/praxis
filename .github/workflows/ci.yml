@@ -150,9 +150,9 @@ jobs:
       - name: Build
         run: cargo build --release
 
-      # Counters only: draw calls, uploaded bytes, GPU memory, Arena bytes in
-      # use and heap allocations against the Baselines in
-      # bench/baselines/<llvmpipe key>.
+      # Counters only: draw calls, Instances and triangles drawn, Instances
+      # overflowed, uploaded bytes, GPU memory, Arena bytes in use and heap
+      # allocations against the Baselines in bench/baselines/<llvmpipe key>.
       - name: Bench and compare
         run: |
           target/release/praxis bench target/bench --ci pbr-sweep uv-grid normal-tangent far-coplanar orrery \

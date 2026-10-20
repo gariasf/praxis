@@ -1,9 +1,12 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use anyhow::Context;
+
 use crate::capture::render_frames;
 use crate::gpu::GpuContext;
-use crate::render::RenderSwitches;
+use crate::render::{RenderSwitches, TIMED_PASSES};
 use crate::scenes::ReferenceScene;
 use crate::stats::FrameStats;
 use crate::time::SIXTY_HERTZ;
@@ -89,6 +92,10 @@ const FAIL_RATIO: f64 = 1.10;
 /// runs, so a CPU time fails only when it also grows by more than this.
 const CPU_NOISE_FLOOR_MICROSECONDS: f64 = 10.0;
 
+/// Likewise for a pass's GPU time: over three runs on the M4 Pro, helmet's
+/// culling pass read 136 to 153 µs, every other pass within 3%.
+const GPU_PASS_NOISE_FLOOR_MICROSECONDS: f64 = 20.0;
+
 /// The steady-state cost of one Reference scene: medians over the measured
 /// frames, plus p95 for times, and the counter frames' counters. Bench
 /// output and Baselines share this form.
@@ -102,18 +109,31 @@ pub struct Measurements {
     pub height: u32,
     pub measured_frames: u32,
     pub cpu_frame_microseconds: Spread,
-    /// From the start of each frame's first pass to the end of its last;
-    /// `None` when a frame read back no GPU stats.
-    pub gpu_main_pass_microseconds: Option<Spread>,
+    /// From the start of each frame's first pass to the end of its last.
+    pub gpu_frame_microseconds: Spread,
+    /// Each pass's own GPU time, by pass.
+    pub gpu_pass_microseconds: BTreeMap<String, Spread>,
     #[serde(flatten)]
     pub counters: Counters,
     pub counter_frames: CounterFrames,
 }
 
-/// Medians of counters, which repeat exactly on every run.
+impl Measurements {
+    /// A Baseline from its JSON; one that another version of the bench
+    /// recorded is refused with a message to re-record it.
+    pub fn from_baseline_json(json: &[u8]) -> anyhow::Result<Self> {
+        serde_json::from_slice(json).context("not in this bench's form: re-record it")
+    }
+}
+
+/// Medians of counters, which repeat exactly on every run, but for the
+/// Instances overflowed: the most of any frame, so one overflow counts.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Counters {
     pub draw_calls: u64,
+    pub instances_drawn: u64,
+    pub triangles_drawn: u64,
+    pub instances_overflowed: u64,
     pub uploaded_bytes: u64,
     pub gpu_memory_bytes: u64,
     pub arena_bytes_in_use: u64,
@@ -121,6 +141,7 @@ pub struct Counters {
 }
 
 impl Counters {
+    /// The counters of `frames`, each with its GPU stats.
     fn of(frames: &[FrameStats]) -> Self {
         let median = |value: fn(&FrameStats) -> u64| {
             percentile(
@@ -128,8 +149,14 @@ impl Counters {
                 0.5,
             ) as u64
         };
+        let most = |value: fn(&FrameStats) -> u64| frames.iter().map(value).max().unwrap_or(0);
         Self {
             draw_calls: median(|stats| u64::from(stats.draw_calls)),
+            instances_drawn: median(|stats| stats.gpu.map_or(0, |gpu| gpu.instances_drawn.into())),
+            triangles_drawn: median(|stats| stats.gpu.map_or(0, |gpu| gpu.triangles_drawn.into())),
+            instances_overflowed: most(|stats| {
+                stats.gpu.map_or(0, |gpu| gpu.instances_overflowed.into())
+            }),
             uploaded_bytes: median(|stats| stats.uploaded_bytes),
             gpu_memory_bytes: median(|stats| stats.gpu_memory_bytes),
             arena_bytes_in_use: median(|stats| stats.arena_bytes_in_use),
@@ -137,9 +164,12 @@ impl Counters {
         }
     }
 
-    fn named(&self) -> [(&'static str, u64); 5] {
+    fn named(&self) -> [(&'static str, u64); 8] {
         [
             ("draw_calls", self.draw_calls),
+            ("instances_drawn", self.instances_drawn),
+            ("triangles_drawn", self.triangles_drawn),
+            ("instances_overflowed", self.instances_overflowed),
             ("uploaded_bytes", self.uploaded_bytes),
             ("gpu_memory_bytes", self.gpu_memory_bytes),
             ("arena_bytes_in_use", self.arena_bytes_in_use),
@@ -166,7 +196,7 @@ pub struct Spread {
 #[derive(Debug, serde::Deserialize)]
 pub struct Budgets {
     pub cpu_frame_microseconds: f64,
-    /// Every pass of a frame; today the main pass is the only one.
+    /// From the start of the frame's first pass to the end of its last.
     pub gpu_frame_microseconds: f64,
     pub gpu_memory_bytes: u64,
 }
@@ -228,29 +258,43 @@ pub fn run(
         SIXTY_HERTZ,
         switches,
     )?;
-    Ok(measure(
+    measure(
         scene,
         context.adapter.get_info().name,
         configuration,
         &frames,
-    ))
+    )
 }
 
 /// The Measurements of `frames`, a `configuration` run of `scene` on
-/// `adapter`.
+/// `adapter`, which fail unless every frame read back its GPU stats.
 fn measure(
     scene: ReferenceScene,
     adapter: String,
     configuration: Configuration,
     frames: &[FrameStats],
-) -> Measurements {
-    let measured = &frames[configuration.warm_up_frames as usize..];
+) -> anyhow::Result<Measurements> {
+    let gpu_frames: Vec<_> = frames.iter().filter_map(|stats| stats.gpu).collect();
+    anyhow::ensure!(
+        gpu_frames.len() == frames.len(),
+        "{} of {} frames read back no GPU stats",
+        frames.len() - gpu_frames.len(),
+        frames.len()
+    );
+    let warm_up_frames = configuration.warm_up_frames as usize;
+    let (measured, measured_gpu) = (&frames[warm_up_frames..], &gpu_frames[warm_up_frames..]);
     let microseconds = |time: Duration| time.as_secs_f64() * 1e6;
-    let frame_times: Vec<f64> = measured
+    let gpu_pass_microseconds = TIMED_PASSES
         .iter()
-        .filter_map(|stats| Some(microseconds(stats.gpu?.frame_time)))
+        .enumerate()
+        .map(|(pass, &name)| {
+            let times = measured_gpu
+                .iter()
+                .map(|gpu| microseconds(gpu.pass_times[pass].1));
+            (name.to_owned(), spread(times.collect()))
+        })
         .collect();
-    Measurements {
+    Ok(Measurements {
         scene: scene.name().to_owned(),
         adapter,
         profile: if cfg!(debug_assertions) {
@@ -268,8 +312,13 @@ fn measure(
                 .map(|stats| microseconds(stats.cpu_frame_time))
                 .collect(),
         ),
-        gpu_main_pass_microseconds: (frame_times.len() == measured.len())
-            .then(|| spread(frame_times)),
+        gpu_frame_microseconds: spread(
+            measured_gpu
+                .iter()
+                .map(|gpu| microseconds(gpu.frame_time))
+                .collect(),
+        ),
+        gpu_pass_microseconds,
         counters: Counters::of(measured),
         counter_frames: CounterFrames {
             frames: COUNTER_FRAMES,
@@ -277,34 +326,26 @@ fn measure(
                 &frames[COUNTER_FRAMES.start as usize..COUNTER_FRAMES.end as usize],
             ),
         },
-    }
+    })
 }
 
-/// One line, `key=value` pairs after the scene name.
+/// One line, `key=value` pairs after the scene name: medians and p95s of
+/// the CPU and GPU frame, each pass's median, then the counters.
 impl std::fmt::Display for Measurements {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (cpu, gpu) = (self.cpu_frame_microseconds, self.gpu_frame_microseconds);
         write!(
             formatter,
-            "{} cpu_us median={:.1} p95={:.1}",
-            self.scene, self.cpu_frame_microseconds.median, self.cpu_frame_microseconds.p95
+            "{} cpu_us median={:.1} p95={:.1} gpu_us median={:.1} p95={:.1}",
+            self.scene, cpu.median, cpu.p95, gpu.median, gpu.p95
         )?;
-        if let Some(gpu) = self.gpu_main_pass_microseconds {
-            write!(
-                formatter,
-                " gpu_us median={:.1} p95={:.1}",
-                gpu.median, gpu.p95
-            )?;
+        for (pass, time) in &self.gpu_pass_microseconds {
+            write!(formatter, " {pass}={:.1}", time.median)?;
         }
-        write!(
-            formatter,
-            " draw_calls={} uploaded_bytes={} gpu_memory_bytes={} arena_bytes_in_use={} \
-             heap_allocations={}",
-            self.counters.draw_calls,
-            self.counters.uploaded_bytes,
-            self.counters.gpu_memory_bytes,
-            self.counters.arena_bytes_in_use,
-            self.counters.heap_allocations
-        )
+        for (counter, value) in self.counters.named() {
+            write!(formatter, " {counter}={value}")?;
+        }
+        Ok(())
     }
 }
 
@@ -408,31 +449,31 @@ pub fn compare(
         cpu,
         budgets.cpu_frame_microseconds,
     );
-    match (
-        current.gpu_main_pass_microseconds,
-        baseline.gpu_main_pass_microseconds,
-    ) {
-        (Some(gpu), Some(baseline_gpu)) => {
-            check_regression(
-                &mut findings,
-                "gpu_main_pass_microseconds",
-                gpu.median,
-                baseline_gpu.median,
-                0.0,
-            );
-            check_budget(
-                &mut findings,
-                "gpu_main_pass_microseconds",
-                gpu.median,
-                budgets.gpu_frame_microseconds,
-            );
+    let passes = &current.gpu_pass_microseconds;
+    let baseline_passes = &baseline.gpu_pass_microseconds;
+    anyhow::ensure!(
+        passes.keys().eq(baseline_passes.keys()),
+        "{} timed passes {:?}, its Baseline {:?}: re-record the Baseline",
+        current.scene,
+        passes.keys().collect::<Vec<_>>(),
+        baseline_passes.keys().collect::<Vec<_>>()
+    );
+    for ((pass, time), baseline_time) in passes.iter().zip(baseline_passes.values()) {
+        let earlier = findings.len();
+        let metric = "gpu_pass_microseconds";
+        let (median, baseline_median) = (time.median, baseline_time.median);
+        let noise_floor = GPU_PASS_NOISE_FLOOR_MICROSECONDS;
+        check_regression(&mut findings, metric, median, baseline_median, noise_floor);
+        for finding in &mut findings[earlier..] {
+            finding.detail = format!("{pass} {}", finding.detail);
         }
-        (None, None) => {}
-        _ => anyhow::bail!(
-            "{}: GPU time is missing from the run or its Baseline",
-            current.scene
-        ),
     }
+    check_budget(
+        &mut findings,
+        "gpu_frame_microseconds",
+        current.gpu_frame_microseconds.median,
+        budgets.gpu_frame_microseconds,
+    );
     Ok(findings)
 }
 
@@ -494,11 +535,13 @@ fn percentile(mut values: Vec<f64>, fraction: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::render::TIMED_PASSES;
     use crate::stats::GpuFrameStats;
 
     const COUNTERS: Counters = Counters {
         draw_calls: 10,
+        instances_drawn: 10,
+        triangles_drawn: 22_080,
+        instances_overflowed: 0,
         uploaded_bytes: 1712,
         gpu_memory_bytes: 1 << 30,
         arena_bytes_in_use: 85_296,
@@ -517,10 +560,17 @@ mod tests {
                 median: 1000.0,
                 p95: 1200.0,
             },
-            gpu_main_pass_microseconds: Some(Spread {
-                median: 2000.0,
-                p95: 2100.0,
-            }),
+            gpu_frame_microseconds: Spread {
+                median: 2500.0,
+                p95: 2600.0,
+            },
+            gpu_pass_microseconds: [("culling_pass", 100.0), ("main_pass", 2000.0)]
+                .into_iter()
+                .map(|(pass, median)| {
+                    let p95 = median + 100.0;
+                    (pass.to_owned(), Spread { median, p95 })
+                })
+                .collect(),
             counters: COUNTERS,
             counter_frames: CounterFrames {
                 frames: COUNTER_FRAMES,
@@ -556,15 +606,18 @@ mod tests {
     fn a_time_warns_above_5_percent_and_fails_above_10() {
         let mut current = baseline();
         current.cpu_frame_microseconds.median = 1060.0;
-        current.gpu_main_pass_microseconds = Some(Spread {
-            median: 2300.0,
-            p95: 2400.0,
-        });
+        current.gpu_pass_microseconds.insert(
+            "main_pass".to_owned(),
+            Spread {
+                median: 2300.0,
+                p95: 2400.0,
+            },
+        );
         assert_eq!(
             verdicts(&current, &baseline(), CompareMode::Local),
             [
                 ("cpu_frame_microseconds", Verdict::Warn),
-                ("gpu_main_pass_microseconds", Verdict::Fail)
+                ("gpu_pass_microseconds", Verdict::Fail)
             ]
         );
     }
@@ -573,10 +626,13 @@ mod tests {
     fn exactly_5_percent_and_improvements_pass() {
         let mut current = baseline();
         current.cpu_frame_microseconds.median = 1050.0;
-        current.gpu_main_pass_microseconds = Some(Spread {
-            median: 1000.0,
-            p95: 9000.0,
-        });
+        current.gpu_pass_microseconds.insert(
+            "main_pass".to_owned(),
+            Spread {
+                median: 1000.0,
+                p95: 9000.0,
+            },
+        );
         current.counters.heap_allocations = 90;
         assert_eq!(verdicts(&current, &baseline(), CompareMode::Local), []);
     }
@@ -596,8 +652,11 @@ mod tests {
         let mut current = baseline();
         current.adapter = "llvmpipe".to_owned();
         current.cpu_frame_microseconds.median = 5000.0;
-        current.gpu_main_pass_microseconds = None;
+        current.gpu_frame_microseconds.median = 50_000.0;
         current.counters.draw_calls = 11;
+        current.counters.instances_drawn += 1;
+        current.counters.triangles_drawn += 1;
+        current.counters.instances_overflowed += 1;
         current.counters.uploaded_bytes = 1712 * 2;
         current.counters.gpu_memory_bytes = (1 << 30) + 1;
         current.counters.arena_bytes_in_use += 1;
@@ -605,6 +664,9 @@ mod tests {
             verdicts(&current, &baseline(), CompareMode::Ci),
             [
                 ("draw_calls", Verdict::Fail),
+                ("instances_drawn", Verdict::Fail),
+                ("triangles_drawn", Verdict::Fail),
+                ("instances_overflowed", Verdict::Fail),
                 ("uploaded_bytes", Verdict::Fail),
                 ("gpu_memory_bytes", Verdict::Fail),
                 ("arena_bytes_in_use", Verdict::Fail)
@@ -622,6 +684,71 @@ mod tests {
             verdicts(&current, &over_budget, CompareMode::Local),
             [("cpu_frame_microseconds", Verdict::Fail)]
         );
+    }
+
+    /// The GPU frame total answers to the 12 ms Budget only, and each pass
+    /// to its Baseline.
+    #[test]
+    fn the_gpu_frame_total_fails_over_its_budget_alone() {
+        let mut slower = baseline();
+        slower.gpu_frame_microseconds.median = 3000.0;
+        assert_eq!(verdicts(&slower, &baseline(), CompareMode::Local), []);
+        let mut over_budget = baseline();
+        over_budget.gpu_frame_microseconds.median = 12_500.0;
+        assert_eq!(
+            verdicts(&over_budget, &over_budget, CompareMode::Local),
+            [("gpu_frame_microseconds", Verdict::Fail)]
+        );
+    }
+
+    #[test]
+    fn a_baseline_of_other_passes_is_refused_with_a_message_to_re_record_it() {
+        let mut more_passes = baseline();
+        let depth_prepass = Spread {
+            median: 300.0,
+            p95: 350.0,
+        };
+        more_passes
+            .gpu_pass_microseconds
+            .insert("depth_prepass".to_owned(), depth_prepass);
+        let error = compare(&more_passes, &baseline(), &BUDGETS, CompareMode::Local)
+            .expect_err("other passes");
+        assert!(error.to_string().contains("re-record"), "{error}");
+    }
+
+    /// The helmet's Baseline as recorded before GPU time was split by pass.
+    const OLD_BASELINE: &str = r#"{
+  "scene": "helmet",
+  "adapter": "Apple M4 Pro",
+  "profile": "release",
+  "width": 2560,
+  "height": 1440,
+  "measured_frames": 1800,
+  "cpu_frame_microseconds": { "median": 48.583, "p95": 106.042 },
+  "gpu_main_pass_microseconds": { "median": 509.167, "p95": 641.458 },
+  "draw_calls": 1,
+  "uploaded_bytes": 288,
+  "gpu_memory_bytes": 271864916,
+  "arena_bytes_in_use": 844804,
+  "heap_allocations": 98,
+  "counter_frames": {
+    "frames": { "start": 8, "end": 72 },
+    "draw_calls": 1,
+    "uploaded_bytes": 288,
+    "gpu_memory_bytes": 271864916,
+    "arena_bytes_in_use": 844804,
+    "heap_allocations": 98
+  }
+}"#;
+
+    #[test]
+    fn a_baseline_in_the_old_form_is_refused_with_a_message_to_re_record_it() {
+        let error =
+            Measurements::from_baseline_json(OLD_BASELINE.as_bytes()).expect_err("the old form");
+        assert!(format!("{error:#}").contains("re-record"), "{error:#}");
+        let current = serde_json::to_vec(&baseline()).expect("serializable");
+        let parsed = Measurements::from_baseline_json(&current).expect("the current form");
+        assert_eq!(parsed, baseline());
     }
 
     #[test]
@@ -642,6 +769,29 @@ mod tests {
     }
 
     #[test]
+    fn a_pass_time_within_the_noise_floor_only_warns() {
+        let culling = |median| Spread {
+            median,
+            p95: median,
+        };
+        let mut current = baseline();
+        current
+            .gpu_pass_microseconds
+            .insert("culling_pass".to_owned(), culling(115.0));
+        assert_eq!(
+            verdicts(&current, &baseline(), CompareMode::Local),
+            [("gpu_pass_microseconds", Verdict::Warn)]
+        );
+        current
+            .gpu_pass_microseconds
+            .insert("culling_pass".to_owned(), culling(120.5));
+        assert_eq!(
+            verdicts(&current, &baseline(), CompareMode::Local),
+            [("gpu_pass_microseconds", Verdict::Fail)]
+        );
+    }
+
+    #[test]
     fn another_adapter_or_profile_is_refused_locally() {
         let mut other_adapter = baseline();
         other_adapter.adapter = "llvmpipe".to_owned();
@@ -651,9 +801,11 @@ mod tests {
         assert!(compare(&debug, &baseline(), &BUDGETS, CompareMode::Ci).is_err());
     }
 
-    /// Frames of a `configuration` run: draw calls 10 and heap allocations 50
-    /// in the counter frames and more elsewhere, a CPU time of 900 µs in the
-    /// warm-up and 100 µs after it.
+    /// Frames of a `configuration` run: draw calls 10, Instances and
+    /// triangles drawn 5 and 15 and heap allocations 50 in the counter frames
+    /// and more elsewhere, 3 Instances overflowed in frame 300 alone, a
+    /// CPU time of 900 µs in the warm-up and 100 µs after it, and on the GPU
+    /// a frame of 300 µs whose passes take 200 µs each.
     fn frames(configuration: Configuration) -> Vec<FrameStats> {
         (0..configuration.warm_up_frames + configuration.measured_frames)
             .map(|frame| {
@@ -663,11 +815,11 @@ mod tests {
                     cpu_frame_time: Duration::from_micros(if warming_up { 900 } else { 100 }),
                     gpu: Some(GpuFrameStats {
                         frame: frame.into(),
-                        pass_times: TIMED_PASSES.map(|pass| (pass, Duration::from_micros(100))),
-                        frame_time: Duration::from_micros(200),
-                        instances_drawn: 0,
-                        triangles_drawn: 0,
-                        instances_overflowed: 0,
+                        pass_times: TIMED_PASSES.map(|pass| (pass, Duration::from_micros(200))),
+                        frame_time: Duration::from_micros(300),
+                        instances_drawn: if counted { 5 } else { 77 },
+                        triangles_drawn: if counted { 15 } else { 231 },
+                        instances_overflowed: if frame == 300 { 3 } else { 0 },
                     }),
                     draw_calls: if counted { 10 } else { 99 },
                     heap_allocations: if counted { 50 } else { 999 },
@@ -686,14 +838,44 @@ mod tests {
                 configuration,
                 &frames(configuration),
             )
+            .expect("every frame read back its GPU stats")
         };
         let reference = measurements(Configuration::REFERENCE);
-        let counted = |counters: Counters| (counters.draw_calls, counters.heap_allocations);
-        assert_eq!(counted(reference.counters), (99, 999));
-        assert_eq!(counted(reference.counter_frames.counters), (10, 50));
+        let counted = |counters: Counters| {
+            (
+                counters.draw_calls,
+                counters.instances_drawn,
+                counters.triangles_drawn,
+                counters.instances_overflowed,
+                counters.heap_allocations,
+            )
+        };
+        assert_eq!(counted(reference.counters), (99, 77, 231, 3, 999));
+        assert_eq!(
+            counted(reference.counter_frames.counters),
+            (10, 5, 15, 0, 50)
+        );
         assert_eq!(reference.cpu_frame_microseconds.median, 100.0);
+        assert_eq!(reference.gpu_frame_microseconds.median, 300.0);
+        assert_eq!(reference.gpu_pass_microseconds.len(), TIMED_PASSES.len());
+        assert!(
+            reference
+                .gpu_pass_microseconds
+                .values()
+                .all(|pass| pass.median == 200.0)
+        );
         let counters_only = measurements(Configuration::COUNTERS);
         assert_eq!(counters_only.counter_frames, reference.counter_frames);
+    }
+
+    #[test]
+    fn a_run_with_a_frame_that_read_back_no_gpu_stats_fails() {
+        let configuration = Configuration::COUNTERS;
+        let mut frames = frames(configuration);
+        frames[40].gpu = None;
+        let scene = ReferenceScene::PbrSweep;
+        let adapter = "Apple M4 Pro".to_owned();
+        assert!(measure(scene, adapter, configuration, &frames).is_err());
     }
 
     #[test]

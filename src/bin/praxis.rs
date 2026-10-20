@@ -146,26 +146,26 @@ fn compare(results: &str, mode: CompareMode) -> anyhow::Result<()> {
         let baseline_directory = praxis::bench::baseline_directory(&current.adapter);
         let baseline_path =
             baseline_directory.join(path.file_name().expect("a read_dir entry has a file name"));
+        let ci_run = (current.width, current.height, current.measured_frames)
+            == (
+                Configuration::CI.width,
+                Configuration::CI.height,
+                Configuration::CI.measured_frames,
+            );
+        let record = if ci_run {
+            format!(
+                "copy {}.json from CI's bench-results artifact",
+                current.scene
+            )
+        } else {
+            format!(
+                "record one with `praxis bench {} {}`",
+                baseline_directory.display(),
+                current.scene
+            )
+        };
         if !baseline_path.exists() {
             failed += 1;
-            let ci_run = (current.width, current.height, current.measured_frames)
-                == (
-                    Configuration::CI.width,
-                    Configuration::CI.height,
-                    Configuration::CI.measured_frames,
-                );
-            let record = if ci_run {
-                format!(
-                    "copy {}.json from CI's bench-results artifact",
-                    current.scene
-                )
-            } else {
-                format!(
-                    "record one with `praxis bench {} {}`",
-                    baseline_directory.display(),
-                    current.scene
-                )
-            };
             writeln!(
                 stdout,
                 "{} FAIL no Baseline at {}; {record}",
@@ -174,8 +174,30 @@ fn compare(results: &str, mode: CompareMode) -> anyhow::Result<()> {
             )?;
             continue;
         }
-        let baseline: Measurements = read_json(&baseline_path)?;
-        let findings = praxis::bench::compare(&current, &baseline, &budgets, mode)?;
+        let baseline = std::fs::read(&baseline_path)
+            .map_err(anyhow::Error::from)
+            .and_then(|json| Measurements::from_baseline_json(&json));
+        let baseline = match baseline {
+            Ok(baseline) => baseline,
+            Err(error) => {
+                failed += 1;
+                writeln!(
+                    stdout,
+                    "{} FAIL Baseline {} {error:#}; {record}",
+                    current.scene,
+                    baseline_path.display(),
+                )?;
+                continue;
+            }
+        };
+        let findings = match praxis::bench::compare(&current, &baseline, &budgets, mode) {
+            Ok(findings) => findings,
+            Err(error) => {
+                failed += 1;
+                writeln!(stdout, "{} FAIL {error:#}", current.scene)?;
+                continue;
+            }
+        };
         if findings.is_empty() {
             writeln!(stdout, "{} ok", current.scene)?;
         }
