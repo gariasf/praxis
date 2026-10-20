@@ -3,6 +3,8 @@ use std::cell::Cell;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
+use crate::render::TIMED_PASSES;
+
 /// What one frame cost.
 #[derive(Clone, Debug, Default)]
 pub struct FrameStats {
@@ -11,9 +13,9 @@ pub struct FrameStats {
     pub cpu_times: Vec<(String, Duration)>,
     /// Wall-clock time from the start of `update` to the end of `render`.
     pub cpu_frame_time: Duration,
-    /// GPU time of each render pass, between timestamps at its boundaries;
-    /// empty when the device has no timestamp queries.
-    pub gpu_times: Vec<(&'static str, Duration)>,
+    /// What the GPU measured of the frame, read back a few frames after it:
+    /// `None` until then, and for good if its readback was skipped.
+    pub gpu: Option<GpuFrameStats>,
     pub draw_calls: u32,
     /// Bytes the frame's uploads wrote to GPU buffers: the Instances it wrote
     /// and the uniforms. Pools upload only while a Scene loads.
@@ -37,6 +39,22 @@ pub struct FrameStats {
     /// Simulated time the frame skipped past its Tick cap (ADR 0022): the
     /// game slowed by this much.
     pub dropped_time: Duration,
+    /// Readbacks of GPU stats the frame skipped, its own or an earlier
+    /// frame's, as their ring slot was not ready and the main thread never
+    /// waits on the GPU (ADR 0016).
+    pub gpu_readbacks_skipped: u32,
+}
+
+/// What the GPU measured of one frame, read back a few frames after it.
+#[derive(Clone, Copy, Debug)]
+pub struct GpuFrameStats {
+    /// The frame's number: how many frames its Renderer rendered before it.
+    pub frame: u64,
+    /// GPU time of each pass, between timestamps at its start and its end,
+    /// in the order the passes ran.
+    pub pass_times: [(&'static str, Duration); TIMED_PASSES.len()],
+    /// From the start of the first pass to the end of the last.
+    pub frame_time: Duration,
 }
 
 /// One line per group, each a label and then `key=value` pairs, so the text
@@ -53,22 +71,27 @@ impl std::fmt::Display for FrameStats {
             write!(formatter, " {name}={:.1}", microseconds(time))?;
         }
         writeln!(formatter)?;
-        if !self.gpu_times.is_empty() {
-            write!(formatter, "gpu_us")?;
-            for (pass, time) in &self.gpu_times {
+        if let Some(gpu) = &self.gpu {
+            write!(
+                formatter,
+                "gpu_us frame={:.1}",
+                microseconds(&gpu.frame_time)
+            )?;
+            for (pass, time) in &gpu.pass_times {
                 write!(formatter, " {pass}={:.1}", microseconds(time))?;
             }
             writeln!(formatter)?;
         }
         writeln!(
             formatter,
-            "counts draw_calls={} uploaded_bytes={} instances_written={} renderables_refused={} heap_allocations={} dropped_us={:.1}",
+            "counts draw_calls={} uploaded_bytes={} instances_written={} renderables_refused={} heap_allocations={} dropped_us={:.1} gpu_readbacks_skipped={}",
             self.draw_calls,
             self.uploaded_bytes,
             self.instances_written,
             self.renderables_refused,
             self.heap_allocations,
-            microseconds(&self.dropped_time)
+            microseconds(&self.dropped_time),
+            self.gpu_readbacks_skipped
         )?;
         let allocator_report_bytes = self
             .allocator_report_bytes
@@ -115,6 +138,7 @@ pub(crate) struct FrameRecorder {
     pub(crate) instances_written: u32,
     pub(crate) renderables_refused: u32,
     pub(crate) dropped_time: Duration,
+    pub(crate) gpu_readbacks_skipped: u32,
 }
 
 impl FrameRecorder {
@@ -131,6 +155,7 @@ impl FrameRecorder {
             instances_written: 0,
             renderables_refused: 0,
             dropped_time: Duration::ZERO,
+            gpu_readbacks_skipped: 0,
         }
     }
 
@@ -143,6 +168,7 @@ impl FrameRecorder {
         self.instances_written = 0;
         self.renderables_refused = 0;
         self.dropped_time = Duration::ZERO;
+        self.gpu_readbacks_skipped = 0;
         self.allocations_at_start = thread_allocations();
         self.started = Instant::now();
     }
@@ -178,6 +204,7 @@ impl FrameRecorder {
             renderables_refused: self.renderables_refused,
             heap_allocations: self.heap_allocations,
             dropped_time: self.dropped_time,
+            gpu_readbacks_skipped: self.gpu_readbacks_skipped,
             ..FrameStats::default()
         }
     }

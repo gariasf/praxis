@@ -1,10 +1,12 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// Slots the per-frame uploads cycle through: the window keeps up to two
-/// frames in flight (`desired_maximum_frame_latency`), plus the one being
-/// written. A fixed count keeps `gpu_memory_bytes` the same on every run.
-const SLOT_COUNT: usize = 3;
+use crate::render::FRAMES_IN_FLIGHT;
+
+/// Slots the per-frame uploads cycle through: the frames in flight, plus the
+/// one being written. A fixed count keeps `gpu_memory_bytes` the same on
+/// every run.
+const SLOT_COUNT: usize = FRAMES_IN_FLIGHT + 1;
 
 /// Staging memory for the per-frame uploads, reused every frame, where
 /// `Queue::write_buffer` creates a fresh staging buffer on every call. Its

@@ -111,9 +111,11 @@ src/
                                  size-dependent target, the depth
                                  conventions), prepare (ECS World to
                                  Frame data), bind_groups (each defined
-                                 once), instance, uniforms, staging,
-                                 shaders/ (WGSL parts and the modules
-                                 each pipeline assembles from them)
+                                 once), readback (each frame's GPU stats
+                                 through a ring of mapped buffers),
+                                 instance, uniforms, staging, shaders/
+                                 (WGSL parts and the modules each
+                                 pipeline assembles from them)
 tests/                         # integration tests at agreed seams
   goldens/<backend>[-cpu]/     # committed Goldens; PRAXIS_UPDATE_GOLDENS=1
                                  cargo test --test goldens rewrites them

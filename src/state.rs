@@ -19,7 +19,7 @@ use crate::scenes::{
     spawn_minification, spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep, spawn_texture_wall,
     spawn_uv_grid, spin, sweep_material_name,
 };
-use crate::stats::{FrameRecorder, FrameStats};
+use crate::stats::{FrameRecorder, FrameStats, GpuFrameStats};
 use crate::threading::{init_compute_pool, single_threaded_schedule};
 use crate::time::{FixedTime, Time, fixed_schedule, run_ticks};
 use crate::transform::{
@@ -230,21 +230,25 @@ impl State {
     }
 
     /// Draws the frame into `target`, a view in the format and size this
-    /// State renders to, and times its passes into `timestamp_writes`.
-    /// Returns the frame's submission.
-    pub fn render(
-        &mut self,
-        target: &wgpu::TextureView,
-        timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
-    ) -> wgpu::SubmissionIndex {
-        let submission = self.renderer.render(
-            self.preparer.frame(),
-            target,
-            timestamp_writes,
-            &mut self.recorder,
-        );
+    /// State renders to. Returns the frame's submission.
+    pub fn render(&mut self, target: &wgpu::TextureView) -> wgpu::SubmissionIndex {
+        let submission = self
+            .renderer
+            .render(self.preparer.frame(), target, &mut self.recorder);
         self.recorder.end();
         submission
+    }
+
+    /// The GPU stats of earlier frames that the last `render` or
+    /// `flush_gpu_frame_stats` read back, by frame number, counted from 0.
+    pub fn gpu_frame_stats(&self) -> &[GpuFrameStats] {
+        self.renderer.gpu_frame_stats()
+    }
+
+    /// Waits until the GPU stats of every frame rendered are read back,
+    /// for `gpu_frame_stats`: the end of a run.
+    pub fn flush_gpu_frame_stats(&mut self) -> anyhow::Result<()> {
+        self.renderer.flush_gpu_frame_stats()
     }
 
     /// The stats of the last frame, from `update` through `render`.

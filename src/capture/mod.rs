@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::gpu::GpuContext;
-use crate::render::MAIN_PASS;
+use crate::render::FRAMES_IN_FLIGHT;
 use crate::scenes::ReferenceScene;
 use crate::state::State;
 use crate::stats::FrameStats;
@@ -14,14 +14,10 @@ pub(crate) const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8
 /// Frames rendered per capture; the last one is read back.
 const FRAME_COUNT: u32 = 60;
 
-/// Frames submitted but not finished on the GPU before the next one starts,
-/// as a window's swapchain allows: the GPU stays busy, and the CPU never runs
-/// further ahead than a window would.
-const FRAMES_IN_FLIGHT: usize = 2;
-
 /// Renders `scene`, moved with its camera by `shift` metres, into a `width` ×
 /// `height` offscreen texture for `FRAME_COUNT` frames and returns the last
-/// one's RGBA8 pixels, rows top first, with every frame's stats.
+/// one's RGBA8 pixels, rows top first, with every frame's stats, its GPU
+/// stats included.
 /// Time and camera are injected (the scene's frame delta and its camera path
 /// by frame) and nothing reads the wall clock or input, so equal arguments
 /// give equal images on one machine.
@@ -46,7 +42,9 @@ pub fn capture(
 
 /// Renders `frame_count` frames of `scene` as `capture` does, each advancing
 /// by `frame_delta`, and returns the target, holding the last frame, with
-/// every frame's stats.
+/// every frame's stats. Up to `FRAMES_IN_FLIGHT` frames are in flight, as a
+/// window's swapchain allows: the GPU stays busy, and the CPU never runs
+/// further ahead than a window would.
 pub(crate) fn render_frames(
     context: &GpuContext,
     scene: ReferenceScene,
@@ -60,11 +58,6 @@ pub(crate) fn render_frames(
     anyhow::ensure!(
         (1..=max_dimension).contains(&width) && (1..=max_dimension).contains(&height),
         "capture size {width}x{height} is outside 1 to {max_dimension} per side"
-    );
-    anyhow::ensure!(
-        (1..=PassTimer::MAX_FRAMES).contains(&frame_count),
-        "{frame_count} frames is outside 1 to {} per run",
-        PassTimer::MAX_FRAMES
     );
 
     let mut state = State::new(context, TARGET_FORMAT, width, height, scene, shift)?;
@@ -83,7 +76,6 @@ pub(crate) fn render_frames(
         view_formats: &[],
     });
     let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
-    let pass_timer = PassTimer::new(&context.device, frame_count);
     let mut frame_stats = Vec::with_capacity(frame_count as usize);
     let mut in_flight = std::collections::VecDeque::with_capacity(FRAMES_IN_FLIGHT);
     for frame in 0..frame_count {
@@ -96,92 +88,20 @@ pub(crate) fn render_frames(
         }
         state.world.insert_resource(scene.camera_at(frame, shift));
         state.update(frame_delta);
-        let submission = state.render(&target_view, Some(pass_timer.writes(frame)));
-        in_flight.push_back(submission);
+        in_flight.push_back(state.render(&target_view));
         frame_stats.push(state.frame_stats());
+        add_gpu_stats(&mut frame_stats, &state);
     }
-
-    for (stats, pass_time) in frame_stats.iter_mut().zip(pass_timer.read(context)?) {
-        stats.gpu_times.push((MAIN_PASS, pass_time));
-    }
+    state.flush_gpu_frame_stats()?;
+    add_gpu_stats(&mut frame_stats, &state);
     Ok((target, frame_stats))
 }
 
-/// GPU time of the State's passes in each frame of a capture, from
-/// timestamps at the start of its first and the end of its last (Apple GPUs
-/// have none inside passes). Metal reads
-/// a timestamp as 0 or stale unless it is resolved after its pass's submission
-/// completed (`docs/research/wgpu-capability-matrix.md`), so `read` resolves
-/// every frame at once, after the last, and one set bounds a run's length.
-/// Runs without end (the window) need a ring of sets instead, each resolved
-/// once its frame's submission completes.
-struct PassTimer {
-    query_set: wgpu::QuerySet,
-}
-
-impl PassTimer {
-    /// One set holds a begin and an end timestamp per frame.
-    const MAX_FRAMES: u32 = wgpu::QUERY_SET_MAX_QUERIES / 2;
-
-    /// A timer for `frame_count` frames. Timestamp queries are in the
-    /// Capability floor (ADR 0021).
-    fn new(device: &wgpu::Device, frame_count: u32) -> Self {
-        Self {
-            query_set: device.create_query_set(&wgpu::QuerySetDescriptor {
-                label: Some("Pass Timestamps"),
-                ty: wgpu::QueryType::Timestamp,
-                count: 2 * frame_count,
-            }),
-        }
-    }
-
-    fn writes(&self, frame: u32) -> wgpu::RenderPassTimestampWrites<'_> {
-        wgpu::RenderPassTimestampWrites {
-            query_set: &self.query_set,
-            beginning_of_pass_write_index: Some(2 * frame),
-            end_of_pass_write_index: Some(2 * frame + 1),
-        }
-    }
-
-    /// Each frame's pass time, in frame order.
-    fn read(&self, context: &GpuContext) -> anyhow::Result<Vec<Duration>> {
-        let query_count = self.query_set.count();
-        let size = u64::from(query_count) * u64::from(wgpu::QUERY_SIZE);
-        let resolve_buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Pass Timestamp Resolve Buffer"),
-            size,
-            usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-        let read_back_buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Pass Timestamp Read-back Buffer"),
-            size,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-
-        // Every frame's submission completes before the resolve is recorded.
-        context.device.poll(wgpu::PollType::wait_indefinitely())?;
-        let mut encoder = context
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Pass Timestamp Resolve Encoder"),
-            });
-        encoder.resolve_query_set(&self.query_set, 0..query_count, &resolve_buffer, 0);
-        encoder.copy_buffer_to_buffer(&resolve_buffer, 0, &read_back_buffer, 0, size);
-        submit_and_map(context, encoder, &read_back_buffer)?;
-
-        let nanoseconds_per_tick = f64::from(context.queue.get_timestamp_period());
-        let ticks: Vec<u64> = bytemuck::pod_collect_to_vec(&read_back_buffer.get_mapped_range(..)?);
-        Ok(ticks
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .map(|&[begin, end]| {
-                let pass_ticks = end.saturating_sub(begin);
-                Duration::from_nanos((pass_ticks as f64 * nanoseconds_per_tick) as u64)
-            })
-            .collect())
+/// Gives each frame of `frame_stats`, numbered from 0 as `state`'s frames
+/// are, the GPU stats `state` read back for it.
+fn add_gpu_stats(frame_stats: &mut [FrameStats], state: &State) {
+    for gpu in state.gpu_frame_stats() {
+        frame_stats[gpu.frame as usize].gpu = Some(*gpu);
     }
 }
 

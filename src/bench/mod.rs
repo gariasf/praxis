@@ -3,7 +3,6 @@ use std::time::Duration;
 
 use crate::capture::render_frames;
 use crate::gpu::GpuContext;
-use crate::render::MAIN_PASS;
 use crate::scenes::ReferenceScene;
 use crate::stats::FrameStats;
 use crate::time::SIXTY_HERTZ;
@@ -102,7 +101,8 @@ pub struct Measurements {
     pub height: u32,
     pub measured_frames: u32,
     pub cpu_frame_microseconds: Spread,
-    /// `None` when the device has no timestamp queries.
+    /// From the start of each frame's first pass to the end of its last;
+    /// `None` when a frame read back no GPU stats.
     pub gpu_main_pass_microseconds: Option<Spread>,
     #[serde(flatten)]
     pub counters: Counters,
@@ -243,15 +243,9 @@ fn measure(
 ) -> Measurements {
     let measured = &frames[configuration.warm_up_frames as usize..];
     let microseconds = |time: Duration| time.as_secs_f64() * 1e6;
-    let main_pass_times: Vec<f64> = measured
+    let frame_times: Vec<f64> = measured
         .iter()
-        .filter_map(|stats| {
-            let (_, time) = stats
-                .gpu_times
-                .iter()
-                .find(|(pass, _)| *pass == MAIN_PASS)?;
-            Some(microseconds(*time))
-        })
+        .filter_map(|stats| Some(microseconds(stats.gpu?.frame_time)))
         .collect();
     Measurements {
         scene: scene.name().to_owned(),
@@ -271,8 +265,8 @@ fn measure(
                 .map(|stats| microseconds(stats.cpu_frame_time))
                 .collect(),
         ),
-        gpu_main_pass_microseconds: (main_pass_times.len() == measured.len())
-            .then(|| spread(main_pass_times)),
+        gpu_main_pass_microseconds: (frame_times.len() == measured.len())
+            .then(|| spread(frame_times)),
         counters: Counters::of(measured),
         counter_frames: CounterFrames {
             frames: COUNTER_FRAMES,
@@ -497,6 +491,8 @@ fn percentile(mut values: Vec<f64>, fraction: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::render::TIMED_PASSES;
+    use crate::stats::GpuFrameStats;
 
     const COUNTERS: Counters = Counters {
         draw_calls: 10,
@@ -662,7 +658,11 @@ mod tests {
                 let warming_up = frame < configuration.warm_up_frames;
                 FrameStats {
                     cpu_frame_time: Duration::from_micros(if warming_up { 900 } else { 100 }),
-                    gpu_times: vec![(MAIN_PASS, Duration::from_micros(200))],
+                    gpu: Some(GpuFrameStats {
+                        frame: frame.into(),
+                        pass_times: TIMED_PASSES.map(|pass| (pass, Duration::from_micros(100))),
+                        frame_time: Duration::from_micros(200),
+                    }),
                     draw_calls: if counted { 10 } else { 99 },
                     heap_allocations: if counted { 50 } else { 999 },
                     ..FrameStats::default()

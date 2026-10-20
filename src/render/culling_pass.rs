@@ -11,8 +11,8 @@ use crate::render::prepare::FrameData;
 use crate::render::renderer::RenderSwitches;
 use crate::render::shaders;
 
-/// The culling pass's label.
-const CULLING_PASS: &str = "culling_pass";
+/// The culling pass's label, and its name in frame stats.
+pub(crate) const CULLING_PASS: &str = "culling_pass";
 
 /// Slots each workgroup of the pass's scans sums: the scans of
 /// `INSTANCE_CAPACITY` slots take one workgroup of blocks, 8 to an
