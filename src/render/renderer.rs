@@ -325,7 +325,8 @@ impl Renderer {
         );
         // The frame's draw is one indirect call.
         recorder.draw_calls += 1;
-        self.gpu_stats.end_frame(&mut encoder);
+        self.gpu_stats
+            .end_frame(&mut encoder, self.culling_pass.frame_draw());
 
         let command_buffer = encoder.finish();
         recorder.stage("encode", started);
@@ -432,7 +433,7 @@ mod tests {
             RenderSwitches::default(),
         );
         let frame = triangle_frame(&mut renderer);
-        let (image, recorder) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
+        let (image, recorder, _) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
 
         assert_eq!(recorder.draw_calls, 1);
         assert_eq!(image.get_pixel(SIZE / 2, SIZE / 2).0, [255, 0, 0, 255]);
@@ -463,7 +464,7 @@ mod tests {
         // A frame at the first size before the resize, as a window draws.
         render_frame(&context, &mut resized, &frame, SIZE, SIZE);
         resized.resize(width, height);
-        let (resized_image, _) = render_frame(&context, &mut resized, &frame, width, height);
+        let (resized_image, ..) = render_frame(&context, &mut resized, &frame, width, height);
 
         let mut created = Renderer::new(
             &context,
@@ -473,7 +474,7 @@ mod tests {
             RenderSwitches::default(),
         );
         let frame = triangle_frame(&mut created);
-        let (created_image, _) = render_frame(&context, &mut created, &frame, width, height);
+        let (created_image, ..) = render_frame(&context, &mut created, &frame, width, height);
 
         assert_eq!(resized.aspect_ratio(), 1.2);
         assert_eq!(
@@ -517,17 +518,46 @@ mod tests {
             4,
             12,
         );
-        let (image, recorder) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
+        let (image, recorder, _) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
 
         assert_eq!(recorder.draw_calls, 1);
         let quarters = [(4, 4), (12, 4), (4, 12), (12, 12)].map(|(x, y)| image.get_pixel(x, y).0);
         assert_eq!(quarters, [RED, GREEN, BLUE, BLUE]);
     }
 
+    /// Twice the Instances of a two-triangle Mesh draw twice the Instances
+    /// and triangles, read back from the GPU, in the same one draw call.
+    #[test]
+    fn doubling_the_instances_doubles_instances_and_triangles_drawn_not_draw_calls() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let switches = RenderSwitches::default();
+        let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE, switches);
+        let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
+        let mesh = load_triangles(&mut renderer, &[[-0.5, 0.0], [0.5, 0.0]], &[Some(red); 2]);
+        let mut drawn = |instances: u32| {
+            let frame = frame_of(
+                vec![instance(mesh, NO_MATERIAL, [0.0, 0.0]); instances as usize],
+                2 * u64::from(instances),
+                6 * u64::from(instances),
+            );
+            let (_, recorder, gpu) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
+            (
+                gpu.instances_drawn,
+                gpu.triangles_drawn,
+                recorder.draw_calls,
+            )
+        };
+
+        assert_eq!(drawn(3), (3, 6, 1));
+        assert_eq!(drawn(6), (6, 12, 1));
+    }
+
     /// Instances past a block of the culling pass's scans, and past a row of
     /// its dispatches, where the draw holds the indices of all but the last,
     /// none culled: each draws from its own offsets until the draw is full,
-    /// then none do, with a warning.
+    /// then none do, with a warning, and the last is counted as overflowed.
     #[test]
     fn a_frame_past_the_draws_capacity_draws_the_instances_that_fit_and_warns() {
         let Some(context) = gpu_context() else {
@@ -561,12 +591,18 @@ mod tests {
             })
             .collect();
         let frame = frame_of(instances, INSTANCES.into(), 3 * u64::from(INSTANCES));
-        let ((image, _), log) =
+        let ((image, _, gpu), log) =
             logged(|| render_frame(&context, &mut renderer, &frame, SIZE, SIZE));
 
         assert_eq!(image.get_pixel(SIZE / 2, 4).0, RED);
         assert_ne!(image.get_pixel(SIZE / 2, 12).0, RED);
         assert!(log.contains("The frame's draw is full"), "{log}");
+        let drawn = (
+            gpu.instances_drawn,
+            gpu.triangles_drawn,
+            gpu.instances_overflowed,
+        );
+        assert_eq!(drawn, (INSTANCES - 1, INSTANCES - 1, 1));
     }
 
     /// Two Renderables, the right one then despawned: its slot, which still
@@ -598,7 +634,7 @@ mod tests {
         let mut red_pixels = |world: &mut World, renderer: &mut Renderer| -> [usize; 2] {
             world.run_system_once(propagate_world_transforms).unwrap();
             let frame = preparer.prepare(world, &renderer.mesh_pool, 1.0);
-            let (image, _) = render_frame(&context, renderer, frame, SIZE, SIZE);
+            let (image, ..) = render_frame(&context, renderer, frame, SIZE, SIZE);
             [0..SIZE / 2, SIZE / 2..SIZE].map(|columns| {
                 image
                     .enumerate_pixels()
@@ -892,14 +928,14 @@ mod tests {
     }
 
     /// Uploads and renders `frame` into a new `width` × `height` target, and
-    /// reads it back, with what the frame recorded.
+    /// reads it back, with what the frame recorded and its GPU stats.
     fn render_frame(
         context: &GpuContext,
         renderer: &mut Renderer,
         frame: &FrameData,
         width: u32,
         height: u32,
-    ) -> (image::RgbaImage, FrameRecorder) {
+    ) -> (image::RgbaImage, FrameRecorder, GpuFrameStats) {
         let target = context.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Frame Data Test Target"),
             size: wgpu::Extent3d {
@@ -924,6 +960,11 @@ mod tests {
         let pixels = read_back(context, &target).expect("read back failed");
         let image =
             image::RgbaImage::from_raw(width, height, pixels).expect("width × height pixels");
-        (image, recorder)
+        renderer.flush_gpu_frame_stats().expect("GPU stats flushed");
+        let gpu = *renderer
+            .gpu_frame_stats()
+            .last()
+            .expect("the frame's GPU stats");
+        (image, recorder, gpu)
     }
 }

@@ -50,11 +50,11 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // light uniforms, 524,288 Instances of 128 bytes, the culling pass's
     // 4-byte Instance slot count and 8-byte offsets for each slot and block
     // of 256 slots, the frame's draw of 2^20 Meshlet records of 12 bytes,
-    // 2^24 packed indices of 4 bytes and 20 bytes of indirect arguments, the
-    // 160×90 Depth32Float texture, three staging slots of the first frame's
-    // 1572 uploaded bytes rounded up to 2048, and the GPU stats readback: its
-    // 32-byte resolve buffer and six slots of 32 bytes. The load's staging is
-    // gone.
+    // 2^24 packed indices of 4 bytes and 28 bytes of indirect arguments and
+    // counts, the 160×90 Depth32Float texture, three staging slots of the
+    // first frame's 1572 uploaded bytes rounded up to 2048, and the GPU stats
+    // readback: its 32-byte resolve buffer and six slots of 64 bytes. The
+    // load's staging is gone.
     assert_eq!(
         last.gpu_memory_bytes,
         5 * 4
@@ -68,11 +68,11 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + (524_288 + 2048) * 8
             + (1 << 20) * 12
             + (1 << 24) * 4
-            + 20
+            + 28
             + 160 * 90 * 4
             + 3 * 2048
             + 32
-            + 6 * 32
+            + 6 * 64
     );
     // One UV sphere in the Arenas: 48 × 24 quads of two triangles but one at
     // each pole, of three u32s, and 25 rings of 49 vertices of 28 bytes, less
@@ -155,6 +155,62 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
 
     let printed = last.to_string();
     assert!(printed.lines().count() <= 5, "over 5 lines:\n{printed}");
+}
+
+/// On every Reference scene, each frame reads back from the GPU the
+/// Instances and triangles its draw held, which equal the scene's
+/// closed-form counts, none overflowed: every Instance in use is drawn.
+#[test]
+fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
+    let context = match pollster::block_on(GpuContext::headless()) {
+        Ok(context) => context,
+        Err(error) if error.is::<wgpu::RequestAdapterError>() => {
+            // Not `eprintln!`, which libtest captures from passing tests.
+            writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+            return;
+        }
+        Err(error) => panic!("headless GPU context failed: {error:#}"),
+    };
+
+    // A sphere: 48 × 24 quads of two triangles but one at each pole. A
+    // ground plane or a quad: two triangles. SciFiHelmet's and
+    // NormalTangentTest's cooked Meshes: 70,074 and 23,322 indices.
+    let (sphere_triangles, plane_triangles) = (48 * 24 * 2 - 2 * 48, 2);
+    let (helmet_triangles, normal_tangent_triangles) = (23_358, 7_774);
+    for scene in ReferenceScene::ALL {
+        if scene == ReferenceScene::Helmet && !std::path::Path::new(praxis::DEFAULT_MODEL).exists()
+        {
+            writeln!(std::io::stderr(), "skipped helmet: assets not fetched").ok();
+            continue;
+        }
+        let (_, frames) =
+            praxis::capture(&context, scene, glam::DVec3::ZERO, 160, 90).expect("capture failed");
+        let (instances, triangles) = match scene {
+            // Ten sweep helmets and the textured one.
+            ReferenceScene::Helmet => (11, helmet_triangles),
+            ReferenceScene::PbrSweep => (10, sphere_triangles),
+            ReferenceScene::UvGrid | ReferenceScene::Minification => (1, plane_triangles),
+            ReferenceScene::NormalTangent => (1, normal_tangent_triangles),
+            ReferenceScene::FarCoplanar => (2, plane_triangles),
+            ReferenceScene::Orrery => (5, sphere_triangles),
+            ReferenceScene::TextureWall => (100, plane_triangles),
+        };
+        for (frame, stats) in frames.iter().enumerate() {
+            let Some(gpu) = stats.gpu else {
+                panic!("{} frame {frame} read back no GPU stats", scene.name());
+            };
+            assert_eq!(
+                (
+                    gpu.instances_drawn,
+                    gpu.triangles_drawn,
+                    gpu.instances_overflowed
+                ),
+                (instances, instances * triangles, 0),
+                "{} frame {frame}",
+                scene.name()
+            );
+        }
+    }
 }
 
 /// On the Reference scenes whose camera moves every frame, the first frame

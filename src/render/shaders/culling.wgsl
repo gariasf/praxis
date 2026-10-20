@@ -10,13 +10,16 @@
 // sample their Textures with.
 
 // The frame's draw: the indirect arguments of one indexed draw from index 0,
-// cleared before the pass.
+// then the Instances it holds and those it has no room for, which Frame
+// stats read back; cleared before the pass.
 struct FrameDraw {
     index_count: atomic<u32>,
     instance_count: u32,
     first_index: u32,
     base_vertex: i32,
     first_instance: u32,
+    instances_drawn: atomic<u32>,
+    instances_overflowed: atomic<u32>,
 }
 
 var<workgroup> scan: array<vec2<u32>, SCAN_BLOCK_SIZE>;
@@ -185,10 +188,14 @@ fn append_meshlets(
     let counts = vec2<u32>(mesh.meshlet_count, 3u * mesh.triangle_count);
     let capacity = vec2<u32>(arrayLength(&meshlet_records), arrayLength(&packed_indices));
     if any(first > capacity) || any(counts > capacity - first) {
+        if triangle == 0u {
+            atomicAdd(&frame_draw.instances_overflowed, 1u);
+        }
         return;
     }
     if triangle == 0u {
         atomicMax(&frame_draw.index_count, first.y + counts.y);
+        atomicAdd(&frame_draw.instances_drawn, 1u);
     }
 
     for (var meshlet_in_mesh = 0u; meshlet_in_mesh < mesh.meshlet_count; meshlet_in_mesh++) {
