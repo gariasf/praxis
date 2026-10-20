@@ -62,6 +62,7 @@ fn a_module_with_ray_queries_validates() {
     let module = ShaderModule {
         name: "shadow",
         enables: &["wgpu_ray_query"],
+        bind_groups: &[],
         parts: &[SHADOW],
     };
     assert_eq!(validate(&module).err(), None);
@@ -88,12 +89,14 @@ fn an_error_names_its_module_part_and_line() {
     let parse_error = validate(&ShaderModule {
         name: "test",
         enables: &["wgpu_binding_array"],
+        bind_groups: &[],
         parts: &[LIGHT, MISSPELT],
     })
     .unwrap_err();
     let validation_error = validate(&ShaderModule {
         name: "test",
         enables: &["wgpu_binding_array"],
+        bind_groups: &[],
         parts: &[LIGHT, UNALIGNED_UNIFORM],
     })
     .unwrap_err();
@@ -226,6 +229,7 @@ fn layout_check_reports_every_kind_of_mismatch() {
     let module = validate(&ShaderModule {
         name: "test",
         enables: &[],
+        bind_groups: &[],
         parts: &[PART],
     })
     .unwrap_or_else(|error| panic!("{error}"));
@@ -255,6 +259,7 @@ fn a_bind_group_past_the_device_limit_fails_validation() {
         validate(&ShaderModule {
             name: "test",
             enables: &[],
+            bind_groups: &[],
             parts: &[PART],
         })
         .err()

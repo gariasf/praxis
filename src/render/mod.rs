@@ -1,3 +1,4 @@
+pub mod bind_groups;
 pub mod depth;
 pub mod instance;
 pub mod prepare;

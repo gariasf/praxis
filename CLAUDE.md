@@ -104,9 +104,10 @@ src/
                                  in git-ignored `cooked/` (ADR 0018)
   render/                      # Renderer (owns the Pools, reads no
                                  ECS World), prepare (ECS World to Frame
-                                 data), instance, uniforms, depth,
-                                 staging, shaders/ (WGSL parts and the
-                                 modules each pipeline assembles from them)
+                                 data), bind_groups (each defined once),
+                                 instance, uniforms, depth, staging,
+                                 shaders/ (WGSL parts and the modules
+                                 each pipeline assembles from them)
 tests/                         # integration tests at agreed seams
   goldens/<backend>[-cpu]/     # committed Goldens; PRAXIS_UPDATE_GOLDENS=1
                                  cargo test --test goldens rewrites them
@@ -167,7 +168,8 @@ When a feature folder grows past one file, split into
   gracefully (warn + skip in render path); never `.unwrap()` in a
   hot loop.
 - Shaders are WGSL parts in `src/render/shaders/`, assembled into modules
-  by its `mod.rs`; a function under an oracle lives in a shared part.
+  by its `mod.rs` after the bindings and constants it declares from Rust;
+  a function under an oracle lives in a shared part.
 - No `unsafe` unless absolutely necessary and clearly explained.
 - Keep dependencies minimal. Use feature flags
   (`image = { version = "0.25", default-features = false, features = ["png"] }`).
@@ -188,8 +190,11 @@ When reviewing changes, check for:
 
 - [ ] GPU resources created in `Renderer::new` are also recreated in
       `resize()`
-- [ ] Shader bind group bindings match the Rust bind group layouts.
-      `cargo test` checks struct layouts field by field
+- [ ] A binding is written once, in its bind group's definition
+      (`src/render/bind_groups.rs`), which declares it in WGSL and gives
+      its layout, pipeline layouts and the `set_bind_group` index; no
+      WGSL part declares one. `cargo test` checks the structs the CPU
+      writes field by field against their Rust twins
       (`src/render/shader_tests.rs`); Rust-only padding fields start
       with `_`
 - [ ] No World position reaches the GPU in f32: only an anchor plus an
@@ -203,8 +208,6 @@ When reviewing changes, check for:
       in `src/render/shader_function_tests.rs`
 - [ ] When a buffer is recreated, the bind group referencing it is
       also recreated (bind groups are snapshots, not pointers)
-- [ ] New bind groups are added to both the pipeline layout and set in
-      the render pass
 - [ ] Texture formats match between creation and surface config (sRGB
       consistency)
 - [ ] `unwrap()` on GPU operations that could fail at runtime — prefer

@@ -1,7 +1,12 @@
 //! The WGSL shader modules, each assembled from ordered parts in this
-//! directory, so passes share structs and functions without copying them. A
-//! function under an oracle lives in a shared part, which the oracle harness
-//! assembles with its kernel alone.
+//! directory, so passes share structs and functions without copying them,
+//! after the constants Rust shares with WGSL and its bindings' declarations,
+//! both generated from Rust (`render::bind_groups`). A function under an
+//! oracle lives in a shared part, which the oracle harness assembles with its
+//! kernel alone.
+
+use crate::render::bind_groups::{BindGroupDefinition, FRAME, MATERIALS, SCENE};
+use crate::render::instance::ANCHOR_CELL_SIZE;
 
 /// One WGSL file of this directory.
 #[derive(Clone, Copy)]
@@ -29,11 +34,13 @@ const COMMON: Part = part!("common.wgsl");
 /// The shading terms.
 const SHADING: Part = part!("shading.wgsl");
 
-/// A WGSL module: the extensions it enables, then its parts in order.
+/// A WGSL module: the extensions it enables, the bind groups whose bindings
+/// it declares, then its parts in order.
 #[derive(Clone, Copy)]
 pub struct ShaderModule {
     pub name: &'static str,
     pub enables: &'static [&'static str],
+    pub bind_groups: &'static [&'static BindGroupDefinition],
     pub parts: &'static [Part],
 }
 
@@ -42,6 +49,7 @@ pub const MAIN: ShaderModule = ShaderModule {
     name: "main",
     // Each Channel is a binding array indexed by Layer (ADR 0017).
     enables: &["wgpu_binding_array"],
+    bind_groups: &[&FRAME, &MATERIALS, &SCENE],
     parts: &[COMMON, SHADING, part!("main.wgsl")],
 };
 
@@ -50,6 +58,7 @@ pub const MAIN: ShaderModule = ShaderModule {
 pub const SHARED: ShaderModule = ShaderModule {
     name: "shared",
     enables: &[],
+    bind_groups: &[],
     parts: &[COMMON, SHADING],
 };
 
@@ -72,8 +81,8 @@ impl ShaderModule {
     }
 
     /// The part that byte `offset` of the module's WGSL falls in, and the
-    /// 1-based line and column of `offset` within that part; `None` in the
-    /// `enable` directives.
+    /// 1-based line and column of `offset` within that part; `None` before
+    /// the first part, in what `assemble` generates.
     #[cfg(test)]
     pub fn locate(&self, offset: usize) -> Option<(&'static str, usize, usize)> {
         let (_, starts) = self.assemble();
@@ -89,14 +98,22 @@ impl ShaderModule {
     }
 
     /// The module's WGSL, an `enable` directive per extension first, since
-    /// directives precede every declaration, then each part on lines of its
-    /// own; and the byte offset where each part starts.
+    /// directives precede every declaration, then the constants Rust shares
+    /// and the declarations of its bind groups' bindings, then each part on
+    /// lines of its own; and the byte offset where each part starts.
     fn assemble(&self) -> (String, Vec<usize>) {
         let mut source: String = self
             .enables
             .iter()
             .map(|extension| format!("enable {extension};\n"))
             .collect();
+        source.push_str(&format!(
+            "const ANCHOR_CELL_SIZE: f32 = {:?};\n",
+            ANCHOR_CELL_SIZE as f32
+        ));
+        for bind_group in self.bind_groups {
+            source.push_str(&bind_group.declarations());
+        }
         let mut starts = Vec::with_capacity(self.parts.len());
         for part in self.parts {
             starts.push(source.len());

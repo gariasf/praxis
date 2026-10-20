@@ -1,27 +1,5 @@
-// The main pass's bindings and entry points, after the shared parts
-// (src/render/shaders/mod.rs).
-
-@group(0) @binding(0)
-var<uniform> camera: CameraUniform;
-
-@group(1) @binding(0) var<storage, read> materials: array<MaterialData>;
-// Each Channel is a binding array indexed by Layer (ADR 0017).
-@group(1) @binding(1) var albedo_textures: binding_array<texture_2d<f32>>;
-@group(1) @binding(2) var normal_textures: binding_array<texture_2d<f32>>;
-@group(1) @binding(3) var metallic_roughness_textures: binding_array<texture_2d<f32>>;
-@group(1) @binding(4) var occlusion_textures: binding_array<texture_2d<f32>>;
-@group(1) @binding(5) var emissive_textures: binding_array<texture_2d<f32>>;
-@group(1) @binding(6) var pbr_sampler: sampler;
-
-@group(2) @binding(0)
-var<uniform> light: LightUniform;
-
-@group(3) @binding(0)
-var<storage, read> instances: array<InstanceData>;
-
-// The vertex Arena, which the vertex shader pulls from (ADR 0019).
-@group(3) @binding(1)
-var<storage, read> vertices: array<CookedVertex>;
+// The main pass's entry points, after the shared parts; its bindings are
+// declared from their bind groups' definitions (src/render/bind_groups.rs).
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
