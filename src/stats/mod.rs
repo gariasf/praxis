@@ -25,6 +25,9 @@ pub struct FrameStats {
     pub instances_written: u32,
     /// Renderables the full Instance buffer refused a slot, so not drawn.
     pub renderables_refused: u32,
+    /// Static Instances the static TLAS leaves out, their slots past its
+    /// capacity, so they cast no shadow.
+    pub static_instances_left_out: u32,
     /// Bytes of the GPU buffers and textures the State created, its Pools
     /// included, summed by the engine on every backend (ADR 0013), and of
     /// its acceleration structures, estimated. The render target and
@@ -102,10 +105,11 @@ impl std::fmt::Display for FrameStats {
         }
         writeln!(
             formatter,
-            " uploaded_bytes={} instances_written={} renderables_refused={} heap_allocations={} dropped_us={:.1} gpu_readbacks_skipped={}",
+            " uploaded_bytes={} instances_written={} renderables_refused={} static_instances_left_out={} heap_allocations={} dropped_us={:.1} gpu_readbacks_skipped={}",
             self.uploaded_bytes,
             self.instances_written,
             self.renderables_refused,
+            self.static_instances_left_out,
             self.heap_allocations,
             microseconds(&self.dropped_time),
             self.gpu_readbacks_skipped
@@ -156,6 +160,7 @@ pub(crate) struct FrameRecorder {
     pub(crate) uploaded_bytes: u64,
     pub(crate) instances_written: u32,
     pub(crate) renderables_refused: u32,
+    pub(crate) static_instances_left_out: u32,
     pub(crate) dropped_time: Duration,
     pub(crate) gpu_readbacks_skipped: u32,
 }
@@ -173,6 +178,7 @@ impl FrameRecorder {
             uploaded_bytes: 0,
             instances_written: 0,
             renderables_refused: 0,
+            static_instances_left_out: 0,
             dropped_time: Duration::ZERO,
             gpu_readbacks_skipped: 0,
         }
@@ -186,6 +192,7 @@ impl FrameRecorder {
         self.uploaded_bytes = 0;
         self.instances_written = 0;
         self.renderables_refused = 0;
+        self.static_instances_left_out = 0;
         self.dropped_time = Duration::ZERO;
         self.gpu_readbacks_skipped = 0;
         self.allocations_at_start = thread_allocations();
@@ -221,6 +228,7 @@ impl FrameRecorder {
             uploaded_bytes: self.uploaded_bytes,
             instances_written: self.instances_written,
             renderables_refused: self.renderables_refused,
+            static_instances_left_out: self.static_instances_left_out,
             heap_allocations: self.heap_allocations,
             dropped_time: self.dropped_time,
             gpu_readbacks_skipped: self.gpu_readbacks_skipped,

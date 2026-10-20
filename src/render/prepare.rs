@@ -51,17 +51,22 @@ type RenderableQuery = QueryState<(
 )>;
 
 impl FrameData {
-    /// Queues `instance` for `slot`, in the last write when `slot` follows it.
-    fn write_instance(&mut self, slot: u32, instance: InstanceData) {
+    /// Queues `instance` for `slot`, a Moving Instance or not, in the last
+    /// write when `slot` follows it and it is of the same kind.
+    fn write_instance(&mut self, slot: u32, instance: InstanceData, moving: bool) {
         let index = self.instances.len();
         self.instances.push(instance);
         match self.instance_writes.last_mut() {
-            Some(write) if write.first_slot + write.instances.len() as u32 == slot => {
+            Some(write)
+                if write.moving == moving
+                    && write.first_slot + write.instances.len() as u32 == slot =>
+            {
                 write.instances.end += 1;
             }
             _ => self.instance_writes.push(InstanceWrite {
                 first_slot: slot,
                 instances: index..index + 1,
+                moving,
             }),
         }
     }
@@ -72,6 +77,8 @@ pub struct InstanceWrite {
     pub first_slot: u32,
     /// The Instances' range in `FrameData::instances`.
     pub instances: Range<usize>,
+    /// Whether they are Moving Instances, which the static TLAS leaves out.
+    pub moving: bool,
 }
 
 /// Each Renderable's slot in the Instance buffer, kept until it stops being a
@@ -271,6 +278,7 @@ impl FramePreparer {
                         offset,
                         mesh: mesh_ref.0.0,
                     },
+                    previous.is_some(),
                 );
             }
         }
@@ -287,7 +295,7 @@ impl FramePreparer {
                 mesh: NO_MESH,
                 ..bytemuck::Zeroable::zeroed()
             };
-            frame.write_instance(slot, freed);
+            frame.write_instance(slot, freed, false);
         }
         instance_slots.free.append(&mut instance_slots.freed);
         frame.instance_slot_count = instance_slots.end;
@@ -576,6 +584,19 @@ mod tests {
             .insert(PreviousWorldTransform::default());
         assert_eq!(frames.prepare(), [4]);
         assert_eq!(frames.prepare(), [4]);
+        // Its write is flagged a Moving Instance's, apart from a static
+        // Instance's in the next slot.
+        frames.spawn(7.0);
+        frames.prepare();
+        let mut writes: Vec<(u32, usize, bool)> = frames
+            .preparer
+            .frame()
+            .instance_writes
+            .iter()
+            .map(|write| (write.first_slot, write.instances.len(), write.moving))
+            .collect();
+        writes.sort_unstable();
+        assert_eq!(writes, [(4, 1, true), (5, 1, false)]);
     }
 
     #[test]

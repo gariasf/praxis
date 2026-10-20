@@ -114,8 +114,9 @@ src/
                                  Frame data), bind_groups (each defined
                                  once), readback (each frame's GPU stats
                                  through a ring of mapped buffers),
-                                 acceleration_structures (their memory
-                                 estimates), instance, uniforms, staging,
+                                 acceleration_structures (the static
+                                 TLAS, their memory estimates), instance,
+                                 uniforms, staging,
                                  shaders/ (WGSL parts and the modules
                                  each pipeline assembles from them)
 tests/                         # integration tests at agreed seams

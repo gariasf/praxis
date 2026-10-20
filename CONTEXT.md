@@ -165,7 +165,7 @@ The variants a Renderer is created with and keeps: whether Instances are culled,
 _Avoid_: Render settings, config, options, debug flags
 
 **Frame stats**:
-What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and the GPU frame total (from the start of the first pass to the end of the last), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables refused, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.
+What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and the GPU frame total (from the start of the first pass to the end of the last), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables refused, static Instances left out of the static TLAS, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.
 _Avoid_: Metrics, telemetry
 
 **Baseline**:
