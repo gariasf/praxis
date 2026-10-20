@@ -194,9 +194,10 @@ When reviewing changes, check for:
 
 - [ ] A size-dependent target lives in the targets module
       (`src/render/targets.rs`), whose `RenderTargets::new` creates every
-      target and runs again on resize; a pass builds the bind groups that
-      read targets in one function, called at creation and after every
-      resize (bind groups are snapshots, not pointers)
+      target and runs again on resize. Bind groups are snapshots, not
+      pointers: whatever recreates a resource rebuilds the groups holding
+      it, so a pass builds the bind groups that read targets in one
+      function, called at creation and after every resize
 - [ ] A binding is written once, in its bind group's definition
       (`src/render/bind_groups.rs`), which declares it in WGSL and gives
       its layout and its group's index in pipeline layouts and

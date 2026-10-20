@@ -13,13 +13,13 @@ use crate::stats::FrameRecorder;
 
 /// Draws Frame data into a target view, the window's surface or an offscreen
 /// texture, from GPU resources and Pools it owns; it reads no ECS World. It
-/// holds the bind groups passes share and the targets, and calls the passes
-/// in ADR 0019's order.
+/// holds the bind groups passes share and the render targets, and calls the
+/// passes in ADR 0019's order.
 pub struct Renderer {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     aspect_ratio: f32,
-    targets: RenderTargets,
+    render_targets: RenderTargets,
     main_pass: MainPass,
     camera_buffer: wgpu::Buffer,
     light_buffer: wgpu::Buffer,
@@ -119,7 +119,7 @@ impl Renderer {
             ],
         );
 
-        let targets = RenderTargets::new(&device, width, height);
+        let render_targets = RenderTargets::new(&device, width, height);
 
         Self {
             mesh_pool,
@@ -128,7 +128,7 @@ impl Renderer {
             device,
             queue,
             aspect_ratio: width as f32 / height as f32,
-            targets,
+            render_targets,
             main_pass,
             camera_buffer,
             light_buffer,
@@ -145,8 +145,8 @@ impl Renderer {
     /// Matches a new target size, both non-zero.
     pub fn resize(&mut self, width: u32, height: u32) {
         // A pass whose bind groups read a target rebuilds them here, after
-        // the targets.
-        self.targets = RenderTargets::new(&self.device, width, height);
+        // the render targets.
+        self.render_targets = RenderTargets::new(&self.device, width, height);
         self.aspect_ratio = width as f32 / height as f32;
     }
 
@@ -215,7 +215,7 @@ impl Renderer {
         self.main_pass.record(
             &mut encoder,
             target,
-            &self.targets,
+            &self.render_targets,
             &[
                 (&FRAME, &self.frame_bind_group),
                 (&MATERIALS, &self.material_pool.bind_group),
@@ -261,7 +261,9 @@ impl Renderer {
             &self.instance_buffer,
         ];
         buffers.iter().map(|buffer| buffer.size()).sum::<u64>()
-            + self.targets.gpu_memory_bytes(self.transient_saves_memory)
+            + self
+                .render_targets
+                .gpu_memory_bytes(self.transient_saves_memory)
             + self.mesh_pool.gpu_memory_bytes()
             + self
                 .material_pool
@@ -329,7 +331,7 @@ mod tests {
         let frame = triangle_frame(&mut created);
         let (created_image, _) = render_frame(&context, &mut created, &frame, width, height);
 
-        assert_eq!(resized.aspect_ratio(), created.aspect_ratio());
+        assert_eq!(resized.aspect_ratio(), 1.2);
         assert_eq!(
             resized_image.get_pixel(width / 2, height / 2).0,
             [255, 0, 0, 255]

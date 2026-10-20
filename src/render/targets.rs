@@ -8,7 +8,8 @@ use crate::stats::texture_bytes;
 /// The depth target's format.
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
-/// Samples per pixel of the targets passes draw into.
+/// Samples per pixel of the depth target, which every pipeline that draws
+/// into it matches.
 pub const SAMPLE_COUNT: u32 = 1;
 
 /// Every size-dependent target, created together by `new`, which a resize
@@ -60,7 +61,7 @@ impl RenderTargets {
     }
 }
 
-/// The depth state of a pipeline that keeps the nearest surface: it passes
+/// The depth state of a pipeline that keeps the nearest depth: it passes
 /// `Greater`, nearer being greater, and writes.
 pub fn depth_stencil_state() -> wgpu::DepthStencilState {
     wgpu::DepthStencilState {

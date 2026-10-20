@@ -69,15 +69,15 @@ impl MainPass {
     }
 
     /// Records the pass into `encoder`: clears `target`, a view in this
-    /// pass's format and the targets' size, and the depth target, then
-    /// draws `draws` from the index Arena `index_buffer`, with `bind_groups`
-    /// set, timed into `timestamp_writes`.
-    #[allow(clippy::too_many_arguments)]
+    /// pass's format and the render targets' size, and the depth target,
+    /// then draws `draws` from the index Arena `index_buffer`, with
+    /// `bind_groups` set, timed into `timestamp_writes`.
+    #[expect(clippy::too_many_arguments)]
     pub fn record(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         target: &wgpu::TextureView,
-        targets: &RenderTargets,
+        render_targets: &RenderTargets,
         bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
         index_buffer: &wgpu::Buffer,
         draws: &[Draw],
@@ -102,7 +102,7 @@ impl MainPass {
                     },
                 }),
             ],
-            depth_stencil_attachment: Some(targets.depth_attachment()),
+            depth_stencil_attachment: Some(render_targets.depth_attachment()),
             occlusion_query_set: None,
             timestamp_writes,
             multiview_mask: None,
