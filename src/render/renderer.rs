@@ -522,10 +522,7 @@ mod tests {
                 view_proj: glam::Mat4::IDENTITY.to_cols_array_2d(),
                 ..CameraUniform::default()
             },
-            light: LightUniform {
-                direction: [0.0, 0.0, -1.0, 0.0],
-                ..LightUniform::default()
-            },
+            light: LightUniform::default(),
             instances: vec![InstanceData {
                 rotation_scale: identity,
                 normal_matrix: identity,

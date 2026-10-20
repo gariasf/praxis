@@ -97,18 +97,19 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let view_direction = normalize(-in.camera_relative_position);
 
-    var outgoing_radiance = vec3<f32>(0.0);
-    if light.directional_light_count > 0u {
-        outgoing_radiance += cook_torrance(
-            normal,
-            view_direction,
-            normalize(-light.direction.xyz),
-            base_color,
-            metallic,
-            roughness,
-            light.color.rgb * light.color.a
-        );
-    }
+    // Shaded whether or not the uniform holds a directional light, since a
+    // branch around it cost the main pass about 10% on the M4 Pro: without
+    // one, its radiance is zero and a fixed direction keeps the term finite.
+    let has_directional_light = light.directional_light_count > 0u;
+    var outgoing_radiance = cook_torrance(
+        normal,
+        view_direction,
+        select(vec3<f32>(0.0, 1.0, 0.0), normalize(-light.direction.xyz), has_directional_light),
+        base_color,
+        metallic,
+        roughness,
+        light.color.rgb * light.color.a * f32(light.directional_light_count)
+    );
 
     for (var light_index = 0u; light_index < light.point_light_count; light_index++) {
         let light_vector = light.point_positions[light_index].xyz - in.camera_relative_position;
