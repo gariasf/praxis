@@ -1,14 +1,15 @@
 //! The Mesh cook (ADR 0018): welds each Primitive on position, UV and
 //! normal, regenerates MikkTSpace tangents, re-splits the vertices whose
-//! tangents differ, packs them as 28-byte vertices with a QTangent, and orders
-//! them for vertex cache, overdraw and vertex fetch.
+//! tangents differ, packs them as 28-byte vertices with a QTangent, orders
+//! them for vertex cache, overdraw and vertex fetch, and cuts each
+//! Primitive's triangles, in that order, into Meshlets.
 
 use glam::{Mat3, Quat, Vec3};
 use sha2::{Digest, Sha256};
 
 use crate::cooked::{
-    AssetId, AssetKind, AssetSource, CookedMesh, CookedPrimitive, CookedVertex,
-    MESH_FORMAT_VERSION, MESH_MAGIC, hex,
+    AssetId, AssetKind, AssetSource, CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex,
+    MESH_FORMAT_VERSION, MESH_MAGIC, MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES, hex,
 };
 use crate::scenes::Geometry;
 
@@ -24,7 +25,7 @@ const OVERDRAW_THRESHOLD: f32 = 1.05;
 /// and the `bevy_mikktspace` version with their dependencies.
 pub(super) fn encoder_settings() -> String {
     format!(
-        "bevy_mikktspace 1.0.0, meshoptimizer 0.25, vertex codec 0, overdraw {OVERDRAW_THRESHOLD}, zstd {} level {}",
+        "bevy_mikktspace 1.0.0, meshoptimizer 0.25, vertex codec 0, overdraw {OVERDRAW_THRESHOLD}, meshlets of {MESHLET_MAX_VERTICES} vertices and {MESHLET_MAX_TRIANGLES} triangles cut in index order, zstd {} level {}",
         zstd::zstd_safe::version_number(),
         CookedMesh::ZSTD_LEVEL
     )
@@ -67,20 +68,40 @@ pub(crate) fn cook(primitives: &[SourcePrimitive]) -> CookedMesh {
         vertices: Vec::new(),
         indices: Vec::new(),
         primitives: Vec::new(),
+        bounds: [[0.0; 3]; 2],
     };
+    let mut triangle_counts = Vec::new();
     for (geometry, material) in primitives {
         let (vertices, indices) = cook_primitive(geometry);
+        let triangles = indices.as_chunks::<3>().0;
+        triangle_counts.push(meshlet_triangle_counts(triangles, vertices.len()));
         let first_vertex = mesh.vertices.len() as u32;
         mesh.primitives.push(CookedPrimitive {
             first_index: mesh.indices.len() as u32,
             index_count: indices.len() as u32,
             material: *material,
+            meshlets: Vec::new(),
         });
         mesh.indices
             .extend(indices.iter().map(|index| index + first_vertex));
         mesh.vertices.extend(vertices);
     }
+    // Renumbering the vertices keeps each run, so the cuts above hold.
     mesh.vertices = meshopt::optimize_vertex_fetch(&mut mesh.indices, &mesh.vertices);
+    for (primitive, triangle_counts) in mesh.primitives.iter_mut().zip(triangle_counts) {
+        let first_index = primitive.first_index as usize;
+        let indices = &mesh.indices[first_index..][..primitive.index_count as usize];
+        primitive.meshlets = CookedMeshlet::split(indices.as_chunks::<3>().0, triangle_counts)
+            .expect("the cut keeps to the Meshlet limits");
+    }
+    let positions = mesh
+        .vertices
+        .iter()
+        .map(|vertex| Vec3::from(vertex.position));
+    mesh.bounds = [
+        positions.clone().fold(Vec3::INFINITY, Vec3::min).into(),
+        positions.fold(Vec3::NEG_INFINITY, Vec3::max).into(),
+    ];
     mesh
 }
 
@@ -120,6 +141,46 @@ fn cook_primitive(geometry: &Geometry) -> (Vec<CookedVertex>, Vec<u32>) {
     .expect("a whole number of vertices, position first");
     meshopt::optimize_overdraw_in_place(&mut indices, &positions, OVERDRAW_THRESHOLD);
     (vertices, indices)
+}
+
+/// Each Meshlet's triangle count when `triangles`, indexing `vertex_count`
+/// vertices, are cut in order into the longest runs the Meshlet limits
+/// allow, like meshoptimizer's `meshopt_buildMeshletsScan`, which `meshopt`
+/// binds only as an `unsafe` call and which counts a degenerate triangle's
+/// repeated corner twice. Kept in order, the indices stay as the vertex cache
+/// and overdraw passes left them, and so does every image.
+fn meshlet_triangle_counts(triangles: &[[u32; 3]], vertex_count: usize) -> Vec<usize> {
+    let mut in_run = vec![false; vertex_count];
+    let mut run_vertices = Vec::new();
+    let mut counts: Vec<usize> = Vec::new();
+    for triangle in triangles {
+        let mut corners = *triangle;
+        corners.sort_unstable();
+        let new_vertices = (0..3)
+            .filter(|&corner| {
+                !in_run[corners[corner] as usize]
+                    && (corner == 0 || corners[corner] != corners[corner - 1])
+            })
+            .count();
+        if counts
+            .last()
+            .is_none_or(|&count| count == MESHLET_MAX_TRIANGLES)
+            || run_vertices.len() + new_vertices > MESHLET_MAX_VERTICES
+        {
+            for vertex in run_vertices.drain(..) {
+                in_run[vertex as usize] = false;
+            }
+            counts.push(0);
+        }
+        for vertex in corners {
+            if !in_run[vertex as usize] {
+                in_run[vertex as usize] = true;
+                run_vertices.push(vertex);
+            }
+        }
+        *counts.last_mut().expect("a run is open") += 1;
+    }
+    counts
 }
 
 /// `geometry` with the vertices whose position, UV and normal are
@@ -308,6 +369,7 @@ pub(super) fn gltf_meshes(
 pub(crate) mod tests {
     use super::*;
     use crate::ReferenceScene;
+    use crate::cooked::CookedCache;
 
     #[test]
     fn the_cook_key_covers_every_part_a_mesh_cooks_from() {
@@ -452,42 +514,145 @@ pub(crate) mod tests {
         meshes
     }
 
-    /// Each triangle rotated to start at its lowest index: meshopt's index
-    /// codec may rotate a triangle, which keeps its winding.
-    fn triangles_from_lowest_index(indices: &[u32]) -> Vec<[u32; 3]> {
-        indices
-            .as_chunks::<3>()
-            .0
-            .iter()
-            .map(|&triangle| {
-                let mut triangle = triangle;
-                let lowest = (0..3).min_by_key(|&corner| triangle[corner]).unwrap();
-                triangle.rotate_left(lowest);
-                triangle
+    /// `triangle` rotated to its lowest rotation: meshopt's index codec may
+    /// rotate a triangle, which keeps its winding.
+    fn rotate_to_lowest<T: Ord + Copy>(triangle: &mut [T; 3]) {
+        *triangle = (0..3)
+            .map(|start| {
+                let mut rotated = *triangle;
+                rotated.rotate_left(start);
+                rotated
             })
-            .collect()
+            .min()
+            .unwrap();
     }
 
+    /// `mesh` with every triangle, of the index stream and of each Meshlet,
+    /// at its lowest rotation.
+    fn with_lowest_rotations(mut mesh: CookedMesh) -> CookedMesh {
+        mesh.indices
+            .as_chunks_mut::<3>()
+            .0
+            .iter_mut()
+            .for_each(rotate_to_lowest);
+        for meshlet in mesh
+            .primitives
+            .iter_mut()
+            .flat_map(|primitive| &mut primitive.meshlets)
+        {
+            meshlet.triangles.iter_mut().for_each(rotate_to_lowest);
+        }
+        mesh
+    }
+
+    /// `triangles` with each corner as the bits of its position and UV, at
+    /// their lowest rotation, sorted: what a cook keeps of a Primitive,
+    /// whatever it welds, reorders or rotates.
+    fn corner_triangles(
+        triangles: impl Iterator<Item = [([f32; 3], [f32; 2]); 3]>,
+    ) -> Vec<[[u32; 5]; 3]> {
+        let mut triangles: Vec<_> = triangles
+            .map(|triangle| {
+                let mut corners =
+                    triangle.map(|([x, y, z], [u, v])| [x, y, z, u, v].map(f32::to_bits));
+                rotate_to_lowest(&mut corners);
+                corners
+            })
+            .collect();
+        triangles.sort_unstable();
+        triangles
+    }
+
+    /// Checks `mesh`, as read back, against the Primitives it cooked from:
+    /// each Primitive's Meshlets, of at most 64 vertices and 124 triangles,
+    /// hold its triangles in index stream order, each once, through their
+    /// vertices; those are the source's triangles; the bounds are the box
+    /// around the source's vertices, so they hold every vertex.
+    fn check_meshlets(name: &str, mesh: &CookedMesh, sources: &[SourcePrimitive]) {
+        let corner = |vertex: u32| {
+            let CookedVertex { position, uv, .. } = mesh.vertices[vertex as usize];
+            (position, uv)
+        };
+        let mut bounds = [Vec3::INFINITY, Vec3::NEG_INFINITY];
+        for (primitive, (geometry, _)) in mesh.primitives.iter().zip(sources) {
+            let first_index = primitive.first_index as usize;
+            let indices = &mesh.indices[first_index..][..primitive.index_count as usize];
+            let mut stream = indices.as_chunks::<3>().0.iter();
+            let mut triangles = Vec::new();
+            for meshlet in &primitive.meshlets {
+                let (vertex_count, triangle_count) =
+                    (meshlet.vertices.len(), meshlet.triangles.len());
+                assert!(
+                    vertex_count <= 64 && (1..=124).contains(&triangle_count),
+                    "{name}: a Meshlet of {vertex_count} vertices and {triangle_count} triangles"
+                );
+                for local in &meshlet.triangles {
+                    let triangle = local.map(|vertex| meshlet.vertices[vertex as usize]);
+                    assert_eq!(
+                        Some(&triangle),
+                        stream.next(),
+                        "{name}: a Meshlet triangle is not its Primitive's next"
+                    );
+                    triangles.push(triangle.map(corner));
+                }
+            }
+            assert_eq!(stream.next(), None, "{name}: a triangle in no Meshlet");
+            let source: Vec<_> = geometry
+                .indices
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .map(|triangle| {
+                    triangle.map(|index| {
+                        let index = index as usize;
+                        (geometry.positions[index], geometry.uvs[index])
+                    })
+                })
+                .collect();
+            for &(position, _) in source.iter().flatten() {
+                let position = Vec3::from(position);
+                bounds = [bounds[0].min(position), bounds[1].max(position)];
+            }
+            assert_eq!(
+                corner_triangles(triangles.into_iter()),
+                corner_triangles(source.into_iter()),
+                "{name}: the Meshlets hold other triangles than the source's"
+            );
+        }
+        assert_eq!(
+            mesh.bounds,
+            bounds.map(|corner| corner.to_array()),
+            "{name}: the bounds are not the box around the source's vertices"
+        );
+    }
+
+    /// The cook seam: every Reference scene Mesh cooked into a scratch
+    /// Cooked cache and read back by Asset ID is its cooked data, in valid
+    /// Meshlets.
     #[test]
-    fn every_reference_scene_mesh_decodes_to_its_cooked_data() {
+    fn every_reference_scene_mesh_reads_back_as_cooked_in_valid_meshlets() {
+        let directory =
+            std::env::temp_dir().join(format!("praxis-mesh-read-back-{}", std::process::id()));
+        let cache = CookedCache::new(&directory);
         let procedural = ReferenceScene::ALL.into_iter().flat_map(|scene| {
             scene
                 .meshes()
                 .into_iter()
                 .map(move |(name, geometry, _)| (name, vec![(geometry, Some(AssetId(1)))]))
         });
-        for (name, primitives) in procedural.chain(reference_gltf_meshes()) {
+        for (id, (name, primitives)) in procedural.chain(reference_gltf_meshes()).enumerate() {
             let mesh = cook(&primitives);
-            let blob = mesh.to_blob().unwrap();
-            let mut decoded = CookedMesh::from_blob(&blob).unwrap();
+            let id = AssetId(id as u128);
+            cache.write(id, "key", &mesh.to_blob().unwrap()).unwrap();
+            let decoded = cache.mesh(id).unwrap();
+            check_meshlets(name, &decoded, &primitives);
             assert_eq!(
-                triangles_from_lowest_index(&decoded.indices),
-                triangles_from_lowest_index(&mesh.indices),
+                with_lowest_rotations(decoded),
+                with_lowest_rotations(mesh),
                 "{name}"
             );
-            decoded.indices = mesh.indices.clone();
-            assert_eq!(decoded, mesh, "{name}");
         }
+        std::fs::remove_dir_all(&directory).ok();
     }
 
     /// #96 counted 14,085 vertices with position, UV and normal welded.

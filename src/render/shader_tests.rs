@@ -1,33 +1,183 @@
-//! Every WGSL file under `src/` is checked here without a GPU, as wgpu checks
-//! it when it creates a shader module (backend code generation aside), and
-//! each struct whose bytes the CPU writes is compared with its Rust twin.
+//! Every shader module is checked here without a GPU, as wgpu checks it when
+//! it creates a shader module (backend code generation aside), every WGSL
+//! file under `src/` is a part of some module, each binding is visible to
+//! exactly the stages that use it, and each struct whose bytes the CPU
+//! writes is compared with its Rust twin.
 
-use std::collections::BTreeSet;
-use std::path::Path;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 
 use wgpu::naga;
 
 use crate::assets::material::MaterialData;
 use crate::cooked::CookedVertex;
+use crate::gpu::{floor_downlevel_flags, floor_features, floor_limits};
+use crate::render::bind_groups::{
+    BindGroupDefinition, Binding, Writer, read_only_storage, uniform,
+};
+use crate::render::shaders::{MODULES, Part, ShaderModule};
 use crate::render::{CameraUniform, InstanceData, LightUniform};
 
-/// Shader capabilities Praxis requires of every adapter: the Capability
-/// floor's binding arrays, indexed per Instance (ADRs 0017, 0021). A shader
-/// that needs another fails validation until it is added here, so a new
-/// hardware requirement is a visible decision.
-const CAPABILITIES: naga::valid::Capabilities =
-    naga::valid::Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
-        .union(naga::valid::Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING);
-
 #[test]
-fn every_wgsl_file_parses_and_validates() {
-    let files = wgsl_files();
-    assert!(!files.is_empty(), "no .wgsl file under src/");
-    let errors: Vec<String> = files
+fn every_module_parses_and_validates() {
+    let errors: Vec<String> = MODULES
         .iter()
-        .filter_map(|(path, source)| validate(path, source).err())
+        .filter_map(|module| validate(module).err())
         .collect();
     assert!(errors.is_empty(), "{}", errors.join("\n"));
+}
+
+/// wgpu checks only that a stage using a binding can see it, and only on a
+/// GPU; this also fails a binding visible to a stage that never uses it.
+#[test]
+fn every_binding_is_visible_to_exactly_the_stages_that_use_it() {
+    let problems = stage_problems(&MODULES);
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
+}
+
+/// A group's layout serves every module that declares it, so a binding is
+/// judged by the stages that use it in any of them.
+#[test]
+fn a_binding_seen_by_a_stage_that_does_not_use_it_or_hidden_from_one_that_does_fails() {
+    const VALUES: BindGroupDefinition = BindGroupDefinition {
+        index: 0,
+        label: "Values",
+        bindings: &[
+            uniform("exact", "vec4<f32>", wgpu::ShaderStages::VERTEX),
+            uniform("both", "vec4<f32>", wgpu::ShaderStages::VERTEX_FRAGMENT),
+            uniform("seen", "vec4<f32>", wgpu::ShaderStages::VERTEX_FRAGMENT),
+            uniform("hidden", "vec4<f32>", wgpu::ShaderStages::VERTEX),
+        ],
+    };
+    const VERTEX: Part = Part {
+        path: "vertex.wgsl",
+        source: "
+            @group(0) @binding(4) var<uniform> stray: vec4<f32>;
+
+            @vertex
+            fn vertex_main() -> @builtin(position) vec4<f32> {
+                return exact + both + seen + hidden + stray;
+            }
+        ",
+    };
+    const FRAGMENT: Part = Part {
+        path: "fragment.wgsl",
+        source: "
+            @fragment
+            fn fragment_main() -> @location(0) vec4<f32> {
+                return both + hidden;
+            }
+        ",
+    };
+    const PASSES: [ShaderModule; 2] = [
+        ShaderModule {
+            name: "vertex",
+            enables: &[],
+            bind_groups: &[&VALUES],
+            parts: &[VERTEX],
+        },
+        ShaderModule {
+            name: "fragment",
+            enables: &[],
+            bind_groups: &[&VALUES],
+            parts: &[FRAGMENT],
+        },
+    ];
+    assert_eq!(
+        stage_problems(&PASSES),
+        [
+            "vertex module: stray: declared in a part, not by its bind group's definition",
+            "Values: hidden: visible to ShaderStages(VERTEX), used by ShaderStages(VERTEX | FRAGMENT)",
+            "Values: seen: visible to ShaderStages(VERTEX | FRAGMENT), used by ShaderStages(VERTEX)",
+        ]
+    );
+}
+
+#[test]
+fn every_wgsl_file_is_a_part_of_some_module() {
+    let parts: BTreeSet<&Path> = MODULES
+        .iter()
+        .flat_map(|module| module.parts)
+        .map(|part| Path::new(part.path))
+        .collect();
+    let unused: Vec<String> = wgsl_files()
+        .iter()
+        .filter(|file| !parts.contains(file.as_path()))
+        .map(|file| format!("{}: no shader module uses it", file.display()))
+        .collect();
+    assert!(unused.is_empty(), "{}", unused.join("\n"));
+}
+
+/// The floor requires ray queries (ADRs 0020, 0021), so a module that
+/// traces them validates.
+#[test]
+fn a_module_with_ray_queries_validates() {
+    const SHADOW: Part = Part {
+        path: "shadow.wgsl",
+        source: "
+            @group(0) @binding(0) var scene: acceleration_structure;
+
+            fn occluded(origin: vec3<f32>, direction: vec3<f32>) -> bool {
+                var query: ray_query;
+                rayQueryInitialize(
+                    &query,
+                    scene,
+                    RayDesc(RAY_FLAG_TERMINATE_ON_FIRST_HIT, 0xFFu, 0.001, 100.0, origin, direction)
+                );
+                rayQueryProceed(&query);
+                return rayQueryGetCommittedIntersection(&query).kind != RAY_QUERY_INTERSECTION_NONE;
+            }
+        ",
+    };
+    let module = ShaderModule {
+        name: "shadow",
+        enables: &["wgpu_ray_query"],
+        bind_groups: &[],
+        parts: &[SHADOW],
+    };
+    assert_eq!(validate(&module).err(), None);
+}
+
+/// A parse error, and a validation error found after parsing, each name
+/// their module, their part and their line within it, past the module's
+/// `enable` directives and earlier parts.
+#[test]
+fn an_error_names_its_module_part_and_line() {
+    const LIGHT: Part = Part {
+        path: "light.wgsl",
+        source: "struct Light {\n    color: vec4<f32>,\n}\n",
+    };
+    const MISSPELT: Part = Part {
+        path: "intensity.wgsl",
+        source: "// A misspelt member, line 4.\n\nfn intensity(light: Light) -> f32 {\n    return light.colour.a;\n}\n",
+    };
+    const UNALIGNED_UNIFORM: Part = Part {
+        path: "counts.wgsl",
+        source: "// A uniform array with a 4-byte stride, line 3.\n\n\
+                 @group(0) @binding(0) var<uniform> counts: array<u32>;\n",
+    };
+    let parse_error = validate(&ShaderModule {
+        name: "test",
+        enables: &["wgpu_binding_array"],
+        bind_groups: &[],
+        parts: &[LIGHT, MISSPELT],
+    })
+    .unwrap_err();
+    let validation_error = validate(&ShaderModule {
+        name: "test",
+        enables: &["wgpu_binding_array"],
+        bind_groups: &[],
+        parts: &[LIGHT, UNALIGNED_UNIFORM],
+    })
+    .unwrap_err();
+    assert!(
+        parse_error.starts_with("test module: intensity.wgsl:4:"),
+        "{parse_error}"
+    );
+    assert!(
+        validation_error.starts_with("test module: counts.wgsl:3:"),
+        "{validation_error}"
+    );
 }
 
 /// The `Twin` of `$type`, matched to the WGSL struct of the same name. The
@@ -47,18 +197,17 @@ macro_rules! twin {
                 size: size_of_val(&value.$field),
                 scalar: scalar_of(&value.$field),
             }),+],
-            vertex_buffer: None,
         }
     }};
 }
 
 #[test]
 fn structs_shared_with_the_cpu_match_their_rust_twins() {
-    let modules: Vec<(String, naga::Module)> = wgsl_files()
-        .into_iter()
-        .map(|(path, source)| {
-            let module = validate(&path, &source).unwrap_or_else(|error| panic!("{error}"));
-            (path, module)
+    let modules: Vec<(ShaderModule, naga::Module)> = MODULES
+        .iter()
+        .map(|module| {
+            let (parsed, _) = validate(module).unwrap_or_else(|error| panic!("{error}"));
+            (*module, parsed)
         })
         .collect();
     let twins = [
@@ -75,7 +224,9 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
             ambient,
             point_positions,
             point_colors,
-            num_point_lights,
+            point_light_count,
+            directional_light_count,
+            _pad,
         }),
         twin!(InstanceData {
             rotation_scale,
@@ -92,15 +243,11 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
             texture_indices,
             extra,
         }),
-        Twin {
-            wgsl_name: "VertexInput",
-            vertex_buffer: Some(CookedVertex::desc()),
-            ..twin!(CookedVertex {
-                position,
-                uv,
-                qtangent
-            })
-        },
+        twin!(CookedVertex {
+            position,
+            uv,
+            qtangent
+        }),
     ];
     let problems = layout_problems(&modules, &twins);
     assert!(problems.is_empty(), "{}", problems.join("\n"));
@@ -112,19 +259,9 @@ fn layout_check_reports_every_kind_of_mismatch() {
         struct Light { color: vec3<f32>, count: u32, direction: vec4<f32> }
         struct Material { base_color: vec4<f32>, roughness: f32 }
         struct Orphan { value: f32 }
-        struct VertexInput {
-            @builtin(vertex_index) index: u32,
-            @location(0) position: vec3<f32>,
-            @location(1) uv: vec2<f32>,
-            @location(2) weight: f32,
-            @location(3) qtangent: vec4<f32>,
-        }
         @group(0) @binding(0) var<uniform> light: Light;
         @group(0) @binding(1) var<storage, read> materials: array<Material>;
         @group(0) @binding(2) var<storage, read> orphans: array<Orphan>;
-        @vertex fn main(input: VertexInput) -> @builtin(position) vec4<f32> {
-            return vec4<f32>(input.position, 1.0);
-        }
     ";
     #[repr(C)]
     struct Light {
@@ -137,15 +274,6 @@ fn layout_check_reports_every_kind_of_mismatch() {
         base_color: [f32; 4],
         roughness: f32,
     }
-    #[repr(C)]
-    struct TestVertex {
-        uv: [f32; 2],
-        position: [f32; 3],
-        // Snorm16 below stores i16s.
-        qtangent: [u16; 4],
-    }
-    const ATTRIBUTES: [wgpu::VertexAttribute; 3] =
-        wgpu::vertex_attr_array![0 => Float32x3, 1 => Unorm16x4, 3 => Snorm16x4];
     let twins = [
         twin!(Light {
             color,
@@ -157,88 +285,214 @@ fn layout_check_reports_every_kind_of_mismatch() {
             roughness
         }),
         Twin {
-            wgsl_name: "VertexInput",
-            vertex_buffer: Some(wgpu::VertexBufferLayout {
-                array_stride: size_of::<TestVertex>() as wgpu::BufferAddress,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &ATTRIBUTES,
-            }),
-            ..twin!(TestVertex {
-                uv,
-                position,
-                qtangent
-            })
-        },
-        Twin {
             wgsl_name: "Missing",
-            ..twin!(TestVertex {
-                uv,
-                position,
-                qtangent
+            ..twin!(Material {
+                base_color,
+                roughness
             })
         },
     ];
-    let module = validate("test.wgsl", SOURCE).unwrap_or_else(|error| panic!("{error}"));
+    const PART: Part = Part {
+        path: "test.wgsl",
+        source: SOURCE,
+    };
+    let module = ShaderModule {
+        name: "test",
+        enables: &[],
+        bind_groups: &[],
+        parts: &[PART],
+    };
+    let (parsed, _) = validate(&module).unwrap_or_else(|error| panic!("{error}"));
 
-    let mut problems = layout_problems(&[("test.wgsl".to_string(), module)], &twins);
+    let mut problems = layout_problems(&[(module, parsed)], &twins);
     problems.sort();
     assert_eq!(
         problems,
         [
-            "Missing: no WGSL file shares it",
-            "test.wgsl: Light: Rust `count` at offset 12: 4 bytes of f32",
-            "test.wgsl: Light: WGSL `count` at offset 12: 4 bytes of u32",
-            "test.wgsl: Material: Rust size: 20 bytes",
-            "test.wgsl: Material: WGSL size: 32 bytes",
-            "test.wgsl: Orphan: shared with the CPU but has no twin",
-            "test.wgsl: VertexInput: Rust `position` at offset 8: 12 bytes of f32",
-            "test.wgsl: VertexInput: Rust `qtangent` at offset 20: 8 bytes of u16",
-            "test.wgsl: VertexInput: Rust `uv` at offset 0: 8 bytes of f32",
-            "test.wgsl: VertexInput: WGSL `position` at offset 0: 12 bytes of f32",
-            "test.wgsl: VertexInput: WGSL `qtangent` at offset 20: 8 bytes of i16",
-            "test.wgsl: VertexInput: `uv` is fed by a Unorm16x4 vertex attribute",
-            "test.wgsl: VertexInput: no vertex attribute at location 2 (`weight`)",
+            "Missing: no shader module shares it",
+            "test module: Light: Rust `count` at offset 12: 4 bytes of f32",
+            "test module: Light: WGSL `count` at offset 12: 4 bytes of u32",
+            "test module: Material: Rust size: 20 bytes",
+            "test module: Material: WGSL size: 32 bytes",
+            "test module: Orphan: shared with the CPU but has no twin",
         ]
+    );
+}
+
+/// The twin check covers what the CPU writes, so a struct only the GPU
+/// writes needs no Rust twin, while one the CPU writes still does.
+#[test]
+fn a_struct_only_the_gpu_writes_needs_no_twin() {
+    const COUNTS: BindGroupDefinition = BindGroupDefinition {
+        index: 0,
+        label: "Counts",
+        bindings: &[
+            read_only_storage("requests", "array<Request>", wgpu::ShaderStages::COMPUTE),
+            Binding {
+                writer: Writer::Gpu,
+                ..read_only_storage("counts", "array<Count>", wgpu::ShaderStages::COMPUTE)
+            },
+        ],
+    };
+    const PART: Part = Part {
+        path: "test.wgsl",
+        source: "
+            struct Request { value: f32 }
+            struct Count { drawn: u32 }
+
+            @compute @workgroup_size(1)
+            fn count() {
+                let total = requests[0].value + f32(counts[0].drawn);
+            }
+        ",
+    };
+    let module = ShaderModule {
+        name: "test",
+        enables: &[],
+        bind_groups: &[&COUNTS],
+        parts: &[PART],
+    };
+    let (parsed, _) = validate(&module).unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(
+        layout_problems(&[(module, parsed)], &[]),
+        ["test module: Request: shared with the CPU but has no twin"]
     );
 }
 
 #[test]
 fn a_bind_group_past_the_device_limit_fails_validation() {
-    let source = "@group(4) @binding(0) var<uniform> value: vec4<f32>;";
+    const PART: Part = Part {
+        path: "test.wgsl",
+        source: "\n@group(4) @binding(0) var<uniform> value: vec4<f32>;\n",
+    };
     assert_eq!(
-        validate("test.wgsl", source).err().as_deref(),
-        Some("test.wgsl: @group(4) exceeds the device's max_bind_groups of 4")
+        validate(&ShaderModule {
+            name: "test",
+            enables: &[],
+            bind_groups: &[],
+            parts: &[PART],
+        })
+        .err()
+        .as_deref(),
+        Some("test module: test.wgsl:2:23: @group(4) exceeds the device's max_bind_groups of 4")
     );
 }
 
-/// Parses and validates `source` as wgpu does, or returns the error after
-/// the path, which some naga diagnostics do not mention.
-fn validate(path: &str, source: &str) -> Result<naga::Module, String> {
+/// Parses and validates `module` as wgpu does on a device that requests
+/// exactly the Capability floor, as `GpuContext` does, so a shader that needs
+/// more fails until the floor gains it (ADR 0021), and returns it with
+/// naga's analysis of it. An error names the module, and the part and line
+/// it is in.
+fn validate(module: &ShaderModule) -> Result<(naga::Module, naga::valid::ModuleInfo), String> {
+    let source = module.source();
+    let label = format!("{} module", module.name);
+    let error = |location: Option<naga::SourceLocation>, message: &str| match location
+        .and_then(|location| module.locate(location.offset as usize))
+    {
+        Some((path, line, column)) => format!("{label}: {path}:{line}:{column}: {message}"),
+        None => format!("{label}: {message}"),
+    };
+    let capabilities =
+        wgpu_naga_bridge::features_to_naga_capabilities(floor_features(), floor_downlevel_flags());
     let mut options = naga::front::wgsl::Options::new();
-    options.capabilities = CAPABILITIES;
-    let module = naga::front::wgsl::Frontend::new_with_options(options)
-        .parse(source)
-        .map_err(|error| format!("{path}: {}", error.emit_to_string_with_path(source, path)))?;
-    // `GpuContext` requests the default limits.
-    let max_bind_groups = wgpu::Limits::default().max_bind_groups;
-    for (_, global) in module.global_variables.iter() {
+    options.capabilities = capabilities;
+    let parsed = naga::front::wgsl::Frontend::new_with_options(options)
+        .parse(&source)
+        .map_err(|parse_error| error(parse_error.location(&source), parse_error.message()))?;
+    let max_bind_groups = floor_limits().max_bind_groups;
+    for (handle, global) in parsed.global_variables.iter() {
         if let Some(binding) = &global.binding
             && binding.group >= max_bind_groups
         {
-            return Err(format!(
-                "{path}: @group({}) exceeds the device's max_bind_groups of {max_bind_groups}",
-                binding.group
+            let span = parsed.global_variables.get_span(handle);
+            return Err(error(
+                Some(span.location(&source)),
+                &format!(
+                    "@group({}) exceeds the device's max_bind_groups of {max_bind_groups}",
+                    binding.group
+                ),
             ));
         }
     }
-    naga::valid::Validator::new(naga::valid::ValidationFlags::all(), CAPABILITIES)
-        .validate(&module)
-        .map_err(|error| format!("{path}: {}", error.emit_to_string_with_path(source, path)))?;
-    Ok(module)
+    let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
+        .validate(&parsed)
+        .map_err(|validation_error| {
+            // The outermost error names the item; its sources say why.
+            let causes: Vec<String> = std::iter::successors(
+                Some(validation_error.as_inner() as &dyn std::error::Error),
+                |cause| cause.source(),
+            )
+            .map(ToString::to_string)
+            .collect();
+            error(validation_error.location(&source), &causes.join(": "))
+        })?;
+    Ok((parsed, info))
 }
 
-/// Every `.wgsl` file under `src/`, as (path relative to the crate, source).
-fn wgsl_files() -> Vec<(String, String)> {
+/// Each binding a part of `modules` declares rather than its bind group's
+/// definition, as `module: binding: problem`; then each binding visible to
+/// a stage whose entry points, in every module that declares it, never use
+/// it, or used by a stage it is not visible to, per naga's analysis, as
+/// `group: binding: problem`.
+fn stage_problems(modules: &[ShaderModule]) -> Vec<String> {
+    let mut problems = Vec::new();
+    // Each defined binding's stages, and the stages that use it.
+    let mut stages = BTreeMap::new();
+    for module in modules {
+        let (parsed, info) = validate(module).unwrap_or_else(|error| panic!("{error}"));
+        for (handle, global) in parsed.global_variables.iter() {
+            let Some(resource) = &global.binding else {
+                continue;
+            };
+            let name = global.name.as_deref().unwrap_or_default();
+            let Some((group, binding)) =
+                defined_binding(module, resource).filter(|(_, binding)| binding.name == name)
+            else {
+                problems.push(format!(
+                    "{} module: {name}: declared in a part, not by its bind group's definition",
+                    module.name
+                ));
+                continue;
+            };
+            let used_by = (0..)
+                .zip(&parsed.entry_points)
+                .filter(|&(index, _)| !info.get_entry_point(index)[handle].is_empty())
+                .fold(wgpu::ShaderStages::NONE, |stages, (_, entry_point)| {
+                    stages | wgpu_naga_bridge::map_naga_stage(entry_point.stage)
+                });
+            stages
+                .entry((group.label, binding.name))
+                .or_insert((binding.stages, wgpu::ShaderStages::NONE))
+                .1 |= used_by;
+        }
+    }
+    problems.extend(
+        stages
+            .into_iter()
+            .filter(|(_, (visible_to, used_by))| visible_to != used_by)
+            .map(|((group, name), (visible_to, used_by))| {
+                format!("{group}: {name}: visible to {visible_to:?}, used by {used_by:?}")
+            }),
+    );
+    problems
+}
+
+/// The bind group and the definition of the binding `resource` names, among
+/// `module`'s bind groups.
+fn defined_binding(
+    module: &ShaderModule,
+    resource: &naga::ResourceBinding,
+) -> Option<(&'static BindGroupDefinition, &'static Binding)> {
+    let group = module
+        .bind_groups
+        .iter()
+        .copied()
+        .find(|bind_group| bind_group.index == resource.group)?;
+    Some((group, group.bindings.get(resource.binding as usize)?))
+}
+
+/// Every `.wgsl` file under `src/`, by its path from the crate root.
+fn wgsl_files() -> Vec<PathBuf> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut files = Vec::new();
     let mut directories = vec![root.join("src")];
@@ -253,10 +507,8 @@ fn wgsl_files() -> Vec<(String, String)> {
                 .extension()
                 .is_some_and(|extension| extension == "wgsl")
             {
-                let source = std::fs::read_to_string(&path)
-                    .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
                 let relative = path.strip_prefix(root).expect("under the crate root");
-                files.push((relative.display().to_string(), source));
+                files.push(relative.to_path_buf());
             }
         }
     }
@@ -269,9 +521,6 @@ struct Twin {
     wgsl_name: &'static str,
     size: usize,
     fields: Vec<Field>,
-    /// How the struct feeds a vertex shader's `@location` inputs; `None` for
-    /// a struct in a uniform or storage buffer.
-    vertex_buffer: Option<wgpu::VertexBufferLayout<'static>>,
 }
 
 struct Field {
@@ -281,7 +530,7 @@ struct Field {
     scalar: naga::Scalar,
 }
 
-/// The scalar a Rust field is built from: `f32` for `[[f32; 4]; 4]`.
+/// The scalar WGSL reads a Rust field as: `f32` for `[[f32; 4]; 4]`.
 trait ShaderScalar {
     const SCALAR: naga::Scalar;
 }
@@ -298,12 +547,9 @@ impl ShaderScalar for u32 {
     const SCALAR: naga::Scalar = naga::Scalar::U32;
 }
 
+/// WGSL has no 16-bit integers, so a shader reads them in pairs, as u32s.
 impl ShaderScalar for i16 {
-    const SCALAR: naga::Scalar = naga::Scalar::I16;
-}
-
-impl ShaderScalar for u16 {
-    const SCALAR: naga::Scalar = naga::Scalar::U16;
+    const SCALAR: naga::Scalar = naga::Scalar::U32;
 }
 
 impl<T: ShaderScalar, const LENGTH: usize> ShaderScalar for [T; LENGTH] {
@@ -314,64 +560,69 @@ fn scalar_of<T: ShaderScalar>(_: &T) -> naga::Scalar {
     T::SCALAR
 }
 
-/// Each way a struct shared with the CPU in `modules` disagrees with its
-/// twin, as `path: struct: problem`; empty when all agree.
-fn layout_problems(modules: &[(String, naga::Module)], twins: &[Twin]) -> Vec<String> {
+/// Each way a struct shared with the CPU in `modules`, each parsed, disagrees
+/// with its twin, as `module: struct: problem`; empty when all agree.
+fn layout_problems(modules: &[(ShaderModule, naga::Module)], twins: &[Twin]) -> Vec<String> {
     let mut problems = Vec::new();
     let mut matched = BTreeSet::new();
-    for (path, module) in modules {
-        for struct_type in structs_shared_with_the_cpu(module) {
-            let name = module.types[struct_type]
+    for (module, parsed) in modules {
+        let label = format!("{} module", module.name);
+        for struct_type in structs_shared_with_the_cpu(module, parsed) {
+            let name = parsed.types[struct_type]
                 .name
                 .as_deref()
                 .unwrap_or_default();
             let Some(twin) = twins.iter().find(|twin| twin.wgsl_name == name) else {
                 problems.push(format!(
-                    "{path}: {name}: shared with the CPU but has no twin"
+                    "{label}: {name}: shared with the CPU but has no twin"
                 ));
                 continue;
             };
             matched.insert(name);
             problems.extend(
-                twin_problems(module, struct_type, twin)
+                twin_problems(parsed, struct_type, twin)
                     .into_iter()
-                    .map(|problem| format!("{path}: {name}: {problem}")),
+                    .map(|problem| format!("{label}: {name}: {problem}")),
             );
         }
     }
     for twin in twins {
         if !matched.contains(twin.wgsl_name) {
-            problems.push(format!("{}: no WGSL file shares it", twin.wgsl_name));
+            problems.push(format!("{}: no shader module shares it", twin.wgsl_name));
         }
     }
     problems
 }
 
-/// Structs whose bytes the CPU writes: those in uniform, storage and
-/// immediate data (alone or as array elements) and vertex shader inputs.
-fn structs_shared_with_the_cpu(module: &naga::Module) -> BTreeSet<naga::Handle<naga::Type>> {
+/// Structs whose bytes the CPU writes, in `module` as `parsed`: those in
+/// uniform, storage and immediate data, alone or as array elements, but for
+/// bindings whose definition says only the GPU writes them.
+fn structs_shared_with_the_cpu(
+    module: &ShaderModule,
+    parsed: &naga::Module,
+) -> BTreeSet<naga::Handle<naga::Type>> {
     let mut types = BTreeSet::new();
-    for (_, global) in module.global_variables.iter() {
-        if matches!(
-            global.space,
-            naga::AddressSpace::Uniform
-                | naga::AddressSpace::Storage { .. }
-                | naga::AddressSpace::Immediate
-        ) {
-            types.insert(match module.types[global.ty].inner {
+    for (_, global) in parsed.global_variables.iter() {
+        let only_the_gpu_writes = global
+            .binding
+            .as_ref()
+            .and_then(|resource| defined_binding(module, resource))
+            .is_some_and(|(_, binding)| binding.writer == Writer::Gpu);
+        if !only_the_gpu_writes
+            && matches!(
+                global.space,
+                naga::AddressSpace::Uniform
+                    | naga::AddressSpace::Storage { .. }
+                    | naga::AddressSpace::Immediate
+            )
+        {
+            types.insert(match parsed.types[global.ty].inner {
                 naga::TypeInner::Array { base, .. } => base,
                 _ => global.ty,
             });
         }
     }
-    for entry_point in &module.entry_points {
-        if entry_point.stage == naga::ShaderStage::Vertex {
-            for argument in &entry_point.function.arguments {
-                types.insert(argument.ty);
-            }
-        }
-    }
-    types.retain(|&handle| matches!(module.types[handle].inner, naga::TypeInner::Struct { .. }));
+    types.retain(|&handle| matches!(parsed.types[handle].inner, naga::TypeInner::Struct { .. }));
     types
 }
 
@@ -390,51 +641,9 @@ fn twin_problems(
         let name = member.name.as_deref().unwrap_or_default();
         let size = module.types[member.ty].inner.size(module.to_ctx()) as usize;
         let scalar = wgsl_scalar(module, member.ty);
-        match (&member.binding, &twin.vertex_buffer) {
-            (Some(naga::Binding::BuiltIn(_)), _) => continue,
-            (Some(naga::Binding::Location { location, .. }), Some(vertex_buffer)) => {
-                let Some(attribute) = vertex_buffer
-                    .attributes
-                    .iter()
-                    .find(|attribute| attribute.shader_location == *location)
-                else {
-                    problems.push(format!(
-                        "no vertex attribute at location {location} (`{name}`)"
-                    ));
-                    continue;
-                };
-                // A vertex input has no memory layout in WGSL: its bytes sit
-                // where the vertex buffer layout puts its location, stored as
-                // its format stores them, and the format sets what the
-                // shader reads.
-                let format_bytes = attribute.format.size() as usize;
-                match vertex_format_scalars(attribute.format) {
-                    Some((stored, read))
-                        if scalar == Some(read)
-                            && size / usize::from(read.width)
-                                == format_bytes / usize::from(stored.width) =>
-                    {
-                        let offset = attribute.offset as usize;
-                        wgsl.insert(describe(name, offset, format_bytes, Some(stored)));
-                    }
-                    _ => problems.push(format!(
-                        "`{name}` is fed by a {:?} vertex attribute",
-                        attribute.format
-                    )),
-                }
-            }
-            _ => {
-                wgsl.insert(describe(name, member.offset as usize, size, scalar));
-            }
-        }
+        wgsl.insert(describe(name, member.offset as usize, size, scalar));
     }
-    let wgsl_size = twin
-        .vertex_buffer
-        .as_ref()
-        .map_or(span as usize, |vertex_buffer| {
-            vertex_buffer.array_stride as usize
-        });
-    wgsl.insert(format!("size: {wgsl_size} bytes"));
+    wgsl.insert(format!("size: {span} bytes"));
     let rust: BTreeSet<String> = twin
         .fields
         .iter()
@@ -459,22 +668,7 @@ fn wgsl_scalar(
     }
 }
 
-/// The scalar a vertex format stores each component as, and the one the
-/// shader reads it as. A format no vertex uses yet has none, so it fails the
-/// check until it is added here.
-fn vertex_format_scalars(format: wgpu::VertexFormat) -> Option<(naga::Scalar, naga::Scalar)> {
-    match format {
-        wgpu::VertexFormat::Float32
-        | wgpu::VertexFormat::Float32x2
-        | wgpu::VertexFormat::Float32x3
-        | wgpu::VertexFormat::Float32x4 => Some((naga::Scalar::F32, naga::Scalar::F32)),
-        wgpu::VertexFormat::Snorm16x4 => Some((naga::Scalar::I16, naga::Scalar::F32)),
-        _ => None,
-    }
-}
-
-/// A field's place and type, its scalar named as Rust names it (`i16`), so
-/// that a scalar WGSL lacks is still told apart.
+/// A field's place and type.
 fn describe(name: &str, offset: usize, size: usize, scalar: Option<naga::Scalar>) -> String {
     let scalar = scalar.map_or("?".to_string(), |scalar| {
         let kind = match scalar.kind {

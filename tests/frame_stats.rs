@@ -42,13 +42,13 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     assert_eq!(last.uploaded_bytes, 96 + 192);
     // Five 1×1 RGBA8 neutral Textures, one per Channel (the spheres sample
     // no other), the 16 MiB vertex and index Arenas, 256 Materials of 80
-    // bytes, the camera and light uniforms, 16 Instances of 128 bytes, the
-    // 160×90 Depth32Float texture, and three staging slots of the first
+    // bytes, the camera and light uniforms, 524,288 Instances of 128 bytes,
+    // the 160×90 Depth32Float texture, and three staging slots of the first
     // frame's 1568 uploaded bytes rounded up to 2048. The load's staging is
     // gone.
     assert_eq!(
         last.gpu_memory_bytes,
-        5 * 4 + 2 * 16 * MEBIBYTE + 256 * 80 + 96 + 192 + 16 * 128 + 160 * 90 * 4 + 3 * 2048
+        5 * 4 + 2 * 16 * MEBIBYTE + 256 * 80 + 96 + 192 + 524_288 * 128 + 160 * 90 * 4 + 3 * 2048
     );
     // One UV sphere in the Arenas: 48 × 24 quads of two triangles but one at
     // each pole, of three u32s, and 25 rings of 49 vertices of 28 bytes, less

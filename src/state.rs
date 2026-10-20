@@ -116,6 +116,7 @@ impl State {
                 [] => error,
                 absent => error.context(format!("absent sources: {}", absent.join(", "))),
             })?;
+        world.spawn(scene.sun());
         for &(position, light) in scene.point_lights() {
             world.spawn((Transform::from_translation(position), light));
         }
@@ -219,6 +220,7 @@ impl State {
         self.recorder.stage("prepare_frame", started);
 
         self.renderer.upload(frame, &mut self.recorder);
+        self.recorder.renderables_refused = self.preparer.renderables_refused();
     }
 
     /// Draws the frame into `target`, a view in the format and size this

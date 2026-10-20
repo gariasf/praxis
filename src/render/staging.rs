@@ -6,17 +6,19 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// written. A fixed count keeps `gpu_memory_bytes` the same on every run.
 const SLOT_COUNT: usize = 3;
 
-/// Staging memory for the per-frame uploads, created once and reused every
-/// frame, where `Queue::write_buffer` creates a fresh staging buffer on every
-/// call. Each frame fills the next slot in turn, copies it into its targets,
-/// and the slot is mapped again once the GPU has run the copies. The fixed
-/// turn keeps the frame's heap allocations the same on every run: wgpu grows
-/// an encoder's tracking by each buffer's tracker index, so which slot a frame
-/// takes changes its allocation count.
-#[derive(Default)]
+/// Staging memory for the per-frame uploads, reused every frame, where
+/// `Queue::write_buffer` creates a fresh staging buffer on every call. Its
+/// slots grow on demand, never past the most one frame uploads. Each frame
+/// fills the next slot in turn, copies it into its targets, and the slot is
+/// mapped again once the GPU has run the copies. The fixed turn keeps the
+/// frame's heap allocations the same on every run: wgpu grows an encoder's
+/// tracking by each buffer's tracker index, so which slot a frame takes
+/// changes its allocation count.
 pub struct FrameStaging {
     slots: Vec<StagingSlot>,
     slot_size: u64,
+    /// The most one frame uploads, which no slot grows past.
+    max_slot_size: u64,
     next_slot: usize,
 }
 
@@ -27,6 +29,16 @@ struct StagingSlot {
 }
 
 impl FrameStaging {
+    /// Staging for frames that each upload at most `max_slot_size` bytes.
+    pub fn new(max_slot_size: u64) -> Self {
+        Self {
+            slots: Vec::new(),
+            slot_size: 0,
+            max_slot_size,
+            next_slot: 0,
+        }
+    }
+
     /// Writes `uploads`, each a target buffer, an offset in it and the bytes
     /// for there, into the next slot and records their copies into `encoder`,
     /// which must be submitted. Returns the bytes uploaded: 0 when the slot
@@ -44,8 +56,13 @@ impl FrameStaging {
         if needed == 0 {
             return 0;
         }
+        assert!(
+            needed <= self.max_slot_size,
+            "a frame uploads {needed} bytes, more than the {} its staging is bounded by",
+            self.max_slot_size
+        );
         if needed > self.slot_size {
-            self.resize(device, needed.next_power_of_two());
+            self.resize(device, needed.next_power_of_two().min(self.max_slot_size));
         }
 
         let slot = &self.slots[self.next_slot];

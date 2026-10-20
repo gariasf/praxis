@@ -91,7 +91,6 @@ src/
   scenes/                      # Reference scenes: generated content,
                                  camera paths in frames, frame deltas,
                                  the orrery's Spin system
-  shader.wgsl                  # WGSL shaders (split when justified)
   components.rs                # ECS components (Transform, MeshRef)
   threading.rs                 # compute pool, schedule executor (ADR 0016)
   camera/, time/, input/,      # feature modules: resource (+ systems)
@@ -104,9 +103,15 @@ src/
                                  sources and Reference scenes into Blobs
                                  in git-ignored `cooked/` (ADR 0018)
   render/                      # Renderer (owns the Pools, reads no
-                                 ECS World), prepare (ECS World to Frame
-                                 data), instance, uniforms, vertex, depth,
-                                 staging
+                                 ECS World, calls the passes in order),
+                                 a module per pass (main_pass: its
+                                 pipeline and recording), targets (every
+                                 size-dependent target, the depth
+                                 conventions), prepare (ECS World to
+                                 Frame data), bind_groups (each defined
+                                 once), instance, uniforms, staging,
+                                 shaders/ (WGSL parts and the modules
+                                 each pipeline assembles from them)
 tests/                         # integration tests at agreed seams
   goldens/<backend>[-cpu]/     # committed Goldens; PRAXIS_UPDATE_GOLDENS=1
                                  cargo test --test goldens rewrites them
@@ -166,7 +171,9 @@ When a feature folder grows past one file, split into
 - Pool lookups return `Option<&T>`. Callers handle `None`
   gracefully (warn + skip in render path); never `.unwrap()` in a
   hot loop.
-- Shaders are WGSL (`.wgsl` files in `src/`).
+- Shaders are WGSL parts in `src/render/shaders/`, assembled into modules
+  by its `mod.rs` after the bindings and constants it declares from Rust;
+  a function under an oracle lives in a shared part.
 - No `unsafe` unless absolutely necessary and clearly explained.
 - Keep dependencies minimal. Use feature flags
   (`image = { version = "0.25", default-features = false, features = ["png"] }`).
@@ -185,12 +192,21 @@ When a feature folder grows past one file, split into
 
 When reviewing changes, check for:
 
-- [ ] GPU resources created in `Renderer::new` are also recreated in
-      `resize()`
-- [ ] Shader bind group bindings match the Rust bind group layouts.
-      `cargo test` checks struct and vertex layouts field by field
-      (`src/render/shader_tests.rs`); Rust-only padding fields start
-      with `_`
+- [ ] A size-dependent target lives in the targets module
+      (`src/render/targets.rs`), whose `RenderTargets::new` creates every
+      target and runs again on resize. Bind groups are snapshots, not
+      pointers: whatever recreates a resource rebuilds the groups holding
+      it, so a pass builds the bind groups that read targets in one
+      function, called at creation and after every resize
+- [ ] A binding is written once, in its bind group's definition
+      (`src/render/bind_groups.rs`), which declares it in WGSL and gives
+      its layout and its group's index in pipeline layouts and
+      `set_bind_group`; no WGSL part declares one. A group a pass uses
+      is listed in its shader module, its pipeline layout and its render
+      pass. `cargo test` checks each binding's stages against the entry
+      points that use it, and the structs the CPU writes field by field
+      against their Rust twins (`src/render/shader_tests.rs`); Rust-only
+      padding fields start with `_`
 - [ ] No World position reaches the GPU in f32: only an anchor plus an
       f32 offset, composed camera-relative (ADR 0014)
 - [ ] Depth is cleared to 0 and compared with `Greater`, with no far
@@ -200,10 +216,6 @@ When reviewing changes, check for:
       on the Rust side (the test compares sizes, not strides)
 - [ ] A new or changed shading function in WGSL has an oracle test
       in `src/render/shader_function_tests.rs`
-- [ ] When a buffer is recreated, the bind group referencing it is
-      also recreated (bind groups are snapshots, not pointers)
-- [ ] New bind groups are added to both the pipeline layout and set in
-      the render pass
 - [ ] Texture formats match between creation and surface config (sRGB
       consistency)
 - [ ] `unwrap()` on GPU operations that could fail at runtime — prefer
@@ -221,8 +233,10 @@ When reviewing changes, check for:
       `uploaded_bytes`, and systems are added inside
       `SystemTimer::scope`
 - [ ] Streaming uploads go through the `StagingBelt`, never
-      `Queue::write_texture`, and GPU arenas never grow at runtime
-      (ADR 0017)
+      `Queue::write_texture`; no GPU buffer grows at runtime, and a
+      request past a buffer's capacity is refused and logged. Only
+      per-frame staging grows, up to the buffers a frame writes, which
+      it asserts (ADRs 0003, 0017)
 - [ ] The runtime loads cooked Blobs only and references Assets by
       Asset ID, never by source path (ADR 0018)
 - [ ] The main pass reads no screen-space history, and no change rules

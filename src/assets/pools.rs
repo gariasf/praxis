@@ -20,10 +20,11 @@ impl MeshPool {
     pub fn new(device: &wgpu::Device, arena_bytes: u64) -> Self {
         Self {
             meshes: Vec::new(),
+            // The vertex shader pulls from it (ADR 0019).
             vertex_arena: Arena::new(
                 device,
                 "Vertex Arena",
-                wgpu::BufferUsages::VERTEX,
+                wgpu::BufferUsages::STORAGE,
                 std::mem::size_of::<CookedVertex>() as u64,
                 arena_bytes,
             ),
@@ -100,7 +101,7 @@ impl MeshPool {
         None
     }
 
-    pub fn vertex_buffer(&self) -> &wgpu::Buffer {
+    pub fn vertex_arena(&self) -> &wgpu::Buffer {
         &self.vertex_arena.buffer
     }
 
@@ -205,8 +206,10 @@ pub(crate) mod tests {
                 first_index: 0,
                 index_count: indices.len() as u32,
                 material: None,
+                meshlets: Vec::new(),
             }],
             indices,
+            bounds: [[0.0; 3]; 2],
         }
     }
 
@@ -225,7 +228,7 @@ pub(crate) mod tests {
         let mut pool = MeshPool::new(&context.device, CAPACITY);
         pool.load(&mut staging, &mesh(3, vec![0, 1, 2]), None)
             .expect("a triangle fits");
-        let buffers = (pool.vertex_buffer().clone(), pool.index_buffer().clone());
+        let buffers = (pool.vertex_arena().clone(), pool.index_buffer().clone());
         let gpu_memory_bytes = pool.gpu_memory_bytes();
         let arena_bytes_in_use = pool.arena_bytes_in_use();
 
@@ -236,7 +239,7 @@ pub(crate) mod tests {
             assert!(handle.is_none(), "a Mesh past capacity loaded");
             assert!(log.contains("Mesh refused"), "not logged: {log:?}");
             assert_eq!(
-                (pool.vertex_buffer(), pool.index_buffer()),
+                (pool.vertex_arena(), pool.index_buffer()),
                 (&buffers.0, &buffers.1)
             );
             assert_eq!(pool.gpu_memory_bytes(), gpu_memory_bytes);

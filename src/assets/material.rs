@@ -6,12 +6,13 @@ use anyhow::Context;
 use crate::cooked::{AssetId, CookedCache, CookedTexture};
 use crate::gpu::FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE;
 use crate::render::LoadStaging;
+use crate::render::bind_groups::MATERIALS;
 use crate::stats::texture_bytes;
 
 /// Textures each Channel's binding array can hold: the Channels split the
 /// Capability floor's binding-array elements per stage (ADR 0021), 13,107
 /// each, room for texture-wall's 10,000 and Layer 0.
-const TEXTURES_PER_CHANNEL: u32 =
+pub(crate) const TEXTURES_PER_CHANNEL: u32 =
     FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE / MaterialChannel::ALL.len() as u32;
 
 /// Materials the SSBO holds. Materials are few and never deleted yet,
@@ -31,8 +32,8 @@ impl MaterialHandle {
 
 /// One texture channel of a material. Each channel has its own binding array;
 /// a material stores one Layer index per channel. The discriminant is the
-/// Channel's position in `MaterialPool::channels` and its binding minus one,
-/// and is part of every Texture's Asset ID: never renumber.
+/// Channel's position in `MaterialPool::channels` and part of every
+/// Texture's Asset ID: never renumber.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum MaterialChannel {
     Albedo = 0,
@@ -67,6 +68,7 @@ pub struct MaterialData {
 /// One Channel's Textures, each sized to its source, bound as one partially
 /// bound binding array (ADR 0017). A Layer is an index into `views`.
 struct ChannelTextures {
+    /// Its binding's name in `MATERIALS`, which labels its Textures too.
     label: &'static str,
     textures: Vec<wgpu::Texture>,
     views: Vec<wgpu::TextureView>,
@@ -157,11 +159,11 @@ impl MaterialPool {
 
         // Ordered as `MaterialChannel`.
         let mut channels = [
-            "albedo",
-            "normal",
-            "metallic_roughness",
-            "occlusion",
-            "emissive",
+            "albedo_textures",
+            "normal_textures",
+            "metallic_roughness_textures",
+            "occlusion_textures",
+            "emissive_textures",
         ]
         .map(ChannelTextures::new);
 
@@ -199,44 +201,7 @@ impl MaterialPool {
             ..Default::default()
         });
 
-        let texture_entry = |binding: u32| wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                view_dimension: wgpu::TextureViewDimension::D2,
-                multisampled: false,
-            },
-            count: std::num::NonZeroU32::new(TEXTURES_PER_CHANNEL),
-        };
-
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Material Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                texture_entry(1),
-                texture_entry(2),
-                texture_entry(3),
-                texture_entry(4),
-                texture_entry(5),
-                wgpu::BindGroupLayoutEntry {
-                    binding: 6,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
-
+        let bind_group_layout = MATERIALS.layout(device);
         let bind_group = create_bind_group(
             device,
             &bind_group_layout,
@@ -274,7 +239,7 @@ impl MaterialPool {
         if self.materials.len() as u64 >= MATERIAL_CAPACITY {
             tracing::error!(
                 capacity = MATERIAL_CAPACITY,
-                "material SSBO full; reusing material 0 (raise MATERIAL_CAPACITY or add growth)"
+                "material SSBO full; reusing material 0 (raise MATERIAL_CAPACITY)"
             );
             return MaterialHandle(0);
         }
@@ -367,9 +332,9 @@ impl MaterialPool {
     }
 }
 
-/// The material bind group: the SSBO, each Channel's Textures as bindings 1
-/// to 5, and the sampler. Bind groups are snapshots, so a new Texture needs a
-/// new one.
+/// The material bind group (`MATERIALS`): the SSBO, each Channel's
+/// Textures, and the sampler. Bind groups are snapshots, so a new Texture
+/// needs a new one.
 fn create_bind_group(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
@@ -381,28 +346,14 @@ fn create_bind_group(
         .iter()
         .map(|channel| channel.views.iter().collect())
         .collect();
-    let mut entries = vec![wgpu::BindGroupEntry {
-        binding: 0,
-        resource: materials_buffer.as_entire_binding(),
-    }];
-    entries.extend(
-        views
-            .iter()
-            .zip(1..)
-            .map(|(channel_views, binding)| wgpu::BindGroupEntry {
-                binding,
-                resource: wgpu::BindingResource::TextureViewArray(channel_views),
-            }),
-    );
-    entries.push(wgpu::BindGroupEntry {
-        binding: 6,
-        resource: wgpu::BindingResource::Sampler(sampler),
+    let channel_resources = channels.iter().zip(&views).map(|(channel, channel_views)| {
+        let resource = wgpu::BindingResource::TextureViewArray(channel_views);
+        (channel.label, resource)
     });
-    device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("Material Bind Group"),
-        layout,
-        entries: &entries,
-    })
+    let resources = std::iter::once(("materials", materials_buffer.as_entire_binding()))
+        .chain(channel_resources)
+        .chain([("pbr_sampler", wgpu::BindingResource::Sampler(sampler))]);
+    MATERIALS.bind_group(device, layout, resources)
 }
 
 #[cfg(all(test, feature = "cook"))]

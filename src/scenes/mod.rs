@@ -6,7 +6,7 @@ use bevy_ecs::prelude::*;
 
 use crate::assets::{AssetLoader, MaterialChannel};
 use crate::camera::Camera;
-use crate::components::{MaterialRef, MeshRef, PointLight, Transform};
+use crate::components::{DirectionalLight, MaterialRef, MeshRef, PointLight, Transform};
 #[cfg(feature = "cook")]
 use crate::cook::LoadedImage;
 #[cfg(feature = "cook")]
@@ -305,6 +305,30 @@ impl ReferenceScene {
             | Self::FarCoplanar
             | Self::Orrery => &COLOURED_LIGHTS,
         }
+    }
+
+    /// The scene's sun, white and of intensity 1: a directional light whose
+    /// forward axis is turned to shine along the scene's direction.
+    pub(crate) fn sun(self) -> (Transform, DirectionalLight) {
+        let direction = match self {
+            Self::Helmet
+            | Self::PbrSweep
+            | Self::UvGrid
+            | Self::NormalTangent
+            | Self::FarCoplanar
+            | Self::Orrery
+            | Self::Minification
+            | Self::TextureWall => glam::vec3(0.5, -1.0, -0.3),
+        };
+        let transform = Transform {
+            rotation: glam::Quat::from_rotation_arc(glam::Vec3::NEG_Z, direction.normalize()),
+            ..Transform::IDENTITY
+        };
+        let light = DirectionalLight {
+            color: glam::Vec3::ONE,
+            intensity: 1.0,
+        };
+        (transform, light)
     }
 }
 

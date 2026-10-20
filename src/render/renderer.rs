@@ -1,36 +1,36 @@
 use std::time::Instant;
 
 use crate::assets::{ARENA_CAPACITY_BYTES, MaterialPool, MeshPool};
-use crate::cooked::CookedVertex;
 use crate::gpu::GpuContext;
+use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
+use crate::render::main_pass::MainPass;
+use crate::render::targets::RenderTargets;
 use crate::render::{
-    CameraUniform, DEPTH_FORMAT, FrameData, FrameStaging, INSTANCE_BUFFER_INITIAL_CAPACITY,
-    InstanceData, LightUniform, LoadStaging, create_depth_texture,
+    CameraUniform, FrameData, FrameStaging, INSTANCE_CAPACITY, InstanceData, LightUniform,
+    LoadStaging,
 };
-use crate::stats::{FrameRecorder, texture_bytes};
-
-/// The label of the Renderer's one render pass, and its name in frame stats.
-pub(crate) const MAIN_PASS: &str = "main_pass";
+use crate::stats::FrameRecorder;
 
 /// Draws Frame data into a target view, the window's surface or an offscreen
-/// texture, from GPU resources and Pools it owns; it reads no ECS World.
+/// texture, from GPU resources and Pools it owns; it reads no ECS World. It
+/// holds the bind groups passes share and the render targets, and calls the
+/// passes in ADR 0019's order.
 pub struct Renderer {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     aspect_ratio: f32,
-    render_pipeline: wgpu::RenderPipeline,
+    render_targets: RenderTargets,
+    main_pass: MainPass,
     camera_buffer: wgpu::Buffer,
-    camera_bind_group: wgpu::BindGroup,
-    depth_texture_view: wgpu::TextureView,
     light_buffer: wgpu::Buffer,
-    light_bind_group: wgpu::BindGroup,
+    /// The camera and the lights (`FRAME`).
+    frame_bind_group: wgpu::BindGroup,
     pub(crate) mesh_pool: MeshPool,
     pub(crate) material_pool: MaterialPool,
     pub(crate) load_staging: LoadStaging,
     instance_buffer: wgpu::Buffer,
-    instance_bind_group: wgpu::BindGroup,
-    instance_capacity: u64,
-    instance_bind_group_layout: wgpu::BindGroupLayout,
+    /// The Instances and the vertex Arena (`SCENE_GEOMETRY`).
+    scene_geometry_bind_group: wgpu::BindGroup,
     /// Set when a frame's uploads failed after it queued Instance writes,
     /// which then never landed: the next prepare must write every Instance.
     lost_instance_writes: bool,
@@ -54,117 +54,24 @@ impl Renderer {
 
         let device = context.device.clone();
         let queue = context.queue.clone();
-        let shader = device.create_shader_module(wgpu::include_wgsl!("../shader.wgsl"));
-
-        let camera_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Camera Bind Group Layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
-
-        let light_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Light Bind Group Layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
-
-        let instance_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Instance Bind Group Layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
+        let frame_bind_group_layout = FRAME.layout(&device);
+        let scene_geometry_bind_group_layout = SCENE_GEOMETRY.layout(&device);
 
         // Material-as-ID: one bind group (SSBO + per-channel texture arrays +
-        // sampler) serves every material. Created before the pipeline layout
-        // because the layout references its bind group layout.
+        // sampler) serves every material. Created before the main pass
+        // because its pipeline layout references its bind group layout.
         let mut load_staging = LoadStaging::new(device.clone());
         let material_pool = MaterialPool::new(&device, &mut load_staging);
 
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[
-                    Some(&camera_bind_group_layout),
-                    Some(&material_pool.bind_group_layout),
-                    Some(&light_bind_group_layout),
-                    Some(&instance_bind_group_layout),
-                ],
-                immediate_size: 0,
-            });
-
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[Some(CookedVertex::desc())],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: target_format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON
-                polygon_mode: wgpu::PolygonMode::Fill,
-                // Requires Features::DEPTH_CLIP_CONTROL
-                unclipped_depth: false,
-                // Requires Features::CONSERVATIVE_RASTERIZATION
-                conservative: false,
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: Some(true),
-                depth_compare: Some(wgpu::CompareFunction::Greater),
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview_mask: None,
-            cache: None,
-        });
+        let main_pass = MainPass::new(
+            &device,
+            target_format,
+            &[
+                (&FRAME, &frame_bind_group_layout),
+                (&MATERIALS, &material_pool.bind_group_layout),
+                (&SCENE_GEOMETRY, &scene_geometry_bind_group_layout),
+            ],
+        );
 
         let camera_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Camera Buffer"),
@@ -172,72 +79,74 @@ impl Renderer {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Camera Bind Group"),
-            layout: &camera_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: camera_buffer.as_entire_binding(),
-            }],
-        });
-
         let light_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Light Buffer"),
             size: std::mem::size_of::<LightUniform>() as wgpu::BufferAddress,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Light Bind Group"),
-            layout: &light_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: light_buffer.as_entire_binding(),
-            }],
+        let frame_bind_group = FRAME.bind_group(
+            &device,
+            &frame_bind_group_layout,
+            [
+                ("camera", camera_buffer.as_entire_binding()),
+                ("light", light_buffer.as_entire_binding()),
+            ],
+        );
+
+        // Created at its fixed capacity; it never grows.
+        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Instance Buffer"),
+            size: u64::from(INSTANCE_CAPACITY) * std::mem::size_of::<InstanceData>() as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
+        // The most a frame uploads: every buffer `upload` writes, in full.
+        let frame_staging = FrameStaging::new(
+            [&camera_buffer, &light_buffer, &instance_buffer]
+                .iter()
+                .map(|buffer| buffer.size())
+                .sum(),
+        );
 
-        let instance_buffer = create_instance_buffer(&device, INSTANCE_BUFFER_INITIAL_CAPACITY);
+        let mesh_pool = MeshPool::new(&device, ARENA_CAPACITY_BYTES);
+        let scene_geometry_bind_group = SCENE_GEOMETRY.bind_group(
+            &device,
+            &scene_geometry_bind_group_layout,
+            [
+                ("instances", instance_buffer.as_entire_binding()),
+                ("vertices", mesh_pool.vertex_arena().as_entire_binding()),
+            ],
+        );
 
-        let instance_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Instance Bind Group"),
-            layout: &instance_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: instance_buffer.as_entire_binding(),
-            }],
-        });
-
-        let instance_capacity = INSTANCE_BUFFER_INITIAL_CAPACITY;
-
-        let depth_texture_view = create_depth_texture(&device, width, height);
+        let render_targets = RenderTargets::new(&device, width, height);
 
         Self {
-            mesh_pool: MeshPool::new(&device, ARENA_CAPACITY_BYTES),
+            mesh_pool,
             material_pool,
             load_staging,
             device,
             queue,
             aspect_ratio: width as f32 / height as f32,
-            render_pipeline,
+            render_targets,
+            main_pass,
             camera_buffer,
-            camera_bind_group,
-            depth_texture_view,
             light_buffer,
-            light_bind_group,
+            frame_bind_group,
             instance_buffer,
-            instance_bind_group,
-            instance_capacity,
-            instance_bind_group_layout,
+            scene_geometry_bind_group,
             lost_instance_writes: false,
             transient_saves_memory: context.adapter.get_info().transient_saves_memory == Some(true),
-            frame_staging: FrameStaging::default(),
+            frame_staging,
             frame_encoder: None,
         }
     }
 
     /// Matches a new target size, both non-zero.
     pub fn resize(&mut self, width: u32, height: u32) {
-        self.depth_texture_view = create_depth_texture(&self.device, width, height);
+        // A pass whose bind groups read a target rebuilds them here, after
+        // the render targets.
+        self.render_targets = RenderTargets::new(&self.device, width, height);
         self.aspect_ratio = width as f32 / height as f32;
     }
 
@@ -257,7 +166,6 @@ impl Renderer {
             self.queue.submit(std::iter::once(unrendered.finish()));
         }
         let mut encoder = create_frame_encoder(&self.device);
-        self.ensure_instance_capacity(&mut encoder, u64::from(frame.instance_slot_count));
         let instance_size = std::mem::size_of::<InstanceData>() as wgpu::BufferAddress;
         let instance_uploads = frame.instance_writes.iter().map(|write| {
             (
@@ -304,59 +212,20 @@ impl Renderer {
             .unwrap_or_else(|| create_frame_encoder(&self.device));
         self.material_pool.refresh_bind_group(&self.device);
 
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some(MAIN_PASS),
-                color_attachments: &[
-                    // This is what @location(0) in the fragment shader targets
-                    Some(wgpu::RenderPassColorAttachment {
-                        view: target,
-                        resolve_target: None,
-                        depth_slice: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color {
-                                r: 0.1,
-                                g: 0.2,
-                                b: 0.3,
-                                a: 1.0,
-                            }),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    }),
-                ],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(0.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
-                occlusion_query_set: None,
-                timestamp_writes,
-                multiview_mask: None,
-            });
-
-            render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.material_pool.bind_group, &[]);
-            render_pass.set_bind_group(2, &self.light_bind_group, &[]);
-            render_pass.set_bind_group(3, &self.instance_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.mesh_pool.vertex_buffer().slice(..));
-            render_pass.set_index_buffer(
-                self.mesh_pool.index_buffer().slice(..),
-                wgpu::IndexFormat::Uint32,
-            );
-
-            for draw in &frame.draws {
-                render_pass.draw_indexed(
-                    draw.indices.clone(),
-                    draw.base_vertex,
-                    draw.instance_index..draw.instance_index + 1,
-                );
-            }
-            recorder.draw_calls += frame.draws.len() as u32;
-        }
+        self.main_pass.record(
+            &mut encoder,
+            target,
+            &self.render_targets,
+            &[
+                (&FRAME, &self.frame_bind_group),
+                (&MATERIALS, &self.material_pool.bind_group),
+                (&SCENE_GEOMETRY, &self.scene_geometry_bind_group),
+            ],
+            self.mesh_pool.index_buffer(),
+            &frame.draws,
+            timestamp_writes,
+        );
+        recorder.draw_calls += frame.draws.len() as u32;
 
         let command_buffer = encoder.finish();
         recorder.stage("encode", started);
@@ -392,68 +261,15 @@ impl Renderer {
             &self.instance_buffer,
         ];
         buffers.iter().map(|buffer| buffer.size()).sum::<u64>()
-            + texture_bytes(
-                self.depth_texture_view.texture(),
-                self.transient_saves_memory,
-            )
+            + self
+                .render_targets
+                .gpu_memory_bytes(self.transient_saves_memory)
             + self.mesh_pool.gpu_memory_bytes()
             + self
                 .material_pool
                 .gpu_memory_bytes(self.transient_saves_memory)
             + self.frame_staging.gpu_memory_bytes()
     }
-
-    /// Grows the Instance buffer to hold `needed` Instances, copying the slots
-    /// earlier frames wrote into the new buffer through `encoder`.
-    fn ensure_instance_capacity(&mut self, encoder: &mut wgpu::CommandEncoder, needed: u64) {
-        if needed <= self.instance_capacity {
-            return;
-        }
-
-        let old_capacity = self.instance_capacity;
-        let mut new_capacity = old_capacity * 2;
-        while new_capacity < needed {
-            new_capacity *= 2;
-        }
-
-        let instance_buffer = create_instance_buffer(&self.device, new_capacity);
-        encoder.copy_buffer_to_buffer(
-            &self.instance_buffer,
-            0,
-            &instance_buffer,
-            0,
-            self.instance_buffer.size(),
-        );
-        self.instance_buffer = instance_buffer;
-
-        self.instance_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Instance Bind Group"),
-            layout: &self.instance_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: self.instance_buffer.as_entire_binding(),
-            }],
-        });
-
-        self.instance_capacity = new_capacity;
-        tracing::info!(
-            old = old_capacity,
-            new = new_capacity,
-            "instance buffer resized"
-        );
-    }
-}
-
-/// An Instance buffer of `capacity` slots; a copy source, so it can grow.
-fn create_instance_buffer(device: &wgpu::Device, capacity: u64) -> wgpu::Buffer {
-    device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("Instance Buffer"),
-        size: capacity * std::mem::size_of::<InstanceData>() as u64,
-        usage: wgpu::BufferUsages::STORAGE
-            | wgpu::BufferUsages::COPY_DST
-            | wgpu::BufferUsages::COPY_SRC,
-        mapped_at_creation: false,
-    })
 }
 
 fn create_frame_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
@@ -470,7 +286,7 @@ mod tests {
     use crate::assets::Primitive;
     use crate::assets::material::MaterialData;
     use crate::capture::read_back;
-    use crate::cooked::{CookedMesh, CookedPrimitive};
+    use crate::cooked::{CookedMesh, CookedPrimitive, CookedVertex};
     use crate::render::instance::padded_columns;
     use crate::render::prepare::{Draw, InstanceWrite};
 
@@ -479,20 +295,72 @@ mod tests {
 
     #[test]
     fn renders_hand_built_frame_data_without_a_world() {
-        let context = match pollster::block_on(GpuContext::headless()) {
-            Ok(context) => context,
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE);
+        let frame = triangle_frame(&mut renderer);
+        let (image, recorder) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
+
+        assert_eq!(recorder.draw_calls, 1);
+        assert_eq!(image.get_pixel(SIZE / 2, SIZE / 2).0, [255, 0, 0, 255]);
+        // The clear colour, linear (0.1, 0.2, 0.3), sRGB-encoded as in
+        // tests/capture.rs; the GPU may round its green either way.
+        let corner = image.get_pixel(0, 0).0;
+        assert!(
+            corner[0] == 89 && corner[1].abs_diff(124) <= 1 && corner[2] == 149,
+            "corner {corner:?}"
+        );
+    }
+
+    #[test]
+    fn a_resized_renderer_draws_as_one_created_at_its_new_size() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        // Wider than tall, so swapped sides would show.
+        let (width, height) = (24, 20);
+        let mut resized = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE);
+        let frame = triangle_frame(&mut resized);
+        // A frame at the first size before the resize, as a window draws.
+        render_frame(&context, &mut resized, &frame, SIZE, SIZE);
+        resized.resize(width, height);
+        let (resized_image, _) = render_frame(&context, &mut resized, &frame, width, height);
+
+        let mut created = Renderer::new(&context, TARGET_FORMAT, width, height);
+        let frame = triangle_frame(&mut created);
+        let (created_image, _) = render_frame(&context, &mut created, &frame, width, height);
+
+        assert_eq!(resized.aspect_ratio(), 1.2);
+        assert_eq!(
+            resized_image.get_pixel(width / 2, height / 2).0,
+            [255, 0, 0, 255]
+        );
+        assert!(
+            resized_image == created_image,
+            "the resized Renderer drew another image than one created at its size"
+        );
+    }
+
+    /// A headless context, or `None` after saying so on a machine without a
+    /// GPU adapter, where these tests skip.
+    fn gpu_context() -> Option<GpuContext> {
+        match pollster::block_on(GpuContext::headless()) {
+            Ok(context) => Some(context),
             Err(error) if error.is::<wgpu::RequestAdapterError>() => {
                 // Not `eprintln!`, which libtest captures from passing tests.
                 writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
-                return;
+                None
             }
             Err(error) => panic!("headless GPU context failed: {error:#}"),
-        };
-        let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE);
+        }
+    }
 
-        // A triangle around the target's centre, counter-clockwise towards
-        // the camera, drawn with an identity view-projection; its QTangent is
-        // the identity, so its normal is +Z.
+    /// Frame data that draws a triangle around the target's centre, black,
+    /// unlit and red emissive, loaded into `renderer`'s Pools.
+    fn triangle_frame(renderer: &mut Renderer) -> FrameData {
+        // Counter-clockwise towards the camera, drawn with an identity
+        // view-projection; its QTangent is the identity, so its normal is +Z.
         let vertex = |x: f32, y: f32| CookedVertex {
             position: [x, y, 0.5],
             uv: [0.0, 0.0],
@@ -505,8 +373,20 @@ mod tests {
                 first_index: 0,
                 index_count: 3,
                 material: None,
+                meshlets: Vec::new(),
             }],
+            bounds: [[-0.5, -0.5, 0.5], [0.5, 0.5, 0.5]],
         };
+        // Loaded first, outside the target, so the triangle's draw finds its
+        // vertices only past its base vertex.
+        let outside = CookedMesh {
+            vertices: vec![vertex(2.0, 2.0), vertex(3.0, 2.0), vertex(2.0, 3.0)],
+            ..triangle.clone()
+        };
+        renderer
+            .mesh_pool
+            .load(&mut renderer.load_staging, &outside, None)
+            .expect("the outside triangle fits");
         let mesh = renderer
             .mesh_pool
             .load(&mut renderer.load_staging, &triangle, None)
@@ -516,6 +396,7 @@ mod tests {
             index_offset,
             index_count,
         } = &renderer.mesh_pool.get(mesh).expect("loaded").primitives[0];
+        assert!(vertex_offset > 0 && index_offset > 0);
         // Black and unlit, so only the red emissive reaches the target.
         let material = renderer.material_pool.insert(
             &mut renderer.load_staging,
@@ -528,16 +409,12 @@ mod tests {
             },
         );
         let identity = padded_columns(glam::Mat3::IDENTITY);
-        let frame = FrameData {
+        FrameData {
             camera: CameraUniform {
                 view_proj: glam::Mat4::IDENTITY.to_cols_array_2d(),
                 ..CameraUniform::default()
             },
-            light: LightUniform {
-                direction: [0.0, 0.0, -1.0, 0.0],
-                ..LightUniform::default()
-            },
-            instance_slot_count: 1,
+            light: LightUniform::default(),
             instances: vec![InstanceData {
                 rotation_scale: identity,
                 normal_matrix: identity,
@@ -555,13 +432,23 @@ mod tests {
                 base_vertex: vertex_offset as i32,
                 instance_index: 0,
             }],
-        };
+        }
+    }
 
+    /// Uploads and renders `frame` into a new `width` × `height` target, and
+    /// reads it back, with what the frame recorded.
+    fn render_frame(
+        context: &GpuContext,
+        renderer: &mut Renderer,
+        frame: &FrameData,
+        width: u32,
+        height: u32,
+    ) -> (image::RgbaImage, FrameRecorder) {
         let target = context.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Frame Data Test Target"),
             size: wgpu::Extent3d {
-                width: SIZE,
-                height: SIZE,
+                width,
+                height,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -572,48 +459,16 @@ mod tests {
             view_formats: &[],
         });
         let mut recorder = FrameRecorder::new();
-        renderer.upload(&frame, &mut recorder);
+        renderer.upload(frame, &mut recorder);
         renderer.render(
-            &frame,
+            frame,
             &target.create_view(&wgpu::TextureViewDescriptor::default()),
             None,
             &mut recorder,
         );
-        let pixels = read_back(&context, &target).expect("read back failed");
-        let image = image::RgbaImage::from_raw(SIZE, SIZE, pixels).expect("SIZE × SIZE pixels");
-
-        assert_eq!(recorder.draw_calls, 1);
-        assert_eq!(image.get_pixel(SIZE / 2, SIZE / 2).0, [255, 0, 0, 255]);
-        // The clear colour, linear (0.1, 0.2, 0.3), sRGB-encoded as in
-        // tests/capture.rs; the GPU may round its green either way.
-        let corner = image.get_pixel(0, 0).0;
-        assert!(
-            corner[0] == 89 && corner[1].abs_diff(124) <= 1 && corner[2] == 149,
-            "corner {corner:?}"
-        );
-
-        // A frame that needs one slot past the Instance buffer's capacity
-        // writes only that slot: the triangle, still drawn from slot 0, stays
-        // red only if the grown buffer kept what slot 0 held.
-        let past_capacity = INSTANCE_BUFFER_INITIAL_CAPACITY as u32;
-        let frame = FrameData {
-            instance_slot_count: past_capacity + 1,
-            instance_writes: vec![InstanceWrite {
-                first_slot: past_capacity,
-                instances: 0..1,
-            }],
-            ..frame
-        };
-        renderer.upload(&frame, &mut recorder);
-        renderer.render(
-            &frame,
-            &target.create_view(&wgpu::TextureViewDescriptor::default()),
-            None,
-            &mut recorder,
-        );
-        let pixels = read_back(&context, &target).expect("read back failed");
-        let image = image::RgbaImage::from_raw(SIZE, SIZE, pixels).expect("SIZE × SIZE pixels");
-        assert!(renderer.instance_capacity > INSTANCE_BUFFER_INITIAL_CAPACITY);
-        assert_eq!(image.get_pixel(SIZE / 2, SIZE / 2).0, [255, 0, 0, 255]);
+        let pixels = read_back(context, &target).expect("read back failed");
+        let image =
+            image::RgbaImage::from_raw(width, height, pixels).expect("width × height pixels");
+        (image, recorder)
     }
 }

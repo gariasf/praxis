@@ -1,11 +1,13 @@
-//! Functions of the main shader run on the GPU over test vectors and are
-//! compared with oracles written apart from the shader: literals, analytic
+//! Functions of the shared shader parts run on the GPU over test vectors and
+//! are compared with oracles written apart from the shader: literals, analytic
 //! results and CPU references.
 
 use std::io::Write;
 
+use crate::cooked::CookedVertex;
 use crate::gpu::GpuContext;
 use crate::render::instance::{ANCHOR_CELL_SIZE, anchor_and_offset};
+use crate::render::shaders;
 
 /// Largest difference allowed between a result and its expectation. Results
 /// land within 2e-7 of theirs on the M4 Pro.
@@ -225,15 +227,17 @@ fn tangent_space_normal_rebuilds_z_from_x_and_y() {
     assert!(grazing > 0);
 }
 
-/// The cooker's QTangents, unpacked as a `Snorm16x4` vertex attribute is
-/// (each component over 32,767, clamped at −1), decode on the GPU to the
-/// normal, tangent and bitangent sign they were cooked from, both signs and
-/// frames near the half turns whose w rounds towards zero included. A rotated
-/// axis is a product of two quaternions, each component off by at most half a
-/// Snorm16 step, plus the nudge that keeps w a whole step: within 4 steps.
+/// Vertices as the cooker writes them, each QTangent from its encoder, laid
+/// out as the vertex Arena holds them and read on the GPU by index: each
+/// position and UV decodes exact, and each QTangent, unpacked from Snorm16
+/// (each component over 32,767, clamped at −1), to the normal, tangent and
+/// bitangent sign it was cooked from, both signs and frames near the half
+/// turns whose w rounds towards zero included. A rotated axis is a product
+/// of two quaternions, each component off by at most half a Snorm16 step,
+/// plus the nudge that keeps w a whole step: within 4 steps.
 #[cfg(feature = "cook")]
 #[test]
-fn qtangents_from_the_cooker_decode_to_their_frame() {
+fn cooked_vertices_decode_to_their_position_uv_and_tangent_frame() {
     use crate::cook::mesh::{qtangent, tests::sample_rotations};
 
     let Some(context) = gpu_context() else {
@@ -247,36 +251,56 @@ fn qtangents_from_the_cooker_decode_to_their_frame() {
             tangent_frames.push((normal, tangent, bitangent_sign));
         }
     }
-    let inputs: Vec<[f32; 4]> = tangent_frames
+    // Every position and UV component a different value, so a read at the
+    // wrong offset or stride returns another.
+    let vertices: Vec<CookedVertex> = tangent_frames
         .iter()
-        .map(|&(normal, tangent, bitangent_sign)| {
-            qtangent(normal.into(), tangent.extend(bitangent_sign).into())
-                .map(|component| (f32::from(component) * step).max(-1.0))
+        .enumerate()
+        .map(|(index, &(normal, tangent, bitangent_sign))| {
+            let first = 8.0 * index as f32;
+            CookedVertex {
+                position: [first, first + 1.0, first + 2.0],
+                uv: [first + 3.0, first + 4.0],
+                qtangent: qtangent(normal.into(), tangent.extend(bitangent_sign).into()),
+            }
         })
         .collect();
-    let normals_and_signs = evaluate(
-        &context,
-        "vec4<f32>(decode_qtangent(input).normal, decode_qtangent(input).bitangent_sign)",
-        &inputs,
-    );
-    let tangents = evaluate(
-        &context,
-        "vec4<f32>(decode_qtangent(input).tangent, 0.0)",
-        &inputs,
-    );
+    // Read last to first, so no case reads the vertex at its own index.
+    let inputs: Vec<[[f32; 4]; 1]> = (0..vertices.len())
+        .rev()
+        .map(|index| [[index as f32, 0.0, 0.0, 0.0]])
+        .collect();
+    // `{vertex}` in an expression stands for the decoded vertex.
+    let decode = |expression: &str| {
+        let expression =
+            expression.replace("{vertex}", "decode_vertex(test_vertices[u32(input.x)])");
+        evaluate_cases(&context, &expression, &inputs, &vertices)
+    };
+    let positions = decode("vec4<f32>({vertex}.position, 0.0)");
+    let uvs = decode("vec4<f32>({vertex}.uv, 0.0, 0.0)");
+    let normals_and_signs =
+        decode("vec4<f32>({vertex}.tangent_frame.normal, {vertex}.tangent_frame.bitangent_sign)");
+    let tangents = decode("vec4<f32>({vertex}.tangent_frame.tangent, 0.0)");
 
-    for ((frame, normal_and_sign), tangent) in
-        tangent_frames.iter().zip(normals_and_signs).zip(tangents)
-    {
-        let &(normal, tangent_expected, bitangent_sign) = frame;
+    let decoded = positions
+        .into_iter()
+        .zip(uvs)
+        .zip(normals_and_signs.into_iter().zip(tangents));
+    for ([input], ((position, uv), (normal_and_sign, tangent))) in inputs.iter().zip(decoded) {
+        let vertex_index = input[0] as usize;
+        let vertex = &vertices[vertex_index];
+        let (normal, tangent_expected, bitangent_sign) = tangent_frames[vertex_index];
         let decoded_normal = glam::Vec3::from_slice(&normal_and_sign);
         let decoded_tangent = glam::Vec3::from_slice(&tangent);
         assert!(
-            normal_and_sign[3] == bitangent_sign
+            position[..3] == vertex.position
+                && uv[..2] == vertex.uv
+                && normal_and_sign[3] == bitangent_sign
                 && decoded_normal.abs_diff_eq(normal, 4.0 * step)
                 && decoded_tangent.abs_diff_eq(tangent_expected, 4.0 * step),
-            "normal {normal}, tangent {tangent_expected}, bitangent sign {bitangent_sign} decode \
-             to {decoded_normal}, {decoded_tangent}, {}",
+            "{vertex:?}: normal {normal}, tangent {tangent_expected}, bitangent sign \
+             {bitangent_sign} decode to {position:?}, {uv:?}, {decoded_normal}, \
+             {decoded_tangent}, {}",
             normal_and_sign[3]
         );
     }
@@ -347,6 +371,7 @@ fn camera_relative_position_meets_the_precision_bar_within_100_km() {
         "vec4<f32>(camera_relative_position(vec3<i32>(inputs[0].xyz), inputs[1].xyz, \
          vec3<i32>(inputs[2].xyz), inputs[3].xyz, inputs[4].xyz), 0.0)",
         &inputs,
+        &[],
     );
 
     let mut world_space_error: f64 = 0.0;
@@ -474,15 +499,15 @@ fn gpu_context() -> Option<GpuContext> {
     }
 }
 
-/// The compute kernel appended to the main shader's source, so it calls the
-/// functions the renderer runs. `EXPRESSION`, `VECTORS_PER_CASE` and
+/// The compute kernel appended to the shared shader parts, so it calls the
+/// functions the passes run. `EXPRESSION`, `VECTORS_PER_CASE` and
 /// `WORKGROUP_SIZE` stand for the expression under test, the test vectors
-/// each case holds and the constant below. Its bindings are ones
-/// the main shader leaves free, so no backend emits a main-shader resource
-/// beside the kernel's.
+/// each case holds and the constant below; `test_vertices` stands in for the
+/// vertex Arena.
 const KERNEL: &str = "
-@group(0) @binding(1) var<storage, read> test_vectors: array<array<vec4<f32>, VECTORS_PER_CASE>>;
-@group(0) @binding(2) var<storage, read_write> test_results: array<vec4<f32>>;
+@group(0) @binding(0) var<storage, read> test_vectors: array<array<vec4<f32>, VECTORS_PER_CASE>>;
+@group(0) @binding(1) var<storage, read_write> test_results: array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read> test_vertices: array<CookedVertex>;
 
 @compute @workgroup_size(WORKGROUP_SIZE)
 fn evaluate_test_vectors(@builtin(global_invocation_id) invocation: vec3<u32>) {
@@ -499,25 +524,27 @@ fn evaluate_test_vectors(@builtin(global_invocation_id) invocation: vec3<u32>) {
 const WORKGROUP_SIZE: u32 = 64;
 
 /// Evaluates `expression`, WGSL of type `vec4<f32>` that reads its test
-/// vector as `input` and may call any function of the main shader, once per
+/// vector as `input` and may call any function of the shared parts, once per
 /// element of `inputs` in one compute dispatch; returns the results in order.
 fn evaluate(context: &GpuContext, expression: &str, inputs: &[[f32; 4]]) -> Vec<[f32; 4]> {
-    evaluate_cases::<1>(context, expression, bytemuck::cast_slice(inputs))
+    evaluate_cases::<1>(context, expression, bytemuck::cast_slice(inputs), &[])
 }
 
 /// As `evaluate`, for cases of `VECTORS` test vectors each, which
-/// `expression` reads as `inputs[0]` to `inputs[VECTORS - 1]`.
+/// `expression` reads as `inputs[0]` to `inputs[VECTORS - 1]`, and
+/// `vertices`, if any, which it reads as `test_vertices`.
 fn evaluate_cases<const VECTORS: usize>(
     context: &GpuContext,
     expression: &str,
     cases: &[[[f32; 4]; VECTORS]],
+    vertices: &[CookedVertex],
 ) -> Vec<[f32; 4]> {
     let device = &context.device;
     let kernel = KERNEL
         .replace("WORKGROUP_SIZE", &WORKGROUP_SIZE.to_string())
         .replace("VECTORS_PER_CASE", &VECTORS.to_string())
         .replace("EXPRESSION", expression);
-    let source = format!("{}\n{kernel}", include_str!("../shader.wgsl"));
+    let source = format!("{}\n{kernel}", shaders::SHARED.source());
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Shader Function Harness"),
         source: wgpu::ShaderSource::Wgsl(source.into()),
@@ -553,19 +580,37 @@ fn evaluate_cases<const VECTORS: usize>(
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
+    // As the vertex Arena holds them.
+    let test_vertices = (!vertices.is_empty()).then(|| {
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Test Vertices"),
+            size: size_of_val(vertices) as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        context
+            .queue
+            .write_buffer(&buffer, 0, bytemuck::cast_slice(vertices));
+        buffer
+    });
+    let mut entries = vec![
+        wgpu::BindGroupEntry {
+            binding: 0,
+            resource: input_buffer.as_entire_binding(),
+        },
+        wgpu::BindGroupEntry {
+            binding: 1,
+            resource: output_buffer.as_entire_binding(),
+        },
+    ];
+    entries.extend(test_vertices.as_ref().map(|buffer| wgpu::BindGroupEntry {
+        binding: 2,
+        resource: buffer.as_entire_binding(),
+    }));
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("Shader Function Harness Bind Group"),
         layout: &pipeline.get_bind_group_layout(0),
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: input_buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: output_buffer.as_entire_binding(),
-            },
-        ],
+        entries: &entries,
     });
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {

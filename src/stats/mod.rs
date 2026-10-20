@@ -21,6 +21,8 @@ pub struct FrameStats {
     /// Instances the frame wrote: those of new Renderables and of those whose
     /// World transform or Material changed (ADR 0003).
     pub instances_written: u32,
+    /// Renderables the full Instance buffer refused a slot, so not drawn.
+    pub renderables_refused: u32,
     /// Bytes of the GPU buffers and textures the State created, its Pools
     /// included, summed by the engine on every backend (ADR 0013). The
     /// render target and capture's own buffers are the caller's.
@@ -60,10 +62,11 @@ impl std::fmt::Display for FrameStats {
         }
         writeln!(
             formatter,
-            "counts draw_calls={} uploaded_bytes={} instances_written={} heap_allocations={} dropped_us={:.1}",
+            "counts draw_calls={} uploaded_bytes={} instances_written={} renderables_refused={} heap_allocations={} dropped_us={:.1}",
             self.draw_calls,
             self.uploaded_bytes,
             self.instances_written,
+            self.renderables_refused,
             self.heap_allocations,
             microseconds(&self.dropped_time)
         )?;
@@ -110,6 +113,7 @@ pub(crate) struct FrameRecorder {
     pub(crate) draw_calls: u32,
     pub(crate) uploaded_bytes: u64,
     pub(crate) instances_written: u32,
+    pub(crate) renderables_refused: u32,
     pub(crate) dropped_time: Duration,
 }
 
@@ -125,6 +129,7 @@ impl FrameRecorder {
             draw_calls: 0,
             uploaded_bytes: 0,
             instances_written: 0,
+            renderables_refused: 0,
             dropped_time: Duration::ZERO,
         }
     }
@@ -136,6 +141,7 @@ impl FrameRecorder {
         self.draw_calls = 0;
         self.uploaded_bytes = 0;
         self.instances_written = 0;
+        self.renderables_refused = 0;
         self.dropped_time = Duration::ZERO;
         self.allocations_at_start = thread_allocations();
         self.started = Instant::now();
@@ -169,6 +175,7 @@ impl FrameRecorder {
             draw_calls: self.draw_calls,
             uploaded_bytes: self.uploaded_bytes,
             instances_written: self.instances_written,
+            renderables_refused: self.renderables_refused,
             heap_allocations: self.heap_allocations,
             dropped_time: self.dropped_time,
             ..FrameStats::default()

@@ -1983,6 +1983,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wgpu",
+ "wgpu-naga-bridge",
  "winit",
  "zstd",
 ]

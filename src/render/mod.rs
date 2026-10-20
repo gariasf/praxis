@@ -1,20 +1,22 @@
-pub mod depth;
+pub mod bind_groups;
 pub mod instance;
+pub mod main_pass;
 pub mod prepare;
 pub mod renderer;
+pub mod shaders;
 pub mod staging;
+pub mod targets;
 pub mod uniforms;
-pub mod vertex;
 
 #[cfg(test)]
 mod shader_function_tests;
 #[cfg(test)]
 mod shader_tests;
 
-pub use depth::{DEPTH_FORMAT, create_depth_texture};
-pub use instance::{INSTANCE_BUFFER_INITIAL_CAPACITY, InstanceData};
+pub use instance::{INSTANCE_CAPACITY, InstanceData};
+pub(crate) use main_pass::MAIN_PASS;
 pub use prepare::{FrameData, FramePreparer};
-pub(crate) use renderer::MAIN_PASS;
 pub use renderer::Renderer;
 pub use staging::{FrameStaging, LoadStaging};
+pub use targets::DEPTH_FORMAT;
 pub use uniforms::{CameraUniform, LightUniform};

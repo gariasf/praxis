@@ -167,14 +167,19 @@ fn decode(texture: &CookedTexture, level: usize) -> Vec<[u8; 4]> {
         .collect()
 }
 
-/// Peak signal-to-noise ratio in dB of 8-bit samples against their source.
-fn psnr(pairs: impl Iterator<Item = (u8, u8)>) -> f64 {
-    let (mut squared_error, mut count) = (0.0, 0.0);
-    for (decoded, source) in pairs {
-        squared_error += (decoded as f64 - source as f64).powi(2);
-        count += 1.0;
+/// Peak signal-to-noise ratio in dB of `decoded` texels against their
+/// `source` texels, over each pair of a stored channel and the source
+/// channel it holds. Nested loops, not a `flat_map` chain, which costs
+/// seconds per Texture unoptimised.
+fn psnr(decoded: &[[u8; 4]], source: &[[u8; 4]], channels: &[(usize, usize)]) -> f64 {
+    assert_eq!(decoded.len(), source.len());
+    let mut squared_error = 0u64;
+    for (decoded_texel, source_texel) in decoded.iter().zip(source) {
+        for &(stored, from) in channels {
+            squared_error += u64::from(decoded_texel[stored].abs_diff(source_texel[from])).pow(2);
+        }
     }
-    let mean_squared_error = squared_error / count;
+    let mean_squared_error = squared_error as f64 / (decoded.len() * channels.len()) as f64;
     10.0 * (255.0f64.powi(2) / mean_squared_error).log10()
 }
 
@@ -310,8 +315,6 @@ fn reference_scene_textures_cook_every_mip_and_keep_their_quality() {
         assert_eq!(texture.levels.len(), mips, "{}", source.name);
 
         let image = source.decode().unwrap();
-        let decoded = decode(&texture, 0);
-        let texels = decoded.iter().zip(image.pixels.as_chunks::<4>().0);
         // The source channels each stored channel holds (ADR 0018).
         let stored: &[(usize, usize)] = match source.channel {
             MaterialChannel::Albedo | MaterialChannel::Emissive => {
@@ -321,11 +324,11 @@ fn reference_scene_textures_cook_every_mip_and_keep_their_quality() {
             MaterialChannel::MetallicRoughness => &[(0, 1), (1, 2)],
             MaterialChannel::Occlusion => &[(0, 0)],
         };
-        let decibels = psnr(texels.flat_map(|(decoded, source)| {
-            stored
-                .iter()
-                .map(|&(stored, from)| (decoded[stored], source[from]))
-        }));
+        let decibels = psnr(
+            &decode(&texture, 0),
+            image.pixels.as_chunks::<4>().0,
+            stored,
+        );
         // Not `eprintln!`, which libtest captures from passing tests.
         writeln!(
             std::io::stderr(),
@@ -650,9 +653,10 @@ fn a_dev_launch_cooks_exactly_what_its_scene_references_and_changed() {
     fs::remove_dir_all(&directory).unwrap();
 }
 
-/// SciFiHelmet's cooked Mesh Blob bytes per triangle, at most: the M2
-/// milestone's mesh-size ceiling (#149). A lower figure re-records it.
-const HELMET_MESH_BYTES_PER_TRIANGLE: f64 = 13.81;
+/// SciFiHelmet's cooked Mesh Blob bytes per triangle, Meshlets included, at
+/// most: the M3 milestone's mesh-size ceiling (#192). A lower figure
+/// re-records it.
+const HELMET_MESH_BYTES_PER_TRIANGLE: f64 = 13.83;
 const HELMET_TRIANGLES: usize = 23_358;
 
 #[test]

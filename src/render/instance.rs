@@ -1,7 +1,10 @@
-pub const INSTANCE_BUFFER_INITIAL_CAPACITY: u64 = 16;
+/// Instances the Instance buffer holds, 64 MiB of them: one fixed capacity
+/// for the app, tests, bench and CI until M4's split of the 8 GB Budget
+/// sizes it.
+pub const INSTANCE_CAPACITY: u32 = 1 << 19;
 
 /// Edge of the grid World positions are anchored to on the GPU, in metres
-/// (ADR 0014); `ANCHOR_CELL_SIZE` in the shader matches it.
+/// (ADR 0014); every shader module declares it from this one.
 pub const ANCHOR_CELL_SIZE: f64 = 64.0;
 
 /// Splits a World position into the integer anchor of its grid cell and its
