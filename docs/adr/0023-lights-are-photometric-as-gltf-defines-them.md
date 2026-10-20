@@ -9,7 +9,7 @@ Light values are photometric, in glTF's units: a `DirectionalLight` gives illumi
 
 ## Consequences
 
-- fp16 cannot hold the range unexposed: under 100,000 lx, a dielectric's sun glint at roughness 0.04 peaks at 1.24×10⁸ cd/m², 10.9 stops past fp16's 65504. Shading runs in f32, and the lit pass writes pre-exposed values clamped to 65504, so every backend stays finite: the M4 Pro saturates on overflow, while Vulkan may store infinity, which shows as black patches.
+- fp16 cannot hold the range unexposed: under 100,000 lx, a dielectric's sun glint at roughness 0.04 peaks at 1.24×10⁸ cd/m², 10.9 stops past fp16's 65504. Shading runs in f32 and pre-exposes colour before fp16 stores it, and every path clamps it to 65504, since on overflow the M4 Pro saturates while Vulkan may store infinity, which shows as black patches.
 - Each Reference scene sets its EV100 by hand in M3, which keeps Goldens exact. Histogram adaptation and local tone mapping wait for the first scene that joins an interior and sunlight or changes the time of day (map issue, *Not yet specified*).
 - Core glTF caps emissive at 1 cd/m² (texture and factor each at most 1), which an exposure of EV100 15 maps to 2.5×10⁻⁵ of display white. Brighter emissives need KHR_materials_emissive_strength, which the cooker does not read yet.
 - Point lights fall off by inverse square inside KHR_lights_punctual's range window (#199). Spot lights, out of M3, take candela too.
