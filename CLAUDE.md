@@ -103,9 +103,13 @@ src/
                                  sources and Reference scenes into Blobs
                                  in git-ignored `cooked/` (ADR 0018)
   render/                      # Renderer (owns the Pools, reads no
-                                 ECS World), prepare (ECS World to Frame
-                                 data), bind_groups (each defined once),
-                                 instance, uniforms, depth, staging,
+                                 ECS World, calls the passes in order),
+                                 a module per pass (main_pass: its
+                                 pipeline and recording), targets (every
+                                 size-dependent target, the depth
+                                 conventions), prepare (ECS World to
+                                 Frame data), bind_groups (each defined
+                                 once), instance, uniforms, staging,
                                  shaders/ (WGSL parts and the modules
                                  each pipeline assembles from them)
 tests/                         # integration tests at agreed seams
@@ -188,8 +192,11 @@ When a feature folder grows past one file, split into
 
 When reviewing changes, check for:
 
-- [ ] GPU resources created in `Renderer::new` are also recreated in
-      `resize()`
+- [ ] A size-dependent target lives in the targets module
+      (`src/render/targets.rs`), whose `RenderTargets::new` creates every
+      target and runs again on resize; a pass builds the bind groups that
+      read targets in one function, called at creation and after every
+      resize (bind groups are snapshots, not pointers)
 - [ ] A binding is written once, in its bind group's definition
       (`src/render/bind_groups.rs`), which declares it in WGSL and gives
       its layout and its group's index in pipeline layouts and
@@ -208,8 +215,6 @@ When reviewing changes, check for:
       on the Rust side (the test compares sizes, not strides)
 - [ ] A new or changed shading function in WGSL has an oracle test
       in `src/render/shader_function_tests.rs`
-- [ ] When a buffer is recreated, the bind group referencing it is
-      also recreated (bind groups are snapshots, not pointers)
 - [ ] Texture formats match between creation and surface config (sRGB
       consistency)
 - [ ] `unwrap()` on GPU operations that could fail at runtime — prefer
