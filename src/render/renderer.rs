@@ -527,7 +527,8 @@ mod tests {
     }
 
     /// Twice the Instances of a two-triangle Mesh draw twice the Instances
-    /// and triangles, read back from the GPU, in the same one draw call.
+    /// and triangles, read back from the GPU, in the same draw calls: one
+    /// each in the depth pre-pass and the lit pass.
     #[test]
     fn doubling_the_instances_doubles_instances_and_triangles_drawn_not_draw_calls() {
         let Some(context) = gpu_context() else {
@@ -550,8 +551,8 @@ mod tests {
             )
         };
 
-        assert_eq!(drawn(3), (3, 6, 1));
-        assert_eq!(drawn(6), (6, 12, 1));
+        assert_eq!(drawn(3), (3, 6, 2));
+        assert_eq!(drawn(6), (6, 12, 2));
     }
 
     /// Instances past a block of the culling pass's scans, and past a row of
