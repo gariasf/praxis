@@ -30,6 +30,7 @@ mod scenes;
 mod state;
 mod stats;
 mod threading;
+mod probe_as_sizes;
 mod time;
 mod transform;
 
