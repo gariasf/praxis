@@ -11,15 +11,16 @@ struct VertexOutput {
 }
 
 @vertex
-fn vs_main(
-    @builtin(vertex_index) vertex_index: u32,
-    @builtin(instance_index) instance_index: u32
-) -> VertexOutput {
+fn vs_main(@builtin(vertex_index) packed_index: u32) -> VertexOutput {
     var out: VertexOutput;
-    let instance = instances[instance_index];
-    // An indexed draw's vertex index counts its base vertex in, so it
-    // indexes the whole Arena.
-    let vertex = decode_vertex(vertices[vertex_index]);
+    // The frame's draw has no base vertex, so the vertex index is the packed
+    // index: a Meshlet record, which names the Instance, the Meshlet and the
+    // Material, and a vertex of that Meshlet (ADR 0019).
+    let index = unpack_index(packed_index);
+    let record = meshlet_records[index.record];
+    let instance = instances[record.instance_slot];
+    let first_vertex = meshlets[record.meshlet].first_vertex;
+    let vertex = decode_vertex(vertices[meshlet_vertices[first_vertex + index.vertex]]);
     let position = camera_relative_position(
         instance.anchor,
         instance.offset,
@@ -38,7 +39,7 @@ fn vs_main(
         tangent_frame.bitangent_sign
     );
     out.camera_relative_position = position;
-    out.material_id = instance.material_id;
+    out.material_id = record.material_id;
     return out;
 }
 

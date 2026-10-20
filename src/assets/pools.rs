@@ -1,5 +1,5 @@
 use crate::{
-    assets::{MaterialHandle, Mesh, MeshData, MeshHandle, MeshletData, Primitive},
+    assets::{MaterialHandle, Mesh, MeshData, MeshHandle, MeshletData},
     cooked::{CookedMesh, CookedVertex},
     render::{LoadStaging, NO_MATERIAL},
 };
@@ -38,6 +38,8 @@ impl MeshPool {
                 wgpu::BufferUsages::STORAGE,
                 size_of::<CookedVertex>() as u64,
             ),
+            // The cooked index stream, which no pass draws from: ADR 0020's
+            // BLAS builds read it.
             index_arena: arena("Index Arena", wgpu::BufferUsages::INDEX, u32_bytes),
             meshlet_arena: arena(
                 "Meshlet Arena",
@@ -207,19 +209,10 @@ impl MeshPool {
             "Mesh loaded"
         );
 
-        // A Primitive's indices count from the Mesh's first vertex.
-        let primitives = mesh
-            .primitives
-            .iter()
-            .map(|primitive| Primitive {
-                vertex_offset: vertices.offset,
-                index_offset: indices.offset + primitive.first_index,
-                index_count: primitive.index_count,
-            })
-            .collect();
         self.meshes.push(Mesh {
-            primitives,
-            material: materials.first().copied().flatten(),
+            meshlet_count: meshlet_count as u32,
+            index_count: 3 * triangle_count as u32,
+            needs_material_handle: materials.contains(&None),
         });
         Some(handle)
     }
@@ -228,8 +221,22 @@ impl MeshPool {
         &self.vertex_arena.buffer
     }
 
-    pub fn index_buffer(&self) -> &wgpu::Buffer {
-        &self.index_arena.buffer
+    /// Each Mesh's `MeshData`, at its Handle's index.
+    pub fn mesh_table(&self) -> &wgpu::Buffer {
+        &self.mesh_table
+    }
+
+    /// The Meshes' `MeshletData`.
+    pub fn meshlet_arena(&self) -> &wgpu::Buffer {
+        &self.meshlet_arena.buffer
+    }
+
+    pub fn meshlet_vertex_arena(&self) -> &wgpu::Buffer {
+        &self.meshlet_vertex_arena.buffer
+    }
+
+    pub fn meshlet_triangle_arena(&self) -> &wgpu::Buffer {
+        &self.meshlet_triangle_arena.buffer
     }
 
     fn arenas(&self) -> [&Arena; 5] {

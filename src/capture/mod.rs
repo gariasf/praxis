@@ -107,8 +107,9 @@ pub(crate) fn render_frames(
     Ok((target, frame_stats))
 }
 
-/// GPU time of the State's pass in each frame of a capture, from timestamps
-/// at the pass's boundaries (Apple GPUs have none inside passes). Metal reads
+/// GPU time of the State's passes in each frame of a capture, from
+/// timestamps at the start of its first and the end of its last (Apple GPUs
+/// have none inside passes). Metal reads
 /// a timestamp as 0 or stale unless it is resolved after its pass's submission
 /// completed (`docs/research/wgpu-capability-matrix.md`), so `read` resolves
 /// every frame at once, after the last, and one set bounds a run's length.

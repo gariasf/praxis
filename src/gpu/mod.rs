@@ -223,8 +223,6 @@ pub(crate) fn floor_features() -> wgpu::Features {
         | wgpu::Features::TEXTURE_COMPRESSION_BC
         // ADRs 0019 and 0020.
         | wgpu::Features::EXPERIMENTAL_RAY_QUERY
-        // Compacted indirect draws carry the Instance index (ADR 0019).
-        | wgpu::Features::INDIRECT_FIRST_INSTANCE
         // ADR 0013's Budgets are GPU milliseconds.
         | wgpu::Features::TIMESTAMP_QUERY
 }
@@ -239,6 +237,10 @@ pub(crate) fn floor_downlevel_flags() -> wgpu::DownlevelFlags {
         // The vertex shader reads Instances and pulls vertices from the
         // vertex Arena as storage buffers (ADRs 0005, 0019).
         | wgpu::DownlevelFlags::VERTEX_STORAGE
+        // A compute pass builds the frame's draw, which the main pass draws
+        // with one indirect call (ADR 0019).
+        | wgpu::DownlevelFlags::COMPUTE_SHADERS
+        | wgpu::DownlevelFlags::INDIRECT_EXECUTION
 }
 
 /// The binding-array elements per shader stage the Capability floor
@@ -426,10 +428,14 @@ mod tests {
             | wgpu::Features::IMMEDIATES
     }
 
-    /// Metal reports anisotropic filtering and vertex-stage storage buffers
-    /// on every adapter (wgpu-hal 30.0.1).
+    /// Metal reports anisotropic filtering, vertex-stage storage buffers and
+    /// compute shaders on every adapter, and indirect execution on the M4
+    /// Pro's GPU family (wgpu-hal 30.0.1).
     const M4_PRO_DOWNLEVEL_FLAGS: wgpu::DownlevelFlags =
-        wgpu::DownlevelFlags::ANISOTROPIC_FILTERING.union(wgpu::DownlevelFlags::VERTEX_STORAGE);
+        wgpu::DownlevelFlags::ANISOTROPIC_FILTERING
+            .union(wgpu::DownlevelFlags::VERTEX_STORAGE)
+            .union(wgpu::DownlevelFlags::COMPUTE_SHADERS)
+            .union(wgpu::DownlevelFlags::INDIRECT_EXECUTION);
 
     /// The Apple M4 Pro's limits on wgpu 30.0.1.
     fn m4_pro_limits() -> wgpu::Limits {
@@ -526,7 +532,7 @@ mod tests {
         formats[0].1 = wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X2;
 
         let error = check_floor(
-            m4_pro_features() - wgpu::Features::INDIRECT_FIRST_INSTANCE,
+            m4_pro_features() - wgpu::Features::TIMESTAMP_QUERY,
             wgpu::DownlevelFlags::empty(),
             &limits,
             &formats,
@@ -536,8 +542,10 @@ mod tests {
         assert_eq!(
             error,
             BelowCapabilityFloor {
-                missing_features: wgpu::Features::INDIRECT_FIRST_INSTANCE,
-                missing_downlevel_flags: wgpu::DownlevelFlags::VERTEX_STORAGE
+                missing_features: wgpu::Features::TIMESTAMP_QUERY,
+                missing_downlevel_flags: wgpu::DownlevelFlags::COMPUTE_SHADERS
+                    | wgpu::DownlevelFlags::INDIRECT_EXECUTION
+                    | wgpu::DownlevelFlags::VERTEX_STORAGE
                     | wgpu::DownlevelFlags::ANISOTROPIC_FILTERING,
                 formats_without_msaa_x4: vec![wgpu::TextureFormat::Depth32Float],
                 limits: vec![LimitGap {
@@ -550,7 +558,8 @@ mod tests {
         assert_eq!(
             error.to_string(),
             "adapter below the Capability floor (ADR 0021): \
-             missing feature INDIRECT_FIRST_INSTANCE; missing downlevel flag VERTEX_STORAGE; \
+             missing feature TIMESTAMP_QUERY; missing downlevel flag COMPUTE_SHADERS; \
+             missing downlevel flag INDIRECT_EXECUTION; missing downlevel flag VERTEX_STORAGE; \
              missing downlevel flag ANISOTROPIC_FILTERING; no 4x MSAA on Depth32Float; \
              max_buffer_size 2147483647 required, adapter has 268435456"
         );

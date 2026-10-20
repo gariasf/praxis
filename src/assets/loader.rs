@@ -29,9 +29,7 @@ impl AssetLoader<'_> {
     }
 
     /// Loads the Mesh `id` into the Mesh pool with the Materials its
-    /// Primitives name, each loaded once. Until M3's draw path draws each
-    /// Primitive with its own, a Mesh draws with its first Primitive's, after
-    /// a warning when another Primitive names a different one.
+    /// Primitives name, each loaded once, which each Primitive draws with.
     pub fn mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
         let mesh = self.cache.mesh(id)?;
         let mut materials = Vec::with_capacity(mesh.primitives.len());
@@ -48,9 +46,6 @@ impl AssetLoader<'_> {
                 (None, None) => None,
             };
             materials.push(material);
-        }
-        if materials.iter().any(|material| *material != materials[0]) {
-            tracing::warn!(mesh = %id, "the Mesh's Primitives name different Materials; it draws with the first's");
         }
         self.mesh_pool
             .load(self.staging, &mesh, &materials)
@@ -69,7 +64,7 @@ mod tests {
     use crate::gpu::GpuContext;
 
     #[test]
-    fn a_mesh_loads_each_primitives_material_once_and_warns_it_draws_with_the_first() {
+    fn a_mesh_loads_each_material_its_primitives_name_once_without_a_warning() {
         let context = match pollster::block_on(GpuContext::headless()) {
             Ok(context) => context,
             Err(error) if error.is::<wgpu::RequestAdapterError>() => {
@@ -128,28 +123,21 @@ mod tests {
             mesh_pool: &mut mesh_pool,
             material_pool: &mut material_pool,
         };
-        let (uniform, uniform_log) = logged(|| loader.mesh(AssetId(3)).unwrap());
-        let (mixed, mixed_log) = logged(|| loader.mesh(AssetId(4)).unwrap());
-
-        assert!(
-            !uniform_log.contains("different Materials"),
-            "{uniform_log}"
-        );
-        assert!(mixed_log.contains("different Materials"), "{mixed_log}");
-        // Each Primitive's Material loads, a Mesh's repeated one once:
-        // Material 1 for Mesh 3, then 2 and 1 for Mesh 4, and 2 for Mesh 5,
-        // before its second Primitive's fails.
+        let ((), log) = logged(|| {
+            loader.mesh(AssetId(3)).unwrap();
+            loader.mesh(AssetId(4)).unwrap();
+        });
         let Err(missing) = loader.mesh(AssetId(5)) else {
             panic!("Mesh 5 loaded without its second Primitive's Material");
         };
+
+        assert!(!log.contains("WARN"), "{log}");
+        // Each Primitive's Material loads, a Mesh's repeated one once:
+        // Material 1 for Mesh 3, then 2 and 1 for Mesh 4, and 2 for Mesh 5,
+        // before its second Primitive's fails.
         assert!(format!("{missing:#}").contains("loading a Material of Mesh"));
-        assert_eq!(loader.material(AssetId(1)).unwrap().index(), 4);
-        // Each draws with the first Material its Primitives name: 1, then 2.
-        let materials = [uniform, mixed].map(|mesh| {
-            let material = mesh_pool.get(mesh).unwrap().material;
-            material.map(MaterialHandle::index)
-        });
-        assert_eq!(materials, [Some(0), Some(1)]);
+        let next = loader.material(AssetId(1)).unwrap();
+        assert_eq!(next.index(), 4);
         std::fs::remove_dir_all(&directory).ok();
     }
 }

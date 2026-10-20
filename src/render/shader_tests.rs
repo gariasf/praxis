@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use wgpu::naga;
 
 use crate::assets::material::MaterialData;
+use crate::assets::{MeshData, MeshletData};
 use crate::cooked::CookedVertex;
 use crate::gpu::{floor_downlevel_flags, floor_features, floor_limits};
 use crate::render::bind_groups::{
@@ -235,6 +236,20 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
             material_id,
             offset,
             mesh,
+        }),
+        twin!(MeshData {
+            first_meshlet,
+            meshlet_count,
+            first_triangle,
+            triangle_count,
+            bounds_min,
+            bounds_max,
+        }),
+        twin!(MeshletData {
+            first_vertex,
+            first_triangle,
+            triangle_count,
+            material_id,
         }),
         twin!(MaterialData {
             base_color,

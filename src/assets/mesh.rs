@@ -1,17 +1,13 @@
-use crate::assets::MaterialHandle;
-
-pub struct Primitive {
-    pub vertex_offset: u32,
-    pub index_offset: u32,
-    pub index_count: u32,
-}
-
+/// A Mesh in the Mesh pool, as prepare needs it; the pool's GPU tables hold
+/// what the GPU draws it from.
 pub struct Mesh {
-    pub primitives: Vec<Primitive>,
-    /// The Material its first Primitive names, if any, which a Renderable
-    /// without a Material Handle draws every Primitive with until M3's draw
-    /// path draws each with its own.
-    pub material: Option<MaterialHandle>,
+    /// Its Meshlets: the Meshlet records each Instance of it draws with.
+    pub meshlet_count: u32,
+    /// Its triangles' indices: the packed indices each Instance of it draws.
+    pub index_count: u32,
+    /// Whether a Primitive names no Material, so that only a Renderable with
+    /// a Material Handle draws it.
+    pub needs_material_handle: bool,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]

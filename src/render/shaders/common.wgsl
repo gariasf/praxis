@@ -1,5 +1,6 @@
 // Shared by every shader module: the structs the CPU writes, the Anchor
-// composition and the vertex decode (src/render/shaders/mod.rs).
+// composition, the packed index and the vertex decode
+// (src/render/shaders/mod.rs).
 
 // Positions reach the shaders relative to the camera (ADR 0014), so the
 // camera sits at the origin and view_proj holds no translation. The camera's
@@ -50,8 +51,9 @@ struct LightUniform {
 }
 
 // An Instance's pivot as anchor plus offset, so camera motion changes no
-// Instance, and its rotation-scale; and its Mesh, or NO_MESH in a freed
-// slot (src/render/instance.rs).
+// Instance, and its rotation-scale; its Mesh, or NO_MESH in a freed slot;
+// and the Material ID that overrides its Mesh's, or NO_MATERIAL. Both are
+// declared from Rust's (src/render/shaders/mod.rs).
 struct InstanceData {
     rotation_scale: mat3x3<f32>,
     normal_matrix: mat3x3<f32>,
@@ -59,6 +61,54 @@ struct InstanceData {
     material_id: u32,
     offset: vec3<f32>,
     mesh: u32,
+}
+
+// A Mesh as the Mesh table holds it, at its Handle's index: its Meshlets,
+// whose triangles follow one another in the Meshlet triangle Arena, and the
+// box that holds its vertices, its lowest corner, then its highest.
+struct MeshData {
+    first_meshlet: u32,
+    meshlet_count: u32,
+    first_triangle: u32,
+    triangle_count: u32,
+    bounds_min: array<f32, 3>,
+    bounds_max: array<f32, 3>,
+}
+
+// A Meshlet as the Mesh pool's Meshlet Arena holds it: its first vertex in
+// the Meshlet vertex Arena, each an index into the vertex Arena; its first
+// triangle in the Meshlet triangle Arena, each three corners indexing those
+// vertices, a byte each, lowest byte first; and its Primitive's Material ID.
+struct MeshletData {
+    first_vertex: u32,
+    first_triangle: u32,
+    triangle_count: u32,
+    material_id: u32,
+}
+
+// One Meshlet of one Instance in the frame's draw, by the Instance's slot,
+// with the Material it is drawn with.
+struct MeshletRecord {
+    instance_slot: u32,
+    meshlet: u32,
+    material_id: u32,
+}
+
+// An index of the frame's draw, unpacked: the Meshlet record it is drawn
+// for, and its vertex within that record's Meshlet (ADR 0019).
+struct PackedIndex {
+    record: u32,
+    vertex: u32,
+}
+
+// The record in the bits above MESHLET_VERTEX_BITS, which is declared from
+// Rust's Meshlet vertex limit (src/render/shaders/mod.rs), the vertex below.
+fn pack_index(record: u32, vertex: u32) -> u32 {
+    return (record << MESHLET_VERTEX_BITS) | vertex;
+}
+
+fn unpack_index(index: u32) -> PackedIndex {
+    return PackedIndex(index >> MESHLET_VERTEX_BITS, index & ((1u << MESHLET_VERTEX_BITS) - 1u));
 }
 
 // A vertex as the vertex Arena stores it, 28 bytes (ADR 0018). Arrays of

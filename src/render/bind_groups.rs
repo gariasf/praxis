@@ -49,7 +49,8 @@ pub const MATERIALS: BindGroupDefinition = BindGroupDefinition {
 };
 
 /// Group 2, the scene geometry, built once since its buffers never grow: the
-/// Instances, and the vertex Arena the vertex shader pulls from (ADR 0019).
+/// Instances, the vertex Arena the vertex shader pulls from (ADR 0019), and
+/// the Mesh pool's tables of Meshes and Meshlets.
 pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
     index: 2,
     label: "Scene Geometry Bind Group",
@@ -57,14 +58,57 @@ pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
         read_only_storage(
             "instances",
             "array<InstanceData>",
-            wgpu::ShaderStages::VERTEX,
+            wgpu::ShaderStages::VERTEX.union(wgpu::ShaderStages::COMPUTE),
         ),
         read_only_storage(
             "vertices",
             "array<CookedVertex>",
             wgpu::ShaderStages::VERTEX,
         ),
+        read_only_storage("meshes", "array<MeshData>", wgpu::ShaderStages::COMPUTE),
+        read_only_storage(
+            "meshlets",
+            "array<MeshletData>",
+            wgpu::ShaderStages::VERTEX.union(wgpu::ShaderStages::COMPUTE),
+        ),
+        read_only_storage("meshlet_vertices", "array<u32>", wgpu::ShaderStages::VERTEX),
+        read_only_storage(
+            "meshlet_triangles",
+            "array<u32>",
+            wgpu::ShaderStages::COMPUTE,
+        ),
     ],
+};
+
+/// Group 3 of the culling pass: the Instance slots in use, which the CPU
+/// writes when they change, and what the pass writes: each slot's offsets in
+/// the frame's draw, and the draw, its Meshlet records, its packed indices
+/// and its indirect arguments.
+pub const FRAME_DRAW: BindGroupDefinition = BindGroupDefinition {
+    index: 3,
+    label: "Frame Draw Bind Group",
+    bindings: &[
+        uniform("instance_slot_count", "u32", wgpu::ShaderStages::COMPUTE),
+        storage("instance_offsets", "array<vec2<u32>>"),
+        storage("meshlet_records", "array<MeshletRecord>"),
+        storage("packed_indices", "array<u32>"),
+        storage("frame_draw", "FrameDraw"),
+    ],
+};
+
+/// Group 3 of the main pass: the Meshlet records of the frame's draw, which
+/// the culling pass writes.
+pub const MESHLET_RECORDS: BindGroupDefinition = BindGroupDefinition {
+    index: 3,
+    label: "Meshlet Records Bind Group",
+    bindings: &[Binding {
+        writer: Writer::Gpu,
+        ..read_only_storage(
+            "meshlet_records",
+            "array<MeshletRecord>",
+            wgpu::ShaderStages::VERTEX,
+        )
+    }],
 };
 
 /// A bind group: its index and its bindings, each numbered by its place.
@@ -96,7 +140,6 @@ pub struct Binding {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Writer {
     Cpu,
-    #[cfg_attr(not(test), allow(dead_code))]
     Gpu,
 }
 
@@ -215,6 +258,16 @@ pub(crate) const fn read_only_storage(
 ) -> Binding {
     let buffer_type = wgpu::BufferBindingType::Storage { read_only: true };
     buffer(name, wgsl_type, buffer_type, stages)
+}
+
+/// A storage buffer the compute stage reads and writes, which only the GPU
+/// writes.
+const fn storage(name: &'static str, wgsl_type: &'static str) -> Binding {
+    let buffer_type = wgpu::BufferBindingType::Storage { read_only: false };
+    Binding {
+        writer: Writer::Gpu,
+        ..buffer(name, wgsl_type, buffer_type, wgpu::ShaderStages::COMPUTE)
+    }
 }
 
 const fn buffer(

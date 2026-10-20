@@ -1,9 +1,9 @@
 //! The main pass: one forward render pass that clears the target and the
-//! depth target, then draws each Primitive of each Instance with its
-//! Material. ADR 0019 plans it as a depth pre-pass and a lit pass.
+//! depth target, then draws the culling pass's frame's draw with one
+//! indirect call, each Meshlet with its record's Material. ADR 0019 plans it
+//! as a depth pre-pass and a lit pass.
 
-use crate::render::bind_groups::{BindGroupDefinition, pipeline_layout};
-use crate::render::prepare::Draw;
+use crate::render::bind_groups::{BindGroupDefinition, MESHLET_RECORDS, pipeline_layout};
 use crate::render::shaders;
 use crate::render::targets::{self, RenderTargets};
 
@@ -13,18 +13,30 @@ pub(crate) const MAIN_PASS: &str = "main_pass";
 /// The main pass's pipeline, which draws into views of one format.
 pub struct MainPass {
     pipeline: wgpu::RenderPipeline,
+    /// Its group 3 (`MESHLET_RECORDS`).
+    meshlet_records: wgpu::BindGroup,
 }
 
 impl MainPass {
-    /// The pass for `target_format` views, given the layouts of the bind
-    /// groups its shader module declares.
+    /// The pass for `target_format` views, given the layouts of the shared
+    /// bind groups its shader module declares, which draws the Meshlet
+    /// records `meshlet_records` holds.
     pub fn new(
         device: &wgpu::Device,
         target_format: wgpu::TextureFormat,
         bind_group_layouts: &[(&BindGroupDefinition, &wgpu::BindGroupLayout)],
+        meshlet_records: &wgpu::Buffer,
     ) -> MainPass {
+        let meshlet_records_layout = MESHLET_RECORDS.layout(device);
+        let meshlet_records = MESHLET_RECORDS.bind_group(
+            device,
+            &meshlet_records_layout,
+            [("meshlet_records", meshlet_records.as_entire_binding())],
+        );
         let shader = device.create_shader_module(shaders::MAIN.descriptor());
-        let layout = pipeline_layout(device, "Main Pass Pipeline Layout", bind_group_layouts);
+        let mut layouts = bind_group_layouts.to_vec();
+        layouts.push((&MESHLET_RECORDS, &meshlet_records_layout));
+        let layout = pipeline_layout(device, "Main Pass Pipeline Layout", &layouts);
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Main Pass Pipeline"),
             layout: Some(&layout),
@@ -65,13 +77,17 @@ impl MainPass {
             multiview_mask: None,
             cache: None,
         });
-        MainPass { pipeline }
+        MainPass {
+            pipeline,
+            meshlet_records,
+        }
     }
 
     /// Records the pass into `encoder`: clears `target`, a view in this
     /// pass's format and the render targets' size, and the depth target,
-    /// then draws `draws` from the index Arena `index_buffer`, with
-    /// `bind_groups` set, timed into `timestamp_writes`.
+    /// then draws the frame's draw, its packed indices `packed_indices` and
+    /// its indirect arguments `frame_draw`, with `bind_groups` set, timed
+    /// into `timestamp_writes`.
     #[expect(clippy::too_many_arguments)]
     pub fn record(
         &self,
@@ -79,8 +95,8 @@ impl MainPass {
         target: &wgpu::TextureView,
         render_targets: &RenderTargets,
         bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
-        index_buffer: &wgpu::Buffer,
-        draws: &[Draw],
+        packed_indices: &wgpu::Buffer,
+        frame_draw: &wgpu::Buffer,
         timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
     ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -112,14 +128,8 @@ impl MainPass {
         for &(definition, bind_group) in bind_groups {
             render_pass.set_bind_group(definition.index, bind_group, &[]);
         }
-        render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-
-        for draw in draws {
-            render_pass.draw_indexed(
-                draw.indices.clone(),
-                draw.base_vertex,
-                draw.instance_index..draw.instance_index + 1,
-            );
-        }
+        render_pass.set_bind_group(MESHLET_RECORDS.index, &self.meshlet_records, &[]);
+        render_pass.set_index_buffer(packed_indices.slice(..), wgpu::IndexFormat::Uint32);
+        render_pass.draw_indexed_indirect(frame_draw, 0);
     }
 }

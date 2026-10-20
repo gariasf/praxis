@@ -306,6 +306,68 @@ fn cooked_vertices_decode_to_their_position_uv_and_tangent_frame() {
     }
 }
 
+/// A packed index holds its Meshlet record in its top 26 bits and the vertex
+/// within that record's Meshlet in its low six (ADR 0019): packing and
+/// unpacking keep both at each bit boundary, the top bit and alternating
+/// bits included, against indices written out by hand. f32 holds a 16-bit
+/// half exactly, so each index crosses the harness as two.
+#[test]
+fn a_packed_index_holds_its_meshlet_record_above_six_bits_of_vertex() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let cases: [(u32, u32, u32); 9] = [
+        (0, 0, 0x0000_0000),
+        (0, 63, 0x0000_003F),
+        (1, 0, 0x0000_0040),
+        (1, 63, 0x0000_007F),
+        (0x0200_0000, 0, 0x8000_0000),
+        (0x03FF_FFFF, 0, 0xFFFF_FFC0),
+        (0x03FF_FFFF, 63, 0xFFFF_FFFF),
+        (0x02AA_AAAA, 0x2A, 0xAAAA_AAAA),
+        (0x0155_5555, 0x15, 0x5555_5555),
+    ];
+    let halves = |value: u32| [(value >> 16) as f32, (value & 0xFFFF) as f32];
+    // `{index}` in an expression stands for the index the case packs.
+    let index = "((u32(input.x) << 16u) | u32(input.y))";
+    let unpacked = evaluate(
+        &context,
+        &"vec4<f32>(f32(unpack_index({index}).record >> 16u), \
+          f32(unpack_index({index}).record & 0xFFFFu), f32(unpack_index({index}).vertex), 0.0)"
+            .replace("{index}", index),
+        &cases.map(|(_, _, packed)| {
+            let [high, low] = halves(packed);
+            [high, low, 0.0, 0.0]
+        }),
+    );
+    let packed = evaluate(
+        &context,
+        "vec4<f32>(f32(pack_index((u32(input.x) << 16u) | u32(input.y), u32(input.z)) >> 16u), \
+         f32(pack_index((u32(input.x) << 16u) | u32(input.y), u32(input.z)) & 0xFFFFu), 0.0, 0.0)",
+        &cases.map(|(record, vertex, _)| {
+            let [high, low] = halves(record);
+            [high, low, vertex as f32, 0.0]
+        }),
+    );
+
+    for ((record, vertex, index), (unpacked, packed)) in
+        cases.into_iter().zip(unpacked.into_iter().zip(packed))
+    {
+        let [high, low] = halves(record);
+        let [index_high, index_low] = halves(index);
+        assert_eq!(
+            unpacked,
+            [high, low, vertex as f32, 0.0],
+            "{index:#010x} unpacks to the wrong record or vertex"
+        );
+        assert_eq!(
+            packed,
+            [index_high, index_low, 0.0, 0.0],
+            "record {record:#x}, vertex {vertex} packs to the wrong index"
+        );
+    }
+}
+
 /// ADR 0014's precision bar: 0.25 px at 1440p and a 45° vertical field of
 /// view, for a point 0.3 m from the camera, is 0.043 mm.
 const PRECISION_BAR: f64 = 4.3e-5;
