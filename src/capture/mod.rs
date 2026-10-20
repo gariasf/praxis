@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::gpu::GpuContext;
-use crate::render::FRAMES_IN_FLIGHT;
+use crate::render::{FRAMES_IN_FLIGHT, RenderSwitches};
 use crate::scenes::ReferenceScene;
 use crate::state::State;
 use crate::stats::FrameStats;
@@ -15,9 +15,9 @@ pub(crate) const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8
 const FRAME_COUNT: u32 = 60;
 
 /// Renders `scene`, moved with its camera by `shift` metres, into a `width` ×
-/// `height` offscreen texture for `FRAME_COUNT` frames and returns the last
-/// one's RGBA8 pixels, rows top first, with every frame's stats, its GPU
-/// stats included.
+/// `height` offscreen texture for `FRAME_COUNT` frames, as `switches` set,
+/// and returns the last one's RGBA8 pixels, rows top first, with every
+/// frame's stats, its GPU stats included.
 /// Time and camera are injected (the scene's frame delta and its camera path
 /// by frame) and nothing reads the wall clock or input, so equal arguments
 /// give equal images on one machine.
@@ -27,6 +27,7 @@ pub fn capture(
     shift: glam::DVec3,
     width: u32,
     height: u32,
+    switches: RenderSwitches,
 ) -> anyhow::Result<(Vec<u8>, Vec<FrameStats>)> {
     let (target, frame_stats) = render_frames(
         context,
@@ -36,6 +37,7 @@ pub fn capture(
         height,
         FRAME_COUNT,
         scene.frame_delta(),
+        switches,
     )?;
     Ok((read_back(context, &target)?, frame_stats))
 }
@@ -45,6 +47,7 @@ pub fn capture(
 /// every frame's stats. Up to `FRAMES_IN_FLIGHT` frames are in flight, as a
 /// window's swapchain allows: the GPU stays busy, and the CPU never runs
 /// further ahead than a window would.
+#[expect(clippy::too_many_arguments)]
 pub(crate) fn render_frames(
     context: &GpuContext,
     scene: ReferenceScene,
@@ -53,6 +56,7 @@ pub(crate) fn render_frames(
     height: u32,
     frame_count: u32,
     frame_delta: Duration,
+    switches: RenderSwitches,
 ) -> anyhow::Result<(wgpu::Texture, Vec<FrameStats>)> {
     let max_dimension = context.device.limits().max_texture_dimension_2d;
     anyhow::ensure!(
@@ -60,7 +64,15 @@ pub(crate) fn render_frames(
         "capture size {width}x{height} is outside 1 to {max_dimension} per side"
     );
 
-    let mut state = State::new(context, TARGET_FORMAT, width, height, scene, shift)?;
+    let mut state = State::new(
+        context,
+        TARGET_FORMAT,
+        width,
+        height,
+        scene,
+        shift,
+        switches,
+    )?;
     let target = context.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Capture Target"),
         size: wgpu::Extent3d {

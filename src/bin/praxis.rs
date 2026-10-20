@@ -3,9 +3,9 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::Context;
-use praxis::ReferenceScene;
 use praxis::bench::{Budgets, CompareMode, Configuration, Measurements, Verdict};
 use praxis::gpu::GpuContext;
+use praxis::{ReferenceScene, RenderSwitches};
 
 /// The capture size when the command names none: small, and 16:9 like the
 /// window.
@@ -117,7 +117,7 @@ fn bench(output: &str, configuration: Configuration, scene_names: &[String]) -> 
     std::fs::create_dir_all(output)?;
     let context = pollster::block_on(GpuContext::headless())?;
     for scene in scenes {
-        let result = praxis::bench::run(&context, scene, configuration)?;
+        let result = praxis::bench::run(&context, scene, configuration, RenderSwitches::default())?;
         let path = Path::new(output).join(format!("{}.json", scene.name()));
         std::fs::write(&path, serde_json::to_string_pretty(&result)? + "\n")?;
         writeln!(std::io::stdout(), "{result}")?;
@@ -207,7 +207,14 @@ fn capture(scene: &str, output: &str, size: &str) -> anyhow::Result<()> {
         .and_then(|(width, height)| Some((width.parse().ok()?, height.parse().ok()?)))
         .ok_or_else(|| anyhow::anyhow!("size {size:?} is not <width>x<height>"))?;
     let context = pollster::block_on(GpuContext::headless())?;
-    let (pixels, frame_stats) = praxis::capture(&context, scene, glam::DVec3::ZERO, width, height)?;
+    let (pixels, frame_stats) = praxis::capture(
+        &context,
+        scene,
+        glam::DVec3::ZERO,
+        width,
+        height,
+        RenderSwitches::default(),
+    )?;
     image::save_buffer_with_format(
         output,
         &pixels,

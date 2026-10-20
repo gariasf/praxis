@@ -72,11 +72,7 @@ pub struct CullingPass {
     frame_draw: wgpu::Buffer,
     /// Its group 3 (`FRAME_DRAW`).
     bind_group: wgpu::BindGroup,
-    capacity: DrawCapacity,
     max_workgroups_per_dimension: u32,
-    /// Set while the Instances in use need more of the draw than it holds,
-    /// which was warned about when it was set.
-    warned_of_overflow: bool,
 }
 
 impl CullingPass {
@@ -175,9 +171,7 @@ impl CullingPass {
             packed_indices,
             frame_draw,
             bind_group,
-            capacity,
             max_workgroups_per_dimension: device.limits().max_compute_workgroups_per_dimension,
-            warned_of_overflow: false,
         }
     }
 
@@ -185,28 +179,15 @@ impl CullingPass {
     /// appends the Meshlets of the Instances it draws among `frame`'s slots
     /// in use, with `bind_groups` set, timed into `timestamp_writes`. Where
     /// they need more Meshlet records or packed indices than the draw holds,
-    /// it draws the Instances that fit. It warns, once until they fit again,
-    /// where every Instance in use, culled or not, would need more.
+    /// it draws the Instances that fit and counts the others as overflowed,
+    /// which the GPU stats readback warns about.
     pub fn record(
-        &mut self,
+        &self,
         encoder: &mut wgpu::CommandEncoder,
         bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
         frame: &FrameData,
         timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
     ) {
-        let overflows = frame.meshlet_count > u64::from(self.capacity.meshlet_records)
-            || frame.index_count > u64::from(self.capacity.packed_indices);
-        if overflows && !self.warned_of_overflow {
-            tracing::warn!(
-                meshlet_records = frame.meshlet_count,
-                packed_indices = frame.index_count,
-                meshlet_record_capacity = self.capacity.meshlet_records,
-                packed_index_capacity = self.capacity.packed_indices,
-                "The frame's draw is full: Instances whose Meshlets do not fit are not drawn"
-            );
-        }
-        self.warned_of_overflow = overflows;
-
         // Each slot's offsets are the sum of the earlier slots' Meshlet
         // records and packed indices: summed by block, then the blocks.
         encoder.clear_buffer(&self.frame_draw, 0, None);

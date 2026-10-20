@@ -3,7 +3,10 @@
 //! `tests/goldens/<key>/<scene>.png`. The key is the backend, plus `-cpu` on
 //! a software driver: `metal` is recorded on the M4 Pro, and
 //! `vulkan-cpu` on CI's lavapipe (the Mesa pinned in `.github/workflows/ci.yml`).
-//! Each scene shifted by 100 km must also match its origin Golden.
+//! Each scene shifted by 100 km must also match its origin Golden, and each
+//! with culling off must match its capture with culling on, so culling
+//! removes no visible Instance; so must the helmet scene, fetched and so
+//! without a Golden, where it is fetched.
 //! A Golden is a reviewed capture from `praxis::capture`, so it catches
 //! regressions, not errors already present when it was recorded.
 //!
@@ -18,8 +21,8 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use praxis::ReferenceScene;
 use praxis::gpu::GpuContext;
+use praxis::{ReferenceScene, RenderSwitches};
 
 const SCENES: [ReferenceScene; 7] = [
     ReferenceScene::PbrSweep,
@@ -176,9 +179,33 @@ fn reference_scenes_match_their_goldens() {
         .join("golden-differences")
         .join(&key);
     let mut failures = Vec::new();
-    for scene in SCENES {
+    let helmet_is_fetched = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join(praxis::DEFAULT_MODEL)
+        .exists();
+    let helmet = helmet_is_fetched.then_some(ReferenceScene::Helmet);
+    for scene in SCENES.into_iter().chain(helmet) {
         let golden_path = golden_path(&golden_directory, scene);
-        let actual = capture(&context, scene, glam::DVec3::ZERO);
+        let actual = capture(
+            &context,
+            scene,
+            glam::DVec3::ZERO,
+            RenderSwitches::default(),
+        );
+        let unculled = capture(
+            &context,
+            scene,
+            glam::DVec3::ZERO,
+            RenderSwitches { culling: false },
+        );
+        failures.extend(mismatch(
+            &actual,
+            &unculled,
+            &format!("{}-unculled", scene.name()),
+            &difference_directory,
+        ));
+        if scene == ReferenceScene::Helmet {
+            continue;
+        }
         if !golden_path.exists() {
             // Saved so a Golden for a machine one cannot run locally (CI's
             // lavapipe) can be taken from the job's artifact.
@@ -203,7 +230,7 @@ fn reference_scenes_match_their_goldens() {
             &difference_directory,
         ));
 
-        let shifted = capture(&context, scene, FAR_SHIFT);
+        let shifted = capture(&context, scene, FAR_SHIFT, RenderSwitches::default());
         failures.extend(mismatch(
             &golden,
             &shifted,
@@ -249,10 +276,15 @@ fn mismatch(
 }
 
 /// The last frame `praxis::capture` renders of `scene`, moved by `shift`, at
-/// the Goldens' size.
-fn capture(context: &GpuContext, scene: ReferenceScene, shift: glam::DVec3) -> image::RgbaImage {
+/// the Goldens' size, as `switches` set.
+fn capture(
+    context: &GpuContext,
+    scene: ReferenceScene,
+    shift: glam::DVec3,
+    switches: RenderSwitches,
+) -> image::RgbaImage {
     let (pixels, _) =
-        praxis::capture(context, scene, shift, WIDTH, HEIGHT).expect("capture failed");
+        praxis::capture(context, scene, shift, WIDTH, HEIGHT, switches).expect("capture failed");
     image::RgbaImage::from_raw(WIDTH, HEIGHT, pixels).expect("WIDTH × HEIGHT pixels")
 }
 
@@ -266,7 +298,7 @@ fn update_goldens(context: &GpuContext, directory: &Path) {
     std::fs::create_dir_all(directory).expect("Golden directory");
     for scene in SCENES {
         let path = golden_path(directory, scene);
-        let actual = capture(context, scene, glam::DVec3::ZERO);
+        let actual = capture(context, scene, glam::DVec3::ZERO, RenderSwitches::default());
         let unchanged =
             image::open(&path).is_ok_and(|golden| golden.into_rgba8().as_raw() == actual.as_raw());
         if unchanged {

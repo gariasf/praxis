@@ -30,6 +30,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         glam::DVec3::ZERO,
         160,
         90,
+        praxis::RenderSwitches::default(),
     )
     .expect("capture failed");
     assert_eq!(frames.len(), FRAME_COUNT);
@@ -183,8 +184,15 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
             writeln!(std::io::stderr(), "skipped helmet: assets not fetched").ok();
             continue;
         }
-        let (_, frames) =
-            praxis::capture(&context, scene, glam::DVec3::ZERO, 160, 90).expect("capture failed");
+        let (_, frames) = praxis::capture(
+            &context,
+            scene,
+            glam::DVec3::ZERO,
+            160,
+            90,
+            praxis::RenderSwitches::default(),
+        )
+        .expect("capture failed");
         let (instances, triangles) = match scene {
             // Ten sweep helmets and the textured one.
             ReferenceScene::Helmet => (11, helmet_triangles),
@@ -229,8 +237,15 @@ fn camera_motion_writes_no_instances() {
     };
 
     for (scene, instances) in [(ReferenceScene::PbrSweep, 10), (ReferenceScene::UvGrid, 1)] {
-        let (_, frames) =
-            praxis::capture(&context, scene, glam::DVec3::ZERO, 160, 90).expect("capture failed");
+        let (_, frames) = praxis::capture(
+            &context,
+            scene,
+            glam::DVec3::ZERO,
+            160,
+            90,
+            praxis::RenderSwitches::default(),
+        )
+        .expect("capture failed");
         let written: Vec<u32> = frames.iter().map(|frame| frame.instances_written).collect();
         assert_eq!(written[0], instances, "{}", scene.name());
         assert!(

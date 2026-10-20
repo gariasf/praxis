@@ -47,7 +47,7 @@ pub struct State {
 impl State {
     /// A State that renders `scene`, moved with its camera by `shift` metres,
     /// into `width` × `height` views of `target_format` textures, both
-    /// non-zero, seen from the scene's camera at frame 0.
+    /// non-zero, seen from the scene's camera at frame 0, as `switches` set.
     pub fn new(
         context: &GpuContext,
         target_format: wgpu::TextureFormat,
@@ -55,17 +55,12 @@ impl State {
         height: u32,
         scene: ReferenceScene,
         shift: glam::DVec3,
+        switches: RenderSwitches,
     ) -> anyhow::Result<State> {
         let _span = tracing::info_span!("state_init").entered();
         init_compute_pool();
 
-        let mut renderer = Renderer::new(
-            context,
-            target_format,
-            width,
-            height,
-            RenderSwitches::default(),
-        );
+        let mut renderer = Renderer::new(context, target_format, width, height, switches);
         let Renderer {
             device,
             mesh_pool,

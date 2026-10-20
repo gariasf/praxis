@@ -18,7 +18,7 @@ use crate::stats::{FrameRecorder, GpuFrameStats};
 pub(crate) const TIMED_PASSES: [&str; 2] = [CULLING_PASS, MAIN_PASS];
 
 /// The Render switches a Renderer is created with and keeps. The defaults are
-/// what ships.
+/// what ships; only capture and bench pass others.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RenderSwitches {
     /// Whether the culling pass draws only the Instances whose Mesh bounds
@@ -510,14 +510,10 @@ mod tests {
             &[[-0.5, 0.0], [0.5, 0.0]],
             &[Some(red), Some(green)],
         );
-        let frame = frame_of(
-            vec![
-                instance(mesh, NO_MATERIAL, [0.0, 0.5]),
-                instance(mesh, blue.index(), [0.0, -0.5]),
-            ],
-            4,
-            12,
-        );
+        let frame = frame_of(vec![
+            instance(mesh, NO_MATERIAL, [0.0, 0.5]),
+            instance(mesh, blue.index(), [0.0, -0.5]),
+        ]);
         let (image, recorder, _) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
 
         assert_eq!(recorder.draw_calls, 1);
@@ -537,11 +533,10 @@ mod tests {
         let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
         let mesh = load_triangles(&mut renderer, &[[-0.5, 0.0], [0.5, 0.0]], &[Some(red); 2]);
         let mut drawn = |instances: u32| {
-            let frame = frame_of(
-                vec![instance(mesh, NO_MATERIAL, [0.0, 0.0]); instances as usize],
-                2 * u64::from(instances),
-                6 * u64::from(instances),
-            );
+            let frame = frame_of(vec![
+                instance(mesh, NO_MATERIAL, [0.0, 0.0]);
+                instances as usize
+            ]);
             let (_, recorder, gpu) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
             (
                 gpu.instances_drawn,
@@ -590,7 +585,7 @@ mod tests {
                 instance(mesh, NO_MATERIAL, offset)
             })
             .collect();
-        let frame = frame_of(instances, INSTANCES.into(), 3 * u64::from(INSTANCES));
+        let frame = frame_of(instances);
         let ((image, _, gpu), log) =
             logged(|| render_frame(&context, &mut renderer, &frame, SIZE, SIZE));
 
@@ -659,7 +654,8 @@ mod tests {
     /// the camera, and freed, over blocks of the culling pass's scans. With
     /// culling on, the frame's draw holds the Meshlets of exactly those
     /// whose Mesh bounds reach into the frustum by their corners in f64, in
-    /// slot order; with it off, of every Instance in use.
+    /// slot order, and Frame stats count only those drawn; with it off, of
+    /// every Instance in use.
     #[test]
     fn the_culling_pass_draws_the_instances_whose_bounds_reach_into_the_frustum() {
         let Some(context) = gpu_context() else {
@@ -771,7 +767,6 @@ mod tests {
                     }
                 })
                 .collect();
-            let in_use = (0..placed.len()).filter(|&slot| !freed(slot)).count() as u64;
             let frame = FrameData {
                 camera: CameraUniform {
                     view_proj: view_proj.to_cols_array_2d(),
@@ -779,9 +774,9 @@ mod tests {
                     offset,
                     ..CameraUniform::default()
                 },
-                ..frame_of(instances, in_use, 3 * in_use)
+                ..frame_of(instances)
             };
-            render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
+            let (_, _, gpu) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
 
             // The draw's index count, its first indirect argument, holds a
             // triangle per Instance drawn, each a Meshlet record naming its
@@ -799,6 +794,8 @@ mod tests {
                 })
                 .map(|slot| slot as u32)
                 .collect();
+            // Frame stats count the Instances drawn, so those culled show.
+            assert_eq!(gpu.instances_drawn as usize, expected.len(), "{switches:?}");
             let drawn_slots: Vec<u32> = records.iter().map(|record| record[0]).collect();
             assert_eq!(drawn_slots, expected, "{switches:?}");
         }
@@ -826,7 +823,7 @@ mod tests {
         load_triangles(renderer, &[[3.0, 3.0]], &[None]);
         let mesh = load_triangles(renderer, &[[0.0, 0.0]], &[None]);
         let red = emissive_material(renderer, [1.0, 0.0, 0.0]);
-        frame_of(vec![instance(mesh, red.index(), [0.0, 0.0])], 1, 3)
+        frame_of(vec![instance(mesh, red.index(), [0.0, 0.0])])
     }
 
     /// A Material that is black and unlit, so only its `emissive` colour
@@ -906,9 +903,8 @@ mod tests {
     }
 
     /// Frame data that writes `instances` into the first slots, seen with an
-    /// identity view-projection, whose Meshes hold `meshlet_count` Meshlets
-    /// and `index_count` indices in all.
-    fn frame_of(instances: Vec<InstanceData>, meshlet_count: u64, index_count: u64) -> FrameData {
+    /// identity view-projection.
+    fn frame_of(instances: Vec<InstanceData>) -> FrameData {
         let slots = instances.len();
         FrameData {
             camera: CameraUniform {
@@ -917,8 +913,6 @@ mod tests {
             },
             light: LightUniform::default(),
             instance_slot_count: slots as u32,
-            meshlet_count,
-            index_count,
             instances,
             instance_writes: vec![InstanceWrite {
                 first_slot: 0,

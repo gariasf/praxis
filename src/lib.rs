@@ -35,6 +35,7 @@ mod transform;
 
 pub use assets::cooked;
 pub use capture::capture;
+pub use render::RenderSwitches;
 pub use scenes::ReferenceScene;
 pub use state::DEFAULT_MODEL;
 pub use stats::{FrameStats, GpuFrameStats};
@@ -172,6 +173,7 @@ impl WindowShell {
             size.height.max(1),
             ReferenceScene::Helmet,
             glam::DVec3::ZERO,
+            RenderSwitches::default(),
         )?;
 
         Ok(Self {

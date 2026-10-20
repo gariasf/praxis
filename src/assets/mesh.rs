@@ -1,10 +1,6 @@
 /// A Mesh in the Mesh pool, as prepare needs it; the pool's GPU tables hold
 /// what the GPU draws it from.
 pub struct Mesh {
-    /// Its Meshlets: the Meshlet records each Instance of it draws with.
-    pub meshlet_count: u32,
-    /// Its triangles' indices: the packed indices each Instance of it draws.
-    pub index_count: u32,
     /// Whether a Primitive names no Material, so that only a Renderable with
     /// a Material Handle draws it.
     pub needs_material_handle: bool,
