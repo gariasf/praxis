@@ -1,3 +1,4 @@
+pub mod acceleration_structures;
 pub mod bind_groups;
 pub mod culling_pass;
 pub mod instance;
@@ -15,6 +16,7 @@ mod shader_function_tests;
 #[cfg(test)]
 mod shader_tests;
 
+pub use acceleration_structures::AccelerationStructureBytes;
 pub use instance::{INSTANCE_CAPACITY, InstanceData, NO_MATERIAL, NO_MESH};
 pub use prepare::{FrameData, FramePreparer};
 pub(crate) use renderer::TIMED_PASSES;

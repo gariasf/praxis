@@ -250,6 +250,9 @@ impl State {
     pub fn frame_stats(&self) -> FrameStats {
         FrameStats {
             gpu_memory_bytes: self.renderer.gpu_memory_bytes(),
+            estimated_acceleration_structure_bytes: self
+                .renderer
+                .estimated_acceleration_structure_bytes(),
             arena_bytes_in_use: self.renderer.mesh_pool.arena_bytes_in_use(),
             allocator_report_bytes: self.renderer.allocator_report_bytes(),
             ..self.recorder.stats()

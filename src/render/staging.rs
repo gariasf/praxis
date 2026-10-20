@@ -147,9 +147,10 @@ impl FrameStaging {
 const LOAD_CHUNK_BYTES: u64 = 1 << 20;
 
 /// Staging for load-time uploads (ADR 0017): each write goes through a
-/// `StagingBelt` into a copy on one encoder, which `submit` sends ahead of
-/// the next frame's. The belt goes with it, so its staging buffers live only
-/// until the GPU has run the copies and never count in `gpu_memory_bytes`.
+/// `StagingBelt` into a copy on one encoder, with the BLAS builds that read
+/// them, which `submit` sends ahead of the next frame's. The belt goes with
+/// it, so its staging buffers live only until the GPU has run the copies and
+/// never count in `gpu_memory_bytes`.
 pub struct LoadStaging {
     device: wgpu::Device,
     pending: Option<(wgpu::util::StagingBelt, wgpu::CommandEncoder)>,
@@ -230,6 +231,13 @@ impl LoadStaging {
             },
             size,
         );
+    }
+
+    /// Records `entry`'s BLAS build after the copies recorded so far, so it
+    /// reads what they write.
+    pub fn build_blas(&mut self, entry: &wgpu::BlasBuildEntry<'_>) {
+        let (_, encoder) = self.pending();
+        encoder.build_acceleration_structures(std::iter::once(entry), std::iter::empty());
     }
 
     /// The belt and encoder of the copies not yet submitted.

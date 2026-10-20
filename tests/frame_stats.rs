@@ -46,26 +46,43 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // of Instance slots in use.
     assert_eq!(frames[0].uploaded_bytes, 10 * 128 + 96 + 192 + 4);
     assert_eq!(last.uploaded_bytes, 96 + 192);
-    // Five 1×1 RGBA8 neutral Textures, one per Channel (the spheres sample
-    // no other), the Mesh pool's five 16 MiB Arenas and its Mesh table of
-    // 65,536 Meshes of 40 bytes, 256 Materials of 80 bytes, the camera and
-    // light uniforms, 524,288 Instances of 128 bytes, the culling pass's
-    // 4-byte Instance slot count and 8-byte offsets for each slot and block
-    // of 256 slots, the frame's draw of 2^20 Meshlet records of 12 bytes,
-    // 2^24 packed indices of 4 bytes and 28 bytes of indirect arguments and
-    // counts, the 160×90 Depth32Float texture at 4 samples, its 4x RGBA8
-    // colour, which Apple GPUs keep in tile memory, so it counts nothing on
-    // Metal, three staging slots of the first frame's 1572 uploaded bytes
-    // rounded up to 2048, and the GPU stats readback: its resolve buffer of a
-    // begin and an end timestamp of 8 bytes for each of the three passes, and
-    // six slots of 80 bytes. The load's staging is gone.
+    // The sphere's triangles: 48 × 24 quads of two triangles but one at each
+    // pole.
+    let triangles = 48 * 24 * 2 - 2 * 48;
+    // Its compacted BLAS, by the bytes per triangle measured on this
+    // backend, an estimate (#202).
+    let compacted_blas_bytes_per_triangle = match context.backend() {
+        wgpu::Backend::Vulkan => 104.0,
+        _ => 45.5,
+    };
+    let acceleration_structure_bytes =
+        (triangles as f64 * compacted_blas_bytes_per_triangle).round() as u64;
+    assert_eq!(
+        last.estimated_acceleration_structure_bytes,
+        acceleration_structure_bytes
+    );
+    // The acceleration structures, five 1×1 RGBA8 neutral Textures, one per
+    // Channel (the spheres sample no other), the Mesh pool's five 16 MiB
+    // Arenas and its Mesh table of 65,536 Meshes of 40 bytes, 256 Materials
+    // of 80 bytes, the camera and light uniforms, 524,288 Instances of 128
+    // bytes, the culling pass's 4-byte Instance slot count and 8-byte
+    // offsets for each slot and block of 256 slots, the frame's draw of 2^20
+    // Meshlet records of 12 bytes, 2^24 packed indices of 4 bytes and 28
+    // bytes of indirect arguments and counts, the 160×90 Depth32Float
+    // texture at 4 samples, its 4x RGBA8 colour, which Apple GPUs keep in
+    // tile memory, so it counts nothing on Metal, three staging slots of the
+    // first frame's 1572 uploaded bytes rounded up to 2048, and the GPU stats
+    // readback: its resolve buffer of a begin and an end timestamp of 8 bytes
+    // for each of the three passes, and six slots of 80 bytes. The load's
+    // staging is gone.
     let multisampled_color = match context.backend() {
         wgpu::Backend::Metal => 0,
         _ => 160 * 90 * 4 * 4,
     };
     assert_eq!(
         last.gpu_memory_bytes,
-        5 * 4
+        acceleration_structure_bytes
+            + 5 * 4
             + 5 * 16 * MEBIBYTE
             + 65_536 * 40
             + 256 * 80
@@ -83,12 +100,11 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + 3 * 2 * 8
             + 6 * 80
     );
-    // One UV sphere in the Arenas: 48 × 24 quads of two triangles but one at
-    // each pole, of three u32s, and 25 rings of 49 vertices of 28 bytes, less
-    // the one vertex at each pole that only a dropped triangle used, which
-    // the cook's weld drops; and its Meshlets as its Blob holds them, 16
-    // bytes each, with a u32 per triangle and per Meshlet vertex.
-    let triangles = 48 * 24 * 2 - 2 * 48;
+    // One UV sphere in the Arenas: its triangles of three u32s, and 25 rings
+    // of 49 vertices of 28 bytes, less the one vertex at each pole that only
+    // a dropped triangle used, which the cook's weld drops; and its Meshlets
+    // as its Blob holds them, 16 bytes each, with a u32 per triangle and per
+    // Meshlet vertex.
     let sphere = CookedCache::new(COOKED_CACHE_DIRECTORY)
         .mesh(AssetId::new(
             AssetSource::Scene(ReferenceScene::PbrSweep.name()),
