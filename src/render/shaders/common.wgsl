@@ -50,13 +50,15 @@ struct LightUniform {
 }
 
 // An Instance's pivot as anchor plus offset, so camera motion changes no
-// Instance, and its rotation-scale.
+// Instance, and its rotation-scale; and its Mesh, or NO_MESH in a freed
+// slot (src/render/instance.rs).
 struct InstanceData {
     rotation_scale: mat3x3<f32>,
     normal_matrix: mat3x3<f32>,
     anchor: vec3<i32>,
     material_id: u32,
     offset: vec3<f32>,
+    mesh: u32,
 }
 
 // A vertex as the vertex Arena stores it, 28 bytes (ADR 0018). Arrays of

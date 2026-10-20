@@ -6,7 +6,7 @@ use crate::assets::MeshPool;
 use crate::camera::{Camera, projection_matrix};
 use crate::components::{DirectionalLight, MaterialRef, MeshRef, PointLight};
 use crate::render::instance::{anchor_and_offset, padded_columns};
-use crate::render::{CameraUniform, INSTANCE_CAPACITY, InstanceData, LightUniform};
+use crate::render::{CameraUniform, INSTANCE_CAPACITY, InstanceData, LightUniform, NO_MESH};
 use crate::time::FixedTime;
 use crate::transform::{PreviousWorldTransform, WorldTransform};
 
@@ -80,12 +80,16 @@ pub struct Draw {
 }
 
 /// Each Renderable's slot in the Instance buffer, kept until it stops being a
-/// Renderable; a freed slot is taken again before a fresh one, and once all
-/// `INSTANCE_CAPACITY` are taken a Renderable is refused one.
+/// Renderable or is not drawn; a slot freed in an earlier frame is taken
+/// again before a fresh one, and once all `INSTANCE_CAPACITY` are taken a
+/// Renderable is refused one.
 #[derive(Default)]
 struct InstanceSlots {
     by_entity: bevy_ecs::entity::EntityHashMap<u32>,
     free: Vec<u32>,
+    /// Slots freed this frame, which take an Instance with no Mesh before
+    /// they join `free`.
+    freed: Vec<u32>,
     /// One past the highest slot taken.
     end: u32,
     /// Renderables refused a slot and not yet given one, each warned about
@@ -120,7 +124,7 @@ impl InstanceSlots {
     fn free(&mut self, entity: Entity) {
         self.refused.remove(&entity);
         if let Some(slot) = self.by_entity.remove(&entity) {
-            self.free.push(slot);
+            self.freed.push(slot);
         }
     }
 }
@@ -162,14 +166,15 @@ impl FramePreparer {
     /// blended between its two newest Ticks (ADR 0022). A Renderable draws
     /// with its Material Handle, else with the Material its Mesh's Primitives
     /// name (`Mesh::material`); one whose Mesh is not in `mesh_pool`, or that
-    /// has neither, is skipped. One that finds the Instance buffer full is
-    /// refused, warned about once and counted every frame, and neither
-    /// written nor drawn until a slot frees.
+    /// has neither, is skipped and frees its slot. One that finds the
+    /// Instance buffer full is refused, warned about once and counted every
+    /// frame, and neither written nor drawn until a slot frees.
     ///
     /// Only new Renderables, blended ones and those whose World transform,
     /// Mesh or Material changed since the last `prepare` write their
-    /// Instance. It ends the World's change window (`World::clear_trackers`),
-    /// so it is the frame's last World read, once per frame.
+    /// Instance, and a slot freed since writes an Instance with no Mesh. It
+    /// ends the World's change window (`World::clear_trackers`), so it is the
+    /// frame's last World read, once per frame.
     pub fn prepare(
         &mut self,
         world: &mut World,
@@ -231,6 +236,7 @@ impl FramePreparer {
                     handle = mesh_ref.0.0,
                     "MeshHandle not in pool, skipping entity"
                 );
+                instance_slots.free(entity);
                 continue;
             };
             let Some(material) = material_ref
@@ -242,6 +248,7 @@ impl FramePreparer {
                     ?entity,
                     "Renderable has no Material Handle and its Mesh's Primitives name no Material, skipping it"
                 );
+                instance_slots.free(entity);
                 continue;
             };
             let Some((slot, is_new)) = instance_slots.get_or_take(entity) else {
@@ -253,7 +260,7 @@ impl FramePreparer {
                 || is_new
                 || current.is_changed()
                 || previous.is_some()
-                || (mesh_ref.is_changed() && material_ref.is_none())
+                || mesh_ref.is_changed()
                 || material_ref.is_some_and(|material_ref| material_ref.is_changed())
                 || lost_material_handle.contains(&entity)
             {
@@ -268,7 +275,7 @@ impl FramePreparer {
                         anchor,
                         material_id: material.index(),
                         offset,
-                        _pad: 0,
+                        mesh: mesh_ref.0.0,
                     },
                 );
             }
@@ -280,6 +287,22 @@ impl FramePreparer {
                     instance_index: slot,
                 }));
         }
+        // A slot freed this frame, or every free slot when every Instance is
+        // written again, takes an Instance with no Mesh, so the GPU no longer
+        // draws it; Renderables may take it from the next frame.
+        let rewritten_free_slots = if *rewrite_every_instance {
+            instance_slots.free.as_slice()
+        } else {
+            &[]
+        };
+        for &slot in instance_slots.freed.iter().chain(rewritten_free_slots) {
+            let freed = InstanceData {
+                mesh: NO_MESH,
+                ..bytemuck::Zeroable::zeroed()
+            };
+            frame.write_instance(slot, freed);
+        }
+        instance_slots.free.append(&mut instance_slots.freed);
         *rewrite_every_instance = false;
         // Ends the window in which prepare sees changes and removals, and
         // drains the removals, which otherwise pile up.
@@ -453,7 +476,11 @@ mod tests {
         assert_eq!(frames.preparer.frame().instance_writes.len(), 1);
         assert!(frames.prepare().is_empty());
 
+        // A freed slot is written an Instance with no Mesh, which draws
+        // nothing.
         frames.world.despawn(second);
+        assert_eq!(frames.prepare(), [1]);
+        assert_eq!(frames.preparer.frame().instances[0].mesh, NO_MESH);
         assert!(frames.prepare().is_empty());
 
         // The freed slot is taken again; the others keep theirs.
@@ -470,14 +497,14 @@ mod tests {
             assert_eq!(frames.prepare(), [slot]);
         }
 
-        // An entity that loses its Mesh is no Renderable: it frees its slot.
+        // An entity that loses its Mesh is no Renderable: it frees its slot,
+        // which no Renderable takes before the next frame, so a spawn in the
+        // same frame takes a fresh one.
         frames.world.entity_mut(first).remove::<MeshRef>();
         frames.spawn(4.0);
-        assert_eq!(frames.prepare(), [0]);
-
-        // With no slot free, a spawn takes a fresh one.
+        assert_eq!(frames.prepare(), [3, 0]);
         frames.spawn(5.0);
-        assert_eq!(frames.prepare(), [3]);
+        assert_eq!(frames.prepare(), [0]);
     }
 
     #[test]
@@ -510,8 +537,11 @@ mod tests {
         assert_eq!(log.matches("Renderable refused").count(), 1, "{log:?}");
         assert!(log.contains(&format!("{past_capacity:?}")), "{log:?}");
 
-        // It takes the slot another Renderable leaves.
+        // It takes the slot another Renderable leaves, from the frame after.
         frames.world.despawn(filled[7]);
+        assert_eq!(frames.prepare(), [7]);
+        assert_eq!(frames.preparer.frame().instances[0].mesh, NO_MESH);
+        assert_eq!(frames.preparer.renderables_refused(), 1);
         assert_eq!(frames.prepare(), [7]);
         assert_eq!(frames.preparer.frame().instances[0].offset, [3.0, 0.0, 0.0]);
         assert_eq!(frames.preparer.renderables_refused(), 0);
@@ -563,7 +593,7 @@ mod tests {
     }
 
     #[test]
-    fn a_renderable_draws_with_its_material_handle_else_with_its_meshs_material() {
+    fn an_instance_names_its_mesh_and_draws_with_its_material_handle_else_its_meshs() {
         let Some(mut frames) = Frames::new() else {
             return;
         };
@@ -574,38 +604,39 @@ mod tests {
                     .load(&mut frames.staging, &mesh(3, vec![0, 1, 2]), &[material]);
             mesh.expect("a triangle fits")
         });
+        let first_mesh = frames.mesh;
         let entity = frames
             .world
-            .spawn((Transform::IDENTITY, MeshRef(frames.mesh)))
+            .spawn((Transform::IDENTITY, MeshRef(first_mesh)))
             .id();
-        // The Material IDs of the Instances the next frame writes.
-        let written_material_ids = |frames: &mut Frames| -> Vec<u32> {
+        // The Mesh and the Material ID of each Instance the next frame writes.
+        let written = |frames: &mut Frames| -> Vec<(u32, u32)> {
             frames.prepare();
             let instances = &frames.preparer.frame().instances;
             instances
                 .iter()
-                .map(|instance| instance.material_id)
+                .map(|instance| (instance.mesh, instance.material_id))
                 .collect()
         };
-        assert_eq!(written_material_ids(&mut frames), [MESH_MATERIAL.index()]);
+        let mesh_material = MESH_MATERIAL.index();
+        assert_eq!(written(&mut frames), [(first_mesh.0, mesh_material)]);
 
         frames
             .world
             .entity_mut(entity)
             .insert(MaterialRef(MaterialHandle(7)));
-        assert_eq!(written_material_ids(&mut frames), [7]);
-        // Under its Handle, another Mesh leaves its Instance as it was.
+        assert_eq!(written(&mut frames), [(first_mesh.0, 7)]);
         frames.world.entity_mut(entity).insert(MeshRef(other_mesh));
-        assert!(written_material_ids(&mut frames).is_empty());
-        // Without it, it draws with its Mesh's Material, and so after a
-        // change of Mesh.
+        assert_eq!(written(&mut frames), [(other_mesh.0, 7)]);
+        // Without its Handle, it draws with its Mesh's Material, and so after
+        // a change of Mesh.
         frames.world.entity_mut(entity).remove::<MaterialRef>();
-        assert_eq!(written_material_ids(&mut frames), [6]);
-        frames.world.entity_mut(entity).insert(MeshRef(frames.mesh));
-        assert_eq!(written_material_ids(&mut frames), [MESH_MATERIAL.index()]);
-        // With neither Material, it is not drawn.
+        assert_eq!(written(&mut frames), [(other_mesh.0, 6)]);
+        frames.world.entity_mut(entity).insert(MeshRef(first_mesh));
+        assert_eq!(written(&mut frames), [(first_mesh.0, mesh_material)]);
+        // With neither Material, it is not drawn, and its slot draws nothing.
         frames.world.entity_mut(entity).insert(MeshRef(bare_mesh));
-        assert!(written_material_ids(&mut frames).is_empty());
+        assert_eq!(written(&mut frames), [(NO_MESH, 0)]);
         assert!(frames.preparer.frame().draws.is_empty());
     }
 

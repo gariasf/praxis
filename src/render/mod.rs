@@ -13,7 +13,7 @@ mod shader_function_tests;
 #[cfg(test)]
 mod shader_tests;
 
-pub use instance::{INSTANCE_CAPACITY, InstanceData, NO_MATERIAL};
+pub use instance::{INSTANCE_CAPACITY, InstanceData, NO_MATERIAL, NO_MESH};
 pub(crate) use main_pass::MAIN_PASS;
 pub use prepare::{FrameData, FramePreparer};
 pub use renderer::Renderer;
