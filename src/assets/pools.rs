@@ -300,6 +300,11 @@ impl MeshPool {
         }
     }
 
+    /// The BLAS of `handle`'s Mesh, or None when the pool has no such Mesh.
+    pub fn blas(&self, handle: MeshHandle) -> Option<&wgpu::Blas> {
+        self.blases.get(handle.0 as usize)
+    }
+
     pub fn vertex_arena(&self) -> &wgpu::Buffer {
         &self.vertex_arena.buffer
     }
@@ -560,6 +565,7 @@ pub(crate) mod tests {
         let bytes = AccelerationStructureBytes {
             per_blas_triangle: 100.0,
             per_compacted_blas_triangle: 50.0,
+            per_tlas_instance: 0.0,
         };
         let mut staging = LoadStaging::new(context.device.clone());
         let mut pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
@@ -595,7 +601,7 @@ pub(crate) mod tests {
 
     /// A one-Primitive Mesh of a triangle about (0.8, 0) in mesh space, at
     /// z 0.
-    fn triangle_about_x() -> CookedMesh {
+    pub(crate) fn triangle_about_x() -> CookedMesh {
         let mut triangle = mesh(3, vec![0, 1, 2]);
         triangle.vertices = [[0.6, -0.2], [1.0, -0.2], [0.8, 0.2]]
             .map(|[x, y]| CookedVertex {
@@ -608,7 +614,7 @@ pub(crate) mod tests {
 
     /// What a ray down -Z from 1 m above each of `points`, in `tlas`'s
     /// frame, hits within 2 m: the tag of the Instance it hits.
-    fn trace_down(
+    pub(crate) fn trace_down(
         context: &GpuContext,
         tlas: &wgpu::Tlas,
         points: &[[f32; 3]],

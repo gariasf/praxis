@@ -9,7 +9,7 @@ use crate::render::readback::GpuStatsReadback;
 use crate::render::targets::RenderTargets;
 use crate::render::{
     AccelerationStructureBytes, CameraUniform, FrameData, FrameStaging, INSTANCE_CAPACITY,
-    InstanceData, LightUniform, LoadStaging,
+    InstanceData, LightUniform, LoadStaging, STATIC_TLAS_CAPACITY, StaticTlas,
 };
 use crate::stats::{FrameRecorder, GpuFrameStats};
 
@@ -43,8 +43,8 @@ impl RenderSwitches {
 
 /// Draws Frame data into a target view, the window's surface or an offscreen
 /// texture, from GPU resources and Pools it owns; it reads no ECS World. It
-/// holds the bind groups passes share and the render targets, and calls the
-/// passes in ADR 0019's order.
+/// holds the bind groups passes share, the render targets and the static
+/// TLAS, and calls the passes in ADR 0019's order.
 pub struct Renderer {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
@@ -63,6 +63,7 @@ pub struct Renderer {
     instance_buffer: wgpu::Buffer,
     /// The Instances and the vertex Arena (`SCENE_GEOMETRY`).
     scene_geometry_bind_group: wgpu::BindGroup,
+    static_tlas: StaticTlas,
     /// What its acceleration structures are estimated to take.
     acceleration_structure_bytes: AccelerationStructureBytes,
     /// Set when a frame's uploads failed after it queued Instance writes,
@@ -203,6 +204,7 @@ impl Renderer {
 
         let render_targets = RenderTargets::new(&device, target_format, width, height);
         let gpu_stats = GpuStatsReadback::new(&device, queue.get_timestamp_period());
+        let static_tlas = StaticTlas::new(&device, STATIC_TLAS_CAPACITY);
 
         Self {
             mesh_pool,
@@ -220,6 +222,7 @@ impl Renderer {
             frame_bind_group,
             instance_buffer,
             scene_geometry_bind_group,
+            static_tlas,
             acceleration_structure_bytes: AccelerationStructureBytes::estimate(context.backend()),
             lost_instance_writes: false,
             uploaded_instance_slot_count: 0,
@@ -244,10 +247,11 @@ impl Renderer {
     }
 
     /// Records the copies of `frame`'s uniforms, the Instances it writes and
-    /// its Instance slot count, if it changed, into the frame's encoder, which
-    /// `render` submits; every upload is followed by a render. First it
-    /// submits the loads staged since the last frame, and, when they loaded
-    /// Meshes, waits for the GPU to build their BLASes and compacts them.
+    /// its Instance slot count, if it changed, and the static TLAS's rebuild,
+    /// if they change it, into the frame's encoder, which `render` submits;
+    /// every upload is followed by a render. First it submits the loads
+    /// staged since the last frame, and, when they loaded Meshes, waits for
+    /// the GPU to build their BLASes and compacts them.
     pub fn upload(&mut self, frame: &FrameData, recorder: &mut FrameRecorder) {
         let started = Instant::now();
         debug_assert!(
@@ -255,7 +259,8 @@ impl Renderer {
             "an upload whose frame was not rendered"
         );
         // Loads staged since the last frame land before its copies and
-        // draws, and their BLASes are compacted before any TLAS takes them.
+        // draws, and their BLASes are compacted before the static TLAS
+        // takes them.
         self.load_staging.submit(&self.queue);
         self.mesh_pool.compact_blases(&self.queue);
         let mut encoder = create_frame_encoder(&self.device);
@@ -291,6 +296,9 @@ impl Renderer {
             recorder.instances_written += frame.instances.len() as u32;
             self.uploaded_instance_slot_count = frame.instance_slot_count;
         }
+        self.static_tlas
+            .update(frame, &self.mesh_pool, &mut encoder);
+        recorder.static_instances_left_out = self.static_tlas.instances_left_out();
         self.frame_encoder = Some(encoder);
         recorder.stage("upload", started);
     }
@@ -404,8 +412,8 @@ impl Renderer {
     /// measured on its backend, since wgpu exposes no acceleration-structure
     /// size (ADR 0017).
     pub fn estimated_acceleration_structure_bytes(&self) -> u64 {
-        self.mesh_pool
-            .estimated_blas_bytes(&self.acceleration_structure_bytes)
+        let bytes = &self.acceleration_structure_bytes;
+        self.mesh_pool.estimated_blas_bytes(bytes) + self.static_tlas.estimated_bytes(bytes)
     }
 }
 
@@ -951,6 +959,7 @@ mod tests {
             instance_writes: vec![InstanceWrite {
                 first_slot: 0,
                 instances: 0..slots,
+                moving: false,
             }],
         }
     }
