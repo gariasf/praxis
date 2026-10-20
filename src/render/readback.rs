@@ -1,16 +1,17 @@
 //! Each frame's GPU stats come back through a ring of buffers the CPU maps
-//! for reading: its passes' timestamps, a few frames late. Only the main
-//! thread submits and polls, and it never waits on a map while it renders
-//! (ADR 0016): a readback whose slot is not ready is skipped and counted;
-//! `flush` waits, at the end of a run. Metal reads timestamps resolved
-//! before their pass's submission completed as 0 or stale
-//! (`docs/research/wgpu-capability-matrix.md`), so a frame's timestamps
-//! are resolved only once its submission completed.
+//! for reading: the counts of the frame's draw and its passes' timestamps,
+//! a few frames late. Only the main thread submits and polls, and it never
+//! waits on a map while it renders (ADR 0016): a readback whose slot is not
+//! ready is skipped and counted; `flush` waits, at the end of a run. Metal
+//! reads timestamps resolved before their pass's submission completed as 0
+//! or stale (`docs/research/wgpu-capability-matrix.md`), so a frame's
+//! timestamps are resolved only once its submission completed.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::time::Duration;
 
+use crate::render::culling_pass::FrameDraw;
 use crate::render::{FRAMES_IN_FLIGHT, TIMED_PASSES};
 use crate::stats::{FrameRecorder, GpuFrameStats};
 
@@ -26,6 +27,9 @@ const SLOT_COUNT: u64 = 2 * COMPLETION_LAG;
 const QUERIES_PER_FRAME: usize = 2 * TIMED_PASSES.len();
 
 const TIMESTAMP_BYTES: u64 = QUERIES_PER_FRAME as u64 * wgpu::QUERY_SIZE as u64;
+
+/// Where a slot holds the frame's timestamps, after its draw's counts.
+const TIMESTAMP_OFFSET: u64 = (size_of::<FrameDraw>() as u64).next_multiple_of(8);
 
 /// What a slot's map callback reported.
 const MAP_PENDING: u8 = 0;
@@ -51,7 +55,7 @@ pub struct GpuStatsReadback {
 }
 
 struct Slot {
-    /// Its frame's timestamps.
+    /// Its frame's draw, then its timestamps.
     buffer: wgpu::Buffer,
     state: SlotState,
     map_result: Arc<AtomicU8>,
@@ -60,11 +64,12 @@ struct Slot {
 #[derive(Clone, Copy)]
 enum SlotState {
     Free,
-    /// The frame's timestamps wait for its submission to complete.
+    /// The frame's counts are copied in; its timestamps wait for its
+    /// submission to complete.
     Recorded {
         frame: u64,
     },
-    /// The frame's timestamps are copied in, and the buffer maps.
+    /// The frame's timestamps are copied in too, and the buffer maps.
     Mapping {
         frame: u64,
     },
@@ -104,7 +109,7 @@ impl GpuStatsReadback {
                 .map(|_| Slot {
                     buffer: buffer(
                         "GPU Stats Readback Slot",
-                        TIMESTAMP_BYTES,
+                        TIMESTAMP_OFFSET + TIMESTAMP_BYTES,
                         wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
                     ),
                     state: SlotState::Free,
@@ -153,9 +158,15 @@ impl GpuStatsReadback {
         })
     }
 
-    /// Ends the frame `begin_frame` started, which is marked completed once
-    /// the GPU has run it.
-    pub fn end_frame(&mut self, encoder: &mut wgpu::CommandEncoder) {
+    /// Ends the frame `begin_frame` started: copies its draw's counts,
+    /// `frame_draw`, into its slot, and marks it completed once the GPU has
+    /// run it.
+    pub fn end_frame(&mut self, encoder: &mut wgpu::CommandEncoder, frame_draw: &wgpu::Buffer) {
+        let slot = &self.slots[slot_index(self.frame)];
+        if matches!(slot.state, SlotState::Recorded { frame } if frame == self.frame) {
+            let size = size_of::<FrameDraw>() as u64;
+            encoder.copy_buffer_to_buffer(frame_draw, 0, &slot.buffer, 0, size);
+        }
         let (frame, frames_completed) = (self.frame, self.frames_completed.clone());
         encoder.on_submitted_work_done(move || {
             frames_completed.fetch_max(frame + 1, Ordering::Release);
@@ -208,7 +219,13 @@ impl GpuStatsReadback {
         let queries = first_query..first_query + QUERIES_PER_FRAME as u32;
         encoder.resolve_query_set(&self.query_set, queries, &self.resolve_buffer, 0);
         let slot = &mut self.slots[index];
-        encoder.copy_buffer_to_buffer(&self.resolve_buffer, 0, &slot.buffer, 0, TIMESTAMP_BYTES);
+        encoder.copy_buffer_to_buffer(
+            &self.resolve_buffer,
+            0,
+            &slot.buffer,
+            TIMESTAMP_OFFSET,
+            TIMESTAMP_BYTES,
+        );
         slot.map_result.store(MAP_PENDING, Ordering::Relaxed);
         let map_result = slot.map_result.clone();
         encoder.map_buffer_on_submit(&slot.buffer, wgpu::MapMode::Read, .., move |result| {
@@ -230,7 +247,11 @@ impl GpuStatsReadback {
             MAP_DONE => {
                 match slot.buffer.get_mapped_range(..) {
                     Ok(view) => {
-                        let ticks: [u64; QUERIES_PER_FRAME] = bytemuck::pod_read_unaligned(&view);
+                        let draw: FrameDraw =
+                            bytemuck::pod_read_unaligned(&view[..size_of::<FrameDraw>()]);
+                        let ticks: [u64; QUERIES_PER_FRAME] = bytemuck::pod_read_unaligned(
+                            &view[TIMESTAMP_OFFSET as usize..][..TIMESTAMP_BYTES as usize],
+                        );
                         let time = |begin: u64, end: u64| {
                             let ticks = end.saturating_sub(begin) as f64;
                             Duration::from_nanos((ticks * self.nanoseconds_per_tick) as u64)
@@ -242,6 +263,9 @@ impl GpuStatsReadback {
                                 (TIMED_PASSES[pass], time(begin, end))
                             }),
                             frame_time: time(ticks[0], ticks[QUERIES_PER_FRAME - 1]),
+                            instances_drawn: draw.instances_drawn,
+                            triangles_drawn: draw.triangles_drawn(),
+                            instances_overflowed: draw.instances_overflowed,
                         });
                     }
                     Err(error) => tracing::error!(frame, %error, "GPU stats readback not mapped"),
@@ -313,6 +337,12 @@ mod tests {
             Err(error) => panic!("headless GPU context failed: {error:#}"),
         };
         let new_ring = || GpuStatsReadback::new(&context.device, 1.0);
+        let frame_draw = context.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Readback Test Frame Draw"),
+            size: size_of::<FrameDraw>() as u64,
+            usage: wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
         // Records a frame, and submits it and waits for it if `completes`:
         // whether it is timed, the readbacks it skipped, the frames it read.
         let frame = |readback: &mut GpuStatsReadback, completes: bool| {
@@ -320,7 +350,7 @@ mod tests {
             let mut encoder = context.device.create_command_encoder(&descriptor);
             let mut recorder = FrameRecorder::new();
             let timed = readback.begin_frame(&mut encoder, &mut recorder).is_some();
-            readback.end_frame(&mut encoder);
+            readback.end_frame(&mut encoder, &frame_draw);
             if completes {
                 context.queue.submit([encoder.finish()]);
                 let wait = context.device.poll(wgpu::PollType::wait_indefinitely());

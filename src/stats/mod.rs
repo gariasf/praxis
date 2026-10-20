@@ -55,6 +55,11 @@ pub struct GpuFrameStats {
     pub pass_times: [(&'static str, Duration); TIMED_PASSES.len()],
     /// From the start of the first pass to the end of the last.
     pub frame_time: Duration,
+    /// The Instances the frame's draw held, and their triangles.
+    pub instances_drawn: u32,
+    pub triangles_drawn: u32,
+    /// Instances in use that the frame's draw had no room for, so not drawn.
+    pub instances_overflowed: u32,
 }
 
 /// One line per group, each a label and then `key=value` pairs, so the text
@@ -82,10 +87,17 @@ impl std::fmt::Display for FrameStats {
             }
             writeln!(formatter)?;
         }
+        write!(formatter, "counts draw_calls={}", self.draw_calls)?;
+        if let Some(gpu) = &self.gpu {
+            write!(
+                formatter,
+                " instances_drawn={} triangles_drawn={} instances_overflowed={}",
+                gpu.instances_drawn, gpu.triangles_drawn, gpu.instances_overflowed
+            )?;
+        }
         writeln!(
             formatter,
-            "counts draw_calls={} uploaded_bytes={} instances_written={} renderables_refused={} heap_allocations={} dropped_us={:.1} gpu_readbacks_skipped={}",
-            self.draw_calls,
+            " uploaded_bytes={} instances_written={} renderables_refused={} heap_allocations={} dropped_us={:.1} gpu_readbacks_skipped={}",
             self.uploaded_bytes,
             self.instances_written,
             self.renderables_refused,

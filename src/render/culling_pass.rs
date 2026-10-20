@@ -36,6 +36,25 @@ impl DrawCapacity {
     };
 }
 
+/// The frame's draw as `culling.wgsl` lays it out, which the GPU stats
+/// readback reads: the indirect arguments of one indexed draw, its index
+/// count first, then the Instances it holds and those it has no room for.
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub(crate) struct FrameDraw {
+    arguments: [u32; 5],
+    pub(crate) instances_drawn: u32,
+    pub(crate) instances_overflowed: u32,
+}
+
+impl FrameDraw {
+    /// Its index count over 3: the drawn Instances' indices fill the draw
+    /// from index 0 with no gap, in slot order.
+    pub(crate) fn triangles_drawn(&self) -> u32 {
+        self.arguments[0] / 3
+    }
+}
+
 /// The culling pass's pipelines, one per step, and the frame's draw it
 /// writes.
 pub struct CullingPass {
@@ -49,7 +68,7 @@ pub struct CullingPass {
     instance_offsets: wgpu::Buffer,
     meshlet_records: wgpu::Buffer,
     packed_indices: wgpu::Buffer,
-    /// The draw's indirect arguments.
+    /// The draw's indirect arguments and counts (`FrameDraw`).
     frame_draw: wgpu::Buffer,
     /// Its group 3 (`FRAME_DRAW`).
     bind_group: wgpu::BindGroup,
@@ -102,13 +121,15 @@ impl CullingPass {
             u64::from(capacity.packed_indices) * size_of::<u32>() as u64,
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::INDEX,
         );
-        // Cleared before each pass, so COPY_DST.
+        // Cleared before each pass, so COPY_DST, and copied to the GPU stats
+        // readback after it, so COPY_SRC.
         let frame_draw = buffer(
             "Frame Draw Buffer",
-            size_of::<wgpu::util::DrawIndexedIndirectArgs>() as u64,
+            size_of::<FrameDraw>() as u64,
             wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::INDIRECT
-                | wgpu::BufferUsages::COPY_DST,
+                | wgpu::BufferUsages::COPY_DST
+                | wgpu::BufferUsages::COPY_SRC,
         );
         let frame_draw_layout = FRAME_DRAW.layout(device);
         let bind_group = FRAME_DRAW.bind_group(
@@ -225,7 +246,7 @@ impl CullingPass {
         &self.packed_indices
     }
 
-    /// The frame's draw's indirect arguments.
+    /// The frame's draw's indirect arguments and counts (`FrameDraw`).
     pub fn frame_draw(&self) -> &wgpu::Buffer {
         &self.frame_draw
     }
