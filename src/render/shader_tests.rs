@@ -4,7 +4,7 @@
 //! exactly the stages that use it, and each struct whose bytes the CPU
 //! writes is compared with its Rust twin.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use wgpu::naga;
@@ -31,10 +31,12 @@ fn every_module_parses_and_validates() {
 /// GPU; this also fails a binding visible to a stage that never uses it.
 #[test]
 fn every_binding_is_visible_to_exactly_the_stages_that_use_it() {
-    let problems: Vec<String> = MODULES.iter().flat_map(stage_problems).collect();
+    let problems = stage_problems(&MODULES);
     assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
 
+/// A group's layout serves every module that declares it, so a binding is
+/// judged by the stages that use it in any of them.
 #[test]
 fn a_binding_seen_by_a_stage_that_does_not_use_it_or_hidden_from_one_that_does_fails() {
     const VALUES: BindGroupDefinition = BindGroupDefinition {
@@ -42,38 +44,51 @@ fn a_binding_seen_by_a_stage_that_does_not_use_it_or_hidden_from_one_that_does_f
         label: "Values",
         bindings: &[
             uniform("exact", "vec4<f32>", wgpu::ShaderStages::VERTEX),
+            uniform("both", "vec4<f32>", wgpu::ShaderStages::VERTEX_FRAGMENT),
             uniform("seen", "vec4<f32>", wgpu::ShaderStages::VERTEX_FRAGMENT),
             uniform("hidden", "vec4<f32>", wgpu::ShaderStages::VERTEX),
         ],
     };
-    const PART: Part = Part {
-        path: "test.wgsl",
+    const VERTEX: Part = Part {
+        path: "vertex.wgsl",
         source: "
-            @group(0) @binding(3) var<uniform> stray: vec4<f32>;
+            @group(0) @binding(4) var<uniform> stray: vec4<f32>;
 
             @vertex
             fn vertex_main() -> @builtin(position) vec4<f32> {
-                return exact + seen + hidden + stray;
-            }
-
-            @fragment
-            fn fragment_main() -> @location(0) vec4<f32> {
-                return hidden;
+                return exact + both + seen + hidden + stray;
             }
         ",
     };
-    let module = ShaderModule {
-        name: "test",
-        enables: &[],
-        bind_groups: &[&VALUES],
-        parts: &[PART],
+    const FRAGMENT: Part = Part {
+        path: "fragment.wgsl",
+        source: "
+            @fragment
+            fn fragment_main() -> @location(0) vec4<f32> {
+                return both + hidden;
+            }
+        ",
     };
+    const PASSES: [ShaderModule; 2] = [
+        ShaderModule {
+            name: "vertex",
+            enables: &[],
+            bind_groups: &[&VALUES],
+            parts: &[VERTEX],
+        },
+        ShaderModule {
+            name: "fragment",
+            enables: &[],
+            bind_groups: &[&VALUES],
+            parts: &[FRAGMENT],
+        },
+    ];
     assert_eq!(
-        stage_problems(&module),
+        stage_problems(&PASSES),
         [
-            "test module: seen: visible to ShaderStages(VERTEX | FRAGMENT), used by ShaderStages(VERTEX)",
-            "test module: hidden: visible to ShaderStages(VERTEX), used by ShaderStages(VERTEX | FRAGMENT)",
-            "test module: stray: declared in a part, not by its bind group's definition",
+            "vertex module: stray: declared in a part, not by its bind group's definition",
+            "Values: hidden: visible to ShaderStages(VERTEX), used by ShaderStages(VERTEX | FRAGMENT)",
+            "Values: seen: visible to ShaderStages(VERTEX | FRAGMENT), used by ShaderStages(VERTEX)",
         ]
     );
 }
@@ -414,50 +429,66 @@ fn validate(module: &ShaderModule) -> Result<(naga::Module, naga::valid::ModuleI
     Ok((parsed, info))
 }
 
-/// Each binding of `module` that is visible to a stage none of whose entry
-/// points use it, or used by a stage it is not visible to, per naga's
-/// analysis, and each that a part declares rather than its bind group's
-/// definition, as `module: binding: problem`.
-fn stage_problems(module: &ShaderModule) -> Vec<String> {
-    let (parsed, info) = validate(module).unwrap_or_else(|error| panic!("{error}"));
+/// Each binding a part of `modules` declares rather than its bind group's
+/// definition, as `module: binding: problem`; then each binding visible to
+/// a stage whose entry points, in every module that declares it, never use
+/// it, or used by a stage it is not visible to, per naga's analysis, as
+/// `group: binding: problem`.
+fn stage_problems(modules: &[ShaderModule]) -> Vec<String> {
     let mut problems = Vec::new();
-    for (handle, global) in parsed.global_variables.iter() {
-        let Some(resource) = &global.binding else {
-            continue;
-        };
-        let name = global.name.as_deref().unwrap_or_default();
-        let problem = match defined_binding(module, resource) {
-            Some(binding) if binding.name == name => {
-                let used_by = (0..)
-                    .zip(&parsed.entry_points)
-                    .filter(|&(index, _)| !info.get_entry_point(index)[handle].is_empty())
-                    .fold(wgpu::ShaderStages::NONE, |stages, (_, entry_point)| {
-                        stages | wgpu_naga_bridge::map_naga_stage(entry_point.stage)
-                    });
-                if used_by == binding.stages {
-                    continue;
-                }
-                format!("visible to {:?}, used by {used_by:?}", binding.stages)
-            }
-            _ => "declared in a part, not by its bind group's definition".to_string(),
-        };
-        problems.push(format!("{} module: {name}: {problem}", module.name));
+    // Each defined binding's stages, and the stages that use it.
+    let mut stages = BTreeMap::new();
+    for module in modules {
+        let (parsed, info) = validate(module).unwrap_or_else(|error| panic!("{error}"));
+        for (handle, global) in parsed.global_variables.iter() {
+            let Some(resource) = &global.binding else {
+                continue;
+            };
+            let name = global.name.as_deref().unwrap_or_default();
+            let Some((group, binding)) =
+                defined_binding(module, resource).filter(|(_, binding)| binding.name == name)
+            else {
+                problems.push(format!(
+                    "{} module: {name}: declared in a part, not by its bind group's definition",
+                    module.name
+                ));
+                continue;
+            };
+            let used_by = (0..)
+                .zip(&parsed.entry_points)
+                .filter(|&(index, _)| !info.get_entry_point(index)[handle].is_empty())
+                .fold(wgpu::ShaderStages::NONE, |stages, (_, entry_point)| {
+                    stages | wgpu_naga_bridge::map_naga_stage(entry_point.stage)
+                });
+            stages
+                .entry((group.label, binding.name))
+                .or_insert((binding.stages, wgpu::ShaderStages::NONE))
+                .1 |= used_by;
+        }
     }
+    problems.extend(
+        stages
+            .into_iter()
+            .filter(|(_, (visible_to, used_by))| visible_to != used_by)
+            .map(|((group, name), (visible_to, used_by))| {
+                format!("{group}: {name}: visible to {visible_to:?}, used by {used_by:?}")
+            }),
+    );
     problems
 }
 
-/// The definition of the binding `resource` names, among `module`'s bind
-/// groups.
+/// The bind group and the definition of the binding `resource` names, among
+/// `module`'s bind groups.
 fn defined_binding(
     module: &ShaderModule,
     resource: &naga::ResourceBinding,
-) -> Option<&'static Binding> {
-    module
+) -> Option<(&'static BindGroupDefinition, &'static Binding)> {
+    let group = module
         .bind_groups
         .iter()
-        .find(|bind_group| bind_group.index == resource.group)?
-        .bindings
-        .get(resource.binding as usize)
+        .copied()
+        .find(|bind_group| bind_group.index == resource.group)?;
+    Some((group, group.bindings.get(resource.binding as usize)?))
 }
 
 /// Every `.wgsl` file under `src/`, by its path from the crate root.
@@ -576,7 +607,7 @@ fn structs_shared_with_the_cpu(
             .binding
             .as_ref()
             .and_then(|resource| defined_binding(module, resource))
-            .is_some_and(|binding| binding.writer == Writer::Gpu);
+            .is_some_and(|(_, binding)| binding.writer == Writer::Gpu);
         if !only_the_gpu_writes
             && matches!(
                 global.space,

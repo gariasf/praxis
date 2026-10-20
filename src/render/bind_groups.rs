@@ -81,7 +81,8 @@ pub struct Binding {
     /// The variable's WGSL type; with a `count`, its elements'.
     pub wgsl_type: &'static str,
     pub binding_type: wgpu::BindingType,
-    /// Exactly the stages whose entry points use it (`shader_tests`).
+    /// Exactly the stages whose entry points use it, in every module that
+    /// declares its group (`shader_tests`).
     pub stages: wgpu::ShaderStages,
     /// The length of its binding array; `None` for one resource.
     pub count: Option<NonZeroU32>,
