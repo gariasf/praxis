@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use crate::assets::{ARENA_CAPACITY_BYTES, MaterialPool, MeshPool};
 use crate::gpu::GpuContext;
+use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY, pipeline_layout};
 use crate::render::{
     CameraUniform, DEPTH_FORMAT, FrameData, FrameStaging, INSTANCE_CAPACITY, InstanceData,
     LightUniform, LoadStaging, create_depth_texture, shaders,
@@ -19,15 +20,16 @@ pub struct Renderer {
     aspect_ratio: f32,
     render_pipeline: wgpu::RenderPipeline,
     camera_buffer: wgpu::Buffer,
-    camera_bind_group: wgpu::BindGroup,
     depth_texture_view: wgpu::TextureView,
     light_buffer: wgpu::Buffer,
-    light_bind_group: wgpu::BindGroup,
+    /// The camera and the lights (`FRAME`).
+    frame_bind_group: wgpu::BindGroup,
     pub(crate) mesh_pool: MeshPool,
     pub(crate) material_pool: MaterialPool,
     pub(crate) load_staging: LoadStaging,
     instance_buffer: wgpu::Buffer,
-    instance_bind_group: wgpu::BindGroup,
+    /// The Instances and the vertex Arena (`SCENE_GEOMETRY`).
+    scene_geometry_bind_group: wgpu::BindGroup,
     /// Set when a frame's uploads failed after it queued Instance writes,
     /// which then never landed: the next prepare must write every Instance.
     lost_instance_writes: bool,
@@ -52,52 +54,8 @@ impl Renderer {
         let device = context.device.clone();
         let queue = context.queue.clone();
         let shader = device.create_shader_module(shaders::MAIN.descriptor());
-
-        let camera_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Camera Bind Group Layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
-
-        let light_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Light Bind Group Layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
-
-        // The Instance buffer and the vertex Arena.
-        let instance_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Instance Bind Group Layout"),
-                entries: &[0, 1].map(|binding| wgpu::BindGroupLayoutEntry {
-                    binding,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }),
-            });
+        let frame_bind_group_layout = FRAME.layout(&device);
+        let scene_geometry_bind_group_layout = SCENE_GEOMETRY.layout(&device);
 
         // Material-as-ID: one bind group (SSBO + per-channel texture arrays +
         // sampler) serves every material. Created before the pipeline layout
@@ -105,17 +63,15 @@ impl Renderer {
         let mut load_staging = LoadStaging::new(device.clone());
         let material_pool = MaterialPool::new(&device, &mut load_staging);
 
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[
-                    Some(&camera_bind_group_layout),
-                    Some(&material_pool.bind_group_layout),
-                    Some(&light_bind_group_layout),
-                    Some(&instance_bind_group_layout),
-                ],
-                immediate_size: 0,
-            });
+        let render_pipeline_layout = pipeline_layout(
+            &device,
+            "Render Pipeline Layout",
+            &[
+                (&FRAME, &frame_bind_group_layout),
+                (&MATERIALS, &material_pool.bind_group_layout),
+                (&SCENE_GEOMETRY, &scene_geometry_bind_group_layout),
+            ],
+        );
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
@@ -170,29 +126,20 @@ impl Renderer {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Camera Bind Group"),
-            layout: &camera_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: camera_buffer.as_entire_binding(),
-            }],
-        });
-
         let light_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Light Buffer"),
             size: std::mem::size_of::<LightUniform>() as wgpu::BufferAddress,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Light Bind Group"),
-            layout: &light_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: light_buffer.as_entire_binding(),
-            }],
-        });
+        let frame_bind_group = FRAME.bind_group(
+            &device,
+            &frame_bind_group_layout,
+            [
+                ("camera", camera_buffer.as_entire_binding()),
+                ("light", light_buffer.as_entire_binding()),
+            ],
+        );
 
         // Created at its fixed capacity; it never grows.
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -210,11 +157,13 @@ impl Renderer {
         );
 
         let mesh_pool = MeshPool::new(&device, ARENA_CAPACITY_BYTES);
-        let instance_bind_group = create_instance_bind_group(
+        let scene_geometry_bind_group = SCENE_GEOMETRY.bind_group(
             &device,
-            &instance_bind_group_layout,
-            &instance_buffer,
-            mesh_pool.vertex_arena(),
+            &scene_geometry_bind_group_layout,
+            [
+                ("instances", instance_buffer.as_entire_binding()),
+                ("vertices", mesh_pool.vertex_arena().as_entire_binding()),
+            ],
         );
 
         let depth_texture_view = create_depth_texture(&device, width, height);
@@ -228,12 +177,11 @@ impl Renderer {
             aspect_ratio: width as f32 / height as f32,
             render_pipeline,
             camera_buffer,
-            camera_bind_group,
             depth_texture_view,
             light_buffer,
-            light_bind_group,
+            frame_bind_group,
             instance_buffer,
-            instance_bind_group,
+            scene_geometry_bind_group,
             lost_instance_writes: false,
             transient_saves_memory: context.adapter.get_info().transient_saves_memory == Some(true),
             frame_staging,
@@ -343,10 +291,9 @@ impl Renderer {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.material_pool.bind_group, &[]);
-            render_pass.set_bind_group(2, &self.light_bind_group, &[]);
-            render_pass.set_bind_group(3, &self.instance_bind_group, &[]);
+            render_pass.set_bind_group(FRAME.index, &self.frame_bind_group, &[]);
+            render_pass.set_bind_group(MATERIALS.index, &self.material_pool.bind_group, &[]);
+            render_pass.set_bind_group(SCENE_GEOMETRY.index, &self.scene_geometry_bind_group, &[]);
             render_pass.set_index_buffer(
                 self.mesh_pool.index_buffer().slice(..),
                 wgpu::IndexFormat::Uint32,
@@ -406,30 +353,6 @@ impl Renderer {
                 .gpu_memory_bytes(self.transient_saves_memory)
             + self.frame_staging.gpu_memory_bytes()
     }
-}
-
-/// The bind group of the Instance buffer and the vertex Arena, which the
-/// vertex shader reads.
-fn create_instance_bind_group(
-    device: &wgpu::Device,
-    layout: &wgpu::BindGroupLayout,
-    instance_buffer: &wgpu::Buffer,
-    vertex_arena: &wgpu::Buffer,
-) -> wgpu::BindGroup {
-    device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("Instance Bind Group"),
-        layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: instance_buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: vertex_arena.as_entire_binding(),
-            },
-        ],
-    })
 }
 
 fn create_frame_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {

@@ -10,8 +10,8 @@ struct CameraUniform {
     offset: vec3<f32>,
 }
 
-// Edge of the anchor grid in metres; ANCHOR_CELL_SIZE in Rust matches it.
-const ANCHOR_CELL_SIZE: f32 = 64.0;
+// ANCHOR_CELL_SIZE, the anchor grid's edge in metres, is declared from
+// Rust's when a module is assembled (src/render/shaders/mod.rs).
 
 // A point's position relative to the camera, from its Instance's anchor and
 // offset, the camera's, and its position relative to the Instance's pivot
