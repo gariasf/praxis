@@ -6,27 +6,27 @@
   "height": 1440,
   "measured_frames": 1800,
   "cpu_frame_microseconds": {
-    "median": 25.583,
-    "p95": 44.417
+    "median": 53.458000000000006,
+    "p95": 88.875
   },
   "gpu_main_pass_microseconds": {
-    "median": 80.125,
-    "p95": 87.08300000000001
+    "median": 114.459,
+    "p95": 173.541
   },
-  "draw_calls": 5,
+  "draw_calls": 1,
   "uploaded_bytes": 928,
-  "gpu_memory_bytes": 173978276,
+  "gpu_memory_bytes": 257880764,
   "arena_bytes_in_use": 76680,
-  "heap_allocations": 60,
+  "heap_allocations": 98,
   "counter_frames": {
     "frames": {
       "start": 8,
       "end": 72
     },
-    "draw_calls": 5,
+    "draw_calls": 1,
     "uploaded_bytes": 928,
-    "gpu_memory_bytes": 173978276,
+    "gpu_memory_bytes": 257880764,
     "arena_bytes_in_use": 76680,
-    "heap_allocations": 60
+    "heap_allocations": 98
   }
 }
