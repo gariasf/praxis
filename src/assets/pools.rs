@@ -206,8 +206,10 @@ pub(crate) mod tests {
                 first_index: 0,
                 index_count: indices.len() as u32,
                 material: None,
+                meshlets: Vec::new(),
             }],
             indices,
+            bounds: [[0.0; 3]; 2],
         }
     }
 

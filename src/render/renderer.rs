@@ -481,7 +481,9 @@ mod tests {
                 first_index: 0,
                 index_count: 3,
                 material: None,
+                meshlets: Vec::new(),
             }],
+            bounds: [[-0.5, -0.5, 0.5], [0.5, 0.5, 0.5]],
         };
         // Loaded first, outside the target, so the triangle's draw finds its
         // vertices only past its base vertex.
