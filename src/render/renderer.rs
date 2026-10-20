@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use crate::assets::{ARENA_CAPACITY_BYTES, MaterialPool, MeshPool};
 use crate::gpu::GpuContext;
-use crate::render::bind_groups::{FRAME, MATERIALS, SCENE, pipeline_layout};
+use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY, pipeline_layout};
 use crate::render::{
     CameraUniform, DEPTH_FORMAT, FrameData, FrameStaging, INSTANCE_CAPACITY, InstanceData,
     LightUniform, LoadStaging, create_depth_texture, shaders,
@@ -28,8 +28,8 @@ pub struct Renderer {
     pub(crate) material_pool: MaterialPool,
     pub(crate) load_staging: LoadStaging,
     instance_buffer: wgpu::Buffer,
-    /// The Instances and the vertex Arena (`SCENE`).
-    scene_bind_group: wgpu::BindGroup,
+    /// The Instances and the vertex Arena (`SCENE_GEOMETRY`).
+    scene_geometry_bind_group: wgpu::BindGroup,
     /// Set when a frame's uploads failed after it queued Instance writes,
     /// which then never landed: the next prepare must write every Instance.
     lost_instance_writes: bool,
@@ -55,7 +55,7 @@ impl Renderer {
         let queue = context.queue.clone();
         let shader = device.create_shader_module(shaders::MAIN.descriptor());
         let frame_bind_group_layout = FRAME.layout(&device);
-        let scene_bind_group_layout = SCENE.layout(&device);
+        let scene_geometry_bind_group_layout = SCENE_GEOMETRY.layout(&device);
 
         // Material-as-ID: one bind group (SSBO + per-channel texture arrays +
         // sampler) serves every material. Created before the pipeline layout
@@ -69,7 +69,7 @@ impl Renderer {
             &[
                 (&FRAME, &frame_bind_group_layout),
                 (&MATERIALS, &material_pool.bind_group_layout),
-                (&SCENE, &scene_bind_group_layout),
+                (&SCENE_GEOMETRY, &scene_geometry_bind_group_layout),
             ],
         );
 
@@ -136,8 +136,8 @@ impl Renderer {
             &device,
             &frame_bind_group_layout,
             [
-                camera_buffer.as_entire_binding(),
-                light_buffer.as_entire_binding(),
+                ("camera", camera_buffer.as_entire_binding()),
+                ("light", light_buffer.as_entire_binding()),
             ],
         );
 
@@ -157,12 +157,12 @@ impl Renderer {
         );
 
         let mesh_pool = MeshPool::new(&device, ARENA_CAPACITY_BYTES);
-        let scene_bind_group = SCENE.bind_group(
+        let scene_geometry_bind_group = SCENE_GEOMETRY.bind_group(
             &device,
-            &scene_bind_group_layout,
+            &scene_geometry_bind_group_layout,
             [
-                instance_buffer.as_entire_binding(),
-                mesh_pool.vertex_arena().as_entire_binding(),
+                ("instances", instance_buffer.as_entire_binding()),
+                ("vertices", mesh_pool.vertex_arena().as_entire_binding()),
             ],
         );
 
@@ -181,7 +181,7 @@ impl Renderer {
             light_buffer,
             frame_bind_group,
             instance_buffer,
-            scene_bind_group,
+            scene_geometry_bind_group,
             lost_instance_writes: false,
             transient_saves_memory: context.adapter.get_info().transient_saves_memory == Some(true),
             frame_staging,
@@ -293,7 +293,7 @@ impl Renderer {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(FRAME.index, &self.frame_bind_group, &[]);
             render_pass.set_bind_group(MATERIALS.index, &self.material_pool.bind_group, &[]);
-            render_pass.set_bind_group(SCENE.index, &self.scene_bind_group, &[]);
+            render_pass.set_bind_group(SCENE_GEOMETRY.index, &self.scene_geometry_bind_group, &[]);
             render_pass.set_index_buffer(
                 self.mesh_pool.index_buffer().slice(..),
                 wgpu::IndexFormat::Uint32,

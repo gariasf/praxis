@@ -1,11 +1,11 @@
 //! The WGSL shader modules, each assembled from ordered parts in this
 //! directory, so passes share structs and functions without copying them,
 //! after the constants Rust shares with WGSL and its bindings' declarations,
-//! both generated from Rust (`render::bind_groups`). A function under an
-//! oracle lives in a shared part, which the oracle harness assembles with its
-//! kernel alone.
+//! both generated from Rust (`render::instance`, `render::bind_groups`). A
+//! function under an oracle lives in a shared part, which the oracle harness
+//! assembles with its kernel alone.
 
-use crate::render::bind_groups::{BindGroupDefinition, FRAME, MATERIALS, SCENE};
+use crate::render::bind_groups::{BindGroupDefinition, FRAME, MATERIALS, SCENE_GEOMETRY};
 use crate::render::instance::ANCHOR_CELL_SIZE;
 
 /// One WGSL file of this directory.
@@ -49,7 +49,7 @@ pub const MAIN: ShaderModule = ShaderModule {
     name: "main",
     // Each Channel is a binding array indexed by Layer (ADR 0017).
     enables: &["wgpu_binding_array"],
-    bind_groups: &[&FRAME, &MATERIALS, &SCENE],
+    bind_groups: &[&FRAME, &MATERIALS, &SCENE_GEOMETRY],
     parts: &[COMMON, SHADING, part!("main.wgsl")],
 };
 

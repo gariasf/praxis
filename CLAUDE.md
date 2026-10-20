@@ -192,11 +192,12 @@ When reviewing changes, check for:
       `resize()`
 - [ ] A binding is written once, in its bind group's definition
       (`src/render/bind_groups.rs`), which declares it in WGSL and gives
-      its layout, pipeline layouts and the `set_bind_group` index; no
-      WGSL part declares one. `cargo test` checks the structs the CPU
-      writes field by field against their Rust twins
-      (`src/render/shader_tests.rs`); Rust-only padding fields start
-      with `_`
+      its layout and its group's index in pipeline layouts and
+      `set_bind_group`; no WGSL part declares one. A group a pass uses
+      is listed in its shader module, its pipeline layout and its render
+      pass. `cargo test` checks the structs the CPU writes field by
+      field against their Rust twins (`src/render/shader_tests.rs`);
+      Rust-only padding fields start with `_`
 - [ ] No World position reaches the GPU in f32: only an anchor plus an
       f32 offset, composed camera-relative (ADR 0014)
 - [ ] Depth is cleared to 0 and compared with `Greater`, with no far

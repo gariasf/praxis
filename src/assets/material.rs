@@ -32,8 +32,8 @@ impl MaterialHandle {
 
 /// One texture channel of a material. Each channel has its own binding array;
 /// a material stores one Layer index per channel. The discriminant is the
-/// Channel's position in `MaterialPool::channels` and its binding minus one,
-/// and is part of every Texture's Asset ID: never renumber.
+/// Channel's position in `MaterialPool::channels` and part of every
+/// Texture's Asset ID: never renumber.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum MaterialChannel {
     Albedo = 0,
@@ -68,6 +68,7 @@ pub struct MaterialData {
 /// One Channel's Textures, each sized to its source, bound as one partially
 /// bound binding array (ADR 0017). A Layer is an index into `views`.
 struct ChannelTextures {
+    /// Its binding's name in `MATERIALS`, which labels its Textures too.
     label: &'static str,
     textures: Vec<wgpu::Texture>,
     views: Vec<wgpu::TextureView>,
@@ -158,11 +159,11 @@ impl MaterialPool {
 
         // Ordered as `MaterialChannel`.
         let mut channels = [
-            "albedo",
-            "normal",
-            "metallic_roughness",
-            "occlusion",
-            "emissive",
+            "albedo_textures",
+            "normal_textures",
+            "metallic_roughness_textures",
+            "occlusion_textures",
+            "emissive_textures",
         ]
         .map(ChannelTextures::new);
 
@@ -345,13 +346,13 @@ fn create_bind_group(
         .iter()
         .map(|channel| channel.views.iter().collect())
         .collect();
-    let resources = std::iter::once(materials_buffer.as_entire_binding())
-        .chain(
-            views
-                .iter()
-                .map(|channel_views| wgpu::BindingResource::TextureViewArray(channel_views)),
-        )
-        .chain([wgpu::BindingResource::Sampler(sampler)]);
+    let channel_resources = channels.iter().zip(&views).map(|(channel, channel_views)| {
+        let resource = wgpu::BindingResource::TextureViewArray(channel_views);
+        (channel.label, resource)
+    });
+    let resources = std::iter::once(("materials", materials_buffer.as_entire_binding()))
+        .chain(channel_resources)
+        .chain([("pbr_sampler", wgpu::BindingResource::Sampler(sampler))]);
     MATERIALS.bind_group(device, layout, resources)
 }
 

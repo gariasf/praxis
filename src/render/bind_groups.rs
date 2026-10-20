@@ -44,7 +44,7 @@ pub const MATERIALS: BindGroupDefinition = BindGroupDefinition {
         Binding {
             name: "pbr_sampler",
             wgsl_type: "sampler",
-            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+            binding_type: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
             stages: wgpu::ShaderStages::FRAGMENT,
             count: None,
         },
@@ -53,9 +53,9 @@ pub const MATERIALS: BindGroupDefinition = BindGroupDefinition {
 
 /// Group 2, the scene geometry, built once since its buffers never grow: the
 /// Instances, and the vertex Arena the vertex shader pulls from (ADR 0019).
-pub const SCENE: BindGroupDefinition = BindGroupDefinition {
+pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
     index: 2,
-    label: "Scene Bind Group",
+    label: "Scene Geometry Bind Group",
     bindings: &[
         read_only_storage(
             "instances",
@@ -83,7 +83,7 @@ pub struct Binding {
     pub name: &'static str,
     /// The variable's WGSL type; with a `count`, its elements'.
     pub wgsl_type: &'static str,
-    pub ty: wgpu::BindingType,
+    pub binding_type: wgpu::BindingType,
     pub stages: wgpu::ShaderStages,
     /// The length of its binding array; `None` for one resource.
     pub count: Option<NonZeroU32>,
@@ -93,11 +93,11 @@ impl BindGroupDefinition {
     pub fn layout(&self, device: &wgpu::Device) -> wgpu::BindGroupLayout {
         let entries: Vec<wgpu::BindGroupLayoutEntry> = (0..)
             .zip(self.bindings)
-            .map(|(binding, definition)| wgpu::BindGroupLayoutEntry {
-                binding,
-                visibility: definition.stages,
-                ty: definition.ty,
-                count: definition.count,
+            .map(|(index, binding)| wgpu::BindGroupLayoutEntry {
+                binding: index,
+                visibility: binding.stages,
+                ty: binding.binding_type,
+                count: binding.count,
             })
             .collect();
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -106,17 +106,29 @@ impl BindGroupDefinition {
         })
     }
 
-    /// A bind group of `layout`, this group's, holding `resources` in
-    /// binding order.
+    /// A bind group of `layout`, this group's, holding each resource at the
+    /// binding it names, so no caller depends on the bindings' order.
     pub fn bind_group<'a>(
         &self,
         device: &wgpu::Device,
         layout: &wgpu::BindGroupLayout,
-        resources: impl IntoIterator<Item = wgpu::BindingResource<'a>>,
+        resources: impl IntoIterator<Item = (&'static str, wgpu::BindingResource<'a>)>,
     ) -> wgpu::BindGroup {
-        let entries: Vec<wgpu::BindGroupEntry> = (0..)
-            .zip(resources)
-            .map(|(binding, resource)| wgpu::BindGroupEntry { binding, resource })
+        let entries: Vec<wgpu::BindGroupEntry> = resources
+            .into_iter()
+            .map(|(name, resource)| {
+                let Some(index) = self
+                    .bindings
+                    .iter()
+                    .position(|binding| binding.name == name)
+                else {
+                    panic!("{} has no binding `{name}`", self.label);
+                };
+                wgpu::BindGroupEntry {
+                    binding: index as u32,
+                    resource,
+                }
+            })
             .collect();
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(self.label),
@@ -130,8 +142,10 @@ impl BindGroupDefinition {
         (0..)
             .zip(self.bindings)
             .map(|(binding_index, binding)| {
-                let address_space = match binding.ty {
-                    wgpu::BindingType::Buffer { ty, .. } => match ty {
+                let address_space = match binding.binding_type {
+                    wgpu::BindingType::Buffer {
+                        ty: buffer_type, ..
+                    } => match buffer_type {
                         wgpu::BufferBindingType::Uniform => "<uniform>",
                         wgpu::BufferBindingType::Storage { read_only: true } => "<storage, read>",
                         wgpu::BufferBindingType::Storage { read_only: false } => {
@@ -188,21 +202,21 @@ const fn read_only_storage(
     wgsl_type: &'static str,
     stages: wgpu::ShaderStages,
 ) -> Binding {
-    let ty = wgpu::BufferBindingType::Storage { read_only: true };
-    buffer(name, wgsl_type, ty, stages)
+    let buffer_type = wgpu::BufferBindingType::Storage { read_only: true };
+    buffer(name, wgsl_type, buffer_type, stages)
 }
 
 const fn buffer(
     name: &'static str,
     wgsl_type: &'static str,
-    ty: wgpu::BufferBindingType,
+    buffer_type: wgpu::BufferBindingType,
     stages: wgpu::ShaderStages,
 ) -> Binding {
     Binding {
         name,
         wgsl_type,
-        ty: wgpu::BindingType::Buffer {
-            ty,
+        binding_type: wgpu::BindingType::Buffer {
+            ty: buffer_type,
             has_dynamic_offset: false,
             min_binding_size: None,
         },
@@ -216,7 +230,7 @@ const fn channel(name: &'static str) -> Binding {
     Binding {
         name,
         wgsl_type: "texture_2d<f32>",
-        ty: wgpu::BindingType::Texture {
+        binding_type: wgpu::BindingType::Texture {
             sample_type: wgpu::TextureSampleType::Float { filterable: true },
             view_dimension: wgpu::TextureViewDimension::D2,
             multisampled: false,
