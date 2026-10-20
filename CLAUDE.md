@@ -195,9 +195,10 @@ When reviewing changes, check for:
       its layout and its group's index in pipeline layouts and
       `set_bind_group`; no WGSL part declares one. A group a pass uses
       is listed in its shader module, its pipeline layout and its render
-      pass. `cargo test` checks the structs the CPU writes field by
-      field against their Rust twins (`src/render/shader_tests.rs`);
-      Rust-only padding fields start with `_`
+      pass. `cargo test` checks each binding's stages against the entry
+      points that use it, and the structs the CPU writes field by field
+      against their Rust twins (`src/render/shader_tests.rs`); Rust-only
+      padding fields start with `_`
 - [ ] No World position reaches the GPU in f32: only an anchor plus an
       f32 offset, composed camera-relative (ADR 0014)
 - [ ] Depth is cleared to 0 and compared with `Greater`, with no far

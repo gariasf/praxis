@@ -1,10 +1,10 @@
 //! Bind groups, each defined once: its index and, per binding, its WGSL name
-//! and type and its layout entry. A definition builds its layout and bind
-//! groups, gives the index pipeline layouts and passes use, and declares its
-//! bindings in every shader module assembled with it, so no shader part
-//! declares one. Groups are packed by how often they change, within the
-//! Capability floor's four (ADR 0021): 0 the frame's, 1 the Materials', 2 the
-//! scene geometry's, 3 a pass's own.
+//! and type, its layout entry and who writes it. A definition builds its
+//! layout and bind groups, gives the index pipeline layouts and passes use,
+//! and declares its bindings in every shader module assembled with it, so no
+//! shader part declares one. Groups are packed by how often they change,
+//! within the Capability floor's four (ADR 0021): 0 the frame's, 1 the
+//! Materials', 2 the scene geometry's, 3 a pass's own.
 
 use std::num::NonZeroU32;
 
@@ -15,11 +15,7 @@ pub const FRAME: BindGroupDefinition = BindGroupDefinition {
     index: 0,
     label: "Frame Bind Group",
     bindings: &[
-        uniform(
-            "camera",
-            "CameraUniform",
-            wgpu::ShaderStages::VERTEX_FRAGMENT,
-        ),
+        uniform("camera", "CameraUniform", wgpu::ShaderStages::VERTEX),
         uniform("light", "LightUniform", wgpu::ShaderStages::FRAGMENT),
     ],
 };
@@ -47,6 +43,7 @@ pub const MATERIALS: BindGroupDefinition = BindGroupDefinition {
             binding_type: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
             stages: wgpu::ShaderStages::FRAGMENT,
             count: None,
+            writer: Writer::Cpu,
         },
     ],
 };
@@ -78,15 +75,29 @@ pub struct BindGroupDefinition {
     pub bindings: &'static [Binding],
 }
 
-/// One binding: its WGSL variable and its layout entry.
+/// One binding: its WGSL variable, its layout entry and who writes it.
 pub struct Binding {
     pub name: &'static str,
     /// The variable's WGSL type; with a `count`, its elements'.
     pub wgsl_type: &'static str,
     pub binding_type: wgpu::BindingType,
+    /// Exactly the stages whose entry points use it, in every module that
+    /// declares its group (`shader_tests`).
     pub stages: wgpu::ShaderStages,
     /// The length of its binding array; `None` for one resource.
     pub count: Option<NonZeroU32>,
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub writer: Writer,
+}
+
+/// Who writes a binding's contents. A struct the CPU writes has a Rust twin
+/// whose layout `shader_tests` compares with it; one only the GPU writes
+/// needs none.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Writer {
+    Cpu,
+    #[cfg_attr(not(test), allow(dead_code))]
+    Gpu,
 }
 
 impl BindGroupDefinition {
@@ -187,8 +198,8 @@ pub fn pipeline_layout(
     })
 }
 
-/// A uniform buffer.
-const fn uniform(
+/// A uniform buffer, which the CPU writes.
+pub(crate) const fn uniform(
     name: &'static str,
     wgsl_type: &'static str,
     stages: wgpu::ShaderStages,
@@ -196,8 +207,8 @@ const fn uniform(
     buffer(name, wgsl_type, wgpu::BufferBindingType::Uniform, stages)
 }
 
-/// A storage buffer the shaders only read.
-const fn read_only_storage(
+/// A storage buffer the shaders only read, which the CPU writes.
+pub(crate) const fn read_only_storage(
     name: &'static str,
     wgsl_type: &'static str,
     stages: wgpu::ShaderStages,
@@ -222,6 +233,7 @@ const fn buffer(
         },
         stages,
         count: None,
+        writer: Writer::Cpu,
     }
 }
 
@@ -237,5 +249,6 @@ const fn channel(name: &'static str) -> Binding {
         },
         stages: wgpu::ShaderStages::FRAGMENT,
         count: NonZeroU32::new(TEXTURES_PER_CHANNEL),
+        writer: Writer::Cpu,
     }
 }
