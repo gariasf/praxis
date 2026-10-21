@@ -181,7 +181,8 @@ fn occluded(bounds: ClipBox) -> bool {
     }
     // In texture coordinates, rows top first: a level-0 texel spans two
     // pixels, or a little more on an odd side.
-    let level_zero_size = vec2<f32>(textureDimensions(depth_pyramid, 0));
+    let level_zero_texels = textureDimensions(depth_pyramid, 0);
+    let level_zero_size = vec2<f32>(level_zero_texels);
     let pixel_margin = 0.5 / level_zero_size;
     let first_coordinates = saturate(vec2<f32>(0.5 * low.x + 0.5, 0.5 - 0.5 * high.y) - pixel_margin);
     let last_coordinates = saturate(vec2<f32>(0.5 * high.x + 0.5, 0.5 - 0.5 * low.y) + pixel_margin);
@@ -190,7 +191,10 @@ fn occluded(bounds: ClipBox) -> bool {
         u32(ceil(log2(max(max(extent.x, extent.y), 1.0)))),
         textureNumLevels(depth_pyramid) - 1u
     );
-    let size = textureDimensions(depth_pyramid, level);
+    // Each level halves the one below, rounded down, as a mip chain does:
+    // computed, since lavapipe (Mesa 25.2.8) answers a size query whose
+    // level varies across a workgroup's invocations with one invocation's.
+    let size = max(level_zero_texels >> vec2<u32>(level), vec2<u32>(1u));
     let first = min(vec2<u32>(first_coordinates * vec2<f32>(size)), size - 1u);
     let last = min(vec2<u32>(last_coordinates * vec2<f32>(size)), size - 1u);
     if any(last > first + 1u) {
