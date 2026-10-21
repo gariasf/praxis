@@ -191,19 +191,23 @@ impl BindGroupDefinition {
     }
 
     pub fn layout(&self, device: &wgpu::Device) -> wgpu::BindGroupLayout {
-        self.layout_of(device, |_| true)
+        let names: Vec<&str> = self.bindings.iter().map(|binding| binding.name).collect();
+        self.layout_of(device, &names)
     }
 
-    /// The layout of the bindings `holds` selects by name alone, for
-    /// pipelines whose entry points use no others: each keeps its index.
-    pub fn layout_of(
-        &self,
-        device: &wgpu::Device,
-        holds: impl Fn(&str) -> bool,
-    ) -> wgpu::BindGroupLayout {
+    /// The layout of the bindings `names` names alone, each at its index,
+    /// for pipelines whose entry points use no others.
+    pub fn layout_of(&self, device: &wgpu::Device, names: &[&str]) -> wgpu::BindGroupLayout {
+        for name in names {
+            assert!(
+                self.bindings.iter().any(|binding| binding.name == *name),
+                "{} has no binding `{name}`",
+                self.label
+            );
+        }
         let entries: Vec<wgpu::BindGroupLayoutEntry> = (0..)
             .zip(self.bindings)
-            .filter(|(_, binding)| holds(binding.name))
+            .filter(|(_, binding)| names.contains(&binding.name))
             .map(|(index, binding)| wgpu::BindGroupLayoutEntry {
                 binding: index,
                 visibility: binding.stages,

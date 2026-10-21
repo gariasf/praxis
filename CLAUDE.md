@@ -111,10 +111,11 @@ src/
                                  pipelines and recording;
                                  depth_pyramid_pass: the compute pass
                                  that reduces the pre-pass's depth into
-                                 the Hi-Z pyramid), targets (every
-                                 size-dependent target, the depth
-                                 pyramid among them, the depth
-                                 conventions), prepare (ECS World to
+                                 the depth pyramid, ADR 0019's Hi-Z
+                                 pyramid), targets (every size-dependent
+                                 target, the depth pyramid among them,
+                                 the depth conventions), prepare (ECS
+                                 World to
                                  Frame data), bind_groups (each defined
                                  once), readback (each frame's GPU stats
                                  through a ring of mapped buffers),

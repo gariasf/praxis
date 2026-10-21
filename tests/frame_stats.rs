@@ -167,7 +167,12 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         let passes: Vec<&str> = gpu.pass_times.iter().map(|&(pass, _)| pass).collect();
         assert_eq!(
             passes,
-            ["culling_pass", "depth_prepass", "depth_pyramid", "lit_pass"],
+            [
+                "culling_pass",
+                "depth_prepass",
+                "depth_pyramid_pass",
+                "lit_pass"
+            ],
             "frame {frame}"
         );
         for (pass, time) in gpu.pass_times {

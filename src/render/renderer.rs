@@ -863,12 +863,12 @@ mod tests {
     }
 
     /// A Renderer resized to an odd size, drawing triangles at several depths
-    /// over one three times their size: its depth pyramid, built from the
-    /// depth the frame left, holds in each texel of each level the minimum
-    /// depth of the texels below whose share of the screen overlaps its own,
-    /// against a CPU reduction of every sample of the depth target, read
-    /// back. Odd sides make each level round down and some texels cover three
-    /// below them.
+    /// over one three times their size: the depth pyramid its frame built
+    /// from the depth pre-pass, whose depth the lit pass leaves as it was,
+    /// holds in each texel of each level the minimum depth of the texels
+    /// below whose share of the screen overlaps its own, against a CPU
+    /// reduction of every sample of the depth target, read back. Odd sides
+    /// make each level round down and some texels cover three below them.
     #[test]
     fn each_depth_pyramid_texel_holds_the_minimum_depth_of_its_share_of_the_screen() {
         let Some(context) = gpu_context() else {
@@ -903,10 +903,6 @@ mod tests {
             })
             .to_vec();
         render_frame(&context, &mut renderer, &frame_of(instances), width, height);
-        let descriptor = wgpu::CommandEncoderDescriptor::default();
-        let mut encoder = context.device.create_command_encoder(&descriptor);
-        renderer.depth_pyramid_pass.record(&mut encoder, None);
-        context.queue.submit([encoder.finish()]);
 
         let samples = read_depth_samples(&context, renderer.render_targets.depth());
         let expected = minimum_depth_pyramid(&samples, width, height);

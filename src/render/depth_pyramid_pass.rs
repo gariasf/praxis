@@ -8,7 +8,7 @@ use crate::render::shaders;
 use crate::render::targets::{RenderTargets, SAMPLE_COUNT};
 
 /// The depth pyramid pass's label, and its name in frame stats.
-pub(crate) const DEPTH_PYRAMID_PASS: &str = "depth_pyramid";
+pub(crate) const DEPTH_PYRAMID_PASS: &str = "depth_pyramid_pass";
 
 /// Texels along each side of the tile of a level each workgroup reduces.
 pub(crate) const DEPTH_PYRAMID_TILE_SIZE: u32 = 8;
@@ -33,9 +33,8 @@ impl DepthPyramidPass {
     pub fn new(device: &wgpu::Device, render_targets: &RenderTargets) -> DepthPyramidPass {
         let shader = device.create_shader_module(shaders::DEPTH_PYRAMID.descriptor());
         // Level 0 reduces the depth target, each later level the one below.
-        let reduce_depth_layout =
-            DEPTH_PYRAMID_LEVEL.layout_of(device, |name| name != "level_below");
-        let reduce_level_layout = DEPTH_PYRAMID_LEVEL.layout_of(device, |name| name != "depth");
+        let reduce_depth_layout = DEPTH_PYRAMID_LEVEL.layout_of(device, &["level", "depth"]);
+        let reduce_level_layout = DEPTH_PYRAMID_LEVEL.layout_of(device, &["level", "level_below"]);
         let pipeline = |entry_point, layout| {
             let label = "Depth Pyramid Pipeline Layout";
             device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -66,27 +65,35 @@ impl DepthPyramidPass {
     /// creation, and after every resize, which creates them again.
     pub fn bind_render_targets(&mut self, device: &wgpu::Device, render_targets: &RenderTargets) {
         let levels = render_targets.depth_pyramid_levels();
-        self.levels = (0..levels.len())
-            .map(|index| {
-                let level = &levels[index];
-                let (layout, reduced_name, reduced) = match index {
-                    0 => (&self.reduce_depth_layout, "depth", render_targets.depth()),
-                    _ => (&self.reduce_level_layout, "level_below", &levels[index - 1]),
-                };
-                let bind_group = DEPTH_PYRAMID_LEVEL.bind_group(
-                    device,
-                    layout,
-                    [
-                        ("level", wgpu::BindingResource::TextureView(level)),
-                        (reduced_name, wgpu::BindingResource::TextureView(reduced)),
-                    ],
-                );
-                let size = level
-                    .texture()
-                    .size()
-                    .mip_level_size(index as u32, wgpu::TextureDimension::D2);
-                (bind_group, size)
-            })
+        let bind = |index: usize, layout, reduced: (&'static str, &wgpu::TextureView)| {
+            let level = &levels[index];
+            let bind_group = DEPTH_PYRAMID_LEVEL.bind_group(
+                device,
+                layout,
+                [
+                    ("level", wgpu::BindingResource::TextureView(level)),
+                    (reduced.0, wgpu::BindingResource::TextureView(reduced.1)),
+                ],
+            );
+            let size = level
+                .texture()
+                .size()
+                .mip_level_size(index as u32, wgpu::TextureDimension::D2);
+            (bind_group, size)
+        };
+        let reduce_depth = bind(
+            0,
+            &self.reduce_depth_layout,
+            ("depth", render_targets.depth()),
+        );
+        self.levels = std::iter::once(reduce_depth)
+            .chain((1..levels.len()).map(|index| {
+                bind(
+                    index,
+                    &self.reduce_level_layout,
+                    ("level_below", &levels[index - 1]),
+                )
+            }))
             .collect();
     }
 
@@ -100,12 +107,13 @@ impl DepthPyramidPass {
             label: Some(DEPTH_PYRAMID_PASS),
             timestamp_writes,
         });
+        // Level 0 reduces the depth target, each later level the one below.
         for (index, (bind_group, size)) in self.levels.iter().enumerate() {
-            match index {
-                0 => pass.set_pipeline(&self.reduce_depth),
-                1 => pass.set_pipeline(&self.reduce_level),
-                _ => {}
-            }
+            pass.set_pipeline(if index == 0 {
+                &self.reduce_depth
+            } else {
+                &self.reduce_level
+            });
             pass.set_bind_group(DEPTH_PYRAMID_LEVEL.index, bind_group, &[]);
             pass.dispatch_workgroups(
                 size.width.div_ceil(DEPTH_PYRAMID_TILE_SIZE),
