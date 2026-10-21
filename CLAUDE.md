@@ -108,9 +108,13 @@ src/
                                  compute pass that builds the frame's
                                  draw; main_pass: the depth pre-pass
                                  and the lit pass that draw it, their
-                                 pipelines and recording), targets
-                                 (every size-dependent target, the
-                                 depth conventions), prepare (ECS World to
+                                 pipelines and recording;
+                                 depth_pyramid_pass: the compute pass
+                                 that reduces the pre-pass's depth into
+                                 the Hi-Z pyramid), targets (every
+                                 size-dependent target, the depth
+                                 pyramid among them, the depth
+                                 conventions), prepare (ECS World to
                                  Frame data), bind_groups (each defined
                                  once), readback (each frame's GPU stats
                                  through a ring of mapped buffers),

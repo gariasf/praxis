@@ -7,9 +7,11 @@
 
 use crate::cooked::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use crate::render::bind_groups::{
-    BindGroupDefinition, FRAME, FRAME_DRAW, MATERIALS, MESHLET_RECORDS, SCENE_GEOMETRY,
+    BindGroupDefinition, DEPTH_PYRAMID_LEVEL, FRAME, FRAME_DRAW, MATERIALS, MESHLET_RECORDS,
+    SCENE_GEOMETRY,
 };
 use crate::render::culling_pass::SCAN_BLOCK_SIZE;
+use crate::render::depth_pyramid_pass::DEPTH_PYRAMID_TILE_SIZE;
 use crate::render::instance::{ANCHOR_CELL_SIZE, INSTANCE_CAPACITY, NO_MATERIAL, NO_MESH};
 use crate::render::renderer::RenderSwitches;
 
@@ -69,6 +71,14 @@ pub const CULLING: ShaderModule = ShaderModule {
     parts: &[COMMON, part!("culling.wgsl")],
 };
 
+/// The depth pyramid pass.
+pub const DEPTH_PYRAMID: ShaderModule = ShaderModule {
+    name: "depth_pyramid",
+    enables: &[],
+    bind_groups: &[&DEPTH_PYRAMID_LEVEL],
+    parts: &[part!("depth_pyramid.wgsl")],
+};
+
 /// The shared parts alone, which the oracle harness appends its kernel to.
 #[cfg(test)]
 pub const SHARED: ShaderModule = ShaderModule {
@@ -80,7 +90,7 @@ pub const SHARED: ShaderModule = ShaderModule {
 
 /// Every module, which `shader_tests` validates.
 #[cfg(test)]
-pub const MODULES: [ShaderModule; 3] = [SHARED, MAIN, CULLING];
+pub const MODULES: [ShaderModule; 4] = [SHARED, MAIN, CULLING, DEPTH_PYRAMID];
 
 impl ShaderModule {
     /// The descriptor that compiles the module, labelled with its name.
@@ -132,7 +142,8 @@ impl ShaderModule {
              const NO_MESH: u32 = {NO_MESH}u;\n\
              const NO_MATERIAL: u32 = {NO_MATERIAL}u;\n\
              const SCAN_BLOCK_SIZE: u32 = {SCAN_BLOCK_SIZE}u;\n\
-             const INSTANCE_CAPACITY: u32 = {INSTANCE_CAPACITY}u;\n",
+             const INSTANCE_CAPACITY: u32 = {INSTANCE_CAPACITY}u;\n\
+             const DEPTH_PYRAMID_TILE_SIZE: u32 = {DEPTH_PYRAMID_TILE_SIZE}u;\n",
             ANCHOR_CELL_SIZE as f32,
             MESHLET_MAX_VERTICES.ilog2()
         ));

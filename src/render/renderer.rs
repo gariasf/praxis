@@ -4,6 +4,7 @@ use crate::assets::{ARENA_CAPACITY_BYTES, MaterialPool, MeshPool};
 use crate::gpu::GpuContext;
 use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
 use crate::render::culling_pass::{CULLING_PASS, CullingPass, DrawCapacity};
+use crate::render::depth_pyramid_pass::{DEPTH_PYRAMID_PASS, DepthPyramidPass};
 use crate::render::main_pass::{DEPTH_PREPASS, LIT_PASS, MainPass};
 use crate::render::readback::GpuStatsReadback;
 use crate::render::targets::RenderTargets;
@@ -15,7 +16,8 @@ use crate::stats::{FrameRecorder, GpuFrameStats};
 
 /// The passes `render` records, in order, each timed from its start to its
 /// end.
-pub(crate) const TIMED_PASSES: [&str; 3] = [CULLING_PASS, DEPTH_PREPASS, LIT_PASS];
+pub(crate) const TIMED_PASSES: [&str; 4] =
+    [CULLING_PASS, DEPTH_PREPASS, DEPTH_PYRAMID_PASS, LIT_PASS];
 
 /// The Render switches a Renderer is created with and keeps. The defaults are
 /// what ships; capture and bench take others, for equivalence checks and
@@ -53,6 +55,7 @@ pub struct Renderer {
     render_targets: RenderTargets,
     culling_pass: CullingPass,
     main_pass: MainPass,
+    depth_pyramid_pass: DepthPyramidPass,
     camera_buffer: wgpu::Buffer,
     light_buffer: wgpu::Buffer,
     /// The camera and the lights (`FRAME`).
@@ -203,6 +206,7 @@ impl Renderer {
         );
 
         let render_targets = RenderTargets::new(&device, target_format, width, height);
+        let depth_pyramid_pass = DepthPyramidPass::new(&device, &render_targets);
         let gpu_stats = GpuStatsReadback::new(&device, queue.get_timestamp_period());
         let static_tlas = StaticTlas::new(&device, STATIC_TLAS_CAPACITY);
 
@@ -217,6 +221,7 @@ impl Renderer {
             render_targets,
             culling_pass,
             main_pass,
+            depth_pyramid_pass,
             camera_buffer,
             light_buffer,
             frame_bind_group,
@@ -238,6 +243,8 @@ impl Renderer {
         // A pass whose bind groups read a target rebuilds them here, after
         // the render targets.
         self.render_targets = RenderTargets::new(&self.device, self.target_format, width, height);
+        self.depth_pyramid_pass
+            .bind_render_targets(&self.device, &self.render_targets);
         self.aspect_ratio = width as f32 / height as f32;
     }
 
@@ -330,18 +337,30 @@ impl Renderer {
             frame,
             timestamps.map(|timestamps| timestamps.compute_pass(CULLING_PASS)),
         );
-        self.main_pass.record(
+        let bind_groups = [
+            (&FRAME, &self.frame_bind_group),
+            (&MATERIALS, &self.material_pool.bind_group),
+            (&SCENE_GEOMETRY, &self.scene_geometry_bind_group),
+        ];
+        self.main_pass.record_depth_prepass(
             &mut encoder,
-            target,
             &self.render_targets,
-            &[
-                (&FRAME, &self.frame_bind_group),
-                (&MATERIALS, &self.material_pool.bind_group),
-                (&SCENE_GEOMETRY, &self.scene_geometry_bind_group),
-            ],
+            &bind_groups,
             self.culling_pass.packed_indices(),
             self.culling_pass.frame_draw(),
             timestamps.map(|timestamps| timestamps.render_pass(DEPTH_PREPASS)),
+        );
+        self.depth_pyramid_pass.record(
+            &mut encoder,
+            timestamps.map(|timestamps| timestamps.compute_pass(DEPTH_PYRAMID_PASS)),
+        );
+        self.main_pass.record_lit_pass(
+            &mut encoder,
+            target,
+            &self.render_targets,
+            &bind_groups,
+            self.culling_pass.packed_indices(),
+            self.culling_pass.frame_draw(),
             timestamps.map(|timestamps| timestamps.render_pass(LIT_PASS)),
         );
         // The depth pre-pass and the lit pass each draw the frame's draw with
@@ -841,6 +860,218 @@ mod tests {
             let drawn_slots: Vec<u32> = records.iter().map(|record| record[0]).collect();
             assert_eq!(drawn_slots, expected, "{switches:?}");
         }
+    }
+
+    /// A Renderer resized to an odd size, drawing triangles at several depths
+    /// over one three times their size: its depth pyramid, built from the
+    /// depth the frame left, holds in each texel of each level the minimum
+    /// depth of the texels below whose share of the screen overlaps its own,
+    /// against a CPU reduction of every sample of the depth target, read
+    /// back. Odd sides make each level round down and some texels cover three
+    /// below them.
+    #[test]
+    fn each_depth_pyramid_texel_holds_the_minimum_depth_of_its_share_of_the_screen() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let (width, height) = (37, 23);
+        let mut renderer = Renderer::new(
+            &context,
+            TARGET_FORMAT,
+            SIZE,
+            SIZE,
+            RenderSwitches::default(),
+        );
+        renderer.resize(width, height);
+        let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
+        let mesh = load_triangles(&mut renderer, &[[0.0, 0.0]], &[Some(red)]);
+        // Each triangle's centre, scale and depth: with an identity
+        // view-projection, a depth is a z, and the Mesh's vertices sit at
+        // z = 0.5.
+        let placements = [
+            ([0.0, 0.0], 3.0, 0.2),
+            ([-0.4, 0.3], 1.0, 0.7),
+            ([0.3, -0.2], 1.0, 0.45),
+            ([0.5, 0.4], 1.0, 0.9),
+            ([-0.6, -0.5], 1.0, 0.3),
+        ];
+        let instances = placements
+            .map(|([x, y], scale, depth)| InstanceData {
+                rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::Vec3::splat(scale))),
+                offset: [x, y, depth - 0.5 * scale],
+                ..instance(mesh, NO_MATERIAL, [0.0, 0.0])
+            })
+            .to_vec();
+        render_frame(&context, &mut renderer, &frame_of(instances), width, height);
+        let descriptor = wgpu::CommandEncoderDescriptor::default();
+        let mut encoder = context.device.create_command_encoder(&descriptor);
+        renderer.depth_pyramid_pass.record(&mut encoder, None);
+        context.queue.submit([encoder.finish()]);
+
+        let samples = read_depth_samples(&context, renderer.render_targets.depth());
+        let expected = minimum_depth_pyramid(&samples, width, height);
+        let levels = renderer.render_targets.depth_pyramid_levels();
+        assert_eq!(levels.len(), expected.len());
+        for ((level, view), expected) in (0..).zip(levels).zip(&expected) {
+            let actual = read_texels(&context, view, level);
+            let differing = actual
+                .iter()
+                .zip(expected)
+                .filter(|(actual, expected)| actual != expected)
+                .count();
+            assert!(
+                actual.len() == expected.len() && differing == 0,
+                "level {level}: {differing} of {} texels differ\n{actual:?}\n{expected:?}",
+                expected.len()
+            );
+        }
+        // Not all background: the large triangle covers whole texels.
+        assert!(expected.iter().flatten().any(|&depth| depth > 0.0));
+    }
+
+    /// Each level of a pyramid of the minimum of `samples`, those of a
+    /// `width` × `height` depth target, each pixel's together, rows top
+    /// first: from the pixels, each level half the size of the one below,
+    /// rounded down but at least 1, to 1 × 1, each texel the minimum of the
+    /// texels below whose share of the screen overlaps its own, the rows and
+    /// columns of every level sharing it evenly.
+    fn minimum_depth_pyramid(samples: &[f32], width: u32, height: u32) -> Vec<Vec<f32>> {
+        let samples_per_pixel = samples.len() / (width * height) as usize;
+        let mut below: Vec<f32> = samples
+            .chunks(samples_per_pixel)
+            .map(|pixel| pixel.iter().copied().fold(f32::INFINITY, f32::min))
+            .collect();
+        let (mut below_width, mut below_height) = (width, height);
+        // Whether texel `below_texel` of a row `below_size` long and texel
+        // `texel` of one `size` long share part of the screen.
+        let overlap = |texel: u32, size: u32, below_texel: u32, below_size: u32| {
+            below_texel * size < (texel + 1) * below_size
+                && (below_texel + 1) * size > texel * below_size
+        };
+        let mut levels = Vec::new();
+        loop {
+            let (level_width, level_height) = ((below_width / 2).max(1), (below_height / 2).max(1));
+            let mut level = Vec::new();
+            for y in 0..level_height {
+                for x in 0..level_width {
+                    let mut minimum = f32::INFINITY;
+                    for below_y in 0..below_height {
+                        for below_x in 0..below_width {
+                            if overlap(y, level_height, below_y, below_height)
+                                && overlap(x, level_width, below_x, below_width)
+                            {
+                                minimum =
+                                    minimum.min(below[(below_y * below_width + below_x) as usize]);
+                            }
+                        }
+                    }
+                    level.push(minimum);
+                }
+            }
+            levels.push(level.clone());
+            if (level_width, level_height) == (1, 1) {
+                return levels;
+            }
+            (below, below_width, below_height) = (level, level_width, level_height);
+        }
+    }
+
+    /// Every sample of a multisampled depth target, each pixel's together,
+    /// rows top first.
+    fn read_depth_samples(context: &GpuContext, depth: &wgpu::TextureView) -> Vec<f32> {
+        let texture = depth.texture();
+        read_texture(
+            context,
+            "@group(0) @binding(0) var source: texture_depth_multisampled_2d;
+            @group(0) @binding(1) var<storage, read_write> values: array<f32>;
+            @compute @workgroup_size(1)
+            fn copy(@builtin(global_invocation_id) pixel: vec3<u32>) {
+                let samples = textureNumSamples(source);
+                let first = (pixel.y * textureDimensions(source).x + pixel.x) * samples;
+                for (var sample = 0u; sample < samples; sample++) {
+                    values[first + sample] = textureLoad(source, pixel.xy, sample);
+                }
+            }",
+            depth,
+            [texture.width(), texture.height()],
+            texture.sample_count(),
+        )
+    }
+
+    /// The texels of `level`, a view of level `index` alone of an R32Float
+    /// texture, rows top first.
+    fn read_texels(context: &GpuContext, level: &wgpu::TextureView, index: u32) -> Vec<f32> {
+        let size = level
+            .texture()
+            .size()
+            .mip_level_size(index, wgpu::TextureDimension::D2);
+        read_texture(
+            context,
+            "@group(0) @binding(0) var source: texture_2d<f32>;
+            @group(0) @binding(1) var<storage, read_write> values: array<f32>;
+            @compute @workgroup_size(1)
+            fn copy(@builtin(global_invocation_id) texel: vec3<u32>) {
+                values[texel.y * textureDimensions(source).x + texel.x] =
+                    textureLoad(source, texel.xy, 0).r;
+            }",
+            level,
+            [size.width, size.height],
+            1,
+        )
+    }
+
+    /// The f32s `kernel` copies from `view`, with one invocation of its `copy`
+    /// entry point per texel of its `size`, each writing `values_per_texel`.
+    fn read_texture(
+        context: &GpuContext,
+        kernel: &str,
+        view: &wgpu::TextureView,
+        size: [u32; 2],
+        values_per_texel: u32,
+    ) -> Vec<f32> {
+        let device = &context.device;
+        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Texture Read-back"),
+            source: wgpu::ShaderSource::Wgsl(kernel.into()),
+        });
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Texture Read-back"),
+            layout: None,
+            module: &module,
+            entry_point: Some("copy"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        });
+        let [width, height] = size;
+        let count = width * height * values_per_texel;
+        let values = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Texture Read-back Values"),
+            size: u64::from(count) * size_of::<f32>() as u64,
+            usage: wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Texture Read-back"),
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: values.as_entire_binding(),
+                },
+            ],
+        });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+        pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.dispatch_workgroups(width, height, 1);
+        drop(pass);
+        context.queue.submit([encoder.finish()]);
+        read_storage(context, &values, count as usize)
     }
 
     /// A headless context, or `None` after saying so on a machine without a

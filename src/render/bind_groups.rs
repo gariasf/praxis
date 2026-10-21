@@ -9,6 +9,7 @@
 use std::num::NonZeroU32;
 
 use crate::assets::material::TEXTURES_PER_CHANNEL;
+use crate::render::targets::DEPTH_PYRAMID_FORMAT;
 
 /// Group 0, written every frame: the camera and the lights.
 pub const FRAME: BindGroupDefinition = BindGroupDefinition {
@@ -115,6 +116,40 @@ pub const MESHLET_RECORDS: BindGroupDefinition = BindGroupDefinition {
     }],
 };
 
+/// Group 3 of the depth pyramid pass, one bind group per level of the
+/// pyramid (`RenderTargets`): the level written, and what it reduces, the
+/// depth target for level 0, the level below for the others.
+pub const DEPTH_PYRAMID_LEVEL: BindGroupDefinition = BindGroupDefinition {
+    index: 3,
+    label: "Depth Pyramid Level Bind Group",
+    bindings: &[
+        Binding {
+            name: "level",
+            wgsl_type: "texture_storage_2d<r32float, write>",
+            binding_type: wgpu::BindingType::StorageTexture {
+                access: wgpu::StorageTextureAccess::WriteOnly,
+                format: DEPTH_PYRAMID_FORMAT,
+                view_dimension: wgpu::TextureViewDimension::D2,
+            },
+            stages: wgpu::ShaderStages::COMPUTE,
+            count: None,
+            writer: Writer::Gpu,
+        },
+        loaded_texture(
+            "depth",
+            "texture_depth_multisampled_2d",
+            wgpu::TextureSampleType::Depth,
+            true,
+        ),
+        loaded_texture(
+            "level_below",
+            "texture_2d<f32>",
+            wgpu::TextureSampleType::Float { filterable: false },
+            false,
+        ),
+    ],
+};
+
 /// A bind group: its index and its bindings, each numbered by its place.
 pub struct BindGroupDefinition {
     /// Where pipeline layouts hold the group and passes set it.
@@ -156,8 +191,19 @@ impl BindGroupDefinition {
     }
 
     pub fn layout(&self, device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        self.layout_of(device, |_| true)
+    }
+
+    /// The layout of the bindings `holds` selects by name alone, for
+    /// pipelines whose entry points use no others: each keeps its index.
+    pub fn layout_of(
+        &self,
+        device: &wgpu::Device,
+        holds: impl Fn(&str) -> bool,
+    ) -> wgpu::BindGroupLayout {
         let entries: Vec<wgpu::BindGroupLayoutEntry> = (0..)
             .zip(self.bindings)
+            .filter(|(_, binding)| holds(binding.name))
             .map(|(index, binding)| wgpu::BindGroupLayoutEntry {
                 binding: index,
                 visibility: binding.stages,
@@ -298,6 +344,28 @@ const fn buffer(
         stages,
         count: None,
         writer: Writer::Cpu,
+    }
+}
+
+/// A texture the compute stage loads texels from, which only the GPU
+/// writes.
+const fn loaded_texture(
+    name: &'static str,
+    wgsl_type: &'static str,
+    sample_type: wgpu::TextureSampleType,
+    multisampled: bool,
+) -> Binding {
+    Binding {
+        name,
+        wgsl_type,
+        binding_type: wgpu::BindingType::Texture {
+            sample_type,
+            view_dimension: wgpu::TextureViewDimension::D2,
+            multisampled,
+        },
+        stages: wgpu::ShaderStages::COMPUTE,
+        count: None,
+        writer: Writer::Gpu,
     }
 }
 

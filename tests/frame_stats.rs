@@ -71,11 +71,12 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // Meshlet records of 12 bytes, 2^24 packed indices of 4 bytes and 28
     // bytes of indirect arguments and counts, the 160×90 Depth32Float
     // texture at 4 samples, its 4x RGBA8 colour, which Apple GPUs keep in
-    // tile memory, so it counts nothing on Metal, three staging slots of the
-    // first frame's 1572 uploaded bytes rounded up to 2048, and the GPU stats
-    // readback: its resolve buffer of a begin and an end timestamp of 8 bytes
-    // for each of the three passes, and six slots of 80 bytes. The load's
-    // staging is gone.
+    // tile memory, so it counts nothing on Metal, the R32Float depth pyramid
+    // from 80×45 down to 1×1 (80×45, 40×22, 20×11, 10×5, 5×2, 2×1, 1×1),
+    // three staging slots of the first frame's 1572 uploaded bytes rounded
+    // up to 2048, and the GPU stats readback: its resolve buffer of a begin
+    // and an end timestamp of 8 bytes for each of the four passes, and six
+    // slots of 96 bytes. The load's staging is gone.
     let multisampled_color = match context.backend() {
         wgpu::Backend::Metal => 0,
         _ => 160 * 90 * 4 * 4,
@@ -97,9 +98,10 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + 28
             + 160 * 90 * 4 * 4
             + multisampled_color
+            + (3600 + 880 + 220 + 50 + 10 + 2 + 1) * 4
             + 3 * 2048
-            + 3 * 2 * 8
-            + 6 * 80
+            + 4 * 2 * 8
+            + 6 * 96
     );
     // One UV sphere in the Arenas: its triangles of three u32s, and 25 rings
     // of 49 vertices of 28 bytes, less the one vertex at each pole that only
@@ -165,7 +167,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         let passes: Vec<&str> = gpu.pass_times.iter().map(|&(pass, _)| pass).collect();
         assert_eq!(
             passes,
-            ["culling_pass", "depth_prepass", "lit_pass"],
+            ["culling_pass", "depth_prepass", "depth_pyramid", "lit_pass"],
             "frame {frame}"
         );
         for (pass, time) in gpu.pass_times {

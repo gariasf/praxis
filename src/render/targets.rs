@@ -13,6 +13,9 @@ pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 /// every pipeline that draws into them matches.
 pub const SAMPLE_COUNT: u32 = 4;
 
+/// The depth pyramid's format: a depth per texel.
+pub const DEPTH_PYRAMID_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Float;
+
 /// Every size-dependent target, created together by `new`, which a resize
 /// calls again. Bind groups are snapshots, not pointers: a pass builds the
 /// bind groups that read targets in one function, which it calls at
@@ -22,6 +25,12 @@ pub struct RenderTargets {
     /// A transient attachment, memoryless where the adapter allows: the pass
     /// that clears it resolves it into the target before it ends.
     color: wgpu::TextureView,
+    /// A view of each level of the depth pyramid, the Hi-Z pyramid that
+    /// holds the minimum depth over each share of the screen: level 0 half
+    /// the targets' size, rounded down, and each level half the one below,
+    /// to 1 × 1, the rows and columns of each level sharing the screen
+    /// evenly.
+    depth_pyramid_levels: Vec<wgpu::TextureView>,
 }
 
 impl RenderTargets {
@@ -50,18 +59,54 @@ impl RenderTargets {
             });
             texture.create_view(&wgpu::TextureViewDescriptor::default())
         };
+        let pyramid_size = wgpu::Extent3d {
+            width: (width / 2).max(1),
+            height: (height / 2).max(1),
+            depth_or_array_layers: 1,
+        };
+        let depth_pyramid = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Depth Pyramid"),
+            size: pyramid_size,
+            mip_level_count: pyramid_size.max_mips(wgpu::TextureDimension::D2),
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: DEPTH_PYRAMID_FORMAT,
+            // Each level is written as storage, then read to reduce the next.
+            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
         RenderTargets {
+            // Read by the depth pyramid pass.
             depth: attachment(
                 "Depth Texture",
                 DEPTH_FORMAT,
-                wgpu::TextureUsages::RENDER_ATTACHMENT,
+                wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             ),
             color: attachment(
                 "Multisampled Colour Texture",
                 target_format,
                 wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
             ),
+            depth_pyramid_levels: (0..depth_pyramid.mip_level_count())
+                .map(|level| {
+                    depth_pyramid.create_view(&wgpu::TextureViewDescriptor {
+                        base_mip_level: level,
+                        mip_level_count: Some(1),
+                        ..wgpu::TextureViewDescriptor::default()
+                    })
+                })
+                .collect(),
         }
+    }
+
+    /// The depth target, as passes read it.
+    pub fn depth(&self) -> &wgpu::TextureView {
+        &self.depth
+    }
+
+    /// A view of each level of the depth pyramid, from level 0.
+    pub fn depth_pyramid_levels(&self) -> &[wgpu::TextureView] {
+        &self.depth_pyramid_levels
     }
 
     /// The depth target as the attachment of the frame's first pass that
@@ -109,7 +154,7 @@ impl RenderTargets {
 
     /// Bytes of the targets' textures.
     pub fn gpu_memory_bytes(&self, transient_saves_memory: bool) -> u64 {
-        [&self.depth, &self.color]
+        [&self.depth, &self.color, &self.depth_pyramid_levels[0]]
             .into_iter()
             .map(|view| texture_bytes(view.texture(), transient_saves_memory))
             .sum()
