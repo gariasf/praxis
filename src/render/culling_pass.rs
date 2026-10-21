@@ -1,8 +1,12 @@
 //! The culling pass: a compute pass that builds the frame's draw from the
 //! Instances, a Meshlet record per Meshlet of each Instance and a packed
 //! index per triangle corner, in slot order, which the main pass draws with
-//! one indirect call (ADR 0019). With the `culling` Render switch on, it
-//! draws only the Instances whose Mesh bounds reach into the view frustum.
+//! one indirect call per pipeline and phase (ADR 0019). It runs in two
+//! phases: phase one draws the Instances visible the frame before, phase
+//! two, after the depth pyramid, the others, and it records each Instance's
+//! visibility for the next frame. With the `culling` Render switch on, it
+//! draws only the Instances whose Mesh bounds reach into the view frustum;
+//! off, phase one draws every Instance in use.
 
 use crate::cooked::MESHLET_MAX_VERTICES;
 use crate::render::INSTANCE_CAPACITY;
@@ -11,8 +15,19 @@ use crate::render::prepare::FrameData;
 use crate::render::renderer::RenderSwitches;
 use crate::render::shaders;
 
-/// The culling pass's label, and its name in frame stats.
-pub(crate) const CULLING_PASS: &str = "culling_pass";
+/// The culling pass's phases' labels, and their names in frame stats.
+pub(crate) const CULLING_PHASE_ONE: &str = "culling_phase_one";
+pub(crate) const CULLING_PHASE_TWO: &str = "culling_phase_two";
+
+/// A phase of the culling pass.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CullingPhase {
+    /// Draws the Instances visible the frame before into the depth pre-pass.
+    One,
+    /// After the depth pyramid, draws the other Instances visible now, and
+    /// records which are visible for the next frame.
+    Two,
+}
 
 /// Slots each workgroup of the pass's scans sums: the scans of
 /// `INSTANCE_CAPACITY` slots take one workgroup of blocks, 8 to an
@@ -37,15 +52,23 @@ impl DrawCapacity {
 }
 
 /// The frame's draw as `culling.wgsl` lays it out, which the GPU stats
-/// readback reads: the indirect arguments of one indexed draw, its index
-/// count first, then the Instances it holds and those it has no room for.
+/// readback reads: the indirect arguments of the indexed draw of both
+/// phases, its index count first, then the Instances it holds and those it
+/// has no room for, then phase two's own draw's arguments, and where phase
+/// two's Meshlet records and packed indices start.
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct FrameDraw {
-    arguments: [u32; 5],
+    pub(crate) arguments: [u32; 5],
     pub(crate) instances_drawn: u32,
     pub(crate) instances_overflowed: u32,
+    pub(crate) phase_two_arguments: [u32; 5],
+    phase_two_offsets: [u32; 2],
 }
+
+/// Where the frame's draw holds the indirect arguments of phase two's draw.
+pub(crate) const PHASE_TWO_DRAW_OFFSET: u64 =
+    std::mem::offset_of!(FrameDraw, phase_two_arguments) as u64;
 
 impl FrameDraw {
     /// Its index count over 3: the drawn Instances' indices fill the draw
@@ -55,12 +78,18 @@ impl FrameDraw {
     }
 }
 
-/// The culling pass's pipelines, one per step, and the frame's draw it
-/// writes.
-pub struct CullingPass {
+/// The pipelines of one phase of the culling pass, one per step.
+struct PhasePipelines {
     offset_slots: wgpu::ComputePipeline,
     offset_blocks: wgpu::ComputePipeline,
     append_meshlets: wgpu::ComputePipeline,
+}
+
+/// The culling pass's pipelines, each phase's, and the frame's draw it
+/// writes.
+pub struct CullingPass {
+    phase_one: PhasePipelines,
+    phase_two: PhasePipelines,
     /// The Instance slots in use, which the CPU writes when they change.
     instance_slot_count: wgpu::Buffer,
     /// Each slot's first Meshlet record and packed index within its block of
@@ -70,6 +99,9 @@ pub struct CullingPass {
     packed_indices: wgpu::Buffer,
     /// The draw's indirect arguments and counts (`FrameDraw`).
     frame_draw: wgpu::Buffer,
+    /// A bit per Instance slot, set where phase two found its Instance
+    /// visible, which phase one reads the next frame.
+    instance_visibility: wgpu::Buffer,
     /// Its group 3 (`FRAME_DRAW`).
     bind_group: wgpu::BindGroup,
     max_workgroups_per_dimension: u32,
@@ -127,6 +159,12 @@ impl CullingPass {
                 | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::COPY_SRC,
         );
+        // Zeroed at creation: no Instance was visible before the first frame.
+        let instance_visibility = buffer(
+            "Instance Visibility Buffer",
+            u64::from(INSTANCE_CAPACITY / u32::BITS) * size_of::<u32>() as u64,
+            wgpu::BufferUsages::STORAGE,
+        );
         let frame_draw_layout = FRAME_DRAW.layout(device);
         let bind_group = FRAME_DRAW.bind_group(
             device,
@@ -140,6 +178,10 @@ impl CullingPass {
                 ("meshlet_records", meshlet_records.as_entire_binding()),
                 ("packed_indices", packed_indices.as_entire_binding()),
                 ("frame_draw", frame_draw.as_entire_binding()),
+                (
+                    "instance_visibility",
+                    instance_visibility.as_entire_binding(),
+                ),
             ],
         );
 
@@ -147,52 +189,71 @@ impl CullingPass {
         let mut layouts = bind_group_layouts.to_vec();
         layouts.push((&FRAME_DRAW, &frame_draw_layout));
         let layout = pipeline_layout(device, "Culling Pass Pipeline Layout", &layouts);
-        let constants = switches.constants();
-        let pipeline = |entry_point| {
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some(entry_point),
-                layout: Some(&layout),
-                module: &shader,
-                entry_point: Some(entry_point),
-                compilation_options: wgpu::PipelineCompilationOptions {
-                    constants: &constants,
-                    ..wgpu::PipelineCompilationOptions::default()
-                },
-                cache: None,
-            })
+        let phase_pipelines = |phase_two: bool| {
+            let constants: Vec<(&str, f64)> = switches
+                .constants()
+                .into_iter()
+                .chain([("PHASE_TWO", f64::from(u8::from(phase_two)))])
+                .collect();
+            let pipeline = |entry_point| {
+                device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: Some(entry_point),
+                    layout: Some(&layout),
+                    module: &shader,
+                    entry_point: Some(entry_point),
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants: &constants,
+                        ..wgpu::PipelineCompilationOptions::default()
+                    },
+                    cache: None,
+                })
+            };
+            PhasePipelines {
+                offset_slots: pipeline("offset_slots"),
+                offset_blocks: pipeline("offset_blocks"),
+                append_meshlets: pipeline("append_meshlets"),
+            }
         };
         CullingPass {
-            offset_slots: pipeline("offset_slots"),
-            offset_blocks: pipeline("offset_blocks"),
-            append_meshlets: pipeline("append_meshlets"),
+            phase_one: phase_pipelines(false),
+            phase_two: phase_pipelines(true),
             instance_slot_count,
             instance_offsets,
             meshlet_records,
             packed_indices,
             frame_draw,
+            instance_visibility,
             bind_group,
             max_workgroups_per_dimension: device.limits().max_compute_workgroups_per_dimension,
         }
     }
 
-    /// Records the pass into `encoder`: clears the frame's draw, then
-    /// appends the Meshlets of the Instances it draws among `frame`'s slots
-    /// in use, with `bind_groups` set, timed into `timestamp_writes`. Where
-    /// they need more Meshlet records or packed indices than the draw holds,
-    /// it draws the Instances that fit and counts the others as overflowed,
-    /// which the GPU stats readback warns about.
+    /// Records `phase` of the pass into `encoder`: phase one clears the
+    /// frame's draw first. It appends the Meshlets of the Instances the phase
+    /// draws among `frame`'s slots in use, with `bind_groups` set, timed into
+    /// `timestamp_writes`. Where they need more Meshlet records or packed
+    /// indices than the draw holds, it draws the Instances that fit and
+    /// counts the others as overflowed, which the GPU stats readback warns
+    /// about.
     pub fn record(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
         frame: &FrameData,
+        phase: CullingPhase,
         timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
     ) {
+        let (label, pipelines) = match phase {
+            CullingPhase::One => {
+                encoder.clear_buffer(&self.frame_draw, 0, None);
+                (CULLING_PHASE_ONE, &self.phase_one)
+            }
+            CullingPhase::Two => (CULLING_PHASE_TWO, &self.phase_two),
+        };
         // Each slot's offsets are the sum of the earlier slots' Meshlet
         // records and packed indices: summed by block, then the blocks.
-        encoder.clear_buffer(&self.frame_draw, 0, None);
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some(CULLING_PASS),
+            label: Some(label),
             timestamp_writes,
         });
         for &(definition, bind_group) in bind_groups {
@@ -201,12 +262,12 @@ impl CullingPass {
         pass.set_bind_group(FRAME_DRAW.index, &self.bind_group, &[]);
         let slots = frame.instance_slot_count;
         if slots > 0 {
-            pass.set_pipeline(&self.offset_slots);
+            pass.set_pipeline(&pipelines.offset_slots);
             pass.dispatch_workgroups(slots.div_ceil(SCAN_BLOCK_SIZE), 1, 1);
-            pass.set_pipeline(&self.offset_blocks);
+            pass.set_pipeline(&pipelines.offset_blocks);
             pass.dispatch_workgroups(1, 1, 1);
             // A workgroup per slot, in rows each dimension's limit holds.
-            pass.set_pipeline(&self.append_meshlets);
+            pass.set_pipeline(&pipelines.append_meshlets);
             let rows = slots.div_ceil(self.max_workgroups_per_dimension);
             pass.dispatch_workgroups(slots.div_ceil(rows), rows, 1);
         }
@@ -232,7 +293,8 @@ impl CullingPass {
         &self.frame_draw
     }
 
-    /// Bytes of the frame's draw, and of the Instance slot count and offsets.
+    /// Bytes of the frame's draw, and of the Instance slot count, offsets
+    /// and visibility.
     pub fn gpu_memory_bytes(&self) -> u64 {
         [
             &self.instance_slot_count,
@@ -240,6 +302,7 @@ impl CullingPass {
             &self.meshlet_records,
             &self.packed_indices,
             &self.frame_draw,
+            &self.instance_visibility,
         ]
         .iter()
         .map(|buffer| buffer.size())

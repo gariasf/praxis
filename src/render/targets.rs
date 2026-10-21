@@ -122,12 +122,17 @@ impl RenderTargets {
         }
     }
 
-    /// The depth target as the attachment of a pass that only tests against
-    /// it: read-only, so wgpu refuses any pipeline of the pass that writes it.
-    pub fn read_only_depth_attachment(&self) -> wgpu::RenderPassDepthStencilAttachment<'_> {
+    /// The depth target as the attachment of the frame's last pass that
+    /// draws depth: loaded, and discarded, since no later pass reads it. A
+    /// pass that writes depth and stores it writes the whole target back,
+    /// about 50 µs at 1440p on the M4 Pro.
+    pub fn final_depth_attachment(&self) -> wgpu::RenderPassDepthStencilAttachment<'_> {
         wgpu::RenderPassDepthStencilAttachment {
             view: &self.depth,
-            depth_ops: None,
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Load,
+                store: wgpu::StoreOp::Discard,
+            }),
             stencil_ops: None,
         }
     }

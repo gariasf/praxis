@@ -88,7 +88,8 @@ pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
 /// Group 3 of the culling pass: the Instance slots in use, which the CPU
 /// writes when they change, and what the pass writes: each slot's offsets in
 /// the frame's draw, and the draw, its Meshlet records, its packed indices,
-/// and its indirect arguments and counts, which the CPU reads back.
+/// and its indirect arguments and counts, which the CPU reads back; and each
+/// slot's visibility, which phase two writes for the next frame's phase one.
 pub const FRAME_DRAW: BindGroupDefinition = BindGroupDefinition {
     index: 3,
     label: "Frame Draw Bind Group",
@@ -98,6 +99,7 @@ pub const FRAME_DRAW: BindGroupDefinition = BindGroupDefinition {
         storage("meshlet_records", "array<MeshletRecord>"),
         storage("packed_indices", "array<u32>"),
         storage("frame_draw", "FrameDraw"),
+        storage("instance_visibility", "array<u32>"),
     ],
 };
 

@@ -18,6 +18,11 @@ fn vs_depth_prepass(@builtin(vertex_index) packed_index: u32) -> @builtin(positi
     return vertex_output(packed_index).clip_position;
 }
 
+// The lit pass draws phase two's Instances into depth before it shades,
+// with this and `vs_depth_prepass`: it writes no colour.
+@fragment
+fn fs_depth() {}
+
 @vertex
 fn vs_main(@builtin(vertex_index) packed_index: u32) -> VertexOutput {
     return vertex_output(packed_index);
