@@ -124,30 +124,25 @@ impl MainPass {
         }
     }
 
-    /// Records the depth pre-pass and the lit pass into `encoder`: clears the
-    /// render targets, draws the frame's draw, its packed indices
-    /// `packed_indices` and its indirect arguments `frame_draw`, in each pass,
-    /// with `bind_groups` set where it reads them, and resolves the colour
-    /// into `target`, a view in this pass's format and the render targets'
-    /// size. Each pass is timed into its own timestamp writes.
-    #[expect(clippy::too_many_arguments)]
-    pub fn record(
+    /// Records the depth pre-pass into `encoder`: clears the depth target
+    /// and draws the frame's draw, its packed indices `packed_indices` and
+    /// its indirect arguments `frame_draw`, with the groups of `bind_groups`
+    /// its vertex stage reads set, timed into `timestamp_writes`.
+    pub fn record_depth_prepass(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        target: &wgpu::TextureView,
         render_targets: &RenderTargets,
         bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
         packed_indices: &wgpu::Buffer,
         frame_draw: &wgpu::Buffer,
-        depth_prepass_timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
-        lit_pass_timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
+        timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
     ) {
         let mut depth_prepass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(DEPTH_PREPASS),
             color_attachments: &[],
             depth_stencil_attachment: Some(render_targets.depth_attachment()),
             occlusion_query_set: None,
-            timestamp_writes: depth_prepass_timestamps,
+            timestamp_writes,
             multiview_mask: None,
         });
         depth_prepass.set_pipeline(&self.depth_prepass_pipeline);
@@ -160,8 +155,24 @@ impl MainPass {
             packed_indices,
             frame_draw,
         );
-        drop(depth_prepass);
+    }
 
+    /// Records the lit pass into `encoder`: clears the multisampled colour,
+    /// draws the frame's draw, as `record_depth_prepass` does, at depth
+    /// equal, with `bind_groups` set, and resolves the colour into `target`,
+    /// a view in this pass's format and the render targets' size, timed into
+    /// `timestamp_writes`.
+    #[expect(clippy::too_many_arguments)]
+    pub fn record_lit_pass(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        target: &wgpu::TextureView,
+        render_targets: &RenderTargets,
+        bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
+        packed_indices: &wgpu::Buffer,
+        frame_draw: &wgpu::Buffer,
+        timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
+    ) {
         let mut lit_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(LIT_PASS),
             color_attachments: &[
@@ -170,7 +181,7 @@ impl MainPass {
             ],
             depth_stencil_attachment: Some(render_targets.read_only_depth_attachment()),
             occlusion_query_set: None,
-            timestamp_writes: lit_pass_timestamps,
+            timestamp_writes,
             multiview_mask: None,
         });
         lit_pass.set_pipeline(&self.lit_pipeline);
