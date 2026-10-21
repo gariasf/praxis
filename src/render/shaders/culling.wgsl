@@ -1,28 +1,50 @@
 // The culling pass's entry points, after the shared parts: they append the
 // Meshlets of the Instances they draw to the frame's draw in slot order,
-// which the main pass draws with one indirect call (ADR 0019). With the
-// CULLING Render switch on, they draw only the Instances whose Mesh bounds
-// reach into the view frustum. Its bindings are declared from their bind
-// groups' definitions (src/render/bind_groups.rs).
+// which the main pass draws with one indirect call per phase and depth
+// pipeline, and one of both phases for the lit pipeline (ADR 0019). Phase one draws the Instances visible the frame before;
+// phase two, after the depth pyramid, the other Instances in view, and it
+// records which Instances were visible for the next frame. With the CULLING
+// Render switch on, they draw only the Instances whose Mesh bounds reach
+// into the view frustum; off, phase one draws every Instance in use. Its
+// bindings are declared from their bind groups' definitions
+// (src/render/bind_groups.rs).
 //
 // Slot order keeps the draw the same from run to run: on the M4 Pro, which
 // triangles a draw holds before another changes the derivatives some pixels
 // sample their Textures with.
 
-// The frame's draw: the indirect arguments of one indexed draw from index 0,
-// then the Instances it holds and those it has no room for, which Frame
-// stats read back; cleared before the pass.
-struct FrameDraw {
+// Which phase a pipeline runs, set as it is created.
+override PHASE_TWO: bool;
+
+// The indirect arguments of one indexed draw.
+struct DrawIndexedIndirect {
     index_count: atomic<u32>,
     instance_count: u32,
     first_index: u32,
     base_vertex: i32,
     first_instance: u32,
+}
+
+// The frame's draw, cleared before phase one: the draw of the Instances
+// appended so far, from index 0, so phase one's, which the depth pre-pass
+// draws, then both phases', which the lit pass draws; the Instances it holds
+// and those it has no room for, which Frame stats read back; phase two's own
+// draw, of the indices after phase one's, which the lit pass draws into
+// depth before it shades; and where phase two's Meshlet records and packed
+// indices start, phase one's sums.
+struct FrameDraw {
+    draw: DrawIndexedIndirect,
     instances_drawn: atomic<u32>,
     instances_overflowed: atomic<u32>,
+    phase_two_draw: DrawIndexedIndirect,
+    phase_two_offsets: vec2<u32>,
 }
 
 var<workgroup> scan: array<vec2<u32>, SCAN_BLOCK_SIZE>;
+
+// Phase two's visibility bits for its block of slots, gathered before they
+// are written.
+var<workgroup> visible_words: array<atomic<u32>, SCAN_BLOCK_SIZE / 32u>;
 
 // The offsets of a slot the pass does not draw, freed or culled: past every
 // capacity, as a sum past a u32 saturates to.
@@ -104,27 +126,52 @@ fn in_view_frustum(instance: InstanceData, mesh: MeshData) -> bool {
     return all(side_reach >= vec4<f32>(0.0)) && near_reach >= 0.0;
 }
 
+// Whether the Instance in `slot` was visible in the frame before, as phase
+// two recorded it: one bit per slot.
+fn visible_before(slot: u32) -> bool {
+    return extractBits(instance_visibility[slot / 32u], slot % 32u, 1u) == 1u;
+}
+
 // A workgroup per block of SCAN_BLOCK_SIZE slots: each slot's Meshlet
-// records and packed indices, its Instance's where the pass draws it or none,
-// summed over the block's earlier slots into its offsets, NOT_DRAWN in their
-// place where it is not drawn, and the block's sum after every slot's.
+// records and packed indices, its Instance's where the phase draws it or
+// none, summed over the block's earlier slots into its offsets, NOT_DRAWN in
+// their place where it is not drawn, and the block's sum after every slot's.
+// Phase one draws an Instance in view that was visible the frame before;
+// phase two one in view that phase one did not draw, and records each
+// Instance in view as visible.
 @compute @workgroup_size(SCAN_BLOCK_SIZE)
 fn offset_slots(
     @builtin(workgroup_id) block: vec3<u32>,
     @builtin(local_invocation_index) invocation: u32
 ) {
     let slot = block.x * SCAN_BLOCK_SIZE + invocation;
+    var visible = false;
     var drawn = false;
     var counts = vec2<u32>(0u);
     if slot < instance_slot_count && instances[slot].mesh != NO_MESH {
         let instance = instances[slot];
         let mesh = meshes[instance.mesh];
-        drawn = !CULLING || in_view_frustum(instance, mesh);
+        visible = !CULLING || in_view_frustum(instance, mesh);
+        if PHASE_TWO {
+            // Phase one's offsets for the slot, before this phase's replace them.
+            drawn = CULLING && visible && all(instance_offsets[slot] == NOT_DRAWN);
+        } else {
+            drawn = visible && (!CULLING || visible_before(slot));
+        }
         if drawn {
             counts = vec2<u32>(mesh.meshlet_count, 3u * mesh.triangle_count);
         }
     }
+    if PHASE_TWO {
+        if visible {
+            atomicOr(&visible_words[invocation / 32u], 1u << (invocation % 32u));
+        }
+    }
     let offset = exclusive_scan(invocation, counts);
+    if PHASE_TWO && invocation < SCAN_BLOCK_SIZE / 32u {
+        instance_visibility[block.x * (SCAN_BLOCK_SIZE / 32u) + invocation] =
+            atomicLoad(&visible_words[invocation]);
+    }
     if slot < instance_slot_count {
         instance_offsets[slot] = select(NOT_DRAWN, offset, drawn);
     }
@@ -133,10 +180,11 @@ fn offset_slots(
     }
 }
 
-// One workgroup: each block's offsets, the sum of the earlier blocks', in
-// place of its own sum; and the draw is of one Instance. Each invocation
-// takes a run of blocks, its loops bounded alike in every invocation so the
-// scan's barriers stay in uniform control flow.
+// One workgroup: each block's offsets, the sum of the earlier blocks' after
+// where the phase starts, in place of its own sum; and the phase's draw is
+// of one Instance. Each invocation takes a run of blocks, its loops bounded
+// alike in every invocation so the scan's barriers stay in uniform control
+// flow. Phase one's sums are where phase two starts.
 @compute @workgroup_size(SCAN_BLOCK_SIZE)
 fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
     let block_count = (instance_slot_count + SCAN_BLOCK_SIZE - 1u) / SCAN_BLOCK_SIZE;
@@ -148,7 +196,12 @@ fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
             sum = saturating_add(sum, instance_offsets[INSTANCE_CAPACITY + first_block + step]);
         }
     }
-    var offset = exclusive_scan(invocation, sum);
+    // Phase one's last invocation writes these below: phase one reads none.
+    var first = vec2<u32>(0u);
+    if PHASE_TWO {
+        first = frame_draw.phase_two_offsets;
+    }
+    var offset = saturating_add(first, exclusive_scan(invocation, sum));
     for (var step = 0u; step < blocks_per_invocation; step++) {
         let block = INSTANCE_CAPACITY + first_block + step;
         if first_block + step < block_count {
@@ -157,8 +210,16 @@ fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
             offset = saturating_add(offset, block_sum);
         }
     }
+    if !PHASE_TWO && invocation == SCAN_BLOCK_SIZE - 1u {
+        frame_draw.phase_two_offsets = offset;
+    }
     if invocation == 0u {
-        frame_draw.instance_count = 1u;
+        if PHASE_TWO {
+            frame_draw.phase_two_draw.instance_count = 1u;
+            frame_draw.phase_two_draw.first_index = min(first.y, arrayLength(&packed_indices));
+        } else {
+            frame_draw.draw.instance_count = 1u;
+        }
     }
 }
 
@@ -194,8 +255,12 @@ fn append_meshlets(
         return;
     }
     if triangle == 0u {
-        atomicMax(&frame_draw.index_count, first.y + counts.y);
+        atomicMax(&frame_draw.draw.index_count, first.y + counts.y);
         atomicAdd(&frame_draw.instances_drawn, 1u);
+        if PHASE_TWO {
+            let phase_two_first = frame_draw.phase_two_draw.first_index;
+            atomicMax(&frame_draw.phase_two_draw.index_count, first.y + counts.y - phase_two_first);
+        }
     }
 
     for (var meshlet_in_mesh = 0u; meshlet_in_mesh < mesh.meshlet_count; meshlet_in_mesh++) {

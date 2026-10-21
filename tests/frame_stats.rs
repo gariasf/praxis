@@ -39,8 +39,9 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // 60 Hz frames run one or two Ticks each, under the cap.
     assert!(frames.iter().all(|frame| frame.dropped_time.is_zero()));
     // Two rows of five spheres in one indirect draw, which the depth pre-pass
-    // and the lit pass each draw with one call.
-    assert_eq!(last.draw_calls, 2);
+    // draws with one call, and the lit pass with two, phase two's into depth
+    // first.
+    assert_eq!(last.draw_calls, 3);
     // Every frame writes the 96-byte camera and 192-byte light uniforms; only
     // the first also writes the ten 128-byte Instances and the 4-byte count
     // of Instance slots in use.
@@ -67,16 +68,17 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // Arenas and its Mesh table of 65,536 Meshes of 40 bytes, 256 Materials
     // of 80 bytes, the camera and light uniforms, 524,288 Instances of 128
     // bytes, the culling pass's 4-byte Instance slot count and 8-byte
-    // offsets for each slot and block of 256 slots, the frame's draw of 2^20
-    // Meshlet records of 12 bytes, 2^24 packed indices of 4 bytes and 28
-    // bytes of indirect arguments and counts, the 160×90 Depth32Float
+    // offsets for each slot and block of 256 slots and visibility bit for
+    // each slot, the frame's draw of 2^20 Meshlet records of 12 bytes, 2^24
+    // packed indices of 4 bytes and 56 bytes of both phases' indirect
+    // arguments, counts and phase two's offsets, the 160×90 Depth32Float
     // texture at 4 samples, its 4x RGBA8 colour, which Apple GPUs keep in
     // tile memory, so it counts nothing on Metal, the R32Float depth pyramid
     // from 80×45 down to 1×1 (80×45, 40×22, 20×11, 10×5, 5×2, 2×1, 1×1),
     // three staging slots of the first frame's 1572 uploaded bytes rounded
     // up to 2048, and the GPU stats readback: its resolve buffer of a begin
-    // and an end timestamp of 8 bytes for each of the four passes, and six
-    // slots of 96 bytes. The load's staging is gone.
+    // and an end timestamp of 8 bytes for each of the five passes, and six
+    // slots of 136 bytes. The load's staging is gone.
     let multisampled_color = match context.backend() {
         wgpu::Backend::Metal => 0,
         _ => 160 * 90 * 4 * 4,
@@ -93,15 +95,16 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + 524_288 * 128
             + 4
             + (524_288 + 2048) * 8
+            + 524_288 / 8
             + (1 << 20) * 12
             + (1 << 24) * 4
-            + 28
+            + 56
             + 160 * 90 * 4 * 4
             + multisampled_color
             + (3600 + 880 + 220 + 50 + 10 + 2 + 1) * 4
             + 3 * 2048
-            + 4 * 2 * 8
-            + 6 * 96
+            + 5 * 2 * 8
+            + 6 * 136
     );
     // One UV sphere in the Arenas: its triangles of three u32s, and 25 rings
     // of 49 vertices of 28 bytes, less the one vertex at each pole that only
@@ -168,9 +171,10 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         assert_eq!(
             passes,
             [
-                "culling_pass",
+                "culling_phase_one",
                 "depth_prepass",
                 "depth_pyramid_pass",
+                "culling_phase_two",
                 "lit_pass"
             ],
             "frame {frame}"
