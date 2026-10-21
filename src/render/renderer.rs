@@ -129,6 +129,7 @@ impl Renderer {
         let mut load_staging = LoadStaging::new(device.clone());
         let material_pool = MaterialPool::new(&device, &mut load_staging);
 
+        let render_targets = RenderTargets::new(&device, target_format, width, height);
         let culling_pass = CullingPass::new(
             &device,
             &[
@@ -137,6 +138,7 @@ impl Renderer {
             ],
             draw_capacity,
             switches,
+            &render_targets,
         );
         let main_pass = MainPass::new(
             &device,
@@ -210,7 +212,6 @@ impl Renderer {
             ],
         );
 
-        let render_targets = RenderTargets::new(&device, target_format, width, height);
         let depth_pyramid_pass = DepthPyramidPass::new(&device, &render_targets);
         let gpu_stats = GpuStatsReadback::new(&device, queue.get_timestamp_period());
         let static_tlas = StaticTlas::new(&device, STATIC_TLAS_CAPACITY);
@@ -249,6 +250,8 @@ impl Renderer {
         // the render targets.
         self.render_targets = RenderTargets::new(&self.device, self.target_format, width, height);
         self.depth_pyramid_pass
+            .bind_render_targets(&self.device, &self.render_targets);
+        self.culling_pass
             .bind_render_targets(&self.device, &self.render_targets);
         self.aspect_ratio = width as f32 / height as f32;
     }
@@ -676,6 +679,72 @@ mod tests {
         }
     }
 
+    /// Quads seen from the origin: a near one over the left half of the view,
+    /// one wholly behind it, one partly behind it and one beside it. Phase
+    /// two draws all four in the first frame, against an empty pyramid; from
+    /// the third, it culls the hidden one, which Frame stats count out, and
+    /// draws the one partly behind; when the near one moves behind the
+    /// camera, phase two draws the hidden one again in that frame. Every
+    /// frame draws the image culling off draws. The Renderer is created at
+    /// another size and resized first, so a pyramid, or a culling bind
+    /// group, left at the old size would cull wrongly.
+    #[test]
+    fn an_instance_hidden_behind_a_nearer_one_is_culled_by_phase_two_until_it_reappears() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let camera = CameraUniform {
+            view_proj: (projection_matrix(1.0) * Camera::new().view_matrix()).to_cols_array_2d(),
+            ..CameraUniform::default()
+        };
+        // Each frame's image and Instances drawn.
+        let frames = |switches| {
+            let mut renderer = Renderer::new(&context, TARGET_FORMAT, 24, 24, switches);
+            renderer.resize(SIZE, SIZE);
+            let [red, green, blue] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+                .map(|emissive| emissive_material(&mut renderer, emissive));
+            let quad = load_quad(&mut renderer);
+            // A quad of `width` × `height` metres centred at `centre`.
+            let placed = |material: MaterialHandle, centre: [f32; 3], [width, height]: [f32; 2]| {
+                InstanceData {
+                    rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
+                        width, height, 1.0,
+                    ))),
+                    offset: centre,
+                    ..instance(quad, material.index(), [0.0, 0.0])
+                }
+            };
+            let hidden = placed(green, [-1.0, 0.0, -6.0], [0.8, 0.8]);
+            let partly_hidden = placed(blue, [0.0, 0.6, -6.0], [0.5, 0.5]);
+            let beside = placed(red, [1.2, -0.6, -6.0], [0.5, 0.5]);
+            [-3.0, -3.0, -3.0, 5.0].map(|near_z| {
+                let near = placed(red, [-1.0, 0.0, near_z], [2.0, 4.0]);
+                let frame = FrameData {
+                    camera,
+                    ..frame_of(vec![near, hidden, partly_hidden, beside])
+                };
+                let (image, _, gpu) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
+                (image, gpu.instances_drawn)
+            })
+        };
+        let culled = frames(RenderSwitches::default());
+        let unculled = frames(RenderSwitches { culling: false });
+
+        let drawn = |frames: &[(image::RgbaImage, u32); 4]| frames.clone().map(|(_, drawn)| drawn);
+        // The near one is behind the camera in the last frame.
+        assert_eq!(drawn(&culled), [4, 4, 3, 3]);
+        assert_eq!(drawn(&unculled), [4, 4, 4, 4]);
+        // A pixel the hidden quad covers: the near quad's red, then its green.
+        assert_eq!(culled[2].0.get_pixel(5, 8).0, RED);
+        assert_eq!(culled[3].0.get_pixel(5, 8).0, GREEN);
+        for (frame, (culled, unculled)) in culled.iter().zip(&unculled).enumerate() {
+            assert!(
+                culled.0 == unculled.0,
+                "frame {frame} differs with culling off"
+            );
+        }
+    }
+
     /// Two Instances, the lower one out of view, then moved into it: in the
     /// frame it enters, phase one draws the upper one, visible the frame
     /// before, and phase two the lower one, into depth before the lit pass
@@ -1015,6 +1084,36 @@ mod tests {
             .mesh_pool
             .load(&mut renderer.load_staging, &mesh, materials)
             .expect("the triangles fit")
+    }
+
+    /// Loads a Mesh of a 1 m square, its Material given by its Instances,
+    /// facing +Z, whose bounds are its own.
+    fn load_quad(renderer: &mut Renderer) -> MeshHandle {
+        let vertices = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]]
+            .map(|[x, y]| CookedVertex {
+                position: [x, y, 0.0],
+                uv: [0.0, 0.0],
+                qtangent: [0, 0, 0, i16::MAX],
+            })
+            .to_vec();
+        let mesh = CookedMesh {
+            vertices,
+            indices: vec![0, 1, 2, 0, 2, 3],
+            primitives: vec![CookedPrimitive {
+                first_index: 0,
+                index_count: 6,
+                material: None,
+                meshlets: vec![CookedMeshlet {
+                    vertices: vec![0, 1, 2, 3],
+                    triangles: vec![[0, 1, 2], [0, 2, 3]],
+                }],
+            }],
+            bounds: [[-0.5, -0.5, 0.0], [0.5, 0.5, 0.0]],
+        };
+        renderer
+            .mesh_pool
+            .load(&mut renderer.load_staging, &mesh, &[None])
+            .expect("the quad fits")
     }
 
     /// An Instance of `mesh` moved by `offset` in x and y.
