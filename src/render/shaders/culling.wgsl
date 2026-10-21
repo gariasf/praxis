@@ -1,7 +1,7 @@
 // The culling pass's entry points, after the shared parts: they append the
 // Meshlets of the Instances they draw to the frame's draw in slot order,
-// which the main pass draws with one indirect call per pipeline and phase
-// (ADR 0019). Phase one draws the Instances visible the frame before;
+// which the main pass draws with one indirect call per phase and depth
+// pipeline, and one of both phases for the lit pipeline (ADR 0019). Phase one draws the Instances visible the frame before;
 // phase two, after the depth pyramid, the other Instances in view, and it
 // records which Instances were visible for the next frame. With the CULLING
 // Render switch on, they draw only the Instances whose Mesh bounds reach
@@ -196,7 +196,11 @@ fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
             sum = saturating_add(sum, instance_offsets[INSTANCE_CAPACITY + first_block + step]);
         }
     }
-    let first = select(vec2<u32>(0u), frame_draw.phase_two_offsets, PHASE_TWO);
+    // Phase one's last invocation writes these below: phase one reads none.
+    var first = vec2<u32>(0u);
+    if PHASE_TWO {
+        first = frame_draw.phase_two_offsets;
+    }
     var offset = saturating_add(first, exclusive_scan(invocation, sum));
     for (var step = 0u; step < blocks_per_invocation; step++) {
         let block = INSTANCE_CAPACITY + first_block + step;

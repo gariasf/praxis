@@ -115,10 +115,10 @@ src/
                                  pyramid), targets (every size-dependent
                                  target, the depth pyramid among them,
                                  the depth conventions), prepare (ECS
-                                 World to
-                                 Frame data), bind_groups (each defined
-                                 once), readback (each frame's GPU stats
-                                 through a ring of mapped buffers),
+                                 World to Frame data), bind_groups (each
+                                 defined once), readback (each frame's
+                                 GPU stats through a ring of mapped
+                                 buffers),
                                  acceleration_structures (the static
                                  TLAS, their memory estimates), instance,
                                  uniforms, staging,
@@ -244,10 +244,10 @@ When reviewing changes, check for:
       main thread submits, presents or polls (ADR 0016)
 - [ ] Whatever changes what an Instance holds makes prepare write its
       slot; other slots keep what earlier frames wrote (ADR 0003)
-- [ ] The GPU builds the frame's draw in slot order, never in the order
-      atomics land: on the M4 Pro, which triangles precede others in a
-      draw changes implicit derivatives, so captures would differ run to
-      run
+- [ ] The GPU builds the frame's draw in slot order within each culling
+      phase, never in the order atomics land: on the M4 Pro, which
+      triangles precede others in a draw changes implicit derivatives, so
+      captures would differ run to run
 - [ ] Frame stats still see new work: GPU buffers and textures join
       their owner's `gpu_memory_bytes`, and so do acceleration
       structures, by the measured per-backend estimate

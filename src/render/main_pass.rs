@@ -1,5 +1,6 @@
 //! The main pass, ADR 0019's two render passes, which draw the culling
-//! pass's frame's draw with one indirect call per pipeline and phase: a
+//! pass's frame's draw with one indirect call per phase and pipeline, the
+//! lit pipeline's drawing both phases: a
 //! depth pre-pass that clears the depth target and keeps the nearest depth
 //! of phase one's Instances, then a lit pass that first draws phase two's
 //! into depth, then both phases' at depth equal, each Meshlet with its
@@ -55,14 +56,14 @@ impl MainPass {
         let mut layouts = bind_group_layouts.to_vec();
         layouts.push((&MESHLET_RECORDS, &meshlet_records_layout));
         let lit_layout = pipeline_layout(device, "Lit Pass Pipeline Layout", &layouts);
-        // The pre-pass has no fragment stage, so it reads only the groups its
-        // vertex stage sees, as `record` sets them.
+        // The depth pipelines' fragment stages read nothing, so they read
+        // only the groups their vertex stage sees, as the pre-pass sets them.
         layouts.retain(|&(definition, _)| definition.visible_to(wgpu::ShaderStages::VERTEX));
         let depth_prepass_layout =
             pipeline_layout(device, "Depth Pre-pass Pipeline Layout", &layouts);
 
-        // Both pipelines rasterise alike, so the lit pass meets at each
-        // sample the depth the pre-pass kept there.
+        // Every pipeline rasterises alike, so the lit pipeline meets at each
+        // sample the depth the depth pipelines kept there.
         let primitive = wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList,
             strip_index_format: None,

@@ -1,7 +1,8 @@
 //! The culling pass: a compute pass that builds the frame's draw from the
 //! Instances, a Meshlet record per Meshlet of each Instance and a packed
-//! index per triangle corner, in slot order, which the main pass draws with
-//! one indirect call per pipeline and phase (ADR 0019). It runs in two
+//! index per triangle corner, in slot order within each phase, which the
+//! main pass draws with one indirect call per phase and depth pipeline, and
+//! one of both phases for the lit pipeline (ADR 0019). It runs in two
 //! phases: phase one draws the Instances visible the frame before, phase
 //! two, after the depth pyramid, the others, and it records each Instance's
 //! visibility for the next frame. With the `culling` Render switch on, it
@@ -15,10 +16,6 @@ use crate::render::prepare::FrameData;
 use crate::render::renderer::RenderSwitches;
 use crate::render::shaders;
 
-/// The culling pass's phases' labels, and their names in frame stats.
-pub(crate) const CULLING_PHASE_ONE: &str = "culling_phase_one";
-pub(crate) const CULLING_PHASE_TWO: &str = "culling_phase_two";
-
 /// A phase of the culling pass.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CullingPhase {
@@ -27,6 +24,16 @@ pub enum CullingPhase {
     /// After the depth pyramid, draws the other Instances visible now, and
     /// records which are visible for the next frame.
     Two,
+}
+
+impl CullingPhase {
+    /// The phase's label, and its name in frame stats.
+    pub(crate) const fn label(self) -> &'static str {
+        match self {
+            CullingPhase::One => "culling_phase_one",
+            CullingPhase::Two => "culling_phase_two",
+        }
+    }
 }
 
 /// Slots each workgroup of the pass's scans sums: the scans of
@@ -59,22 +66,22 @@ impl DrawCapacity {
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct FrameDraw {
-    pub(crate) arguments: [u32; 5],
+    pub(crate) draw: wgpu::util::DrawIndexedIndirectArgs,
     pub(crate) instances_drawn: u32,
     pub(crate) instances_overflowed: u32,
-    pub(crate) phase_two_arguments: [u32; 5],
+    pub(crate) phase_two_draw: wgpu::util::DrawIndexedIndirectArgs,
     phase_two_offsets: [u32; 2],
 }
 
 /// Where the frame's draw holds the indirect arguments of phase two's draw.
 pub(crate) const PHASE_TWO_DRAW_OFFSET: u64 =
-    std::mem::offset_of!(FrameDraw, phase_two_arguments) as u64;
+    std::mem::offset_of!(FrameDraw, phase_two_draw) as u64;
 
 impl FrameDraw {
     /// Its index count over 3: the drawn Instances' indices fill the draw
-    /// from index 0 with no gap, in slot order.
+    /// from index 0 with no gap, in slot order within each phase.
     pub(crate) fn triangles_drawn(&self) -> u32 {
-        self.arguments[0] / 3
+        self.draw.index_count / 3
     }
 }
 
@@ -149,7 +156,7 @@ impl CullingPass {
             u64::from(capacity.packed_indices) * size_of::<u32>() as u64,
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::INDEX,
         );
-        // Cleared before each pass, so COPY_DST, and copied to the GPU stats
+        // Cleared before phase one, so COPY_DST, and copied to the GPU stats
         // readback after it, so COPY_SRC.
         let frame_draw = buffer(
             "Frame Draw Buffer",
@@ -189,7 +196,8 @@ impl CullingPass {
         let mut layouts = bind_group_layouts.to_vec();
         layouts.push((&FRAME_DRAW, &frame_draw_layout));
         let layout = pipeline_layout(device, "Culling Pass Pipeline Layout", &layouts);
-        let phase_pipelines = |phase_two: bool| {
+        let phase_pipelines = |phase| {
+            let phase_two = phase == CullingPhase::Two;
             let constants: Vec<(&str, f64)> = switches
                 .constants()
                 .into_iter()
@@ -215,8 +223,8 @@ impl CullingPass {
             }
         };
         CullingPass {
-            phase_one: phase_pipelines(false),
-            phase_two: phase_pipelines(true),
+            phase_one: phase_pipelines(CullingPhase::One),
+            phase_two: phase_pipelines(CullingPhase::Two),
             instance_slot_count,
             instance_offsets,
             meshlet_records,
@@ -243,17 +251,17 @@ impl CullingPass {
         phase: CullingPhase,
         timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
     ) {
-        let (label, pipelines) = match phase {
+        let pipelines = match phase {
             CullingPhase::One => {
                 encoder.clear_buffer(&self.frame_draw, 0, None);
-                (CULLING_PHASE_ONE, &self.phase_one)
+                &self.phase_one
             }
-            CullingPhase::Two => (CULLING_PHASE_TWO, &self.phase_two),
+            CullingPhase::Two => &self.phase_two,
         };
         // Each slot's offsets are the sum of the earlier slots' Meshlet
         // records and packed indices: summed by block, then the blocks.
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some(label),
+            label: Some(phase.label()),
             timestamp_writes,
         });
         for &(definition, bind_group) in bind_groups {

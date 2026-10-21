@@ -3,9 +3,7 @@ use std::time::Instant;
 use crate::assets::{ARENA_CAPACITY_BYTES, MaterialPool, MeshPool};
 use crate::gpu::GpuContext;
 use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
-use crate::render::culling_pass::{
-    CULLING_PHASE_ONE, CULLING_PHASE_TWO, CullingPass, CullingPhase, DrawCapacity,
-};
+use crate::render::culling_pass::{CullingPass, CullingPhase, DrawCapacity};
 use crate::render::depth_pyramid_pass::{DEPTH_PYRAMID_PASS, DepthPyramidPass};
 use crate::render::main_pass::{DEPTH_PREPASS, LIT_PASS, MainPass};
 use crate::render::readback::GpuStatsReadback;
@@ -19,10 +17,10 @@ use crate::stats::{FrameRecorder, GpuFrameStats};
 /// The passes `render` records, in order, each timed from its start to its
 /// end.
 pub(crate) const TIMED_PASSES: [&str; 5] = [
-    CULLING_PHASE_ONE,
+    CullingPhase::One.label(),
     DEPTH_PREPASS,
     DEPTH_PYRAMID_PASS,
-    CULLING_PHASE_TWO,
+    CullingPhase::Two.label(),
     LIT_PASS,
 ];
 
@@ -344,7 +342,7 @@ impl Renderer {
             &culling_bind_groups,
             frame,
             CullingPhase::One,
-            timestamps.map(|timestamps| timestamps.compute_pass(CULLING_PHASE_ONE)),
+            timestamps.map(|timestamps| timestamps.compute_pass(CullingPhase::One.label())),
         );
         let bind_groups = [
             (&FRAME, &self.frame_bind_group),
@@ -368,7 +366,7 @@ impl Renderer {
             &culling_bind_groups,
             frame,
             CullingPhase::Two,
-            timestamps.map(|timestamps| timestamps.compute_pass(CULLING_PHASE_TWO)),
+            timestamps.map(|timestamps| timestamps.compute_pass(CullingPhase::Two.label())),
         );
         self.main_pass.record_lit_pass(
             &mut encoder,
@@ -703,8 +701,13 @@ mod tests {
                 else {
                     unreachable!("one frame's draw");
                 };
-                let phase_two = draw.phase_two_arguments;
-                (image, draw.arguments[0], phase_two[2], phase_two[0])
+                let phase_two = draw.phase_two_draw;
+                (
+                    image,
+                    draw.draw.index_count,
+                    phase_two.first_index,
+                    phase_two.index_count,
+                )
             })
         };
         let culled = frames(RenderSwitches::default());

@@ -126,10 +126,8 @@ impl DepthPyramidPass {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write;
-
     use super::*;
-    use crate::assets::pools::tests::read_storage;
+    use crate::assets::pools::tests::{gpu_context, read_storage};
     use crate::capture::TARGET_FORMAT;
     use crate::gpu::GpuContext;
     use crate::render::targets;
@@ -404,19 +402,5 @@ mod tests {
         drop(pass);
         context.queue.submit([encoder.finish()]);
         read_storage(context, &values, count as usize)
-    }
-
-    /// A headless context, or `None` after saying so on a machine without a
-    /// GPU adapter, where these tests skip.
-    fn gpu_context() -> Option<GpuContext> {
-        match pollster::block_on(GpuContext::headless()) {
-            Ok(context) => Some(context),
-            Err(error) if error.is::<wgpu::RequestAdapterError>() => {
-                // Not `eprintln!`, which libtest captures from passing tests.
-                writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
-                None
-            }
-            Err(error) => panic!("headless GPU context failed: {error:#}"),
-        }
     }
 }

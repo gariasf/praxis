@@ -774,7 +774,7 @@ pub(crate) mod tests {
 
     /// A headless context, or `None` after saying so on a machine without a
     /// GPU adapter, where these tests skip.
-    fn gpu_context() -> Option<GpuContext> {
+    pub(crate) fn gpu_context() -> Option<GpuContext> {
         match pollster::block_on(GpuContext::headless()) {
             Ok(context) => Some(context),
             Err(error) if error.is::<wgpu::RequestAdapterError>() => {
