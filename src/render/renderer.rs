@@ -679,14 +679,15 @@ mod tests {
         }
     }
 
-    /// Quads seen from the origin: a near one over the left half of the view,
-    /// one wholly behind it, one partly behind it and one beside it. Phase
-    /// two draws all four in the first frame, against an empty pyramid; from
-    /// the third, it culls the hidden one, which Frame stats count out, and
-    /// draws the one partly behind; when the near one moves behind the
-    /// camera, phase two draws the hidden one again in that frame. Every
-    /// frame draws the image culling off draws. The Renderer is created at
-    /// another size and resized first, so a pyramid, or a culling bind
+    /// Quads seen from the origin: a near one over the upper left quarter of
+    /// the view, one wholly behind it, one partly behind it, one turned to
+    /// reach through it, and one apart. Phase two draws all five in the first
+    /// frame, against an empty pyramid; from the third, it culls the hidden
+    /// one, which Frame stats count out, and draws the one partly behind and
+    /// the one whose nearest corner is in front; when the near one moves
+    /// behind the camera, phase two draws the hidden one again in that frame.
+    /// Every frame draws the image culling off draws. The Renderer is created
+    /// at another size and resized first, so a pyramid, or a culling bind
     /// group, left at the old size would cull wrongly.
     #[test]
     fn an_instance_hidden_behind_a_nearer_one_is_culled_by_phase_two_until_it_reappears() {
@@ -704,24 +705,28 @@ mod tests {
             let [red, green, blue] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
                 .map(|emissive| emissive_material(&mut renderer, emissive));
             let quad = load_quad(&mut renderer);
-            // A quad of `width` × `height` metres centred at `centre`.
-            let placed = |material: MaterialHandle, centre: [f32; 3], [width, height]: [f32; 2]| {
+            // A quad of `size` metres turned `turn` radians about +Y, centred
+            // at `centre`.
+            let placed = |material: MaterialHandle, centre: [f32; 3], size: f32, turn: f32| {
+                let rotation_scale = glam::Mat3::from_rotation_y(turn)
+                    * glam::Mat3::from_diagonal(glam::vec3(size, size, 1.0));
                 InstanceData {
-                    rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
-                        width, height, 1.0,
-                    ))),
+                    rotation_scale: padded_columns(rotation_scale),
                     offset: centre,
                     ..instance(quad, material.index(), [0.0, 0.0])
                 }
             };
-            let hidden = placed(green, [-1.0, 0.0, -6.0], [0.8, 0.8]);
-            let partly_hidden = placed(blue, [0.0, 0.6, -6.0], [0.5, 0.5]);
-            let beside = placed(red, [1.2, -0.6, -6.0], [0.5, 0.5]);
+            let hidden = placed(green, [-1.0, 1.0, -6.0], 0.8, 0.0);
+            let partly_hidden = placed(blue, [0.0, 1.0, -6.0], 0.5, 0.0);
+            // Its left edge 0.22 m in front of the near quad, its right edge
+            // as far behind it.
+            let through = placed(blue, [-0.93, 0.6, -3.0], 0.5, std::f32::consts::FRAC_PI_3);
+            let apart = placed(red, [1.2, -0.6, -6.0], 0.5, 0.0);
             [-3.0, -3.0, -3.0, 5.0].map(|near_z| {
-                let near = placed(red, [-1.0, 0.0, near_z], [2.0, 4.0]);
+                let near = placed(red, [-1.0, 1.0, near_z], 2.0, 0.0);
                 let frame = FrameData {
                     camera,
-                    ..frame_of(vec![near, hidden, partly_hidden, beside])
+                    ..frame_of(vec![near, hidden, partly_hidden, through, apart])
                 };
                 let (image, _, gpu) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
                 (image, gpu.instances_drawn)
@@ -732,11 +737,11 @@ mod tests {
 
         let drawn = |frames: &[(image::RgbaImage, u32); 4]| frames.clone().map(|(_, drawn)| drawn);
         // The near one is behind the camera in the last frame.
-        assert_eq!(drawn(&culled), [4, 4, 3, 3]);
-        assert_eq!(drawn(&unculled), [4, 4, 4, 4]);
+        assert_eq!(drawn(&culled), [5, 5, 4, 4]);
+        assert_eq!(drawn(&unculled), [5, 5, 5, 5]);
         // A pixel the hidden quad covers: the near quad's red, then its green.
-        assert_eq!(culled[2].0.get_pixel(5, 8).0, RED);
-        assert_eq!(culled[3].0.get_pixel(5, 8).0, GREEN);
+        assert_eq!(culled[2].0.get_pixel(4, 4).0, RED);
+        assert_eq!(culled[3].0.get_pixel(4, 4).0, GREEN);
         for (frame, (culled, unculled)) in culled.iter().zip(&unculled).enumerate() {
             assert!(
                 culled.0 == unculled.0,

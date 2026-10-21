@@ -4,8 +4,8 @@
 //! main pass draws with one indirect call per phase and depth pipeline, and
 //! one of both phases for the lit pipeline (ADR 0019). It runs in two
 //! phases: phase one draws the Instances visible the frame before, phase
-//! two, after the depth pyramid, the others, and it records each Instance's
-//! visibility for the next frame. With the `culling` Render switch on, it
+//! two, after the depth pyramid, the others in view that the pyramid does
+//! not hide, and it records each Instance's visibility for the next frame. With the `culling` Render switch on, it
 //! draws only the Instances whose Mesh bounds reach into the view frustum;
 //! off, phase one draws every Instance in use.
 
@@ -22,8 +22,8 @@ use crate::render::targets::RenderTargets;
 pub enum CullingPhase {
     /// Draws the Instances visible the frame before into the depth pre-pass.
     One,
-    /// After the depth pyramid, draws the other Instances visible now, and
-    /// records which are visible for the next frame.
+    /// After the depth pyramid, draws the other Instances in view that it
+    /// does not hide, and records which are visible for the next frame.
     Two,
 }
 
@@ -278,8 +278,8 @@ impl CullingPass {
         }
     }
 
-    /// Builds the bind group that reads `render_targets`: at creation, and
-    /// after every resize, which creates them again.
+    /// Builds the bind group that reads `render_targets` again, as `new`
+    /// builds it: after every resize, which creates them again.
     pub fn bind_render_targets(&mut self, device: &wgpu::Device, render_targets: &RenderTargets) {
         self.bind_group = frame_draw_bind_group(
             device,
@@ -312,18 +312,25 @@ impl CullingPass {
     /// Bytes of the frame's draw, and of the Instance slot count, offsets
     /// and visibility.
     pub fn gpu_memory_bytes(&self) -> u64 {
-        let buffers = &self.buffers;
+        self.buffers
+            .named()
+            .iter()
+            .map(|(_, buffer)| buffer.size())
+            .sum()
+    }
+}
+
+impl FrameDrawBuffers {
+    /// Each buffer by the name of its binding.
+    fn named(&self) -> [(&'static str, &wgpu::Buffer); 6] {
         [
-            &buffers.instance_slot_count,
-            &buffers.instance_offsets,
-            &buffers.meshlet_records,
-            &buffers.packed_indices,
-            &buffers.frame_draw,
-            &buffers.instance_visibility,
+            ("instance_slot_count", &self.instance_slot_count),
+            ("instance_offsets", &self.instance_offsets),
+            ("meshlet_records", &self.meshlet_records),
+            ("packed_indices", &self.packed_indices),
+            ("frame_draw", &self.frame_draw),
+            ("instance_visibility", &self.instance_visibility),
         ]
-        .iter()
-        .map(|buffer| buffer.size())
-        .sum()
     }
 }
 
@@ -335,32 +342,15 @@ fn frame_draw_bind_group(
     buffers: &FrameDrawBuffers,
     render_targets: &RenderTargets,
 ) -> wgpu::BindGroup {
+    let buffers = buffers
+        .named()
+        .map(|(name, buffer)| (name, buffer.as_entire_binding()));
+    let depth_pyramid = wgpu::BindingResource::TextureView(render_targets.depth_pyramid());
     FRAME_DRAW.bind_group(
         device,
         layout,
-        [
-            (
-                "instance_slot_count",
-                buffers.instance_slot_count.as_entire_binding(),
-            ),
-            (
-                "instance_offsets",
-                buffers.instance_offsets.as_entire_binding(),
-            ),
-            (
-                "meshlet_records",
-                buffers.meshlet_records.as_entire_binding(),
-            ),
-            ("packed_indices", buffers.packed_indices.as_entire_binding()),
-            ("frame_draw", buffers.frame_draw.as_entire_binding()),
-            (
-                "instance_visibility",
-                buffers.instance_visibility.as_entire_binding(),
-            ),
-            (
-                "depth_pyramid",
-                wgpu::BindingResource::TextureView(render_targets.depth_pyramid()),
-            ),
-        ],
+        buffers
+            .into_iter()
+            .chain([("depth_pyramid", depth_pyramid)]),
     )
 }

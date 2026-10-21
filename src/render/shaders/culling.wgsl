@@ -1,9 +1,11 @@
 // The culling pass's entry points, after the shared parts: they append the
 // Meshlets of the Instances they draw to the frame's draw in slot order,
 // which the main pass draws with one indirect call per phase and depth
-// pipeline, and one of both phases for the lit pipeline (ADR 0019). Phase one draws the Instances visible the frame before;
-// phase two, after the depth pyramid, the other Instances in view, and it
-// records which Instances were visible for the next frame. With the CULLING
+// pipeline, and one of both phases for the lit pipeline (ADR 0019). Phase
+// one draws the Instances visible the frame before; phase two, after the
+// depth pyramid, the other Instances in view that the pyramid does not
+// hide, and it records which Instances were visible for the next frame. With
+// the CULLING
 // Render switch on, they draw only the Instances whose Mesh bounds reach
 // into the view frustum; off, phase one draws every Instance in use. Its
 // bindings are declared from their bind groups' definitions
@@ -138,11 +140,13 @@ fn in_view_frustum(bounds: ClipBox) -> bool {
     return all(side_reach >= vec4<f32>(0.0)) && near_reach >= 0.0;
 }
 
-// The share of the box's clip-space z and w, summed over its terms, by which
-// its corners move towards the camera before the occlusion test: f32
-// rounding moves the vertices the vertex shader composes from the same terms
-// by far less.
+// How far the occlusion test moves the box's corners towards the camera in
+// clip-space z and w, metres for a perspective camera, past where f32
+// rounding could put the vertices the vertex shader composes: a share of
+// the terms summed, and ADR 0014's worst camera-relative error, 0.041 mm,
+// for the box's composition and the vertices' each, rounded up.
 const OCCLUSION_ROUNDING: f32 = 1.0 / 16384.0;
+const COMPOSITION_ERROR: f32 = 1e-4;
 
 // Whether a box that reaches into the view frustum lies wholly behind what
 // phase one drew: nearer nowhere than the depth pyramid's minimum, the
@@ -150,16 +154,18 @@ const OCCLUSION_ROUNDING: f32 = 1.0 / 16384.0;
 // in the level where that rectangle spans at most two texels per axis.
 // Depth, z over w, is greatest at a corner of a box in front of the camera,
 // as is the box's reach across the screen, so the test projects the eight
-// corners, each moved towards the camera by OCCLUSION_ROUNDING, and grows
-// the rectangle by a pixel past where rasterization rounds vertices. A box
+// corners, each moved towards the camera past f32 rounding, and grows the
+// rectangle by a pixel past where rasterization rounds vertices. A box
 // with a corner at or behind the camera's plane, or that rounding leaves
 // over more than two texels, is not occluded.
 fn occluded(bounds: ClipBox) -> bool {
     let axes = bounds.half_axes;
     let w_rounding = OCCLUSION_ROUNDING
-        * (abs(bounds.centre.w) + abs(axes[0].w) + abs(axes[1].w) + abs(axes[2].w));
+        * (abs(bounds.centre.w) + abs(axes[0].w) + abs(axes[1].w) + abs(axes[2].w))
+        + COMPOSITION_ERROR;
     let z_rounding = OCCLUSION_ROUNDING
-        * (abs(bounds.centre.z) + abs(axes[0].z) + abs(axes[1].z) + abs(axes[2].z));
+        * (abs(bounds.centre.z) + abs(axes[0].z) + abs(axes[1].z) + abs(axes[2].z))
+        + COMPOSITION_ERROR;
     var nearest_depth = 0.0;
     var low = vec2<f32>(1.0);
     var high = vec2<f32>(-1.0);
@@ -176,9 +182,9 @@ fn occluded(bounds: ClipBox) -> bool {
     // In texture coordinates, rows top first: a level-0 texel spans two
     // pixels, or a little more on an odd side.
     let level_zero_size = vec2<f32>(textureDimensions(depth_pyramid, 0));
-    let pixel = 0.5 / level_zero_size;
-    let first_coordinates = saturate(vec2<f32>(0.5 * low.x + 0.5, 0.5 - 0.5 * high.y) - pixel);
-    let last_coordinates = saturate(vec2<f32>(0.5 * high.x + 0.5, 0.5 - 0.5 * low.y) + pixel);
+    let pixel_margin = 0.5 / level_zero_size;
+    let first_coordinates = saturate(vec2<f32>(0.5 * low.x + 0.5, 0.5 - 0.5 * high.y) - pixel_margin);
+    let last_coordinates = saturate(vec2<f32>(0.5 * high.x + 0.5, 0.5 - 0.5 * low.y) + pixel_margin);
     let extent = (last_coordinates - first_coordinates) * level_zero_size;
     let level = min(
         u32(ceil(log2(max(max(extent.x, extent.y), 1.0)))),
@@ -207,9 +213,9 @@ fn visible_before(slot: u32) -> bool {
 // records and packed indices, its Instance's where the phase draws it or
 // none, summed over the block's earlier slots into its offsets, NOT_DRAWN in
 // their place where it is not drawn, and the block's sum after every slot's.
-// Phase one draws an Instance in view that was visible the frame before;
-// phase two one in view and not behind what phase one drew that phase one
-// did not draw, and records each such Instance as visible.
+// Phase one draws an Instance in view that was visible the frame before.
+// Phase two finds each Instance in view visible unless it lies behind what
+// phase one drew, records which are, and draws those phase one did not.
 @compute @workgroup_size(SCAN_BLOCK_SIZE)
 fn offset_slots(
     @builtin(workgroup_id) block: vec3<u32>,
