@@ -119,7 +119,8 @@ src/
                                  target's display colour), targets
                                  (every size-dependent target, the depth
                                  pyramid and the HDR target among them,
-                                 the depth conventions), prepare (ECS
+                                 the depth and colour conventions),
+                                 prepare (ECS
                                  World to Frame data), bind_groups (each
                                  defined once), readback (each frame's
                                  GPU stats through a ring of mapped

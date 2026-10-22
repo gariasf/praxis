@@ -526,6 +526,105 @@ fn ambient_luminance_is_the_base_colour_over_pi_darkened_by_occlusion() {
     }
 }
 
+/// Rec. 709's relative luminance weighs each linear primary by ITU-R BT.709-6's
+/// coefficients, which sum to 1, so white's is 1.
+#[test]
+fn relative_luminance_weighs_the_primaries_by_bt_709() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let cases = [
+        ([1.0, 0.0, 0.0], 0.2126),
+        ([0.0, 1.0, 0.0], 0.7152),
+        ([0.0, 0.0, 1.0], 0.0722),
+        ([1.0, 1.0, 1.0], 1.0),
+    ];
+    let inputs = cases.map(|([red, green, blue], _)| [red, green, blue, 0.0]);
+    let results = evaluate(
+        &context,
+        "vec4<f32>(relative_luminance(input.xyz))",
+        &inputs,
+    );
+
+    for ((color, expected), result) in cases.into_iter().zip(results) {
+        let case = format_args!("the luminance of {color:?}");
+        assert_close(result[0], expected, TOLERANCE.into(), case);
+    }
+}
+
+/// The lit pass weights exposed colour by 1/(1 + luminance), the hardware's
+/// box resolve averages four samples so weighted, and the tonemapping pass
+/// undoes the weighting: the result is the samples' average weighted by
+/// 1/(1 + luminance) (Karis 2013), Σ w c / Σ w in f64. One sample of 100
+/// over three of 0.05 resolves to 0.395 where the box gives 25.04, so a
+/// bright sub-pixel highlight no longer whitens its edge, and four equal
+/// samples resolve to their colour. A weighted luminance at or past 1, which
+/// only rounding reaches, undoes to fp16's largest finite value, not
+/// infinity.
+#[test]
+fn the_weighted_resolve_undone_averages_samples_by_one_over_one_plus_luminance() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let grey = |value: f32| [value; 3];
+    let sample_sets = [
+        [[0.5, 0.25, 0.125]; 4],
+        [grey(100.0), grey(0.05), grey(0.05), grey(0.05)],
+        [[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], grey(0.0), grey(0.0)],
+        [
+            [2047.0, 1000.0, 3.0],
+            [0.0, 0.1, 0.0],
+            grey(1.0),
+            [0.2, 0.3, 0.4],
+        ],
+        [grey(0.0); 4],
+    ];
+    let cases =
+        sample_sets.map(|samples| samples.map(|[red, green, blue]| [red, green, blue, 0.0]));
+    let results = evaluate_cases::<4>(
+        &context,
+        "vec4<f32>(resolve_unweighted((resolve_weighted(inputs[0].xyz) \
+             + resolve_weighted(inputs[1].xyz) + resolve_weighted(inputs[2].xyz) \
+             + resolve_weighted(inputs[3].xyz)) / 4.0), 0.0)",
+        &cases,
+        &[],
+    );
+
+    for (samples, result) in sample_sets.into_iter().zip(results) {
+        let weights = samples.map(|sample| {
+            let [red, green, blue] = sample.map(f64::from);
+            1.0 / (1.0 + 0.2126 * red + 0.7152 * green + 0.0722 * blue)
+        });
+        let weight_sum: f64 = weights.iter().sum();
+        for channel in 0..3 {
+            let weighted_sum: f64 = samples
+                .iter()
+                .zip(weights)
+                .map(|(sample, weight)| weight * f64::from(sample[channel]))
+                .sum();
+            let expected = weighted_sum / weight_sum;
+            let case = format_args!("channel {channel} of {samples:?}");
+            let tolerance = RELATIVE_TOLERANCE * expected.max(1.0);
+            assert_close(result[channel], expected, tolerance, case);
+        }
+    }
+
+    let limits = evaluate(
+        &context,
+        "vec4<f32>(resolve_unweighted(input.xyz), 0.0)",
+        &[
+            [1.0, 1.0, 1.0, 0.0],
+            [2.0, 2.0, 2.0, 0.0],
+            [0.0, 1.5, 0.0, 0.0],
+        ],
+    );
+    let limits: Vec<[f32; 3]> = limits
+        .iter()
+        .map(|result| [result[0], result[1], result[2]])
+        .collect();
+    assert_eq!(limits, [[65504.0; 3], [65504.0; 3], [0.0, 65504.0, 0.0]]);
+}
+
 /// Linear sRGB reflectance of gold at normal incidence, as the pbr-sweep
 /// scene uses it: each channel a different base colour.
 const GOLD: [f32; 3] = [1.0, 0.71, 0.29];
