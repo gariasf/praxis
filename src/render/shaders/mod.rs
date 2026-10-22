@@ -48,6 +48,12 @@ const SHADING: Part = part!("shading.wgsl");
 /// Exposed colour as the HDR target stores it.
 const HDR: Part = part!("hdr.wgsl");
 
+/// GT7's tone mapping, under Polyphony's MIT notice.
+const GT7: Part = part!("gt7.wgsl");
+
+/// What turns exposed colour into display colour, around GT7.
+const DISPLAY: Part = part!("display.wgsl");
+
 /// A WGSL module: the extensions it enables, the bind groups whose bindings
 /// it declares, then its parts in order.
 #[derive(Clone, Copy)]
@@ -88,7 +94,7 @@ pub const TONEMAPPING: ShaderModule = ShaderModule {
     name: "tonemapping",
     enables: &[],
     bind_groups: &[&TONEMAPPING_INPUT],
-    parts: &[HDR, part!("tonemapping.wgsl")],
+    parts: &[HDR, GT7, DISPLAY, part!("tonemapping.wgsl")],
 };
 
 /// The shared parts alone, which the oracle harness appends its kernel to.
@@ -97,7 +103,7 @@ pub const SHARED: ShaderModule = ShaderModule {
     name: "shared",
     enables: &[],
     bind_groups: &[],
-    parts: &[COMMON, SHADING, HDR],
+    parts: &[COMMON, SHADING, HDR, GT7, DISPLAY],
 };
 
 /// Every module, which `shader_tests` validates.

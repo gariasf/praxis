@@ -625,6 +625,272 @@ fn the_weighted_resolve_undone_averages_samples_by_one_over_one_plus_luminance()
     assert_eq!(limits, [[65504.0; 3], [65504.0; 3], [0.0, 65504.0, 0.0]]);
 }
 
+/// The GT tone curve at GT7's parameters matches Polyphony's sample
+/// implementation, compiled unmodified: 0 below 0, a toe below the mid
+/// point 0.538, the identity from there to 0.444 of the 2.5 peak, 1.11, then
+/// a shoulder towards 2.963, 1.19 times the peak.
+#[test]
+fn gt7_curve_matches_polyphonys_sample_implementation() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let reference = [
+        (-1.0, 0.0),
+        (0.0, 0.0),
+        (0.05, 0.026298122),
+        (0.2, 0.1666931),
+        (0.4, 0.39478737),
+        (0.538, 0.538),
+        (0.8, 0.8),
+        (1.0, 1.0),
+        (1.1, 1.1),
+        (1.11, 1.1099999),
+        (1.2, 1.1978496),
+        (1.5, 1.4616987),
+        (2.0, 1.8167689),
+        (2.5, 2.0878806),
+        (3.0, 2.2948864),
+        (4.0, 2.5736287),
+        (8.0, 2.9183128),
+        (100.0, 2.9633331),
+    ];
+    let inputs = reference.map(|(frame_buffer, _)| [frame_buffer, 0.0, 0.0, 0.0]);
+    let results = evaluate(&context, "vec4<f32>(gt7_curve(input.x))", &inputs);
+
+    for ((frame_buffer, expected), result) in reference.into_iter().zip(results) {
+        let case = format_args!("the GT curve at {frame_buffer}");
+        assert_close(result[0], expected, GT7_TOLERANCE, case);
+    }
+}
+
+/// PQ's encoding is SMPTE ST 2084's inverse EOTF, evaluated in f64, of
+/// frame-buffer values of 100 cd/m² each: 100 cd/m² encodes to 0.508 and
+/// 10,000 to 1. Decoding returns each value, PQ's 10,000 cd/m² range
+/// spanning the curve's dark end to past GT7's paper white.
+#[test]
+fn pq_encodes_as_st_2084_and_decodes_back() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let frame_buffer_values = [0.0, 0.001, 0.05, 0.25, 1.0, 2.5, 10.0, 100.0];
+    let inputs = frame_buffer_values.map(|value| [value, value, value, 0.0]);
+    let encoded = evaluate(&context, "vec4<f32>(pq_encode(input.xyz), 0.0)", &inputs);
+    let decoded = evaluate(
+        &context,
+        "vec4<f32>(pq_decode(pq_encode(input.xyz)), 0.0)",
+        &inputs,
+    );
+
+    let (m1, m2) = (2610.0 / 16384.0, 2523.0 / 4096.0 * 128.0);
+    let (c1, c2, c3) = (
+        3424.0 / 4096.0,
+        2413.0 / 4096.0 * 32.0,
+        2392.0 / 4096.0 * 32.0,
+    );
+    for ((value, encoded), decoded) in frame_buffer_values.into_iter().zip(&encoded).zip(decoded) {
+        let normalized = (f64::from(value) * 100.0 / 10000.0).powf(m1);
+        let expected = ((c1 + c2 * normalized) / (1.0 + c3 * normalized)).powf(m2);
+        let case = format_args!("PQ of {value}");
+        assert_close(encoded[0], expected, GT7_TOLERANCE, case);
+        let case = format_args!("PQ decoding {value}");
+        assert_close(
+            decoded[0],
+            value.into(),
+            GT7_TOLERANCE * f64::from(value).max(1.0),
+            case,
+        );
+    }
+    assert_close(encoded[4][0], 0.508, 1e-3, format_args!("PQ of 100 cd/m²"));
+    assert_close(
+        encoded[7][0],
+        1.0,
+        GT7_TOLERANCE,
+        format_args!("PQ of 10,000 cd/m²"),
+    );
+}
+
+/// ICtCp (ITU-T T.302) puts a grey's PQ-encoded value in I and none in Ct
+/// and Cp, its chroma; converting a colour there and back returns it, within
+/// the sample's six-digit inverse matrix.
+#[test]
+fn ictcp_holds_a_grey_in_its_intensity_and_converts_back() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let colors = [
+        [0.5, 0.5, 0.5],
+        [2.5, 2.5, 2.5],
+        [1.0, 0.25, 0.05],
+        [0.02, 0.6, 0.3],
+        [3.0, 2.0, 8.0],
+    ];
+    let inputs = colors.map(|[red, green, blue]| [red, green, blue, 0.0]);
+    let ictcp = evaluate(
+        &context,
+        "vec4<f32>(rec2020_to_ictcp(input.xyz), 0.0)",
+        &inputs,
+    );
+    let encoded = evaluate(&context, "vec4<f32>(pq_encode(input.xyz), 0.0)", &inputs);
+    let round_trip = evaluate(
+        &context,
+        "vec4<f32>(ictcp_to_rec2020(rec2020_to_ictcp(input.xyz)), 0.0)",
+        &inputs,
+    );
+
+    for (index, color) in colors.into_iter().enumerate() {
+        if color[0] == color[1] && color[1] == color[2] {
+            let case = format_args!("ICtCp of the grey {color:?}");
+            assert_close(
+                ictcp[index][0],
+                encoded[index][0].into(),
+                GT7_TOLERANCE,
+                case,
+            );
+            assert_close(ictcp[index][1], 0.0, GT7_TOLERANCE, case);
+            assert_close(ictcp[index][2], 0.0, GT7_TOLERANCE, case);
+        }
+        for channel in 0..3 {
+            let expected = f64::from(color[channel]);
+            let case = format_args!("channel {channel} of {color:?} through ICtCp");
+            assert_close(
+                round_trip[index][channel],
+                expected,
+                1e-3 * expected.max(1.0),
+                case,
+            );
+        }
+    }
+}
+
+/// GT7's SDR tone mapping matches outputs of Polyphony's sample
+/// implementation, gt7_tone_mapping.cpp 1.0 (MIT; SHA-256 94df7e7e…9822),
+/// compiled unmodified with clang++ -O0 -ffp-contract=off on the M4 Pro and
+/// run on linear Rec. 2020 frame-buffer inputs: the sample's own three;
+/// greys through the toe, the linear section from 0.538, the shoulder from
+/// 1.11 and past the paper white of 2.5, which saturates; and saturated
+/// colours from dim to far past it, which whiten through the ICtCp blend,
+/// red and green but not blue.
+#[test]
+fn gt7_tonemap_matches_polyphonys_sample_implementation() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let inputs: Vec<[f32; 4]> = GT7_REFERENCE
+        .iter()
+        .map(|&([red, green, blue], _)| [red, green, blue, 0.0])
+        .collect();
+    let results = evaluate(&context, "vec4<f32>(gt7_tonemap(input.xyz), 0.0)", &inputs);
+
+    for ((input, expected), result) in GT7_REFERENCE.iter().zip(results) {
+        for channel in 0..3 {
+            let case = format_args!("channel {channel} of GT7{input:?}");
+            assert_close(
+                result[channel],
+                expected[channel].into(),
+                GT7_TOLERANCE,
+                case,
+            );
+        }
+    }
+}
+
+/// `tonemap` reads exposed 1 as GT7's paper white, and converts Rec. 709 to
+/// Rec. 2020 and back around GT7, clipping into [0, 1]. Against the sample
+/// implementation's GT7 between the conversions in f64, from BT.709-6's and
+/// BT.2020-2's primaries: greys, which both conversions keep grey, pass the
+/// linear section, exposed 0.2152 to 0.444, unchanged, so mid-tones keep
+/// their exposure; Rec. 709's primaries stay pure but green, which picks up
+/// red; past the paper white, colours whiten.
+#[test]
+fn tonemap_is_gt7_between_rec_709_and_rec_2020_with_exposed_1_at_paper_white() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let inputs: Vec<[f32; 4]> = TONEMAP_REFERENCE
+        .iter()
+        .map(|&([red, green, blue], _)| [red, green, blue, 0.0])
+        .collect();
+    let results = evaluate(&context, "vec4<f32>(tonemap(input.xyz), 0.0)", &inputs);
+
+    for ((input, expected), result) in TONEMAP_REFERENCE.iter().zip(results) {
+        for channel in 0..3 {
+            let case = format_args!("channel {channel} of tonemap{input:?}");
+            assert_close(
+                result[channel],
+                expected[channel].into(),
+                GT7_TOLERANCE,
+                case,
+            );
+        }
+    }
+}
+
+/// Linear Rec. 2020 frame-buffer inputs and their outputs from Polyphony's
+/// gt7_tone_mapping.cpp 1.0, initialised for SDR, printed to nine digits by
+/// a harness that includes the file unmodified.
+const GT7_REFERENCE: [([f32; 3], [f32; 3]); 26] = [
+    ([0.5, 1.23, 0.75], [0.1996225, 0.49070296, 0.29956776]),
+    ([12.3, 34.3, 56.9], [1.0, 1.0, 1.0]),
+    ([1504.7, 64.51, 0.5], [1.0, 1.0, 0.7387512]),
+    ([0.0, 0.0, 0.0], [0.0, 0.0, 0.0]),
+    (
+        [0.01, 0.01, 0.01],
+        [0.0013133113, 0.0013132402, 0.0013132499],
+    ),
+    ([0.1, 0.1, 0.1], [0.02633636, 0.026336258, 0.026336217]),
+    ([0.3, 0.3, 0.3], [0.11250466, 0.11250422, 0.11250404]),
+    ([0.538, 0.538, 0.538], [0.2152061, 0.2152053, 0.21520495]),
+    ([0.8, 0.8, 0.8], [0.3200031, 0.3200019, 0.32000136]),
+    ([1.11, 1.11, 1.11], [0.4440012, 0.4439995, 0.44399878]),
+    ([1.5, 1.5, 1.5], [0.58467156, 0.5846693, 0.5846684]),
+    ([2.5, 2.5, 2.5], [0.8351579, 0.8351547, 0.8351534]),
+    ([5.0, 5.0, 5.0], [1.0, 1.0, 1.0]),
+    ([50.0, 50.0, 50.0], [1.0, 1.0, 1.0]),
+    ([0.2, 0.0, 0.0], [0.06769287, 0.0, 0.0]),
+    ([2.0, 0.0, 0.0], [0.7297, 0.0, 0.0]),
+    ([20.0, 0.0, 0.0], [0.6966279, 0.17642365, 0.15613371]),
+    ([0.0, 0.2, 0.0], [0.0, 0.067029335, 0.0]),
+    ([0.0, 2.0, 0.0], [0.0, 0.72763175, 0.0]),
+    ([0.0, 20.0, 0.0], [0.4372026, 0.91132194, 0.4371986]),
+    ([0.0, 0.0, 0.2], [0.0, 0.0, 0.069220796]),
+    ([0.0, 0.0, 2.0], [0.0, 0.0, 0.73478824]),
+    ([0.0, 0.0, 20.0], [0.0, 0.0, 1.0]),
+    ([1.0, 0.6, 0.1], [0.3988926, 0.23934059, 0.034391593]),
+    ([3.0, 2.4, 0.2], [0.9566267, 0.79841584, 0.06546863]),
+    ([0.05, 0.3, 0.9], [0.014997541, 0.11209259, 0.3466799]),
+];
+
+/// Exposed Rec. 709 inputs and the display colours the sample's GT7 gives
+/// them between Rec. 709 and Rec. 2020, with the conversions in f64 from
+/// the standards' primaries, exposed 1 read as 2.5, and the result clipped
+/// to [0, 1].
+const TONEMAP_REFERENCE: [([f32; 3], [f32; 3]); 14] = [
+    ([0.0, 0.0, 0.0], [0.0, 0.0, 0.0]),
+    (
+        [0.0864, 0.0864, 0.0864],
+        [0.073816635, 0.073816106, 0.073816],
+    ),
+    ([0.2152, 0.2152, 0.2152], [0.21520665, 0.2152052, 0.2152049]),
+    ([0.32, 0.32, 0.32], [0.32000393, 0.32000175, 0.32000127]),
+    ([0.6, 0.6, 0.6], [0.5846731, 0.584669, 0.5846683]),
+    ([1.0, 1.0, 1.0], [0.8351601, 0.83515435, 0.83515316]),
+    ([4.0, 4.0, 4.0], [1.0, 1.0, 1.0]),
+    ([0.1, 0.2, 0.3], [0.09670808, 0.19929703, 0.29879954]),
+    ([1.0, 0.0, 0.0], [0.9479998, 0.0, 0.0]),
+    ([0.0, 1.0, 0.0], [0.027424455, 0.8751596, 0.0]),
+    ([0.0, 0.0, 1.0], [0.0, 0.0, 0.85535264]),
+    ([8.0, 0.0, 0.0], [1.0, 0.50304955, 0.23320603]),
+    ([0.5, 0.25, 0.125], [0.499791, 0.24980466, 0.1230321]),
+    ([3.0, 2.0, 0.5], [1.0, 1.0, 0.83223754]),
+];
+
+/// Largest difference allowed between GT7 on the GPU and the sample's
+/// outputs, on a scale where 1 is display white. On the M4 Pro, GT7 lands
+/// within 7e-5 of them, PQ's exponents amplifying f32 rounding, and
+/// `tonemap` within 2.3e-4, where its conversion back to Rec. 709 subtracts
+/// near-equal terms for saturated green: a fifth of an 8-bit step.
+const GT7_TOLERANCE: f64 = 3e-4;
+
 /// Linear sRGB reflectance of gold at normal incidence, as the pbr-sweep
 /// scene uses it: each channel a different base colour.
 const GOLD: [f32; 3] = [1.0, 0.71, 0.29];
