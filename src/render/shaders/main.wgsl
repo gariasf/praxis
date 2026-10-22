@@ -89,28 +89,46 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let view_direction = normalize(-in.camera_relative_position);
 
-    // Shaded whether or not the uniform holds a directional light, since a
-    // branch around it cost the main pass about 10% on the M4 Pro: without
-    // one, its illuminance is zero and a fixed direction keeps the term finite.
+    // The first directional light is shaded whether or not the light buffer
+    // holds one, since a branch around it cost the lit pass about 10% on
+    // the M4 Pro: without one, its illuminance is zero and a fixed direction
+    // keeps the term finite. Any others follow.
     let has_directional_light = light.directional_light_count > 0u;
+    let first = lights[0];
     var outgoing_luminance = reflected_luminance(
         surface,
         normal,
         view_direction,
-        select(vec3<f32>(0.0, 1.0, 0.0), normalize(-light.direction.xyz), has_directional_light),
-        light.color.rgb * light.color.a * f32(light.directional_light_count)
+        select(vec3<f32>(0.0, 1.0, 0.0), normalize(-first.offset), has_directional_light),
+        first.intensity * f32(has_directional_light)
     );
-
-    for (var light_index = 0u; light_index < light.point_light_count; light_index++) {
-        let position_and_range = light.point_positions[light_index];
-        let color_and_intensity = light.point_colors[light_index];
+    for (var index = 1u; index < light.directional_light_count; index++) {
+        let directional = lights[index];
+        outgoing_luminance += reflected_luminance(
+            surface,
+            normal,
+            view_direction,
+            normalize(-directional.offset),
+            directional.intensity
+        );
+    }
+    let light_count = light.directional_light_count + light.point_light_count;
+    for (var index = light.directional_light_count; index < light_count; index++) {
+        let point = lights[index];
+        let position = camera_relative_position(
+            point.anchor,
+            point.offset,
+            camera.anchor,
+            camera.offset,
+            vec3<f32>(0.0)
+        );
         outgoing_luminance += point_light_luminance(
             surface,
             normal,
             view_direction,
-            position_and_range.xyz - in.camera_relative_position,
-            color_and_intensity.rgb * color_and_intensity.a,
-            position_and_range.w
+            position - in.camera_relative_position,
+            point.intensity,
+            point.range
         );
     }
 

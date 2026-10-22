@@ -11,7 +11,8 @@ use crate::render::targets::RenderTargets;
 use crate::render::tonemapping_pass::{TONEMAPPING_PASS, TonemappingPass};
 use crate::render::{
     AccelerationStructureBytes, CameraUniform, FrameData, FrameStaging, INSTANCE_CAPACITY,
-    InstanceData, LightUniform, LoadStaging, STATIC_TLAS_CAPACITY, StaticTlas,
+    InstanceData, LIGHT_CAPACITY, LightData, LightUniform, LoadStaging, STATIC_TLAS_CAPACITY,
+    StaticTlas,
 };
 use crate::stats::{FrameRecorder, GpuFrameStats};
 
@@ -64,6 +65,8 @@ pub struct Renderer {
     depth_pyramid_pass: DepthPyramidPass,
     tonemapping_pass: TonemappingPass,
     camera_buffer: wgpu::Buffer,
+    light_uniform_buffer: wgpu::Buffer,
+    /// Created at its fixed capacity; it never grows.
     light_buffer: wgpu::Buffer,
     /// The camera and the lights (`FRAME`).
     frame_bind_group: wgpu::BindGroup,
@@ -159,10 +162,16 @@ impl Renderer {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let light_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Light Buffer"),
+        let light_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Light Uniform Buffer"),
             size: std::mem::size_of::<LightUniform>() as wgpu::BufferAddress,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let light_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Light Buffer"),
+            size: u64::from(LIGHT_CAPACITY) * std::mem::size_of::<LightData>() as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         let frame_bind_group = FRAME.bind_group(
@@ -170,7 +179,8 @@ impl Renderer {
             &frame_bind_group_layout,
             [
                 ("camera", camera_buffer.as_entire_binding()),
-                ("light", light_buffer.as_entire_binding()),
+                ("light", light_uniform_buffer.as_entire_binding()),
+                ("lights", light_buffer.as_entire_binding()),
             ],
         );
 
@@ -185,6 +195,7 @@ impl Renderer {
         let frame_staging = FrameStaging::new(
             [
                 &camera_buffer,
+                &light_uniform_buffer,
                 &light_buffer,
                 &instance_buffer,
                 culling_pass.instance_slot_count(),
@@ -233,6 +244,7 @@ impl Renderer {
             depth_pyramid_pass,
             tonemapping_pass,
             camera_buffer,
+            light_uniform_buffer,
             light_buffer,
             frame_bind_group,
             instance_buffer,
@@ -298,11 +310,18 @@ impl Renderer {
                 let buffer = self.culling_pass.instance_slot_count();
                 (buffer, 0, bytemuck::bytes_of(&frame.instance_slot_count))
             });
+        let light_upload = (!frame.lights.is_empty())
+            .then(|| (&self.light_buffer, 0, bytemuck::cast_slice(&frame.lights)));
         let uploads = [
             (&self.camera_buffer, 0, bytemuck::bytes_of(&frame.camera)),
-            (&self.light_buffer, 0, bytemuck::bytes_of(&frame.light)),
+            (
+                &self.light_uniform_buffer,
+                0,
+                bytemuck::bytes_of(&frame.light),
+            ),
         ]
         .into_iter()
+        .chain(light_upload)
         .chain(instance_uploads)
         .chain(slot_count_upload);
         let uploaded_bytes = self
@@ -439,6 +458,7 @@ impl Renderer {
     pub fn gpu_memory_bytes(&self) -> u64 {
         let buffers = [
             &self.camera_buffer,
+            &self.light_uniform_buffer,
             &self.light_buffer,
             &self.instance_buffer,
         ];
@@ -881,6 +901,83 @@ mod tests {
         assert_eq!(red_pixels(&mut world, &mut renderer), [left, 0]);
     }
 
+    /// Nine point lights over a white matte quad that fills the view, each
+    /// 0.1 m in front of it in a 3 × 3 grid 0.5 m apart, reaching 0.2 m: each
+    /// lights the quad under it, which stays dark between them, so lights
+    /// past the four the light uniform held reach the pixels they light.
+    #[test]
+    fn nine_point_lights_each_light_the_surface_under_them() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        const SIDE: u32 = 48;
+        let view_proj = projection_matrix(1.0) * Camera::new().view_matrix();
+        let mut renderer = Renderer::new(
+            &context,
+            TARGET_FORMAT,
+            SIDE,
+            SIDE,
+            RenderSwitches::default(),
+        );
+        let white = renderer.material_pool.insert(
+            &mut renderer.load_staging,
+            MaterialData {
+                base_color: [1.0; 4],
+                metallic_roughness: [0.0, 1.0, 0.0, 0.0],
+                emissive: [0.0, 0.0, 0.0, 1.0],
+                layers: [MaterialPool::DEFAULT_LAYER; 4],
+                extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
+            },
+        );
+        let quad = load_quad(&mut renderer);
+        let wall = InstanceData {
+            rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(2.0, 2.0, 1.0))),
+            offset: [0.0, 0.0, -2.0],
+            ..instance(quad, white.index(), [0.0, 0.0])
+        };
+        let grid = [-0.5, 0.0, 0.5];
+        let centres: Vec<glam::Vec3> = grid
+            .iter()
+            .flat_map(|&y| grid.map(|x| glam::vec3(x, y, -2.0)))
+            .collect();
+        let lights = centres
+            .iter()
+            .map(|centre| LightData {
+                range: 0.2,
+                offset: (*centre + glam::Vec3::Z * 0.1).to_array(),
+                intensity: [0.01; 3],
+                ..LightData::default()
+            })
+            .collect();
+        let frame = FrameData {
+            camera: CameraUniform {
+                view_proj: view_proj.to_cols_array_2d(),
+                exposure: 1.0,
+                ..CameraUniform::default()
+            },
+            light: LightUniform {
+                point_light_count: 9,
+                ..LightUniform::default()
+            },
+            lights,
+            ..frame_of(vec![wall])
+        };
+        let (image, ..) = render_frame(&context, &mut renderer, &frame, SIDE, SIDE);
+
+        // The pixel at `position`, on the quad.
+        let red_at = |position: glam::Vec3| {
+            let clip = view_proj * position.extend(1.0);
+            let normalised = clip.truncate() / clip.w;
+            let x = (normalised.x + 1.0) / 2.0 * SIDE as f32;
+            let y = (1.0 - normalised.y) / 2.0 * SIDE as f32;
+            image.get_pixel(x as u32, y as u32).0[0]
+        };
+        let lit: Vec<u8> = centres.iter().map(|&centre| red_at(centre)).collect();
+        let between = red_at(glam::vec3(0.25, 0.25, -2.0));
+        assert!(lit.iter().all(|&red| red > 50), "{lit:?}");
+        assert!(between <= 1, "{between} between the lights");
+    }
+
     /// The cooked bounds of every Mesh `load_triangles` loads: a box that
     /// holds its triangles, off their pivot, its three sides unequal, so a
     /// culling test reads each axis apart.
@@ -1180,6 +1277,7 @@ mod tests {
                 ..CameraUniform::default()
             },
             light: LightUniform::default(),
+            lights: Vec::new(),
             background: wgpu::Color {
                 r: 0.1,
                 g: 0.2,

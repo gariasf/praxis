@@ -17,7 +17,7 @@ use crate::render::bind_groups::{
     BindGroupDefinition, Binding, Writer, read_only_storage, uniform,
 };
 use crate::render::shaders::{MODULES, Part, ShaderModule};
-use crate::render::{CameraUniform, InstanceData, LightUniform};
+use crate::render::{CameraUniform, InstanceData, LightData, LightUniform};
 
 #[test]
 fn every_module_parses_and_validates() {
@@ -220,14 +220,18 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
             _pad_offset,
         }),
         twin!(LightUniform {
-            direction,
-            color,
             ambient_illuminance,
-            point_positions,
-            point_colors,
-            point_light_count,
             directional_light_count,
+            point_light_count,
             _pad,
+        }),
+        twin!(LightData {
+            anchor,
+            range,
+            offset,
+            _pad_offset,
+            intensity,
+            _pad_intensity,
         }),
         twin!(InstanceData {
             rotation_scale,

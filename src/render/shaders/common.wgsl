@@ -41,19 +41,25 @@ struct MaterialData {
     extra: vec4<u32>,
 };
 
+// The light buffer's counts, its directional lights first, and the scene's
+// ambient illuminance.
 struct LightUniform {
-    direction: vec4<f32>,
-    color: vec4<f32>,
     // rgb: the scene's ambient illuminance.
     ambient_illuminance: vec4<f32>,
-
-    // Point lights: xyz their position relative to the camera, w their
-    // range; rgb their colour, a their intensity.
-    point_positions: array<vec4<f32>, 4>,
-    point_colors: array<vec4<f32>, 4>,
-    point_light_count: u32,
-    // 0 or 1: the uniform holds one directional light
     directional_light_count: u32,
+    point_light_count: u32,
+}
+
+// A light as the light buffer holds it, directional lights first, then point
+// lights. A point light's position arrives as an Anchor plus an offset
+// (ADR 0014), with its range; a directional light has no position, and its
+// offset holds the direction it shines along. Its intensity is its colour
+// times its candela, or a directional light's times its lux (ADR 0023).
+struct LightData {
+    anchor: vec3<i32>,
+    range: f32,
+    offset: vec3<f32>,
+    intensity: vec3<f32>,
 }
 
 // An Instance's pivot as anchor plus offset, so camera motion changes no
