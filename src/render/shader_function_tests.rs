@@ -184,7 +184,7 @@ fn smith_masking_ggx(cosine: f64, alpha: f64) -> f64 {
     2.0 / (1.0 + (1.0 + alpha * alpha * tangent_squared).sqrt())
 }
 
-/// A cooked normal map stores a unit normal's x and y, each mapped to
+/// A cooked normal Texture stores a unit normal's x and y, each mapped to
 /// [0, 1], and the shader rebuilds z = √(1 − x² − y²), the cosine between the
 /// normal and the surface's, which falls to 0 at grazing slopes. On a lattice
 /// of encodings 1/512 apart, whose x, y and squares f32 holds exactly, every
