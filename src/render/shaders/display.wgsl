@@ -25,7 +25,7 @@ fn tonemap(exposed: vec3<f32>) -> vec3<f32> {
 
 // IEC 61966-2-1's sRGB encoding of display-linear colour, clamped to
 // [0, 1]. The tonemapping pass encodes here, once, into an 8-bit UNORM
-// target, so a dither can land on 8-bit steps (#200's decision D1).
+// target, so its dither lands on 8-bit steps (#200's decision D1).
 fn srgb_encode(display: vec3<f32>) -> vec3<f32> {
     let clamped = clamp(display, vec3<f32>(0.0), vec3<f32>(1.0));
     return select(
@@ -33,4 +33,17 @@ fn srgb_encode(display: vec3<f32>) -> vec3<f32> {
         12.92 * clamped,
         clamped <= vec3<f32>(0.0031308)
     );
+}
+
+// Noise on (−1, 1) of triangular density, in 8-bit steps, from a value of
+// the dither mask: one of 256 levels, each standing for its bin's centre in
+// (0, 1), turned by the inverse of the triangular distribution's CDF, as
+// Peters remaps a blue-noise mask for dithering
+// (momentsingraphics.de/BlueNoise.html, "Dithering"). Triangular noise of
+// two steps peak to peak is the least that removes noise modulation
+// (Lipshitz, Wannamaker and Vanderkooy 1992).
+fn dither_noise(mask_value: f32) -> f32 {
+    let uniform = (round(mask_value * 255.0) + 0.5) / 256.0;
+    let centred = 2.0 * uniform - 1.0;
+    return sign(centred) * (1.0 - sqrt(1.0 - abs(centred)));
 }

@@ -5,8 +5,8 @@ use praxis::gpu::GpuContext;
 
 /// The clear colour, exposed (0.1, 0.2, 0.3), as GT7 shows it: Polyphony's
 /// sample implementation, between Rec. 709 and Rec. 2020, gives (0.0967,
-/// 0.1993, 0.2988), which an 8-bit sRGB target stores as 87.6, 123.4 and
-/// 148.6. The tolerance of 1 absorbs a GPU's rounding.
+/// 0.1993, 0.2988), which sRGB encodes as 87.6, 123.4 and 148.6. The
+/// tolerance of 1 absorbs the dither's step.
 const BACKGROUND: [u8; 4] = [88, 123, 149, 255];
 
 #[test]
