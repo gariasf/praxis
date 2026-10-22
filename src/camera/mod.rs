@@ -4,6 +4,17 @@ use winit::keyboard::KeyCode;
 use crate::input::Input;
 use crate::time::Time;
 
+/// The luminance, in cd/m², that saturates a sensor of ISO 100 at EV100 0:
+/// 78 / (100 · 0.65), with Lagarde and de Rousiers's lens and vignetting
+/// factor q = 0.65 ("Moving Frostbite to Physically Based Rendering 3.0",
+/// 2014, p. 85).
+const SATURATING_LUMINANCE_AT_EV100_ZERO: f32 = 1.2;
+
+/// The EV100 whose `Camera::exposure` is `exposure`.
+pub fn ev100_for_exposure(exposure: f32) -> f32 {
+    (1.0 / (SATURATING_LUMINANCE_AT_EV100_ZERO * exposure)).log2()
+}
+
 #[derive(Resource)]
 pub struct Camera {
     /// World position in f64 metres (ADR 0014).
@@ -30,11 +41,11 @@ impl Camera {
         }
     }
 
-    /// What luminance is scaled by before the HDR target stores it,
-    /// 1/(1.2 · 2^EV100), so the luminance that saturates a sensor at this
-    /// EV100 lands near display white (Lagarde and de Rousiers 2014, p. 86).
+    /// What the lit pass scales luminance by, 1/(1.2 · 2^EV100), so the
+    /// luminance that saturates a sensor at this EV100 lands near display
+    /// white (Lagarde and de Rousiers 2014, p. 86).
     pub fn exposure(&self) -> f32 {
-        1.0 / (1.2 * self.ev100.exp2())
+        1.0 / (SATURATING_LUMINANCE_AT_EV100_ZERO * self.ev100.exp2())
     }
 
     /// A camera at `position` facing `target`, which must not be straight
@@ -127,6 +138,11 @@ mod tests {
             assert!(
                 (exposure - expected).abs() <= f32::EPSILON * expected,
                 "EV100 {ev100}: exposure {exposure}, expected {expected}"
+            );
+            let inverse = ev100_for_exposure(expected);
+            assert!(
+                (inverse - ev100).abs() <= 4.0 * f32::EPSILON * ev100.abs().max(1.0),
+                "exposure {expected}: EV100 {inverse}, expected {ev100}"
             );
         }
     }

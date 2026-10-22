@@ -5,7 +5,7 @@ use std::time::Duration;
 use bevy_ecs::prelude::*;
 
 use crate::assets::{AssetLoader, MaterialChannel};
-use crate::camera::Camera;
+use crate::camera::{Camera, ev100_for_exposure};
 use crate::components::{DirectionalLight, MaterialRef, MeshRef, PointLight, Transform};
 #[cfg(feature = "cook")]
 use crate::cook::LoadedImage;
@@ -272,8 +272,8 @@ impl ReferenceScene {
     }
 
     /// The scene's exposure, an EV100 set by hand (ADR 0023). Each scene
-    /// exposes the sun's illuminance to 1, log2(100,000 / 1.2), as it was lit
-    /// before its lights took photometric units.
+    /// exposes the sun's illuminance to 1, as it was lit before its lights
+    /// took photometric units: EV100 16.35.
     fn ev100(self) -> f32 {
         match self {
             Self::Helmet
@@ -283,7 +283,7 @@ impl ReferenceScene {
             | Self::FarCoplanar
             | Self::Orrery
             | Self::Minification
-            | Self::TextureWall => 16.3466,
+            | Self::TextureWall => ev100_for_exposure(1.0 / SUN_ILLUMINANCE),
         }
     }
 

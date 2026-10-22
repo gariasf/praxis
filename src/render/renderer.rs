@@ -471,7 +471,7 @@ mod tests {
     use crate::assets::material::MaterialData;
     use crate::assets::pools::tests::{logged, read_storage};
     use crate::assets::{MaterialHandle, MeshHandle};
-    use crate::camera::{Camera, projection_matrix};
+    use crate::camera::{Camera, ev100_for_exposure, projection_matrix};
     use crate::capture::read_back;
     use crate::components::{MeshRef, Transform};
     use crate::cooked::{CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex};
@@ -826,7 +826,7 @@ mod tests {
         let mut world = World::new();
         // Exposed to 1, so the emissive reaches the target as it is.
         world.insert_resource(Camera {
-            ev100: (1.0f32 / 1.2).log2(),
+            ev100: ev100_for_exposure(1.0),
             ..Camera::new()
         });
         world.insert_resource(FixedTime::default());
