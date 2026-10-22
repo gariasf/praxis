@@ -198,8 +198,8 @@ impl MaterialPool {
             channels[channel as usize].push(device, staging, &neutral);
         }
 
-        let colour_sampler = channel_sampler(device, "Colour Channel Sampler", COLOUR_ANISOTROPY);
-        let data_sampler = channel_sampler(device, "Data Channel Sampler", DATA_ANISOTROPY);
+        let colour_sampler = trilinear_sampler(device, "Colour Channel Sampler", COLOUR_ANISOTROPY);
+        let data_sampler = trilinear_sampler(device, "Data Channel Sampler", DATA_ANISOTROPY);
 
         let bind_group_layout = MATERIALS.layout(device);
         let bind_group = create_bind_group(
@@ -207,7 +207,8 @@ impl MaterialPool {
             &bind_group_layout,
             &materials_buffer,
             &channels,
-            [&colour_sampler, &data_sampler],
+            &colour_sampler,
+            &data_sampler,
         );
 
         Self {
@@ -317,7 +318,8 @@ impl MaterialPool {
                 &self.bind_group_layout,
                 &self.materials_buffer,
                 &self.channels,
-                [&self.colour_sampler, &self.data_sampler],
+                &self.colour_sampler,
+                &self.data_sampler,
             );
             // ADR 0017's gate: the build's cost at the bound Textures' count.
             tracing::info!(
@@ -333,9 +335,10 @@ impl MaterialPool {
     }
 }
 
-/// A trilinear sampler (#144) at `anisotropy`, within the Capability
-/// floor's (ADR 0021).
-fn channel_sampler(device: &wgpu::Device, label: &str, anisotropy: u16) -> wgpu::Sampler {
+/// A trilinear, repeating sampler (#144) at `anisotropy`, which the
+/// Capability floor's anisotropic filtering keeps wgpu from clamping to 1
+/// (ADR 0021).
+fn trilinear_sampler(device: &wgpu::Device, label: &str, anisotropy: u16) -> wgpu::Sampler {
     device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some(label),
         address_mode_u: wgpu::AddressMode::Repeat,
@@ -356,7 +359,8 @@ fn create_bind_group(
     layout: &wgpu::BindGroupLayout,
     materials_buffer: &wgpu::Buffer,
     channels: &[ChannelTextures; 5],
-    [colour_sampler, data_sampler]: [&wgpu::Sampler; 2],
+    colour_sampler: &wgpu::Sampler,
+    data_sampler: &wgpu::Sampler,
 ) -> wgpu::BindGroup {
     let views: Vec<Vec<&wgpu::TextureView>> = channels
         .iter()

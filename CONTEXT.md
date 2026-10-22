@@ -23,7 +23,7 @@ The appearance of a Primitive: PBR factors plus one Layer per Channel.
 _Avoid_: Shader, texture set, bind group
 
 **Channel**:
-One texture role of a Material: albedo, normal, metallic-roughness, occlusion or emissive.
+One texture role of a Material: albedo, normal, metallic-roughness, occlusion or emissive. Albedo and emissive are the colour Channels, encoded sRGB; normal, metallic-roughness and occlusion are the data Channels, encoded linear. Each kind has its own sampler.
 _Avoid_: Map, slot
 
 **Layer**:

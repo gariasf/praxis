@@ -24,7 +24,7 @@ pass on Apple's tile-based GPU.
 
 | Variant | Anisotropy: albedo, normal, metallic-roughness, occlusion, emissive | Lit pass µs (3 rounds) | GPU frame µs (3 rounds) |
 |---|---|---|---|
-| Today: one sampler | 16, 16, 16, 16, 16 | 556.7 / 557.2 / 557.5 | 1,274.3 / 1,274.2 / 1,274.8 |
+| `064d2ba`: one sampler | 16, 16, 16, 16, 16 | 556.7 / 557.2 / 557.5 | 1,274.3 / 1,274.2 / 1,274.8 |
 | Patch at 16x | 16, 16, 16, 16, 16 | 557.5 / 558.0 / 557.8 | 1,272.7 / 1,272.8 / 1,274.9 |
 | 8x | 8, 8, 8, 8, 8 | 446.5 / 446.9 / 454.0 | 1,162.6 / 1,163.2 / 1,193.5 |
 | 4x | 4, 4, 4, 4, 4 | 368.8 / 368.0 / 369.5 | 1,085.6 / 1,082.9 / 1,088.5 |
@@ -38,19 +38,19 @@ pass on Apple's tile-based GPU.
 | Occlusion and emissive 1x | 16, 16, 16, 1, 1 | 561.2 / 557.3 / 557.5 | 1,285.2 / 1,274.1 / 1,274.4 |
 
 - The patch alone costs nothing: five samplers at 16x time as one, and
-  their capture matches today's Golden pixel for pixel.
+  their capture matches `064d2ba`'s Golden pixel for pixel.
 - 16x costs 214 µs of the lit pass, 38% of it (557.2 against 343.0 µs at
   1x, medians of the rounds' medians), as M2's exit measured in a single
   pass without MSAA (222 µs). Over 1x, 2x costs nothing, 4x 26 µs and 8x
-  104 µs. GPU frame totals move by the same amounts, within 4 µs.
+  104 µs. GPU frame totals move by the same amounts, within 2.1 µs.
 - The 1×1 Textures' anisotropy costs nothing. The Channels' costs
   overlap: albedo alone at 16x costs 42 µs over 1x everywhere, but
   dropping it to 1x from 16x everywhere saves 84 µs.
-- Against today: 8x saves 110 µs; colour 16x with data 8x 74 µs, data
+- Against `064d2ba`: 8x saves 110 µs; colour 16x with data 8x 74 µs, data
   4x 126 µs, data 2x 158 µs. Data 4x saves 1.1% of ADR 0013's 12 ms GPU
   Budget.
 
-Captures at the Golden's size, 640×360, against today's Golden:
+Captures at the Golden's size, 640×360, against `064d2ba`'s Golden:
 
 | Variant | Pixels changed | Beyond 1 step | Largest step |
 |---|---|---|---|
@@ -65,7 +65,7 @@ width. The Golden's size hides some of it: colour 16x with data 8x
 changes 221 pixels at 640×360 (0.1%) but 273,950 at 1440p (7.4%), whose
 pixels sample finer mips that still hold the bumps.
 
-Images, on the `pr-images` branch at `2a87cbb`: today's
+Images, on the `pr-images` branch at `2a87cbb`: `064d2ba`'s
 [Golden](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/golden.png)
 and, at 640×360, [8x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/8x.png),
 [colour 16x, data 4x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/colour-16x-data-4x.png)
@@ -84,9 +84,9 @@ and [the checker](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201ed
 
 Image quality, against a reference: 16x at 7680×4320, 9 samples per
 pixel, box-filtered to 2560×1440 in linear light. RMSE in 8-bit steps over
-the band (rows 484 to 759; the horizon is at 488), and within it over the
-highlight's columns (1000 to 1559) and the checker either side (0 to 899
-and 1660 to 2559):
+the band (rows 484 to 759, from 4 rows above the horizon at 488), and
+within it over the highlight's columns (1000 to 1559) and the checker
+either side (0 to 899 and 1660 to 2559):
 
 | Variant | Band | Highlight | Checker |
 |---|---|---|---|
@@ -115,6 +115,10 @@ and 1660 to 2559):
   Channels at 4x or 2x show a smoother, narrower V without the sparkle.
   No variant shows the mirror image: Toksvig widens one lobe and keeps no
   sharp peak.
+
+The owner chose colour Channels at 16x and data Channels at 4x on
+2026-10-22, judging the images on #257; the Goldens and Baselines there
+are that sampler's.
 
 ## M2 exit (2026-10-19, #154)
 
