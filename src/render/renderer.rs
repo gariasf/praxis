@@ -494,9 +494,13 @@ mod tests {
 
     const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
     const SIZE: u32 = 16;
-    const RED: [u8; 4] = [255, 0, 0, 255];
-    const GREEN: [u8; 4] = [0, 255, 0, 255];
-    const BLUE: [u8; 4] = [0, 0, 255, 255];
+    /// Emissive red, green and blue exposed to 1, as GT7 shows them:
+    /// Polyphony's sample implementation gives 0.948 red, 0.875 green with
+    /// 0.027 red, and 0.855 blue, which sRGB encodes as 249.1, 240.5 with
+    /// 46.1, and 238.0.
+    const RED: [u8; 4] = [249, 0, 0, 255];
+    const GREEN: [u8; 4] = [46, 240, 0, 255];
+    const BLUE: [u8; 4] = [0, 0, 238, 255];
 
     #[test]
     fn renders_hand_built_frame_data_without_a_world() {
@@ -514,14 +518,10 @@ mod tests {
         let (image, recorder, _) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
 
         assert_eq!(recorder.draw_calls, 4);
-        assert_eq!(image.get_pixel(SIZE / 2, SIZE / 2).0, [255, 0, 0, 255]);
-        // The Frame data's background, linear (0.1, 0.2, 0.3), sRGB-encoded
-        // as in tests/capture.rs; the GPU may round its green either way.
-        let corner = image.get_pixel(0, 0).0;
-        assert!(
-            corner[0] == 89 && corner[1].abs_diff(124) <= 1 && corner[2] == 149,
-            "corner {corner:?}"
-        );
+        assert_eq!(image.get_pixel(SIZE / 2, SIZE / 2).0, RED);
+        // The Frame data's background, exposed (0.1, 0.2, 0.3), as GT7 shows
+        // it in tests/capture.rs.
+        assert_eq!(image.get_pixel(0, 0).0, [88, 123, 149, 255]);
     }
 
     #[test]
@@ -555,10 +555,7 @@ mod tests {
         let (created_image, ..) = render_frame(&context, &mut created, &frame, width, height);
 
         assert_eq!(resized.aspect_ratio(), 1.2);
-        assert_eq!(
-            resized_image.get_pixel(width / 2, height / 2).0,
-            [255, 0, 0, 255]
-        );
+        assert_eq!(resized_image.get_pixel(width / 2, height / 2).0, RED);
         assert!(
             resized_image == created_image,
             "the resized Renderer drew another image than one created at its size"
