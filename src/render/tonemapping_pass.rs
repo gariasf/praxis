@@ -129,7 +129,9 @@ mod tests {
     /// so the HDR target holds one exposed colour, weighted: every pixel of
     /// an 8-bit sRGB target shows it as GT7 maps it, the sRGB-encoded outputs
     /// of Polyphony's sample implementation between Rec. 709 and Rec. 2020
-    /// (as `tonemap`'s oracle takes them). Black stays black, a grey in GT7's
+    /// (as `tonemap`'s oracle takes them), within a step, as fp16 and a
+    /// GPU's transcendentals move a value near a step's edge: lavapipe shows
+    /// the last case's 132.65 as 132. Black stays black, a grey in GT7's
     /// linear section keeps its exposure, the Reference scenes' background
     /// shows as in `tests/capture.rs`, red stays red, and a red past the
     /// paper white whitens.
@@ -191,7 +193,13 @@ mod tests {
             let pixels = read_back(&context, &target).expect("read back failed");
 
             for pixel in pixels.as_chunks::<4>().0 {
-                assert_eq!(pixel[..3], expected, "exposed ({red}, {green}, {blue})");
+                assert!(
+                    pixel
+                        .iter()
+                        .zip(expected)
+                        .all(|(&channel, expected)| { channel.abs_diff(expected) <= 1 }),
+                    "exposed ({red}, {green}, {blue}) shows {pixel:?}"
+                );
             }
         }
     }
