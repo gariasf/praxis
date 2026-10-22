@@ -57,8 +57,9 @@ fn distribution_ggx_integrates_to_one_over_the_hemisphere() {
     let Some(context) = gpu_context() else {
         return;
     };
-    // Below 0.25, f32 rounding near D's peak costs the sum up to 2e-3, at the
-    // renderer's floor of 0.04.
+    // Below 0.25, f32 holds cos θ too coarsely near D's peak: at the
+    // renderer's floor of 0.04 the sum lands 9e-4 short, so the floor is
+    // checked against D's f64 reference instead.
     let roughnesses = [0.25, 0.5, 0.75, 1.0];
     let sample_count = 4096;
     // Each sample's angle θ and the width dθ = π u du it stands for.
@@ -82,7 +83,7 @@ fn distribution_ggx_integrates_to_one_over_the_hemisphere() {
         .collect();
     let results = evaluate(
         &context,
-        "vec4<f32>(distribution_ggx(input.x, input.y))",
+        "vec4<f32>(distribution_ggx(input.x, input.y * input.y))",
         &inputs,
     );
 
@@ -108,7 +109,7 @@ fn distribution_ggx_integrates_to_one_over_the_hemisphere() {
     // is 16/π at roughness 0.5.
     let peak = evaluate(
         &context,
-        "vec4<f32>(distribution_ggx(input.x, input.y))",
+        "vec4<f32>(distribution_ggx(input.x, input.y * input.y))",
         &[[1.0, 0.5, 0.0, 0.0]],
     )[0][0];
     assert!(
@@ -117,71 +118,113 @@ fn distribution_ggx_integrates_to_one_over_the_hemisphere() {
     );
 }
 
-/// Smith's G is the fraction of microfacets both seen and lit, so it stays in
-/// [0, 1] and is 1 along the normal. At roughness 1 the shader's k is 1/2,
-/// where Schlick's form equals the exact Smith masking of GGX (Karis 2013).
-/// Below that, k follows Disney's roughness remap for analytic lights, which
-/// Karis adopts, and a literal pins it at roughness 0.5. The remap keeps k at
-/// 1/8 or more, so unlike exact Smith this G does not reach 1 as roughness
-/// falls to 0.
+/// D matches glTF 2.0 Appendix B's Trowbridge-Reitz formula, evaluated in
+/// f64, from below the horizon, where χ⁺ makes it 0, to the normal, and from
+/// the roughness floor to 1. At the floor's peak the formula's
+/// (N·H)² (α² − 1) + 1 falls to α² = 2.56e-6, which f32 keeps only as the
+/// shader sums it.
 #[test]
-fn geometry_smith_stays_in_zero_to_one_and_is_exact_at_roughness_one() {
+fn distribution_ggx_matches_appendix_b_from_the_roughness_floor_to_one() {
     let Some(context) = gpu_context() else {
         return;
     };
-    let tenths: [f32; 11] = std::array::from_fn(|tenth| tenth as f32 / 10.0);
+    let cosines = [-0.5, 0.0, 1e-3, 0.5, 0.9, 0.99, 0.999, 0.9999, 0.99999, 1.0];
+    let inputs: Vec<[f32; 4]> = [minimum_roughness(&context), 0.25, 0.5, 1.0]
+        .into_iter()
+        .flat_map(|roughness| cosines.map(|cosine| [cosine, roughness * roughness, 0.0, 0.0]))
+        .collect();
+    let results = evaluate(
+        &context,
+        "vec4<f32>(distribution_ggx(input.x, input.y))",
+        &inputs,
+    );
+
+    for (&[normal_dot_half, alpha, ..], result) in inputs.iter().zip(results) {
+        let expected = reference_distribution(normal_dot_half.into(), alpha.into());
+        let case = format_args!("D(N·H = {normal_dot_half}, α = {alpha})");
+        assert_close(result[0], expected, RELATIVE_TOLERANCE * expected, case);
+    }
+}
+
+/// V, Smith's height-correlated masking-shadowing over 4 |N·L| |N·V|,
+/// matches Appendix B's formula, evaluated in f64, at cosines from grazing to
+/// the normal and widths from the roughness floor to 1, and is 0, not
+/// infinite, where both cosines are 0, and where χ⁺(H·V) is 0. G, which is
+/// 4 |N·L| |N·V| V, the share of microfacets both seen and lit, stays in
+/// [0, 1].
+#[test]
+fn smith_visibility_matches_appendix_b_and_keeps_g_within_zero_to_one() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let cosines = [0.0, 1e-4, 0.01, 0.3, 0.7, 1.0];
     let mut inputs = Vec::new();
-    for normal_dot_view in tenths {
-        for normal_dot_light in tenths {
-            for roughness in tenths {
-                inputs.push([normal_dot_view, normal_dot_light, roughness, 0.0]);
+    for roughness in [minimum_roughness(&context), 0.5, 1.0] {
+        for normal_dot_light in cosines {
+            for normal_dot_view in cosines {
+                for view_dot_half in [0.0, 0.5] {
+                    let alpha = roughness * roughness;
+                    inputs.push([normal_dot_light, normal_dot_view, view_dot_half, alpha]);
+                }
             }
         }
     }
     let results = evaluate(
         &context,
-        "vec4<f32>(geometry_smith(input.x, input.y, input.z))",
+        "vec4<f32>(smith_visibility(input.x, input.y, input.z, input.w))",
         &inputs,
     );
 
-    for (&[normal_dot_view, normal_dot_light, roughness, _], result) in inputs.iter().zip(results) {
-        let geometry = result[0];
-        assert!(
-            (-TOLERANCE..=1.0 + TOLERANCE).contains(&geometry),
-            "G({normal_dot_view}, {normal_dot_light}, {roughness}) = {geometry}, outside [0, 1]"
-        );
-        if normal_dot_view == 1.0 && normal_dot_light == 1.0 {
-            assert!(
-                (geometry - 1.0).abs() <= TOLERANCE,
-                "G(1, 1, {roughness}) = {geometry}, expected 1"
-            );
-        }
-        if roughness == 1.0 {
-            let expected = smith_masking_ggx(normal_dot_view.into(), 1.0)
-                * smith_masking_ggx(normal_dot_light.into(), 1.0);
-            assert!(
-                (f64::from(geometry) - expected).abs() <= f64::from(TOLERANCE),
-                "G({normal_dot_view}, {normal_dot_light}, 1) = {geometry}, expected {expected}"
-            );
-        }
-        if [normal_dot_view, normal_dot_light, roughness] == [0.5; 3] {
-            // k = (0.5 + 1)² / 8 = 9/32, so each term is
-            // 0.5 / (0.5 · 23/32 + 9/32) = 32/41.
-            let expected = 1024.0 / 1681.0;
-            assert!(
-                (f64::from(geometry) - expected).abs() <= f64::from(TOLERANCE),
-                "G(0.5, 0.5, 0.5) = {geometry}, expected 1024/1681"
-            );
-        }
+    for (&[normal_dot_light, normal_dot_view, view_dot_half, alpha], result) in
+        inputs.iter().zip(results)
+    {
+        let input = [normal_dot_light, normal_dot_view, view_dot_half, alpha].map(f64::from);
+        let expected = reference_visibility(input);
+        let case = format_args!("V{input:?}");
+        assert_close(result[0], expected, RELATIVE_TOLERANCE * expected, case);
+        let geometry = 4.0 * normal_dot_light * normal_dot_view * result[0];
+        assert!(geometry <= 1.0 + TOLERANCE, "{case}: G is {geometry}");
     }
 }
 
-/// The exact Smith masking of GGX (Walter et al. 2007, eq. 34) for a
-/// direction at `cosine` from the normal, at width `alpha`:
-/// 2 / (1 + √(1 + α² tan² θ)).
-fn smith_masking_ggx(cosine: f64, alpha: f64) -> f64 {
-    let tangent_squared = (1.0 - cosine * cosine) / (cosine * cosine);
-    2.0 / (1.0 + (1.0 + alpha * alpha * tangent_squared).sqrt())
+/// Largest error allowed between a result and its f64 reference, relative to
+/// the reference, or to a scale the test names. Results land within 2e-6 of
+/// theirs on the M4 Pro.
+const RELATIVE_TOLERANCE: f64 = 4e-6;
+
+/// Asserts that `actual` is finite and within `tolerance` of `expected`, so
+/// exactly where `tolerance` is 0.
+fn assert_close(actual: f32, expected: f64, tolerance: f64, case: std::fmt::Arguments) {
+    let error = (f64::from(actual) - expected).abs();
+    assert!(
+        actual.is_finite() && error <= tolerance.abs(),
+        "{case} is {actual}, expected {expected}"
+    );
+}
+
+/// Appendix B's D, α² χ⁺(N·H) / (π ((N·H)² (α² − 1) + 1)²), as it writes it.
+fn reference_distribution(normal_dot_half: f64, alpha: f64) -> f64 {
+    let alpha_squared = alpha * alpha;
+    let denominator = normal_dot_half * normal_dot_half * (alpha_squared - 1.0) + 1.0;
+    let heaviside = if normal_dot_half > 0.0 { 1.0 } else { 0.0 };
+    alpha_squared * heaviside / (std::f64::consts::PI * denominator * denominator)
+}
+
+/// Appendix B's V from N·L, N·V, V·H (for H·L and H·V) and α, 0 where its
+/// denominator is, as the shader makes it.
+fn reference_visibility(
+    [normal_dot_light, normal_dot_view, view_dot_half, alpha]: [f64; 4],
+) -> f64 {
+    let alpha_squared = alpha * alpha;
+    let root = |cosine: f64| (alpha_squared + (1.0 - alpha_squared) * cosine * cosine).sqrt();
+    let denominator = 2.0
+        * (normal_dot_view.abs() * root(normal_dot_light)
+            + normal_dot_light.abs() * root(normal_dot_view));
+    if view_dot_half > 0.0 && denominator > 0.0 {
+        1.0 / denominator
+    } else {
+        0.0
+    }
 }
 
 /// A cooked normal Texture stores a unit normal's x and y, each mapped to
