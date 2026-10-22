@@ -10,9 +10,15 @@ fn vs_full_screen(@builtin(vertex_index) vertex_index: u32) -> @builtin(position
 }
 
 // A pixel's display colour, from its exposed colour, unweighted from the
-// resolve, sRGB-encoded.
+// resolve, sRGB-encoded and dithered by up to an 8-bit step either way with
+// the mask's triangular noise, fixed to the screen (#200's decision D1).
 @fragment
 fn fs_tonemap(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
-    let weighted = textureLoad(hdr_target, vec2<u32>(position.xy), 0).rgb;
-    return vec4<f32>(srgb_encode(tonemap(resolve_unweighted(weighted))), 1.0);
+    let pixel = vec2<u32>(position.xy);
+    let weighted = textureLoad(hdr_target, pixel, 0).rgb;
+    let encoded = srgb_encode(tonemap(resolve_unweighted(weighted)));
+    // DITHER_MASK_SIDE, a power of two declared from Rust's
+    // (src/render/shaders/mod.rs), tiles the mask with a bit mask.
+    let noise = dither_noise(textureLoad(dither_mask, pixel % DITHER_MASK_SIDE, 0).r);
+    return vec4<f32>(encoded + noise / 255.0, 1.0);
 }

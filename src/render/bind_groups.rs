@@ -108,6 +108,7 @@ pub const FRAME_DRAW: BindGroupDefinition = BindGroupDefinition {
             "texture_2d<f32>",
             wgpu::TextureSampleType::Float { filterable: false },
             false,
+            wgpu::ShaderStages::COMPUTE,
         ),
     ],
 };
@@ -151,30 +152,42 @@ pub const DEPTH_PYRAMID_LEVEL: BindGroupDefinition = BindGroupDefinition {
             "texture_depth_multisampled_2d",
             wgpu::TextureSampleType::Depth,
             true,
+            wgpu::ShaderStages::COMPUTE,
         ),
         loaded_texture(
             "level_below",
             "texture_2d<f32>",
             wgpu::TextureSampleType::Float { filterable: false },
             false,
+            wgpu::ShaderStages::COMPUTE,
         ),
     ],
 };
 
 /// Group 3 of the tonemapping pass: the HDR target, which the lit pass
-/// resolves into.
+/// resolves into, and the dither's mask, which the CPU loads.
 pub const TONEMAPPING_INPUT: BindGroupDefinition = BindGroupDefinition {
     index: 3,
     label: "Tonemapping Input Bind Group",
-    bindings: &[Binding {
-        stages: wgpu::ShaderStages::FRAGMENT,
-        ..loaded_texture(
+    bindings: &[
+        loaded_texture(
             "hdr_target",
             "texture_2d<f32>",
             wgpu::TextureSampleType::Float { filterable: false },
             false,
-        )
-    }],
+            wgpu::ShaderStages::FRAGMENT,
+        ),
+        Binding {
+            writer: Writer::Cpu,
+            ..loaded_texture(
+                "dither_mask",
+                "texture_2d<f32>",
+                wgpu::TextureSampleType::Float { filterable: false },
+                false,
+                wgpu::ShaderStages::FRAGMENT,
+            )
+        },
+    ],
 };
 
 /// A bind group: its index and its bindings, each numbered by its place.
@@ -378,13 +391,13 @@ const fn buffer(
     }
 }
 
-/// A texture the compute stage loads texels from, which only the GPU
-/// writes.
+/// A texture `stages` load texels from, which only the GPU writes.
 const fn loaded_texture(
     name: &'static str,
     wgsl_type: &'static str,
     sample_type: wgpu::TextureSampleType,
     multisampled: bool,
+    stages: wgpu::ShaderStages,
 ) -> Binding {
     Binding {
         name,
@@ -394,7 +407,7 @@ const fn loaded_texture(
             view_dimension: wgpu::TextureViewDimension::D2,
             multisampled,
         },
-        stages: wgpu::ShaderStages::COMPUTE,
+        stages,
         count: None,
         writer: Writer::Gpu,
     }

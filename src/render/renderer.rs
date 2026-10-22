@@ -215,7 +215,8 @@ impl Renderer {
         );
 
         let depth_pyramid_pass = DepthPyramidPass::new(&device, &render_targets);
-        let tonemapping_pass = TonemappingPass::new(&device, target_format, &render_targets);
+        let tonemapping_pass =
+            TonemappingPass::new(&device, target_format, &render_targets, &mut load_staging);
         let gpu_stats = GpuStatsReadback::new(&device, queue.get_timestamp_period());
         let static_tlas = StaticTlas::new(&device, STATIC_TLAS_CAPACITY);
 
@@ -453,6 +454,7 @@ impl Renderer {
                 .gpu_memory_bytes(self.transient_saves_memory)
             + self.frame_staging.gpu_memory_bytes()
             + self.gpu_stats.gpu_memory_bytes()
+            + self.tonemapping_pass.gpu_memory_bytes()
     }
 
     /// Bytes of its acceleration structures, estimated from the bytes
@@ -498,10 +500,18 @@ mod tests {
     /// Emissive red, green and blue exposed to 1, as GT7 shows them:
     /// Polyphony's sample implementation gives 0.948 red, 0.875 green with
     /// 0.027 red, and 0.855 blue, which sRGB encodes as 249.1, 240.5 with
-    /// 46.1, and 238.0.
+    /// 46.1, and 238.0. The dither moves each channel by up to a step.
     const RED: [u8; 4] = [249, 0, 0, 255];
     const GREEN: [u8; 4] = [46, 240, 0, 255];
     const BLUE: [u8; 4] = [0, 0, 238, 255];
+
+    /// Whether `pixel` shows `colour`, each channel within the dither's step.
+    fn shows(pixel: [u8; 4], colour: [u8; 4]) -> bool {
+        pixel
+            .iter()
+            .zip(colour)
+            .all(|(&channel, expected)| channel.abs_diff(expected) <= 1)
+    }
 
     #[test]
     fn renders_hand_built_frame_data_without_a_world() {
@@ -519,10 +529,11 @@ mod tests {
         let (image, recorder, _) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
 
         assert_eq!(recorder.draw_calls, 4);
-        assert_eq!(image.get_pixel(SIZE / 2, SIZE / 2).0, RED);
+        assert!(shows(image.get_pixel(SIZE / 2, SIZE / 2).0, RED));
         // The Frame data's background, exposed (0.1, 0.2, 0.3), as GT7 shows
         // it in tests/capture.rs.
-        assert_eq!(image.get_pixel(0, 0).0, [88, 123, 149, 255]);
+        let corner = image.get_pixel(0, 0).0;
+        assert!(shows(corner, [88, 123, 149, 255]), "corner {corner:?}");
     }
 
     #[test]
@@ -556,7 +567,7 @@ mod tests {
         let (created_image, ..) = render_frame(&context, &mut created, &frame, width, height);
 
         assert_eq!(resized.aspect_ratio(), 1.2);
-        assert_eq!(resized_image.get_pixel(width / 2, height / 2).0, RED);
+        assert!(shows(resized_image.get_pixel(width / 2, height / 2).0, RED));
         assert!(
             resized_image == created_image,
             "the resized Renderer drew another image than one created at its size"
@@ -594,7 +605,14 @@ mod tests {
 
         assert_eq!(recorder.draw_calls, 4);
         let quarters = [(4, 4), (12, 4), (4, 12), (12, 12)].map(|(x, y)| image.get_pixel(x, y).0);
-        assert_eq!(quarters, [RED, GREEN, BLUE, BLUE]);
+        let expected = [RED, GREEN, BLUE, BLUE];
+        assert!(
+            quarters
+                .iter()
+                .zip(expected)
+                .all(|(&pixel, colour)| shows(pixel, colour)),
+            "{quarters:?}"
+        );
     }
 
     /// Twice the Instances of a two-triangle Mesh draw twice the Instances
@@ -672,8 +690,8 @@ mod tests {
                 logged(|| render_frame(&context, &mut renderer, &frame, SIZE, SIZE));
 
             let culled = switches.culling;
-            assert_eq!(image.get_pixel(SIZE / 2, 4).0, RED);
-            assert_eq!(image.get_pixel(SIZE / 2, 12).0 == RED, culled);
+            assert!(shows(image.get_pixel(SIZE / 2, 4).0, RED));
+            assert_eq!(shows(image.get_pixel(SIZE / 2, 12).0, RED), culled);
             assert_eq!(log.contains("The frame's draw is full"), !culled, "{log}");
             let drawn = (
                 gpu.instances_drawn,
@@ -751,8 +769,8 @@ mod tests {
         assert_eq!(drawn(&culled), [5, 5, 4, 4]);
         assert_eq!(drawn(&unculled), [5, 5, 5, 5]);
         // A pixel the hidden quad covers: the near quad's red, then its green.
-        assert_eq!(culled[2].0.get_pixel(4, 4).0, RED);
-        assert_eq!(culled[3].0.get_pixel(4, 4).0, GREEN);
+        assert!(shows(culled[2].0.get_pixel(4, 4).0, RED));
+        assert!(shows(culled[3].0.get_pixel(4, 4).0, GREEN));
         for (frame, (culled, unculled)) in culled.iter().zip(&unculled).enumerate() {
             assert!(
                 culled.0 == unculled.0,
@@ -805,7 +823,7 @@ mod tests {
         ] = &culled;
         assert_eq!((*out_of_view, *both), (3, 6));
         assert_eq!((*entering_first, *entering_count, *after), (3, 3, 0));
-        assert_eq!(entering.get_pixel(SIZE / 2, 12).0, RED);
+        assert!(shows(entering.get_pixel(SIZE / 2, 12).0, RED));
         for (frame, (culled, unculled)) in culled.iter().zip(&unculled).enumerate() {
             assert!(
                 culled.0 == unculled.0,
@@ -852,7 +870,7 @@ mod tests {
             [0..SIZE / 2, SIZE / 2..SIZE].map(|columns| {
                 image
                     .enumerate_pixels()
-                    .filter(|(x, _, pixel)| columns.contains(x) && pixel.0 == RED)
+                    .filter(|(x, _, pixel)| columns.contains(x) && shows(pixel.0, RED))
                     .count()
             })
         };

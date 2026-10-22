@@ -15,6 +15,7 @@ use crate::render::depth_pyramid_pass::DEPTH_PYRAMID_TILE_SIZE;
 use crate::render::instance::{ANCHOR_CELL_SIZE, INSTANCE_CAPACITY, NO_MATERIAL, NO_MESH};
 use crate::render::renderer::RenderSwitches;
 use crate::render::targets::LUMINANCE_COEFFICIENTS;
+use crate::render::tonemapping_pass::DITHER_MASK_SIDE;
 
 // A packed index holds a Meshlet vertex in whole bits.
 const _: () = assert!(MESHLET_MAX_VERTICES.is_power_of_two());
@@ -162,7 +163,8 @@ impl ShaderModule {
              const SCAN_BLOCK_SIZE: u32 = {SCAN_BLOCK_SIZE}u;\n\
              const INSTANCE_CAPACITY: u32 = {INSTANCE_CAPACITY}u;\n\
              const DEPTH_PYRAMID_TILE_SIZE: u32 = {DEPTH_PYRAMID_TILE_SIZE}u;\n\
-             const LUMINANCE_COEFFICIENTS: vec3<f32> = vec3<f32>({:?}, {:?}, {:?});\n",
+             const LUMINANCE_COEFFICIENTS: vec3<f32> = vec3<f32>({:?}, {:?}, {:?});\n\
+             const DITHER_MASK_SIDE: u32 = {DITHER_MASK_SIDE}u;\n",
             ANCHOR_CELL_SIZE as f32,
             MESHLET_MAX_VERTICES.ilog2(),
             LUMINANCE_COEFFICIENTS[0],

@@ -921,6 +921,39 @@ fn srgb_encode_follows_iec_61966_2_1() {
 /// standard's in f64: a thousandth of an 8-bit step.
 const SRGB_TOLERANCE: f64 = 4e-6;
 
+/// The dither's noise from each of the mask's 256 levels, k/255 as the
+/// texture holds it, is the inverse of the CDF of the triangular
+/// distribution on (−1, 1) at the level's bin centre u = (k + ½)/256,
+/// −1 + √(2u) below ½ and 1 − √(2 − 2u) from it, in f64: odd about ½, and
+/// over the 256 levels, which the mask holds 16 times each, its mean is 0
+/// and its variance within 1e-4 of the distribution's 1/6.
+#[test]
+fn dither_noise_is_the_triangular_inverse_cdf_of_each_mask_level() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let inputs: Vec<[f32; 4]> = (0..256)
+        .map(|level| [level as f32 / 255.0, 0.0, 0.0, 0.0])
+        .collect();
+    let results = evaluate(&context, "vec4<f32>(dither_noise(input.x))", &inputs);
+
+    let noise: Vec<f64> = results.iter().map(|result| f64::from(result[0])).collect();
+    for (level, &noise) in noise.iter().enumerate() {
+        let uniform = (level as f64 + 0.5) / 256.0;
+        let expected = if uniform < 0.5 {
+            -1.0 + (2.0 * uniform).sqrt()
+        } else {
+            1.0 - (2.0 - 2.0 * uniform).sqrt()
+        };
+        let case = format_args!("the dither noise of level {level}");
+        assert_close(noise as f32, expected, TOLERANCE.into(), case);
+    }
+    let mean = noise.iter().sum::<f64>() / noise.len() as f64;
+    let variance = noise.iter().map(|value| value * value).sum::<f64>() / noise.len() as f64;
+    assert!(mean.abs() <= 1e-6, "mean {mean}");
+    assert!((variance - 1.0 / 6.0).abs() <= 1e-4, "variance {variance}");
+}
+
 /// Linear sRGB reflectance of gold at normal incidence, as the pbr-sweep
 /// scene uses it: each channel a different base colour.
 const GOLD: [f32; 3] = [1.0, 0.71, 0.29];

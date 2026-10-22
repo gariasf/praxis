@@ -78,8 +78,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // (80×45, 40×22, 20×11, 10×5, 5×2, 2×1, 1×1), three staging slots of the
     // first frame's 1572 uploaded bytes rounded up to 2048, and the GPU stats
     // readback: its resolve buffer of a begin and an end timestamp of 8
-    // bytes for each of the six passes, and six slots of 152 bytes. The
-    // load's staging is gone.
+    // bytes for each of the six passes, and six slots of 152 bytes, and the
+    // tonemapping pass's 64×64 R8 dither mask. The load's staging is gone.
     let multisampled_color = match context.backend() {
         wgpu::Backend::Metal => 0,
         _ => 160 * 90 * 4 * 8,
@@ -107,6 +107,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + 3 * 2048
             + 6 * 2 * 8
             + 6 * 152
+            + 64 * 64
     );
     // One UV sphere in the Arenas: its triangles of three u32s, and 25 rings
     // of 49 vertices of 28 bytes, less the one vertex at each pole that only

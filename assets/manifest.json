@@ -75,5 +75,16 @@
     "sha256": "5ac0932355ae1ea05a7485eeddcc3f1fbe56c678e00b519075feced80e9e9d6a",
     "dev_only": false,
     "fetched": false
+  },
+  {
+    "path": "BlueNoise/LDR_LLL1_0.png",
+    "guid": "d844d8c5c5df4ef6b1259ae444845451",
+    "source": "https://momentsingraphics.de/Media/BlueNoise/FreeBlueNoiseTextures.zip#Data/64_64/LDR_LLL1_0.png",
+    "license": "CC0-1.0",
+    "credit": "Blue-noise textures: © 2016 Christoph Peters, CC0 1.0",
+    "version": "FreeBlueNoiseTextures.zip of 2016-12-23, SHA-256 4279ad66ec851a8cbf37025816ef5187bf1c1c001d46afb8edfa6d3c8e44c644",
+    "sha256": "140c55bd97c21b9b22008d7054b492333fec67fbfc1a1b266e5b0209b647eed4",
+    "dev_only": false,
+    "fetched": false
   }
 ]
