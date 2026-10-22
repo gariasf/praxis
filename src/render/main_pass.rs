@@ -9,6 +9,7 @@
 
 use crate::render::bind_groups::{BindGroupDefinition, MESHLET_RECORDS, pipeline_layout};
 use crate::render::culling_pass::PHASE_TWO_DRAW_OFFSET;
+use crate::render::renderer::RenderSwitches;
 use crate::render::shaders;
 use crate::render::targets::{self, RenderTargets};
 
@@ -31,11 +32,12 @@ pub struct MainPass {
 impl MainPass {
     /// The pass, given the layouts of the shared bind groups its shader
     /// module declares, which draws the Meshlet records `meshlet_records`
-    /// holds.
+    /// holds, its lit pipeline as `switches` set.
     pub fn new(
         device: &wgpu::Device,
         bind_group_layouts: &[(&BindGroupDefinition, &wgpu::BindGroupLayout)],
         meshlet_records: &wgpu::Buffer,
+        switches: RenderSwitches,
     ) -> MainPass {
         let meshlet_records_layout = MESHLET_RECORDS.layout(device);
         let meshlet_records = MESHLET_RECORDS.bind_group(
@@ -123,7 +125,10 @@ impl MainPass {
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &switches.constants(),
+                    ..wgpu::PipelineCompilationOptions::default()
+                },
             }),
             primitive,
             depth_stencil: Some(targets::depth_equal_state()),

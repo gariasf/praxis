@@ -37,19 +37,28 @@ pub struct RenderSwitches {
     /// Whether the culling pass draws only the Instances whose Mesh bounds
     /// reach into the view frustum, rather than every Instance in use.
     pub culling: bool,
+    /// Whether the lit pass shades each pixel with the point lights its
+    /// Froxel's list holds, rather than every point light (brute force).
+    pub froxel_lights: bool,
 }
 
 impl Default for RenderSwitches {
     fn default() -> Self {
-        Self { culling: true }
+        Self {
+            culling: true,
+            froxel_lights: true,
+        }
     }
 }
 
 impl RenderSwitches {
     /// Each switch by the name of the WGSL `override` that every shader
     /// module declares for it, with its value as a pipeline sets it.
-    pub(crate) fn constants(&self) -> [(&'static str, f64); 1] {
-        [("CULLING", f64::from(u8::from(self.culling)))]
+    pub(crate) fn constants(&self) -> [(&'static str, f64); 2] {
+        [
+            ("CULLING", f64::from(u8::from(self.culling))),
+            ("FROXEL_LIGHTS", f64::from(u8::from(self.froxel_lights))),
+        ]
     }
 }
 
@@ -71,7 +80,7 @@ pub struct Renderer {
     light_uniform_buffer: wgpu::Buffer,
     /// Created at its fixed capacity; it never grows.
     light_buffer: wgpu::Buffer,
-    /// The camera and the lights (`FRAME`).
+    /// The camera, the lights and the Froxel lists (`FRAME`).
     frame_bind_group: wgpu::BindGroup,
     pub(crate) mesh_pool: MeshPool,
     pub(crate) material_pool: MaterialPool,
@@ -157,6 +166,7 @@ impl Renderer {
                 (&SCENE_GEOMETRY, &scene_geometry_bind_group_layout),
             ],
             culling_pass.meshlet_records(),
+            switches,
         );
 
         let camera_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -190,6 +200,10 @@ impl Renderer {
                 ("camera", camera_buffer.as_entire_binding()),
                 ("light", light_uniform_buffer.as_entire_binding()),
                 ("lights", light_buffer.as_entire_binding()),
+                (
+                    "froxel_lists",
+                    froxel_pass.froxel_lists().as_entire_binding(),
+                ),
             ],
         );
 
@@ -706,7 +720,13 @@ mod tests {
             meshlet_records: INSTANCES,
             packed_indices: 3 * (INSTANCES - 1),
         };
-        for switches in [RenderSwitches { culling: false }, RenderSwitches::default()] {
+        for switches in [
+            RenderSwitches {
+                culling: false,
+                ..RenderSwitches::default()
+            },
+            RenderSwitches::default(),
+        ] {
             let mut renderer = Renderer::with_draw_capacity(
                 &context,
                 TARGET_FORMAT,
@@ -806,7 +826,10 @@ mod tests {
             })
         };
         let culled = frames(RenderSwitches::default());
-        let unculled = frames(RenderSwitches { culling: false });
+        let unculled = frames(RenderSwitches {
+            culling: false,
+            ..RenderSwitches::default()
+        });
 
         let drawn = |frames: &[(image::RgbaImage, u32); 4]| frames.clone().map(|(_, drawn)| drawn);
         // The near one is behind the camera in the last frame.
@@ -858,7 +881,10 @@ mod tests {
             })
         };
         let culled = frames(RenderSwitches::default());
-        let unculled = frames(RenderSwitches { culling: false });
+        let unculled = frames(RenderSwitches {
+            culling: false,
+            ..RenderSwitches::default()
+        });
 
         let [
             (_, out_of_view, ..),
@@ -929,6 +955,7 @@ mod tests {
     /// 0.1 m in front of it in a 3 × 3 grid 0.5 m apart, reaching 0.2 m: each
     /// lights the quad under it, which stays dark between them, so lights
     /// past the four the light uniform held reach the pixels they light.
+    /// Lit through Froxel lists, the image is the one brute force draws.
     #[test]
     fn nine_point_lights_each_light_the_surface_under_them() {
         let Some(context) = gpu_context() else {
@@ -936,59 +963,62 @@ mod tests {
         };
         const SIDE: u32 = 48;
         let view_proj = projection_matrix(1.0) * Camera::new().view_matrix();
-        let mut renderer = Renderer::new(
-            &context,
-            TARGET_FORMAT,
-            SIDE,
-            SIDE,
-            RenderSwitches::default(),
-        );
-        let white = renderer.material_pool.insert(
-            &mut renderer.load_staging,
-            MaterialData {
-                base_color: [1.0; 4],
-                metallic_roughness: [0.0, 1.0, 0.0, 0.0],
-                emissive: [0.0, 0.0, 0.0, 1.0],
-                layers: [MaterialPool::DEFAULT_LAYER; 4],
-                extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
-            },
-        );
-        let quad = load_quad(&mut renderer);
-        let wall = InstanceData {
-            rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(2.0, 2.0, 1.0))),
-            offset: [0.0, 0.0, -2.0],
-            ..instance(quad, white.index(), [0.0, 0.0])
-        };
         let grid = [-0.5, 0.0, 0.5];
         let centres: Vec<glam::Vec3> = grid
             .iter()
             .flat_map(|&y| grid.map(|x| glam::vec3(x, y, -2.0)))
             .collect();
-        let lights = centres
-            .iter()
-            .map(|centre| LightData {
-                range: 0.2,
-                offset: (*centre + glam::Vec3::Z * 0.1).to_array(),
-                intensity: [0.01; 3],
-                ..LightData::default()
-            })
-            .collect();
-        let frame = FrameData {
-            camera: CameraUniform {
-                view_proj: view_proj.to_cols_array_2d(),
-                exposure: 1.0,
-                ..CameraUniform::default()
-            },
-            light: LightUniform {
-                point_light_count: 9,
-                ..LightUniform::default()
-            },
-            lights,
-            ..frame_of(vec![wall])
+        let image_with = |switches| {
+            let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIDE, SIDE, switches);
+            let white = renderer.material_pool.insert(
+                &mut renderer.load_staging,
+                MaterialData {
+                    base_color: [1.0; 4],
+                    metallic_roughness: [0.0, 1.0, 0.0, 0.0],
+                    emissive: [0.0, 0.0, 0.0, 1.0],
+                    layers: [MaterialPool::DEFAULT_LAYER; 4],
+                    extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
+                },
+            );
+            let quad = load_quad(&mut renderer);
+            let wall = InstanceData {
+                rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
+                    2.0, 2.0, 1.0,
+                ))),
+                offset: [0.0, 0.0, -2.0],
+                ..instance(quad, white.index(), [0.0, 0.0])
+            };
+            let lights = centres
+                .iter()
+                .map(|centre| LightData {
+                    range: 0.2,
+                    offset: (*centre + glam::Vec3::Z * 0.1).to_array(),
+                    intensity: [0.01; 3],
+                    ..LightData::default()
+                })
+                .collect();
+            let frame = FrameData {
+                camera: CameraUniform {
+                    view_proj: view_proj.to_cols_array_2d(),
+                    exposure: 1.0,
+                    ..CameraUniform::default()
+                },
+                light: LightUniform {
+                    point_light_count: 9,
+                    ..LightUniform::default()
+                },
+                lights,
+                ..frame_of(vec![wall])
+            };
+            render_frame(&context, &mut renderer, &frame, SIDE, SIDE).0
         };
-        let (image, ..) = render_frame(&context, &mut renderer, &frame, SIDE, SIDE);
+        let image = image_with(RenderSwitches::default());
+        let brute_force = image_with(RenderSwitches {
+            froxel_lights: false,
+            ..RenderSwitches::default()
+        });
 
-        // The pixel at `position`, on the quad.
+        // The red of the pixel at `position`, on the quad.
         let red_at = |position: glam::Vec3| {
             let clip = view_proj * position.extend(1.0);
             let normalised = clip.truncate() / clip.w;
@@ -1000,6 +1030,10 @@ mod tests {
         let between = red_at(glam::vec3(0.25, 0.25, -2.0));
         assert!(lit.iter().all(|&red| red > 50), "{lit:?}");
         assert!(between <= 1, "{between} between the lights");
+        assert!(
+            image == brute_force,
+            "Froxel lights differ from brute force"
+        );
     }
 
     /// The sun, then point lights about a camera 100 km out, turned, among
@@ -1338,7 +1372,13 @@ mod tests {
         );
 
         let (anchor, offset) = anchor_and_offset(camera.position);
-        for switches in [RenderSwitches::default(), RenderSwitches { culling: false }] {
+        for switches in [
+            RenderSwitches::default(),
+            RenderSwitches {
+                culling: false,
+                ..RenderSwitches::default()
+            },
+        ] {
             let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE, switches);
             let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
             let mesh = load_triangles(&mut renderer, &[[0.0, 0.0]], &[Some(red)]);

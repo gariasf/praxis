@@ -50,7 +50,7 @@ const COMMON: Part = part!("common.wgsl");
 /// The shading terms.
 const SHADING: Part = part!("shading.wgsl");
 
-/// The Froxel grid: where a Froxel's list starts, and its slices.
+/// The Froxel grid: its slices, and where a Froxel's list starts.
 const FROXEL_GRID: Part = part!("froxel_grid.wgsl");
 
 /// Exposed colour as the HDR target stores it.
@@ -78,7 +78,7 @@ pub const MAIN: ShaderModule = ShaderModule {
     // Each Channel is a binding array indexed by Layer (ADR 0017).
     enables: &["wgpu_binding_array"],
     bind_groups: &[&FRAME, &MATERIALS, &SCENE_GEOMETRY, &MESHLET_RECORDS],
-    parts: &[COMMON, SHADING, HDR, part!("main.wgsl")],
+    parts: &[COMMON, SHADING, HDR, FROXEL_GRID, part!("main.wgsl")],
 };
 
 /// The culling pass.

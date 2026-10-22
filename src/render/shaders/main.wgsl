@@ -112,8 +112,19 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             directional.intensity
         );
     }
-    let light_count = light.directional_light_count + light.point_light_count;
-    for (var index = light.directional_light_count; index < light_count; index++) {
+    // The point lights the pixel's Froxel lists, in light order, or, with
+    // FROXEL_LIGHTS off, every point light: brute force.
+    var froxel = 0u;
+    var point_light_count = light.point_light_count;
+    if FROXEL_LIGHTS {
+        froxel = froxel_at(camera.view_proj * vec4<f32>(in.camera_relative_position, 1.0));
+        point_light_count = froxel_lists[froxel].light_count;
+    }
+    for (var entry = 0u; entry < point_light_count; entry++) {
+        var index = light.directional_light_count + entry;
+        if FROXEL_LIGHTS {
+            index = froxel_lists[froxel].lights[entry];
+        }
         let point = lights[index];
         let position = point_light_position(point, camera.anchor, camera.offset);
         outgoing_luminance += point_light_luminance(

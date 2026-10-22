@@ -119,8 +119,7 @@ impl FroxelPass {
         pass.dispatch_workgroups(FROXEL_COLUMNS, FROXEL_ROWS, 1);
     }
 
-    /// Each Froxel's list.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// Each Froxel's list, which the lit pass reads.
     pub fn froxel_lists(&self) -> &wgpu::Buffer {
         &self.froxel_lists
     }
