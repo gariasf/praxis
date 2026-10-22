@@ -24,7 +24,8 @@ or interactive checks and roadmap decisions (`docs/agents/workflow.md`).
   every step.
 - **Goals are explicit.** Work traces to a ticket in the live milestone
   (`docs/agents/workflow.md`).
-- Teaching happens on request.
+- Teaching happens on request, and the standing request is a field guide
+  for each session's important new concepts (`docs/agents/workflow.md`).
 
 ## Documents
 
