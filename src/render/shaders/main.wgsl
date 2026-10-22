@@ -102,21 +102,20 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     );
 
     for (var light_index = 0u; light_index < light.point_light_count; light_index++) {
-        let light_vector = light.point_positions[light_index].xyz - in.camera_relative_position;
-        let distance = length(light_vector);
-        let range = light.point_positions[light_index].w;
-        let point_light = light.point_colors[light_index];
-        outgoing_luminance += reflected_luminance(
+        let position_and_range = light.point_positions[light_index];
+        let color_and_intensity = light.point_colors[light_index];
+        outgoing_luminance += point_light_luminance(
             surface,
             normal,
             view_direction,
-            light_vector / distance,
-            point_light.rgb * point_light.a * point_light_attenuation(distance, range)
+            position_and_range.xyz - in.camera_relative_position,
+            color_and_intensity.rgb * color_and_intensity.a,
+            position_and_range.w
         );
     }
 
     return vec4<f32>(
-        ambient_radiance(surface, light.ambient_irradiance.rgb) + outgoing_luminance
+        ambient_luminance(surface, light.ambient_illuminance.rgb) + outgoing_luminance
             + surface.emissive,
         surface.opacity
     );

@@ -22,6 +22,7 @@ mod capture;
 mod components;
 #[cfg(feature = "cook")]
 pub mod cook;
+mod environment;
 pub mod gpu;
 mod helmet;
 mod input;

@@ -6,14 +6,13 @@ use bevy_ecs::prelude::*;
 
 use crate::assets::{AssetLoader, MaterialChannel};
 use crate::camera::Camera;
-use crate::components::{
-    DirectionalLight, Environment, MaterialRef, MeshRef, PointLight, Transform,
-};
+use crate::components::{DirectionalLight, MaterialRef, MeshRef, PointLight, Transform};
 #[cfg(feature = "cook")]
 use crate::cook::LoadedImage;
 #[cfg(feature = "cook")]
 use crate::cooked::CookedMaterial;
 use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource};
+use crate::environment::Environment;
 use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
 use crate::transform::PreviousWorldTransform;
 
@@ -346,8 +345,8 @@ impl ReferenceScene {
             | Self::Orrery
             | Self::Minification
             | Self::TextureWall => Environment {
-                ambient_irradiance: glam::Vec3::splat(0.1),
-                background_radiance: glam::vec3(0.1, 0.2, 0.3),
+                ambient_illuminance: glam::Vec3::splat(0.1),
+                background_luminance: glam::vec3(0.1, 0.2, 0.3),
             },
         }
     }

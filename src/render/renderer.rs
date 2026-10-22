@@ -473,8 +473,9 @@ mod tests {
     use crate::assets::{MaterialHandle, MeshHandle};
     use crate::camera::{Camera, projection_matrix};
     use crate::capture::read_back;
-    use crate::components::{Environment, MeshRef, Transform};
+    use crate::components::{MeshRef, Transform};
     use crate::cooked::{CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex};
+    use crate::environment::Environment;
     use crate::render::culling_pass::FrameDraw;
     use crate::render::instance::{anchor_and_offset, padded_columns};
     use crate::render::prepare::InstanceWrite;

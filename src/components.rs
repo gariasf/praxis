@@ -63,13 +63,3 @@ pub struct DirectionalLight {
     pub color: glam::Vec3,
     pub intensity: f32,
 }
-
-/// The light a Scene's surroundings give, constant until ADR 0020's
-/// irradiance probes (M5) and M6's atmosphere replace it: the irradiance
-/// every surface receives from all around, and the radiance of the
-/// background, seen wherever nothing is drawn. The default is dark.
-#[derive(Resource, Clone, Copy, Default)]
-pub struct Environment {
-    pub ambient_irradiance: glam::Vec3,
-    pub background_radiance: glam::Vec3,
-}

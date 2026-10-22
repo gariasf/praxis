@@ -367,17 +367,18 @@ fn reflected_luminance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_
 }
 
 /// A point light's attenuation is KHR_lights_punctual's
-/// max(min(1 − (d / r)⁴, 1), 0) / d², evaluated in f64: inverse square near
-/// the light, then windowed smoothly to exactly 0 at the range and past it.
-/// Errors are judged against the inverse square alone, since f32 cancels to
-/// a few ulps of it in 1 − (d / r)⁴ just inside the range.
+/// max(min(1 − (d / r)⁴, 1), 0) / d², evaluated in f64 from the same d² the
+/// shader takes: inverse square near the light, then windowed smoothly to
+/// exactly 0 at the range and past it. Errors are judged against the
+/// inverse square alone, since f32 cancels to a few ulps of it in
+/// 1 − (d / r)⁴ just inside the range.
 #[test]
 fn point_light_attenuation_falls_by_inverse_square_to_zero_at_the_range() {
     let Some(context) = gpu_context() else {
         return;
     };
     let cases = [
-        (1e-3, 4.0),
+        (0.02, 4.0),
         (0.5, 1.0),
         (1.0, 10.0),
         (2.0, 4.0),
@@ -387,50 +388,133 @@ fn point_light_attenuation_falls_by_inverse_square_to_zero_at_the_range() {
         (5.0, 4.0),
         (20.0, 20.0),
     ];
-    let inputs = cases.map(|(distance, range)| [distance, range, 0.0, 0.0]);
+    let inputs = cases.map(|(distance, range): (f32, f32)| [distance * distance, range, 0.0, 0.0]);
     let results = evaluate(
         &context,
         "vec4<f32>(point_light_attenuation(input.x, input.y))",
         &inputs,
     );
 
-    for ((distance, range), result) in cases.into_iter().zip(results) {
-        let (distance, range) = (f64::from(distance), f64::from(range));
-        let inverse_square = 1.0 / (distance * distance);
-        let window = (1.0 - (distance / range).powi(4)).clamp(0.0, 1.0);
-        let case = format_args!("attenuation at {distance} m of a {range} m range");
+    for ([distance_squared, range, ..], result) in inputs.into_iter().zip(results) {
+        let (distance_squared, range) = (f64::from(distance_squared), f64::from(range));
+        let inverse_square = 1.0 / distance_squared;
+        let window = (1.0 - (distance_squared / (range * range)).powi(2)).clamp(0.0, 1.0);
+        let case = format_args!(
+            "attenuation at {} m of a {range} m range",
+            distance_squared.sqrt()
+        );
         let tolerance = RELATIVE_TOLERANCE * inverse_square;
         assert_close(result[0], window * inverse_square, tolerance, case);
-        if distance >= range {
+        if distance_squared >= range * range {
             assert_eq!(result[0], 0.0, "{case}");
         }
     }
 }
 
-/// Ambient light reaches a surface's diffuse share, its base colour times
-/// (1 − metallic), and leaves as from a Lambertian surface, E/π, darkened by
-/// occlusion: under an irradiance of π, the base colour times (1 − metallic)
-/// and occlusion.
+/// What a surface point reflects from a point light matches the f64
+/// reference: the light's colour times its intensity, attenuated over the
+/// light's distance within its range, distance² held at 1 cm² or more, then
+/// reflected from its direction as `reflected_luminance` reflects it, for
+/// lights near and far, beside and above the normal, up to and past the
+/// range, where it is exactly 0; at the light itself, which has no
+/// direction, it is 0, not NaN.
 #[test]
-fn ambient_radiance_is_the_lambertian_diffuse_share_darkened_by_occlusion() {
+fn point_light_luminance_attenuates_the_intensity_it_reflects() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let range = 4.0;
+    let intensity = [2.0, 1.0, 0.5, 0.0];
+    let normal = [0.0, 0.0, 1.0, 0.0];
+    let view = direction(30.0, 0.0).as_vec3().extend(0.0).to_array();
+    let [red, green, blue] = GOLD;
+    let mut offsets = vec![glam::DVec3::ZERO];
+    for (polar, azimuth) in [(0.0, 0.0), (45.0, 180.0), (80.0, 90.0), (120.0, 0.0)] {
+        for distance in [0.5, 2.0, 3.9, 4.0, 5.0] {
+            offsets.push(direction(polar, azimuth) * distance);
+        }
+    }
+    let cases: Vec<[[f32; 4]; 6]> = offsets
+        .iter()
+        .map(|offset| {
+            let offset = offset.as_vec3().extend(0.0).to_array();
+            let material = [red, green, blue, 0.5];
+            [
+                normal,
+                view,
+                offset,
+                material,
+                [0.5, range, 0.0, 0.0],
+                intensity,
+            ]
+        })
+        .collect();
+    let surface = surface("inputs[3].rgb", "inputs[3].w", "inputs[4].x", "1.0");
+    let results = evaluate_cases(
+        &context,
+        &format!(
+            "vec4<f32>(point_light_luminance({surface}, inputs[0].xyz, inputs[1].xyz, \
+             inputs[2].xyz, inputs[5].rgb, inputs[4].y), 0.0)"
+        ),
+        &cases,
+        &[],
+    );
+
+    for (case, result) in cases.iter().zip(results) {
+        let [normal, view, offset] = [case[0], case[1], case[2]]
+            .map(|vector| glam::Vec4::from_array(vector).truncate().as_dvec3());
+        let distance = offset.length();
+        let light = offset.try_normalize().unwrap_or(glam::DVec3::ZERO);
+        let brdf = reference_brdf(
+            cosines(normal, view, light),
+            [red, green, blue].map(f64::from),
+            0.5,
+            0.5,
+        );
+        let inverse_square = 1.0 / (distance * distance).max(1e-4);
+        let window = (1.0 - (distance / f64::from(range)).powi(4)).clamp(0.0, 1.0);
+        let normal_dot_light = normal.dot(light).max(0.0);
+        for channel in 0..3 {
+            let reflected = brdf[channel] * f64::from(intensity[channel]) * normal_dot_light;
+            let case = format_args!("a light {distance} m off along {light}, channel {channel}");
+            let tolerance = DIRECTION_TOLERANCE * reflected * inverse_square;
+            assert_close(
+                result[channel],
+                reflected * window * inverse_square,
+                tolerance,
+                case,
+            );
+            if distance >= f64::from(range) || distance == 0.0 {
+                assert_eq!(result[channel], 0.0, "{case}");
+            }
+        }
+    }
+}
+
+/// Ambient light reaches every surface as a stand-in for ADR 0020's
+/// irradiance probes, which light diffuse and rough specular reflection
+/// alike, and leaves as from a Lambertian surface of its base colour, E/π,
+/// darkened by occlusion: under an illuminance of π, the base colour times
+/// occlusion, whatever the metallic.
+#[test]
+fn ambient_luminance_is_the_base_colour_over_pi_darkened_by_occlusion() {
     let Some(context) = gpu_context() else {
         return;
     };
     let cases = [(0.0, 1.0), (0.5, 1.0), (1.0, 1.0), (0.0, 0.25)];
     let inputs = cases.map(|(metallic, occlusion)| [metallic, occlusion, 0.0, 0.0]);
     let [red, green, blue] = GOLD;
+    let base_color = format!("vec3<f32>({red}, {green}, {blue})");
+    let surface = surface(&base_color, "input.x", "0.5", "input.y");
     let results = evaluate(
         &context,
-        &format!(
-            "vec4<f32>(ambient_radiance(Surface(vec3<f32>({red}, {green}, {blue}), 1.0, \
-             input.x, 0.5, input.y, vec3<f32>(0.0)), vec3<f32>(PI)), 0.0)"
-        ),
+        &format!("vec4<f32>(ambient_luminance({surface}, vec3<f32>(PI)), 0.0)"),
         &inputs,
     );
 
     for ((metallic, occlusion), result) in cases.into_iter().zip(results) {
         for (channel, base_color) in GOLD.into_iter().enumerate() {
-            let expected = f64::from(base_color * (1.0 - metallic) * occlusion);
+            let expected = f64::from(base_color * occlusion);
             let case = format_args!("metallic {metallic}, occlusion {occlusion}");
             assert_close(
                 result[channel],

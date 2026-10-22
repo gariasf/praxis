@@ -222,7 +222,7 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
         twin!(LightUniform {
             direction,
             color,
-            ambient_irradiance,
+            ambient_illuminance,
             point_positions,
             point_colors,
             point_light_count,

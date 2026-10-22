@@ -94,7 +94,8 @@ src/
   components.rs                # ECS components (Transform, MeshRef)
   threading.rs                 # compute pool, schedule executor (ADR 0016)
   camera/, time/, input/,      # feature modules: resource (+ systems)
-    helmet/, transform/           per domain in one mod.rs
+    helmet/, transform/,          per domain in one mod.rs
+    environment/
   assets/                      # asset types, pools, the Cooked cache
                                  reader (Asset IDs, Blobs), and the
                                  loader from one into the other

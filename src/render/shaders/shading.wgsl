@@ -161,21 +161,47 @@ fn reflected_luminance(
     return brdf * illuminance * max(normal_dot_light, 0.0);
 }
 
-// The share of a point light's intensity that reaches `distance` from it as
-// illuminance: inverse-square falloff within KHR_lights_punctual's range
-// window, which falls to 0 at `range` and stays 0 past it,
-//   max(min(1 − (distance / range)⁴, 1), 0) / distance².
-fn point_light_attenuation(distance: f32, range: f32) -> f32 {
-    let ratio = distance / range;
-    let ratio_squared = ratio * ratio;
-    return clamp(1.0 - ratio_squared * ratio_squared, 0.0, 1.0) / (distance * distance);
+// Point lights hold distance² at 1 cm² or more, as if 1 cm in radius, so a
+// surface at one is lit finitely; Filament (Apache-2.0) holds the same.
+const MINIMUM_LIGHT_DISTANCE_SQUARED: f32 = 1e-4;
+
+// The share of a point light's intensity that reaches `distance_squared`
+// from it as illuminance: inverse-square falloff within KHR_lights_punctual's
+// range window, which falls to 0 at `range` and stays 0 past it,
+//   max(min(1 − (distance / range)⁴, 1), 0) / distance²,
+// with (distance / range)⁴ taken as (distance² / range²)².
+fn point_light_attenuation(distance_squared: f32, range: f32) -> f32 {
+    let ratio_squared = distance_squared / (range * range);
+    let window = clamp(1.0 - ratio_squared * ratio_squared, 0.0, 1.0);
+    return window / distance_squared;
 }
 
-// The radiance a surface point reflects from a constant ambient irradiance,
-// a stand-in for ADR 0020's irradiance probes (M5): the dielectric's
-// diffuse share, base colour × (1 − metallic), reflected as by a Lambertian
-// surface, E/π, and darkened by occlusion, which glTF applies to indirect
-// light only.
-fn ambient_radiance(surface: Surface, irradiance: vec3<f32>) -> vec3<f32> {
-    return irradiance * surface.base_color * (1.0 - surface.metallic) / PI * surface.occlusion;
+// The luminance a surface point reflects along view_direction from a point
+// light at light_offset from it, of luminous intensity `intensity` (its
+// colour times its candela, ADR 0023) and range `range`. Within 1 cm of
+// the light distance² holds at MINIMUM_LIGHT_DISTANCE_SQUARED, and the
+// light's direction shortens with the distance, to zero at the light
+// itself, where it has none.
+fn point_light_luminance(
+    surface: Surface,
+    normal: vec3<f32>,
+    view_direction: vec3<f32>,
+    light_offset: vec3<f32>,
+    intensity: vec3<f32>,
+    range: f32
+) -> vec3<f32> {
+    let distance_squared = max(dot(light_offset, light_offset), MINIMUM_LIGHT_DISTANCE_SQUARED);
+    let illuminance = intensity * point_light_attenuation(distance_squared, range);
+    let light_direction = light_offset * inverseSqrt(distance_squared);
+    return reflected_luminance(surface, normal, view_direction, light_direction, illuminance);
+}
+
+// The luminance a surface point reflects from a constant ambient
+// illuminance E, a stand-in for ADR 0020's irradiance probes (M5), which
+// light diffuse and rough specular reflection alike: E/π times its base
+// colour, as a white-lit dielectric's diffuse lobe or a metal's specular
+// one about reflects, darkened by occlusion, which glTF applies to
+// indirect light only.
+fn ambient_luminance(surface: Surface, illuminance: vec3<f32>) -> vec3<f32> {
+    return illuminance * surface.base_color / PI * surface.occlusion;
 }
