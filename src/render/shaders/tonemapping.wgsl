@@ -8,8 +8,8 @@ fn vs_full_screen(@builtin(vertex_index) vertex_index: u32) -> @builtin(position
     return vec4<f32>(corner * 2.0 - 1.0, 0.0, 1.0);
 }
 
-// A pixel's exposed colour, clamped to display white, as before #200's
-// tonemapping operator.
+// A pixel's exposed colour, clamped to display white as the 8-bit target
+// clamped it before the HDR target; #200's GT7 replaces the clamp.
 @fragment
 fn fs_tonemap(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let exposed = textureLoad(hdr_target, vec2<u32>(position.xy), 0).rgb;

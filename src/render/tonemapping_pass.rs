@@ -1,6 +1,5 @@
 //! The tonemapping pass: one triangle over the target that reads each pixel
-//! of the HDR target, undoes the lit pass's resolve weighting and writes the
-//! pixel's display colour.
+//! of the HDR target and writes the pixel's display colour.
 
 use crate::render::bind_groups::{TONEMAPPING_INPUT, pipeline_layout};
 use crate::render::shaders;
@@ -58,7 +57,7 @@ impl TonemappingPass {
             multiview_mask: None,
             cache: None,
         });
-        let input = Self::input(device, &layout, render_targets);
+        let input = Self::input_bind_group(device, &layout, render_targets);
         TonemappingPass {
             pipeline,
             layout,
@@ -69,10 +68,11 @@ impl TonemappingPass {
     /// Builds the bind group that reads `render_targets`: at creation, and
     /// after every resize, which creates them again.
     pub fn bind_render_targets(&mut self, device: &wgpu::Device, render_targets: &RenderTargets) {
-        self.input = Self::input(device, &self.layout, render_targets);
+        self.input = Self::input_bind_group(device, &self.layout, render_targets);
     }
 
-    fn input(
+    /// The bind group that reads `render_targets`' HDR target.
+    fn input_bind_group(
         device: &wgpu::Device,
         layout: &wgpu::BindGroupLayout,
         render_targets: &RenderTargets,

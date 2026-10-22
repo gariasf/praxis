@@ -397,8 +397,8 @@ async fn request_adapter(
 }
 
 /// The first sRGB format the surface offers, else its first format: the
-/// main pass writes linear colour and relies on an sRGB target to encode it,
-/// so a non-sRGB surface comes out darker.
+/// tonemapping pass writes linear colour and relies on an sRGB target to
+/// encode it, so a non-sRGB surface comes out darker.
 fn choose_surface_format(
     surface_capabilities: &wgpu::SurfaceCapabilities,
 ) -> anyhow::Result<wgpu::TextureFormat> {

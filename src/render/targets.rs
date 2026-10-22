@@ -159,15 +159,24 @@ impl RenderTargets {
     }
 
     /// The multisampled colour as a pass's attachment: cleared to `clear`,
-    /// and resolved at the pass's end into the HDR target; its samples are
+    /// exposed colour, clamped as the lit pass clamps what it draws, and
+    /// resolved at the pass's end into the HDR target; its samples are
     /// discarded, as a transient attachment's must be.
     pub fn color_attachment(&self, clear: wgpu::Color) -> wgpu::RenderPassColorAttachment<'_> {
+        // fp16's largest finite value, so no backend stores infinity
+        // (ADR 0023).
+        let largest_half = 65504.0;
         wgpu::RenderPassColorAttachment {
             view: &self.color,
             resolve_target: Some(&self.hdr),
             depth_slice: None,
             ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(clear),
+                load: wgpu::LoadOp::Clear(wgpu::Color {
+                    r: clear.r.min(largest_half),
+                    g: clear.g.min(largest_half),
+                    b: clear.b.min(largest_half),
+                    a: clear.a,
+                }),
                 store: wgpu::StoreOp::Discard,
             },
         }
