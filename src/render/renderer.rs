@@ -5,6 +5,7 @@ use crate::gpu::GpuContext;
 use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
 use crate::render::culling_pass::{CullingPass, CullingPhase, DrawCapacity};
 use crate::render::depth_pyramid_pass::{DEPTH_PYRAMID_PASS, DepthPyramidPass};
+use crate::render::froxel_pass::{FROXEL_PASS, FroxelPass};
 use crate::render::main_pass::{DEPTH_PREPASS, LIT_PASS, MainPass};
 use crate::render::readback::GpuStatsReadback;
 use crate::render::targets::RenderTargets;
@@ -18,8 +19,9 @@ use crate::stats::{FrameRecorder, GpuFrameStats};
 
 /// The passes `render` records, in order, each timed from its start to its
 /// end.
-pub(crate) const TIMED_PASSES: [&str; 6] = [
+pub(crate) const TIMED_PASSES: [&str; 7] = [
     CullingPhase::One.label(),
+    FROXEL_PASS,
     DEPTH_PREPASS,
     DEPTH_PYRAMID_PASS,
     CullingPhase::Two.label(),
@@ -60,6 +62,7 @@ pub struct Renderer {
     pub(crate) queue: wgpu::Queue,
     aspect_ratio: f32,
     render_targets: RenderTargets,
+    froxel_pass: FroxelPass,
     culling_pass: CullingPass,
     main_pass: MainPass,
     depth_pyramid_pass: DepthPyramidPass,
@@ -174,6 +177,12 @@ impl Renderer {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let froxel_pass = FroxelPass::new(
+            &device,
+            &camera_buffer,
+            &light_uniform_buffer,
+            &light_buffer,
+        );
         let frame_bind_group = FRAME.bind_group(
             &device,
             &frame_bind_group_layout,
@@ -239,6 +248,7 @@ impl Renderer {
             queue,
             aspect_ratio: width as f32 / height as f32,
             render_targets,
+            froxel_pass,
             culling_pass,
             main_pass,
             depth_pyramid_pass,
@@ -372,6 +382,12 @@ impl Renderer {
             CullingPhase::One,
             timestamps.map(|timestamps| timestamps.compute_pass(CullingPhase::One.label())),
         );
+        // After the first culling dispatch, so ADR 0019's gate, which spans
+        // from it to the end of the lit pass, counts the lights' culling.
+        self.froxel_pass.record(
+            &mut encoder,
+            timestamps.map(|timestamps| timestamps.compute_pass(FROXEL_PASS)),
+        );
         let bind_groups = [
             (&FRAME, &self.frame_bind_group),
             (&MATERIALS, &self.material_pool.bind_group),
@@ -414,8 +430,11 @@ impl Renderer {
         // two's into depth, then both phases', each with one indirect call;
         // the tonemapping pass draws one triangle.
         recorder.draw_calls += 4;
-        self.gpu_stats
-            .end_frame(&mut encoder, self.culling_pass.frame_draw());
+        self.gpu_stats.end_frame(
+            &mut encoder,
+            self.culling_pass.frame_draw(),
+            self.froxel_pass.froxel_lights_overflowed(),
+        );
 
         let command_buffer = encoder.finish();
         recorder.stage("encode", started);
@@ -466,6 +485,7 @@ impl Renderer {
             + self
                 .render_targets
                 .gpu_memory_bytes(self.transient_saves_memory)
+            + self.froxel_pass.gpu_memory_bytes()
             + self.culling_pass.gpu_memory_bytes()
             + self.mesh_pool.gpu_memory_bytes()
             + self.estimated_acceleration_structure_bytes()
@@ -509,6 +529,10 @@ mod tests {
     use crate::cooked::{CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex};
     use crate::environment::Environment;
     use crate::render::culling_pass::FrameDraw;
+    use crate::render::froxel_pass::{
+        FIRST_FROXEL_SLICE_DEPTH, FROXEL_COLUMNS, FROXEL_COUNT, FROXEL_LIGHT_CAPACITY, FROXEL_ROWS,
+        FROXEL_SLICES, FROXEL_SLICES_PER_OCTAVE,
+    };
     use crate::render::instance::{anchor_and_offset, padded_columns};
     use crate::render::prepare::InstanceWrite;
     use crate::render::{FramePreparer, NO_MATERIAL, NO_MESH};
@@ -976,6 +1000,236 @@ mod tests {
         let between = red_at(glam::vec3(0.25, 0.25, -2.0));
         assert!(lit.iter().all(|&red| red > 50), "{lit:?}");
         assert!(between <= 1, "{between} between the lights");
+    }
+
+    /// The sun, then point lights about a camera 100 km out, turned, among
+    /// them more than a Froxel's list holds at one spot. Against a CPU
+    /// assignment in f64 of every light to every Froxel whose bounds its
+    /// range reaches into, each Froxel's list holds exactly its lights, in
+    /// light order, up to its capacity, and Frame stats count the lights
+    /// past it, with a warning; no buffer grows.
+    #[test]
+    fn each_froxel_lists_the_point_lights_whose_range_reaches_into_its_bounds() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let camera = Camera {
+            position: glam::dvec3(100_000.3, 20.0, -70_000.6),
+            yaw: 0.4,
+            pitch: -0.2,
+            ..Camera::new()
+        };
+        let view_proj = projection_matrix(16.0 / 9.0) * camera.view_matrix();
+        let forward = camera.forward().as_dvec3();
+        let up = camera.right().cross(camera.forward()).as_dvec3();
+        let right = camera.right().as_dvec3();
+        // The unit normal of the plane through the camera that holds the
+        // screen rectangles' sides at `side` in normalised device
+        // coordinates, across the screen in x, or down it in y, pointing to
+        // higher coordinates; unprojected in f64 from points on it.
+        let inverse = view_proj.as_dmat4().inverse();
+        let side_normal = |side: f64, in_x: bool| {
+            let unproject = |at: f64, along: f64| {
+                let normalised = if in_x {
+                    glam::dvec4(at, along, 0.5, 1.0)
+                } else {
+                    glam::dvec4(along, at, 0.5, 1.0)
+                };
+                let point = inverse * normalised;
+                point.truncate() / point.w
+            };
+            let normal = unproject(side, -1.0).cross(unproject(side, 1.0));
+            normal.normalize() * normal.dot(unproject(side + 1.0, 0.0)).signum()
+        };
+        let sides = |rectangles: u32, in_x: bool| -> Vec<glam::DVec3> {
+            (0..=rectangles)
+                .map(|side| side_normal(2.0 * f64::from(side) / f64::from(rectangles) - 1.0, in_x))
+                .collect()
+        };
+        let (column_sides, row_sides) = (sides(FROXEL_COLUMNS, true), sides(FROXEL_ROWS, false));
+        // Where each slice starts, in view depth; the last reaches to
+        // infinity.
+        let slice_starts: Vec<f64> = (0..FROXEL_SLICES)
+            .map(|slice| match slice {
+                0 => 0.0,
+                _ => {
+                    let octaves = f64::from(slice - 1) / f64::from(FROXEL_SLICES_PER_OCTAVE);
+                    f64::from(FIRST_FROXEL_SLICE_DEPTH) * octaves.exp2()
+                }
+            })
+            .chain([f64::INFINITY])
+            .collect();
+        // Per light, whether its range reaches past each column's and each
+        // row's lower side and higher side, and which slices; `None` where
+        // a side or slice boundary is within 1 mm of its reach, and 1 cm
+        // more a kilometre out, past what f32 rounding moves, so no verdict
+        // is a tie.
+        let reaches = |centre: glam::DVec3, range: f64| {
+            let margin = 1e-3 + 1e-5 * centre.length();
+            let past = |normals: &[glam::DVec3]| -> Option<Vec<(bool, bool)>> {
+                normals
+                    .iter()
+                    .map(|normal| {
+                        let distance = normal.dot(centre);
+                        let clear =
+                            (distance + range).abs() > margin && (distance - range).abs() > margin;
+                        clear.then_some((distance >= -range, distance <= range))
+                    })
+                    .collect()
+            };
+            let depth = forward.dot(centre);
+            let clear = slice_starts.iter().all(|start| {
+                (depth + range - start).abs() > margin && (depth - range - start).abs() > margin
+            });
+            let slices: Vec<bool> = slice_starts
+                .windows(2)
+                .map(|bounds| depth + range >= bounds[0] && depth - range <= bounds[1])
+                .collect();
+            Some((
+                past(&column_sides)?,
+                past(&row_sides)?,
+                clear.then_some(slices)?,
+            ))
+        };
+        // Uniform in [0, 1), from a fixed-seed generator.
+        let mut seed: u64 = 0xf70e;
+        let mut random = move || {
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (seed >> 11) as f64 / (1u64 << 53) as f64
+        };
+        // From 5 m behind the camera to 80 m ahead, and one in ten 1 to 5 km
+        // ahead, in the last slices, reaching five times as far.
+        let scattered = std::iter::from_fn(|| {
+            let far = random() < 0.1;
+            let distance = match far {
+                true => 1_000.0 + 4_000.0 * random(),
+                false => 85.0 * random() - 5.0,
+            };
+            let [across, along_up] =
+                [(); 2].map(|_| (0.6 * distance.abs() + 3.0) * (2.0 * random() - 1.0));
+            let range = (0.2 + 11.8 * random()) * if far { 5.0 } else { 1.0 };
+            Some((forward * distance + right * across + up * along_up, range))
+        });
+        // More than a list holds, 7.3 m ahead, each reaching 0.4 m.
+        let overflowing = std::iter::repeat_n(
+            (forward * 7.3 + right * 0.31 + up * 0.17, 0.4),
+            FROXEL_LIGHT_CAPACITY as usize + 5,
+        );
+        let placed: Vec<(glam::DVec3, f64, _)> = scattered
+            .filter_map(|(centre, range)| Some((centre, range, reaches(centre, range)?)))
+            .take(300)
+            .chain(overflowing.map(|(centre, range)| {
+                (
+                    centre,
+                    range,
+                    reaches(centre, range).expect("the lights at one spot are no tie"),
+                )
+            }))
+            .collect();
+
+        let mut expected = vec![Vec::new(); FROXEL_COUNT as usize];
+        // Lists in the GPU's order: by row, column, then slice.
+        let (columns, rows, slices) = (
+            FROXEL_COLUMNS as usize,
+            FROXEL_ROWS as usize,
+            FROXEL_SLICES as usize,
+        );
+        for (point, (_, _, (column_sides, row_sides, slices_reached))) in (1..).zip(&placed) {
+            for row in 0..rows {
+                for column in 0..columns {
+                    if column_sides[column].0
+                        && column_sides[column + 1].1
+                        && row_sides[row].0
+                        && row_sides[row + 1].1
+                    {
+                        for slice in (0..slices).filter(|&slice| slices_reached[slice]) {
+                            expected[(row * columns + column) * slices + slice].push(point);
+                        }
+                    }
+                }
+            }
+        }
+        let overflowed: usize = expected
+            .iter()
+            .map(|lights| lights.len().saturating_sub(FROXEL_LIGHT_CAPACITY as usize))
+            .sum();
+        assert!(overflowed > 0, "the lights at one spot overflow no list");
+
+        let mut renderer = Renderer::new(
+            &context,
+            TARGET_FORMAT,
+            SIZE,
+            SIZE,
+            RenderSwitches::default(),
+        );
+        let sun = LightData {
+            offset: [0.0, -1.0, 0.0],
+            intensity: [1.0; 3],
+            ..LightData::default()
+        };
+        let lights = std::iter::once(sun)
+            .chain(placed.iter().map(|&(centre, range, _)| {
+                let (anchor, offset) = anchor_and_offset(camera.position + centre);
+                LightData {
+                    anchor,
+                    range: range as f32,
+                    offset,
+                    intensity: [1.0; 3],
+                    ..LightData::default()
+                }
+            }))
+            .collect();
+        let (anchor, offset) = anchor_and_offset(camera.position);
+        let frame = FrameData {
+            camera: CameraUniform {
+                view_proj: view_proj.to_cols_array_2d(),
+                anchor,
+                offset,
+                exposure: 1.0,
+                ..CameraUniform::default()
+            },
+            light: LightUniform {
+                directional_light_count: 1,
+                point_light_count: placed.len() as u32,
+                ..LightUniform::default()
+            },
+            lights,
+            ..frame_of(Vec::new())
+        };
+        let unstaged_bytes = |renderer: &Renderer| {
+            renderer.gpu_memory_bytes() - renderer.frame_staging.gpu_memory_bytes()
+        };
+        let created_bytes = unstaged_bytes(&renderer);
+        let ((_, _, gpu), log) =
+            logged(|| render_frame(&context, &mut renderer, &frame, SIZE, SIZE));
+
+        let stride = FROXEL_LIGHT_CAPACITY as usize + 1;
+        let lists = read_storage::<u32>(
+            &context,
+            renderer.froxel_pass.froxel_lists(),
+            FROXEL_COUNT as usize * stride,
+        );
+        let differing: Vec<String> = lists
+            .chunks(stride)
+            .zip(&expected)
+            .enumerate()
+            .filter_map(|(froxel, (list, lights))| {
+                let held = &lights[..lights.len().min(FROXEL_LIGHT_CAPACITY as usize)];
+                let listed = &list[1..][..(list[0] as usize).min(stride - 1)];
+                (listed != held).then(|| format!("Froxel {froxel}: {listed:?}, not {held:?}"))
+            })
+            .collect();
+        assert!(
+            differing.is_empty(),
+            "{} lists differ:\n{}",
+            differing.len(),
+            differing[..differing.len().min(5)].join("\n")
+        );
+        assert_eq!(gpu.froxel_lights_overflowed as usize, overflowed);
+        assert!(log.contains("The Froxel lists are full"), "{log}");
+        assert_eq!(unstaged_bytes(&renderer), created_bytes);
     }
 
     /// The cooked bounds of every Mesh `load_triangles` loads: a box that

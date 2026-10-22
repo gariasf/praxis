@@ -1,6 +1,7 @@
 //! Each frame's GPU stats come back through a ring of buffers the CPU maps
-//! for reading: the counts of the frame's draw and its passes' timestamps,
-//! a few frames late. Only the main thread submits and polls, and it never
+//! for reading: the counts of the frame's draw and of the lights its Froxel
+//! lists had no room for, and its passes' timestamps, a few frames late.
+//! Only the main thread submits and polls, and it never
 //! waits on a map while it renders (ADR 0016): a readback whose slot is not
 //! ready is skipped and counted; `flush` waits, at the end of a run. Metal
 //! reads timestamps resolved before their pass's submission completed as 0
@@ -28,8 +29,13 @@ const QUERIES_PER_FRAME: usize = 2 * TIMED_PASSES.len();
 
 const TIMESTAMP_BYTES: u64 = QUERIES_PER_FRAME as u64 * wgpu::QUERY_SIZE as u64;
 
-/// Where a slot holds the frame's timestamps, after its draw's counts.
-const TIMESTAMP_OFFSET: u64 = (size_of::<FrameDraw>() as u64).next_multiple_of(8);
+/// Where a slot holds the count of the lights the frame's Froxel lists had
+/// no room for, after its draw's counts.
+const FROXEL_OVERFLOW_OFFSET: u64 = size_of::<FrameDraw>() as u64;
+
+/// Where a slot holds the frame's timestamps, after its counts.
+const TIMESTAMP_OFFSET: u64 =
+    (FROXEL_OVERFLOW_OFFSET + size_of::<u32>() as u64).next_multiple_of(8);
 
 /// What a slot's map callback reported.
 const MAP_PENDING: u8 = 0;
@@ -55,6 +61,9 @@ pub struct GpuStatsReadback {
     /// Set while the frames read back had Instances the frame's draw had no
     /// room for, which was warned about when it was set.
     warned_of_overflow: bool,
+    /// Set while the frames read back had lights their Froxel lists had no
+    /// room for, which was warned about when it was set.
+    warned_of_froxel_overflow: bool,
 }
 
 struct Slot {
@@ -124,6 +133,7 @@ impl GpuStatsReadback {
             nanoseconds_per_tick: f64::from(nanoseconds_per_tick),
             read_back: Vec::with_capacity(SLOT_COUNT as usize),
             warned_of_overflow: false,
+            warned_of_froxel_overflow: false,
         }
     }
 
@@ -163,13 +173,26 @@ impl GpuStatsReadback {
     }
 
     /// Ends the frame `begin_frame` started: copies its draw's counts,
-    /// `frame_draw`, into its slot, and marks it completed once the GPU has
-    /// run it.
-    pub fn end_frame(&mut self, encoder: &mut wgpu::CommandEncoder, frame_draw: &wgpu::Buffer) {
+    /// `frame_draw`, and the lights its Froxel lists had no room for,
+    /// `froxel_lights_overflowed`, into its slot, and marks it completed once
+    /// the GPU has run it.
+    pub fn end_frame(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        frame_draw: &wgpu::Buffer,
+        froxel_lights_overflowed: &wgpu::Buffer,
+    ) {
         let slot = &self.slots[slot_index(self.frame)];
         if matches!(slot.state, SlotState::Recorded { frame } if frame == self.frame) {
             let size = size_of::<FrameDraw>() as u64;
             encoder.copy_buffer_to_buffer(frame_draw, 0, &slot.buffer, 0, size);
+            encoder.copy_buffer_to_buffer(
+                froxel_lights_overflowed,
+                0,
+                &slot.buffer,
+                FROXEL_OVERFLOW_OFFSET,
+                size_of::<u32>() as u64,
+            );
         }
         let (frame, frames_completed) = (self.frame, self.frames_completed.clone());
         encoder.on_submitted_work_done(move || {
@@ -241,8 +264,9 @@ impl GpuStatsReadback {
 
     /// Reads slot `index` back if it is mapped, and frees it. Returns whether
     /// it is free; one still mapping is not. A frame whose draw had no room
-    /// for some Instances is warned about, once until a frame read back has
-    /// room for all; a skipped readback neither warns nor clears it.
+    /// for some Instances, or whose Froxel lists for some lights, is warned
+    /// about, once until a frame read back has room for all; a skipped
+    /// readback neither warns nor clears it.
     fn read(&mut self, index: usize) -> bool {
         let slot = &mut self.slots[index];
         let SlotState::Mapping { frame } = slot.state else {
@@ -264,6 +288,18 @@ impl GpuStatsReadback {
                             );
                         }
                         self.warned_of_overflow = overflowed;
+                        let froxel_lights_overflowed: u32 = bytemuck::pod_read_unaligned(
+                            &view[FROXEL_OVERFLOW_OFFSET as usize..][..size_of::<u32>()],
+                        );
+                        let froxel_overflowed = froxel_lights_overflowed > 0;
+                        if froxel_overflowed && !self.warned_of_froxel_overflow {
+                            tracing::warn!(
+                                frame,
+                                froxel_lights_overflowed,
+                                "The Froxel lists are full: lights past a list's capacity do not light its Froxel"
+                            );
+                        }
+                        self.warned_of_froxel_overflow = froxel_overflowed;
                         let ticks: [u64; QUERIES_PER_FRAME] = bytemuck::pod_read_unaligned(
                             &view[TIMESTAMP_OFFSET as usize..][..TIMESTAMP_BYTES as usize],
                         );
@@ -281,6 +317,7 @@ impl GpuStatsReadback {
                             instances_drawn: draw.instances_drawn,
                             triangles_drawn: draw.triangles_drawn(),
                             instances_overflowed: draw.instances_overflowed,
+                            froxel_lights_overflowed,
                         });
                     }
                     Err(error) => tracing::error!(frame, %error, "GPU stats readback not mapped"),
@@ -352,12 +389,17 @@ mod tests {
             Err(error) => panic!("headless GPU context failed: {error:#}"),
         };
         let new_ring = || GpuStatsReadback::new(&context.device, 1.0);
-        let frame_draw = context.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Readback Test Frame Draw"),
-            size: size_of::<FrameDraw>() as u64,
-            usage: wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
+        let counts = |label, size| {
+            context.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(label),
+                size,
+                usage: wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            })
+        };
+        let frame_draw = counts("Readback Test Frame Draw", size_of::<FrameDraw>() as u64);
+        let froxel_lights_overflowed =
+            counts("Readback Test Froxel Overflow", size_of::<u32>() as u64);
         // Records a frame, and submits it and waits for it if `completes`:
         // whether it is timed, the readbacks it skipped, the frames it read.
         let frame = |readback: &mut GpuStatsReadback, completes: bool| {
@@ -365,7 +407,7 @@ mod tests {
             let mut encoder = context.device.create_command_encoder(&descriptor);
             let mut recorder = FrameRecorder::new();
             let timed = readback.begin_frame(&mut encoder, &mut recorder).is_some();
-            readback.end_frame(&mut encoder, &frame_draw);
+            readback.end_frame(&mut encoder, &frame_draw, &froxel_lights_overflowed);
             if completes {
                 context.queue.submit([encoder.finish()]);
                 let wait = context.device.poll(wgpu::PollType::wait_indefinitely());

@@ -820,6 +820,7 @@ mod tests {
                         instances_drawn: if counted { 5 } else { 77 },
                         triangles_drawn: if counted { 15 } else { 231 },
                         instances_overflowed: if frame == 300 { 3 } else { 0 },
+                        froxel_lights_overflowed: 0,
                     }),
                     draw_calls: if counted { 10 } else { 99 },
                     heap_allocations: if counted { 50 } else { 999 },

@@ -7,11 +7,15 @@
 
 use crate::cooked::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use crate::render::bind_groups::{
-    BindGroupDefinition, DEPTH_PYRAMID_LEVEL, FRAME, FRAME_DRAW, MATERIALS, MESHLET_RECORDS,
-    SCENE_GEOMETRY, TONEMAPPING_INPUT,
+    BindGroupDefinition, DEPTH_PYRAMID_LEVEL, FRAME, FRAME_DRAW, FROXEL_LISTS, MATERIALS,
+    MESHLET_RECORDS, SCENE_GEOMETRY, TONEMAPPING_INPUT,
 };
 use crate::render::culling_pass::SCAN_BLOCK_SIZE;
 use crate::render::depth_pyramid_pass::DEPTH_PYRAMID_TILE_SIZE;
+use crate::render::froxel_pass::{
+    FIRST_FROXEL_SLICE_DEPTH, FROXEL_COLUMNS, FROXEL_LIGHT_CAPACITY, FROXEL_ROWS, FROXEL_SLICES,
+    FROXEL_SLICES_PER_OCTAVE,
+};
 use crate::render::instance::{ANCHOR_CELL_SIZE, INSTANCE_CAPACITY, NO_MATERIAL, NO_MESH};
 use crate::render::renderer::RenderSwitches;
 use crate::render::targets::LUMINANCE_COEFFICIENTS;
@@ -45,6 +49,9 @@ const COMMON: Part = part!("common.wgsl");
 
 /// The shading terms.
 const SHADING: Part = part!("shading.wgsl");
+
+/// The Froxel grid: where a Froxel's list starts, and its slices.
+const FROXEL_GRID: Part = part!("froxel_grid.wgsl");
 
 /// Exposed colour as the HDR target stores it.
 const HDR: Part = part!("hdr.wgsl");
@@ -82,6 +89,14 @@ pub const CULLING: ShaderModule = ShaderModule {
     parts: &[COMMON, part!("culling.wgsl")],
 };
 
+/// The Froxel pass.
+pub const FROXEL: ShaderModule = ShaderModule {
+    name: "froxel",
+    enables: &[],
+    bind_groups: &[&FROXEL_LISTS],
+    parts: &[COMMON, FROXEL_GRID, part!("froxel.wgsl")],
+};
+
 /// The depth pyramid pass.
 pub const DEPTH_PYRAMID: ShaderModule = ShaderModule {
     name: "depth_pyramid",
@@ -109,7 +124,7 @@ pub const SHARED: ShaderModule = ShaderModule {
 
 /// Every module, which `shader_tests` validates.
 #[cfg(test)]
-pub const MODULES: [ShaderModule; 5] = [SHARED, MAIN, CULLING, DEPTH_PYRAMID, TONEMAPPING];
+pub const MODULES: [ShaderModule; 6] = [SHARED, MAIN, CULLING, FROXEL, DEPTH_PYRAMID, TONEMAPPING];
 
 impl ShaderModule {
     /// The descriptor that compiles the module, labelled with its name.
@@ -164,7 +179,13 @@ impl ShaderModule {
              const INSTANCE_CAPACITY: u32 = {INSTANCE_CAPACITY}u;\n\
              const DEPTH_PYRAMID_TILE_SIZE: u32 = {DEPTH_PYRAMID_TILE_SIZE}u;\n\
              const LUMINANCE_COEFFICIENTS: vec3<f32> = vec3<f32>({:?}, {:?}, {:?});\n\
-             const DITHER_MASK_SIDE: u32 = {DITHER_MASK_SIDE}u;\n",
+             const DITHER_MASK_SIDE: u32 = {DITHER_MASK_SIDE}u;\n\
+             const FROXEL_COLUMNS: u32 = {FROXEL_COLUMNS}u;\n\
+             const FROXEL_ROWS: u32 = {FROXEL_ROWS}u;\n\
+             const FROXEL_SLICES: u32 = {FROXEL_SLICES}u;\n\
+             const FIRST_FROXEL_SLICE_DEPTH: f32 = {FIRST_FROXEL_SLICE_DEPTH:?};\n\
+             const FROXEL_SLICES_PER_OCTAVE: f32 = {FROXEL_SLICES_PER_OCTAVE:?};\n\
+             const FROXEL_LIGHT_CAPACITY: u32 = {FROXEL_LIGHT_CAPACITY}u;\n",
             ANCHOR_CELL_SIZE as f32,
             MESHLET_MAX_VERTICES.ilog2(),
             LUMINANCE_COEFFICIENTS[0],

@@ -115,13 +115,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let light_count = light.directional_light_count + light.point_light_count;
     for (var index = light.directional_light_count; index < light_count; index++) {
         let point = lights[index];
-        let position = camera_relative_position(
-            point.anchor,
-            point.offset,
-            camera.anchor,
-            camera.offset,
-            vec3<f32>(0.0)
-        );
+        let position = point_light_position(point, camera.anchor, camera.offset);
         outgoing_luminance += point_light_luminance(
             surface,
             normal,

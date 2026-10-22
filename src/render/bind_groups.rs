@@ -110,6 +110,22 @@ pub const FRAME_DRAW: BindGroupDefinition = BindGroupDefinition {
     ],
 };
 
+/// Group 3 of the Froxel pass: the camera and the lights, which the CPU
+/// writes as `FRAME` holds them, and what the pass writes: each Froxel's
+/// list, and how many lights the lists had no room for, which the CPU reads
+/// back.
+pub const FROXEL_LISTS: BindGroupDefinition = BindGroupDefinition {
+    index: 3,
+    label: "Froxel Lists Bind Group",
+    bindings: &[
+        uniform("camera", "CameraUniform", wgpu::ShaderStages::COMPUTE),
+        uniform("light", "LightUniform", wgpu::ShaderStages::COMPUTE),
+        read_only_storage("lights", "array<LightData>", wgpu::ShaderStages::COMPUTE),
+        storage("froxel_lists", "array<FroxelList>"),
+        storage("froxel_lights_overflowed", "atomic<u32>"),
+    ],
+};
+
 /// Group 3 of the main pass: the Meshlet records of the frame's draw, which
 /// the culling pass writes.
 pub const MESHLET_RECORDS: BindGroupDefinition = BindGroupDefinition {
