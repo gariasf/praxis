@@ -241,7 +241,7 @@ impl bevy_mikktspace::Geometry for TangentGeometry<'_> {
     }
 
     /// MikkTSpace puts the bitangent along +v. glTF's `v` runs down the
-    /// image while its normal maps take +Y as up, so `v` is flipped.
+    /// image while its normal Textures take +Y as up, so `v` is flipped.
     fn tex_coord(&self, face: usize, vertex: usize) -> [f32; 2] {
         let [u, v] = self.uvs[self.vertex_index(face, vertex)];
         [u, 1.0 - v]

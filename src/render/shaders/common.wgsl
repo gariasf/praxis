@@ -33,7 +33,9 @@ struct MaterialData {
     base_color: vec4<f32>,
     metallic_roughness: vec4<f32>,
     emissive: vec4<f32>,
-    texture_indices: vec4<u32>,
+    // A Layer per Channel: albedo, normal, metallic-roughness, occlusion;
+    // the emissive Channel's is extra.x.
+    layers: vec4<u32>,
     extra: vec4<u32>,
 };
 

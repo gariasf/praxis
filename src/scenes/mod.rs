@@ -181,7 +181,7 @@ impl ReferenceScene {
     }
 
     /// The scene's generated Textures by name, with their Channel. A
-    /// metallic-roughness Texture cooks widened by the normal map of the
+    /// metallic-roughness Texture cooks widened by the normal Texture of the
     /// Material that samples it (Toksvig).
     #[cfg(feature = "cook")]
     pub(crate) fn textures(self) -> Vec<(String, MaterialChannel, LoadedImage)> {
@@ -585,7 +585,7 @@ fn checker_texture() -> LoadedImage {
     })
 }
 
-/// A tangent-space normal map of the height sin(x) sin(y), one bump every
+/// A tangent-space normal Texture of the height sin(x) sin(y), one bump every
 /// `MINIFICATION_BUMP_PERIOD` texels each way with slopes up to
 /// `MINIFICATION_BUMP_SLOPE`: a box of a period or more holds normals tilted
 /// every way, whose variance Toksvig widens the gloss by.
@@ -609,8 +609,8 @@ fn bump_texture() -> LoadedImage {
 }
 
 /// Roughness `MINIFICATION_GLOSS_ROUGHNESS` and metallic 0 at every texel
-/// (glTF's green and blue), the size of the normal map, so Toksvig widens
-/// every mip.
+/// (glTF's green and blue), the size of the normal Texture, so Toksvig
+/// widens every mip.
 #[cfg(feature = "cook")]
 fn gloss_texture() -> LoadedImage {
     let roughness = (MINIFICATION_GLOSS_ROUGHNESS * 255.0).round() as u8;

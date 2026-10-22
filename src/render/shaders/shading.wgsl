@@ -3,6 +3,43 @@
 
 const PI: f32 = 3.14159265;
 
+// As roughness, and α = roughness² with it, falls to 0, D collapses to a
+// delta and the BRDF divides by zero, so glTF 2.0's Appendix B keeps α above
+// 0 (https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#specular-brdf).
+const MINIMUM_ROUGHNESS: f32 = 0.04;
+
+// A surface point, as the shading terms read it.
+struct Surface {
+    base_color: vec3<f32>,
+    // The base colour's alpha, which the lit pass writes out.
+    opacity: f32,
+    metallic: f32,
+    roughness: f32,
+    occlusion: f32,
+    emissive: vec3<f32>,
+}
+
+// A surface point from its Material's factors and the texels of its Layers,
+// each factor scaling its texel (glTF 2.0, "Metallic-Roughness Material"):
+// cooked metallic-roughness holds roughness in red and metallic in green
+// (BC5, ADR 0018). Roughness keeps to MINIMUM_ROUGHNESS or above.
+fn decode_surface(
+    material: MaterialData,
+    albedo: vec4<f32>,
+    metallic_roughness: vec2<f32>,
+    occlusion: f32,
+    emissive: vec3<f32>
+) -> Surface {
+    return Surface(
+        albedo.rgb * material.base_color.rgb,
+        albedo.a * material.base_color.a,
+        metallic_roughness.g * material.metallic_roughness.x,
+        max(metallic_roughness.r * material.metallic_roughness.y, MINIMUM_ROUGHNESS),
+        occlusion,
+        emissive * material.emissive.rgb,
+    );
+}
+
 // F term. base_reflectance is the reflectance at normal incidence (textbook F0).
 fn fresnel_schlick(cos_incidence_angle: f32, base_reflectance: vec3<f32>) -> vec3<f32> {
     return base_reflectance
@@ -28,9 +65,10 @@ fn geometry_smith(normal_dot_view: f32, normal_dot_light: f32, roughness: f32) -
     return view_masking * light_shadowing;
 }
 
-// A cooked normal map stores a unit normal's x and y in [0, 1], in BC5's two
-// channels (ADR 0018); z is rebuilt as the positive root of x² + y² + z² = 1,
-// and is 0 where block error carries x and y past the unit circle.
+// A cooked normal Texture stores a unit normal's x and y in [0, 1], in BC5's
+// two channels (ADR 0018); z is rebuilt as the positive root of
+// x² + y² + z² = 1, and is 0 where block error carries x and y past the
+// unit circle.
 fn tangent_space_normal(encoded: vec2<f32>) -> vec3<f32> {
     let x_and_y = encoded * 2.0 - vec2<f32>(1.0);
     return vec3<f32>(x_and_y, sqrt(max(1.0 - dot(x_and_y, x_and_y), 0.0)));
