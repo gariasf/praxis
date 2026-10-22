@@ -3,13 +3,14 @@ use std::io::Write;
 use praxis::ReferenceScene;
 use praxis::gpu::GpuContext;
 
-/// The clear colour, linear (0.1, 0.2, 0.3), as an 8-bit sRGB target stores
-/// it: 255 × (1.055 × c^(1/2.4) − 0.055) gives 89.0, 123.6 and 148.9. The GPU
-/// may round 123.6 either way, hence the tolerance of 1.
-const BACKGROUND: [u8; 4] = [89, 124, 149, 255];
+/// The clear colour, exposed (0.1, 0.2, 0.3), as GT7 shows it: Polyphony's
+/// sample implementation, between Rec. 709 and Rec. 2020, gives (0.0967,
+/// 0.1993, 0.2988), which an 8-bit sRGB target stores as 87.6, 123.4 and
+/// 148.6. The tolerance of 1 absorbs a GPU's rounding.
+const BACKGROUND: [u8; 4] = [88, 123, 149, 255];
 
 #[test]
-fn capture_draws_the_scene_over_the_srgb_encoded_background() {
+fn capture_draws_the_scene_over_the_tonemapped_background() {
     let context = match pollster::block_on(GpuContext::headless()) {
         Ok(context) => context,
         Err(error) if error.is::<wgpu::RequestAdapterError>() => {

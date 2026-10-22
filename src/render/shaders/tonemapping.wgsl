@@ -1,5 +1,6 @@
-// The tonemapping pass's entry points, after the HDR part; its binding is
-// declared from its bind group's definition (src/render/bind_groups.rs).
+// The tonemapping pass's entry points, after the HDR, GT7 and display
+// parts; its binding is declared from its bind group's definition
+// (src/render/bind_groups.rs).
 
 // (−1, −1), (3, −1) and (−1, 3): one triangle that covers the target.
 @vertex
@@ -8,11 +9,10 @@ fn vs_full_screen(@builtin(vertex_index) vertex_index: u32) -> @builtin(position
     return vec4<f32>(corner * 2.0 - 1.0, 0.0, 1.0);
 }
 
-// A pixel's exposed colour, unweighted from the resolve and clamped to
-// display white as the 8-bit target clamped it before the HDR target;
-// #200's GT7 replaces the clamp.
+// A pixel's display colour, from its exposed colour, unweighted from the
+// resolve.
 @fragment
 fn fs_tonemap(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let weighted = textureLoad(hdr_target, vec2<u32>(position.xy), 0).rgb;
-    return vec4<f32>(min(resolve_unweighted(weighted), vec3<f32>(1.0)), 1.0);
+    return vec4<f32>(tonemap(resolve_unweighted(weighted)), 1.0);
 }
