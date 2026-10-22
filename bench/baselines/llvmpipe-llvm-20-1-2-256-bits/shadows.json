@@ -1,0 +1,64 @@
+{
+  "scene": "shadows",
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "profile": "release",
+  "width": 640,
+  "height": 360,
+  "measured_frames": 256,
+  "cpu_frame_microseconds": {
+    "median": 11249.769,
+    "p95": 11847.279
+  },
+  "gpu_frame_microseconds": {
+    "median": 11178.501,
+    "p95": 11768.28
+  },
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 309.837,
+      "p95": 396.177
+    },
+    "culling_phase_two": {
+      "median": 190.59799999999998,
+      "p95": 216.356
+    },
+    "depth_prepass": {
+      "median": 643.65,
+      "p95": 713.84
+    },
+    "depth_pyramid_pass": {
+      "median": 873.137,
+      "p95": 1057.4340000000002
+    },
+    "lit_pass": {
+      "median": 5911.251,
+      "p95": 6357.473
+    },
+    "tonemapping_pass": {
+      "median": 2947.895,
+      "p95": 3049.341
+    }
+  },
+  "draw_calls": 4,
+  "instances_drawn": 1,
+  "triangles_drawn": 2210,
+  "instances_overflowed": 0,
+  "uploaded_bytes": 288,
+  "gpu_memory_bytes": 313965724,
+  "arena_bytes_in_use": 76856,
+  "heap_allocations": 249,
+  "counter_frames": {
+    "frames": {
+      "start": 8,
+      "end": 72
+    },
+    "draw_calls": 4,
+    "instances_drawn": 1,
+    "triangles_drawn": 2210,
+    "instances_overflowed": 0,
+    "uploaded_bytes": 288,
+    "gpu_memory_bytes": 313965724,
+    "arena_bytes_in_use": 76856,
+    "heap_allocations": 249
+  }
+}

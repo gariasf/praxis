@@ -346,14 +346,7 @@ impl ReferenceScene {
             // The directional light alone, white, so each quad shows its
             // Texture's colour.
             Self::TextureWall => &[],
-            Self::Shadows => &[(
-                SHADOWS_LIGHT,
-                PointLight {
-                    color: glam::Vec3::ONE,
-                    intensity: 9.0 * SUN_ILLUMINANCE,
-                    range: 20.0,
-                },
-            )],
+            Self::Shadows => &SHADOWS_LIGHTS,
             Self::Helmet
             | Self::PbrSweep
             | Self::UvGrid
@@ -798,8 +791,12 @@ const SHADOWS_ROUGHNESS: f32 = 0.6;
 /// the left.
 const SHADOWS_CAMERA: glam::DVec3 = glam::DVec3::new(0.0, 2.4, 3.0);
 const SHADOWS_CAMERA_TARGET: glam::DVec3 = glam::DVec3::new(0.0, 0.45, -0.4);
-/// Up and to the right of the sphere, in front of it.
-const SHADOWS_LIGHT: glam::DVec3 = glam::DVec3::new(1.5, 2.5, 1.0);
+/// White, up and to the right of the sphere, in front of it, giving the
+/// sun's illuminance 3 m away and reaching 20 m, as each coloured light does.
+const SHADOWS_LIGHTS: [(glam::DVec3, PointLight); 1] = [(
+    glam::DVec3::new(1.5, 2.5, 1.0),
+    coloured_light(glam::Vec3::ONE),
+)];
 
 /// The Mesh draws each of its Primitives with the Material it names.
 pub(crate) fn spawn_shadows(world: &mut World, loader: &mut AssetLoader) -> anyhow::Result<()> {
