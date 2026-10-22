@@ -13,10 +13,11 @@ use crate::render::shaders;
 /// land within 2e-7 of theirs on the M4 Pro.
 const TOLERANCE: f32 = 1e-6;
 
-/// Schlick adds (1 − cos θ)⁵ of the light the base reflectance misses: none
-/// at normal incidence, 1/32 at cos θ = 0.5, and all of it at grazing.
+/// Schlick adds (1 − |cos θ|)⁵ of the light the base reflectance misses:
+/// none at normal incidence, or where a dot product of unit vectors rounds
+/// just past 1, 1/32 at cos θ = ±0.5, and all of it at grazing.
 #[test]
-fn fresnel_schlick_rises_from_the_base_reflectance_to_one_at_grazing() {
+fn fresnel_rises_from_the_base_reflectance_to_one_at_grazing() {
     let Some(context) = gpu_context() else {
         return;
     };
@@ -24,7 +25,9 @@ fn fresnel_schlick_rises_from_the_base_reflectance_to_one_at_grazing() {
     let base_reflectance = [0.04, 0.5, 1.0];
     let cases = [
         (1.0, base_reflectance),
+        (f32::from_bits(1.0f32.to_bits() + 1), base_reflectance),
         (0.5, [0.07, 0.515625, 1.0]),
+        (-0.5, [0.07, 0.515625, 1.0]),
         (0.0, [1.0, 1.0, 1.0]),
     ];
 
@@ -32,7 +35,7 @@ fn fresnel_schlick_rises_from_the_base_reflectance_to_one_at_grazing() {
     let inputs = cases.map(|(cosine, _)| [cosine, red, green, blue]);
     let results = evaluate(
         &context,
-        "vec4<f32>(fresnel_schlick(input.x, input.yzw), 0.0)",
+        "vec4<f32>(input.yzw + (vec3<f32>(1.0) - input.yzw) * fresnel_weight(input.x), 0.0)",
         &inputs,
     );
 
@@ -187,10 +190,196 @@ fn smith_visibility_matches_appendix_b_and_keeps_g_within_zero_to_one() {
     }
 }
 
+/// The BRDF, mix(dielectric_brdf, metal_brdf, metallic), matches Appendix
+/// B's "full code" evaluated in f64, from the cosines of lights and views
+/// from the normal to grazing, at the roughness floor and above, for a
+/// dielectric, a metal and half of each, and is reciprocal: the light and
+/// view swapped give the same value.
+#[test]
+fn metallic_roughness_brdf_matches_appendix_b_and_is_reciprocal() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let polar_angles = [0.0, 30.0, 60.0, 85.0, 90.0];
+    let mut cases = Vec::new();
+    for roughness in [minimum_roughness(&context), 0.5, 1.0] {
+        for metallic in [0.0, 0.5, 1.0] {
+            for view_angle in polar_angles {
+                for light_angle in polar_angles {
+                    for azimuth in [0.0, 90.0, 180.0] {
+                        let view = direction(view_angle, 0.0);
+                        let light = direction(light_angle, azimuth);
+                        let cosines =
+                            cosines(glam::DVec3::Z, view, light).map(|cosine| cosine as f32);
+                        let [red, green, blue] = GOLD;
+                        cases.push([cosines, [red, green, blue, metallic], [roughness; 4]]);
+                    }
+                }
+            }
+        }
+    }
+    let surface = surface("inputs[1].rgb", "inputs[1].w", "inputs[2].x", "1.0");
+    let brdf = |normal_dot_light: &str, normal_dot_view: &str| {
+        format!(
+            "vec4<f32>(metallic_roughness_brdf({surface}, {normal_dot_light}, \
+             {normal_dot_view}, inputs[0].z, inputs[0].w), 0.0)"
+        )
+    };
+    let results = evaluate_cases(&context, &brdf("inputs[0].x", "inputs[0].y"), &cases, &[]);
+    let swapped = evaluate_cases(&context, &brdf("inputs[0].y", "inputs[0].x"), &cases, &[]);
+
+    for ((&[cosines, material, [roughness, ..]], result), swapped) in
+        cases.iter().zip(results).zip(swapped)
+    {
+        let [red, green, blue, metallic] = material.map(f64::from);
+        let cosines = cosines.map(f64::from);
+        let expected = reference_brdf(cosines, [red, green, blue], metallic, roughness.into());
+        for channel in 0..3 {
+            let case = format_args!(
+                "BRDF{cosines:?} metallic {metallic} roughness {roughness}, channel {channel}"
+            );
+            let tolerance = RELATIVE_TOLERANCE * expected[channel];
+            assert_close(result[channel], expected[channel], tolerance, case);
+            let value = f64::from(result[channel]);
+            let tolerance = RELATIVE_TOLERANCE * value;
+            assert_close(
+                swapped[channel],
+                value,
+                tolerance,
+                format_args!("{case}, swapped"),
+            );
+        }
+    }
+}
+
+/// What a point reflects from a punctual light, f(L, V) E (N·L)⁺, from unit
+/// vectors around a normal off every axis, matches the f64 reference: 0 for a
+/// light at or below the horizon, finite where the light is opposite the
+/// view, even at the roughness floor. A white metal reflects at most what it
+/// receives: under illuminance 1 from each direction of the hemisphere in
+/// turn, what it reflects sums to at most 1 (a white furnace). Appendix B's
+/// dielectric is not held to that, since its fresnel_mix is not energy
+/// conserving (Appendix B, "Coupling Diffuse and Specular Reflection").
+#[test]
+fn reflected_luminance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_it_receives() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let tilt = glam::DQuat::from_euler(glam::EulerRot::XYZ, 0.3, -0.5, 0.7);
+    let case = |view_angle: f64, light: glam::DVec3, metallic: f32, roughness: f32| {
+        let [normal, view, light] = [glam::DVec3::Z, direction(view_angle, 0.0), light]
+            .map(|vector| (tilt * vector).as_vec3().extend(0.0).to_array());
+        let [red, green, blue] = GOLD;
+        [
+            normal,
+            view,
+            light,
+            [red, green, blue, metallic],
+            [roughness; 4],
+        ]
+    };
+    let floor = minimum_roughness(&context);
+    let mut cases = Vec::new();
+    for (view_angle, light) in [
+        (60.0, direction(90.0, 180.0)),
+        (60.0, direction(120.0, 180.0)),
+        (90.0, direction(90.0, 180.0)),
+        (90.0, direction(45.0, 180.0)),
+        (120.0, -direction(120.0, 0.0)),
+    ] {
+        for metallic in [0.0, 1.0] {
+            cases.push(case(view_angle, light, metallic, floor));
+        }
+    }
+    // The hemisphere in midpoints of 1° by 2° cells, each the solid angle
+    // sin θ dθ dφ of its cell.
+    let cells: Vec<(glam::DVec3, f64)> = (0..90)
+        .flat_map(|polar| (0..180).map(move |azimuth| (polar, azimuth)))
+        .map(|(polar, azimuth)| {
+            let polar_angle = f64::from(polar) + 0.5;
+            let solid_angle = polar_angle.to_radians().sin() * 2f64.to_radians().powi(2) / 2.0;
+            (
+                direction(polar_angle, f64::from(azimuth) * 2.0 + 1.0),
+                solid_angle,
+            )
+        })
+        .collect();
+    let furnaces = [
+        (0.0, 0.5),
+        (60.0, 0.5),
+        (85.0, 0.5),
+        (0.0, 1.0),
+        (85.0, 1.0),
+    ];
+    for (view_angle, roughness) in furnaces {
+        for &(light, _) in &cells {
+            let mut white_metal = case(view_angle, light, 1.0, roughness);
+            white_metal[3] = [1.0; 4];
+            cases.push(white_metal);
+        }
+    }
+    let surface = surface("inputs[3].rgb", "inputs[3].w", "inputs[4].x", "1.0");
+    let results = evaluate_cases(
+        &context,
+        &format!(
+            "vec4<f32>(reflected_luminance({surface}, inputs[0].xyz, inputs[1].xyz, \
+             inputs[2].xyz, vec3<f32>(1.0)), 0.0)"
+        ),
+        &cases,
+        &[],
+    );
+
+    for (case, result) in cases.iter().zip(&results) {
+        let [normal, view, light, material, roughness] =
+            case.map(|vector| glam::Vec4::from_array(vector).as_dvec4());
+        let [normal, view, light] = [normal, view, light].map(glam::DVec4::truncate);
+        let brdf = reference_brdf(
+            cosines(normal, view, light),
+            material.truncate().to_array(),
+            material.w,
+            roughness.x,
+        );
+        let normal_dot_light = normal.dot(light).max(0.0);
+        for channel in 0..3 {
+            let expected = brdf[channel] * normal_dot_light;
+            let case = format_args!("{case:?}, channel {channel}");
+            assert_close(
+                result[channel],
+                expected,
+                DIRECTION_TOLERANCE * expected,
+                case,
+            );
+        }
+    }
+    let furnace_results = results[cases.len() - furnaces.len() * cells.len()..].chunks(cells.len());
+    for ((view_angle, roughness), results) in furnaces.into_iter().zip(furnace_results) {
+        let albedo: f64 = results
+            .iter()
+            .zip(&cells)
+            .map(|(result, (_, solid_angle))| f64::from(result[0]) * solid_angle)
+            .sum();
+        assert!(
+            albedo <= 1.0,
+            "a white metal of roughness {roughness}, seen {view_angle}° off its normal, \
+             reflects {albedo} of what it receives"
+        );
+    }
+}
+
+/// Linear sRGB reflectance of gold at normal incidence, as the pbr-sweep
+/// scene uses it: each channel a different base colour.
+const GOLD: [f32; 3] = [1.0, 0.71, 0.29];
+
 /// Largest error allowed between a result and its f64 reference, relative to
 /// the reference, or to a scale the test names. Results land within 2e-6 of
 /// theirs on the M4 Pro.
 const RELATIVE_TOLERANCE: f64 = 4e-6;
+
+/// The same for shading from unit vectors: f32 rounds each direction and
+/// each cosine between them by up to about 1e-7, which D, steep near its
+/// peak at the roughness floor, turns into up to 1.1e-5 of the result on the
+/// M4 Pro.
+const DIRECTION_TOLERANCE: f64 = 5e-5;
 
 /// Asserts that `actual` is finite and within `tolerance` of `expected`, so
 /// exactly where `tolerance` is 0.
@@ -200,6 +389,30 @@ fn assert_close(actual: f32, expected: f64, tolerance: f64, case: std::fmt::Argu
         actual.is_finite() && error <= tolerance.abs(),
         "{case} is {actual}, expected {expected}"
     );
+}
+
+/// The unit direction `polar` degrees from +Z, turned `azimuth` degrees about
+/// it from +X.
+fn direction(polar: f64, azimuth: f64) -> glam::DVec3 {
+    let (polar, azimuth) = (polar.to_radians(), azimuth.to_radians());
+    glam::DVec3::new(
+        polar.sin() * azimuth.cos(),
+        polar.sin() * azimuth.sin(),
+        polar.cos(),
+    )
+}
+
+/// N·L, N·V, N·H and V·H for unit `normal`, `view` and `light` directions,
+/// H halfway between L and V, or zero where they are opposite, as the shader
+/// leaves it.
+fn cosines(normal: glam::DVec3, view: glam::DVec3, light: glam::DVec3) -> [f64; 4] {
+    let half = (light + view).try_normalize().unwrap_or(glam::DVec3::ZERO);
+    [
+        normal.dot(light),
+        normal.dot(view),
+        normal.dot(half),
+        view.dot(half),
+    ]
 }
 
 /// Appendix B's D, α² χ⁺(N·H) / (π ((N·H)² (α² − 1) + 1)²), as it writes it
@@ -226,6 +439,36 @@ fn reference_visibility(
     } else {
         0.0
     }
+}
+
+/// Appendix B's "full code" (glTF 2.0, Khronos, CC BY 4.0): the BRDF of a
+/// surface of `base_color`, `metallic` and `roughness`, from the cosines
+/// N·L, N·V, N·H and V·H.
+fn reference_brdf(
+    cosines: [f64; 4],
+    base_color: [f64; 3],
+    metallic: f64,
+    roughness: f64,
+) -> [f64; 3] {
+    let [
+        normal_dot_light,
+        normal_dot_view,
+        normal_dot_half,
+        view_dot_half,
+    ] = cosines;
+    let alpha = roughness * roughness;
+    let specular_brdf = reference_distribution(normal_dot_half, alpha)
+        * reference_visibility([normal_dot_light, normal_dot_view, view_dot_half, alpha]);
+    let fresnel_weight = (1.0 - view_dot_half.abs()).powi(5);
+    let mix = |base: f64, layer: f64, weight: f64| base * (1.0 - weight) + layer * weight;
+    base_color.map(|base_color| {
+        let diffuse_brdf = base_color / std::f64::consts::PI;
+        let dielectric_fresnel = 0.04 + (1.0 - 0.04) * fresnel_weight;
+        let dielectric_brdf = mix(diffuse_brdf, specular_brdf, dielectric_fresnel);
+        let metal_fresnel = base_color + (1.0 - base_color) * fresnel_weight;
+        let metal_brdf = metal_fresnel * specular_brdf;
+        mix(dielectric_brdf, metal_brdf, metallic)
+    })
 }
 
 /// A cooked normal Texture stores a unit normal's x and y, each mapped to
@@ -328,6 +571,12 @@ fn decode_surface_scales_each_texel_by_its_factor_and_floors_roughness() {
         [[0.25, 0.375, 0.75, 0.0], [0.25, floor, 0.75, 0.0]]
     );
     assert_eq!(emissives, [[0.5, 0.5, 0.5, 0.0]; 2]);
+}
+
+/// WGSL for an opaque Surface with no emissive, from WGSL expressions for
+/// its base colour, metallic, roughness and occlusion.
+fn surface(base_color: &str, metallic: &str, roughness: &str, occlusion: &str) -> String {
+    format!("Surface({base_color}, 1.0, {metallic}, {roughness}, {occlusion}, vec3<f32>(0.0))")
 }
 
 /// The shader's roughness floor, `MINIMUM_ROUGHNESS` (shading.wgsl).
