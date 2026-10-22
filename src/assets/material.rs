@@ -19,6 +19,15 @@ pub(crate) const TEXTURES_PER_CHANNEL: u32 =
 /// so a fixed cap avoids growth + bind-group rebuilds for now.
 const MATERIAL_CAPACITY: u64 = 256;
 
+/// The colour Channels' anisotropy (albedo, emissive) and the data
+/// Channels' (normal, metallic-roughness, occlusion), the owner's pick from
+/// #184's measured candidates (`docs/performance.md`): 4x on the data
+/// Channels saves 126 µs of minification's lit pass and drops the sparkle
+/// of highlights whose normals came from finer mips than Toksvig widened
+/// their roughness for.
+const COLOUR_ANISOTROPY: u16 = 16;
+const DATA_ANISOTROPY: u16 = 4;
+
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub struct MaterialHandle(pub u32);
 
@@ -135,7 +144,8 @@ pub struct MaterialPool {
     channels: [ChannelTextures; 5],
     /// Each loaded Texture's Layer in its Channel, which its Asset ID names.
     texture_layers: HashMap<AssetId, u32>,
-    sampler: wgpu::Sampler,
+    colour_sampler: wgpu::Sampler,
+    data_sampler: wgpu::Sampler,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
     /// Set when a load adds a Texture the bind group lacks.
@@ -188,18 +198,8 @@ impl MaterialPool {
             channels[channel as usize].push(device, staging, &neutral);
         }
 
-        // One sampler serves every Channel (#144): trilinear, at the
-        // anisotropy the Capability floor guarantees (ADR 0021).
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("Material Sampler"),
-            address_mode_u: wgpu::AddressMode::Repeat,
-            address_mode_v: wgpu::AddressMode::Repeat,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::MipmapFilterMode::Linear,
-            anisotropy_clamp: 16,
-            ..Default::default()
-        });
+        let colour_sampler = trilinear_sampler(device, "Colour Channel Sampler", COLOUR_ANISOTROPY);
+        let data_sampler = trilinear_sampler(device, "Data Channel Sampler", DATA_ANISOTROPY);
 
         let bind_group_layout = MATERIALS.layout(device);
         let bind_group = create_bind_group(
@@ -207,7 +207,8 @@ impl MaterialPool {
             &bind_group_layout,
             &materials_buffer,
             &channels,
-            &sampler,
+            &colour_sampler,
+            &data_sampler,
         );
 
         Self {
@@ -215,7 +216,8 @@ impl MaterialPool {
             materials_buffer,
             channels,
             texture_layers: HashMap::new(),
-            sampler,
+            colour_sampler,
+            data_sampler,
             bind_group_layout,
             bind_group,
             bind_group_is_stale: false,
@@ -316,7 +318,8 @@ impl MaterialPool {
                 &self.bind_group_layout,
                 &self.materials_buffer,
                 &self.channels,
-                &self.sampler,
+                &self.colour_sampler,
+                &self.data_sampler,
             );
             // ADR 0017's gate: the build's cost at the bound Textures' count.
             tracing::info!(
@@ -332,15 +335,32 @@ impl MaterialPool {
     }
 }
 
+/// A trilinear, repeating sampler (#144) at `anisotropy`, which the
+/// Capability floor's anisotropic filtering keeps wgpu from clamping to 1
+/// (ADR 0021).
+fn trilinear_sampler(device: &wgpu::Device, label: &str, anisotropy: u16) -> wgpu::Sampler {
+    device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some(label),
+        address_mode_u: wgpu::AddressMode::Repeat,
+        address_mode_v: wgpu::AddressMode::Repeat,
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::MipmapFilterMode::Linear,
+        anisotropy_clamp: anisotropy,
+        ..Default::default()
+    })
+}
+
 /// The material bind group (`MATERIALS`): the SSBO, each Channel's
-/// Textures, and the sampler. Bind groups are snapshots, so a new Texture
-/// needs a new one.
+/// Textures, and the colour and data Channels' samplers. Bind groups are
+/// snapshots, so a new Texture needs a new one.
 fn create_bind_group(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
     materials_buffer: &wgpu::Buffer,
     channels: &[ChannelTextures; 5],
-    sampler: &wgpu::Sampler,
+    colour_sampler: &wgpu::Sampler,
+    data_sampler: &wgpu::Sampler,
 ) -> wgpu::BindGroup {
     let views: Vec<Vec<&wgpu::TextureView>> = channels
         .iter()
@@ -350,9 +370,14 @@ fn create_bind_group(
         let resource = wgpu::BindingResource::TextureViewArray(channel_views);
         (channel.label, resource)
     });
+    let samplers = [
+        ("colour_sampler", colour_sampler),
+        ("data_sampler", data_sampler),
+    ]
+    .map(|(name, sampler)| (name, wgpu::BindingResource::Sampler(sampler)));
     let resources = std::iter::once(("materials", materials_buffer.as_entire_binding()))
         .chain(channel_resources)
-        .chain([("pbr_sampler", wgpu::BindingResource::Sampler(sampler))]);
+        .chain(samplers);
     MATERIALS.bind_group(device, layout, resources)
 }
 

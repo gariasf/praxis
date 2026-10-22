@@ -234,8 +234,8 @@ pub(crate) fn floor_features() -> wgpu::Features {
 /// or lacks with no request.
 pub(crate) fn floor_downlevel_flags() -> wgpu::DownlevelFlags {
     // ADR 0017 keeps hardware anisotropic filtering, and Material Channels
-    // sample at 16x (#144); without the flag, wgpu silently clamps every
-    // sampler's anisotropy to 1.
+    // sample at up to 16x (#144, #184); without the flag, wgpu silently
+    // clamps every sampler's anisotropy to 1.
     wgpu::DownlevelFlags::ANISOTROPIC_FILTERING
         // The vertex shader reads Instances and pulls vertices from the
         // vertex Arena as storage buffers (ADRs 0005, 0019).

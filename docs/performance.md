@@ -4,6 +4,123 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## Anisotropy candidates (2026-10-22, #184)
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
+`064d2ba`, and of `064d2ba` with a measurement patch, not committed, that
+gives each Material Channel its own sampler and reads each sampler's
+anisotropy from an environment variable. `praxis bench <dir> minification`
+at 2560×1440 with 4x MSAA, 248 warm-up and 1800 measured frames, three
+rounds, each running every variant once in rotated order. Load average
+about 13, from peer sessions' builds and a browser.
+
+minification's floor samples three Textures, in the albedo, normal and
+metallic-roughness Channels; occlusion and emissive sample Layer 0's 1×1
+Textures. The colour Channels are albedo and emissive, the data Channels
+normal, metallic-roughness and occlusion, as `MaterialPool::new` splits
+them by encoding. The lit pass does all the sampling; GPU frame totals
+are given too, since the tonemapping pass's timestamps overlap the lit
+pass on Apple's tile-based GPU.
+
+| Variant | Anisotropy: albedo, normal, metallic-roughness, occlusion, emissive | Lit pass µs (3 rounds) | GPU frame µs (3 rounds) |
+|---|---|---|---|
+| `064d2ba`: one sampler | 16, 16, 16, 16, 16 | 556.7 / 557.2 / 557.5 | 1,274.3 / 1,274.2 / 1,274.8 |
+| Patch at 16x | 16, 16, 16, 16, 16 | 557.5 / 558.0 / 557.8 | 1,272.7 / 1,272.8 / 1,274.9 |
+| 8x | 8, 8, 8, 8, 8 | 446.5 / 446.9 / 454.0 | 1,162.6 / 1,163.2 / 1,193.5 |
+| 4x | 4, 4, 4, 4, 4 | 368.8 / 368.0 / 369.5 | 1,085.6 / 1,082.9 / 1,088.5 |
+| 2x | 2, 2, 2, 2, 2 | 341.7 / 343.9 / 346.3 | 1,058.5 / 1,060.6 / 1,067.8 |
+| 1x | 1, 1, 1, 1, 1 | 343.0 / 343.9 / 340.0 | 1,059.1 / 1,061.8 / 1,057.1 |
+| Colour 16x, data 8x | 16, 8, 8, 8, 16 | 486.6 / 483.6 / 482.9 | 1,207.7 / 1,199.7 / 1,199.2 |
+| Colour 16x, data 4x | 16, 4, 4, 4, 16 | 430.6 / 430.8 / 432.9 | 1,147.1 / 1,147.5 / 1,155.7 |
+| Colour 16x, data 2x | 16, 2, 2, 2, 16 | 399.1 / 397.4 / 401.5 | 1,115.2 / 1,113.1 / 1,121.4 |
+| Colour 16x, data 1x | 16, 1, 1, 1, 16 | 392.1 / 384.7 / 383.8 | 1,128.0 / 1,101.0 / 1,099.5 |
+| Albedo 1x | 1, 16, 16, 16, 16 | 470.2 / 473.5 / 473.1 | 1,186.0 / 1,193.9 / 1,192.0 |
+| Occlusion and emissive 1x | 16, 16, 16, 1, 1 | 561.2 / 557.3 / 557.5 | 1,285.2 / 1,274.1 / 1,274.4 |
+
+- The patch alone costs nothing: five samplers at 16x time as one, and
+  their capture matches `064d2ba`'s Golden pixel for pixel.
+- 16x costs 214 µs of the lit pass, 38% of it (557.2 against 343.0 µs at
+  1x, medians of the rounds' medians), as M2's exit measured in a single
+  pass without MSAA (222 µs). Over 1x, 2x costs nothing, 4x 26 µs and 8x
+  104 µs. GPU frame totals move by the same amounts, within 2.1 µs.
+- The 1×1 Textures' anisotropy costs nothing. The Channels' costs
+  overlap: albedo alone at 16x costs 42 µs over 1x everywhere, but
+  dropping it to 1x from 16x everywhere saves 84 µs.
+- Against `064d2ba`: 8x saves 110 µs; colour 16x with data 8x 74 µs, data
+  4x 126 µs, data 2x 158 µs. Data 4x saves 1.1% of ADR 0013's 12 ms GPU
+  Budget.
+
+Captures at the Golden's size, 640×360, against `064d2ba`'s Golden:
+
+| Variant | Pixels changed | Beyond 1 step | Largest step |
+|---|---|---|---|
+| 8x | 18,892 | 7,229 | 10 |
+| Colour 16x, data 8x | 221 | 0 | 1 |
+| Colour 16x, data 4x | 18,119 | 4,099 | 29 |
+| Colour 16x, data 2x | 74,414 | 37,702 | 102 |
+
+Every difference sits in the band below the horizon, where a pixel's
+footprint is longer, in texels, than the lower anisotropy times its
+width. The Golden's size hides some of it: colour 16x with data 8x
+changes 221 pixels at 640×360 (0.1%) but 273,950 at 1440p (7.4%), whose
+pixels sample finer mips that still hold the bumps.
+
+Images, on the `pr-images` branch at `2a87cbb`: `064d2ba`'s
+[Golden](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/golden.png)
+and, at 640×360, [8x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/8x.png),
+[colour 16x, data 4x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/colour-16x-data-4x.png)
+and [colour 16x, data 2x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/colour-16x-data-2x.png),
+each with its difference image against the Golden
+([8x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/8x-difference.png),
+[data 4x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/colour-16x-data-4x-difference.png),
+[data 2x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/colour-16x-data-2x-difference.png))
+and against 16x at 1440p, halved
+([8x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/8x-difference-1440p.png),
+[data 4x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/colour-16x-data-4x-difference-1440p.png),
+[data 2x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/colour-16x-data-2x-difference-1440p.png));
+and 1440p zooms of the band, doubled, beside the reference below:
+[the highlight](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/highlight-zoom.png)
+and [the checker](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/checker-zoom.png).
+
+Image quality, against a reference: 16x at 7680×4320, 9 samples per
+pixel, box-filtered to 2560×1440 in linear light. RMSE in 8-bit steps over
+the band (rows 484 to 759, from 3 rows below the floor's far edge, at
+row 481 across the middle of the frame), and within it over the
+highlight's columns (1000 to 1559) and the checker either side (0 to 899
+and 1660 to 2559):
+
+| Variant | Band | Highlight | Checker |
+|---|---|---|---|
+| 16x | 16.09 | 33.89 | 2.98 |
+| 8x | 16.72 | 35.05 | 3.44 |
+| 4x | 16.89 | 34.50 | 5.40 |
+| 2x | 16.04 | 28.98 | 9.54 |
+| 1x | 19.39 | 29.92 | 15.15 |
+| Colour 16x, data 8x | 16.63 | 35.02 | 2.98 |
+| Colour 16x, data 4x | 16.34 | 34.32 | 3.06 |
+| Colour 16x, data 2x | 13.61 | 28.09 | 3.55 |
+| Colour 16x, data 1x | 13.42 | 27.65 | 3.59 |
+
+- The checker is fixed in texture space, so the reference and every
+  variant show it in the same place, and its error measures filtering:
+  albedo at 16x is closest. 8x is 15% further off, 4x 81%. Keeping albedo
+  at 16x keeps the checker within 3% (data 4x) or 19% (data 2x, through
+  the bumps' shading).
+- The highlight is not a fair test: the reference resolves glints that a
+  one-sample render cannot place, so RMSE favours the smoother images
+  there. By eye, the reference shows a narrow streak, the light's mirror
+  image and glints below it; 16x and 8x a broad white column with
+  single-pixel sparkle along its flanks and lower end, specular aliasing:
+  their normal and roughness come from a finer mip, whose Toksvig
+  widening covers the footprint's width but not its length. Data
+  Channels at 4x or 2x show a smoother, narrower V without the sparkle.
+  No variant shows the mirror image: Toksvig widens one lobe and keeps no
+  sharp peak.
+
+The owner chose colour Channels at 16x and data Channels at 4x on
+2026-10-22, judging the images on #257; the Goldens and Baselines there
+are that sampler's.
+
 ## M2 exit (2026-10-19, #154)
 
 Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release build of

@@ -38,7 +38,7 @@ pub enum ReferenceScene {
     Orrery,
     /// A glossy checker floor 100 m long, seen at a grazing angle under one
     /// raking point light: its fine checks and high-frequency bumps show
-    /// mips, 16x anisotropy and Toksvig.
+    /// mips, anisotropic filtering and Toksvig.
     Minification,
     /// 10,000 4×4 Textures resident in the albedo Channel, each one colour
     /// that encodes its index, and a 10 × 10 grid of quads, each with its own

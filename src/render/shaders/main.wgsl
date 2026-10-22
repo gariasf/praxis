@@ -68,12 +68,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let material = materials[in.material_id];
     let surface = decode_surface(
         material,
-        textureSample(albedo_textures[material.layers.x], pbr_sampler, in.uv),
-        textureSample(metallic_roughness_textures[material.layers.z], pbr_sampler, in.uv).rg,
-        textureSample(occlusion_textures[material.layers.w], pbr_sampler, in.uv).r,
-        textureSample(emissive_textures[material.extra.x], pbr_sampler, in.uv).rgb
+        textureSample(albedo_textures[material.layers.x], colour_sampler, in.uv),
+        textureSample(metallic_roughness_textures[material.layers.z], data_sampler, in.uv).rg,
+        textureSample(occlusion_textures[material.layers.w], data_sampler, in.uv).r,
+        textureSample(emissive_textures[material.extra.x], colour_sampler, in.uv).rgb
     );
-    let normal_sample = textureSample(normal_textures[material.layers.y], pbr_sampler, in.uv).rg;
+    let normal_sample = textureSample(normal_textures[material.layers.y], data_sampler, in.uv).rg;
 
     // Tangent frame. Interpolation bends the tangent off the normal, so
     // re-orthogonalise it (Gram-Schmidt) before rebuilding the bitangent with

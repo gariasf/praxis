@@ -29,7 +29,8 @@ pub const FRAME: BindGroupDefinition = BindGroupDefinition {
 
 /// Group 1, which the Material pool rebuilds when loads add Textures: the
 /// Materials (ADR 0001), each Channel's Textures as a binding array indexed
-/// by Layer, in `MaterialChannel` order (ADR 0017), and their sampler.
+/// by Layer, in `MaterialChannel` order (ADR 0017), and their samplers: the
+/// colour Channels' and the data Channels', at their own anisotropy (#184).
 pub const MATERIALS: BindGroupDefinition = BindGroupDefinition {
     index: 1,
     label: "Material Bind Group",
@@ -44,14 +45,8 @@ pub const MATERIALS: BindGroupDefinition = BindGroupDefinition {
         channel("metallic_roughness_textures"),
         channel("occlusion_textures"),
         channel("emissive_textures"),
-        Binding {
-            name: "pbr_sampler",
-            wgsl_type: "sampler",
-            binding_type: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-            stages: wgpu::ShaderStages::FRAGMENT,
-            count: None,
-            writer: Writer::Cpu,
-        },
+        channel_sampler("colour_sampler"),
+        channel_sampler("data_sampler"),
     ],
 };
 
@@ -425,6 +420,18 @@ const fn channel(name: &'static str) -> Binding {
         },
         stages: wgpu::ShaderStages::FRAGMENT,
         count: NonZeroU32::new(TEXTURES_PER_CHANNEL),
+        writer: Writer::Cpu,
+    }
+}
+
+/// A filtering sampler the fragment shader samples Channels with.
+const fn channel_sampler(name: &'static str) -> Binding {
+    Binding {
+        name,
+        wgsl_type: "sampler",
+        binding_type: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+        stages: wgpu::ShaderStages::FRAGMENT,
+        count: None,
         writer: Writer::Cpu,
     }
 }

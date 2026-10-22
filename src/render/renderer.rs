@@ -127,7 +127,7 @@ impl Renderer {
         let scene_geometry_bind_group_layout = SCENE_GEOMETRY.layout(&device);
 
         // Material-as-ID: one bind group (SSBO + per-channel texture arrays +
-        // sampler) serves every material. Created before the main pass
+        // samplers) serves every material. Created before the main pass
         // because its pipeline layout references its bind group layout.
         let mut load_staging = LoadStaging::new(device.clone());
         let material_pool = MaterialPool::new(&device, &mut load_staging);
