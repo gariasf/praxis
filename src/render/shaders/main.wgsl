@@ -114,9 +114,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         );
     }
 
-    return vec4<f32>(
-        ambient_luminance(surface, light.ambient_illuminance.rgb) + outgoing_luminance
-            + surface.emissive,
-        surface.opacity
-    );
+    let luminance = ambient_luminance(surface, light.ambient_illuminance.rgb) + outgoing_luminance
+        + surface.emissive;
+    // Pre-exposed in f32, before the target stores it (ADR 0023).
+    return vec4<f32>(luminance * camera.exposure, surface.opacity);
 }

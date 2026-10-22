@@ -19,7 +19,9 @@ pub const FRAME: BindGroupDefinition = BindGroupDefinition {
         uniform(
             "camera",
             "CameraUniform",
-            wgpu::ShaderStages::VERTEX.union(wgpu::ShaderStages::COMPUTE),
+            wgpu::ShaderStages::VERTEX
+                .union(wgpu::ShaderStages::COMPUTE)
+                .union(wgpu::ShaderStages::FRAGMENT),
         ),
         uniform("light", "LightUniform", wgpu::ShaderStages::FRAGMENT),
     ],

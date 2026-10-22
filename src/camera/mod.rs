@@ -12,6 +12,9 @@ pub struct Camera {
     pub pitch: f32, // radians, up-down
     pub speed: f32,
     pub sensitivity: f32,
+    /// Its exposure as an EV100, which each Reference scene sets by hand
+    /// (ADR 0023).
+    pub ev100: f32,
 }
 
 impl Camera {
@@ -22,7 +25,16 @@ impl Camera {
             pitch: 0.0,
             speed: 2.0,
             sensitivity: 0.003,
+            // Sunny 16: a sunny day's exposure.
+            ev100: 15.0,
         }
+    }
+
+    /// What luminance is scaled by before the HDR target stores it,
+    /// 1/(1.2 · 2^EV100), so the luminance that saturates a sensor at this
+    /// EV100 lands near display white (Lagarde and de Rousiers 2014, p. 86).
+    pub fn exposure(&self) -> f32 {
+        1.0 / (1.2 * self.ev100.exp2())
     }
 
     /// A camera at `position` facing `target`, which must not be straight
@@ -99,6 +111,25 @@ pub fn fly_camera(input: Res<Input>, time: Res<Time>, mut camera: ResMut<Camera>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Frostbite's exposure, 1/(1.2 · 2^EV100) (Lagarde and de Rousiers
+    /// 2014, "Moving Frostbite to Physically Based Rendering 3.0", p. 86): at
+    /// EV100 0, 1.2 cd/m² exposes to 1; each EV halves the scale, so Sunny
+    /// 16's EV100 15 scales by 1/39,321.6.
+    #[test]
+    fn exposure_is_one_over_1_2_times_2_to_the_ev100() {
+        for (ev100, expected) in [(0.0, 1.0 / 1.2), (-1.0, 1.0 / 0.6), (15.0, 1.0 / 39_321.6)] {
+            let exposure = Camera {
+                ev100,
+                ..Camera::new()
+            }
+            .exposure();
+            assert!(
+                (exposure - expected).abs() <= f32::EPSILON * expected,
+                "EV100 {ev100}: exposure {exposure}, expected {expected}"
+            );
+        }
+    }
 
     /// Depth matches the analytic `near / distance`, distance along the view
     /// axis, within f32 rounding from the near plane to 10,000 km, and stays

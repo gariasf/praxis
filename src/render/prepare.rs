@@ -20,7 +20,8 @@ use crate::transform::{PreviousWorldTransform, WorldTransform};
 pub struct FrameData {
     pub camera: CameraUniform,
     pub light: LightUniform,
-    /// The colour the lit pass clears to: the scene's background luminance.
+    /// The colour the lit pass clears to: the scene's background luminance,
+    /// pre-exposed as the lit pass exposes what it draws.
     pub background: wgpu::Color,
     /// Slots the Instance buffer holds: one past the highest any Renderable
     /// has taken. The GPU draws each, but a freed one.
@@ -201,14 +202,16 @@ impl FramePreparer {
         let camera_position = camera.position;
         let view_proj = projection_matrix(aspect_ratio) * camera.view_matrix();
         let (anchor, offset) = anchor_and_offset(camera_position);
+        let exposure = camera.exposure();
         frame.camera = CameraUniform {
             view_proj: view_proj.to_cols_array_2d(),
             anchor,
+            exposure,
             offset,
             ..CameraUniform::default()
         };
         let environment = *world.resource::<Environment>();
-        let background = environment.background_luminance;
+        let background = environment.background_luminance * exposure;
         frame.background = wgpu::Color {
             r: background.x.into(),
             g: background.y.into(),
