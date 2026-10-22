@@ -14,6 +14,7 @@ use crate::render::culling_pass::SCAN_BLOCK_SIZE;
 use crate::render::depth_pyramid_pass::DEPTH_PYRAMID_TILE_SIZE;
 use crate::render::instance::{ANCHOR_CELL_SIZE, INSTANCE_CAPACITY, NO_MATERIAL, NO_MESH};
 use crate::render::renderer::RenderSwitches;
+use crate::render::targets::LUMINANCE_COEFFICIENTS;
 
 // A packed index holds a Meshlet vertex in whole bits.
 const _: () = assert!(MESHLET_MAX_VERTICES.is_power_of_two());
@@ -44,6 +45,9 @@ const COMMON: Part = part!("common.wgsl");
 /// The shading terms.
 const SHADING: Part = part!("shading.wgsl");
 
+/// Exposed colour as the HDR target stores it.
+const HDR: Part = part!("hdr.wgsl");
+
 /// A WGSL module: the extensions it enables, the bind groups whose bindings
 /// it declares, then its parts in order.
 #[derive(Clone, Copy)]
@@ -60,7 +64,7 @@ pub const MAIN: ShaderModule = ShaderModule {
     // Each Channel is a binding array indexed by Layer (ADR 0017).
     enables: &["wgpu_binding_array"],
     bind_groups: &[&FRAME, &MATERIALS, &SCENE_GEOMETRY, &MESHLET_RECORDS],
-    parts: &[COMMON, SHADING, part!("main.wgsl")],
+    parts: &[COMMON, SHADING, HDR, part!("main.wgsl")],
 };
 
 /// The culling pass.
@@ -84,7 +88,7 @@ pub const TONEMAPPING: ShaderModule = ShaderModule {
     name: "tonemapping",
     enables: &[],
     bind_groups: &[&TONEMAPPING_INPUT],
-    parts: &[part!("tonemapping.wgsl")],
+    parts: &[HDR, part!("tonemapping.wgsl")],
 };
 
 /// The shared parts alone, which the oracle harness appends its kernel to.
@@ -93,7 +97,7 @@ pub const SHARED: ShaderModule = ShaderModule {
     name: "shared",
     enables: &[],
     bind_groups: &[],
-    parts: &[COMMON, SHADING],
+    parts: &[COMMON, SHADING, HDR],
 };
 
 /// Every module, which `shader_tests` validates.
@@ -151,9 +155,13 @@ impl ShaderModule {
              const NO_MATERIAL: u32 = {NO_MATERIAL}u;\n\
              const SCAN_BLOCK_SIZE: u32 = {SCAN_BLOCK_SIZE}u;\n\
              const INSTANCE_CAPACITY: u32 = {INSTANCE_CAPACITY}u;\n\
-             const DEPTH_PYRAMID_TILE_SIZE: u32 = {DEPTH_PYRAMID_TILE_SIZE}u;\n",
+             const DEPTH_PYRAMID_TILE_SIZE: u32 = {DEPTH_PYRAMID_TILE_SIZE}u;\n\
+             const LUMINANCE_COEFFICIENTS: vec3<f32> = vec3<f32>({:?}, {:?}, {:?});\n",
             ANCHOR_CELL_SIZE as f32,
-            MESHLET_MAX_VERTICES.ilog2()
+            MESHLET_MAX_VERTICES.ilog2(),
+            LUMINANCE_COEFFICIENTS[0],
+            LUMINANCE_COEFFICIENTS[1],
+            LUMINANCE_COEFFICIENTS[2]
         ));
         for (switch, _) in RenderSwitches::default().constants() {
             source.push_str(&format!("override {switch}: bool;\n"));

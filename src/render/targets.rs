@@ -1,8 +1,10 @@
-//! The targets whose size is the frame's, and the depth conventions every
-//! pass follows. Depth is reverse-Z with an infinite far plane (ADR 0015):
-//! it clears to 0, the far plane, nearer is greater, and a Hi-Z pyramid
-//! keeps the minimum, the farthest. The main pass draws at 4x MSAA
-//! (ADR 0019) and resolves into the HDR target.
+//! The targets whose size is the frame's, and the depth and colour
+//! conventions every pass follows. Depth is reverse-Z with an infinite far
+//! plane (ADR 0015): it clears to 0, the far plane, nearer is greater, and a
+//! Hi-Z pyramid keeps the minimum, the farthest. The main pass draws at 4x
+//! MSAA (ADR 0019) and resolves into the HDR target, which holds exposed
+//! colour weighted by 1/(1 + luminance), so the resolve averages it in
+//! display space (`resolve_weighted`, hdr.wgsl; #200's decision R2).
 
 use crate::stats::texture_bytes;
 
@@ -18,6 +20,11 @@ pub const DEPTH_PYRAMID_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Fl
 
 /// The HDR target's format, and the multisampled colour's.
 pub const HDR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+
+/// The luminance of a linear colour in Rec. 709's primaries, the scene's, per
+/// unit of each (ITU-R BT.709-6, item 3.2); WGSL declares them as
+/// `LUMINANCE_COEFFICIENTS`.
+pub const LUMINANCE_COEFFICIENTS: [f32; 3] = [0.2126, 0.7152, 0.0722];
 
 /// Every size-dependent target, created together by `new`, which a resize
 /// calls again. Bind groups are snapshots, not pointers: a pass builds the
@@ -159,22 +166,22 @@ impl RenderTargets {
     }
 
     /// The multisampled colour as a pass's attachment: cleared to `clear`,
-    /// exposed colour, clamped as the lit pass clamps what it draws, and
-    /// resolved at the pass's end into the HDR target; its samples are
-    /// discarded, as a transient attachment's must be.
+    /// exposed colour, weighted as the lit pass weights what it draws, which
+    /// keeps it below fp16's largest value, and resolved at the pass's end
+    /// into the HDR target; its samples are discarded, as a transient
+    /// attachment's must be.
     pub fn color_attachment(&self, clear: wgpu::Color) -> wgpu::RenderPassColorAttachment<'_> {
-        // fp16's largest finite value, so no backend stores infinity
-        // (ADR 0023).
-        let largest_half = 65504.0;
+        let [red, green, blue] = LUMINANCE_COEFFICIENTS.map(f64::from);
+        let weight = 1.0 / (1.0 + red * clear.r + green * clear.g + blue * clear.b);
         wgpu::RenderPassColorAttachment {
             view: &self.color,
             resolve_target: Some(&self.hdr),
             depth_slice: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Clear(wgpu::Color {
-                    r: clear.r.min(largest_half),
-                    g: clear.g.min(largest_half),
-                    b: clear.b.min(largest_half),
+                    r: clear.r * weight,
+                    g: clear.g * weight,
+                    b: clear.b * weight,
                     a: clear.a,
                 }),
                 store: wgpu::StoreOp::Discard,
