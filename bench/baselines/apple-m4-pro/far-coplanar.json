@@ -6,37 +6,37 @@
   "height": 1440,
   "measured_frames": 1800,
   "cpu_frame_microseconds": {
-    "median": 128.875,
-    "p95": 266.791
+    "median": 101.667,
+    "p95": 124.41700000000002
   },
   "gpu_frame_microseconds": {
-    "median": 937.25,
-    "p95": 1051.25
+    "median": 1209.875,
+    "p95": 1220.25
   },
   "gpu_pass_microseconds": {
     "culling_phase_one": {
-      "median": 16.666,
-      "p95": 17.791999999999998
+      "median": 17.416999999999998,
+      "p95": 18.292
     },
     "culling_phase_two": {
-      "median": 17.625,
-      "p95": 18.625
+      "median": 18.0,
+      "p95": 18.75
     },
     "depth_prepass": {
-      "median": 94.125,
-      "p95": 100.625
+      "median": 92.75,
+      "p95": 94.584
     },
     "depth_pyramid_pass": {
-      "median": 242.542,
-      "p95": 257.584
+      "median": 243.625,
+      "p95": 252.66699999999997
     },
     "lit_pass": {
-      "median": 506.20799999999997,
-      "p95": 537.25
+      "median": 506.83399999999995,
+      "p95": 509.625
     },
     "tonemapping_pass": {
-      "median": 544.167,
-      "p95": 635.2909999999999
+      "median": 815.333,
+      "p95": 818.7090000000001
     }
   },
   "draw_calls": 4,
@@ -44,7 +44,7 @@
   "triangles_drawn": 4,
   "instances_overflowed": 0,
   "uploaded_bytes": 288,
-  "gpu_memory_bytes": 406626599,
+  "gpu_memory_bytes": 406630695,
   "arena_bytes_in_use": 176,
   "heap_allocations": 249,
   "counter_frames": {
@@ -57,7 +57,7 @@
     "triangles_drawn": 4,
     "instances_overflowed": 0,
     "uploaded_bytes": 288,
-    "gpu_memory_bytes": 406626599,
+    "gpu_memory_bytes": 406630695,
     "arena_bytes_in_use": 176,
     "heap_allocations": 249
   }
