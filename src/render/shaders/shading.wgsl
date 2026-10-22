@@ -1,6 +1,6 @@
 // The shading terms, shared by every pass that lights a surface
 // (src/render/shaders/mod.rs). D and V are glTF 2.0's, written from its
-// Appendix B:
+// Appendix B (Khronos, CC BY 4.0):
 // https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#appendix-b-brdf-implementation
 
 const PI: f32 = 3.14159265;
@@ -74,11 +74,13 @@ fn smith_visibility(
     alpha: f32
 ) -> f32 {
     let alpha_squared = alpha * alpha;
-    let light_shadowing = abs(normal_dot_view)
+    // The denominator's two terms hold the light's shadowing and the view's
+    // masking, each under its root.
+    let shadowing_term = abs(normal_dot_view)
         * sqrt(alpha_squared + (1.0 - alpha_squared) * normal_dot_light * normal_dot_light);
-    let view_masking = abs(normal_dot_light)
+    let masking_term = abs(normal_dot_light)
         * sqrt(alpha_squared + (1.0 - alpha_squared) * normal_dot_view * normal_dot_view);
-    let denominator = 2.0 * (light_shadowing + view_masking);
+    let denominator = 2.0 * (shadowing_term + masking_term);
     return select(0.0, 1.0 / denominator, view_dot_half > 0.0 && denominator > 0.0);
 }
 

@@ -202,7 +202,8 @@ fn assert_close(actual: f32, expected: f64, tolerance: f64, case: std::fmt::Argu
     );
 }
 
-/// Appendix B's D, α² χ⁺(N·H) / (π ((N·H)² (α² − 1) + 1)²), as it writes it.
+/// Appendix B's D, α² χ⁺(N·H) / (π ((N·H)² (α² − 1) + 1)²), as it writes it
+/// (glTF 2.0, Khronos, CC BY 4.0).
 fn reference_distribution(normal_dot_half: f64, alpha: f64) -> f64 {
     let alpha_squared = alpha * alpha;
     let denominator = normal_dot_half * normal_dot_half * (alpha_squared - 1.0) + 1.0;
