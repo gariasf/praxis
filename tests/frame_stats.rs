@@ -246,6 +246,8 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
             ReferenceScene::FarCoplanar => (2, plane_triangles),
             ReferenceScene::Orrery => (5, sphere_triangles),
             ReferenceScene::TextureWall => (100, plane_triangles),
+            // One Mesh of a ground plane and a sphere.
+            ReferenceScene::Shadows => (1, plane_triangles + sphere_triangles),
         };
         for (frame, stats) in frames.iter().enumerate() {
             let Some(gpu) = stats.gpu else {
