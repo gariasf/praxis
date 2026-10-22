@@ -4,7 +4,7 @@ use bevy_ecs::prelude::*;
 
 use crate::assets::MeshPool;
 use crate::camera::{Camera, projection_matrix};
-use crate::components::{DirectionalLight, MaterialRef, MeshRef, PointLight};
+use crate::components::{DirectionalLight, Environment, MaterialRef, MeshRef, PointLight};
 use crate::render::instance::{anchor_and_offset, padded_columns};
 use crate::render::{
     CameraUniform, INSTANCE_CAPACITY, InstanceData, LightUniform, NO_MATERIAL, NO_MESH,
@@ -19,6 +19,8 @@ use crate::transform::{PreviousWorldTransform, WorldTransform};
 pub struct FrameData {
     pub camera: CameraUniform,
     pub light: LightUniform,
+    /// The colour the lit pass clears to: the scene's background radiance.
+    pub background: wgpu::Color,
     /// Slots the Instance buffer holds: one past the highest any Renderable
     /// has taken. The GPU draws each, but a freed one.
     pub instance_slot_count: u32,
@@ -162,10 +164,11 @@ impl FramePreparer {
         }
     }
 
-    /// Fills the Frame data from the World's camera, lights and Renderables,
-    /// seen at `aspect_ratio`, Instances anchored and lights placed relative
-    /// to the camera (ADR 0014). Whatever the fixed schedule moves is drawn
-    /// blended between its two newest Ticks (ADR 0022). A Renderable draws
+    /// Fills the Frame data from the World's camera, lights, Environment and
+    /// Renderables, seen at `aspect_ratio`, Instances anchored and lights
+    /// placed relative to the camera (ADR 0014). Whatever the fixed schedule
+    /// moves is drawn blended between its two newest Ticks (ADR 0022). A
+    /// Renderable draws
     /// each Primitive of its Mesh with its Material Handle, else with the
     /// Material the Primitive names; one whose Mesh is not in `mesh_pool`, or
     /// that has no Material Handle where a Primitive names no Material, is
@@ -203,6 +206,13 @@ impl FramePreparer {
             anchor,
             offset,
             ..CameraUniform::default()
+        };
+        let background = world.resource::<Environment>().background_radiance;
+        frame.background = wgpu::Color {
+            r: background.x.into(),
+            g: background.y.into(),
+            b: background.z.into(),
+            a: 1.0,
         };
         let blend_weight = world.resource::<FixedTime>().blend_weight;
         frame.light = prepare_lights(
@@ -325,10 +335,11 @@ impl FramePreparer {
     }
 }
 
-/// The lights: the first directional light the query yields, shining along
-/// its entity's forward axis, the others not drawn and warned about when they
-/// appear; and point lights at their position relative to `camera_position`,
-/// past the uniform's four dropped.
+/// The lights: the Environment's ambient irradiance; the first directional
+/// light the query yields, shining along its entity's forward axis, the
+/// others not drawn and warned about when they appear; and point lights at
+/// their position relative to `camera_position`, past the uniform's four
+/// dropped.
 fn prepare_lights(
     world: &World,
     directional_light_query: &mut LightQuery<DirectionalLight>,
@@ -337,8 +348,9 @@ fn prepare_lights(
     camera_position: glam::DVec3,
     blend_weight: f32,
 ) -> LightUniform {
+    let ambient_irradiance = world.resource::<Environment>().ambient_irradiance;
     let mut light_uniform = LightUniform {
-        ambient: [1.0, 1.0, 1.0, 0.1],
+        ambient_irradiance: ambient_irradiance.extend(0.0).to_array(),
         ..LightUniform::default()
     };
     let mut directional_lights = directional_light_query.iter(world);
@@ -368,7 +380,7 @@ fn prepare_lights(
     for (current, previous, point_light) in point_light_query.iter(world).take(capacity) {
         let transform = current.drawn(previous, blend_weight);
         let position = (transform.translation() - camera_position).as_vec3();
-        light_uniform.point_positions[count] = position.extend(0.0).to_array();
+        light_uniform.point_positions[count] = position.extend(point_light.range).to_array();
         light_uniform.point_colors[count] =
             point_light.color.extend(point_light.intensity).to_array();
         count += 1;
@@ -427,6 +439,7 @@ mod tests {
             let mut world = World::new();
             world.insert_resource(Camera::new());
             world.insert_resource(FixedTime::default());
+            world.insert_resource(Environment::default());
             let preparer = FramePreparer::new(&mut world);
             let mut propagation = Schedule::default();
             propagation.add_systems(propagate_world_transforms);

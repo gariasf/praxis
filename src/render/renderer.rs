@@ -378,6 +378,7 @@ impl Renderer {
             &bind_groups,
             self.culling_pass.packed_indices(),
             self.culling_pass.frame_draw(),
+            frame.background,
             timestamps.map(|timestamps| timestamps.render_pass(LIT_PASS)),
         );
         // The depth pre-pass draws phase one's draw, and the lit pass phase
@@ -472,7 +473,7 @@ mod tests {
     use crate::assets::{MaterialHandle, MeshHandle};
     use crate::camera::{Camera, projection_matrix};
     use crate::capture::read_back;
-    use crate::components::{MeshRef, Transform};
+    use crate::components::{Environment, MeshRef, Transform};
     use crate::cooked::{CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex};
     use crate::render::culling_pass::FrameDraw;
     use crate::render::instance::{anchor_and_offset, padded_columns};
@@ -504,8 +505,8 @@ mod tests {
 
         assert_eq!(recorder.draw_calls, 3);
         assert_eq!(image.get_pixel(SIZE / 2, SIZE / 2).0, [255, 0, 0, 255]);
-        // The clear colour, linear (0.1, 0.2, 0.3), sRGB-encoded as in
-        // tests/capture.rs; the GPU may round its green either way.
+        // The Frame data's background, linear (0.1, 0.2, 0.3), sRGB-encoded
+        // as in tests/capture.rs; the GPU may round its green either way.
         let corner = image.get_pixel(0, 0).0;
         assert!(
             corner[0] == 89 && corner[1].abs_diff(124) <= 1 && corner[2] == 149,
@@ -823,6 +824,7 @@ mod tests {
         let mut world = World::new();
         world.insert_resource(Camera::new());
         world.insert_resource(FixedTime::default());
+        world.insert_resource(Environment::default());
         let mut preparer = FramePreparer::new(&mut world);
         let [_, right] = [-0.5, 0.5].map(|x| {
             let transform = Transform::from_translation(glam::dvec3(x, 0.0, 0.0));
@@ -1145,6 +1147,12 @@ mod tests {
                 ..CameraUniform::default()
             },
             light: LightUniform::default(),
+            background: wgpu::Color {
+                r: 0.1,
+                g: 0.2,
+                b: 0.3,
+                a: 1.0,
+            },
             instance_slot_count: slots as u32,
             instances,
             instance_writes: vec![InstanceWrite {

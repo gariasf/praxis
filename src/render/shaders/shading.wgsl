@@ -1,7 +1,9 @@
 // The shading terms, shared by every pass that lights a surface
-// (src/render/shaders/mod.rs): the surface decode and glTF 2.0's
-// metallic-roughness BRDF, written from its Appendix B (Khronos, CC BY 4.0):
+// (src/render/shaders/mod.rs): the surface decode, glTF 2.0's
+// metallic-roughness BRDF, written from its Appendix B (Khronos, CC BY 4.0),
+// and KHR_lights_punctual's falloff:
 // https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#appendix-b-brdf-implementation
+// https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Khronos/KHR_lights_punctual/README.md
 
 const PI: f32 = 3.14159265;
 
@@ -157,4 +159,23 @@ fn reflected_luminance(
         dot(view_direction, half_vector)
     );
     return brdf * illuminance * max(normal_dot_light, 0.0);
+}
+
+// The share of a point light's intensity that reaches `distance` from it as
+// illuminance: inverse-square falloff within KHR_lights_punctual's range
+// window, which falls to 0 at `range` and stays 0 past it,
+//   max(min(1 − (distance / range)⁴, 1), 0) / distance².
+fn point_light_attenuation(distance: f32, range: f32) -> f32 {
+    let ratio = distance / range;
+    let ratio_squared = ratio * ratio;
+    return clamp(1.0 - ratio_squared * ratio_squared, 0.0, 1.0) / (distance * distance);
+}
+
+// The radiance a surface point reflects from a constant ambient irradiance,
+// a stand-in for ADR 0020's irradiance probes (M5): the dielectric's
+// diffuse share, base colour × (1 − metallic), reflected as by a Lambertian
+// surface, E/π, and darkened by occlusion, which glTF applies to indirect
+// light only.
+fn ambient_radiance(surface: Surface, irradiance: vec3<f32>) -> vec3<f32> {
+    return irradiance * surface.base_color * (1.0 - surface.metallic) / PI * surface.occlusion;
 }

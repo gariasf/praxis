@@ -366,6 +366,82 @@ fn reflected_luminance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_
     }
 }
 
+/// A point light's attenuation is KHR_lights_punctual's
+/// max(min(1 − (d / r)⁴, 1), 0) / d², evaluated in f64: inverse square near
+/// the light, then windowed smoothly to exactly 0 at the range and past it.
+/// Errors are judged against the inverse square alone, since f32 cancels to
+/// a few ulps of it in 1 − (d / r)⁴ just inside the range.
+#[test]
+fn point_light_attenuation_falls_by_inverse_square_to_zero_at_the_range() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let cases = [
+        (1e-3, 4.0),
+        (0.5, 1.0),
+        (1.0, 10.0),
+        (2.0, 4.0),
+        (3.0, 4.0),
+        (3.999, 4.0),
+        (4.0, 4.0),
+        (5.0, 4.0),
+        (20.0, 20.0),
+    ];
+    let inputs = cases.map(|(distance, range)| [distance, range, 0.0, 0.0]);
+    let results = evaluate(
+        &context,
+        "vec4<f32>(point_light_attenuation(input.x, input.y))",
+        &inputs,
+    );
+
+    for ((distance, range), result) in cases.into_iter().zip(results) {
+        let (distance, range) = (f64::from(distance), f64::from(range));
+        let inverse_square = 1.0 / (distance * distance);
+        let window = (1.0 - (distance / range).powi(4)).clamp(0.0, 1.0);
+        let case = format_args!("attenuation at {distance} m of a {range} m range");
+        let tolerance = RELATIVE_TOLERANCE * inverse_square;
+        assert_close(result[0], window * inverse_square, tolerance, case);
+        if distance >= range {
+            assert_eq!(result[0], 0.0, "{case}");
+        }
+    }
+}
+
+/// Ambient light reaches a surface's diffuse share, its base colour times
+/// (1 − metallic), and leaves as from a Lambertian surface, E/π, darkened by
+/// occlusion: under an irradiance of π, the base colour times (1 − metallic)
+/// and occlusion.
+#[test]
+fn ambient_radiance_is_the_lambertian_diffuse_share_darkened_by_occlusion() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let cases = [(0.0, 1.0), (0.5, 1.0), (1.0, 1.0), (0.0, 0.25)];
+    let inputs = cases.map(|(metallic, occlusion)| [metallic, occlusion, 0.0, 0.0]);
+    let [red, green, blue] = GOLD;
+    let results = evaluate(
+        &context,
+        &format!(
+            "vec4<f32>(ambient_radiance(Surface(vec3<f32>({red}, {green}, {blue}), 1.0, \
+             input.x, 0.5, input.y, vec3<f32>(0.0)), vec3<f32>(PI)), 0.0)"
+        ),
+        &inputs,
+    );
+
+    for ((metallic, occlusion), result) in cases.into_iter().zip(results) {
+        for (channel, base_color) in GOLD.into_iter().enumerate() {
+            let expected = f64::from(base_color * (1.0 - metallic) * occlusion);
+            let case = format_args!("metallic {metallic}, occlusion {occlusion}");
+            assert_close(
+                result[channel],
+                expected,
+                RELATIVE_TOLERANCE * expected,
+                case,
+            );
+        }
+    }
+}
+
 /// Linear sRGB reflectance of gold at normal incidence, as the pbr-sweep
 /// scene uses it: each channel a different base colour.
 const GOLD: [f32; 3] = [1.0, 0.71, 0.29];

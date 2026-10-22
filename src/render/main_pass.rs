@@ -18,14 +18,6 @@ pub(crate) const DEPTH_PREPASS: &str = "depth_prepass";
 /// The lit pass's label, and its name in frame stats.
 pub(crate) const LIT_PASS: &str = "lit_pass";
 
-/// The colour the lit pass clears to, linear.
-const BACKGROUND: wgpu::Color = wgpu::Color {
-    r: 0.1,
-    g: 0.2,
-    b: 0.3,
-    a: 1.0,
-};
-
 /// The main pass's pipelines, which draw into views of one format.
 pub struct MainPass {
     depth_prepass_pipeline: wgpu::RenderPipeline,
@@ -182,12 +174,12 @@ impl MainPass {
         depth_prepass.draw_indexed_indirect(frame_draw, 0);
     }
 
-    /// Records the lit pass into `encoder`: clears the multisampled colour,
-    /// draws phase two's draw into the depth target, then the frame's draw of
-    /// both phases at depth equal, the buffers as `record_depth_prepass`
-    /// takes them, with `bind_groups` set, and resolves the colour into
-    /// `target`, a view in this pass's format and the render targets' size,
-    /// timed into `timestamp_writes`.
+    /// Records the lit pass into `encoder`: clears the multisampled colour
+    /// to `background`, linear, draws phase two's draw into the depth
+    /// target, then the frame's draw of both phases at depth equal, the
+    /// buffers as `record_depth_prepass` takes them, with `bind_groups` set,
+    /// and resolves the colour into `target`, a view in this pass's format
+    /// and the render targets' size, timed into `timestamp_writes`.
     #[expect(clippy::too_many_arguments)]
     pub fn record_lit_pass(
         &self,
@@ -197,13 +189,14 @@ impl MainPass {
         bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
         packed_indices: &wgpu::Buffer,
         frame_draw: &wgpu::Buffer,
+        background: wgpu::Color,
         timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
     ) {
         let mut lit_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(LIT_PASS),
             color_attachments: &[
                 // This is what @location(0) in the fragment shader targets
-                Some(render_targets.color_attachment(target, BACKGROUND)),
+                Some(render_targets.color_attachment(target, background)),
             ],
             depth_stencil_attachment: Some(render_targets.final_depth_attachment()),
             occlusion_query_set: None,

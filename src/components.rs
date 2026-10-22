@@ -51,6 +51,9 @@ pub struct MaterialRef(pub MaterialHandle);
 pub struct PointLight {
     pub color: glam::Vec3,
     pub intensity: f32,
+    /// Metres from the light past which it adds nothing (KHR_lights_punctual's
+    /// `range`, which must be positive and here finite).
+    pub range: f32,
 }
 
 /// A directional light shining along its entity's forward axis: -Z turned by
@@ -59,4 +62,14 @@ pub struct PointLight {
 pub struct DirectionalLight {
     pub color: glam::Vec3,
     pub intensity: f32,
+}
+
+/// The light a Scene's surroundings give, constant until ADR 0020's
+/// irradiance probes (M5) and M6's atmosphere replace it: the irradiance
+/// every surface receives from all around, and the radiance of the
+/// background, seen wherever nothing is drawn. The default is dark.
+#[derive(Resource, Clone, Copy, Default)]
+pub struct Environment {
+    pub ambient_irradiance: glam::Vec3,
+    pub background_radiance: glam::Vec3,
 }

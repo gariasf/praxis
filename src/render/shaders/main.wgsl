@@ -104,17 +104,20 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     for (var light_index = 0u; light_index < light.point_light_count; light_index++) {
         let light_vector = light.point_positions[light_index].xyz - in.camera_relative_position;
         let distance = length(light_vector);
-        let attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * distance * distance);
+        let range = light.point_positions[light_index].w;
+        let point_light = light.point_colors[light_index];
         outgoing_luminance += reflected_luminance(
             surface,
             normal,
             view_direction,
-            normalize(light_vector),
-            light.point_colors[light_index].rgb * light.point_colors[light_index].a * attenuation
+            light_vector / distance,
+            point_light.rgb * point_light.a * point_light_attenuation(distance, range)
         );
     }
 
-    // Constant ambient stand-in until ADR 0020's irradiance probes (M5); occlusion darkens it.
-    let ambient = 0.03 * surface.base_color * surface.occlusion;
-    return vec4<f32>(ambient + outgoing_luminance + surface.emissive, surface.opacity);
+    return vec4<f32>(
+        ambient_radiance(surface, light.ambient_irradiance.rgb) + outgoing_luminance
+            + surface.emissive,
+        surface.opacity
+    );
 }

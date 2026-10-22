@@ -1,11 +1,11 @@
 #[repr(C)]
 #[derive(Copy, Clone, Default, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct LightUniform {
-    pub direction: [f32; 4], // xyz = direction, w = unused
-    pub color: [f32; 4],     // rgb = color, a = intensity
-    pub ambient: [f32; 4],   // rgb = ambient color, a = strength
+    pub direction: [f32; 4],          // xyz = direction, w = unused
+    pub color: [f32; 4],              // rgb = color, a = intensity
+    pub ambient_irradiance: [f32; 4], // rgb = the scene's ambient irradiance, w = unused
 
-    pub point_positions: [[f32; 4]; 4], // xyz = position relative to the camera, w = unused
+    pub point_positions: [[f32; 4]; 4], // xyz = position relative to the camera, w = range
     pub point_colors: [[f32; 4]; 4],    // rgb = color, a = intensity
     pub point_light_count: u32,
     pub directional_light_count: u32, // 0 or 1: the uniform holds one directional light
