@@ -12,11 +12,11 @@ impl GpuContext {
     /// A context with no window or surface.
     pub async fn headless() -> anyhow::Result<Self> {
         let adapter = request_adapter(&create_wgpu_instance(), None).await?;
-        Self::request_device(adapter, None).await
+        Self::request_device(adapter).await
     }
 
     /// A context whose adapter can present to `target`, the surface for it,
-    /// and the surface format the main pass renders into.
+    /// and the surface format the tonemapping pass renders into.
     pub(crate) async fn with_surface(
         target: impl Into<wgpu::SurfaceTarget<'static>>,
     ) -> anyhow::Result<(Self, wgpu::Surface<'static>, wgpu::TextureFormat)> {
@@ -24,19 +24,15 @@ impl GpuContext {
         let surface = wgpu_instance.create_surface(target)?;
         let adapter = request_adapter(&wgpu_instance, Some(&surface)).await?;
         let surface_format = choose_surface_format(&surface.get_capabilities(&adapter))?;
-        let context = Self::request_device(adapter, Some(surface_format)).await?;
+        let context = Self::request_device(adapter).await?;
         Ok((context, surface, surface_format))
     }
 
     /// Requests a device with exactly the Capability floor, after checking
-    /// the adapter against all of it, `surface_format` included.
-    async fn request_device(
-        adapter: wgpu::Adapter,
-        surface_format: Option<wgpu::TextureFormat>,
-    ) -> anyhow::Result<Self> {
+    /// the adapter against all of it.
+    async fn request_device(adapter: wgpu::Adapter) -> anyhow::Result<Self> {
         let attachment_formats: Vec<_> = MAIN_PASS_FORMATS
             .into_iter()
-            .chain(surface_format)
             .map(|format| (format, adapter.get_texture_format_features(format).flags))
             .collect();
         check_floor(
@@ -215,10 +211,9 @@ fn adapter_report(adapter: &wgpu::Adapter) -> String {
     report
 }
 
-/// The attachment formats the main pass uses apart from the window's
-/// surface format: depth, and the capture target.
+/// The attachment formats the main pass uses: depth, and the HDR colour.
 const MAIN_PASS_FORMATS: [wgpu::TextureFormat; 2] =
-    [crate::render::DEPTH_FORMAT, crate::capture::TARGET_FORMAT];
+    [crate::render::DEPTH_FORMAT, crate::render::HDR_FORMAT];
 
 /// The Capability floor's features (ADR 0021): exactly what every device
 /// requests.
@@ -311,7 +306,7 @@ fn check_floor(
 
 /// The format features the floor requires of a main-pass attachment format:
 /// 4x MSAA, and on a colour format its resolve, since the lit pass resolves
-/// its multisampled colour into the target (ADR 0019).
+/// its multisampled colour into the HDR target (ADR 0019).
 fn floor_format_features(format: wgpu::TextureFormat) -> wgpu::TextureFormatFeatureFlags {
     let msaa_x4 = wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4;
     if format.is_depth_stencil_format() {
@@ -402,8 +397,8 @@ async fn request_adapter(
 }
 
 /// The first sRGB format the surface offers, else its first format: the
-/// main pass writes linear colour and relies on an sRGB target to encode it,
-/// so a non-sRGB surface comes out darker.
+/// tonemapping pass writes linear colour and relies on an sRGB target to
+/// encode it, so a non-sRGB surface comes out darker.
 fn choose_surface_format(
     surface_capabilities: &wgpu::SurfaceCapabilities,
 ) -> anyhow::Result<wgpu::TextureFormat> {
@@ -523,12 +518,11 @@ mod tests {
         }
     }
 
-    /// The window's main-pass formats on the M4 Pro, each with 4x MSAA.
-    fn m4_pro_attachment_formats() -> [(wgpu::TextureFormat, wgpu::TextureFormatFeatureFlags); 3] {
+    /// The main pass's formats on the M4 Pro, each with 4x MSAA.
+    fn m4_pro_attachment_formats() -> [(wgpu::TextureFormat, wgpu::TextureFormatFeatureFlags); 2] {
         [
             (wgpu::TextureFormat::Depth32Float, MSAA_X4),
-            (wgpu::TextureFormat::Rgba8UnormSrgb, MSAA_X4),
-            (wgpu::TextureFormat::Bgra8UnormSrgb, MSAA_X4),
+            (wgpu::TextureFormat::Rgba16Float, MSAA_X4),
         ]
     }
 
@@ -577,7 +571,7 @@ mod tests {
                         wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4
                     ),
                     (
-                        wgpu::TextureFormat::Rgba8UnormSrgb,
+                        wgpu::TextureFormat::Rgba16Float,
                         wgpu::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE
                     ),
                 ],
@@ -595,7 +589,7 @@ mod tests {
              missing downlevel flag INDIRECT_EXECUTION; missing downlevel flag VERTEX_STORAGE; \
              missing downlevel flag ANISOTROPIC_FILTERING; \
              missing format feature MULTISAMPLE_X4 on Depth32Float; \
-             missing format feature MULTISAMPLE_RESOLVE on Rgba8UnormSrgb; \
+             missing format feature MULTISAMPLE_RESOLVE on Rgba16Float; \
              max_buffer_size 2147483647 required, adapter has 268435456"
         );
     }

@@ -114,8 +114,11 @@ src/
                                  depth_pyramid_pass: the compute pass
                                  that reduces the pre-pass's depth into
                                  the depth pyramid, ADR 0019's Hi-Z
-                                 pyramid), targets (every size-dependent
-                                 target, the depth pyramid among them,
+                                 pyramid; tonemapping_pass: the pass
+                                 that turns the HDR target into the
+                                 target's display colour), targets
+                                 (every size-dependent target, the depth
+                                 pyramid and the HDR target among them,
                                  the depth conventions), prepare (ECS
                                  World to Frame data), bind_groups (each
                                  defined once), readback (each frame's

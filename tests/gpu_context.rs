@@ -46,7 +46,7 @@ fn capability_report_names_adapter_backend_planned_features_and_floor_items() {
     // The floor's limits and 4x MSAA per main-pass format, #93's other three.
     assert!(value_of(&report, "max buffer size").ends_with(" bytes"));
     assert!(value_of(&report, "acceleration structures").ends_with(" per stage"));
-    for format in ["Depth32Float", "Rgba8UnormSrgb"] {
+    for format in ["Depth32Float", "Rgba16Float"] {
         let msaa_x4 = value_of(&report, "4x MSAA");
         assert!(
             msaa_x4.contains(&format!("{format} yes")) || msaa_x4.contains(&format!("{format} no")),

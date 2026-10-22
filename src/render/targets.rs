@@ -2,7 +2,7 @@
 //! pass follows. Depth is reverse-Z with an infinite far plane (ADR 0015):
 //! it clears to 0, the far plane, nearer is greater, and a Hi-Z pyramid
 //! keeps the minimum, the farthest. The main pass draws at 4x MSAA
-//! (ADR 0019).
+//! (ADR 0019) and resolves into the HDR target.
 
 use crate::stats::texture_bytes;
 
@@ -16,6 +16,9 @@ pub const SAMPLE_COUNT: u32 = 4;
 /// The depth pyramid's format: a depth per texel.
 pub const DEPTH_PYRAMID_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Float;
 
+/// The HDR target's format, and the multisampled colour's.
+pub const HDR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+
 /// Every size-dependent target, created together by `new`, which a resize
 /// calls again. Bind groups are snapshots, not pointers: a pass builds the
 /// bind groups that read targets in one function, which it calls at
@@ -23,8 +26,10 @@ pub const DEPTH_PYRAMID_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Fl
 pub struct RenderTargets {
     depth: wgpu::TextureView,
     /// A transient attachment, memoryless where the adapter allows: the pass
-    /// that clears it resolves it into the target before it ends.
+    /// that clears it resolves it into `hdr` before it ends.
     color: wgpu::TextureView,
+    /// The lit pass's colour, resolved, which the tonemapping pass reads.
+    hdr: wgpu::TextureView,
     /// The depth pyramid, every level, as phase two of the culling pass reads
     /// it.
     depth_pyramid: wgpu::TextureView,
@@ -37,15 +42,9 @@ pub struct RenderTargets {
 }
 
 impl RenderTargets {
-    /// Targets `width` × `height`, both non-zero, whose colour resolves into
-    /// views of `target_format`.
-    pub fn new(
-        device: &wgpu::Device,
-        target_format: wgpu::TextureFormat,
-        width: u32,
-        height: u32,
-    ) -> RenderTargets {
-        let attachment = |label, format, usage| {
+    /// Targets `width` × `height`, both non-zero.
+    pub fn new(device: &wgpu::Device, width: u32, height: u32) -> RenderTargets {
+        let attachment = |label, format, sample_count, usage| {
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some(label),
                 size: wgpu::Extent3d {
@@ -54,7 +53,7 @@ impl RenderTargets {
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
-                sample_count: SAMPLE_COUNT,
+                sample_count,
                 dimension: wgpu::TextureDimension::D2,
                 format,
                 usage,
@@ -83,12 +82,20 @@ impl RenderTargets {
             depth: attachment(
                 "Depth Texture",
                 DEPTH_FORMAT,
+                SAMPLE_COUNT,
                 wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             ),
             color: attachment(
                 "Multisampled Colour Texture",
-                target_format,
+                HDR_FORMAT,
+                SAMPLE_COUNT,
                 wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
+            ),
+            hdr: attachment(
+                "HDR Texture",
+                HDR_FORMAT,
+                1,
+                wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             ),
             depth_pyramid: depth_pyramid.create_view(&wgpu::TextureViewDescriptor::default()),
             depth_pyramid_levels: (0..depth_pyramid.mip_level_count())
@@ -106,6 +113,11 @@ impl RenderTargets {
     /// The depth target, as passes read it.
     pub fn depth(&self) -> &wgpu::TextureView {
         &self.depth
+    }
+
+    /// The HDR target, as the tonemapping pass reads it.
+    pub fn hdr(&self) -> &wgpu::TextureView {
+        &self.hdr
     }
 
     /// The depth pyramid, every level.
@@ -147,20 +159,24 @@ impl RenderTargets {
     }
 
     /// The multisampled colour as a pass's attachment: cleared to `clear`,
-    /// and resolved at the pass's end into `target`, a view of the targets'
-    /// size and colour format; its samples are discarded, as a transient
-    /// attachment's must be.
-    pub fn color_attachment<'a>(
-        &'a self,
-        target: &'a wgpu::TextureView,
-        clear: wgpu::Color,
-    ) -> wgpu::RenderPassColorAttachment<'a> {
+    /// exposed colour, clamped as the lit pass clamps what it draws, and
+    /// resolved at the pass's end into the HDR target; its samples are
+    /// discarded, as a transient attachment's must be.
+    pub fn color_attachment(&self, clear: wgpu::Color) -> wgpu::RenderPassColorAttachment<'_> {
+        // fp16's largest finite value, so no backend stores infinity
+        // (ADR 0023).
+        let largest_half = 65504.0;
         wgpu::RenderPassColorAttachment {
             view: &self.color,
-            resolve_target: Some(target),
+            resolve_target: Some(&self.hdr),
             depth_slice: None,
             ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(clear),
+                load: wgpu::LoadOp::Clear(wgpu::Color {
+                    r: clear.r.min(largest_half),
+                    g: clear.g.min(largest_half),
+                    b: clear.b.min(largest_half),
+                    a: clear.a,
+                }),
                 store: wgpu::StoreOp::Discard,
             },
         }
@@ -168,10 +184,15 @@ impl RenderTargets {
 
     /// Bytes of the targets' textures.
     pub fn gpu_memory_bytes(&self, transient_saves_memory: bool) -> u64 {
-        [&self.depth, &self.color, &self.depth_pyramid_levels[0]]
-            .into_iter()
-            .map(|view| texture_bytes(view.texture(), transient_saves_memory))
-            .sum()
+        [
+            &self.depth,
+            &self.color,
+            &self.hdr,
+            &self.depth_pyramid_levels[0],
+        ]
+        .into_iter()
+        .map(|view| texture_bytes(view.texture(), transient_saves_memory))
+        .sum()
     }
 }
 

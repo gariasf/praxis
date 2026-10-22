@@ -161,6 +161,22 @@ pub const DEPTH_PYRAMID_LEVEL: BindGroupDefinition = BindGroupDefinition {
     ],
 };
 
+/// Group 3 of the tonemapping pass: the HDR target, which the lit pass
+/// resolves into.
+pub const TONEMAPPING_INPUT: BindGroupDefinition = BindGroupDefinition {
+    index: 3,
+    label: "Tonemapping Input Bind Group",
+    bindings: &[Binding {
+        stages: wgpu::ShaderStages::FRAGMENT,
+        ..loaded_texture(
+            "hdr_target",
+            "texture_2d<f32>",
+            wgpu::TextureSampleType::Float { filterable: false },
+            false,
+        )
+    }],
+};
+
 /// A bind group: its index and its bindings, each numbered by its place.
 pub struct BindGroupDefinition {
     /// Where pipeline layouts hold the group and passes set it.

@@ -116,6 +116,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let luminance = ambient_luminance(surface, light.ambient_illuminance.rgb) + outgoing_luminance
         + surface.emissive;
-    // Pre-exposed in f32, before the target stores it (ADR 0023).
-    return vec4<f32>(luminance * camera.exposure, surface.opacity);
+    // Pre-exposed in f32, then clamped to fp16's largest finite value before
+    // the HDR target stores it, so no backend stores infinity (ADR 0023).
+    return vec4<f32>(min(luminance * camera.exposure, vec3<f32>(65504.0)), surface.opacity);
 }

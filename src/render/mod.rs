@@ -10,6 +10,7 @@ pub mod renderer;
 pub mod shaders;
 pub mod staging;
 pub mod targets;
+pub mod tonemapping_pass;
 pub mod uniforms;
 
 #[cfg(test)]
@@ -23,7 +24,7 @@ pub use prepare::{FrameData, FramePreparer};
 pub(crate) use renderer::TIMED_PASSES;
 pub use renderer::{RenderSwitches, Renderer};
 pub use staging::{FrameStaging, LoadStaging};
-pub use targets::DEPTH_FORMAT;
+pub use targets::{DEPTH_FORMAT, HDR_FORMAT};
 pub use uniforms::{CameraUniform, LightUniform};
 
 /// Frames submitted but not finished on the GPU when the next one starts, at

@@ -5,7 +5,7 @@
 //! of phase one's Instances, then a lit pass that first draws phase two's
 //! into depth, then both phases' at depth equal, each Meshlet with its
 //! record's Material, into the multisampled colour, which it resolves into
-//! the target.
+//! the HDR target.
 
 use crate::render::bind_groups::{BindGroupDefinition, MESHLET_RECORDS, pipeline_layout};
 use crate::render::culling_pass::PHASE_TWO_DRAW_OFFSET;
@@ -18,7 +18,7 @@ pub(crate) const DEPTH_PREPASS: &str = "depth_prepass";
 /// The lit pass's label, and its name in frame stats.
 pub(crate) const LIT_PASS: &str = "lit_pass";
 
-/// The main pass's pipelines, which draw into views of one format.
+/// The main pass's pipelines.
 pub struct MainPass {
     depth_prepass_pipeline: wgpu::RenderPipeline,
     /// Phase two's draw into depth, inside the lit pass, before it shades.
@@ -29,12 +29,11 @@ pub struct MainPass {
 }
 
 impl MainPass {
-    /// The pass for `target_format` views, given the layouts of the shared
-    /// bind groups its shader module declares, which draws the Meshlet
-    /// records `meshlet_records` holds.
+    /// The pass, given the layouts of the shared bind groups its shader
+    /// module declares, which draws the Meshlet records `meshlet_records`
+    /// holds.
     pub fn new(
         device: &wgpu::Device,
-        target_format: wgpu::TextureFormat,
         bind_group_layouts: &[(&BindGroupDefinition, &wgpu::BindGroupLayout)],
         meshlet_records: &wgpu::Buffer,
     ) -> MainPass {
@@ -100,7 +99,7 @@ impl MainPass {
                 module: &shader,
                 entry_point: Some("fs_depth"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: target_format,
+                    format: targets::HDR_FORMAT,
                     blend: None,
                     write_mask: wgpu::ColorWrites::empty(),
                 })],
@@ -120,7 +119,7 @@ impl MainPass {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: target_format,
+                    format: targets::HDR_FORMAT,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -175,16 +174,15 @@ impl MainPass {
     }
 
     /// Records the lit pass into `encoder`: clears the multisampled colour
-    /// to `background`, linear, draws phase two's draw into the depth
+    /// to `background`, exposed, draws phase two's draw into the depth
     /// target, then the frame's draw of both phases at depth equal, the
     /// buffers as `record_depth_prepass` takes them, with `bind_groups` set,
-    /// and resolves the colour into `target`, a view in this pass's format
-    /// and the render targets' size, timed into `timestamp_writes`.
+    /// and resolves the colour into the HDR target, timed into
+    /// `timestamp_writes`.
     #[expect(clippy::too_many_arguments)]
     pub fn record_lit_pass(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        target: &wgpu::TextureView,
         render_targets: &RenderTargets,
         bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
         packed_indices: &wgpu::Buffer,
@@ -196,7 +194,7 @@ impl MainPass {
             label: Some(LIT_PASS),
             color_attachments: &[
                 // This is what @location(0) in the fragment shader targets
-                Some(render_targets.color_attachment(target, background)),
+                Some(render_targets.color_attachment(background)),
             ],
             depth_stencil_attachment: Some(render_targets.final_depth_attachment()),
             occlusion_query_set: None,

@@ -8,7 +8,7 @@
 use crate::cooked::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use crate::render::bind_groups::{
     BindGroupDefinition, DEPTH_PYRAMID_LEVEL, FRAME, FRAME_DRAW, MATERIALS, MESHLET_RECORDS,
-    SCENE_GEOMETRY,
+    SCENE_GEOMETRY, TONEMAPPING_INPUT,
 };
 use crate::render::culling_pass::SCAN_BLOCK_SIZE;
 use crate::render::depth_pyramid_pass::DEPTH_PYRAMID_TILE_SIZE;
@@ -79,6 +79,14 @@ pub const DEPTH_PYRAMID: ShaderModule = ShaderModule {
     parts: &[part!("depth_pyramid.wgsl")],
 };
 
+/// The tonemapping pass.
+pub const TONEMAPPING: ShaderModule = ShaderModule {
+    name: "tonemapping",
+    enables: &[],
+    bind_groups: &[&TONEMAPPING_INPUT],
+    parts: &[part!("tonemapping.wgsl")],
+};
+
 /// The shared parts alone, which the oracle harness appends its kernel to.
 #[cfg(test)]
 pub const SHARED: ShaderModule = ShaderModule {
@@ -90,7 +98,7 @@ pub const SHARED: ShaderModule = ShaderModule {
 
 /// Every module, which `shader_tests` validates.
 #[cfg(test)]
-pub const MODULES: [ShaderModule; 4] = [SHARED, MAIN, CULLING, DEPTH_PYRAMID];
+pub const MODULES: [ShaderModule; 5] = [SHARED, MAIN, CULLING, DEPTH_PYRAMID, TONEMAPPING];
 
 impl ShaderModule {
     /// The descriptor that compiles the module, labelled with its name.
