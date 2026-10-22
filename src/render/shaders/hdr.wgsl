@@ -5,10 +5,10 @@
 // backend stores infinity, which Vulkan allows on overflow (ADR 0023).
 const LARGEST_HALF: f32 = 65504.0;
 
-// The luminance of a linear colour in Rec. 709's primaries, the scene's,
-// from LUMINANCE_COEFFICIENTS, ITU-R BT.709-6's, which is declared from
-// Rust's (src/render/shaders/mod.rs).
-fn luminance(color: vec3<f32>) -> f32 {
+// The relative luminance of a linear colour in Rec. 709's primaries, the
+// scene's, from LUMINANCE_COEFFICIENTS, ITU-R BT.709-6's, which is declared
+// from Rust's (src/render/shaders/mod.rs).
+fn relative_luminance(color: vec3<f32>) -> f32 {
     return dot(color, LUMINANCE_COEFFICIENTS);
 }
 
@@ -19,12 +19,12 @@ fn luminance(color: vec3<f32>) -> f32 {
 // graphicrants.blogspot.com/2013/12/tone-mapping.html). Weighted luminance
 // stays below 1.
 fn resolve_weighted(color: vec3<f32>) -> vec3<f32> {
-    return color / (1.0 + luminance(color));
+    return color / (1.0 + relative_luminance(color));
 }
 
 // The inverse of `resolve_weighted`, weighted / (1 − luminance(weighted)),
 // clamped to LARGEST_HALF, which a resolved luminance at or past 1 gives.
 fn resolve_unweighted(weighted: vec3<f32>) -> vec3<f32> {
-    let complement = max(1.0 - luminance(weighted), 1.0 / LARGEST_HALF);
+    let complement = max(1.0 - relative_luminance(weighted), 1.0 / LARGEST_HALF);
     return min(weighted / complement, vec3<f32>(LARGEST_HALF));
 }

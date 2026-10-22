@@ -526,10 +526,10 @@ fn ambient_luminance_is_the_base_colour_over_pi_darkened_by_occlusion() {
     }
 }
 
-/// Rec. 709's luminance weighs each linear primary by ITU-R BT.709-6's
+/// Rec. 709's relative luminance weighs each linear primary by ITU-R BT.709-6's
 /// coefficients, which sum to 1, so white's is 1.
 #[test]
-fn luminance_weighs_the_primaries_by_bt_709() {
+fn relative_luminance_weighs_the_primaries_by_bt_709() {
     let Some(context) = gpu_context() else {
         return;
     };
@@ -540,7 +540,11 @@ fn luminance_weighs_the_primaries_by_bt_709() {
         ([1.0, 1.0, 1.0], 1.0),
     ];
     let inputs = cases.map(|([red, green, blue], _)| [red, green, blue, 0.0]);
-    let results = evaluate(&context, "vec4<f32>(luminance(input.xyz))", &inputs);
+    let results = evaluate(
+        &context,
+        "vec4<f32>(relative_luminance(input.xyz))",
+        &inputs,
+    );
 
     for ((color, expected), result) in cases.into_iter().zip(results) {
         let case = format_args!("the luminance of {color:?}");

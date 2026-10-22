@@ -166,22 +166,28 @@ impl RenderTargets {
     }
 
     /// The multisampled colour as a pass's attachment: cleared to `clear`,
-    /// exposed colour, weighted as the lit pass weights what it draws, which
-    /// keeps it below fp16's largest value, and resolved at the pass's end
-    /// into the HDR target; its samples are discarded, as a transient
-    /// attachment's must be.
+    /// exposed colour, clamped and weighted as the lit pass clamps and weights
+    /// what it draws (`resolve_weighted`, hdr.wgsl), and resolved at the
+    /// pass's end into the HDR target; its samples are discarded, as a
+    /// transient attachment's must be.
     pub fn color_attachment(&self, clear: wgpu::Color) -> wgpu::RenderPassColorAttachment<'_> {
-        let [red, green, blue] = LUMINANCE_COEFFICIENTS.map(f64::from);
-        let weight = 1.0 / (1.0 + red * clear.r + green * clear.g + blue * clear.b);
+        // fp16's largest finite value, so no backend stores infinity
+        // (ADR 0023).
+        let largest_half = 65504.0;
+        let [red, green, blue] =
+            [clear.r, clear.g, clear.b].map(|channel| channel.min(largest_half));
+        let coefficients = LUMINANCE_COEFFICIENTS.map(f64::from);
+        let luminance = coefficients[0] * red + coefficients[1] * green + coefficients[2] * blue;
+        let weight = 1.0 / (1.0 + luminance);
         wgpu::RenderPassColorAttachment {
             view: &self.color,
             resolve_target: Some(&self.hdr),
             depth_slice: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Clear(wgpu::Color {
-                    r: clear.r * weight,
-                    g: clear.g * weight,
-                    b: clear.b * weight,
+                    r: red * weight,
+                    g: green * weight,
+                    b: blue * weight,
                     a: clear.a,
                 }),
                 store: wgpu::StoreOp::Discard,
