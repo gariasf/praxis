@@ -65,6 +65,23 @@ width. The Golden's size hides some of it: colour 16x with data 8x
 changes 221 pixels at 640×360 (0.1%) but 273,950 at 1440p (7.4%), whose
 pixels sample finer mips that still hold the bumps.
 
+Images, on the `pr-images` branch at `2a87cbb`: today's
+[Golden](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/golden.png)
+and, at 640×360, [8x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/8x.png),
+[colour 16x, data 4x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/colour-16x-data-4x.png)
+and [colour 16x, data 2x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/colour-16x-data-2x.png),
+each with its difference image against the Golden
+([8x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/8x-difference.png),
+[data 4x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/colour-16x-data-4x-difference.png),
+[data 2x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/colour-16x-data-2x-difference.png))
+and against 16x at 1440p, halved
+([8x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/8x-difference-1440p.png),
+[data 4x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/colour-16x-data-4x-difference-1440p.png),
+[data 2x](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/colour-16x-data-2x-difference-1440p.png));
+and 1440p zooms of the band, doubled, beside the reference below:
+[the highlight](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/highlight-zoom.png)
+and [the checker](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201eda665cb141a7ccf8a722226677d2/257/checker-zoom.png).
+
 Image quality, against a reference: 16x at 7680×4320, 9 samples per
 pixel, box-filtered to 2560×1440 in linear light. RMSE in 8-bit steps over
 the band (rows 484 to 759; the horizon is at 488), and within it over the
