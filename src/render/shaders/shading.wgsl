@@ -1,9 +1,12 @@
 // The shading terms, shared by every pass that lights a surface
 // (src/render/shaders/mod.rs): the surface decode, glTF 2.0's
 // metallic-roughness BRDF, written from its Appendix B (Khronos, CC BY 4.0),
-// and KHR_lights_punctual's falloff:
-// https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#appendix-b-brdf-implementation
-// https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Khronos/KHR_lights_punctual/README.md
+// and KHR_lights_punctual's falloff. Appendix B is the specification
+// source's, which revised the published 2.0.1's informative sample
+// implementation: 2.0.1 gives a separable Smith G and a simplified mix of
+// the two lobes.
+// https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc
+// https://github.com/KhronosGroup/glTF/blob/854a757a61e6bc0dde91631579b9d3d2e1743df9/extensions/2.0/Khronos/KHR_lights_punctual/README.md
 
 const PI: f32 = 3.14159265;
 
@@ -12,8 +15,8 @@ const PI: f32 = 3.14159265;
 const DIELECTRIC_BASE_REFLECTANCE: f32 = 0.04;
 
 // As roughness, and α = roughness² with it, falls to 0, D collapses to a
-// delta and the BRDF divides by zero, so glTF 2.0's Appendix B keeps α above
-// 0 (https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#specular-brdf).
+// delta and the BRDF divides by zero, which Appendix B's source says never to
+// do.
 const MINIMUM_ROUGHNESS: f32 = 0.04;
 
 // A surface point, as the shading terms read it.
