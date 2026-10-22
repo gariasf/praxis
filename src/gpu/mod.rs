@@ -396,24 +396,31 @@ async fn request_adapter(
     Ok(adapter)
 }
 
-/// The first sRGB format the surface offers, else its first format: the
-/// tonemapping pass writes linear colour and relies on an sRGB target to
-/// encode it, so a non-sRGB surface comes out darker.
+/// An 8-bit UNORM format the surface offers, `Bgra8Unorm` or `Rgba8Unorm`:
+/// the tonemapping pass encodes sRGB itself and dithers in that encoding
+/// (#200's decision D1), so it writes a format the GPU does not encode
+/// again, which the display reads as sRGB. An sRGB surface's non-sRGB view
+/// would need `DownlevelFlags::SURFACE_VIEW_FORMATS`, which Vulkan reports
+/// only with `VK_KHR_swapchain_mutable_format`.
 fn choose_surface_format(
     surface_capabilities: &wgpu::SurfaceCapabilities,
 ) -> anyhow::Result<wgpu::TextureFormat> {
     let formats = &surface_capabilities.formats;
     let surface_format = formats
         .iter()
-        .find(|format| format.is_srgb())
-        .or_else(|| formats.first())
         .copied()
-        .ok_or_else(|| anyhow::anyhow!("the surface offers no formats on the selected adapter"))?;
-    tracing::debug!(
-        ?surface_format,
-        srgb = surface_format.is_srgb(),
-        "surface format chosen"
-    );
+        .find(|format| {
+            matches!(
+                format,
+                wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Rgba8Unorm
+            )
+        })
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "the surface offers no 8-bit UNORM format, which the tonemapping pass writes: {formats:?}"
+            )
+        })?;
+    tracing::debug!(?surface_format, "surface format chosen");
     Ok(surface_format)
 }
 
@@ -524,6 +531,27 @@ mod tests {
             (wgpu::TextureFormat::Depth32Float, MSAA_X4),
             (wgpu::TextureFormat::Rgba16Float, MSAA_X4),
         ]
+    }
+
+    /// The surface takes the 8-bit UNORM format it offers, wherever it is
+    /// listed, and a surface without one is refused, so no sRGB format
+    /// encodes again what the tonemapping pass encoded.
+    #[test]
+    fn the_surface_format_is_an_8_bit_unorm_one() {
+        use wgpu::TextureFormat::{Bgra8Unorm, Bgra8UnormSrgb, Rgba8Unorm, Rgba16Float};
+        let chosen = |formats: Vec<wgpu::TextureFormat>| {
+            choose_surface_format(&wgpu::SurfaceCapabilities {
+                formats,
+                ..wgpu::SurfaceCapabilities::default()
+            })
+            .ok()
+        };
+        assert_eq!(
+            chosen(vec![Bgra8UnormSrgb, Bgra8Unorm, Rgba16Float]),
+            Some(Bgra8Unorm)
+        );
+        assert_eq!(chosen(vec![Rgba16Float, Rgba8Unorm]), Some(Rgba8Unorm));
+        assert_eq!(chosen(vec![Bgra8UnormSrgb, Rgba16Float]), None);
     }
 
     #[test]

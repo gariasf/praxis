@@ -91,7 +91,8 @@ pub struct Renderer {
 
 impl Renderer {
     /// A Renderer with empty Pools that draws into `width` × `height` views of
-    /// `target_format` textures, both non-zero, as `switches` set.
+    /// `target_format`, both non-zero, as `switches` set. The format is not
+    /// sRGB: the tonemapping pass encodes sRGB itself.
     pub fn new(
         context: &GpuContext,
         target_format: wgpu::TextureFormat,
@@ -492,7 +493,7 @@ mod tests {
     use crate::time::FixedTime;
     use crate::transform::propagate_world_transforms;
 
-    const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+    const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
     const SIZE: u32 = 16;
     /// Emissive red, green and blue exposed to 1, as GT7 shows them:
     /// Polyphony's sample implementation gives 0.948 red, 0.875 green with

@@ -1,5 +1,5 @@
 //! The tonemapping pass: one triangle over the target that reads each pixel
-//! of the HDR target and writes the pixel's display colour.
+//! of the HDR target and writes the pixel's display colour, sRGB-encoded.
 
 use crate::render::bind_groups::{TONEMAPPING_INPUT, pipeline_layout};
 use crate::render::shaders;
@@ -19,13 +19,17 @@ pub struct TonemappingPass {
 }
 
 impl TonemappingPass {
-    /// The pass for `target_format` views, reading the HDR target of
-    /// `render_targets`.
+    /// The pass for views of `target_format`, which is not sRGB: the pass
+    /// encodes sRGB itself. It reads the HDR target of `render_targets`.
     pub fn new(
         device: &wgpu::Device,
         target_format: wgpu::TextureFormat,
         render_targets: &RenderTargets,
     ) -> TonemappingPass {
+        debug_assert!(
+            !target_format.is_srgb(),
+            "the tonemapping pass encodes sRGB itself, so writes no sRGB view"
+        );
         let shader = device.create_shader_module(shaders::TONEMAPPING.descriptor());
         let layout = TONEMAPPING_INPUT.layout(device);
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -123,11 +127,11 @@ impl TonemappingPass {
 mod tests {
     use super::*;
     use crate::assets::pools::tests::gpu_context;
-    use crate::capture::read_back;
+    use crate::capture::{TARGET_FORMAT, read_back};
 
     /// The pass alone, after a lit pass that draws nothing and only clears,
     /// so the HDR target holds one exposed colour, weighted: every pixel of
-    /// an 8-bit sRGB target shows it as GT7 maps it, the sRGB-encoded outputs
+    /// an 8-bit target shows it as GT7 maps it, the sRGB-encoded outputs
     /// of Polyphony's sample implementation between Rec. 709 and Rec. 2020
     /// (as `tonemap`'s oracle takes them), within a step, as fp16 and a
     /// GPU's transcendentals move a value near a step's edge: lavapipe shows
@@ -141,7 +145,7 @@ mod tests {
             return;
         };
         let device = &context.device;
-        let format = wgpu::TextureFormat::Rgba8UnormSrgb;
+        let format = TARGET_FORMAT;
         let size = wgpu::Extent3d {
             width: 5,
             height: 3,

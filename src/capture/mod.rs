@@ -6,10 +6,9 @@ use crate::scenes::ReferenceScene;
 use crate::state::State;
 use crate::stats::FrameStats;
 
-/// 8-bit sRGB like the window's surface, which takes the first sRGB format
-/// the surface offers (`Bgra8UnormSrgb` on Metal). RGBA order makes the
-/// read-back bytes the image's pixels.
-pub(crate) const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+/// 8-bit UNORM like the window's surface: the tonemapping pass writes both
+/// sRGB-encoded. RGBA order makes the read-back bytes the image's pixels.
+pub(crate) const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 /// Frames rendered per capture; the last one is read back.
 const FRAME_COUNT: u32 = 60;

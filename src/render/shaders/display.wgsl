@@ -22,3 +22,15 @@ fn tonemap(exposed: vec3<f32>) -> vec3<f32> {
     let display = gt7_tonemap(REC709_TO_REC2020 * exposed * GT7_PAPER_WHITE);
     return clamp(REC2020_TO_REC709 * display, vec3<f32>(0.0), vec3<f32>(1.0));
 }
+
+// IEC 61966-2-1's sRGB encoding of display-linear colour, clamped to
+// [0, 1]. The tonemapping pass encodes here, once, into an 8-bit UNORM
+// target, so a dither can land on 8-bit steps (#200's decision D1).
+fn srgb_encode(display: vec3<f32>) -> vec3<f32> {
+    let clamped = clamp(display, vec3<f32>(0.0), vec3<f32>(1.0));
+    return select(
+        1.055 * pow(clamped, vec3<f32>(1.0 / 2.4)) - 0.055,
+        12.92 * clamped,
+        clamped <= vec3<f32>(0.0031308)
+    );
+}

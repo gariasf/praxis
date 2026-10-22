@@ -891,6 +891,36 @@ const TONEMAP_REFERENCE: [([f32; 3], [f32; 3]); 14] = [
 /// near-equal terms for saturated green: a fifth of an 8-bit step.
 const GT7_TOLERANCE: f64 = 3e-4;
 
+/// IEC 61966-2-1's sRGB encoding, evaluated in f64: 12.92 x up to 0.0031308,
+/// then 1.055 x^(1/2.4) − 0.055, so 0 encodes to 0 and 1 to 1, across the
+/// knee and through the mid-tones; values outside [0, 1] clamp first.
+#[test]
+fn srgb_encode_follows_iec_61966_2_1() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let values = [
+        -0.5, 0.0, 0.001, 0.0031308, 0.0032, 0.05, 0.18, 0.5, 0.9, 1.0, 1.5,
+    ];
+    let inputs = values.map(|value| [value, value, value, 0.0]);
+    let results = evaluate(&context, "vec4<f32>(srgb_encode(input.xyz), 0.0)", &inputs);
+
+    for (value, result) in values.into_iter().zip(results) {
+        let linear = f64::from(value).clamp(0.0, 1.0);
+        let expected = if linear <= 0.0031308 {
+            12.92 * linear
+        } else {
+            1.055 * linear.powf(1.0 / 2.4) - 0.055
+        };
+        let case = format_args!("the sRGB encoding of {value}");
+        assert_close(result[0], expected, SRGB_TOLERANCE, case);
+    }
+}
+
+/// Largest difference allowed between the shader's sRGB encoding and the
+/// standard's in f64: a thousandth of an 8-bit step.
+const SRGB_TOLERANCE: f64 = 4e-6;
+
 /// Linear sRGB reflectance of gold at normal incidence, as the pbr-sweep
 /// scene uses it: each channel a different base colour.
 const GOLD: [f32; 3] = [1.0, 0.71, 0.29];

@@ -238,8 +238,10 @@ When reviewing changes, check for:
       on the Rust side (the test compares sizes, not strides)
 - [ ] A new or changed shading function in WGSL has an oracle test
       in `src/render/shader_function_tests.rs`
-- [ ] Texture formats match between creation and surface config (sRGB
-      consistency)
+- [ ] Texture formats match between creation and surface config, and
+      sRGB is encoded once: the tonemapping pass alone encodes it, in its
+      shader, into 8-bit UNORM targets, so its dither lands on 8-bit steps
+      (#200's decision D1); no target is an sRGB format
 - [ ] `unwrap()` on GPU operations that could fail at runtime — prefer
       `?` or explicit handling
 - [ ] No GPU resources stored on ECS components — components are pure
