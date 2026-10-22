@@ -1,9 +1,11 @@
 // The culling pass's entry points, after the shared parts: they append the
 // Meshlets of the Instances they draw to the frame's draw in slot order,
 // which the main pass draws with one indirect call per phase and depth
-// pipeline, and one of both phases for the lit pipeline (ADR 0019). Phase one draws the Instances visible the frame before;
-// phase two, after the depth pyramid, the other Instances in view, and it
-// records which Instances were visible for the next frame. With the CULLING
+// pipeline, and one of both phases for the lit pipeline (ADR 0019). Phase
+// one draws the Instances visible the frame before; phase two, after the
+// depth pyramid, the other Instances in view that the pyramid does not
+// hide, and it records which Instances were visible for the next frame. With
+// the CULLING
 // Render switch on, they draw only the Instances whose Mesh bounds reach
 // into the view frustum; off, phase one draws every Instance in use. Its
 // bindings are declared from their bind groups' definitions
@@ -90,15 +92,15 @@ fn near_plane_distance(clip: vec4<f32>) -> f32 {
     return clip.w - clip.z;
 }
 
-// Whether an Instance's Mesh bounds reach into the view frustum, which clip
-// space bounds by its four side planes and its near plane; with reverse-Z
-// and no far plane, every point past the near plane lands at z ≥ 0, so
-// there is no sixth plane (ADR 0015). The box, its centre composed relative
-// to the camera as its vertices are (ADR 0014), is outside only where it
-// lies wholly beyond one plane. A plane's distance is linear in clip space,
-// so the box reaches furthest inside it by its centre's distance plus each
-// half axis's, whole.
-fn in_view_frustum(instance: InstanceData, mesh: MeshData) -> bool {
+// An Instance's Mesh bounds in clip space: the box's centre, composed
+// relative to the camera as its vertices are (ADR 0014), and its half axes,
+// each a direction.
+struct ClipBox {
+    centre: vec4<f32>,
+    half_axes: mat3x4<f32>,
+}
+
+fn clip_space_bounds(instance: InstanceData, mesh: MeshData) -> ClipBox {
     let bounds_min = vec3<f32>(mesh.bounds_min[0], mesh.bounds_min[1], mesh.bounds_min[2]);
     let bounds_max = vec3<f32>(mesh.bounds_max[0], mesh.bounds_max[1], mesh.bounds_max[2]);
     let half_extent = 0.5 * (bounds_max - bounds_min);
@@ -109,21 +111,100 @@ fn in_view_frustum(instance: InstanceData, mesh: MeshData) -> bool {
         camera.offset,
         instance.rotation_scale * (0.5 * (bounds_min + bounds_max))
     );
-    let clip_centre = camera.view_proj * vec4<f32>(centre, 1.0);
-    let clip_half_axes = camera.view_proj * mat3x4<f32>(
-        vec4<f32>(instance.rotation_scale[0] * half_extent.x, 0.0),
-        vec4<f32>(instance.rotation_scale[1] * half_extent.y, 0.0),
-        vec4<f32>(instance.rotation_scale[2] * half_extent.z, 0.0),
+    return ClipBox(
+        camera.view_proj * vec4<f32>(centre, 1.0),
+        camera.view_proj * mat3x4<f32>(
+            vec4<f32>(instance.rotation_scale[0] * half_extent.x, 0.0),
+            vec4<f32>(instance.rotation_scale[1] * half_extent.y, 0.0),
+            vec4<f32>(instance.rotation_scale[2] * half_extent.z, 0.0),
+        ),
     );
-    let side_reach = side_plane_distances(clip_centre)
-        + abs(side_plane_distances(clip_half_axes[0]))
-        + abs(side_plane_distances(clip_half_axes[1]))
-        + abs(side_plane_distances(clip_half_axes[2]));
-    let near_reach = near_plane_distance(clip_centre)
-        + abs(near_plane_distance(clip_half_axes[0]))
-        + abs(near_plane_distance(clip_half_axes[1]))
-        + abs(near_plane_distance(clip_half_axes[2]));
+}
+
+// Whether an Instance's Mesh bounds reach into the view frustum, which clip
+// space bounds by its four side planes and its near plane; with reverse-Z
+// and no far plane, every point past the near plane lands at z ≥ 0, so
+// there is no sixth plane (ADR 0015). The box is outside only where it lies
+// wholly beyond one plane. A plane's distance is linear in clip space, so
+// the box reaches furthest inside it by its centre's distance plus each
+// half axis's, whole.
+fn in_view_frustum(bounds: ClipBox) -> bool {
+    let side_reach = side_plane_distances(bounds.centre)
+        + abs(side_plane_distances(bounds.half_axes[0]))
+        + abs(side_plane_distances(bounds.half_axes[1]))
+        + abs(side_plane_distances(bounds.half_axes[2]));
+    let near_reach = near_plane_distance(bounds.centre)
+        + abs(near_plane_distance(bounds.half_axes[0]))
+        + abs(near_plane_distance(bounds.half_axes[1]))
+        + abs(near_plane_distance(bounds.half_axes[2]));
     return all(side_reach >= vec4<f32>(0.0)) && near_reach >= 0.0;
+}
+
+// How far the occlusion test moves the box's corners towards the camera in
+// clip-space z and w, metres for a perspective camera, past where f32
+// rounding could put the vertices the vertex shader composes: a share of
+// the terms summed, and ADR 0014's worst camera-relative error, 0.041 mm,
+// for the box's composition and the vertices' each, rounded up.
+const OCCLUSION_ROUNDING: f32 = 1.0 / 16384.0;
+const COMPOSITION_ERROR: f32 = 1e-4;
+
+// Whether a box that reaches into the view frustum lies wholly behind what
+// phase one drew: nearer nowhere than the depth pyramid's minimum, the
+// farthest depth (ADR 0015), over the texels its screen rectangle covers,
+// in the level where that rectangle spans at most two texels per axis.
+// Depth, z over w, is greatest at a corner of a box in front of the camera,
+// as is the box's reach across the screen, so the test projects the eight
+// corners, each moved towards the camera past f32 rounding, and grows the
+// rectangle by a pixel past where rasterization rounds vertices. A box
+// with a corner at or behind the camera's plane, or that rounding leaves
+// over more than two texels, is not occluded.
+fn occluded(bounds: ClipBox) -> bool {
+    let axes = bounds.half_axes;
+    let w_rounding = OCCLUSION_ROUNDING
+        * (abs(bounds.centre.w) + abs(axes[0].w) + abs(axes[1].w) + abs(axes[2].w))
+        + COMPOSITION_ERROR;
+    let z_rounding = OCCLUSION_ROUNDING
+        * (abs(bounds.centre.z) + abs(axes[0].z) + abs(axes[1].z) + abs(axes[2].z))
+        + COMPOSITION_ERROR;
+    var nearest_depth = 0.0;
+    var low = vec2<f32>(1.0);
+    var high = vec2<f32>(-1.0);
+    for (var corner = 0u; corner < 8u; corner++) {
+        let signs = 2.0 * vec3<f32>((vec3<u32>(corner) >> vec3<u32>(0u, 1u, 2u)) & vec3<u32>(1u)) - 1.0;
+        let clip = bounds.centre + axes * signs;
+        if clip.w <= w_rounding {
+            return false;
+        }
+        nearest_depth = max(nearest_depth, (clip.z + z_rounding) / (clip.w - w_rounding));
+        low = min(low, clip.xy / clip.w);
+        high = max(high, clip.xy / clip.w);
+    }
+    // In texture coordinates, rows top first: a level-0 texel spans two
+    // pixels, or a little more on an odd side.
+    let level_zero_texels = textureDimensions(depth_pyramid, 0);
+    let level_zero_size = vec2<f32>(level_zero_texels);
+    let pixel_margin = 0.5 / level_zero_size;
+    let first_coordinates = saturate(vec2<f32>(0.5 * low.x + 0.5, 0.5 - 0.5 * high.y) - pixel_margin);
+    let last_coordinates = saturate(vec2<f32>(0.5 * high.x + 0.5, 0.5 - 0.5 * low.y) + pixel_margin);
+    let extent = (last_coordinates - first_coordinates) * level_zero_size;
+    let level = min(
+        u32(ceil(log2(max(max(extent.x, extent.y), 1.0)))),
+        textureNumLevels(depth_pyramid) - 1u
+    );
+    // Each level halves the one below, rounded down, as a mip chain does:
+    // computed, since lavapipe (Mesa 25.2.8) answers a size query whose
+    // level varies across a workgroup's invocations with one invocation's.
+    let size = max(level_zero_texels >> vec2<u32>(level), vec2<u32>(1u));
+    let first = min(vec2<u32>(first_coordinates * vec2<f32>(size)), size - 1u);
+    let last = min(vec2<u32>(last_coordinates * vec2<f32>(size)), size - 1u);
+    if any(last > first + 1u) {
+        return false;
+    }
+    let farthest = min(
+        min(textureLoad(depth_pyramid, first, level).r, textureLoad(depth_pyramid, vec2<u32>(last.x, first.y), level).r),
+        min(textureLoad(depth_pyramid, vec2<u32>(first.x, last.y), level).r, textureLoad(depth_pyramid, last, level).r)
+    );
+    return nearest_depth < farthest;
 }
 
 // Whether the Instance in `slot` was visible in the frame before, as phase
@@ -136,9 +217,9 @@ fn visible_before(slot: u32) -> bool {
 // records and packed indices, its Instance's where the phase draws it or
 // none, summed over the block's earlier slots into its offsets, NOT_DRAWN in
 // their place where it is not drawn, and the block's sum after every slot's.
-// Phase one draws an Instance in view that was visible the frame before;
-// phase two one in view that phase one did not draw, and records each
-// Instance in view as visible.
+// Phase one draws an Instance in view that was visible the frame before.
+// Phase two finds each Instance in view visible unless it lies behind what
+// phase one drew, records which are, and draws those phase one did not.
 @compute @workgroup_size(SCAN_BLOCK_SIZE)
 fn offset_slots(
     @builtin(workgroup_id) block: vec3<u32>,
@@ -151,8 +232,11 @@ fn offset_slots(
     if slot < instance_slot_count && instances[slot].mesh != NO_MESH {
         let instance = instances[slot];
         let mesh = meshes[instance.mesh];
-        visible = !CULLING || in_view_frustum(instance, mesh);
+        let bounds = clip_space_bounds(instance, mesh);
+        visible = !CULLING || in_view_frustum(bounds);
         if PHASE_TWO {
+            // Behind what phase one drew, it is not visible.
+            visible = visible && !(CULLING && occluded(bounds));
             // Phase one's offsets for the slot, before this phase's replace them.
             drawn = CULLING && visible && all(instance_offsets[slot] == NOT_DRAWN);
         } else {

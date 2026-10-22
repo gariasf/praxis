@@ -4,8 +4,8 @@
 //! main pass draws with one indirect call per phase and depth pipeline, and
 //! one of both phases for the lit pipeline (ADR 0019). It runs in two
 //! phases: phase one draws the Instances visible the frame before, phase
-//! two, after the depth pyramid, the others, and it records each Instance's
-//! visibility for the next frame. With the `culling` Render switch on, it
+//! two, after the depth pyramid, the others in view that the pyramid does
+//! not hide, and it records each Instance's visibility for the next frame. With the `culling` Render switch on, it
 //! draws only the Instances whose Mesh bounds reach into the view frustum;
 //! off, phase one draws every Instance in use.
 
@@ -15,14 +15,15 @@ use crate::render::bind_groups::{BindGroupDefinition, FRAME_DRAW, pipeline_layou
 use crate::render::prepare::FrameData;
 use crate::render::renderer::RenderSwitches;
 use crate::render::shaders;
+use crate::render::targets::RenderTargets;
 
 /// A phase of the culling pass.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CullingPhase {
     /// Draws the Instances visible the frame before into the depth pre-pass.
     One,
-    /// After the depth pyramid, draws the other Instances visible now, and
-    /// records which are visible for the next frame.
+    /// After the depth pyramid, draws the other Instances in view that it
+    /// does not hide, and records which are visible for the next frame.
     Two,
 }
 
@@ -97,6 +98,15 @@ struct PhasePipelines {
 pub struct CullingPass {
     phase_one: PhasePipelines,
     phase_two: PhasePipelines,
+    buffers: FrameDrawBuffers,
+    frame_draw_layout: wgpu::BindGroupLayout,
+    /// Its group 3 (`FRAME_DRAW`), built by `frame_draw_bind_group`.
+    bind_group: wgpu::BindGroup,
+    max_workgroups_per_dimension: u32,
+}
+
+/// The buffers of the pass's group 3, which holds the depth pyramid besides.
+struct FrameDrawBuffers {
     /// The Instance slots in use, which the CPU writes when they change.
     instance_slot_count: wgpu::Buffer,
     /// Each slot's first Meshlet record and packed index within its block of
@@ -109,19 +119,18 @@ pub struct CullingPass {
     /// A bit per Instance slot, set where phase two found its Instance
     /// visible, which phase one reads the next frame.
     instance_visibility: wgpu::Buffer,
-    /// Its group 3 (`FRAME_DRAW`).
-    bind_group: wgpu::BindGroup,
-    max_workgroups_per_dimension: u32,
 }
 
 impl CullingPass {
     /// The pass, given the layouts of the shared bind groups its shader
-    /// module declares, with its draw of `capacity`, as `switches` set.
+    /// module declares, with its draw of `capacity`, as `switches` set,
+    /// testing Instances against the depth pyramid of `render_targets`.
     pub fn new(
         device: &wgpu::Device,
         bind_group_layouts: &[(&BindGroupDefinition, &wgpu::BindGroupLayout)],
         capacity: DrawCapacity,
         switches: RenderSwitches,
+        render_targets: &RenderTargets,
     ) -> CullingPass {
         // A record above its Meshlet vertex's bits, short of the all-ones
         // index.
@@ -172,25 +181,17 @@ impl CullingPass {
             u64::from(INSTANCE_CAPACITY / u32::BITS) * size_of::<u32>() as u64,
             wgpu::BufferUsages::STORAGE,
         );
+        let buffers = FrameDrawBuffers {
+            instance_slot_count,
+            instance_offsets,
+            meshlet_records,
+            packed_indices,
+            frame_draw,
+            instance_visibility,
+        };
         let frame_draw_layout = FRAME_DRAW.layout(device);
-        let bind_group = FRAME_DRAW.bind_group(
-            device,
-            &frame_draw_layout,
-            [
-                (
-                    "instance_slot_count",
-                    instance_slot_count.as_entire_binding(),
-                ),
-                ("instance_offsets", instance_offsets.as_entire_binding()),
-                ("meshlet_records", meshlet_records.as_entire_binding()),
-                ("packed_indices", packed_indices.as_entire_binding()),
-                ("frame_draw", frame_draw.as_entire_binding()),
-                (
-                    "instance_visibility",
-                    instance_visibility.as_entire_binding(),
-                ),
-            ],
-        );
+        let bind_group =
+            frame_draw_bind_group(device, &frame_draw_layout, &buffers, render_targets);
 
         let shader = device.create_shader_module(shaders::CULLING.descriptor());
         let mut layouts = bind_group_layouts.to_vec();
@@ -225,12 +226,8 @@ impl CullingPass {
         CullingPass {
             phase_one: phase_pipelines(CullingPhase::One),
             phase_two: phase_pipelines(CullingPhase::Two),
-            instance_slot_count,
-            instance_offsets,
-            meshlet_records,
-            packed_indices,
-            frame_draw,
-            instance_visibility,
+            buffers,
+            frame_draw_layout,
             bind_group,
             max_workgroups_per_dimension: device.limits().max_compute_workgroups_per_dimension,
         }
@@ -253,7 +250,7 @@ impl CullingPass {
     ) {
         let pipelines = match phase {
             CullingPhase::One => {
-                encoder.clear_buffer(&self.frame_draw, 0, None);
+                encoder.clear_buffer(&self.buffers.frame_draw, 0, None);
                 &self.phase_one
             }
             CullingPhase::Two => &self.phase_two,
@@ -281,39 +278,79 @@ impl CullingPass {
         }
     }
 
+    /// Builds the bind group that reads `render_targets` again, as `new`
+    /// builds it: after every resize, which creates them again.
+    pub fn bind_render_targets(&mut self, device: &wgpu::Device, render_targets: &RenderTargets) {
+        self.bind_group = frame_draw_bind_group(
+            device,
+            &self.frame_draw_layout,
+            &self.buffers,
+            render_targets,
+        );
+    }
+
     /// The Instance slots in use, a u32 the CPU writes.
     pub fn instance_slot_count(&self) -> &wgpu::Buffer {
-        &self.instance_slot_count
+        &self.buffers.instance_slot_count
     }
 
     /// The frame's Meshlet records, which the main pass's vertex shader reads.
     pub fn meshlet_records(&self) -> &wgpu::Buffer {
-        &self.meshlet_records
+        &self.buffers.meshlet_records
     }
 
     /// The frame's draw's index buffer.
     pub fn packed_indices(&self) -> &wgpu::Buffer {
-        &self.packed_indices
+        &self.buffers.packed_indices
     }
 
     /// The frame's draw's indirect arguments and counts (`FrameDraw`).
     pub fn frame_draw(&self) -> &wgpu::Buffer {
-        &self.frame_draw
+        &self.buffers.frame_draw
     }
 
     /// Bytes of the frame's draw, and of the Instance slot count, offsets
     /// and visibility.
     pub fn gpu_memory_bytes(&self) -> u64 {
-        [
-            &self.instance_slot_count,
-            &self.instance_offsets,
-            &self.meshlet_records,
-            &self.packed_indices,
-            &self.frame_draw,
-            &self.instance_visibility,
-        ]
-        .iter()
-        .map(|buffer| buffer.size())
-        .sum()
+        self.buffers
+            .named()
+            .iter()
+            .map(|(_, buffer)| buffer.size())
+            .sum()
     }
+}
+
+impl FrameDrawBuffers {
+    /// Each buffer by the name of its binding.
+    fn named(&self) -> [(&'static str, &wgpu::Buffer); 6] {
+        [
+            ("instance_slot_count", &self.instance_slot_count),
+            ("instance_offsets", &self.instance_offsets),
+            ("meshlet_records", &self.meshlet_records),
+            ("packed_indices", &self.packed_indices),
+            ("frame_draw", &self.frame_draw),
+            ("instance_visibility", &self.instance_visibility),
+        ]
+    }
+}
+
+/// The pass's group 3 (`FRAME_DRAW`) of `layout`: `buffers`, and the depth
+/// pyramid of `render_targets`.
+fn frame_draw_bind_group(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    buffers: &FrameDrawBuffers,
+    render_targets: &RenderTargets,
+) -> wgpu::BindGroup {
+    let buffers = buffers
+        .named()
+        .map(|(name, buffer)| (name, buffer.as_entire_binding()));
+    let depth_pyramid = wgpu::BindingResource::TextureView(render_targets.depth_pyramid());
+    FRAME_DRAW.bind_group(
+        device,
+        layout,
+        buffers
+            .into_iter()
+            .chain([("depth_pyramid", depth_pyramid)]),
+    )
 }

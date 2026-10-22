@@ -25,6 +25,9 @@ pub struct RenderTargets {
     /// A transient attachment, memoryless where the adapter allows: the pass
     /// that clears it resolves it into the target before it ends.
     color: wgpu::TextureView,
+    /// The depth pyramid, every level, as phase two of the culling pass reads
+    /// it.
+    depth_pyramid: wgpu::TextureView,
     /// A view of each level of the depth pyramid, the Hi-Z pyramid that
     /// holds the minimum depth over each share of the screen: level 0 half
     /// the targets' size, rounded down, and each level half the one below,
@@ -87,6 +90,7 @@ impl RenderTargets {
                 target_format,
                 wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
             ),
+            depth_pyramid: depth_pyramid.create_view(&wgpu::TextureViewDescriptor::default()),
             depth_pyramid_levels: (0..depth_pyramid.mip_level_count())
                 .map(|level| {
                     depth_pyramid.create_view(&wgpu::TextureViewDescriptor {
@@ -102,6 +106,11 @@ impl RenderTargets {
     /// The depth target, as passes read it.
     pub fn depth(&self) -> &wgpu::TextureView {
         &self.depth
+    }
+
+    /// The depth pyramid, every level.
+    pub fn depth_pyramid(&self) -> &wgpu::TextureView {
+        &self.depth_pyramid
     }
 
     /// A view of each level of the depth pyramid, from level 0.
