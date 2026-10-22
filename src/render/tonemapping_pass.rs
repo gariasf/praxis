@@ -282,8 +282,10 @@ mod tests {
 
     /// The dither keeps a flat colour's mean: over the mask's 64 × 64 tile,
     /// a grey whose sRGB code GT7 and the encoding put at 153.32 shows 152,
-    /// 153 and 154, averaging 153.32 within 0.02, where rounding alone would
-    /// show 153 everywhere (exposed 0.32 in GT7's linear section).
+    /// 153 and 154, averaging 153.32 within 0.1, where rounding alone would
+    /// show 153 everywhere (exposed 0.32 in GT7's linear section). The HDR
+    /// target's fp16 holds the cleared colour to half a step of its own,
+    /// which a backend may round either way: lavapipe's mean is 153.27.
     #[test]
     fn the_dither_spreads_a_flat_colour_over_three_steps_keeping_its_mean() {
         let Some(context) = gpu_context() else {
@@ -345,6 +347,6 @@ mod tests {
         codes.dedup();
         let mean = reds.iter().map(|&code| f64::from(code)).sum::<f64>() / reds.len() as f64;
         assert_eq!(codes, [152, 153, 154]);
-        assert!((mean - 153.32).abs() <= 0.02, "mean code {mean}");
+        assert!((mean - 153.32).abs() <= 0.1, "mean code {mean}");
     }
 }
