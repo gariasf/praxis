@@ -635,10 +635,13 @@ pub(crate) mod tests {
             std::env::temp_dir().join(format!("praxis-mesh-read-back-{}", std::process::id()));
         let cache = CookedCache::new(&directory);
         let procedural = ReferenceScene::ALL.into_iter().flat_map(|scene| {
-            scene
-                .meshes()
-                .into_iter()
-                .map(move |(name, geometry, _)| (name, vec![(geometry, Some(AssetId(1)))]))
+            scene.meshes().into_iter().map(|(name, primitives)| {
+                let primitives = primitives
+                    .into_iter()
+                    .map(|(geometry, _)| (geometry, Some(AssetId(1))))
+                    .collect();
+                (name, primitives)
+            })
         });
         for (id, (name, primitives)) in procedural.chain(reference_gltf_meshes()).enumerate() {
             let mesh = cook(&primitives);

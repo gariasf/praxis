@@ -275,10 +275,15 @@ fn read_sources(
                 None => texture,
             });
         }
-        for (name, geometry, material) in scene.meshes() {
+        for (name, primitives) in scene.meshes() {
             let id = scene.mesh_id(name);
-            let material = material.map(|material| scene.material_id(material));
-            let primitives = vec![(geometry, material)];
+            let primitives: Vec<_> = primitives
+                .into_iter()
+                .map(|(geometry, material)| {
+                    let material = material.map(|material| scene.material_id(material));
+                    (geometry, material)
+                })
+                .collect();
             sources
                 .meshes
                 .push((id, mesh::cook_key(&primitives), primitives));

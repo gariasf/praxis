@@ -44,10 +44,14 @@ pub enum ReferenceScene {
     /// that encodes its index, and a 10 × 10 grid of quads, each with its own
     /// Material, sampling Layers across the whole range.
     TextureWall,
+    /// A sphere over a ground plane, one Mesh whose two Primitives name
+    /// their own Materials, under the sun and one point light: the sphere's
+    /// shadow from the sun, traced per pixel, matches its analytic shadow.
+    Shadows,
 }
 
 impl ReferenceScene {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Helmet,
         Self::PbrSweep,
         Self::UvGrid,
@@ -56,6 +60,7 @@ impl ReferenceScene {
         Self::Orrery,
         Self::Minification,
         Self::TextureWall,
+        Self::Shadows,
     ];
 
     /// The name the capture command selects the scene by.
@@ -69,6 +74,7 @@ impl ReferenceScene {
             Self::Orrery => "orrery",
             Self::Minification => "minification",
             Self::TextureWall => "texture-wall",
+            Self::Shadows => "shadows",
         }
     }
 
@@ -105,7 +111,8 @@ impl ReferenceScene {
             | Self::FarCoplanar
             | Self::Orrery
             | Self::Minification
-            | Self::TextureWall => &[],
+            | Self::TextureWall
+            | Self::Shadows => &[],
         }
     }
 
@@ -178,6 +185,14 @@ impl ReferenceScene {
                     (wall_material_name(quad), material)
                 })
                 .collect(),
+            Self::Shadows => ["ground", "sphere"]
+                .into_iter()
+                .zip(SHADOWS_COLORS)
+                .map(|(name, base_color)| {
+                    let material = factors(base_color, 0.0, SHADOWS_ROUGHNESS, None);
+                    (name.into(), material)
+                })
+                .collect(),
         }
     }
 
@@ -210,32 +225,43 @@ impl ReferenceScene {
                     (wall_texture_name(index), MaterialChannel::Albedo, texture)
                 })
                 .collect(),
-            Self::Helmet | Self::PbrSweep | Self::NormalTangent | Self::FarCoplanar => Vec::new(),
+            Self::Helmet
+            | Self::PbrSweep
+            | Self::NormalTangent
+            | Self::FarCoplanar
+            | Self::Shadows => Vec::new(),
         }
     }
 
-    /// The scene's procedural Meshes by name, each one Primitive with the
-    /// name of its Material, if its Renderables do not each override it;
-    /// glTF Meshes cook from their manifest source.
+    /// The scene's procedural Meshes by name, each with its Primitives; glTF
+    /// Meshes cook from their manifest source.
     #[cfg(feature = "cook")]
-    pub(crate) fn meshes(self) -> Vec<(&'static str, Geometry, Option<&'static str>)> {
+    pub(crate) fn meshes(self) -> Vec<(&'static str, Vec<ScenePrimitive>)> {
         match self {
             Self::Helmet | Self::NormalTangent => Vec::new(),
-            Self::PbrSweep => vec![("sphere", uv_sphere(SPHERE_RADIUS), None)],
-            Self::UvGrid => vec![("plane", ground_plane(4.0, 2.0), Some("grid"))],
-            Self::FarCoplanar => vec![(
-                "plane",
-                ground_plane(FAR_COPLANAR_DISTANCE as f32, 1.0),
-                None,
-            )],
-            Self::Orrery => vec![("sphere", uv_sphere(SPHERE_RADIUS), Some("grid"))],
-            Self::Minification => vec![(
-                "ground",
-                ground_plane(MINIFICATION_HALF_SIZE, MINIFICATION_UV_REPEAT),
-                Some("ground"),
-            )],
+            Self::PbrSweep => vec![("sphere", vec![(uv_sphere(SPHERE_RADIUS), None)])],
+            Self::UvGrid => vec![("plane", vec![(ground_plane(4.0, 2.0), Some("grid"))])],
+            Self::FarCoplanar => {
+                let plane = ground_plane(FAR_COPLANAR_DISTANCE as f32, 1.0);
+                vec![("plane", vec![(plane, None)])]
+            }
+            Self::Orrery => vec![("sphere", vec![(uv_sphere(SPHERE_RADIUS), Some("grid"))])],
+            Self::Minification => {
+                let ground = ground_plane(MINIFICATION_HALF_SIZE, MINIFICATION_UV_REPEAT);
+                vec![("ground", vec![(ground, Some("ground"))])]
+            }
             Self::TextureWall => {
-                vec![("quad", ground_plane(TEXTURE_WALL_QUAD_HALF_SIZE, 1.0), None)]
+                let quad = ground_plane(TEXTURE_WALL_QUAD_HALF_SIZE, 1.0);
+                vec![("quad", vec![(quad, None)])]
+            }
+            Self::Shadows => {
+                let mut sphere = uv_sphere(SHADOWS_SPHERE_RADIUS);
+                for position in &mut sphere.positions {
+                    position[1] += SHADOWS_SPHERE_HEIGHT;
+                }
+                let ground = ground_plane(SHADOWS_GROUND_HALF_SIZE, 1.0);
+                let primitives = vec![(ground, Some("ground")), (sphere, Some("sphere"))];
+                vec![("sphere-over-plane", primitives)]
             }
         }
     }
@@ -265,6 +291,7 @@ impl ReferenceScene {
                 Camera::looking_at(MINIFICATION_CAMERA, MINIFICATION_CAMERA_TARGET)
             }
             Self::TextureWall => Camera::looking_at(TEXTURE_WALL_CAMERA, glam::DVec3::ZERO),
+            Self::Shadows => Camera::looking_at(SHADOWS_CAMERA, SHADOWS_CAMERA_TARGET),
         };
         camera.position += shift;
         camera.ev100 = self.ev100();
@@ -283,7 +310,8 @@ impl ReferenceScene {
             | Self::FarCoplanar
             | Self::Orrery
             | Self::Minification
-            | Self::TextureWall => ev100_for_exposure(1.0 / SUN_ILLUMINANCE),
+            | Self::TextureWall
+            | Self::Shadows => ev100_for_exposure(1.0 / SUN_ILLUMINANCE),
         }
     }
 
@@ -299,7 +327,8 @@ impl ReferenceScene {
             | Self::NormalTangent
             | Self::FarCoplanar
             | Self::Minification
-            | Self::TextureWall => SIXTY_HERTZ,
+            | Self::TextureWall
+            | Self::Shadows => SIXTY_HERTZ,
         }
     }
 
@@ -317,6 +346,7 @@ impl ReferenceScene {
             // The directional light alone, white, so each quad shows its
             // Texture's colour.
             Self::TextureWall => &[],
+            Self::Shadows => &SHADOWS_LIGHTS,
             Self::Helmet
             | Self::PbrSweep
             | Self::UvGrid
@@ -337,7 +367,8 @@ impl ReferenceScene {
             | Self::FarCoplanar
             | Self::Orrery
             | Self::Minification
-            | Self::TextureWall => glam::vec3(0.5, -1.0, -0.3),
+            | Self::TextureWall
+            | Self::Shadows => glam::vec3(0.5, -1.0, -0.3),
         };
         let transform = Transform {
             rotation: glam::Quat::from_rotation_arc(glam::Vec3::NEG_Z, direction.normalize()),
@@ -362,7 +393,8 @@ impl ReferenceScene {
             | Self::FarCoplanar
             | Self::Orrery
             | Self::Minification
-            | Self::TextureWall => Environment {
+            | Self::TextureWall
+            | Self::Shadows => Environment {
                 ambient_illuminance: glam::Vec3::splat(0.1 * SUN_ILLUMINANCE),
                 background_luminance: glam::vec3(0.1, 0.2, 0.3) * SUN_ILLUMINANCE,
             },
@@ -739,6 +771,44 @@ fn wall_texture(index: u32) -> LoadedImage {
         height: 4,
     }
 }
+
+/// shadows' sphere: its radius and its centre's height over the ground
+/// plane, which reaches `SHADOWS_GROUND_HALF_SIZE` from the origin each way.
+#[cfg(feature = "cook")]
+const SHADOWS_SPHERE_RADIUS: f32 = 0.5;
+#[cfg(feature = "cook")]
+const SHADOWS_SPHERE_HEIGHT: f32 = 1.0;
+#[cfg(feature = "cook")]
+const SHADOWS_GROUND_HALF_SIZE: f32 = 8.0;
+/// The ground's base colour, light grey, then the sphere's, orange, so the
+/// Golden shows each Primitive's own Material.
+#[cfg(feature = "cook")]
+const SHADOWS_COLORS: [[f32; 4]; 2] = [[0.8, 0.8, 0.8, 1.0], [0.8, 0.25, 0.1, 1.0]];
+#[cfg(feature = "cook")]
+const SHADOWS_ROUGHNESS: f32 = 0.6;
+/// In front of the sphere and above it, looking down at the ground its
+/// shadows fall on: the sun's behind it to the right, the point light's to
+/// the left.
+const SHADOWS_CAMERA: glam::DVec3 = glam::DVec3::new(0.0, 2.4, 3.0);
+const SHADOWS_CAMERA_TARGET: glam::DVec3 = glam::DVec3::new(0.0, 0.45, -0.4);
+/// White, up and to the right of the sphere, in front of it, giving the
+/// sun's illuminance 3 m away and reaching 20 m, as each coloured light does.
+const SHADOWS_LIGHTS: [(glam::DVec3, PointLight); 1] = [(
+    glam::DVec3::new(1.5, 2.5, 1.0),
+    coloured_light(glam::Vec3::ONE),
+)];
+
+/// The Mesh draws each of its Primitives with the Material it names.
+pub(crate) fn spawn_shadows(world: &mut World, loader: &mut AssetLoader) -> anyhow::Result<()> {
+    let mesh = loader.mesh(ReferenceScene::Shadows.mesh_id("sphere-over-plane"))?;
+    world.spawn((Transform::IDENTITY, MeshRef(mesh)));
+    Ok(())
+}
+
+/// A procedural Primitive: its triangles, and the name of its Material, if
+/// its Renderables do not each override it.
+#[cfg(feature = "cook")]
+pub(crate) type ScenePrimitive = (Geometry, Option<&'static str>);
 
 /// An indexed triangle list, counter-clockwise when seen from outside.
 #[cfg(feature = "cook")]
