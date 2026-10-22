@@ -117,6 +117,7 @@ impl State {
                 [] => error,
                 absent => error.context(format!("absent sources: {}", absent.join(", "))),
             })?;
+        world.insert_resource(scene.environment());
         world.spawn(scene.sun());
         for &(position, light) in scene.point_lights() {
             world.spawn((Transform::from_translation(position), light));

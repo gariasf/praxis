@@ -12,6 +12,7 @@ use crate::cook::LoadedImage;
 #[cfg(feature = "cook")]
 use crate::cooked::CookedMaterial;
 use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource};
+use crate::environment::Environment;
 use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
 use crate::transform::PreviousWorldTransform;
 
@@ -285,7 +286,7 @@ impl ReferenceScene {
         }
     }
 
-    /// The scene's point lights: position, colour and intensity.
+    /// The scene's point lights: position, colour, intensity and range.
     pub(crate) fn point_lights(self) -> &'static [(glam::DVec3, PointLight)] {
         match self {
             Self::Minification => &[(
@@ -293,6 +294,7 @@ impl ReferenceScene {
                 PointLight {
                     color: glam::Vec3::ONE,
                     intensity: MINIFICATION_LIGHT_INTENSITY,
+                    range: MINIFICATION_LIGHT_RANGE,
                 },
             )],
             // The directional light alone, white, so each quad shows its
@@ -330,9 +332,28 @@ impl ReferenceScene {
         };
         (transform, light)
     }
+
+    /// The scene's surroundings: from all around, a tenth of the sun's
+    /// illuminance, and a blue background.
+    pub(crate) fn environment(self) -> Environment {
+        match self {
+            Self::Helmet
+            | Self::PbrSweep
+            | Self::UvGrid
+            | Self::NormalTangent
+            | Self::FarCoplanar
+            | Self::Orrery
+            | Self::Minification
+            | Self::TextureWall => Environment {
+                ambient_illuminance: glam::Vec3::splat(0.1),
+                background_luminance: glam::vec3(0.1, 0.2, 0.3),
+            },
+        }
+    }
 }
 
-/// Red, green, blue and yellow, 2 m up and 2 m from the origin along X and Z.
+/// Red, green, blue and yellow, 2 m up and 2 m from the origin along X and Z,
+/// each giving the sun's illuminance 3 m away and reaching 20 m.
 const COLOURED_LIGHTS: [(glam::DVec3, PointLight); 4] = [
     (
         glam::DVec3::new(2.0, 2.0, 2.0),
@@ -355,7 +376,8 @@ const COLOURED_LIGHTS: [(glam::DVec3, PointLight); 4] = [
 const fn coloured_light(color: glam::Vec3) -> PointLight {
     PointLight {
         color,
-        intensity: 1.0,
+        intensity: 9.0,
+        range: 20.0,
     }
 }
 
@@ -535,7 +557,9 @@ const MINIFICATION_CAMERA_TARGET: glam::DVec3 = glam::DVec3::new(0.0, 0.0, 38.0)
 /// 1 m over the floor 30 m ahead: the floor mirrors it about 16 m out, in
 /// the minified distance, so Toksvig shapes its reflection.
 const MINIFICATION_LIGHT: glam::DVec3 = glam::DVec3::new(0.0, 1.0, 16.0);
-const MINIFICATION_LIGHT_INTENSITY: f32 = 30.0;
+const MINIFICATION_LIGHT_INTENSITY: f32 = 300.0;
+/// Past the floor's far corners, 83 m from the light.
+const MINIFICATION_LIGHT_RANGE: f32 = 200.0;
 /// Side of minification's Textures, in texels.
 #[cfg(feature = "cook")]
 const MINIFICATION_TEXTURE_SIZE: u32 = 256;

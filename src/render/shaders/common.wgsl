@@ -42,9 +42,11 @@ struct MaterialData {
 struct LightUniform {
     direction: vec4<f32>,
     color: vec4<f32>,
-    ambient: vec4<f32>,
+    // rgb: the scene's ambient illuminance.
+    ambient_illuminance: vec4<f32>,
 
-    // Point light
+    // Point lights: xyz their position relative to the camera, w their
+    // range; rgb their colour, a their intensity.
     point_positions: array<vec4<f32>, 4>,
     point_colors: array<vec4<f32>, 4>,
     point_light_count: u32,

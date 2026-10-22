@@ -51,6 +51,9 @@ pub struct MaterialRef(pub MaterialHandle);
 pub struct PointLight {
     pub color: glam::Vec3,
     pub intensity: f32,
+    /// Metres from the light past which it adds nothing (KHR_lights_punctual's
+    /// `range`, which must be positive and here finite).
+    pub range: f32,
 }
 
 /// A directional light shining along its entity's forward axis: -Z turned by
