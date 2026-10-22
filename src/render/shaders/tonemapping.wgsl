@@ -10,9 +10,9 @@ fn vs_full_screen(@builtin(vertex_index) vertex_index: u32) -> @builtin(position
 }
 
 // A pixel's display colour, from its exposed colour, unweighted from the
-// resolve.
+// resolve, sRGB-encoded.
 @fragment
 fn fs_tonemap(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let weighted = textureLoad(hdr_target, vec2<u32>(position.xy), 0).rgb;
-    return vec4<f32>(tonemap(resolve_unweighted(weighted)), 1.0);
+    return vec4<f32>(srgb_encode(tonemap(resolve_unweighted(weighted))), 1.0);
 }
