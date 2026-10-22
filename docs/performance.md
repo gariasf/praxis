@@ -84,9 +84,10 @@ and [the checker](https://raw.githubusercontent.com/gariasf/praxis/2a87cbb5201ed
 
 Image quality, against a reference: 16x at 7680×4320, 9 samples per
 pixel, box-filtered to 2560×1440 in linear light. RMSE in 8-bit steps over
-the band (rows 484 to 759, from 4 rows above the horizon at 488), and
-within it over the highlight's columns (1000 to 1559) and the checker
-either side (0 to 899 and 1660 to 2559):
+the band (rows 484 to 759, from 3 rows below the floor's far edge, at
+row 481 across the middle of the frame), and within it over the
+highlight's columns (1000 to 1559) and the checker either side (0 to 899
+and 1660 to 2559):
 
 | Variant | Band | Highlight | Checker |
 |---|---|---|---|
