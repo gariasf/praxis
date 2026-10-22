@@ -6,41 +6,41 @@
   "height": 1440,
   "measured_frames": 1800,
   "cpu_frame_microseconds": {
-    "median": 2179.417,
-    "p95": 2892.2079999999996
+    "median": 2074.625,
+    "p95": 2439.4170000000004
   },
   "gpu_frame_microseconds": {
-    "median": 15505.875,
-    "p95": 17006.166999999998
+    "median": 15299.458999999999,
+    "p95": 16657.333
   },
   "gpu_pass_microseconds": {
     "culling_phase_one": {
-      "median": 70.084,
-      "p95": 72.0
+      "median": 69.709,
+      "p95": 71.79100000000001
     },
     "culling_phase_two": {
-      "median": 59.541,
-      "p95": 61.958000000000006
+      "median": 60.042,
+      "p95": 63.167
     },
     "depth_prepass": {
-      "median": 410.16700000000003,
-      "p95": 411.375
+      "median": 410.08299999999997,
+      "p95": 419.792
     },
     "depth_pyramid_pass": {
-      "median": 789.4580000000001,
-      "p95": 820.958
+      "median": 789.625,
+      "p95": 793.125
     },
     "froxel_pass": {
-      "median": 26.542,
-      "p95": 28.375
+      "median": 26.125,
+      "p95": 28.291999999999998
     },
     "lit_pass": {
-      "median": 936.4580000000001,
-      "p95": 1080.8339999999998
+      "median": 965.417,
+      "p95": 1291.458
     },
     "tonemapping_pass": {
-      "median": 2374.084,
-      "p95": 2535.375
+      "median": 2405.417,
+      "p95": 3191.625
     }
   },
   "draw_calls": 4,
