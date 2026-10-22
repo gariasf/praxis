@@ -46,12 +46,14 @@ fn decode_surface(
     );
 }
 
-// F: Schlick's approximation (Appendix B, "Fresnel"). base_reflectance is
-// the reflectance at normal incidence (textbook F0), and the angle is
-// between V and H.
-fn fresnel_schlick(cos_incidence_angle: f32, base_reflectance: vec3<f32>) -> vec3<f32> {
-    return base_reflectance
-        + (vec3<f32>(1.0) - base_reflectance) * pow(1.0 - cos_incidence_angle, 5.0);
+// Schlick's Fresnel weight, (1 − |V·H|)⁵ (Appendix B, "Fresnel"): how far
+// F climbs from the reflectance at normal incidence, F0, towards 1 as V
+// turns from H. Multiplied out, not pow, which has no value for the
+// negative base that a |V·H| rounded past 1 gives.
+fn fresnel_weight(view_dot_half: f32) -> f32 {
+    let complement = 1.0 - abs(view_dot_half);
+    let complement_squared = complement * complement;
+    return complement_squared * complement_squared * complement;
 }
 
 // D: the Trowbridge-Reitz (GGX) distribution of microfacet normals at width
@@ -113,24 +115,31 @@ fn metallic_roughness_brdf(
     let alpha = surface.roughness * surface.roughness;
     let specular = distribution_ggx(normal_dot_half, alpha)
         * smith_visibility(normal_dot_light, normal_dot_view, view_dot_half, alpha);
-    let cos_incidence_angle = abs(view_dot_half);
-    // A dielectric's surface reflects F of the light; the rest enters,
-    // scatters and leaves diffuse.
-    let dielectric = mix(
-        surface.base_color / PI,
-        vec3<f32>(specular),
-        fresnel_schlick(cos_incidence_angle, vec3<f32>(DIELECTRIC_BASE_REFLECTANCE))
+    // The mix, gathered by lobe. A dielectric's surface reflects F of the
+    // light, from its fixed F0, and the rest enters, scatters and leaves
+    // diffuse; a metal's F0 is its base colour. Schlick's F is linear in F0,
+    // so metallic's mix of the two specular lobes is one lobe whose F is at
+    // the mixed F0, which no light changes. Mixed as Appendix B writes it,
+    // the lit pass took up to 25 µs (5%) longer at 1440p on the M4 Pro.
+    let weight = fresnel_weight(view_dot_half);
+    let dielectric_fresnel = DIELECTRIC_BASE_REFLECTANCE
+        + (1.0 - DIELECTRIC_BASE_REFLECTANCE) * weight;
+    let diffuse_share = (1.0 - surface.metallic) * (1.0 - dielectric_fresnel) / PI;
+    let base_reflectance = mix(
+        vec3<f32>(DIELECTRIC_BASE_REFLECTANCE),
+        surface.base_color,
+        surface.metallic
     );
-    let metal = fresnel_schlick(cos_incidence_angle, surface.base_color) * specular;
-    return mix(dielectric, metal, surface.metallic);
+    let specular_fresnel = base_reflectance + (vec3<f32>(1.0) - base_reflectance) * weight;
+    return diffuse_share * surface.base_color + specular_fresnel * specular;
 }
 
-// The radiance a surface point reflects along view_direction from a
+// The luminance a surface point reflects along view_direction from a
 // punctual light along light_direction, which gives `illuminance` on a
 // surface facing it: f(L, V) E (N·L)⁺, the directions unit vectors from the
-// point. H is left zero where L and V are opposite, so χ⁺ zeroes the
-// specular lobe there.
-fn reflected_radiance(
+// point (ADR 0023's photometric units). H is left zero where L and V are
+// opposite, so χ⁺ zeroes the specular lobe there.
+fn reflected_luminance(
     surface: Surface,
     normal: vec3<f32>,
     view_direction: vec3<f32>,

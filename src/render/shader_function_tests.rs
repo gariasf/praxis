@@ -13,10 +13,11 @@ use crate::render::shaders;
 /// land within 2e-7 of theirs on the M4 Pro.
 const TOLERANCE: f32 = 1e-6;
 
-/// Schlick adds (1 − cos θ)⁵ of the light the base reflectance misses: none
-/// at normal incidence, 1/32 at cos θ = 0.5, and all of it at grazing.
+/// Schlick adds (1 − |cos θ|)⁵ of the light the base reflectance misses:
+/// none at normal incidence, or where a dot product of unit vectors rounds
+/// just past 1, 1/32 at cos θ = ±0.5, and all of it at grazing.
 #[test]
-fn fresnel_schlick_rises_from_the_base_reflectance_to_one_at_grazing() {
+fn fresnel_rises_from_the_base_reflectance_to_one_at_grazing() {
     let Some(context) = gpu_context() else {
         return;
     };
@@ -24,7 +25,9 @@ fn fresnel_schlick_rises_from_the_base_reflectance_to_one_at_grazing() {
     let base_reflectance = [0.04, 0.5, 1.0];
     let cases = [
         (1.0, base_reflectance),
+        (f32::from_bits(1.0f32.to_bits() + 1), base_reflectance),
         (0.5, [0.07, 0.515625, 1.0]),
+        (-0.5, [0.07, 0.515625, 1.0]),
         (0.0, [1.0, 1.0, 1.0]),
     ];
 
@@ -32,7 +35,7 @@ fn fresnel_schlick_rises_from_the_base_reflectance_to_one_at_grazing() {
     let inputs = cases.map(|(cosine, _)| [cosine, red, green, blue]);
     let results = evaluate(
         &context,
-        "vec4<f32>(fresnel_schlick(input.x, input.yzw), 0.0)",
+        "vec4<f32>(input.yzw + (vec3<f32>(1.0) - input.yzw) * fresnel_weight(input.x), 0.0)",
         &inputs,
     );
 
@@ -215,11 +218,11 @@ fn metallic_roughness_brdf_matches_appendix_b_and_is_reciprocal() {
             }
         }
     }
+    let surface = surface("inputs[1].rgb", "inputs[1].w", "inputs[2].x", "1.0");
     let brdf = |normal_dot_light: &str, normal_dot_view: &str| {
         format!(
-            "vec4<f32>(metallic_roughness_brdf(Surface(inputs[1].rgb, 1.0, inputs[1].w, \
-             inputs[2].x, 1.0, vec3<f32>(0.0)), {normal_dot_light}, {normal_dot_view}, \
-             inputs[0].z, inputs[0].w), 0.0)"
+            "vec4<f32>(metallic_roughness_brdf({surface}, {normal_dot_light}, \
+             {normal_dot_view}, inputs[0].z, inputs[0].w), 0.0)"
         )
     };
     let results = evaluate_cases(&context, &brdf("inputs[0].x", "inputs[0].y"), &cases, &[]);
@@ -258,7 +261,7 @@ fn metallic_roughness_brdf_matches_appendix_b_and_is_reciprocal() {
 /// dielectric is not held to that, since its fresnel_mix is not energy
 /// conserving (Appendix B, "Coupling Diffuse and Specular Reflection").
 #[test]
-fn reflected_radiance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_it_receives() {
+fn reflected_luminance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_it_receives() {
     let Some(context) = gpu_context() else {
         return;
     };
@@ -315,11 +318,13 @@ fn reflected_radiance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_i
             cases.push(white_metal);
         }
     }
+    let surface = surface("inputs[3].rgb", "inputs[3].w", "inputs[4].x", "1.0");
     let results = evaluate_cases(
         &context,
-        "vec4<f32>(reflected_radiance(Surface(inputs[3].rgb, 1.0, inputs[3].w, inputs[4].x, \
-         1.0, vec3<f32>(0.0)), inputs[0].xyz, inputs[1].xyz, inputs[2].xyz, vec3<f32>(1.0)), \
-         0.0)",
+        &format!(
+            "vec4<f32>(reflected_luminance({surface}, inputs[0].xyz, inputs[1].xyz, \
+             inputs[2].xyz, vec3<f32>(1.0)), 0.0)"
+        ),
         &cases,
         &[],
     );
@@ -436,8 +441,9 @@ fn reference_visibility(
     }
 }
 
-/// Appendix B's "full code": the BRDF of a surface of `base_color`,
-/// `metallic` and `roughness`, from the cosines N·L, N·V, N·H and V·H.
+/// Appendix B's "full code" (glTF 2.0, Khronos, CC BY 4.0): the BRDF of a
+/// surface of `base_color`, `metallic` and `roughness`, from the cosines
+/// N·L, N·V, N·H and V·H.
 fn reference_brdf(
     cosines: [f64; 4],
     base_color: [f64; 3],
@@ -453,13 +459,13 @@ fn reference_brdf(
     let alpha = roughness * roughness;
     let specular_brdf = reference_distribution(normal_dot_half, alpha)
         * reference_visibility([normal_dot_light, normal_dot_view, view_dot_half, alpha]);
-    let fresnel_w = (1.0 - view_dot_half.abs()).powi(5);
-    let mix = |x: f64, y: f64, a: f64| x * (1.0 - a) + y * a;
+    let fresnel_weight = (1.0 - view_dot_half.abs()).powi(5);
+    let mix = |base: f64, layer: f64, weight: f64| base * (1.0 - weight) + layer * weight;
     base_color.map(|base_color| {
         let diffuse_brdf = base_color / std::f64::consts::PI;
-        let dielectric_fresnel = 0.04 + (1.0 - 0.04) * fresnel_w;
+        let dielectric_fresnel = 0.04 + (1.0 - 0.04) * fresnel_weight;
         let dielectric_brdf = mix(diffuse_brdf, specular_brdf, dielectric_fresnel);
-        let metal_fresnel = base_color + (1.0 - base_color) * fresnel_w;
+        let metal_fresnel = base_color + (1.0 - base_color) * fresnel_weight;
         let metal_brdf = metal_fresnel * specular_brdf;
         mix(dielectric_brdf, metal_brdf, metallic)
     })
@@ -565,6 +571,12 @@ fn decode_surface_scales_each_texel_by_its_factor_and_floors_roughness() {
         [[0.25, 0.375, 0.75, 0.0], [0.25, floor, 0.75, 0.0]]
     );
     assert_eq!(emissives, [[0.5, 0.5, 0.5, 0.0]; 2]);
+}
+
+/// WGSL for an opaque Surface with no emissive, from WGSL expressions for
+/// its base colour, metallic, roughness and occlusion.
+fn surface(base_color: &str, metallic: &str, roughness: &str, occlusion: &str) -> String {
+    format!("Surface({base_color}, 1.0, {metallic}, {roughness}, {occlusion}, vec3<f32>(0.0))")
 }
 
 /// The shader's roughness floor, `MINIMUM_ROUGHNESS` (shading.wgsl).

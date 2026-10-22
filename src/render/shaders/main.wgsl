@@ -93,7 +93,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // branch around it cost the main pass about 10% on the M4 Pro: without
     // one, its illuminance is zero and a fixed direction keeps the term finite.
     let has_directional_light = light.directional_light_count > 0u;
-    var outgoing_radiance = reflected_radiance(
+    var outgoing_luminance = reflected_luminance(
         surface,
         normal,
         view_direction,
@@ -105,7 +105,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let light_vector = light.point_positions[light_index].xyz - in.camera_relative_position;
         let distance = length(light_vector);
         let attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * distance * distance);
-        outgoing_radiance += reflected_radiance(
+        outgoing_luminance += reflected_luminance(
             surface,
             normal,
             view_direction,
@@ -116,5 +116,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // Constant ambient stand-in until ADR 0020's irradiance probes (M5); occlusion darkens it.
     let ambient = 0.03 * surface.base_color * surface.occlusion;
-    return vec4<f32>(ambient + outgoing_radiance + surface.emissive, surface.opacity);
+    return vec4<f32>(ambient + outgoing_luminance + surface.emissive, surface.opacity);
 }
