@@ -61,8 +61,8 @@ pub struct MaterialData {
     pub base_color: [f32; 4],
     pub metallic_roughness: [f32; 4], // x=metallic, y=roughness, zw=pad
     pub emissive: [f32; 4],           // xyz=color, w=strength
-    pub texture_indices: [u32; 4],    // x=albedo, y=normal, z=MR, w=AO
-    pub extra: [u32; 4],              // x=emissive_idx, yzw=pad
+    pub layers: [u32; 4],             // x=albedo, y=normal, z=MR, w=AO
+    pub extra: [u32; 4],              // x=emissive Layer, yzw=pad
 }
 
 /// One Channel's Textures, each sized to its source, bound as one partially
@@ -128,7 +128,7 @@ impl ChannelTextures {
 /// Material-as-ID: one SSBO of `MaterialData` indexed by `MaterialHandle`, plus
 /// one texture binding array per Channel. A single bind group serves every
 /// material; the fragment shader looks up `materials[instance.material_id]` and
-/// samples each Channel's array at the Layer stored in `texture_indices`.
+/// samples each Channel's array at the Layer stored in `layers`.
 pub struct MaterialPool {
     materials: Vec<MaterialData>,
     materials_buffer: wgpu::Buffer,
@@ -275,7 +275,7 @@ impl MaterialPool {
             base_color: material.base_color,
             metallic_roughness: [material.metallic, material.roughness, 0.0, 0.0],
             emissive: [red, green, blue, 1.0],
-            texture_indices: [layers[0], layers[1], layers[2], layers[3]],
+            layers: [layers[0], layers[1], layers[2], layers[3]],
             extra: [layers[4], 0, 0, 0],
         };
         tracing::debug!(material = %id, ?layers, "Material loaded");
@@ -412,7 +412,7 @@ mod tests {
                 let handle = pool
                     .load(&context.device, &mut staging, &cache, AssetId(id))
                     .unwrap();
-                pool.materials[handle.index() as usize].texture_indices[3]
+                pool.materials[handle.index() as usize].layers[3]
             })
             .collect();
         assert_eq!(pool.gpu_memory_bytes(false) - neutral_bytes, 3 * 8);

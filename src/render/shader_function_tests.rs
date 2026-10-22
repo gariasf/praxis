@@ -227,6 +227,70 @@ fn tangent_space_normal_rebuilds_z_from_x_and_y() {
     assert!(grazing > 0);
 }
 
+/// A surface decodes as its Material's factors times its texels (glTF's
+/// metallic-roughness Material): base colour and its alpha, metallic from the
+/// cooked metallic-roughness texel's green and roughness from its red,
+/// occlusion and emissive; a roughness below the floor rises to it. The
+/// values are binary fractions, so each product is exact.
+#[test]
+fn decode_surface_scales_each_texel_by_its_factor_and_floors_roughness() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    // The factors (base colour, metallic and roughness, emissive), then the
+    // texels (albedo; roughness, metallic and occlusion; emissive).
+    let material = [
+        [0.5, 0.25, 1.0, 0.75],
+        [0.5, 0.75, 0.0, 0.0],
+        [2.0, 1.0, 0.5, 1.0],
+    ];
+    let texels = |roughness| {
+        [
+            [0.5, 1.0, 0.25, 0.5],
+            [roughness, 0.5, 0.75, 0.0],
+            [0.25, 0.5, 1.0, 0.0],
+        ]
+    };
+    let cases = [0.5, 1.0 / 64.0].map(|roughness| {
+        let [albedo, metallic_roughness, emissive] = texels(roughness);
+        [
+            material[0],
+            material[1],
+            material[2],
+            albedo,
+            metallic_roughness,
+            emissive,
+        ]
+    });
+    let decode = |expression: &str| {
+        let surface = "decode_surface(MaterialData(inputs[0], inputs[1], inputs[2], vec4<u32>(0u), \
+                       vec4<u32>(0u)), inputs[3], inputs[4].xy, inputs[4].z, inputs[5].xyz)";
+        evaluate_cases(
+            &context,
+            &expression.replace("{surface}", surface),
+            &cases,
+            &[],
+        )
+    };
+    let colours = decode("vec4<f32>({surface}.base_color, {surface}.opacity)");
+    let scalars =
+        decode("vec4<f32>({surface}.metallic, {surface}.roughness, {surface}.occlusion, 0.0)");
+    let emissives = decode("vec4<f32>({surface}.emissive, 0.0)");
+
+    let floor = minimum_roughness(&context);
+    assert_eq!(colours, [[0.25, 0.25, 0.25, 0.375]; 2]);
+    assert_eq!(
+        scalars,
+        [[0.25, 0.375, 0.75, 0.0], [0.25, floor, 0.75, 0.0]]
+    );
+    assert_eq!(emissives, [[0.5, 0.5, 0.5, 0.0]; 2]);
+}
+
+/// The shader's roughness floor, `MINIMUM_ROUGHNESS` (shading.wgsl).
+fn minimum_roughness(context: &GpuContext) -> f32 {
+    evaluate(context, "vec4<f32>(MINIMUM_ROUGHNESS)", &[[0.0; 4]])[0][0]
+}
+
 /// Vertices as the cooker writes them, each QTangent from its encoder, laid
 /// out as the vertex Arena holds them and read on the GPU by index: each
 /// position and UV decodes exact, and each QTangent, unpacked from Snorm16

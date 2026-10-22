@@ -416,7 +416,7 @@ fn a_changed_cook_setting_re_cooks_exactly_the_assets_it_covers() {
 /// The side and mip count of the Toksvig sources' images.
 const TOKSVIG_SIDE: u32 = 16;
 const TOKSVIG_MIPS: usize = 5;
-/// In the normal map's top half, each low bit of a texel's x tilts its
+/// In the normal Texture's top half, each low bit of a texel's x tilts its
 /// normal about y by this much, one way when the bit is clear and the other
 /// when it is set; the bottom half is flat. A tilted box 2^m texels wide
 /// then holds every sign combination of m tilts, so its normals' mean has
@@ -428,8 +428,8 @@ const ROUGHNESS_BYTE: u8 = 77;
 /// rounding of the source normals.
 const ROUGHNESS_TOLERANCE: f32 = 0.01;
 
-/// `bumpy` samples a tilted normal map and a metallic-roughness image;
-/// `smooth` samples another metallic-roughness image and no normal map.
+/// `bumpy` samples a tilted normal Texture and a metallic-roughness image;
+/// `smooth` samples another metallic-roughness image and no normal Texture.
 fn write_toksvig_sources(assets: &Path) {
     let gltf = json!({
         "asset": {"version": "2.0"},
@@ -477,7 +477,7 @@ fn write_toksvig_sources(assets: &Path) {
 }
 
 #[test]
-fn toksvig_widens_each_metallic_roughness_mip_by_its_normal_maps_variance() {
+fn toksvig_widens_each_metallic_roughness_mip_by_its_normal_textures_variance() {
     let directory = scratch("toksvig");
     let (assets, cache) = (directory.join("assets"), directory.join("cooked"));
     let cache = CookedCache::new(&cache);
@@ -518,8 +518,8 @@ fn toksvig_widens_each_metallic_roughness_mip_by_its_normal_maps_variance() {
 }
 
 #[test]
-fn a_material_without_a_normal_map_cooks_its_roughness_unchanged() {
-    let directory = scratch("no-normal-map");
+fn a_material_without_a_normal_texture_cooks_its_roughness_unchanged() {
+    let directory = scratch("no-normal-texture");
     let (assets, cache) = (directory.join("assets"), directory.join("cooked"));
     let cache = CookedCache::new(&cache);
     write_toksvig_sources(&assets);
@@ -538,10 +538,10 @@ fn a_material_without_a_normal_map_cooks_its_roughness_unchanged() {
 
 const NORMAL_TANGENT_TEST_GUID: u128 = 0xc750a32dc879478eaca4748dbc82645a;
 
-/// Changes one texel of the normal map embedded in NormalTangentTest's .glb
+/// Changes one texel of the normal Texture embedded in NormalTangentTest's .glb
 /// at `path` (its image 2): the edited image is appended to the binary
 /// chunk, and the image's buffer view moves onto it.
-fn touch_embedded_normal_map(path: &Path) {
+fn touch_embedded_normal_texture(path: &Path) {
     let glb = fs::read(path).unwrap();
     let gltf::Glb {
         header,
@@ -557,12 +557,12 @@ fn touch_embedded_normal_map(path: &Path) {
     let length = document["bufferViews"][view]["byteLength"]
         .as_u64()
         .unwrap() as usize;
-    let mut normal_map = image::load_from_memory(&binary_chunk[offset..][..length])
+    let mut normal_texture = image::load_from_memory(&binary_chunk[offset..][..length])
         .unwrap()
         .into_rgba8();
-    normal_map.get_pixel_mut(0, 0).0[0] ^= 0x10;
+    normal_texture.get_pixel_mut(0, 0).0[0] ^= 0x10;
     let mut png = std::io::Cursor::new(Vec::new());
-    normal_map
+    normal_texture
         .write_to(&mut png, image::ImageFormat::Png)
         .unwrap();
     let appended_offset = binary_chunk.len().next_multiple_of(4);
@@ -584,7 +584,7 @@ fn touch_embedded_normal_map(path: &Path) {
 
 /// A dev launch of the normal-tangent scene cooks its source and nothing
 /// else, cooks nothing when nothing changed, re-cooks exactly a touched
-/// normal map and the metallic-roughness Texture widened by it, and keeps
+/// normal Texture and the metallic-roughness Texture widened by it, and keeps
 /// the Blobs of a source, or a manifest, gone absent.
 #[test]
 fn a_dev_launch_cooks_exactly_what_its_scene_references_and_changed() {
@@ -627,7 +627,7 @@ fn a_dev_launch_cooks_exactly_what_its_scene_references_and_changed() {
     }
     assert_eq!(launch().cooked, [], "nothing changed, yet a launch cooked");
 
-    touch_embedded_normal_map(&glb);
+    touch_embedded_normal_texture(&glb);
     let mut cooked = launch().cooked;
     cooked.sort();
     // Unnamed, NormalTangentTest's images are named by their index; image 1

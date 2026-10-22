@@ -1039,7 +1039,7 @@ mod tests {
                 base_color: [0.0, 0.0, 0.0, 1.0],
                 metallic_roughness: [0.0, 1.0, 0.0, 0.0],
                 emissive: [red, green, blue, 1.0],
-                texture_indices: [MaterialPool::DEFAULT_LAYER; 4],
+                layers: [MaterialPool::DEFAULT_LAYER; 4],
                 extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
             },
         )

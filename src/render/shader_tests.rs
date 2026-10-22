@@ -255,7 +255,7 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
             base_color,
             metallic_roughness,
             emissive,
-            texture_indices,
+            layers,
             extra,
         }),
         twin!(CookedVertex {

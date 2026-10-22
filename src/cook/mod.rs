@@ -252,9 +252,9 @@ fn read_sources(
             })
             .collect();
         // Toksvig, as in `read_gltf`: a metallic-roughness Texture cooks from
-        // its Material's normal map too (the first Material's, when several
-        // sample it).
-        let normal_maps: Vec<_> = textures
+        // its Material's normal Texture too (the first Material's, when
+        // several sample it).
+        let normal_textures: Vec<_> = textures
             .iter()
             .map(|texture| {
                 let [_, normal, ..] = materials
@@ -269,9 +269,9 @@ fn read_sources(
                     .cloned()
             })
             .collect();
-        for (texture, normal_map) in textures.into_iter().zip(normal_maps) {
-            sources.textures.push(match normal_map {
-                Some(normal_map) => texture.with_normal_map(normal_map),
+        for (texture, normal_texture) in textures.into_iter().zip(normal_textures) {
+            sources.textures.push(match normal_texture {
+                Some(normal_texture) => texture.with_normal_texture(normal_texture),
                 None => texture,
             });
         }
@@ -405,10 +405,10 @@ fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> a
             if channel == MaterialChannel::MetallicRoughness
                 && let Some(normal) = &textures[MaterialChannel::Normal as usize]
             {
-                let Some(normal_map) = texture_source(MaterialChannel::Normal, normal)? else {
+                let Some(normal_texture) = texture_source(MaterialChannel::Normal, normal)? else {
                     continue;
                 };
-                source = source.with_normal_map(normal_map);
+                source = source.with_normal_texture(normal_texture);
             }
             sources.textures.push(source);
         }
@@ -429,7 +429,7 @@ fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> a
             .meshes
             .push((id, mesh::cook_key(&primitives), primitives));
     }
-    // A normal map a metallic-roughness Texture depends on is read twice.
+    // A normal Texture a metallic-roughness Texture depends on is read twice.
     let mut absent_images = absent_images.into_inner();
     absent_images.sort();
     absent_images.dedup();

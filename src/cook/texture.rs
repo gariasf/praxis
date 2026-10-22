@@ -35,9 +35,9 @@ pub struct TextureSource {
     /// Where the image comes from, for messages.
     pub name: String,
     image: SourceImage,
-    /// A metallic-roughness Texture's normal map, whose variance widens its
+    /// A metallic-roughness Texture's normal Texture, whose variance widens its
     /// roughness (Toksvig).
-    normal_map: Option<Box<TextureSource>>,
+    normal_texture: Option<Box<TextureSource>>,
 }
 
 #[derive(Clone)]
@@ -61,7 +61,7 @@ impl TextureSource {
             channel,
             name,
             image,
-            normal_map: None,
+            normal_texture: None,
         }
     }
 
@@ -77,16 +77,16 @@ impl TextureSource {
             channel,
             name,
             image,
-            normal_map: None,
+            normal_texture: None,
         }
     }
 
     /// This metallic-roughness Texture with its roughness widened by
-    /// `normal_map`'s variance, a dependency its Cook key then covers.
-    pub(super) fn with_normal_map(self, normal_map: TextureSource) -> Self {
+    /// `normal_texture`'s variance, a dependency its Cook key then covers.
+    pub(super) fn with_normal_texture(self, normal_texture: TextureSource) -> Self {
         debug_assert_eq!(self.channel, MaterialChannel::MetallicRoughness);
         Self {
-            normal_map: Some(Box::new(normal_map)),
+            normal_texture: Some(Box::new(normal_texture)),
             ..self
         }
     }
@@ -113,7 +113,7 @@ impl TextureSource {
     }
 
     /// SHA-256 over the format, the encoder, the settings, the Channel, a
-    /// normal map's Cook key and the source bytes; a generated image's bytes
+    /// normal Texture's Cook key and the source bytes; a generated image's bytes
     /// are its pixels and size.
     pub(super) fn cook_key(&self, settings: &CookSettings, format_version: u32) -> String {
         let mut hasher = Sha256::new();
@@ -124,9 +124,9 @@ impl TextureSource {
         hasher.update([self.channel as u8]);
         // Tagged, and ahead of the source bytes, whose length varies, so that
         // no source's bytes can stand in for it.
-        if let Some(normal_map) = &self.normal_map {
+        if let Some(normal_texture) = &self.normal_texture {
             hasher.update(b"N");
-            hasher.update(normal_map.cook_key(settings, format_version));
+            hasher.update(normal_texture.cook_key(settings, format_version));
         }
         match &self.image {
             SourceImage::Encoded(bytes) => hasher.update(bytes),
@@ -169,8 +169,8 @@ impl TextureSource {
         };
         let mips = width.max(height).ilog2() as usize + 1;
         let mut level = linearise(&image, self.channel);
-        let mut spread = match &self.normal_map {
-            Some(normal_map) => Some(Level::spread(&normal_map.decode()?)),
+        let mut spread = match &self.normal_texture {
+            Some(normal_texture) => Some(Level::spread(&normal_texture.decode()?)),
             None => None,
         };
         let mut levels = Vec::with_capacity(mips);
@@ -181,7 +181,7 @@ impl TextureSource {
             if self.channel == MaterialChannel::Normal {
                 level.renormalise();
             }
-            // The normal map's level whose texels cover this level's; one
+            // The normal Texture's level whose texels cover this level's; one
             // coarser than this level, or of another aspect ratio, widens
             // nothing here.
             let widened = spread.as_mut().and_then(|spread| {
@@ -276,10 +276,10 @@ fn linearise(image: &LoadedImage, channel: MaterialChannel) -> Level {
 }
 
 impl Level {
-    /// A normal map's spread at its finest level: per texel the unit normal,
+    /// A normal Texture's spread at its finest level: per texel the unit normal,
     /// and the variance about it of the normals the texel covers, zero.
-    fn spread(normal_map: &LoadedImage) -> Level {
-        let mut normals = linearise(normal_map, MaterialChannel::Normal);
+    fn spread(normal_texture: &LoadedImage) -> Level {
+        let mut normals = linearise(normal_texture, MaterialChannel::Normal);
         normals.renormalise();
         let values = normals
             .values
