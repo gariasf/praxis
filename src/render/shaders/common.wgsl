@@ -4,10 +4,12 @@
 
 // Positions reach the shaders relative to the camera (ADR 0014), so the
 // camera sits at the origin and view_proj holds no translation. The camera's
-// World position arrives as the anchor of its grid cell plus an offset.
+// World position arrives as the anchor of its grid cell plus an offset, and
+// its exposure as the scale the lit pass applies to luminance (ADR 0023).
 struct CameraUniform {
     view_proj: mat4x4<f32>,
     anchor: vec3<i32>,
+    exposure: f32,
     offset: vec3<f32>,
 }
 

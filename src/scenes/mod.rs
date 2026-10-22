@@ -5,7 +5,7 @@ use std::time::Duration;
 use bevy_ecs::prelude::*;
 
 use crate::assets::{AssetLoader, MaterialChannel};
-use crate::camera::Camera;
+use crate::camera::{Camera, ev100_for_exposure};
 use crate::components::{DirectionalLight, MaterialRef, MeshRef, PointLight, Transform};
 #[cfg(feature = "cook")]
 use crate::cook::LoadedImage;
@@ -267,7 +267,24 @@ impl ReferenceScene {
             Self::TextureWall => Camera::looking_at(TEXTURE_WALL_CAMERA, glam::DVec3::ZERO),
         };
         camera.position += shift;
+        camera.ev100 = self.ev100();
         camera
+    }
+
+    /// The scene's exposure, an EV100 set by hand (ADR 0023). Each scene
+    /// exposes the sun's illuminance to 1, as it was lit before its lights
+    /// took photometric units: EV100 16.35.
+    fn ev100(self) -> f32 {
+        match self {
+            Self::Helmet
+            | Self::PbrSweep
+            | Self::UvGrid
+            | Self::NormalTangent
+            | Self::FarCoplanar
+            | Self::Orrery
+            | Self::Minification
+            | Self::TextureWall => ev100_for_exposure(1.0 / SUN_ILLUMINANCE),
+        }
     }
 
     /// The time each frame of a capture advances by. The orrery's frames, at
@@ -309,8 +326,8 @@ impl ReferenceScene {
         }
     }
 
-    /// The scene's sun, white and of intensity 1: a directional light whose
-    /// forward axis is turned to shine along the scene's direction.
+    /// The scene's sun, white, of `SUN_ILLUMINANCE`: a directional light
+    /// whose forward axis is turned to shine along the scene's direction.
     pub(crate) fn sun(self) -> (Transform, DirectionalLight) {
         let direction = match self {
             Self::Helmet
@@ -328,13 +345,14 @@ impl ReferenceScene {
         };
         let light = DirectionalLight {
             color: glam::Vec3::ONE,
-            intensity: 1.0,
+            intensity: SUN_ILLUMINANCE,
         };
         (transform, light)
     }
 
     /// The scene's surroundings: from all around, a tenth of the sun's
-    /// illuminance, and a blue background.
+    /// illuminance, and a blue background whose luminance in cd/m² is a tenth
+    /// to three tenths of the sun's illuminance in lux.
     pub(crate) fn environment(self) -> Environment {
         match self {
             Self::Helmet
@@ -345,12 +363,16 @@ impl ReferenceScene {
             | Self::Orrery
             | Self::Minification
             | Self::TextureWall => Environment {
-                ambient_illuminance: glam::Vec3::splat(0.1),
-                background_luminance: glam::vec3(0.1, 0.2, 0.3),
+                ambient_illuminance: glam::Vec3::splat(0.1 * SUN_ILLUMINANCE),
+                background_luminance: glam::vec3(0.1, 0.2, 0.3) * SUN_ILLUMINANCE,
             },
         }
     }
 }
+
+/// The sun's illuminance in every scene, in lux: direct sunlight (ADR 0023).
+/// The scenes' other lights are given against it.
+const SUN_ILLUMINANCE: f32 = 100_000.0;
 
 /// Red, green, blue and yellow, 2 m up and 2 m from the origin along X and Z,
 /// each giving the sun's illuminance 3 m away and reaching 20 m.
@@ -376,7 +398,7 @@ const COLOURED_LIGHTS: [(glam::DVec3, PointLight); 4] = [
 const fn coloured_light(color: glam::Vec3) -> PointLight {
     PointLight {
         color,
-        intensity: 9.0,
+        intensity: 9.0 * SUN_ILLUMINANCE,
         range: 20.0,
     }
 }
@@ -557,7 +579,8 @@ const MINIFICATION_CAMERA_TARGET: glam::DVec3 = glam::DVec3::new(0.0, 0.0, 38.0)
 /// 1 m over the floor 30 m ahead: the floor mirrors it about 16 m out, in
 /// the minified distance, so Toksvig shapes its reflection.
 const MINIFICATION_LIGHT: glam::DVec3 = glam::DVec3::new(0.0, 1.0, 16.0);
-const MINIFICATION_LIGHT_INTENSITY: f32 = 300.0;
+/// The sun's illuminance about 17 m away.
+const MINIFICATION_LIGHT_INTENSITY: f32 = 300.0 * SUN_ILLUMINANCE;
 /// Past the floor's far corners, 83 m from the light.
 const MINIFICATION_LIGHT_RANGE: f32 = 200.0;
 /// Side of minification's Textures, in texels.

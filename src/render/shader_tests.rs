@@ -215,7 +215,7 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
         twin!(CameraUniform {
             view_proj,
             anchor,
-            _pad_anchor,
+            exposure,
             offset,
             _pad_offset,
         }),

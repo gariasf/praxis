@@ -50,6 +50,7 @@ pub struct MaterialRef(pub MaterialHandle);
 #[derive(Component, Clone, Copy)]
 pub struct PointLight {
     pub color: glam::Vec3,
+    /// Luminous intensity, in candela (ADR 0023).
     pub intensity: f32,
     /// Metres from the light past which it adds nothing (KHR_lights_punctual's
     /// `range`, which must be positive and here finite).
@@ -61,5 +62,6 @@ pub struct PointLight {
 #[derive(Component, Clone, Copy)]
 pub struct DirectionalLight {
     pub color: glam::Vec3,
+    /// Illuminance on a surface facing it, in lux (ADR 0023).
     pub intensity: f32,
 }

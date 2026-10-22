@@ -471,7 +471,7 @@ mod tests {
     use crate::assets::material::MaterialData;
     use crate::assets::pools::tests::{logged, read_storage};
     use crate::assets::{MaterialHandle, MeshHandle};
-    use crate::camera::{Camera, projection_matrix};
+    use crate::camera::{Camera, ev100_for_exposure, projection_matrix};
     use crate::capture::read_back;
     use crate::components::{MeshRef, Transform};
     use crate::cooked::{CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex};
@@ -698,6 +698,7 @@ mod tests {
         };
         let camera = CameraUniform {
             view_proj: (projection_matrix(1.0) * Camera::new().view_matrix()).to_cols_array_2d(),
+            exposure: 1.0,
             ..CameraUniform::default()
         };
         // Each frame's image and Instances drawn.
@@ -823,7 +824,11 @@ mod tests {
         // A triangle facing the camera, 2 m ahead of it.
         let mesh = load_triangles(&mut renderer, &[[0.0, 0.0]], &[Some(red)]);
         let mut world = World::new();
-        world.insert_resource(Camera::new());
+        // Exposed to 1, so the emissive reaches the target as it is.
+        world.insert_resource(Camera {
+            ev100: ev100_for_exposure(1.0),
+            ..Camera::new()
+        });
         world.insert_resource(FixedTime::default());
         world.insert_resource(Environment::default());
         let mut preparer = FramePreparer::new(&mut world);
@@ -1139,12 +1144,13 @@ mod tests {
     }
 
     /// Frame data that writes `instances` into the first slots, seen with an
-    /// identity view-projection.
+    /// identity view-projection and exposed to 1.
     fn frame_of(instances: Vec<InstanceData>) -> FrameData {
         let slots = instances.len();
         FrameData {
             camera: CameraUniform {
                 view_proj: glam::Mat4::IDENTITY.to_cols_array_2d(),
+                exposure: 1.0,
                 ..CameraUniform::default()
             },
             light: LightUniform::default(),
