@@ -61,7 +61,8 @@ fn vertex_output(packed_index: u32) -> VertexOutput {
 }
 
 // Every Texture is sampled first, so none is sampled under non-uniform
-// control flow.
+// control flow; the rest decodes the surface and sums what each light
+// reflects with the ambient term and the emissive.
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let material = materials[in.material_id];
@@ -90,15 +91,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // Shaded whether or not the uniform holds a directional light, since a
     // branch around it cost the main pass about 10% on the M4 Pro: without
-    // one, its radiance is zero and a fixed direction keeps the term finite.
+    // one, its illuminance is zero and a fixed direction keeps the term finite.
     let has_directional_light = light.directional_light_count > 0u;
-    var outgoing_radiance = cook_torrance(
+    var outgoing_radiance = reflected_radiance(
+        surface,
         normal,
         view_direction,
         select(vec3<f32>(0.0, 1.0, 0.0), normalize(-light.direction.xyz), has_directional_light),
-        surface.base_color,
-        surface.metallic,
-        surface.roughness,
         light.color.rgb * light.color.a * f32(light.directional_light_count)
     );
 
@@ -106,13 +105,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let light_vector = light.point_positions[light_index].xyz - in.camera_relative_position;
         let distance = length(light_vector);
         let attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * distance * distance);
-        outgoing_radiance += cook_torrance(
+        outgoing_radiance += reflected_radiance(
+            surface,
             normal,
             view_direction,
             normalize(light_vector),
-            surface.base_color,
-            surface.metallic,
-            surface.roughness,
             light.point_colors[light_index].rgb * light.point_colors[light_index].a * attenuation
         );
     }
