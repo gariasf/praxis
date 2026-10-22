@@ -128,7 +128,6 @@ impl DepthPyramidPass {
 mod tests {
     use super::*;
     use crate::assets::pools::tests::{gpu_context, read_storage};
-    use crate::capture::TARGET_FORMAT;
     use crate::gpu::GpuContext;
     use crate::render::targets;
 
@@ -144,10 +143,9 @@ mod tests {
             return;
         };
         let device = &context.device;
-        let mut pass =
-            DepthPyramidPass::new(device, &RenderTargets::new(device, TARGET_FORMAT, 16, 16));
+        let mut pass = DepthPyramidPass::new(device, &RenderTargets::new(device, 16, 16));
         let (width, height) = (37, 23);
-        let render_targets = RenderTargets::new(device, TARGET_FORMAT, width, height);
+        let render_targets = RenderTargets::new(device, width, height);
         pass.bind_render_targets(device, &render_targets);
         // Each triangle's centre, half its width and its depth, in clip space.
         let triangles = [

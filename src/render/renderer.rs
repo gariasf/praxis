@@ -8,6 +8,7 @@ use crate::render::depth_pyramid_pass::{DEPTH_PYRAMID_PASS, DepthPyramidPass};
 use crate::render::main_pass::{DEPTH_PREPASS, LIT_PASS, MainPass};
 use crate::render::readback::GpuStatsReadback;
 use crate::render::targets::RenderTargets;
+use crate::render::tonemapping_pass::{TONEMAPPING_PASS, TonemappingPass};
 use crate::render::{
     AccelerationStructureBytes, CameraUniform, FrameData, FrameStaging, INSTANCE_CAPACITY,
     InstanceData, LightUniform, LoadStaging, STATIC_TLAS_CAPACITY, StaticTlas,
@@ -16,12 +17,13 @@ use crate::stats::{FrameRecorder, GpuFrameStats};
 
 /// The passes `render` records, in order, each timed from its start to its
 /// end.
-pub(crate) const TIMED_PASSES: [&str; 5] = [
+pub(crate) const TIMED_PASSES: [&str; 6] = [
     CullingPhase::One.label(),
     DEPTH_PREPASS,
     DEPTH_PYRAMID_PASS,
     CullingPhase::Two.label(),
     LIT_PASS,
+    TONEMAPPING_PASS,
 ];
 
 /// The Render switches a Renderer is created with and keeps. The defaults are
@@ -55,12 +57,12 @@ impl RenderSwitches {
 pub struct Renderer {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
-    target_format: wgpu::TextureFormat,
     aspect_ratio: f32,
     render_targets: RenderTargets,
     culling_pass: CullingPass,
     main_pass: MainPass,
     depth_pyramid_pass: DepthPyramidPass,
+    tonemapping_pass: TonemappingPass,
     camera_buffer: wgpu::Buffer,
     light_buffer: wgpu::Buffer,
     /// The camera and the lights (`FRAME`).
@@ -129,7 +131,7 @@ impl Renderer {
         let mut load_staging = LoadStaging::new(device.clone());
         let material_pool = MaterialPool::new(&device, &mut load_staging);
 
-        let render_targets = RenderTargets::new(&device, target_format, width, height);
+        let render_targets = RenderTargets::new(&device, width, height);
         let culling_pass = CullingPass::new(
             &device,
             &[
@@ -142,7 +144,6 @@ impl Renderer {
         );
         let main_pass = MainPass::new(
             &device,
-            target_format,
             &[
                 (&FRAME, &frame_bind_group_layout),
                 (&MATERIALS, &material_pool.bind_group_layout),
@@ -213,6 +214,7 @@ impl Renderer {
         );
 
         let depth_pyramid_pass = DepthPyramidPass::new(&device, &render_targets);
+        let tonemapping_pass = TonemappingPass::new(&device, target_format, &render_targets);
         let gpu_stats = GpuStatsReadback::new(&device, queue.get_timestamp_period());
         let static_tlas = StaticTlas::new(&device, STATIC_TLAS_CAPACITY);
 
@@ -222,12 +224,12 @@ impl Renderer {
             load_staging,
             device,
             queue,
-            target_format,
             aspect_ratio: width as f32 / height as f32,
             render_targets,
             culling_pass,
             main_pass,
             depth_pyramid_pass,
+            tonemapping_pass,
             camera_buffer,
             light_buffer,
             frame_bind_group,
@@ -248,10 +250,12 @@ impl Renderer {
     pub fn resize(&mut self, width: u32, height: u32) {
         // A pass whose bind groups read a target rebuilds them here, after
         // the render targets.
-        self.render_targets = RenderTargets::new(&self.device, self.target_format, width, height);
+        self.render_targets = RenderTargets::new(&self.device, width, height);
         self.depth_pyramid_pass
             .bind_render_targets(&self.device, &self.render_targets);
         self.culling_pass
+            .bind_render_targets(&self.device, &self.render_targets);
+        self.tonemapping_pass
             .bind_render_targets(&self.device, &self.render_targets);
         self.aspect_ratio = width as f32 / height as f32;
     }
@@ -373,7 +377,6 @@ impl Renderer {
         );
         self.main_pass.record_lit_pass(
             &mut encoder,
-            target,
             &self.render_targets,
             &bind_groups,
             self.culling_pass.packed_indices(),
@@ -381,9 +384,15 @@ impl Renderer {
             frame.background,
             timestamps.map(|timestamps| timestamps.render_pass(LIT_PASS)),
         );
+        self.tonemapping_pass.record(
+            &mut encoder,
+            target,
+            timestamps.map(|timestamps| timestamps.render_pass(TONEMAPPING_PASS)),
+        );
         // The depth pre-pass draws phase one's draw, and the lit pass phase
-        // two's into depth, then both phases', each with one indirect call.
-        recorder.draw_calls += 3;
+        // two's into depth, then both phases', each with one indirect call;
+        // the tonemapping pass draws one triangle.
+        recorder.draw_calls += 4;
         self.gpu_stats
             .end_frame(&mut encoder, self.culling_pass.frame_draw());
 
@@ -504,7 +513,7 @@ mod tests {
         let frame = triangle_frame(&mut renderer);
         let (image, recorder, _) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
 
-        assert_eq!(recorder.draw_calls, 3);
+        assert_eq!(recorder.draw_calls, 4);
         assert_eq!(image.get_pixel(SIZE / 2, SIZE / 2).0, [255, 0, 0, 255]);
         // The Frame data's background, linear (0.1, 0.2, 0.3), sRGB-encoded
         // as in tests/capture.rs; the GPU may round its green either way.
@@ -585,14 +594,15 @@ mod tests {
         ]);
         let (image, recorder, _) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
 
-        assert_eq!(recorder.draw_calls, 3);
+        assert_eq!(recorder.draw_calls, 4);
         let quarters = [(4, 4), (12, 4), (4, 12), (12, 12)].map(|(x, y)| image.get_pixel(x, y).0);
         assert_eq!(quarters, [RED, GREEN, BLUE, BLUE]);
     }
 
     /// Twice the Instances of a two-triangle Mesh draw twice the Instances
     /// and triangles, read back from the GPU, in the same draw calls: one in
-    /// the depth pre-pass and two in the lit pass.
+    /// the depth pre-pass, two in the lit pass and one in the tonemapping
+    /// pass.
     #[test]
     fn doubling_the_instances_doubles_instances_and_triangles_drawn_not_draw_calls() {
         let Some(context) = gpu_context() else {
@@ -615,8 +625,8 @@ mod tests {
             )
         };
 
-        assert_eq!(drawn(3), (3, 6, 3));
-        assert_eq!(drawn(6), (6, 12, 3));
+        assert_eq!(drawn(3), (3, 6, 4));
+        assert_eq!(drawn(6), (6, 12, 4));
     }
 
     /// Instances past a block of the culling pass's scans, and past a row of
