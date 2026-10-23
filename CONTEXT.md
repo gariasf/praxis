@@ -92,6 +92,10 @@ _Avoid_: Object
 An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.
 _Avoid_: Dynamic Instance, movable
 
+**Bend**:
+The GPU's stand-in for skinning until M7: each frame a compute pass rewrites a Renderable's own Mesh, the bent Mesh, from a rest Mesh of the same vertices, its middle curved into an arc by a curvature the fixed schedule sets each Tick.
+_Avoid_: Deformation, skinning
+
 **Frame data**:
 The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.
 _Avoid_: Scene data, render state

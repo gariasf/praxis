@@ -227,9 +227,10 @@ impl FramePreparer {
     /// highest slots are left out of it, counted, and warned about when they
     /// appear. A Renderable with a `Bend` has its Mesh bent from the rest
     /// Mesh when both are in `mesh_pool` with as many vertices, and is
-    /// warned about otherwise; past the bend pass's capacity, the bends of
-    /// the Meshes highest in the vertex Arena are left out, counted, and
-    /// warned about when they appear.
+    /// warned about otherwise, as is a bend that would race with another;
+    /// past the bend pass's capacity, the bends of the Meshes highest in the
+    /// vertex Arena are left out, counted, and warned about when they
+    /// appear.
     ///
     /// Only new Renderables, blended ones and those whose World transform,
     /// Mesh or Material changed since the last `prepare` write their
@@ -521,8 +522,11 @@ fn prepare_lights(
 /// Fills `bends` with a bend per Renderable with a `Bend` whose Mesh and
 /// rest Mesh `mesh_pool` holds with as many vertices, its curvature blended
 /// `blend_weight` of the way from the previous Tick's, in the order of the
-/// bent Meshes' ranges of the vertex Arena, up to `BEND_CAPACITY`. Sets
-/// `left_out` to how many it had no room for.
+/// bent Meshes' ranges of the vertex Arena, up to `BEND_CAPACITY`. The pass
+/// writes each bent Mesh while it reads each rest Mesh, so of two bends of
+/// one Mesh it keeps one, and it drops a bend from a Mesh that a bend
+/// writes, its own included, warning about both. Sets `left_out` to how
+/// many it had no room for.
 fn prepare_bends(
     world: &World,
     bend_query: &mut BendQuery,
@@ -549,8 +553,7 @@ fn prepare_bends(
             );
             continue;
         }
-        let curvature =
-            bend.previous_curvature + (bend.curvature - bend.previous_curvature) * blend_weight;
+        let curvature = bend.drawn_curvature(blend_weight);
         bends.push(BendData {
             rest_first_vertex: rest.vertices.start,
             first_vertex: bent.vertices.start,
@@ -560,12 +563,26 @@ fn prepare_bends(
         });
     }
     bends.sort_unstable_by_key(|bend| bend.first_vertex);
-    debug_assert!(
-        bends
-            .windows(2)
-            .all(|pair| pair[0].first_vertex != pair[1].first_vertex),
-        "two Renderables bend one Mesh"
-    );
+    let listed = bends.len();
+    bends.dedup_by_key(|bend| bend.first_vertex);
+    let mut index = 0;
+    while index < bends.len() {
+        let rest = bends[index].rest_first_vertex;
+        if bends
+            .binary_search_by_key(&rest, |bend| bend.first_vertex)
+            .is_ok()
+        {
+            bends.remove(index);
+        } else {
+            index += 1;
+        }
+    }
+    if bends.len() < listed {
+        tracing::warn!(
+            dropped = listed - bends.len(),
+            "Bends that would race are dropped: a Mesh two Renderables bend is bent once, and one bent from a Mesh a bend writes is not bent"
+        );
+    }
     let capacity = BEND_CAPACITY as usize;
     *left_out = bends.len().saturating_sub(capacity) as u32;
     bends.truncate(capacity);
@@ -962,41 +979,67 @@ mod tests {
 
     /// Frame data lists each bend in the order of its bent Mesh's range of
     /// the vertex Arena, whatever order the ECS World holds them in, from its
-    /// rest Mesh's range, its curvature blended between the two newest Ticks;
-    /// a bend whose Mesh is not in the pool, or whose rest Mesh holds other
-    /// vertices, is warned about and left unbent.
+    /// rest Mesh's range, its curvature blended between the two newest Ticks.
+    /// A bend whose Mesh is not in the pool, or whose rest Mesh holds other
+    /// vertices, is warned about and left unbent; so are bends that would
+    /// race: a second bend of one Mesh, and bends from a Mesh a bend writes,
+    /// a Mesh's own included.
     #[test]
     fn each_bend_reaches_frame_data_from_its_rest_mesh_blended_between_ticks() {
         let Some(mut frames) = Frames::new() else {
             return;
         };
         let rest = load(&mut frames, 3);
-        let [first, second] = [(); 2].map(|()| load(&mut frames, 3));
+        let [first, second, own, third] = [(); 4].map(|()| load(&mut frames, 3));
         let longer = load(&mut frames, 4);
         frames.world.resource_mut::<FixedTime>().blend_weight = 0.25;
-        for (mesh, curvature) in [
-            (second, 1.0),
-            (first, 0.6),
-            (longer, 0.4),
-            (MeshHandle(99), 0.4),
+        for (mesh, bend) in [
+            (second, bend(rest, 1.0)),
+            (first, bend(rest, 0.6)),
+            (first, bend(rest, 0.6)),
+            (longer, bend(rest, 0.4)),
+            (MeshHandle(99), bend(rest, 0.4)),
+            (own, bend(own, 0.4)),
+            (third, bend(second, 0.4)),
         ] {
-            let bent = (Transform::IDENTITY, MeshRef(mesh), bend(rest, curvature));
-            frames.world.spawn(bent);
+            frames
+                .world
+                .spawn((Transform::IDENTITY, MeshRef(mesh), bend));
         }
         let ((), log) = logged(|| {
             frames.prepare();
         });
 
-        let vertices = |mesh| frames.mesh_pool.get(mesh).expect("loaded").vertices.clone();
-        let expected = [(first, 0.6), (second, 1.0)].map(|(mesh, curvature)| BendData {
-            rest_first_vertex: vertices(rest).start,
-            first_vertex: vertices(mesh).start,
-            vertex_count: 3,
-            azimuth: 0.5,
-            curvature: 0.2 + (curvature - 0.2) * 0.25,
-        });
-        assert_eq!(frames.preparer.frame().bends, expected);
+        let start = |mesh| frames.mesh_pool.get(mesh).expect("loaded").vertices.start;
+        let listed: Vec<(u32, u32, u32, f32)> = frames
+            .preparer
+            .frame()
+            .bends
+            .iter()
+            .map(|bend| {
+                let (rest, bent, count) =
+                    (bend.rest_first_vertex, bend.first_vertex, bend.vertex_count);
+                assert_eq!(bend.azimuth, 0.5);
+                (rest, bent, count, bend.curvature)
+            })
+            .collect();
+        // A quarter of the way from 0.2 to 0.6, and to 1.
+        let expected = [(first, 0.3), (second, 0.4)];
+        assert_eq!(listed.len(), expected.len(), "{listed:?}");
+        for ((rest_start, bent_start, count, curvature), (mesh, blended)) in
+            listed.into_iter().zip(expected)
+        {
+            assert_eq!(
+                (rest_start, bent_start, count),
+                (start(rest), start(mesh), 3)
+            );
+            assert!(
+                (curvature - blended).abs() <= 1e-6,
+                "{curvature}, not {blended}"
+            );
+        }
         assert_eq!(log.matches("so it is not bent").count(), 2, "{log}");
+        assert_eq!(log.matches("dropped=3").count(), 1, "{log}");
         assert_eq!(frames.preparer.bends_left_out(), 0);
     }
 

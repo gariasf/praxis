@@ -23,7 +23,8 @@ use crate::stats::{FrameRecorder, FrameStats, GpuFrameStats};
 use crate::threading::{init_compute_pool, single_threaded_schedule};
 use crate::time::{FixedTime, Time, fixed_schedule, run_ticks};
 use crate::transform::{
-    propagate_world_transforms, record_previous_world_transforms, reset_teleported,
+    propagate_world_transforms, record_previous_curvatures, record_previous_world_transforms,
+    reset_teleported,
 };
 
 /// The source file of the helmet scene's Mesh and Material, relative to the
@@ -273,15 +274,17 @@ fn simulation_schedules(recorder: &FrameRecorder) -> (Schedule, Schedule) {
     let mut fixed_schedule = fixed_schedule();
     recorder.systems.scope(|| {
         schedule.add_systems(fly_camera);
-        // A Tick starts by keeping the World transforms it may move and ends
-        // by propagating its moves, so the two newest Ticks' are at hand for
-        // prepare's blend, however many Ticks a frame runs (ADR 0022).
+        // A Tick starts by keeping the World transforms and curvatures it may
+        // change and ends by propagating its moves, so the two newest Ticks'
+        // are at hand for prepare's blend, however many Ticks a frame runs
+        // (ADR 0022).
         // Game-state systems run before `reset_teleported`, which reads the
         // jumps they mark. Presses wait in `Input` for the next Tick that
         // runs, so a frame that runs none loses none.
         fixed_schedule.add_systems(
             (
                 record_previous_world_transforms,
+                record_previous_curvatures,
                 (spawn_helmet, despawn_helmet)
                     .chain()
                     .run_if(resource_exists::<HelmetAssets>),
@@ -301,6 +304,8 @@ mod tests {
     use bevy_ecs::schedule::ExecutorKind;
 
     use super::*;
+    use crate::assets::MeshHandle;
+    use crate::components::Bend;
     use crate::time::{TICK, TICK_SECONDS};
     use crate::transform::{PreviousWorldTransform, Teleported, WorldTransform};
 
@@ -416,6 +421,48 @@ mod tests {
         run_frames(&mut world, &mut fixed_schedule, |world, ticks, weight| {
             assert_drawn_at(world, pivot, PIVOT, ticks);
             assert_drawn_at(world, body, blend_on_orbit(PIVOT, ticks, weight, 0), ticks);
+        });
+    }
+
+    /// Sets each bend's curvature to the count of Ticks run, as a
+    /// game-state system.
+    fn count_ticks(fixed_time: Res<FixedTime>, mut bends: Query<&mut Bend>) {
+        for mut bend in &mut bends {
+            bend.curvature = (fixed_time.tick + 1) as f32;
+        }
+    }
+
+    #[test]
+    fn between_ticks_a_bend_is_drawn_at_the_blend_of_its_two_newest_tick_curvatures() {
+        let mut world = World::new();
+        world.insert_resource(Input::default());
+        world.insert_resource(FixedTime::default());
+        let bend = Bend {
+            rest: MeshHandle(0),
+            azimuth: 0.0,
+            curvature: 0.0,
+            previous_curvature: 0.0,
+        };
+        let entity = world.spawn(bend).id();
+        let (_, mut fixed_schedule) = simulation_schedules(&FrameRecorder::new());
+        fixed_schedule.add_systems(
+            count_ticks
+                .after(clear_just_pressed)
+                .before(reset_teleported),
+        );
+        run_frames(&mut world, &mut fixed_schedule, |world, ticks, weight| {
+            let blend_weight = world.resource::<FixedTime>().blend_weight;
+            let drawn = world
+                .get::<Bend>(entity)
+                .unwrap()
+                .drawn_curvature(blend_weight);
+            // From the spawn's 0 until the first Tick, then a weight of the
+            // way from the second newest Tick's count to the newest's.
+            let expected = ticks.saturating_sub(1) as f64 + if ticks == 0 { 0.0 } else { weight };
+            assert!(
+                (f64::from(drawn) - expected).abs() <= 1e-4,
+                "after {ticks} Ticks drawn at {drawn}, not {expected}"
+            );
         });
     }
 
