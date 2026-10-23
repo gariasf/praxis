@@ -59,6 +59,18 @@ struct FroxelList {
     lights: array<u32, FROXEL_LIGHT_CAPACITY>,
 }
 
+// What the frame's lights counted, which the CPU reads back
+// (src/render/froxel_pass.rs): the lights the Froxel pass's lists had no
+// room for, then, with the count_point_lights Render switch on, the pixels
+// the light count pass counted and the point lights their Froxels list and
+// whose range reaches them, summed.
+struct LightCounts {
+    froxel_lights_overflowed: atomic<u32>,
+    lit_pixels: atomic<u32>,
+    listed_point_lights: atomic<u32>,
+    reaching_point_lights: atomic<u32>,
+}
+
 // A point light's position relative to the camera at `camera_anchor` and
 // `camera_offset`, composed from its Anchor and offset (ADR 0014).
 fn point_light_position(

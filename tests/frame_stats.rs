@@ -71,7 +71,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // lights of 48 bytes, 524,288 Instances of 128
     // bytes, the culling pass's 4-byte Instance slot count and 8-byte
     // offsets for each slot and block of 256 slots and visibility bit for
-    // each slot, the frame's draw of 2^20 Meshlet records of 12 bytes, 2^24
+    // each slot, the frame's draw of 2^20 Meshlet records of 12 bytes, 2^25
     // packed indices of 4 bytes and 56 bytes of both phases' indirect
     // arguments, counts and phase two's offsets, the 160×90 Depth32Float
     // texture at 4 samples, its 4x RGBA16F colour, which Apple GPUs keep in
@@ -81,11 +81,11 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // u32s a pixel and its 4-byte overflow count, three staging slots of the
     // first frame's 1668 uploaded bytes rounded up to 2048, the GPU stats
     // readback: its resolve buffer of a begin and an end timestamp of 8
-    // bytes for each of the eleven timed passes, and six slots of 240 bytes,
+    // bytes for each of the eleven timed passes, and six slots of 256 bytes,
     // the tonemapping pass's 64×64 R8 dither mask, the Froxel pass's lists,
-    // 32 × 18 × 32 of 128 u32s, and its 4-byte overflow count, the dynamic
-    // TLAS's markers' 4-byte result, and the bend pass's 4,096 bends of 20
-    // bytes. The load's staging is gone.
+    // 32 × 18 × 32 of 128 u32s, and its 16 bytes of light counts, the
+    // dynamic TLAS's markers' 4-byte result, and the bend pass's 4,096 bends
+    // of 20 bytes. The load's staging is gone.
     let multisampled_color = match context.backend() {
         wgpu::Backend::Metal => 0,
         _ => 160 * 90 * 4 * 8,
@@ -105,7 +105,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + (524_288 + 2048) * 8
             + 524_288 / 8
             + (1 << 20) * 12
-            + (1 << 24) * 4
+            + (1 << 25) * 4
             + 56
             + 160 * 90 * 4 * 4
             + multisampled_color
@@ -115,10 +115,10 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + 4
             + 3 * 2048
             + 11 * 2 * 8
-            + 6 * 240
+            + 6 * 256
             + 64 * 64
             + 32 * 18 * 32 * 128 * 4
-            + 4
+            + 16
             + 4
             + 4096 * 20
     );

@@ -59,6 +59,6 @@ fn build_froxel_lists(
     }
     froxel_lists[froxel].light_count = min(count, FROXEL_LIGHT_CAPACITY);
     if count > FROXEL_LIGHT_CAPACITY {
-        atomicAdd(&froxel_lights_overflowed, count - FROXEL_LIGHT_CAPACITY);
+        atomicAdd(&light_counts.froxel_lights_overflowed, count - FROXEL_LIGHT_CAPACITY);
     }
 }

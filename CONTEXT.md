@@ -173,11 +173,11 @@ A committed image that a Reference scene must reproduce within tolerance.
 _Avoid_: Snapshot, screenshot
 
 **Render switches**:
-The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, and the form the `crowd` scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.
+The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the `crowd` scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.
 _Avoid_: Render settings, config, options, debug flags
 
 **Frame stats**:
-What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and of the dynamic TLAS's build, and the GPU frame total (that build plus the span from the start of the first pass to the end of the last), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables refused, lights the light buffer had no room for, lights the Froxel lists had no room for and lights the shadow mask had no bit for, static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, bends the bend pass had no room for, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.
+What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and of the dynamic TLAS's build, and the GPU frame total (that build plus the span from the start of the first pass to the end of the last), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables refused, lights the light buffer had no room for, lights the Froxel lists had no room for and lights the shadow mask had no bit for, the lit pixels and the point lights their Froxels list and whose range reaches them (where counted), static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, bends the bend pass had no room for, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.
 _Avoid_: Metrics, telemetry
 
 **Baseline**:

@@ -220,7 +220,8 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> anyhow::Result<T> {
 
 /// Renders the Reference scene named `scene` headless at `size`,
 /// `<width>x<height>`, writes the last frame to `output` as a PNG, and prints
-/// that frame's stats. The PNG encoder comes with `cook`.
+/// that frame's stats, its point lights per lit pixel counted. The PNG
+/// encoder comes with `cook`.
 #[cfg(feature = "cook")]
 fn capture(scene: &str, output: &str, size: &str) -> anyhow::Result<()> {
     let scene = parse_scene(scene)?;
@@ -235,7 +236,10 @@ fn capture(scene: &str, output: &str, size: &str) -> anyhow::Result<()> {
         glam::DVec3::ZERO,
         width,
         height,
-        RenderSwitches::default(),
+        RenderSwitches {
+            count_point_lights: true,
+            ..RenderSwitches::default()
+        },
     )?;
     image::save_buffer_with_format(
         output,

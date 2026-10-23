@@ -28,6 +28,20 @@ pub(crate) const FROXEL_LIGHT_CAPACITY: u32 = 127;
 /// The Froxels: 18,432 lists, 9 MiB.
 pub(crate) const FROXEL_COUNT: u32 = FROXEL_COLUMNS * FROXEL_ROWS * FROXEL_SLICES;
 
+/// What the frame's lights counted, as `common.wgsl` lays it out, which the
+/// GPU stats readback reads: the lights the lists had no room for, then,
+/// with the `count_point_lights` Render switch on, the pixels the light
+/// count pass counted and the point lights their Froxels list and whose
+/// range reaches them.
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub(crate) struct LightCounts {
+    pub(crate) froxel_lights_overflowed: u32,
+    pub(crate) lit_pixels: u32,
+    pub(crate) listed_point_lights: u32,
+    pub(crate) reaching_point_lights: u32,
+}
+
 /// The pass's pipeline, and the lists it writes.
 pub struct FroxelPass {
     pipeline: wgpu::ComputePipeline,
@@ -36,9 +50,9 @@ pub struct FroxelPass {
     /// Each Froxel's list: how many lights it holds, then their indices in
     /// the light buffer, in light order.
     froxel_lists: wgpu::Buffer,
-    /// The lights the lists had no room for, summed over Froxels: cleared
-    /// before the pass, copied to the GPU stats readback after it.
-    froxel_lights_overflowed: wgpu::Buffer,
+    /// `LightCounts`: cleared before the pass, copied to the GPU stats
+    /// readback at the frame's end.
+    light_counts: wgpu::Buffer,
 }
 
 impl FroxelPass {
@@ -57,9 +71,9 @@ impl FroxelPass {
             usage: wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
-        let froxel_lights_overflowed = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Froxel Overflow Buffer"),
-            size: size_of::<u32>() as u64,
+        let light_counts = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Light Count Buffer"),
+            size: size_of::<LightCounts>() as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::COPY_SRC,
@@ -74,10 +88,7 @@ impl FroxelPass {
                 ("light", light.as_entire_binding()),
                 ("lights", lights.as_entire_binding()),
                 ("froxel_lists", froxel_lists.as_entire_binding()),
-                (
-                    "froxel_lights_overflowed",
-                    froxel_lights_overflowed.as_entire_binding(),
-                ),
+                ("light_counts", light_counts.as_entire_binding()),
             ],
         );
         let shader = device.create_shader_module(shaders::FROXEL.descriptor());
@@ -97,7 +108,7 @@ impl FroxelPass {
             pipeline,
             bind_group,
             froxel_lists,
-            froxel_lights_overflowed,
+            light_counts,
         }
     }
 
@@ -109,7 +120,7 @@ impl FroxelPass {
         encoder: &mut wgpu::CommandEncoder,
         timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
     ) {
-        encoder.clear_buffer(&self.froxel_lights_overflowed, 0, None);
+        encoder.clear_buffer(&self.light_counts, 0, None);
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some(FROXEL_PASS),
             timestamp_writes,
@@ -124,13 +135,14 @@ impl FroxelPass {
         &self.froxel_lists
     }
 
-    /// The lights the frame's lists had no room for, a u32.
-    pub fn froxel_lights_overflowed(&self) -> &wgpu::Buffer {
-        &self.froxel_lights_overflowed
+    /// What the frame's lights counted (`LightCounts`), to which the light
+    /// count pass adds.
+    pub fn light_counts(&self) -> &wgpu::Buffer {
+        &self.light_counts
     }
 
-    /// Bytes of the lists and their overflow count.
+    /// Bytes of the lists and the light counts.
     pub fn gpu_memory_bytes(&self) -> u64 {
-        self.froxel_lists.size() + self.froxel_lights_overflowed.size()
+        self.froxel_lists.size() + self.light_counts.size()
     }
 }

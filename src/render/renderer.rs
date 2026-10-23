@@ -8,6 +8,7 @@ use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
 use crate::render::culling_pass::{CullingPass, CullingPhase, DrawCapacity};
 use crate::render::depth_pyramid_pass::{DEPTH_PYRAMID_PASS, DepthPyramidPass};
 use crate::render::froxel_pass::{FROXEL_PASS, FroxelPass};
+use crate::render::light_count_pass::LightCountPass;
 use crate::render::main_pass::{DEPTH_PREPASS, LIT_PASS, MainPass, PHASE_TWO_DEPTH_PASS};
 use crate::render::readback::GpuStatsReadback;
 use crate::render::shadow_mask_pass::{SHADOW_MASK_PASS, ShadowMaskPass};
@@ -64,6 +65,12 @@ pub struct RenderSwitches {
     /// TLAS (ADR 0020), for the lit pass to read, rather than light every
     /// pixel the light faces.
     pub shadow_rays: bool,
+    /// Whether a compute pass after the frame's others counts into the GPU
+    /// stats the pixels where the frame drew a surface at the first sample,
+    /// with the point lights the surface's Froxel lists and those whose
+    /// range reaches it, from the depth the main pass then keeps. Off, as it
+    /// ships, nothing counts them.
+    pub count_point_lights: bool,
 }
 
 impl Default for RenderSwitches {
@@ -72,6 +79,7 @@ impl Default for RenderSwitches {
             culling: true,
             froxel_lights: true,
             shadow_rays: true,
+            count_point_lights: false,
         }
     }
 }
@@ -107,6 +115,8 @@ pub struct Renderer {
     shadow_rays: bool,
     depth_pyramid_pass: DepthPyramidPass,
     tonemapping_pass: TonemappingPass,
+    /// With the `count_point_lights` Render switch on.
+    light_count_pass: Option<LightCountPass>,
     camera_buffer: wgpu::Buffer,
     light_uniform_buffer: wgpu::Buffer,
     /// Created at its fixed capacity; it never grows.
@@ -227,6 +237,15 @@ impl Renderer {
             &light_uniform_buffer,
             &light_buffer,
         );
+        let light_count_pass = switches.count_point_lights.then(|| {
+            LightCountPass::new(
+                &device,
+                &camera_buffer,
+                &light_buffer,
+                &froxel_pass,
+                &render_targets,
+            )
+        });
         let frame_bind_group = FRAME.bind_group(
             &device,
             &frame_bind_group_layout,
@@ -329,6 +348,7 @@ impl Renderer {
             shadow_rays: switches.shadow_rays,
             depth_pyramid_pass,
             tonemapping_pass,
+            light_count_pass,
             camera_buffer,
             light_uniform_buffer,
             light_buffer,
@@ -362,6 +382,9 @@ impl Renderer {
             .bind_render_targets(&self.device, &self.render_targets);
         self.tonemapping_pass
             .bind_render_targets(&self.device, &self.render_targets);
+        if let Some(light_count_pass) = &mut self.light_count_pass {
+            light_count_pass.bind_render_targets(&self.device, &self.render_targets);
+        }
         self.aspect_ratio = width as f32 / height as f32;
     }
 
@@ -562,6 +585,10 @@ impl Renderer {
             target,
             timestamps.map(|timestamps| timestamps.render_pass(TONEMAPPING_PASS)),
         );
+        // Untimed, after the passes the frame's GPU time spans.
+        if let Some(light_count_pass) = &self.light_count_pass {
+            light_count_pass.record(&mut encoder);
+        }
         // The depth pre-pass draws phase one's draw, and phase two's depth
         // pass or the lit pass phase two's into depth, then the lit pass both
         // phases', each with one indirect call; the tonemapping pass draws
@@ -576,7 +603,7 @@ impl Renderer {
         self.gpu_stats.end_frame(
             &mut encoder,
             self.culling_pass.frame_draw(),
-            self.froxel_pass.froxel_lights_overflowed(),
+            self.froxel_pass.light_counts(),
             self.shadow_mask_pass.shadow_mask_lights_overflowed(),
         );
 
@@ -1567,6 +1594,92 @@ pub(crate) mod tests {
             image == brute_force,
             "Froxel lights differ from brute force"
         );
+    }
+
+    /// A white quad over the left half of the view, 1.8 m away, and point
+    /// lights. With the `count_point_lights` Render switch on, the light
+    /// count pass counts each pixel the quad covers, with the lights its
+    /// Froxel lists and those whose range reaches the quad there: three in
+    /// front reaching past it, listed and reaching everywhere; one just
+    /// behind it, within its Froxels' slice of depth but short of it, listed
+    /// in some and reaching none. Off, nothing counts them.
+    #[test]
+    fn the_light_count_pass_counts_the_point_lights_each_lit_pixel_lists_and_is_reached_by() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        const SIDE: u32 = 48;
+        let view_proj = projection_matrix(1.0) * Camera::new().view_matrix();
+        let counts_with = |switches, lights: &[([f32; 3], f32)]| {
+            let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIDE, SIDE, switches);
+            let white = renderer.material_pool.insert(
+                &mut renderer.load_staging,
+                MaterialData {
+                    base_color: [1.0; 4],
+                    metallic_roughness: [0.0, 1.0, 0.0, 0.0],
+                    emissive: [0.0, 0.0, 0.0, 1.0],
+                    layers: [MaterialPool::DEFAULT_LAYER; 4],
+                    extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
+                },
+            );
+            let quad = load_quad(&mut renderer);
+            // Its right edge on the view's axis, between two columns of
+            // pixels.
+            let left_half = InstanceData {
+                rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
+                    3.0, 4.0, 1.0,
+                ))),
+                offset: [-1.5, 0.0, -1.8],
+                ..instance(quad, white.index(), [0.0, 0.0])
+            };
+            let frame = FrameData {
+                camera: CameraUniform {
+                    view_proj: view_proj.to_cols_array_2d(),
+                    exposure: 1.0,
+                    ..CameraUniform::default()
+                },
+                light: LightUniform {
+                    point_light_count: lights.len() as u32,
+                    ..LightUniform::default()
+                },
+                lights: lights
+                    .iter()
+                    .map(|&(offset, range)| LightData {
+                        range,
+                        offset,
+                        intensity: [0.01; 3],
+                        ..LightData::default()
+                    })
+                    .collect(),
+                ..frame_of(vec![left_half])
+            };
+            let (_, _, gpu) = render_frame(&context, &mut renderer, &frame, SIDE, SIDE);
+            (
+                gpu.lit_pixels,
+                gpu.listed_point_lights,
+                gpu.reaching_point_lights,
+            )
+        };
+        let counting = RenderSwitches {
+            count_point_lights: true,
+            ..RenderSwitches::default()
+        };
+        let covered = SIDE / 2 * SIDE;
+        let reaching = [
+            ([-0.3, 0.0, -0.8], 10.0),
+            ([0.3, 0.0, -0.8], 10.0),
+            ([0.0, 0.3, -0.8], 10.0),
+        ];
+        assert_eq!(
+            counts_with(counting, &reaching),
+            (covered, 3 * covered, 3 * covered)
+        );
+        let (lit, listed, reached) = counts_with(counting, &[([-0.3, 0.0, -1.95], 0.1)]);
+        assert!(
+            (lit, reached) == (covered, 0) && listed > 0,
+            "{lit} lit pixels, {listed} listed and {reached} reaching the light behind the quad"
+        );
+        assert_eq!(counts_with(RenderSwitches::default(), &reaching), (0, 0, 0));
     }
 
     /// The sun, then point lights about a camera 100 km out, turned, among

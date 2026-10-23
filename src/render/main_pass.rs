@@ -39,6 +39,9 @@ pub struct MainPass {
     /// Whether shadow rays are on, so phase two's depth is drawn in its own
     /// pass rather than by the lit pass.
     shadow_rays: bool,
+    /// Whether the lit pass keeps the depth it ends with, for the light
+    /// count pass (the `count_point_lights` Render switch).
+    keeps_depth: bool,
 }
 
 impl MainPass {
@@ -160,6 +163,7 @@ impl MainPass {
             meshlet_records_buffer,
             inputs,
             shadow_rays: switches.shadow_rays,
+            keeps_depth: switches.count_point_lights,
         }
     }
 
@@ -285,7 +289,7 @@ impl MainPass {
                 // This is what @location(0) in the fragment shader targets
                 Some(render_targets.color_attachment(background)),
             ],
-            depth_stencil_attachment: Some(render_targets.final_depth_attachment()),
+            depth_stencil_attachment: Some(render_targets.final_depth_attachment(self.keeps_depth)),
             occlusion_query_set: None,
             timestamp_writes,
             multiview_mask: None,

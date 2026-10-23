@@ -125,8 +125,8 @@ pub const FRAME_DRAW: BindGroupDefinition = BindGroupDefinition {
 
 /// Group 3 of the Froxel pass: the camera and the lights, which the CPU
 /// writes as `FRAME` holds them, and what the pass writes: each Froxel's
-/// list, and how many lights the lists had no room for, which the CPU reads
-/// back.
+/// list, and the light counts, among them how many lights the lists had no
+/// room for, which the CPU reads back.
 pub const FROXEL_LISTS: BindGroupDefinition = BindGroupDefinition {
     index: 3,
     label: "Froxel Lists Bind Group",
@@ -135,7 +135,7 @@ pub const FROXEL_LISTS: BindGroupDefinition = BindGroupDefinition {
         uniform("light", "LightUniform", wgpu::ShaderStages::COMPUTE),
         read_only_storage("lights", "array<LightData>", wgpu::ShaderStages::COMPUTE),
         storage("froxel_lists", "array<FroxelList>"),
-        storage("froxel_lights_overflowed", "atomic<u32>"),
+        storage("light_counts", "LightCounts"),
     ],
 };
 
@@ -229,6 +229,36 @@ pub const MAIN_PASS_INPUTS: BindGroupDefinition = BindGroupDefinition {
             wgpu::TextureSampleType::Uint,
             false,
             wgpu::ShaderStages::FRAGMENT,
+        ),
+    ],
+};
+
+/// Group 3 of the light count pass, which runs with the
+/// `count_point_lights` Render switch on: the camera and the lights, which
+/// the CPU writes as `FRAME` holds them, the Froxel lists, which the Froxel
+/// pass writes, the depth target, which the main pass writes, and the light
+/// counts, which the pass adds to and the CPU reads back.
+pub const LIGHT_COUNT_INPUT: BindGroupDefinition = BindGroupDefinition {
+    index: 3,
+    label: "Light Count Input Bind Group",
+    bindings: &[
+        uniform("camera", "CameraUniform", wgpu::ShaderStages::COMPUTE),
+        read_only_storage("lights", "array<LightData>", wgpu::ShaderStages::COMPUTE),
+        Binding {
+            writer: Writer::Gpu,
+            ..read_only_storage(
+                "froxel_lists",
+                "array<FroxelList>",
+                wgpu::ShaderStages::COMPUTE,
+            )
+        },
+        storage("light_counts", "LightCounts"),
+        loaded_texture(
+            "depth",
+            "texture_depth_multisampled_2d",
+            wgpu::TextureSampleType::Depth,
+            true,
+            wgpu::ShaderStages::COMPUTE,
         ),
     ],
 };
