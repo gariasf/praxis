@@ -1313,6 +1313,73 @@ fn a_packed_index_holds_its_meshlet_record_above_six_bits_of_vertex() {
     }
 }
 
+/// The shadow mask pass rebuilds the point a depth target shows through a
+/// pixel from its depth and the camera's view_proj. Through a camera turned
+/// off every axis, at points across a 1440p target, its corners and sample
+/// offsets included, and depths from the near plane to 10 km, each lands
+/// where the f64 inverse of that view_proj puts it, within 2^-20 of its
+/// largest coordinate: sixteen times inside the 2^-16 a shadow ray's origin
+/// leaves its surface by (`shadow_mask.wgsl`).
+#[test]
+fn position_at_rebuilds_the_point_a_depth_shows_through_a_pixel() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let size = [2560.0_f32, 1440.0];
+    let view = glam::Mat4::look_to_rh(
+        glam::Vec3::ZERO,
+        glam::vec3(0.3, -0.5, -0.8).normalize(),
+        glam::Vec3::Y,
+    );
+    let view_proj = crate::camera::projection_matrix(size[0] / size[1]) * view;
+    let columns = view_proj.to_cols_array_2d();
+    // The near plane's distance over the depth along the view axis.
+    let near = f64::from(columns[3][2]);
+    let points = [0.0, 0.375, 640.5, 1279.875, 2559.625, 2560.0]
+        .into_iter()
+        .flat_map(|x| [0.0, 0.125, 720.5, 1439.875, 1440.0].map(|y| [x, y]));
+    let mut cases = Vec::new();
+    for [x, y] in points {
+        for distance in [0.1, 0.35, 2.0, 40.0, 900.0, 10_000.0] {
+            let depth = (near / distance) as f32;
+            cases.push([
+                columns[0],
+                columns[1],
+                columns[2],
+                columns[3],
+                [x, y, depth, 0.0],
+                [size[0], size[1], 0.0, 0.0],
+            ]);
+        }
+    }
+    let results = evaluate_cases(
+        &context,
+        "vec4<f32>(position_at(mat4x4<f32>(inputs[0], inputs[1], inputs[2], inputs[3]), \
+         inputs[4].xy, inputs[4].z, inputs[5].xy), 0.0)",
+        &cases,
+        &[],
+    );
+
+    let inverse = view_proj.as_dmat4().inverse();
+    for (case, result) in cases.iter().zip(results) {
+        let [x, y, depth, _] = case[4].map(f64::from);
+        let device = glam::dvec4(
+            x / f64::from(size[0]) * 2.0 - 1.0,
+            1.0 - y / f64::from(size[1]) * 2.0,
+            depth,
+            1.0,
+        );
+        let homogeneous = inverse * device;
+        let expected = homogeneous.truncate() / homogeneous.w;
+        let gpu = glam::Vec3::from_slice(&result).as_dvec3();
+        let bound = expected.abs().max_element() * 2f64.powi(-20);
+        assert!(
+            gpu.distance(expected) <= bound,
+            "({x}, {y}) at depth {depth}: rebuilt {gpu}, {expected} by the f64 inverse"
+        );
+    }
+}
+
 /// ADR 0014's precision bar: 0.25 px at 1440p and a 45° vertical field of
 /// view, for a point 0.3 m from the camera, is 0.043 mm.
 const PRECISION_BAR: f64 = 4.3e-5;

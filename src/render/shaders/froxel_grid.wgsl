@@ -27,14 +27,15 @@ fn froxel_slice(depth: f32) -> u32 {
     return u32(clamp(slice, 0.0, f32(FROXEL_SLICES - 1u)));
 }
 
-// The index of the Froxel that holds the point at clip-space position
-// `clip`: its screen rectangle from its normalised device coordinates, its
-// slice from clip w, its depth along the view axis.
-fn froxel_at(clip: vec4<f32>) -> u32 {
+// The index of the Froxel that holds the point `view_depth` along the view
+// axis behind `point`, in pixels from the top left corner of a target of
+// `size`: its screen rectangle, counted from the lowest normalised device
+// coordinates, and its slice.
+fn froxel_at(point: vec2<f32>, size: vec2<f32>, view_depth: f32) -> u32 {
     let rectangle = clamp(
-        floor((clip.xy / clip.w * 0.5 + 0.5) * FROXEL_GRID_SIZE),
+        floor(vec2<f32>(point.x / size.x, 1.0 - point.y / size.y) * FROXEL_GRID_SIZE),
         vec2<f32>(0.0),
         FROXEL_GRID_SIZE - 1.0
     );
-    return froxel_index(vec2<u32>(rectangle), froxel_slice(clip.w));
+    return froxel_index(vec2<u32>(rectangle), froxel_slice(view_depth));
 }

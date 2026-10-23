@@ -125,7 +125,7 @@ impl DepthPyramidPass {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::assets::pools::tests::{gpu_context, read_storage};
     use crate::gpu::GpuContext;
@@ -188,7 +188,7 @@ mod tests {
     /// Draws `triangles`, each three clip-space corners, into the depth
     /// target of `render_targets`, as the depth pre-pass draws: cleared to
     /// 0, keeping the nearest.
-    fn draw_depth(
+    pub(crate) fn draw_depth(
         context: &GpuContext,
         render_targets: &RenderTargets,
         triangles: &[[[f32; 4]; 3]],
@@ -306,7 +306,7 @@ mod tests {
 
     /// Every sample of a multisampled depth target, each pixel's together,
     /// rows top first.
-    fn read_depth_samples(context: &GpuContext, depth: &wgpu::TextureView) -> Vec<f32> {
+    pub(crate) fn read_depth_samples(context: &GpuContext, depth: &wgpu::TextureView) -> Vec<f32> {
         let texture = depth.texture();
         read_texture(
             context,
@@ -350,7 +350,7 @@ mod tests {
 
     /// The f32s `kernel` copies from `view`, with one invocation of its `copy`
     /// entry point per texel of its `size`, each writing `values_per_texel`.
-    fn read_texture(
+    pub(crate) fn read_texture(
         context: &GpuContext,
         kernel: &str,
         view: &wgpu::TextureView,

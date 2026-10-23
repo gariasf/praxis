@@ -167,6 +167,7 @@ Apple M4 Pro (Apple9 per MFST p2), 24 GiB, macOS 27.0.1, wgpu 29.0.1 on Metal, 2
 | `max_buffer_size` (`maxBufferLength`); `max_storage_buffer_binding_size` | 4,294,967,295 bytes on 30.0.1, wgpu-core's cap (`praxis capabilities`, 2026-10-14, #96); `maxBufferLength` itself read 14,302,248,960 bytes (13.3 GiB) on 29.0.1; 4,294,967,292 |
 | `generate_allocator_report()` after creating a 64 MiB buffer | `None` |
 | Legacy feature-set queries behind BC, `INDIRECT_FIRST_INSTANCE`, 16384 textures and texture arrays | All answered: each of those is present |
+| 4x MSAA sample positions in a `Depth32Float` target (2026-10-23, wgpu 30.0.1, #260's `each_depth_sample_lies_where_the_pass_rebuilds_it`, which CI's lavapipe also runs) | The standard pattern: (0.375, 0.125), (0.875, 0.375), (0.125, 0.625), (0.625, 0.875) from the pixel's top left. Vulkan promises it only where `standardSampleLocations` is set, which wgpu does not report; the shadow mask pass rebuilds positions at it |
 
 ## Surprises (what a session trusting the docs or the ticket would get wrong)
 

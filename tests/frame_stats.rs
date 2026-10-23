@@ -77,10 +77,11 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // texture at 4 samples, its 4x RGBA16F colour, which Apple GPUs keep in
     // tile memory, so it counts nothing on Metal, the RGBA16F HDR target it
     // resolves into, the R32Float depth pyramid from 80×45 down to 1×1
-    // (80×45, 40×22, 20×11, 10×5, 5×2, 2×1, 1×1), three staging slots of the
+    // (80×45, 40×22, 20×11, 10×5, 5×2, 2×1, 1×1), the shadow mask of two
+    // u32s a pixel and its 4-byte overflow count, three staging slots of the
     // first frame's 1668 uploaded bytes rounded up to 2048, the GPU stats
     // readback: its resolve buffer of a begin and an end timestamp of 8
-    // bytes for each of the nine timed passes, and six slots of 208 bytes,
+    // bytes for each of the eleven timed passes, and six slots of 240 bytes,
     // the tonemapping pass's 64×64 R8 dither mask, the Froxel pass's lists,
     // 32 × 18 × 32 of 128 u32s, and its 4-byte overflow count, the dynamic
     // TLAS's markers' 4-byte result, and the bend pass's 4,096 bends of 20
@@ -110,9 +111,11 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + multisampled_color
             + 160 * 90 * 8
             + (3600 + 880 + 220 + 50 + 10 + 2 + 1) * 4
+            + 160 * 90 * 8
+            + 4
             + 3 * 2048
-            + 9 * 2 * 8
-            + 6 * 208
+            + 11 * 2 * 8
+            + 6 * 240
             + 64 * 64
             + 32 * 18 * 32 * 128 * 4
             + 4
@@ -194,6 +197,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
                 "depth_prepass",
                 "depth_pyramid_pass",
                 "culling_phase_two",
+                "phase_two_depth_pass",
+                "shadow_mask_pass",
                 "lit_pass",
                 "tonemapping_pass"
             ],

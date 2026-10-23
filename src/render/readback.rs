@@ -1,6 +1,7 @@
 //! Each frame's GPU stats come back through a ring of buffers the CPU maps
-//! for reading: the counts of the frame's draw and of the lights its Froxel
-//! lists had no room for, and its passes' timestamps, a few frames late.
+//! for reading: the counts of the frame's draw, of the lights its Froxel
+//! lists had no room for and of those its shadow mask had no bit for, and
+//! its passes' timestamps, a few frames late.
 //! Only the main thread submits and polls, and it never
 //! waits on a map while it renders (ADR 0016): a readback whose slot is not
 //! ready is skipped and counted; `flush` waits, at the end of a run. Metal
@@ -14,7 +15,7 @@ use std::time::Duration;
 
 use crate::render::bend_pass::BEND_PASS;
 use crate::render::culling_pass::FrameDraw;
-use crate::render::main_pass::LIT_PASS;
+use crate::render::shadow_mask_pass::SHADOW_MASK_PASS;
 use crate::render::{FRAMES_IN_FLIGHT, TIMED_PASSES};
 use crate::stats::{FrameRecorder, GpuFrameStats};
 
@@ -35,9 +36,13 @@ const TIMESTAMP_BYTES: u64 = QUERIES_PER_FRAME as u64 * wgpu::QUERY_SIZE as u64;
 /// no room for, after its draw's counts.
 const FROXEL_OVERFLOW_OFFSET: u64 = size_of::<FrameDraw>() as u64;
 
+/// Where a slot holds the count of the lights the frame's shadow mask had no
+/// bit for, after the Froxel lists'.
+const SHADOW_MASK_OVERFLOW_OFFSET: u64 = FROXEL_OVERFLOW_OFFSET + size_of::<u32>() as u64;
+
 /// Where a slot holds the frame's timestamps, after its counts.
 const TIMESTAMP_OFFSET: u64 =
-    (FROXEL_OVERFLOW_OFFSET + size_of::<u32>() as u64).next_multiple_of(8);
+    (SHADOW_MASK_OVERFLOW_OFFSET + size_of::<u32>() as u64).next_multiple_of(8);
 
 /// What a slot's map callback reported.
 const MAP_PENDING: u8 = 0;
@@ -66,10 +71,15 @@ pub struct GpuStatsReadback {
     /// Set while the frames read back had lights their Froxel lists had no
     /// room for, which was warned about when it was set.
     warned_of_froxel_overflow: bool,
-    /// The last frame read back and the tick its lit pass ended at: the
-    /// next frame's build of the dynamic TLAS, which its rays read, waits
-    /// for it.
-    last_lit_pass_end: Option<(u64, u64)>,
+    /// Set while the frames read back had lights their shadow mask had no
+    /// bit for, which was warned about when it was set.
+    warned_of_shadow_mask_overflow: bool,
+    /// Which of `TIMED_PASSES` never run, so read as taking no time.
+    untimed: [bool; TIMED_PASSES.len()],
+    /// The last frame read back and the tick its shadow mask pass ended at,
+    /// in frames that trace shadow rays: the next frame's build of the
+    /// dynamic TLAS, which the rays read, waits for it.
+    last_shadow_ray_end: Option<(u64, u64)>,
 }
 
 struct Slot {
@@ -109,8 +119,9 @@ pub struct FrameTimestamps<'a> {
 }
 
 impl GpuStatsReadback {
-    /// The ring, empty; timestamps tick every `nanoseconds_per_tick`.
-    pub fn new(device: &wgpu::Device, nanoseconds_per_tick: f32) -> Self {
+    /// The ring, empty; timestamps tick every `nanoseconds_per_tick`, and
+    /// the passes of `TIMED_PASSES` that `untimed` names never run.
+    pub fn new(device: &wgpu::Device, nanoseconds_per_tick: f32, untimed: &[&str]) -> Self {
         let buffer = |label, size, usage| {
             device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some(label),
@@ -150,7 +161,14 @@ impl GpuStatsReadback {
             read_back: Vec::with_capacity(SLOT_COUNT as usize),
             warned_of_overflow: false,
             warned_of_froxel_overflow: false,
-            last_lit_pass_end: None,
+            warned_of_shadow_mask_overflow: false,
+            untimed: untimed
+                .iter()
+                .fold([false; TIMED_PASSES.len()], |mut flags, pass| {
+                    flags[pass_position(pass)] = true;
+                    flags
+                }),
+            last_shadow_ray_end: None,
         }
     }
 
@@ -210,26 +228,28 @@ impl GpuStatsReadback {
     }
 
     /// Ends the frame `begin_frame` started: copies its draw's counts,
-    /// `frame_draw`, and the lights its Froxel lists had no room for,
-    /// `froxel_lights_overflowed`, into its slot, and marks it completed once
-    /// the GPU has run it.
+    /// `frame_draw`, the lights its Froxel lists had no room for,
+    /// `froxel_lights_overflowed`, and those its shadow mask had no bit for,
+    /// `shadow_mask_lights_overflowed`, into its slot, and marks it
+    /// completed once the GPU has run it.
     pub fn end_frame(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
         frame_draw: &wgpu::Buffer,
         froxel_lights_overflowed: &wgpu::Buffer,
+        shadow_mask_lights_overflowed: &wgpu::Buffer,
     ) {
         let slot = &self.slots[slot_index(self.frame)];
         if matches!(slot.state, SlotState::Recorded { frame } if frame == self.frame) {
             let size = size_of::<FrameDraw>() as u64;
             encoder.copy_buffer_to_buffer(frame_draw, 0, &slot.buffer, 0, size);
-            encoder.copy_buffer_to_buffer(
-                froxel_lights_overflowed,
-                0,
-                &slot.buffer,
-                FROXEL_OVERFLOW_OFFSET,
-                size_of::<u32>() as u64,
-            );
+            for (count, offset) in [
+                (froxel_lights_overflowed, FROXEL_OVERFLOW_OFFSET),
+                (shadow_mask_lights_overflowed, SHADOW_MASK_OVERFLOW_OFFSET),
+            ] {
+                let size = size_of::<u32>() as u64;
+                encoder.copy_buffer_to_buffer(count, 0, &slot.buffer, offset, size);
+            }
         }
         let (frame, frames_completed) = (self.frame, self.frames_completed.clone());
         encoder.on_submitted_work_done(move || {
@@ -301,9 +321,10 @@ impl GpuStatsReadback {
 
     /// Reads slot `index` back if it is mapped, and frees it. Returns whether
     /// it is free; one still mapping is not. A frame whose draw had no room
-    /// for some Instances, or whose Froxel lists for some lights, is warned
-    /// about, once until a frame read back has room for all; a skipped
-    /// readback neither warns nor clears it.
+    /// for some Instances, whose Froxel lists had none for some lights, or
+    /// whose shadow mask had no bit for some, is warned about, once until a
+    /// frame read back has room for all; a skipped readback neither warns
+    /// nor clears it.
     fn read(&mut self, index: usize) -> bool {
         let slot = &mut self.slots[index];
         let SlotState::Mapping { frame } = slot.state else {
@@ -337,6 +358,18 @@ impl GpuStatsReadback {
                             );
                         }
                         self.warned_of_froxel_overflow = froxel_overflowed;
+                        let shadow_mask_lights_overflowed: u32 = bytemuck::pod_read_unaligned(
+                            &view[SHADOW_MASK_OVERFLOW_OFFSET as usize..][..size_of::<u32>()],
+                        );
+                        let shadow_mask_overflowed = shadow_mask_lights_overflowed > 0;
+                        if shadow_mask_overflowed && !self.warned_of_shadow_mask_overflow {
+                            tracing::warn!(
+                                frame,
+                                shadow_mask_lights_overflowed,
+                                "The shadow mask is full: lights past a pixel's bits cast no shadow there"
+                            );
+                        }
+                        self.warned_of_shadow_mask_overflow = shadow_mask_overflowed;
                         let ticks: [u64; QUERIES_PER_FRAME] = bytemuck::pod_read_unaligned(
                             &view[TIMESTAMP_OFFSET as usize..][..TIMESTAMP_BYTES as usize],
                         );
@@ -350,17 +383,18 @@ impl GpuStatsReadback {
                         // marker before it can run while the frame before
                         // still traces rays against the TLAS, which the build
                         // waits for, so it starts at the later of the two.
-                        let previous_lit_pass_end = self
-                            .last_lit_pass_end
+                        let previous_shadow_ray_end = self
+                            .last_shadow_ray_end
                             .filter(|&(previous, _)| previous + 1 == frame)
                             .map_or(0, |(_, tick)| tick);
                         let build = if slot.dynamic_tlas_built {
-                            time(ticks[0].max(previous_lit_pass_end), ticks[1])
+                            time(ticks[0].max(previous_shadow_ray_end), ticks[1])
                         } else {
                             Duration::ZERO
                         };
-                        let lit_pass = pass_position(LIT_PASS);
-                        self.last_lit_pass_end = Some((frame, ticks[2 * lit_pass + 1]));
+                        let shadow_mask_pass = pass_position(SHADOW_MASK_PASS);
+                        self.last_shadow_ray_end = (!self.untimed[shadow_mask_pass])
+                            .then(|| (frame, ticks[2 * shadow_mask_pass + 1]));
                         // A frame that bends nothing records no bend pass,
                         // whose timestamps are then an earlier frame's.
                         let (bend_pass, bent) = (pass_position(BEND_PASS), slot.bent);
@@ -371,6 +405,7 @@ impl GpuStatsReadback {
                                 let taken = match pass {
                                     0 => build,
                                     _ if pass == bend_pass && !bent => Duration::ZERO,
+                                    _ if self.untimed[pass] => Duration::ZERO,
                                     _ => pass_time(pass),
                                 };
                                 (TIMED_PASSES[pass], taken)
@@ -385,6 +420,7 @@ impl GpuStatsReadback {
                             triangles_drawn: draw.triangles_drawn(),
                             instances_overflowed: draw.instances_overflowed,
                             froxel_lights_overflowed,
+                            shadow_mask_lights_overflowed,
                         });
                     }
                     Err(error) => tracing::error!(frame, %error, "GPU stats readback not mapped"),
@@ -479,7 +515,7 @@ mod tests {
             }
             Err(error) => panic!("headless GPU context failed: {error:#}"),
         };
-        let new_ring = || GpuStatsReadback::new(&context.device, 1.0);
+        let new_ring = || GpuStatsReadback::new(&context.device, 1.0, &[]);
         let counts = |label, size| {
             context.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some(label),
@@ -491,6 +527,10 @@ mod tests {
         let frame_draw = counts("Readback Test Frame Draw", size_of::<FrameDraw>() as u64);
         let froxel_lights_overflowed =
             counts("Readback Test Froxel Overflow", size_of::<u32>() as u64);
+        let shadow_mask_lights_overflowed = counts(
+            "Readback Test Shadow Mask Overflow",
+            size_of::<u32>() as u64,
+        );
         // Records a frame, and submits it and waits for it if `completes`:
         // whether it is timed, the readbacks it skipped, the frames it read.
         let frame = |readback: &mut GpuStatsReadback, completes: bool| {
@@ -498,7 +538,12 @@ mod tests {
             let mut encoder = context.device.create_command_encoder(&descriptor);
             let mut recorder = FrameRecorder::new();
             let timed = readback.begin_frame(&mut encoder, &mut recorder).is_some();
-            readback.end_frame(&mut encoder, &frame_draw, &froxel_lights_overflowed);
+            readback.end_frame(
+                &mut encoder,
+                &frame_draw,
+                &froxel_lights_overflowed,
+                &shadow_mask_lights_overflowed,
+            );
             if completes {
                 context.queue.submit([encoder.finish()]);
                 let wait = context.device.poll(wgpu::PollType::wait_indefinitely());

@@ -1,13 +1,15 @@
-//! The main pass, ADR 0019's two render passes, which draw the culling
-//! pass's frame's draw with one indirect call per phase and pipeline, the
-//! lit pipeline's drawing both phases: a
-//! depth pre-pass that clears the depth target and keeps the nearest depth
-//! of phase one's Instances, then a lit pass that first draws phase two's
-//! into depth, then both phases' at depth equal, each Meshlet with its
-//! record's Material, into the multisampled colour, which it resolves into
-//! the HDR target.
+//! The main pass, ADR 0019's render passes, which draw the culling pass's
+//! frame's draw with one indirect call per phase and pipeline, the lit
+//! pipeline's drawing both phases: a depth pre-pass that clears the depth
+//! target and keeps the nearest depth of phase one's Instances, then phase
+//! two's drawn into depth, then a lit pass that draws both phases' at depth
+//! equal, each Meshlet with its record's Material, into the multisampled
+//! colour, which it resolves into the HDR target. With shadow rays on, phase
+//! two's depth is a pass of its own, so the shadow mask pass reads every
+//! Instance's depth before the lit pass reads the mask; with them off, the
+//! lit pass draws it first.
 
-use crate::render::bind_groups::{BindGroupDefinition, MESHLET_RECORDS, pipeline_layout};
+use crate::render::bind_groups::{BindGroupDefinition, MAIN_PASS_INPUTS, pipeline_layout};
 use crate::render::culling_pass::PHASE_TWO_DRAW_OFFSET;
 use crate::render::renderer::RenderSwitches;
 use crate::render::shaders;
@@ -16,38 +18,52 @@ use crate::render::targets::{self, RenderTargets};
 /// The depth pre-pass's label, and its name in frame stats.
 pub(crate) const DEPTH_PREPASS: &str = "depth_prepass";
 
+/// Phase two's depth pass's label, and its name in frame stats.
+pub(crate) const PHASE_TWO_DEPTH_PASS: &str = "phase_two_depth_pass";
+
 /// The lit pass's label, and its name in frame stats.
 pub(crate) const LIT_PASS: &str = "lit_pass";
 
 /// The main pass's pipelines.
 pub struct MainPass {
     depth_prepass_pipeline: wgpu::RenderPipeline,
-    /// Phase two's draw into depth, inside the lit pass, before it shades.
+    /// With shadow rays off, phase two's draw into depth, inside the lit
+    /// pass, before it shades.
     lit_pass_depth_pipeline: wgpu::RenderPipeline,
     lit_pipeline: wgpu::RenderPipeline,
-    /// Its group 3 (`MESHLET_RECORDS`).
-    meshlet_records: wgpu::BindGroup,
+    inputs_layout: wgpu::BindGroupLayout,
+    meshlet_records_buffer: wgpu::Buffer,
+    /// Its group 3 (`MAIN_PASS_INPUTS`), built from the render targets by
+    /// `bind_render_targets`.
+    inputs: wgpu::BindGroup,
+    /// Whether shadow rays are on, so phase two's depth is drawn in its own
+    /// pass rather than by the lit pass.
+    shadow_rays: bool,
 }
 
 impl MainPass {
     /// The pass, given the layouts of the shared bind groups its shader
     /// module declares, which draws the Meshlet records `meshlet_records`
-    /// holds, its lit pipeline as `switches` set.
+    /// holds, lit through the shadow mask of `render_targets`, its lit
+    /// pipeline as `switches` set.
     pub fn new(
         device: &wgpu::Device,
         bind_group_layouts: &[(&BindGroupDefinition, &wgpu::BindGroupLayout)],
         meshlet_records: &wgpu::Buffer,
+        render_targets: &RenderTargets,
         switches: RenderSwitches,
     ) -> MainPass {
-        let meshlet_records_layout = MESHLET_RECORDS.layout(device);
-        let meshlet_records = MESHLET_RECORDS.bind_group(
+        let inputs_layout = MAIN_PASS_INPUTS.layout(device);
+        let meshlet_records_buffer = meshlet_records.clone();
+        let inputs = Self::inputs_bind_group(
             device,
-            &meshlet_records_layout,
-            [("meshlet_records", meshlet_records.as_entire_binding())],
+            &inputs_layout,
+            &meshlet_records_buffer,
+            render_targets,
         );
         let shader = device.create_shader_module(shaders::MAIN.descriptor());
         let mut layouts = bind_group_layouts.to_vec();
-        layouts.push((&MESHLET_RECORDS, &meshlet_records_layout));
+        layouts.push((&MAIN_PASS_INPUTS, &inputs_layout));
         let lit_layout = pipeline_layout(device, "Lit Pass Pipeline Layout", &layouts);
         // The depth pipelines' fragment stages read nothing, so they read
         // only the groups their vertex stage sees, as the pre-pass sets them.
@@ -140,8 +156,43 @@ impl MainPass {
             depth_prepass_pipeline,
             lit_pass_depth_pipeline,
             lit_pipeline,
-            meshlet_records,
+            inputs_layout,
+            meshlet_records_buffer,
+            inputs,
+            shadow_rays: switches.shadow_rays,
         }
+    }
+
+    /// Builds the bind group that reads `render_targets`: at creation, and
+    /// after every resize, which creates them again.
+    pub fn bind_render_targets(&mut self, device: &wgpu::Device, render_targets: &RenderTargets) {
+        self.inputs = Self::inputs_bind_group(
+            device,
+            &self.inputs_layout,
+            &self.meshlet_records_buffer,
+            render_targets,
+        );
+    }
+
+    /// Group 3 of `layout`: `meshlet_records`, and the shadow mask of
+    /// `render_targets`.
+    fn inputs_bind_group(
+        device: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
+        meshlet_records: &wgpu::Buffer,
+        render_targets: &RenderTargets,
+    ) -> wgpu::BindGroup {
+        MAIN_PASS_INPUTS.bind_group(
+            device,
+            layout,
+            [
+                ("meshlet_records", meshlet_records.as_entire_binding()),
+                (
+                    "shadow_mask",
+                    wgpu::BindingResource::TextureView(render_targets.shadow_mask()),
+                ),
+            ],
+        )
     }
 
     /// Records the depth pre-pass into `encoder`: clears the depth target
@@ -178,12 +229,45 @@ impl MainPass {
         depth_prepass.draw_indexed_indirect(frame_draw, 0);
     }
 
+    /// Records phase two's depth pass into `encoder`, with shadow rays on:
+    /// draws phase two's draw into the depth target, which it loads and
+    /// stores for the shadow mask pass, the buffers and groups as
+    /// `record_depth_prepass` takes them, timed into `timestamp_writes`.
+    pub fn record_phase_two_depth(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        render_targets: &RenderTargets,
+        bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
+        packed_indices: &wgpu::Buffer,
+        frame_draw: &wgpu::Buffer,
+        timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
+    ) {
+        let mut depth_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some(PHASE_TWO_DEPTH_PASS),
+            color_attachments: &[],
+            depth_stencil_attachment: Some(render_targets.loaded_depth_attachment()),
+            occlusion_query_set: None,
+            timestamp_writes,
+            multiview_mask: None,
+        });
+        depth_pass.set_pipeline(&self.depth_prepass_pipeline);
+        self.bind(
+            &mut depth_pass,
+            bind_groups
+                .iter()
+                .copied()
+                .filter(|&(definition, _)| definition.visible_to(wgpu::ShaderStages::VERTEX)),
+            packed_indices,
+        );
+        depth_pass.draw_indexed_indirect(frame_draw, PHASE_TWO_DRAW_OFFSET);
+    }
+
     /// Records the lit pass into `encoder`: clears the multisampled colour
     /// to `background`, exposed, draws phase two's draw into the depth
-    /// target, then the frame's draw of both phases at depth equal, the
-    /// buffers as `record_depth_prepass` takes them, with `bind_groups` set,
-    /// and resolves the colour into the HDR target, timed into
-    /// `timestamp_writes`.
+    /// target unless its own pass did, then the frame's draw of both phases
+    /// at depth equal, the buffers as `record_depth_prepass` takes them,
+    /// with `bind_groups` set, and resolves the colour into the HDR target,
+    /// timed into `timestamp_writes`.
     #[expect(clippy::too_many_arguments)]
     pub fn record_lit_pass(
         &self,
@@ -207,8 +291,10 @@ impl MainPass {
             multiview_mask: None,
         });
         self.bind(&mut lit_pass, bind_groups.iter().copied(), packed_indices);
-        lit_pass.set_pipeline(&self.lit_pass_depth_pipeline);
-        lit_pass.draw_indexed_indirect(frame_draw, PHASE_TWO_DRAW_OFFSET);
+        if !self.shadow_rays {
+            lit_pass.set_pipeline(&self.lit_pass_depth_pipeline);
+            lit_pass.draw_indexed_indirect(frame_draw, PHASE_TWO_DRAW_OFFSET);
+        }
         lit_pass.set_pipeline(&self.lit_pipeline);
         lit_pass.draw_indexed_indirect(frame_draw, 0);
     }
@@ -224,7 +310,7 @@ impl MainPass {
         for (definition, bind_group) in bind_groups {
             render_pass.set_bind_group(definition.index, bind_group, &[]);
         }
-        render_pass.set_bind_group(MESHLET_RECORDS.index, &self.meshlet_records, &[]);
+        render_pass.set_bind_group(MAIN_PASS_INPUTS.index, &self.inputs, &[]);
         render_pass.set_index_buffer(packed_indices.slice(..), wgpu::IndexFormat::Uint32);
     }
 }

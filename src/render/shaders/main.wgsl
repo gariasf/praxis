@@ -11,11 +11,6 @@ struct VertexOutput {
     @location(2) uv: vec2<f32>,
     @location(3) @interpolate(flat) material_id: u32,
     @location(4) tangent_world: vec4<f32>, // xyz = world tangent, w = bitangent sign
-    // The position again, interpolated within the samples the triangle
-    // covers: at an edge pixel the centre can lie off the triangle, where
-    // its plane, extended past a crease, runs inside the mesh, so a shadow
-    // ray starting there would find the mesh in its way.
-    @location(5) @interpolate(perspective, centroid) centroid_position: vec3<f32>,
 }
 
 @vertex
@@ -23,8 +18,8 @@ fn vs_depth_prepass(@builtin(vertex_index) packed_index: u32) -> @builtin(positi
     return vertex_output(packed_index).clip_position;
 }
 
-// The lit pass draws phase two's Instances into depth before it shades,
-// with this and `vs_depth_prepass`: it writes no colour.
+// With shadow rays off, the lit pass draws phase two's Instances into depth
+// before it shades, with this and `vs_depth_prepass`: it writes no colour.
 @fragment
 fn fs_depth() {}
 
@@ -61,68 +56,45 @@ fn vertex_output(packed_index: u32) -> VertexOutput {
         tangent_frame.bitangent_sign
     );
     out.camera_relative_position = position;
-    out.centroid_position = position;
     out.material_id = record.material_id;
     return out;
 }
 
-// A directional light's shadow ray runs to f32's largest distance, past
-// anything a TLAS holds.
-const UNBOUNDED_RAY_DISTANCE: f32 = 3.40282347e38;
+// A bit past every bit the shadow mask holds for lights.
+const UNMASKED: u32 = 0xffffffffu;
 
-// A shadow ray's origin leaves its surface along the normal by this share
-// of the point's largest coordinate, relative to the camera or in the TLAS's
-// frame, and of 1 m at least. Rasterising the point, composing it into the
-// TLAS's frame and intersecting the TLAS each round a coordinate by at most
-// 2^-24 of its size, so the origin clears the surface by 256 roundings.
-const SHADOW_RAY_OFFSET_SCALE: f32 = 1.52587890625e-5; // 2^-16
+// Whether the shadow mask's word for a pixel, `mask`, hides the light whose
+// bit is `bit` (src/render/shadow_mask_pass.rs): a light past its bits casts
+// no shadow there.
+fn masked(mask: vec2<u32>, bit: u32) -> bool {
+    let half = select(mask.x, mask.y, bit >= 32u);
+    return bit < SHADOW_MASK_LIGHTS && ((half >> (bit & 31u)) & 1u) == 1u;
+}
 
-// Whether either TLAS holds geometry within `distance` of the surface point
-// at `position`, relative to the camera, along `direction`, a unit vector:
-// one hard shadow ray (ADR 0020), traced against the static TLAS, then,
-// where that finds nothing, against the dynamic TLAS unless it is empty: a
-// query of an empty TLAS still costs the lit pass. It starts off the
-// surface along `normal`, its unit geometric normal, in the frame both TLAS
-// share, whose origin is the corner of the camera's `tlas_anchor`, composed
-// as an Instance's position is (ADR 0014).
-fn shadowed(position: vec3<f32>, normal: vec3<f32>, direction: vec3<f32>, distance: f32) -> bool {
-    // The camera stands where an Instance does in this composition, and the
-    // TLAS's frame, with no offset from its Anchor, where the camera does.
-    let tlas_position = camera_relative_position(
-        camera.anchor,
-        camera.offset,
-        camera.tlas_anchor,
-        vec3<f32>(0.0),
-        position
-    );
-    let extent = max(abs(tlas_position), abs(position));
-    let offset = SHADOW_RAY_OFFSET_SCALE * max(max(extent.x, extent.y), max(extent.z, 1.0));
-    // Opaque, so one rayQueryProceed completes a traversal, and any hit
-    // shadows the point.
-    let ray = RayDesc(
-        RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_TERMINATE_ON_FIRST_HIT,
-        0xffu,
-        0.0,
-        distance,
-        tlas_position + normal * offset,
-        direction
-    );
-    var query: ray_query;
-    rayQueryInitialize(&query, static_tlas, ray);
-    rayQueryProceed(&query);
-    let hidden = rayQueryGetCommittedIntersection(&query).kind != RAY_QUERY_INTERSECTION_NONE;
-    if hidden || camera.dynamic_tlas_entries == 0u {
-        return hidden;
+// The bit of the point light at `index` of the light buffer in a shadow mask
+// whose bits follow the lights of `froxel`: after the directional lights',
+// at its entry in the Froxel's list, which is in light order, so a binary
+// search finds it; UNMASKED where the list lacks it.
+fn froxel_mask_bit(froxel: u32, index: u32) -> u32 {
+    let count = froxel_lists[froxel].light_count;
+    var low = 0u;
+    var high = count;
+    while low < high {
+        let middle = (low + high) / 2u;
+        if froxel_lists[froxel].lights[middle] < index {
+            low = middle + 1u;
+        } else {
+            high = middle;
+        }
     }
-    rayQueryInitialize(&query, dynamic_tlas, ray);
-    rayQueryProceed(&query);
-    return rayQueryGetCommittedIntersection(&query).kind != RAY_QUERY_INTERSECTION_NONE;
+    let listed = low < count && froxel_lists[froxel].lights[low] == index;
+    return select(UNMASKED, light.directional_light_count + low, listed);
 }
 
 // Every Texture is sampled first, so none is sampled under non-uniform
 // control flow; the rest decodes the surface and sums what each light
-// reflects, unless a shadow ray finds it hidden, with the ambient term and
-// the emissive.
+// reflects, unless the shadow mask hides it, with the ambient term and the
+// emissive.
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let material = materials[in.material_id];
@@ -160,18 +132,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         normalize(-first.offset),
         has_directional_light
     );
-    var first_illuminance = first.intensity * f32(has_directional_light);
-    // Each directional light's shadow ray is traced only where the light
-    // adds something.
-    if SHADOW_RAYS && has_directional_light && dot(normal, first_direction) > 0.0
-        && shadowed(
-            in.centroid_position,
-            geometric_normal,
-            first_direction,
-            UNBOUNDED_RAY_DISTANCE
-        ) {
-        first_illuminance = vec3<f32>(0.0);
+    // The shadow mask's word for this pixel: none with shadow rays off. Its
+    // bits follow the pixel's lights in the order they are summed here, the
+    // directional lights first.
+    var mask = vec2<u32>(0u);
+    if SHADOW_RAYS {
+        mask = textureLoad(shadow_mask, vec2<u32>(in.clip_position.xy), 0).rg;
     }
+    let first_illuminance = first.intensity * f32(has_directional_light && !masked(mask, 0u));
     var outgoing_luminance = reflected_luminance(
         surface,
         normal,
@@ -182,11 +150,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     for (var index = 1u; index < light.directional_light_count; index++) {
         let directional = lights[index];
         let direction = normalize(-directional.offset);
-        var illuminance = directional.intensity;
-        if SHADOW_RAYS && dot(normal, direction) > 0.0
-            && shadowed(in.centroid_position, geometric_normal, direction, UNBOUNDED_RAY_DISTANCE) {
-            illuminance = vec3<f32>(0.0);
-        }
+        let illuminance = directional.intensity * f32(!masked(mask, index));
         outgoing_luminance += reflected_luminance(
             surface,
             normal,
@@ -196,14 +160,19 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         );
     }
     // The point lights the pixel's Froxel lists, in light order, or, with
-    // FROXEL_LIGHTS off, every point light: brute force. Each one's shadow
-    // ray runs from the centroid position to the light, traced only where
-    // the light adds something there: where the surface faces it, within its
-    // range.
+    // FROXEL_LIGHTS off, every point light: brute force. The mask's bits
+    // follow the lights of the Froxel at this pixel's rectangle and the
+    // slice its nearest sample shows, which the top bits of the word's
+    // second half hold: this fragment's Froxel but at an edge, or where a
+    // slice ends between the sample and the pixel's centre.
     var froxel = 0u;
+    var mask_froxel = 0u;
     var point_light_count = light.point_light_count;
     if FROXEL_LIGHTS {
-        froxel = froxel_at(camera.view_proj * vec4<f32>(in.camera_relative_position, 1.0));
+        let view_depth = (camera.view_proj * vec4<f32>(in.camera_relative_position, 1.0)).w;
+        let size = vec2<f32>(textureDimensions(shadow_mask));
+        froxel = froxel_at(in.clip_position.xy, size, view_depth);
+        mask_froxel = froxel - froxel % FROXEL_SLICES + (mask.y >> (SHADOW_MASK_LIGHTS - 32u));
         point_light_count = froxel_lists[froxel].light_count;
     }
     for (var entry = 0u; entry < point_light_count; entry++) {
@@ -213,18 +182,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         }
         let point = lights[index];
         let position = point_light_position(point, camera.anchor, camera.offset);
-        let centroid_to_light = position - in.centroid_position;
-        var intensity = point.intensity;
-        if SHADOW_RAYS && dot(normal, centroid_to_light) > 0.0
-            && dot(centroid_to_light, centroid_to_light) < point.range * point.range
-            && shadowed(
-                in.centroid_position,
-                geometric_normal,
-                normalize(centroid_to_light),
-                length(centroid_to_light)
-            ) {
-            intensity = vec3<f32>(0.0);
+        var bit = light.directional_light_count + entry;
+        if SHADOW_RAYS && FROXEL_LIGHTS && mask_froxel != froxel {
+            bit = froxel_mask_bit(mask_froxel, index);
         }
+        let intensity = point.intensity * f32(!masked(mask, bit));
         outgoing_luminance += point_light_luminance(
             surface,
             normal,

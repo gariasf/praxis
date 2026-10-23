@@ -1,6 +1,6 @@
 // Shared by every shader module: the structs the CPU writes, the Anchor
-// composition, the packed index and the vertex decode
-// (src/render/shaders/mod.rs).
+// composition, the position a depth target's depth places at a pixel, the
+// packed index and the vertex decode (src/render/shaders/mod.rs).
 
 // Positions reach the shaders relative to the camera (ADR 0014), so the
 // camera sits at the origin and view_proj holds no translation. The camera's
@@ -33,6 +33,22 @@ fn camera_relative_position(
 ) -> vec3<f32> {
     let anchor_position = vec3<f32>(anchor - camera_anchor) * ANCHOR_CELL_SIZE;
     return anchor_position + (offset - camera_offset) + local_position;
+}
+
+// The position relative to the camera of the surface a depth target shows
+// at `depth` through `point`, in pixels from the top left corner of a target
+// of `size`, seen through `view_proj`. view_proj holds no translation (ADR
+// 0014), and its reverse-Z projection with no far plane (ADR 0015) puts the
+// near plane's distance in clip z and the depth along the view axis in clip
+// w, so depth is the near distance over clip w. Its rows are the view's
+// axes, x and y scaled by the projection, w along the view axis.
+fn position_at(view_proj: mat4x4<f32>, point: vec2<f32>, depth: f32, size: vec2<f32>) -> vec3<f32> {
+    let device = vec2<f32>(point.x / size.x * 2.0 - 1.0, 1.0 - point.y / size.y * 2.0);
+    let rows = transpose(view_proj);
+    let view_depth = view_proj[3].z / depth;
+    let right = rows[0].xyz / dot(rows[0].xyz, rows[0].xyz);
+    let up = rows[1].xyz / dot(rows[1].xyz, rows[1].xyz);
+    return view_depth * (rows[3].xyz + device.x * right + device.y * up);
 }
 
 // A Froxel's list: how many lights it holds, at most FROXEL_LIGHT_CAPACITY,
