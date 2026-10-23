@@ -59,6 +59,10 @@ but texture-wall, and within 5% for main's orrery, pbr-sweep and helmet.
 - **Memory and allocations.** The mask takes 29,491,200 bytes at 1440p,
   8 bytes per pixel. The two new passes add 43 or 44 heap allocations a
   frame (279 to 322 on most scenes).
+- **`crowd`.** #274 added it after this A/B. Its M4 Pro Baseline is 12,861 µs
+  on main at `0743418` and 3,283 µs on this branch on it: lit pass 11,339
+  µs against a shadow mask pass of 1,174. These are Baselines, not an
+  interleaved A/B.
 - **`town`.** On #206's branch, with inline rays, the GPU frame median was
   92.7 ms at 1440p over its circling path, with 0.6 to 0.8 point lights
   reaching each lit pixel and 6 or 7 listed per Froxel (#206's session,
