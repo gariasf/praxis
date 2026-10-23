@@ -46,6 +46,36 @@ pub struct MeshRef(pub MeshHandle);
 #[derive(Component)]
 pub struct MaterialRef(pub MaterialHandle);
 
+/// Bends its Renderable's Mesh on the GPU each frame from `rest`, a Mesh of
+/// the same vertices whose +Y axis runs up its middle from y = 0: a stand-in
+/// for skinning (#208). The middle bends into a circular arc towards the
+/// azimuth, and every vertex turns with the middle at its height. The bent
+/// Mesh is the Renderable's own, since the GPU writes its vertices, and its
+/// bounds must hold every shape it bends to, since the culling pass tests
+/// them. Game state: the fixed schedule sets the curvature each Tick, after
+/// `record_previous_curvatures` keeps the last, and frames draw the blend of
+/// the two (ADR 0022); the azimuth is drawn as set. A bend spawns with its
+/// previous curvature equal to its curvature.
+#[derive(Component, Clone, Copy)]
+pub struct Bend {
+    pub rest: MeshHandle,
+    /// The direction the middle bends towards, about +Y from +X towards +Z,
+    /// in radians.
+    pub azimuth: f32,
+    /// Radians the middle turns through per metre of its height, after the
+    /// newest Tick and after the one before.
+    pub curvature: f32,
+    pub previous_curvature: f32,
+}
+
+impl Bend {
+    /// The curvature a frame draws, `blend_weight` of the way from the
+    /// previous Tick's to the newest Tick's.
+    pub fn drawn_curvature(&self, blend_weight: f32) -> f32 {
+        self.previous_curvature + (self.curvature - self.previous_curvature) * blend_weight
+    }
+}
+
 /// A point light at its entity's `Transform`.
 #[derive(Component, Clone, Copy)]
 pub struct PointLight {

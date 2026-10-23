@@ -92,6 +92,10 @@ _Avoid_: Object
 An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.
 _Avoid_: Dynamic Instance, movable
 
+**Bend**:
+The GPU's stand-in for skinning until M7: each frame a compute pass rewrites a Renderable's own Mesh, the bent Mesh, from a rest Mesh of the same vertices, its middle curved into an arc by a curvature the fixed schedule sets each Tick.
+_Avoid_: Deformation, skinning
+
 **Frame data**:
 The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.
 _Avoid_: Scene data, render state
@@ -165,7 +169,7 @@ The variants a Renderer is created with and keeps: whether Instances are culled,
 _Avoid_: Render settings, config, options, debug flags
 
 **Frame stats**:
-What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and of the dynamic TLAS's build, and the GPU frame total (that build plus the span from the start of the first pass to the end of the last), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables refused, lights the light buffer had no room for and lights the Froxel lists had no room for, static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.
+What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and of the dynamic TLAS's build, and the GPU frame total (that build plus the span from the start of the first pass to the end of the last), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables refused, lights the light buffer had no room for and lights the Froxel lists had no room for, static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, bends the bend pass had no room for, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.
 _Avoid_: Metrics, telemetry
 
 **Baseline**:

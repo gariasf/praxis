@@ -4,9 +4,9 @@ use bevy_ecs::prelude::*;
 
 use crate::assets::MeshPool;
 use crate::camera::{Camera, projection_matrix};
-use crate::components::{DirectionalLight, MaterialRef, MeshRef, PointLight};
+use crate::components::{Bend, DirectionalLight, MaterialRef, MeshRef, PointLight};
 use crate::environment::Environment;
-use crate::render::bend_pass::BendData;
+use crate::render::bend_pass::{BEND_CAPACITY, BendData};
 use crate::render::instance::{anchor_and_offset, padded_columns};
 use crate::render::{
     CameraUniform, DYNAMIC_TLAS_CAPACITY, INSTANCE_CAPACITY, InstanceData, LIGHT_CAPACITY,
@@ -39,8 +39,8 @@ pub struct FrameData {
     /// `DYNAMIC_TLAS_CAPACITY`, those in the lowest slots, in no order. Each
     /// is written every frame, so each is among `instances`.
     pub moving_instances: Vec<MovingInstance>,
-    /// The Meshes the GPU bends this frame, at most `BEND_CAPACITY`, in the
-    /// order of their ranges of the vertex Arena.
+    /// The Meshes the GPU bends this frame (`Bend`), at most
+    /// `BEND_CAPACITY`, in the order of their ranges of the vertex Arena.
     pub bends: Vec<BendData>,
 }
 
@@ -55,6 +55,9 @@ type LightQuery<Light> = QueryState<(
     Option<&'static PreviousWorldTransform>,
     &'static Light,
 )>;
+
+/// The Renderables whose Mesh the GPU bends.
+type BendQuery = QueryState<(&'static MeshRef, &'static Bend)>;
 
 /// The Renderables, with what blends the moving ones and the changes that
 /// write their Instance.
@@ -180,6 +183,11 @@ pub struct FramePreparer {
     /// Set while Moving Instances are left out of the dynamic TLAS, which
     /// was warned about when it was set.
     warned_of_moving_instances_left_out: bool,
+    bend_query: BendQuery,
+    bends_left_out: u32,
+    /// Set while bends are left out of the bend pass, which was warned about
+    /// when it was set.
+    warned_of_bends_left_out: bool,
     frame: FrameData,
 }
 
@@ -196,6 +204,9 @@ impl FramePreparer {
             renderables_refused: 0,
             moving_instances_left_out: 0,
             warned_of_moving_instances_left_out: false,
+            bend_query: world.query(),
+            bends_left_out: 0,
+            warned_of_bends_left_out: false,
             frame: FrameData::default(),
         }
     }
@@ -214,6 +225,11 @@ impl FramePreparer {
     /// An Instance is a Moving Instance while its entity carries its previous
     /// World transform; past the dynamic TLAS's capacity, those in the
     /// highest slots are left out of it, counted, and warned about when they
+    /// appear. A Renderable with a `Bend` has its Mesh bent from the rest
+    /// Mesh when both are in `mesh_pool` with as many vertices, and is
+    /// warned about otherwise, as is a bend that would race with another;
+    /// past the bend pass's capacity, the bends of the Meshes highest in the
+    /// vertex Arena are left out, counted, and warned about when they
     /// appear.
     ///
     /// Only new Renderables, blended ones and those whose World transform,
@@ -238,6 +254,9 @@ impl FramePreparer {
             renderables_refused,
             moving_instances_left_out,
             warned_of_moving_instances_left_out,
+            bend_query,
+            bends_left_out,
+            warned_of_bends_left_out,
             frame,
         } = self;
         let camera = world.resource::<Camera>();
@@ -390,6 +409,22 @@ impl FramePreparer {
             }
         }
         *warned_of_moving_instances_left_out = *moving_instances_left_out > 0;
+        prepare_bends(
+            world,
+            bend_query,
+            mesh_pool,
+            blend_weight,
+            &mut frame.bends,
+            bends_left_out,
+        );
+        if *bends_left_out > 0 && !*warned_of_bends_left_out {
+            tracing::warn!(
+                left_out = *bends_left_out,
+                capacity = BEND_CAPACITY,
+                "Bends left out of the bend pass, past its capacity: their Meshes keep the shape they last took"
+            );
+        }
+        *warned_of_bends_left_out = *bends_left_out > 0;
         *rewrite_every_instance = false;
         // Ends the window in which prepare sees changes and removals, and
         // drains the removals, which otherwise pile up.
@@ -419,6 +454,12 @@ impl FramePreparer {
     /// which had no room for them, so they cast no shadow.
     pub fn moving_instances_left_out(&self) -> u32 {
         self.moving_instances_left_out
+    }
+
+    /// Bends the last `prepare` left out of the bend pass, which had no room
+    /// for them, so their Meshes keep the shape they last took.
+    pub fn bends_left_out(&self) -> u32 {
+        self.bends_left_out
     }
 
     /// Makes the next `prepare` write every Renderable's Instance into the
@@ -476,6 +517,75 @@ fn prepare_lights(
     lights.extend(point_lights.by_ref().take(capacity - lights.len()));
     *overflowed = (directional_lights.count() + point_lights.count()) as u32;
     directional_light_count
+}
+
+/// Fills `bends` with a bend per Renderable with a `Bend` whose Mesh and
+/// rest Mesh `mesh_pool` holds with as many vertices, its curvature blended
+/// `blend_weight` of the way from the previous Tick's, in the order of the
+/// bent Meshes' ranges of the vertex Arena, up to `BEND_CAPACITY`. The pass
+/// writes each bent Mesh while it reads each rest Mesh, so of two bends of
+/// one Mesh it keeps one, and it drops a bend from a Mesh that a bend
+/// writes, its own included, warning about both. Sets `left_out` to how
+/// many it had no room for.
+fn prepare_bends(
+    world: &World,
+    bend_query: &mut BendQuery,
+    mesh_pool: &MeshPool,
+    blend_weight: f32,
+    bends: &mut Vec<BendData>,
+    left_out: &mut u32,
+) {
+    bends.clear();
+    for (mesh_ref, bend) in bend_query.iter(world) {
+        let (Some(bent), Some(rest)) = (mesh_pool.get(mesh_ref.0), mesh_pool.get(bend.rest)) else {
+            tracing::warn!(
+                mesh = mesh_ref.0.0,
+                rest = bend.rest.0,
+                "A bent Mesh or its rest Mesh is not in the pool, so it is not bent"
+            );
+            continue;
+        };
+        if bent.vertices.len() != rest.vertices.len() {
+            tracing::warn!(
+                mesh = mesh_ref.0.0,
+                rest = bend.rest.0,
+                "A bent Mesh and its rest Mesh hold different vertex counts, so it is not bent"
+            );
+            continue;
+        }
+        let curvature = bend.drawn_curvature(blend_weight);
+        bends.push(BendData {
+            rest_first_vertex: rest.vertices.start,
+            first_vertex: bent.vertices.start,
+            vertex_count: bent.vertices.len() as u32,
+            azimuth: bend.azimuth,
+            curvature,
+        });
+    }
+    bends.sort_unstable_by_key(|bend| bend.first_vertex);
+    let listed = bends.len();
+    bends.dedup_by_key(|bend| bend.first_vertex);
+    let mut index = 0;
+    while index < bends.len() {
+        let rest = bends[index].rest_first_vertex;
+        if bends
+            .binary_search_by_key(&rest, |bend| bend.first_vertex)
+            .is_ok()
+        {
+            bends.remove(index);
+        } else {
+            index += 1;
+        }
+    }
+    if bends.len() < listed {
+        tracing::warn!(
+            dropped = listed - bends.len(),
+            "Bends that would race are dropped: a Mesh two Renderables bend is bent once, and one bent from a Mesh a bend writes is not bent"
+        );
+    }
+    let capacity = BEND_CAPACITY as usize;
+    *left_out = bends.len().saturating_sub(capacity) as u32;
+    bends.truncate(capacity);
 }
 
 #[cfg(test)]
@@ -844,6 +954,131 @@ mod tests {
         // slot draws nothing.
         frames.world.entity_mut(entity).insert(MeshRef(bare_mesh));
         assert_eq!(written(&mut frames), [(NO_MESH, 0)]);
+    }
+
+    /// Loads a Mesh of a triangle over the first three of `vertex_count`
+    /// vertices into `frames`' pool.
+    fn load(frames: &mut Frames, vertex_count: usize) -> MeshHandle {
+        let triangle = mesh(vertex_count, vec![0, 1, 2]);
+        let loaded = frames
+            .mesh_pool
+            .load(&mut frames.staging, &triangle, &[Some(MESH_MATERIAL)]);
+        loaded.expect("a triangle fits")
+    }
+
+    /// A bend from `rest` towards azimuth 0.5, its curvature 0.2 after the
+    /// previous Tick and `curvature` after the newest.
+    fn bend(rest: MeshHandle, curvature: f32) -> Bend {
+        Bend {
+            rest,
+            azimuth: 0.5,
+            curvature,
+            previous_curvature: 0.2,
+        }
+    }
+
+    /// Frame data lists each bend in the order of its bent Mesh's range of
+    /// the vertex Arena, whatever order the ECS World holds them in, from its
+    /// rest Mesh's range, its curvature blended between the two newest Ticks.
+    /// A bend whose Mesh is not in the pool, or whose rest Mesh holds other
+    /// vertices, is warned about and left unbent; so are bends that would
+    /// race: a second bend of one Mesh, and bends from a Mesh a bend writes,
+    /// a Mesh's own included.
+    #[test]
+    fn each_bend_reaches_frame_data_from_its_rest_mesh_blended_between_ticks() {
+        let Some(mut frames) = Frames::new() else {
+            return;
+        };
+        let rest = load(&mut frames, 3);
+        let [first, second, own, third] = [(); 4].map(|()| load(&mut frames, 3));
+        let longer = load(&mut frames, 4);
+        frames.world.resource_mut::<FixedTime>().blend_weight = 0.25;
+        for (mesh, bend) in [
+            (second, bend(rest, 1.0)),
+            (first, bend(rest, 0.6)),
+            (first, bend(rest, 0.6)),
+            (longer, bend(rest, 0.4)),
+            (MeshHandle(99), bend(rest, 0.4)),
+            (own, bend(own, 0.4)),
+            (third, bend(second, 0.4)),
+        ] {
+            frames
+                .world
+                .spawn((Transform::IDENTITY, MeshRef(mesh), bend));
+        }
+        let ((), log) = logged(|| {
+            frames.prepare();
+        });
+
+        let start = |mesh| frames.mesh_pool.get(mesh).expect("loaded").vertices.start;
+        let listed: Vec<(u32, u32, u32, f32)> = frames
+            .preparer
+            .frame()
+            .bends
+            .iter()
+            .map(|bend| {
+                let (rest, bent, count) =
+                    (bend.rest_first_vertex, bend.first_vertex, bend.vertex_count);
+                assert_eq!(bend.azimuth, 0.5);
+                (rest, bent, count, bend.curvature)
+            })
+            .collect();
+        // A quarter of the way from 0.2 to 0.6, and to 1.
+        let expected = [(first, 0.3), (second, 0.4)];
+        assert_eq!(listed.len(), expected.len(), "{listed:?}");
+        for ((rest_start, bent_start, count, curvature), (mesh, blended)) in
+            listed.into_iter().zip(expected)
+        {
+            assert_eq!(
+                (rest_start, bent_start, count),
+                (start(rest), start(mesh), 3)
+            );
+            assert!(
+                (curvature - blended).abs() <= 1e-6,
+                "{curvature}, not {blended}"
+            );
+        }
+        assert_eq!(log.matches("so it is not bent").count(), 2, "{log}");
+        assert_eq!(log.matches("dropped=3").count(), 1, "{log}");
+        assert_eq!(frames.preparer.bends_left_out(), 0);
+    }
+
+    /// One bend more than the bend pass holds: the bend of the Mesh highest
+    /// in the vertex Arena is left out, counted every frame and warned about
+    /// once.
+    #[test]
+    fn the_bend_of_the_highest_mesh_past_the_bend_capacity_is_left_out() {
+        let Some(mut frames) = Frames::new() else {
+            return;
+        };
+        let rest = load(&mut frames, 3);
+        let mut firsts: Vec<u32> = (0..=BEND_CAPACITY)
+            .map(|_| {
+                let mesh = load(&mut frames, 3);
+                frames
+                    .world
+                    .spawn((Transform::IDENTITY, MeshRef(mesh), bend(rest, 1.0)));
+                frames.mesh_pool.get(mesh).expect("loaded").vertices.start
+            })
+            .collect();
+        firsts.sort_unstable();
+        firsts.pop();
+        let ((), log) = logged(|| {
+            for _ in 0..3 {
+                frames.prepare();
+                let listed: Vec<u32> = frames
+                    .preparer
+                    .frame()
+                    .bends
+                    .iter()
+                    .map(|bend| bend.first_vertex)
+                    .collect();
+                assert_eq!(listed, firsts);
+                assert_eq!(frames.preparer.bends_left_out(), 1);
+            }
+        });
+        let warnings = log.matches("left out of the bend pass").count();
+        assert_eq!(warnings, 1, "{log:?}");
     }
 
     #[test]

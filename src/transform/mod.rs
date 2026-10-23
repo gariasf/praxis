@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::*;
 
-use crate::components::Transform;
+use crate::components::{Bend, Transform};
 
 /// Where an entity sits in the Game world: its `Transform` composed with
 /// every ancestor's, in f64 (ADR 0014). Derived by
@@ -54,6 +54,15 @@ pub fn record_previous_world_transforms(
 ) {
     for (current, mut previous) in &mut moving {
         previous.0 = Some(current.0);
+    }
+}
+
+/// Starts a Tick, as `record_previous_world_transforms` does for World
+/// transforms: each bend's curvature becomes its previous one, before the
+/// Tick sets it.
+pub fn record_previous_curvatures(mut bends: Query<&mut Bend>) {
+    for mut bend in &mut bends {
+        bend.previous_curvature = bend.curvature;
     }
 }
 
