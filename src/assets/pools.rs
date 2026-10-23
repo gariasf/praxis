@@ -11,17 +11,25 @@ pub const ARENA_CAPACITY_BYTES: u64 = 16 << 20;
 /// Meshes the Mesh table holds, provisional as `ARENA_CAPACITY_BYTES` is.
 pub const MESH_CAPACITY: u32 = 1 << 16;
 
-/// What a Mesh is loaded for: the main pass draws it from its Meshlets, and
-/// rays trace it through its BLAS unless it is drawn alone.
+/// What a Mesh is loaded for: the main pass draws it from its Meshlets, rays
+/// trace it through its BLAS, or both.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MeshUse {
     DrawnAndTraced,
     /// Drawn alone: a Mesh the GPU bends, whose BLAS, built from its rest
     /// shape, would cast another shape's shadow (#208).
     Drawn,
+    /// Traced alone: a shadow proxy, which no pass draws, so it keeps no
+    /// Meshlets and needs no Material (#208).
+    Traced,
 }
 
 impl MeshUse {
+    /// Whether the main pass draws it, so it needs Meshlets.
+    fn drawn(self) -> bool {
+        self != MeshUse::Traced
+    }
+
     /// Whether rays trace it, so it needs a BLAS and the index stream the
     /// BLAS is built from.
     fn traced(self) -> bool {
@@ -114,7 +122,8 @@ impl MeshPool {
     /// `materials`, in Primitive order, where no Renderable overrides it; and,
     /// where `mesh_use` has rays trace it, its index stream and its BLAS's
     /// build from its vertex and index ranges, which `compact_blases`
-    /// compacts once `staging` is submitted. Returns its Handle, or None
+    /// compacts once `staging` is submitted. A Mesh no pass draws keeps no
+    /// Meshlets. Returns its Handle, or None
     /// after logging when the Mesh table is full or an Arena's longest free
     /// range is too short; a refused Mesh leaves the pool as it was.
     pub fn load_for(
@@ -129,8 +138,13 @@ impl MeshPool {
             mesh.primitives.len(),
             "a Material, or none, per Primitive"
         );
+        let drawn_primitives = if mesh_use.drawn() {
+            &mesh.primitives[..]
+        } else {
+            &[]
+        };
         let meshlets = || {
-            mesh.primitives
+            drawn_primitives
                 .iter()
                 .flat_map(|primitive| &primitive.meshlets)
         };
@@ -199,7 +213,7 @@ impl MeshPool {
         let mut meshlet_table = Vec::with_capacity(meshlet_count);
         let mut vertex_indices = Vec::with_capacity(meshlet_vertex_count);
         let mut triangles = Vec::with_capacity(triangle_count);
-        for (primitive, material) in mesh.primitives.iter().zip(materials) {
+        for (primitive, material) in drawn_primitives.iter().zip(materials) {
             for meshlet in &primitive.meshlets {
                 meshlet_table.push(MeshletData {
                     first_vertex: meshlet_vertices.offset + vertex_indices.len() as u32,
@@ -262,7 +276,7 @@ impl MeshPool {
             "Mesh loaded"
         );
         self.meshes.push(Mesh {
-            needs_material_handle: materials.contains(&None),
+            needs_material_handle: mesh_use.drawn() && materials.contains(&None),
             vertices: vertices.offset..vertices.offset + mesh.vertices.len() as u32,
         });
         if !mesh_use.traced() {

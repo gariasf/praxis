@@ -242,6 +242,9 @@ fn offset_slots(
         } else {
             drawn = visible && (!CULLING || visible_before(slot));
         }
+        // A shadow proxy's Mesh has no Meshlets: rays trace it, no pass
+        // draws it.
+        drawn = drawn && mesh.meshlet_count != 0u;
         if drawn {
             counts = vec2<u32>(mesh.meshlet_count, 3u * mesh.triangle_count);
         }

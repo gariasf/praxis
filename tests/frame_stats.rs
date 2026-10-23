@@ -267,7 +267,7 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
             ReferenceScene::TextureWall => (100, 100 * plane_triangles),
             // One Mesh of a ground plane and a sphere.
             ReferenceScene::Shadows => (1, plane_triangles + sphere_triangles),
-            // The ground and 100 figures.
+            // The ground and 100 figures; their shadow proxies are not drawn.
             ReferenceScene::Crowd => (101, plane_triangles + 100 * figure_triangles),
         };
         for (frame, stats) in frames.iter().enumerate() {
