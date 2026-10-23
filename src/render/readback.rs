@@ -178,18 +178,10 @@ impl GpuStatsReadback {
         }
         self.slots[index].state = SlotState::Recorded { frame: self.frame };
         self.slots[index].dynamic_tlas_built = false;
-        self.frame_timestamps()
-    }
-
-    /// Where the passes of the frame `begin_frame` started write their
-    /// timestamps; `None` when its readback was skipped.
-    pub fn frame_timestamps(&self) -> Option<FrameTimestamps<'_>> {
-        let index = slot_index(self.frame);
-        matches!(self.slots[index].state, SlotState::Recorded { frame } if frame == self.frame)
-            .then(|| FrameTimestamps {
-                query_set: &self.query_set,
-                first_query: (index * QUERIES_PER_FRAME) as u32,
-            })
+        Some(FrameTimestamps {
+            query_set: &self.query_set,
+            first_query: (index * QUERIES_PER_FRAME) as u32,
+        })
     }
 
     /// Marks the frame `begin_frame` started as one that builds the dynamic
