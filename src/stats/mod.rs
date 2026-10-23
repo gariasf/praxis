@@ -33,6 +33,9 @@ pub struct FrameStats {
     /// Moving Instances the dynamic TLAS had no room for, so they cast no
     /// shadow.
     pub moving_instances_left_out: u32,
+    /// Bends the bend pass had no room for, so their Meshes kept the shape
+    /// they last took.
+    pub bends_left_out: u32,
     /// Bytes of the GPU buffers and textures the State created, its Pools
     /// included, summed by the engine on every backend (ADR 0013), and of
     /// its acceleration structures, estimated. The render target and
@@ -119,13 +122,14 @@ impl std::fmt::Display for FrameStats {
         }
         writeln!(
             formatter,
-            " uploaded_bytes={} instances_written={} renderables_refused={} lights_overflowed={} static_instances_left_out={} moving_instances_left_out={} heap_allocations={} dropped_us={:.1} gpu_readbacks_skipped={}",
+            " uploaded_bytes={} instances_written={} renderables_refused={} lights_overflowed={} static_instances_left_out={} moving_instances_left_out={} bends_left_out={} heap_allocations={} dropped_us={:.1} gpu_readbacks_skipped={}",
             self.uploaded_bytes,
             self.instances_written,
             self.renderables_refused,
             self.lights_overflowed,
             self.static_instances_left_out,
             self.moving_instances_left_out,
+            self.bends_left_out,
             self.heap_allocations,
             microseconds(&self.dropped_time),
             self.gpu_readbacks_skipped
@@ -179,6 +183,7 @@ pub(crate) struct FrameRecorder {
     pub(crate) lights_overflowed: u32,
     pub(crate) static_instances_left_out: u32,
     pub(crate) moving_instances_left_out: u32,
+    pub(crate) bends_left_out: u32,
     pub(crate) dropped_time: Duration,
     pub(crate) gpu_readbacks_skipped: u32,
 }
@@ -199,6 +204,7 @@ impl FrameRecorder {
             lights_overflowed: 0,
             static_instances_left_out: 0,
             moving_instances_left_out: 0,
+            bends_left_out: 0,
             dropped_time: Duration::ZERO,
             gpu_readbacks_skipped: 0,
         }
@@ -215,6 +221,7 @@ impl FrameRecorder {
         self.lights_overflowed = 0;
         self.static_instances_left_out = 0;
         self.moving_instances_left_out = 0;
+        self.bends_left_out = 0;
         self.dropped_time = Duration::ZERO;
         self.gpu_readbacks_skipped = 0;
         self.allocations_at_start = thread_allocations();
@@ -253,6 +260,7 @@ impl FrameRecorder {
             lights_overflowed: self.lights_overflowed,
             static_instances_left_out: self.static_instances_left_out,
             moving_instances_left_out: self.moving_instances_left_out,
+            bends_left_out: self.bends_left_out,
             heap_allocations: self.heap_allocations,
             dropped_time: self.dropped_time,
             gpu_readbacks_skipped: self.gpu_readbacks_skipped,
