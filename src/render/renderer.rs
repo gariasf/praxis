@@ -11,9 +11,9 @@ use crate::render::readback::GpuStatsReadback;
 use crate::render::targets::RenderTargets;
 use crate::render::tonemapping_pass::{TONEMAPPING_PASS, TonemappingPass};
 use crate::render::{
-    AccelerationStructureBytes, CameraUniform, FrameData, FrameStaging, INSTANCE_CAPACITY,
-    InstanceData, LIGHT_CAPACITY, LightData, LightUniform, LoadStaging, STATIC_TLAS_CAPACITY,
-    StaticTlas,
+    AccelerationStructureBytes, CameraUniform, DYNAMIC_TLAS_CAPACITY, DynamicTlas, FrameData,
+    FrameStaging, INSTANCE_CAPACITY, InstanceData, LIGHT_CAPACITY, LightData, LightUniform,
+    LoadStaging, STATIC_TLAS_CAPACITY, StaticTlas,
 };
 use crate::stats::{FrameRecorder, GpuFrameStats};
 
@@ -41,8 +41,8 @@ pub struct RenderSwitches {
     /// Froxel's list holds, rather than every point light (brute force).
     pub froxel_lights: bool,
     /// Whether the lit pass traces a hard shadow ray at each pixel toward
-    /// each directional light, against the static TLAS (ADR 0020), rather
-    /// than light every pixel the light faces.
+    /// each directional light, against the static and dynamic TLAS (ADR
+    /// 0020), rather than light every pixel the light faces.
     pub shadow_rays: bool,
 }
 
@@ -70,8 +70,8 @@ impl RenderSwitches {
 
 /// Draws Frame data into a target view, the window's surface or an offscreen
 /// texture, from GPU resources and Pools it owns; it reads no ECS World. It
-/// holds the bind groups passes share, the render targets and the static
-/// TLAS, and calls the passes in ADR 0019's order.
+/// holds the bind groups passes share, the render targets and both TLAS, and
+/// calls the passes in ADR 0019's order.
 pub struct Renderer {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
@@ -92,10 +92,11 @@ pub struct Renderer {
     pub(crate) material_pool: MaterialPool,
     pub(crate) load_staging: LoadStaging,
     instance_buffer: wgpu::Buffer,
-    /// The Instances, the vertex Arena, the Mesh pool's tables and the
-    /// static TLAS (`SCENE_GEOMETRY`).
+    /// The Instances, the vertex Arena, the Mesh pool's tables and both
+    /// TLAS (`SCENE_GEOMETRY`).
     scene_geometry_bind_group: wgpu::BindGroup,
     static_tlas: StaticTlas,
+    dynamic_tlas: DynamicTlas,
     /// What its acceleration structures are estimated to take.
     acceleration_structure_bytes: AccelerationStructureBytes,
     /// Set when a frame's uploads failed after it queued Instance writes,
@@ -237,6 +238,7 @@ impl Renderer {
 
         let mesh_pool = MeshPool::new(&device, ARENA_CAPACITY_BYTES);
         let static_tlas = StaticTlas::new(&device, STATIC_TLAS_CAPACITY);
+        let dynamic_tlas = DynamicTlas::new(&device, DYNAMIC_TLAS_CAPACITY, context.backend());
         let scene_geometry_bind_group = SCENE_GEOMETRY.bind_group(
             &device,
             &scene_geometry_bind_group_layout,
@@ -254,6 +256,7 @@ impl Renderer {
                     mesh_pool.meshlet_triangle_arena().as_entire_binding(),
                 ),
                 ("static_tlas", static_tlas.binding()),
+                ("dynamic_tlas", dynamic_tlas.binding()),
             ],
         );
 
@@ -282,6 +285,7 @@ impl Renderer {
             instance_buffer,
             scene_geometry_bind_group,
             static_tlas,
+            dynamic_tlas,
             acceleration_structure_bytes: AccelerationStructureBytes::estimate(context.backend()),
             lost_instance_writes: false,
             uploaded_instance_slot_count: 0,
@@ -311,11 +315,11 @@ impl Renderer {
         self.aspect_ratio
     }
 
-    /// Records the static TLAS's rebuild, if `frame` changes it, and the
-    /// copies of `frame`'s uniforms, the camera's with the static TLAS's
-    /// Anchor, the Instances it writes and its Instance slot count, if it
-    /// changed, into the frame's encoder, which `render` submits; every
-    /// upload is followed by a render. First it submits the loads staged
+    /// Records the static TLAS's rebuild, if `frame` changes it, the dynamic
+    /// TLAS's, and the copies of `frame`'s uniforms, the camera's with the
+    /// static TLAS's Anchor, the Instances it writes and its Instance slot
+    /// count, if it changed, into the frame's encoder, which `render`
+    /// submits; every upload is followed by a render. First it submits the loads staged
     /// since the last frame, and, when they loaded Meshes, waits for the GPU
     /// to build their BLASes and compacts them.
     pub fn upload(&mut self, frame: &FrameData, recorder: &mut FrameRecorder) {
@@ -334,9 +338,13 @@ impl Renderer {
             .update(frame, &self.mesh_pool, &mut encoder);
         recorder.static_instances_left_out = self.static_tlas.instances_left_out();
         // Shadow rays start in the static TLAS's frame, whose Anchor the
-        // first Frame data's camera set.
+        // first Frame data's camera set, and the dynamic TLAS shares it.
+        let tlas_anchor = self.static_tlas.anchor();
+        recorder.uploaded_bytes +=
+            self.dynamic_tlas
+                .update(frame, &self.mesh_pool, tlas_anchor, &mut encoder);
         let camera = CameraUniform {
-            tlas_anchor: self.static_tlas.anchor(),
+            tlas_anchor,
             ..frame.camera
         };
         let instance_size = std::mem::size_of::<InstanceData>() as wgpu::BufferAddress;
@@ -531,7 +539,9 @@ impl Renderer {
     /// size (ADR 0017).
     pub fn estimated_acceleration_structure_bytes(&self) -> u64 {
         let bytes = &self.acceleration_structure_bytes;
-        self.mesh_pool.estimated_blas_bytes(bytes) + self.static_tlas.estimated_bytes(bytes)
+        self.mesh_pool.estimated_blas_bytes(bytes)
+            + self.static_tlas.estimated_bytes(bytes)
+            + self.dynamic_tlas.estimated_bytes(bytes)
     }
 }
 
@@ -563,7 +573,7 @@ mod tests {
         FROXEL_SLICES, FROXEL_SLICES_PER_OCTAVE,
     };
     use crate::render::instance::{anchor_and_offset, padded_columns};
-    use crate::render::prepare::InstanceWrite;
+    use crate::render::prepare::{InstanceWrite, MovingInstance};
     use crate::render::{FramePreparer, NO_MATERIAL, NO_MESH};
     use crate::time::FixedTime;
     use crate::transform::propagate_world_transforms;
@@ -917,14 +927,26 @@ mod tests {
         }
     }
 
+    /// What stands between the light and the floor in
+    /// `shadows_fall_from_both_tlas_and_shadow_rays_off_draw_none`.
+    #[derive(Clone, Copy)]
+    enum Occluder {
+        None,
+        Static,
+        Moving,
+        /// Its slot freed after it moved, so it is listed no more.
+        Freed,
+    }
+
     /// A white floor ahead of the camera, under a directional light shining
     /// the way the camera looks, and a square behind the camera, out of
     /// view, that hides the light from the floor's middle: its shadow rays
     /// darken the middle and leave the corners as the frame without the
     /// square draws them, and with shadow rays off, the frame draws that
-    /// unshadowed image.
+    /// unshadowed image. The square shadows alike as a Moving Instance,
+    /// from the dynamic TLAS, until the frame that frees it.
     #[test]
-    fn shadow_rays_off_draw_the_image_no_shadow_darkens() {
+    fn shadows_fall_from_both_tlas_and_shadow_rays_off_draw_none() {
         let Some(context) = gpu_context() else {
             return;
         };
@@ -945,7 +967,9 @@ mod tests {
             intensity: [1.0; 3],
             ..LightData::default()
         };
-        let image = |switches, occluded: bool| {
+        // One image per frame, each frame's occluder as given, rendered in
+        // turn by one Renderer.
+        let images = |switches, occluders: &[Occluder]| {
             let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE, switches);
             let white = renderer.material_pool.insert(
                 &mut renderer.load_staging,
@@ -969,26 +993,48 @@ mod tests {
             };
             // The floor fills the view, 1.66 m across at 2 m; the square's
             // shadow covers its middle metre.
-            let mut instances = vec![square(4.0, 2.0)];
-            if occluded {
-                instances.push(square(1.0, -1.0));
-            }
-            let frame = FrameData {
-                camera,
-                light,
-                lights: vec![sun],
-                ..frame_of(instances)
+            let floor = square(4.0, 2.0);
+            let occluder = square(1.0, -1.0);
+            let freed = InstanceData {
+                mesh: NO_MESH,
+                ..bytemuck::Zeroable::zeroed()
             };
-            render_frame(&context, &mut renderer, &frame, SIZE, SIZE).0
+            occluders
+                .iter()
+                .map(|&occluder_state| {
+                    let mut frame = match occluder_state {
+                        Occluder::None => frame_of(vec![floor]),
+                        Occluder::Static => frame_of(vec![floor, occluder]),
+                        Occluder::Moving => FrameData {
+                            instance_writes: [(0, false), (1, true)]
+                                .map(|(slot, moving)| InstanceWrite {
+                                    first_slot: slot as u32,
+                                    instances: slot..slot + 1,
+                                    moving,
+                                })
+                                .into(),
+                            moving_instances: vec![MovingInstance {
+                                slot: 1,
+                                instance: 1,
+                            }],
+                            ..frame_of(vec![floor, occluder])
+                        },
+                        Occluder::Freed => frame_of(vec![floor, freed]),
+                    };
+                    (frame.camera, frame.light, frame.lights) = (camera, light, vec![sun]);
+                    render_frame(&context, &mut renderer, &frame, SIZE, SIZE).0
+                })
+                .collect::<Vec<_>>()
         };
-        let shadowed = image(RenderSwitches::default(), true);
-        let unshadowed = image(RenderSwitches::default(), false);
+        let image = |switches, occluder| images(switches, &[occluder]).remove(0);
+        let shadowed = image(RenderSwitches::default(), Occluder::Static);
+        let unshadowed = image(RenderSwitches::default(), Occluder::None);
         let untraced = image(
             RenderSwitches {
                 shadow_rays: false,
                 ..RenderSwitches::default()
             },
-            true,
+            Occluder::Static,
         );
 
         // The shadowed middle sees the ambient term alone, about a quarter as
@@ -1004,6 +1050,18 @@ mod tests {
         assert!(
             untraced == unshadowed,
             "with shadow rays off, the frame drew another image than the unshadowed one"
+        );
+        let moved = images(
+            RenderSwitches::default(),
+            &[Occluder::Moving, Occluder::Freed],
+        );
+        assert!(
+            moved[0] == shadowed,
+            "a Moving Instance shadowed otherwise than a static one"
+        );
+        assert!(
+            moved[1] == unshadowed,
+            "a freed Moving Instance still shadows"
         );
     }
 
@@ -1690,6 +1748,7 @@ mod tests {
                 instances: 0..slots,
                 moving: false,
             }],
+            moving_instances: Vec::new(),
         }
     }
 

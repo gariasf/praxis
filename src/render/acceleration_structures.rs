@@ -11,6 +11,12 @@ use crate::render::{FrameData, InstanceData};
 /// Provisional until M4's split of the 8 GB Budget sizes it.
 pub const STATIC_TLAS_CAPACITY: u32 = 1 << 18;
 
+/// Moving Instances the dynamic TLAS holds: those in the lowest slots, so
+/// which ones changes only as they spawn and despawn; any past it are left
+/// out, so they cast no shadow, and are counted and warned about (decision on
+/// #17, item 8). Provisional until M4's split of the 8 GB Budget sizes it.
+pub const DYNAMIC_TLAS_CAPACITY: u32 = 10_000;
+
 /// What acceleration structures take in GPU memory, as measured on one
 /// adapter: estimates, since wgpu exposes no acceleration-structure size,
 /// until M4 sets exact ones (decision on #17, item 15).
@@ -164,6 +170,91 @@ impl StaticTlas {
     /// Static Instances in slots past its capacity, which it leaves out.
     pub fn instances_left_out(&self) -> u32 {
         self.left_out.len() as u32
+    }
+
+    /// Its bytes, as `acceleration_structure_bytes` estimates them for its
+    /// capacity, whatever it holds.
+    pub fn estimated_bytes(
+        &self,
+        acceleration_structure_bytes: &AccelerationStructureBytes,
+    ) -> u64 {
+        acceleration_structure_bytes.tlas(self.tlas.get().len())
+    }
+}
+
+/// The dynamic TLAS (ADR 0020): the Moving Instances that Frame data lists,
+/// each tagged with its slot, rebuilt each frame in the static TLAS's frame,
+/// so a ray composed once is traced against both.
+pub struct DynamicTlas {
+    tlas: wgpu::Tlas,
+    /// Entries its last build filled, from the first; `None` before it.
+    filled: Option<usize>,
+    /// Bytes each entry uploads to the GPU per build: the backend's own
+    /// instance record, which wgpu-core converts it to and stages.
+    entry_upload_bytes: u64,
+}
+
+impl DynamicTlas {
+    /// An empty dynamic TLAS of `capacity` entries, built on `backend`.
+    pub fn new(device: &wgpu::Device, capacity: u32, backend: wgpu::Backend) -> Self {
+        Self {
+            tlas: device.create_tlas(&wgpu::CreateTlasDescriptor {
+                label: Some("Dynamic TLAS"),
+                max_instances: capacity,
+                // Traced at every lit pixel, as the static TLAS is; ADR 0020's
+                // per-frame cost was measured with this flag.
+                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+                update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+            }),
+            filled: None,
+            entry_upload_bytes: match backend {
+                // `MTLIndirectAccelerationStructureInstanceDescriptor`.
+                wgpu::Backend::Metal => 72,
+                // `VkAccelerationStructureInstanceKHR`,
+                // `D3D12_RAYTRACING_INSTANCE_DESC`.
+                _ => 64,
+            },
+        }
+    }
+
+    /// Fills its entries with `frame`'s Moving Instances, each with its
+    /// BLAS from `mesh_pool` and its transform from the corner of `anchor`,
+    /// the static TLAS's, and records its build into `encoder`; when it holds
+    /// none, only in its first frame and the frame it empties. Returns the
+    /// bytes the build uploads.
+    pub fn update(
+        &mut self,
+        frame: &FrameData,
+        mesh_pool: &MeshPool,
+        anchor: [i32; 3],
+        encoder: &mut wgpu::CommandEncoder,
+    ) -> u64 {
+        let filled = frame.moving_instances.len();
+        let previously_filled = self.filled.replace(filled);
+        if filled == 0 && previously_filled == Some(0) {
+            return 0;
+        }
+        let mut entries = 0;
+        for (index, moving) in frame.moving_instances.iter().enumerate() {
+            let instance = &frame.instances[moving.instance];
+            let blas = mesh_pool.blas(MeshHandle(instance.mesh));
+            entries += u64::from(blas.is_some());
+            self.tlas[index] = blas.map(|blas| {
+                let transform = anchored_transform(instance, anchor);
+                // Every ray's cull mask.
+                wgpu::TlasInstance::new(blas, transform, moving.slot, 0xff)
+            });
+        }
+        for index in filled..previously_filled.unwrap_or(0) {
+            self.tlas[index] = None;
+        }
+        encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&self.tlas));
+        entries * self.entry_upload_bytes
+    }
+
+    /// Its binding, which stays valid as it is rebuilt in place.
+    pub fn binding(&self) -> wgpu::BindingResource<'_> {
+        self.tlas.as_binding()
     }
 
     /// Its bytes, as `acceleration_structure_bytes` estimates them for its

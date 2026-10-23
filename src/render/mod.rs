@@ -19,7 +19,10 @@ mod shader_function_tests;
 #[cfg(test)]
 mod shader_tests;
 
-pub use acceleration_structures::{AccelerationStructureBytes, STATIC_TLAS_CAPACITY, StaticTlas};
+pub use acceleration_structures::{
+    AccelerationStructureBytes, DYNAMIC_TLAS_CAPACITY, DynamicTlas, STATIC_TLAS_CAPACITY,
+    StaticTlas,
+};
 pub use instance::{INSTANCE_CAPACITY, InstanceData, NO_MATERIAL, NO_MESH};
 pub use prepare::{FrameData, FramePreparer};
 pub(crate) use renderer::TIMED_PASSES;

@@ -8,8 +8,8 @@ use crate::components::{DirectionalLight, MaterialRef, MeshRef, PointLight};
 use crate::environment::Environment;
 use crate::render::instance::{anchor_and_offset, padded_columns};
 use crate::render::{
-    CameraUniform, INSTANCE_CAPACITY, InstanceData, LIGHT_CAPACITY, LightData, LightUniform,
-    NO_MATERIAL, NO_MESH,
+    CameraUniform, DYNAMIC_TLAS_CAPACITY, INSTANCE_CAPACITY, InstanceData, LIGHT_CAPACITY,
+    LightData, LightUniform, NO_MATERIAL, NO_MESH,
 };
 use crate::time::FixedTime;
 use crate::transform::{PreviousWorldTransform, WorldTransform};
@@ -34,6 +34,10 @@ pub struct FrameData {
     /// other slot keeps what an earlier frame wrote (ADR 0003).
     pub instances: Vec<InstanceData>,
     pub instance_writes: Vec<InstanceWrite>,
+    /// The Moving Instances the dynamic TLAS holds, at most
+    /// `DYNAMIC_TLAS_CAPACITY`, those in the lowest slots, in no order. Each
+    /// is written every frame, so each is among `instances`.
+    pub moving_instances: Vec<MovingInstance>,
 }
 
 const _: () = {
@@ -60,10 +64,17 @@ type RenderableQuery = QueryState<(
 
 impl FrameData {
     /// Queues `instance` for `slot`, a Moving Instance or not, in the last
-    /// write when `slot` follows it and it is of the same kind.
+    /// write when `slot` follows it and it is of the same kind, and lists it
+    /// among the Moving Instances if it is one.
     fn write_instance(&mut self, slot: u32, instance: InstanceData, moving: bool) {
         let index = self.instances.len();
         self.instances.push(instance);
+        if moving {
+            self.moving_instances.push(MovingInstance {
+                slot,
+                instance: index,
+            });
+        }
         match self.instance_writes.last_mut() {
             Some(write)
                 if write.moving == moving
@@ -87,6 +98,13 @@ pub struct InstanceWrite {
     pub instances: Range<usize>,
     /// Whether they are Moving Instances, which the static TLAS leaves out.
     pub moving: bool,
+}
+
+/// A Moving Instance the dynamic TLAS holds: its slot, and its Instance's
+/// index in `FrameData::instances`.
+pub struct MovingInstance {
+    pub slot: u32,
+    pub instance: usize,
 }
 
 /// Each Renderable's slot in the Instance buffer, kept until it stops being a
@@ -154,6 +172,10 @@ pub struct FramePreparer {
     /// Set by `rewrite_all_instances` until the next `prepare`.
     rewrite_every_instance: bool,
     renderables_refused: u32,
+    moving_instances_left_out: u32,
+    /// Set while Moving Instances are left out of the dynamic TLAS, which
+    /// was warned about when it was set.
+    warned_of_moving_instances_left_out: bool,
     frame: FrameData,
 }
 
@@ -168,6 +190,8 @@ impl FramePreparer {
             instance_slots: InstanceSlots::default(),
             rewrite_every_instance: false,
             renderables_refused: 0,
+            moving_instances_left_out: 0,
+            warned_of_moving_instances_left_out: false,
             frame: FrameData::default(),
         }
     }
@@ -183,6 +207,10 @@ impl FramePreparer {
     /// Primitive names no Material, is skipped and frees its slot. One that
     /// finds the Instance buffer full is refused, warned about once and
     /// counted every frame, and neither written nor drawn until a slot frees.
+    /// An Instance is a Moving Instance while its entity carries its previous
+    /// World transform; past the dynamic TLAS's capacity, those in the
+    /// highest slots are left out of it, counted, and warned about when they
+    /// appear.
     ///
     /// Only new Renderables, blended ones and those whose World transform,
     /// Mesh or Material changed since the last `prepare` write their
@@ -204,6 +232,8 @@ impl FramePreparer {
             instance_slots,
             rewrite_every_instance,
             renderables_refused,
+            moving_instances_left_out,
+            warned_of_moving_instances_left_out,
             frame,
         } = self;
         let camera = world.resource::<Camera>();
@@ -252,6 +282,7 @@ impl FramePreparer {
 
         frame.instances.clear();
         frame.instance_writes.clear();
+        frame.moving_instances.clear();
         *renderables_refused = 0;
         let renderables = renderable_query.query(world);
         // Slots of entities that stopped being Renderables are freed before new
@@ -265,9 +296,12 @@ impl FramePreparer {
             }
         }
         // Those that lost their Material Handle now draw with their Mesh's
-        // Materials.
-        let lost_material_handle: bevy_ecs::entity::EntityHashSet =
-            world.removed::<MaterialRef>().collect();
+        // Materials, and those that lost their previous World transform are
+        // static, so the static TLAS takes them.
+        let lost_component: bevy_ecs::entity::EntityHashSet = world
+            .removed::<MaterialRef>()
+            .chain(world.removed::<PreviousWorldTransform>())
+            .collect();
         for (entity, current, previous, mesh_ref, material_ref) in renderables.iter() {
             let Some(mesh) = mesh_pool.get(mesh_ref.0) else {
                 tracing::warn!(
@@ -298,7 +332,7 @@ impl FramePreparer {
                 || material_ref
                     .as_ref()
                     .is_some_and(|material_ref| material_ref.is_changed())
-                || lost_material_handle.contains(&entity)
+                || lost_component.contains(&entity)
             {
                 let transform = current.drawn(previous, blend_weight);
                 let rotation_scale = transform.0.matrix3.as_mat3();
@@ -335,6 +369,23 @@ impl FramePreparer {
         }
         instance_slots.free.append(&mut instance_slots.freed);
         frame.instance_slot_count = instance_slots.end;
+        // Past the dynamic TLAS's capacity, the lowest slots keep their place.
+        let capacity = DYNAMIC_TLAS_CAPACITY as usize;
+        *moving_instances_left_out = frame.moving_instances.len().saturating_sub(capacity) as u32;
+        if *moving_instances_left_out > 0 {
+            frame
+                .moving_instances
+                .select_nth_unstable_by_key(capacity, |moving| moving.slot);
+            frame.moving_instances.truncate(capacity);
+            if !*warned_of_moving_instances_left_out {
+                tracing::warn!(
+                    left_out = *moving_instances_left_out,
+                    capacity,
+                    "Moving Instances left out of the dynamic TLAS, past its capacity: those in the highest slots cast no shadow"
+                );
+            }
+        }
+        *warned_of_moving_instances_left_out = *moving_instances_left_out > 0;
         *rewrite_every_instance = false;
         // Ends the window in which prepare sees changes and removals, and
         // drains the removals, which otherwise pile up.
@@ -358,6 +409,12 @@ impl FramePreparer {
     /// room for them, so not drawn.
     pub fn lights_overflowed(&self) -> u32 {
         self.lights_overflowed
+    }
+
+    /// Moving Instances the last `prepare` left out of the dynamic TLAS,
+    /// which had no room for them, so they cast no shadow.
+    pub fn moving_instances_left_out(&self) -> u32 {
+        self.moving_instances_left_out
     }
 
     /// Makes the next `prepare` write every Renderable's Instance into the
@@ -426,7 +483,7 @@ mod tests {
     use crate::assets::{ARENA_CAPACITY_BYTES, MaterialHandle, MeshHandle};
     use crate::components::Transform;
     use crate::gpu::GpuContext;
-    use crate::render::LoadStaging;
+    use crate::render::{DYNAMIC_TLAS_CAPACITY, LoadStaging};
     use crate::transform::propagate_world_transforms;
 
     /// The Material `Frames::mesh` draws with.
@@ -638,6 +695,103 @@ mod tests {
             .collect();
         writes.sort_unstable();
         assert_eq!(writes, [(4, 1, true), (5, 1, false)]);
+    }
+
+    /// The slots of the Moving Instances the last frame listed for the
+    /// dynamic TLAS, in order.
+    fn listed(frames: &Frames) -> Vec<u32> {
+        let mut slots: Vec<u32> = frames
+            .preparer
+            .frame()
+            .moving_instances
+            .iter()
+            .map(|moving| moving.slot)
+            .collect();
+        slots.sort_unstable();
+        slots
+    }
+
+    #[test]
+    fn an_instance_is_moving_while_its_entity_carries_its_previous_world_transform() {
+        let Some(mut frames) = Frames::new() else {
+            return;
+        };
+        let [still, moving] = [0.0, 1.0].map(|x| frames.spawn(x));
+        frames
+            .world
+            .entity_mut(moving)
+            .insert(PreviousWorldTransform::default());
+        frames.prepare();
+        // Listed with its own Instance, and written every frame.
+        let frame = frames.preparer.frame();
+        let [entry] = &frame.moving_instances[..] else {
+            panic!(
+                "{} Moving Instances listed, not one",
+                frame.moving_instances.len()
+            );
+        };
+        assert_eq!(frame.instances[entry.instance].offset, [1.0, 0.0, 0.0]);
+        let (moving_slot, still_slot) = (entry.slot, 1 - entry.slot);
+        assert_eq!(frames.prepare(), [moving_slot]);
+        assert_eq!(listed(&frames), [moving_slot]);
+
+        // Losing the component makes it static in that frame: written once
+        // more, unflagged, so the static TLAS takes it, and no longer listed.
+        frames
+            .world
+            .entity_mut(moving)
+            .remove::<PreviousWorldTransform>();
+        assert_eq!(frames.prepare(), [moving_slot]);
+        assert!(!frames.preparer.frame().instance_writes[0].moving);
+        assert!(listed(&frames).is_empty());
+        assert!(frames.prepare().is_empty());
+
+        frames
+            .world
+            .entity_mut(still)
+            .insert(PreviousWorldTransform::default());
+        assert_eq!(frames.prepare(), [still_slot]);
+        assert_eq!(listed(&frames), [still_slot]);
+    }
+
+    /// One Moving Instance more than the dynamic TLAS holds: the lowest slots
+    /// keep their place in it, so the one in the highest slot is left out,
+    /// counted every frame and warned about once, whatever order the World
+    /// holds them in.
+    #[test]
+    fn the_moving_instance_in_the_highest_slot_past_the_dynamic_tlass_capacity_is_left_out() {
+        let Some(mut frames) = Frames::new() else {
+            return;
+        };
+        let spawn_moving = |frames: &mut Frames| {
+            let entity = frames.spawn(0.0);
+            let mut entity = frames.world.entity_mut(entity);
+            entity.insert(PreviousWorldTransform::default()).id()
+        };
+        let moving: Vec<Entity> = (0..=DYNAMIC_TLAS_CAPACITY)
+            .map(|_| spawn_moving(&mut frames))
+            .collect();
+        let lowest: Vec<u32> = (0..DYNAMIC_TLAS_CAPACITY).collect();
+        let ((), log) = logged(|| {
+            for _ in 0..3 {
+                frames.prepare();
+                assert_eq!(listed(&frames), lowest);
+                assert_eq!(frames.preparer.moving_instances_left_out(), 1);
+            }
+        });
+        let warnings = log.matches("left out of the dynamic TLAS").count();
+        assert_eq!(warnings, 1, "{log:?}");
+
+        // Slot 3 frees, so all fit. A new Moving Instance takes it again: the
+        // World now holds it last, yet the highest slot is the one left out.
+        frames.world.despawn(moving[3]);
+        frames.prepare();
+        assert_eq!(frames.preparer.moving_instances_left_out(), 0);
+        assert_eq!(listed(&frames).len(), DYNAMIC_TLAS_CAPACITY as usize);
+        spawn_moving(&mut frames);
+        frames.prepare();
+        assert_eq!(listed(&frames), lowest);
+        assert_eq!(frames.preparer.moving_instances_left_out(), 1);
     }
 
     #[test]
