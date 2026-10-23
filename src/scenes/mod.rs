@@ -51,7 +51,9 @@ pub enum ReferenceScene {
     /// 100 figures of 5,120 triangles, each its own Mesh, swaying in the
     /// fixed schedule as the GPU bends them each frame, a stand-in for
     /// skinned crowd members (#208). Their Meshes have no BLAS, which would
-    /// hold their rest shape, so they cast no shadow.
+    /// hold their rest shape: each casts its shadow through rigid shadow
+    /// proxies, one per bone of its middle, Moving Instances in the dynamic
+    /// TLAS.
     Crowd,
 }
 
@@ -284,9 +286,11 @@ impl ReferenceScene {
             // loaded for a figure shares it.
             Self::Crowd => {
                 let ground = ground_plane(CROWD_GROUND_HALF_SIZE, 1.0);
+                let [longitudes, latitudes] = CROWD_PROXY_SEGMENTS;
                 vec![
                     ("ground", vec![(ground, Some("ground"))]),
                     ("figure", vec![(crowd_figure(), None)]),
+                    ("proxy", vec![(uv_sphere(1.0, longitudes, latitudes), None)]),
                 ]
             }
         }
@@ -855,6 +859,19 @@ const CROWD_FIGURE_HEIGHT: f32 = 1.8;
 const CROWD_FIGURE_RADIUS: f32 = 0.25;
 #[cfg(feature = "cook")]
 const CROWD_FIGURE_SEGMENTS: [u32; 2] = [40, 65];
+/// The bones each figure's middle is cut into, each with a shadow proxy:
+/// about as many as the limb and torso bones of a humanoid skeleton.
+const CROWD_BONES: u32 = 16;
+/// A shadow proxy is a sphere of 12 segments around and 8 from pole to
+/// pole, 168 triangles, stretched over its bone: across, to
+/// `CROWD_PROXY_WIDTH` of the figure there, so it stays inside the figure's
+/// surface; along, to `CROWD_PROXY_LENGTH` bones, so neighbours overlap,
+/// but short of the figure's poles, so a figure's shadow rays leave it
+/// clear of its own proxies.
+#[cfg(feature = "cook")]
+const CROWD_PROXY_SEGMENTS: [u32; 2] = [12, 8];
+const CROWD_PROXY_WIDTH: f64 = 0.85;
+const CROWD_PROXY_LENGTH: f64 = 1.5;
 /// Each figure's middle bends towards its azimuth and back, to
 /// `CROWD_SWAY_CURVATURE` radians per metre at most, which turns its top by
 /// 0.63 rad (36°), once every `CROWD_SWAY_PERIOD` seconds.
@@ -907,7 +924,8 @@ fn crowd_figure_bounds() -> [[f32; 3]; 2] {
 }
 
 /// Spawns the ground, then the figures in rows of `CROWD_COLUMNS` centred
-/// on the origin, each drawing its own Mesh, bent from one rest Mesh.
+/// on the origin, each drawing its own Mesh, bent from one rest Mesh, with
+/// its bones' shadow proxies as children.
 pub(crate) fn spawn_crowd(world: &mut World, loader: &mut AssetLoader) -> anyhow::Result<()> {
     let scene = ReferenceScene::Crowd;
     let ground = loader.mesh(scene.mesh_id("ground"))?;
@@ -915,6 +933,7 @@ pub(crate) fn spawn_crowd(world: &mut World, loader: &mut AssetLoader) -> anyhow
     let material = loader.material(scene.material_id("figure"))?;
     let figure = scene.mesh_id("figure");
     let rest = loader.bent_mesh(figure)?;
+    let proxy = loader.shadow_proxy(scene.mesh_id("proxy"))?;
     let centre = f64::from(CROWD_COLUMNS - 1) / 2.0;
     for index in 0..CROWD_FIGURES {
         let (row, column) = (index / CROWD_COLUMNS, index % CROWD_COLUMNS);
@@ -931,11 +950,22 @@ pub(crate) fn spawn_crowd(world: &mut World, loader: &mut AssetLoader) -> anyhow
             previous_curvature: curvature,
         };
         let bent = (MeshRef(loader.bent_mesh(figure)?), bend, sway);
-        world.spawn((
-            Transform::from_translation(position),
-            MaterialRef(material),
-            bent,
-        ));
+        let figure_entity = world
+            .spawn((
+                Transform::from_translation(position),
+                MaterialRef(material),
+                bent,
+            ))
+            .id();
+        for bone in 0..CROWD_BONES {
+            world.spawn((
+                bone_transform(bone, &bend),
+                ChildOf(figure_entity),
+                MeshRef(proxy),
+                Bone(bone),
+                PreviousWorldTransform::default(),
+            ));
+        }
     }
     Ok(())
 }
@@ -956,13 +986,71 @@ impl Sway {
     }
 }
 
+/// One of a crowd figure's bones, numbered up its middle from its foot,
+/// whose shadow proxy the figure's sway places.
+#[derive(Component)]
+pub(crate) struct Bone(u32);
+
 /// Sets each swaying figure's curvature for the end of the running Tick,
-/// from the Tick count, so no rounding accumulates over Ticks.
-pub(crate) fn sway(fixed_time: Res<FixedTime>, mut figures: Query<(&Sway, &mut Bend)>) {
+/// from the Tick count, so no rounding accumulates over Ticks, and places
+/// its bones' shadow proxies on its bent middle.
+pub(crate) fn sway(
+    fixed_time: Res<FixedTime>,
+    mut figures: Query<(&Sway, &mut Bend, &Children)>,
+    mut bones: Query<(&Bone, &mut Transform)>,
+) {
     let seconds = (fixed_time.tick + 1) as f64 * TICK_SECONDS;
-    for (sway, mut bend) in &mut figures {
+    for (sway, mut bend, children) in &mut figures {
         bend.curvature = sway.curvature(seconds);
+        for &child in children {
+            if let Ok((bone, mut transform)) = bones.get_mut(child) {
+                *transform = bone_transform(bone.0, &bend);
+            }
+        }
     }
+}
+
+/// Where bone `bone`'s shadow proxy sits in a figure bent by `bend`:
+/// centred on the bent middle halfway up the bone and turned as the middle
+/// turns there, stretched over the bone, short of the poles, and to
+/// `CROWD_PROXY_WIDTH` of the figure's width there, a spheroid's.
+fn bone_transform(bone: u32, bend: &Bend) -> Transform {
+    let figure_height = f64::from(CROWD_FIGURE_HEIGHT);
+    let length = figure_height / f64::from(CROWD_BONES);
+    let height = (f64::from(bone) + 0.5) * length;
+    let (centre, turn) = bent_middle(height, bend);
+    let from_equator = 2.0 * height / figure_height - 1.0;
+    let radius = f64::from(CROWD_FIGURE_RADIUS) * (1.0 - from_equator * from_equator).sqrt();
+    let across = CROWD_PROXY_WIDTH * radius;
+    let to_pole = height.min(figure_height - height);
+    let along = (0.5 * CROWD_PROXY_LENGTH * length).min(CROWD_PROXY_WIDTH * to_pole);
+    Transform {
+        translation: centre,
+        rotation: turn.as_quat(),
+        scale: glam::dvec3(across, along, across).as_vec3(),
+    }
+}
+
+/// Where `bend` takes the point of the middle `height` up it, and how it
+/// turns the middle there, as the bend pass bends a vertex there
+/// (src/render/shaders/bend.wgsl): the arc's chord from the foot runs at
+/// half the angle the middle turns through, its length the height times
+/// sin(half) / half.
+fn bent_middle(height: f64, bend: &Bend) -> (glam::DVec3, glam::DQuat) {
+    let half_angle = 0.5 * f64::from(bend.curvature) * height;
+    let azimuth = f64::from(bend.azimuth);
+    let toward = glam::dvec3(azimuth.cos(), 0.0, azimuth.sin());
+    let axis = glam::dvec3(toward.z, 0.0, -toward.x);
+    let turn = glam::DQuat::from_axis_angle(axis, 2.0 * half_angle);
+    let chord = if half_angle == 0.0 {
+        height
+    } else {
+        height * half_angle.sin() / half_angle
+    };
+    (
+        chord * (glam::DVec3::Y * half_angle.cos() + toward * half_angle.sin()),
+        turn,
+    )
 }
 
 /// A procedural Primitive: its triangles, and the name of its Material, if
@@ -1092,7 +1180,73 @@ fn grid_texture() -> Vec<u8> {
 #[cfg(all(test, feature = "cook"))]
 mod tests {
     use super::*;
+    use crate::assets::MeshHandle;
     use crate::render::bend_pass::tests::bent;
+
+    /// A figure bent by `curvature` towards azimuth 2.2.
+    fn bend(curvature: f32) -> Bend {
+        Bend {
+            rest: MeshHandle(0),
+            azimuth: 2.2,
+            curvature,
+            previous_curvature: curvature,
+        }
+    }
+
+    /// Each bone's shadow proxy sits on the middle as the bend pass bends
+    /// it, centred halfway up the bone, every 0.1125 m (1.8 m over 16
+    /// bones) from 0.05625 m, and turned as the middle turns there, unbent
+    /// and bent either way to the sway's most curvature, within the
+    /// oracle's sum of 1,024 steps, about 3e-8 m.
+    #[test]
+    fn each_bones_shadow_proxy_sits_on_the_bent_middle() {
+        let most = CROWD_SWAY_CURVATURE as f32;
+        for bend in [bend(-most), bend(0.0), bend(most)] {
+            for bone in 0..CROWD_BONES {
+                let transform = bone_transform(bone, &bend);
+                let middle = glam::dvec3(0.0, 0.05625 + 0.1125 * f64::from(bone), 0.0);
+                let (centre, turn) = bent(middle, bend.azimuth.into(), bend.curvature.into());
+                let off_centre = (transform.translation - centre).length();
+                let rotation = transform.rotation.as_dquat();
+                let off_turn = [glam::DVec3::X, glam::DVec3::Y]
+                    .map(|axis| (rotation * axis - turn * axis).length())
+                    .into_iter()
+                    .fold(0.0, f64::max);
+                assert!(
+                    off_centre <= 1e-7 && off_turn <= 1e-6,
+                    "bone {bone} at curvature {}: {off_centre} m off, axes {off_turn} off",
+                    bend.curvature
+                );
+            }
+        }
+    }
+
+    /// Unbent, every point of every bone's shadow proxy lies inside its
+    /// figure, the spheroid 0.25 m across and 1.8 m tall standing on its
+    /// lowest point, so the figure's own shadow rays leave it clear of them.
+    #[test]
+    fn each_bones_shadow_proxy_lies_inside_its_figure() {
+        for bone in 0..CROWD_BONES {
+            let transform = bone_transform(bone, &bend(0.0));
+            for latitude in 0..=16 {
+                for longitude in 0..32 {
+                    let polar = std::f32::consts::PI * latitude as f32 / 16.0;
+                    let around = std::f32::consts::TAU * longitude as f32 / 32.0;
+                    let on_unit_sphere = glam::vec3(
+                        polar.sin() * around.cos(),
+                        polar.cos(),
+                        polar.sin() * around.sin(),
+                    );
+                    let point = transform
+                        .to_affine()
+                        .transform_point3(on_unit_sphere.as_dvec3());
+                    let from_middle = (point.x * point.x + point.z * point.z) / (0.25 * 0.25)
+                        + (point.y - 0.9) * (point.y - 0.9) / (0.9 * 0.9);
+                    assert!(from_middle < 1.0, "bone {bone}'s proxy reaches {point}");
+                }
+            }
+        }
+    }
 
     /// Every vertex of a crowd figure, bent by curvatures from barely any to
     /// the sway's most, lies in the box its Mesh is culled by: sideways the

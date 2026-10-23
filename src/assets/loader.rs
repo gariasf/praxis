@@ -49,6 +49,16 @@ impl AssetLoader<'_> {
             .with_context(|| format!("the Mesh pool refused Mesh {id}"))
     }
 
+    /// Loads the Mesh `id` as a shadow proxy, which rays trace through its
+    /// BLAS and no pass draws, so it loads no Material (#208).
+    pub fn shadow_proxy(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
+        let mesh = self.cache.mesh(id)?;
+        let materials = vec![None; mesh.primitives.len()];
+        self.mesh_pool
+            .load_for(self.staging, &mesh, &materials, MeshUse::Traced)
+            .with_context(|| format!("the Mesh pool refused Mesh {id}"))
+    }
+
     /// The Materials `mesh`'s Primitives name, Mesh `id`'s, each loaded once.
     fn materials(
         &mut self,
