@@ -329,7 +329,7 @@ impl Renderer {
     /// changed, into the frame's encoder, which `render` submits; every
     /// upload is followed by a render. First it submits the loads staged
     /// since the last frame, and, when they loaded Meshes, waits for the GPU
-    /// to build their BLASes and compacts them.
+    /// to build their BLASes and to compact them.
     pub fn upload(&mut self, frame: &FrameData, recorder: &mut FrameRecorder) {
         let started = Instant::now();
         debug_assert!(
