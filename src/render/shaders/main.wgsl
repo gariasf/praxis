@@ -197,8 +197,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
     // The point lights the pixel's Froxel lists, in light order, or, with
     // FROXEL_LIGHTS off, every point light: brute force. Each one's shadow
-    // ray runs from the surface to the light, traced only where the light
-    // adds something: where the surface faces it, within its range.
+    // ray runs from the centroid position to the light, traced only where
+    // the light adds something there: where the surface faces it, within its
+    // range.
     var froxel = 0u;
     var point_light_count = light.point_light_count;
     if FROXEL_LIGHTS {
@@ -212,11 +213,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         }
         let point = lights[index];
         let position = point_light_position(point, camera.anchor, camera.offset);
-        let to_light = position - in.centroid_position;
+        let centroid_to_light = position - in.centroid_position;
         var intensity = point.intensity;
-        if SHADOW_RAYS && dot(normal, to_light) > 0.0
-            && dot(to_light, to_light) < point.range * point.range
-            && shadowed(in.centroid_position, geometric_normal, normalize(to_light), length(to_light)) {
+        if SHADOW_RAYS && dot(normal, centroid_to_light) > 0.0
+            && dot(centroid_to_light, centroid_to_light) < point.range * point.range
+            && shadowed(
+                in.centroid_position,
+                geometric_normal,
+                normalize(centroid_to_light),
+                length(centroid_to_light)
+            ) {
             intensity = vec3<f32>(0.0);
         }
         outgoing_luminance += point_light_luminance(

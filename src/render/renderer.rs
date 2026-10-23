@@ -1159,8 +1159,8 @@ mod tests {
                 },
             );
             let quad = load_quad(&mut renderer);
-            // A square of `size` metres facing the camera at `distance` ahead
-            // of it, which is behind it when negative.
+            // A square of `size` metres facing +Z at `distance` ahead of the
+            // camera, which looks down -Z, or behind it when negative.
             let square = |size: f32, distance: f32| InstanceData {
                 rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
                     size, size, 1.0,

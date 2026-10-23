@@ -80,14 +80,14 @@ enum Sight {
     /// The sphere beyond each light's terminator band, and which of the
     /// lights, in `LIGHTS`'s order, reach it.
     Sphere {
-        lit: [bool; 2],
+        lit: [bool; LIGHTS.len()],
     },
     /// The sphere within `TERMINATOR_BAND` of a light's terminator, on its
     /// lit side.
     Terminator,
     /// The ground, and which of the lights the sphere hides from it.
     Ground {
-        shadowed: [bool; 2],
+        shadowed: [bool; LIGHTS.len()],
     },
 }
 
