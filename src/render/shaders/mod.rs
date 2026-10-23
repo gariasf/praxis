@@ -9,7 +9,8 @@ use crate::cooked::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES, QTANGENT_SMALLE
 use crate::render::bend_pass::BEND_WORKGROUP_SIZE;
 use crate::render::bind_groups::{
     BENDS, BindGroupDefinition, DEPTH_PYRAMID_LEVEL, DYNAMIC_TLAS_MARKERS, FRAME, FRAME_DRAW,
-    FROXEL_LISTS, MATERIALS, MESHLET_RECORDS, SCENE_GEOMETRY, TONEMAPPING_INPUT,
+    FROXEL_LISTS, MAIN_PASS_INPUTS, MATERIALS, SCENE_GEOMETRY, SHADOW_MASK_BUILD,
+    TONEMAPPING_INPUT,
 };
 use crate::render::culling_pass::SCAN_BLOCK_SIZE;
 use crate::render::depth_pyramid_pass::DEPTH_PYRAMID_TILE_SIZE;
@@ -19,6 +20,7 @@ use crate::render::froxel_pass::{
 };
 use crate::render::instance::{ANCHOR_CELL_SIZE, INSTANCE_CAPACITY, NO_MATERIAL, NO_MESH};
 use crate::render::renderer::RenderSwitches;
+use crate::render::shadow_mask_pass::{SAMPLE_OFFSETS, SHADOW_MASK_LIGHTS, SHADOW_MASK_TILE_SIZE};
 use crate::render::targets::LUMINANCE_COEFFICIENTS;
 use crate::render::tonemapping_pass::DITHER_MASK_SIDE;
 
@@ -79,8 +81,17 @@ pub const MAIN: ShaderModule = ShaderModule {
     // Each Channel is a binding array indexed by Layer (ADR 0017), and the
     // scene geometry holds both TLAS (ADR 0020).
     enables: &["wgpu_binding_array", "wgpu_ray_query"],
-    bind_groups: &[&FRAME, &MATERIALS, &SCENE_GEOMETRY, &MESHLET_RECORDS],
+    bind_groups: &[&FRAME, &MATERIALS, &SCENE_GEOMETRY, &MAIN_PASS_INPUTS],
     parts: &[COMMON, SHADING, HDR, FROXEL_GRID, part!("main.wgsl")],
+};
+
+/// The shadow mask pass.
+pub const SHADOW_MASK: ShaderModule = ShaderModule {
+    name: "shadow_mask",
+    // It traces rays against both TLAS.
+    enables: &["wgpu_ray_query"],
+    bind_groups: &[&SCENE_GEOMETRY, &SHADOW_MASK_BUILD],
+    parts: &[COMMON, FROXEL_GRID, part!("shadow_mask.wgsl")],
 };
 
 /// The culling pass.
@@ -143,9 +154,10 @@ pub const SHARED: ShaderModule = ShaderModule {
 
 /// Every module, which `shader_tests` validates.
 #[cfg(test)]
-pub const MODULES: [ShaderModule; 8] = [
+pub const MODULES: [ShaderModule; 9] = [
     SHARED,
     MAIN,
+    SHADOW_MASK,
     CULLING,
     FROXEL,
     DEPTH_PYRAMID,
@@ -215,12 +227,23 @@ impl ShaderModule {
              const FROXEL_SLICES_PER_OCTAVE: f32 = {FROXEL_SLICES_PER_OCTAVE:?};\n\
              const FROXEL_LIGHT_CAPACITY: u32 = {FROXEL_LIGHT_CAPACITY}u;\n\
              const BEND_WORKGROUP_SIZE: u32 = {BEND_WORKGROUP_SIZE}u;\n\
-             const QTANGENT_SMALLEST_W: f32 = {QTANGENT_SMALLEST_W:?};\n",
+             const QTANGENT_SMALLEST_W: f32 = {QTANGENT_SMALLEST_W:?};\n\
+             const SHADOW_MASK_TILE_SIZE: u32 = {SHADOW_MASK_TILE_SIZE}u;\n\
+             const SHADOW_MASK_LIGHTS: u32 = {SHADOW_MASK_LIGHTS}u;\n",
             ANCHOR_CELL_SIZE as f32,
             MESHLET_MAX_VERTICES.ilog2(),
             LUMINANCE_COEFFICIENTS[0],
             LUMINANCE_COEFFICIENTS[1],
             LUMINANCE_COEFFICIENTS[2]
+        ));
+        let sample_offsets: Vec<String> = SAMPLE_OFFSETS
+            .iter()
+            .map(|[x, y]| format!("vec2<f32>({x:?}, {y:?})"))
+            .collect();
+        source.push_str(&format!(
+            "const SAMPLE_OFFSETS: array<vec2<f32>, {}> = array<vec2<f32>, {0}>({});\n",
+            SAMPLE_OFFSETS.len(),
+            sample_offsets.join(", ")
         ));
         for (switch, _) in RenderSwitches::default().constants() {
             source.push_str(&format!("override {switch}: bool;\n"));

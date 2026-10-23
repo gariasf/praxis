@@ -8,8 +8,9 @@ use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
 use crate::render::culling_pass::{CullingPass, CullingPhase, DrawCapacity};
 use crate::render::depth_pyramid_pass::{DEPTH_PYRAMID_PASS, DepthPyramidPass};
 use crate::render::froxel_pass::{FROXEL_PASS, FroxelPass};
-use crate::render::main_pass::{DEPTH_PREPASS, LIT_PASS, MainPass};
+use crate::render::main_pass::{DEPTH_PREPASS, LIT_PASS, MainPass, PHASE_TWO_DEPTH_PASS};
 use crate::render::readback::GpuStatsReadback;
+use crate::render::shadow_mask_pass::{SHADOW_MASK_PASS, ShadowMaskPass};
 use crate::render::targets::RenderTargets;
 use crate::render::tonemapping_pass::{TONEMAPPING_PASS, TonemappingPass};
 use crate::render::{
@@ -22,8 +23,9 @@ use crate::stats::{FrameRecorder, GpuFrameStats};
 /// The passes `render` records, in order, each timed from its start to its
 /// end, after the dynamic TLAS's build, timed from the end of the marker
 /// before it to the start of the marker after it in frames that build it.
-/// The bend pass runs in frames that bend Meshes.
-pub(crate) const TIMED_PASSES: [&str; 9] = [
+/// The bend pass runs in frames that bend Meshes; phase two's depth pass
+/// and the shadow mask pass only with shadow rays on (`SHADOW_RAY_PASSES`).
+pub(crate) const TIMED_PASSES: [&str; 11] = [
     DYNAMIC_TLAS_BUILD,
     BEND_PASS,
     CullingPhase::One.label(),
@@ -31,9 +33,15 @@ pub(crate) const TIMED_PASSES: [&str; 9] = [
     DEPTH_PREPASS,
     DEPTH_PYRAMID_PASS,
     CullingPhase::Two.label(),
+    PHASE_TWO_DEPTH_PASS,
+    SHADOW_MASK_PASS,
     LIT_PASS,
     TONEMAPPING_PASS,
 ];
+
+/// The passes only shadow rays run: with them off, each reads as taking no
+/// time.
+pub(crate) const SHADOW_RAY_PASSES: [&str; 2] = [PHASE_TWO_DEPTH_PASS, SHADOW_MASK_PASS];
 
 /// The CPU stages of the dynamic TLAS's build: its recording and its
 /// submit, the CPU cost ADR 0020 caps.
@@ -51,9 +59,10 @@ pub struct RenderSwitches {
     /// Whether the lit pass shades each pixel with the point lights its
     /// Froxel's list holds, rather than every point light (brute force).
     pub froxel_lights: bool,
-    /// Whether the lit pass traces a hard shadow ray at each pixel toward
-    /// each light that reaches it, against the static and dynamic TLAS (ADR
-    /// 0020), rather than light every pixel the light faces.
+    /// Whether the shadow mask pass traces a hard shadow ray at each pixel
+    /// toward each light that reaches it, against the static and dynamic
+    /// TLAS (ADR 0020), for the lit pass to read, rather than light every
+    /// pixel the light faces.
     pub shadow_rays: bool,
 }
 
@@ -92,6 +101,10 @@ pub struct Renderer {
     froxel_pass: FroxelPass,
     culling_pass: CullingPass,
     main_pass: MainPass,
+    shadow_mask_pass: ShadowMaskPass,
+    /// Whether the frame traces shadow rays, which the shadow mask pass and
+    /// phase two's depth pass run for.
+    shadow_rays: bool,
     depth_pyramid_pass: DepthPyramidPass,
     tonemapping_pass: TonemappingPass,
     camera_buffer: wgpu::Buffer,
@@ -186,6 +199,7 @@ impl Renderer {
                 (&SCENE_GEOMETRY, &scene_geometry_bind_group_layout),
             ],
             culling_pass.meshlet_records(),
+            &render_targets,
             switches,
         );
 
@@ -274,10 +288,30 @@ impl Renderer {
             ],
         );
 
+        let shadow_mask_pass = ShadowMaskPass::new(
+            &device,
+            &scene_geometry_bind_group_layout,
+            [
+                ("camera", &camera_buffer),
+                ("light", &light_uniform_buffer),
+                ("lights", &light_buffer),
+                ("froxel_lists", froxel_pass.froxel_lists()),
+            ],
+            &render_targets,
+            switches,
+        );
         let depth_pyramid_pass = DepthPyramidPass::new(&device, &render_targets);
         let tonemapping_pass =
             TonemappingPass::new(&device, target_format, &render_targets, &mut load_staging);
-        let gpu_stats = GpuStatsReadback::new(&device, queue.get_timestamp_period());
+        let gpu_stats = GpuStatsReadback::new(
+            &device,
+            queue.get_timestamp_period(),
+            if switches.shadow_rays {
+                &[]
+            } else {
+                &SHADOW_RAY_PASSES
+            },
+        );
 
         Self {
             mesh_pool,
@@ -291,6 +325,8 @@ impl Renderer {
             froxel_pass,
             culling_pass,
             main_pass,
+            shadow_mask_pass,
+            shadow_rays: switches.shadow_rays,
             depth_pyramid_pass,
             tonemapping_pass,
             camera_buffer,
@@ -319,6 +355,10 @@ impl Renderer {
         self.depth_pyramid_pass
             .bind_render_targets(&self.device, &self.render_targets);
         self.culling_pass
+            .bind_render_targets(&self.device, &self.render_targets);
+        self.main_pass
+            .bind_render_targets(&self.device, &self.render_targets);
+        self.shadow_mask_pass
             .bind_render_targets(&self.device, &self.render_targets);
         self.tonemapping_pass
             .bind_render_targets(&self.device, &self.render_targets);
@@ -493,6 +533,21 @@ impl Renderer {
             CullingPhase::Two,
             timestamps.map(|timestamps| timestamps.compute_pass(CullingPhase::Two.label())),
         );
+        if self.shadow_rays {
+            self.main_pass.record_phase_two_depth(
+                &mut encoder,
+                &self.render_targets,
+                &bind_groups,
+                self.culling_pass.packed_indices(),
+                self.culling_pass.frame_draw(),
+                timestamps.map(|timestamps| timestamps.render_pass(PHASE_TWO_DEPTH_PASS)),
+            );
+            self.shadow_mask_pass.record(
+                &mut encoder,
+                &self.scene_geometry_bind_group,
+                timestamps.map(|timestamps| timestamps.compute_pass(SHADOW_MASK_PASS)),
+            );
+        }
         self.main_pass.record_lit_pass(
             &mut encoder,
             &self.render_targets,
@@ -507,9 +562,10 @@ impl Renderer {
             target,
             timestamps.map(|timestamps| timestamps.render_pass(TONEMAPPING_PASS)),
         );
-        // The depth pre-pass draws phase one's draw, and the lit pass phase
-        // two's into depth, then both phases', each with one indirect call;
-        // the tonemapping pass draws one triangle.
+        // The depth pre-pass draws phase one's draw, and phase two's depth
+        // pass or the lit pass phase two's into depth, then the lit pass both
+        // phases', each with one indirect call; the tonemapping pass draws
+        // one triangle.
         recorder.draw_calls += 4;
         if dynamic_tlas_commands.is_some() {
             self.gpu_stats.dynamic_tlas_built();
@@ -521,6 +577,7 @@ impl Renderer {
             &mut encoder,
             self.culling_pass.frame_draw(),
             self.froxel_pass.froxel_lights_overflowed(),
+            self.shadow_mask_pass.shadow_mask_lights_overflowed(),
         );
 
         let command_buffer = encoder.finish();
@@ -582,6 +639,7 @@ impl Renderer {
                 .gpu_memory_bytes(self.transient_saves_memory)
             + self.bend_pass.gpu_memory_bytes()
             + self.froxel_pass.gpu_memory_bytes()
+            + self.shadow_mask_pass.gpu_memory_bytes()
             + self.culling_pass.gpu_memory_bytes()
             + self.mesh_pool.gpu_memory_bytes()
             + self.estimated_acceleration_structure_bytes()
@@ -628,12 +686,14 @@ pub(crate) mod tests {
     use crate::cooked::{CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex};
     use crate::environment::Environment;
     use crate::render::culling_pass::FrameDraw;
+    use crate::render::depth_pyramid_pass::tests::read_texture;
     use crate::render::froxel_pass::{
         FIRST_FROXEL_SLICE_DEPTH, FROXEL_COLUMNS, FROXEL_COUNT, FROXEL_LIGHT_CAPACITY, FROXEL_ROWS,
         FROXEL_SLICES, FROXEL_SLICES_PER_OCTAVE,
     };
     use crate::render::instance::{ANCHOR_CELL_SIZE, anchor_and_offset, padded_columns};
     use crate::render::prepare::{InstanceWrite, MovingInstance};
+    use crate::render::shadow_mask_pass::SHADOW_MASK_LIGHTS;
     use crate::render::{FramePreparer, NO_MATERIAL, NO_MESH};
     use crate::time::FixedTime;
     use crate::transform::propagate_world_transforms;
@@ -760,8 +820,8 @@ pub(crate) mod tests {
 
     /// Twice the Instances of a two-triangle Mesh draw twice the Instances
     /// and triangles, read back from the GPU, in the same draw calls: one in
-    /// the depth pre-pass, two in the lit pass and one in the tonemapping
-    /// pass.
+    /// the depth pre-pass, one in phase two's depth pass, one in the lit
+    /// pass and one in the tonemapping pass.
     #[test]
     fn doubling_the_instances_doubles_instances_and_triangles_drawn_not_draw_calls() {
         let Some(context) = gpu_context() else {
@@ -1220,6 +1280,159 @@ pub(crate) mod tests {
             beyond == unoccluded,
             "a square beyond the point light shadowed the floor"
         );
+    }
+
+    /// A white floor ahead of the camera, lit by `lights`, directional lights
+    /// first, and a square `size` metres across `behind` the camera, out of
+    /// view, if any, between the floor's middle and the light that lights
+    /// it, as `shadows_fall_from_both_tlas_and_shadow_rays_off_draw_none` and
+    /// `a_point_lights_shadow_ray_ends_at_the_light` place them: the Renderer
+    /// that drew it, the image, the frame's GPU stats and what it logged.
+    fn shadowed_floor(
+        context: &GpuContext,
+        lights: &[LightData],
+        square: Option<(f32, f32)>,
+    ) -> (Renderer, image::RgbaImage, GpuFrameStats, String) {
+        let mut renderer = Renderer::new(
+            context,
+            TARGET_FORMAT,
+            SIZE,
+            SIZE,
+            RenderSwitches::default(),
+        );
+        let white = renderer.material_pool.insert(
+            &mut renderer.load_staging,
+            MaterialData {
+                base_color: [1.0; 4],
+                metallic_roughness: [0.0, 1.0, 0.0, 0.0],
+                emissive: [0.0, 0.0, 0.0, 1.0],
+                layers: [MaterialPool::DEFAULT_LAYER; 4],
+                extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
+            },
+        );
+        let quad = load_quad(&mut renderer);
+        // A square of `size` metres facing +Z at `distance` ahead of the
+        // camera, which looks down -Z, or behind it when negative.
+        let square_at = |size: f32, distance: f32| InstanceData {
+            rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(size, size, 1.0))),
+            offset: [0.0, 0.0, -distance],
+            ..instance(quad, white.index(), [0.0, 0.0])
+        };
+        let mut instances = vec![square_at(4.0, FLOOR_DISTANCE)];
+        instances.extend(square.map(|(size, behind)| square_at(size, -behind)));
+        // A directional light has no range.
+        let directional_light_count = lights.iter().filter(|light| light.range == 0.0).count();
+        let frame = FrameData {
+            camera: CameraUniform {
+                view_proj: (projection_matrix(1.0) * Camera::new().view_matrix())
+                    .to_cols_array_2d(),
+                exposure: 1.0,
+                ..CameraUniform::default()
+            },
+            light: LightUniform {
+                ambient_illuminance: [0.1, 0.1, 0.1, 0.0],
+                directional_light_count: directional_light_count as u32,
+                point_light_count: (lights.len() - directional_light_count) as u32,
+                ..LightUniform::default()
+            },
+            lights: lights.to_vec(),
+            ..frame_of(instances)
+        };
+        let ((image, _, gpu), log) =
+            logged(|| render_frame(context, &mut renderer, &frame, SIZE, SIZE));
+        (renderer, image, gpu, log)
+    }
+
+    /// How far ahead of the camera `shadowed_floor`'s floor lies, along the
+    /// view axis: inside a Froxel slice, not at its edge.
+    const FLOOR_DISTANCE: f32 = 2.25;
+
+    /// Shining the way the camera looks; a directional light's offset holds
+    /// the direction it shines along.
+    const SUN: LightData = LightData {
+        anchor: [0; 3],
+        range: 0.0,
+        offset: [0.0, 0.0, -1.0],
+        _pad_offset: 0,
+        intensity: [1.0; 3],
+        _pad_intensity: 0,
+    };
+
+    /// The pixel's word in the shadow mask, its two halves: a bit per light,
+    /// the first the sun's, which the square hides from the floor's middle
+    /// and not from its corner, then the slice of the Froxel whose lights the
+    /// bits follow, the floor's, in the second half's top bits.
+    #[test]
+    fn the_shadow_mask_holds_each_lights_bit_and_its_froxels_slice() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let (renderer, ..) = shadowed_floor(&context, &[SUN], Some((1.0, 1.0)));
+        let halves: Vec<u32> = read_texture(
+            &context,
+            "@group(0) @binding(0) var source: texture_2d<u32>;
+            @group(0) @binding(1) var<storage, read_write> values: array<u32>;
+            @compute @workgroup_size(1)
+            fn copy(@builtin(global_invocation_id) texel: vec3<u32>) {
+                let word = textureLoad(source, texel.xy, 0);
+                let first = 2u * (texel.y * textureDimensions(source).x + texel.x);
+                values[first] = word.r;
+                values[first + 1u] = word.g;
+            }",
+            renderer.render_targets.shadow_mask(),
+            [SIZE, SIZE],
+            2,
+        )
+        .into_iter()
+        .map(f32::to_bits)
+        .collect();
+
+        let octaves = (FLOOR_DISTANCE / FIRST_FROXEL_SLICE_DEPTH).log2();
+        let slice = (octaves * FROXEL_SLICES_PER_OCTAVE).floor() as u32 + 1;
+        let second_half = slice << (SHADOW_MASK_LIGHTS - 32);
+        let word = |x: u32, y: u32| {
+            let first = 2 * (y * SIZE + x) as usize;
+            [halves[first], halves[first + 1]]
+        };
+        assert_eq!(word(SIZE / 2, SIZE / 2), [1, second_half]);
+        assert_eq!(word(0, 0), [0, second_half]);
+    }
+
+    /// The mask holds no bit for a light past SHADOW_MASK_LIGHTS: the sun
+    /// after as many unlit directional lights, or a point light after them,
+    /// casts no shadow, so the frame is the one without the square, and each
+    /// pixel it lights is counted and warned about.
+    #[test]
+    fn a_light_past_the_shadow_masks_bits_casts_no_shadow_and_is_counted() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let unlit = LightData {
+            intensity: [0.0; 3],
+            ..SUN
+        };
+        // 1 m behind the camera, 3 m from the floor's middle.
+        let point = LightData {
+            range: 10.0,
+            offset: [0.0, 0.0, 1.0],
+            intensity: [9.0; 3],
+            ..LightData::default()
+        };
+        // The sun's square, 1 m across 1 m behind the camera, and the point
+        // light's, 0.2 m across 0.5 m behind it, between it and the floor.
+        for (light, square) in [(SUN, (1.0, 1.0)), (point, (0.2, 0.5))] {
+            let mut lights = vec![unlit; SHADOW_MASK_LIGHTS as usize];
+            lights.push(light);
+            let (_, unshadowed, ..) = shadowed_floor(&context, &lights, None);
+            let (_, past, gpu, log) = shadowed_floor(&context, &lights, Some(square));
+            assert!(
+                past == unshadowed,
+                "a light past the mask's bits shadowed the floor"
+            );
+            // The floor fills the view, and the light reaches all of it.
+            assert_eq!(gpu.shadow_mask_lights_overflowed, SIZE * SIZE);
+            assert!(log.contains("The shadow mask is full"), "{log}");
+        }
     }
 
     /// Two Renderables, the right one then despawned: its slot, which still

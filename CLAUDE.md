@@ -115,9 +115,13 @@ src/
                                  lights from the light buffer;
                                  culling_pass: the
                                  compute pass that builds the frame's
-                                 draw; main_pass: the depth pre-pass
-                                 and the lit pass that draw it, their
-                                 pipelines and recording;
+                                 draw; main_pass: the depth pre-pass,
+                                 phase two's depth pass and the lit pass
+                                 that draw it, their pipelines and
+                                 recording; shadow_mask_pass: the compute
+                                 pass that traces each pixel's shadow
+                                 rays from the depth target into the
+                                 shadow mask the lit pass reads;
                                  depth_pyramid_pass: the compute pass
                                  that reduces the pre-pass's depth into
                                  the depth pyramid, ADR 0019's Hi-Z
@@ -125,7 +129,8 @@ src/
                                  that turns the HDR target into the
                                  target's display colour), targets
                                  (every size-dependent target, the depth
-                                 pyramid and the HDR target among them,
+                                 pyramid, the HDR target and the shadow
+                                 mask among them,
                                  the depth and colour conventions),
                                  prepare (ECS
                                  World to Frame data), bind_groups (each

@@ -108,6 +108,10 @@ _Avoid_: Scene data, render state
 A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.
 _Avoid_: Cluster, light cluster, tile
 
+**Shadow mask**:
+A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows, by the surface itself where it faces away or by what its shadow ray finds, in the order the lit pass sums the pixel's lights, up to 59 of them. A compute pass traces it from the depth target; the lit pass reads it.
+_Avoid_: Shadow map, shadow buffer, visibility buffer
+
 **Meshlet**:
 A small group of one Primitive's triangles, bounded in vertex and triangle count, that the GPU draws as a unit and can cull as one.
 _Avoid_: Cluster, chunk
@@ -173,7 +177,7 @@ The variants a Renderer is created with and keeps: whether Instances are culled,
 _Avoid_: Render settings, config, options, debug flags
 
 **Frame stats**:
-What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and of the dynamic TLAS's build, and the GPU frame total (that build plus the span from the start of the first pass to the end of the last), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables refused, lights the light buffer had no room for and lights the Froxel lists had no room for, static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, bends the bend pass had no room for, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.
+What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and of the dynamic TLAS's build, and the GPU frame total (that build plus the span from the start of the first pass to the end of the last), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables refused, lights the light buffer had no room for, lights the Froxel lists had no room for and lights the shadow mask had no bit for, static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, bends the bend pass had no room for, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.
 _Avoid_: Metrics, telemetry
 
 **Baseline**:

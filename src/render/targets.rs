@@ -21,6 +21,10 @@ pub const DEPTH_PYRAMID_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Fl
 /// The HDR target's format, and the multisampled colour's.
 pub const HDR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
+/// The shadow mask's format: a word of two halves per pixel, a bit per light
+/// and the Froxel slice the bits follow.
+pub const SHADOW_MASK_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg32Uint;
+
 /// The luminance of a linear colour in Rec. 709's primaries, the scene's, per
 /// unit of each (ITU-R BT.709-6, item 3.2); WGSL declares them as
 /// `LUMINANCE_COEFFICIENTS`.
@@ -46,12 +50,15 @@ pub struct RenderTargets {
     /// to 1 × 1, the rows and columns of each level sharing the screen
     /// evenly.
     depth_pyramid_levels: Vec<wgpu::TextureView>,
+    /// Which lights the shadow mask pass found hidden at each pixel, which
+    /// the lit pass reads.
+    shadow_mask: wgpu::TextureView,
 }
 
 impl RenderTargets {
     /// Targets `width` × `height`, both non-zero.
     pub fn new(device: &wgpu::Device, width: u32, height: u32) -> RenderTargets {
-        let attachment = |label, format, sample_count, usage| {
+        let target = |label, format, sample_count, usage| {
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some(label),
                 size: wgpu::Extent3d {
@@ -86,19 +93,19 @@ impl RenderTargets {
         });
         RenderTargets {
             // Read by the depth pyramid pass.
-            depth: attachment(
+            depth: target(
                 "Depth Texture",
                 DEPTH_FORMAT,
                 SAMPLE_COUNT,
                 wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             ),
-            color: attachment(
+            color: target(
                 "Multisampled Colour Texture",
                 HDR_FORMAT,
                 SAMPLE_COUNT,
                 wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
             ),
-            hdr: attachment(
+            hdr: target(
                 "HDR Texture",
                 HDR_FORMAT,
                 1,
@@ -114,6 +121,13 @@ impl RenderTargets {
                     })
                 })
                 .collect(),
+            // Written as storage, then read by the lit pass.
+            shadow_mask: target(
+                "Shadow Mask",
+                SHADOW_MASK_FORMAT,
+                1,
+                wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+            ),
         }
     }
 
@@ -137,6 +151,11 @@ impl RenderTargets {
         &self.depth_pyramid_levels
     }
 
+    /// The shadow mask.
+    pub fn shadow_mask(&self) -> &wgpu::TextureView {
+        &self.shadow_mask
+    }
+
     /// The depth target as the attachment of the frame's first pass that
     /// draws depth: cleared to 0, the far plane, and stored.
     pub fn depth_attachment(&self) -> wgpu::RenderPassDepthStencilAttachment<'_> {
@@ -144,6 +163,19 @@ impl RenderTargets {
             view: &self.depth,
             depth_ops: Some(wgpu::Operations {
                 load: wgpu::LoadOp::Clear(0.0),
+                store: wgpu::StoreOp::Store,
+            }),
+            stencil_ops: None,
+        }
+    }
+
+    /// The depth target as the attachment of a pass that draws more depth
+    /// for a later pass to read: loaded, and stored.
+    pub fn loaded_depth_attachment(&self) -> wgpu::RenderPassDepthStencilAttachment<'_> {
+        wgpu::RenderPassDepthStencilAttachment {
+            view: &self.depth,
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Load,
                 store: wgpu::StoreOp::Store,
             }),
             stencil_ops: None,
@@ -202,6 +234,7 @@ impl RenderTargets {
             &self.color,
             &self.hdr,
             &self.depth_pyramid_levels[0],
+            &self.shadow_mask,
         ]
         .into_iter()
         .map(|view| texture_bytes(view.texture(), transient_saves_memory))

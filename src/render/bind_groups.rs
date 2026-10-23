@@ -9,7 +9,7 @@
 use std::num::NonZeroU32;
 
 use crate::assets::material::TEXTURES_PER_CHANNEL;
-use crate::render::targets::DEPTH_PYRAMID_FORMAT;
+use crate::render::targets::{DEPTH_PYRAMID_FORMAT, SHADOW_MASK_FORMAT};
 
 /// Group 0, written every frame: the camera, the light buffer with its
 /// counts, and each Froxel's list of its lights, which the Froxel pass
@@ -64,8 +64,8 @@ pub const MATERIALS: BindGroupDefinition = BindGroupDefinition {
 /// Group 2, the scene geometry, built once since its buffers never grow and
 /// its TLAS are rebuilt in place: the Instances, the vertex Arena the vertex
 /// shader pulls from (ADR 0019), the Mesh pool's tables of Meshes and
-/// Meshlets, and the static and dynamic TLAS the lit pass traces shadow rays
-/// against (ADR 0020).
+/// Meshlets, and the static and dynamic TLAS the shadow mask pass traces
+/// shadow rays against (ADR 0020).
 pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
     index: 2,
     label: "Scene Geometry Bind Group",
@@ -92,8 +92,8 @@ pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
             "array<u32>",
             wgpu::ShaderStages::COMPUTE,
         ),
-        acceleration_structure("static_tlas", wgpu::ShaderStages::FRAGMENT),
-        acceleration_structure("dynamic_tlas", wgpu::ShaderStages::FRAGMENT),
+        acceleration_structure("static_tlas", wgpu::ShaderStages::COMPUTE),
+        acceleration_structure("dynamic_tlas", wgpu::ShaderStages::COMPUTE),
     ],
 };
 
@@ -166,19 +166,71 @@ pub const BENDS: BindGroupDefinition = BindGroupDefinition {
     ],
 };
 
-/// Group 3 of the main pass: the Meshlet records of the frame's draw, which
-/// the culling pass writes.
-pub const MESHLET_RECORDS: BindGroupDefinition = BindGroupDefinition {
+/// Group 3 of the shadow mask pass, which builds the mask: the camera, the
+/// lights and the Froxel lists, which `FRAME` holds, the depth target, and
+/// what the pass writes: the shadow mask, and how many lights it had no bit
+/// for, which the CPU reads back.
+pub const SHADOW_MASK_BUILD: BindGroupDefinition = BindGroupDefinition {
     index: 3,
-    label: "Meshlet Records Bind Group",
-    bindings: &[Binding {
-        writer: Writer::Gpu,
-        ..read_only_storage(
-            "meshlet_records",
-            "array<MeshletRecord>",
-            wgpu::ShaderStages::VERTEX,
-        )
-    }],
+    label: "Shadow Mask Build Bind Group",
+    bindings: &[
+        uniform("camera", "CameraUniform", wgpu::ShaderStages::COMPUTE),
+        uniform("light", "LightUniform", wgpu::ShaderStages::COMPUTE),
+        read_only_storage("lights", "array<LightData>", wgpu::ShaderStages::COMPUTE),
+        Binding {
+            writer: Writer::Gpu,
+            ..read_only_storage(
+                "froxel_lists",
+                "array<FroxelList>",
+                wgpu::ShaderStages::COMPUTE,
+            )
+        },
+        loaded_texture(
+            "depth_target",
+            "texture_depth_multisampled_2d",
+            wgpu::TextureSampleType::Depth,
+            true,
+            wgpu::ShaderStages::COMPUTE,
+        ),
+        Binding {
+            name: "shadow_mask",
+            wgsl_type: "texture_storage_2d<rg32uint, write>",
+            binding_type: wgpu::BindingType::StorageTexture {
+                access: wgpu::StorageTextureAccess::WriteOnly,
+                format: SHADOW_MASK_FORMAT,
+                view_dimension: wgpu::TextureViewDimension::D2,
+            },
+            stages: wgpu::ShaderStages::COMPUTE,
+            count: None,
+            writer: Writer::Gpu,
+        },
+        storage("shadow_mask_lights_overflowed", "atomic<u32>"),
+    ],
+};
+
+/// Group 3 of the main pass: the Meshlet records of the frame's draw, which
+/// the culling pass writes, and the shadow mask, which the shadow mask pass
+/// writes.
+pub const MAIN_PASS_INPUTS: BindGroupDefinition = BindGroupDefinition {
+    index: 3,
+    label: "Main Pass Inputs Bind Group",
+    bindings: &[
+        Binding {
+            writer: Writer::Gpu,
+            ..read_only_storage(
+                "meshlet_records",
+                "array<MeshletRecord>",
+                wgpu::ShaderStages::VERTEX,
+            )
+        },
+        loaded_texture(
+            "shadow_mask",
+            "texture_2d<u32>",
+            wgpu::TextureSampleType::Uint,
+            false,
+            wgpu::ShaderStages::FRAGMENT,
+        ),
+    ],
 };
 
 /// Group 3 of the depth pyramid pass, one bind group per level of the

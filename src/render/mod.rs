@@ -10,6 +10,7 @@ pub mod prepare;
 pub mod readback;
 pub mod renderer;
 pub mod shaders;
+pub mod shadow_mask_pass;
 pub mod staging;
 pub mod targets;
 pub mod tonemapping_pass;
