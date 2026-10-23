@@ -6,51 +6,51 @@
   "height": 360,
   "measured_frames": 256,
   "cpu_frame_microseconds": {
-    "median": 12092.014,
-    "p95": 12930.057999999999
+    "median": 26657.27,
+    "p95": 27527.237999999998
   },
   "gpu_frame_microseconds": {
-    "median": 12013.606,
-    "p95": 12663.255
+    "median": 26563.316,
+    "p95": 27433.747000000003
   },
   "gpu_pass_microseconds": {
     "culling_phase_one": {
-      "median": 273.963,
-      "p95": 358.841
+      "median": 512.1890000000001,
+      "p95": 596.8679999999999
     },
     "culling_phase_two": {
-      "median": 203.492,
-      "p95": 233.452
+      "median": 307.707,
+      "p95": 345.077
     },
     "depth_prepass": {
-      "median": 484.851,
-      "p95": 530.365
+      "median": 1053.32,
+      "p95": 1147.485
     },
     "depth_pyramid_pass": {
-      "median": 918.675,
-      "p95": 1240.179
+      "median": 1611.859,
+      "p95": 1908.154
     },
     "froxel_pass": {
-      "median": 221.154,
-      "p95": 314.734
+      "median": 315.621,
+      "p95": 412.793
     },
     "lit_pass": {
-      "median": 6363.045,
-      "p95": 6690.414000000001
+      "median": 17010.377,
+      "p95": 17511.448
     },
     "tonemapping_pass": {
-      "median": 3129.9919999999997,
-      "p95": 3301.1749999999997
+      "median": 5074.244000000001,
+      "p95": 5299.465
     }
   },
   "draw_calls": 4,
   "instances_drawn": 2,
   "triangles_drawn": 4,
   "instances_overflowed": 0,
-  "uploaded_bytes": 368,
-  "gpu_memory_bytes": 323371424,
+  "uploaded_bytes": 384,
+  "gpu_memory_bytes": 323371440,
   "arena_bytes_in_use": 176,
-  "heap_allocations": 269,
+  "heap_allocations": 278,
   "counter_frames": {
     "frames": {
       "start": 8,
@@ -60,9 +60,9 @@
     "instances_drawn": 2,
     "triangles_drawn": 4,
     "instances_overflowed": 0,
-    "uploaded_bytes": 368,
-    "gpu_memory_bytes": 323371424,
+    "uploaded_bytes": 384,
+    "gpu_memory_bytes": 323371440,
     "arena_bytes_in_use": 176,
-    "heap_allocations": 269
+    "heap_allocations": 278
   }
 }

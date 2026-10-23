@@ -6,51 +6,51 @@
   "height": 360,
   "measured_frames": 256,
   "cpu_frame_microseconds": {
-    "median": 18969.415,
-    "p95": 24001.724
+    "median": 60987.845,
+    "p95": 64007.53600000001
   },
   "gpu_frame_microseconds": {
-    "median": 18873.59,
-    "p95": 23945.604
+    "median": 60829.273,
+    "p95": 63854.276
   },
   "gpu_pass_microseconds": {
     "culling_phase_one": {
-      "median": 331.24100000000004,
-      "p95": 429.52799999999996
+      "median": 659.835,
+      "p95": 765.8539999999999
     },
     "culling_phase_two": {
-      "median": 210.888,
-      "p95": 255.92699999999996
+      "median": 322.784,
+      "p95": 367.077
     },
     "depth_prepass": {
-      "median": 2436.4790000000003,
-      "p95": 2961.812
+      "median": 4161.397,
+      "p95": 4393.45
     },
     "depth_pyramid_pass": {
-      "median": 949.823,
-      "p95": 1374.936
+      "median": 1694.0819999999999,
+      "p95": 1999.0149999999999
     },
     "froxel_pass": {
-      "median": 233.532,
-      "p95": 368.466
+      "median": 347.791,
+      "p95": 439.283
     },
     "lit_pass": {
-      "median": 11101.299,
-      "p95": 14221.84
+      "median": 47637.981,
+      "p95": 50664.277
     },
     "tonemapping_pass": {
-      "median": 3168.06,
-      "p95": 3948.2659999999996
+      "median": 5106.106,
+      "p95": 5404.758
     }
   },
   "draw_calls": 4,
   "instances_drawn": 10,
   "triangles_drawn": 22080,
   "instances_overflowed": 0,
-  "uploaded_bytes": 368,
-  "gpu_memory_bytes": 323603920,
+  "uploaded_bytes": 384,
+  "gpu_memory_bytes": 323603936,
   "arena_bytes_in_use": 76680,
-  "heap_allocations": 269,
+  "heap_allocations": 280,
   "counter_frames": {
     "frames": {
       "start": 8,
@@ -60,9 +60,9 @@
     "instances_drawn": 10,
     "triangles_drawn": 22080,
     "instances_overflowed": 0,
-    "uploaded_bytes": 368,
-    "gpu_memory_bytes": 323603920,
+    "uploaded_bytes": 384,
+    "gpu_memory_bytes": 323603936,
     "arena_bytes_in_use": 76680,
-    "heap_allocations": 269
+    "heap_allocations": 280
   }
 }
