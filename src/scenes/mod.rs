@@ -889,7 +889,7 @@ const CROWD_CAMERA: glam::DVec3 = glam::DVec3::new(0.0, 11.0, 20.0);
 const CROWD_CAMERA_TARGET: glam::DVec3 = glam::DVec3::new(0.0, 0.6, -0.5);
 
 /// crowd's figure, standing on its lowest point at the origin with its
-/// middle up +Y: a sphere stretched to `CROWD_FIGURE_RADIUS` across and
+/// middle up +Y: a sphere stretched to `CROWD_FIGURE_RADIUS` in radius and
 /// `CROWD_FIGURE_HEIGHT` tall, its normals by the inverse stretch, and
 /// culled by the box that holds every shape it sways to.
 #[cfg(feature = "cook")]
@@ -1220,7 +1220,7 @@ mod tests {
     }
 
     /// Unbent, every point of every bone's shadow proxy lies inside its
-    /// figure, the spheroid 0.25 m across and 1.8 m tall standing on its
+    /// figure, the spheroid 0.25 m in radius and 1.8 m tall standing on its
     /// lowest point, so the figure's own shadow rays leave it clear of them.
     #[test]
     fn each_bones_shadow_proxy_lies_inside_its_figure() {

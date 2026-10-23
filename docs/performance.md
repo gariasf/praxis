@@ -7,8 +7,8 @@ its top three offenders and the tickets that take them.
 ## The crowd's per-bone proxies (2026-10-23, #208)
 
 Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of the
-`crowd` scene without its shadow proxies (#208's part 3, c6cfeca) and
-with them (part 4). `praxis bench <dir> crowd` at 2560×1440 with 4x MSAA,
+`crowd` scene without its shadow proxies (#274) and with them
+(#276). `praxis bench <dir> crowd` at 2560×1440 with 4x MSAA,
 248 warm-up and 1,800 measured frames, eight runs alternating the two
 builds. Load average 5.4 to 10.3, from a peer session's build: CPU p95s
 are noisy, GPU medians agree within 2% across runs.
