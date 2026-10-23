@@ -1,13 +1,16 @@
-//! Shadow rays: on the `shadows` Reference scene, tracing the sun's shadow
-//! rays darkens exactly the pixels where the sphere's analytic shadow falls
-//! on the ground, and changes no other, outside a one-pixel band around every
-//! edge of what each pixel sees. The oracle is the scene's geometry as
-//! `src/scenes/mod.rs` places it, intersected in f64: the true sphere, not
-//! its triangles, which lie within 2.1 mm of it, so their shadow's outline
-//! lies within 2.5 mm of the true one's, a quarter of a pixel there. Near the
-//! sphere's terminator, though, a triangle can face away from the sun while
-//! the normals interpolated over it face the sun: there it hides the sun from
-//! its own pixels, which are not judged.
+//! Shadow rays: on the `shadows` Reference scene, tracing each light's shadow
+//! rays darkens exactly the pixels where the sphere's analytic shadows fall
+//! on the ground, the sun's and the point light's, and changes no other,
+//! outside a one-pixel band around every edge of what each pixel sees. The
+//! oracle is the scene's geometry and lights as `src/scenes/mod.rs` places
+//! them, intersected in f64: the true sphere, not its triangles, which lie
+//! within 2.1 mm of it, so their shadows' outlines lie within 2.5 mm of the
+//! true ones' under the sun, a quarter of a pixel there, and within 11 mm
+//! under the point light, whose rays graze the ground farther out, three
+//! quarters of a pixel there. Near the sphere's terminator for each light,
+//! though, a triangle can face away from the light while the normals
+//! interpolated over it face it: there it hides the light from its own
+//! pixels, which are not judged.
 
 use std::io::Write;
 use std::path::Path;
@@ -30,11 +33,38 @@ const CAMERA: glam::DVec3 = glam::DVec3::new(0.0, 2.4, 3.0);
 const CAMERA_TARGET: glam::DVec3 = glam::DVec3::new(0.0, 0.45, -0.4);
 const FIELD_OF_VIEW: f64 = std::f64::consts::FRAC_PI_4;
 
-/// Where the sun shines along.
-const SUN_DIRECTION: glam::DVec3 = glam::DVec3::new(0.5, -1.0, -0.3);
+/// A light of the scene, as far as its shadow goes.
+#[derive(Clone, Copy)]
+enum Light {
+    /// Shining along a direction.
+    Directional(glam::DVec3),
+    /// At a position, whose range of 20 m reaches every point of the ground
+    /// from where the scene places it: the farthest corner is 13.3 m away.
+    Point(glam::DVec3),
+}
 
-/// The cosine of the sun's angle from the sphere's normal past which a
-/// triangle can face away from the sun: the sphere's 48 × 24 segments of
+/// The sun, then the point light.
+const LIGHTS: [Light; 2] = [
+    Light::Directional(glam::DVec3::new(0.5, -1.0, -0.3)),
+    Light::Point(glam::DVec3::new(1.5, 2.5, 1.0)),
+];
+
+impl Light {
+    /// The unit direction from `point` toward the light, and how far a
+    /// shadow ray runs that way to reach it.
+    fn towards(self, point: glam::DVec3) -> (glam::DVec3, f64) {
+        match self {
+            Self::Directional(direction) => (-direction.normalize(), f64::INFINITY),
+            Self::Point(position) => {
+                let offset = position - point;
+                (offset.normalize(), offset.length())
+            }
+        }
+    }
+}
+
+/// The cosine of a light's angle from the sphere's normal past which a
+/// triangle can face away from the light: the sphere's 48 × 24 segments of
 /// 7.5° make triangles whose circumradius, √2 sin 3.75° of the radius, turns
 /// them up to 5.3° from the normals interpolated over them.
 const TERMINATOR_BAND: f64 = std::f64::consts::SQRT_2 * 0.065_403_129_230_143_07;
@@ -47,16 +77,18 @@ const TOLERANCE: i16 = 1;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Sight {
     Sky,
-    /// The sphere where the sun reaches it, beyond the terminator's band.
-    SunlitSphere,
-    /// The sphere within `TERMINATOR_BAND` of its terminator, on its sunlit
-    /// side.
+    /// The sphere beyond each light's terminator band, and which of the
+    /// lights, in `LIGHTS`'s order, reach it.
+    Sphere {
+        lit: [bool; 2],
+    },
+    /// The sphere within `TERMINATOR_BAND` of a light's terminator, on its
+    /// lit side.
     Terminator,
-    /// The sphere where it faces away from the sun.
-    UnlitSphere,
-    SunlitGround,
-    /// The ground where the sphere hides the sun.
-    ShadowedGround,
+    /// The ground, and which of the lights the sphere hides from it.
+    Ground {
+        shadowed: [bool; 2],
+    },
 }
 
 /// The distance along unit `direction` from `origin` to where it enters the
@@ -81,7 +113,6 @@ fn sight(x: f64, y: f64) -> Sight {
     let across = (2.0 * x / f64::from(WIDTH) - 1.0) * half_width;
     let along_up = (1.0 - 2.0 * y / f64::from(HEIGHT)) * half_height;
     let direction = (forward + right * across + up * along_up).normalize();
-    let towards_sun = -SUN_DIRECTION.normalize();
 
     let to_ground = (direction.y < 0.0).then(|| -CAMERA.y / direction.y);
     let ground = to_ground
@@ -90,17 +121,27 @@ fn sight(x: f64, y: f64) -> Sight {
     if let Some(distance) = enters_sphere(CAMERA, direction)
         && ground.is_none_or(|point| distance < (point - CAMERA).length())
     {
-        let normal = (CAMERA + direction * distance - SPHERE_CENTRE) / SPHERE_RADIUS;
-        return match normal.dot(towards_sun) {
-            cosine if cosine > TERMINATOR_BAND => Sight::SunlitSphere,
-            cosine if cosine > 0.0 => Sight::Terminator,
-            _ => Sight::UnlitSphere,
+        let point = CAMERA + direction * distance;
+        let normal = (point - SPHERE_CENTRE) / SPHERE_RADIUS;
+        let cosines = LIGHTS.map(|light| normal.dot(light.towards(point).0));
+        if cosines
+            .iter()
+            .any(|&cosine| cosine > 0.0 && cosine <= TERMINATOR_BAND)
+        {
+            return Sight::Terminator;
+        }
+        return Sight::Sphere {
+            lit: cosines.map(|cosine| cosine > 0.0),
         };
     }
     match ground {
         None => Sight::Sky,
-        Some(point) if enters_sphere(point, towards_sun).is_some() => Sight::ShadowedGround,
-        Some(_) => Sight::SunlitGround,
+        Some(point) => Sight::Ground {
+            shadowed: LIGHTS.map(|light| {
+                let (towards, reach) = light.towards(point);
+                enters_sphere(point, towards).is_some_and(|distance| distance < reach)
+            }),
+        },
     }
 }
 
@@ -119,7 +160,7 @@ fn capture(context: &GpuContext, switches: RenderSwitches) -> image::RgbaImage {
 }
 
 #[test]
-fn the_suns_shadow_rays_darken_exactly_the_spheres_analytic_shadow() {
+fn shadow_rays_darken_exactly_the_spheres_analytic_shadows() {
     let context = match pollster::block_on(GpuContext::headless()) {
         Ok(context) => context,
         Err(error) if error.is::<wgpu::RequestAdapterError>() => {
@@ -139,8 +180,9 @@ fn the_suns_shadow_rays_darken_exactly_the_spheres_analytic_shadow() {
     );
 
     // Each pixel whose centre and its eight neighbours' centres see alike
-    // is judged: where it sees shadowed ground, darkened by more than the
-    // tolerance in some channel and brightened in none; elsewhere, unchanged.
+    // is judged: where it sees ground the sphere hides from a light,
+    // darkened by more than the tolerance in some channel and brightened in
+    // none; elsewhere, unchanged.
     let sights: Vec<Sight> = (0..HEIGHT)
         .flat_map(|y| (0..WIDTH).map(move |x| sight(f64::from(x) + 0.5, f64::from(y) + 0.5)))
         .collect();
@@ -152,7 +194,7 @@ fn the_suns_shadow_rays_darken_exactly_the_spheres_analytic_shadow() {
         sights[(y * i64::from(WIDTH) + x) as usize]
     };
     let mut wrong = Vec::new();
-    let mut judged_shadowed = 0;
+    let mut judged_shadowed = [0; LIGHTS.len()];
     let mut diagnostic = traced.clone();
     for (x, y, traced_pixel) in traced.enumerate_pixels() {
         let (column, row) = (i64::from(x), i64::from(y));
@@ -168,23 +210,29 @@ fn the_suns_shadow_rays_darken_exactly_the_spheres_analytic_shadow() {
         let untraced_pixel = untraced.get_pixel(x, y);
         let deltas = [0, 1, 2]
             .map(|channel| i16::from(traced_pixel[channel]) - i16::from(untraced_pixel[channel]));
-        let shadowed = expected == Sight::ShadowedGround;
-        let right = if shadowed {
+        let shadowed = match expected {
+            Sight::Ground { shadowed } => shadowed,
+            _ => [false; LIGHTS.len()],
+        };
+        let right = if shadowed.contains(&true) {
             deltas.iter().any(|&delta| delta < -TOLERANCE) && deltas.iter().all(|&delta| delta <= 0)
         } else {
             deltas.iter().all(|&delta| delta.abs() <= TOLERANCE)
         };
-        judged_shadowed += usize::from(shadowed);
+        for (count, shadowed) in judged_shadowed.iter_mut().zip(shadowed) {
+            *count += usize::from(shadowed);
+        }
         if !right {
             wrong.push((x, y, expected, deltas));
             diagnostic.put_pixel(x, y, image::Rgba([255, 0, 255, 255]));
         }
     }
 
-    // The shadow is thousands of pixels, so the check has something to judge.
+    // Each light's shadow is thousands of pixels, so the check has something
+    // to judge under both.
     assert!(
-        judged_shadowed > 4000,
-        "{judged_shadowed} shadowed pixels judged"
+        judged_shadowed.iter().all(|&count| count > 4000),
+        "{judged_shadowed:?} shadowed pixels judged, the sun's then the point light's"
     );
     if !wrong.is_empty() {
         let directory = Path::new(env!("CARGO_TARGET_TMPDIR")).join("shadows");
