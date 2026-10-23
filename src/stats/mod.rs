@@ -85,6 +85,13 @@ pub struct GpuFrameStats {
     /// Lights that reach a pixel past the shadow mask's bits there, summed
     /// over pixels: each casts no shadow at those pixels.
     pub shadow_mask_lights_overflowed: u32,
+    /// With the `count_point_lights` Render switch on, the pixels where the
+    /// frame drew a surface at the first sample, and the point lights their
+    /// Froxels list and whose range reaches that surface, summed over those
+    /// pixels; 0 with it off.
+    pub lit_pixels: u32,
+    pub listed_point_lights: u32,
+    pub reaching_point_lights: u32,
 }
 
 /// One line per group, each a label and then `key=value` pairs, so the text
@@ -123,6 +130,17 @@ impl std::fmt::Display for FrameStats {
                 gpu.froxel_lights_overflowed,
                 gpu.shadow_mask_lights_overflowed
             )?;
+            // Counted only with the `count_point_lights` Render switch on.
+            if gpu.lit_pixels > 0 {
+                let per_lit_pixel = |lights: u32| f64::from(lights) / f64::from(gpu.lit_pixels);
+                write!(
+                    formatter,
+                    " lit_pixels={} listed_point_lights_per_lit_pixel={:.2} reaching_point_lights_per_lit_pixel={:.2}",
+                    gpu.lit_pixels,
+                    per_lit_pixel(gpu.listed_point_lights),
+                    per_lit_pixel(gpu.reaching_point_lights)
+                )?;
+            }
         }
         writeln!(
             formatter,

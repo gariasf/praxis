@@ -127,7 +127,11 @@ src/
                                  the depth pyramid, ADR 0019's Hi-Z
                                  pyramid; tonemapping_pass: the pass
                                  that turns the HDR target into the
-                                 target's display colour), targets
+                                 target's display colour;
+                                 light_count_pass: with the
+                                 count_point_lights Render switch, the
+                                 compute pass that counts each lit
+                                 pixel's point lights), targets
                                  (every size-dependent target, the depth
                                  pyramid, the HDR target and the shadow
                                  mask among them,

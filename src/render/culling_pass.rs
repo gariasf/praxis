@@ -50,12 +50,14 @@ pub struct DrawCapacity {
 }
 
 impl DrawCapacity {
-    /// 2^24 packed indices, 64 MiB, draw 5.6 million triangles: M3's dense
-    /// scene draws at least 5 million. 2^20 Meshlet records, 12 MiB, are as
-    /// many Meshlets of 5.3 triangles on average.
+    /// 2^25 packed indices, 128 MiB, the most one storage binding holds at
+    /// the Capability floor (ADR 0021), draw 11.2 million triangles: all of
+    /// M3's dense scene with culling off, as its Goldens compare (#206).
+    /// 2^20 Meshlet records, 12 MiB, are as many Meshlets of 10.7 triangles
+    /// on average.
     pub const PROVISIONAL: DrawCapacity = DrawCapacity {
         meshlet_records: 1 << 20,
-        packed_indices: 1 << 24,
+        packed_indices: 1 << 25,
     };
 }
 

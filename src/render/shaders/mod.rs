@@ -9,8 +9,8 @@ use crate::cooked::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES, QTANGENT_SMALLE
 use crate::render::bend_pass::BEND_WORKGROUP_SIZE;
 use crate::render::bind_groups::{
     BENDS, BindGroupDefinition, DEPTH_PYRAMID_LEVEL, DYNAMIC_TLAS_MARKERS, FRAME, FRAME_DRAW,
-    FROXEL_LISTS, MAIN_PASS_INPUTS, MATERIALS, SCENE_GEOMETRY, SHADOW_MASK_BUILD,
-    TONEMAPPING_INPUT,
+    FROXEL_LISTS, LIGHT_COUNT_INPUT, MAIN_PASS_INPUTS, MATERIALS, SCENE_GEOMETRY,
+    SHADOW_MASK_BUILD, TONEMAPPING_INPUT,
 };
 use crate::render::culling_pass::SCAN_BLOCK_SIZE;
 use crate::render::depth_pyramid_pass::DEPTH_PYRAMID_TILE_SIZE;
@@ -19,6 +19,7 @@ use crate::render::froxel_pass::{
     FROXEL_SLICES_PER_OCTAVE,
 };
 use crate::render::instance::{ANCHOR_CELL_SIZE, INSTANCE_CAPACITY, NO_MATERIAL, NO_MESH};
+use crate::render::light_count_pass::LIGHT_COUNT_TILE_SIZE;
 use crate::render::renderer::RenderSwitches;
 use crate::render::shadow_mask_pass::{SAMPLE_OFFSETS, SHADOW_MASK_LIGHTS, SHADOW_MASK_TILE_SIZE};
 use crate::render::targets::LUMINANCE_COEFFICIENTS;
@@ -111,6 +112,14 @@ pub const FROXEL: ShaderModule = ShaderModule {
     parts: &[COMMON, FROXEL_GRID, part!("froxel.wgsl")],
 };
 
+/// The light count pass, with the `count_point_lights` Render switch on.
+pub const LIGHT_COUNT: ShaderModule = ShaderModule {
+    name: "light_count",
+    enables: &[],
+    bind_groups: &[&LIGHT_COUNT_INPUT],
+    parts: &[COMMON, FROXEL_GRID, part!("light_count.wgsl")],
+};
+
 /// The depth pyramid pass.
 pub const DEPTH_PYRAMID: ShaderModule = ShaderModule {
     name: "depth_pyramid",
@@ -154,12 +163,13 @@ pub const SHARED: ShaderModule = ShaderModule {
 
 /// Every module, which `shader_tests` validates.
 #[cfg(test)]
-pub const MODULES: [ShaderModule; 9] = [
+pub const MODULES: [ShaderModule; 10] = [
     SHARED,
     MAIN,
     SHADOW_MASK,
     CULLING,
     FROXEL,
+    LIGHT_COUNT,
     DEPTH_PYRAMID,
     TONEMAPPING,
     DYNAMIC_TLAS_MARKER,
@@ -218,6 +228,7 @@ impl ShaderModule {
              const SCAN_BLOCK_SIZE: u32 = {SCAN_BLOCK_SIZE}u;\n\
              const INSTANCE_CAPACITY: u32 = {INSTANCE_CAPACITY}u;\n\
              const DEPTH_PYRAMID_TILE_SIZE: u32 = {DEPTH_PYRAMID_TILE_SIZE}u;\n\
+             const LIGHT_COUNT_TILE_SIZE: u32 = {LIGHT_COUNT_TILE_SIZE}u;\n\
              const LUMINANCE_COEFFICIENTS: vec3<f32> = vec3<f32>({:?}, {:?}, {:?});\n\
              const DITHER_MASK_SIDE: u32 = {DITHER_MASK_SIDE}u;\n\
              const FROXEL_COLUMNS: u32 = {FROXEL_COLUMNS}u;\n\
