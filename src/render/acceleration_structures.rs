@@ -1,8 +1,9 @@
 use std::collections::HashSet;
 
 use crate::assets::{MeshHandle, MeshPool};
+use crate::render::bind_groups::{DYNAMIC_TLAS_MARKERS, pipeline_layout};
 use crate::render::instance::ANCHOR_CELL_SIZE;
-use crate::render::{FrameData, InstanceData};
+use crate::render::{FrameData, InstanceData, shaders};
 
 /// Slots the static TLAS covers: a static Instance in a higher slot is left
 /// out, so it casts no shadow, and is counted and warned about. Sized for
@@ -16,6 +17,10 @@ pub const STATIC_TLAS_CAPACITY: u32 = 1 << 18;
 /// out, so they cast no shadow, and are counted and warned about (decision on
 /// #17, item 8). Provisional until M4's split of the 8 GB Budget sizes it.
 pub const DYNAMIC_TLAS_CAPACITY: u32 = 10_000;
+
+/// The dynamic TLAS's build's name in frame stats: the GPU time from the end
+/// of the marker before it to the start of the marker after it.
+pub(crate) const DYNAMIC_TLAS_BUILD: &str = "dynamic_tlas_build";
 
 /// What acceleration structures take in GPU memory, as measured on one
 /// adapter: estimates, since wgpu exposes no acceleration-structure size,
@@ -178,30 +183,76 @@ impl StaticTlas {
 
 /// The dynamic TLAS (ADR 0020): the Moving Instances that Frame data lists,
 /// each tagged with its slot, rebuilt each frame in the static TLAS's frame,
-/// so a ray composed once is traced against both.
+/// so a ray composed once is traced against both. Its build goes in a
+/// command buffer of its own, so its recording and its submit are timed on
+/// their own, between two markers that time it on the GPU.
 pub struct DynamicTlas {
     tlas: wgpu::Tlas,
-    /// Entries its last build filled, from the first; `None` before it.
-    filled: Option<usize>,
+    /// Entries its last build filled, from the first.
+    filled: usize,
     /// Bytes each entry uploads to the GPU per build: the backend's own
     /// instance record, which wgpu-core converts it to and stages.
     entry_upload_bytes: u64,
+    /// One invocation that queries the TLAS, recorded on either side of its
+    /// build: the GPU runs neither marker alongside the build, as it would a
+    /// pass that does not touch the TLAS, and a pass that does nothing writes
+    /// no timestamp on Metal (#204).
+    marker_pipeline: wgpu::ComputePipeline,
+    /// Its group 3 (`DYNAMIC_TLAS_MARKERS`).
+    marker_bind_group: wgpu::BindGroup,
+    /// What the markers found, which nothing reads.
+    marker_result: wgpu::Buffer,
 }
 
 impl DynamicTlas {
-    /// An empty dynamic TLAS of `DYNAMIC_TLAS_CAPACITY` entries, built on
-    /// `backend`.
-    pub fn new(device: &wgpu::Device, backend: wgpu::Backend) -> Self {
+    /// An empty dynamic TLAS of `DYNAMIC_TLAS_CAPACITY` entries on
+    /// `backend`, built through `queue` at once, so a marker never queries it
+    /// unbuilt.
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, backend: wgpu::Backend) -> Self {
+        let tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
+            label: Some("Dynamic TLAS"),
+            max_instances: DYNAMIC_TLAS_CAPACITY,
+            // Traced at every lit pixel, as the static TLAS is; ADR 0020's
+            // per-frame cost was measured with this flag.
+            flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+        });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Dynamic TLAS Encoder"),
+        });
+        encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&tlas));
+        queue.submit(std::iter::once(encoder.finish()));
+        let marker_result = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Dynamic TLAS Marker Result"),
+            size: size_of::<u32>() as u64,
+            usage: wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+        let layout = DYNAMIC_TLAS_MARKERS.layout(device);
+        let marker_bind_group = DYNAMIC_TLAS_MARKERS.bind_group(
+            device,
+            &layout,
+            [
+                ("dynamic_tlas", tlas.as_binding()),
+                ("marker_result", marker_result.as_entire_binding()),
+            ],
+        );
+        let shader = device.create_shader_module(shaders::DYNAMIC_TLAS_MARKER.descriptor());
+        let marker_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("mark_dynamic_tlas"),
+            layout: Some(&pipeline_layout(
+                device,
+                "Dynamic TLAS Marker Pipeline Layout",
+                &[(&DYNAMIC_TLAS_MARKERS, &layout)],
+            )),
+            module: &shader,
+            entry_point: Some("mark_dynamic_tlas"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        });
         Self {
-            tlas: device.create_tlas(&wgpu::CreateTlasDescriptor {
-                label: Some("Dynamic TLAS"),
-                max_instances: DYNAMIC_TLAS_CAPACITY,
-                // Traced at every lit pixel, as the static TLAS is; ADR 0020's
-                // per-frame cost was measured with this flag.
-                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-                update_mode: wgpu::AccelerationStructureUpdateMode::Build,
-            }),
-            filled: None,
+            tlas,
+            filled: 0,
             entry_upload_bytes: match backend {
                 // `MTLIndirectAccelerationStructureInstanceDescriptor`.
                 wgpu::Backend::Metal => 72,
@@ -209,30 +260,36 @@ impl DynamicTlas {
                 // `D3D12_RAYTRACING_INSTANCE_DESC`.
                 _ => 64,
             },
+            marker_pipeline,
+            marker_bind_group,
+            marker_result,
         }
     }
 
     /// Fills its entries with `frame`'s Moving Instances, each with its
     /// BLAS from `mesh_pool` and its transform from the corner of `anchor`,
-    /// the static TLAS's, and records its build into `encoder`; when it holds
-    /// none, only in its first frame and the frame it empties. Returns the
-    /// bytes the build uploads.
-    pub fn update(
+    /// the static TLAS's, and records its build into a command buffer of
+    /// `device`'s, between markers that write `timestamps`, the end of the
+    /// first and the start of the second. Returns the command buffer and the
+    /// bytes the build uploads; `None` while it holds none and held none in
+    /// the last build, which leaves nothing to build.
+    pub fn record(
         &mut self,
+        device: &wgpu::Device,
         frame: &FrameData,
         mesh_pool: &MeshPool,
         anchor: [i32; 3],
-        encoder: &mut wgpu::CommandEncoder,
-    ) -> u64 {
+        timestamps: Option<[wgpu::ComputePassTimestampWrites<'_>; 2]>,
+    ) -> Option<(wgpu::CommandBuffer, u64)> {
         // Prepare lists no more than its capacity.
         let listed = frame
             .moving_instances
             .iter()
             .take(DYNAMIC_TLAS_CAPACITY as usize);
         let filled = listed.len();
-        let previously_filled = self.filled.replace(filled);
-        if filled == 0 && previously_filled == Some(0) {
-            return 0;
+        let previously_filled = std::mem::replace(&mut self.filled, filled);
+        if filled == 0 && previously_filled == 0 {
+            return None;
         }
         let mut uploaded_entries = 0;
         for (index, moving) in listed.enumerate() {
@@ -241,21 +298,41 @@ impl DynamicTlas {
             uploaded_entries += u64::from(blas.is_some());
             self.tlas[index] = blas.map(|blas| tlas_instance(blas, instance, anchor, moving.slot));
         }
-        for index in filled..previously_filled.unwrap_or(0) {
+        for index in filled..previously_filled {
             self.tlas[index] = None;
         }
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Dynamic TLAS Encoder"),
+        });
+        let [before, after] = timestamps.map_or([None, None], |writes| writes.map(Some));
+        self.mark(&mut encoder, before);
         encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&self.tlas));
-        uploaded_entries * self.entry_upload_bytes
+        self.mark(&mut encoder, after);
+        Some((encoder.finish(), uploaded_entries * self.entry_upload_bytes))
+    }
+
+    /// Records a marker into `encoder`, timed into `timestamp_writes`; none
+    /// without them.
+    fn mark(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
+    ) {
+        if timestamp_writes.is_none() {
+            return;
+        }
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("Dynamic TLAS Marker"),
+            timestamp_writes,
+        });
+        pass.set_pipeline(&self.marker_pipeline);
+        pass.set_bind_group(DYNAMIC_TLAS_MARKERS.index, &self.marker_bind_group, &[]);
+        pass.dispatch_workgroups(1, 1, 1);
     }
 
     /// Its binding, which stays valid as it is rebuilt in place.
     pub fn binding(&self) -> wgpu::BindingResource<'_> {
         self.tlas.as_binding()
-    }
-
-    /// Entries its last build filled.
-    pub fn entries(&self) -> u32 {
-        self.filled.unwrap_or(0) as u32
     }
 
     /// Its bytes, as `acceleration_structure_bytes` estimates them for its
@@ -265,6 +342,12 @@ impl DynamicTlas {
         acceleration_structure_bytes: &AccelerationStructureBytes,
     ) -> u64 {
         acceleration_structure_bytes.tlas(self.tlas.get().len())
+    }
+
+    /// Bytes of its buffers: the markers' result, as the TLAS's own are
+    /// estimated.
+    pub fn gpu_memory_bytes(&self) -> u64 {
+        self.marker_result.size()
     }
 }
 

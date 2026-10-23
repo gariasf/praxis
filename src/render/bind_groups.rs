@@ -139,6 +139,18 @@ pub const FROXEL_LISTS: BindGroupDefinition = BindGroupDefinition {
     ],
 };
 
+/// Group 3 of the dynamic TLAS's markers: the dynamic TLAS, which they query
+/// so the GPU orders them around its build, and what they found, which they
+/// write so the query stays.
+pub const DYNAMIC_TLAS_MARKERS: BindGroupDefinition = BindGroupDefinition {
+    index: 3,
+    label: "Dynamic TLAS Markers Bind Group",
+    bindings: &[
+        acceleration_structure("dynamic_tlas", wgpu::ShaderStages::COMPUTE),
+        storage("marker_result", "u32"),
+    ],
+};
+
 /// Group 3 of the main pass: the Meshlet records of the frame's draw, which
 /// the culling pass writes.
 pub const MESHLET_RECORDS: BindGroupDefinition = BindGroupDefinition {

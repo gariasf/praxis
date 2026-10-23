@@ -80,10 +80,10 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // (80×45, 40×22, 20×11, 10×5, 5×2, 2×1, 1×1), three staging slots of the
     // first frame's 1668 uploaded bytes rounded up to 2048, the GPU stats
     // readback: its resolve buffer of a begin and an end timestamp of 8
-    // bytes for each of the seven passes, and six slots of 176 bytes, the
-    // tonemapping pass's 64×64 R8 dither mask, and the Froxel pass's lists,
-    // 32 × 18 × 32 of 128 u32s, and its 4-byte overflow count. The load's
-    // staging is gone.
+    // bytes for each of the eight timed passes, and six slots of 192 bytes,
+    // the tonemapping pass's 64×64 R8 dither mask, the Froxel pass's lists,
+    // 32 × 18 × 32 of 128 u32s, and its 4-byte overflow count, and the
+    // dynamic TLAS's markers' 4-byte result. The load's staging is gone.
     let multisampled_color = match context.backend() {
         wgpu::Backend::Metal => 0,
         _ => 160 * 90 * 4 * 8,
@@ -110,10 +110,11 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + 160 * 90 * 8
             + (3600 + 880 + 220 + 50 + 10 + 2 + 1) * 4
             + 3 * 2048
-            + 7 * 2 * 8
-            + 6 * 176
+            + 8 * 2 * 8
+            + 6 * 192
             + 64 * 64
             + 32 * 18 * 32 * 128 * 4
+            + 4
             + 4
     );
     // One UV sphere in the Arenas: its triangles of three u32s, and 25 rings
@@ -155,7 +156,9 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         "clear_just_pressed",
         "prepare_frame",
         "upload",
+        "dynamic_tlas",
         "encode",
+        "dynamic_tlas_submit",
         "submit",
     ] {
         assert!(timed.contains(&name), "no CPU time for {name}: {timed:?}");
@@ -171,7 +174,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // Timestamp queries are in the Capability floor, so every frame read
     // back its passes' GPU time, none skipped: Metal reads a timestamp
     // resolved before its pass's submission completed as 0. The frame spans
-    // its passes.
+    // its passes; nothing moves, so no frame builds the dynamic TLAS, and its
+    // build takes no time.
     for (frame, stats) in frames.iter().enumerate() {
         assert_eq!(stats.gpu_readbacks_skipped, 0, "frame {frame}");
         let Some(gpu) = stats.gpu else {
@@ -181,6 +185,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         assert_eq!(
             passes,
             [
+                "dynamic_tlas_build",
                 "culling_phase_one",
                 "froxel_pass",
                 "depth_prepass",
@@ -192,8 +197,9 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             "frame {frame}"
         );
         for (pass, time) in gpu.pass_times {
+            let runs = pass != "dynamic_tlas_build";
             assert!(
-                Duration::ZERO < time
+                (Duration::ZERO < time) == runs
                     && time <= gpu.frame_time
                     && gpu.frame_time < Duration::from_secs(1),
                 "frame {frame}: {pass} took {time:?} of {:?} on the GPU",
@@ -314,6 +320,31 @@ fn the_orrerys_moving_instances_upload_their_dynamic_tlas_entries_every_frame() 
         112 + 32 + 5 * 48 + 5 * 128 + 5 * entry_bytes
     );
     assert_eq!(last.moving_instances_left_out, 0);
+    // Every frame builds it: its recording and its submit are timed on the
+    // CPU, and its build on the GPU, within the frame.
+    for (frame, stats) in frames.iter().enumerate() {
+        let timed: Vec<&str> = stats
+            .cpu_times
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect();
+        for stage in ["dynamic_tlas", "dynamic_tlas_submit"] {
+            assert!(
+                timed.contains(&stage),
+                "frame {frame}: no CPU time for {stage}"
+            );
+        }
+        let Some(gpu) = stats.gpu else {
+            panic!("frame {frame} read back no GPU stats");
+        };
+        let (pass, build) = gpu.pass_times[0];
+        assert_eq!(pass, "dynamic_tlas_build", "frame {frame}");
+        assert!(
+            Duration::ZERO < build && build <= gpu.frame_time,
+            "frame {frame}: the build took {build:?} of {:?}",
+            gpu.frame_time
+        );
+    }
 }
 
 /// On the Reference scenes whose camera moves every frame, the first frame

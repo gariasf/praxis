@@ -71,7 +71,12 @@ struct Slot {
     buffer: wgpu::Buffer,
     state: SlotState,
     map_result: Arc<AtomicU8>,
+    /// A bit per timed pass its frame did not run, by its place in
+    /// `TIMED_PASSES`: each reads as taking no time.
+    untimed: u32,
 }
+
+const _: () = assert!(TIMED_PASSES.len() <= u32::BITS as usize);
 
 #[derive(Clone, Copy)]
 enum SlotState {
@@ -126,6 +131,7 @@ impl GpuStatsReadback {
                     ),
                     state: SlotState::Free,
                     map_result: Arc::new(AtomicU8::new(MAP_PENDING)),
+                    untimed: 0,
                 })
                 .collect(),
             frames_completed: Arc::new(AtomicU64::new(0)),
@@ -166,10 +172,28 @@ impl GpuStatsReadback {
             return None;
         }
         self.slots[index].state = SlotState::Recorded { frame: self.frame };
-        Some(FrameTimestamps {
-            query_set: &self.query_set,
-            first_query: (index * QUERIES_PER_FRAME) as u32,
-        })
+        self.slots[index].untimed = 0;
+        self.frame_timestamps()
+    }
+
+    /// Where the passes of the frame `begin_frame` started write their
+    /// timestamps; `None` when its readback was skipped.
+    pub fn frame_timestamps(&self) -> Option<FrameTimestamps<'_>> {
+        let index = slot_index(self.frame);
+        matches!(self.slots[index].state, SlotState::Recorded { frame } if frame == self.frame)
+            .then(|| FrameTimestamps {
+                query_set: &self.query_set,
+                first_query: (index * QUERIES_PER_FRAME) as u32,
+            })
+    }
+
+    /// Marks `pass`, of `TIMED_PASSES`, as one the frame `begin_frame`
+    /// started does not run, so it reads as taking no time.
+    pub fn pass_untimed(&mut self, pass: &str) {
+        let slot = &mut self.slots[slot_index(self.frame)];
+        if matches!(slot.state, SlotState::Recorded { frame } if frame == self.frame) {
+            slot.untimed |= 1 << pass_position(pass);
+        }
     }
 
     /// Ends the frame `begin_frame` started: copies its draw's counts,
@@ -307,13 +331,23 @@ impl GpuStatsReadback {
                             let ticks = end.saturating_sub(begin) as f64;
                             Duration::from_nanos((ticks * self.nanoseconds_per_tick) as u64)
                         };
+                        let untimed = slot.untimed;
+                        let timed = |pass: usize| untimed & (1 << pass) == 0;
+                        let first_timed = (0..TIMED_PASSES.len()).find(|&pass| timed(pass));
                         self.read_back.push(GpuFrameStats {
                             frame,
                             pass_times: std::array::from_fn(|pass| {
                                 let (begin, end) = (ticks[2 * pass], ticks[2 * pass + 1]);
-                                (TIMED_PASSES[pass], time(begin, end))
+                                let taken = if timed(pass) {
+                                    time(begin, end)
+                                } else {
+                                    Duration::ZERO
+                                };
+                                (TIMED_PASSES[pass], taken)
                             }),
-                            frame_time: time(ticks[0], ticks[QUERIES_PER_FRAME - 1]),
+                            frame_time: first_timed.map_or(Duration::ZERO, |pass| {
+                                time(ticks[2 * pass], ticks[QUERIES_PER_FRAME - 1])
+                            }),
                             instances_drawn: draw.instances_drawn,
                             triangles_drawn: draw.triangles_drawn(),
                             instances_overflowed: draw.instances_overflowed,
@@ -352,12 +386,36 @@ impl<'a> FrameTimestamps<'a> {
         }
     }
 
-    fn first_query_of(self, pass: &str) -> u32 {
-        let Some(position) = TIMED_PASSES.iter().position(|&timed| timed == pass) else {
-            panic!("{pass} is not a timed pass");
-        };
-        self.first_query + 2 * position as u32
+    /// The timestamp writes that bracket `pass`, of `TIMED_PASSES`, with
+    /// two compute passes around it: the end of the first, the start of the
+    /// second.
+    pub fn bracket(self, pass: &str) -> [wgpu::ComputePassTimestampWrites<'a>; 2] {
+        let first = self.first_query_of(pass);
+        [
+            wgpu::ComputePassTimestampWrites {
+                query_set: self.query_set,
+                beginning_of_pass_write_index: None,
+                end_of_pass_write_index: Some(first),
+            },
+            wgpu::ComputePassTimestampWrites {
+                query_set: self.query_set,
+                beginning_of_pass_write_index: Some(first + 1),
+                end_of_pass_write_index: None,
+            },
+        ]
     }
+
+    fn first_query_of(self, pass: &str) -> u32 {
+        self.first_query + 2 * pass_position(pass) as u32
+    }
+}
+
+/// Where `pass` is in `TIMED_PASSES`.
+fn pass_position(pass: &str) -> usize {
+    let Some(position) = TIMED_PASSES.iter().position(|&timed| timed == pass) else {
+        panic!("{pass} is not a timed pass");
+    };
+    position
 }
 
 fn slot_index(frame: u64) -> usize {

@@ -96,6 +96,9 @@ const CPU_NOISE_FLOOR_MICROSECONDS: f64 = 10.0;
 /// culling pass read 136 to 153 µs, every other pass within 3%.
 const GPU_PASS_NOISE_FLOOR_MICROSECONDS: f64 = 20.0;
 
+/// The CPU stages of the dynamic TLAS's build: its recording and its submit.
+const DYNAMIC_TLAS_STAGES: [&str; 2] = ["dynamic_tlas", "dynamic_tlas_submit"];
+
 /// The steady-state cost of one Reference scene: medians over the measured
 /// frames, plus p95 for times, and the counter frames' counters. Bench
 /// output and Baselines share this form.
@@ -109,6 +112,9 @@ pub struct Measurements {
     pub height: u32,
     pub measured_frames: u32,
     pub cpu_frame_microseconds: Spread,
+    /// The dynamic TLAS's build on the CPU: its recording and its submit
+    /// (ADR 0020).
+    pub dynamic_tlas_cpu_microseconds: Spread,
     /// From the start of each frame's first pass to the end of its last.
     pub gpu_frame_microseconds: Spread,
     /// Each pass's own GPU time, by pass.
@@ -312,6 +318,18 @@ fn measure(
                 .map(|stats| microseconds(stats.cpu_frame_time))
                 .collect(),
         ),
+        dynamic_tlas_cpu_microseconds: spread(
+            measured
+                .iter()
+                .map(|stats| {
+                    let stages = stats
+                        .cpu_times
+                        .iter()
+                        .filter(|(stage, _)| DYNAMIC_TLAS_STAGES.contains(&stage.as_str()));
+                    stages.map(|&(_, time)| microseconds(time)).sum()
+                })
+                .collect(),
+        ),
         gpu_frame_microseconds: spread(
             measured_gpu
                 .iter()
@@ -336,8 +354,13 @@ impl std::fmt::Display for Measurements {
         let (cpu, gpu) = (self.cpu_frame_microseconds, self.gpu_frame_microseconds);
         write!(
             formatter,
-            "{} cpu_us median={:.1} p95={:.1} gpu_us median={:.1} p95={:.1}",
-            self.scene, cpu.median, cpu.p95, gpu.median, gpu.p95
+            "{} cpu_us median={:.1} p95={:.1} dynamic_tlas_cpu_us={:.1} gpu_us median={:.1} p95={:.1}",
+            self.scene,
+            cpu.median,
+            cpu.p95,
+            self.dynamic_tlas_cpu_microseconds.median,
+            gpu.median,
+            gpu.p95
         )?;
         for (pass, time) in &self.gpu_pass_microseconds {
             write!(formatter, " {pass}={:.1}", time.median)?;
@@ -449,6 +472,13 @@ pub fn compare(
         cpu,
         budgets.cpu_frame_microseconds,
     );
+    check_regression(
+        &mut findings,
+        "dynamic_tlas_cpu_microseconds",
+        current.dynamic_tlas_cpu_microseconds.median,
+        baseline.dynamic_tlas_cpu_microseconds.median,
+        CPU_NOISE_FLOOR_MICROSECONDS,
+    );
     let passes = &current.gpu_pass_microseconds;
     let baseline_passes = &baseline.gpu_pass_microseconds;
     anyhow::ensure!(
@@ -559,6 +589,10 @@ mod tests {
             cpu_frame_microseconds: Spread {
                 median: 1000.0,
                 p95: 1200.0,
+            },
+            dynamic_tlas_cpu_microseconds: Spread {
+                median: 100.0,
+                p95: 120.0,
             },
             gpu_frame_microseconds: Spread {
                 median: 2500.0,
