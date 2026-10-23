@@ -47,7 +47,7 @@ jobs:
     # Not a required check until two green weeks (#35).
     name: Goldens (software Vulkan)
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
 
@@ -85,7 +85,7 @@ jobs:
     # `cooked/` with `assets/` absent.
     name: Goldens from a shipping build (software Vulkan)
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
 

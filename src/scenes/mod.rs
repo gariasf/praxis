@@ -16,6 +16,10 @@ use crate::environment::Environment;
 use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
 use crate::transform::PreviousWorldTransform;
 
+mod town;
+
+pub(crate) use town::spawn_town;
+
 /// The Reference scenes `capture` renders, each with a camera path in frames
 /// and a frame delta.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -55,10 +59,14 @@ pub enum ReferenceScene {
     /// proxies, one per bone of its middle, Moving Instances in the dynamic
     /// TLAS.
     Crowd,
+    /// A procedural town of 1 × 1 km at M3's target scale (ADR 0013): about
+    /// 250,000 Instances and 1,024 street lamps, seen from street level,
+    /// then from over the rooftops (`town.rs`).
+    Town,
 }
 
 impl ReferenceScene {
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Helmet,
         Self::PbrSweep,
         Self::UvGrid,
@@ -69,6 +77,7 @@ impl ReferenceScene {
         Self::TextureWall,
         Self::Shadows,
         Self::Crowd,
+        Self::Town,
     ];
 
     /// The name the capture command selects the scene by.
@@ -84,6 +93,7 @@ impl ReferenceScene {
             Self::TextureWall => "texture-wall",
             Self::Shadows => "shadows",
             Self::Crowd => "crowd",
+            Self::Town => "town",
         }
     }
 
@@ -122,7 +132,8 @@ impl ReferenceScene {
             | Self::Minification
             | Self::TextureWall
             | Self::Shadows
-            | Self::Crowd => &[],
+            | Self::Crowd
+            | Self::Town => &[],
         }
     }
 
@@ -211,6 +222,7 @@ impl ReferenceScene {
                     (name.into(), material)
                 })
                 .collect(),
+            Self::Town => town::materials(),
         }
     }
 
@@ -248,7 +260,8 @@ impl ReferenceScene {
             | Self::NormalTangent
             | Self::FarCoplanar
             | Self::Shadows
-            | Self::Crowd => Vec::new(),
+            | Self::Crowd
+            | Self::Town => Vec::new(),
         }
     }
 
@@ -293,6 +306,7 @@ impl ReferenceScene {
                     ("proxy", vec![(uv_sphere(1.0, longitudes, latitudes), None)]),
                 ]
             }
+            Self::Town => town::meshes(),
         }
     }
 
@@ -323,6 +337,7 @@ impl ReferenceScene {
             Self::TextureWall => Camera::looking_at(TEXTURE_WALL_CAMERA, glam::DVec3::ZERO),
             Self::Shadows => Camera::looking_at(SHADOWS_CAMERA, SHADOWS_CAMERA_TARGET),
             Self::Crowd => Camera::looking_at(CROWD_CAMERA, CROWD_CAMERA_TARGET),
+            Self::Town => town::camera_at(frame),
         };
         camera.position += shift;
         camera.ev100 = self.ev100();
@@ -343,7 +358,8 @@ impl ReferenceScene {
             | Self::Minification
             | Self::TextureWall
             | Self::Shadows
-            | Self::Crowd => ev100_for_exposure(1.0 / SUN_ILLUMINANCE),
+            | Self::Crowd
+            | Self::Town => ev100_for_exposure(1.0 / SUN_ILLUMINANCE),
         }
     }
 
@@ -361,11 +377,13 @@ impl ReferenceScene {
             | Self::Minification
             | Self::TextureWall
             | Self::Shadows
-            | Self::Crowd => SIXTY_HERTZ,
+            | Self::Crowd
+            | Self::Town => SIXTY_HERTZ,
         }
     }
 
     /// The scene's point lights: position, colour, intensity and range.
+    /// town's stand in its lamps, which its spawn places.
     pub(crate) fn point_lights(self) -> &'static [(glam::DVec3, PointLight)] {
         match self {
             Self::Minification => &[(
@@ -380,6 +398,8 @@ impl ReferenceScene {
             // Texture's colour; and so the crowd's figures cast the sun's
             // shadows alone.
             Self::TextureWall | Self::Crowd => &[],
+            // town's spawn places its lamps' lights, where it places the lamps.
+            Self::Town => &[],
             Self::Shadows => &SHADOWS_LIGHTS,
             Self::Helmet
             | Self::PbrSweep
@@ -392,6 +412,8 @@ impl ReferenceScene {
 
     /// The scene's sun, white, of `SUN_ILLUMINANCE`: a directional light
     /// whose forward axis is turned to shine along the scene's direction.
+    /// town's stands 33° up in the south-southwest, behind the camera's
+    /// street, so the street takes the sun between long shadows.
     pub(crate) fn sun(self) -> (Transform, DirectionalLight) {
         let direction = match self {
             Self::Helmet
@@ -404,6 +426,7 @@ impl ReferenceScene {
             | Self::TextureWall
             | Self::Shadows
             | Self::Crowd => glam::vec3(0.5, -1.0, -0.3),
+            Self::Town => glam::vec3(0.25, -0.55, -0.8),
         };
         let transform = Transform {
             rotation: glam::Quat::from_rotation_arc(glam::Vec3::NEG_Z, direction.normalize()),
@@ -430,7 +453,8 @@ impl ReferenceScene {
             | Self::Minification
             | Self::TextureWall
             | Self::Shadows
-            | Self::Crowd => Environment {
+            | Self::Crowd
+            | Self::Town => Environment {
                 ambient_illuminance: glam::Vec3::splat(0.1 * SUN_ILLUMINANCE),
                 background_luminance: glam::vec3(0.1, 0.2, 0.3) * SUN_ILLUMINANCE,
             },

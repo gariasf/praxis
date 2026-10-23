@@ -9,6 +9,11 @@ use praxis::gpu::GpuContext;
 
 const MEBIBYTE: u64 = 1 << 20;
 
+/// town's Instances and their triangles, as its generator places them
+/// (`src/scenes/town.rs`).
+const TOWN_INSTANCES: u32 = 244_256;
+const TOWN_TRIANGLES: u32 = 9_754_190;
+
 /// Frames per capture: one second at 60 Hz.
 const FRAME_COUNT: usize = 60;
 
@@ -227,6 +232,9 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
 /// On every Reference scene, each frame reads back from the GPU the
 /// Instances and triangles its draw held, which equal the scene's
 /// closed-form counts, none overflowed: every Instance in use is drawn.
+/// town hides most of its Instances, so it is drawn with culling off,
+/// which its Goldens compare with culling on: the frame's draw holds the
+/// whole town.
 #[test]
 fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
     let context = match pollster::block_on(GpuContext::headless()) {
@@ -252,15 +260,12 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
             writeln!(std::io::stderr(), "skipped helmet: assets not fetched").ok();
             continue;
         }
-        let (_, frames) = praxis::capture(
-            &context,
-            scene,
-            glam::DVec3::ZERO,
-            160,
-            90,
-            praxis::RenderSwitches::default(),
-        )
-        .expect("capture failed");
+        let switches = praxis::RenderSwitches {
+            culling: scene != ReferenceScene::Town,
+            ..praxis::RenderSwitches::default()
+        };
+        let (_, frames) = praxis::capture(&context, scene, glam::DVec3::ZERO, 160, 90, switches)
+            .expect("capture failed");
         let (instances, triangles) = match scene {
             // Ten sweep helmets and the textured one.
             ReferenceScene::Helmet => (11, 11 * helmet_triangles),
@@ -274,6 +279,8 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
             ReferenceScene::Shadows => (1, plane_triangles + sphere_triangles),
             // The ground and 100 figures; their shadow proxies are not drawn.
             ReferenceScene::Crowd => (101, plane_triangles + 100 * figure_triangles),
+            // Every Instance its generator places, and their triangles.
+            ReferenceScene::Town => (TOWN_INSTANCES, TOWN_TRIANGLES),
         };
         for (frame, stats) in frames.iter().enumerate() {
             let Some(gpu) = stats.gpu else {
