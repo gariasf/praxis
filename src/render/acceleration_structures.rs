@@ -150,6 +150,17 @@ impl StaticTlas {
         changed
     }
 
+    /// Its binding, which stays valid as it is rebuilt in place.
+    pub fn binding(&self) -> wgpu::BindingResource<'_> {
+        self.tlas.as_binding()
+    }
+
+    /// The Anchor whose corner is its frame's origin: the camera's in the
+    /// first Frame data it took, zero before.
+    pub fn anchor(&self) -> [i32; 3] {
+        self.anchor.unwrap_or_default()
+    }
+
     /// Static Instances in slots past its capacity, which it leaves out.
     pub fn instances_left_out(&self) -> u32 {
         self.left_out.len() as u32

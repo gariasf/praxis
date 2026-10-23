@@ -61,9 +61,11 @@ pub const MATERIALS: BindGroupDefinition = BindGroupDefinition {
     ],
 };
 
-/// Group 2, the scene geometry, built once since its buffers never grow: the
-/// Instances, the vertex Arena the vertex shader pulls from (ADR 0019), and
-/// the Mesh pool's tables of Meshes and Meshlets.
+/// Group 2, the scene geometry, built once since its buffers never grow and
+/// its TLAS is rebuilt in place: the Instances, the vertex Arena the vertex
+/// shader pulls from (ADR 0019), the Mesh pool's tables of Meshes and
+/// Meshlets, and the static TLAS the lit pass traces shadow rays against
+/// (ADR 0020).
 pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
     index: 2,
     label: "Scene Geometry Bind Group",
@@ -90,6 +92,7 @@ pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
             "array<u32>",
             wgpu::ShaderStages::COMPUTE,
         ),
+        acceleration_structure("static_tlas", wgpu::ShaderStages::FRAGMENT),
     ],
 };
 
@@ -428,6 +431,21 @@ const fn loaded_texture(
             sample_type,
             view_dimension: wgpu::TextureViewDimension::D2,
             multisampled,
+        },
+        stages,
+        count: None,
+        writer: Writer::Gpu,
+    }
+}
+
+/// An acceleration structure `stages` trace rays against, which the GPU
+/// builds.
+const fn acceleration_structure(name: &'static str, stages: wgpu::ShaderStages) -> Binding {
+    Binding {
+        name,
+        wgsl_type: "acceleration_structure",
+        binding_type: wgpu::BindingType::AccelerationStructure {
+            vertex_return: false,
         },
         stages,
         count: None,
