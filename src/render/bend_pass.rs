@@ -144,17 +144,18 @@ mod tests {
     fn rest_mesh() -> CookedMesh {
         let vertices = (0..VERTEX_COUNT)
             .map(|index| {
-                let step = f64::from(index);
-                let around = 2.4 * step;
-                let axis = glam::dvec3((1.3 * step).cos(), 0.6, (1.3 * step).sin()).normalize();
-                let frame = glam::DQuat::from_axis_angle(axis, 2.8 * (0.37 * step).fract());
-                let frame = if index % 2 == 0 { frame } else { -frame };
-                let height = 2.0 * step / f64::from(VERTEX_COUNT - 1);
+                let bitangent_sign = if index % 2 == 0 { 1.0 } else { -1.0 };
+                let index = f64::from(index);
+                let around = 2.4 * index;
+                let axis = glam::dvec3((1.3 * index).cos(), 0.6, (1.3 * index).sin());
+                let angle = 2.8 * (0.37 * index).fract();
+                let rotation = glam::DQuat::from_axis_angle(axis.normalize(), angle);
+                let height = 2.0 * index / f64::from(VERTEX_COUNT - 1);
                 CookedVertex {
                     position: [0.25 * around.cos(), height, 0.25 * around.sin()]
                         .map(|coordinate| coordinate as f32),
-                    uv: [step as f32, 0.5],
-                    qtangent: frame
+                    uv: [index as f32, 0.5],
+                    qtangent: (rotation * bitangent_sign)
                         .to_array()
                         .map(|component| (component * f64::from(i16::MAX)).round() as i16),
                 }
@@ -227,11 +228,9 @@ mod tests {
         let [rest, straight, forward, back, after] = [(); 5].map(|()| {
             let staging = &mut renderer.load_staging;
             let handle = renderer.mesh_pool.load(staging, &rest_mesh, &[None]);
-            let vertices = &renderer
-                .mesh_pool
-                .get(handle.expect("fits"))
-                .expect("loaded");
-            vertices.vertices.start as usize..vertices.vertices.end as usize
+            let mesh = renderer.mesh_pool.get(handle.expect("fits"));
+            let vertices = &mesh.expect("loaded").vertices;
+            vertices.start as usize..vertices.end as usize
         });
         let bend = |mesh: &Range<usize>, azimuth, curvature| BendData {
             rest_first_vertex: rest.start as u32,

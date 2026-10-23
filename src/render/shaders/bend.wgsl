@@ -20,20 +20,22 @@ struct BendData {
     curvature: f32,
 }
 
-// sin(x) / x, by its Taylor series where |x| < 0.5, whose first term left
-// out, x⁸ / 9!, is under 1.1e-8 there: Metal compiles with fast math, which
-// leaves sin an absolute error that dividing by a small x would magnify.
-fn sinc(x: f32) -> f32 {
-    let squared = x * x;
+// sin(angle) / angle, sinc, by its Taylor series below 0.5 radians, whose
+// first term left out, angle⁸ / 9!, is under 1.1e-8 there: Metal compiles
+// with fast math, which leaves sin an absolute error that dividing by a
+// small angle would magnify.
+fn sinc(angle: f32) -> f32 {
+    let squared = angle * angle;
     let series = 1.0 - squared / 6.0 * (1.0 - squared / 20.0 * (1.0 - squared / 42.0));
-    return select(sin(x) / x, series, abs(x) < 0.5);
+    return select(sin(angle) / angle, series, abs(angle) < 0.5);
 }
 
-// The quaternion product a b: b's rotation, then a's.
-fn quaternion_product(a: vec4<f32>, b: vec4<f32>) -> vec4<f32> {
+// The quaternion product of `outer` and `inner`: `inner`'s rotation, then
+// `outer`'s.
+fn quaternion_product(outer: vec4<f32>, inner: vec4<f32>) -> vec4<f32> {
     return vec4<f32>(
-        a.w * b.xyz + b.w * a.xyz + cross(a.xyz, b.xyz),
-        a.w * b.w - dot(a.xyz, b.xyz)
+        outer.w * inner.xyz + inner.w * outer.xyz + cross(outer.xyz, inner.xyz),
+        outer.w * inner.w - dot(outer.xyz, inner.xyz)
     );
 }
 
@@ -64,10 +66,7 @@ fn bend_vertices(@builtin(global_invocation_id) invocation: vec3<u32>) {
     // The QTangent turns with it, stored as the cooker stores one: its w
     // made positive and kept off zero, then given the bitangent sign
     // (ADR 0018).
-    let stored = vec4<f32>(
-        unpack2x16snorm(vertex.qtangent[0]),
-        unpack2x16snorm(vertex.qtangent[1])
-    );
+    let stored = unpack_qtangent(vertex);
     let bitangent_sign = select(1.0, -1.0, stored.w < 0.0);
     var turned = quaternion_product(rotation, normalize(stored) * bitangent_sign);
     turned *= select(1.0, -1.0, turned.w < 0.0);
