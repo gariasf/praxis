@@ -15,9 +15,9 @@ use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
 use crate::input::{Input, clear_just_pressed};
 use crate::render::{FramePreparer, RenderSwitches, Renderer};
 use crate::scenes::{
-    ReferenceScene, SCI_FI_HELMET, SWEEP_METALLIC, SWEEP_ROUGHNESS, spawn_far_coplanar,
-    spawn_minification, spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep, spawn_shadows,
-    spawn_texture_wall, spawn_uv_grid, spin, sweep_material_name,
+    ReferenceScene, SCI_FI_HELMET, SWEEP_METALLIC, SWEEP_ROUGHNESS, spawn_crowd,
+    spawn_far_coplanar, spawn_minification, spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep,
+    spawn_shadows, spawn_texture_wall, spawn_uv_grid, spin, sway, sweep_material_name,
 };
 use crate::stats::{FrameRecorder, FrameStats, GpuFrameStats};
 use crate::threading::{init_compute_pool, single_threaded_schedule};
@@ -105,6 +105,7 @@ impl State {
             ReferenceScene::Minification => spawn_minification,
             ReferenceScene::TextureWall => spawn_texture_wall,
             ReferenceScene::Shadows => spawn_shadows,
+            ReferenceScene::Crowd => spawn_crowd,
         };
         let mut loader = AssetLoader {
             device,
@@ -289,6 +290,7 @@ fn simulation_schedules(recorder: &FrameRecorder) -> (Schedule, Schedule) {
                     .chain()
                     .run_if(resource_exists::<HelmetAssets>),
                 spin,
+                sway,
                 clear_just_pressed,
                 reset_teleported,
                 propagate_world_transforms,

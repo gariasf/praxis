@@ -1,7 +1,7 @@
 use anyhow::Context;
 
-use crate::assets::{MaterialChannel, MaterialHandle, MaterialPool, MeshHandle, MeshPool};
-use crate::cooked::{AssetId, CookedCache};
+use crate::assets::{MaterialChannel, MaterialHandle, MaterialPool, MeshHandle, MeshPool, MeshUse};
+use crate::cooked::{AssetId, CookedCache, CookedMesh};
 use crate::render::LoadStaging;
 
 /// What a scene load reads Assets with: a Cooked cache, and the Pools they
@@ -32,6 +32,29 @@ impl AssetLoader<'_> {
     /// Primitives name, each loaded once, which each Primitive draws with.
     pub fn mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
         let mesh = self.cache.mesh(id)?;
+        let materials = self.materials(id, &mesh)?;
+        self.mesh_pool
+            .load(self.staging, &mesh, &materials)
+            .with_context(|| format!("the Mesh pool refused Mesh {id}"))
+    }
+
+    /// Loads the Mesh `id` as `mesh` does, for the GPU to bend each frame
+    /// (`Bend`): drawn, and traced by no ray, as its BLAS would hold its rest
+    /// shape (#208). Its cooked bounds must hold every shape it bends to.
+    pub fn bent_mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
+        let mesh = self.cache.mesh(id)?;
+        let materials = self.materials(id, &mesh)?;
+        self.mesh_pool
+            .load_for(self.staging, &mesh, &materials, MeshUse::Drawn)
+            .with_context(|| format!("the Mesh pool refused Mesh {id}"))
+    }
+
+    /// The Materials `mesh`'s Primitives name, Mesh `id`'s, each loaded once.
+    fn materials(
+        &mut self,
+        id: AssetId,
+        mesh: &CookedMesh,
+    ) -> anyhow::Result<Vec<Option<MaterialHandle>>> {
         let mut materials = Vec::with_capacity(mesh.primitives.len());
         for (index, primitive) in mesh.primitives.iter().enumerate() {
             let earlier = mesh.primitives[..index]
@@ -47,9 +70,7 @@ impl AssetLoader<'_> {
             };
             materials.push(material);
         }
-        self.mesh_pool
-            .load(self.staging, &mesh, &materials)
-            .with_context(|| format!("the Mesh pool refused Mesh {id}"))
+        Ok(materials)
     }
 }
 

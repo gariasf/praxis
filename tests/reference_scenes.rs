@@ -29,6 +29,7 @@ fn procedural_scenes_render_identically_without_asset_files() {
         ReferenceScene::PbrSweep,
         ReferenceScene::UvGrid,
         ReferenceScene::Orrery,
+        ReferenceScene::Crowd,
     ] {
         let capture = || {
             praxis::capture(

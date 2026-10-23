@@ -120,7 +120,7 @@ impl BendPass {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::ops::Range;
     use std::time::Duration;
 
@@ -181,11 +181,15 @@ mod tests {
     /// Where bending by `curvature` towards `azimuth` takes the rest Mesh's
     /// point at `position`, and how it turns the point's tangent frame: the
     /// middle's direction, turned from +Y towards the azimuth by the
-    /// curvature times the height, summed in 4,096 steps up to the point's
+    /// curvature times the height, summed in 1,024 steps up to the point's
     /// height, then the point's offset from the middle, turned as the middle
     /// turns there.
-    fn bent(position: glam::DVec3, azimuth: f64, curvature: f64) -> (glam::DVec3, glam::DQuat) {
-        const STEPS: u32 = 4096;
+    pub(crate) fn bent(
+        position: glam::DVec3,
+        azimuth: f64,
+        curvature: f64,
+    ) -> (glam::DVec3, glam::DQuat) {
+        const STEPS: u32 = 1024;
         let toward = glam::dvec3(azimuth.cos(), 0.0, azimuth.sin());
         let direction = |height: f64| {
             glam::DVec3::Y * (curvature * height).cos() + toward * (curvature * height).sin()

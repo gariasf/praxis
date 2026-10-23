@@ -11,6 +11,24 @@ pub const ARENA_CAPACITY_BYTES: u64 = 16 << 20;
 /// Meshes the Mesh table holds, provisional as `ARENA_CAPACITY_BYTES` is.
 pub const MESH_CAPACITY: u32 = 1 << 16;
 
+/// What a Mesh is loaded for: the main pass draws it from its Meshlets, and
+/// rays trace it through its BLAS unless it is drawn alone.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MeshUse {
+    DrawnAndTraced,
+    /// Drawn alone: a Mesh the GPU bends, whose BLAS, built from its rest
+    /// shape, would cast another shape's shadow (#208).
+    Drawn,
+}
+
+impl MeshUse {
+    /// Whether rays trace it, so it needs a BLAS and the index stream the
+    /// BLAS is built from.
+    fn traced(self) -> bool {
+        self != MeshUse::Drawn
+    }
+}
+
 /// The Meshes, and the GPU tables they are drawn from: Arenas of vertices
 /// and indices, the Meshlet Arenas and the Mesh table (ADRs 0017, 0019);
 /// and a BLAS per Mesh, which rays trace (ADR 0020).
@@ -18,8 +36,8 @@ pub struct MeshPool {
     device: wgpu::Device,
     meshes: Vec<Mesh>,
     /// Each Mesh's BLAS, at its Handle's index, built at load from its
-    /// ranges of the vertex and index Arenas.
-    blases: Vec<wgpu::Blas>,
+    /// ranges of the vertex and index Arenas; none for a Mesh no ray traces.
+    blases: Vec<Option<wgpu::Blas>>,
     /// The Meshes whose BLAS is built but not yet compacted, with its
     /// triangles.
     awaiting_compaction: Vec<(MeshHandle, u64)>,
@@ -81,19 +99,30 @@ impl MeshPool {
         }
     }
 
-    /// Writes `mesh` through `staging` into one range of each Arena, and its
-    /// entry into the Mesh table, each Primitive drawn with its Material of
-    /// `materials`, in Primitive order, where no Renderable overrides it; and
-    /// records its BLAS's build from its vertex and index ranges, which
-    /// `compact_blases` compacts once `staging` is submitted. Returns its
-    /// Handle, or None after logging when the Mesh table is full or an
-    /// Arena's longest free range is too short; a refused Mesh leaves the
-    /// pool as it was.
+    /// Loads `mesh` to be drawn and traced, as `load_for` loads it.
     pub fn load(
         &mut self,
         staging: &mut LoadStaging,
         mesh: &CookedMesh,
         materials: &[Option<MaterialHandle>],
+    ) -> Option<MeshHandle> {
+        self.load_for(staging, mesh, materials, MeshUse::DrawnAndTraced)
+    }
+
+    /// Writes `mesh` through `staging` into one range of each Arena, and its
+    /// entry into the Mesh table, each Primitive drawn with its Material of
+    /// `materials`, in Primitive order, where no Renderable overrides it; and,
+    /// where `mesh_use` has rays trace it, its index stream and its BLAS's
+    /// build from its vertex and index ranges, which `compact_blases`
+    /// compacts once `staging` is submitted. Returns its Handle, or None
+    /// after logging when the Mesh table is full or an Arena's longest free
+    /// range is too short; a refused Mesh leaves the pool as it was.
+    pub fn load_for(
+        &mut self,
+        staging: &mut LoadStaging,
+        mesh: &CookedMesh,
+        materials: &[Option<MaterialHandle>],
+        mesh_use: MeshUse,
     ) -> Option<MeshHandle> {
         assert_eq!(
             materials.len(),
@@ -108,9 +137,15 @@ impl MeshPool {
         let meshlet_count = meshlets().count();
         let meshlet_vertex_count = meshlets().map(|meshlet| meshlet.vertices.len()).sum();
         let triangle_count = meshlets().map(|meshlet| meshlet.triangles.len()).sum();
+        // Only a BLAS build reads the index stream.
+        let index_stream: &[u32] = if mesh_use.traced() {
+            &mesh.indices
+        } else {
+            &[]
+        };
         let counts = [
             mesh.vertices.len(),
-            mesh.indices.len(),
+            index_stream.len(),
             meshlet_count,
             meshlet_vertex_count,
             triangle_count,
@@ -144,7 +179,7 @@ impl MeshPool {
         else {
             tracing::error!(
                 vertices = mesh.vertices.len(),
-                indices = mesh.indices.len(),
+                indices = index_stream.len(),
                 meshlets = meshlet_count,
                 meshlet_vertices = meshlet_vertex_count,
                 triangles = triangle_count,
@@ -199,7 +234,7 @@ impl MeshPool {
             bytemuck::cast_slice(&mesh.vertices),
         );
         self.index_arena
-            .write(staging, indices.offset, bytemuck::cast_slice(&mesh.indices));
+            .write(staging, indices.offset, bytemuck::cast_slice(index_stream));
         self.meshlet_arena.write(
             staging,
             meshlet_range.offset,
@@ -220,6 +255,20 @@ impl MeshPool {
             u64::from(handle.0) * size_of::<MeshData>() as u64,
             bytemuck::bytes_of(&mesh_data),
         );
+        tracing::debug!(
+            vertices = mesh.vertices.len(),
+            indices = index_stream.len(),
+            meshlets = meshlet_count,
+            "Mesh loaded"
+        );
+        self.meshes.push(Mesh {
+            needs_material_handle: materials.contains(&None),
+            vertices: vertices.offset..vertices.offset + mesh.vertices.len() as u32,
+        });
+        if !mesh_use.traced() {
+            self.blases.push(None);
+            return Some(handle);
+        }
         let geometry = wgpu::BlasTriangleGeometrySizeDescriptor {
             vertex_format: wgpu::VertexFormat::Float32x3,
             vertex_count: mesh.vertices.len() as u32,
@@ -253,22 +302,11 @@ impl MeshPool {
                 transform_buffer_offset: None,
             }]),
         });
-        tracing::debug!(
-            vertices = mesh.vertices.len(),
-            indices = mesh.indices.len(),
-            meshlets = meshlet_count,
-            "Mesh loaded"
-        );
 
         let blas_triangles = mesh.indices.len() as u64 / 3;
-        self.blases.push(blas);
+        self.blases.push(Some(blas));
         self.awaiting_compaction.push((handle, blas_triangles));
         self.uncompacted_blas_triangles += blas_triangles;
-
-        self.meshes.push(Mesh {
-            needs_material_handle: materials.contains(&None),
-            vertices: vertices.offset..vertices.offset + mesh.vertices.len() as u32,
-        });
         Some(handle)
     }
 
@@ -285,13 +323,17 @@ impl MeshPool {
             return;
         }
         for &(handle, _) in &self.awaiting_compaction {
-            self.blases[handle.0 as usize].prepare_compaction_async(|_| {});
+            if let Some(blas) = &self.blases[handle.0 as usize] {
+                blas.prepare_compaction_async(|_| {});
+            }
         }
         if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
             tracing::error!(%error, "waiting for BLAS builds failed");
         }
         for (handle, triangles) in self.awaiting_compaction.drain(..) {
-            let blas = &mut self.blases[handle.0 as usize];
+            let Some(blas) = &mut self.blases[handle.0 as usize] else {
+                continue;
+            };
             if !blas.ready_for_compaction() {
                 tracing::warn!(
                     mesh = handle.0,
@@ -310,9 +352,10 @@ impl MeshPool {
         }
     }
 
-    /// The BLAS of `handle`'s Mesh, or None when the pool has no such Mesh.
+    /// The BLAS of `handle`'s Mesh, or None when the pool has no such Mesh
+    /// or no ray traces it.
     pub fn blas(&self, handle: MeshHandle) -> Option<&wgpu::Blas> {
-        self.blases.get(handle.0 as usize)
+        self.blases.get(handle.0 as usize)?.as_ref()
     }
 
     pub fn vertex_arena(&self) -> &wgpu::Buffer {
