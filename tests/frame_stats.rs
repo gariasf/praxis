@@ -234,10 +234,12 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
         Err(error) => panic!("headless GPU context failed: {error:#}"),
     };
 
-    // A sphere: 48 × 24 quads of two triangles but one at each pole. A
-    // ground plane or a quad: two triangles. SciFiHelmet's and
-    // NormalTangentTest's cooked Meshes: 70,074 and 23,322 indices.
+    // A sphere: 48 × 24 quads of two triangles but one at each pole; a crowd
+    // figure, 40 × 65 of them. A ground plane or a quad: two triangles.
+    // SciFiHelmet's and NormalTangentTest's cooked Meshes: 70,074 and
+    // 23,322 indices.
     let (sphere_triangles, plane_triangles) = (48 * 24 * 2 - 2 * 48, 2);
+    let figure_triangles = 40 * 65 * 2 - 2 * 40;
     let (helmet_triangles, normal_tangent_triangles) = (23_358, 7_774);
     for scene in ReferenceScene::ALL {
         if scene == ReferenceScene::Helmet && !std::path::Path::new(praxis::DEFAULT_MODEL).exists()
@@ -256,15 +258,17 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
         .expect("capture failed");
         let (instances, triangles) = match scene {
             // Ten sweep helmets and the textured one.
-            ReferenceScene::Helmet => (11, helmet_triangles),
-            ReferenceScene::PbrSweep => (10, sphere_triangles),
+            ReferenceScene::Helmet => (11, 11 * helmet_triangles),
+            ReferenceScene::PbrSweep => (10, 10 * sphere_triangles),
             ReferenceScene::UvGrid | ReferenceScene::Minification => (1, plane_triangles),
             ReferenceScene::NormalTangent => (1, normal_tangent_triangles),
-            ReferenceScene::FarCoplanar => (2, plane_triangles),
-            ReferenceScene::Orrery => (5, sphere_triangles),
-            ReferenceScene::TextureWall => (100, plane_triangles),
+            ReferenceScene::FarCoplanar => (2, 2 * plane_triangles),
+            ReferenceScene::Orrery => (5, 5 * sphere_triangles),
+            ReferenceScene::TextureWall => (100, 100 * plane_triangles),
             // One Mesh of a ground plane and a sphere.
             ReferenceScene::Shadows => (1, plane_triangles + sphere_triangles),
+            // The ground and 100 figures.
+            ReferenceScene::Crowd => (101, plane_triangles + 100 * figure_triangles),
         };
         for (frame, stats) in frames.iter().enumerate() {
             let Some(gpu) = stats.gpu else {
@@ -276,7 +280,7 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
                     gpu.triangles_drawn,
                     gpu.instances_overflowed
                 ),
-                (instances, instances * triangles, 0),
+                (instances, triangles, 0),
                 "{} frame {frame}",
                 scene.name()
             );

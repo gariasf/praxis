@@ -621,7 +621,7 @@ pub(crate) mod tests {
     use super::*;
     use crate::assets::material::MaterialData;
     use crate::assets::pools::tests::{logged, read_storage};
-    use crate::assets::{MaterialHandle, MeshHandle};
+    use crate::assets::{MaterialHandle, MeshHandle, MeshUse};
     use crate::camera::{Camera, ev100_for_exposure, projection_matrix};
     use crate::capture::read_back;
     use crate::components::{MeshRef, Transform};
@@ -1832,7 +1832,12 @@ pub(crate) mod tests {
         };
         renderer
             .mesh_pool
-            .load(&mut renderer.load_staging, &mesh, materials)
+            .load(
+                &mut renderer.load_staging,
+                &mesh,
+                materials,
+                MeshUse::DrawnAndTraced,
+            )
             .expect("the triangles fit")
     }
 
@@ -1862,7 +1867,12 @@ pub(crate) mod tests {
         };
         renderer
             .mesh_pool
-            .load(&mut renderer.load_staging, &mesh, &[None])
+            .load(
+                &mut renderer.load_staging,
+                &mesh,
+                &[None],
+                MeshUse::DrawnAndTraced,
+            )
             .expect("the quad fits")
     }
 

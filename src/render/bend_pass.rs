@@ -120,11 +120,12 @@ impl BendPass {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::ops::Range;
     use std::time::Duration;
 
     use super::*;
+    use crate::assets::MeshUse;
     use crate::assets::pools::tests::read_storage;
     use crate::cooked::{
         CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex, MESHLET_MAX_VERTICES,
@@ -184,7 +185,11 @@ mod tests {
     /// curvature times the height, summed in 4,096 steps up to the point's
     /// height, then the point's offset from the middle, turned as the middle
     /// turns there.
-    fn bent(position: glam::DVec3, azimuth: f64, curvature: f64) -> (glam::DVec3, glam::DQuat) {
+    pub(crate) fn bent(
+        position: glam::DVec3,
+        azimuth: f64,
+        curvature: f64,
+    ) -> (glam::DVec3, glam::DQuat) {
         const STEPS: u32 = 4096;
         let toward = glam::dvec3(azimuth.cos(), 0.0, azimuth.sin());
         let direction = |height: f64| {
@@ -227,7 +232,10 @@ mod tests {
         let rest_mesh = rest_mesh();
         let [rest, straight, forward, back, after] = [(); 5].map(|()| {
             let staging = &mut renderer.load_staging;
-            let handle = renderer.mesh_pool.load(staging, &rest_mesh, &[None]);
+            let handle =
+                renderer
+                    .mesh_pool
+                    .load(staging, &rest_mesh, &[None], MeshUse::DrawnAndTraced);
             let mesh = renderer.mesh_pool.get(handle.expect("fits"));
             let vertices = &mesh.expect("loaded").vertices;
             vertices.start as usize..vertices.end as usize

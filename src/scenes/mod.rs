@@ -6,7 +6,7 @@ use bevy_ecs::prelude::*;
 
 use crate::assets::{AssetLoader, MaterialChannel};
 use crate::camera::{Camera, ev100_for_exposure};
-use crate::components::{DirectionalLight, MaterialRef, MeshRef, PointLight, Transform};
+use crate::components::{Bend, DirectionalLight, MaterialRef, MeshRef, PointLight, Transform};
 #[cfg(feature = "cook")]
 use crate::cook::LoadedImage;
 #[cfg(feature = "cook")]
@@ -48,10 +48,15 @@ pub enum ReferenceScene {
     /// their own Materials, under the sun and one point light: the sphere's
     /// shadow from the sun, traced per pixel, matches its analytic shadow.
     Shadows,
+    /// 100 figures of 5,120 triangles, each its own Mesh, swaying in the
+    /// fixed schedule as the GPU bends them each frame, a stand-in for
+    /// skinned crowd members (#208). Their Meshes have no BLAS, which would
+    /// hold their rest shape, so they cast no shadow.
+    Crowd,
 }
 
 impl ReferenceScene {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Helmet,
         Self::PbrSweep,
         Self::UvGrid,
@@ -61,6 +66,7 @@ impl ReferenceScene {
         Self::Minification,
         Self::TextureWall,
         Self::Shadows,
+        Self::Crowd,
     ];
 
     /// The name the capture command selects the scene by.
@@ -75,6 +81,7 @@ impl ReferenceScene {
             Self::Minification => "minification",
             Self::TextureWall => "texture-wall",
             Self::Shadows => "shadows",
+            Self::Crowd => "crowd",
         }
     }
 
@@ -112,7 +119,8 @@ impl ReferenceScene {
             | Self::Orrery
             | Self::Minification
             | Self::TextureWall
-            | Self::Shadows => &[],
+            | Self::Shadows
+            | Self::Crowd => &[],
         }
     }
 
@@ -193,6 +201,14 @@ impl ReferenceScene {
                     (name.into(), material)
                 })
                 .collect(),
+            Self::Crowd => ["ground", "figure"]
+                .into_iter()
+                .zip(CROWD_COLORS)
+                .map(|(name, base_color)| {
+                    let material = factors(base_color, 0.0, CROWD_ROUGHNESS, None);
+                    (name.into(), material)
+                })
+                .collect(),
         }
     }
 
@@ -229,7 +245,8 @@ impl ReferenceScene {
             | Self::PbrSweep
             | Self::NormalTangent
             | Self::FarCoplanar
-            | Self::Shadows => Vec::new(),
+            | Self::Shadows
+            | Self::Crowd => Vec::new(),
         }
     }
 
@@ -239,13 +256,13 @@ impl ReferenceScene {
     pub(crate) fn meshes(self) -> Vec<(&'static str, Vec<ScenePrimitive>)> {
         match self {
             Self::Helmet | Self::NormalTangent => Vec::new(),
-            Self::PbrSweep => vec![("sphere", vec![(uv_sphere(SPHERE_RADIUS), None)])],
+            Self::PbrSweep => vec![("sphere", vec![(scene_sphere(SPHERE_RADIUS), None)])],
             Self::UvGrid => vec![("plane", vec![(ground_plane(4.0, 2.0), Some("grid"))])],
             Self::FarCoplanar => {
                 let plane = ground_plane(FAR_COPLANAR_DISTANCE as f32, 1.0);
                 vec![("plane", vec![(plane, None)])]
             }
-            Self::Orrery => vec![("sphere", vec![(uv_sphere(SPHERE_RADIUS), Some("grid"))])],
+            Self::Orrery => vec![("sphere", vec![(scene_sphere(SPHERE_RADIUS), Some("grid"))])],
             Self::Minification => {
                 let ground = ground_plane(MINIFICATION_HALF_SIZE, MINIFICATION_UV_REPEAT);
                 vec![("ground", vec![(ground, Some("ground"))])]
@@ -255,13 +272,22 @@ impl ReferenceScene {
                 vec![("quad", vec![(quad, None)])]
             }
             Self::Shadows => {
-                let mut sphere = uv_sphere(SHADOWS_SPHERE_RADIUS);
+                let mut sphere = scene_sphere(SHADOWS_SPHERE_RADIUS);
                 for position in &mut sphere.positions {
                     position[1] += SHADOWS_SPHERE_HEIGHT;
                 }
                 let ground = ground_plane(SHADOWS_GROUND_HALF_SIZE, 1.0);
                 let primitives = vec![(ground, Some("ground")), (sphere, Some("sphere"))];
                 vec![("sphere-over-plane", primitives)]
+            }
+            // The figures' Material is their Renderables', so each Mesh
+            // loaded for a figure shares it.
+            Self::Crowd => {
+                let ground = ground_plane(CROWD_GROUND_HALF_SIZE, 1.0);
+                vec![
+                    ("ground", vec![(ground, Some("ground"))]),
+                    ("figure", vec![(crowd_figure(), None)]),
+                ]
             }
         }
     }
@@ -292,6 +318,7 @@ impl ReferenceScene {
             }
             Self::TextureWall => Camera::looking_at(TEXTURE_WALL_CAMERA, glam::DVec3::ZERO),
             Self::Shadows => Camera::looking_at(SHADOWS_CAMERA, SHADOWS_CAMERA_TARGET),
+            Self::Crowd => Camera::looking_at(CROWD_CAMERA, CROWD_CAMERA_TARGET),
         };
         camera.position += shift;
         camera.ev100 = self.ev100();
@@ -311,7 +338,8 @@ impl ReferenceScene {
             | Self::Orrery
             | Self::Minification
             | Self::TextureWall
-            | Self::Shadows => ev100_for_exposure(1.0 / SUN_ILLUMINANCE),
+            | Self::Shadows
+            | Self::Crowd => ev100_for_exposure(1.0 / SUN_ILLUMINANCE),
         }
     }
 
@@ -328,7 +356,8 @@ impl ReferenceScene {
             | Self::FarCoplanar
             | Self::Minification
             | Self::TextureWall
-            | Self::Shadows => SIXTY_HERTZ,
+            | Self::Shadows
+            | Self::Crowd => SIXTY_HERTZ,
         }
     }
 
@@ -344,8 +373,9 @@ impl ReferenceScene {
                 },
             )],
             // The directional light alone, white, so each quad shows its
-            // Texture's colour.
-            Self::TextureWall => &[],
+            // Texture's colour; and so the crowd's figures cast the sun's
+            // shadows alone.
+            Self::TextureWall | Self::Crowd => &[],
             Self::Shadows => &SHADOWS_LIGHTS,
             Self::Helmet
             | Self::PbrSweep
@@ -368,7 +398,8 @@ impl ReferenceScene {
             | Self::Orrery
             | Self::Minification
             | Self::TextureWall
-            | Self::Shadows => glam::vec3(0.5, -1.0, -0.3),
+            | Self::Shadows
+            | Self::Crowd => glam::vec3(0.5, -1.0, -0.3),
         };
         let transform = Transform {
             rotation: glam::Quat::from_rotation_arc(glam::Vec3::NEG_Z, direction.normalize()),
@@ -394,7 +425,8 @@ impl ReferenceScene {
             | Self::Orrery
             | Self::Minification
             | Self::TextureWall
-            | Self::Shadows => Environment {
+            | Self::Shadows
+            | Self::Crowd => Environment {
                 ambient_illuminance: glam::Vec3::splat(0.1 * SUN_ILLUMINANCE),
                 background_luminance: glam::vec3(0.1, 0.2, 0.3) * SUN_ILLUMINANCE,
             },
@@ -805,6 +837,127 @@ pub(crate) fn spawn_shadows(world: &mut World, loader: &mut AssetLoader) -> anyh
     Ok(())
 }
 
+/// crowd's figures: rows of `CROWD_COLUMNS`, `CROWD_SPACING` metres apart,
+/// on a ground plane reaching `CROWD_GROUND_HALF_SIZE` from the origin each
+/// way.
+const CROWD_FIGURES: u32 = 100;
+const CROWD_COLUMNS: u32 = 10;
+const CROWD_SPACING: f64 = 1.6;
+#[cfg(feature = "cook")]
+const CROWD_GROUND_HALF_SIZE: f32 = 12.0;
+/// A figure is a spheroid `CROWD_FIGURE_HEIGHT` tall and twice
+/// `CROWD_FIGURE_RADIUS` across, standing on its lowest point with its
+/// middle up +Y: 40 segments around and 65 from pole to pole make 5,120
+/// triangles.
+const CROWD_FIGURE_HEIGHT: f32 = 1.8;
+const CROWD_FIGURE_RADIUS: f32 = 0.25;
+#[cfg(feature = "cook")]
+const CROWD_FIGURE_SEGMENTS: [u32; 2] = [40, 65];
+/// Each figure's middle bends towards its azimuth and back, to
+/// `CROWD_SWAY_CURVATURE` radians per metre at most, which turns its top by
+/// 0.63 rad (36°), once every `CROWD_SWAY_PERIOD` seconds.
+const CROWD_SWAY_CURVATURE: f64 = 0.35;
+const CROWD_SWAY_PERIOD: f64 = 2.5;
+/// From one figure to the next, the sway's phase and azimuth both step by
+/// the golden angle, π (3 − √5), so no two neighbours sway alike.
+const GOLDEN_ANGLE: f64 = 2.399_963_229_728_653;
+/// The ground's base colour, light grey, then the figures', blue.
+#[cfg(feature = "cook")]
+const CROWD_COLORS: [[f32; 4]; 2] = [[0.6, 0.6, 0.6, 1.0], [0.2, 0.35, 0.7, 1.0]];
+#[cfg(feature = "cook")]
+const CROWD_ROUGHNESS: f32 = 0.6;
+/// Above the crowd and back from it, looking down about 28° at its middle,
+/// so every figure stays in view and none hides another whole.
+const CROWD_CAMERA: glam::DVec3 = glam::DVec3::new(0.0, 11.0, 20.0);
+const CROWD_CAMERA_TARGET: glam::DVec3 = glam::DVec3::new(0.0, 0.6, -0.5);
+
+/// crowd's figure, standing on its lowest point at the origin with its
+/// middle up +Y: a sphere stretched to `CROWD_FIGURE_RADIUS` across and
+/// `CROWD_FIGURE_HEIGHT` tall, its normals by the inverse stretch.
+#[cfg(feature = "cook")]
+fn crowd_figure() -> Geometry {
+    let [longitudes, latitudes] = CROWD_FIGURE_SEGMENTS;
+    let mut figure = uv_sphere(1.0, longitudes, latitudes);
+    let half_height = 0.5 * CROWD_FIGURE_HEIGHT;
+    let stretch = glam::vec3(CROWD_FIGURE_RADIUS, half_height, CROWD_FIGURE_RADIUS);
+    for (position, normal) in figure.positions.iter_mut().zip(&mut figure.normals) {
+        let stretched = glam::Vec3::from(*position) * stretch + glam::Vec3::Y * half_height;
+        *position = stretched.into();
+        *normal = (glam::Vec3::from(*normal) / stretch).normalize().into();
+    }
+    figure
+}
+
+/// The box that holds a crowd figure however it bends: its middle's top
+/// reaches (1 − cos κh) / κ sideways at the most curvature κ, h its height,
+/// and the figure lies within its radius of its middle; no point rises
+/// above the figure's height.
+fn crowd_figure_bounds() -> [[f32; 3]; 2] {
+    let height = f64::from(CROWD_FIGURE_HEIGHT);
+    let sideways = (1.0 - (CROWD_SWAY_CURVATURE * height).cos()) / CROWD_SWAY_CURVATURE;
+    let reach = (f64::from(CROWD_FIGURE_RADIUS) + sideways) as f32;
+    [[-reach, 0.0, -reach], [reach, CROWD_FIGURE_HEIGHT, reach]]
+}
+
+/// Spawns the ground, then the figures in rows of `CROWD_COLUMNS` centred
+/// on the origin, each drawing its own Mesh, bent from one rest Mesh.
+pub(crate) fn spawn_crowd(world: &mut World, loader: &mut AssetLoader) -> anyhow::Result<()> {
+    let scene = ReferenceScene::Crowd;
+    let ground = loader.mesh(scene.mesh_id("ground"))?;
+    world.spawn((Transform::IDENTITY, MeshRef(ground)));
+    let material = loader.material(scene.material_id("figure"))?;
+    let (figure, bounds) = (scene.mesh_id("figure"), crowd_figure_bounds());
+    let rest = loader.bent_mesh(figure, bounds)?;
+    let centre = f64::from(CROWD_COLUMNS - 1) / 2.0;
+    for index in 0..CROWD_FIGURES {
+        let (row, column) = (index / CROWD_COLUMNS, index % CROWD_COLUMNS);
+        let position =
+            glam::dvec3(f64::from(column) - centre, 0.0, f64::from(row) - centre) * CROWD_SPACING;
+        let sway = Sway {
+            phase: (f64::from(index) * GOLDEN_ANGLE).rem_euclid(std::f64::consts::TAU),
+        };
+        let curvature = sway.curvature(0.0);
+        let bend = Bend {
+            rest,
+            azimuth: sway.phase as f32,
+            curvature,
+            previous_curvature: curvature,
+        };
+        let bent = (MeshRef(loader.bent_mesh(figure, bounds)?), bend, sway);
+        world.spawn((
+            Transform::from_translation(position),
+            MaterialRef(material),
+            bent,
+        ));
+    }
+    Ok(())
+}
+
+/// Sways a crowd figure: its middle bends towards its azimuth and back,
+/// from its phase at Tick 0.
+#[derive(Component)]
+pub(crate) struct Sway {
+    phase: f64,
+}
+
+impl Sway {
+    /// Its curvature `seconds` after Tick 0.
+    fn curvature(&self, seconds: f64) -> f32 {
+        let tau = std::f64::consts::TAU;
+        let angle = (tau * seconds / CROWD_SWAY_PERIOD + self.phase).rem_euclid(tau);
+        (CROWD_SWAY_CURVATURE * angle.sin()) as f32
+    }
+}
+
+/// Sets each swaying figure's curvature for the end of the running Tick,
+/// from the Tick count, so no rounding accumulates over Ticks.
+pub(crate) fn sway(fixed_time: Res<FixedTime>, mut figures: Query<(&Sway, &mut Bend)>) {
+    let seconds = (fixed_time.tick + 1) as f64 * TICK_SECONDS;
+    for (sway, mut bend) in &mut figures {
+        bend.curvature = sway.curvature(seconds);
+    }
+}
+
 /// A procedural Primitive: its triangles, and the name of its Material, if
 /// its Renderables do not each override it.
 #[cfg(feature = "cook")]
@@ -820,20 +973,25 @@ pub(crate) struct Geometry {
     pub(crate) indices: Vec<u32>,
 }
 
-/// A sphere of `radius` around the origin. `u` runs once around from +Z
+/// A sphere of `radius` around the origin, 48 segments around and 24 from
+/// pole to pole, as the scenes' spheres are.
+#[cfg(feature = "cook")]
+fn scene_sphere(radius: f32) -> Geometry {
+    uv_sphere(radius, 48, 24)
+}
+
+/// A sphere of `radius` around the origin, in `longitude_segments` around
+/// and `latitude_segments` from pole to pole. `u` runs once around from +Z
 /// towards +X, `v` from the north pole to the south pole, as a glTF texture
 /// maps top row first.
 #[cfg(feature = "cook")]
-fn uv_sphere(radius: f32) -> Geometry {
-    const LONGITUDE_SEGMENTS: u32 = 48;
-    const LATITUDE_SEGMENTS: u32 = 24;
-
+fn uv_sphere(radius: f32, longitude_segments: u32, latitude_segments: u32) -> Geometry {
     let mut geometry = Geometry::default();
-    for latitude in 0..=LATITUDE_SEGMENTS {
-        let v = latitude as f32 / LATITUDE_SEGMENTS as f32;
+    for latitude in 0..=latitude_segments {
+        let v = latitude as f32 / latitude_segments as f32;
         let polar_angle = PI * v;
-        for longitude in 0..=LONGITUDE_SEGMENTS {
-            let u = longitude as f32 / LONGITUDE_SEGMENTS as f32;
+        for longitude in 0..=longitude_segments {
+            let u = longitude as f32 / longitude_segments as f32;
             let azimuth = TAU * u;
             let normal = [
                 polar_angle.sin() * azimuth.sin(),
@@ -846,16 +1004,16 @@ fn uv_sphere(radius: f32) -> Geometry {
         }
     }
 
-    let row_length = LONGITUDE_SEGMENTS + 1;
-    for latitude in 0..LATITUDE_SEGMENTS {
-        for longitude in 0..LONGITUDE_SEGMENTS {
+    let row_length = longitude_segments + 1;
+    for latitude in 0..latitude_segments {
+        for longitude in 0..longitude_segments {
             let top_left = latitude * row_length + longitude;
             let top_right = top_left + 1;
             let bottom_left = top_left + row_length;
             let bottom_right = bottom_left + 1;
             // At a pole one edge of the quad collapses to a point; skip the
             // triangle that would have no area.
-            if latitude != LATITUDE_SEGMENTS - 1 {
+            if latitude != latitude_segments - 1 {
                 geometry
                     .indices
                     .extend([top_left, bottom_left, bottom_right]);
@@ -918,4 +1076,34 @@ fn grid_texture() -> Vec<u8> {
         }
     }
     pixels
+}
+
+#[cfg(all(test, feature = "cook"))]
+mod tests {
+    use super::*;
+    use crate::render::bend_pass::tests::bent;
+
+    /// Every vertex of a crowd figure, bent to the sway's most curvature
+    /// either way towards four azimuths a quarter turn apart, so eight
+    /// directions, lies in the box its Mesh is culled by: the figure is
+    /// round about its middle, so no direction reaches further.
+    #[test]
+    fn a_crowd_figure_bends_within_its_bounds() {
+        let [lowest, highest] = crowd_figure_bounds().map(glam::Vec3::from);
+        let figure = crowd_figure();
+        for curvature in [-CROWD_SWAY_CURVATURE, CROWD_SWAY_CURVATURE] {
+            for quarter in 0..4 {
+                let azimuth = f64::from(quarter) * std::f64::consts::FRAC_PI_2;
+                for &position in &figure.positions {
+                    let rest = glam::Vec3::from(position).as_dvec3();
+                    let (bent, _) = bent(rest, azimuth, curvature);
+                    let bent = bent.as_vec3();
+                    assert!(
+                        bent.cmpge(lowest).all() && bent.cmple(highest).all(),
+                        "{rest} bends to {bent} at curvature {curvature}, azimuth {azimuth}"
+                    );
+                }
+            }
+        }
+    }
 }

@@ -1,7 +1,7 @@
 use anyhow::Context;
 
-use crate::assets::{MaterialChannel, MaterialHandle, MaterialPool, MeshHandle, MeshPool};
-use crate::cooked::{AssetId, CookedCache};
+use crate::assets::{MaterialChannel, MaterialHandle, MaterialPool, MeshHandle, MeshPool, MeshUse};
+use crate::cooked::{AssetId, CookedCache, CookedMesh};
 use crate::render::LoadStaging;
 
 /// What a scene load reads Assets with: a Cooked cache, and the Pools they
@@ -32,6 +32,29 @@ impl AssetLoader<'_> {
     /// Primitives name, each loaded once, which each Primitive draws with.
     pub fn mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
         let mesh = self.cache.mesh(id)?;
+        self.load(id, &mesh, MeshUse::DrawnAndTraced)
+    }
+
+    /// Loads the Mesh `id` as `mesh` does, for the GPU to bend each frame
+    /// (`Bend`): drawn, culled by `bounds`, the box that holds every shape
+    /// it bends to, and traced by no ray, as its BLAS would hold its rest
+    /// shape (#208).
+    pub fn bent_mesh(&mut self, id: AssetId, bounds: [[f32; 3]; 2]) -> anyhow::Result<MeshHandle> {
+        let mesh = CookedMesh {
+            bounds,
+            ..self.cache.mesh(id)?
+        };
+        self.load(id, &mesh, MeshUse::Drawn)
+    }
+
+    /// Loads `mesh`, Asset `id`, for `use_`, with the Materials its
+    /// Primitives name, each loaded once.
+    fn load(
+        &mut self,
+        id: AssetId,
+        mesh: &CookedMesh,
+        use_: MeshUse,
+    ) -> anyhow::Result<MeshHandle> {
         let mut materials = Vec::with_capacity(mesh.primitives.len());
         for (index, primitive) in mesh.primitives.iter().enumerate() {
             let earlier = mesh.primitives[..index]
@@ -48,7 +71,7 @@ impl AssetLoader<'_> {
             materials.push(material);
         }
         self.mesh_pool
-            .load(self.staging, &mesh, &materials)
+            .load(self.staging, mesh, &materials, use_)
             .with_context(|| format!("the Mesh pool refused Mesh {id}"))
     }
 }
