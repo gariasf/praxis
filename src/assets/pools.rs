@@ -273,10 +273,12 @@ impl MeshPool {
 
     /// Compacts the BLASes of the Meshes loaded since the last call, once
     /// the staging their builds were recorded into is submitted: it waits
-    /// for the GPU to build them, then to compact them, since on Metal no
-    /// barrier orders a TLAS build after the copies that write its BLASes
-    /// (gfx-rs/wgpu#9215). A Mesh keeps its compacted BLAS, or the one built
-    /// where compaction failed, as logged.
+    /// for the GPU to build them, then to compact them. Nothing else orders
+    /// a TLAS build after the copies: wgpu-core 30.0.1 records no barrier
+    /// after `compact_blas`'s copy on any backend, and Metal has no
+    /// acceleration-structure barrier at all (gfx-rs/wgpu#9215). A Mesh keeps
+    /// its compacted BLAS, or the one built where compaction failed, as
+    /// logged.
     pub fn compact_blases(&mut self, queue: &wgpu::Queue) {
         if self.awaiting_compaction.is_empty() {
             return;
@@ -594,10 +596,10 @@ pub(crate) mod tests {
     }
 
     /// A TLAS built once `compact_blases` returns holds the compacted BLAS
-    /// while other devices load the GPU, as parallel tests do: on Metal no
-    /// barrier orders a TLAS build after the copies that write its BLASes
-    /// (gfx-rs/wgpu#9215), so `compact_blases` waits for them (#244). Eight
-    /// threads, each with its own device, load and trace a triangle 25 times.
+    /// while other devices load the GPU, as parallel tests do: no barrier
+    /// orders a TLAS build after the copies that write its BLASes, so
+    /// `compact_blases` waits for them (#244). Eight threads, each with its
+    /// own device, load and trace a triangle 25 times.
     #[test]
     fn a_tlas_built_after_compaction_holds_its_blas_while_other_devices_load_the_gpu() {
         if gpu_context().is_none() {
