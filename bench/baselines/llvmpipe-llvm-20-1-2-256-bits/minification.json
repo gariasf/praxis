@@ -6,16 +6,16 @@
   "height": 360,
   "measured_frames": 256,
   "cpu_frame_microseconds": {
-    "median": 215916.715,
-    "p95": 219364.88700000002
+    "median": 412635.941,
+    "p95": 415867.442
   },
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.34099999999999997,
-    "p95": 0.49100000000000005
+    "median": 0.31,
+    "p95": 0.561
   },
   "gpu_frame_microseconds": {
-    "median": 215877.391,
-    "p95": 219331.897
+    "median": 412560.877,
+    "p95": 415764.555
   },
   "gpu_pass_microseconds": {
     "bend_pass": {
@@ -23,44 +23,44 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 431.069,
-      "p95": 508.82599999999996
+      "median": 533.043,
+      "p95": 599.3059999999999
     },
     "culling_phase_two": {
-      "median": 197.90800000000002,
-      "p95": 227.232
+      "median": 294.46799999999996,
+      "p95": 332.348
     },
     "depth_prepass": {
-      "median": 383.017,
-      "p95": 476.858
+      "median": 820.187,
+      "p95": 889.494
     },
     "depth_pyramid_pass": {
-      "median": 862.359,
-      "p95": 1207.6789999999999
+      "median": 1573.549,
+      "p95": 1976.899
     },
     "dynamic_tlas_build": {
       "median": 0.0,
       "p95": 0.0
     },
     "froxel_pass": {
-      "median": 175.455,
-      "p95": 262.946
+      "median": 227.994,
+      "p95": 297.614
     },
     "lit_pass": {
-      "median": 204809.31399999998,
-      "p95": 207925.87300000002
+      "median": 389075.21900000004,
+      "p95": 391767.01
     },
     "phase_two_depth_pass": {
-      "median": 77.82400000000001,
-      "p95": 95.40899999999999
+      "median": 128.008,
+      "p95": 162.382
     },
     "shadow_mask_pass": {
-      "median": 5140.772,
-      "p95": 6115.429
+      "median": 13068.455,
+      "p95": 15320.819
     },
     "tonemapping_pass": {
-      "median": 2933.3689999999997,
-      "p95": 3430.421
+      "median": 5052.707,
+      "p95": 5375.596
     }
   },
   "draw_calls": 4,
@@ -68,7 +68,7 @@
   "triangles_drawn": 2,
   "instances_overflowed": 0,
   "uploaded_bytes": 240,
-  "gpu_memory_bytes": 327957704,
+  "gpu_memory_bytes": 395066676,
   "arena_bytes_in_use": 176,
   "heap_allocations": 324,
   "counter_frames": {
@@ -81,7 +81,7 @@
     "triangles_drawn": 2,
     "instances_overflowed": 0,
     "uploaded_bytes": 240,
-    "gpu_memory_bytes": 327957704,
+    "gpu_memory_bytes": 395066676,
     "arena_bytes_in_use": 176,
     "heap_allocations": 324
   }
