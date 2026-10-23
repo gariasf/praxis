@@ -11,7 +11,8 @@ use std::num::NonZeroU32;
 use crate::assets::material::TEXTURES_PER_CHANNEL;
 use crate::render::targets::DEPTH_PYRAMID_FORMAT;
 
-/// Group 0, written every frame: the camera and the lights.
+/// Group 0, written every frame: the camera, and the light buffer with its
+/// counts.
 pub const FRAME: BindGroupDefinition = BindGroupDefinition {
     index: 0,
     label: "Frame Bind Group",
@@ -24,6 +25,7 @@ pub const FRAME: BindGroupDefinition = BindGroupDefinition {
                 .union(wgpu::ShaderStages::FRAGMENT),
         ),
         uniform("light", "LightUniform", wgpu::ShaderStages::FRAGMENT),
+        read_only_storage("lights", "array<LightData>", wgpu::ShaderStages::FRAGMENT),
     ],
 };
 

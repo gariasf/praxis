@@ -224,6 +224,7 @@ impl State {
 
         self.renderer.upload(frame, &mut self.recorder);
         self.recorder.renderables_refused = self.preparer.renderables_refused();
+        self.recorder.lights_overflowed = self.preparer.lights_overflowed();
     }
 
     /// Draws the frame into `target`, a view in the format and size this

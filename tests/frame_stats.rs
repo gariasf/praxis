@@ -42,11 +42,12 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // draws with one call, and the lit pass with two, phase two's into depth
     // first; then the tonemapping pass's one triangle.
     assert_eq!(last.draw_calls, 4);
-    // Every frame writes the 96-byte camera and 192-byte light uniforms; only
-    // the first also writes the ten 128-byte Instances and the 4-byte count
-    // of Instance slots in use.
-    assert_eq!(frames[0].uploaded_bytes, 10 * 128 + 96 + 192 + 4);
-    assert_eq!(last.uploaded_bytes, 96 + 192);
+    // Every frame writes the 96-byte camera and 32-byte light uniforms and
+    // the sun and four point lights, 48 bytes each; only the first also
+    // writes the ten 128-byte Instances and the 4-byte count of Instance
+    // slots in use.
+    assert_eq!(frames[0].uploaded_bytes, 10 * 128 + 96 + 32 + 5 * 48 + 4);
+    assert_eq!(last.uploaded_bytes, 96 + 32 + 5 * 48);
     // The sphere's triangles: 48 × 24 quads of two triangles but one at each
     // pole.
     let triangles = 48 * 24 * 2 - 2 * 48;
@@ -66,7 +67,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // The acceleration structures, five 1×1 RGBA8 neutral Textures, one per
     // Channel (the spheres sample no other), the Mesh pool's five 16 MiB
     // Arenas and its Mesh table of 65,536 Meshes of 40 bytes, 256 Materials
-    // of 80 bytes, the camera and light uniforms, 524,288 Instances of 128
+    // of 80 bytes, the camera and light uniforms, the light buffer of 4,096
+    // lights of 48 bytes, 524,288 Instances of 128
     // bytes, the culling pass's 4-byte Instance slot count and 8-byte
     // offsets for each slot and block of 256 slots and visibility bit for
     // each slot, the frame's draw of 2^20 Meshlet records of 12 bytes, 2^24
@@ -76,7 +78,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // tile memory, so it counts nothing on Metal, the RGBA16F HDR target it
     // resolves into, the R32Float depth pyramid from 80×45 down to 1×1
     // (80×45, 40×22, 20×11, 10×5, 5×2, 2×1, 1×1), three staging slots of the
-    // first frame's 1572 uploaded bytes rounded up to 2048, and the GPU stats
+    // first frame's 1652 uploaded bytes rounded up to 2048, and the GPU stats
     // readback: its resolve buffer of a begin and an end timestamp of 8
     // bytes for each of the six passes, and six slots of 152 bytes, and the
     // tonemapping pass's 64×64 R8 dither mask. The load's staging is gone.
@@ -92,7 +94,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + 65_536 * 40
             + 256 * 80
             + 96
-            + 192
+            + 32
+            + 4096 * 48
             + 524_288 * 128
             + 4
             + (524_288 + 2048) * 8

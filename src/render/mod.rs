@@ -25,7 +25,7 @@ pub(crate) use renderer::TIMED_PASSES;
 pub use renderer::{RenderSwitches, Renderer};
 pub use staging::{FrameStaging, LoadStaging};
 pub use targets::{DEPTH_FORMAT, HDR_FORMAT};
-pub use uniforms::{CameraUniform, LightUniform};
+pub use uniforms::{CameraUniform, LIGHT_CAPACITY, LightData, LightUniform};
 
 /// Frames submitted but not finished on the GPU when the next one starts, at
 /// most: the window's swapchain latency and capture's queue. Per-frame

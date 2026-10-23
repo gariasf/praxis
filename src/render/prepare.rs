@@ -8,7 +8,8 @@ use crate::components::{DirectionalLight, MaterialRef, MeshRef, PointLight};
 use crate::environment::Environment;
 use crate::render::instance::{anchor_and_offset, padded_columns};
 use crate::render::{
-    CameraUniform, INSTANCE_CAPACITY, InstanceData, LightUniform, NO_MATERIAL, NO_MESH,
+    CameraUniform, INSTANCE_CAPACITY, InstanceData, LIGHT_CAPACITY, LightData, LightUniform,
+    NO_MATERIAL, NO_MESH,
 };
 use crate::time::FixedTime;
 use crate::transform::{PreviousWorldTransform, WorldTransform};
@@ -20,6 +21,9 @@ use crate::transform::{PreviousWorldTransform, WorldTransform};
 pub struct FrameData {
     pub camera: CameraUniform,
     pub light: LightUniform,
+    /// The light buffer's lights, directional lights first, at most
+    /// `LIGHT_CAPACITY`.
+    pub lights: Vec<LightData>,
     /// The colour the lit pass clears to: the scene's background luminance,
     /// pre-exposed as the lit pass exposes what it draws.
     pub background: wgpu::Color,
@@ -141,9 +145,10 @@ impl InstanceSlots {
 pub struct FramePreparer {
     directional_light_query: LightQuery<DirectionalLight>,
     point_light_query: LightQuery<PointLight>,
-    /// Set while the ECS World holds directional lights past the first,
-    /// which were warned about when it was set.
-    warned_of_undrawn_directional_lights: bool,
+    lights_overflowed: u32,
+    /// Set while lights overflow the light buffer, which was warned about
+    /// when it was set.
+    warned_of_overflowed_lights: bool,
     renderable_query: RenderableQuery,
     instance_slots: InstanceSlots,
     /// Set by `rewrite_all_instances` until the next `prepare`.
@@ -157,7 +162,8 @@ impl FramePreparer {
         Self {
             directional_light_query: world.query(),
             point_light_query: world.query(),
-            warned_of_undrawn_directional_lights: false,
+            lights_overflowed: 0,
+            warned_of_overflowed_lights: false,
             renderable_query: world.query(),
             instance_slots: InstanceSlots::default(),
             rewrite_every_instance: false,
@@ -167,15 +173,16 @@ impl FramePreparer {
     }
 
     /// Fills the Frame data from the World's camera, lights, Environment and
-    /// Renderables, seen at `aspect_ratio`, Instances anchored and lights
-    /// placed relative to the camera (ADR 0014). Whatever the fixed schedule
-    /// moves is drawn blended between its two newest Ticks (ADR 0022). A
-    /// Renderable draws each Primitive of its Mesh with its Material Handle,
-    /// else with the Material the Primitive names; one whose Mesh is not in `mesh_pool`, or
-    /// that has no Material Handle where a Primitive names no Material, is
-    /// skipped and frees its slot. One that finds the
-    /// Instance buffer full is refused, warned about once and counted every
-    /// frame, and neither written nor drawn until a slot frees.
+    /// Renderables, seen at `aspect_ratio`, Instances and point lights
+    /// anchored (ADR 0014); lights past the light buffer's capacity are
+    /// counted, warned about when they appear, and not drawn. Whatever the
+    /// fixed schedule moves is drawn blended between its two newest Ticks
+    /// (ADR 0022). A Renderable draws each Primitive of its Mesh with its
+    /// Material Handle, else with the Material the Primitive names; one whose
+    /// Mesh is not in `mesh_pool`, or that has no Material Handle where a
+    /// Primitive names no Material, is skipped and frees its slot. One that
+    /// finds the Instance buffer full is refused, warned about once and
+    /// counted every frame, and neither written nor drawn until a slot frees.
     ///
     /// Only new Renderables, blended ones and those whose World transform,
     /// Mesh or Material changed since the last `prepare` write their
@@ -191,7 +198,8 @@ impl FramePreparer {
         let Self {
             directional_light_query,
             point_light_query,
-            warned_of_undrawn_directional_lights,
+            lights_overflowed,
+            warned_of_overflowed_lights,
             renderable_query,
             instance_slots,
             rewrite_every_instance,
@@ -219,15 +227,28 @@ impl FramePreparer {
             a: 1.0,
         };
         let blend_weight = world.resource::<FixedTime>().blend_weight;
-        frame.light = prepare_lights(
+        let directional_light_count = prepare_lights(
             world,
             directional_light_query,
             point_light_query,
-            warned_of_undrawn_directional_lights,
-            camera_position,
             blend_weight,
+            &mut frame.lights,
+            lights_overflowed,
         );
-        frame.light.ambient_illuminance = environment.ambient_illuminance.extend(0.0).to_array();
+        frame.light = LightUniform {
+            ambient_illuminance: environment.ambient_illuminance.extend(0.0).to_array(),
+            directional_light_count,
+            point_light_count: frame.lights.len() as u32 - directional_light_count,
+            ..LightUniform::default()
+        };
+        if *lights_overflowed > 0 && !*warned_of_overflowed_lights {
+            tracing::warn!(
+                lights_overflowed = *lights_overflowed,
+                capacity = LIGHT_CAPACITY,
+                "Lights past the light buffer's capacity are not drawn"
+            );
+        }
+        *warned_of_overflowed_lights = *lights_overflowed > 0;
 
         frame.instances.clear();
         frame.instance_writes.clear();
@@ -333,6 +354,12 @@ impl FramePreparer {
         self.renderables_refused
     }
 
+    /// Lights the last `prepare` left out of the light buffer, which had no
+    /// room for them, so not drawn.
+    pub fn lights_overflowed(&self) -> u32 {
+        self.lights_overflowed
+    }
+
     /// Makes the next `prepare` write every Renderable's Instance into the
     /// slot it keeps, for when the Renderer lost Instance writes.
     pub fn rewrite_all_instances(&mut self) {
@@ -340,53 +367,54 @@ impl FramePreparer {
     }
 }
 
-/// The lights: the first directional light the query yields, shining along
-/// its entity's forward axis, the others not drawn and warned about when they
-/// appear; and point lights at their position relative to `camera_position`,
-/// past the uniform's four dropped.
+/// Fills `lights` with every directional light, shining along its entity's
+/// forward axis, then every point light, at its World position as an Anchor
+/// plus an offset (ADR 0014), each blended between its two newest Ticks, up
+/// to `LIGHT_CAPACITY`. Returns how many are directional, and sets
+/// `overflowed` to how many the light buffer had no room for.
 fn prepare_lights(
     world: &World,
     directional_light_query: &mut LightQuery<DirectionalLight>,
     point_light_query: &mut LightQuery<PointLight>,
-    warned_of_undrawn_directional_lights: &mut bool,
-    camera_position: glam::DVec3,
     blend_weight: f32,
-) -> LightUniform {
-    let mut light_uniform = LightUniform::default();
-    let mut directional_lights = directional_light_query.iter(world);
-    if let Some((current, previous, directional_light)) = directional_lights.next() {
-        let transform = current.drawn(previous, blend_weight);
-        // A zero scale, or a blend half way through a half turn, leaves no
-        // direction to shade with, so the light is not drawn.
-        if let Some(direction) = (transform.0.matrix3 * glam::DVec3::NEG_Z).try_normalize() {
-            light_uniform.direction = direction.as_vec3().extend(0.0).to_array();
-            light_uniform.color = directional_light
-                .color
-                .extend(directional_light.intensity)
-                .to_array();
-            light_uniform.directional_light_count = 1;
-        }
-    }
-    let undrawn = directional_lights.count();
-    if undrawn > 0 && !*warned_of_undrawn_directional_lights {
-        tracing::warn!(
-            undrawn,
-            "Directional lights past the first are not drawn: the light uniform holds one"
-        );
-    }
-    *warned_of_undrawn_directional_lights = undrawn > 0;
-    let mut count = 0;
-    let capacity = light_uniform.point_positions.len();
-    for (current, previous, point_light) in point_light_query.iter(world).take(capacity) {
-        let transform = current.drawn(previous, blend_weight);
-        let position = (transform.translation() - camera_position).as_vec3();
-        light_uniform.point_positions[count] = position.extend(point_light.range).to_array();
-        light_uniform.point_colors[count] =
-            point_light.color.extend(point_light.intensity).to_array();
-        count += 1;
-    }
-    light_uniform.point_light_count = count as u32;
-    light_uniform
+    lights: &mut Vec<LightData>,
+    overflowed: &mut u32,
+) -> u32 {
+    let mut directional_lights =
+        directional_light_query
+            .iter(world)
+            .filter_map(|(current, previous, light)| {
+                let transform = current.drawn(previous, blend_weight);
+                // A zero scale, or a blend half way through a half turn,
+                // leaves no direction to shade with, so the light is not
+                // drawn.
+                let direction = (transform.0.matrix3 * glam::DVec3::NEG_Z).try_normalize()?;
+                Some(LightData {
+                    offset: direction.as_vec3().to_array(),
+                    intensity: (light.color * light.intensity).to_array(),
+                    ..LightData::default()
+                })
+            });
+    let mut point_lights = point_light_query
+        .iter(world)
+        .map(|(current, previous, light)| {
+            let transform = current.drawn(previous, blend_weight);
+            let (anchor, offset) = anchor_and_offset(transform.translation());
+            LightData {
+                anchor,
+                range: light.range,
+                offset,
+                intensity: (light.color * light.intensity).to_array(),
+                ..LightData::default()
+            }
+        });
+    let capacity = LIGHT_CAPACITY as usize;
+    lights.clear();
+    lights.extend(directional_lights.by_ref().take(capacity));
+    let directional_light_count = lights.len() as u32;
+    lights.extend(point_lights.by_ref().take(capacity - lights.len()));
+    *overflowed = (directional_lights.count() + point_lights.count()) as u32;
+    directional_light_count
 }
 
 #[cfg(test)]
@@ -666,6 +694,7 @@ mod tests {
         };
         frames.prepare();
         assert_eq!(frames.preparer.frame().light.directional_light_count, 0);
+        assert!(frames.preparer.frame().lights.is_empty());
     }
 
     #[test]
@@ -686,11 +715,23 @@ mod tests {
         assert_eq!(frames.preparer.frame().light.directional_light_count, 0);
     }
 
+    /// Two directional lights and a point light 100 km out: both directional
+    /// lights are drawn, first, each its colour times its lux, then the
+    /// point light as its Anchor and offset, its colour times its candela.
     #[test]
-    fn a_second_directional_light_is_warned_about_once_and_not_drawn() {
+    fn every_light_is_drawn_directional_lights_first_point_lights_anchored() {
         let Some(mut frames) = Frames::new() else {
             return;
         };
+        let point_light = PointLight {
+            color: glam::vec3(1.0, 0.5, 0.25),
+            intensity: 4.0,
+            range: 3.0,
+        };
+        let position = glam::dvec3(100_000.25, 2.0, -64.5);
+        frames
+            .world
+            .spawn((Transform::from_translation(position), point_light));
         for color in [glam::Vec3::X, glam::Vec3::Y] {
             let light = DirectionalLight {
                 color,
@@ -698,15 +739,71 @@ mod tests {
             };
             frames.world.spawn((Transform::IDENTITY, light));
         }
+        frames.prepare();
+        let frame = frames.preparer.frame();
+        let counts = (
+            frame.light.directional_light_count,
+            frame.light.point_light_count,
+        );
+        assert_eq!(counts, (2, 1));
+        let intensities: Vec<[f32; 3]> = frame.lights.iter().map(|light| light.intensity).collect();
+        assert_eq!(
+            intensities,
+            [[2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [4.0, 2.0, 1.0]]
+        );
+        let point = frame.lights[2];
+        assert_eq!(
+            (point.anchor, point.offset, point.range),
+            ([1562, 0, -2], [32.25, 2.0, 63.5], 3.0)
+        );
+    }
+
+    /// One directional light and one point light more than the light buffer
+    /// holds: the directional light and all but two point lights are drawn,
+    /// and the two are counted every frame and warned about once, until
+    /// they fit again.
+    #[test]
+    fn lights_past_the_light_buffers_capacity_are_counted_and_warned_about_once() {
+        let Some(mut frames) = Frames::new() else {
+            return;
+        };
+        let sun = DirectionalLight {
+            color: glam::Vec3::ONE,
+            intensity: 1.0,
+        };
+        frames.world.spawn((Transform::IDENTITY, sun));
+        let point_light = PointLight {
+            color: glam::Vec3::ONE,
+            intensity: 1.0,
+            range: 1.0,
+        };
+        let point_lights: Vec<Entity> = (0..LIGHT_CAPACITY + 1)
+            .map(|index| {
+                let position = glam::dvec3(f64::from(index), 0.0, 0.0);
+                let light = (Transform::from_translation(position), point_light);
+                frames.world.spawn(light).id()
+            })
+            .collect();
         let ((), log) = logged(|| {
             for _ in 0..3 {
                 frames.prepare();
-                let light = &frames.preparer.frame().light;
-                assert_eq!(light.directional_light_count, 1);
-                assert_eq!(light.color, [1.0, 0.0, 0.0, 2.0]);
+                let light = frames.preparer.frame().light;
+                let counts = (light.directional_light_count, light.point_light_count);
+                assert_eq!(counts, (1, LIGHT_CAPACITY - 1));
+                assert_eq!(frames.preparer.lights_overflowed(), 2);
             }
         });
-        assert_eq!(log.matches("not drawn").count(), 1, "{log:?}");
+        assert_eq!(log.matches("light buffer's capacity").count(), 1, "{log:?}");
+
+        for &entity in &point_lights[..2] {
+            frames.world.despawn(entity);
+        }
+        frames.prepare();
+        assert_eq!(
+            frames.preparer.frame().lights.len(),
+            LIGHT_CAPACITY as usize
+        );
+        assert_eq!(frames.preparer.lights_overflowed(), 0);
     }
 
     #[test]
@@ -728,9 +825,9 @@ mod tests {
         let previous = PreviousWorldTransform(Some(glam::DAffine3::IDENTITY));
         frames.world.spawn((turned, light, previous));
         frames.prepare();
-        let direction = frames.preparer.frame().light.direction;
+        let direction = frames.preparer.frame().lights[0].offset;
         let half_way = -std::f32::consts::FRAC_1_SQRT_2;
-        let expected = [0.0, half_way, half_way, 0.0];
+        let expected = [0.0, half_way, half_way];
         assert!(
             direction
                 .iter()
