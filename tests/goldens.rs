@@ -5,8 +5,10 @@
 //! `vulkan-cpu` on CI's lavapipe (the Mesa pinned in `.github/workflows/ci.yml`).
 //! Each scene shifted by 100 km must also match its origin Golden, and each
 //! with culling off must match its capture with culling on, so culling
-//! removes no visible Instance. The helmet scene has no Golden, since its
-//! source is fetched, and takes the culling check where it is fetched.
+//! removes no visible Instance, as each lit with every light at every pixel
+//! must match it lit through Froxel lists, so no list misses a light that
+//! reaches its Froxel. The helmet scene has no Golden, since its source is
+//! fetched, and takes those two checks where it is fetched.
 //! A Golden is a reviewed capture from `praxis::capture`, so it catches
 //! regressions, not errors already present when it was recorded.
 //!
@@ -199,12 +201,30 @@ fn reference_scenes_match_their_goldens() {
             &context,
             scene,
             glam::DVec3::ZERO,
-            RenderSwitches { culling: false },
+            RenderSwitches {
+                culling: false,
+                ..RenderSwitches::default()
+            },
         );
         failures.extend(mismatch(
             &culled,
             &unculled,
             &format!("{}-unculled", scene.name()),
+            &difference_directory,
+        ));
+        let brute_force = capture(
+            &context,
+            scene,
+            glam::DVec3::ZERO,
+            RenderSwitches {
+                froxel_lights: false,
+                ..RenderSwitches::default()
+            },
+        );
+        failures.extend(mismatch(
+            &culled,
+            &brute_force,
+            &format!("{}-brute-force", scene.name()),
             &difference_directory,
         ));
         if scene == ReferenceScene::Helmet {

@@ -11,8 +11,9 @@ use std::num::NonZeroU32;
 use crate::assets::material::TEXTURES_PER_CHANNEL;
 use crate::render::targets::DEPTH_PYRAMID_FORMAT;
 
-/// Group 0, written every frame: the camera, and the light buffer with its
-/// counts.
+/// Group 0, written every frame: the camera, the light buffer with its
+/// counts, and each Froxel's list of its lights, which the Froxel pass
+/// writes (`FROXEL_LISTS`).
 pub const FRAME: BindGroupDefinition = BindGroupDefinition {
     index: 0,
     label: "Frame Bind Group",
@@ -26,6 +27,14 @@ pub const FRAME: BindGroupDefinition = BindGroupDefinition {
         ),
         uniform("light", "LightUniform", wgpu::ShaderStages::FRAGMENT),
         read_only_storage("lights", "array<LightData>", wgpu::ShaderStages::FRAGMENT),
+        Binding {
+            writer: Writer::Gpu,
+            ..read_only_storage(
+                "froxel_lists",
+                "array<FroxelList>",
+                wgpu::ShaderStages::FRAGMENT,
+            )
+        },
     ],
 };
 
