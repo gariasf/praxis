@@ -76,7 +76,7 @@ pub struct ShaderModule {
 pub const MAIN: ShaderModule = ShaderModule {
     name: "main",
     // Each Channel is a binding array indexed by Layer (ADR 0017), and the
-    // scene geometry holds the static TLAS (ADR 0020).
+    // scene geometry holds both TLAS (ADR 0020).
     enables: &["wgpu_binding_array", "wgpu_ray_query"],
     bind_groups: &[&FRAME, &MATERIALS, &SCENE_GEOMETRY, &MESHLET_RECORDS],
     parts: &[COMMON, SHADING, HDR, FROXEL_GRID, part!("main.wgsl")],
@@ -85,7 +85,7 @@ pub const MAIN: ShaderModule = ShaderModule {
 /// The culling pass.
 pub const CULLING: ShaderModule = ShaderModule {
     name: "culling",
-    // The scene geometry holds the static TLAS.
+    // The scene geometry holds both TLAS.
     enables: &["wgpu_ray_query"],
     bind_groups: &[&FRAME, &SCENE_GEOMETRY, &FRAME_DRAW],
     parts: &[COMMON, part!("culling.wgsl")],

@@ -77,12 +77,14 @@ const UNBOUNDED_RAY_DISTANCE: f32 = 3.40282347e38;
 // 2^-24 of its size, so the origin clears the surface by 256 roundings.
 const SHADOW_RAY_OFFSET_SCALE: f32 = 1.52587890625e-5; // 2^-16
 
-// Whether the static TLAS holds geometry within `distance` of the surface
-// point at `position`, relative to the camera, along `direction`, a unit
-// vector: one hard shadow ray (ADR 0020). It starts off the surface along
-// `normal`, its unit geometric normal, in the TLAS's frame, whose origin is
-// the corner of the camera's `tlas_anchor`, composed as an Instance's
-// position is (ADR 0014).
+// Whether either TLAS holds geometry within `distance` of the surface point
+// at `position`, relative to the camera, along `direction`, a unit vector:
+// one hard shadow ray (ADR 0020), traced against the static TLAS, then,
+// where that finds nothing, against the dynamic TLAS unless it is empty: a
+// query of an empty TLAS still costs the lit pass. It starts off the
+// surface along `normal`, its unit geometric normal, in the frame both TLAS
+// share, whose origin is the corner of the camera's `tlas_anchor`, composed
+// as an Instance's position is (ADR 0014).
 fn shadowed(position: vec3<f32>, normal: vec3<f32>, direction: vec3<f32>, distance: f32) -> bool {
     // The camera stands where an Instance does in this composition, and the
     // TLAS's frame, with no offset from its Anchor, where the camera does.
@@ -95,21 +97,24 @@ fn shadowed(position: vec3<f32>, normal: vec3<f32>, direction: vec3<f32>, distan
     );
     let extent = max(abs(tlas_position), abs(position));
     let offset = SHADOW_RAY_OFFSET_SCALE * max(max(extent.x, extent.y), max(extent.z, 1.0));
-    var query: ray_query;
-    // Opaque, so one rayQueryProceed completes the traversal, and any hit
+    // Opaque, so one rayQueryProceed completes a traversal, and any hit
     // shadows the point.
-    rayQueryInitialize(
-        &query,
-        static_tlas,
-        RayDesc(
-            RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_TERMINATE_ON_FIRST_HIT,
-            0xffu,
-            0.0,
-            distance,
-            tlas_position + normal * offset,
-            direction
-        )
+    let ray = RayDesc(
+        RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_TERMINATE_ON_FIRST_HIT,
+        0xffu,
+        0.0,
+        distance,
+        tlas_position + normal * offset,
+        direction
     );
+    var query: ray_query;
+    rayQueryInitialize(&query, static_tlas, ray);
+    rayQueryProceed(&query);
+    let hidden = rayQueryGetCommittedIntersection(&query).kind != RAY_QUERY_INTERSECTION_NONE;
+    if hidden || camera.dynamic_tlas_entries == 0u {
+        return hidden;
+    }
+    rayQueryInitialize(&query, dynamic_tlas, ray);
     rayQueryProceed(&query);
     return rayQueryGetCommittedIntersection(&query).kind != RAY_QUERY_INTERSECTION_NONE;
 }

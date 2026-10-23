@@ -62,10 +62,10 @@ pub const MATERIALS: BindGroupDefinition = BindGroupDefinition {
 };
 
 /// Group 2, the scene geometry, built once since its buffers never grow and
-/// its TLAS is rebuilt in place: the Instances, the vertex Arena the vertex
+/// its TLAS are rebuilt in place: the Instances, the vertex Arena the vertex
 /// shader pulls from (ADR 0019), the Mesh pool's tables of Meshes and
-/// Meshlets, and the static TLAS the lit pass traces shadow rays against
-/// (ADR 0020).
+/// Meshlets, and the static and dynamic TLAS the lit pass traces shadow rays
+/// against (ADR 0020).
 pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
     index: 2,
     label: "Scene Geometry Bind Group",
@@ -93,6 +93,7 @@ pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
             wgpu::ShaderStages::COMPUTE,
         ),
         acceleration_structure("static_tlas", wgpu::ShaderStages::FRAGMENT),
+        acceleration_structure("dynamic_tlas", wgpu::ShaderStages::FRAGMENT),
     ],
 };
 
