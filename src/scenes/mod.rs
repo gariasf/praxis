@@ -853,9 +853,7 @@ const CROWD_GROUND_HALF_SIZE: f32 = 12.0;
 /// `CROWD_FIGURE_RADIUS` across, standing on its lowest point with its
 /// middle up +Y: 40 segments around and 65 from pole to pole make 5,120
 /// triangles.
-#[cfg(feature = "cook")]
 const CROWD_FIGURE_HEIGHT: f32 = 1.8;
-#[cfg(feature = "cook")]
 const CROWD_FIGURE_RADIUS: f32 = 0.25;
 #[cfg(feature = "cook")]
 const CROWD_FIGURE_SEGMENTS: [u32; 2] = [40, 65];
