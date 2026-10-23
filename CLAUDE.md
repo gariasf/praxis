@@ -106,7 +106,10 @@ src/
                                  in git-ignored `cooked/` (ADR 0018)
   render/                      # Renderer (owns the Pools, reads no
                                  ECS World, calls the passes in order),
-                                 a module per pass (culling_pass: the
+                                 a module per pass (froxel_pass: the
+                                 compute pass that lists each Froxel's
+                                 lights from the light buffer;
+                                 culling_pass: the
                                  compute pass that builds the frame's
                                  draw; main_pass: the depth pre-pass
                                  and the lit pass that draw it, their

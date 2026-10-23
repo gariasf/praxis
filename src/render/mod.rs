@@ -2,6 +2,7 @@ pub mod acceleration_structures;
 pub mod bind_groups;
 pub mod culling_pass;
 pub mod depth_pyramid_pass;
+pub mod froxel_pass;
 pub mod instance;
 pub mod main_pass;
 pub mod prepare;

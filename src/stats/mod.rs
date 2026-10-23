@@ -70,6 +70,9 @@ pub struct GpuFrameStats {
     pub triangles_drawn: u32,
     /// Instances in use that the frame's draw had no room for, so not drawn.
     pub instances_overflowed: u32,
+    /// Lights the Froxel lists had no room for, summed over Froxels: each
+    /// lights nothing in a Froxel whose list it is missing from.
+    pub froxel_lights_overflowed: u32,
 }
 
 /// One line per group, each a label and then `key=value` pairs, so the text
@@ -101,8 +104,11 @@ impl std::fmt::Display for FrameStats {
         if let Some(gpu) = &self.gpu {
             write!(
                 formatter,
-                " instances_drawn={} triangles_drawn={} instances_overflowed={}",
-                gpu.instances_drawn, gpu.triangles_drawn, gpu.instances_overflowed
+                " instances_drawn={} triangles_drawn={} instances_overflowed={} froxel_lights_overflowed={}",
+                gpu.instances_drawn,
+                gpu.triangles_drawn,
+                gpu.instances_overflowed,
+                gpu.froxel_lights_overflowed
             )?;
         }
         writeln!(

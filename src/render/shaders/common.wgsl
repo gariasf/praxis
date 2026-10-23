@@ -31,6 +31,30 @@ fn camera_relative_position(
     return anchor_position + (offset - camera_offset) + local_position;
 }
 
+// A Froxel's list: how many lights it holds, at most FROXEL_LIGHT_CAPACITY,
+// then their indices in the light buffer, in light order
+// (src/render/froxel_pass.rs).
+struct FroxelList {
+    light_count: u32,
+    lights: array<u32, FROXEL_LIGHT_CAPACITY>,
+}
+
+// A point light's position relative to the camera at `camera_anchor` and
+// `camera_offset`, composed from its Anchor and offset (ADR 0014).
+fn point_light_position(
+    light: LightData,
+    camera_anchor: vec3<i32>,
+    camera_offset: vec3<f32>
+) -> vec3<f32> {
+    return camera_relative_position(
+        light.anchor,
+        light.offset,
+        camera_anchor,
+        camera_offset,
+        vec3<f32>(0.0)
+    );
+}
+
 struct MaterialData {
     base_color: vec4<f32>,
     metallic_roughness: vec4<f32>,
