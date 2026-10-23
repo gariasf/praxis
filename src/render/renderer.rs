@@ -11,9 +11,9 @@ use crate::render::readback::GpuStatsReadback;
 use crate::render::targets::RenderTargets;
 use crate::render::tonemapping_pass::{TONEMAPPING_PASS, TonemappingPass};
 use crate::render::{
-    AccelerationStructureBytes, CameraUniform, DYNAMIC_TLAS_CAPACITY, DynamicTlas, FrameData,
-    FrameStaging, INSTANCE_CAPACITY, InstanceData, LIGHT_CAPACITY, LightData, LightUniform,
-    LoadStaging, STATIC_TLAS_CAPACITY, StaticTlas,
+    AccelerationStructureBytes, CameraUniform, DynamicTlas, FrameData, FrameStaging,
+    INSTANCE_CAPACITY, InstanceData, LIGHT_CAPACITY, LightData, LightUniform, LoadStaging,
+    STATIC_TLAS_CAPACITY, StaticTlas,
 };
 use crate::stats::{FrameRecorder, GpuFrameStats};
 
@@ -238,7 +238,7 @@ impl Renderer {
 
         let mesh_pool = MeshPool::new(&device, ARENA_CAPACITY_BYTES);
         let static_tlas = StaticTlas::new(&device, STATIC_TLAS_CAPACITY);
-        let dynamic_tlas = DynamicTlas::new(&device, DYNAMIC_TLAS_CAPACITY, context.backend());
+        let dynamic_tlas = DynamicTlas::new(&device, context.backend());
         let scene_geometry_bind_group = SCENE_GEOMETRY.bind_group(
             &device,
             &scene_geometry_bind_group_layout,
@@ -319,9 +319,9 @@ impl Renderer {
     /// TLAS's, and the copies of `frame`'s uniforms, the camera's with the
     /// static TLAS's Anchor, the Instances it writes and its Instance slot
     /// count, if it changed, into the frame's encoder, which `render`
-    /// submits; every upload is followed by a render. First it submits the loads staged
-    /// since the last frame, and, when they loaded Meshes, waits for the GPU
-    /// to build their BLASes and compacts them.
+    /// submits; every upload is followed by a render. First it submits the
+    /// loads staged since the last frame, and, when they loaded Meshes, waits
+    /// for the GPU to build their BLASes and compacts them.
     pub fn upload(&mut self, frame: &FrameData, recorder: &mut FrameRecorder) {
         let started = Instant::now();
         debug_assert!(
@@ -345,6 +345,7 @@ impl Renderer {
                 .update(frame, &self.mesh_pool, tlas_anchor, &mut encoder);
         let camera = CameraUniform {
             tlas_anchor,
+            dynamic_tlas_entries: self.dynamic_tlas.entries(),
             ..frame.camera
         };
         let instance_size = std::mem::size_of::<InstanceData>() as wgpu::BufferAddress;
@@ -572,7 +573,7 @@ mod tests {
         FIRST_FROXEL_SLICE_DEPTH, FROXEL_COLUMNS, FROXEL_COUNT, FROXEL_LIGHT_CAPACITY, FROXEL_ROWS,
         FROXEL_SLICES, FROXEL_SLICES_PER_OCTAVE,
     };
-    use crate::render::instance::{anchor_and_offset, padded_columns};
+    use crate::render::instance::{ANCHOR_CELL_SIZE, anchor_and_offset, padded_columns};
     use crate::render::prepare::{InstanceWrite, MovingInstance};
     use crate::render::{FramePreparer, NO_MATERIAL, NO_MESH};
     use crate::time::FixedTime;
@@ -931,7 +932,7 @@ mod tests {
     /// `shadows_fall_from_both_tlas_and_shadow_rays_off_draw_none`.
     #[derive(Clone, Copy)]
     enum Occluder {
-        None,
+        Absent,
         Static,
         Moving,
         /// Its slot freed after it moved, so it is listed no more.
@@ -968,7 +969,10 @@ mod tests {
             ..LightData::default()
         };
         // One image per frame, each frame's occluder as given, rendered in
-        // turn by one Renderer.
+        // turn by one Renderer. After the first, which anchors the static
+        // TLAS, the camera's position is given from the next Anchor cell
+        // over: the same position, so the same image, as long as both TLAS
+        // keep the first frame's Anchor.
         let images = |switches, occluders: &[Occluder]| {
             let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE, switches);
             let white = renderer.material_pool.insert(
@@ -1001,9 +1005,10 @@ mod tests {
             };
             occluders
                 .iter()
-                .map(|&occluder_state| {
+                .enumerate()
+                .map(|(index, &occluder_state)| {
                     let mut frame = match occluder_state {
-                        Occluder::None => frame_of(vec![floor]),
+                        Occluder::Absent => frame_of(vec![floor]),
                         Occluder::Static => frame_of(vec![floor, occluder]),
                         Occluder::Moving => FrameData {
                             instance_writes: [(0, false), (1, true)]
@@ -1022,13 +1027,17 @@ mod tests {
                         Occluder::Freed => frame_of(vec![floor, freed]),
                     };
                     (frame.camera, frame.light, frame.lights) = (camera, light, vec![sun]);
+                    if index > 0 {
+                        frame.camera.anchor = [1, 0, 0];
+                        frame.camera.offset = [-(ANCHOR_CELL_SIZE as f32), 0.0, 0.0];
+                    }
                     render_frame(&context, &mut renderer, &frame, SIZE, SIZE).0
                 })
                 .collect::<Vec<_>>()
         };
         let image = |switches, occluder| images(switches, &[occluder]).remove(0);
         let shadowed = image(RenderSwitches::default(), Occluder::Static);
-        let unshadowed = image(RenderSwitches::default(), Occluder::None);
+        let unshadowed = image(RenderSwitches::default(), Occluder::Absent);
         let untraced = image(
             RenderSwitches {
                 shadow_rays: false,
@@ -1053,14 +1062,18 @@ mod tests {
         );
         let moved = images(
             RenderSwitches::default(),
-            &[Occluder::Moving, Occluder::Freed],
+            &[Occluder::Moving, Occluder::Moving, Occluder::Freed],
         );
         assert!(
             moved[0] == shadowed,
             "a Moving Instance shadowed otherwise than a static one"
         );
         assert!(
-            moved[1] == unshadowed,
+            moved[1] == shadowed,
+            "the dynamic TLAS left the static TLAS's frame as the camera's Anchor changed"
+        );
+        assert!(
+            moved[2] == unshadowed,
             "a freed Moving Instance still shadows"
         );
     }

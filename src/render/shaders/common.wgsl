@@ -5,15 +5,16 @@
 // Positions reach the shaders relative to the camera (ADR 0014), so the
 // camera sits at the origin and view_proj holds no translation. The camera's
 // World position arrives as the anchor of its grid cell plus an offset, its
-// exposure as the scale the lit pass applies to luminance (ADR 0023), and
-// the static TLAS's frame as the Anchor whose corner is its origin, which
-// rays start from (ADR 0020).
+// exposure as the scale the lit pass applies to luminance (ADR 0023), the
+// static TLAS's frame as the Anchor whose corner is its origin, which rays
+// start from (ADR 0020), and how many entries the dynamic TLAS holds.
 struct CameraUniform {
     view_proj: mat4x4<f32>,
     anchor: vec3<i32>,
     exposure: f32,
     offset: vec3<f32>,
     tlas_anchor: vec3<i32>,
+    dynamic_tlas_entries: u32,
 }
 
 // ANCHOR_CELL_SIZE, the anchor grid's edge in metres, is declared from

@@ -80,7 +80,8 @@ const SHADOW_RAY_OFFSET_SCALE: f32 = 1.52587890625e-5; // 2^-16
 // Whether either TLAS holds geometry within `distance` of the surface point
 // at `position`, relative to the camera, along `direction`, a unit vector:
 // one hard shadow ray (ADR 0020), traced against the static TLAS, then,
-// where that finds nothing, against the dynamic TLAS. It starts off the
+// where that finds nothing, against the dynamic TLAS unless it is empty: a
+// query of an empty TLAS still costs the lit pass. It starts off the
 // surface along `normal`, its unit geometric normal, in the frame both TLAS
 // share, whose origin is the corner of the camera's `tlas_anchor`, composed
 // as an Instance's position is (ADR 0014).
@@ -109,8 +110,9 @@ fn shadowed(position: vec3<f32>, normal: vec3<f32>, direction: vec3<f32>, distan
     var query: ray_query;
     rayQueryInitialize(&query, static_tlas, ray);
     rayQueryProceed(&query);
-    if rayQueryGetCommittedIntersection(&query).kind != RAY_QUERY_INTERSECTION_NONE {
-        return true;
+    let hidden = rayQueryGetCommittedIntersection(&query).kind != RAY_QUERY_INTERSECTION_NONE;
+    if hidden || camera.dynamic_tlas_entries == 0u {
+        return hidden;
     }
     rayQueryInitialize(&query, dynamic_tlas, ray);
     rayQueryProceed(&query);

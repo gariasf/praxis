@@ -130,13 +130,7 @@ impl StaticTlas {
                     continue;
                 };
                 *entry = match blas {
-                    Some(blas) => Some(wgpu::TlasInstance::new(
-                        blas,
-                        anchored_transform(instance, anchor),
-                        slot,
-                        // Every ray's cull mask.
-                        0xff,
-                    )),
+                    Some(blas) => Some(tlas_instance(blas, instance, anchor, slot)),
                     None if entry.is_none() => continue,
                     None => None,
                 };
@@ -195,12 +189,13 @@ pub struct DynamicTlas {
 }
 
 impl DynamicTlas {
-    /// An empty dynamic TLAS of `capacity` entries, built on `backend`.
-    pub fn new(device: &wgpu::Device, capacity: u32, backend: wgpu::Backend) -> Self {
+    /// An empty dynamic TLAS of `DYNAMIC_TLAS_CAPACITY` entries, built on
+    /// `backend`.
+    pub fn new(device: &wgpu::Device, backend: wgpu::Backend) -> Self {
         Self {
             tlas: device.create_tlas(&wgpu::CreateTlasDescriptor {
                 label: Some("Dynamic TLAS"),
-                max_instances: capacity,
+                max_instances: DYNAMIC_TLAS_CAPACITY,
                 // Traced at every lit pixel, as the static TLAS is; ADR 0020's
                 // per-frame cost was measured with this flag.
                 flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
@@ -229,32 +224,38 @@ impl DynamicTlas {
         anchor: [i32; 3],
         encoder: &mut wgpu::CommandEncoder,
     ) -> u64 {
-        let filled = frame.moving_instances.len();
+        // Prepare lists no more than its capacity.
+        let listed = frame
+            .moving_instances
+            .iter()
+            .take(DYNAMIC_TLAS_CAPACITY as usize);
+        let filled = listed.len();
         let previously_filled = self.filled.replace(filled);
         if filled == 0 && previously_filled == Some(0) {
             return 0;
         }
-        let mut entries = 0;
-        for (index, moving) in frame.moving_instances.iter().enumerate() {
+        let mut uploaded_entries = 0;
+        for (index, moving) in listed.enumerate() {
             let instance = &frame.instances[moving.instance];
             let blas = mesh_pool.blas(MeshHandle(instance.mesh));
-            entries += u64::from(blas.is_some());
-            self.tlas[index] = blas.map(|blas| {
-                let transform = anchored_transform(instance, anchor);
-                // Every ray's cull mask.
-                wgpu::TlasInstance::new(blas, transform, moving.slot, 0xff)
-            });
+            uploaded_entries += u64::from(blas.is_some());
+            self.tlas[index] = blas.map(|blas| tlas_instance(blas, instance, anchor, moving.slot));
         }
         for index in filled..previously_filled.unwrap_or(0) {
             self.tlas[index] = None;
         }
         encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&self.tlas));
-        entries * self.entry_upload_bytes
+        uploaded_entries * self.entry_upload_bytes
     }
 
     /// Its binding, which stays valid as it is rebuilt in place.
     pub fn binding(&self) -> wgpu::BindingResource<'_> {
         self.tlas.as_binding()
+    }
+
+    /// Entries its last build filled.
+    pub fn entries(&self) -> u32 {
+        self.filled.unwrap_or(0) as u32
     }
 
     /// Its bytes, as `acceleration_structure_bytes` estimates them for its
@@ -265,6 +266,18 @@ impl DynamicTlas {
     ) -> u64 {
         acceleration_structure_bytes.tlas(self.tlas.get().len())
     }
+}
+
+/// `instance`'s entry in a TLAS: `blas`, placed by its transform from the
+/// corner of `anchor` and tagged with its `slot`.
+fn tlas_instance(
+    blas: &wgpu::Blas,
+    instance: &InstanceData,
+    anchor: [i32; 3],
+    slot: u32,
+) -> wgpu::TlasInstance {
+    // Every ray's cull mask.
+    wgpu::TlasInstance::new(blas, anchored_transform(instance, anchor), slot, 0xff)
 }
 
 /// `instance`'s transform as rows of the 3×4 matrix a TLAS Instance holds,

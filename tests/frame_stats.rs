@@ -275,6 +275,47 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
     }
 }
 
+/// The orrery's five spheres are Moving Instances: every frame writes their
+/// Instances and uploads their dynamic TLAS entries, each as its backend's
+/// instance record, which wgpu-core converts it to, and leaves none of them
+/// out.
+#[test]
+fn the_orrerys_moving_instances_upload_their_dynamic_tlas_entries_every_frame() {
+    let context = match pollster::block_on(GpuContext::headless()) {
+        Ok(context) => context,
+        Err(error) if error.is::<wgpu::RequestAdapterError>() => {
+            // Not `eprintln!`, which libtest captures from passing tests.
+            writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+            return;
+        }
+        Err(error) => panic!("headless GPU context failed: {error:#}"),
+    };
+    let (_, frames) = praxis::capture(
+        &context,
+        ReferenceScene::Orrery,
+        glam::DVec3::ZERO,
+        160,
+        90,
+        praxis::RenderSwitches::default(),
+    )
+    .expect("capture failed");
+    let last = frames.last().expect("no frame stats");
+    // `MTLIndirectAccelerationStructureInstanceDescriptor`, or
+    // `VkAccelerationStructureInstanceKHR`.
+    let entry_bytes = match context.backend() {
+        wgpu::Backend::Metal => 72,
+        _ => 64,
+    };
+    // The 112-byte camera and 32-byte light uniforms, the sun and four point
+    // lights, 48 bytes each, and the five 128-byte Instances and their
+    // entries.
+    assert_eq!(
+        last.uploaded_bytes,
+        112 + 32 + 5 * 48 + 5 * 128 + 5 * entry_bytes
+    );
+    assert_eq!(last.moving_instances_left_out, 0);
+}
+
 /// On the Reference scenes whose camera moves every frame, the first frame
 /// writes every Instance and the camera's motion writes none after it
 /// (ADR 0003).

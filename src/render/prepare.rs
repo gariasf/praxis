@@ -298,7 +298,7 @@ impl FramePreparer {
         // Those that lost their Material Handle now draw with their Mesh's
         // Materials, and those that lost their previous World transform are
         // static, so the static TLAS takes them.
-        let lost_component: bevy_ecs::entity::EntityHashSet = world
+        let lost_material_handle_or_previous_transform: bevy_ecs::entity::EntityHashSet = world
             .removed::<MaterialRef>()
             .chain(world.removed::<PreviousWorldTransform>())
             .collect();
@@ -332,7 +332,7 @@ impl FramePreparer {
                 || material_ref
                     .as_ref()
                     .is_some_and(|material_ref| material_ref.is_changed())
-                || lost_component.contains(&entity)
+                || lost_material_handle_or_previous_transform.contains(&entity)
             {
                 let transform = current.drawn(previous, blend_weight);
                 let rotation_scale = transform.0.matrix3.as_mat3();
@@ -756,10 +756,10 @@ mod tests {
 
     /// One Moving Instance more than the dynamic TLAS holds: the lowest slots
     /// keep their place in it, so the one in the highest slot is left out,
-    /// counted every frame and warned about once, whatever order the World
+    /// counted every frame and warned about once, whatever order the ECS World
     /// holds them in.
     #[test]
-    fn the_moving_instance_in_the_highest_slot_past_the_dynamic_tlass_capacity_is_left_out() {
+    fn the_moving_instance_in_the_highest_slot_past_the_dynamic_tlas_capacity_is_left_out() {
         let Some(mut frames) = Frames::new() else {
             return;
         };
@@ -783,7 +783,8 @@ mod tests {
         assert_eq!(warnings, 1, "{log:?}");
 
         // Slot 3 frees, so all fit. A new Moving Instance takes it again: the
-        // World now holds it last, yet the highest slot is the one left out.
+        // ECS World now holds it last, yet the highest slot is the one left
+        // out.
         frames.world.despawn(moving[3]);
         frames.prepare();
         assert_eq!(frames.preparer.moving_instances_left_out(), 0);

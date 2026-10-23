@@ -49,5 +49,6 @@ pub struct CameraUniform {
     /// (ADR 0020), where shadow rays start: the Renderer sets it, from the
     /// camera's Anchor in the first Frame data.
     pub tlas_anchor: [i32; 3],
-    pub _pad_tlas_anchor: u32,
+    /// Entries the dynamic TLAS holds: with none, shadow rays skip it.
+    pub dynamic_tlas_entries: u32,
 }
