@@ -586,8 +586,11 @@ pub(crate) mod tests {
         pool.compact_blases(&context.queue);
         assert_eq!(pool.estimated_blas_bytes(&bytes), 2 * 50);
 
-        let blas = &pool.blases[handle.0 as usize];
-        assert_eq!(trace_triangle(&context, blas), [Some(7), None, None]);
+        let blas = pool.blas(handle).expect("the triangle's BLAS");
+        assert_eq!(
+            trace_triangle_about_x(&context, blas),
+            [Some(7), None, None]
+        );
     }
 
     /// A TLAS built once `compact_blases` returns holds the compacted BLAS
@@ -603,7 +606,9 @@ pub(crate) mod tests {
         let load_and_trace = || {
             let context = gpu_context().expect("a GPU adapter, as found above");
             let mut staging = LoadStaging::new(context.device.clone());
-            let mut pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
+            // Room for its 25 triangles; eight pools of full Arenas would
+            // take 660 MiB.
+            let mut pool = MeshPool::new(&context.device, 4 << 10);
             (0..25)
                 .map(|_| {
                     let handle = pool
@@ -611,7 +616,8 @@ pub(crate) mod tests {
                         .expect("a triangle fits");
                     staging.submit(&context.queue);
                     pool.compact_blases(&context.queue);
-                    trace_triangle(&context, &pool.blases[handle.0 as usize])
+                    let blas = pool.blas(handle).expect("the triangle's BLAS");
+                    trace_triangle_about_x(&context, blas)
                 })
                 .collect::<Vec<_>>()
         };
@@ -627,7 +633,7 @@ pub(crate) mod tests {
 
     /// What `trace_down` finds at a point on `triangle_about_x`'s triangle and
     /// at two points off it, in a TLAS of `blas` alone, tagged 7.
-    fn trace_triangle(context: &GpuContext, blas: &wgpu::Blas) -> Vec<Option<u32>> {
+    fn trace_triangle_about_x(context: &GpuContext, blas: &wgpu::Blas) -> Vec<Option<u32>> {
         let mut tlas = context.device.create_tlas(&wgpu::CreateTlasDescriptor {
             label: Some("Test TLAS"),
             max_instances: 1,
