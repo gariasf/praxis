@@ -691,9 +691,10 @@ pub(crate) fn spawn_town(world: &mut World, loader: &mut AssetLoader) -> anyhow:
 
 /// The camera's path: at street level up the avenue at X = 0, facing north
 /// (−Z), for `STREET_FRAMES`; then for `RISE_FRAMES` up and back over the
-/// rooftops to a circle over the town's outer blocks at `ORBIT_HEIGHT`,
-/// turning to face its middle; then round the circle, facing the middle. Its position and
-/// its speed change smoothly throughout.
+/// rooftops to a circle round the town's middle, inside its edge, at
+/// `ORBIT_HEIGHT`, turning to face its middle; then round the circle,
+/// facing the middle. Its position and its speed change smoothly
+/// throughout.
 const STREET_FRAMES: u32 = 420;
 const RISE_FRAMES: u32 = 360;
 /// In the avenue's right-hand lane, at eye height, and moving at 4 m/s.
