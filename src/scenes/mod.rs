@@ -60,8 +60,9 @@ pub enum ReferenceScene {
     /// TLAS.
     Crowd,
     /// A procedural town of 1 × 1 km at M3's target scale (ADR 0013): about
-    /// 250,000 Instances and 1,024 street lamps, seen from street level,
-    /// then from over the rooftops (`town.rs`).
+    /// 250,000 Instances, 10,000 of them pigeons circling in flocks, and
+    /// 1,024 street lamps, seen from street level, then from over the
+    /// rooftops (`town.rs`).
     Town,
 }
 

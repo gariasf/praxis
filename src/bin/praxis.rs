@@ -47,6 +47,9 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
         [command, output, flag, scenes @ ..] if command == "bench" && flag == "--counters" => {
             bench(output, Configuration::COUNTERS, scenes)
         }
+        [command, output, flag, scenes @ ..] if command == "bench" && flag == "--ci-counters" => {
+            bench(output, Configuration::CI_COUNTERS, scenes)
+        }
         [command, output, scenes @ ..] if command == "bench" => {
             bench(output, Configuration::REFERENCE, scenes)
         }
@@ -57,7 +60,7 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
         _ => anyhow::bail!(
             "unexpected arguments {arguments:?}: run with no arguments, `capabilities`, \
              `cook`, `capture <scene> <png path> [<width>x<height>]`, \
-             `bench <output directory> [--ci | --counters] [<scene>...]`, or \
+             `bench <output directory> [--ci | --counters | --ci-counters] [<scene>...]`, or \
              `compare <bench directory> [--ci]`"
         ),
     }
@@ -146,12 +149,9 @@ fn compare(results: &str, mode: CompareMode) -> anyhow::Result<()> {
         let baseline_directory = praxis::bench::baseline_directory(&current.adapter);
         let baseline_path =
             baseline_directory.join(path.file_name().expect("a read_dir entry has a file name"));
-        let ci_run = (current.width, current.height, current.measured_frames)
-            == (
-                Configuration::CI.width,
-                Configuration::CI.height,
-                Configuration::CI.measured_frames,
-            );
+        // Both of CI's configurations render at its size.
+        let ci_run =
+            (current.width, current.height) == (Configuration::CI.width, Configuration::CI.height);
         let record = if ci_run {
             format!(
                 "copy {}.json from CI's bench-results artifact",

@@ -59,6 +59,14 @@ impl Configuration {
         warm_up_frames: COUNTER_FRAMES.start,
         measured_frames: COUNTER_FRAMES.end - COUNTER_FRAMES.start,
     };
+
+    /// CI's size, rendering the counter frames and no more: CI's bench of a
+    /// scene too dense for lavapipe to render `CI`'s frames in its time.
+    pub const CI_COUNTERS: Self = Self {
+        width: Self::CI.width,
+        height: Self::CI.height,
+        ..Self::COUNTERS
+    };
 }
 
 /// The frames whose counters every run also records, whatever its length:
