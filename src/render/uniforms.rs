@@ -45,4 +45,9 @@ pub struct CameraUniform {
     pub exposure: f32,
     pub offset: [f32; 3],
     pub _pad_offset: u32,
+    /// The Anchor whose corner is the origin of the static TLAS's frame
+    /// (ADR 0020), where shadow rays start: the Renderer sets it, from the
+    /// camera's Anchor in the first Frame data.
+    pub tlas_anchor: [i32; 3],
+    pub _pad_tlas_anchor: u32,
 }

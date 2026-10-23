@@ -40,6 +40,10 @@ pub struct RenderSwitches {
     /// Whether the lit pass shades each pixel with the point lights its
     /// Froxel's list holds, rather than every point light (brute force).
     pub froxel_lights: bool,
+    /// Whether the lit pass traces a hard shadow ray at each pixel toward
+    /// each directional light, against the static TLAS (ADR 0020), rather
+    /// than light every pixel the light faces.
+    pub shadow_rays: bool,
 }
 
 impl Default for RenderSwitches {
@@ -47,6 +51,7 @@ impl Default for RenderSwitches {
         Self {
             culling: true,
             froxel_lights: true,
+            shadow_rays: true,
         }
     }
 }
@@ -54,10 +59,11 @@ impl Default for RenderSwitches {
 impl RenderSwitches {
     /// Each switch by the name of the WGSL `override` that every shader
     /// module declares for it, with its value as a pipeline sets it.
-    pub(crate) fn constants(&self) -> [(&'static str, f64); 2] {
+    pub(crate) fn constants(&self) -> [(&'static str, f64); 3] {
         [
             ("CULLING", f64::from(u8::from(self.culling))),
             ("FROXEL_LIGHTS", f64::from(u8::from(self.froxel_lights))),
+            ("SHADOW_RAYS", f64::from(u8::from(self.shadow_rays))),
         ]
     }
 }
@@ -86,7 +92,8 @@ pub struct Renderer {
     pub(crate) material_pool: MaterialPool,
     pub(crate) load_staging: LoadStaging,
     instance_buffer: wgpu::Buffer,
-    /// The Instances and the vertex Arena (`SCENE_GEOMETRY`).
+    /// The Instances, the vertex Arena, the Mesh pool's tables and the
+    /// static TLAS (`SCENE_GEOMETRY`).
     scene_geometry_bind_group: wgpu::BindGroup,
     static_tlas: StaticTlas,
     /// What its acceleration structures are estimated to take.
@@ -229,6 +236,7 @@ impl Renderer {
         );
 
         let mesh_pool = MeshPool::new(&device, ARENA_CAPACITY_BYTES);
+        let static_tlas = StaticTlas::new(&device, STATIC_TLAS_CAPACITY);
         let scene_geometry_bind_group = SCENE_GEOMETRY.bind_group(
             &device,
             &scene_geometry_bind_group_layout,
@@ -245,6 +253,7 @@ impl Renderer {
                     "meshlet_triangles",
                     mesh_pool.meshlet_triangle_arena().as_entire_binding(),
                 ),
+                ("static_tlas", static_tlas.binding()),
             ],
         );
 
@@ -252,7 +261,6 @@ impl Renderer {
         let tonemapping_pass =
             TonemappingPass::new(&device, target_format, &render_targets, &mut load_staging);
         let gpu_stats = GpuStatsReadback::new(&device, queue.get_timestamp_period());
-        let static_tlas = StaticTlas::new(&device, STATIC_TLAS_CAPACITY);
 
         Self {
             mesh_pool,
@@ -303,12 +311,13 @@ impl Renderer {
         self.aspect_ratio
     }
 
-    /// Records the copies of `frame`'s uniforms, the Instances it writes and
-    /// its Instance slot count, if it changed, and the static TLAS's rebuild,
-    /// if they change it, into the frame's encoder, which `render` submits;
-    /// every upload is followed by a render. First it submits the loads
-    /// staged since the last frame, and, when they loaded Meshes, waits for
-    /// the GPU to build their BLASes and compacts them.
+    /// Records the static TLAS's rebuild, if `frame` changes it, and the
+    /// copies of `frame`'s uniforms, the camera's with the static TLAS's
+    /// Anchor, the Instances it writes and its Instance slot count, if it
+    /// changed, into the frame's encoder, which `render` submits; every
+    /// upload is followed by a render. First it submits the loads staged
+    /// since the last frame, and, when they loaded Meshes, waits for the GPU
+    /// to build their BLASes and compacts them.
     pub fn upload(&mut self, frame: &FrameData, recorder: &mut FrameRecorder) {
         let started = Instant::now();
         debug_assert!(
@@ -321,6 +330,15 @@ impl Renderer {
         self.load_staging.submit(&self.queue);
         self.mesh_pool.compact_blases(&self.queue);
         let mut encoder = create_frame_encoder(&self.device);
+        self.static_tlas
+            .update(frame, &self.mesh_pool, &mut encoder);
+        recorder.static_instances_left_out = self.static_tlas.instances_left_out();
+        // Shadow rays start in the static TLAS's frame, whose Anchor the
+        // first Frame data's camera set.
+        let camera = CameraUniform {
+            tlas_anchor: self.static_tlas.anchor(),
+            ..frame.camera
+        };
         let instance_size = std::mem::size_of::<InstanceData>() as wgpu::BufferAddress;
         let instance_uploads = frame.instance_writes.iter().map(|write| {
             (
@@ -337,7 +355,7 @@ impl Renderer {
         let light_upload = (!frame.lights.is_empty())
             .then(|| (&self.light_buffer, 0, bytemuck::cast_slice(&frame.lights)));
         let uploads = [
-            (&self.camera_buffer, 0, bytemuck::bytes_of(&frame.camera)),
+            (&self.camera_buffer, 0, bytemuck::bytes_of(&camera)),
             (
                 &self.light_uniform_buffer,
                 0,
@@ -360,9 +378,6 @@ impl Renderer {
             recorder.instances_written += frame.instances.len() as u32;
             self.uploaded_instance_slot_count = frame.instance_slot_count;
         }
-        self.static_tlas
-            .update(frame, &self.mesh_pool, &mut encoder);
-        recorder.static_instances_left_out = self.static_tlas.instances_left_out();
         self.frame_encoder = Some(encoder);
         recorder.stage("upload", started);
     }
@@ -900,6 +915,96 @@ mod tests {
                 "frame {frame} differs with culling off"
             );
         }
+    }
+
+    /// A white floor ahead of the camera, under a directional light shining
+    /// the way the camera looks, and a square behind the camera, out of
+    /// view, that hides the light from the floor's middle: its shadow rays
+    /// darken the middle and leave the corners as the frame without the
+    /// square draws them, and with shadow rays off, the frame draws that
+    /// unshadowed image.
+    #[test]
+    fn shadow_rays_off_draw_the_image_no_shadow_darkens() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let camera = CameraUniform {
+            view_proj: (projection_matrix(1.0) * Camera::new().view_matrix()).to_cols_array_2d(),
+            exposure: 1.0,
+            ..CameraUniform::default()
+        };
+        let light = LightUniform {
+            ambient_illuminance: [0.1, 0.1, 0.1, 0.0],
+            directional_light_count: 1,
+            ..LightUniform::default()
+        };
+        // Shining the way the camera looks: a directional light's offset
+        // holds the direction it shines along.
+        let sun = LightData {
+            offset: [0.0, 0.0, -1.0],
+            intensity: [1.0; 3],
+            ..LightData::default()
+        };
+        let image = |switches, occluded: bool| {
+            let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE, switches);
+            let white = renderer.material_pool.insert(
+                &mut renderer.load_staging,
+                MaterialData {
+                    base_color: [1.0; 4],
+                    metallic_roughness: [0.0, 1.0, 0.0, 0.0],
+                    emissive: [0.0, 0.0, 0.0, 1.0],
+                    layers: [MaterialPool::DEFAULT_LAYER; 4],
+                    extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
+                },
+            );
+            let quad = load_quad(&mut renderer);
+            // A square of `size` metres facing the camera at `distance` ahead
+            // of it, which is behind it when negative.
+            let square = |size: f32, distance: f32| InstanceData {
+                rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
+                    size, size, 1.0,
+                ))),
+                offset: [0.0, 0.0, -distance],
+                ..instance(quad, white.index(), [0.0, 0.0])
+            };
+            // The floor fills the view, 1.66 m across at 2 m; the square's
+            // shadow covers its middle metre.
+            let mut instances = vec![square(4.0, 2.0)];
+            if occluded {
+                instances.push(square(1.0, -1.0));
+            }
+            let frame = FrameData {
+                camera,
+                light,
+                lights: vec![sun],
+                ..frame_of(instances)
+            };
+            render_frame(&context, &mut renderer, &frame, SIZE, SIZE).0
+        };
+        let shadowed = image(RenderSwitches::default(), true);
+        let unshadowed = image(RenderSwitches::default(), false);
+        let untraced = image(
+            RenderSwitches {
+                shadow_rays: false,
+                ..RenderSwitches::default()
+            },
+            true,
+        );
+
+        // The shadowed middle sees the ambient term alone, about a quarter as
+        // bright once tonemapped: far more than the dither's step darker.
+        let middle = |image: &image::RgbaImage| image.get_pixel(SIZE / 2, SIZE / 2).0;
+        assert!(
+            middle(&shadowed)[0].saturating_add(32) < middle(&unshadowed)[0],
+            "{:?} not darker than {:?}",
+            middle(&shadowed),
+            middle(&unshadowed)
+        );
+        assert_eq!(shadowed.get_pixel(0, 0), unshadowed.get_pixel(0, 0));
+        assert!(
+            untraced == unshadowed,
+            "with shadow rays off, the frame drew another image than the unshadowed one"
+        );
     }
 
     /// Two Renderables, the right one then despawned: its slot, which still

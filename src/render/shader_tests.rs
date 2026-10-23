@@ -218,6 +218,8 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
             exposure,
             offset,
             _pad_offset,
+            tlas_anchor,
+            _pad_tlas_anchor,
         }),
         twin!(LightUniform {
             ambient_illuminance,

@@ -6,51 +6,51 @@
   "height": 360,
   "measured_frames": 256,
   "cpu_frame_microseconds": {
-    "median": 52444.006,
-    "p95": 60097.642
+    "median": 93626.71399999999,
+    "p95": 107293.342
   },
   "gpu_frame_microseconds": {
-    "median": 52386.984,
-    "p95": 60045.409
+    "median": 93532.913,
+    "p95": 107170.898
   },
   "gpu_pass_microseconds": {
     "culling_phase_one": {
-      "median": 459.042,
-      "p95": 595.222
+      "median": 595.062,
+      "p95": 662.171
     },
     "culling_phase_two": {
-      "median": 219.571,
-      "p95": 253.69200000000004
+      "median": 310.552,
+      "p95": 353.11199999999997
     },
     "depth_prepass": {
-      "median": 1377.225,
-      "p95": 1574.567
+      "median": 2265.063,
+      "p95": 2624.756
     },
     "depth_pyramid_pass": {
-      "median": 934.242,
-      "p95": 1290.905
+      "median": 1648.2669999999998,
+      "p95": 2059.5280000000002
     },
     "froxel_pass": {
-      "median": 245.36499999999998,
-      "p95": 353.072
+      "median": 346.529,
+      "p95": 398.216
     },
     "lit_pass": {
-      "median": 45533.614,
-      "p95": 53308.689
+      "median": 82917.243,
+      "p95": 96288.81
     },
     "tonemapping_pass": {
-      "median": 3153.763,
-      "p95": 3627.087
+      "median": 5088.2210000000005,
+      "p95": 5320.417
     }
   },
   "draw_calls": 4,
   "instances_drawn": 5,
   "triangles_drawn": 11040,
   "instances_overflowed": 0,
-  "uploaded_bytes": 1008,
-  "gpu_memory_bytes": 329193280,
+  "uploaded_bytes": 1024,
+  "gpu_memory_bytes": 329196368,
   "arena_bytes_in_use": 76680,
-  "heap_allocations": 269,
+  "heap_allocations": 273,
   "counter_frames": {
     "frames": {
       "start": 8,
@@ -60,9 +60,9 @@
     "instances_drawn": 5,
     "triangles_drawn": 11040,
     "instances_overflowed": 0,
-    "uploaded_bytes": 1008,
-    "gpu_memory_bytes": 329193280,
+    "uploaded_bytes": 1024,
+    "gpu_memory_bytes": 329196368,
     "arena_bytes_in_use": 76680,
-    "heap_allocations": 269
+    "heap_allocations": 273
   }
 }

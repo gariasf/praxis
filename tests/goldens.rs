@@ -6,8 +6,8 @@
 //! Each scene shifted by 100 km must also match its origin Golden, and each
 //! with culling off must match its capture with culling on, so culling
 //! removes no visible Instance, as each lit with every light at every pixel
-//! must match it lit through Froxel lists, so no list misses a light that
-//! reaches its Froxel. The helmet scene has no Golden, since its source is
+//! must match it lit through Froxel lists, both with shadow rays off, so no
+//! list misses a light that reaches its Froxel. The helmet scene has no Golden, since its source is
 //! fetched, and takes those two checks where it is fetched.
 //! A Golden is a reviewed capture from `praxis::capture`, so it catches
 //! regressions, not errors already present when it was recorded.
@@ -212,17 +212,23 @@ fn reference_scenes_match_their_goldens() {
             &format!("{}-unculled", scene.name()),
             &difference_directory,
         ));
+        // With shadow rays off, as M3 judges the Froxel lists.
+        let unshadowed = RenderSwitches {
+            shadow_rays: false,
+            ..RenderSwitches::default()
+        };
+        let froxel_lit = capture(&context, scene, glam::DVec3::ZERO, unshadowed);
         let brute_force = capture(
             &context,
             scene,
             glam::DVec3::ZERO,
             RenderSwitches {
                 froxel_lights: false,
-                ..RenderSwitches::default()
+                ..unshadowed
             },
         );
         failures.extend(mismatch(
-            &culled,
+            &froxel_lit,
             &brute_force,
             &format!("{}-brute-force", scene.name()),
             &difference_directory,

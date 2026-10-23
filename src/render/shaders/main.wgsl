@@ -11,6 +11,11 @@ struct VertexOutput {
     @location(2) uv: vec2<f32>,
     @location(3) @interpolate(flat) material_id: u32,
     @location(4) tangent_world: vec4<f32>, // xyz = world tangent, w = bitangent sign
+    // The position again, interpolated within the samples the triangle
+    // covers: at an edge pixel the centre can lie off the triangle, where
+    // its plane, extended past a crease, runs inside the mesh, so a shadow
+    // ray starting there would find the mesh in its way.
+    @location(5) @interpolate(perspective, centroid) centroid_position: vec3<f32>,
 }
 
 @vertex
@@ -56,13 +61,63 @@ fn vertex_output(packed_index: u32) -> VertexOutput {
         tangent_frame.bitangent_sign
     );
     out.camera_relative_position = position;
+    out.centroid_position = position;
     out.material_id = record.material_id;
     return out;
 }
 
+// A directional light's shadow ray runs to f32's largest distance, past
+// anything a TLAS holds.
+const UNBOUNDED_RAY_DISTANCE: f32 = 3.40282347e38;
+
+// A shadow ray's origin leaves its surface along the normal by this share
+// of the point's largest coordinate, relative to the camera or in the TLAS's
+// frame, and of 1 m at least. Rasterising the point, composing it into the
+// TLAS's frame and intersecting the TLAS each round a coordinate by at most
+// 2^-24 of its size, so the origin clears the surface by 256 roundings.
+const SHADOW_RAY_OFFSET_SCALE: f32 = 1.52587890625e-5; // 2^-16
+
+// Whether the static TLAS holds geometry within `distance` of the surface
+// point at `position`, relative to the camera, along `direction`, a unit
+// vector: one hard shadow ray (ADR 0020). It starts off the surface along
+// `normal`, its unit geometric normal, in the TLAS's frame, whose origin is
+// the corner of the camera's `tlas_anchor`, composed as an Instance's
+// position is (ADR 0014).
+fn shadowed(position: vec3<f32>, normal: vec3<f32>, direction: vec3<f32>, distance: f32) -> bool {
+    // The camera stands where an Instance does in this composition, and the
+    // TLAS's frame, with no offset from its Anchor, where the camera does.
+    let tlas_position = camera_relative_position(
+        camera.anchor,
+        camera.offset,
+        camera.tlas_anchor,
+        vec3<f32>(0.0),
+        position
+    );
+    let extent = max(abs(tlas_position), abs(position));
+    let offset = SHADOW_RAY_OFFSET_SCALE * max(max(extent.x, extent.y), max(extent.z, 1.0));
+    var query: ray_query;
+    // Opaque, so one rayQueryProceed completes the traversal, and any hit
+    // shadows the point.
+    rayQueryInitialize(
+        &query,
+        static_tlas,
+        RayDesc(
+            RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_TERMINATE_ON_FIRST_HIT,
+            0xffu,
+            0.0,
+            distance,
+            tlas_position + normal * offset,
+            direction
+        )
+    );
+    rayQueryProceed(&query);
+    return rayQueryGetCommittedIntersection(&query).kind != RAY_QUERY_INTERSECTION_NONE;
+}
+
 // Every Texture is sampled first, so none is sampled under non-uniform
 // control flow; the rest decodes the surface and sums what each light
-// reflects with the ambient term and the emissive.
+// reflects, unless a shadow ray finds it hidden, with the ambient term and
+// the emissive.
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let material = materials[in.material_id];
@@ -95,21 +150,44 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // keeps the term finite. Any others follow.
     let has_directional_light = light.directional_light_count > 0u;
     let first = lights[0];
+    let first_direction = select(
+        vec3<f32>(0.0, 1.0, 0.0),
+        normalize(-first.offset),
+        has_directional_light
+    );
+    var first_illuminance = first.intensity * f32(has_directional_light);
+    // Each directional light's shadow ray is traced only where the light
+    // adds something.
+    if SHADOW_RAYS && has_directional_light && dot(normal, first_direction) > 0.0
+        && shadowed(
+            in.centroid_position,
+            geometric_normal,
+            first_direction,
+            UNBOUNDED_RAY_DISTANCE
+        ) {
+        first_illuminance = vec3<f32>(0.0);
+    }
     var outgoing_luminance = reflected_luminance(
         surface,
         normal,
         view_direction,
-        select(vec3<f32>(0.0, 1.0, 0.0), normalize(-first.offset), has_directional_light),
-        first.intensity * f32(has_directional_light)
+        first_direction,
+        first_illuminance
     );
     for (var index = 1u; index < light.directional_light_count; index++) {
         let directional = lights[index];
+        let direction = normalize(-directional.offset);
+        var illuminance = directional.intensity;
+        if SHADOW_RAYS && dot(normal, direction) > 0.0
+            && shadowed(in.centroid_position, geometric_normal, direction, UNBOUNDED_RAY_DISTANCE) {
+            illuminance = vec3<f32>(0.0);
+        }
         outgoing_luminance += reflected_luminance(
             surface,
             normal,
             view_direction,
-            normalize(-directional.offset),
-            directional.intensity
+            direction,
+            illuminance
         );
     }
     // The point lights the pixel's Froxel lists, in light order, or, with

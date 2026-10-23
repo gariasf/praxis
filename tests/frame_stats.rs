@@ -42,12 +42,12 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // draws with one call, and the lit pass with two, phase two's into depth
     // first; then the tonemapping pass's one triangle.
     assert_eq!(last.draw_calls, 4);
-    // Every frame writes the 96-byte camera and 32-byte light uniforms and
+    // Every frame writes the 112-byte camera and 32-byte light uniforms and
     // the sun and four point lights, 48 bytes each; only the first also
     // writes the ten 128-byte Instances and the 4-byte count of Instance
     // slots in use.
-    assert_eq!(frames[0].uploaded_bytes, 10 * 128 + 96 + 32 + 5 * 48 + 4);
-    assert_eq!(last.uploaded_bytes, 96 + 32 + 5 * 48);
+    assert_eq!(frames[0].uploaded_bytes, 10 * 128 + 112 + 32 + 5 * 48 + 4);
+    assert_eq!(last.uploaded_bytes, 112 + 32 + 5 * 48);
     // The sphere's triangles: 48 × 24 quads of two triangles but one at each
     // pole.
     let triangles = 48 * 24 * 2 - 2 * 48;
@@ -78,7 +78,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // tile memory, so it counts nothing on Metal, the RGBA16F HDR target it
     // resolves into, the R32Float depth pyramid from 80×45 down to 1×1
     // (80×45, 40×22, 20×11, 10×5, 5×2, 2×1, 1×1), three staging slots of the
-    // first frame's 1652 uploaded bytes rounded up to 2048, the GPU stats
+    // first frame's 1668 uploaded bytes rounded up to 2048, the GPU stats
     // readback: its resolve buffer of a begin and an end timestamp of 8
     // bytes for each of the seven passes, and six slots of 176 bytes, the
     // tonemapping pass's 64×64 R8 dither mask, and the Froxel pass's lists,
@@ -95,7 +95,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + 5 * 16 * MEBIBYTE
             + 65_536 * 40
             + 256 * 80
-            + 96
+            + 112
             + 32
             + 4096 * 48
             + 524_288 * 128
