@@ -49,7 +49,7 @@ pub struct RenderSwitches {
     /// Froxel's list holds, rather than every point light (brute force).
     pub froxel_lights: bool,
     /// Whether the lit pass traces a hard shadow ray at each pixel toward
-    /// each directional light, against the static and dynamic TLAS (ADR
+    /// each light that reaches it, against the static and dynamic TLAS (ADR
     /// 0020), rather than light every pixel the light faces.
     pub shadow_rays: bool,
 }
@@ -1110,6 +1110,91 @@ mod tests {
         assert!(
             moved[2] == unshadowed,
             "a freed Moving Instance still shadows"
+        );
+    }
+
+    /// A white floor ahead of the camera, lit by a point light 1 m behind
+    /// the camera, and a square 0.2 m across behind the camera, out of view:
+    /// between the light and the floor, it darkens the floor's middle; beyond
+    /// the light, which ends each shadow ray, the frame is the one without it.
+    #[test]
+    fn a_point_lights_shadow_ray_ends_at_the_light() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let camera = CameraUniform {
+            view_proj: (projection_matrix(1.0) * Camera::new().view_matrix()).to_cols_array_2d(),
+            exposure: 1.0,
+            ..CameraUniform::default()
+        };
+        let light = LightUniform {
+            ambient_illuminance: [0.1, 0.1, 0.1, 0.0],
+            point_light_count: 1,
+            ..LightUniform::default()
+        };
+        // 3 m from the floor's middle, which it gives about 1 lux.
+        let point = LightData {
+            range: 10.0,
+            offset: [0.0, 0.0, 1.0],
+            intensity: [9.0; 3],
+            ..LightData::default()
+        };
+        // The frame with the square, if any, this far behind the camera.
+        let image = |behind: Option<f32>| {
+            let mut renderer = Renderer::new(
+                &context,
+                TARGET_FORMAT,
+                SIZE,
+                SIZE,
+                RenderSwitches::default(),
+            );
+            let white = renderer.material_pool.insert(
+                &mut renderer.load_staging,
+                MaterialData {
+                    base_color: [1.0; 4],
+                    metallic_roughness: [0.0, 1.0, 0.0, 0.0],
+                    emissive: [0.0, 0.0, 0.0, 1.0],
+                    layers: [MaterialPool::DEFAULT_LAYER; 4],
+                    extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
+                },
+            );
+            let quad = load_quad(&mut renderer);
+            // A square of `size` metres facing +Z at `distance` ahead of the
+            // camera, which looks down -Z, or behind it when negative.
+            let square = |size: f32, distance: f32| InstanceData {
+                rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
+                    size, size, 1.0,
+                ))),
+                offset: [0.0, 0.0, -distance],
+                ..instance(quad, white.index(), [0.0, 0.0])
+            };
+            let mut instances = vec![square(4.0, 2.0)];
+            instances.extend(behind.map(|distance| square(0.2, -distance)));
+            let frame = FrameData {
+                camera,
+                light,
+                lights: vec![point],
+                ..frame_of(instances)
+            };
+            render_frame(&context, &mut renderer, &frame, SIZE, SIZE).0
+        };
+        let unoccluded = image(None);
+        // 0.5 m from the light, its shadow covers the floor's middle 1.2 m; 1 m
+        // beyond the light, an unbounded ray would find it from the middle
+        // 0.6 m.
+        let between = image(Some(0.5));
+        let beyond = image(Some(2.0));
+
+        let middle = |image: &image::RgbaImage| image.get_pixel(SIZE / 2, SIZE / 2).0;
+        assert!(
+            middle(&between)[0].saturating_add(32) < middle(&unoccluded)[0],
+            "{:?} not darker than {:?}",
+            middle(&between),
+            middle(&unoccluded)
+        );
+        assert!(
+            beyond == unoccluded,
+            "a square beyond the point light shadowed the floor"
         );
     }
 
