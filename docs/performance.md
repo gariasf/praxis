@@ -4,6 +4,52 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## The dynamic TLAS's build on the orrery (2026-10-23, #204)
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
+`3b79286` (#266) and of main at `79cdabb` (#264). `praxis bench` at
+2560×1440 with 4x MSAA, 248 warm-up and 1800 measured frames. The machine
+carried an antivirus scan and the owner's interactive use: GPU p95 ran 1.0
+to 1.3 times the median; the orrery's three runs agreed within 1.5% at the
+median.
+
+The orrery's five planets are Moving Instances: every frame rebuilds the
+dynamic TLAS from their five entries.
+
+| Metric | Three runs, medians (p95) |
+|---|---|
+| Dynamic build on the CPU: recording, `finish` and its own submit (`dynamic_tlas_cpu_microseconds`) | 198.5 (269), 197.3 (252), 203.0 (291) µs |
+| Dynamic build on the GPU (`dynamic_tlas_build`) | 174.2 (209), 175.9 (213), 174.7 (194) µs |
+| GPU frame total, the build included | 2,588, 2,590, 2,553 µs |
+
+- **Recording.** wgpu 30 walks every one of the TLAS's 10,000 entries at
+  each build, filled or not, about 12 ns each (#202), which is most of the
+  CPU time with 5 entries. ADR 0020's figure for 10,000 filled entries, 0.64
+  to 0.92 ms of recording plus submit, comes from a scratch program; #207
+  measures it on `town`.
+- **Not in the CPU figure.** Each of the four passes that set the
+  scene-geometry bind group makes the frame's own submit walk the dynamic
+  TLAS's entries again, in wgpu-core's validation and Metal's residency
+  set.
+- **What timing the build adds.** Its own command buffer and submit and
+  the two markers cost the orrery 73 heap allocations a frame (317 to 390)
+  and, in an interleaved A/B of `0bfd654` against main (two rounds; the
+  last commit only moves where the frame records the build), 27 µs of CPU
+  frame. The GPU frame total grew by 177 µs, the build it now counts.
+  Scenes where nothing moves build nothing, record no markers and did not
+  change: helmet −3 µs of CPU and +6 µs of GPU, uv-grid −12 and −2, shadows
+  +12 and −1.
+- **Frames in flight.** The marker before the build can run while the
+  previous frame still traces rays against the TLAS, and the build waits
+  for it. Timed from that marker's end alone, the build read 1,650 to 1,750
+  µs, the previous frame's whole lit pass. It now starts at the later of the
+  marker's end and the previous frame's lit-pass end.
+- **Bracketing on Metal.** Empty compute passes write no timestamps, and
+  passes that touch no TLAS do not bracket the build, which Metal runs
+  alongside them; markers that query the TLAS do. In a probe on an idle GPU
+  at low clocks, the build took 0.14 ms at 0 entries, 0.27 at 5, 1.37 at
+  1,000 and 2.26 at 10,000 (debug build, medians of 40).
+
 ## Anisotropy candidates (2026-10-22, #184)
 
 Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
