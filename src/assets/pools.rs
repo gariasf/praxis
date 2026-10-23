@@ -21,6 +21,14 @@ pub enum MeshUse {
     Drawn,
 }
 
+impl MeshUse {
+    /// Whether rays trace it, so it needs a BLAS and the index stream the
+    /// BLAS is built from.
+    fn traced(self) -> bool {
+        self != MeshUse::Drawn
+    }
+}
+
 /// The Meshes, and the GPU tables they are drawn from: Arenas of vertices
 /// and indices, the Meshlet Arenas and the Mesh table (ADRs 0017, 0019);
 /// and a BLAS per Mesh, which rays trace (ADR 0020).
@@ -91,21 +99,30 @@ impl MeshPool {
         }
     }
 
-    /// Writes `mesh` through `staging` into one range of each Arena, and its
-    /// entry into the Mesh table, each Primitive drawn with its Material of
-    /// `materials`, in Primitive order, where no Renderable overrides it; and
-    /// records its BLAS's build from its vertex and index ranges, which
-    /// `compact_blases` compacts once `staging` is submitted, unless `use_`
-    /// is to draw it alone.
-    /// Returns its Handle, or None after logging when the Mesh table is full
-    /// or an Arena's longest free range is too short; a refused Mesh leaves
-    /// the pool as it was.
+    /// Loads `mesh` to be drawn and traced, as `load_for` loads it.
     pub fn load(
         &mut self,
         staging: &mut LoadStaging,
         mesh: &CookedMesh,
         materials: &[Option<MaterialHandle>],
-        use_: MeshUse,
+    ) -> Option<MeshHandle> {
+        self.load_for(staging, mesh, materials, MeshUse::DrawnAndTraced)
+    }
+
+    /// Writes `mesh` through `staging` into one range of each Arena, and its
+    /// entry into the Mesh table, each Primitive drawn with its Material of
+    /// `materials`, in Primitive order, where no Renderable overrides it; and,
+    /// where `mesh_use` has rays trace it, its index stream and its BLAS's
+    /// build from its vertex and index ranges, which `compact_blases`
+    /// compacts once `staging` is submitted. Returns its Handle, or None
+    /// after logging when the Mesh table is full or an Arena's longest free
+    /// range is too short; a refused Mesh leaves the pool as it was.
+    pub fn load_for(
+        &mut self,
+        staging: &mut LoadStaging,
+        mesh: &CookedMesh,
+        materials: &[Option<MaterialHandle>],
+        mesh_use: MeshUse,
     ) -> Option<MeshHandle> {
         assert_eq!(
             materials.len(),
@@ -120,9 +137,15 @@ impl MeshPool {
         let meshlet_count = meshlets().count();
         let meshlet_vertex_count = meshlets().map(|meshlet| meshlet.vertices.len()).sum();
         let triangle_count = meshlets().map(|meshlet| meshlet.triangles.len()).sum();
+        // Only a BLAS build reads the index stream.
+        let index_stream: &[u32] = if mesh_use.traced() {
+            &mesh.indices
+        } else {
+            &[]
+        };
         let counts = [
             mesh.vertices.len(),
-            mesh.indices.len(),
+            index_stream.len(),
             meshlet_count,
             meshlet_vertex_count,
             triangle_count,
@@ -156,7 +179,7 @@ impl MeshPool {
         else {
             tracing::error!(
                 vertices = mesh.vertices.len(),
-                indices = mesh.indices.len(),
+                indices = index_stream.len(),
                 meshlets = meshlet_count,
                 meshlet_vertices = meshlet_vertex_count,
                 triangles = triangle_count,
@@ -211,7 +234,7 @@ impl MeshPool {
             bytemuck::cast_slice(&mesh.vertices),
         );
         self.index_arena
-            .write(staging, indices.offset, bytemuck::cast_slice(&mesh.indices));
+            .write(staging, indices.offset, bytemuck::cast_slice(index_stream));
         self.meshlet_arena.write(
             staging,
             meshlet_range.offset,
@@ -234,17 +257,16 @@ impl MeshPool {
         );
         tracing::debug!(
             vertices = mesh.vertices.len(),
-            indices = mesh.indices.len(),
+            indices = index_stream.len(),
             meshlets = meshlet_count,
             "Mesh loaded"
         );
-        let loaded = Mesh {
+        self.meshes.push(Mesh {
             needs_material_handle: materials.contains(&None),
             vertices: vertices.offset..vertices.offset + mesh.vertices.len() as u32,
-        };
-        if use_ == MeshUse::Drawn {
+        });
+        if !mesh_use.traced() {
             self.blases.push(None);
-            self.meshes.push(loaded);
             return Some(handle);
         }
         let geometry = wgpu::BlasTriangleGeometrySizeDescriptor {
@@ -285,7 +307,6 @@ impl MeshPool {
         self.blases.push(Some(blas));
         self.awaiting_compaction.push((handle, blas_triangles));
         self.uncompacted_blas_triangles += blas_triangles;
-        self.meshes.push(loaded);
         Some(handle)
     }
 
@@ -301,12 +322,10 @@ impl MeshPool {
         if self.awaiting_compaction.is_empty() {
             return;
         }
-        for blas in self
-            .awaiting_compaction
-            .iter()
-            .filter_map(|&(handle, _)| self.blases[handle.0 as usize].as_ref())
-        {
-            blas.prepare_compaction_async(|_| {});
+        for &(handle, _) in &self.awaiting_compaction {
+            if let Some(blas) = &self.blases[handle.0 as usize] {
+                blas.prepare_compaction_async(|_| {});
+            }
         }
         if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
             tracing::error!(%error, "waiting for BLAS builds failed");
@@ -528,13 +547,8 @@ pub(crate) mod tests {
         };
         let mut staging = LoadStaging::new(context.device.clone());
         let mut pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
-        pool.load(
-            &mut staging,
-            &mesh(3, vec![0, 1, 2]),
-            &[None],
-            MeshUse::DrawnAndTraced,
-        )
-        .expect("a triangle fits");
+        pool.load(&mut staging, &mesh(3, vec![0, 1, 2]), &[None])
+            .expect("a triangle fits");
         // Each vertex's x is its index, so a pulled vertex names itself.
         let vertex = |x| CookedVertex {
             position: [x, 1.0, 2.0],
@@ -556,12 +570,7 @@ pub(crate) mod tests {
         };
         let material = MaterialHandle(5);
         let handle = pool
-            .load(
-                &mut staging,
-                &two_primitives,
-                &[Some(material), None],
-                MeshUse::DrawnAndTraced,
-            )
+            .load(&mut staging, &two_primitives, &[Some(material), None])
             .expect("the Mesh fits");
         staging.submit(&context.queue);
 
@@ -613,20 +622,10 @@ pub(crate) mod tests {
         };
         let mut staging = LoadStaging::new(context.device.clone());
         let mut pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
-        pool.load(
-            &mut staging,
-            &mesh(3, vec![0, 0, 0]),
-            &[None],
-            MeshUse::DrawnAndTraced,
-        )
-        .expect("a triangle fits");
+        pool.load(&mut staging, &mesh(3, vec![0, 0, 0]), &[None])
+            .expect("a triangle fits");
         let handle = pool
-            .load(
-                &mut staging,
-                &triangle_about_x(),
-                &[None],
-                MeshUse::DrawnAndTraced,
-            )
+            .load(&mut staging, &triangle_about_x(), &[None])
             .expect("a triangle fits");
         assert_eq!(pool.estimated_blas_bytes(&bytes), 2 * 100);
         staging.submit(&context.queue);
@@ -659,12 +658,7 @@ pub(crate) mod tests {
             (0..25)
                 .map(|_| {
                     let handle = pool
-                        .load(
-                            &mut staging,
-                            &triangle_about_x(),
-                            &[None],
-                            MeshUse::DrawnAndTraced,
-                        )
+                        .load(&mut staging, &triangle_about_x(), &[None])
                         .expect("a triangle fits");
                     staging.submit(&context.queue);
                     pool.compact_blases(&context.queue);
@@ -901,40 +895,23 @@ pub(crate) mod tests {
         };
         let mut staging = LoadStaging::new(context.device.clone());
         let mut pool = MeshPool::new(&context.device, CAPACITY);
-        pool.load(
-            &mut staging,
-            &mesh(3, vec![0, 1, 2]),
-            &[None],
-            MeshUse::DrawnAndTraced,
-        )
-        .expect("a triangle fits");
+        pool.load(&mut staging, &mesh(3, vec![0, 1, 2]), &[None])
+            .expect("a triangle fits");
         let gpu_memory_bytes = pool.gpu_memory_bytes();
         let arena_bytes_in_use = pool.arena_bytes_in_use();
 
         // One vertex past the vertex Arena, then one index past the index
         // Arena while the vertices fit.
         for past_capacity in [mesh(2, vec![0, 1, 0]), mesh(1, vec![0; 26])] {
-            let (handle, log) = logged(|| {
-                pool.load(
-                    &mut staging,
-                    &past_capacity,
-                    &[None],
-                    MeshUse::DrawnAndTraced,
-                )
-            });
+            let (handle, log) = logged(|| pool.load(&mut staging, &past_capacity, &[None]));
             assert!(handle.is_none(), "a Mesh past capacity loaded");
             assert!(log.contains("Mesh refused"), "not logged: {log:?}");
             assert_eq!(pool.gpu_memory_bytes(), gpu_memory_bytes);
             assert_eq!(pool.arena_bytes_in_use(), arena_bytes_in_use);
         }
         // The second refusal gave back the last vertex it took.
-        pool.load(
-            &mut staging,
-            &mesh(1, vec![0, 0, 0]),
-            &[None],
-            MeshUse::DrawnAndTraced,
-        )
-        .expect("the last vertex fits");
+        pool.load(&mut staging, &mesh(1, vec![0, 0, 0]), &[None])
+            .expect("the last vertex fits");
     }
 
     /// What `run` returns, and the text of the events it logged.

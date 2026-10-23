@@ -53,11 +53,15 @@ pub(super) fn cook_key(primitives: &[SourcePrimitive]) -> String {
             normals,
             uvs,
             indices,
+            bounds,
         } = geometry;
         hash_part(bytemuck::cast_slice(positions));
         hash_part(bytemuck::cast_slice(normals));
         hash_part(bytemuck::cast_slice(uvs));
         hash_part(bytemuck::cast_slice(indices));
+        if let Some(bounds) = bounds {
+            hash_part(bytemuck::cast_slice(bounds));
+        }
         hash_part(&material.map_or(0, |material| material.0).to_be_bytes());
     }
     hex(&hasher.finalize())
@@ -99,9 +103,14 @@ pub(crate) fn cook(primitives: &[SourcePrimitive]) -> CookedMesh {
         .vertices
         .iter()
         .map(|vertex| Vec3::from(vertex.position));
+    let held = primitives
+        .iter()
+        .filter_map(|(geometry, _)| geometry.bounds)
+        .flat_map(|[lowest, highest]| [Vec3::from(lowest), Vec3::from(highest)]);
+    let corners = positions.chain(held);
     mesh.bounds = [
-        positions.clone().fold(Vec3::INFINITY, Vec3::min).into(),
-        positions.fold(Vec3::NEG_INFINITY, Vec3::max).into(),
+        corners.clone().fold(Vec3::INFINITY, Vec3::min).into(),
+        corners.fold(Vec3::NEG_INFINITY, Vec3::max).into(),
     ];
     mesh
 }
@@ -205,6 +214,7 @@ pub(crate) fn weld(geometry: &Geometry) -> Geometry {
         uvs: keys.iter().map(|key| [key[3], key[4]]).collect(),
         normals: keys.iter().map(|key| [key[5], key[6], key[7]]).collect(),
         indices: meshopt::remap_index_buffer(Some(&geometry.indices), vertex_count, &remap),
+        bounds: None,
     }
 }
 
@@ -355,6 +365,7 @@ pub(super) fn gltf_meshes(
                 normals,
                 uvs,
                 indices,
+                bounds: None,
             };
             primitives.push((geometry, material));
         }
@@ -377,15 +388,17 @@ pub(crate) mod tests {
                 normals: vec![[0.0, 0.0, 1.0]; 3],
                 uvs: vec![[0.0; 2]; 3],
                 indices: vec![0, 1, 2],
+                bounds: None,
             };
             (geometry, None)
         };
         let key = cook_key(&[triangle()]);
-        let changes: [fn(&mut SourcePrimitive); 5] = [
+        let changes: [fn(&mut SourcePrimitive); 6] = [
             |(geometry, _)| geometry.positions[0][0] = 1.0,
             |(geometry, _)| geometry.normals[0][2] = -1.0,
             |(geometry, _)| geometry.uvs[0][0] = 1.0,
             |(geometry, _)| geometry.indices[0] = 2,
+            |(geometry, _)| geometry.bounds = Some([[-1.0; 3], [1.0; 3]]),
             |(_, material)| *material = Some(AssetId(1)),
         ];
         for change in changes {
@@ -469,6 +482,7 @@ pub(crate) mod tests {
                 .map(|&index| plane.uvs[index as usize])
                 .collect(),
             indices: (0..6).collect(),
+            bounds: None,
         };
         assert_eq!(weld(&soup).positions.len(), 4);
         assert_eq!(cook(&[(soup, None)]).vertices.len(), 4);
@@ -565,7 +579,8 @@ pub(crate) mod tests {
     /// each Primitive's Meshlets, of at most 64 vertices and 124 triangles,
     /// hold its triangles in index stream order, each once, through their
     /// vertices; those are the source's triangles; the bounds are the box
-    /// around the source's vertices, so they hold every vertex.
+    /// around the source's vertices and any box a Primitive adds, so they
+    /// hold every vertex.
     fn check_meshlets(name: &str, mesh: &CookedMesh, sources: &[SourcePrimitive]) {
         let corner = |vertex: u32| {
             let CookedVertex { position, uv, .. } = mesh.vertices[vertex as usize];
@@ -607,7 +622,13 @@ pub(crate) mod tests {
                     })
                 })
                 .collect();
-            for &(position, _) in source.iter().flatten() {
+            let added = geometry.bounds.into_iter().flatten();
+            for position in source
+                .iter()
+                .flatten()
+                .map(|&(position, _)| position)
+                .chain(added)
+            {
                 let position = Vec3::from(position);
                 bounds = [bounds[0].min(position), bounds[1].max(position)];
             }
@@ -620,7 +641,7 @@ pub(crate) mod tests {
         assert_eq!(
             mesh.bounds,
             bounds.map(|corner| corner.to_array()),
-            "{name}: the bounds are not the box around the source's vertices"
+            "{name}: the bounds are not the box around the source's vertices and added box"
         );
     }
 

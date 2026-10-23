@@ -873,7 +873,8 @@ const CROWD_CAMERA_TARGET: glam::DVec3 = glam::DVec3::new(0.0, 0.6, -0.5);
 
 /// crowd's figure, standing on its lowest point at the origin with its
 /// middle up +Y: a sphere stretched to `CROWD_FIGURE_RADIUS` across and
-/// `CROWD_FIGURE_HEIGHT` tall, its normals by the inverse stretch.
+/// `CROWD_FIGURE_HEIGHT` tall, its normals by the inverse stretch, and
+/// culled by the box that holds every shape it sways to.
 #[cfg(feature = "cook")]
 fn crowd_figure() -> Geometry {
     let [longitudes, latitudes] = CROWD_FIGURE_SEGMENTS;
@@ -885,13 +886,17 @@ fn crowd_figure() -> Geometry {
         *position = stretched.into();
         *normal = (glam::Vec3::from(*normal) / stretch).normalize().into();
     }
-    figure
+    Geometry {
+        bounds: Some(crowd_figure_bounds()),
+        ..figure
+    }
 }
 
 /// The box that holds a crowd figure however it bends: its middle's top
 /// reaches (1 − cos κh) / κ sideways at the most curvature κ, h its height,
 /// and the figure lies within its radius of its middle; no point rises
 /// above the figure's height.
+#[cfg(feature = "cook")]
 fn crowd_figure_bounds() -> [[f32; 3]; 2] {
     let height = f64::from(CROWD_FIGURE_HEIGHT);
     let sideways = (1.0 - (CROWD_SWAY_CURVATURE * height).cos()) / CROWD_SWAY_CURVATURE;
@@ -906,8 +911,8 @@ pub(crate) fn spawn_crowd(world: &mut World, loader: &mut AssetLoader) -> anyhow
     let ground = loader.mesh(scene.mesh_id("ground"))?;
     world.spawn((Transform::IDENTITY, MeshRef(ground)));
     let material = loader.material(scene.material_id("figure"))?;
-    let (figure, bounds) = (scene.mesh_id("figure"), crowd_figure_bounds());
-    let rest = loader.bent_mesh(figure, bounds)?;
+    let figure = scene.mesh_id("figure");
+    let rest = loader.bent_mesh(figure)?;
     let centre = f64::from(CROWD_COLUMNS - 1) / 2.0;
     for index in 0..CROWD_FIGURES {
         let (row, column) = (index / CROWD_COLUMNS, index % CROWD_COLUMNS);
@@ -923,7 +928,7 @@ pub(crate) fn spawn_crowd(world: &mut World, loader: &mut AssetLoader) -> anyhow
             curvature,
             previous_curvature: curvature,
         };
-        let bent = (MeshRef(loader.bent_mesh(figure, bounds)?), bend, sway);
+        let bent = (MeshRef(loader.bent_mesh(figure)?), bend, sway);
         world.spawn((
             Transform::from_translation(position),
             MaterialRef(material),
@@ -971,6 +976,9 @@ pub(crate) struct Geometry {
     pub(crate) normals: Vec<[f32; 3]>,
     pub(crate) uvs: Vec<[f32; 2]>,
     pub(crate) indices: Vec<u32>,
+    /// A box its Mesh's cooked bounds must hold besides its vertices, for a
+    /// Mesh the GPU bends: every shape it bends to (#208).
+    pub(crate) bounds: Option<[[f32; 3]; 2]>,
 }
 
 /// A sphere of `radius` around the origin, 48 segments around and 24 from
@@ -1045,6 +1053,7 @@ pub(crate) fn ground_plane(half_size: f32, uv_repeat: f32) -> Geometry {
             [uv_repeat, 0.0],
         ],
         indices: vec![0, 1, 2, 0, 2, 3],
+        bounds: None,
     }
 }
 
@@ -1083,17 +1092,28 @@ mod tests {
     use super::*;
     use crate::render::bend_pass::tests::bent;
 
-    /// Every vertex of a crowd figure, bent to the sway's most curvature
-    /// either way towards four azimuths a quarter turn apart, so eight
-    /// directions, lies in the box its Mesh is culled by: the figure is
-    /// round about its middle, so no direction reaches further.
+    /// Every vertex of a crowd figure, bent by curvatures from barely any to
+    /// the sway's most, lies in the box its Mesh is culled by: sideways the
+    /// most curvature reaches furthest, but the ring below the top rises
+    /// highest at about 0.011 rad/m. A negative curvature bends the other
+    /// way, so the azimuths, one along a column of vertices and one between
+    /// two, cover it; the figure is round about its middle.
     #[test]
     fn a_crowd_figure_bends_within_its_bounds() {
         let [lowest, highest] = crowd_figure_bounds().map(glam::Vec3::from);
         let figure = crowd_figure();
-        for curvature in [-CROWD_SWAY_CURVATURE, CROWD_SWAY_CURVATURE] {
-            for quarter in 0..4 {
-                let azimuth = f64::from(quarter) * std::f64::consts::FRAC_PI_2;
+        let curvatures = [
+            0.002,
+            0.006,
+            0.011,
+            0.02,
+            0.05,
+            0.1,
+            0.2,
+            CROWD_SWAY_CURVATURE,
+        ];
+        for curvature in curvatures {
+            for azimuth in [0.0, std::f64::consts::PI / 40.0] {
                 for &position in &figure.positions {
                     let rest = glam::Vec3::from(position).as_dvec3();
                     let (bent, _) = bent(rest, azimuth, curvature);

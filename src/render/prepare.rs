@@ -594,7 +594,7 @@ mod tests {
 
     use super::*;
     use crate::assets::pools::tests::{logged, mesh};
-    use crate::assets::{ARENA_CAPACITY_BYTES, MaterialHandle, MeshHandle, MeshUse};
+    use crate::assets::{ARENA_CAPACITY_BYTES, MaterialHandle, MeshHandle};
     use crate::components::Transform;
     use crate::gpu::GpuContext;
     use crate::render::{DYNAMIC_TLAS_CAPACITY, LoadStaging};
@@ -633,7 +633,6 @@ mod tests {
                     &mut staging,
                     &mesh(3, vec![0, 1, 2]),
                     &[Some(MESH_MATERIAL)],
-                    MeshUse::DrawnAndTraced,
                 )
                 .expect("a triangle fits");
             let mut world = World::new();
@@ -916,12 +915,10 @@ mod tests {
             return;
         };
         let [other_mesh, bare_mesh] = [Some(MaterialHandle(6)), None].map(|material| {
-            let mesh = frames.mesh_pool.load(
-                &mut frames.staging,
-                &mesh(3, vec![0, 1, 2]),
-                &[material],
-                MeshUse::DrawnAndTraced,
-            );
+            let mesh =
+                frames
+                    .mesh_pool
+                    .load(&mut frames.staging, &mesh(3, vec![0, 1, 2]), &[material]);
             mesh.expect("a triangle fits")
         });
         let first_mesh = frames.mesh;
@@ -963,12 +960,9 @@ mod tests {
     /// vertices into `frames`' pool.
     fn load(frames: &mut Frames, vertex_count: usize) -> MeshHandle {
         let triangle = mesh(vertex_count, vec![0, 1, 2]);
-        let loaded = frames.mesh_pool.load(
-            &mut frames.staging,
-            &triangle,
-            &[Some(MESH_MATERIAL)],
-            MeshUse::DrawnAndTraced,
-        );
+        let loaded = frames
+            .mesh_pool
+            .load(&mut frames.staging, &triangle, &[Some(MESH_MATERIAL)]);
         loaded.expect("a triangle fits")
     }
 

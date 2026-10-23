@@ -383,8 +383,8 @@ mod tests {
     use std::io::Write;
 
     use super::*;
+    use crate::assets::ARENA_CAPACITY_BYTES;
     use crate::assets::pools::tests::{logged, mesh, trace_down, triangle_about_x};
-    use crate::assets::{ARENA_CAPACITY_BYTES, MeshUse};
     use crate::gpu::GpuContext;
     use crate::render::instance::padded_columns;
     use crate::render::prepare::InstanceWrite;
@@ -417,8 +417,7 @@ mod tests {
             };
             let mut staging = LoadStaging::new(context.device.clone());
             let mut mesh_pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
-            let mut load =
-                |mesh| mesh_pool.load(&mut staging, &mesh, &[None], MeshUse::DrawnAndTraced);
+            let mut load = |mesh| mesh_pool.load(&mut staging, &mesh, &[None]);
             load(mesh(3, vec![0, 1, 2])).expect("a triangle fits");
             let mesh = load(triangle_about_x()).expect("a triangle fits");
             staging.submit(&context.queue);
