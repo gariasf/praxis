@@ -7,50 +7,62 @@ its top three offenders and the tickets that take them.
 ## Shadow rays: from the lit pass to a shadow mask (2026-10-23, #260)
 
 Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of main at
-`470221e` and of #260's branch on it. `praxis bench` at 2560×1440 with 4x
+`d12da41` and of #260's branch on it. `praxis bench` at 2560×1440 with 4x
 MSAA, 248 warm-up and 1800 measured frames. Four binaries, each scene's
 rays on and off for main and the branch, run interleaved in three rounds
-in rotated order. Medians over the rounds of each run's GPU medians, in
-µs. Other sessions ran a few seconds of GPU tests during the window: a run
-they overlapped read high (uv-grid's mask run at 4,912 µs once, against
-2,303 and 2,317), and the median of three keeps the other two. Most
-scenes' medians agreed within 2% across rounds; shadows' within 12%.
+in rotated order, on a machine otherwise idle. Medians over the rounds of
+each run's GPU medians, in µs; the rounds agreed within 1% for every scene
+but texture-wall, and within 5% for main's orrery, pbr-sweep and helmet.
 
-| Scene | Lit pass, inline: rays on / off | Rays' cost, inline | Lit pass, mask: rays on / off | Shadow mask pass | Rays' cost, mask | GPU frame, inline → mask |
-|---|---|---|---|---|---|---|
-| far-coplanar | 2,828 / 312 | +2.53 ms | 336 / 314 | 988 | +1.04 ms | 3,558 → 2,074 |
-| minification | 3,813 / 465 | +3.35 ms | 498 / 458 | 1,047 | +1.12 ms | 4,554 → 2,307 |
-| uv-grid | 3,502 / 408 | +3.11 ms | 437 / 404 | 1,176 | +1.24 ms | 4,183 → 2,317 |
-| orrery | 5,519 / 290 | +5.42 ms | 327 / 293 | 1,119 | +1.18 ms | 6,377 → 2,146 |
-| normal-tangent | 8,146 / 440 | +7.72 ms | 465 / 438 | 1,348 | +1.40 ms | 8,861 → 2,545 |
-| shadows | 11,238 / 439 | +10.82 ms | 463 / 435 | 1,883 | +1.94 ms | 12,018 → 3,137 |
-| pbr-sweep | 9,341 / 406 | +8.95 ms | 449 / 404 | 1,373 | +1.45 ms | 10,040 → 2,537 |
-| helmet | 35,204 / 721 | +34.49 ms | 768 / 710 | 2,522 | +2.68 ms | 36,116 → 4,295 |
-| texture-wall | 3,292 / 967 | +0.15 ms | 967 / 963 | 3,994 (±903) | +0.71 ms | 15,495 → 15,817 |
+| Scene | Lit pass, inline: rays on / off | Rays' cost, inline | Lit pass, mask: rays on / off | Phase two's depth pass | Shadow mask pass | Rays' cost, mask | GPU frame, inline → mask |
+|---|---|---|---|---|---|---|---|
+| far-coplanar | 2,822 / 312 | +2.53 ms | 333 / 311 | 12 | 989 | +1.05 ms | 3,555 → 2,074 |
+| minification | 3,811 / 461 | +3.36 ms | 487 / 459 | 12 | 1,048 | +1.11 ms | 4,547 → 2,292 |
+| uv-grid | 3,502 / 404 | +3.11 ms | 433 / 406 | 12 | 1,175 | +1.23 ms | 4,184 → 2,310 |
+| orrery | 5,694 / 289 | +5.69 ms | 328 / 287 | 12 | 1,115 | +1.20 ms | 6,645 → 2,317 |
+| normal-tangent | 8,203 / 439 | +7.80 ms | 466 / 438 | 12 | 1,347 | +1.40 ms | 8,943 → 2,545 |
+| shadows | 11,233 / 439 | +10.81 ms | 462 / 435 | 12 | 1,881 | +1.94 ms | 12,012 → 3,136 |
+| pbr-sweep | 9,454 / 404 | +9.07 ms | 448 / 404 | 12 | 1,368 | +1.44 ms | 10,152 → 2,528 |
+| helmet | 35,313 / 712 | +34.61 ms | 760 / 711 | 12 | 2,520 | +2.59 ms | 36,226 → 4,207 |
+| texture-wall | 3,387 / 966 | +0.13 ms | 585 / 963 | 17 | 2,388 | +0.34 ms | 15,623 → 15,756 |
 
-- **The rays cost 2.4 to 12.9 times less from the mask.** The cost is
-  rays on minus rays off on the GPU frame. Each frame traces the same rays
-  either way: one per pixel and light that reaches it, from the pixel's
-  nearest sample rather than from each fragment's centroid. The mask's
-  cost is phase two's depth pass (12 µs as timed; Metal overlaps it with
-  its neighbours), the mask pass, and the lit pass's read of the mask:
-  rays-off time plus 4 to 58 µs.
+- **The rays cost 2.4 to 13.4 times less from the mask.** The cost is
+  rays on minus rays off on the GPU frame. The rays are not quite the same:
+  inline, one per fragment, from its centroid, and skipped where the
+  shading normal turns from the light; from the mask, one per pixel, from
+  its nearest sample, and skipped where the face turns from the light. The
+  mask's cost is phase two's depth pass (12 µs as timed; Metal overlaps it
+  with its neighbours), the mask pass, and the lit pass's read of the mask:
+  rays-off time plus 22 to 49 µs.
 - **texture-wall** spends its 15 ms frame in its 10,000 Textures (#183). Its
   timestamps swing by up to 1 ms from round to round, so its rows are
   within noise.
-- **Rays off.** With rays off, the branch's GPU frame is main's within
-  ±24 µs on every scene but texture-wall, inside its spread: the mask
-  pass does not run, and phase two's depth stays in the lit pass. ADR 0019's
-  gate does not move.
+- **Rays off.** The branch's GPU frame with rays off is main's within ±4
+  µs on every scene but texture-wall, inside its spread, and the orrery.
+  The mask pass does not run, and phase two's depth stays in the lit pass.
+  ADR 0019's gate does not move.
+- **The orrery's dynamic TLAS build** is now counted with rays off: about
+  160 µs, the +160 µs on its GPU frame. Main measured the build from the
+  previous frame's lit pass, which the build no longer waits for once
+  nothing in the lit pass reads the TLAS, so the build read 0 with rays off
+  on main, and with rays on on the branch. It now starts no earlier than
+  the end of the previous frame's shadow mask pass, which traces the rays,
+  and reads about 170 µs with rays on, main's 178.
 - **Ray-query code in the lit pass costs even where it never runs.** A
   first version kept an inline fallback in `fs_main` for lights past the
-  mask's bits, which no Reference scene reached. With that fallback, the lit
-  pass took 1,362 to 4,611 µs against 429 to 754 without it, two rounds
-  each on uv-grid, pbr-sweep, shadows and the helmet. The owner chose a
-  fixed capacity of 59 lights per pixel, with the overflow counted and
-  warned, over the fallback
+  mask's bits, which no Reference scene reached. With that fallback the lit
+  pass took 1,362 to 4,611 µs, against 429 to 754 µs without it (two
+  rounds each on uv-grid, pbr-sweep, shadows and the helmet, at `470221e`).
+  The owner chose a fixed capacity of 59 lights per pixel over the
+  fallback, with the overflow counted and warned
   ([decision](https://github.com/gariasf/praxis/issues/17#issuecomment-6369952061)).
-- **Memory.** The mask takes 29,491,200 bytes at 1440p, 8 bytes per pixel.
+- **Memory and allocations.** The mask takes 29,491,200 bytes at 1440p,
+  8 bytes per pixel. The two new passes add 43 or 44 heap allocations a
+  frame (279 to 322 on most scenes).
+- **`town`.** On #206's branch, with inline rays, the GPU frame median was
+  92.7 ms at 1440p over its circling path, with 0.6 to 0.8 point lights
+  reaching each lit pixel and 6 or 7 listed per Froxel (#206's session,
+  2026-10-23). #207 measures it with the mask.
 
 ## The crowd's per-bone proxies (2026-10-23, #208)
 
