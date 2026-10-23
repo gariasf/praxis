@@ -6,7 +6,7 @@ use anyhow::Context;
 
 use crate::capture::render_frames;
 use crate::gpu::GpuContext;
-use crate::render::{RenderSwitches, TIMED_PASSES};
+use crate::render::{DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT, RenderSwitches, TIMED_PASSES};
 use crate::scenes::ReferenceScene;
 use crate::stats::FrameStats;
 use crate::time::SIXTY_HERTZ;
@@ -109,7 +109,11 @@ pub struct Measurements {
     pub height: u32,
     pub measured_frames: u32,
     pub cpu_frame_microseconds: Spread,
-    /// From the start of each frame's first pass to the end of its last.
+    /// The dynamic TLAS's build on the CPU: its recording and its submit
+    /// (ADR 0020).
+    pub dynamic_tlas_cpu_microseconds: Spread,
+    /// Each frame's dynamic TLAS build, plus the span from the start of its
+    /// first pass to the end of its last.
     pub gpu_frame_microseconds: Spread,
     /// Each pass's own GPU time, by pass.
     pub gpu_pass_microseconds: BTreeMap<String, Spread>,
@@ -196,7 +200,8 @@ pub struct Spread {
 #[derive(Debug, serde::Deserialize)]
 pub struct Budgets {
     pub cpu_frame_microseconds: f64,
-    /// From the start of the frame's first pass to the end of its last.
+    /// The frame's dynamic TLAS build, plus the span from the start of its
+    /// first pass to the end of its last.
     pub gpu_frame_microseconds: f64,
     pub gpu_memory_bytes: u64,
 }
@@ -312,6 +317,17 @@ fn measure(
                 .map(|stats| microseconds(stats.cpu_frame_time))
                 .collect(),
         ),
+        dynamic_tlas_cpu_microseconds: spread(
+            measured
+                .iter()
+                .map(|stats| {
+                    let stages = stats.cpu_times.iter().filter(|(stage, _)| {
+                        [DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT].contains(&stage.as_str())
+                    });
+                    stages.map(|&(_, time)| microseconds(time)).sum()
+                })
+                .collect(),
+        ),
         gpu_frame_microseconds: spread(
             measured_gpu
                 .iter()
@@ -336,8 +352,13 @@ impl std::fmt::Display for Measurements {
         let (cpu, gpu) = (self.cpu_frame_microseconds, self.gpu_frame_microseconds);
         write!(
             formatter,
-            "{} cpu_us median={:.1} p95={:.1} gpu_us median={:.1} p95={:.1}",
-            self.scene, cpu.median, cpu.p95, gpu.median, gpu.p95
+            "{} cpu_us median={:.1} p95={:.1} dynamic_tlas_cpu_us={:.1} gpu_us median={:.1} p95={:.1}",
+            self.scene,
+            cpu.median,
+            cpu.p95,
+            self.dynamic_tlas_cpu_microseconds.median,
+            gpu.median,
+            gpu.p95
         )?;
         for (pass, time) in &self.gpu_pass_microseconds {
             write!(formatter, " {pass}={:.1}", time.median)?;
@@ -559,6 +580,10 @@ mod tests {
             cpu_frame_microseconds: Spread {
                 median: 1000.0,
                 p95: 1200.0,
+            },
+            dynamic_tlas_cpu_microseconds: Spread {
+                median: 100.0,
+                p95: 120.0,
             },
             gpu_frame_microseconds: Spread {
                 median: 2500.0,
@@ -804,7 +829,8 @@ mod tests {
     /// Frames of a `configuration` run: draw calls 10, Instances and
     /// triangles drawn 5 and 15 and heap allocations 50 in the counter frames
     /// and more elsewhere, 3 Instances overflowed in frame 300 alone, a
-    /// CPU time of 900 µs in the warm-up and 100 µs after it, and on the GPU
+    /// CPU time of 900 µs in the warm-up and 100 µs after it, 30 µs of it
+    /// recording the dynamic TLAS's build and 10 µs submitting it, and on the GPU
     /// a frame of 300 µs whose passes take 200 µs each.
     fn frames(configuration: Configuration) -> Vec<FrameStats> {
         (0..configuration.warm_up_frames + configuration.measured_frames)
@@ -813,6 +839,13 @@ mod tests {
                 let warming_up = frame < configuration.warm_up_frames;
                 FrameStats {
                     cpu_frame_time: Duration::from_micros(if warming_up { 900 } else { 100 }),
+                    cpu_times: [
+                        ("prepare_frame", 50),
+                        (DYNAMIC_TLAS_RECORDING, 30),
+                        (DYNAMIC_TLAS_SUBMIT, 10),
+                    ]
+                    .map(|(stage, time)| (stage.to_owned(), Duration::from_micros(time)))
+                    .into(),
                     gpu: Some(GpuFrameStats {
                         frame: frame.into(),
                         pass_times: TIMED_PASSES.map(|pass| (pass, Duration::from_micros(200))),
@@ -857,6 +890,7 @@ mod tests {
             (10, 5, 15, 0, 50)
         );
         assert_eq!(reference.cpu_frame_microseconds.median, 100.0);
+        assert_eq!(reference.dynamic_tlas_cpu_microseconds.median, 40.0);
         assert_eq!(reference.gpu_frame_microseconds.median, 300.0);
         assert_eq!(reference.gpu_pass_microseconds.len(), TIMED_PASSES.len());
         assert!(

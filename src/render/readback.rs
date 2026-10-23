@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::time::Duration;
 
 use crate::render::culling_pass::FrameDraw;
+use crate::render::main_pass::LIT_PASS;
 use crate::render::{FRAMES_IN_FLIGHT, TIMED_PASSES};
 use crate::stats::{FrameRecorder, GpuFrameStats};
 
@@ -64,6 +65,10 @@ pub struct GpuStatsReadback {
     /// Set while the frames read back had lights their Froxel lists had no
     /// room for, which was warned about when it was set.
     warned_of_froxel_overflow: bool,
+    /// The last frame read back and the tick its lit pass ended at: the
+    /// next frame's build of the dynamic TLAS, which its rays read, waits
+    /// for it.
+    last_lit_pass_end: Option<(u64, u64)>,
 }
 
 struct Slot {
@@ -71,6 +76,10 @@ struct Slot {
     buffer: wgpu::Buffer,
     state: SlotState,
     map_result: Arc<AtomicU8>,
+    /// Whether its frame built the dynamic TLAS, the first of
+    /// `TIMED_PASSES`: in a frame that does not, the build reads as taking
+    /// no time.
+    dynamic_tlas_built: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -126,6 +135,7 @@ impl GpuStatsReadback {
                     ),
                     state: SlotState::Free,
                     map_result: Arc::new(AtomicU8::new(MAP_PENDING)),
+                    dynamic_tlas_built: false,
                 })
                 .collect(),
             frames_completed: Arc::new(AtomicU64::new(0)),
@@ -134,6 +144,7 @@ impl GpuStatsReadback {
             read_back: Vec::with_capacity(SLOT_COUNT as usize),
             warned_of_overflow: false,
             warned_of_froxel_overflow: false,
+            last_lit_pass_end: None,
         }
     }
 
@@ -166,10 +177,20 @@ impl GpuStatsReadback {
             return None;
         }
         self.slots[index].state = SlotState::Recorded { frame: self.frame };
+        self.slots[index].dynamic_tlas_built = false;
         Some(FrameTimestamps {
             query_set: &self.query_set,
             first_query: (index * QUERIES_PER_FRAME) as u32,
         })
+    }
+
+    /// Marks the frame `begin_frame` started as one that builds the dynamic
+    /// TLAS between the markers its timestamps bracket.
+    pub fn dynamic_tlas_built(&mut self) {
+        let slot = &mut self.slots[slot_index(self.frame)];
+        if matches!(slot.state, SlotState::Recorded { frame } if frame == self.frame) {
+            slot.dynamic_tlas_built = true;
+        }
     }
 
     /// Ends the frame `begin_frame` started: copies its draw's counts,
@@ -307,13 +328,34 @@ impl GpuStatsReadback {
                             let ticks = end.saturating_sub(begin) as f64;
                             Duration::from_nanos((ticks * self.nanoseconds_per_tick) as u64)
                         };
+                        let pass_time = |pass: usize| time(ticks[2 * pass], ticks[2 * pass + 1]);
+                        // The first timed pass, the dynamic TLAS's build, runs
+                        // in a submission of its own before the frame's. The
+                        // marker before it can run while the frame before
+                        // still traces rays against the TLAS, which the build
+                        // waits for, so it starts at the later of the two.
+                        let previous_lit_pass_end = self
+                            .last_lit_pass_end
+                            .filter(|&(previous, _)| previous + 1 == frame)
+                            .map_or(0, |(_, tick)| tick);
+                        let build = if slot.dynamic_tlas_built {
+                            time(ticks[0].max(previous_lit_pass_end), ticks[1])
+                        } else {
+                            Duration::ZERO
+                        };
+                        let lit_pass = pass_position(LIT_PASS);
+                        self.last_lit_pass_end = Some((frame, ticks[2 * lit_pass + 1]));
                         self.read_back.push(GpuFrameStats {
                             frame,
                             pass_times: std::array::from_fn(|pass| {
-                                let (begin, end) = (ticks[2 * pass], ticks[2 * pass + 1]);
-                                (TIMED_PASSES[pass], time(begin, end))
+                                let taken = if pass == 0 { build } else { pass_time(pass) };
+                                (TIMED_PASSES[pass], taken)
                             }),
-                            frame_time: time(ticks[0], ticks[QUERIES_PER_FRAME - 1]),
+                            // The build plus the span of the frame's passes, so
+                            // neither the wait between the two submissions nor
+                            // what the frame records before its first pass
+                            // counts.
+                            frame_time: build + time(ticks[2], ticks[QUERIES_PER_FRAME - 1]),
                             instances_drawn: draw.instances_drawn,
                             triangles_drawn: draw.triangles_drawn(),
                             instances_overflowed: draw.instances_overflowed,
@@ -352,12 +394,36 @@ impl<'a> FrameTimestamps<'a> {
         }
     }
 
-    fn first_query_of(self, pass: &str) -> u32 {
-        let Some(position) = TIMED_PASSES.iter().position(|&timed| timed == pass) else {
-            panic!("{pass} is not a timed pass");
-        };
-        self.first_query + 2 * position as u32
+    /// The timestamp writes that bracket `pass`, of `TIMED_PASSES`, with
+    /// two compute passes around it: the end of the first, the start of the
+    /// second.
+    pub fn bracket(self, pass: &str) -> [wgpu::ComputePassTimestampWrites<'a>; 2] {
+        let first = self.first_query_of(pass);
+        [
+            wgpu::ComputePassTimestampWrites {
+                query_set: self.query_set,
+                beginning_of_pass_write_index: None,
+                end_of_pass_write_index: Some(first),
+            },
+            wgpu::ComputePassTimestampWrites {
+                query_set: self.query_set,
+                beginning_of_pass_write_index: Some(first + 1),
+                end_of_pass_write_index: None,
+            },
+        ]
     }
+
+    fn first_query_of(self, pass: &str) -> u32 {
+        self.first_query + 2 * pass_position(pass) as u32
+    }
+}
+
+/// Where `pass` is in `TIMED_PASSES`.
+fn pass_position(pass: &str) -> usize {
+    let Some(position) = TIMED_PASSES.iter().position(|&timed| timed == pass) else {
+        panic!("{pass} is not a timed pass");
+    };
+    position
 }
 
 fn slot_index(frame: u64) -> usize {

@@ -6,41 +6,49 @@
   "height": 360,
   "measured_frames": 256,
   "cpu_frame_microseconds": {
-    "median": 402181.184,
-    "p95": 404989.331
+    "median": 225326.153,
+    "p95": 232538.533
+  },
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.20099999999999998,
+    "p95": 0.331
   },
   "gpu_frame_microseconds": {
-    "median": 402086.576,
-    "p95": 404875.37200000003
+    "median": 225267.176,
+    "p95": 232049.535
   },
   "gpu_pass_microseconds": {
     "culling_phase_one": {
-      "median": 544.151,
-      "p95": 618.771
+      "median": 508.51800000000003,
+      "p95": 587.5169999999999
     },
     "culling_phase_two": {
-      "median": 300.965,
-      "p95": 336.772
+      "median": 217.598,
+      "p95": 252.882
     },
     "depth_prepass": {
-      "median": 895.59,
-      "p95": 996.9499999999999
+      "median": 493.926,
+      "p95": 566.491
     },
     "depth_pyramid_pass": {
-      "median": 1682.155,
-      "p95": 2361.178
+      "median": 944.777,
+      "p95": 1394.901
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
     },
     "froxel_pass": {
-      "median": 229.311,
-      "p95": 331.16200000000003
+      "median": 196.737,
+      "p95": 303.698
     },
     "lit_pass": {
-      "median": 392447.665,
-      "p95": 395295.302
+      "median": 219274.508,
+      "p95": 225578.106
     },
     "tonemapping_pass": {
-      "median": 5129.182000000001,
-      "p95": 5626.5960000000005
+      "median": 3180.573,
+      "p95": 3684.2490000000003
     }
   },
   "draw_calls": 4,
@@ -48,7 +56,7 @@
   "triangles_drawn": 2,
   "instances_overflowed": 0,
   "uploaded_bytes": 240,
-  "gpu_memory_bytes": 326032128,
+  "gpu_memory_bytes": 326032244,
   "arena_bytes_in_use": 176,
   "heap_allocations": 279,
   "counter_frames": {
@@ -61,7 +69,7 @@
     "triangles_drawn": 2,
     "instances_overflowed": 0,
     "uploaded_bytes": 240,
-    "gpu_memory_bytes": 326032128,
+    "gpu_memory_bytes": 326032244,
     "arena_bytes_in_use": 176,
     "heap_allocations": 279
   }

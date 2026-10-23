@@ -6,41 +6,49 @@
   "height": 360,
   "measured_frames": 256,
   "cpu_frame_microseconds": {
-    "median": 207741.382,
-    "p95": 216304.66400000002
+    "median": 111917.284,
+    "p95": 117043.52399999999
+  },
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.19999999999999998,
+    "p95": 0.35
   },
   "gpu_frame_microseconds": {
-    "median": 207599.117,
-    "p95": 216118.012
+    "median": 111865.306,
+    "p95": 116896.14
   },
   "gpu_pass_microseconds": {
     "culling_phase_one": {
-      "median": 654.078,
-      "p95": 726.3019999999999
+      "median": 547.327,
+      "p95": 634.588
     },
     "culling_phase_two": {
-      "median": 311.614,
-      "p95": 351.649
+      "median": 220.063,
+      "p95": 258.847
     },
     "depth_prepass": {
-      "median": 2992.888,
-      "p95": 3179.279
+      "median": 1774.54,
+      "p95": 1917.5819999999999
     },
     "depth_pyramid_pass": {
-      "median": 1751.989,
-      "p95": 2178.381
+      "median": 951.775,
+      "p95": 1367.256
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
     },
     "froxel_pass": {
-      "median": 349.917,
-      "p95": 416.922
+      "median": 251.07900000000004,
+      "p95": 392.644
     },
     "lit_pass": {
-      "median": 195588.702,
-      "p95": 204180.391
+      "median": 104259.981,
+      "p95": 109128.706
     },
     "tonemapping_pass": {
-      "median": 5148.225,
-      "p95": 5364.812
+      "median": 3191.241,
+      "p95": 3424.4179999999997
     }
   },
   "draw_calls": 4,
@@ -48,7 +56,7 @@
   "triangles_drawn": 7774,
   "instances_overflowed": 0,
   "uploaded_bytes": 384,
-  "gpu_memory_bytes": 346153240,
+  "gpu_memory_bytes": 346153356,
   "arena_bytes_in_use": 258368,
   "heap_allocations": 279,
   "counter_frames": {
@@ -61,7 +69,7 @@
     "triangles_drawn": 7774,
     "instances_overflowed": 0,
     "uploaded_bytes": 384,
-    "gpu_memory_bytes": 346153240,
+    "gpu_memory_bytes": 346153356,
     "arena_bytes_in_use": 258368,
     "heap_allocations": 279
   }

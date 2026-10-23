@@ -7,8 +7,8 @@
 
 use crate::cooked::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use crate::render::bind_groups::{
-    BindGroupDefinition, DEPTH_PYRAMID_LEVEL, FRAME, FRAME_DRAW, FROXEL_LISTS, MATERIALS,
-    MESHLET_RECORDS, SCENE_GEOMETRY, TONEMAPPING_INPUT,
+    BindGroupDefinition, DEPTH_PYRAMID_LEVEL, DYNAMIC_TLAS_MARKERS, FRAME, FRAME_DRAW,
+    FROXEL_LISTS, MATERIALS, MESHLET_RECORDS, SCENE_GEOMETRY, TONEMAPPING_INPUT,
 };
 use crate::render::culling_pass::SCAN_BLOCK_SIZE;
 use crate::render::depth_pyramid_pass::DEPTH_PYRAMID_TILE_SIZE;
@@ -115,6 +115,14 @@ pub const TONEMAPPING: ShaderModule = ShaderModule {
     parts: &[HDR, GT7, DISPLAY, part!("tonemapping.wgsl")],
 };
 
+/// The dynamic TLAS's markers, which time its build.
+pub const DYNAMIC_TLAS_MARKER: ShaderModule = ShaderModule {
+    name: "dynamic_tlas_marker",
+    enables: &["wgpu_ray_query"],
+    bind_groups: &[&DYNAMIC_TLAS_MARKERS],
+    parts: &[part!("dynamic_tlas_marker.wgsl")],
+};
+
 /// The shared parts alone, which the oracle harness appends its kernel to.
 #[cfg(test)]
 pub const SHARED: ShaderModule = ShaderModule {
@@ -126,7 +134,15 @@ pub const SHARED: ShaderModule = ShaderModule {
 
 /// Every module, which `shader_tests` validates.
 #[cfg(test)]
-pub const MODULES: [ShaderModule; 6] = [SHARED, MAIN, CULLING, FROXEL, DEPTH_PYRAMID, TONEMAPPING];
+pub const MODULES: [ShaderModule; 7] = [
+    SHARED,
+    MAIN,
+    CULLING,
+    FROXEL,
+    DEPTH_PYRAMID,
+    TONEMAPPING,
+    DYNAMIC_TLAS_MARKER,
+];
 
 impl ShaderModule {
     /// The descriptor that compiles the module, labelled with its name.

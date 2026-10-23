@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use crate::assets::{ARENA_CAPACITY_BYTES, MaterialPool, MeshPool};
 use crate::gpu::GpuContext;
+use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
 use crate::render::culling_pass::{CullingPass, CullingPhase, DrawCapacity};
 use crate::render::depth_pyramid_pass::{DEPTH_PYRAMID_PASS, DepthPyramidPass};
@@ -18,8 +19,10 @@ use crate::render::{
 use crate::stats::{FrameRecorder, GpuFrameStats};
 
 /// The passes `render` records, in order, each timed from its start to its
-/// end.
-pub(crate) const TIMED_PASSES: [&str; 7] = [
+/// end, after the dynamic TLAS's build, timed from the end of the marker
+/// before it to the start of the marker after it in frames that build it.
+pub(crate) const TIMED_PASSES: [&str; 8] = [
+    DYNAMIC_TLAS_BUILD,
     CullingPhase::One.label(),
     FROXEL_PASS,
     DEPTH_PREPASS,
@@ -28,6 +31,11 @@ pub(crate) const TIMED_PASSES: [&str; 7] = [
     LIT_PASS,
     TONEMAPPING_PASS,
 ];
+
+/// The CPU stages of the dynamic TLAS's build: its recording and its
+/// submit, the CPU cost ADR 0020 caps.
+pub(crate) const DYNAMIC_TLAS_RECORDING: &str = "dynamic_tlas";
+pub(crate) const DYNAMIC_TLAS_SUBMIT: &str = "dynamic_tlas_submit";
 
 /// The Render switches a Renderer is created with and keeps. The defaults are
 /// what ships; capture and bench take others, for equivalence checks and
@@ -238,7 +246,7 @@ impl Renderer {
 
         let mesh_pool = MeshPool::new(&device, ARENA_CAPACITY_BYTES);
         let static_tlas = StaticTlas::new(&device, STATIC_TLAS_CAPACITY);
-        let dynamic_tlas = DynamicTlas::new(&device, context.backend());
+        let dynamic_tlas = DynamicTlas::new(&device, &queue, context.backend());
         let scene_geometry_bind_group = SCENE_GEOMETRY.bind_group(
             &device,
             &scene_geometry_bind_group_layout,
@@ -315,13 +323,13 @@ impl Renderer {
         self.aspect_ratio
     }
 
-    /// Records the static TLAS's rebuild, if `frame` changes it, the dynamic
-    /// TLAS's, and the copies of `frame`'s uniforms, the camera's with the
-    /// static TLAS's Anchor, the Instances it writes and its Instance slot
-    /// count, if it changed, into the frame's encoder, which `render`
-    /// submits; every upload is followed by a render. First it submits the
-    /// loads staged since the last frame, and, when they loaded Meshes, waits
-    /// for the GPU to build their BLASes and compacts them.
+    /// Records the static TLAS's rebuild, if `frame` changes it, and the
+    /// copies of `frame`'s uniforms, the camera's with the static TLAS's
+    /// Anchor, the Instances it writes and its Instance slot count, if it
+    /// changed, into the frame's encoder, which `render` submits; every
+    /// upload is followed by a render. First it submits the loads staged
+    /// since the last frame, and, when they loaded Meshes, waits for the GPU
+    /// to build their BLASes and compacts them.
     pub fn upload(&mut self, frame: &FrameData, recorder: &mut FrameRecorder) {
         let started = Instant::now();
         debug_assert!(
@@ -340,12 +348,10 @@ impl Renderer {
         // Shadow rays start in the static TLAS's frame, whose Anchor the
         // first Frame data's camera set, and the dynamic TLAS shares it.
         let tlas_anchor = self.static_tlas.anchor();
-        recorder.uploaded_bytes +=
-            self.dynamic_tlas
-                .update(frame, &self.mesh_pool, tlas_anchor, &mut encoder);
         let camera = CameraUniform {
             tlas_anchor,
-            dynamic_tlas_entries: self.dynamic_tlas.entries(),
+            // Prepare lists no more than the dynamic TLAS holds.
+            dynamic_tlas_entries: frame.moving_instances.len() as u32,
             ..frame.camera
         };
         let instance_size = std::mem::size_of::<InstanceData>() as wgpu::BufferAddress;
@@ -393,8 +399,10 @@ impl Renderer {
 
     /// Draws `frame`, uploaded by `upload`, into `target`, a view in the
     /// format and size this Renderer renders to, timing its passes for
-    /// `gpu_frame_stats`, which reads them back a few frames later. Returns
-    /// the frame's submission.
+    /// `gpu_frame_stats`, which reads them back a few frames later, and
+    /// submits it after the dynamic TLAS's build, if it has one, which it
+    /// records into a command buffer of its own. Returns the frame's
+    /// submission.
     pub fn render(
         &mut self,
         frame: &FrameData,
@@ -409,6 +417,21 @@ impl Renderer {
         self.material_pool.refresh_bind_group(&self.device);
 
         let timestamps = self.gpu_stats.begin_frame(&mut encoder, recorder);
+        // The dynamic TLAS's build, its recording timed apart from the
+        // frame's: `encode` resumes after it.
+        let encoding = started.elapsed();
+        let started = Instant::now();
+        let bracket = timestamps.map(|timestamps| timestamps.bracket(DYNAMIC_TLAS_BUILD));
+        let tlas_anchor = self.static_tlas.anchor();
+        let dynamic_tlas_commands = self
+            .dynamic_tlas
+            .record(&self.device, frame, &self.mesh_pool, tlas_anchor, bracket)
+            .map(|(commands, uploaded_bytes)| {
+                recorder.uploaded_bytes += uploaded_bytes;
+                commands
+            });
+        recorder.stage(DYNAMIC_TLAS_RECORDING, started);
+        let started = Instant::now() - encoding;
         let culling_bind_groups = [
             (&FRAME, &self.frame_bind_group),
             (&SCENE_GEOMETRY, &self.scene_geometry_bind_group),
@@ -468,6 +491,9 @@ impl Renderer {
         // two's into depth, then both phases', each with one indirect call;
         // the tonemapping pass draws one triangle.
         recorder.draw_calls += 4;
+        if dynamic_tlas_commands.is_some() {
+            self.gpu_stats.dynamic_tlas_built();
+        }
         self.gpu_stats.end_frame(
             &mut encoder,
             self.culling_pass.frame_draw(),
@@ -477,6 +503,14 @@ impl Renderer {
         let command_buffer = encoder.finish();
         recorder.stage("encode", started);
 
+        // Its own submit, timed on its own: the dynamic build's CPU cost is
+        // its recording and its submit (ADR 0020).
+        let started = Instant::now();
+        if let Some(commands) = dynamic_tlas_commands {
+            self.queue.submit(std::iter::once(commands));
+        }
+        recorder.stage(DYNAMIC_TLAS_SUBMIT, started);
+
         let started = Instant::now();
         // submit will accept anything that implements IntoIter
         let submission = self.queue.submit(std::iter::once(command_buffer));
@@ -484,7 +518,7 @@ impl Renderer {
         submission
     }
 
-    /// The GPU stats of earlier frames that the last `render` or
+    /// The GPU stats of earlier frames that the last `upload` or
     /// `flush_gpu_frame_stats` read back, by frame number, counted from 0.
     pub fn gpu_frame_stats(&self) -> &[GpuFrameStats] {
         self.gpu_stats.read_back()
@@ -527,6 +561,7 @@ impl Renderer {
             + self.culling_pass.gpu_memory_bytes()
             + self.mesh_pool.gpu_memory_bytes()
             + self.estimated_acceleration_structure_bytes()
+            + self.dynamic_tlas.gpu_memory_bytes()
             + self
                 .material_pool
                 .gpu_memory_bytes(self.transient_saves_memory)

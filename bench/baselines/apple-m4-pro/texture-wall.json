@@ -6,41 +6,49 @@
   "height": 1440,
   "measured_frames": 1800,
   "cpu_frame_microseconds": {
-    "median": 2078.417,
-    "p95": 2408.625
+    "median": 2273.958,
+    "p95": 2739.9579999999996
+  },
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.041999999999999996,
+    "p95": 0.20800000000000002
   },
   "gpu_frame_microseconds": {
-    "median": 14685.667,
-    "p95": 15694.166
+    "median": 15408.082999999999,
+    "p95": 16840.167
   },
   "gpu_pass_microseconds": {
     "culling_phase_one": {
-      "median": 69.375,
-      "p95": 70.875
+      "median": 69.916,
+      "p95": 71.45899999999999
     },
     "culling_phase_two": {
-      "median": 60.042,
-      "p95": 62.167
+      "median": 59.708,
+      "p95": 60.708999999999996
     },
     "depth_prepass": {
-      "median": 410.084,
-      "p95": 410.875
+      "median": 410.334,
+      "p95": 411.209
     },
     "depth_pyramid_pass": {
-      "median": 789.5419999999999,
-      "p95": 791.791
+      "median": 789.042,
+      "p95": 790.041
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
     },
     "froxel_pass": {
-      "median": 26.125,
-      "p95": 28.125
+      "median": 26.083000000000002,
+      "p95": 27.958
     },
     "lit_pass": {
-      "median": 5242.25,
-      "p95": 5260.7080000000005
+      "median": 5256.542,
+      "p95": 5525.875
     },
     "tonemapping_pass": {
-      "median": 6676.2080000000005,
-      "p95": 6697.4169999999995
+      "median": 6683.4169999999995,
+      "p95": 6912.708
     }
   },
   "draw_calls": 4,
@@ -48,7 +56,7 @@
   "triangles_drawn": 200,
   "instances_overflowed": 0,
   "uploaded_bytes": 192,
-  "gpu_memory_bytes": 419675587,
+  "gpu_memory_bytes": 419675703,
   "arena_bytes_in_use": 176,
   "heap_allocations": 285,
   "counter_frames": {
@@ -61,7 +69,7 @@
     "triangles_drawn": 200,
     "instances_overflowed": 0,
     "uploaded_bytes": 192,
-    "gpu_memory_bytes": 419675587,
+    "gpu_memory_bytes": 419675703,
     "arena_bytes_in_use": 176,
     "heap_allocations": 285
   }
