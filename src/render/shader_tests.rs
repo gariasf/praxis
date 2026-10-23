@@ -13,6 +13,7 @@ use crate::assets::material::MaterialData;
 use crate::assets::{MeshData, MeshletData};
 use crate::cooked::CookedVertex;
 use crate::gpu::{floor_downlevel_flags, floor_features, floor_limits};
+use crate::render::bend_pass::BendData;
 use crate::render::bind_groups::{
     BindGroupDefinition, Binding, Writer, read_only_storage, uniform,
 };
@@ -268,6 +269,13 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
             position,
             uv,
             qtangent
+        }),
+        twin!(BendData {
+            rest_first_vertex,
+            first_vertex,
+            vertex_count,
+            azimuth,
+            curvature,
         }),
     ];
     let problems = layout_problems(&modules, &twins);

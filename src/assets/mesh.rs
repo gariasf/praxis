@@ -4,6 +4,9 @@ pub struct Mesh {
     /// Whether a Primitive names no Material, so that only a Renderable with
     /// a Material Handle draws it.
     pub needs_material_handle: bool,
+    /// Its range of the vertex Arena, which a bend writes (#208).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub vertices: std::ops::Range<u32>,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]

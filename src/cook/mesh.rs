@@ -9,7 +9,8 @@ use sha2::{Digest, Sha256};
 
 use crate::cooked::{
     AssetId, AssetKind, AssetSource, CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex,
-    MESH_FORMAT_VERSION, MESH_MAGIC, MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES, hex,
+    MESH_FORMAT_VERSION, MESH_MAGIC, MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES,
+    QTANGENT_SMALLEST_W, hex,
 };
 use crate::scenes::Geometry;
 
@@ -278,10 +279,6 @@ fn corner_tangents(
     geometry.tangents
 }
 
-/// The smallest QTangent w, one Snorm16 step, so the w that carries the
-/// bitangent sign never rounds to zero.
-const SMALLEST_W: f32 = 1.0 / i16::MAX as f32;
-
 /// The QTangent of a glTF normal and tangent (`xyz`, `w` the bitangent
 /// sign): the rotation whose columns are the tangent made perpendicular to
 /// the normal, the bitangent cross(normal, tangent) and the normal, with
@@ -299,9 +296,10 @@ pub(crate) fn qtangent(normal: [f32; 3], tangent: [f32; 4]) -> [i16; 4] {
     if rotation.w < 0.0 {
         rotation = -rotation;
     }
-    if rotation.w < SMALLEST_W {
-        let axis = rotation.xyz().normalize() * (1.0 - SMALLEST_W * SMALLEST_W).sqrt();
-        rotation = Quat::from_xyzw(axis.x, axis.y, axis.z, SMALLEST_W);
+    if rotation.w < QTANGENT_SMALLEST_W {
+        let axis =
+            rotation.xyz().normalize() * (1.0 - QTANGENT_SMALLEST_W * QTANGENT_SMALLEST_W).sqrt();
+        rotation = Quat::from_xyzw(axis.x, axis.y, axis.z, QTANGENT_SMALLEST_W);
     }
     if bitangent_sign < 0.0 {
         rotation = -rotation;

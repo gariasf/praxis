@@ -93,7 +93,7 @@ An Instance whose entity the fixed schedule moves, so the entity carries its pre
 _Avoid_: Dynamic Instance, movable
 
 **Frame data**:
-The per-frame collection of changed Instances, lights and camera that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.
+The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.
 _Avoid_: Scene data, render state
 
 **Froxel**:

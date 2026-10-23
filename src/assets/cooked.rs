@@ -38,6 +38,9 @@ pub(crate) const MESHLET_MAX_VERTICES: usize = 64;
 /// `MESHLET_MAX_VERTICES` vertices has (2V − 4), so that on manifold
 /// geometry the vertex limit binds first.
 pub(crate) const MESHLET_MAX_TRIANGLES: usize = 124;
+/// The smallest QTangent w, one Snorm16 step, so the w that carries the
+/// bitangent sign never rounds to zero.
+pub(crate) const QTANGENT_SMALLEST_W: f32 = 1.0 / i16::MAX as f32;
 
 /// What an Asset is. Its number, and a Texture's Channel, are part of every
 /// Asset ID: never renumber.

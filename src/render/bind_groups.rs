@@ -151,6 +151,21 @@ pub const DYNAMIC_TLAS_MARKERS: BindGroupDefinition = BindGroupDefinition {
     ],
 };
 
+/// Group 3 of the bend pass: the frame's bends, which the CPU writes, and
+/// the vertex Arena, which the CPU writes as Meshes load and the pass writes
+/// each bent Mesh's range of, from its rest Mesh's (#208).
+pub const BENDS: BindGroupDefinition = BindGroupDefinition {
+    index: 3,
+    label: "Bends Bind Group",
+    bindings: &[
+        read_only_storage("bends", "array<BendData>", wgpu::ShaderStages::COMPUTE),
+        Binding {
+            writer: Writer::Cpu,
+            ..storage("vertices", "array<CookedVertex>")
+        },
+    ],
+};
+
 /// Group 3 of the main pass: the Meshlet records of the frame's draw, which
 /// the culling pass writes.
 pub const MESHLET_RECORDS: BindGroupDefinition = BindGroupDefinition {
