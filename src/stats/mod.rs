@@ -65,7 +65,8 @@ pub struct GpuFrameStats {
     pub frame: u64,
     /// GPU time of each pass, between timestamps at its start and its end,
     /// in the order the passes ran, after the dynamic TLAS's build, between
-    /// the markers around it: no time in a frame that does not build it.
+    /// the markers around it: no time in a frame that does not build it, as
+    /// for the bend pass in a frame that bends nothing.
     pub pass_times: [(&'static str, Duration); TIMED_PASSES.len()],
     /// The dynamic TLAS's build, plus the span from the start of the first
     /// pass to the end of the last.

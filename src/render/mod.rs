@@ -1,4 +1,5 @@
 pub mod acceleration_structures;
+pub mod bend_pass;
 pub mod bind_groups;
 pub mod culling_pass;
 pub mod depth_pyramid_pass;

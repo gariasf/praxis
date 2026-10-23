@@ -5,9 +5,10 @@
 //! `render::bind_groups`). A function under an oracle lives in a shared
 //! part, which the oracle harness assembles with its kernel alone.
 
-use crate::cooked::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
+use crate::cooked::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES, QTANGENT_SMALLEST_W};
+use crate::render::bend_pass::BEND_WORKGROUP_SIZE;
 use crate::render::bind_groups::{
-    BindGroupDefinition, DEPTH_PYRAMID_LEVEL, DYNAMIC_TLAS_MARKERS, FRAME, FRAME_DRAW,
+    BENDS, BindGroupDefinition, DEPTH_PYRAMID_LEVEL, DYNAMIC_TLAS_MARKERS, FRAME, FRAME_DRAW,
     FROXEL_LISTS, MATERIALS, MESHLET_RECORDS, SCENE_GEOMETRY, TONEMAPPING_INPUT,
 };
 use crate::render::culling_pass::SCAN_BLOCK_SIZE;
@@ -123,6 +124,14 @@ pub const DYNAMIC_TLAS_MARKER: ShaderModule = ShaderModule {
     parts: &[part!("dynamic_tlas_marker.wgsl")],
 };
 
+/// The bend pass.
+pub const BEND: ShaderModule = ShaderModule {
+    name: "bend",
+    enables: &[],
+    bind_groups: &[&BENDS],
+    parts: &[COMMON, part!("bend.wgsl")],
+};
+
 /// The shared parts alone, which the oracle harness appends its kernel to.
 #[cfg(test)]
 pub const SHARED: ShaderModule = ShaderModule {
@@ -134,7 +143,7 @@ pub const SHARED: ShaderModule = ShaderModule {
 
 /// Every module, which `shader_tests` validates.
 #[cfg(test)]
-pub const MODULES: [ShaderModule; 7] = [
+pub const MODULES: [ShaderModule; 8] = [
     SHARED,
     MAIN,
     CULLING,
@@ -142,6 +151,7 @@ pub const MODULES: [ShaderModule; 7] = [
     DEPTH_PYRAMID,
     TONEMAPPING,
     DYNAMIC_TLAS_MARKER,
+    BEND,
 ];
 
 impl ShaderModule {
@@ -203,7 +213,9 @@ impl ShaderModule {
              const FROXEL_SLICES: u32 = {FROXEL_SLICES}u;\n\
              const FIRST_FROXEL_SLICE_DEPTH: f32 = {FIRST_FROXEL_SLICE_DEPTH:?};\n\
              const FROXEL_SLICES_PER_OCTAVE: f32 = {FROXEL_SLICES_PER_OCTAVE:?};\n\
-             const FROXEL_LIGHT_CAPACITY: u32 = {FROXEL_LIGHT_CAPACITY}u;\n",
+             const FROXEL_LIGHT_CAPACITY: u32 = {FROXEL_LIGHT_CAPACITY}u;\n\
+             const BEND_WORKGROUP_SIZE: u32 = {BEND_WORKGROUP_SIZE}u;\n\
+             const QTANGENT_SMALLEST_W: f32 = {QTANGENT_SMALLEST_W:?};\n",
             ANCHOR_CELL_SIZE as f32,
             MESHLET_MAX_VERTICES.ilog2(),
             LUMINANCE_COEFFICIENTS[0],

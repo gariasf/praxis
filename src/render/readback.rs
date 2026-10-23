@@ -12,6 +12,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::time::Duration;
 
+use crate::render::bend_pass::BEND_PASS;
 use crate::render::culling_pass::FrameDraw;
 use crate::render::main_pass::LIT_PASS;
 use crate::render::{FRAMES_IN_FLIGHT, TIMED_PASSES};
@@ -80,6 +81,10 @@ struct Slot {
     /// `TIMED_PASSES`: in a frame that does not, the build reads as taking
     /// no time.
     dynamic_tlas_built: bool,
+    /// Whether its frame bent Meshes in the bend pass: in a frame that does
+    /// not, the pass reads as taking no time, and the frame's passes start
+    /// at the next one.
+    bent: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -136,6 +141,7 @@ impl GpuStatsReadback {
                     state: SlotState::Free,
                     map_result: Arc::new(AtomicU8::new(MAP_PENDING)),
                     dynamic_tlas_built: false,
+                    bent: false,
                 })
                 .collect(),
             frames_completed: Arc::new(AtomicU64::new(0)),
@@ -178,6 +184,7 @@ impl GpuStatsReadback {
         }
         self.slots[index].state = SlotState::Recorded { frame: self.frame };
         self.slots[index].dynamic_tlas_built = false;
+        self.slots[index].bent = false;
         Some(FrameTimestamps {
             query_set: &self.query_set,
             first_query: (index * QUERIES_PER_FRAME) as u32,
@@ -190,6 +197,15 @@ impl GpuStatsReadback {
         let slot = &mut self.slots[slot_index(self.frame)];
         if matches!(slot.state, SlotState::Recorded { frame } if frame == self.frame) {
             slot.dynamic_tlas_built = true;
+        }
+    }
+
+    /// Marks the frame `begin_frame` started as one that bends Meshes in the
+    /// bend pass, which its timestamps time.
+    pub fn bent(&mut self) {
+        let slot = &mut self.slots[slot_index(self.frame)];
+        if matches!(slot.state, SlotState::Recorded { frame } if frame == self.frame) {
+            slot.bent = true;
         }
     }
 
@@ -345,17 +361,26 @@ impl GpuStatsReadback {
                         };
                         let lit_pass = pass_position(LIT_PASS);
                         self.last_lit_pass_end = Some((frame, ticks[2 * lit_pass + 1]));
+                        // A frame that bends nothing records no bend pass,
+                        // whose timestamps are then an earlier frame's.
+                        let (bend_pass, bent) = (pass_position(BEND_PASS), slot.bent);
+                        let first_pass = if bent { bend_pass } else { bend_pass + 1 };
                         self.read_back.push(GpuFrameStats {
                             frame,
                             pass_times: std::array::from_fn(|pass| {
-                                let taken = if pass == 0 { build } else { pass_time(pass) };
+                                let taken = match pass {
+                                    0 => build,
+                                    _ if pass == bend_pass && !bent => Duration::ZERO,
+                                    _ => pass_time(pass),
+                                };
                                 (TIMED_PASSES[pass], taken)
                             }),
                             // The build plus the span of the frame's passes, so
                             // neither the wait between the two submissions nor
                             // what the frame records before its first pass
                             // counts.
-                            frame_time: build + time(ticks[2], ticks[QUERIES_PER_FRAME - 1]),
+                            frame_time: build
+                                + time(ticks[2 * first_pass], ticks[QUERIES_PER_FRAME - 1]),
                             instances_drawn: draw.instances_drawn,
                             triangles_drawn: draw.triangles_drawn(),
                             instances_overflowed: draw.instances_overflowed,

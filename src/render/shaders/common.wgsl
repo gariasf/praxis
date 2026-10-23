@@ -194,13 +194,15 @@ struct Vertex {
     tangent_frame: TangentFrame,
 }
 
-// `vertex` decoded, its QTangent unpacked from Snorm16 (each component over
-// 32,767, clamped at −1).
+// `vertex`'s QTangent, unpacked from Snorm16: each component over 32,767,
+// clamped at −1.
+fn unpack_qtangent(vertex: CookedVertex) -> vec4<f32> {
+    return vec4<f32>(unpack2x16snorm(vertex.qtangent[0]), unpack2x16snorm(vertex.qtangent[1]));
+}
+
+// `vertex` decoded.
 fn decode_vertex(vertex: CookedVertex) -> Vertex {
-    let qtangent = vec4<f32>(
-        unpack2x16snorm(vertex.qtangent[0]),
-        unpack2x16snorm(vertex.qtangent[1])
-    );
+    let qtangent = unpack_qtangent(vertex);
     return Vertex(
         vec3<f32>(vertex.position[0], vertex.position[1], vertex.position[2]),
         vec2<f32>(vertex.uv[0], vertex.uv[1]),

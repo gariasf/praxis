@@ -6,6 +6,7 @@ use crate::assets::MeshPool;
 use crate::camera::{Camera, projection_matrix};
 use crate::components::{DirectionalLight, MaterialRef, MeshRef, PointLight};
 use crate::environment::Environment;
+use crate::render::bend_pass::BendData;
 use crate::render::instance::{anchor_and_offset, padded_columns};
 use crate::render::{
     CameraUniform, DYNAMIC_TLAS_CAPACITY, INSTANCE_CAPACITY, InstanceData, LIGHT_CAPACITY,
@@ -38,6 +39,9 @@ pub struct FrameData {
     /// `DYNAMIC_TLAS_CAPACITY`, those in the lowest slots, in no order. Each
     /// is written every frame, so each is among `instances`.
     pub moving_instances: Vec<MovingInstance>,
+    /// The Meshes the GPU bends this frame, at most `BEND_CAPACITY`, in the
+    /// order of their ranges of the vertex Arena.
+    pub bends: Vec<BendData>,
 }
 
 const _: () = {

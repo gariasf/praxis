@@ -6,49 +6,53 @@
   "height": 1440,
   "measured_frames": 1800,
   "cpu_frame_microseconds": {
-    "median": 457.875,
-    "p95": 1266.541
+    "median": 256.667,
+    "p95": 428.834
   },
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.08299999999999999,
-    "p95": 0.33199999999999996
+    "median": 0.041999999999999996,
+    "p95": 0.16699999999999998
   },
   "gpu_frame_microseconds": {
-    "median": 12053.084,
-    "p95": 13182.666
+    "median": 12003.375,
+    "p95": 12033.125
   },
   "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
     "culling_phase_one": {
-      "median": 36.625,
-      "p95": 40.875
+      "median": 36.958,
+      "p95": 38.292
     },
     "culling_phase_two": {
-      "median": 17.291999999999998,
-      "p95": 18.125
+      "median": 17.167,
+      "p95": 17.875
     },
     "depth_prepass": {
-      "median": 125.49999999999999,
-      "p95": 140.416
+      "median": 118.625,
+      "p95": 126.291
     },
     "depth_pyramid_pass": {
-      "median": 272.625,
-      "p95": 281.583
+      "median": 269.95799999999997,
+      "p95": 273.833
     },
     "dynamic_tlas_build": {
       "median": 0.0,
       "p95": 0.0
     },
     "froxel_pass": {
-      "median": 5.625,
-      "p95": 6.1659999999999995
+      "median": 5.958,
+      "p95": 6.625
     },
     "lit_pass": {
-      "median": 11264.542000000001,
-      "p95": 12293.875
+      "median": 11226.875,
+      "p95": 11252.208
     },
     "tonemapping_pass": {
-      "median": 11569.582999999999,
-      "p95": 12647.0
+      "median": 11532.041,
+      "p95": 11557.875
     }
   },
   "draw_calls": 4,
@@ -56,7 +60,7 @@
   "triangles_drawn": 2210,
   "instances_overflowed": 0,
   "uploaded_bytes": 240,
-  "gpu_memory_bytes": 419248551,
+  "gpu_memory_bytes": 419330583,
   "arena_bytes_in_use": 76856,
   "heap_allocations": 279,
   "counter_frames": {
@@ -69,7 +73,7 @@
     "triangles_drawn": 2210,
     "instances_overflowed": 0,
     "uploaded_bytes": 240,
-    "gpu_memory_bytes": 419248551,
+    "gpu_memory_bytes": 419330583,
     "arena_bytes_in_use": 76856,
     "heap_allocations": 279
   }

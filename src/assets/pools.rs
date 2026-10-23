@@ -267,6 +267,7 @@ impl MeshPool {
 
         self.meshes.push(Mesh {
             needs_material_handle: materials.contains(&None),
+            vertices: vertices.offset..vertices.offset + mesh.vertices.len() as u32,
         });
         Some(handle)
     }

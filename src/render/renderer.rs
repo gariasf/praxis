@@ -3,6 +3,7 @@ use std::time::Instant;
 use crate::assets::{ARENA_CAPACITY_BYTES, MaterialPool, MeshPool};
 use crate::gpu::GpuContext;
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
+use crate::render::bend_pass::{BEND_PASS, BendPass};
 use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
 use crate::render::culling_pass::{CullingPass, CullingPhase, DrawCapacity};
 use crate::render::depth_pyramid_pass::{DEPTH_PYRAMID_PASS, DepthPyramidPass};
@@ -21,8 +22,10 @@ use crate::stats::{FrameRecorder, GpuFrameStats};
 /// The passes `render` records, in order, each timed from its start to its
 /// end, after the dynamic TLAS's build, timed from the end of the marker
 /// before it to the start of the marker after it in frames that build it.
-pub(crate) const TIMED_PASSES: [&str; 8] = [
+/// The bend pass runs in frames that bend Meshes.
+pub(crate) const TIMED_PASSES: [&str; 9] = [
     DYNAMIC_TLAS_BUILD,
+    BEND_PASS,
     CullingPhase::One.label(),
     FROXEL_PASS,
     DEPTH_PREPASS,
@@ -85,6 +88,7 @@ pub struct Renderer {
     pub(crate) queue: wgpu::Queue,
     aspect_ratio: f32,
     render_targets: RenderTargets,
+    bend_pass: BendPass,
     froxel_pass: FroxelPass,
     culling_pass: CullingPass,
     main_pass: MainPass,
@@ -230,6 +234,8 @@ impl Renderer {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let mesh_pool = MeshPool::new(&device, ARENA_CAPACITY_BYTES);
+        let bend_pass = BendPass::new(&device, mesh_pool.vertex_arena());
         // The most a frame uploads: every buffer `upload` writes, in full.
         let frame_staging = FrameStaging::new(
             [
@@ -238,13 +244,13 @@ impl Renderer {
                 &light_buffer,
                 &instance_buffer,
                 culling_pass.instance_slot_count(),
+                bend_pass.bends(),
             ]
             .iter()
             .map(|buffer| buffer.size())
             .sum(),
         );
 
-        let mesh_pool = MeshPool::new(&device, ARENA_CAPACITY_BYTES);
         let static_tlas = StaticTlas::new(&device, STATIC_TLAS_CAPACITY);
         let dynamic_tlas = DynamicTlas::new(&device, &queue, context.backend());
         let scene_geometry_bind_group = SCENE_GEOMETRY.bind_group(
@@ -281,6 +287,7 @@ impl Renderer {
             queue,
             aspect_ratio: width as f32 / height as f32,
             render_targets,
+            bend_pass,
             froxel_pass,
             culling_pass,
             main_pass,
@@ -325,8 +332,8 @@ impl Renderer {
 
     /// Records the static TLAS's rebuild, if `frame` changes it, and the
     /// copies of `frame`'s uniforms, the camera's with the static TLAS's
-    /// Anchor, the Instances it writes and its Instance slot count, if it
-    /// changed, into the frame's encoder, which `render` submits; every
+    /// Anchor, the Instances it writes, its bends and its Instance slot
+    /// count, if it changed, into the frame's encoder, which `render` submits; every
     /// upload is followed by a render. First it submits the loads staged
     /// since the last frame, and, when they loaded Meshes, waits for the GPU
     /// to build their BLASes and to compact them.
@@ -369,6 +376,13 @@ impl Renderer {
             });
         let light_upload = (!frame.lights.is_empty())
             .then(|| (&self.light_buffer, 0, bytemuck::cast_slice(&frame.lights)));
+        let bend_upload = (!frame.bends.is_empty()).then(|| {
+            (
+                self.bend_pass.bends(),
+                0,
+                bytemuck::cast_slice(&frame.bends),
+            )
+        });
         let uploads = [
             (&self.camera_buffer, 0, bytemuck::bytes_of(&camera)),
             (
@@ -379,6 +393,7 @@ impl Renderer {
         ]
         .into_iter()
         .chain(light_upload)
+        .chain(bend_upload)
         .chain(instance_uploads)
         .chain(slot_count_upload);
         let uploaded_bytes = self
@@ -432,6 +447,11 @@ impl Renderer {
             });
         recorder.stage(DYNAMIC_TLAS_RECORDING, started);
         let started = Instant::now() - encoding;
+        // Bent Meshes take their shapes before any pass reads their vertices.
+        let bend_timestamps = timestamps.map(|timestamps| timestamps.compute_pass(BEND_PASS));
+        let bent = self
+            .bend_pass
+            .record(&mut encoder, &frame.bends, bend_timestamps);
         let culling_bind_groups = [
             (&FRAME, &self.frame_bind_group),
             (&SCENE_GEOMETRY, &self.scene_geometry_bind_group),
@@ -493,6 +513,9 @@ impl Renderer {
         recorder.draw_calls += 4;
         if dynamic_tlas_commands.is_some() {
             self.gpu_stats.dynamic_tlas_built();
+        }
+        if bent {
+            self.gpu_stats.bent();
         }
         self.gpu_stats.end_frame(
             &mut encoder,
@@ -557,6 +580,7 @@ impl Renderer {
             + self
                 .render_targets
                 .gpu_memory_bytes(self.transient_saves_memory)
+            + self.bend_pass.gpu_memory_bytes()
             + self.froxel_pass.gpu_memory_bytes()
             + self.culling_pass.gpu_memory_bytes()
             + self.mesh_pool.gpu_memory_bytes()
@@ -588,7 +612,7 @@ fn create_frame_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::io::Write;
 
     use bevy_ecs::prelude::*;
@@ -1727,7 +1751,7 @@ mod tests {
 
     /// A headless context, or `None` after saying so on a machine without a
     /// GPU adapter, where these tests skip.
-    fn gpu_context() -> Option<GpuContext> {
+    pub(crate) fn gpu_context() -> Option<GpuContext> {
         match pollster::block_on(GpuContext::headless()) {
             Ok(context) => Some(context),
             Err(error) if error.is::<wgpu::RequestAdapterError>() => {
@@ -1882,12 +1906,13 @@ mod tests {
                 moving: false,
             }],
             moving_instances: Vec::new(),
+            bends: Vec::new(),
         }
     }
 
     /// Uploads and renders `frame` into a new `width` × `height` target, and
     /// reads it back, with what the frame recorded and its GPU stats.
-    fn render_frame(
+    pub(crate) fn render_frame(
         context: &GpuContext,
         renderer: &mut Renderer,
         frame: &FrameData,
