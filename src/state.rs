@@ -238,7 +238,7 @@ impl State {
         submission
     }
 
-    /// The GPU stats of earlier frames that the last `render` or
+    /// The GPU stats of earlier frames that the last `update` or
     /// `flush_gpu_frame_stats` read back, by frame number, counted from 0.
     pub fn gpu_frame_stats(&self) -> &[GpuFrameStats] {
         self.renderer.gpu_frame_stats()

@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::time::Duration;
 
 use crate::render::culling_pass::FrameDraw;
+use crate::render::main_pass::LIT_PASS;
 use crate::render::{FRAMES_IN_FLIGHT, TIMED_PASSES};
 use crate::stats::{FrameRecorder, GpuFrameStats};
 
@@ -64,6 +65,10 @@ pub struct GpuStatsReadback {
     /// Set while the frames read back had lights their Froxel lists had no
     /// room for, which was warned about when it was set.
     warned_of_froxel_overflow: bool,
+    /// The last frame read back and the tick its lit pass ended at: the
+    /// next frame's build of the dynamic TLAS, which its rays read, waits
+    /// for it.
+    last_lit_pass_end: Option<(u64, u64)>,
 }
 
 struct Slot {
@@ -71,12 +76,11 @@ struct Slot {
     buffer: wgpu::Buffer,
     state: SlotState,
     map_result: Arc<AtomicU8>,
-    /// A bit per timed pass its frame did not run, by its place in
-    /// `TIMED_PASSES`: each reads as taking no time.
-    untimed: u32,
+    /// Whether its frame built the dynamic TLAS, the first of
+    /// `TIMED_PASSES`: in a frame that does not, the build reads as taking
+    /// no time.
+    dynamic_tlas_built: bool,
 }
-
-const _: () = assert!(TIMED_PASSES.len() <= u32::BITS as usize);
 
 #[derive(Clone, Copy)]
 enum SlotState {
@@ -131,7 +135,7 @@ impl GpuStatsReadback {
                     ),
                     state: SlotState::Free,
                     map_result: Arc::new(AtomicU8::new(MAP_PENDING)),
-                    untimed: 0,
+                    dynamic_tlas_built: false,
                 })
                 .collect(),
             frames_completed: Arc::new(AtomicU64::new(0)),
@@ -140,6 +144,7 @@ impl GpuStatsReadback {
             read_back: Vec::with_capacity(SLOT_COUNT as usize),
             warned_of_overflow: false,
             warned_of_froxel_overflow: false,
+            last_lit_pass_end: None,
         }
     }
 
@@ -172,7 +177,7 @@ impl GpuStatsReadback {
             return None;
         }
         self.slots[index].state = SlotState::Recorded { frame: self.frame };
-        self.slots[index].untimed = 0;
+        self.slots[index].dynamic_tlas_built = false;
         self.frame_timestamps()
     }
 
@@ -187,12 +192,12 @@ impl GpuStatsReadback {
             })
     }
 
-    /// Marks `pass`, of `TIMED_PASSES`, as one the frame `begin_frame`
-    /// started does not run, so it reads as taking no time.
-    pub fn pass_untimed(&mut self, pass: &str) {
+    /// Marks the frame `begin_frame` started as one that builds the dynamic
+    /// TLAS between the markers its timestamps bracket.
+    pub fn dynamic_tlas_built(&mut self) {
         let slot = &mut self.slots[slot_index(self.frame)];
         if matches!(slot.state, SlotState::Recorded { frame } if frame == self.frame) {
-            slot.untimed |= 1 << pass_position(pass);
+            slot.dynamic_tlas_built = true;
         }
     }
 
@@ -331,23 +336,34 @@ impl GpuStatsReadback {
                             let ticks = end.saturating_sub(begin) as f64;
                             Duration::from_nanos((ticks * self.nanoseconds_per_tick) as u64)
                         };
-                        let untimed = slot.untimed;
-                        let timed = |pass: usize| untimed & (1 << pass) == 0;
-                        let first_timed = (0..TIMED_PASSES.len()).find(|&pass| timed(pass));
+                        let pass_time = |pass: usize| time(ticks[2 * pass], ticks[2 * pass + 1]);
+                        // The first timed pass, the dynamic TLAS's build, runs
+                        // in a submission of its own before the frame's. The
+                        // marker before it can run while the frame before
+                        // still traces rays against the TLAS, which the build
+                        // waits for, so it starts at the later of the two.
+                        let previous_lit_pass_end = self
+                            .last_lit_pass_end
+                            .filter(|&(previous, _)| previous + 1 == frame)
+                            .map_or(0, |(_, tick)| tick);
+                        let build = if slot.dynamic_tlas_built {
+                            time(ticks[0].max(previous_lit_pass_end), ticks[1])
+                        } else {
+                            Duration::ZERO
+                        };
+                        let lit_pass = pass_position(LIT_PASS);
+                        self.last_lit_pass_end = Some((frame, ticks[2 * lit_pass + 1]));
                         self.read_back.push(GpuFrameStats {
                             frame,
                             pass_times: std::array::from_fn(|pass| {
-                                let (begin, end) = (ticks[2 * pass], ticks[2 * pass + 1]);
-                                let taken = if timed(pass) {
-                                    time(begin, end)
-                                } else {
-                                    Duration::ZERO
-                                };
+                                let taken = if pass == 0 { build } else { pass_time(pass) };
                                 (TIMED_PASSES[pass], taken)
                             }),
-                            frame_time: first_timed.map_or(Duration::ZERO, |pass| {
-                                time(ticks[2 * pass], ticks[QUERIES_PER_FRAME - 1])
-                            }),
+                            // The build plus the span of the frame's passes, so
+                            // neither the wait between the two submissions nor
+                            // what the frame records before its first pass
+                            // counts.
+                            frame_time: build + time(ticks[2], ticks[QUERIES_PER_FRAME - 1]),
                             instances_drawn: draw.instances_drawn,
                             triangles_drawn: draw.triangles_drawn(),
                             instances_overflowed: draw.instances_overflowed,

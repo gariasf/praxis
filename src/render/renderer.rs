@@ -32,6 +32,11 @@ pub(crate) const TIMED_PASSES: [&str; 8] = [
     TONEMAPPING_PASS,
 ];
 
+/// The CPU stages of the dynamic TLAS's build: its recording and its
+/// submit, the CPU cost ADR 0020 caps.
+pub(crate) const DYNAMIC_TLAS_RECORDING: &str = "dynamic_tlas";
+pub(crate) const DYNAMIC_TLAS_SUBMIT: &str = "dynamic_tlas_submit";
+
 /// The Render switches a Renderer is created with and keeps. The defaults are
 /// what ships; capture and bench take others, for equivalence checks and
 /// A/Bs.
@@ -402,14 +407,12 @@ impl Renderer {
         let build =
             self.dynamic_tlas
                 .record(&self.device, frame, &self.mesh_pool, tlas_anchor, bracket);
-        match build {
-            Some((commands, uploaded_bytes)) => {
-                self.dynamic_tlas_commands = Some(commands);
-                recorder.uploaded_bytes += uploaded_bytes;
-            }
-            None => self.gpu_stats.pass_untimed(DYNAMIC_TLAS_BUILD),
+        if let Some((commands, uploaded_bytes)) = build {
+            self.dynamic_tlas_commands = Some(commands);
+            recorder.uploaded_bytes += uploaded_bytes;
+            self.gpu_stats.dynamic_tlas_built();
         }
-        recorder.stage("dynamic_tlas", started);
+        recorder.stage(DYNAMIC_TLAS_RECORDING, started);
     }
 
     /// Draws `frame`, uploaded by `upload`, into `target`, a view in the
@@ -505,7 +508,7 @@ impl Renderer {
         if let Some(commands) = self.dynamic_tlas_commands.take() {
             self.queue.submit(std::iter::once(commands));
         }
-        recorder.stage("dynamic_tlas_submit", started);
+        recorder.stage(DYNAMIC_TLAS_SUBMIT, started);
 
         let started = Instant::now();
         // submit will accept anything that implements IntoIter
@@ -514,7 +517,7 @@ impl Renderer {
         submission
     }
 
-    /// The GPU stats of earlier frames that the last `render` or
+    /// The GPU stats of earlier frames that the last `upload` or
     /// `flush_gpu_frame_stats` read back, by frame number, counted from 0.
     pub fn gpu_frame_stats(&self) -> &[GpuFrameStats] {
         self.gpu_stats.read_back()

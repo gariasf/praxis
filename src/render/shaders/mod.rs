@@ -120,7 +120,7 @@ pub const DYNAMIC_TLAS_MARKER: ShaderModule = ShaderModule {
     name: "dynamic_tlas_marker",
     enables: &["wgpu_ray_query"],
     bind_groups: &[&DYNAMIC_TLAS_MARKERS],
-    parts: &[part!("dynamic_tlas_markers.wgsl")],
+    parts: &[part!("dynamic_tlas_marker.wgsl")],
 };
 
 /// The shared parts alone, which the oracle harness appends its kernel to.

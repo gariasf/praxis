@@ -312,7 +312,9 @@ impl DynamicTlas {
     }
 
     /// Records a marker into `encoder`, timed into `timestamp_writes`; none
-    /// without them.
+    /// without them. wgpu-core checks the first marker's query against the
+    /// BLASes of the last build, so a BLAS rebuilt through wgpu since would
+    /// fail the whole command buffer, build included.
     fn mark(
         &self,
         encoder: &mut wgpu::CommandEncoder,

@@ -64,9 +64,11 @@ pub struct GpuFrameStats {
     /// The frame's number: how many frames its Renderer rendered before it.
     pub frame: u64,
     /// GPU time of each pass, between timestamps at its start and its end,
-    /// in the order the passes ran.
+    /// in the order the passes ran, after the dynamic TLAS's build, between
+    /// the markers around it: no time in a frame that does not build it.
     pub pass_times: [(&'static str, Duration); TIMED_PASSES.len()],
-    /// From the start of the first pass to the end of the last.
+    /// The dynamic TLAS's build, plus the span from the start of the first
+    /// pass to the end of the last.
     pub frame_time: Duration,
     /// The Instances the frame's draw held, and their triangles.
     pub instances_drawn: u32,
