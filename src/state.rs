@@ -17,7 +17,7 @@ use crate::render::{FramePreparer, RenderSwitches, Renderer};
 use crate::scenes::{
     ReferenceScene, SCI_FI_HELMET, SWEEP_METALLIC, SWEEP_ROUGHNESS, spawn_crowd,
     spawn_far_coplanar, spawn_minification, spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep,
-    spawn_shadows, spawn_texture_wall, spawn_uv_grid, spin, sway, sweep_material_name,
+    spawn_shadows, spawn_texture_wall, spawn_town, spawn_uv_grid, spin, sway, sweep_material_name,
 };
 use crate::stats::{FrameRecorder, FrameStats, GpuFrameStats};
 use crate::threading::{init_compute_pool, single_threaded_schedule};
@@ -106,6 +106,7 @@ impl State {
             ReferenceScene::TextureWall => spawn_texture_wall,
             ReferenceScene::Shadows => spawn_shadows,
             ReferenceScene::Crowd => spawn_crowd,
+            ReferenceScene::Town => spawn_town,
         };
         let mut loader = AssetLoader {
             device,

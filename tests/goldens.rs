@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 use praxis::gpu::GpuContext;
 use praxis::{ReferenceScene, RenderSwitches};
 
-const SCENES: [ReferenceScene; 8] = [
+const SCENES: [ReferenceScene; 9] = [
     ReferenceScene::PbrSweep,
     ReferenceScene::UvGrid,
     ReferenceScene::NormalTangent,
@@ -35,6 +35,7 @@ const SCENES: [ReferenceScene; 8] = [
     ReferenceScene::Minification,
     ReferenceScene::TextureWall,
     ReferenceScene::Shadows,
+    ReferenceScene::Town,
 ];
 
 /// The capture command's default size.

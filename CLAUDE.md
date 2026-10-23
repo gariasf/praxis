@@ -92,7 +92,8 @@ src/
   scenes/                      # Reference scenes: generated content,
                                  camera paths in frames, frame deltas,
                                  the orrery's Spin and the crowd's Sway
-                                 systems
+                                 systems; town.rs, the dense scene's
+                                 generator
   components.rs                # ECS components (Transform, MeshRef)
   threading.rs                 # compute pool, schedule executor (ADR 0016)
   camera/, time/, input/,      # feature modules: resource (+ systems)
