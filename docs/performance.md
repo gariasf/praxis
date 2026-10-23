@@ -4,6 +4,77 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## The crowd's per-bone proxies (2026-10-23, #208)
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of the
+`crowd` scene without its shadow proxies (#208's part 3, c6cfeca) and
+with them (part 4). `praxis bench <dir> crowd` at 2560×1440 with 4x MSAA,
+248 warm-up and 1,800 measured frames, eight runs alternating the two
+builds. Load average 5.4 to 10.3, from a peer session's build: CPU p95s
+are noisy, GPU medians agree within 2% across runs.
+
+The scene's 100 figures, 5,120 triangles each, sway in the fixed schedule
+and are bent on the GPU every frame. Their Meshes have no BLAS. Form (b)
+gives each figure's middle 16 bones, each with a shadow proxy of 168
+triangles: **1,600 proxies, Moving Instances in the dynamic TLAS, 16% of
+its 10,000 entries.** Every frame rebuilds the dynamic TLAS from them.
+
+The Budget for the crowd's acceleration-structure update is 0.5 ms of CPU
+and 1.0 ms of GPU per frame (decision on #17, item 14). CPU is the build's
+recording plus its submit (`dynamic_tlas_cpu_microseconds`), GPU the build
+between its markers (`dynamic_tlas_build`), as #204 times them:
+
+| Run | Update CPU µs, median (p95) | Update GPU µs, median (p95) |
+|---|---|---|
+| 1 | 538.0 (1,282.4) | 521.5 (596.2) |
+| 2 | 428.4 (588.1) | 543.6 (593.0) |
+| 3 | 473.0 (902.5) | 539.3 (590.5) |
+| 4 | 516.0 (1,143.6) | 526.2 (584.8) |
+| 5 | 462.4 (894.0) | 527.2 (585.0) |
+
+- **GPU: within the Budget.** The build takes 522 to 544 µs at the median
+  and under 600 µs at p95, about half of the 1.0 ms.
+- **CPU: at the Budget.** Medians of 428 to 538 µs straddle 0.5 ms; p95s
+  run 588 to 1,282 µs on this loaded machine. On the orrery, 5 entries
+  cost about 200 µs, most of it wgpu walking all 10,000 slots at every
+  build (#204); 1,600 entries add the rest, and wgpu-core allocates a
+  `Vec` per entry: the frame's heap allocations go from 295 to 2,034.
+- **Beyond the update** (the quietest run of each build, medians):
+
+  | | Without proxies | With proxies |
+  |---|---|---|
+  | CPU frame µs | 243.5 | 938.2 |
+  | GPU frame µs | 7,414.6 | 12,860.9 |
+  | Lit pass µs | 6,468.6 | 11,339.0 |
+  | Uploaded B per frame | 2,192 | 322,192 |
+  | Heap allocations | 295 | 2,034 |
+
+  - The CPU frame grows by 695 µs: the update, plus placing 1,600
+    proxies every Tick, propagating their World transforms and writing
+    their Instances. In one frame that ran two Ticks, the update took
+    465 µs (356 recording, 109 submitting); each Tick's sway placed the
+    proxies in 21 to 22 µs and propagated their World transforms in 37 to
+    39 µs; prepare wrote their Instances in 38 µs; and the frame's own
+    encoding and submit grew by 95 and 94 µs. #204 found that wgpu-core
+    walks a TLAS's entries at submit for each pass that sets a bind group
+    holding it, four passes here.
+  - The lit pass grows by 4.9 ms. Without proxies the figures cast no
+    shadow and the dynamic TLAS is empty, which the lit pass skips; with
+    them, every lit pixel's sun ray that the static TLAS lets through is
+    traced against 1,600 proxies. This is shadow-ray cost, outside the
+    update's Budget; form (a) traces 100 refitted BLASes of 5,120
+    triangles instead.
+  - Uploads grow by 320,000 B a frame: each proxy's 128-byte Instance
+    and its 72-byte TLAS entry.
+- **Shapes.** A proxy is an ellipsoid along its bone, 0.85 of the
+  figure's radius across, so a figure's shadow is a chain of overlapping
+  ellipsoids a little thinner than the figure. The end bones' proxies
+  stop short of the head and the foot: reaching 2.8 cm past the head, the
+  top one spotted every figure's top with its own shadow.
+
+#209 times form (a), refit through wgpu-hal, against the same Budget, and
+puts both forms to the owner, who picks M7's.
+
 ## The dynamic TLAS's build on the orrery (2026-10-23, #204)
 
 Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
