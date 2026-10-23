@@ -273,8 +273,10 @@ impl MeshPool {
 
     /// Compacts the BLASes of the Meshes loaded since the last call, once
     /// the staging their builds were recorded into is submitted: it waits
-    /// for the GPU to build them. A Mesh keeps its compacted BLAS, or the one
-    /// built where compaction failed, as logged.
+    /// for the GPU to build them, then to compact them, since on Metal no
+    /// barrier orders a TLAS build after the copies that write its BLASes
+    /// (gfx-rs/wgpu#9215). A Mesh keeps its compacted BLAS, or the one built
+    /// where compaction failed, as logged.
     pub fn compact_blases(&mut self, queue: &wgpu::Queue) {
         if self.awaiting_compaction.is_empty() {
             return;
@@ -297,6 +299,11 @@ impl MeshPool {
             *blas = queue.compact_blas(blas);
             self.uncompacted_blas_triangles -= triangles;
             self.compacted_blas_triangles += triangles;
+        }
+        // The copies wait in the queue's pending writes until a submit.
+        queue.submit(std::iter::empty());
+        if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
+            tracing::error!(%error, "waiting for BLAS compaction failed");
         }
     }
 
@@ -579,6 +586,48 @@ pub(crate) mod tests {
         pool.compact_blases(&context.queue);
         assert_eq!(pool.estimated_blas_bytes(&bytes), 2 * 50);
 
+        let blas = &pool.blases[handle.0 as usize];
+        assert_eq!(trace_triangle(&context, blas), [Some(7), None, None]);
+    }
+
+    /// A TLAS built once `compact_blases` returns holds the compacted BLAS
+    /// while other devices load the GPU, as parallel tests do: on Metal no
+    /// barrier orders a TLAS build after the copies that write its BLASes
+    /// (gfx-rs/wgpu#9215), so `compact_blases` waits for them (#244). Eight
+    /// threads, each with its own device, load and trace a triangle 25 times.
+    #[test]
+    fn a_tlas_built_after_compaction_holds_its_blas_while_other_devices_load_the_gpu() {
+        if gpu_context().is_none() {
+            return;
+        }
+        let load_and_trace = || {
+            let context = gpu_context().expect("a GPU adapter, as found above");
+            let mut staging = LoadStaging::new(context.device.clone());
+            let mut pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
+            (0..25)
+                .map(|_| {
+                    let handle = pool
+                        .load(&mut staging, &triangle_about_x(), &[None])
+                        .expect("a triangle fits");
+                    staging.submit(&context.queue);
+                    pool.compact_blases(&context.queue);
+                    trace_triangle(&context, &pool.blases[handle.0 as usize])
+                })
+                .collect::<Vec<_>>()
+        };
+        std::thread::scope(|scope| {
+            let threads: Vec<_> = (0..8).map(|_| scope.spawn(load_and_trace)).collect();
+            for thread in threads {
+                for traced in thread.join().expect("a tracing thread finishes") {
+                    assert_eq!(traced, [Some(7), None, None]);
+                }
+            }
+        });
+    }
+
+    /// What `trace_down` finds at a point on `triangle_about_x`'s triangle and
+    /// at two points off it, in a TLAS of `blas` alone, tagged 7.
+    fn trace_triangle(context: &GpuContext, blas: &wgpu::Blas) -> Vec<Option<u32>> {
         let mut tlas = context.device.create_tlas(&wgpu::CreateTlasDescriptor {
             label: Some("Test TLAS"),
             max_instances: 1,
@@ -586,17 +635,12 @@ pub(crate) mod tests {
             update_mode: wgpu::AccelerationStructureUpdateMode::Build,
         });
         let identity = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0];
-        tlas[0] = Some(wgpu::TlasInstance::new(
-            &pool.blases[handle.0 as usize],
-            identity,
-            7,
-            0xff,
-        ));
+        tlas[0] = Some(wgpu::TlasInstance::new(blas, identity, 7, 0xff));
         let mut encoder = context.device.create_command_encoder(&Default::default());
         encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&tlas));
         context.queue.submit(std::iter::once(encoder.finish()));
         let points = [[0.8, 0.0, 0.0], [0.0, 0.0, 0.0], [0.8, 0.5, 0.0]];
-        assert_eq!(trace_down(&context, &tlas, &points), [Some(7), None, None]);
+        trace_down(context, &tlas, &points)
     }
 
     /// A one-Primitive Mesh of a triangle about (0.8, 0) in mesh space, at
