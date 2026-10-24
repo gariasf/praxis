@@ -29,8 +29,8 @@ use crate::transform::{
 
 /// The source file of the helmet scene's Mesh and Material, relative to the
 /// working directory (the crate root under `cargo run` and `cargo test`),
-/// which a dev launch cooks. It is fetched, not committed:
-/// `scripts/fetch-assets.sh` downloads it.
+/// which a dev launch cooks. It is fetched, not committed: `praxis fetch`
+/// downloads it, as a dev launch of the helmet does when it is absent.
 pub const DEFAULT_MODEL: &str = "assets/SciFiHelmet/SciFiHelmet.gltf";
 
 /// The Scene in its ECS World, the Frame data prepared from it, and the
@@ -157,7 +157,7 @@ impl State {
         let source = AssetSource::File(SCI_FI_HELMET);
         let id = AssetId::new(source, AssetKind::Mesh, AssetName::Name("SciFiHelmet"));
         let mesh_handle = loader.mesh(id).with_context(|| {
-            format!("loading {DEFAULT_MODEL}; run scripts/fetch-assets.sh if it is missing")
+            format!("loading {DEFAULT_MODEL}; run `praxis fetch` if it is missing")
         })?;
 
         // Debug material sweep: a pure factor sweep over the neutral default

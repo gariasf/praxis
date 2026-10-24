@@ -36,6 +36,8 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
         #[cfg(feature = "cook")]
         [command] if command == "cook" => cook(),
         #[cfg(feature = "cook")]
+        [command] if command == "fetch" => fetch(),
+        #[cfg(feature = "cook")]
         [command, scene, output] if command == "capture" => {
             capture(scene, output, DEFAULT_CAPTURE_SIZE)
         }
@@ -59,7 +61,7 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
         }
         _ => anyhow::bail!(
             "unexpected arguments {arguments:?}: run with no arguments, `capabilities`, \
-             `cook`, `capture <scene> <png path> [<width>x<height>]`, \
+             `cook`, `fetch`, `capture <scene> <png path> [<width>x<height>]`, \
              `bench <output directory> [--ci | --counters | --ci-counters] [<scene>...]`, or \
              `compare <bench directory> [--ci]`"
         ),
@@ -91,6 +93,21 @@ fn cook() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Fetches the manifest's fetched files into `assets/`, and prints one line
+/// per file: `ok` for one kept, `fetched` for one downloaded.
+#[cfg(feature = "cook")]
+fn fetch() -> anyhow::Result<()> {
+    let mut stdout = std::io::stdout();
+    for (path, fetch) in praxis::cook::fetch(Path::new(praxis::cook::ASSETS_DIRECTORY))? {
+        let verdict = match fetch {
+            praxis::cook::Fetch::Kept => "ok",
+            praxis::cook::Fetch::Fetched => "fetched",
+        };
+        writeln!(stdout, "{verdict:<8} {path}")?;
+    }
+    Ok(())
+}
+
 fn parse_scene(name: &str) -> anyhow::Result<ReferenceScene> {
     ReferenceScene::from_name(name).ok_or_else(|| {
         let names: Vec<_> = ReferenceScene::ALL.map(ReferenceScene::name).into();
@@ -105,7 +122,7 @@ fn bench(output: &str, configuration: Configuration, scene_names: &[String]) -> 
     let scenes = if scene_names.is_empty() {
         let helmet_fetched = Path::new(praxis::DEFAULT_MODEL).exists();
         if !helmet_fetched {
-            tracing::warn!("helmet skipped: run scripts/fetch-assets.sh to bench it");
+            tracing::warn!("helmet skipped: run `praxis fetch` to bench it");
         }
         ReferenceScene::ALL
             .into_iter()

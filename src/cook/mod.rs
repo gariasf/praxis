@@ -2,6 +2,7 @@
 //! Reference scene into Blobs in the Cooked cache, cooking only the Assets
 //! whose Cook key changed.
 
+mod fetch;
 pub(crate) mod mesh;
 mod texture;
 
@@ -12,6 +13,7 @@ use anyhow::Context;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
+pub use fetch::{Fetch, fetch};
 pub use texture::{LoadedImage, TextureSource};
 
 use crate::ReferenceScene;
@@ -84,7 +86,8 @@ pub fn cook(
 
 /// What a dev launch of `scene` cooks before it loads: the manifest
 /// sources the scene references, those present, and its procedural Assets.
-/// The Blobs of an absent source, or of every source when the manifest is
+/// A source the manifest marks fetched is fetched first when absent. The
+/// Blobs of a source still absent, or of every source when the manifest is
 /// absent, stay as they are.
 pub fn cook_scene(
     scene: ReferenceScene,
@@ -92,6 +95,7 @@ pub fn cook_scene(
     cache: &CookedCache,
     settings: &CookSettings,
 ) -> anyhow::Result<CookReport> {
+    fetch::fetch_for_launch(assets, scene.source_files());
     let sources = read_sources(assets, &[scene], Some(scene.source_files()))?;
     cook_sources(&sources, cache, settings)
 }

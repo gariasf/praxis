@@ -6,7 +6,7 @@ Files in this directory keep their own licences. `manifest.json` records each fi
 
 SciFi Helmet: © 2017 Michael Pavlovic, CC0 1.0
 
-From [Khronos glTF-Sample-Assets](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/SciFiHelmet), unmodified. Licence: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/legalcode). Fetched by `scripts/fetch-assets.sh`, never committed.
+From [Khronos glTF-Sample-Assets](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/SciFiHelmet), unmodified. Licence: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/legalcode). Fetched by `praxis fetch`, never committed.
 
 ## NormalTangentTest/
 

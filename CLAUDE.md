@@ -105,7 +105,10 @@ src/
   cook/                        # the cooker behind the default-on `cook`
                                  feature: `praxis cook` turns manifest
                                  sources and Reference scenes into Blobs
-                                 in git-ignored `cooked/` (ADR 0018)
+                                 in git-ignored `cooked/` (ADR 0018);
+                                 `praxis fetch` downloads the manifest's
+                                 fetched sources, as a dev launch that
+                                 lacks one does
   render/                      # Renderer (owns the Pools, reads no
                                  ECS World, calls the passes in order),
                                  a module per pass (bend_pass: the
@@ -155,7 +158,6 @@ bench/                         # budgets.json (ADR 0013) and baselines/
                                  <adapter>/<scene>.json: the M4 Pro's,
                                  and CI's lavapipe (`--ci`); `praxis
                                  bench <dir>` then `praxis compare <dir>`
-scripts/fetch-assets.sh        # downloads the manifest's fetched assets
 scripts/verify.sh              # the verify command: fmt, clippy, build,
                                  tests with Goldens, bench counters
                                  against Baselines and Budgets
