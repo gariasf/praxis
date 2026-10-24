@@ -435,9 +435,9 @@ fn choose_surface_format(
 /// an instance initialises every backend it names, and in debug builds
 /// DX12's validation turns on the D3D12 and DXGI debug layers for the whole
 /// process, under which NVIDIA's Vulkan driver, which presents through DXGI,
-/// raised exception 0x87D as it destroyed its device (617.42 and 621.01,
-/// #279). Vulkan leads, as wgpu's pick among `Backends::PRIMARY` did on
-/// Windows and Linux; macOS builds have Metal alone.
+/// raises exception 0x87D as it destroys its device (drivers 617.42 and
+/// 621.01). Vulkan leads, as in wgpu's own backend order; macOS builds have
+/// Metal alone.
 const BACKEND_ORDER: [wgpu::Backend; 3] = [
     wgpu::Backend::Vulkan,
     wgpu::Backend::Metal,
@@ -740,7 +740,8 @@ mod tests {
         );
     }
 
-    /// No instance starts a backend beside the one it tries (#279).
+    /// No instance starts a backend beside the one it tries, so DX12's debug
+    /// layers never load under Vulkan.
     #[test]
     fn each_instance_names_one_backend() {
         for backend in BACKEND_ORDER {
