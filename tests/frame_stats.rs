@@ -11,8 +11,8 @@ const MEBIBYTE: u64 = 1 << 20;
 
 /// town's Instances and their triangles, as its generator places them
 /// (`src/scenes/town.rs`).
-const TOWN_INSTANCES: u32 = 244_256;
-const TOWN_TRIANGLES: u32 = 9_754_190;
+const TOWN_INSTANCES: u32 = 254_256;
+const TOWN_TRIANGLES: u32 = 9_994_190;
 
 /// Frames per capture: one second at 60 Hz.
 const FRAME_COUNT: usize = 60;
@@ -234,7 +234,10 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
 /// closed-form counts, none overflowed: every Instance in use is drawn.
 /// town hides most of its Instances, so it is drawn with culling off,
 /// which its Goldens compare with culling on: the frame's draw holds the
-/// whole town.
+/// whole town. After the first frame, each frame writes the Instances of
+/// what moves alone, town's 10,000 birds among them, and leaves no Moving
+/// Instance out of the dynamic TLAS; town's birds fill it, each uploading
+/// its entry every frame.
 #[test]
 fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
     let context = match pollster::block_on(GpuContext::headless()) {
@@ -266,22 +269,32 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
         };
         let (_, frames) = praxis::capture(&context, scene, glam::DVec3::ZERO, 160, 90, switches)
             .expect("capture failed");
-        let (instances, triangles) = match scene {
+        let (instances, triangles, moving) = match scene {
             // Ten sweep helmets and the textured one.
-            ReferenceScene::Helmet => (11, 11 * helmet_triangles),
-            ReferenceScene::PbrSweep => (10, 10 * sphere_triangles),
-            ReferenceScene::UvGrid | ReferenceScene::Minification => (1, plane_triangles),
-            ReferenceScene::NormalTangent => (1, normal_tangent_triangles),
-            ReferenceScene::FarCoplanar => (2, 2 * plane_triangles),
-            ReferenceScene::Orrery => (5, 5 * sphere_triangles),
-            ReferenceScene::TextureWall => (100, 100 * plane_triangles),
+            ReferenceScene::Helmet => (11, 11 * helmet_triangles, 0),
+            ReferenceScene::PbrSweep => (10, 10 * sphere_triangles, 0),
+            ReferenceScene::UvGrid | ReferenceScene::Minification => (1, plane_triangles, 0),
+            ReferenceScene::NormalTangent => (1, normal_tangent_triangles, 0),
+            ReferenceScene::FarCoplanar => (2, 2 * plane_triangles, 0),
+            ReferenceScene::Orrery => (5, 5 * sphere_triangles, 5),
+            ReferenceScene::TextureWall => (100, 100 * plane_triangles, 0),
             // One Mesh of a ground plane and a sphere.
-            ReferenceScene::Shadows => (1, plane_triangles + sphere_triangles),
-            // The ground and 100 figures; their shadow proxies are not drawn.
-            ReferenceScene::Crowd => (101, plane_triangles + 100 * figure_triangles),
-            // Every Instance its generator places, and their triangles.
-            ReferenceScene::Town => (TOWN_INSTANCES, TOWN_TRIANGLES),
+            ReferenceScene::Shadows => (1, plane_triangles + sphere_triangles, 0),
+            // The ground and 100 figures; their shadow proxies, 16 a figure,
+            // move with the sway but are not drawn.
+            ReferenceScene::Crowd => (101, plane_triangles + 100 * figure_triangles, 1_600),
+            // Every Instance its generator places, and their triangles; its
+            // birds circle.
+            ReferenceScene::Town => (TOWN_INSTANCES, TOWN_TRIANGLES, 10_000),
         };
+        // The 112-byte camera and 32-byte light uniforms, the sun and the
+        // 1,024 lamps' lights of 48 bytes, and each bird's 128-byte Instance
+        // and its dynamic TLAS entry, as its backend's instance record.
+        let entry_bytes = match context.backend() {
+            wgpu::Backend::Metal => 72,
+            _ => 64,
+        };
+        let town_upload = 112 + 32 + 1025 * 48 + 10_000 * (128 + entry_bytes);
         for (frame, stats) in frames.iter().enumerate() {
             let Some(gpu) = stats.gpu else {
                 panic!("{} frame {frame} read back no GPU stats", scene.name());
@@ -296,6 +309,17 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
                 "{} frame {frame}",
                 scene.name()
             );
+            if frame > 0 {
+                assert_eq!(
+                    (stats.instances_written, stats.moving_instances_left_out),
+                    (moving, 0),
+                    "{} frame {frame}: Instances written and Moving Instances left out",
+                    scene.name()
+                );
+                if scene == ReferenceScene::Town {
+                    assert_eq!(stats.uploaded_bytes, town_upload, "town frame {frame}");
+                }
+            }
         }
     }
 }

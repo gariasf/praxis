@@ -3,18 +3,22 @@
 //! street fronts carry windows and whose roofs carry railings, plant and
 //! aerials; the rest are parks. Sidewalks carry trees, parked cars,
 //! bollards, benches and bins, utility poles carry wires that go sub-pixel
-//! at distance, and 1,024 street lamps each hold a point light. Its Meshes
+//! at distance, 1,024 street lamps each hold a point light, and 10,000
+//! pigeons circle over the roofs in flocks, its Moving Instances. Its Meshes
 //! cook from the generators here, and its spawn places each Instance from a
 //! hash of where it stands, so every launch places the same town.
 
 use std::f64::consts::FRAC_PI_2;
 
 use bevy_ecs::prelude::*;
+use glam::FloatExt;
 
-use super::ReferenceScene;
+use super::{ReferenceScene, Spin};
 use crate::assets::{AssetLoader, MaterialHandle, MeshHandle};
 use crate::camera::Camera;
 use crate::components::{MaterialRef, MeshRef, PointLight, Transform};
+use crate::render::DYNAMIC_TLAS_CAPACITY;
+use crate::transform::PreviousWorldTransform;
 
 /// The town's Meshes.
 #[derive(Clone, Copy)]
@@ -39,12 +43,14 @@ enum TownMesh {
     BlueCar,
     Bollard,
     Bin,
+    /// A pigeon, which each of the town's Moving Instances draws.
+    Bird,
 }
 
 impl TownMesh {
     /// Every Mesh, in the order of its discriminant, which indexes its
     /// Handle when loaded.
-    const ALL: [TownMesh; 18] = [
+    const ALL: [TownMesh; 19] = [
         TownMesh::Ground,
         TownMesh::Box,
         TownMesh::AirConditioner,
@@ -63,6 +69,7 @@ impl TownMesh {
         TownMesh::BlueCar,
         TownMesh::Bollard,
         TownMesh::Bin,
+        TownMesh::Bird,
     ];
 
     /// The name it cooks under.
@@ -86,6 +93,7 @@ impl TownMesh {
             TownMesh::BlueCar => "blue-car",
             TownMesh::Bollard => "bollard",
             TownMesh::Bin => "bin",
+            TownMesh::Bird => "bird",
         }
     }
 }
@@ -219,6 +227,25 @@ const LAMP_LIGHT: PointLight = PointLight {
     range: 18.0,
 };
 
+/// Flocks of pigeons over the town, `FLOCKS_PER_SIDE` a side on a grid
+/// `FLOCK_PITCH` apart, each of `BIRDS_PER_FLOCK` circling its centre in
+/// the fixed schedule: 10,000 Moving Instances, the dynamic TLAS's capacity
+/// (ADR 0020). Centres stand `FLOCK_HEIGHT` up, clear of every roof's plant,
+/// and turn at `FLOCK_SPIN` radians a second, either way.
+const FLOCKS_PER_SIDE: u32 = 10;
+const FLOCK_PITCH: f64 = 100.0;
+const BIRDS_PER_FLOCK: u32 = 100;
+const _: () = assert!(FLOCKS_PER_SIDE * FLOCKS_PER_SIDE * BIRDS_PER_FLOCK == DYNAMIC_TLAS_CAPACITY);
+const FLOCK_HEIGHT: std::ops::Range<f64> = 30.0..55.0;
+const FLOCK_SPIN: std::ops::Range<f64> = 0.2..0.6;
+/// A bird's distance from its flock's centre, and how far above or below
+/// it.
+const FLOCK_RADIUS: std::ops::Range<f64> = 6.0..30.0;
+const FLOCK_DEPTH: f64 = 4.0;
+/// How far a flock's centre strays from its grid cell's middle, each way:
+/// as far as keeps the whole flock within its cell, so within the town.
+const FLOCK_STRAY: f64 = FLOCK_PITCH / 2.0 - FLOCK_RADIUS.end;
+
 /// Utility poles along every street, `POLE_SPACING` apart, each span between
 /// two holding a wire at each of `WIRE_HEIGHTS`.
 const POLE_SPACING: f64 = 25.0;
@@ -257,6 +284,8 @@ enum Choice {
     Bench,
     Bin,
     Lamp,
+    Flock,
+    Bird,
 }
 
 /// A Renderable the spawn places: its Mesh, its Material where it
@@ -651,8 +680,78 @@ fn place_poles_and_wires(placed: &mut Vec<TownRenderable>) {
     }
 }
 
+/// A flock: its centre, how fast it turns, in radians a second, and its
+/// birds, placed about its centre.
+struct Flock {
+    centre: glam::DVec3,
+    radians_per_second: f64,
+    birds: Vec<Transform>,
+}
+
+/// The town's flocks, row by row: each centre at random about its grid
+/// cell's middle, and each bird at random about its centre, facing the way
+/// it circles.
+fn flocks() -> Vec<Flock> {
+    let offset = |index: u32| -TOWN_HALF_SIZE + FLOCK_PITCH * (f64::from(index) + 0.5);
+    (0..FLOCKS_PER_SIDE * FLOCKS_PER_SIDE)
+        .map(|flock| {
+            let (column, row) = (flock % FLOCKS_PER_SIDE, flock / FLOCKS_PER_SIDE);
+            let flock_random = |choice: Choice, item: u64| {
+                random([column.into(), row.into(), choice as u64, item])
+            };
+            let centre = glam::dvec3(
+                offset(column) + FLOCK_STRAY * (2.0 * flock_random(Choice::Flock, 0) - 1.0),
+                FLOCK_HEIGHT
+                    .start
+                    .lerp(FLOCK_HEIGHT.end, flock_random(Choice::Flock, 1)),
+                offset(row) + FLOCK_STRAY * (2.0 * flock_random(Choice::Flock, 2) - 1.0),
+            );
+            let turning = if flock_random(Choice::Flock, 3) < 0.5 {
+                1.0
+            } else {
+                -1.0
+            };
+            let radians_per_second = turning
+                * FLOCK_SPIN
+                    .start
+                    .lerp(FLOCK_SPIN.end, flock_random(Choice::Flock, 4));
+            let birds = (0..BIRDS_PER_FLOCK)
+                .map(|bird| {
+                    let bird_random =
+                        |item: u64| flock_random(Choice::Bird, u64::from(bird) << 4 | item);
+                    // Uniform over the ring's area, so the flock is no
+                    // denser towards its middle than towards its edge.
+                    let [inner_squared, outer_squared] =
+                        [FLOCK_RADIUS.start, FLOCK_RADIUS.end].map(|radius| radius * radius);
+                    let radius = inner_squared.lerp(outer_squared, bird_random(0)).sqrt();
+                    let angle = std::f64::consts::TAU * bird_random(1);
+                    // A turn about +Y by the flock's spin moves this point
+                    // along (−sin, 0, −cos) of its angle.
+                    let position = glam::dvec3(
+                        radius * angle.cos(),
+                        FLOCK_DEPTH * (2.0 * bird_random(2) - 1.0),
+                        -radius * angle.sin(),
+                    );
+                    let heading = glam::dvec3(-angle.sin(), 0.0, -angle.cos()) * turning;
+                    Transform {
+                        rotation: facing(heading),
+                        ..Transform::from_translation(position)
+                    }
+                })
+                .collect();
+            Flock {
+                centre,
+                radians_per_second,
+                birds,
+            }
+        })
+        .collect()
+}
+
 /// Loads the town's Meshes and the Materials its boxes draw with, then
-/// places its Instances and its lamps' point lights.
+/// places its Instances, its lamps' point lights, and its flocks: each a
+/// spinning centre with its birds as its children, all moved in the fixed
+/// schedule, so each carries its previous World transform (ADR 0022).
 pub(crate) fn spawn_town(world: &mut World, loader: &mut AssetLoader) -> anyhow::Result<()> {
     let scene = ReferenceScene::Town;
     let meshes: Vec<MeshHandle> = TownMesh::ALL
@@ -686,6 +785,26 @@ pub(crate) fn spawn_town(world: &mut World, loader: &mut AssetLoader) -> anyhow:
             .into_iter()
             .map(|position| (Transform::from_translation(position), LAMP_LIGHT)),
     );
+    let bird = meshes[TownMesh::Bird as usize];
+    for flock in flocks() {
+        let centre = world
+            .spawn((
+                Transform::from_translation(flock.centre),
+                Spin {
+                    radians_per_second: flock.radians_per_second,
+                },
+                PreviousWorldTransform::default(),
+            ))
+            .id();
+        world.spawn_batch(flock.birds.into_iter().map(|transform| {
+            (
+                transform,
+                ChildOf(centre),
+                MeshRef(bird),
+                PreviousWorldTransform::default(),
+            )
+        }));
+    }
     Ok(())
 }
 
@@ -981,6 +1100,16 @@ mod generators {
                     vec![
                         cylinder(0.1, 0.1, 0.85, 8),
                         raised(cylinder(0.1, 0.0, 0.08, 8), 0.85),
+                    ],
+                )],
+            ),
+            (
+                TownMesh::Bird,
+                vec![of(
+                    "slate",
+                    vec![
+                        cuboid(vec3(-0.04, -0.03, -0.2), vec3(0.04, 0.03, 0.2)),
+                        cuboid(vec3(-0.3, -0.005, -0.06), vec3(0.3, 0.005, 0.08)),
                     ],
                 )],
             ),
