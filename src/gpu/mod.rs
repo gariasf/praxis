@@ -11,18 +11,22 @@ pub struct GpuContext {
 impl GpuContext {
     /// A context with no window or surface.
     pub async fn headless() -> anyhow::Result<Self> {
-        let adapter = request_adapter(&create_wgpu_instance(), None).await?;
+        let adapter =
+            first_backend(async |wgpu_instance| request_adapter(wgpu_instance, None).await).await?;
         Self::request_device(adapter).await
     }
 
     /// A context whose adapter can present to `target`, the surface for it,
     /// and the surface format the tonemapping pass renders into.
     pub(crate) async fn with_surface(
-        target: impl Into<wgpu::SurfaceTarget<'static>>,
+        target: impl Into<wgpu::SurfaceTarget<'static>> + Clone,
     ) -> anyhow::Result<(Self, wgpu::Surface<'static>, wgpu::TextureFormat)> {
-        let wgpu_instance = create_wgpu_instance();
-        let surface = wgpu_instance.create_surface(target)?;
-        let adapter = request_adapter(&wgpu_instance, Some(&surface)).await?;
+        let (adapter, surface) = first_backend(async |wgpu_instance| {
+            let surface = wgpu_instance.create_surface(target.clone())?;
+            let adapter = request_adapter(wgpu_instance, Some(&surface)).await?;
+            Ok((adapter, surface))
+        })
+        .await?;
         let surface_format = choose_surface_format(&surface.get_capabilities(&adapter))?;
         let context = Self::request_device(adapter).await?;
         Ok((context, surface, surface_format))
@@ -80,7 +84,8 @@ impl GpuContext {
 /// requests no device, so it also runs on adapters below the Capability
 /// floor, to diagnose them.
 pub async fn capability_report() -> anyhow::Result<String> {
-    let adapter = request_adapter(&create_wgpu_instance(), None).await?;
+    let adapter =
+        first_backend(async |wgpu_instance| request_adapter(wgpu_instance, None).await).await?;
     Ok(adapter_report(&adapter))
 }
 
@@ -391,6 +396,8 @@ async fn request_adapter(
         name = %adapter_info.name,
         backend = ?adapter_info.backend,
         device_type = ?adapter_info.device_type,
+        driver = %adapter_info.driver,
+        driver_info = %adapter_info.driver_info,
         "adapter selected"
     );
     Ok(adapter)
@@ -424,14 +431,67 @@ fn choose_surface_format(
     Ok(surface_format)
 }
 
-fn create_wgpu_instance() -> wgpu::Instance {
-    wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::PRIMARY,
-        flags: Default::default(),
+/// The backends a context tries, in order, each in an instance of its own:
+/// an instance initialises every backend it names, and in debug builds
+/// DX12's validation turns on the D3D12 and DXGI debug layers for the whole
+/// process, under which NVIDIA's Vulkan driver, which presents through DXGI,
+/// raised exception 0x87D as it destroyed its device (617.42 and 621.01,
+/// #279). Vulkan leads, as wgpu's pick among `Backends::PRIMARY` did on
+/// Windows and Linux; macOS builds have Metal alone.
+const BACKEND_ORDER: [wgpu::Backend; 3] = [
+    wgpu::Backend::Vulkan,
+    wgpu::Backend::Metal,
+    wgpu::Backend::Dx12,
+];
+
+/// The backends of `BACKEND_ORDER` that `allowed` names, in its order.
+fn backend_order(allowed: wgpu::Backends) -> impl Iterator<Item = wgpu::Backend> {
+    BACKEND_ORDER
+        .into_iter()
+        .filter(move |&backend| allowed.contains(backend.into()))
+}
+
+/// Runs `try_backend` on an instance of each backend this build has, in
+/// `backend_order`, and returns its first success. `WGPU_BACKEND`, when set,
+/// narrows the backends tried. A backend that fails is warned about, so a
+/// fallback to the next is never silent.
+async fn first_backend<T>(
+    mut try_backend: impl AsyncFnMut(&wgpu::Instance) -> anyhow::Result<T>,
+) -> anyhow::Result<T> {
+    let built = wgpu::Instance::enabled_backend_features();
+    let requested = wgpu::Backends::PRIMARY.with_env();
+    let mut failed = Vec::new();
+    let mut last_error = None;
+    for backend in backend_order(built & requested) {
+        let wgpu_instance = wgpu::Instance::new(instance_descriptor(backend));
+        match try_backend(&wgpu_instance).await {
+            Ok(value) => return Ok(value),
+            Err(error) => {
+                tracing::warn!(?backend, error = %format_args!("{error:#}"), "no usable adapter on this backend");
+                failed.push(backend);
+                last_error = Some(error);
+            }
+        }
+    }
+    match last_error {
+        Some(error) => Err(error.context(format!("no usable adapter on {failed:?}"))),
+        None => anyhow::bail!(
+            "no backend to try: this build has {built:?}, and WGPU_BACKEND asks for {requested:?}"
+        ),
+    }
+}
+
+/// An instance of `backend` alone, with wgpu's flags for this build,
+/// validation in debug builds, as wgpu's variables such as `WGPU_VALIDATION`
+/// and `WGPU_DEBUG` override them.
+fn instance_descriptor(backend: wgpu::Backend) -> wgpu::InstanceDescriptor {
+    wgpu::InstanceDescriptor {
+        backends: backend.into(),
+        flags: wgpu::InstanceFlags::from_env_or_default(),
         memory_budget_thresholds: Default::default(),
         backend_options: Default::default(),
         display: None,
-    })
+    }
 }
 
 #[cfg(test)]
@@ -656,5 +716,29 @@ mod tests {
             ),
             Ok(())
         );
+    }
+
+    /// No instance starts a backend beside the one it tries (#279).
+    #[test]
+    fn each_instance_names_one_backend() {
+        for backend in BACKEND_ORDER {
+            assert_eq!(
+                instance_descriptor(backend).backends,
+                wgpu::Backends::from(backend)
+            );
+        }
+    }
+
+    #[test]
+    fn backends_are_tried_vulkan_metal_then_dx12_among_those_allowed() {
+        use wgpu::Backend::{Dx12, Metal, Vulkan};
+        let order = |allowed| backend_order(allowed).collect::<Vec<_>>();
+        assert_eq!(order(wgpu::Backends::PRIMARY), [Vulkan, Metal, Dx12]);
+        assert_eq!(
+            order(wgpu::Backends::DX12 | wgpu::Backends::VULKAN),
+            [Vulkan, Dx12]
+        );
+        assert_eq!(order(wgpu::Backends::DX12), [Dx12]);
+        assert_eq!(order(wgpu::Backends::GL), []);
     }
 }
