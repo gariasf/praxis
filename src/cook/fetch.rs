@@ -28,8 +28,8 @@ pub fn fetch(assets: &Path) -> anyhow::Result<Vec<(String, Fetch)>> {
 }
 
 /// What a dev launch fetches before it cooks: its scene's fetched files,
-/// when one is absent. A failure only warns, and the launch loads what the
-/// Cooked cache holds, as it would have.
+/// when one is absent. A failure only warns; the launch then loads what the
+/// Cooked cache holds.
 pub(super) fn fetch_for_launch(assets: &Path, source_guids: &[u128]) {
     if let Err(error) = fetch_for_launch_with(assets, source_guids, download) {
         tracing::warn!(error = %format_args!("{error:#}"), "fetch failed; loading what the Cooked cache holds");
