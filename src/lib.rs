@@ -36,7 +36,7 @@ mod transform;
 
 pub use assets::cooked;
 pub use capture::capture;
-pub use render::RenderSwitches;
+pub use render::{CrowdForm, RenderSwitches};
 pub use scenes::ReferenceScene;
 pub use state::DEFAULT_MODEL;
 pub use stats::{FrameStats, GpuFrameStats};

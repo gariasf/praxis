@@ -13,11 +13,12 @@ use crate::cooked::{
 use crate::gpu::GpuContext;
 use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
 use crate::input::{Input, clear_just_pressed};
-use crate::render::{FramePreparer, RenderSwitches, Renderer};
+use crate::render::{CrowdForm, FramePreparer, RenderSwitches, Renderer};
 use crate::scenes::{
     ReferenceScene, SCI_FI_HELMET, SWEEP_METALLIC, SWEEP_ROUGHNESS, spawn_crowd,
     spawn_far_coplanar, spawn_minification, spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep,
-    spawn_shadows, spawn_texture_wall, spawn_town, spawn_uv_grid, spin, sway, sweep_material_name,
+    spawn_shadows, spawn_texture_wall, spawn_town, spawn_traced_crowd, spawn_uv_grid, spin, sway,
+    sweep_material_name,
 };
 use crate::stats::{FrameRecorder, FrameStats, GpuFrameStats};
 use crate::threading::{init_compute_pool, single_threaded_schedule};
@@ -60,6 +61,9 @@ impl State {
     ) -> anyhow::Result<State> {
         let _span = tracing::info_span!("state_init").entered();
         init_compute_pool();
+        if let Some(reason) = switches.crowd_form.unavailable_on(context.backend()) {
+            anyhow::bail!("{:?} is unavailable: {reason}", switches.crowd_form);
+        }
 
         let mut renderer = Renderer::new(context, target_format, width, height, switches);
         let Renderer {
@@ -105,7 +109,10 @@ impl State {
             ReferenceScene::Minification => spawn_minification,
             ReferenceScene::TextureWall => spawn_texture_wall,
             ReferenceScene::Shadows => spawn_shadows,
-            ReferenceScene::Crowd => spawn_crowd,
+            ReferenceScene::Crowd => match switches.crowd_form {
+                CrowdForm::Proxies => spawn_crowd,
+                CrowdForm::Refit | CrowdForm::Rebuild => spawn_traced_crowd,
+            },
             ReferenceScene::Town => spawn_town,
         };
         let mut loader = AssetLoader {

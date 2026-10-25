@@ -5,6 +5,7 @@ use crate::gpu::GpuContext;
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::render::bend_pass::{BEND_PASS, BendPass};
 use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
+use crate::render::blas_refit::BlasRefit;
 use crate::render::culling_pass::{CullingPass, CullingPhase, DrawCapacity};
 use crate::render::depth_pyramid_pass::{DEPTH_PYRAMID_PASS, DepthPyramidPass};
 use crate::render::froxel_pass::{FROXEL_PASS, FroxelPass};
@@ -47,6 +48,11 @@ pub(crate) const SHADOW_RAY_PASSES: [&str; 2] = [PHASE_TWO_DEPTH_PASS, SHADOW_MA
 /// The CPU stages of the dynamic TLAS's build: its recording and its
 /// submit, the CPU cost ADR 0020 caps.
 pub(crate) const DYNAMIC_TLAS_RECORDING: &str = "dynamic_tlas";
+
+/// The CPU stage that records the frame's BLAS updates, with the crowd's
+/// refit or rebuild form, and submits them with the frame's commands before
+/// them.
+pub(crate) const BLAS_REFIT: &str = "blas_refit";
 pub(crate) const DYNAMIC_TLAS_SUBMIT: &str = "dynamic_tlas_submit";
 
 /// The Render switches a Renderer is created with and keeps. The defaults are
@@ -71,6 +77,34 @@ pub struct RenderSwitches {
     /// range reaches it, from the depth the main pass then keeps. Off, as it
     /// ships, nothing counts them.
     pub count_point_lights: bool,
+    /// The form the `crowd` scene's figures, which the GPU bends each frame,
+    /// take in the TLAS.
+    pub crowd_form: CrowdForm,
+}
+
+/// How the shapes the GPU bends Meshes to each frame reach the TLAS (ADR
+/// 0020): the forms M3's `crowd` scene measures for M7 to pick from.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum CrowdForm {
+    /// The bent Meshes have no BLAS: rigid shadow proxies, one per bone,
+    /// cast their shadows as Moving Instances (#208).
+    #[default]
+    Proxies,
+    /// Each bent Mesh's BLAS is refitted to its bent shape each frame
+    /// through wgpu-hal, and its Instance is a Moving Instance. Metal only:
+    /// wgpu-core rebuilds BLASes but never updates them.
+    Refit,
+    /// As `Refit`, each BLAS rebuilt through wgpu instead: what refit must
+    /// match, on any backend.
+    Rebuild,
+}
+
+impl CrowdForm {
+    /// Why it cannot run on `backend`, if it cannot.
+    pub fn unavailable_on(self, backend: wgpu::Backend) -> Option<&'static str> {
+        (self == CrowdForm::Refit && backend != wgpu::Backend::Metal)
+            .then_some("the crowd's refit form updates BLASes through wgpu-hal on Metal only")
+    }
 }
 
 impl Default for RenderSwitches {
@@ -80,6 +114,7 @@ impl Default for RenderSwitches {
             froxel_lights: true,
             shadow_rays: true,
             count_point_lights: false,
+            crowd_form: CrowdForm::Proxies,
         }
     }
 }
@@ -113,6 +148,13 @@ pub struct Renderer {
     /// Whether the frame traces shadow rays, which the shadow mask pass and
     /// phase two's depth pass run for.
     shadow_rays: bool,
+    /// With the crowd's refit or rebuild form.
+    blas_refit: Option<BlasRefit>,
+    /// Whether the dynamic TLAS's build is timed between markers: not with
+    /// BLAS updates, which put the build inside the frame's span from the
+    /// bend pass, and whose rebuilds through wgpu would fail the first
+    /// marker's query, as `DynamicTlas::mark` says.
+    marks_dynamic_tlas_build: bool,
     depth_pyramid_pass: DepthPyramidPass,
     tonemapping_pass: TonemappingPass,
     /// With the `count_point_lights` Render switch on.
@@ -286,6 +328,7 @@ impl Renderer {
 
         let static_tlas = StaticTlas::new(&device, STATIC_TLAS_CAPACITY);
         let dynamic_tlas = DynamicTlas::new(&device, &queue, context.backend());
+        let blas_refit = BlasRefit::new(&device, &queue, context.backend(), switches.crowd_form);
         let scene_geometry_bind_group = SCENE_GEOMETRY.bind_group(
             &device,
             &scene_geometry_bind_group_layout,
@@ -346,6 +389,8 @@ impl Renderer {
             main_pass,
             shadow_mask_pass,
             shadow_rays: switches.shadow_rays,
+            blas_refit,
+            marks_dynamic_tlas_build: switches.crowd_form == CrowdForm::Proxies,
             depth_pyramid_pass,
             tonemapping_pass,
             light_count_pass,
@@ -479,8 +524,9 @@ impl Renderer {
     /// format and size this Renderer renders to, timing its passes for
     /// `gpu_frame_stats`, which reads them back a few frames later, and
     /// submits it after the dynamic TLAS's build, if it has one, which it
-    /// records into a command buffer of its own. Returns the frame's
-    /// submission.
+    /// records into a command buffer of its own; with BLAS updates, the
+    /// frame's commands up to its bend pass and the updates are submitted
+    /// before the build. Returns the frame's submission.
     pub fn render(
         &mut self,
         frame: &FrameData,
@@ -495,11 +541,26 @@ impl Renderer {
         self.material_pool.refresh_bind_group(&self.device);
 
         let timestamps = self.gpu_stats.begin_frame(&mut encoder, recorder);
+        // Bent Meshes take their shapes before any pass reads their vertices.
+        let bend_timestamps = timestamps.map(|timestamps| timestamps.compute_pass(BEND_PASS));
+        let bent = self
+            .bend_pass
+            .record(&mut encoder, &frame.bends, bend_timestamps);
+        let encoding = started.elapsed();
+        // Their BLASes take them too, in a submission of their own, which
+        // the dynamic TLAS's build, recorded after it, follows.
+        if let Some(blas_refit) = self.blas_refit.as_mut().filter(|_| bent) {
+            let started = Instant::now();
+            let head = std::mem::replace(&mut encoder, create_frame_encoder(&self.device));
+            blas_refit.submit(&self.device, &self.queue, head, &self.mesh_pool);
+            recorder.stage(BLAS_REFIT, started);
+        }
         // The dynamic TLAS's build, its recording timed apart from the
         // frame's: `encode` resumes after it.
-        let encoding = started.elapsed();
         let started = Instant::now();
-        let bracket = timestamps.map(|timestamps| timestamps.bracket(DYNAMIC_TLAS_BUILD));
+        let bracket = timestamps
+            .filter(|_| self.marks_dynamic_tlas_build)
+            .map(|timestamps| timestamps.bracket(DYNAMIC_TLAS_BUILD));
         let tlas_anchor = self.static_tlas.anchor();
         let dynamic_tlas_commands = self
             .dynamic_tlas
@@ -510,11 +571,6 @@ impl Renderer {
             });
         recorder.stage(DYNAMIC_TLAS_RECORDING, started);
         let started = Instant::now() - encoding;
-        // Bent Meshes take their shapes before any pass reads their vertices.
-        let bend_timestamps = timestamps.map(|timestamps| timestamps.compute_pass(BEND_PASS));
-        let bent = self
-            .bend_pass
-            .record(&mut encoder, &frame.bends, bend_timestamps);
         let culling_bind_groups = [
             (&FRAME, &self.frame_bind_group),
             (&SCENE_GEOMETRY, &self.scene_geometry_bind_group),
@@ -594,7 +650,7 @@ impl Renderer {
         // phases', each with one indirect call; the tonemapping pass draws
         // one triangle.
         recorder.draw_calls += 4;
-        if dynamic_tlas_commands.is_some() {
+        if dynamic_tlas_commands.is_some() && self.marks_dynamic_tlas_build {
             self.gpu_stats.dynamic_tlas_built();
         }
         if bent {
@@ -665,6 +721,10 @@ impl Renderer {
                 .render_targets
                 .gpu_memory_bytes(self.transient_saves_memory)
             + self.bend_pass.gpu_memory_bytes()
+            + self
+                .blas_refit
+                .as_ref()
+                .map_or(0, BlasRefit::gpu_memory_bytes)
             + self.froxel_pass.gpu_memory_bytes()
             + self.shadow_mask_pass.gpu_memory_bytes()
             + self.culling_pass.gpu_memory_bytes()

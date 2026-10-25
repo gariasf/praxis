@@ -13,6 +13,7 @@ use crate::cook::LoadedImage;
 use crate::cooked::CookedMaterial;
 use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource};
 use crate::environment::Environment;
+use crate::render::CrowdForm;
 use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
 use crate::transform::PreviousWorldTransform;
 
@@ -948,15 +949,38 @@ fn crowd_figure_bounds() -> [[f32; 3]; 2] {
 
 /// Spawns the ground, then the figures in rows of `CROWD_COLUMNS` centred
 /// on the origin, each drawing its own Mesh, bent from one rest Mesh, with
-/// its bones' shadow proxies as children.
+/// its bones' shadow proxies as children (`CrowdForm::Proxies`).
 pub(crate) fn spawn_crowd(world: &mut World, loader: &mut AssetLoader) -> anyhow::Result<()> {
+    spawn_crowd_as(world, loader, CrowdForm::Proxies)
+}
+
+/// Spawns the crowd as `spawn_crowd` does, each figure traced through its
+/// own Mesh's BLAS, updated each frame, and no shadow proxies
+/// (`CrowdForm::Refit`, `CrowdForm::Rebuild`).
+pub(crate) fn spawn_traced_crowd(
+    world: &mut World,
+    loader: &mut AssetLoader,
+) -> anyhow::Result<()> {
+    spawn_crowd_as(world, loader, CrowdForm::Refit)
+}
+
+/// Spawns the crowd as `form` traces it: through shadow proxies, or through
+/// the figures' own BLASes.
+fn spawn_crowd_as(
+    world: &mut World,
+    loader: &mut AssetLoader,
+    form: CrowdForm,
+) -> anyhow::Result<()> {
     let scene = ReferenceScene::Crowd;
     let ground = loader.mesh(scene.mesh_id("ground"))?;
     world.spawn((Transform::IDENTITY, MeshRef(ground)));
     let material = loader.material(scene.material_id("figure"))?;
     let figure = scene.mesh_id("figure");
     let rest = loader.bent_mesh(figure)?;
-    let proxy = loader.shadow_proxy(scene.mesh_id("proxy"))?;
+    let proxy = match form {
+        CrowdForm::Proxies => Some(loader.shadow_proxy(scene.mesh_id("proxy"))?),
+        CrowdForm::Refit | CrowdForm::Rebuild => None,
+    };
     let centre = f64::from(CROWD_COLUMNS - 1) / 2.0;
     for index in 0..CROWD_FIGURES {
         let (row, column) = (index / CROWD_COLUMNS, index % CROWD_COLUMNS);
@@ -972,14 +996,24 @@ pub(crate) fn spawn_crowd(world: &mut World, loader: &mut AssetLoader) -> anyhow
             curvature,
             previous_curvature: curvature,
         };
-        let bent = (MeshRef(loader.bent_mesh(figure)?), bend, sway);
-        let figure_entity = world
-            .spawn((
-                Transform::from_translation(position),
-                MaterialRef(material),
-                bent,
-            ))
-            .id();
+        let mut figure_entity = world.spawn((
+            Transform::from_translation(position),
+            MaterialRef(material),
+            bend,
+            sway,
+        ));
+        let Some(proxy) = proxy else {
+            // A Moving Instance, so it joins the dynamic TLAS, rebuilt each
+            // frame over its BLAS's bent bounds; the static TLAS would keep
+            // the bounds of its load.
+            figure_entity.insert((
+                MeshRef(loader.refitted_mesh(figure)?),
+                PreviousWorldTransform::default(),
+            ));
+            continue;
+        };
+        figure_entity.insert(MeshRef(loader.bent_mesh(figure)?));
+        let figure_entity = figure_entity.id();
         for bone in 0..CROWD_BONES {
             world.spawn((
                 bone_transform(bone, &bend),
@@ -1019,13 +1053,13 @@ pub(crate) struct Bone(u32);
 /// its bones' shadow proxies on its bent middle.
 pub(crate) fn sway(
     fixed_time: Res<FixedTime>,
-    mut figures: Query<(&Sway, &mut Bend, &Children)>,
+    mut figures: Query<(&Sway, &mut Bend, Option<&Children>)>,
     mut bones: Query<(&Bone, &mut Transform)>,
 ) {
     let seconds = (fixed_time.tick + 1) as f64 * TICK_SECONDS;
     for (sway, mut bend, children) in &mut figures {
         bend.curvature = sway.curvature(seconds);
-        for &child in children {
+        for &child in children.into_iter().flatten() {
             if let Ok((bone, mut transform)) = bones.get_mut(child) {
                 *transform = bone_transform(bone.0, &bend);
             }

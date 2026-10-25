@@ -1,6 +1,7 @@
 pub mod acceleration_structures;
 pub mod bend_pass;
 pub mod bind_groups;
+pub mod blas_refit;
 pub mod culling_pass;
 pub mod depth_pyramid_pass;
 pub mod froxel_pass;
@@ -28,8 +29,8 @@ pub use acceleration_structures::{
 };
 pub use instance::{INSTANCE_CAPACITY, InstanceData, NO_MATERIAL, NO_MESH};
 pub use prepare::{FrameData, FramePreparer};
+pub use renderer::{CrowdForm, RenderSwitches, Renderer};
 pub(crate) use renderer::{DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT, TIMED_PASSES};
-pub use renderer::{RenderSwitches, Renderer};
 pub use staging::{FrameStaging, LoadStaging};
 pub use targets::{DEPTH_FORMAT, HDR_FORMAT};
 pub use uniforms::{CameraUniform, LIGHT_CAPACITY, LightData, LightUniform};
