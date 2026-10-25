@@ -11,18 +11,22 @@ pub struct GpuContext {
 impl GpuContext {
     /// A context with no window or surface.
     pub async fn headless() -> anyhow::Result<Self> {
-        let adapter = request_adapter(&create_wgpu_instance(), None).await?;
+        let adapter =
+            first_backend(async |wgpu_instance| request_adapter(wgpu_instance, None).await).await?;
         Self::request_device(adapter).await
     }
 
     /// A context whose adapter can present to `target`, the surface for it,
     /// and the surface format the tonemapping pass renders into.
     pub(crate) async fn with_surface(
-        target: impl Into<wgpu::SurfaceTarget<'static>>,
+        target: impl Into<wgpu::SurfaceTarget<'static>> + Clone,
     ) -> anyhow::Result<(Self, wgpu::Surface<'static>, wgpu::TextureFormat)> {
-        let wgpu_instance = create_wgpu_instance();
-        let surface = wgpu_instance.create_surface(target)?;
-        let adapter = request_adapter(&wgpu_instance, Some(&surface)).await?;
+        let (adapter, surface) = first_backend(async |wgpu_instance| {
+            let surface = wgpu_instance.create_surface(target.clone())?;
+            let adapter = request_adapter(wgpu_instance, Some(&surface)).await?;
+            Ok((adapter, surface))
+        })
+        .await?;
         let surface_format = choose_surface_format(&surface.get_capabilities(&adapter))?;
         let context = Self::request_device(adapter).await?;
         Ok((context, surface, surface_format))
@@ -80,7 +84,8 @@ impl GpuContext {
 /// requests no device, so it also runs on adapters below the Capability
 /// floor, to diagnose them.
 pub async fn capability_report() -> anyhow::Result<String> {
-    let adapter = request_adapter(&create_wgpu_instance(), None).await?;
+    let adapter =
+        first_backend(async |wgpu_instance| request_adapter(wgpu_instance, None).await).await?;
     Ok(adapter_report(&adapter))
 }
 
@@ -391,6 +396,8 @@ async fn request_adapter(
         name = %adapter_info.name,
         backend = ?adapter_info.backend,
         device_type = ?adapter_info.device_type,
+        driver = %adapter_info.driver,
+        driver_info = %adapter_info.driver_info,
         "adapter selected"
     );
     Ok(adapter)
@@ -424,14 +431,89 @@ fn choose_surface_format(
     Ok(surface_format)
 }
 
-fn create_wgpu_instance() -> wgpu::Instance {
-    wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::PRIMARY,
-        flags: Default::default(),
+/// The backends a context tries, in order, each in an instance of its own:
+/// an instance initialises every backend it names, and in debug builds
+/// DX12's validation turns on the D3D12 and DXGI debug layers for the whole
+/// process, under which NVIDIA's Vulkan driver, which presents through DXGI,
+/// raises exception 0x87D as it destroys its device (drivers 617.42 and
+/// 621.01). Vulkan leads, as in wgpu's own backend order; macOS builds have
+/// Metal alone.
+const BACKEND_ORDER: [wgpu::Backend; 3] = [
+    wgpu::Backend::Vulkan,
+    wgpu::Backend::Metal,
+    wgpu::Backend::Dx12,
+];
+
+/// The backends of `BACKEND_ORDER` that the build has and `WGPU_BACKEND`
+/// asks for, `requested`, in its order.
+fn backend_order(
+    built: wgpu::Backends,
+    requested: wgpu::Backends,
+) -> impl Iterator<Item = wgpu::Backend> {
+    BACKEND_ORDER
+        .into_iter()
+        .filter(move |&backend| (built & requested).contains(backend.into()))
+}
+
+/// Runs `try_backend` on an instance of each backend of `backend_order`,
+/// `WGPU_BACKEND` read when set, and returns its first success.
+async fn first_backend<T>(
+    try_backend: impl AsyncFnMut(&wgpu::Instance) -> anyhow::Result<T>,
+) -> anyhow::Result<T> {
+    let built = wgpu::Instance::enabled_backend_features();
+    let requested = wgpu::Backends::PRIMARY.with_env();
+    let backends: Vec<_> = backend_order(built, requested).collect();
+    anyhow::ensure!(
+        !backends.is_empty(),
+        "no backend to try: this build has {built:?}, and WGPU_BACKEND asks for {requested:?}"
+    );
+    first_success(&backends, try_backend).await
+}
+
+/// Runs `try_backend` on an instance of each of `backends` in turn, and
+/// returns its first success. A backend that fails is warned about, so a
+/// fallback to the next is never silent; when all fail, the error gives each
+/// one's cause, the last as its source.
+async fn first_success<T>(
+    backends: &[wgpu::Backend],
+    mut try_backend: impl AsyncFnMut(&wgpu::Instance) -> anyhow::Result<T>,
+) -> anyhow::Result<T> {
+    let mut failures = Vec::new();
+    for &backend in backends {
+        let wgpu_instance = wgpu::Instance::new(instance_descriptor(backend));
+        match try_backend(&wgpu_instance).await {
+            Ok(value) => return Ok(value),
+            Err(error) => {
+                tracing::warn!(?backend, error = %format_args!("{error:#}"), "backend unusable");
+                failures.push((backend, error));
+            }
+        }
+    }
+    let Some((last_backend, last_error)) = failures.pop() else {
+        anyhow::bail!("no backend to try");
+    };
+    let backends_and_causes: Vec<_> = failures
+        .iter()
+        .map(|(backend, error)| format!("{backend:?}: {error:#}"))
+        .chain([format!("{last_backend:?}")])
+        .collect();
+    Err(last_error.context(format!(
+        "no usable backend; {}",
+        backends_and_causes.join("; ")
+    )))
+}
+
+/// An instance of `backend` alone, with wgpu's flags and backend options for
+/// this build, validation in debug builds, as wgpu's variables override
+/// them: `WGPU_VALIDATION`, `WGPU_DEBUG`, `WGPU_DX12_COMPILER` and the rest.
+fn instance_descriptor(backend: wgpu::Backend) -> wgpu::InstanceDescriptor {
+    wgpu::InstanceDescriptor {
+        backends: backend.into(),
+        flags: wgpu::InstanceFlags::from_env_or_default(),
         memory_budget_thresholds: Default::default(),
-        backend_options: Default::default(),
+        backend_options: wgpu::BackendOptions::from_env_or_default(),
         display: None,
-    })
+    }
 }
 
 #[cfg(test)]
@@ -656,5 +738,66 @@ mod tests {
             ),
             Ok(())
         );
+    }
+
+    /// No instance starts a backend beside the one it tries, so DX12's debug
+    /// layers never load under Vulkan.
+    #[test]
+    fn each_instance_names_one_backend() {
+        for backend in BACKEND_ORDER {
+            assert_eq!(
+                instance_descriptor(backend).backends,
+                wgpu::Backends::from(backend)
+            );
+        }
+    }
+
+    #[test]
+    fn backends_are_tried_vulkan_metal_then_dx12_among_those_built_and_requested() {
+        use wgpu::Backend::{Dx12, Metal, Vulkan};
+        use wgpu::Backends;
+        let order = |built, requested| backend_order(built, requested).collect::<Vec<_>>();
+        assert_eq!(
+            order(Backends::PRIMARY, Backends::PRIMARY),
+            [Vulkan, Metal, Dx12]
+        );
+        // Windows' build, as is and with `WGPU_BACKEND=dx12`.
+        let windows = Backends::VULKAN | Backends::DX12;
+        assert_eq!(order(windows, Backends::PRIMARY), [Vulkan, Dx12]);
+        assert_eq!(order(windows, Backends::DX12), [Dx12]);
+        // macOS's build, with `WGPU_BACKEND` naming a backend it lacks.
+        assert_eq!(order(Backends::METAL, Backends::VULKAN), []);
+    }
+
+    /// A backend that fails falls through to the next, and when all fail the
+    /// error names each one's cause, keeping the last as its source. `Noop`
+    /// and `Gl`, which this build lacks, make instances that start nothing.
+    #[test]
+    fn a_failing_backend_falls_through_to_the_next() {
+        use wgpu::Backend::{Gl, Noop};
+        let mut tries = 0;
+        let first_success_on_second_try =
+            pollster::block_on(first_success(&[Noop, Gl], async |_| {
+                tries += 1;
+                match tries {
+                    1 => anyhow::bail!("no driver"),
+                    _ => Ok(tries),
+                }
+            }));
+        assert_eq!(first_success_on_second_try.unwrap(), 2);
+
+        let error = pollster::block_on(first_success(
+            &[Noop, Gl],
+            async |_| -> anyhow::Result<()> {
+                Err(anyhow::Error::from(std::fmt::Error).context("no adapter"))
+            },
+        ))
+        .unwrap_err();
+        assert_eq!(
+            format!("{error:#}"),
+            "no usable backend; Noop: no adapter: an error occurred when formatting an argument; \
+             Gl: no adapter: an error occurred when formatting an argument"
+        );
+        assert!(error.is::<std::fmt::Error>());
     }
 }
