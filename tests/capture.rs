@@ -26,7 +26,7 @@ fn capture_draws_the_scene_over_the_tonemapped_background() {
     if !model.exists() {
         writeln!(
             std::io::stderr(),
-            "skipped: {} is not fetched; run scripts/fetch-assets.sh",
+            "skipped: {} is not fetched; run `praxis fetch`",
             praxis::DEFAULT_MODEL
         )
         .ok();

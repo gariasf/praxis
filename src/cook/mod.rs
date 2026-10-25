@@ -2,6 +2,7 @@
 //! Reference scene into Blobs in the Cooked cache, cooking only the Assets
 //! whose Cook key changed.
 
+mod fetch;
 pub(crate) mod mesh;
 mod texture;
 
@@ -12,6 +13,7 @@ use anyhow::Context;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
+pub use fetch::{Fetch, fetch};
 pub use texture::{LoadedImage, TextureSource};
 
 use crate::ReferenceScene;
@@ -48,11 +50,41 @@ pub struct CookReport {
     pub absent_sources: Vec<String>,
 }
 
-/// The fields of an `assets/manifest.json` entry the cooker reads.
+/// The fields of an `assets/manifest.json` entry the cooker and fetching
+/// read; a committed file's needs only its path and GUID.
 #[derive(Deserialize)]
 struct ManifestEntry {
     path: String,
     guid: String,
+    /// Whether the file is downloaded from `source` rather than committed.
+    #[serde(default)]
+    fetched: bool,
+    #[serde(default)]
+    source: String,
+    #[serde(default)]
+    sha256: String,
+}
+
+impl ManifestEntry {
+    fn guid(&self) -> anyhow::Result<u128> {
+        u128::from_str_radix(&self.guid, 16)
+            .with_context(|| format!("{}: guid {:?} is not hex", self.path, self.guid))
+    }
+}
+
+/// The entries of the manifest in `assets`; none when it is absent and
+/// `may_be_absent`, as a dev launch allows.
+fn read_manifest(assets: &Path, may_be_absent: bool) -> anyhow::Result<Vec<ManifestEntry>> {
+    let path = assets.join("manifest.json");
+    match std::fs::read(&path) {
+        Ok(manifest) => {
+            serde_json::from_slice(&manifest).with_context(|| format!("parsing {}", path.display()))
+        }
+        Err(error) if may_be_absent && error.kind() == std::io::ErrorKind::NotFound => {
+            Ok(Vec::new())
+        }
+        Err(error) => Err(error).with_context(|| format!("reading {}", path.display())),
+    }
 }
 
 /// Every Material, Texture and Mesh the sources define.
@@ -84,7 +116,8 @@ pub fn cook(
 
 /// What a dev launch of `scene` cooks before it loads: the manifest
 /// sources the scene references, those present, and its procedural Assets.
-/// The Blobs of an absent source, or of every source when the manifest is
+/// A source the manifest marks fetched is fetched first when absent. The
+/// Blobs of a source still absent, or of every source when the manifest is
 /// absent, stay as they are.
 pub fn cook_scene(
     scene: ReferenceScene,
@@ -92,6 +125,7 @@ pub fn cook_scene(
     cache: &CookedCache,
     settings: &CookSettings,
 ) -> anyhow::Result<CookReport> {
+    fetch::fetch_for_launch(assets, scene.source_files());
     let sources = read_sources(assets, &[scene], Some(scene.source_files()))?;
     cook_sources(&sources, cache, settings)
 }
@@ -196,17 +230,8 @@ fn read_sources(
     source_guids: Option<&[u128]>,
 ) -> anyhow::Result<Sources> {
     let manifest_path = assets.join("manifest.json");
-    let manifest: Vec<ManifestEntry> = match std::fs::read(&manifest_path) {
-        Ok(manifest) => serde_json::from_slice(&manifest)
-            .with_context(|| format!("parsing {}", manifest_path.display()))?,
-        // A dev launch's GUIDs then all warn as unlisted, below.
-        Err(error) if source_guids.is_some() && error.kind() == std::io::ErrorKind::NotFound => {
-            Vec::new()
-        }
-        Err(error) => {
-            return Err(error).with_context(|| format!("reading {}", manifest_path.display()));
-        }
-    };
+    // Without one, a dev launch's GUIDs all warn as unlisted, below.
+    let manifest = read_manifest(assets, source_guids.is_some())?;
 
     let mut sources = Sources::default();
     let mut unlisted: Vec<u128> = source_guids.unwrap_or_default().to_vec();
@@ -214,8 +239,7 @@ fn read_sources(
         if !(entry.path.ends_with(".gltf") || entry.path.ends_with(".glb")) {
             continue;
         }
-        let guid = u128::from_str_radix(&entry.guid, 16)
-            .with_context(|| format!("{}: guid {:?} is not hex", entry.path, entry.guid))?;
+        let guid = entry.guid()?;
         unlisted.retain(|listed| *listed != guid);
         if source_guids.is_some_and(|guids| !guids.contains(&guid)) {
             continue;

@@ -13,7 +13,7 @@
 
 .env
 
-# Fetched assets: pinned in assets/manifest.json, downloaded by scripts/fetch-assets.sh
+# Fetched assets: pinned in assets/manifest.json, downloaded by `praxis fetch`
 /assets/SciFiHelmet/
 
 # The helmet's Baseline is local-only, like its asset (#34)
