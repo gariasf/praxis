@@ -357,7 +357,7 @@ impl MeshPool {
                 vertex_buffer: &self.vertex_arena.buffer,
                 first_vertex: blas.first_vertex,
                 vertex_stride: size_of::<CookedVertex>() as u64,
-                index_buffer: Some(&self.index_arena.buffer),
+                index_buffer: Some(self.index_arena()),
                 first_index: Some(blas.first_index),
                 transform_buffer: None,
                 transform_buffer_offset: None,
@@ -370,7 +370,7 @@ impl MeshPool {
     /// what a refit must match.
     pub fn rebuild_refitted_blases(&self, encoder: &mut wgpu::CommandEncoder) {
         let entries: Vec<_> = self
-            .refitted_blases
+            .refitted_blases()
             .iter()
             .map(|blas| self.blas_build_entry(blas))
             .collect();

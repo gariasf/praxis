@@ -138,7 +138,7 @@ impl BlasRefit {
     ) -> wgpu::CommandBuffer {
         use wgpu::hal::{self, CommandEncoder as _, api::Metal};
 
-        use crate::assets::REFITTED_BLAS_FLAGS;
+        use crate::assets::pools::REFITTED_BLAS_FLAGS;
 
         let blases = mesh_pool.refitted_blases();
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -247,7 +247,8 @@ impl BlasRefit {
 mod metal {
     use wgpu::hal::{self, Device as _, api::Metal};
 
-    use crate::assets::{MeshBlas, MeshPool, REFITTED_BLAS_FLAGS};
+    use crate::assets::MeshPool;
+    use crate::assets::pools::{MeshBlas, REFITTED_BLAS_FLAGS};
     use crate::cooked::CookedVertex;
 
     /// Scratch regions start this far apart at least: a margin over the
