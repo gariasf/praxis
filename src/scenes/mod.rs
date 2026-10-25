@@ -13,6 +13,7 @@ use crate::cook::LoadedImage;
 use crate::cooked::CookedMaterial;
 use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource};
 use crate::environment::Environment;
+use crate::render::CrowdForm;
 use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
 use crate::transform::PreviousWorldTransform;
 
@@ -950,7 +951,7 @@ fn crowd_figure_bounds() -> [[f32; 3]; 2] {
 /// on the origin, each drawing its own Mesh, bent from one rest Mesh, with
 /// its bones' shadow proxies as children (`CrowdForm::Proxies`).
 pub(crate) fn spawn_crowd(world: &mut World, loader: &mut AssetLoader) -> anyhow::Result<()> {
-    spawn_crowd_as(world, loader, false)
+    spawn_crowd_as(world, loader, CrowdForm::Proxies)
 }
 
 /// Spawns the crowd as `spawn_crowd` does, each figure traced through its
@@ -960,22 +961,25 @@ pub(crate) fn spawn_traced_crowd(
     world: &mut World,
     loader: &mut AssetLoader,
 ) -> anyhow::Result<()> {
-    spawn_crowd_as(world, loader, true)
+    spawn_crowd_as(world, loader, CrowdForm::Refit)
 }
 
-/// Spawns the crowd, its figures traced through their own BLASes when
-/// `traced`, through shadow proxies otherwise.
-fn spawn_crowd_as(world: &mut World, loader: &mut AssetLoader, traced: bool) -> anyhow::Result<()> {
+/// Spawns the crowd as `form` traces it: through shadow proxies, or through
+/// the figures' own BLASes.
+fn spawn_crowd_as(
+    world: &mut World,
+    loader: &mut AssetLoader,
+    form: CrowdForm,
+) -> anyhow::Result<()> {
     let scene = ReferenceScene::Crowd;
     let ground = loader.mesh(scene.mesh_id("ground"))?;
     world.spawn((Transform::IDENTITY, MeshRef(ground)));
     let material = loader.material(scene.material_id("figure"))?;
     let figure = scene.mesh_id("figure");
     let rest = loader.bent_mesh(figure)?;
-    let proxy = if traced {
-        None
-    } else {
-        Some(loader.shadow_proxy(scene.mesh_id("proxy"))?)
+    let proxy = match form {
+        CrowdForm::Proxies => Some(loader.shadow_proxy(scene.mesh_id("proxy"))?),
+        CrowdForm::Refit | CrowdForm::Rebuild => None,
     };
     let centre = f64::from(CROWD_COLUMNS - 1) / 2.0;
     for index in 0..CROWD_FIGURES {

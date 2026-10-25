@@ -25,6 +25,9 @@ pub struct BlasRefit {
     /// None where the build waits for it on the CPU instead.
     #[cfg(target_vendor = "apple")]
     order: Option<metal::Order>,
+    /// Whether a refit was refused and logged, so it is logged once.
+    #[cfg(target_vendor = "apple")]
+    refusal_logged: bool,
     /// Whether the build must wait for the update on the CPU: on Metal,
     /// where nothing orders a TLAS build after the BLASes it reads are
     /// written (gfx-rs/wgpu#9215), when no shared event could be made.
@@ -67,6 +70,8 @@ impl BlasRefit {
             scratch: None,
             #[cfg(target_vendor = "apple")]
             order,
+            #[cfg(target_vendor = "apple")]
+            refusal_logged: false,
             waits_on_cpu,
         })
     }
@@ -133,20 +138,28 @@ impl BlasRefit {
     ) -> wgpu::CommandBuffer {
         use wgpu::hal::{self, CommandEncoder as _, api::Metal};
 
+        use crate::assets::REFITTED_BLAS_FLAGS;
+
         let blases = mesh_pool.refitted_blases();
-        let (scratch, offsets) = self
-            .scratch
-            .get_or_insert_with(|| metal::scratch(device, mesh_pool));
-        if blases.len() > offsets.len() {
-            tracing::error!(
-                refitted = offsets.len(),
-                loaded = blases.len(),
-                "BLASes loaded after the first refit are not refitted"
-            );
-        }
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("BLAS Refit Encoder"),
         });
+        let logged = &mut self.refusal_logged;
+        let mut refuse = |refusal: &str| {
+            if !std::mem::replace(logged, true) {
+                tracing::error!(refusal, loaded = blases.len(), "BLASes not refitted");
+            }
+        };
+        if self.scratch.is_none() {
+            self.scratch = metal::scratch(device, mesh_pool);
+        }
+        let Some((scratch, offsets)) = &self.scratch else {
+            refuse("no scratch: an Arena is not Metal's");
+            return encoder.finish();
+        };
+        if blases.len() > offsets.len() {
+            refuse("those loaded after the first refit have no scratch");
+        }
         // SAFETY: wgpu-hal's refit is sound under these invariants, each
         // held here:
         // - Every handle is Metal's: `new` refuses the refit off Metal.
@@ -156,14 +169,19 @@ impl BlasRefit {
         //   the main thread calls into wgpu meanwhile (ADR 0016).
         // - The encoder is used through wgpu-hal alone, never ended here,
         //   and finished by wgpu; wgpu-core panics on a mix of the two.
-        // - The GPU's use ends before any handle is freed: wgpu-core keeps
-        //   whatever a submission names until it completes, and the Mesh
-        //   pool and this refit hold the rest as long as the Renderer.
+        // - The GPU's use ends before any object is freed: wgpu-core never
+        //   sees what this command buffer uses, but wgpu-hal's Metal command
+        //   buffers retain every resource their commands name until they
+        //   complete (its `retain_command_buffer_references`, on by
+        //   default).
         // - Each refit's descriptor is the one wgpu-core built the BLAS from
         //   (`MeshPool::load_for`), with its flags, which allow updates: the
         //   same buffers, offsets, counts, stride and formats.
         // - Each refit has its own scratch region, of the size Metal asks
-        //   for its update.
+        //   for its update, in a buffer any usage makes on Metal. The next
+        //   frame's refits reuse the regions, and the frames before them may
+        //   still run: Metal tracks hazards on wgpu-hal's buffers, scratch
+        //   included, so they wait.
         // - The bend pass's writes to the vertex Arena come first in the
         //   queue, and Metal tracks hazards on wgpu-hal's buffers, so each
         //   refit reads the bent shapes; the TLAS build that reads the
@@ -179,7 +197,7 @@ impl BlasRefit {
                 metal::unguarded(mesh_pool.index_arena().as_hal::<Metal>()),
                 metal::unguarded(scratch.as_hal::<Metal>()),
             ) else {
-                tracing::error!("BLASes not refitted: an Arena or the scratch is not Metal's");
+                refuse("an Arena or the scratch is not Metal's");
                 return encoder.finish();
             };
             let mut handles: Vec<wgpu::Blas> =
@@ -189,7 +207,7 @@ impl BlasRefit {
                 .map(|blas| metal::unguarded(blas.as_hal::<Metal>()))
                 .collect::<Option<Vec<_>>>()
             else {
-                tracing::error!("BLASes not refitted: a BLAS is not Metal's");
+                refuse("a BLAS is not Metal's");
                 return encoder.finish();
             };
             let entries: Vec<_> = blases
@@ -204,7 +222,7 @@ impl BlasRefit {
                     |((entries, raw_blas), &offset)| hal::BuildAccelerationStructureDescriptor {
                         entries,
                         mode: hal::AccelerationStructureBuildMode::Update,
-                        flags: crate::assets::REFITTED_BLAS_FLAGS,
+                        flags: REFITTED_BLAS_FLAGS,
                         source_acceleration_structure: Some(*raw_blas),
                         destination_acceleration_structure: *raw_blas,
                         scratch_buffer: scratch,
@@ -216,7 +234,7 @@ impl BlasRefit {
                 Some(hal_encoder) => {
                     hal_encoder.build_acceleration_structures(descriptors.len() as u32, descriptors)
                 }
-                None => tracing::error!("BLASes not refitted: the encoder is not Metal's"),
+                None => refuse("the encoder is not Metal's"),
             });
         }
         encoder.finish()
@@ -229,7 +247,7 @@ impl BlasRefit {
 mod metal {
     use wgpu::hal::{self, Device as _, api::Metal};
 
-    use crate::assets::{MeshPool, REFITTED_BLAS_FLAGS, RefittedBlas};
+    use crate::assets::{MeshBlas, MeshPool, REFITTED_BLAS_FLAGS};
     use crate::cooked::CookedVertex;
 
     /// Scratch regions start this far apart at least: a margin over the
@@ -255,7 +273,7 @@ mod metal {
     /// `blas`'s triangles as wgpu-core gave them to its build, from
     /// `vertices` and `indices`, the Mesh pool's Arenas.
     pub(super) fn triangles<'a>(
-        blas: &RefittedBlas,
+        blas: &MeshBlas,
         vertices: &'a hal::metal::Buffer,
         indices: &'a hal::metal::Buffer,
     ) -> hal::AccelerationStructureEntries<'a, hal::metal::Buffer> {
@@ -280,18 +298,17 @@ mod metal {
 
     /// A scratch buffer of `device`'s with a region for each of
     /// `mesh_pool`'s refitted BLASes, as large as Metal asks for its update,
-    /// and the regions' offsets.
-    pub(super) fn scratch(device: &wgpu::Device, mesh_pool: &MeshPool) -> (wgpu::Buffer, Vec<u64>) {
+    /// and the regions' offsets; None if a handle is not Metal's.
+    pub(super) fn scratch(
+        device: &wgpu::Device,
+        mesh_pool: &MeshPool,
+    ) -> Option<(wgpu::Buffer, Vec<u64>)> {
         // SAFETY: the handles are Metal's, as `BlasRefit::new` checked, and
         // the Mesh pool holds the Arenas past this call (`unguarded`).
         let sizes: Vec<u64> = unsafe {
-            let (Some(hal_device), Some(vertices), Some(indices)) = (
-                device.as_hal::<Metal>(),
-                unguarded(mesh_pool.vertex_arena().as_hal::<Metal>()),
-                unguarded(mesh_pool.index_arena().as_hal::<Metal>()),
-            ) else {
-                return (empty_scratch(device), Vec::new());
-            };
+            let hal_device = device.as_hal::<Metal>()?;
+            let vertices = unguarded(mesh_pool.vertex_arena().as_hal::<Metal>())?;
+            let indices = unguarded(mesh_pool.index_arena().as_hal::<Metal>())?;
             mesh_pool
                 .refitted_blases()
                 .iter()
@@ -319,16 +336,7 @@ mod metal {
             usage: wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
-        (buffer, offsets)
-    }
-
-    fn empty_scratch(device: &wgpu::Device) -> wgpu::Buffer {
-        device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("BLAS Refit Scratch"),
-            size: SCRATCH_ALIGNMENT,
-            usage: wgpu::BufferUsages::STORAGE,
-            mapped_at_creation: false,
-        })
+        Some((buffer, offsets))
     }
 
     /// Orders the GPU work of a submission after the one before it: the
@@ -352,20 +360,21 @@ mod metal {
         pub(super) fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Option<Self> {
             // SAFETY: both handles are Metal's; the fence is destroyed by
             // the device that made it (`Drop`), and the queue lives as long
-            // as wgpu's.
-            unsafe {
-                let fence = device.as_hal::<Metal>()?.create_fence().ok()?;
-                fence.raw_shared_event()?;
-                if let Err(error) = queue.as_hal::<Metal>()?.enable_strict_event_sync() {
-                    tracing::error!(%error, "strict event sync not enabled");
-                    return None;
-                }
-                Some(Self {
-                    device: device.clone(),
-                    fence: Some(fence),
-                    signalled: 0,
-                })
+            // as wgpu's. Strict event sync then adds a wait to every command
+            // buffer and a command buffer to every submission on the queue.
+            let order = Self {
+                device: device.clone(),
+                fence: Some(unsafe { device.as_hal::<Metal>()?.create_fence().ok()? }),
+                signalled: 0,
+            };
+            // Dropping `order` destroys the fence on the way out.
+            order.fence.as_ref()?.raw_shared_event()?;
+            let queue = unsafe { queue.as_hal::<Metal>()? };
+            if let Err(error) = queue.enable_strict_event_sync() {
+                tracing::error!(%error, "strict event sync not enabled");
+                return None;
             }
+            Some(order)
         }
 
         /// Has the submission `queue` makes next signal a new value as it
@@ -392,8 +401,10 @@ mod metal {
             else {
                 return;
             };
-            // SAFETY: the queue is Metal's, and only the main thread submits
-            // (ADR 0016), so no other submission takes the staged event.
+            // SAFETY: the queue is Metal's. The submission right after the
+            // staging takes it, whichever it is: only the main thread submits
+            // (ADR 0016), and `Renderer::render` submits nothing between the
+            // update's submission and the dynamic TLAS's build.
             unsafe {
                 let Some(queue) = queue.as_hal::<Metal>() else {
                     return;
@@ -409,8 +420,9 @@ mod metal {
 
     impl Drop for Order {
         fn drop(&mut self) {
-            // SAFETY: the device made the fence, and no submission waits on
-            // it: its event is only signalled and waited for on the GPU.
+            // SAFETY: the device made the fence, and no CPU wait reads it.
+            // Submissions still pending signal or wait on its shared event,
+            // which each staging retained, so the event outlives them.
             unsafe {
                 if let (Some(device), Some(fence)) =
                     (self.device.as_hal::<Metal>(), self.fence.take())
