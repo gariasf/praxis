@@ -153,7 +153,9 @@ src/
                                  each pipeline assembles from them)
 tests/                         # integration tests at agreed seams
   goldens/<backend>[-cpu]/     # committed Goldens; PRAXIS_UPDATE_GOLDENS=1
-                                 cargo test --test goldens rewrites them
+                                 cargo test --test goldens rewrites them;
+                                 readme.md shows each scene by its metal
+                                 Golden, and that test checks it does
 bench/                         # budgets.json (ADR 0013) and baselines/
                                  <adapter>/<scene>.json: the M4 Pro's,
                                  and CI's lavapipe (`--ci`); `praxis

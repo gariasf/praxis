@@ -152,6 +152,42 @@ fn compare_counts_pixels_beyond_tolerance_and_marks_them_red() {
     assert_eq!(difference_pixels.get_pixel(2, 0).0, [255, 0, 0, 255]);
 }
 
+/// The readme shows each scene by its Metal Golden, linked where it lies, so
+/// a scene added, renamed or removed here fails until the readme follows.
+#[test]
+fn readme_shows_each_scene_by_its_metal_golden() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let readme = std::fs::read_to_string(root.join("readme.md")).expect("readme.md is readable");
+    let prefix = "tests/goldens/metal/";
+    let mut shown: Vec<&str> = readme
+        .match_indices(prefix)
+        .filter_map(|(start, _)| {
+            let rest = &readme[start + prefix.len()..];
+            let name_length = rest
+                .find(|character: char| !(character.is_ascii_alphanumeric() || character == '-'))
+                .unwrap_or(rest.len());
+            rest[name_length..]
+                .starts_with(".png")
+                .then_some(&rest[..name_length])
+        })
+        .collect();
+    shown.sort_unstable();
+    let mut checked: Vec<&str> = SCENES.map(ReferenceScene::name).into();
+    checked.sort_unstable();
+    assert_eq!(
+        shown, checked,
+        "the readme shows each scene checked here once"
+    );
+    for scene in shown {
+        let golden = root.join(prefix).join(format!("{scene}.png"));
+        assert!(
+            golden.exists(),
+            "readme.md shows {}, which is absent",
+            golden.display()
+        );
+    }
+}
+
 #[test]
 fn reference_scenes_match_their_goldens() {
     let context = match pollster::block_on(GpuContext::headless()) {
