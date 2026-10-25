@@ -19,6 +19,9 @@
 //! scene with no Golden yet writes its capture there. With
 //! `PRAXIS_REQUIRE_GOLDENS=1`, as on CI, a missing adapter or Golden directory
 //! fails instead of skipping.
+//!
+//! `readme.md` shows each scene by its Metal Golden, and a test here holds
+//! its rows to the Metal Goldens recorded.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -153,39 +156,34 @@ fn compare_counts_pixels_beyond_tolerance_and_marks_them_red() {
 }
 
 /// The readme shows each scene by its Metal Golden, linked where it lies, so
-/// a scene added, renamed or removed here fails until the readme follows.
+/// a scene that gains, renames or loses its Golden fails until the readme
+/// follows. A scene added off the Mac, with no Metal Golden yet, is not
+/// required.
 #[test]
 fn readme_shows_each_scene_by_its_metal_golden() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let readme = std::fs::read_to_string(root.join("readme.md")).expect("readme.md is readable");
-    let prefix = "tests/goldens/metal/";
     let mut shown: Vec<&str> = readme
-        .match_indices(prefix)
-        .filter_map(|(start, _)| {
-            let rest = &readme[start + prefix.len()..];
-            let name_length = rest
-                .find(|character: char| !(character.is_ascii_alphanumeric() || character == '-'))
-                .unwrap_or(rest.len());
-            rest[name_length..]
-                .starts_with(".png")
-                .then_some(&rest[..name_length])
+        .split(r#"src="tests/goldens/metal/"#)
+        .skip(1)
+        .map(|rest| {
+            rest.split_once('"')
+                .map_or(rest, |(file_name, _)| file_name)
         })
         .collect();
     shown.sort_unstable();
-    let mut checked: Vec<&str> = SCENES.map(ReferenceScene::name).into();
-    checked.sort_unstable();
+    let metal_directory = root.join("tests/goldens/metal");
+    let mut recorded: Vec<String> = SCENES
+        .into_iter()
+        .map(|scene| golden_path(&metal_directory, scene))
+        .filter(|golden| golden.exists())
+        .filter_map(|golden| Some(golden.file_name()?.to_string_lossy().into_owned()))
+        .collect();
+    recorded.sort_unstable();
     assert_eq!(
-        shown, checked,
-        "the readme shows each scene checked here once"
+        shown, recorded,
+        "readme.md shows each scene checked here by its recorded Metal Golden, once"
     );
-    for scene in shown {
-        let golden = root.join(prefix).join(format!("{scene}.png"));
-        assert!(
-            golden.exists(),
-            "readme.md shows {}, which is absent",
-            golden.display()
-        );
-    }
 }
 
 #[test]
