@@ -22,6 +22,10 @@ pub enum MeshUse {
     /// Traced alone: a shadow proxy, which no pass draws, so it keeps no
     /// Meshlets and needs no Material (#208).
     Traced,
+    /// Drawn and traced, a Mesh the GPU bends whose BLAS is updated each
+    /// frame from its bent shape: built to allow updates, never compacted
+    /// (#209).
+    Refitted,
 }
 
 impl MeshUse {
@@ -37,6 +41,21 @@ impl MeshUse {
     }
 }
 
+/// The flags a refitted Mesh's BLAS is built with, which its refits repeat.
+pub const REFITTED_BLAS_FLAGS: wgpu::AccelerationStructureFlags =
+    wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
+        .union(wgpu::AccelerationStructureFlags::ALLOW_UPDATE);
+
+/// A BLAS updated each frame (`MeshUse::Refitted`), and the build it was
+/// made by: its triangles' sizes, and where they lie in the vertex and index
+/// Arenas.
+pub struct RefittedBlas {
+    pub blas: wgpu::Blas,
+    pub geometry: wgpu::BlasTriangleGeometrySizeDescriptor,
+    pub first_vertex: u32,
+    pub first_index: u32,
+}
+
 /// The Meshes, and the GPU tables they are drawn from: Arenas of vertices
 /// and indices, the Meshlet Arenas and the Mesh table (ADRs 0017, 0019);
 /// and a BLAS per Mesh, which rays trace (ADR 0020).
@@ -49,6 +68,8 @@ pub struct MeshPool {
     /// The Meshes whose BLAS is built but not yet compacted, with its
     /// triangles.
     awaiting_compaction: Vec<(MeshHandle, u64)>,
+    /// The BLASes of the Meshes loaded as `MeshUse::Refitted`.
+    refitted_blases: Vec<RefittedBlas>,
     /// Triangles of the BLASes compacted, and of the others.
     compacted_blas_triangles: u64,
     uncompacted_blas_triangles: u64,
@@ -72,6 +93,7 @@ impl MeshPool {
             meshes: Vec::new(),
             blases: Vec::new(),
             awaiting_compaction: Vec::new(),
+            refitted_blases: Vec::new(),
             compacted_blas_triangles: 0,
             uncompacted_blas_triangles: 0,
             // The vertex shader pulls from it (ADR 0019), BLAS builds read it.
@@ -122,7 +144,7 @@ impl MeshPool {
     /// `materials`, in Primitive order, where no Renderable overrides it; and,
     /// where `mesh_use` has rays trace it, its index stream and its BLAS's
     /// build from its vertex and index ranges, which `compact_blases`
-    /// compacts once `staging` is submitted. A Mesh no pass draws keeps no
+    /// compacts once `staging` is submitted, unless it is refitted. A Mesh no pass draws keeps no
     /// Meshlets. Returns its Handle, or None
     /// after logging when the Mesh table is full or an Arena's longest free
     /// range is too short; a refused Mesh leaves the pool as it was.
@@ -290,38 +312,75 @@ impl MeshPool {
             index_count: Some(mesh.indices.len() as u32),
             flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
         };
+        let refitted = mesh_use == MeshUse::Refitted;
         let blas = self.device.create_blas(
             &wgpu::CreateBlasDescriptor {
                 label: Some("Mesh BLAS"),
-                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
-                    | wgpu::AccelerationStructureFlags::ALLOW_COMPACTION,
+                flags: if refitted {
+                    REFITTED_BLAS_FLAGS
+                } else {
+                    wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
+                        | wgpu::AccelerationStructureFlags::ALLOW_COMPACTION
+                },
                 update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             },
             wgpu::BlasGeometrySizeDescriptors::Triangles {
                 descriptors: vec![geometry.clone()],
             },
         );
-        // The position leads each vertex; the cooked indices count from the
-        // Mesh's first vertex.
-        staging.build_blas(&wgpu::BlasBuildEntry {
-            blas: &blas,
+        let refitted_blas = RefittedBlas {
+            blas,
+            geometry,
+            first_vertex: vertices.offset,
+            first_index: indices.offset,
+        };
+        staging.build_blas(&self.blas_build_entry(&refitted_blas));
+
+        let blas_triangles = mesh.indices.len() as u64 / 3;
+        self.blases.push(Some(refitted_blas.blas.clone()));
+        if refitted {
+            self.refitted_blases.push(refitted_blas);
+        } else {
+            self.awaiting_compaction.push((handle, blas_triangles));
+        }
+        self.uncompacted_blas_triangles += blas_triangles;
+        Some(handle)
+    }
+
+    /// The build of `blas` from its ranges of the vertex and index Arenas:
+    /// the position leads each vertex, and the cooked indices count from the
+    /// Mesh's first vertex.
+    fn blas_build_entry<'a>(&'a self, blas: &'a RefittedBlas) -> wgpu::BlasBuildEntry<'a> {
+        wgpu::BlasBuildEntry {
+            blas: &blas.blas,
             geometry: wgpu::BlasGeometries::TriangleGeometries(vec![wgpu::BlasTriangleGeometry {
-                size: &geometry,
+                size: &blas.geometry,
                 vertex_buffer: &self.vertex_arena.buffer,
-                first_vertex: vertices.offset,
+                first_vertex: blas.first_vertex,
                 vertex_stride: size_of::<CookedVertex>() as u64,
                 index_buffer: Some(&self.index_arena.buffer),
-                first_index: Some(indices.offset),
+                first_index: Some(blas.first_index),
                 transform_buffer: None,
                 transform_buffer_offset: None,
             }]),
-        });
+        }
+    }
 
-        let blas_triangles = mesh.indices.len() as u64 / 3;
-        self.blases.push(Some(blas));
-        self.awaiting_compaction.push((handle, blas_triangles));
-        self.uncompacted_blas_triangles += blas_triangles;
-        Some(handle)
+    /// Records into `encoder` a full rebuild through wgpu of each BLAS
+    /// loaded as `MeshUse::Refitted`, from what its Arena ranges hold then:
+    /// what a refit must match.
+    pub fn rebuild_refitted_blases(&self, encoder: &mut wgpu::CommandEncoder) {
+        let entries: Vec<_> = self
+            .refitted_blases
+            .iter()
+            .map(|blas| self.blas_build_entry(blas))
+            .collect();
+        encoder.build_acceleration_structures(&entries, std::iter::empty());
+    }
+
+    /// The BLASes of the Meshes loaded as `MeshUse::Refitted`.
+    pub fn refitted_blases(&self) -> &[RefittedBlas] {
+        &self.refitted_blases
     }
 
     /// Compacts the BLASes of the Meshes loaded since the last call, once
@@ -374,6 +433,10 @@ impl MeshPool {
 
     pub fn vertex_arena(&self) -> &wgpu::Buffer {
         &self.vertex_arena.buffer
+    }
+
+    pub fn index_arena(&self) -> &wgpu::Buffer {
+        &self.index_arena.buffer
     }
 
     /// Each Mesh's `MeshData`, at its Handle's index.

@@ -42,10 +42,21 @@ impl AssetLoader<'_> {
     /// (`Bend`): drawn, and traced by no ray, as its BLAS would hold its rest
     /// shape (#208). Its cooked bounds must hold every shape it bends to.
     pub fn bent_mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
+        self.mesh_for(id, MeshUse::Drawn)
+    }
+
+    /// Loads the Mesh `id` as `bent_mesh` does, and traced through a BLAS
+    /// updated each frame from the shape the GPU bends it to (#209).
+    pub fn refitted_mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
+        self.mesh_for(id, MeshUse::Refitted)
+    }
+
+    /// Loads the Mesh `id` as `mesh` does, for `mesh_use`.
+    fn mesh_for(&mut self, id: AssetId, mesh_use: MeshUse) -> anyhow::Result<MeshHandle> {
         let mesh = self.cache.mesh(id)?;
         let materials = self.materials(id, &mesh)?;
         self.mesh_pool
-            .load_for(self.staging, &mesh, &materials, MeshUse::Drawn)
+            .load_for(self.staging, &mesh, &materials, mesh_use)
             .with_context(|| format!("the Mesh pool refused Mesh {id}"))
     }
 

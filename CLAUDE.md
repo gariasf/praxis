@@ -114,7 +114,10 @@ src/
                                  a module per pass (bend_pass: the
                                  compute pass that bends Meshes from
                                  their rest Meshes, a stand-in for
-                                 skinning; froxel_pass: the
+                                 skinning; blas_refit: their BLASes
+                                 refitted through wgpu-hal on Metal,
+                                 or rebuilt, before the dynamic TLAS's
+                                 build; froxel_pass: the
                                  compute pass that lists each Froxel's
                                  lights from the light buffer;
                                  culling_pass: the
