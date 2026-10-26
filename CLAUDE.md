@@ -162,7 +162,9 @@ tests/                         # integration tests at agreed seams
 bench/                         # budgets.json (ADR 0013) and baselines/
                                  <adapter>/<scene>.json: the M4 Pro's,
                                  and CI's lavapipe (`--ci`); `praxis
-                                 bench <dir>` then `praxis compare <dir>`
+                                 bench <dir>` then `praxis compare <dir>`;
+                                 `praxis report <dir>` prints the tables
+                                 PRs quote
 scripts/verify.sh              # the verify command: fmt, clippy, build,
                                  tests with Goldens, bench counters
                                  against Baselines and Budgets

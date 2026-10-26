@@ -50,6 +50,7 @@ A declined finding class that recurs becomes a line in the `CLAUDE.md` review ch
 ## Performance and memory
 
 - Budgets and Baselines live in the repo beside the benches (`bench/`, since M0). A render or hot-path change reports its delta against its Baselines.
+- Figures quoted from bench results, in a PR or `docs/performance.md`, are pasted from `praxis report <results directory>`, which prints them as markdown tables against their Baselines and the Budgets; none is retyped by hand.
 - A budget moves down freely and moves up only through an ADR or map comment.
 - Measurement is always on; optimisation is evidence-driven: fix what measurement names, in the order it names them.
 

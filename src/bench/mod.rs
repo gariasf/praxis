@@ -1,3 +1,7 @@
+mod report;
+
+pub use report::report;
+
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -394,43 +398,8 @@ pub fn compare(
     budgets: &Budgets,
     mode: CompareMode,
 ) -> anyhow::Result<Vec<Finding>> {
-    anyhow::ensure!(
-        (
-            &current.scene,
-            &current.profile,
-            current.width,
-            current.height
-        ) == (
-            &baseline.scene,
-            &baseline.profile,
-            baseline.width,
-            baseline.height
-        ),
-        "{} ran {} at {}x{}, its Baseline is {} {} at {}x{}",
-        current.scene,
-        current.profile,
-        current.width,
-        current.height,
-        baseline.scene,
-        baseline.profile,
-        baseline.width,
-        baseline.height
-    );
-    anyhow::ensure!(
-        current.counter_frames.frames == baseline.counter_frames.frames,
-        "{} counted frames {:?}, its Baseline {:?}: re-record the Baseline",
-        current.scene,
-        current.counter_frames.frames,
-        baseline.counter_frames.frames
-    );
-    let (counters, baseline_counters) = if current.measured_frames == baseline.measured_frames {
-        (current.counters, baseline.counters)
-    } else {
-        (
-            current.counter_frames.counters,
-            baseline.counter_frames.counters,
-        )
-    };
+    ensure_comparable(current, baseline)?;
+    let (counters, baseline_counters) = compared_counters(current, baseline);
     let mut findings = Vec::new();
     for ((metric, current), (_, baseline)) in
         counters.named().into_iter().zip(baseline_counters.named())
@@ -509,6 +478,54 @@ pub fn compare(
         budgets.gpu_frame_microseconds,
     );
     Ok(findings)
+}
+
+/// Fails unless `baseline` ran `current`'s scene in its profile at its size,
+/// counting the same counter frames.
+fn ensure_comparable(current: &Measurements, baseline: &Measurements) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        (
+            &current.scene,
+            &current.profile,
+            current.width,
+            current.height
+        ) == (
+            &baseline.scene,
+            &baseline.profile,
+            baseline.width,
+            baseline.height
+        ),
+        "{} ran {} at {}x{}, its Baseline is {} {} at {}x{}",
+        current.scene,
+        current.profile,
+        current.width,
+        current.height,
+        baseline.scene,
+        baseline.profile,
+        baseline.width,
+        baseline.height
+    );
+    anyhow::ensure!(
+        current.counter_frames.frames == baseline.counter_frames.frames,
+        "{} counted frames {:?}, its Baseline {:?}: re-record the Baseline",
+        current.scene,
+        current.counter_frames.frames,
+        baseline.counter_frames.frames
+    );
+    Ok(())
+}
+
+/// The counters `current` and `baseline` compare: their measured frames'
+/// when both measured as many frames, their counter frames' otherwise.
+fn compared_counters(current: &Measurements, baseline: &Measurements) -> (Counters, Counters) {
+    if current.measured_frames == baseline.measured_frames {
+        (current.counters, baseline.counters)
+    } else {
+        (
+            current.counter_frames.counters,
+            baseline.counter_frames.counters,
+        )
+    }
 }
 
 /// Warns when the time `current` exceeds `baseline` by more than
