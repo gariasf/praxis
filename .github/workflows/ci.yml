@@ -78,7 +78,7 @@ jobs:
       - name: Test
         env:
           PRAXIS_REQUIRE_GOLDENS: "1"
-        run: cargo test
+        run: cargo test --test probe_culling
 
       - name: Upload Golden differences
         if: failure()

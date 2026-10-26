@@ -196,7 +196,20 @@ impl CullingPass {
         let bind_group =
             frame_draw_bind_group(device, &frame_draw_layout, &buffers, render_targets);
 
-        let shader = device.create_shader_module(shaders::CULLING.descriptor());
+        let mut probe_source = shaders::CULLING.source();
+        match std::env::var("PROBE_CULL").as_deref() {
+            Ok("off") => probe_source = probe_source.replace("return nearest_depth < farthest;", "return false;"),
+            Ok("uniform") => {
+                let start = probe_source.find("    let farthest = min(").unwrap();
+                let end = start + probe_source[start..].find(");\n").unwrap() + 3;
+                probe_source.replace_range(start..end, PROBE_UNIFORM);
+            }
+            _ => {}
+        }
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("probe culling"),
+            source: wgpu::ShaderSource::Wgsl(probe_source.into()),
+        });
         let mut layouts = bind_group_layouts.to_vec();
         layouts.push((&FRAME_DRAW, &frame_draw_layout));
         let layout = pipeline_layout(device, "Culling Pass Pipeline Layout", &layouts);
@@ -357,3 +370,18 @@ fn frame_draw_bind_group(
             .chain([("depth_pyramid", depth_pyramid)]),
     )
 }
+
+const PROBE_UNIFORM: &str = "    var farthest = 1.0e30;
+    for (var probe_level = 0u; probe_level < textureNumLevels(depth_pyramid); probe_level++) {
+        let probe_size = max(level_zero_texels >> vec2<u32>(probe_level), vec2<u32>(1u));
+        let probe_first = min(first, probe_size - 1u);
+        let probe_last = min(last, probe_size - 1u);
+        let loaded = min(
+            min(textureLoad(depth_pyramid, probe_first, probe_level).r, textureLoad(depth_pyramid, vec2<u32>(probe_last.x, probe_first.y), probe_level).r),
+            min(textureLoad(depth_pyramid, vec2<u32>(probe_first.x, probe_last.y), probe_level).r, textureLoad(depth_pyramid, probe_last, probe_level).r)
+        );
+        if probe_level == level {
+            farthest = loaded;
+        }
+    }
+";
