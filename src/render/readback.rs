@@ -497,21 +497,32 @@ fn frame_times(
     } else {
         Duration::ZERO
     };
+    // From the earliest start to the latest end of `passes` that write both
+    // timestamps: Metal can run a pass alongside those recorded around it
+    // when it reads none of their output, so the Froxel pass can start
+    // before culling phase one, and a pass can end after the last.
+    let span = |passes: std::ops::Range<usize>| {
+        let (begin, end) = passes
+            .filter(|&pass| pass != blas_refit && !untimed[pass])
+            .fold((u64::MAX, 0), |(begin, end), pass| {
+                (begin.min(ticks[2 * pass]), end.max(ticks[2 * pass + 1]))
+            });
+        time(begin, end)
+    };
     // The refit runs from the end of the bend pass, and the frame's other
     // passes in a later submission. A frame that bends nothing records no
     // bend pass, whose timestamps are then an earlier frame's.
-    let last_end = ticks[QUERIES_PER_FRAME - 1];
     let frame_time = if shape.blas_refitted {
         build
             + time(ticks[2 * bend_pass], ticks[2 * blas_refit + 1])
-            + time(ticks[2 * (blas_refit + 1)], last_end)
+            + span(blas_refit + 1..TIMED_PASSES.len())
     } else {
         let first_pass = if shape.bent {
             bend_pass
         } else {
             blas_refit + 1
         };
-        build + time(ticks[2 * first_pass], last_end)
+        build + span(first_pass..TIMED_PASSES.len())
     };
     let pass_times = std::array::from_fn(|pass| {
         let taken = match pass {
@@ -547,6 +558,9 @@ mod tests {
 
     use super::*;
     use crate::gpu::GpuContext;
+    use crate::render::culling_pass::CullingPhase;
+    use crate::render::froxel_pass::FROXEL_PASS;
+    use crate::render::main_pass::LIT_PASS;
 
     /// Timestamps a microsecond apart, each pass starting 10 µs after the
     /// one before it and taking 4 µs, in submissions that start 100 µs
@@ -606,6 +620,43 @@ mod tests {
         assert_eq!(passes[0].1, Duration::ZERO);
         assert_eq!(passes[pass_position(BEND_PASS)].1, Duration::ZERO);
         assert_eq!(frame_time, microseconds(rest_span));
+    }
+
+    /// Metal can start a compute pass before the passes recorded ahead of it
+    /// when it reads none of their output, as the Froxel pass does culling
+    /// phase one's, and end one after the last: the frame spans its passes'
+    /// earliest start and latest end, so no pass outlasts it. An untimed
+    /// pass's stale timestamps, and the unwritten start of the refit, span
+    /// nothing.
+    #[test]
+    fn a_frame_spans_its_passes_earliest_start_and_latest_end() {
+        let mut ticks = spread_ticks();
+        let microseconds = Duration::from_micros;
+        let (froxel_pass, lit_pass) = (pass_position(FROXEL_PASS), pass_position(LIT_PASS));
+        let shadow_mask_pass = pass_position(SHADOW_MASK_PASS);
+        let culling_start = ticks[2 * pass_position(CullingPhase::One.label())];
+        ticks[2 * froxel_pass] = culling_start - 30;
+        ticks[2 * lit_pass + 1] = ticks[QUERIES_PER_FRAME - 1] + 20;
+        ticks[2 * shadow_mask_pass] = 1;
+        ticks[2 * shadow_mask_pass + 1] = 1 << 40;
+        let mut untimed = [false; TIMED_PASSES.len()];
+        untimed[shadow_mask_pass] = true;
+        let rest_span = ticks[2 * lit_pass + 1] - (culling_start - 30);
+
+        let (passes, frame_time) = frame_times(&ticks, FrameShape::default(), &untimed, 0, 1000.0);
+        assert_eq!(frame_time, microseconds(rest_span));
+        assert!(passes.iter().all(|&(_, taken)| taken <= frame_time));
+
+        let refitted = FrameShape {
+            dynamic_tlas_built: true,
+            bent: true,
+            blas_refitted: true,
+        };
+        let (_, frame_time) = frame_times(&ticks, refitted, &untimed, 0, 1000.0);
+        assert_eq!(
+            frame_time,
+            microseconds(4) + microseconds(4 + 7) + microseconds(rest_span)
+        );
     }
 
     /// Frames that never complete, as their encoders are never submitted:
