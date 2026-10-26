@@ -88,8 +88,8 @@ Budget for the update is 0.5 ms of CPU and 1.0 ms of GPU per frame
   one run its GPU frame spanned 9,303 µs, waits between submissions
   included, and its update's CPU took 709 µs.
 
-The owner picks M7's form (#209's PR, Decide). Recommended: form (b),
-the proxies. It fits both Budgets with 40% of the GPU's to spare, runs on
+The owner picked form (b), the proxies, for M7, as recommended
+([decision](https://github.com/gariasf/praxis/issues/17#issuecomment-6410351140)). It fits both Budgets with 40% of the GPU's to spare, runs on
 every backend, and needs no `unsafe`. Form (a) is over the GPU Budget by
 0.37 ms on Metal alone, where it also needs strict event sync. Form (b)'s
 costs are the thinner shadows, 16 of the dynamic TLAS's 10,000 entries
