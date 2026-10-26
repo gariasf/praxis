@@ -7,8 +7,9 @@ use super::{Budgets, Measurements, Spread, compared_counters, ensure_comparable}
 
 /// `current`'s times and counters as markdown tables, each against its
 /// `baseline`, when there is one, and the Budgets. Times compare only with a
-/// Baseline of as many frames on the same adapter, as `compare` judges them;
-/// counters compare as `compare` reads them. A Baseline of another scene,
+/// Baseline of as many frames on the same adapter, as `compare` judges them,
+/// each pass with the Baseline's pass of its name; counters compare as
+/// `compare` reads them. A Baseline of another scene,
 /// profile, size or counter frames is refused.
 pub fn report(
     current: &Measurements,
@@ -91,10 +92,10 @@ pub fn report(
             ],
             None => std::array::from_fn(|_| "—".to_owned()),
         };
-        let [baseline_median, baseline_p95, delta, ratio] = compared;
+        let [baseline_median, baseline_p95, delta, ratio_text] = compared;
         writeln!(
             report,
-            "| {name} | {} | {} | {baseline_median} | {baseline_p95} | {delta} | {ratio} | {} |",
+            "| {name} | {} | {} | {baseline_median} | {baseline_p95} | {delta} | {ratio_text} | {} |",
             grouped(time.median, 1),
             grouped(time.p95, 1),
             budget.map_or("—".to_owned(), |budget| grouped(budget, 1))
@@ -112,15 +113,18 @@ pub fn report(
         }
         None => (current.counters, None),
     };
-    for (index, (counter, value)) in counters.named().into_iter().enumerate() {
+    let baseline_values = baseline_counters.map_or([None; 8], |baseline_counters| {
+        baseline_counters.named().map(|(_, value)| Some(value))
+    });
+    for ((counter, value), baseline_value) in counters.named().into_iter().zip(baseline_values) {
         let value = value as f64;
-        let [baseline_value, delta, ratio] = match baseline_counters {
-            Some(baseline_counters) => {
-                let baseline_value = baseline_counters.named()[index].1 as f64;
+        let [baseline_value, delta, ratio_text] = match baseline_value {
+            Some(baseline_value) => {
+                let baseline_value = baseline_value as f64;
                 [
                     grouped(baseline_value, 0),
                     signed(value - baseline_value, 0),
-                    self::ratio(value, baseline_value),
+                    ratio(value, baseline_value),
                 ]
             }
             None => std::array::from_fn(|_| "—".to_owned()),
@@ -131,7 +135,7 @@ pub fn report(
         };
         writeln!(
             report,
-            "| `{counter}` | {} | {baseline_value} | {delta} | {ratio} | {budget} |",
+            "| `{counter}` | {} | {baseline_value} | {delta} | {ratio_text} | {budget} |",
             grouped(value, 0)
         )?;
     }

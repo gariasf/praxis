@@ -153,7 +153,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         _ => anyhow::bail!(
             "unexpected arguments {arguments:?}: run `praxis [<scene>]`, `capabilities`, \
              `cook`, `fetch`, `capture <scene> <png path> [<width>x<height>]`, \
-             `bench <output directory> [--ci | --counters | --ci-counters] [<scene>...]`, or \
+             `bench <output directory> [--ci | --counters | --ci-counters] [<scene>...]`, \
              `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
             ReferenceScene::ALL.map(ReferenceScene::name)
@@ -287,9 +287,10 @@ fn compare(results: &str, mode: CompareMode) -> anyhow::Result<()> {
     let mut stdout = std::io::stdout();
     for path in result_paths(results)? {
         let current: Measurements = read_json(&path)?;
-        let baseline_directory = praxis::bench::baseline_directory(&current.adapter);
-        let baseline_path =
-            baseline_directory.join(path.file_name().expect("a read_dir entry has a file name"));
+        let baseline_path = baseline_path(&current, &path);
+        let baseline_directory = baseline_path
+            .parent()
+            .expect("a Baseline path has a directory");
         // Both of CI's configurations render at its size.
         let ci_run =
             (current.width, current.height) == (Configuration::CI.width, Configuration::CI.height);
@@ -366,8 +367,7 @@ fn report(results: &str) -> anyhow::Result<()> {
     let mut stdout = std::io::stdout();
     for path in result_paths(results)? {
         let current: Measurements = read_json(&path)?;
-        let baseline_path = praxis::bench::baseline_directory(&current.adapter)
-            .join(path.file_name().expect("a read_dir entry has a file name"));
+        let baseline_path = baseline_path(&current, &path);
         let tables = std::fs::read(&baseline_path)
             .map_err(anyhow::Error::from)
             .and_then(|json| Measurements::from_baseline_json(&json))
@@ -387,6 +387,13 @@ fn report(results: &str) -> anyhow::Result<()> {
         writeln!(stdout, "{tables}")?;
     }
     Ok(())
+}
+
+/// The Baseline of `current`, read from `path`: its adapter's file of the
+/// same name.
+fn baseline_path(current: &Measurements, path: &Path) -> std::path::PathBuf {
+    praxis::bench::baseline_directory(&current.adapter)
+        .join(path.file_name().expect("a read_dir entry has a file name"))
 }
 
 /// Every `<scene>.json` in `results`, by name; none is an error.
