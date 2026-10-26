@@ -489,8 +489,9 @@ struct FrameTimes {
 /// `ticks`, `nanoseconds_per_tick` apart; the frame's GPU time: the
 /// dynamic TLAS's build, plus the span of each submission's passes, so
 /// neither the waits between submissions nor what a submission records
-/// before its first pass counts; and ADR 0019's gate, the span of the passes
-/// from culling phase one to the lit pass; and the tick its last pass ended
+/// before its first pass counts; ADR 0019's gate, from the start of culling
+/// phase one to the latest end of the passes up to the lit pass; and the
+/// tick its last pass ended
 /// at. The build, in a submission before the frame's passes, starts no
 /// earlier than `build_floor`; the passes `untimed` names take no time.
 fn frame_times(
@@ -553,11 +554,12 @@ fn frame_times(
         };
         (TIMED_PASSES[pass], taken)
     });
-    let gate_passes = pass_position(CullingPhase::One.label())..pass_position(LIT_PASS) + 1;
+    let culling_phase_one = pass_position(CullingPhase::One.label());
+    let (_, gate_end) = bounds(culling_phase_one..pass_position(LIT_PASS) + 1);
     FrameTimes {
         pass_times,
         frame_time,
-        gate_time: span(gate_passes),
+        gate_time: time(ticks[2 * culling_phase_one], gate_end),
         last_pass_end: bounds(blas_refit + 1..TIMED_PASSES.len()).1,
     }
 }
@@ -697,10 +699,10 @@ mod tests {
         );
     }
 
-    /// ADR 0019's gate spans the passes from culling phase one to the lit
-    /// pass, from the earliest start to the latest end, with neither the
-    /// build nor the passes after the lit pass; the frame's last pass ends
-    /// at the latest end of any.
+    /// ADR 0019's gate runs from the first culling dispatch to the latest
+    /// end of the passes up to the lit pass, with neither the build nor the
+    /// passes after the lit pass, even where Metal starts the Froxel pass
+    /// earlier; the frame's last pass ends at the latest end of any.
     #[test]
     fn the_gate_spans_culling_phase_one_to_the_lit_pass() {
         let mut ticks = spread_ticks();
@@ -721,7 +723,7 @@ mod tests {
 
         ticks[2 * pass_position(FROXEL_PASS)] = culling_start - 30;
         let times = frame_times(&ticks, built, &untimed, 0, 1000.0);
-        assert_eq!(times.gate_time, microseconds(lit_end - culling_start + 30));
+        assert_eq!(times.gate_time, microseconds(lit_end - culling_start));
     }
 
     /// Frames that never complete, as their encoders are never submitted:

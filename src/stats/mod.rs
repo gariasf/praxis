@@ -75,8 +75,8 @@ pub struct GpuFrameStats {
     /// pass, plus the span from the start of the first pass to the end of
     /// the last.
     pub frame_time: Duration,
-    /// ADR 0019's gate: the span from the earliest start to the latest end
-    /// of the passes from culling phase one to the lit pass.
+    /// ADR 0019's gate: from the start of culling phase one to the latest
+    /// end of the passes up to the lit pass.
     pub gate_time: Duration,
     /// The Instances the frame's draw held, and their triangles.
     pub instances_drawn: u32,
