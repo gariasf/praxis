@@ -20,12 +20,13 @@ const LISTED_NAMES: usize = 4;
 /// The machines whose results the repository records or compares against.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Machine {
-    /// The Apple M4 Pro on Metal: ADR 0013's reference, whose Baselines
-    /// the Budgets are set against.
+    /// The Apple M4 Pro on Metal: ADR 0013's reference, on which the
+    /// Budgets are judged.
     M4Pro,
     /// Mesa's lavapipe on Vulkan, as CI's jobs run it.
     Lavapipe,
-    /// The owner's NVIDIA RTX 2070 SUPER, a comparison adapter only.
+    /// The owner's NVIDIA RTX 2070 SUPER, whose results are compared with
+    /// the M4 Pro's but judge no Budget.
     RtxComparison,
     Unknown,
 }
@@ -156,7 +157,7 @@ fn stems_by_directory(root: &Path, extension: &str) -> BTreeMap<String, BTreeSet
 
 /// What `key`'s directory lacks of what any directory holds: a scene with a
 /// Golden or Baseline on one adapter is checked on every adapter.
-pub fn missing(stems_by_directory: &BTreeMap<String, BTreeSet<String>>, key: &str) -> Vec<String> {
+fn missing(stems_by_directory: &BTreeMap<String, BTreeSet<String>>, key: &str) -> Vec<String> {
     let empty = BTreeSet::new();
     let present = stems_by_directory.get(key).unwrap_or(&empty);
     let expected: BTreeSet<_> = stems_by_directory.values().flatten().collect();
@@ -213,6 +214,10 @@ fn baselines(adapter: &str, machine: Machine) -> Check {
         String::new()
     };
     let fix = match machine {
+        // CI fetches no helmet, so benches none.
+        Machine::Lavapipe if absent.iter().any(|scene| scene == "helmet") => format!(
+            "copy them from CI's bench-results artifact, and `praxis bench {directory} helmet`"
+        ),
         Machine::Lavapipe => "copy them from CI's bench-results artifact".to_owned(),
         _ => format!("on a quiet machine, `praxis bench {directory}{scenes}`"),
     };
@@ -223,8 +228,8 @@ fn baselines(adapter: &str, machine: Machine) -> Check {
     )
 }
 
-/// The fetched sources, which `verify` benches the helmet from, and the
-/// Cooked cache, which a launch fills with what it loads.
+/// The fetched files, which a launch downloads when its scene's are absent,
+/// and the Cooked cache, which a launch fills with what it loads.
 #[cfg(feature = "cook")]
 fn assets() -> Check {
     let (absent, fetched) =
@@ -235,9 +240,9 @@ fn assets() -> Check {
     if !absent.is_empty() {
         return Check::new(
             "assets",
-            Verdict::Fail,
+            Verdict::Warn,
             format!(
-                "{} of {fetched} fetched files absent; run `praxis fetch`",
+                "{} of {fetched} fetched files absent, so verify's launches download them: run `praxis fetch`",
                 absent.len()
             ),
         );
@@ -309,7 +314,7 @@ fn gpu_load() -> Check {
 /// The busiest GPU's utilisation from `nvidia-smi
 /// --query-gpu=utilization.gpu --format=csv,noheader,nounits`: one
 /// percentage per line, one line per GPU.
-pub fn parse_nvidia_smi_utilization(report: &str) -> Option<u32> {
+fn parse_nvidia_smi_utilization(report: &str) -> Option<u32> {
     report
         .lines()
         .filter_map(|line| line.trim().parse().ok())
@@ -318,7 +323,7 @@ pub fn parse_nvidia_smi_utilization(report: &str) -> Option<u32> {
 
 /// The busiest GPU's utilisation from `ioreg -r -d 1 -w 0 -c IOAccelerator`,
 /// whose performance statistics hold `"Device Utilization %"=<percent>`.
-pub fn parse_ioreg_utilization(report: &str) -> Option<u32> {
+fn parse_ioreg_utilization(report: &str) -> Option<u32> {
     const KEY: &str = "\"Device Utilization %\"=";
     report
         .match_indices(KEY)
@@ -341,7 +346,7 @@ fn other_processes() -> Check {
     let Some(processes) = processes else {
         return Check::new("processes", Verdict::Note, "unknown: no process listing");
     };
-    let others = praxis_processes(&processes, std::process::id());
+    let others = praxis_processes(&processes, std::process::id(), &binary_names());
     if others.is_empty() {
         return Check::new("processes", Verdict::Ok, "no other praxis process");
     }
@@ -357,7 +362,7 @@ fn other_processes() -> Check {
 }
 
 /// Process IDs and image names from `tasklist /FO CSV /NH`.
-pub fn parse_tasklist(listing: &str) -> Vec<(u32, String)> {
+fn parse_tasklist(listing: &str) -> Vec<(u32, String)> {
     listing
         .lines()
         .filter_map(|line| {
@@ -370,7 +375,7 @@ pub fn parse_tasklist(listing: &str) -> Vec<(u32, String)> {
 }
 
 /// Process IDs and command names from `ps -A -o pid=,comm=`.
-pub fn parse_ps(listing: &str) -> Vec<(u32, String)> {
+fn parse_ps(listing: &str) -> Vec<(u32, String)> {
     listing
         .lines()
         .filter_map(|line| {
@@ -380,15 +385,41 @@ pub fn parse_ps(listing: &str) -> Vec<(u32, String)> {
         .collect()
 }
 
-/// The processes that are praxis, its binary or one of its test binaries
-/// (`praxis-<hash>`), other than `own_id`.
-pub fn praxis_processes(processes: &[(u32, String)], own_id: u32) -> Vec<(u32, String)> {
+/// The names of praxis's binaries: `praxis` itself, and each integration
+/// test's, which Cargo names after its file in `tests/`.
+fn binary_names() -> Vec<String> {
+    let tests = std::fs::read_dir("tests").into_iter().flatten().flatten();
+    let test_names = tests
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|extension| extension == "rs"))
+        .filter_map(|path| Some(path.file_stem()?.to_str()?.to_owned()));
+    std::iter::once("praxis".to_owned())
+        .chain(test_names)
+        .collect()
+}
+
+/// The processes other than `own_id` that run one of `binary_names`, as
+/// built (`praxis`) or as Cargo's test harness (`goldens-<16 hex digits>`).
+fn praxis_processes(
+    processes: &[(u32, String)],
+    own_id: u32,
+    binary_names: &[String],
+) -> Vec<(u32, String)> {
+    let is_hash =
+        |hash: &str| hash.len() == 16 && hash.bytes().all(|byte| byte.is_ascii_hexdigit());
     processes
         .iter()
         .filter(|(id, name)| {
             let file_name = name.rsplit(['/', '\\']).next().unwrap_or(name);
             let stem = file_name.strip_suffix(".exe").unwrap_or(file_name);
-            *id != own_id && (stem == "praxis" || stem.starts_with("praxis-"))
+            let is_praxis = binary_names.iter().any(|binary| {
+                stem == binary
+                    || stem
+                        .strip_prefix(binary.as_str())
+                        .and_then(|rest| rest.strip_prefix('-'))
+                        .is_some_and(is_hash)
+            });
+            *id != own_id && is_praxis
         })
         .cloned()
         .collect()
@@ -404,6 +435,8 @@ fn work_in_flight() -> Vec<Check> {
         "open",
         "--json",
         "number,headRefName,isDraft",
+        "--limit",
+        "200",
     ]) else {
         return vec![skipped("prs"), skipped("tickets")];
     };
@@ -481,7 +514,7 @@ fn gh_json(arguments: &[&str]) -> Option<Vec<serde_json::Value>> {
 
 /// The live milestone: the open one with the lowest number in its `M<n>`
 /// title.
-pub fn live_milestone<'title>(titles: &[&'title str]) -> Option<&'title str> {
+fn live_milestone<'title>(titles: &[&'title str]) -> Option<&'title str> {
     titles
         .iter()
         .filter_map(|&title| Some((title.strip_prefix('M')?.parse::<u32>().ok()?, title)))
@@ -578,7 +611,7 @@ mod tests {
     fn the_repositorys_goldens_and_baselines_are_complete_for_their_adapters() {
         let goldens = stems_by_directory(Path::new(GOLDEN_DIRECTORY), "png");
         assert!(missing(&goldens, "metal").is_empty());
-        assert!(!missing(&goldens, "dx12").is_empty());
+        assert!(!missing(&goldens, "no-such-backend").is_empty());
         let baselines = stems_by_directory(Path::new(BASELINE_DIRECTORY), "json");
         assert!(missing(&baselines, "apple-m4-pro").is_empty());
     }
@@ -594,17 +627,23 @@ mod tests {
 
     #[test]
     fn praxis_processes_come_from_either_listing_without_this_one() {
+        let binaries = ["praxis".to_owned(), "goldens".to_owned()];
         let tasklist = "\"praxis.exe\",\"4120\",\"Console\",\"1\",\"9.436 K\"\n\
-                        \"praxis-0a1b2c3d4e5f.exe\",\"77\",\"Console\",\"1\",\"8 K\"\n\
+                        \"praxis-0a1b2c3d4e5f6789.exe\",\"77\",\"Console\",\"1\",\"8 K\"\n\
+                        \"goldens-7ecf3aef1db514ba.exe\",\"79\",\"Console\",\"1\",\"8 K\"\n\
+                        \"praxis-launcher.exe\",\"80\",\"Console\",\"1\",\"8 K\"\n\
                         \"praxisd.exe\",\"78\",\"Console\",\"1\",\"8 K\"\n\
                         \"cargo.exe\",\"90\",\"Console\",\"1\",\"8 K\"";
         assert_eq!(
-            praxis_processes(&parse_tasklist(tasklist), 4120),
-            [(77, "praxis-0a1b2c3d4e5f.exe".to_owned())]
+            praxis_processes(&parse_tasklist(tasklist), 4120, &binaries),
+            [
+                (77, "praxis-0a1b2c3d4e5f6789.exe".to_owned()),
+                (79, "goldens-7ecf3aef1db514ba.exe".to_owned()),
+            ]
         );
         let ps = "  412 /Users/owner/praxis/target/release/praxis\n 9001 /bin/zsh\n";
         assert_eq!(
-            praxis_processes(&parse_ps(ps), 1),
+            praxis_processes(&parse_ps(ps), 1, &binaries),
             [(412, "/Users/owner/praxis/target/release/praxis".to_owned())]
         );
     }
