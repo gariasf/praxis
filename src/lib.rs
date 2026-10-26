@@ -35,7 +35,7 @@ mod time;
 mod transform;
 
 pub use assets::cooked;
-pub use capture::capture;
+pub use capture::{capture, capture_frames};
 pub use render::{CrowdForm, RenderSwitches};
 pub use scenes::ReferenceScene;
 pub use state::DEFAULT_MODEL;

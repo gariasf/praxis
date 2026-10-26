@@ -215,10 +215,7 @@ impl State {
     /// and uploads it.
     pub fn update(&mut self, frame_delta: Duration) {
         self.recorder.begin();
-        self.recorder.dropped_time =
-            run_ticks(&mut self.fixed_schedule, &mut self.world, frame_delta);
-        self.world.resource_mut::<Time>().delta_time = frame_delta.as_secs_f32();
-        self.schedule.run(&mut self.world);
+        self.recorder.dropped_time = self.simulate(frame_delta);
 
         let started = Instant::now();
         // Writes a failed upload lost are written again, with every Instance.
@@ -237,6 +234,16 @@ impl State {
         self.recorder.lights_overflowed = self.preparer.lights_overflowed();
         self.recorder.moving_instances_left_out = self.preparer.moving_instances_left_out();
         self.recorder.bends_left_out = self.preparer.bends_left_out();
+    }
+
+    /// Runs the Ticks `frame_delta` completes and moves the camera by it,
+    /// preparing no frame, and returns the time past the Ticks' cap it
+    /// dropped. The next `prepare` writes every change since the last.
+    pub(crate) fn simulate(&mut self, frame_delta: Duration) -> Duration {
+        let dropped_time = run_ticks(&mut self.fixed_schedule, &mut self.world, frame_delta);
+        self.world.resource_mut::<Time>().delta_time = frame_delta.as_secs_f32();
+        self.schedule.run(&mut self.world);
+        dropped_time
     }
 
     /// Draws the frame into `target`, a view in the format and size this
