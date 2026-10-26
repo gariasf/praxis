@@ -14,6 +14,18 @@ Which skill starts which kind of session, and when. The owner types the slash co
 | Milestone boundary | `/improve-codebase-architecture`, then `/grill-with-docs` on one candidate; a literature scan of the next milestone's topics that checks whether new work challenges an existing ADR | HTML report, refactor ticket; "State of the art: …" tickets for the next milestone's technique decisions; an ADR challenge, if any, as a map comment | |
 | Unsure | `/ask-matt <situation>` | the flow that fits | |
 
+## Effort
+
+Reasoning effort is set per step, not per session. A session runs at medium and hands a step that needs more to a sub-agent at that step's effort (the Agent tool's `effort`).
+
+| Effort | Steps |
+|---|---|
+| low | `cargo run --release -- fetch`, `scripts/verify.sh`, bench runs, filling the PR template, merge and worktree cleanup |
+| medium | implementing a ticket whose seam is agreed; the Standards review axis |
+| high or max | design choices, numerics and shader maths, the Spec and Sources review axes, diagnosing a failure whose cause is unclear |
+
+A step escalates one level when its gate fails twice in a row, or when it states a numeric claim the repo does not already hold (a new constant, measurement, budget or citation figure): that step goes to a sub-agent at high or above.
+
 ## Rules of thumb
 
 - Build sessions start from a ticket and nothing else. Grilling and spec work (`/grill-with-docs`, `/to-spec`, `/to-tickets`) stay in their own sessions.
