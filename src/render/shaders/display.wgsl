@@ -1,9 +1,10 @@
 // What turns exposed colour into display colour, after GT7's part: the
 // conversions around GT7 and its reading of exposure.
 
-// Linear colour from Rec. 709's primaries to Rec. 2020's, and back, each
-// column a primary (ITU-R BT.2087-0's matrix [ref:bt2087-rec709-to-rec2020],
-// derived again from BT.709-6's// and BT.2020-2's primaries and D65 to seven places).
+// Linear colour from Rec. 709's primaries to Rec. 2020's, and back, each column
+// a primary (ITU-R BT.2087-0's matrix [ref:bt2087-rec709-to-rec2020], derived
+// again from BT.709-6's [ref:bt709-6-primaries] and BT.2020-2's
+// [ref:bt2020-2-primaries] primaries and D65 to seven places).
 const REC709_TO_REC2020 = mat3x3<f32>(
     vec3<f32>(0.6274039, 0.0690973, 0.0163914),
     vec3<f32>(0.3292830, 0.9195404, 0.0880133),
@@ -24,9 +25,8 @@ fn tonemap(exposed: vec3<f32>) -> vec3<f32> {
 }
 
 // IEC 61966-2-1's sRGB encoding of display-linear colour
-// [ref:khronos-dfs-srgb], clamped to
-// [0, 1]. The tonemapping pass encodes here, once, into an 8-bit UNORM
-// target, so its dither lands on 8-bit steps.
+// [ref:khronos-dfs-srgb], clamped to [0, 1]. The tonemapping pass encodes here,
+// once, into an 8-bit UNORM target, so its dither lands on 8-bit steps.
 fn srgb_encode(display: vec3<f32>) -> vec3<f32> {
     let clamped = clamp(display, vec3<f32>(0.0), vec3<f32>(1.0));
     return select(

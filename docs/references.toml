@@ -51,14 +51,14 @@ checked = 2026-10-26
 
 ["msl-4.1-fast-math"]
 url = "https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf"
-section = "Metal Shading Language Specification 4.1 (2026-06-04), §1.6.3 Math Intrinsics Compiler Options, pp. 14-15, and §8.4 Table 8.2, p. 370"
+section = "Metal Shading Language Specification 4.1 (2026-06-04), §1.6.3 Math Intrinsics Compiler Options, pp. 14-15, and §8.4 Table 8.2, pp. 370-371"
 quote = '''-fmetal-math-mode=<fast, relaxed, safe> [...] The default is fast. If you set the option to fast, it lets the compiler make aggressive, potentially lossy assumptions about floating-point math. These include no NaNs, no INFs, no signed zeros, allow reciprocal, allow reassociation, and FP contract to be fast. [...]
-Table 8.2. Accuracy of single-precision operations and functions with fast math enabled [...] x + y: Correctly rounded [...] x - y: Correctly rounded [...] x * y: Correctly rounded'''
+Table 8.2. Accuracy of single-precision operations and functions with fast math enabled [...] x + y: Correctly rounded [...] x - y: Correctly rounded [...] x * y: Correctly rounded [...] fma: Correctly rounded'''
 checked = 2026-10-26
 
 ["msl-4.1-rounding"]
 url = "https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf"
-section = "Metal Shading Language Specification 4.1 (2026-06-04), §8.2 Rounding Mode, p. 367"
+section = "Metal Shading Language Specification 4.1 (2026-06-04), §8.2 Rounding Mode, p. 368"
 quote = '''Either round ties to even or round toward zero rounding mode may be supported for single-precision, half-precision, and brain floating-point operations.'''
 checked = 2026-10-26
 
@@ -69,7 +69,7 @@ quote = '''with the Trowbridge-Reitz/GGX microfacet distribution D = α² χ⁺(
 checked = 2026-10-26
 
 ["gltf-2.0-roughness-mapping"]
-url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc#L3622-L3626"
+url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc#L3622-L3627"
 section = "glTF 2.0 specification source, Appendix B, Microfacet Surfaces"
 quote = '''The mapping α = roughness² results in more perceptually linear changes in the roughness. [...] This mapping was suggested by Burley (2012).'''
 checked = 2026-10-26
@@ -202,14 +202,14 @@ quote = '''1.3 Chromaticity coordinates (CIE, 1931): Primary: x: y [...] Red (R)
 checked = 2026-10-26
 
 ["bt2020-2-primaries"]
-url = "https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.2020-2-201510-I!!PDF-E.pdf#page=3"
+url = "https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.2020-2-201510-I!!PDF-E.pdf#page=5"
 section = "ITU-R BT.2020-2, Table 3, System colorimetry"
 quote = '''Red primary (R): 0.708: 0.292 [...] Green primary (G): 0.170: 0.797 [...] Blue primary (B): 0.131: 0.046 [...] Reference white (D65): 0.3127: 0.3290'''
 checked = 2026-10-26
 
 ["bt709-6-luma"]
 url = "https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.709-6-201506-I!!PDF-E.pdf#page=6"
-section = "ITU-R BT.709-6, Part 1, item 3.2, Derivation of luminance signal; the same weights are the Y row of BT.2087-0's Annex 1, M2"
+section = "ITU-R BT.709-6, Part 1, item 3.2, Derivation of luminance signal"
 quote = '''3.2 Derivation of luminance signal E′_Y: E′_Y = 0.2126 E′_R + 0.7152 E′_G + 0.0722 E′_B'''
 checked = 2026-10-26
 
@@ -252,7 +252,7 @@ checked = 2026-10-26
 ["filament-light-units"]
 url = "https://github.com/google/filament/blob/26b427773c9292317c4e65d7cd371d87daa1eebc/docs/Filament.md.html#L1238"
 section = "Filament, Filament.md.html, Lighting, Units"
-quote = '''Point light | Luminous power (lm)'''
+quote = '''Point light: Luminous power (lm)'''
 checked = 2026-10-26
 
 ["bevy-point-light-lumens"]
@@ -325,4 +325,26 @@ checked = 2026-10-26
 url = "https://web.archive.org/web/20260302051755/https://dev.epicgames.com/documentation/en-us/unreal-engine/using-physical-lighting-units-in-unreal-engine"
 section = "Unreal Engine documentation, Using Physical Lighting Units, suggestions for a physically based lighting workflow"
 quote = '''If reflective surfaces have artifacts like black patches, the SceneColor buffer might be overflowing. To fix it, either enable Apply Pre-Exposure before writing to the scene color in the Project Settings, or reduce the brightness of lights in the scene.'''
+checked = 2026-10-26
+
+["bt2087-rec709-to-xyz"]
+url = "https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.2087-0-201510-I!!PDF-E.pdf#page=6"
+section = "ITU-R BT.2087-0, Annex 1, M2: the right-hand factor, Rec. 709's linear RGB to CIE XYZ"
+quote = '''0.4124 0.3576 0.1805; 0.2126 0.7152 0.0722; 0.0193 0.1192 0.9505'''
+checked = 2026-10-26
+
+["wgpu-hal-30-metal-compile-options"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L272-L278"
+section = "wgpu-hal 30.0.1, Metal device, shader module compile options: no math mode or fast-math setter"
+quote = '''let options = MTLCompileOptions::new();
+options.setLanguageVersion(self.shared.private_caps.msl_version); [...]
+if available!(macos = 11.0, ios = 13.0, tvos = 14.0, visionos = 1.0) {
+    options.setPreserveInvariance(true);
+}'''
+checked = 2026-10-26
+
+["gltf-2.0-bitangent"]
+url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc#L1763"
+section = "glTF 2.0 specification source, Meshes, Using Primitive Data"
+quote = '''The bitangent vectors are computed by taking the cross product of the XYZ components of the normal and tangent vectors and multiplying that cross product against the W component of the tangent.'''
 checked = 2026-10-26

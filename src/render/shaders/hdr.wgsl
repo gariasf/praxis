@@ -1,9 +1,9 @@
 // Exposed colour as the lit pass stores it in the HDR target and the
 // tonemapping pass reads it back (ADR 0023).
 
-// fp16's largest finite value. Exposed colour is clamped to it, so no
-// backend stores infinity, which Vulkan allows on overflow (ADR 0023)
-// [ref:wgsl-f16-largest] [ref:vulkan-fp-conversion].
+// fp16's largest finite value, as WGSL gives it [ref:wgsl-f16-largest].
+// Exposed colour is clamped to it, so no backend stores infinity, which
+// Vulkan allows on overflow [ref:vulkan-fp-conversion] (ADR 0023).
 const LARGEST_HALF: f32 = 65504.0;
 
 // The relative luminance of a linear colour in Rec. 709's primaries, the

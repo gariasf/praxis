@@ -343,17 +343,20 @@ fn reflected_luminance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_
             roughness.x,
         );
         let normal_dot_light = normal.dot(light).max(0.0);
-        // f32's N·L, three products and two sums each rounded once (Vulkan's
-        // precision table [ref:vulkan-spirv-precision]; D3D's 0.5 ULP
-        // [ref:d3d11.3-fp32-rules]; Metal's fast math, the default wgpu-hal
-        // keeps, rounds them correctly too, reassociated or fused
-        // [ref:msl-4.1-fast-math]), errs by at most γ₃ |N|ᵀ|L| ≤ γ₃ ‖N‖ ‖L‖
-        // with γ₃ = 3u / (1 − 3u), in any order (Higham, Accuracy and
-        // Stability of Numerical Algorithms, §3.1 [ref:higham-3.1]). u is
-        // 2⁻²³, not round-to-nearest's 2⁻²⁴, as Metal may round toward zero
-        // [ref:msl-4.1-rounding]. Against N·L ≈ 0, for a light on the
-        // horizon, that error is all there is, which a tolerance relative to
-        // the result rules out.
+        // f32's N·L is three products and two sums, each rounded once: Vulkan
+        // rounds them correctly (its precision table
+        // [ref:vulkan-spirv-precision]) and D3D to 0.5 ULP
+        // [ref:d3d11.3-fp32-rules]. Metal's fast math, which wgpu-hal leaves
+        // at its default [ref:wgpu-hal-30-metal-compile-options], rounds
+        // them and fused multiply-adds correctly but may reorder them
+        // [ref:msl-4.1-fast-math], and Metal may round toward zero
+        // [ref:msl-4.1-rounding]. In any order and with any fusing, the dot
+        // product errs by at most γ₃ |N|ᵀ|L| ≤ γ₃ ‖N‖ ‖L‖ with
+        // γ₃ = 3u / (1 − 3u) (Higham, Accuracy and Stability of Numerical
+        // Algorithms, §3.1 [ref:higham-3.1]), where u is 2⁻²³ to cover
+        // rounding toward zero, not round-to-nearest's 2⁻²⁴. Against
+        // N·L ≈ 0, for a light on the horizon, that error is all there is,
+        // which a tolerance relative to the result rules out.
         let unit_roundoff = f64::from(f32::EPSILON);
         let normal_dot_light_rounding =
             3.0 * unit_roundoff / (1.0 - 3.0 * unit_roundoff) * normal.length() * light.length();

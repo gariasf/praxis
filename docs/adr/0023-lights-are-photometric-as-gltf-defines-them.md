@@ -5,7 +5,7 @@ Light values are photometric, in glTF's units: a `DirectionalLight` gives illumi
 ## Considered options
 
 - Relative units (option U2): a sun near 1 and unitless point lights, so fewer stops and an exposure near 1. glTF lights would need a scale at import, values tuned in one scene do not carry to another, and Frostbite found converting relative lights to physical units "extremely hard" once content existed (row 14) [ref:frostbite-2014-relative-lights].
-- Point lights in lumens, as Frostbite, Filament, Bevy and Godot author them [ref:frostbite-2014-light-units] [ref:filament-light-units] [ref:bevy-point-light-lumens] [ref:godot-light-units]: a bulb's familiar rating, but glTF stores candela, so every import would convert (Bevy's glTF loader multiplies by 4π [ref:bevy-gltf-point-candela]).
+- Point lights in lumens, as Frostbite, Filament and Bevy author them, and Godot with its physical light units enabled [ref:frostbite-2014-light-units] [ref:filament-light-units] [ref:bevy-point-light-lumens] [ref:godot-light-units]: a bulb's familiar rating, but glTF stores candela, so every import would convert (Bevy's glTF loader multiplies by 4π [ref:bevy-gltf-point-candela]).
 
 ## Consequences
 

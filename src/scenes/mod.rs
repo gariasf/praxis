@@ -464,8 +464,8 @@ impl ReferenceScene {
     }
 }
 
-/// The sun's illuminance in every scene, in lux: direct sunlight (ADR 0023)
-/// [ref:bevy-lux-constants].
+/// The sun's illuminance in every scene, in lux: direct sunlight, as Bevy's
+/// `lux::DIRECT_SUNLIGHT` gives it [ref:bevy-lux-constants] (ADR 0023).
 /// The scenes' other lights are given against it.
 const SUN_ILLUMINANCE: f32 = 100_000.0;
 

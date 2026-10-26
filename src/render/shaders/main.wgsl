@@ -109,7 +109,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // Tangent frame. Interpolation bends the tangent off the normal, so
     // re-orthogonalise it (Gram-Schmidt) before rebuilding the bitangent with
-    // the glTF handedness sign.
+    // the glTF handedness sign [ref:gltf-2.0-bitangent].
     let geometric_normal = normalize(in.normal);
     let interpolated_tangent = in.tangent_world.xyz;
     let tangent = normalize(

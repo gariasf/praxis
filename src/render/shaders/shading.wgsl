@@ -34,9 +34,9 @@ struct Surface {
 
 // A surface point from its Material's factors and the texels of its Layers,
 // each factor scaling its texel (glTF 2.0, "Metallic-Roughness Material"
-// [ref:gltf-2.0-metallic-roughness]):
-// cooked metallic-roughness holds roughness in red and metallic in green
-// (BC5, ADR 0018). Roughness keeps to MINIMUM_ROUGHNESS or above.
+// [ref:gltf-2.0-metallic-roughness]): cooked metallic-roughness holds roughness
+// in red and metallic in green (BC5, ADR 0018). Roughness keeps to
+// MINIMUM_ROUGHNESS or above.
 fn decode_surface(
     material: MaterialData,
     albedo: vec4<f32>,
@@ -55,10 +55,9 @@ fn decode_surface(
 }
 
 // Schlick's Fresnel weight, (1 − |V·H|)⁵ (Appendix B, "Fresnel"
-// [ref:gltf-2.0-fresnel]): how far
-// F climbs from the reflectance at normal incidence, F0, towards 1 as V
-// turns from H. Multiplied out, not pow, which has no value for the
-// negative base that a |V·H| rounded past 1 gives.
+// [ref:gltf-2.0-fresnel]): how far F climbs from the reflectance at normal
+// incidence, F0, towards 1 as V turns from H. Multiplied out, not pow, which
+// has no value for the negative base that a |V·H| rounded past 1 gives.
 fn fresnel_weight(view_dot_half: f32) -> f32 {
     let complement = 1.0 - abs(view_dot_half);
     let complement_squared = complement * complement;
@@ -173,10 +172,10 @@ fn reflected_luminance(
 // [ref:filament-punctual-light-1cm].
 const MINIMUM_LIGHT_DISTANCE_SQUARED: f32 = 1e-4;
 
-// The share of a point light's intensity that reaches `distance_squared`
-// from it as illuminance: inverse-square falloff within KHR_lights_punctual's
-// range window [ref:khr-lights-punctual-range], which falls to 0 at `range`
-// and stays 0 past it,
+// The share of a point light's intensity that reaches `distance_squared` from
+// it as illuminance: inverse-square falloff within KHR_lights_punctual's range
+// window [ref:khr-lights-punctual-range], which falls to 0 at `range` and stays
+// 0 past it,
 //   max(min(1 − (distance / range)⁴, 1), 0) / distance²,
 // with (distance / range)⁴ taken as (distance² / range²)².
 fn point_light_attenuation(distance_squared: f32, range: f32) -> f32 {

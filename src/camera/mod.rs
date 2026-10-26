@@ -124,10 +124,10 @@ pub fn fly_camera(input: Res<Input>, time: Res<Time>, mut camera: ResMut<Camera>
 mod tests {
     use super::*;
 
-    /// Frostbite's exposure, 1/(1.2 · 2^EV100) (Lagarde and de Rousiers
-    /// 2014, "Moving Frostbite to Physically Based Rendering 3.0", pp. 86-87): at
-    /// EV100 0, 1.2 cd/m² exposes to 1; each EV halves the scale, so Sunny
-    /// 16's EV100 15 scales by 1/39,321.6.
+    /// Frostbite's exposure, 1/(1.2 · 2^EV100) (Lagarde and de Rousiers 2014,
+    /// "Moving Frostbite to Physically Based Rendering 3.0", pp. 86-87
+    /// [ref:frostbite-2014-exposure]): at EV100 0, 1.2 cd/m² exposes to 1; each
+    /// EV halves the scale, so Sunny 16's EV100 15 scales by 1/39,321.6.
     #[test]
     fn exposure_is_one_over_1_2_times_2_to_the_ev100() {
         for (ev100, expected) in [(0.0, 1.0 / 1.2), (-1.0, 1.0 / 0.6), (15.0, 1.0 / 39_321.6)] {
