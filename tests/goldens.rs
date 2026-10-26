@@ -330,20 +330,32 @@ fn golden_path(directory: &Path, scene: ReferenceScene) -> PathBuf {
 const README_GOLDEN_PREFIX: &str = "tests/goldens/metal/";
 
 /// What disagrees between `readme` and the scenes this test checks: a scene
-/// the README does not show, a Golden it shows of a scene not checked, and
-/// a linked Golden absent from `root`.
+/// the README does not show, or shows more than once, a Golden it shows of a
+/// scene not checked, and a linked Golden absent from `root`. A link counts
+/// only as the prefix, a scene name and `.png`.
 fn readme_disagreements(readme: &str, root: &Path) -> Vec<String> {
     let linked: Vec<&str> = readme
         .split(README_GOLDEN_PREFIX)
         .skip(1)
-        .filter_map(|after_prefix| after_prefix.split_once(".png"))
-        .map(|(scene, _)| scene)
+        .filter_map(|after_prefix| {
+            let name_length = after_prefix
+                .find(|character: char| !(character.is_ascii_alphanumeric() || character == '-'))
+                .unwrap_or(after_prefix.len());
+            let (scene, rest) = after_prefix.split_at(name_length);
+            (!scene.is_empty() && rest.starts_with(".png")).then_some(scene)
+        })
         .collect();
     let checked: Vec<&str> = SCENES.iter().map(|scene| scene.name()).collect();
     let mut disagreements = Vec::new();
     for scene in &checked {
-        if !linked.contains(scene) {
-            disagreements.push(format!("README.md does not show the Golden of {scene}"));
+        match linked
+            .iter()
+            .filter(|linked_scene| *linked_scene == scene)
+            .count()
+        {
+            0 => disagreements.push(format!("README.md does not show the Golden of {scene}")),
+            1 => {}
+            _ => disagreements.push(format!("README.md shows {scene} more than once")),
         }
     }
     for scene in &linked {
@@ -372,7 +384,7 @@ fn readme_shows_each_scene_golden() {
 }
 
 #[test]
-fn readme_disagreements_name_a_missing_scene_an_unchecked_one_and_an_absent_file() {
+fn readme_disagreements_name_missing_repeated_unchecked_and_absent_goldens() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let readme = std::fs::read_to_string(root.join("README.md")).expect("README.md");
     let town_link = format!("{README_GOLDEN_PREFIX}town.png");
@@ -382,10 +394,15 @@ fn readme_disagreements_name_a_missing_scene_an_unchecked_one_and_an_absent_file
         .map(|line| format!("{line}\n"))
         .collect();
     let with_crowd = format!("{readme}\n![crowd]({README_GOLDEN_PREFIX}crowd.png)\n");
+    let with_town_twice = format!("{readme}\n![town]({README_GOLDEN_PREFIX}town.png)\n");
 
     assert_eq!(
         readme_disagreements(&without_town, root),
         ["README.md does not show the Golden of town"]
+    );
+    assert_eq!(
+        readme_disagreements(&with_town_twice, root),
+        ["README.md shows town more than once"]
     );
     assert_eq!(
         readme_disagreements(&with_crowd, root),
