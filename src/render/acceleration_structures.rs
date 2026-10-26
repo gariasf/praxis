@@ -22,8 +22,9 @@ pub const DYNAMIC_TLAS_CAPACITY: u32 = 10_000;
 /// of the marker before it to the start of the marker after it.
 pub(crate) const DYNAMIC_TLAS_BUILD: &str = "dynamic_tlas_build";
 
-/// NVIDIA's PCI vendor ID, which Vulkan and DX12 both report (the PCI ID
-/// Repository's `pci.ids` [ref:pci-vendor-id-nvidia]).
+/// NVIDIA's PCI vendor ID (the PCI ID Repository's `pci.ids`
+/// [ref:pci-vendor-id-nvidia]), which Vulkan [ref:vulkan-vendorid-pci] and
+/// DXGI [ref:dxgi-adapter-desc2-vendorid] both report.
 const NVIDIA_VENDOR: u32 = 0x10DE;
 
 /// What acceleration structures take in GPU memory, as measured on one
@@ -210,7 +211,8 @@ pub struct DynamicTlas {
     /// Entries its last build filled, from the first.
     filled: usize,
     /// Bytes each entry uploads to the GPU per build: the backend's own
-    /// instance record, which wgpu-core converts it to and stages.
+    /// instance record, which wgpu-core converts it to and stages
+    /// [ref:wgpu-30-tlas-instance-staging].
     entry_upload_bytes: u64,
     /// One invocation that queries the TLAS, recorded on either side of its
     /// build: the GPU runs neither marker alongside the build, as it would a
@@ -273,10 +275,13 @@ impl DynamicTlas {
             tlas,
             filled: 0,
             entry_upload_bytes: match backend {
-                // `MTLIndirectAccelerationStructureInstanceDescriptor`.
+                // `MTLIndirectAccelerationStructureInstanceDescriptor`
+                // [ref:metal-indirect-instance-descriptor].
                 wgpu::Backend::Metal => 72,
-                // `VkAccelerationStructureInstanceKHR`,
-                // `D3D12_RAYTRACING_INSTANCE_DESC`.
+                // `VkAccelerationStructureInstanceKHR`
+                // [ref:vulkan-acceleration-structure-instance],
+                // `D3D12_RAYTRACING_INSTANCE_DESC`
+                // [ref:d3d12-raytracing-instance-desc].
                 _ => 64,
             },
             marker_pipeline,
@@ -416,7 +421,8 @@ mod tests {
 
     /// An NVIDIA GPU is counted with NVIDIA's figures on Vulkan and on DX12,
     /// lavapipe, a CPU Vulkan adapter under Mesa's vendor ID (the Vulkan
-    /// registry's `VK_VENDOR_ID_MESA` [ref:vulkan-vendor-id-mesa]), with
+    /// registry's `VK_VENDOR_ID_MESA` [ref:vulkan-vendor-id-mesa], which
+    /// lavapipe reports [ref:lavapipe-vendor-id-mesa]), with
     /// lavapipe's, and an Apple GPU on Metal with the M4 Pro's.
     #[test]
     fn the_estimate_follows_the_adapter() {

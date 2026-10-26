@@ -27,7 +27,8 @@ pub(crate) const SHADOW_MASK_LIGHTS: u32 = 59;
 /// Where each of a pixel's samples lies, from its top left corner, in
 /// pixels, which the pass rebuilds each sample's surface at: the standard
 /// pattern of four, Vulkan's standard sample locations, which an adapter
-/// promises only with `standardSampleLocations` and wgpu does not report.
+/// promises only with `standardSampleLocations` and wgpu does not report
+/// [ref:vulkan-standard-sample-locations].
 /// WGSL declares them as `SAMPLE_OFFSETS`, and a test checks the backend's
 /// depth target against them.
 pub(crate) const SAMPLE_OFFSETS: [[f32; 2]; SAMPLE_COUNT as usize] = [
