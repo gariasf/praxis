@@ -71,9 +71,13 @@ pub struct GpuFrameStats {
     /// the markers around it: no time in a frame that does not build it, as
     /// for the bend pass in a frame that bends nothing.
     pub pass_times: [(&'static str, Duration); TIMED_PASSES.len()],
-    /// The dynamic TLAS's build, plus the span from the start of the first
-    /// pass to the end of the last.
+    /// The dynamic TLAS's build, from the end of the frame before's last
+    /// pass, plus the span from the start of the first pass to the end of
+    /// the last.
     pub frame_time: Duration,
+    /// ADR 0019's gate: from the start of culling phase one to the latest
+    /// end of the passes up to the lit pass.
+    pub gate_time: Duration,
     /// The Instances the frame's draw held, and their triangles.
     pub instances_drawn: u32,
     pub triangles_drawn: u32,
