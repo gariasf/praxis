@@ -13,6 +13,39 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
 
+## Ticket form
+
+A ticket body has these sections, in this order (`docs/agents/workflow.md`, Tickets):
+
+```markdown
+## Parent
+
+#<map or parent ticket> and the decision behind it.
+
+## What to build
+
+The slice, end to end, in the glossary's terms.
+
+## Start here
+
+- `path/to/file.rs`: `function_or_type`, and why it is the place to start.
+- Ruled out: what was considered and dropped, with the reason.
+
+## Acceptance criteria
+
+- [ ] Each a command or an observable result.
+
+## Verification seam
+
+The seam agreed for `/tdd`, the metric a render or hot-path change must not regress, and the size.
+
+## Blocked by
+
+- #<n>, or None.
+```
+
+Start here names real paths and items, read from the code when the ticket is written; a ticket whose work is only docs or issues names those files instead. "Ruled out" may say "nothing yet".
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
