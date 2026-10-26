@@ -1,0 +1,1564 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Depth Pyramid Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume five of the series. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --bad: #c43a31;
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --bad: #f07067; --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --bad: #f07067; --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page {
+  max-width: 1040px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+.wide-block { max-width: 1040px; margin-left: auto; margin-right: auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+ol.steps { margin: 0 0 16px; padding-left: 26px; display: grid; gap: 8px; }
+ol.steps li { padding-left: 4px; }
+.keypoints li, ol.steps li { min-width: 0; }
+.prose code, figcaption code, .readout code, ol.work code { overflow-wrap: anywhere; }
+ol.steps li::marker { font-family: var(--mono); font-size: 0.85em; color: var(--accent); font-weight: 600; }
+
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .t-bad { font: 600 12px var(--mono); fill: var(--bad); }
+svg .t-good { font: 600 12px var(--mono); fill: var(--good); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .grid { stroke: var(--rule); stroke-width: 1; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
+.canvas-frame canvas { border-radius: 0; }
+canvas.demo { touch-action: none; cursor: crosshair; }
+canvas.pick { cursor: crosshair; }
+canvas:focus-visible { outline: 2px solid var(--warm); outline-offset: -3px; }
+.canvas-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend .swatch { display: inline-block; width: 15px; height: 13px; border: 2px solid var(--ink); border-radius: 2px; vertical-align: middle; margin-right: 7px; box-sizing: border-box; }
+.legend .swatch.footprint { border-color: var(--warm); border-width: 3px; }
+.legend .swatch.plain { border-style: dashed; }
+.legend .swatch.missed { border-color: var(--bad); background: repeating-linear-gradient(45deg, var(--bad) 0 1.5px, transparent 1.5px 4px); }
+.legend .swatch.differs { border-color: var(--bad); }
+.legend .swatch.read { border-color: var(--accent); background: var(--accent-wash); }
+.legend .swatch.grown { border-style: dashed; border-color: var(--ink-soft); }
+.legend .ramp { display: inline-block; width: 64px; height: 13px; border: 1px solid var(--rule); border-radius: 2px; vertical-align: middle; margin-right: 7px; background: linear-gradient(to right, var(--panel), var(--accent)); background: linear-gradient(to right, var(--panel), var(--accent) 60%, color-mix(in srgb, var(--accent) 35%, var(--ink))); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.demo-grid > div { min-width: 0; }
+ol.work { margin: 12px 0 0; padding: 10px 12px 10px 34px; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink-soft); display: grid; gap: 4px; }
+ol.work b { color: var(--ink); font-weight: 600; }
+ol.work li::marker { color: var(--accent); font-weight: 600; }
+.verdict { font-family: var(--mono); font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); margin: 10px 0 0; padding: 10px 12px; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; }
+.verdict b { font-weight: 600; }
+.verdict b.occluded { color: var(--good); }
+.verdict b.drawn { color: var(--accent); }
+.verdict b.wrong { color: var(--bad); }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+.table-wrap.counts { max-width: 620px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.bars { display: grid; gap: 10px; }
+.bar-row { display: grid; grid-template-columns: minmax(0, 17em) minmax(0, 1fr) minmax(0, 6em); gap: 10px; align-items: center; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.bar-row b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.bar-row .value { text-align: right; font-variant-numeric: tabular-nums; }
+.bar-track { height: 18px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 0 4px 4px 0; }
+.bar-fill.slow { background: var(--ink-soft); }
+.bar-fill.fast { background: var(--accent); }
+
+.frames { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; }
+.frame-cell { flex: 0 0 auto; width: 172px; min-width: 0; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; font-family: var(--mono); font-size: 12px; line-height: 1.45; color: var(--ink-soft); display: grid; gap: 6px; align-content: start; }
+.frame-cell h4 { margin: 0; font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.frame-cell.focus { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.frame-cell ul { margin: 0; padding-left: 14px; }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .bar-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .bar-row .value { text-align: left; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+
+/* In brief: the guide's conclusion first, for the reader who stops here. */
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">← Praxis field guides</a></div>
+  <div class="eyebrow">Praxis · M3 · ticket #198 · PRs #240, #241, #242</div>
+  <h1>The farthest depth, at every scale</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>Culling Instances hidden behind what is already drawn means bounding the farthest depth under each one's screen rectangle, and reading the 4x MSAA depth directly takes 160,000 loads for a 200-pixel square. Each frame, Praxis reduces the depth into a pyramid whose texels hold the farthest depth over their share of the screen, and the culling pass reads four texels per Instance. The idea to keep: because the pyramid holds the farthest depth, the test may draw a hidden Instance but never culls a visible one.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>Why reverse-Z makes the pyramid keep the minimum depth</li>
+      <li>How even shares cover levels with an odd side</li>
+      <li>Why level 0 reads every sample of the 4x depth</li>
+      <li>How phase two picks a level and reads four texels</li>
+      <li>What the pass costs on the M4 Pro, and how it is tested</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="instance-buffer.html">Instance Buffer Explained</a>, <a href="distant-textures.html">Distant Textures Explained</a></p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at fe08baa (PR #242, 2026-10-22), the last of ticket #198's three parts, after PRs #240 and #241 (2026-10-21). <b>Since then:</b> PRs #273 and #275 have built town, the dense scene this guide looks ahead to, with 254,256 Instances, and PR #298 checks its culling on against off at eight frames (<a href="town.html">Town Explained</a>). Since PR #277, with shadow rays on, phase two's Instances draw into depth in a pass of their own, which stores the depth for the shadow mask pass, and the lit pass reads its shadows from that mask (<a href="shadow-rays.html">Shadow Rays Explained</a>). The pyramid's shader and phase two's test of it are unchanged on main at 270c5e4.</p>
+  </aside>
+  <p class="lede">A field guide to the <span class="concept" data-tip="ADR 0019's Hi-Z pyramid: an R32Float mip chain whose level 0 is half the target's size, rounded down, each level halving the one below down to 1 × 1. Each texel holds the minimum depth, the farthest, over its share of the screen." data-term="Depth pyramid">depth pyramid</span> that Praxis builds every frame from its <span class="concept" data-tip="Multisample anti-aliasing with four samples per pixel: coverage and depth are tested at four points in each pixel, so a triangle's edge can cover some of a pixel's samples and not others.">4x MSAA</span> <span class="concept" data-tip="The main pass's first render pass: it draws phase one's Instances into the 4x MSAA depth target only, cleared to 0, and stores the depth for the depth pyramid and the lit pass." data-term="Depth pre-pass">depth pre-pass</span>. Each texel of the pyramid holds the minimum depth over its share of the screen, which under <span class="concept" data-tip="ADR 0015's depth: a point d metres in front of the camera lands at depth 0.1 / d, so depth is 1 at the near plane and falls towards 0 at infinity. Depth clears to 0 and passes Greater, so nearer is greater." data-term="Reverse-Z">reverse-Z</span> is the farthest. <span class="concept" data-tip="The culling pass's second phase, run after the depth pyramid: it tests each Instance in view against the pyramid, records which are visible for the next frame, and draws those phase one did not." data-term="Phase two">Phase two</span> of the <span class="concept" data-tip="The compute pass that decides what the frame draws: it tests each Instance against the view frustum and, in phase two, the depth pyramid, and appends the Meshlets of those it draws to the frame's draw." data-term="Culling pass">culling pass</span> reads it to cull <span class="concept" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any. It sits in a slot of the Instance buffer that the Renderable keeps while it is one." data-term="Instance">Instances</span> hidden behind what phase one drew. The guide covers how the pyramid is sized and reduced, why it keeps the minimum, what it costs on the M4 Pro, and how it is tested.</p>
+  <p class="status"><b>Provenance.</b> Ticket #198 is closed and its three parts are merged: PR #240 (9775d24) builds the pyramid, PR #241 (7be466e) runs the culling pass in two phases, and PR #242 (fe08baa) culls against the pyramid. The guide describes main at fe08baa, when no <span class="concept" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Goldens and Baselines are made from them." data-term="Reference scene">Reference scene</span> hid an Instance, so the pyramid cost GPU time and culled nothing. Since then, PRs #273 and #275 have built <code>town</code>, with 254,256 Instances (<a href="town.html">Town Explained</a>), and later PRs have added passes around the pyramid pass and changed how the lit pass lights and shadows (<a href="froxel-lights.html">Froxel Lights Explained</a>, <a href="shadow-rays.html">Shadow Rays Explained</a>). The pyramid's shader and phase two's test of it are unchanged on main at 270c5e4, and the pass still runs between the depth pre-pass and phase two.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#why">1 · Why a pyramid</a>
+    <a href="#minimum">2 · Why the minimum</a>
+    <a href="#shares">3 · Sizes and shares</a>
+    <a href="#samples">4 · Every sample</a>
+    <a href="#pass">5 · The pass</a>
+    <a href="#resize">6 · Resize</a>
+    <a href="#reading-it">7 · How phase two reads it</a>
+    <a href="#tests">8 · Tests</a>
+    <a href="#cost">9 · What it costs</a>
+    <a href="#next">10 · What comes next</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="why">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1</div>
+    <h2>Why a pyramid</h2>
+    <p><span class="concept" data-tip="The culling pass's second phase, run after the depth pyramid: it tests each Instance in view against the pyramid, records which are visible for the next frame, and draws those phase one did not." data-term="Phase two">Phase two</span> of the <span class="concept" data-tip="The compute pass that decides what the frame draws: it tests each Instance against the view frustum and, in phase two, the depth pyramid, and appends the Meshlets of those it draws to the frame's draw." data-term="Culling pass">culling pass</span> asks one question of each <span class="concept" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any. It sits in a slot of the Instance buffer that the Renderable keeps while it is one." data-term="Instance">Instance</span> in view: does its box lie wholly behind what <span class="concept" data-tip="The culling pass's first phase: it appends the Instances in view that were visible the frame before to the frame's draw, which the depth pre-pass draws." data-term="Phase one">phase one</span> drew? Phase one has already drawn the Instances in view that were visible the frame before into the <span class="concept" data-tip="The main pass's first render pass: it draws phase one's Instances into the 4x MSAA depth target only, cleared to 0, and stores the depth for the depth pyramid and the lit pass." data-term="Depth pre-pass">depth pre-pass</span>. For each Instance, phase two projects the eight corners of its <span class="concept" data-tip="The box that holds a Mesh's vertices, in the Mesh's own space. The culling pass places it by the Instance's transform and projects its eight corners." data-term="Mesh bounds">Mesh bounds</span>, which gives a <span class="concept" data-tip="The smallest rectangle on screen, with sides parallel to the screen's, that holds a box's projected corners." data-term="Screen rectangle">screen rectangle</span> and the box's nearest depth. The box is hidden if even its nearest point lies behind the farthest depth drawn anywhere under that rectangle.</p>
+    <p>Answering from the depth target itself means reading every sample under the rectangle. The pre-pass draws at <span class="concept" data-tip="Multisample anti-aliasing with four samples per pixel: coverage and depth are tested at four points in each pixel, so a triangle's edge can cover some of a pixel's samples and not others.">4x MSAA</span>, so a rectangle 200 pixels on a side covers 160,000 samples, by this guide's arithmetic, and <span class="concept" data-tip="M3's dense Reference scene (#206): about 1 × 1 km with building blocks as occluders, and about 250k Instances of 10 to 20 Meshes."><code>town</code></span>, the dense Reference scene of M3, the project's main-pass milestone, was planned with about 250k Instances; PRs #273 and #275 have since built it with 254,256.</p>
+    <p>A <span class="concept" data-tip="ADR 0019's Hi-Z pyramid: an R32Float mip chain whose level 0 is half the target's size, rounded down, each level halving the one below down to 1 × 1. Each texel holds the minimum depth, the farthest, over its share of the screen." data-term="Depth pyramid">depth pyramid</span> answers with four reads, whatever the rectangle's size. Each <span class="concept" data-tip="One image of the pyramid's mip chain. Each level is the one below halved and rounded down, and at least 1, in each direction." data-term="Level">level</span> halves the one below, and each <span class="concept" data-tip="One element of a texture; here, one value of one level of the depth pyramid." data-term="Texel">texel</span> holds the farthest depth over its <span class="concept" data-tip="The part of the screen a texel stands for when its level's columns and rows divide the screen evenly: texel x of a level n texels wide covers x/n to (x+1)/n of the width." data-term="Share of the screen">share of the screen</span>. Phase two picks the level whose texels are at least as large as the rectangle, so the rectangle touches one or two texels along each axis there, and reads those. Their minimum is never nearer than the farthest depth under the rectangle, because the texels cover all of it and more. The answer can be farther than the truth, which only ever keeps an Instance that could have been culled: the test is <span class="concept" data-tip="Never culls what is visible. The test's approximations may only keep an Instance that could have been culled, never remove one that shows." data-term="Conservative">conservative</span>.</p>
+    <p>Greene, Kass and Miller described the structure in 1993 as a Z pyramid, built by combining "four Z values at each level into one Z value at the next coarser level by choosing the farthest Z from the observer". Their basic test compared a polygon with the one entry whose region covered its whole bounding box, and they named its weakness: "a small polygon covering the center of the image will be compared to the Z value at the coarsest level of the pyramid." Reading up to four texels avoids it. A rectangle that straddles the centre still gets texels about its own size.</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap counts">
+      <table class="facts">
+        <thead><tr><th>Square rectangle, pixels on a side</th><th class="n">Samples under it at 4x</th><th class="n">Pyramid loads</th></tr></thead>
+        <tbody>
+          <tr><td>8</td><td class="n">256</td><td class="n">4</td></tr>
+          <tr><td>64</td><td class="n">16,384</td><td class="n">4</td></tr>
+          <tr><td>512</td><td class="n">1,048,576</td><td class="n">4</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>Reads to bound the farthest depth under one rectangle</b>, by this guide's arithmetic: s pixels on a side cover 4s² samples. Whenever it reads the pyramid, phase two issues four loads (<a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/shaders/culling.wgsl#L203-L206"><code>culling.wgsl</code>, lines 203 to 206</a>), some of them of the same texel when the rectangle fits in one along an axis.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="minimum">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 · ADR 0015</div>
+    <h2>Why the minimum</h2>
+    <p>Praxis's depth is <span class="concept" data-tip="ADR 0015's depth: a point d metres in front of the camera lands at depth 0.1 / d, so depth is 1 at the near plane and falls towards 0 at infinity. Depth clears to 0 and passes Greater, so nearer is greater." data-term="Reverse-Z">reverse-Z</span> (<span class="concept" data-tip="Architecture Decision Record: a short document in docs/adr/ recording a decision that is hard to reverse, with its reasons.">ADR</span> 0015). A point d metres in front of the camera lands at depth 0.1 / d: 1 at the near plane, 0.1 at 1 m, 0.001 at 100 m, and towards 0 at infinity (<code>src/camera/mod.rs</code>). The depth target clears to 0, the far plane, and the <span class="concept" data-tip="The main pass's first render pass: it draws phase one's Instances into the 4x MSAA depth target only, cleared to 0, and stores the depth for the depth pyramid and the lit pass." data-term="Depth pre-pass">depth pre-pass</span> keeps a fragment where its depth is greater, so each sample ends up holding the nearest surface drawn there.</p>
+    <p>A <span class="concept" data-tip="One element of a texture; here, one value of one level of the depth pyramid." data-term="Texel">texel</span> of the <span class="concept" data-tip="ADR 0019's Hi-Z pyramid: an R32Float mip chain whose level 0 is half the target's size, rounded down, each level halving the one below down to 1 × 1. Each texel holds the minimum depth, the farthest, over its share of the screen." data-term="Depth pyramid">depth pyramid</span> must bound the farthest surface under it, so that no box that shows through a gap is mistaken for hidden. With nearer greater, the farthest is the smallest depth. ADR 0015 puts it in one clause: "a Hi-Z pyramid keeps the minimum depth, which is the farthest". Where phase one drew nothing, depth stays 0, and no box in front of the camera lies behind 0, so open sky hides nothing.</p>
+    <p>The test then reads: a box is occluded if its nearest depth is less than that minimum, that is, if even its nearest point is farther than the farthest surface under it. Spec #188 states the property for M3: "The pyramid holds minimum reverse-Z depth, the farthest, so it is conservative."</p>
+  </div>
+  <figure class="wide">
+    <div class="fluid"><svg id="f2-chart" role="img" aria-label="Eight samples across one texel's share, seen from the side: six hold an occluder at depth 0.7 and two see the far plane at 0. A box at depth 0.3 lies behind the occluder and shows through the gap. The minimum, 0, keeps the box; the maximum, 0.7, would cull it."></svg></div>
+    <figcaption><b>An illustration, not engine data.</b> Eight samples across one texel's share, seen from the side: six hold an occluder at depth 0.7, and two see past it to the cleared far plane, 0. A box whose nearest depth is 0.3 lies behind the occluder and shows through the gap. Against the minimum, 0.3 &lt; 0 is false, so the box is kept. Against the maximum, 0.3 &lt; 0.7 holds, so the box would be culled, and the gap would show the far plane where the box belongs.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>PR #242 shows the maximum failing. Its renderer test hides one quad behind a nearer one and expects 5, 5, 4 and 4 <span class="concept" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any. It sits in a slot of the Instance buffer that the Renderable keeps while it is one." data-term="Instance">Instances</span> drawn over four frames. With a pyramid that keeps the maximum, in its levels and over the four texels read, it draws 5, 5, 3 and 3. #196's check renders every <span class="concept" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Goldens and Baselines are made from them." data-term="Reference scene">Reference scene</span> with the culling <span class="concept" data-tip="The variants a Renderer is created with and keeps, such as whether Instances are culled. Their defaults are what ships." data-term="Render switches">Render switch</span> on and off and requires the two images to match within the Goldens' tolerance, one 8-bit step per channel. (Since PR #298 it checks <code>town</code> at eight frames, and allows one differing pixel per frame on software Vulkan and none on Metal.) With a maximum-depth pyramid it fails on four scenes, on Metal: pbr-sweep by 25,247 pixels, orrery by 2,742, texture-wall by 29,519 and helmet by 28,774. With the minimum, every scene matches, culling on and off, and at <span class="concept" data-tip="The goldens test that shifts each Reference scene that has a Golden, with its camera, by 100,032 m along x and along z, 1,563 whole 64 m Anchor cells, and requires the capture to match that Golden." data-term="100 km check">100 km</span>.</p>
+    <p>Rákos's 2010 article on Hi-Z occlusion culling keeps the maximum, a "store maximum depth" policy for "a usual depth buffer setup", and notes the other case: "For a reverse directed depth buffer the 'store minimum depth' policy has to be used."</p>
+  </div>
+</section>
+
+<section class="chapter" id="shares">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 · PR #240</div>
+    <h2>Sizes and shares</h2>
+    <p><span class="concept" data-tip="The struct in src/render/targets.rs that creates every target whose size is the frame's, the depth pyramid among them. A resize creates it again."><code>RenderTargets</code></span> creates the <span class="concept" data-tip="ADR 0019's Hi-Z pyramid: an R32Float mip chain whose level 0 is half the target's size, rounded down, each level halving the one below down to 1 × 1. Each texel holds the minimum depth, the farthest, over its share of the screen." data-term="Depth pyramid">depth pyramid</span> with the other targets whose size is the frame's. <span class="concept" data-tip="One image of the pyramid's mip chain. Each level is the one below halved and rounded down, and at least 1, in each direction." data-term="Level">Level</span> 0 is half the target's width and height, rounded down and at least 1, and the texture holds every level down to 1 × 1. Each level is the one below halved and rounded down, max(1, size &gt;&gt; level), as wgpu sizes any mip chain. At 2560 × 1440 that makes eleven levels: 1280 × 720, 640 × 360, 320 × 180, 160 × 90, 80 × 45, 40 × 22, 20 × 11, 10 × 5, 5 × 2, 2 × 1 and 1 × 1.</p>
+    <p>With sides halved and rounded down, some levels have an odd side, which raises the question of which <span class="concept" data-tip="One element of a texture; here, one value of one level of the depth pyramid." data-term="Texel">texels</span> of the level below a texel must cover. The pyramid answers with even shares. Each level's columns and rows divide the screen evenly, so texel x of a level n texels wide stands for x/n to (x+1)/n of the screen's width, its <span class="concept" data-tip="The part of the screen a texel stands for when its level's columns and rows divide the screen evenly: texel x of a level n texels wide covers x/n to (x+1)/n of the width." data-term="Share of the screen">share of the screen</span>. It holds the minimum of every texel of the level below whose share overlaps its own: for a level below m texels wide, from ⌊x·m/n⌋ to ⌈(x+1)·m/n⌉ − 1.</p>
+  </div>
+  <figure class="wide">
+    <pre class="code"><code><span class="comment">// The texels of a level `below_size` texels in size that `texel` of a level
+// `size` overlaps, the rows and columns of each level sharing the screen
+// evenly: from ⌊texel × below / size⌋ to ⌈(texel + 1) × below / size⌉ − 1.
+// Two along an axis that halves exactly, three where the level below is odd.</span>
+fn overlapped_texels(texel: vec2&lt;u32&gt;, size: vec2&lt;u32&gt;, below_size: vec2&lt;u32&gt;) -&gt; OverlappedTexels {
+    return OverlappedTexels(
+        texel * below_size / size,
+        ((texel + 1u) * below_size + size - 1u) / size - 1u,
+    );
+}</code></pre>
+    <figcaption><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/shaders/depth_pyramid.wgsl#L15-L24"><code>src/render/shaders/depth_pyramid.wgsl</code>, lines 15 to 24</a>. Both of the pass's entry points take each axis's first and last texel below from it.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Where the level below halves exactly, m = 2n, the range is columns 2x and 2x + 1. Where it is odd, m = 2n + 1, each texel's share is 2 + 1/n columns of the level below wide, so every texel overlaps three of them, by this guide's arithmetic. A plain 2 × 2 reduction reads columns 2x and 2x + 1 everywhere. At 37 pixels across and 18 texels, it never reads column 36, and texel 8, whose share runs from 8/18 to 9/18 of the width, reads pixels 16 and 17 although its share also covers pixel 18.</p>
+    <p>That matters because <span class="concept" data-tip="The culling pass's second phase, run after the depth pyramid: it tests each Instance in view against the pyramid, records which are visible for the next frame, and draws those phase one did not." data-term="Phase two">phase two</span> finds texels by the same even shares: a screen position u, from 0 to 1, picks texel ⌊u·n⌋. Under a plain reduction, pixels under a rectangle could go unread. If one of them showed the far plane through a gap, the test would see only the nearer depth around it and could cull a visible <span class="concept" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any. It sits in a slot of the Instance buffer that the Renderable keeps while it is one." data-term="Instance">Instance</span>. With texels covering two below and never three, PR #240's test finds 13 of level 0's 198 texels wrong.</p>
+    <p>The test resizes to 37 × 23, whose chain, 18 × 11, 9 × 5, 4 × 2, 2 × 1 and 1 × 1, reduces an odd side at levels 0, 1 and 2. The demo uses the same size and the same triangles.</p>
+  </div>
+  <figure class="wide" id="demo-pyramid">
+    <div class="controls" style="margin-top:0">
+      <span class="control-label">Level:</span>
+      <div class="seg" role="group" aria-label="Level" id="d1-levels">
+        <button type="button" data-level="0" aria-pressed="true">0 · 18×11</button>
+        <button type="button" data-level="1" aria-pressed="false">1 · 9×5</button>
+        <button type="button" data-level="2" aria-pressed="false">2 · 4×2</button>
+        <button type="button" data-level="3" aria-pressed="false">3 · 2×1</button>
+        <button type="button" data-level="4" aria-pressed="false">4 · 1×1</button>
+      </div>
+    </div>
+    <div class="controls">
+      <span class="control-label">Rule:</span>
+      <div class="seg" role="group" aria-label="Reduction rule" id="d1-rules">
+        <button type="button" data-rule="even" aria-pressed="true">Praxis: even shares</button>
+        <button type="button" data-rule="plain" aria-pressed="false">Plain 2×2</button>
+        <button type="button" data-rule="sample" aria-pressed="false">Sample 0 alone</button>
+      </div>
+    </div>
+    <div class="demo-grid" style="margin-top:14px">
+      <div>
+        <p class="canvas-label" id="d1-below-label">The depth target</p>
+        <div class="canvas-frame"><canvas id="d1-below" class="pick" tabindex="0" role="img" aria-label="The level being reduced, with the selected texel's share and the texels it covers outlined. Arrow keys move the selected texel."></canvas></div>
+      </div>
+      <div>
+        <p class="canvas-label" id="d1-level-label">Level 0</p>
+        <div class="canvas-frame"><canvas id="d1-level" class="pick" tabindex="0" role="img" aria-label="The level itself, with the selected texel outlined. Arrow keys move the selected texel."></canvas></div>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="ramp"></span>0 far, to 0.9 near</span>
+      <span><span class="swatch"></span>the texel's share</span>
+      <span><span class="swatch footprint"></span>what it covers</span>
+      <span><span class="swatch plain"></span>a plain 2×2 reads</span>
+      <span><span class="swatch missed"></span>covered, left unread</span>
+      <span><span class="swatch differs"></span>differs from Praxis's</span>
+    </div>
+    <ol class="work" id="d1-readout" aria-live="polite"></ol>
+    <figcaption><b>Live demo.</b> A 37 × 23 depth target with four samples per pixel, drawn with the pass-level test's five triangles at depths 0.2, 0.7, 0.45, 0.9 and 0.3 over the cleared 0. The demo rasterizes them itself at Vulkan's standard 4x sample positions, and its counts match the test's on the GPU: the plain 2 × 2 gets 13 of level 0's 198 texels wrong, and the sample-0 read 9. Left, the level being reduced, with this level's shares over it; at level 0, each pixel shows its four samples, one per quadrant. Right, the level itself. Hover or tap a texel, or focus either picture and use the arrow keys.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="samples">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 · PRs #240, #242</div>
+    <h2>Every sample of level 0</h2>
+    <p>The <span class="concept" data-tip="The main pass's first render pass: it draws phase one's Instances into the 4x MSAA depth target only, cleared to 0, and stores the depth for the depth pyramid and the lit pass." data-term="Depth pre-pass">depth pre-pass</span> draws at <span class="concept" data-tip="Multisample anti-aliasing with four samples per pixel: coverage and depth are tested at four points in each pixel, so a triangle's edge can cover some of a pixel's samples and not others.">4x MSAA</span> (ADR 0019), so the depth target holds four <span class="concept" data-tip="One of the four depth values a pixel holds under 4x MSAA, each tested at its own point in the pixel." data-term="Sample">samples</span> per pixel, each tested at its own point. Along a silhouette, some of a pixel's samples hold the near surface and others whatever lies behind it. Level 0 takes the minimum of all four samples of every pixel it covers, so one sample that sees past an edge pulls the <span class="concept" data-tip="One element of a texture; here, one value of one level of the depth pyramid." data-term="Texel">texel</span> to the farther depth. Reading sample 0 alone misses that: in the PR's test, 9 of level 0's 198 texels then differ.</p>
+    <p>Phase two relies on it. It grows each rectangle by a pixel past where rasterization rounds vertices, "so every sample a covered pixel holds is in the texels read" (PR #242). The same PR adds that "reading fewer samples, or a 1x depth, would stop the test being conservative under MSAA."</p>
+    <p>The pass binds the depth target as a <code>texture_depth_multisampled_2d</code>, which WGSL's <code>textureLoad</code> reads one sample at a time, by index, and the target gained <code>TEXTURE_BINDING</code> for it. A copy between a texture and a buffer needs a single-sampled texture, so the test reads the samples back with a compute kernel instead.</p>
+  </div>
+  <figure class="wide">
+    <pre class="code"><code><span class="comment">// The minimum depth of the depth target's four samples at `pixel`, which
+// Rust asserts it has (SAMPLE_COUNT), loaded together: Metal's compiler
+// does not unroll a loop over them.</span>
+fn pixel_minimum(pixel: vec2&lt;u32&gt;) -&gt; f32 {
+    return min(
+        min(textureLoad(depth, pixel, 0), textureLoad(depth, pixel, 1)),
+        min(textureLoad(depth, pixel, 2), textureLoad(depth, pixel, 3))
+    );
+}</code></pre>
+    <figcaption><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/shaders/depth_pyramid.wgsl#L26-L34"><code>depth_pyramid.wgsl</code>, lines 26 to 34</a>. In Rust, <code>const _: () = assert!(SAMPLE_COUNT == 4);</code> fails the build if the sample count changes (<a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/depth_pyramid_pass.rs#L16-L18"><code>depth_pyramid_pass.rs</code>, lines 16 to 18</a>).</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The loads are written out because a loop cost more. In PR #240's words, "in a loop, Metal's compiler serialised the loads". It measured level 0 at 1440p on the <span class="concept" data-tip="The Apple M4 Pro on which the project's Budgets are judged and its Baselines recorded; wgpu runs on Metal there.">M4 Pro</span> written three ways.</p>
+  </div>
+  <figure class="wide">
+    <div class="bars">
+      <div class="bar-row"><span>Loop over pixels and samples</span><div class="bar-track"><div class="bar-fill slow" style="width:100%"></div></div><span class="value"><b>656 µs</b></span></div>
+      <div class="bar-row"><span>Loop over samples alone</span><div class="bar-track"><div class="bar-fill slow" style="width:26.7%"></div></div><span class="value"><b>175 µs</b></span></div>
+      <div class="bar-row"><span>Explicit loads, as merged</span><div class="bar-track"><div class="bar-fill fast" style="width:22.9%"></div></div><span class="value"><b>150 µs</b></span></div>
+    </div>
+    <figcaption><b>Level 0's GPU time at 2560 × 1440 on the M4 Pro</b>, by how the sample loads are written (PR #240).</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Even written out, level 0 is most of the pass: about 150 to 220 µs of it at 1440p, depending on the depth. It reads every sample of the 4x depth, 58,982,400 bytes uncompressed at 1440p (ADR 0019), about 59 MB. Scenes with grazing ground planes, minification and far-coplanar, cost the most, which PR #240 reads as "consistent with the depth compressing worse there".</p>
+    <p>At 2560 × 1440, level 0 is exactly half the target, so each of its texels reads 2 × 2 pixels, 16 samples. Where both sides of the target are odd, a level-0 texel reads 3 × 3 pixels, 36 samples, by this guide's arithmetic.</p>
+  </div>
+</section>
+
+<section class="chapter" id="pass">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 · PRs #240, #241</div>
+    <h2>One pass, a level per dispatch</h2>
+    <p><code>DepthPyramidPass</code> holds two compute pipelines over two entry points of <code>depth_pyramid.wgsl</code>: <code>reduce_depth</code> for level 0, which reads the depth target, and <code>reduce_level</code> for every later level, which reads the level below. The PR's review kept them apart, since "WGSL has no generics, and a shared function would make each entry point use both bindings" (PR #240).</p>
+    <p>Their <span class="concept" data-tip="A set of resources a pass binds for its shaders. Each is defined once, in src/render/bind_groups.rs, and a bind group is a snapshot: it keeps the textures it was built with." data-term="Bind group">bind group</span> is <code>DEPTH_PYRAMID_LEVEL</code>, defined once in <code>bind_groups.rs</code> with three bindings: <code>level</code>, the level written, a write-only <code>r32float</code> <span class="concept" data-tip="A texture a shader writes texel by texel. Each pyramid level is written as one, then read to reduce the next." data-term="Storage texture">storage texture</span>; <code>depth</code>, the multisampled depth target; and <code>level_below</code>. Each pipeline's layout holds only the two bindings its entry point uses, which <code>BindGroupDefinition::layout_of</code> builds from a list of binding names, checked as <code>bind_group</code> checks them. The pass keeps one bind group per level, with that level's size.</p>
+    <p><code>record</code> opens one compute pass, labelled <code>depth_pyramid_pass</code>, and <span class="concept" data-tip="One run of a compute shader over a grid of workgroups. The pyramid pass dispatches once per level, a workgroup per 8 × 8 tile of texels." data-term="Dispatch">dispatches</span> once per level, in order, over <span class="concept" data-tip="A group of compute-shader invocations that run together. The pyramid pass gives each one an 8 × 8 tile of a level, a texel per invocation." data-term="Workgroup">workgroups</span> of 8 × 8 texels. At 1440p that is eleven dispatches.</p>
+  </div>
+  <figure class="wide">
+    <pre class="code"><code><span class="comment">// Level 0 reduces the depth target, each later level the one below.</span>
+for (index, (bind_group, size)) in self.levels.iter().enumerate() {
+    pass.set_pipeline(if index == 0 {
+        &amp;self.reduce_depth
+    } else {
+        &amp;self.reduce_level
+    });
+    pass.set_bind_group(DEPTH_PYRAMID_LEVEL.index, bind_group, &amp;[]);
+    pass.dispatch_workgroups(
+        size.width.div_ceil(DEPTH_PYRAMID_TILE_SIZE),
+        size.height.div_ceil(DEPTH_PYRAMID_TILE_SIZE),
+        1,
+    );
+}</code></pre>
+    <figcaption><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/depth_pyramid_pass.rs#L110-L123"><code>src/render/depth_pyramid_pass.rs</code>, lines 110 to 123</a>, indented less. <code>DEPTH_PYRAMID_TILE_SIZE</code> is 8.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The Renderer records the pass between the depth pre-pass and phase two; PR #240 split <code>MainPass::record</code> into <code>record_depth_prepass</code> and <code>record_lit_pass</code> to make room for it. <code>TIMED_PASSES</code> lists the frame's five passes in order, each timed from its start to its end, and <span class="concept" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and the GPU frame total, draw calls, Instances and triangles drawn, heap allocations, GPU memory and more.">Frame stats</span> report each one's <span class="concept" data-tip="A pass's GPU time in Frame stats: GPU timestamps written at its start and end, read back a few frames later." data-term="Pass time">GPU time</span>. Later PRs added seven passes around these: on main (270c5e4), <code>TIMED_PASSES</code> lists twelve, with the pyramid pass still between the depth pre-pass and phase two.</p>
+  </div>
+  <figure class="wide">
+    <div class="frames" role="list" aria-label="The frame's passes, in order">
+      <div class="frame-cell" role="listitem"><h4>culling_phase_one</h4><span>compute</span><ul><li>Appends the Instances in view that were visible the frame before.</li></ul></div>
+      <div class="frame-cell" role="listitem"><h4>depth_prepass</h4><span>render</span><ul><li>Draws them into the 4x depth, cleared to 0.</li><li>Stores the depth.</li></ul></div>
+      <div class="frame-cell focus" role="listitem"><h4>depth_pyramid_pass</h4><span>compute</span><ul><li>Reads every sample of the depth.</li><li>Writes the pyramid, a level per dispatch.</li></ul></div>
+      <div class="frame-cell" role="listitem"><h4>culling_phase_two</h4><span>compute</span><ul><li>Tests each Instance in view against the pyramid.</li><li>Appends those phase one did not draw and the pyramid does not hide.</li></ul></div>
+      <div class="frame-cell" role="listitem"><h4>lit_pass</h4><span>render</span><ul><li>Draws phase two's depth, then shades both phases at depth equal.</li><li>Loads the depth and discards it.</li></ul></div>
+    </div>
+    <figcaption><b>The frame's passes, as <code>TIMED_PASSES</code> lists them</b> (<a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/renderer.rs#L17-L25"><code>renderer.rs</code>, lines 17 to 25</a>; recorded on lines 343 to 382). At fe08baa, the frame-stats capture test expects exactly these, in this order, each with a non-zero time; on main it expects all twelve, with the three that pbr-sweep never runs, the dynamic TLAS's build, the bend pass and the BLAS refit, reading no time. Since PR #302 it also lets phase two's depth pass read no time in a frame where phase two draws nothing.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The order sets two attachment choices. The pre-pass clears the depth to 0 and stores it, since the pyramid and the lit pass read it. The <span class="concept" data-tip="ADR 0019's shading pass, run at depth equal after the 4x MSAA depth pre-pass. At fe08baa a directional light and up to four point lights lit it. Since then every directional light and the point lights of each pixel's Froxel light it (PRs #261 and #263), and it reads their shadows from a shadow mask that a compute pass traces before it (PRs #258, #265 and #277)." data-term="Lit pass">lit pass</span> is the frame's last pass that draws depth, so it loads the depth and ends with <span class="concept" data-tip="A render pass's instruction to throw an attachment's contents away at its end instead of writing them back to memory." data-term="StoreOp::Discard"><code>StoreOp::Discard</code></span>. Once a render pass holds a pipeline that writes depth, a store writes the whole target back, "even when phase two draws nothing": about 50 µs at 1440p on the M4 Pro. PR #241 measured pbr-sweep at 730 µs with <code>Store</code> against 679 µs. Since PR #277, with shadow rays on, as they ship, phase two's Instances draw into depth in a render pass of their own, <code>phase_two_depth_pass</code>, which loads the depth and stores it for the shadow mask pass; the lit pass then writes no depth, and still loads the depth and discards it. With shadow rays off, the lit pass draws phase two's depth as above.</p>
+    <p>The pass asked nothing new of the <span class="concept" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span>. It runs on compute shaders, which the floor already required for the culling pass (ADR 0021), and PR #240 changed neither ADR 0021 nor <code>src/gpu/</code>. The device is requested with exactly the floor, so the pass runs on what the floor guarantees. The raise #198 did need came in its second part: <code>max_storage_buffers_per_shader_stage</code> from 8 to 9, for the culling pass's visibility bits.</p>
+  </div>
+</section>
+
+<section class="chapter" id="resize">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 · PRs #240, #242</div>
+    <h2>Recreated on resize</h2>
+    <p>The pyramid's size follows the target's, so it lives with the targets. <span class="concept" data-tip="The struct in src/render/targets.rs that creates every target whose size is the frame's, the depth pyramid among them. A resize creates it again."><code>RenderTargets</code></span> creates every target whose size is the frame's: the 4x depth, the 4x colour and the pyramid, and since PRs #251 and #277 the HDR target and the shadow mask too. <code>Renderer::resize</code> creates them all again. <code>RenderTargets</code> keeps two kinds of view of the pyramid: one of every level, which phase two reads and which PR #242 added, and one of each level alone, which the pyramid pass writes and reads a level at a time.</p>
+    <p><span class="concept" data-tip="A set of resources a pass binds for its shaders. Each is defined once, in src/render/bind_groups.rs, and a bind group is a snapshot: it keeps the textures it was built with." data-term="Bind group">Bind groups</span> are snapshots, not pointers, as the module's comment says. After a resize, a bind group built for the old pyramid still holds the old textures. If the pyramid pass kept its own, it would go on reducing the old depth into the old pyramid, and <span class="concept" data-tip="The culling pass's second phase, run after the depth pyramid: it tests each Instance in view against the pyramid, records which are visible for the next frame, and draws those phase one did not." data-term="Phase two">phase two</span> would read texels the frame never wrote. So each pass builds the bind groups that read targets in one function, called at creation and after every resize: <code>DepthPyramidPass::bind_render_targets</code>, and <code>CullingPass::bind_render_targets</code> for the <span class="concept" data-tip="The compute pass that decides what the frame draws: it tests each Instance against the view frustum and, in phase two, the depth pyramid, and appends the Meshlets of those it draws to the frame's draw." data-term="Culling pass">culling pass</span>, whose group 3 holds the pyramid.</p>
+  </div>
+  <figure class="wide">
+    <pre class="code"><code><span class="comment">/// Matches a new target size, both non-zero.</span>
+pub fn resize(&amp;mut self, width: u32, height: u32) {
+    <span class="comment">// A pass whose bind groups read a target rebuilds them here, after
+    // the render targets.</span>
+    self.render_targets = RenderTargets::new(&amp;self.device, self.target_format, width, height);
+    self.depth_pyramid_pass
+        .bind_render_targets(&amp;self.device, &amp;self.render_targets);
+    self.culling_pass
+        .bind_render_targets(&amp;self.device, &amp;self.render_targets);
+    self.aspect_ratio = width as f32 / height as f32;
+}</code></pre>
+    <figcaption><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/renderer.rs#L247-L257"><code>src/render/renderer.rs</code>, lines 247 to 257</a>, indented less.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Tests check both. The pass-level test creates the pass for 16 × 16 targets, then rebinds it to targets created again at 37 × 23; without the rebinding, 62 of level 0's 198 texels differ. PR #242's renderer test creates its Renderer at 24 × 24 and resizes it to 16 × 16 first. If <code>resize</code> skips rebinding the culling pass, or the pyramid pass, it draws 5, 5, 5 and 4 Instances where it should draw 5, 5, 4 and 4.</p>
+    <p>The pyramid counts in <code>gpu_memory_bytes</code> through <code>RenderTargets::gpu_memory_bytes</code>, which counts every level of the texture behind level 0's view.</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Target</th><th>Pyramid</th><th class="n">Levels</th><th class="n">Texels</th><th class="n">Bytes</th><th>Where it appears</th></tr></thead>
+        <tbody>
+          <tr class="focus"><td>2560 × 1440</td><td>1280 × 720 to 1 × 1</td><td class="n">11</td><td class="n">1,228,763</td><td class="n">4,915,052</td><td>M4 Pro bench, PRs #240 and #242</td></tr>
+          <tr><td>640 × 360</td><td>320 × 180 to 1 × 1</td><td class="n">9</td><td class="n">76,763</td><td class="n">307,052</td><td>CI's lavapipe bench, PR #240</td></tr>
+          <tr><td>160 × 90</td><td>80 × 45 to 1 × 1</td><td class="n">7</td><td class="n">4,763</td><td class="n">19,052</td><td>the frame-stats capture test</td></tr>
+          <tr><td>37 × 23</td><td>18 × 11 to 1 × 1</td><td class="n">5</td><td class="n">254</td><td class="n">1,016</td><td>the pass-level test</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>The pyramid at the sizes the PRs use</b>, at 4 bytes a texel. Figures the PRs and tests state, and this guide's arithmetic for the rest.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="reading-it">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 7 · PR #242</div>
+    <h2>How phase two reads it</h2>
+    <p>The pyramid's one reader is <code>occluded</code>, in <code>culling.wgsl</code>, which <span class="concept" data-tip="The culling pass's second phase, run after the depth pyramid: it tests each Instance in view against the pyramid, records which are visible for the next frame, and draws those phase one did not." data-term="Phase two">phase two</span> calls for each <span class="concept" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any. It sits in a slot of the Instance buffer that the Renderable keeps while it is one." data-term="Instance">Instance</span> in view. This chapter follows only its use of the pyramid; the next guide covers the rest of the culling pass.</p>
+    <ol class="steps">
+      <li><b>Project the box.</b> For each of the eight corners of the Instance's <span class="concept" data-tip="The box that holds a Mesh's vertices, in the Mesh's own space. The culling pass places it by the Instance's transform and projects its eight corners." data-term="Mesh bounds">Mesh bounds</span> in <span class="concept" data-tip="The four-component position a vertex shader outputs. Dividing x, y and z by w gives the point's place on screen and its depth." data-term="Clip space">clip space</span>, keep the greatest depth, z over w: the box's nearest point. Each corner is first moved towards the camera, in clip-space z and in w, by 1/16384 of the summed magnitudes of that coordinate over the box's centre and its three half-axes, plus 0.1 mm, past what f32 rounding could do to the vertices. A box with a corner at or behind the camera's plane is never occluded.</li>
+      <li><b>Take the screen rectangle.</b> The corners' x and y over w bound the <span class="concept" data-tip="The smallest rectangle on screen, with sides parallel to the screen's, that holds a box's projected corners." data-term="Screen rectangle">screen rectangle</span>. Phase two turns it into texture coordinates, rows top first, and grows it by half a level-0 texel on each side, about a pixel.</li>
+      <li><b>Pick the level.</b> With e the rectangle's larger side, measured in level-0 texels, the <span class="concept" data-tip="One image of the pyramid's mip chain. Each level is the one below halved and rounded down, and at least 1, in each direction." data-term="Level">level</span> is min(⌈log₂ max(e, 1)⌉, levels − 1). Its <span class="concept" data-tip="One element of a texture; here, one value of one level of the depth pyramid." data-term="Texel">texels</span> are at least 2<sup>level</sup> level-0 texels wide, so the rectangle spans at most two of them per axis, by this guide's reading.</li>
+      <li><b>Find the texels.</b> Phase two computes the level's size, max(1, level 0's size &gt;&gt; level), and turns the rectangle's corners into a first and last texel per axis. If rounding leaves more than two per axis, the box is not occluded.</li>
+      <li><b>Read four texels</b>, the corners of that block of one or two by one or two, and take their minimum.</li>
+      <li><b>Compare.</b> The box is occluded if its nearest depth is less than that minimum, and phase two culls it.</li>
+    </ol>
+    <p>The level rule has the form of the one on slide 67 of Wihlidal's GDC 2016 talk, <code>min(ceil(log2(max(longestEdge, 1.0f))), levels - 1)</code>, and Rákos's 2010 article also reads four texels per test.</p>
+  </div>
+  <figure class="wide">
+    <pre class="code"><code>let level = min(
+    u32(ceil(log2(max(max(extent.x, extent.y), 1.0)))),
+    textureNumLevels(depth_pyramid) - 1u
+);
+<span class="comment">// Each level halves the one below, rounded down, as a mip chain does:
+// computed, since lavapipe (Mesa 25.2.8) answers a size query whose
+// level varies across a workgroup's invocations with one invocation's.</span>
+let size = max(level_zero_texels &gt;&gt; vec2&lt;u32&gt;(level), vec2&lt;u32&gt;(1u));</code></pre>
+    <figcaption><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/shaders/culling.wgsl#L190-L197"><code>src/render/shaders/culling.wgsl</code>, lines 190 to 197</a>, indented less. <code>extent</code> is the grown rectangle in level-0 texels.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Sizes computed, not queried</h3>
+    <p>Step 4 computes each level's size because <span class="concept" data-tip="Mesa's software Vulkan driver, which renders on the CPU and repeats exactly. CI renders Goldens and records counter Baselines with it.">lavapipe</span> answered the query wrongly. On CI's lavapipe, Mesa 25.2.8, <code>textureDimensions(.., level)</code> gives every invocation that lavapipe runs together in one SIMD vector the size at the first one's level, which Mesa's source marks "<a href="https://gitlab.freedesktop.org/mesa/mesa/-/blob/mesa-25.2.8/src/gallium/auxiliary/gallivm/lp_bld_sample_soa.c#L4353-L4361">FIXME: this needs to honor per-element lod</a>"; the code comment above names the whole workgroup. Every Instance then read the 1 × 1 level's size, its rectangle collapsed to texel (0, 0), and the test culled two visible quads: the first CI run drew 5, 5, 2 and 4. Temporary probes on CI, since dropped, narrowed it down: loads through the all-levels view were right texel by texel, a copy of <code>occluded</code> run one invocation per workgroup got every step right, and inside the culling pass the queried size was 1 at every level. The fix "replaces one texture query with a shift", so the PR's timings, taken before it, stand. Level 0's size is still queried, with the same level in every invocation.</p>
+  </div>
+  <figure class="wide" id="demo-occlusion">
+    <div class="controls" style="margin-top:0">
+      <span class="control-label">Start from:</span>
+      <div class="seg" role="group" aria-label="Start from" id="d2-presets">
+        <button type="button" data-preset="hidden" aria-pressed="true">Hidden, small</button>
+        <button type="button" data-preset="coarse" aria-pressed="false">Hidden, coarse texels</button>
+        <button type="button" data-preset="gap" aria-pressed="false">Beside a near triangle</button>
+      </div>
+    </div>
+    <div class="controls">
+      <span class="control-label">Pyramid keeps:</span>
+      <div class="seg" role="group" aria-label="Pyramid keeps" id="d2-keep">
+        <button type="button" data-keep="min" aria-pressed="true">the minimum, as Praxis</button>
+        <button type="button" data-keep="max" aria-pressed="false">the maximum</button>
+      </div>
+    </div>
+    <div class="demo-grid" style="margin-top:14px">
+      <div>
+        <div class="canvas-frame"><canvas id="d2-canvas" class="demo" tabindex="0" role="img" aria-label="A 160 by 90 depth target with a screen rectangle over it and the pyramid texels phase two would read for it. Arrow keys move the rectangle; with Shift they resize it."></canvas></div>
+        <div class="legend">
+          <span><span class="ramp"></span>0 far, to 0.9 near</span>
+          <span><span class="swatch"></span>screen rectangle</span>
+          <span><span class="swatch grown"></span>grown by a pixel</span>
+          <span><span class="swatch read"></span>texels read</span>
+        </div>
+        <div class="sliders">
+          <label for="d2-left" class="control-label">Left</label>
+          <input type="range" id="d2-left" min="0" max="159" value="70">
+          <label for="d2-top" class="control-label">Top</label>
+          <input type="range" id="d2-top" min="0" max="89" value="58">
+          <label for="d2-width" class="control-label">Width</label>
+          <input type="range" id="d2-width" min="1" max="160" value="10">
+          <label for="d2-height" class="control-label">Height</label>
+          <input type="range" id="d2-height" min="1" max="90" value="8">
+          <label for="d2-nearest" class="control-label">Nearest depth</label>
+          <input type="range" id="d2-nearest" min="0" max="100" value="15">
+        </div>
+      </div>
+      <div>
+        <ol class="work" id="d2-steps" style="margin-top:0"></ol>
+        <p class="verdict" id="d2-verdict" aria-live="polite"></p>
+      </div>
+    </div>
+    <figcaption><b>Live demo.</b> A 160 × 90 depth target, the frame-stats capture test's size, drawn with the same five triangles, and its pyramid of seven levels, 80 × 45 down to 1 × 1. The rectangle stands for an Instance's screen rectangle and the slider for its box's nearest depth, in hundredths: the demo sets both directly, where phase two derives them from the box's corners, and it leaves out the depth margin of step 1. From the rectangle on, it follows <code>occluded</code>: the pixel margin, the level, the computed size, the texels and the comparison. Drag the rectangle or its corner, use the sliders, or focus the picture and use the arrow keys, with Shift to resize. "The maximum" builds the pyramid and combines the four reads with the maximum, as PR #242's failing variant did.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Phase one, the visibility bits, why phase two also tests the Instances phase one drew, and how the frame's draw grows across the two phases are the subject of the next guide, <a href="instance-culling.html">Instance Culling Explained</a>.</p>
+  </div>
+</section>
+
+<section class="chapter" id="tests">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 8 · PRs #240, #241, #242</div>
+    <h2>How it is tested</h2>
+    <p>Ticket #198's architecture review asked for a pass-level test beside the capture tests: "the pyramid built from a read-back depth texture against a CPU minimum-reduction". It is <code>each_depth_pyramid_texel_holds_the_minimum_depth_of_its_share_of_the_screen</code>, in <code>depth_pyramid_pass.rs</code>:</p>
+    <ol class="steps">
+      <li>It creates the pass for 16 × 16 targets, then rebinds it to targets created again at 37 × 23, so that levels 0, 1 and 2 reduce an odd side.</li>
+      <li>It draws five triangles into the depth target as the pre-pass draws, cleared to 0 and passing <code>Greater</code>: one at depth 0.2, three times the others' size, and four at 0.7, 0.45, 0.9 and 0.3.</li>
+      <li>It records the pass, then reads back every sample of the 4x depth and every level with small compute kernels.</li>
+      <li>It builds the expected pyramid on the CPU, from each pixel's minimum, a level at a time, and requires every texel of every level to be equal, with no tolerance.</li>
+      <li>It checks that the expected pyramid is not all background.</li>
+    </ol>
+    <p>The CPU side is written another way. The shader computes each texel's first and last texel below; the CPU loops over every texel below and keeps those whose share overlaps, by an integer test, <code>below_texel * size &lt; (texel + 1) * below_size &amp;&amp; (below_texel + 1) * size &gt; texel * below_size</code>. Two formulations that agree are better evidence than one copied into the test.</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Broken on purpose</th><th class="n">Level-0 texels that differ</th><th>Reported in</th></tr></thead>
+        <tbody>
+          <tr><td>Texels cover two texels below, never three</td><td class="n">13 of 198</td><td>PRs #240, #241</td></tr>
+          <tr><td>Level 0 reads sample 0 alone</td><td class="n">9 of 198</td><td>PRs #240, #241</td></tr>
+          <tr><td>Level 0 takes the maximum of a pixel's first two samples, then the minimum of that and the other two</td><td class="n">3 of 198</td><td>PR #241</td></tr>
+          <tr><td>The pass is not rebound to the new targets</td><td class="n">62 of 198</td><td>PRs #240, #241</td></tr>
+          <tr><td>The reduction keeps the maximum</td><td class="n">198 of 198</td><td>PR #240</td></tr>
+          <tr><td>The pyramid pass is recorded before the depth pre-pass</td><td class="n">62 of 198</td><td>PR #240</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>How the pass-level test fails</b>, as the PRs report it. The last two rows come from PR #240's first form of the test, which ran in a Renderer. PR #241 moved it to the pass seam, drawing its own depth, because the depth target is undefined after a frame once the lit pass discards it. Run on the demo's own rasterization, the first four rows come out the same, by this guide's check.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Around it, <code>capture_reports_the_pbr_sweep_frame_stats</code> expects the five passes in order, each with a non-zero time (on main, twelve, some of which read no time, as chapter 5 notes), and a closed-form <code>gpu_memory_bytes</code> that adds the 80 × 45 pyramid's seven levels, 19,052 B. PR #242's renderer test drives the pyramid through phase two and a resize (chapters 2 and 6), and #196's check compares every <span class="concept" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Goldens and Baselines are made from them." data-term="Reference scene">Reference scene</span> with culling on and off. <span class="concept" data-tip="A committed image that a Reference scene must reproduce within tolerance." data-term="Golden">Goldens</span> were unchanged on Metal through all three PRs, and CI checked software Vulkan.</p>
+  </div>
+</section>
+
+<section class="chapter" id="cost">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 9 · PRs #240, #242</div>
+    <h2>What it costs</h2>
+    <p>PR #240 benched main at 93355f1 against its branch on the <span class="concept" data-tip="The Apple M4 Pro on which the project's Budgets are judged and its Baselines recorded; wgpu runs on Metal there.">M4 Pro</span> at 2560 × 1440, in three interleaved rounds per binary with the machine's load average at 4 to 8, and reports the <span class="concept" data-tip="The middle value once the frames' times are sorted, so a few slow frames barely move it." data-term="Median">median</span> of the three runs' medians.</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Scene</th><th class="n">GPU frame, main → PR</th><th class="n">depth_pyramid_pass</th><th class="n">GPU rise beyond the pass</th><th class="n">CPU frame, main → PR</th></tr></thead>
+        <tbody>
+          <tr><td>far-coplanar</td><td class="n">593.0 → 838.6</td><td class="n">244.1</td><td class="n">+1.6</td><td class="n">71.2 → 89.5</td></tr>
+          <tr><td>helmet</td><td class="n">864.3 → 1,084.8</td><td class="n">210.1</td><td class="n">+10.4</td><td class="n">89.8 → 106.2</td></tr>
+          <tr><td>minification</td><td class="n">657.5 → 914.3</td><td class="n">258.2</td><td class="n">−1.5</td><td class="n">69.8 → 104.0</td></tr>
+          <tr><td>normal-tangent</td><td class="n">508.5 → 720.9</td><td class="n">183.5</td><td class="n">+28.9</td><td class="n">70.1 → 94.0</td></tr>
+          <tr><td>orrery</td><td class="n">365.0 → 560.3</td><td class="n">179.3</td><td class="n">+16.0</td><td class="n">70.0 → 85.6</td></tr>
+          <tr><td>pbr-sweep</td><td class="n">458.1 → 659.8</td><td class="n">185.0</td><td class="n">+16.8</td><td class="n">67.3 → 83.0</td></tr>
+          <tr><td>texture-wall</td><td class="n">14,150.6 → 14,525.2</td><td class="n">789.8</td><td class="n">n/a</td><td class="n">1,784.3 → 1,905.0</td></tr>
+          <tr><td>uv-grid</td><td class="n">442.0 → 658.6</td><td class="n">196.5</td><td class="n">+20.2</td><td class="n">69.5 → 86.2</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>PR #240 on the M4 Pro</b>, in µs. texture-wall spends GPU time outside its passes' timestamps (#183), so its pass lines do not add up: its pass reads 790 µs while its frame rises by 375 µs.</figcaption>
+  </figure>
+  <div class="prose">
+    <ul class="keypoints">
+      <li><b>GPU:</b> the frame rises by the pass's own time plus up to 29 µs, which PR #240 puts down to the extra pass boundary between the pre-pass and the lit pass. Level 0 is about 150 to 220 µs of the pass; the ten later levels cost about 40 µs together, mostly per-dispatch cost.</li>
+      <li><b>CPU:</b> +15 to +34 µs a frame on every scene but texture-wall, for the compute pass, its eleven dispatches and its timestamps; by this guide's arithmetic from the table, texture-wall's CPU frame rose by 120.7 µs.</li>
+      <li><b><span class="concept" data-tip="A Frame stat: the CPU heap allocations one frame makes, counted by the engine's counting allocator." data-term="Heap allocations">Heap allocations</span>:</b> from 138 to 194 a frame on every scene, 56 more. Recording an empty pass with its timestamps costs 4, level 0's dispatch 16, and each later dispatch about 3.6, from wgpu's per-dispatch tracking.</li>
+      <li><b>GPU memory:</b> +4,915,164 B at 1440p: the pyramid's 1,228,763 R32Float texels, and 112 B for a fourth timed pass in the readback of GPU times (PR #241's split of the culling pass later made five). On CI's <span class="concept" data-tip="Mesa's software Vulkan driver, which renders on the CPU and repeats exactly. CI renders Goldens and records counter Baselines with it.">lavapipe</span>, only <code>gpu_memory_bytes</code>, +307,164 B at 640 × 360, and heap allocations, from 146 to 196, moved. The <span class="concept" data-tip="The recorded measurements of a Reference scene on one adapter: the M4 Pro, where Budgets are judged against it, or CI's lavapipe, where only its counters are judged." data-term="Baseline">Baselines</span> were re-recorded on both.</li>
+    </ul>
+    <p>After all three parts, PR #242 measured the pass at 180.0 to 265.5 µs on every scene but texture-wall, and #198 as a whole at +232 to +307 µs of GPU over 93355f1 on those scenes, of which the pyramid is 180 to 266 µs. That went past the ticket's line, "must not regress: GPU frame total on today's scenes beyond the pyramid's measured cost", and the project's owner accepted it. The PR's recommendation put the whole at about 2.5% of the 12 ms <span class="concept" data-tip="A numeric limit on one metric of a Reference scene, such as CPU ms, GPU ms or GPU memory, that a change must not regress. ADR 0013 gives the GPU 12 ms a frame at 1440p.">Budget</span>, paid back once <span class="concept" data-tip="M3's dense Reference scene (#206): about 1 × 1 km with building blocks as occluders, and about 250k Instances of 10 to 20 Meshes."><code>town</code></span> hides Instances. When #198 closed, the Reference scenes paid the cost and gained nothing; PRs #273 and #275 have since built <code>town</code>.</p>
+  </div>
+</section>
+
+<section class="chapter" id="next">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 10</div>
+    <h2>What comes next</h2>
+    <ul class="keypoints">
+      <li><b><a href="instance-culling.html">Instance Culling Explained</a></b>, next in this series: phase one and its <span class="concept" data-tip="One bit per Instance slot, kept between frames in a 64 KiB buffer: phase two sets the bits of the Instances it finds visible, and the next frame's phase one draws those." data-term="Visibility bits">visibility bits</span>, phase two's test in full, the frame's draw across the two phases, and the Capability floor's ninth storage buffer.</li>
+      <li><b><a href="https://github.com/gariasf/praxis/issues/206">#206</a></b> builds <span class="concept" data-tip="M3's dense Reference scene (#206): about 1 × 1 km with building blocks as occluders, and about 250k Instances of 10 to 20 Meshes."><code>town</code></span>, the first Reference scene that hides Instances, about 1 × 1 km with building blocks as occluders. PRs #273 and #275 have since built it, and #206 closed on 2026-10-24 (<a href="town.html">Town Explained</a>). Spec #188 asks for its camera path to run "at street level, then over the rooftops, with no cuts, so that occlusion changes exercise both Hi-Z phases".</li>
+      <li><b>Fewer dispatches</b>, deferred on <a href="https://github.com/gariasf/praxis/issues/17">#17</a>, the issue that holds the project's architecture decisions and milestone order: "one dispatch could write two levels, the second from the level two below (still conservative, though not equal to the chained minimum)", revived "when a profile names the pyramid's tail or the frame's heap allocations".</li>
+      <li><b>ADR 0019's gate</b> times the opaque main pass from the first culling dispatch to the end of the <span class="concept" data-tip="ADR 0019's shading pass, run at depth equal after the 4x MSAA depth pre-pass. At fe08baa a directional light and up to four point lights lit it. Since then every directional light and the point lights of each pixel's Froxel light it (PRs #261 and #263), and it reads their shadows from a shadow mask that a compute pass traces before it (PRs #258, #265 and #277)." data-term="Lit pass">lit pass</span> with shadow rays off, the pyramid included. If a Reference scene's median at 1440p passes 6 ms of GPU, half of ADR 0013's 12 ms, options B and D of ADR 0019 are prototyped on that scene before anything changes.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Every link below resolved when the guide was written. Repo links are pinned to main at fe08baa.</p>
+  </div>
+  <div class="reading wide-block">
+    <article>
+      <h3>These PRs and their sources</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/pull/240">PR #240</a> <span>the pyramid: target, pass, test and costs</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/241">PR #241</a> <span>two phases; the test moves to the pass seam; Discard</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/242">PR #242</a> <span>the occlusion test, lavapipe's size query, the maximum-depth evidence</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/198">Ticket #198</a>, <a href="https://github.com/gariasf/praxis/issues/198#issuecomment-6324901439">its split</a> and <a href="https://github.com/gariasf/praxis/issues/198#issuecomment-6275846776">the review's addition</a> <span>the ask, the three parts, and the pass-level test</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/242#issuecomment-6333843749">The project owner's acceptance</a> <span>#198's GPU cost</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/docs/adr/0019-clustered-forward-main-pass-with-4x-msaa.md">ADR 0019</a> <span>the main pass, and where the Hi-Z pyramid sits in it</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/docs/adr/0015-reverse-z-depth-with-an-infinite-far-plane.md">ADR 0015</a> <span>reverse-Z, and why the minimum</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/docs/adr/0021-capability-floor.md">ADR 0021</a> <span>the Capability floor</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/docs/adr/0013-reference-hardware-and-provisional-budgets.md">ADR 0013</a> <span>the 12 ms GPU Budget</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/188">Spec #188</a> <span>M3; stories 2, 3, 13 and 47, on the culling, the pre-pass and <code>town</code>'s path</span></li>
+      </ul>
+      <h4>Code at fe08baa</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/depth_pyramid_pass.rs">depth_pyramid_pass.rs</a> <span>the pass and its test</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/shaders/depth_pyramid.wgsl">depth_pyramid.wgsl</a> <span>the two entry points</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/targets.rs">targets.rs</a> <span>the pyramid as a render target; the depth attachments</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/shaders/culling.wgsl#L143-L208">culling.wgsl, <code>occluded</code></a> <span>the pyramid's reader</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/bind_groups.rs#L128-L160">bind_groups.rs, <code>DEPTH_PYRAMID_LEVEL</code></a> <span>the pass's bindings</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Hi-Z in the literature</h3>
+      <ul>
+        <li>Greene, Kass and Miller, <a href="https://history.siggraph.org/learning/hierarchical-z-buffer-visibility-by-greene-kass-and-miller/">Hierarchical Z-Buffer Visibility</a>, SIGGRAPH 1993, pp. 231–238, <a href="https://doi.org/10.1145/166117.166147">doi:10.1145/166117.166147</a> <span>§3.2: the Z pyramid of farthest Z, and the weakness of testing against one entry</span></li>
+        <li>Rákos, <a href="https://www.rastergrid.com/blog/2010/10/hierarchical-z-map-based-occlusion-culling/">Hierarchical-Z map based occlusion culling</a>, 2010 <span>a Hi-Z map built on the GPU: the reduction, odd levels' edge texels, four lookups, and the minimum under reversed depth</span></li>
+        <li>Haar and Aaltonen, <a href="https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf">GPU-Driven Rendering Pipelines</a>, SIGGRAPH 2015 Advances course <span>PDF pages 51 and 52, two-phase occlusion culling: the first phase culls against the last frame's pyramid, the second refreshes it, tests what the first culled, and draws its false negatives</span></li>
+        <li>Wihlidal, <a href="https://www.slideshare.net/gwihlidal/optimizing-the-graphics-pipeline-with-compute-gdc-2016">Optimizing the Graphics Pipeline with Compute</a>, GDC 2016 <span>slide 67: a Hi-Z pyramid populated after depth laydown, and its level rule</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Specifications and APIs</h3>
+      <ul>
+        <li>WGSL, <a href="https://www.w3.org/TR/WGSL/#textureload">textureLoad</a> <span>one sample of a <code>texture_depth_multisampled_2d</code>, by index</span></li>
+        <li>WGSL, <a href="https://www.w3.org/TR/WGSL/#texturedimensions">textureDimensions</a> <span>the query lavapipe answered wrongly with a varying level</span></li>
+        <li>Vulkan, <a href="https://docs.vulkan.org/spec/latest/chapters/primsrast.html">Rasterization</a> <span>its Standard Sample Locations table: the 4x positions the demos use</span></li>
+        <li>wgpu-types 30.0.1, <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/origin_extent.rs#L146-L191"><code>max_mips</code> and <code>mip_level_size</code></a> <span>how many levels, and each one's size</span></li>
+        <li>wgpu 30.0.1, <a href="https://docs.rs/wgpu/30.0.1/wgpu/enum.StoreOp.html">StoreOp</a> <span><code>Store</code> and <code>Discard</code></span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Books</h3>
+      <ul>
+        <li><i>Real-Time Rendering</i>, 4th ed.: §19.7 Occlusion Culling, from p. 840, whose index puts hierarchical z-buffering on pp. 846–850, where both talks above are cited; §23.7 Depth Culling, Testing, and Buffering, from p. 1014, with the hardware's HiZ, zmax and zmin culling on p. 1015; §4.7 Projections, with reversed z on p. 100; §5.4 Aliasing and Antialiasing, with multisampling on pp. 139–142. <span>Numbers from the book's <a href="https://www.realtimerendering.com/Real-Time_Rendering_4th-TOC_Preface_Intro_Bib_Index.pdf">contents, bibliography and index</a>.</span></li>
+        <li><i>Foundations of Game Engine Development</i>, Vol. 2, Rendering: §6.3.2 Infinite Projection Matrices and §6.3.3 Projected Depth Precision, for ADR 0015's projection; chapter 9, Visibility and Occlusion, with §9.4.3 Box Visibility, for the culling pass next. <span>From the <a href="https://foundationsofgameenginedev.com/">book's site</a>.</span></li>
+        <li><i>Game Engine Architecture</i>, 3rd ed.: §11.1 Foundations of Depth-Buffered Triangle Rasterization <span>background on depth buffering, by the <a href="https://www.gameenginebook.com/toc.html">book's site</a></span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+  </div>
+  <dl class="glossary wide-block">
+    <div><dt>Depth pyramid</dt><dd>ADR 0019's Hi-Z pyramid: an R32Float mip chain from half the target's size to 1 × 1, each texel the minimum depth, the farthest, over its share of the screen.</dd></div>
+    <div><dt>Hi-Z</dt><dd>Hierarchical Z: depth kept at several resolutions, so a few reads bound the depth under a region.</dd></div>
+    <div><dt>Level</dt><dd>One image of the pyramid; each is the one below halved, rounded down, at least 1.</dd></div>
+    <div><dt>Texel</dt><dd>One value of one level.</dd></div>
+    <div><dt>Share of the screen</dt><dd>What a texel stands for when its level divides the screen evenly: texel x of n covers x/n to (x+1)/n.</dd></div>
+    <div><dt>Reverse-Z</dt><dd>Depth 1 at the near plane, falling towards 0 at infinity; cleared to 0, nearer is greater (ADR 0015).</dd></div>
+    <div><dt>Depth pre-pass</dt><dd>The render pass that draws phase one's Instances into the 4x depth and stores it for the pyramid and the lit pass.</dd></div>
+    <div><dt>4x MSAA, sample</dt><dd>Four samples per pixel, each tested for coverage and depth at its own point.</dd></div>
+    <div><dt>Conservative</dt><dd>Never culls what is visible; its errors only keep Instances that could have been culled.</dd></div>
+    <div><dt>Culling pass</dt><dd>The compute pass that tests each Instance and builds the frame's draw.</dd></div>
+    <div><dt>Phase one, phase two</dt><dd>Phase one draws the Instances in view that were visible the frame before; phase two, after the pyramid, tests the Instances in view and draws those phase one did not.</dd></div>
+    <div><dt>Mesh bounds</dt><dd>The box that holds a Mesh's vertices; phase two projects its eight corners.</dd></div>
+    <div><dt>Screen rectangle</dt><dd>The rectangle on screen that holds a box's projected corners.</dd></div>
+    <div><dt>RenderTargets</dt><dd>Every target whose size is the frame's, the pyramid among them, created again on resize.</dd></div>
+    <div><dt>Bind group</dt><dd>The resources a pass binds; a snapshot, so it is rebuilt after every resize.</dd></div>
+    <div><dt>Dispatch</dt><dd>One run of a compute shader over a grid of workgroups; the pyramid pass makes one per level.</dd></div>
+    <div><dt>Lit pass</dt><dd>The shading pass, at depth equal; the frame's last depth pass, which discards the depth.</dd></div>
+    <div><dt>StoreOp::Discard</dt><dd>Throws an attachment's contents away at the end of a render pass instead of writing them back.</dd></div>
+    <div><dt>Instance</dt><dd>One Renderable's data on the GPU, in its slot of the Instance buffer.</dd></div>
+    <div><dt>Frame stats</dt><dd>What one frame cost, measured by the engine: GPU time per pass, heap allocations, GPU memory and more.</dd></div>
+    <div><dt>Capability floor</dt><dd>The GPU features and limits the engine requires to start.</dd></div>
+    <div><dt>lavapipe</dt><dd>Mesa's software Vulkan driver, with which CI renders Goldens and records counter Baselines.</dd></div>
+    <div><dt>M4 Pro</dt><dd>The machine on which Budgets are judged and Baselines recorded, with wgpu on Metal.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from <a href="https://github.com/gariasf/praxis/pull/240">PR #240</a>, <a href="https://github.com/gariasf/praxis/pull/241">PR #241</a> and <a href="https://github.com/gariasf/praxis/pull/242">PR #242</a>, ticket <a href="https://github.com/gariasf/praxis/issues/198">#198</a> and its comments, with the code read at main <a href="https://github.com/gariasf/praxis/tree/fe08baafce3ef4c064f5792e93ed681557f802e1">fe08baa</a>. Decisions come from ADRs 0013, 0015, 0019 and 0021 and spec #188. Measurements are the PRs'; where the guide does its own arithmetic, it says so. The demos rasterize the pass-level test's triangles in the page, at Vulkan's standard 4x sample positions, and follow the pass's reduction and phase two's level and texel rules; their captions name what they leave out.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="acceleration-structures.html">Previous: Acceleration Structures Explained</a><a href="index.html">All field guides</a><a href="instance-culling.html">Next: Instance Culling Explained</a></nav>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const byId = (id) => document.getElementById(id);
+  const svgNS = "http://www.w3.org/2000/svg";
+  const make = (tag, attributes, parent, text) => {
+    const node = document.createElementNS(svgNS, tag);
+    for (const key in attributes) node.setAttribute(key, attributes[key]);
+    if (text !== undefined) node.textContent = text;
+    if (parent) parent.appendChild(node);
+    return node;
+  };
+  const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+  const depthText = (value) => value.toFixed(2);
+
+  // <pure> The depth image, the pyramid and the occlusion test, free of the DOM.
+  // Vulkan's standard 4x sample positions, from each pixel's upper left corner.
+  const SAMPLE_POSITIONS = [[0.375, 0.125], [0.875, 0.375], [0.125, 0.625], [0.625, 0.875]];
+  // The pass-level test's triangles (depth_pyramid_pass.rs, lines 152 to 163): centre and
+  // half width in clip space, and depth. Each points up, its base below its centre.
+  const TEST_TRIANGLES = [
+    { centre: [0.0, 0.0], halfWidth: 0.9, depth: 0.2 },
+    { centre: [-0.4, 0.3], halfWidth: 0.3, depth: 0.7 },
+    { centre: [0.3, -0.2], halfWidth: 0.3, depth: 0.45 },
+    { centre: [0.5, 0.4], halfWidth: 0.3, depth: 0.9 },
+    { centre: [-0.6, -0.5], halfWidth: 0.3, depth: 0.3 },
+  ];
+  function insideTriangle(corners, x, y) {
+    const edge = (from, to) => (to[0] - from[0]) * (y - from[1]) - (to[1] - from[1]) * (x - from[0]);
+    const first = edge(corners[0], corners[1]);
+    const second = edge(corners[1], corners[2]);
+    const third = edge(corners[2], corners[0]);
+    return (first >= 0 && second >= 0 && third >= 0) || (first <= 0 && second <= 0 && third <= 0);
+  }
+  // Each sample's depth as the depth pre-pass leaves it: cleared to 0, keeping the greatest, the nearest.
+  function rasterize(width, height) {
+    const triangles = TEST_TRIANGLES.map((triangle) => ({
+      depth: triangle.depth,
+      corners: [[-1, -1], [1, -1], [0, 1]].map(([across, up]) => [triangle.centre[0] + across * triangle.halfWidth, triangle.centre[1] + up * triangle.halfWidth]),
+    }));
+    const samples = new Float64Array(width * height * 4);
+    for (let row = 0; row < height; row++) {
+      for (let column = 0; column < width; column++) {
+        SAMPLE_POSITIONS.forEach(([across, down], sample) => {
+          // Rows run down the target; clip-space y runs up.
+          const x = ((column + across) / width) * 2 - 1;
+          const y = 1 - ((row + down) / height) * 2;
+          let depth = 0;
+          for (const triangle of triangles) {
+            if (triangle.depth > depth && insideTriangle(triangle.corners, x, y)) depth = triangle.depth;
+          }
+          samples[(row * width + column) * 4 + sample] = depth;
+        });
+      }
+    }
+    return samples;
+  }
+  // One value per pixel: the minimum of its four samples, their maximum, or sample 0 alone.
+  function pixelDepths(samples, width, height, read) {
+    const values = new Float64Array(width * height);
+    for (let pixel = 0; pixel < values.length; pixel++) {
+      const four = Array.from(samples.subarray(pixel * 4, pixel * 4 + 4));
+      values[pixel] = read === "first" ? four[0] : read === "max" ? Math.max(...four) : Math.min(...four);
+    }
+    return { width: width, height: height, values: values };
+  }
+  // The first and last texel of a level `belowSize` long that texel `texel` of a level `size` long
+  // covers: its even share, as depth_pyramid.wgsl's overlapped_texels computes it, or a plain 2 × 2.
+  function coveredRange(texel, size, belowSize, rule) {
+    if (rule === "plain") return [Math.min(2 * texel, belowSize - 1), Math.min(2 * texel + 1, belowSize - 1)];
+    return [Math.floor((texel * belowSize) / size), Math.floor(((texel + 1) * belowSize + size - 1) / size) - 1];
+  }
+  const combine = (keep) => (keep === "max" ? Math.max : Math.min);
+  function reduceLevel(below, rule, keep) {
+    const width = Math.max(1, Math.floor(below.width / 2));
+    const height = Math.max(1, Math.floor(below.height / 2));
+    const values = new Float64Array(width * height);
+    const pick = combine(keep);
+    for (let y = 0; y < height; y++) {
+      const rows = coveredRange(y, height, below.height, rule);
+      for (let x = 0; x < width; x++) {
+        const columns = coveredRange(x, width, below.width, rule);
+        let value = keep === "max" ? -Infinity : Infinity;
+        for (let row = rows[0]; row <= rows[1]; row++) {
+          for (let column = columns[0]; column <= columns[1]; column++) value = pick(value, below.values[row * below.width + column]);
+        }
+        values[y * width + x] = value;
+      }
+    }
+    return { width: width, height: height, values: values };
+  }
+  function buildPyramid(pixels, rule, keep) {
+    const levels = [];
+    let below = pixels;
+    do {
+      below = reduceLevel(below, rule, keep);
+      levels.push(below);
+    } while (below.width > 1 || below.height > 1);
+    return levels;
+  }
+  // culling.wgsl's occluded from the screen rectangle on (lines 182 to 207): `rectangle` in texture
+  // coordinates, rows top first, and the box's nearest depth.
+  function occlusionTest(rectangle, nearestDepth, levels, keep) {
+    const saturate = (value) => Math.min(1, Math.max(0, value));
+    const levelZero = [levels[0].width, levels[0].height];
+    const margin = [0.5 / levelZero[0], 0.5 / levelZero[1]];
+    const first = [saturate(rectangle.u0 - margin[0]), saturate(rectangle.v0 - margin[1])];
+    const last = [saturate(rectangle.u1 + margin[0]), saturate(rectangle.v1 + margin[1])];
+    const extent = [(last[0] - first[0]) * levelZero[0], (last[1] - first[1]) * levelZero[1]];
+    const level = Math.min(Math.ceil(Math.log2(Math.max(extent[0], extent[1], 1))), levels.length - 1);
+    const size = levelZero.map((side) => Math.max(side >> level, 1));
+    const firstTexel = [0, 1].map((axis) => Math.min(Math.floor(first[axis] * size[axis]), size[axis] - 1));
+    const lastTexel = [0, 1].map((axis) => Math.min(Math.floor(last[axis] * size[axis]), size[axis] - 1));
+    const tooWide = lastTexel[0] > firstTexel[0] + 1 || lastTexel[1] > firstTexel[1] + 1;
+    const reads = [[firstTexel[0], firstTexel[1]], [lastTexel[0], firstTexel[1]], [firstTexel[0], lastTexel[1]], [lastTexel[0], lastTexel[1]]];
+    const values = reads.map(([x, y]) => levels[level].values[y * levels[level].width + x]);
+    const bound = combine(keep)(...values);
+    return { first: first, last: last, extent: extent, level: level, size: size, firstTexel: firstTexel, lastTexel: lastTexel, tooWide: tooWide, reads: reads, values: values, bound: bound, occluded: !tooWide && nearestDepth < bound };
+  }
+  // </pure>
+
+  /* Theme: every drawing reads the colour tokens when it draws, and redraws when the theme changes. */
+  const redrawers = [];
+  const redrawAll = () => {
+    for (const redraw of redrawers) redraw();
+  };
+  function parseColour(text) {
+    const value = (text || "").trim();
+    if (value.startsWith("#")) {
+      const hex = value.length === 4 ? value.slice(1).split("").map((digit) => digit + digit).join("") : value.slice(1, 7);
+      return [0, 2, 4].map((at) => parseInt(hex.slice(at, at + 2), 16));
+    }
+    const parts = value.match(/[\d.]+/g);
+    return parts && parts.length >= 3 ? parts.slice(0, 3).map(Number) : [128, 128, 128];
+  }
+  function readTokens() {
+    const style = getComputedStyle(document.documentElement);
+    const token = (name) => style.getPropertyValue(name).trim();
+    const colours = {
+      panel: token("--panel"), paper: token("--paper"), ink: token("--ink"), inkSoft: token("--ink-soft"),
+      rule: token("--rule"), accent: token("--accent"), accentWash: token("--accent-wash"), warm: token("--warm"),
+      bad: token("--bad"), good: token("--good"), mono: token("--mono"),
+    };
+    colours.panelRgb = parseColour(colours.panel);
+    colours.accentRgb = parseColour(colours.accent);
+    colours.inkRgb = parseColour(colours.ink);
+    return colours;
+  }
+  // Far, depth 0, is the panel. Drawn depths, 0.2 to 0.9 in both demos, are spread logarithmically
+  // along a ramp that runs from the panel to the accent over its first 60%, then towards the ink.
+  function depthColour(colours, depth) {
+    const share = depth <= 0 ? 0 : clamp(0.35 + (0.65 * Math.log(depth / 0.2)) / Math.log(4.5), 0.15, 1);
+    const mix = (from, to, amount) => from.map((channel, index) => Math.round(channel + (to[index] - channel) * amount));
+    const mixed = share <= 0.6
+      ? mix(colours.panelRgb, colours.accentRgb, share / 0.6)
+      : mix(colours.accentRgb, colours.inkRgb, ((share - 0.6) / 0.4) * 0.65);
+    return "rgb(" + mixed.join(", ") + ")";
+  }
+  if (window.matchMedia) {
+    const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    if (darkQuery.addEventListener) darkQuery.addEventListener("change", redrawAll);
+    else if (darkQuery.addListener) darkQuery.addListener(redrawAll);
+  }
+  if (window.MutationObserver) {
+    new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawAll);
+
+  /* Sizing: each drawing takes its container's width and redraws when that width changes. */
+  function watchWidth(container, render) {
+    redrawers.push(render);
+    if (window.ResizeObserver) {
+      let lastWidth = -1;
+      new ResizeObserver(() => {
+        const width = container.clientWidth;
+        if (width !== lastWidth) {
+          lastWidth = width;
+          render();
+        }
+      }).observe(container);
+    } else {
+      window.addEventListener("resize", render);
+    }
+    render();
+  }
+  function canvasView(canvas, aspect) {
+    const width = Math.max(1, canvas.parentElement.clientWidth);
+    const height = Math.round(width * aspect);
+    const ratio = window.devicePixelRatio || 1;
+    canvas.style.width = width + "px";
+    canvas.style.height = height + "px";
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    const context = canvas.getContext("2d");
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    return { context: context, width: width, height: height };
+  }
+  function setPressed(buttons, isPressed) {
+    for (const button of buttons) button.setAttribute("aria-pressed", String(isPressed(button)));
+  }
+  // A grid cell's box in the view, snapped to whole pixels so neighbours meet without seams.
+  function cellBox(view, grid, column, row) {
+    const left = Math.round((column / grid.width) * view.width);
+    const top = Math.round((row / grid.height) * view.height);
+    return { x: left, y: top, w: Math.round(((column + 1) / grid.width) * view.width) - left, h: Math.round(((row + 1) / grid.height) * view.height) - top };
+  }
+  function gridLines(context, view, grid, colour, lineWidth) {
+    context.strokeStyle = colour;
+    context.lineWidth = lineWidth;
+    context.beginPath();
+    for (let column = 1; column < grid.width; column++) {
+      const x = (column / grid.width) * view.width;
+      context.moveTo(x, 0);
+      context.lineTo(x, view.height);
+    }
+    for (let row = 1; row < grid.height; row++) {
+      const y = (row / grid.height) * view.height;
+      context.moveTo(0, y);
+      context.lineTo(view.width, y);
+    }
+    context.stroke();
+  }
+  function hatch(context, cell, colour) {
+    context.save();
+    context.beginPath();
+    context.rect(cell.x, cell.y, cell.w, cell.h);
+    context.clip();
+    context.strokeStyle = colour;
+    context.lineWidth = 1.3;
+    context.beginPath();
+    for (let offset = -cell.h; offset < cell.w; offset += 5) {
+      context.moveTo(cell.x + offset, cell.y + cell.h);
+      context.lineTo(cell.x + offset + cell.h, cell.y);
+    }
+    context.stroke();
+    context.restore();
+  }
+  function haloText(context, colours, text, x, y) {
+    context.font = "600 11px " + colours.mono;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.lineJoin = "round";
+    context.lineWidth = 3;
+    context.strokeStyle = colours.panel;
+    context.strokeText(text, x, y);
+    context.fillStyle = colours.ink;
+    context.fillText(text, x, y);
+  }
+  const arrowSteps = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+
+  /* Figure, chapter 2: one texel's share seen from the side. */
+  (function minimumFigure() {
+    const svg = byId("f2-chart");
+    if (!svg) return;
+    const SAMPLES = [0.7, 0.7, 0.7, 0, 0, 0.7, 0.7, 0.7];
+    const BOX = 0.3;
+    function render() {
+      const colours = readTokens();
+      const width = Math.max(300, svg.parentElement.clientWidth);
+      const narrow = width < 520;
+      const height = 260;
+      const plot = { left: 40, right: width - 10, top: 34, bottom: height - 44 };
+      const yOf = (depth) => plot.bottom - depth * (plot.bottom - plot.top);
+      const column = (plot.right - plot.left) / SAMPLES.length;
+      svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+      svg.replaceChildren();
+      make("text", { x: 4, y: 16, class: "t-small" }, svg, "depth, nearer is greater");
+      for (const depth of [0, 0.3, 0.7, 1]) {
+        make("line", { x1: plot.left, y1: yOf(depth), x2: plot.right, y2: yOf(depth), class: "grid" }, svg);
+        make("text", { x: plot.left - 8, y: yOf(depth) + 4, class: "t-small", "text-anchor": "end" }, svg, String(depth));
+      }
+      make("line", { x1: plot.left, y1: yOf(0.7), x2: plot.right, y2: yOf(0.7), stroke: colours.bad, "stroke-width": 2, "stroke-dasharray": "3 4" }, svg);
+      make("line", { x1: plot.left, y1: yOf(BOX), x2: plot.right, y2: yOf(BOX), stroke: colours.warm, "stroke-width": 2.5, "stroke-dasharray": "8 4" }, svg);
+      make("line", { x1: plot.left, y1: yOf(0), x2: plot.right, y2: yOf(0), stroke: colours.good, "stroke-width": 2.5 }, svg);
+      SAMPLES.forEach((depth, index) => {
+        const from = plot.left + index * column + 5;
+        const to = plot.left + (index + 1) * column - 5;
+        if (depth > 0) make("line", { x1: from, y1: yOf(depth), x2: to, y2: yOf(depth), stroke: colours.ink, "stroke-width": 6, "stroke-linecap": "round" }, svg);
+        else make("circle", { cx: (from + to) / 2, cy: yOf(0), r: 5, fill: colours.panel, stroke: colours.ink, "stroke-width": 1.8 }, svg);
+      });
+      const labelX = plot.right - 4;
+      make("text", { x: labelX, y: yOf(0.7) - 10, class: "t-bad halo", "text-anchor": "end" }, svg, narrow ? "maximum 0.7: culled" : "maximum, 0.7: 0.3 < 0.7, so culled");
+      make("text", { x: labelX, y: yOf(BOX) - 10, class: "t-warm halo", "text-anchor": "end" }, svg, narrow ? "box at 0.3" : "the box's nearest depth, 0.3");
+      make("text", { x: labelX, y: yOf(0) - 10, class: "t-good halo", "text-anchor": "end" }, svg, narrow ? "minimum 0: kept" : "minimum, 0: 0.3 < 0 is false, so kept");
+      make("text", { x: plot.left + 4 * column, y: yOf(0) + 22, class: "t-small", "text-anchor": "middle" }, svg, "the gap: far plane");
+      make("text", { x: plot.left + 1.5 * column, y: yOf(0.7) + 22, class: "t-small", "text-anchor": "middle" }, svg, "occluder");
+      make("text", { x: plot.right, y: height - 6, class: "t-small", "text-anchor": "end" }, svg, "eight samples across one texel's share");
+    }
+    watchWidth(svg.parentElement, render);
+  })();
+
+  /* Demo 1: the pass-level test's depth, reduced a level at a time. */
+  (function pyramidDemo() {
+    const belowCanvas = byId("d1-below");
+    const levelCanvas = byId("d1-level");
+    if (!belowCanvas || !levelCanvas) return;
+    const WIDTH = 37;
+    const HEIGHT = 23;
+    const samples = rasterize(WIDTH, HEIGHT);
+    const pixels = { every: pixelDepths(samples, WIDTH, HEIGHT, "min"), first: pixelDepths(samples, WIDTH, HEIGHT, "first") };
+    const pyramids = {
+      even: buildPyramid(pixels.every, "even", "min"),
+      plain: buildPyramid(pixels.every, "plain", "min"),
+      sample: buildPyramid(pixels.first, "even", "min"),
+    };
+    const differing = {};
+    for (const rule in pyramids) {
+      differing[rule] = pyramids[rule].map((level, index) => level.values.reduce((count, value, at) => count + (value !== pyramids.even[index].values[at] ? 1 : 0), 0));
+    }
+    const RULE_NAMES = { even: "Praxis's even shares", plain: "a plain 2 × 2", sample: "sample 0 alone" };
+    const state = { level: 0, rule: "even", texel: [12, 4] };
+    const levelButtons = Array.from(document.querySelectorAll("#d1-levels button"));
+    const ruleButtons = Array.from(document.querySelectorAll("#d1-rules button"));
+    const belowOf = (rule, level) => (level === 0 ? (rule === "sample" ? pixels.first : pixels.every) : pyramids[rule][level - 1]);
+    const praxisBelow = (level) => (level === 0 ? pixels.every : pyramids.even[level - 1]);
+    function spanBox(view, grid, columns, rows) {
+      const first = cellBox(view, grid, columns[0], rows[0]);
+      const last = cellBox(view, grid, columns[1], rows[1]);
+      return { x: first.x, y: first.y, w: last.x + last.w - first.x, h: last.y + last.h - first.y };
+    }
+    // The part of a pixel's box that shows one sample: the quadrant that holds its position.
+    function quadrant(cell, sample) {
+      const right = SAMPLE_POSITIONS[sample][0] >= 0.5;
+      const lower = SAMPLE_POSITIONS[sample][1] >= 0.5;
+      const halfWidth = Math.round(cell.w / 2);
+      const halfHeight = Math.round(cell.h / 2);
+      return { x: cell.x + (right ? halfWidth : 0), y: cell.y + (lower ? halfHeight : 0), w: right ? cell.w - halfWidth : halfWidth, h: lower ? cell.h - halfHeight : halfHeight };
+    }
+    function markDiffering(context, view, grid, reference, colour) {
+      context.strokeStyle = colour;
+      context.lineWidth = 2;
+      for (let index = 0; index < grid.values.length; index++) {
+        if (grid.values[index] === reference.values[index]) continue;
+        const cell = cellBox(view, grid, index % grid.width, Math.floor(index / grid.width));
+        context.strokeRect(cell.x + 2, cell.y + 2, Math.max(1, cell.w - 4), Math.max(1, cell.h - 4));
+      }
+    }
+    function drawBelow() {
+      const view = canvasView(belowCanvas, HEIGHT / WIDTH);
+      const context = view.context;
+      const colours = readTokens();
+      const level = pyramids[state.rule][state.level];
+      const below = belowOf(state.rule, state.level);
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, view.width, view.height);
+      for (let row = 0; row < below.height; row++) {
+        for (let column = 0; column < below.width; column++) {
+          const cell = cellBox(view, below, column, row);
+          if (state.level === 0) {
+            for (let sample = 0; sample < 4; sample++) {
+              const part = quadrant(cell, sample);
+              context.fillStyle = depthColour(colours, samples[(row * WIDTH + column) * 4 + sample]);
+              context.fillRect(part.x, part.y, part.w, part.h);
+            }
+          } else {
+            context.fillStyle = depthColour(colours, below.values[row * below.width + column]);
+            context.fillRect(cell.x, cell.y, cell.w, cell.h);
+          }
+        }
+      }
+      if (view.width / below.width >= 7) {
+        context.globalAlpha = 0.7;
+        gridLines(context, view, below, colours.rule, 1);
+        context.globalAlpha = 1;
+      }
+      gridLines(context, view, level, colours.inkSoft, 1.5);
+      if (state.rule !== "even") markDiffering(context, view, below, praxisBelow(state.level), colours.bad);
+      const [x, y] = state.texel;
+      const columns = coveredRange(x, level.width, below.width, "even");
+      const rows = coveredRange(y, level.height, below.height, "even");
+      if (state.rule === "plain") {
+        const plainColumns = coveredRange(x, level.width, below.width, "plain");
+        const plainRows = coveredRange(y, level.height, below.height, "plain");
+        for (let row = rows[0]; row <= rows[1]; row++) {
+          for (let column = columns[0]; column <= columns[1]; column++) {
+            const read = column >= plainColumns[0] && column <= plainColumns[1] && row >= plainRows[0] && row <= plainRows[1];
+            if (!read) hatch(context, cellBox(view, below, column, row), colours.bad);
+          }
+        }
+      }
+      if (state.rule === "sample" && state.level === 0) {
+        // The samples a sample-0 read skips, dimmed.
+        context.fillStyle = colours.panel;
+        context.globalAlpha = 0.72;
+        for (let row = rows[0]; row <= rows[1]; row++) {
+          for (let column = columns[0]; column <= columns[1]; column++) {
+            const cell = cellBox(view, below, column, row);
+            for (let sample = 1; sample < 4; sample++) {
+              const part = quadrant(cell, sample);
+              context.fillRect(part.x, part.y, part.w, part.h);
+            }
+          }
+        }
+        context.globalAlpha = 1;
+      }
+      const footprint = spanBox(view, below, columns, rows);
+      context.strokeStyle = colours.warm;
+      context.lineWidth = 3;
+      context.strokeRect(footprint.x + 1.5, footprint.y + 1.5, footprint.w - 3, footprint.h - 3);
+      if (state.rule === "plain") {
+        const plain = spanBox(view, below, coveredRange(x, level.width, below.width, "plain"), coveredRange(y, level.height, below.height, "plain"));
+        context.save();
+        context.setLineDash([5, 3]);
+        context.strokeStyle = colours.ink;
+        context.lineWidth = 2;
+        context.strokeRect(plain.x + 4, plain.y + 4, plain.w - 8, plain.h - 8);
+        context.restore();
+      }
+      const share = { x: (x / level.width) * view.width, y: (y / level.height) * view.height, w: view.width / level.width, h: view.height / level.height };
+      context.strokeStyle = colours.ink;
+      context.lineWidth = 2;
+      context.strokeRect(share.x + 1, share.y + 1, share.w - 2, share.h - 2);
+    }
+    function drawLevel() {
+      const view = canvasView(levelCanvas, HEIGHT / WIDTH);
+      const context = view.context;
+      const colours = readTokens();
+      const level = pyramids[state.rule][state.level];
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, view.width, view.height);
+      for (let index = 0; index < level.values.length; index++) {
+        const cell = cellBox(view, level, index % level.width, Math.floor(index / level.width));
+        context.fillStyle = depthColour(colours, level.values[index]);
+        context.fillRect(cell.x, cell.y, cell.w, cell.h);
+      }
+      gridLines(context, view, level, colours.inkSoft, 1);
+      if (state.rule !== "even") markDiffering(context, view, level, pyramids.even[state.level], colours.bad);
+      if (view.width / level.width >= 34 && view.height / level.height >= 18) {
+        for (let index = 0; index < level.values.length; index++) {
+          const cell = cellBox(view, level, index % level.width, Math.floor(index / level.width));
+          haloText(context, colours, depthText(level.values[index]), cell.x + cell.w / 2, cell.y + cell.h / 2);
+        }
+      }
+      const cell = cellBox(view, level, state.texel[0], state.texel[1]);
+      context.strokeStyle = colours.ink;
+      context.lineWidth = 2.5;
+      context.strokeRect(cell.x + 1.25, cell.y + 1.25, cell.w - 2.5, cell.h - 2.5);
+    }
+    // How many texels below each texel covers along one axis.
+    function axisNote(belowSize, size, unit) {
+      if (belowSize === size) return "the same, so one " + unit;
+      if (belowSize === 2 * size) return "exactly twice, so two " + unit + "s";
+      return "odd, so three " + unit + "s";
+    }
+    function report() {
+      const level = pyramids[state.rule][state.level];
+      const below = belowOf(state.rule, state.level);
+      const [x, y] = state.texel;
+      const at = y * level.width + x;
+      const columns = coveredRange(x, level.width, below.width, "even");
+      const rows = coveredRange(y, level.height, below.height, "even");
+      const count = (columns[1] - columns[0] + 1) * (rows[1] - rows[0] + 1);
+      const source = state.level === 0 ? "the depth target" : "level " + (state.level - 1);
+      const items = [];
+      items.push("Texel <b>(" + x + ", " + y + ")</b> of level " + state.level + ", " + level.width + " × " + level.height + ", covers columns " + columns[0] + " to " + columns[1] + " and rows " + rows[0] + " to " + rows[1] + " of " + source + ": " + (state.level === 0 ? count + " pixels, " + 4 * count + " samples." : count + " texels."));
+      const praxis = pyramids.even[state.level].values[at];
+      items.push("Praxis keeps their minimum, <b>" + depthText(praxis) + "</b>" + (praxis === 0 ? ", the cleared far plane, so nothing can be culled behind this texel." : "."));
+      if (state.rule === "even") {
+        items.push("Across, the level below is " + below.width + " wide: " + axisNote(below.width, level.width, "column") + " per texel. Down, it is " + below.height + " high: " + axisNote(below.height, level.height, "row") + ".");
+        items.push("Pick another rule to see which texels it gets wrong.");
+      } else {
+        const value = pyramids[state.rule][state.level].values[at];
+        const verdict = value === praxis ? ", the same here." : ", nearer than the farthest depth the texel stands for, so wrong.";
+        if (state.rule === "plain") {
+          const plainColumns = coveredRange(x, level.width, below.width, "plain");
+          const plainRows = coveredRange(y, level.height, below.height, "plain");
+          const read = (plainColumns[1] - plainColumns[0] + 1) * (plainRows[1] - plainRows[0] + 1);
+          items.push("A plain 2 × 2 reads columns " + plainColumns[0] + " to " + plainColumns[1] + " and rows " + plainRows[0] + " to " + plainRows[1] + ", leaves " + (count - read) + " of the " + count + " unread, and holds <b>" + depthText(value) + "</b>" + verdict);
+        } else {
+          items.push((state.level === 0 ? "Reading sample 0 alone, it holds <b>" : "Built from sample 0 alone, it holds <b>") + depthText(value) + "</b>" + verdict);
+        }
+        items.push("Texels that differ from Praxis's pyramid under " + RULE_NAMES[state.rule] + ": " + differing[state.rule].map((wrong, index) => "level " + index + ", " + wrong + " of " + pyramids.even[index].values.length).join("; ") + ".");
+      }
+      const list = byId("d1-readout");
+      list.replaceChildren();
+      for (const html of items) {
+        const item = document.createElement("li");
+        item.innerHTML = html;
+        list.appendChild(item);
+      }
+      byId("d1-below-label").textContent = state.level === 0
+        ? "The depth target, 37 × 23, four samples per pixel, under level 0's shares"
+        : "Level " + (state.level - 1) + ", " + below.width + " × " + below.height + ", under level " + state.level + "'s shares";
+      byId("d1-level-label").textContent = "Level " + state.level + ", " + level.width + " × " + level.height + (state.rule === "even" ? "" : ", by " + RULE_NAMES[state.rule]);
+    }
+    function update() {
+      drawBelow();
+      drawLevel();
+      report();
+    }
+    for (const canvas of [belowCanvas, levelCanvas]) {
+      const pick = (event) => {
+        const level = pyramids[state.rule][state.level];
+        const box = canvas.getBoundingClientRect();
+        const x = clamp(Math.floor(((event.clientX - box.left) / box.width) * level.width), 0, level.width - 1);
+        const y = clamp(Math.floor(((event.clientY - box.top) / box.height) * level.height), 0, level.height - 1);
+        if (x === state.texel[0] && y === state.texel[1]) return;
+        state.texel = [x, y];
+        update();
+      };
+      canvas.addEventListener("pointermove", (event) => {
+        if (event.pointerType === "mouse") pick(event);
+      });
+      canvas.addEventListener("pointerdown", pick);
+      canvas.addEventListener("keydown", (event) => {
+        const step = arrowSteps[event.key];
+        if (!step) return;
+        event.preventDefault();
+        const level = pyramids[state.rule][state.level];
+        state.texel = [clamp(state.texel[0] + step[0], 0, level.width - 1), clamp(state.texel[1] + step[1], 0, level.height - 1)];
+        update();
+      });
+    }
+    for (const button of levelButtons) {
+      button.addEventListener("click", () => {
+        const from = pyramids[state.rule][state.level];
+        state.level = Number(button.dataset.level);
+        const to = pyramids[state.rule][state.level];
+        state.texel = [Math.min(to.width - 1, Math.floor(((state.texel[0] + 0.5) / from.width) * to.width)), Math.min(to.height - 1, Math.floor(((state.texel[1] + 0.5) / from.height) * to.height))];
+        setPressed(levelButtons, (other) => other === button);
+        update();
+      });
+    }
+    for (const button of ruleButtons) {
+      button.addEventListener("click", () => {
+        state.rule = button.dataset.rule;
+        setPressed(ruleButtons, (other) => other === button);
+        update();
+      });
+    }
+    watchWidth(belowCanvas.parentElement, drawBelow);
+    watchWidth(levelCanvas.parentElement, drawLevel);
+    report();
+  })();
+
+  /* Demo 2: the texels phase two reads for one screen rectangle. */
+  (function occlusionDemo() {
+    const canvas = byId("d2-canvas");
+    if (!canvas) return;
+    const WIDTH = 160;
+    const HEIGHT = 90;
+    const samples = rasterize(WIDTH, HEIGHT);
+    const pixels = pixelDepths(samples, WIDTH, HEIGHT, "min");
+    const pyramids = {
+      min: buildPyramid(pixels, "even", "min"),
+      max: buildPyramid(pixelDepths(samples, WIDTH, HEIGHT, "max"), "even", "max"),
+    };
+    const PRESETS = {
+      hidden: { left: 70, top: 58, width: 10, height: 8, nearest: 15 },
+      coarse: { left: 60, top: 64, width: 14, height: 10, nearest: 15 },
+      gap: { left: 100, top: 12, width: 12, height: 10, nearest: 50 },
+    };
+    const FIELDS = ["left", "top", "width", "height", "nearest"];
+    const state = Object.assign({ keep: "min" }, PRESETS.hidden);
+    const sliders = {};
+    for (const field of FIELDS) sliders[field] = byId("d2-" + field);
+    const presetButtons = Array.from(document.querySelectorAll("#d2-presets button"));
+    const keepButtons = Array.from(document.querySelectorAll("#d2-keep button"));
+    let result = null;
+    function keepOnScreen() {
+      state.width = clamp(Math.round(state.width), 1, WIDTH);
+      state.height = clamp(Math.round(state.height), 1, HEIGHT);
+      state.left = clamp(Math.round(state.left), 0, WIDTH - state.width);
+      state.top = clamp(Math.round(state.top), 0, HEIGHT - state.height);
+      state.nearest = clamp(Math.round(state.nearest), 0, 100);
+    }
+    function sync() {
+      for (const field of FIELDS) sliders[field].value = String(state[field]);
+      setPressed(presetButtons, (button) => FIELDS.every((field) => PRESETS[button.dataset.preset][field] === state[field]));
+    }
+    // The farthest sample under the rectangle: the box is hidden if its nearest point lies behind it.
+    function farthestUnder() {
+      let farthest = Infinity;
+      for (let row = state.top; row < state.top + state.height; row++) {
+        for (let column = state.left; column < state.left + state.width; column++) farthest = Math.min(farthest, pixels.values[row * WIDTH + column]);
+      }
+      return farthest;
+    }
+    function draw() {
+      const view = canvasView(canvas, HEIGHT / WIDTH);
+      const context = view.context;
+      const colours = readTokens();
+      for (let row = 0; row < HEIGHT; row++) {
+        for (let column = 0; column < WIDTH; column++) {
+          const cell = cellBox(view, pixels, column, row);
+          context.fillStyle = depthColour(colours, pixels.values[row * WIDTH + column]);
+          context.fillRect(cell.x, cell.y, cell.w, cell.h);
+        }
+      }
+      const levelGrid = { width: result.size[0], height: result.size[1] };
+      if (view.width / levelGrid.width >= 6) {
+        context.globalAlpha = 0.5;
+        gridLines(context, view, levelGrid, colours.inkSoft, 1);
+        context.globalAlpha = 1;
+      }
+      if (!result.tooWide) {
+      const left = (result.firstTexel[0] / levelGrid.width) * view.width;
+      const top = (result.firstTexel[1] / levelGrid.height) * view.height;
+      const right = ((result.lastTexel[0] + 1) / levelGrid.width) * view.width;
+      const bottom = ((result.lastTexel[1] + 1) / levelGrid.height) * view.height;
+      context.fillStyle = colours.accentWash;
+      context.fillRect(left, top, right - left, bottom - top);
+      context.strokeStyle = colours.accent;
+      context.lineWidth = 1.2;
+      context.beginPath();
+      if (result.lastTexel[0] > result.firstTexel[0]) {
+        const middle = (result.lastTexel[0] / levelGrid.width) * view.width;
+        context.moveTo(middle, top);
+        context.lineTo(middle, bottom);
+      }
+      if (result.lastTexel[1] > result.firstTexel[1]) {
+        const middle = (result.lastTexel[1] / levelGrid.height) * view.height;
+        context.moveTo(left, middle);
+        context.lineTo(right, middle);
+      }
+      context.stroke();
+      context.lineWidth = 2.5;
+      context.strokeRect(left + 1.25, top + 1.25, right - left - 2.5, bottom - top - 2.5);
+      const textureWidth = right - left;
+      const textureHeight = bottom - top;
+      const texelWidth = textureWidth / (result.lastTexel[0] - result.firstTexel[0] + 1);
+      const texelHeight = textureHeight / (result.lastTexel[1] - result.firstTexel[1] + 1);
+      if (texelWidth >= 40 && texelHeight >= 22) {
+        const seen = new Set();
+        result.reads.forEach(([x, y], index) => {
+          const key = x + "," + y;
+          if (seen.has(key)) return;
+          seen.add(key);
+          // At the texel's edge away from the rectangle, so the two seldom overlap.
+          const centreX = ((x + 0.5) / levelGrid.width) * view.width;
+          const rectangleBelowMiddle = (state.top + state.height / 2) / HEIGHT > (y + 0.5) / levelGrid.height;
+          const labelY = rectangleBelowMiddle ? (y / levelGrid.height) * view.height + 11 : ((y + 1) / levelGrid.height) * view.height - 11;
+          haloText(context, colours, depthText(result.values[index]), centreX, labelY);
+        });
+      }
+      }
+      const scaleX = view.width / WIDTH;
+      const scaleY = view.height / HEIGHT;
+      context.save();
+      context.setLineDash([4, 3]);
+      context.strokeStyle = colours.inkSoft;
+      context.lineWidth = 1.5;
+      context.strokeRect(result.first[0] * view.width, result.first[1] * view.height, (result.last[0] - result.first[0]) * view.width, (result.last[1] - result.first[1]) * view.height);
+      context.restore();
+      context.strokeStyle = colours.ink;
+      context.lineWidth = 2;
+      context.strokeRect(state.left * scaleX, state.top * scaleY, state.width * scaleX, state.height * scaleY);
+      const handle = 10;
+      context.fillStyle = colours.ink;
+      context.strokeStyle = colours.panel;
+      context.lineWidth = 1.5;
+      context.fillRect((state.left + state.width) * scaleX - handle / 2, (state.top + state.height) * scaleY - handle / 2, handle, handle);
+      context.strokeRect((state.left + state.width) * scaleX - handle / 2, (state.top + state.height) * scaleY - handle / 2, handle, handle);
+    }
+    function report() {
+      const nearest = state.nearest / 100;
+      const largest = Math.max(result.extent[0], result.extent[1]);
+      const range = (from, to) => (from === to ? String(from) : from + " to " + to);
+      const keepWord = state.keep === "max" ? "maximum" : "minimum";
+      const distinct = [];
+      result.reads.forEach(([x, y], index) => {
+        if (!distinct.some((entry) => entry.x === x && entry.y === y)) distinct.push({ x: x, y: y, value: result.values[index] });
+      });
+      const items = [
+        "The rectangle covers columns " + range(state.left, state.left + state.width - 1) + " and rows " + range(state.top, state.top + state.height - 1) + ". Grown by half a level-0 texel, one pixel here, on each side, it spans " + result.extent[0].toFixed(2) + " × " + result.extent[1].toFixed(2) + " level-0 texels.",
+        "Level min(⌈log₂ " + Math.max(largest, 1).toFixed(2) + "⌉, " + (pyramids[state.keep].length - 1) + ") = <b>" + result.level + "</b>, computed as " + result.size[0] + " × " + result.size[1] + ".",
+        "There it covers texels " + range(result.firstTexel[0], result.lastTexel[0]) + " across and " + range(result.firstTexel[1], result.lastTexel[1]) + " down: " + distinct.length + (distinct.length === 1 ? " texel" : " texels") + ", read with four loads.",
+        "Their " + keepWord + ": <b>" + depthText(result.bound) + "</b>" + (distinct.length > 1 ? ", of " + distinct.map((entry) => depthText(entry.value)).join(", ") : "") + ".",
+        "The box's nearest depth, <b>" + depthText(nearest) + "</b>, is " + (nearest < result.bound ? "less than " : "not less than ") + depthText(result.bound) + ": " + (result.occluded ? "<b>occluded</b>." : "<b>not occluded</b>."),
+      ];
+      if (result.tooWide) items.splice(2, 3, "There it covers texels " + range(result.firstTexel[0], result.lastTexel[0]) + " across and " + range(result.firstTexel[1], result.lastTexel[1]) + " down. Rounding left more than two along an axis, so phase two reads no texel: <b>not occluded</b>.");
+      const list = byId("d2-steps");
+      list.replaceChildren();
+      for (const html of items) {
+        const item = document.createElement("li");
+        item.innerHTML = html;
+        list.appendChild(item);
+      }
+      const truth = farthestUnder();
+      const hidden = nearest < truth;
+      let verdict;
+      if (result.occluded) {
+        verdict = hidden
+          ? "<b class=\"occluded\">Culled.</b> The farthest sample under the rectangle is at " + depthText(truth) + ", nearer than the box's nearest point, so the box is hidden."
+          : "<b class=\"wrong\">Culled wrongly.</b> The farthest sample under the rectangle is at " + depthText(truth) + ", as far as the box's nearest point or farther, so the box may show there. A pyramid of the minimum never does this.";
+      } else {
+        verdict = hidden
+          ? "<b class=\"drawn\">Drawn, though hidden.</b> The farthest sample under the rectangle is at " + depthText(truth) + ", nearer than the box, but " + (result.tooWide ? "rounding left the rectangle over more than two texels along an axis" : "the texels read reach " + depthText(result.bound)) + ". The test errs towards drawing, which costs time and changes no pixel."
+          : "<b class=\"drawn\">Drawn.</b> The farthest sample under the rectangle is at " + depthText(truth) + ", as far as the box's nearest point or farther, so the box may show.";
+      }
+      byId("d2-verdict").innerHTML = verdict;
+    }
+    function update() {
+      keepOnScreen();
+      result = occlusionTest({ u0: state.left / WIDTH, v0: state.top / HEIGHT, u1: (state.left + state.width) / WIDTH, v1: (state.top + state.height) / HEIGHT }, state.nearest / 100, pyramids[state.keep], state.keep);
+      sync();
+      draw();
+      report();
+    }
+    let drag = null;
+    const toPixels = (event) => {
+      const box = canvas.getBoundingClientRect();
+      const grab = event.pointerType === "mouse" ? 12 : 22;
+      return { x: ((event.clientX - box.left) / box.width) * WIDTH, y: ((event.clientY - box.top) / box.height) * HEIGHT, grab: (grab / box.width) * WIDTH };
+    };
+    function place(point) {
+      if (drag.mode === "resize") {
+        state.width = clamp(Math.round(point.x - state.left), 1, WIDTH - state.left);
+        state.height = clamp(Math.round(point.y - state.top), 1, HEIGHT - state.top);
+      } else {
+        state.left = Math.round(point.x - drag.offsetX);
+        state.top = Math.round(point.y - drag.offsetY);
+      }
+      update();
+    }
+    canvas.addEventListener("pointerdown", (event) => {
+      if (event.button > 0) return;
+      const point = toPixels(event);
+      const right = state.left + state.width;
+      const bottom = state.top + state.height;
+      if (Math.abs(point.x - right) <= point.grab && Math.abs(point.y - bottom) <= point.grab) {
+        drag = { mode: "resize" };
+      } else if (point.x >= state.left && point.x <= right && point.y >= state.top && point.y <= bottom) {
+        drag = { mode: "move", offsetX: point.x - state.left, offsetY: point.y - state.top };
+      } else {
+        drag = { mode: "move", offsetX: state.width / 2, offsetY: state.height / 2 };
+        place(point);
+      }
+      drag.pointer = event.pointerId;
+      if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
+      // preventDefault stops a drag from selecting text, and with it the focus a click gives.
+      event.preventDefault();
+      canvas.focus({ preventScroll: true });
+    });
+    canvas.addEventListener("pointermove", (event) => {
+      if (drag && event.pointerId === drag.pointer) place(toPixels(event));
+    });
+    const stop = (event) => {
+      if (drag && event.pointerId === drag.pointer) drag = null;
+    };
+    canvas.addEventListener("pointerup", stop);
+    canvas.addEventListener("pointercancel", stop);
+    canvas.addEventListener("keydown", (event) => {
+      const step = arrowSteps[event.key];
+      if (!step) return;
+      event.preventDefault();
+      if (event.shiftKey) {
+        state.width = clamp(state.width + step[0], 1, WIDTH - state.left);
+        state.height = clamp(state.height + step[1], 1, HEIGHT - state.top);
+      } else {
+        state.left += step[0];
+        state.top += step[1];
+      }
+      update();
+    });
+    for (const field of FIELDS) {
+      sliders[field].addEventListener("input", () => {
+        state[field] = Number(sliders[field].value);
+        if (field === "left") state.width = Math.min(state.width, WIDTH - state.left);
+        if (field === "top") state.height = Math.min(state.height, HEIGHT - state.top);
+        if (field === "width") state.left = Math.min(state.left, WIDTH - state.width);
+        if (field === "height") state.top = Math.min(state.top, HEIGHT - state.height);
+        update();
+      });
+    }
+    for (const button of presetButtons) {
+      button.addEventListener("click", () => {
+        Object.assign(state, PRESETS[button.dataset.preset]);
+        update();
+      });
+    }
+    for (const button of keepButtons) {
+      button.addEventListener("click", () => {
+        state.keep = button.dataset.keep;
+        setPressed(keepButtons, (other) => other === button);
+        update();
+      });
+    }
+    keepOnScreen();
+    result = occlusionTest({ u0: state.left / WIDTH, v0: state.top / HEIGHT, u1: (state.left + state.width) / WIDTH, v1: (state.top + state.height) / HEIGHT }, state.nearest / 100, pyramids[state.keep], state.keep);
+    sync();
+    report();
+    watchWidth(canvas.parentElement, draw);
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>

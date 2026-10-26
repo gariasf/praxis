@@ -1,0 +1,1824 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>BLAS Refit Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume 16 of the series, after Town Explained; chapters 7 and 8 cover #209 part 2. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --bad: #c43a31;
+  --bad-wash: rgba(196, 58, 49, 0.14);
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+    --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+  --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+}
+.sheet {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.keypoints li { min-width: 0; }
+.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .s-ink { stroke: var(--ink); } svg .s-soft { stroke: var(--ink-soft); } svg .s-accent { stroke: var(--accent); } svg .s-warm { stroke: var(--warm); }
+svg .f-ink { fill: var(--ink); } svg .f-soft { fill: var(--ink-soft); } svg .f-accent { fill: var(--accent); } svg .f-warm { fill: var(--warm); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+output { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
+.canvas-frame canvas { border-radius: 0; }
+canvas.demo { touch-action: none; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
+.legend i.dashed { border-top: 2.5px dashed var(--warm); }
+.legend i.thin { border-top: 1.5px solid var(--ink); }
+.legend i.dotted { border-top: 2.5px dotted var(--ink-soft); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.demo-grid > div { min-width: 0; }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 14px 0 0; font-family: var(--mono); font-size: 14px; }
+.figures div { min-width: 0; }
+.figures dt { color: var(--ink-soft); font-size: 12px; }
+.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .formula { font-size: 13px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.meter { display: grid; gap: 14px; }
+.meter-row { display: grid; gap: 5px; min-width: 0; }
+.meter-label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-family: var(--mono); font-size: 13.5px; color: var(--ink-soft); }
+.meter-label b { color: var(--ink); font-weight: 600; }
+.meter-track { position: relative; height: 20px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.meter-fill, .meter-range, .meter-budget { position: absolute; top: 0; bottom: 0; }
+.meter-fill { left: 0; background: var(--accent); }
+.meter-range { background: var(--accent-wash); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.meter-fill.over { background: var(--bad); }
+.meter-range.over { background: var(--bad-wash); box-shadow: inset 0 0 0 1.5px var(--bad); }
+.meter-budget { width: 0; border-left: 2px dashed var(--warm); }
+.meter-axis { position: relative; height: 36px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.meter-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.meter-axis span.first { transform: none; }
+.meter-axis span.last { transform: translateX(-100%); }
+.meter-axis span.budget { top: 17px; color: var(--warm); font-weight: 600; }
+
+
+
+/* This volume's own parts: the plain opening of each chapter, the quotes, the invariants, the frame's submissions and the demos' legends. */
+p.plain { font-size: 19px; line-height: 1.55; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 20px; }
+blockquote.callout { margin: 20px 0; }
+blockquote.callout p:last-child { margin-bottom: 0; }
+.bad-text { color: var(--bad); }
+.good-text { color: var(--good); }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.apart { border-style: dashed; }
+.legend .swatch { display: inline-block; width: 16px; height: 12px; border: 1px solid var(--rule); border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+.legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: 0; margin-right: 6px; }
+.pair-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.pair-grid > div { min-width: 0; }
+.pair-title { font-family: var(--display); font-weight: 700; font-size: 15px; margin: 0 0 6px; }
+ol.invariants { list-style: none; counter-reset: invariant; padding: 0; margin: 0; }
+ol.invariants > li { counter-increment: invariant; position: relative; padding-left: 40px; margin: 0 0 26px; }
+ol.invariants > li::before { content: counter(invariant); position: absolute; left: 0; top: 0; width: 28px; height: 28px; border-radius: 50%; background: var(--accent-wash); color: var(--accent); font: 700 15px/28px var(--display); text-align: center; }
+ol.invariants h3 { margin-top: 0; }
+ol.invariants pre.code { margin: 8px 0 12px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+[hidden] { display: none !important; }
+.bars { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.bars-title { color: var(--ink); margin-bottom: 8px; }
+.bar-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) 96px; gap: 10px; align-items: center; margin: 6px 0; }
+.bar-track { position: relative; height: 18px; background: var(--panel); border: 1px solid var(--rule); border-radius: 3px; }
+.bar-fill, .bar-spread { position: absolute; top: 0; bottom: 0; left: 0; }
+.bar-fill.accent { background: var(--accent); } .bar-fill.warm { background: var(--warm); } .bar-fill.ink { background: var(--ink-soft); }
+.bar-spread { opacity: 0.4; } .bar-spread.warm { background: var(--warm); } .bar-spread.ink { background: var(--ink-soft); }
+.bar-budget { position: absolute; top: -4px; bottom: -4px; width: 0; border-left: 2px solid var(--bad); }
+.bar-value { color: var(--ink); font-variant-numeric: tabular-nums; text-align: right; }
+.bars-scale { position: relative; height: 16px; margin: 2px 106px 0 74px; font-size: 11.5px; }
+.bars-scale span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.bars-scale span:first-child { left: 0; transform: none; }
+.bars-scale span:last-child { transform: translateX(-100%); }
+@media (max-width: 640px) { .bar-row { grid-template-columns: 52px minmax(0, 1fr) 84px; gap: 6px; } .bar-value { white-space: nowrap; font-size: 12px; } .bars-scale { margin: 2px 90px 0 58px; } .bars-scale span:last-child { display: none; } }
+@media (max-width: 640px) { .pair-grid { grid-template-columns: minmax(0, 1fr); } ol.invariants > li { padding-left: 34px; } }
+
+/* In brief: the guide's conclusion first, for the reader who stops here. */
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis field guides</a></div>
+  <div class="eyebrow">Praxis &middot; M3 &middot; ticket #209 &middot; PRs #289 and #290, merged</div>
+  <h1>Refitting a BLAS beneath wgpu</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>A figure the GPU bends every frame casts the right shadow only if its BLAS, the ray-tracing tree over its triangles, bends too, which wgpu's safe API cannot do. Praxis's refit form updates each BLAS through wgpu-hal, wgpu's lowest layer, on Metal, but its update, refits plus build, took 1.37 to 1.38 ms against a 1.0 ms GPU Budget, so the crowd keeps per-bone shadow proxies. The idea to keep: Metal orders work only through resources a command names, so a TLAS build, which names BLASes by ID, needs an explicit wait.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>What a refit keeps and gives up against a rebuild</li>
+      <li>Why wgpu-core cannot refit, and how Praxis reaches wgpu-hal beneath it</li>
+      <li>What invariants an unsafe block over wgpu-hal relies on</li>
+      <li>How a Metal shared event orders a TLAS build after BLAS writes</li>
+      <li>How a marker pass times GPU work on Metal</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="gpu-ordering.html">GPU Ordering Explained</a>, <a href="crowd-shadows.html">Crowd Shadows Explained</a></p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at 66b5b57 (PR #289, 2026-10-26) and at 0534eb6, PR #290's head, whose <code>src/</code> and <code>docs/</code> merged unchanged as 71918ac (2026-10-26). <b>Since then:</b> PR #291 (c5a12eb) spans the GPU frame from its passes' earliest start to their latest end, since Metal can start the Froxel pass before culling's first phase, so the <code>frame_times</code> code quoted in chapter 7 differs on main.</p>
+  </aside>
+  <p class="lede">A figure the GPU bends every frame casts the right shadow only if its <span class="concept" data-term="BLAS" data-tip="Bottom-level acceleration structure: the GPU&#x27;s search structure over one Mesh&#x27;s triangles, built when a Mesh that rays trace loads. Most are then compacted (#202); a refitted Mesh&#x27;s is built to allow updates and never compacted (#209).">BLAS</span> bends with it. #208 gave the <code>crowd</code> scene's figures shadows through rigid proxies. Part 1 of #209 gives each figure a BLAS of its own and <span class="concept" data-term="Refit" data-tip="Updating an acceleration structure in place after its triangles move: the tree keeps its shape and only its bounds are recomputed. The structure must be built to allow it, and its triangles keep their count and order. wgpu-core 30 does not implement it; Metal does, reached through wgpu-hal.">refits</span> it in every frame, which wgpu's safe API cannot do. So it reaches two layers down, into <span class="concept" data-term="wgpu-hal" data-tip="wgpu&#x27;s lower layer, one unsafe implementation per backend, beneath the safe API. ADR 0007 permits it for a subsystem that exceeds wgpu&#x27;s safe API.">wgpu-hal</span>, on Metal, in one main <code>unsafe</code> block and a few smaller ones, and then has to order the GPU work by hand, because Metal does not order a TLAS build after the BLASes it reads. Part 2 then times the refit with a marker Metal cannot run early, and the figures settle M7's form. This guide covers rebuild against refit, the crowd-form switch, wgpu's three layers, the <code>unsafe</code> block's invariants one at a time, the frame split in two submissions joined by a Metal shared event, the test that compares refit with rebuild, timing GPU work with markers, and the result. Three live demos refit a tree of boxes as a figure bends, run a frame's submissions with and without the order, and time a refit with three kinds of marker.</p>
+  <p class="status"><b>Provenance.</b> #209 was split in two for the project's size ceiling, about 400 changed lines a pull request. Part 1, PR #289, merged on 2026-10-26 as 66b5b57: the switch, the refit, its order on Metal and its capture test (chapters 1 to 6, code quoted from 66b5b57). Part 2, PR #290, merged on 2026-10-26 as 71918ac and closed #209: the timing, the <code>--crowd-form</code> flag for <code>praxis bench</code> and <code>capture</code>, both forms in <code>docs/performance.md</code>, and the owner's decision, proxies for M7 (chapters 7 and 8, quoted from 0534eb6, its head when this guide was written; the commits after it re-recorded the Baselines and changed nothing under <code>src/</code> or <code>docs/</code>). Since then, PR #291 has changed how the GPU frame spans its passes (chapter 7). wgpu's code is quoted from the 30.0.1 crates the lockfile pins.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#why">1 &middot; Why the BLAS must follow</a>
+    <a href="#forms">2 &middot; Three crowd forms</a>
+    <a href="#layers">3 &middot; Three layers of wgpu</a>
+    <a href="#invariants">4 &middot; The unsafe block</a>
+    <a href="#ordering">5 &middot; Ordering on Metal</a>
+    <a href="#testing">6 &middot; How the test knows</a>
+    <a href="#timing">7 &middot; Timing with markers</a>
+    <a href="#result">8 &middot; The result</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="why">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1 &middot; ADR 0020 &middot; M3's exit criterion 8</div>
+    <h2>Why the BLAS must follow the bend</h2>
+    <p class="plain">A shadow ray in Praxis walks the <span class="concept" data-term="TLAS" data-tip="Top-level acceleration structure: the GPU&#x27;s search structure over Instances, each placing a BLAS with its transform. A ray walks it down to the triangles it meets.">TLAS</span> down to a <span class="concept" data-term="BLAS" data-tip="Bottom-level acceleration structure: the GPU&#x27;s search structure over one Mesh&#x27;s triangles, built when a Mesh that rays trace loads. Most are then compacted (#202); a refitted Mesh&#x27;s is built to allow updates and never compacted (#209).">BLAS</span> and meets the triangles it holds. A BLAS is built from the vertices its Mesh has when it is built. When the <span class="concept" data-term="Bend pass" data-tip="The compute pass that rewrites each bent Mesh&#x27;s vertices from its rest Mesh&#x27;s every frame, a stand-in for skinning (#269).">bend pass</span> rewrites a figure's vertices, nothing changes in its BLAS, so the figure would cast the shadow of the shape it was built in.</p>
+    <p>There are two ways to bring a BLAS to new vertices. A <span class="concept" data-term="Rebuild" data-tip="Building an acceleration structure again from scratch, from its current triangles. Through wgpu-core 30 it is the only way to update one.">rebuild</span> makes the tree again from the triangles, as if they were new. A <span class="concept" data-term="Refit" data-tip="Updating an acceleration structure in place after its triangles move: the tree keeps its shape and only its bounds are recomputed. The structure must be built to allow it, and its triangles keep their count and order. wgpu-core 30 does not implement it; Metal does, reached through wgpu-hal.">refit</span>, called an update in Vulkan and wgpu, keeps the tree: which triangles share a leaf and how the leaves group stay as they were, and only the boxes are recomputed, from the leaves up, to hold the triangles where they are now.</p>
+    <p>The world-design pre-mortem priced the rebuild: "A hundred 5,120-triangle BLAS take 7.8 to 9.3 ms of GPU to rebuild (measured [...]), 65 to 78% of ADR 0013's 12 ms". The owner's <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, which caps what that kind may hold (ADR 0017). Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budget</span> for the crowd's acceleration-structure update is 1.0 ms of GPU and 0.5 ms of CPU per frame (the decision on map #17, item 14). A refit does less work than a rebuild, which is why M3 times it. What it gives up:</p>
+    <ul class="keypoints">
+      <li><b>The same triangles.</b> A refit repeats its build's description: in the code's words, "the same buffers, offsets, counts, stride and formats". Only the vertex positions in those ranges may change.</li>
+      <li><b>Built to allow it.</b> A refitted Mesh's BLAS is built with <code>ALLOW_UPDATE</code>, which wgpu-hal hands Metal as <code>MTLAccelerationStructureUsage::Refit</code> (<code>wgpu-hal/src/metal/conv.rs:486-487</code>). Apple's documentation warns that Metal then builds the structure "more conservatively, which can reduce its intersection performance".</li>
+      <li><b>Never compacted.</b> Every other BLAS in Praxis is built with <code>ALLOW_COMPACTION</code> and compacted once built (#202). A refitted one stays as built.</li>
+      <li><b>Its index stream kept.</b> #208 loaded the bent figures with no <span class="concept" data-term="Index stream" data-tip="A Mesh&#x27;s cooked u32 indices in the index Arena. No pass draws from it; only a BLAS build reads it.">index stream</span>, since only a BLAS build reads one: its hand-off counts 6.2 MB of the 16 MiB index Arena saved. A refit reads the indices again in every frame, so a refitted figure keeps its stream.</li>
+      <li><b>A tree chosen for another shape.</b> The grouping was picked for the shape the BLAS was built in. As the triangles drift from it, the recomputed boxes grow and overlap, and a ray tests more of them. The crowd's figures are built upright and sway either way; the demo below shows the effect on a model.</li>
+      <li><b>Scratch memory.</b> A refit works in a scratch region of the size Metal asks for its update (<code>refitScratchBufferSize</code>, read at <code>wgpu-hal/src/metal/device.rs:2088</code>). On the M4 Pro, Metal asks for none for these BLASes (chapter 7).</li>
+    </ul>
+  </div>
+  <figure class="wide" id="demo-refit">
+    <div class="pair-grid">
+      <div>
+        <p class="pair-title">Refit: the rest shape's tree, boxes recomputed</p>
+        <div class="canvas-frame"><canvas id="r-canvas-refit" role="img" aria-label="A bent figure's outline and the boxes of its tree, kept from the upright shape and refitted to the bent one."></canvas></div>
+      </div>
+      <div>
+        <p class="pair-title">Rebuild: a new tree for the bent shape</p>
+        <div class="canvas-frame"><canvas id="r-canvas-rebuild" role="img" aria-label="The same bent outline with the boxes of a tree built again from scratch for the bent shape."></canvas></div>
+      </div>
+    </div>
+    <div class="sliders">
+      <label for="r-curvature" class="control-label">Curvature <output id="r-curvature-out" for="r-curvature"></output></label>
+      <input type="range" id="r-curvature" min="-1.2" max="1.2" step="0.01" value="0.35">
+      <label for="r-level" class="control-label">Tree level <output id="r-level-out" for="r-level"></output></label>
+      <input type="range" id="r-level" min="1" max="5" step="1" value="3">
+    </div>
+    <div class="controls">
+      <button type="button" class="btn" id="r-sway" aria-pressed="false">Sway</button>
+      <span class="control-label">Built at:</span>
+      <div class="seg" role="group" aria-label="Shape the refitted tree was built in" id="r-built">
+        <button type="button" data-built="upright" aria-pressed="true">upright</button>
+        <button type="button" data-built="current" aria-pressed="false">this curvature</button>
+      </div>
+    </div>
+    <dl class="figures">
+      <div><dt>Boxes at this level, summed perimeter, refit</dt><dd id="r-area-refit"></dd></div>
+      <div><dt>The same, rebuild</dt><dd id="r-area-rebuild"></dd></div>
+      <div><dt>All levels, refit over rebuild</dt><dd id="r-ratio"></dd></div>
+    </dl>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--accent-wash); border: 1.5px solid var(--accent)"></span>the bent figure</span>
+      <span><span class="swatch" style="border: 1.5px dashed var(--warm)"></span>boxes at the chosen level</span>
+      <span><i class="thin"></i>the leaves' boxes, one or two edges each</span>
+    </div>
+    <figcaption><b>Live demo.</b> This page's model, not Metal's: one crowd figure's outline, 1.8 m tall and 0.25 m in radius, as 48 edges in the plane of its bend, bent with the bend pass's chord and sinc. A tree of boxes over the edges, at most two to a leaf, splits each box where its two halves' perimeters, each weighted by its edges, sum to the least: a greedy form of the surface area heuristic. For random lines in a plane, the chance that one through a box also crosses a box inside it is the ratio of their perimeters, as in space it is the ratio of surface areas, so summed box perimeter stands in here for how many boxes a ray tests. The left tree was built in the shape chosen under "Built at" and is refitted to the slider's curvature; the right is built again at every step. Metal does not publish its BLAS layout, so the demo shows the kind of effect, not its size on the M4 Pro. The slider runs past the crowd's 0.35 to 1.2 rad/m; even there the refitted tree stays within 8% of a rebuilt one at every level, and since a greedy build is not the best tree, the ratio can dip just below 1.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>A refit costs less to make than a rebuild and traces worse the further its triangles have drifted. The crowd sways back and forth through the upright shape its BLASes are built in, so the drift never grows past the sway's widest lean, a curvature of 0.35 rad/m, where the model's refitted tree stays within 7% of a rebuilt one at every level. No figure isolates what the drift costs the shadow rays on the M4 Pro: part 2 reports no shadow mask time for the rebuild form, and the 50 &micro;s more that the shadow mask pass took in the refit form than with the proxies compares 100 BLASes of 5,120 triangles with 1,600 proxies (chapter 8). What part 2 did measure is that the refits alone cost more than the whole Budget.</p>
+  </div>
+</section>
+
+<section class="chapter" id="forms">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 &middot; PR #289 &middot; <code>CrowdForm</code></div>
+    <h2>Three crowd forms</h2>
+    <p class="plain">Which way the figures reach the TLAS is a <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel&#x27;s point lights, and the form the crowd scene&#x27;s deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span>, <code>RenderSwitches::crowd_form</code>, with three values. The default, <code>Proxies</code>, is #208's form, unchanged. <code>Refit</code> is the new form. <code>Rebuild</code> is the same setup with each BLAS rebuilt through wgpu instead: it runs on any backend and gives the shapes a refit must match.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">/// How the shapes the GPU bends Meshes to each frame reach the TLAS (ADR</span>
+<span class="comment">/// 0020): the forms M3's `crowd` scene measures for M7 to pick from.</span>
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum CrowdForm {
+    <span class="comment">/// The bent Meshes have no BLAS: rigid shadow proxies, one per bone,</span>
+    <span class="comment">/// cast their shadows as Moving Instances (#208).</span>
+    #[default]
+    Proxies,
+    <span class="comment">/// Each bent Mesh's BLAS is refitted to its bent shape each frame</span>
+    <span class="comment">/// through wgpu-hal, and its Instance is a Moving Instance. Metal only:</span>
+    <span class="comment">/// wgpu-core rebuilds BLASes but never updates them.</span>
+    Refit,
+    <span class="comment">/// As `Refit`, each BLAS rebuilt through wgpu instead: what refit must</span>
+    <span class="comment">/// match, on any backend.</span>
+    Rebuild,
+}
+
+impl CrowdForm {
+    <span class="comment">/// Why it cannot run on `backend`, if it cannot.</span>
+    pub fn unavailable_on(self, backend: wgpu::Backend) -&gt; Option&lt;&amp;'static str&gt; {
+        (self == CrowdForm::Refit &amp;&amp; backend != wgpu::Backend::Metal)
+            .then_some("the crowd's refit form updates BLASes through wgpu-hal on Metal only")
+    }
+}</code></pre>
+    <figcaption><b>The switch's values</b>, <code>src/render/renderer.rs:85-108</code>.</figcaption>
+  </figure>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts compact" style="min-width: 640px">
+        <thead><tr><th></th><th><code>Proxies</code> (default)</th><th><code>Refit</code></th><th><code>Rebuild</code></th></tr></thead>
+        <tbody>
+          <tr><td>What casts a figure's shadow</td><td>16 rigid <span class="concept" data-term="Shadow proxy" data-tip="A Mesh that rays trace and no pass draws, standing in for part of a Renderable whose own BLAS would not hold the shape it is drawn in, such as a bent figure&#x27;s bone.">shadow proxies</span>, one per bone</td><td colspan="2">the figure's own triangles, through its own BLAS</td></tr>
+          <tr><td>The figure's Mesh, loaded as</td><td><code>MeshUse::Drawn</code>: no BLAS</td><td colspan="2"><code>MeshUse::Refitted</code>: a BLAS built with <code>ALLOW_UPDATE</code>, uncompacted, index stream kept</td></tr>
+          <tr><td>In the dynamic TLAS</td><td>the 1,600 proxies, as <span class="concept" data-term="Moving Instance" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.">Moving Instances</span></td><td colspan="2">the 100 figures, as Moving Instances</td></tr>
+          <tr><td>Each frame, after the bend pass</td><td>nothing more</td><td>each BLAS refitted through wgpu-hal</td><td>each BLAS rebuilt through wgpu</td></tr>
+          <tr><td>Backends</td><td>any</td><td>Metal only; refused elsewhere</td><td>any</td></tr>
+          <tr class="focus"><td>What it is for</td><td>#208's form, which ships</td><td>form (a), which #209 times</td><td>the <span class="concept" data-term="Oracle" data-tip="A slow, plainly correct computation that a test checks the fast one against. The refit&#x27;s is a full rebuild of the same BLASes.">oracle</span> refit is tested against</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>The three forms</b>, from <code>CrowdForm</code>'s docs, <code>spawn_crowd_as</code> in <code>src/scenes/mod.rs</code> and <code>MeshPool::load_for</code> in <code>src/assets/pools.rs</code>. 100 figures of 16 bones each make the 1,600 proxies (#208).</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>A fourth way to load a Mesh</h3>
+    <p>#208 had three <span class="concept" data-term="MeshUse" data-tip="What a Mesh is loaded for: drawn and traced, the default; drawn alone, a bent Mesh with no BLAS; traced alone, a shadow proxy; or refitted, a bent Mesh drawn and traced through a BLAS updated each frame (#208, #209).">MeshUse</span> values: drawn and traced, drawn alone, traced alone. Part 1 adds <code>Refitted</code>, "Drawn and traced, a Mesh the GPU bends whose BLAS is updated each frame from its bent shape: built to allow updates, never compacted". Being traced, it keeps its index stream. The load builds it with flags kept in one constant, which every refit repeats:</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">/// The flags a refitted Mesh's BLAS is built with, which its refits repeat.</span>
+pub const REFITTED_BLAS_FLAGS: wgpu::AccelerationStructureFlags =
+    wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
+        .union(wgpu::AccelerationStructureFlags::ALLOW_UPDATE);</code></pre>
+    <figcaption><b>The flags</b>, <code>src/assets/pools.rs:44-47</code>.</figcaption>
+  </figure>
+  <figure class="wide">
+<pre class="code"><code>let refitted = mesh_use == MeshUse::Refitted;
+let blas = self.device.create_blas(
+    &amp;wgpu::CreateBlasDescriptor {
+        label: Some("Mesh BLAS"),
+        flags: if refitted {
+            REFITTED_BLAS_FLAGS
+        } else {
+            wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
+                | wgpu::AccelerationStructureFlags::ALLOW_COMPACTION
+        },
+        update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+    },
+    <span class="comment">// [...]</span>
+);
+let mesh_blas = MeshBlas {
+    blas,
+    geometry,
+    first_vertex: vertices.offset,
+    first_index: indices.offset,
+};
+staging.build_blas(&amp;self.blas_build_entry(&amp;mesh_blas));
+
+let blas_triangles = mesh.indices.len() as u64 / 3;
+self.blases.push(Some(mesh_blas.blas.clone()));
+if refitted {
+    self.refitted_blases.push(mesh_blas);
+} else {
+    self.awaiting_compaction.push((handle, blas_triangles));
+}</code></pre>
+    <figcaption><b>Building a refitted Mesh's BLAS</b>, in <code>MeshPool::load_for</code>, <code>src/assets/pools.rs:314-344</code>, three lines elided. <code>MeshBlas</code> keeps the build's sizes and where its triangles lie in the Arenas, which is what each refit repeats. A refitted BLAS goes to <code>refitted_blases</code> instead of the compaction queue.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>The figures become Moving Instances</h3>
+    <p>The static TLAS is rebuilt only when its static Instances change, so it would keep each figure's box as loaded while the figure swayed out of it. In the update forms each figure therefore carries <code>PreviousWorldTransform</code>, which makes its Instance a Moving Instance: it joins the <span class="concept" data-term="Dynamic TLAS" data-tip="The top-level acceleration structure over the Moving Instances, at most 10,000 of them, those in the lowest slots, each tagged with its slot. It is rebuilt every frame, in the static TLAS&#x27;s frame (#204).">dynamic TLAS</span>, which is rebuilt every frame over each BLAS's current bounds.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code>let Some(proxy) = proxy else {
+    <span class="comment">// A Moving Instance, so it joins the dynamic TLAS, rebuilt each</span>
+    <span class="comment">// frame over its BLAS's bent bounds; the static TLAS would keep</span>
+    <span class="comment">// the bounds of its load.</span>
+    figure_entity.insert((
+        MeshRef(loader.refitted_mesh(figure)?),
+        PreviousWorldTransform::default(),
+    ));
+    continue;
+};</code></pre>
+    <figcaption><b>A figure in the update forms</b>, in <code>spawn_crowd_as</code>, <code>src/scenes/mod.rs:1005-1014</code>. <code>proxy</code> is None in both update forms, so the figure gets no proxies and its own refitted Mesh.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Refused off Metal</h3>
+    <p><code>State::new</code> checks the switch before it makes the Renderer, and fails with the reason, so a capture or a bench asked for the refit form on Vulkan or DX12 stops with "Refit is unavailable: [...]". <code>BlasRefit::new</code> checks again and logs; the review kept that second check as defence in depth.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code>if let Some(reason) = switches.crowd_form.unavailable_on(context.backend()) {
+    anyhow::bail!("{:?} is unavailable: {reason}", switches.crowd_form);
+}</code></pre>
+    <figcaption><b>The refusal</b>, <code>src/state.rs:64-66</code>. The scene's spawn follows the same switch (<code>src/state.rs:112-115</code>): <code>spawn_crowd</code> for <code>Proxies</code>, <code>spawn_traced_crowd</code> for the other two.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The default form draws and traces as before; the PR's bench step found every counter in every scene equal to its Baseline. It changes one thing for <code>Proxies</code>: the dynamic TLAS's command buffer is now recorded after the bend pass instead of before it (chapter 5).</p>
+  </div>
+</section>
+
+<section class="chapter" id="layers">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 &middot; ADR 0007 &middot; wgpu 30.0.1</div>
+    <h2>Three layers of wgpu</h2>
+    <p class="plain">wgpu is layered. Praxis calls its safe API. Beneath it, <span class="concept" data-term="wgpu-core" data-tip="wgpu&#x27;s middle layer, beneath its safe API: it validates each call, tracks each resource&#x27;s state and lifetime, records the barriers between uses, and calls wgpu-hal.">wgpu-core</span> validates every call, tracks each resource's state and lifetime and records the barriers between uses. Beneath that, <span class="concept" data-term="wgpu-hal" data-tip="wgpu&#x27;s lower layer, one unsafe implementation per backend, beneath the safe API. ADR 0007 permits it for a subsystem that exceeds wgpu&#x27;s safe API.">wgpu-hal</span> is one thin, <code>unsafe</code> implementation per backend. Metal's wgpu-hal can refit, as Vulkan's and DX12's can; wgpu-core never asks any of them to.</p>
+  </div>
+  <figure class="wide fluid">
+    <svg viewBox="0 0 720 330" role="img" aria-label="The layers: Praxis calls wgpu, which calls wgpu-core, which calls wgpu-hal, which calls Metal. wgpu-core always asks for a build. The refit goes from Praxis to wgpu-hal's Metal encoder directly, through as_hal guards, past wgpu-core.">
+      <rect x="40" y="20" width="400" height="44" rx="6" fill="var(--panel)" class="s-soft" stroke-width="1.5"/>
+      <text x="240" y="47" text-anchor="middle" class="t-title">Praxis</text>
+      <rect x="40" y="92" width="400" height="44" rx="6" fill="var(--panel)" class="s-soft" stroke-width="1.5"/>
+      <text x="240" y="113" text-anchor="middle" class="t-strong">wgpu: the safe API</text>
+      <text x="240" y="128" text-anchor="middle" class="t-small">build_acceleration_structures</text>
+      <rect x="40" y="164" width="400" height="44" rx="6" fill="var(--panel)" class="s-soft" stroke-width="1.5"/>
+      <text x="240" y="185" text-anchor="middle" class="t-strong">wgpu-core: validation, tracking, barriers</text>
+      <text x="240" y="200" text-anchor="middle" class="t-small">mode: Build, always</text>
+      <rect x="40" y="236" width="400" height="44" rx="6" fill="var(--accent-wash)" class="s-accent" stroke-width="1.5"/>
+      <text x="240" y="257" text-anchor="middle" class="t-strong">wgpu-hal, Metal: unsafe, one per backend</text>
+      <text x="240" y="272" text-anchor="middle" class="t-small">Build | Update</text>
+      <rect x="40" y="296" width="400" height="26" rx="6" fill="var(--figure-bg)" class="s-soft" stroke-width="1.2" stroke-dasharray="4 3"/>
+      <text x="240" y="314" text-anchor="middle" class="t-label">Metal: build &amp; refit commands</text>
+      <line x1="240" y1="64" x2="240" y2="90" class="s-ink" stroke-width="1.5"/>
+      <line x1="240" y1="136" x2="240" y2="162" class="s-ink" stroke-width="1.5"/>
+      <line x1="240" y1="208" x2="240" y2="234" class="s-ink" stroke-width="1.5"/>
+      <line x1="240" y1="280" x2="240" y2="294" class="s-ink" stroke-width="1.5"/>
+      <path d="M 440 42 C 560 42 560 258 444 258" fill="none" class="s-warm" stroke-width="2.5" stroke-dasharray="7 4"/>
+      <polygon points="444,258 454,253 454,263" class="f-warm"/>
+      <text x="566" y="120" class="t-warm">the refit</text>
+      <text x="566" y="138" class="t-small">as_hal guards</text>
+      <text x="566" y="154" class="t-small">as_hal_mut encoder</text>
+      <text x="566" y="170" class="t-small">one unsafe block</text>
+      <text x="566" y="186" class="t-small">Metal only</text>
+    </svg>
+    <figcaption><b>Where the refit goes.</b> Every BLAS build through wgpu passes wgpu-core, which asks wgpu-hal for <code>Build</code>. The refit hands wgpu-hal's Metal encoder an <code>Update</code> directly, so wgpu-core never sees it.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Why wgpu-core cannot refit</h3>
+    <p>wgpu has an update mode in its API, <code>AccelerationStructureUpdateMode::PreferUpdate</code>, but wgpu-core 30.0.1 treats it as a request it cannot meet. For a BLAS it logs and builds:</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code>if blas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
+    log::debug!("only rebuild implemented")
+}</code></pre>
+    <figcaption><b>wgpu-core's answer</b>, <code>wgpu-core/src/command/ray_tracing.rs:1106-1108</code> in 30.0.1; the descriptor it then builds says <code>mode: hal::AccelerationStructureBuildMode::Build</code> (line 1126). TLASes get a warning instead: "only rebuild is implemented" (line 337). ADR 0020 records the same: "wgpu-core has no refit".</figcaption>
+  </figure>
+  <div class="prose">
+    <p>wgpu-hal's Metal backend implements both modes. For <code>Update</code> it calls Metal's refit, <code>refitAccelerationStructure:descriptor:destination:scratchBuffer:scratchBufferOffset:</code>, from the source structure into the destination, which for Praxis are the same BLAS (<code>wgpu-hal/src/metal/command.rs:1864-1873</code>). ADR 0007 allows exactly this: "using <code>wgpu-hal</code> only for a subsystem that exceeds wgpu's safe API".</p>
+    <h3>The raw command encoder</h3>
+    <p>To record wgpu-hal commands, Praxis asks a wgpu command encoder, which records a <span class="concept" data-term="Command buffer" data-tip="A recorded list of GPU commands, which a submission hands to the GPU. On Metal, an MTLCommandBuffer.">command buffer</span>, for the wgpu-hal encoder beneath it, with <code>CommandEncoder::as_hal_mut</code>, which lends a <code>&amp;mut hal::metal::CommandEncoder</code> to a closure. wgpu's docs set its terms: the raw encoder "must not be manually destroyed", "You must not end the command buffer; wgpu will do it when you call finish", and "The wgpu command encoder must not be interacted with in any way while recording is happening to the wgpu_hal or backend command encoder". wgpu-core enforces the last: "Mixing the wgpu encoding API with access to the raw hal encoder via <code>as_hal_mut</code> is not supported", and it tracks which API an encoder uses "to detect and reject invalid usage" (<code>wgpu-core/src/command/mod.rs:625-627</code>).</p>
+    <p>So the refits get an encoder of their own, labelled "BLAS Refit Encoder", which only ever sees wgpu-hal. wgpu finishes it into a command buffer like any other, and Praxis submits it right after the frame's first commands (chapter 5).</p>
+    <h3>Guards and the snatch lock</h3>
+    <p>A refit needs several wgpu-hal objects at once: the vertex Arena, the index Arena, the scratch buffer and every refitted BLAS. Each wgpu resource lends its wgpu-hal object through <code>as_hal</code>, which returns an <span class="concept" data-term="as_hal guard" data-tip="What wgpu&#x27;s as_hal returns: a value that keeps the resource alive and reads as the wgpu-hal object while it lives. The guard of a buffer, texture, texture view or acceleration structure also holds the snatch lock.">as_hal guard</span>. The guard of a buffer or a BLAS holds an <code>Arc</code> of the resource and a read of its device's <span class="concept" data-term="Snatch lock" data-tip="wgpu-core&#x27;s per-device lock over each resource&#x27;s raw object, which destroying the resource snatches away. The as_hal guard of a buffer, texture, texture view or acceleration structure holds it for reading, a device&#x27;s or queue&#x27;s does not, and in debug builds a thread that takes it twice panics.">snatch lock</span>, the lock that stops a resource's raw object from being destroyed ("snatched") while someone reads it (<code>wgpu-core/src/as_hal.rs:59-81</code>). A thread may not hold it twice. In debug builds wgpu-core checks, and panics:</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code>panic!(
+    "thread '{name}' attempted to acquire a snatch lock recursively.\n\
+ - Currently trying to acquire {new}\n\
+ - Previously acquired {prev}",
+);</code></pre>
+    <figcaption><b>Two guards at once</b>, <code>wgpu-core/src/snatch.rs:140-144</code>, under <code>debug_assertions</code>.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>So the refit cannot hold four guards at once. Instead, <code>unguarded</code> reads the object's address through each guard, then lets the guard go, lock and all, and keeps the reference:</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">/// The wgpu-hal object `guard` reads, kept past the guard: each guard</span>
+<span class="comment">/// holds its device's snatch lock, which a thread must not take twice,</span>
+<span class="comment">/// and a refit needs several objects at once.</span>
+<span class="comment">///</span>
+<span class="comment">/// # Safety</span>
+<span class="comment">///</span>
+<span class="comment">/// The resource the object belongs to is neither destroyed nor dropped</span>
+<span class="comment">/// while the reference lives.</span>
+pub(super) unsafe fn unguarded&lt;'a, T&gt;(
+    guard: Option&lt;impl std::ops::Deref&lt;Target = T&gt;&gt;,
+) -&gt; Option&lt;&amp;'a T&gt; {
+    <span class="comment">// SAFETY: wgpu-core boxes the object in the resource, so its address</span>
+    <span class="comment">// holds while the resource lives undestroyed, as the caller ensures.</span>
+    guard.map(|guard| unsafe { &amp;*std::ptr::from_ref(&amp;*guard) })
+}</code></pre>
+    <figcaption><b>Keeping a reference past its guard</b>, <code>src/render/blas_refit.rs:258-272</code>. The lifetime <code>'a</code> is the caller's to choose, which is why the function is <code>unsafe</code>: nothing in the types ties the reference to the resource.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Letting the guard go also drops its <code>Arc</code>, so the guard no longer keeps the resource alive. Praxis does: the Mesh pool holds the Arenas, <code>BlasRefit</code> holds the scratch buffer, and the refit clones every BLAS handle into a local <code>handles</code> list for the length of the recording.</p>
+    <h3>Who keeps the resources alive on the GPU</h3>
+    <p>wgpu-core keeps a resource alive until the GPU has finished every command buffer that uses it, but it learns what a command buffer uses only from the commands recorded through it. The refit's command buffer was recorded through wgpu-hal, so wgpu-core knows nothing of it. What holds its resources is Metal itself: wgpu-hal's Metal backend makes its command buffers with retained references by default (<code>retain_command_buffer_references: true</code>, <code>wgpu-hal/src/metal/mod.rs:383-393</code>), and a Metal command buffer made that way retains every resource its commands name until it completes. The review caught the first SAFETY text crediting wgpu-core with this, and the PR corrected it.</p>
+  </div>
+</section>
+
+<section class="chapter" id="invariants">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 &middot; <code>src/render/blas_refit.rs:163-239</code></div>
+    <h2>The unsafe block, invariant by invariant</h2>
+    <p class="plain">An <code>unsafe</code> block tells the compiler "trust me"; its SAFETY comment says why. The ticket asked that the block state "every invariant it relies on". The PR's description lists seven; the merged comment has eight, adding the rule about the raw encoder from chapter 3. They are taken here in the code's order.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code>let descriptors: Vec&lt;_&gt; = entries
+    .iter()
+    .zip(&amp;raw_blases)
+    .zip(offsets.iter())
+    .map(
+        |((entries, raw_blas), &amp;offset)| hal::BuildAccelerationStructureDescriptor {
+            entries,
+            mode: hal::AccelerationStructureBuildMode::Update,
+            flags: REFITTED_BLAS_FLAGS,
+            source_acceleration_structure: Some(*raw_blas),
+            destination_acceleration_structure: *raw_blas,
+            scratch_buffer: scratch,
+            scratch_buffer_offset: offset,
+        },
+    )
+    .collect();
+encoder.as_hal_mut::&lt;Metal, _, _&gt;(|hal_encoder| match hal_encoder {
+    Some(hal_encoder) =&gt; {
+        hal_encoder.build_acceleration_structures(descriptors.len() as u32, descriptors)
+    }
+    None =&gt; refuse("the encoder is not Metal's"),
+});</code></pre>
+    <figcaption><b>What the block does</b>, its end, <code>src/render/blas_refit.rs:217-238</code>: one <code>Update</code> descriptor per refitted BLAS, the BLAS as its own source and destination, each with its own scratch offset, all recorded in one call on the raw encoder.</figcaption>
+  </figure>
+  <div class="prose">
+    <ol class="invariants">
+      <li>
+        <h3>Every handle is Metal's</h3>
+<pre class="code"><code><span class="comment">// - Every handle is Metal's: `new` refuses the refit off Metal.</span></code></pre>
+        <p>The block reinterprets wgpu objects as <code>hal::metal</code> types. <code>BlasRefit::new</code> returns None for <code>Refit</code> on any other backend, so the block never runs there. Each <code>as_hal::&lt;Metal&gt;()</code> also returns None for a foreign object, and the block then refuses and logs once instead of recording.</p>
+      </li>
+      <li>
+        <h3>Every wgpu-hal object outlives its use past its guard</h3>
+<pre class="code"><code><span class="comment">// - Every wgpu-hal object outlives its use past its guard</span>
+<span class="comment">//   (`metal::unguarded`): the Mesh pool, this refit and `blases`</span>
+<span class="comment">//   hold their handles throughout, nothing destroys them, and only</span>
+<span class="comment">//   the main thread calls into wgpu meanwhile (ADR 0016).</span></code></pre>
+        <p>This is the promise <code>unguarded</code> asks for (chapter 3). Its last clause matters because the snatch lock's job was to stop another thread destroying a resource mid-read; with the guards gone, the promise holds because only the <span class="concept" data-term="Main thread" data-tip="Under ADR 0016, the thread that runs the frame: only it submits GPU work, presents or polls.">main thread</span> touches wgpu while the refit records.</p>
+      </li>
+      <li>
+        <h3>The encoder is wgpu-hal's alone</h3>
+<pre class="code"><code><span class="comment">// - The encoder is used through wgpu-hal alone, never ended here,</span>
+<span class="comment">//   and finished by wgpu; wgpu-core panics on a mix of the two.</span></code></pre>
+        <p>wgpu's own terms for <code>as_hal_mut</code>, from chapter 3. The refit's encoder records nothing through wgpu, and <code>encoder.finish()</code> ends it.</p>
+      </li>
+      <li>
+        <h3>The GPU's use ends before any object is freed</h3>
+<pre class="code"><code><span class="comment">// - The GPU's use ends before any object is freed: wgpu-core never</span>
+<span class="comment">//   sees what this command buffer uses, but wgpu-hal's Metal command</span>
+<span class="comment">//   buffers retain every resource their commands name until they</span>
+<span class="comment">//   complete (its `retain_command_buffer_references`, on by</span>
+<span class="comment">//   default).</span></code></pre>
+        <p>The CPU-side promise (invariant 2) covers recording. This one covers the GPU running the commands after the CPU has moved on: if a BLAS were dropped next frame while a refit of it still ran, Metal's retained reference would keep it.</p>
+      </li>
+      <li>
+        <h3>Each refit repeats its BLAS's build</h3>
+<pre class="code"><code><span class="comment">// - Each refit's descriptor is the one wgpu-core built the BLAS from</span>
+<span class="comment">//   (`MeshPool::load_for`), with its flags, which allow updates: the</span>
+<span class="comment">//   same buffers, offsets, counts, stride and formats.</span></code></pre>
+        <p>A refit is only defined over the triangles the structure was built from. <code>metal::triangles</code> rebuilds wgpu-hal's description of them from <code>MeshBlas</code>, the record <code>load_for</code> kept: the same vertex and index Arenas, first vertex, vertex count and format, the 28-byte <code>CookedVertex</code> stride, u32 indices from <code>first_index</code>, and the geometry's flags. <code>REFITTED_BLAS_FLAGS</code> is the one constant both the build and the refit read.</p>
+      </li>
+      <li>
+        <h3>Each refit has its own scratch region</h3>
+<pre class="code"><code><span class="comment">// - Each refit has its own scratch region, of the size Metal asks</span>
+<span class="comment">//   for its update, in a buffer any usage makes on Metal. The next</span>
+<span class="comment">//   frame's refits reuse the regions, and the frames before them may</span>
+<span class="comment">//   still run: Metal tracks hazards on wgpu-hal's buffers, scratch</span>
+<span class="comment">//   included, so they wait.</span></code></pre>
+        <p>All the refits are in one call and may run side by side, so no two share scratch. <code>metal::scratch</code> asks wgpu-hal for each BLAS's <code>update_scratch_size</code>, rounds it up to <code>SCRATCH_ALIGNMENT</code>, 256 bytes, "a margin over the one-byte alignment wgpu-hal reports for Metal", and lays the regions end to end in one buffer made at the first refit. A frame in flight may still be refitting when the next frame's refits are recorded into the same regions. Metal's <span class="concept" data-term="Hazard tracking" data-tip="Metal&#x27;s automatic ordering of GPU work that writes and reads the same resource. It sees only the resources a command names; a TLAS names its BLASes by ID, so a TLAS build is not ordered after them (gfx-rs/wgpu#9215).">hazard tracking</span> sees the scratch buffer named in both and orders them. The buffer joins the Renderer's GPU memory through <code>BlasRefit::gpu_memory_bytes</code>.</p>
+      </li>
+      <li>
+        <h3>The bend comes first; the build waits</h3>
+<pre class="code"><code><span class="comment">// - The bend pass's writes to the vertex Arena come first in the</span>
+<span class="comment">//   queue, and Metal tracks hazards on wgpu-hal's buffers, so each</span>
+<span class="comment">//   refit reads the bent shapes; the TLAS build that reads the</span>
+<span class="comment">//   BLASes waits for this command buffer through `metal::Order`, or</span>
+<span class="comment">//   on the CPU.</span></code></pre>
+        <p>Two orders, of two kinds. Before the refit, Metal's hazard tracking is enough: the bend pass writes the vertex Arena and the refit names it. After the refit it is not: the TLAS build reads the BLASes without naming them. That half is chapter 5.</p>
+      </li>
+      <li>
+        <h3>wgpu-core never learns of the refit, and need not</h3>
+<pre class="code"><code><span class="comment">// - wgpu-core never learns of the refit, and needs not: it changes no</span>
+<span class="comment">//   BLAS's size, handle or build index, so the TLAS built next still</span>
+<span class="comment">//   validates against it, and wgpu-core's barriers are no-ops on</span>
+<span class="comment">//   Metal.</span></code></pre>
+        <p>wgpu-core keeps, per BLAS, the index of the build that last wrote it. A TLAS build fails if one of its BLASes was never built, and a pass that uses a TLAS fails if one of its BLASes was built after it (<code>wgpu-core/src/command/ray_tracing.rs:495-534</code>). A refit in place leaves each BLAS as wgpu-core last saw it, built at load, so the dynamic TLAS built after it still validates. And the barriers wgpu-core would have recorded around a write it knew of do nothing on Metal: wgpu-hal's <code>place_acceleration_structure_barrier</code> for Metal is an empty function (<code>wgpu-hal/src/metal/command.rs:1877-1881</code>). The module's own summary: "a refit changes only what the BLAS holds".</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section class="chapter" id="ordering">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 &middot; gfx-rs/wgpu#9215 &middot; ADR 0016</div>
+    <h2>Ordering on Metal</h2>
+    <p class="plain">Metal orders GPU work that writes and reads the same resource, but only resources a command names. wgpu-hal 30.0.1 builds a TLAS from instance descriptors that name each BLAS by its resource ID, so Metal never sees the build read them, and nothing orders a TLAS build after a BLAS write. #244 found this, for BLAS builds and compaction at load (gfx-rs/wgpu#9215, "Metal BLAS -&gt; TLAS builds need synchronisation", open). A refit each frame followed by the dynamic TLAS's build is the same pair.</p>
+    <p>#244 measured what a missing order does: "a TLAS built right after a BLAS build or compaction copy, with no wait between them, missed the BLAS in 3 to 23 of 80 iterations while other devices loaded the GPU" (its heads-up on #209). <a href="gpu-ordering.html">GPU Ordering Explained</a>, volume 13, tells that story. The heads-up gave #209 two ways to order the pair:</p>
+    <ul class="keypoints">
+      <li><b>A CPU wait.</b> Submit the refit, then <code>poll</code> its submission. That is what <code>compact_blases</code> does at load, but every frame "it would stall the main thread on the GPU, against criterion 8's 0.5 ms of CPU".</li>
+      <li><b>wgpu-hal events.</b> Metal's <code>Queue::add_signal_event</code> and <code>add_wait_event</code> can signal after the refit's command buffer and wait before the build's. In #9215's thread, one application had dropped this route because staging is queue-wide: whatever submit comes next takes a staged event, whether another thread makes it or wgpu-core makes one of its own, as it can when a buffer with pending writes is mapped. In Praxis only the main thread submits (ADR 0016), and <code>Order::stage</code>'s SAFETY comment, below, states that nothing submits in between.</li>
+    </ul>
+    <p>Part 1 takes the events, and keeps the CPU wait as a fallback.</p>
+    <h3>The frame in two submissions</h3>
+    <p>Until #289 the dynamic TLAS's build went in a command buffer submitted before the frame's, and the bend pass was recorded in the frame's encoder, after it. In the <code>Proxies</code> form the build's command buffer is still submitted first; only its recording now follows the bend pass. A refit must sit between the bend and the build, so in the update forms the frame is now cut after its bend pass. Everything recorded so far, the "head", goes in a <span class="concept" data-term="Submission" data-tip="One call to Queue::submit: the command buffers it hands the GPU, in order, and the index the CPU can wait on.">submission</span> of its own with the refits.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code>let timestamps = self.gpu_stats.begin_frame(&amp;mut encoder, recorder);
+<span class="comment">// Bent Meshes take their shapes before any pass reads their vertices.</span>
+let bend_timestamps = timestamps.map(|timestamps| timestamps.compute_pass(BEND_PASS));
+let bent = self
+    .bend_pass
+    .record(&amp;mut encoder, &amp;frame.bends, bend_timestamps);
+let encoding = started.elapsed();
+<span class="comment">// Their BLASes take them too, in a submission of their own, which</span>
+<span class="comment">// the dynamic TLAS's build, recorded after it, follows.</span>
+if let Some(blas_refit) = self.blas_refit.as_mut().filter(|_| bent) {
+    let started = Instant::now();
+    let head = std::mem::replace(&amp;mut encoder, create_frame_encoder(&amp;self.device));
+    blas_refit.submit(&amp;self.device, &amp;self.queue, head, &amp;self.mesh_pool);
+    recorder.stage(BLAS_REFIT, started);
+}</code></pre>
+    <figcaption><b>The cut</b>, in <code>Renderer::render</code>, <code>src/render/renderer.rs:543-557</code>. The head holds what <code>upload</code> recorded (the static TLAS's rebuild when it has one, and the frame's copies), what <code>gpu_stats.begin_frame</code> records, and the bend pass. A fresh encoder takes the rest of the frame. In the <code>Proxies</code> form <code>blas_refit</code> is None and nothing is cut.</figcaption>
+  </figure>
+  <figure class="wide fluid">
+    <svg viewBox="0 0 760 300" role="img" aria-label="Three submissions in one frame. Submission 1 holds the head and the refits and signals the shared event at value n when it completes. Submission 2 begins with wgpu-hal's internal wait command buffer, which waits for value n and then releases the relay; the dynamic TLAS build's command buffer starts by waiting on the relay. Submission 3 holds the rest of the frame.">
+      <text x="20" y="26" class="t-label">CPU, main thread, in order:</text>
+      <text x="20" y="50" class="t-small">stage signal n</text>
+      <text x="150" y="50" class="t-small">submit 1</text>
+      <text x="250" y="50" class="t-small">stage wait n</text>
+      <text x="370" y="50" class="t-small">record build</text>
+      <text x="490" y="50" class="t-small">submit 2</text>
+      <text x="600" y="50" class="t-small">submit 3</text>
+      <line x1="20" y1="60" x2="740" y2="60" class="s-soft" stroke-width="1"/>
+      <text x="20" y="96" class="t-strong">Submission 1</text>
+      <rect x="20" y="106" width="200" height="40" rx="5" fill="var(--figure-bg)" class="s-soft" stroke-width="1.5"/>
+      <text x="120" y="124" text-anchor="middle" class="t-strong">head</text>
+      <text x="120" y="139" text-anchor="middle" class="t-small">uploads, bend pass</text>
+      <rect x="226" y="106" width="150" height="40" rx="5" fill="var(--accent-wash)" class="s-accent" stroke-width="1.5"/>
+      <text x="301" y="124" text-anchor="middle" class="t-strong">refits</text>
+      <text x="301" y="139" text-anchor="middle" class="t-small">wgpu-hal only</text>
+      <circle cx="390" cy="126" r="7" class="f-warm"/>
+      <text x="402" y="122" class="t-warm">signal n</text>
+      <text x="402" y="138" class="t-small">on completion</text>
+      <text x="20" y="186" class="t-strong">Submission 2</text>
+      <rect x="226" y="196" width="160" height="40" rx="5" fill="var(--panel)" class="s-soft" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <text x="306" y="214" text-anchor="middle" class="t-strong">internal wait</text>
+      <text x="306" y="229" text-anchor="middle" class="t-small">wait n, release relay</text>
+      <rect x="392" y="196" width="190" height="40" rx="5" fill="var(--warm-wash)" class="s-warm" stroke-width="1.5"/>
+      <text x="487" y="214" text-anchor="middle" class="t-strong">dynamic TLAS build</text>
+      <text x="487" y="229" text-anchor="middle" class="t-small">starts: wait on relay</text>
+      <path d="M 390 134 C 390 165 320 170 312 192" fill="none" class="s-warm" stroke-width="2" stroke-dasharray="5 3"/>
+      <polygon points="312,194 308,184 317,186" class="f-warm"/>
+      <path d="M 386 216 L 390 216" class="s-ink" stroke-width="1.5"/>
+      <text x="20" y="276" class="t-strong">Submission 3</text>
+      <rect x="392" y="256" width="348" height="34" rx="5" fill="var(--figure-bg)" class="s-soft" stroke-width="1.5"/>
+      <text x="566" y="278" text-anchor="middle" class="t-strong">the rest of the frame: culling ... tonemapping</text>
+    </svg>
+    <figcaption><b>One frame in the update forms on Metal.</b> The signal is staged before submission 1 and rides on its last command buffer; the wait is staged after it, and wgpu-hal puts it on an internal command buffer at the head of submission 2. With strict event sync, that internal command buffer then releases the relay event every command buffer encoded since submission 1 waits on, the build's among them. Submission 3 is the frame's own, as before.</figcaption>
+  </figure>
+  <div class="prose">
+    <p><code>BlasRefit::submit</code> does the cut's work: in the rebuild form it records the rebuilds into the head itself, through wgpu; in the refit form it submits the head and the refit command buffer together; either way it stages the signal before and the wait after:</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code>pub fn submit(
+    &amp;mut self,
+    device: &amp;wgpu::Device,
+    queue: &amp;wgpu::Queue,
+    mut head: wgpu::CommandEncoder,
+    mesh_pool: &amp;MeshPool,
+) {
+    if self.form == CrowdForm::Rebuild {
+        mesh_pool.rebuild_refitted_blases(&amp;mut head);
+    }
+    let head = head.finish();
+    #[cfg(target_vendor = "apple")]
+    if let Some(order) = &amp;mut self.order {
+        order.signal_from_next_submit(queue);
+    }
+    #[cfg(target_vendor = "apple")]
+    let submission = if self.form == CrowdForm::Refit {
+        let refits = self.record_refits(device, mesh_pool);
+        queue.submit([head, refits])
+    } else {
+        queue.submit(std::iter::once(head))
+    };
+    #[cfg(not(target_vendor = "apple"))]
+    let submission = queue.submit(std::iter::once(head));
+    #[cfg(target_vendor = "apple")]
+    if let Some(order) = &amp;self.order {
+        order.wait_in_next_submit(queue);
+    }
+    if self.waits_on_cpu {
+        let wait = wgpu::PollType::Wait {
+            submission_index: Some(submission),
+            timeout: None,
+        };
+        if let Err(error) = device.poll(wait) {
+            tracing::error!(%error, "waiting for BLAS updates failed");
+        }
+    }
+}</code></pre>
+    <figcaption><b>Submitting the update</b>, <code>src/render/blas_refit.rs:82-119</code>. The rebuild form on Metal is ordered the same way as the refit, since a rebuild through wgpu is also a BLAS write that Metal does not order the TLAS build after.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>A shared event, staged for the next submit</h3>
+    <p>A <span class="concept" data-term="Shared event" data-tip="MTLSharedEvent: a Metal counter that one command buffer can signal to a value and another wait for, on the GPU, with no CPU wait between them. Unlike a plain MTLEvent, it also reaches the CPU and other devices.">shared event</span> is a Metal counter on the GPU: one command buffer signals it to a value as it completes, another waits until it reaches that value. <code>metal::Order</code> gets one from a wgpu-hal fence (<code>raw_shared_event</code>) and counts the values it has signalled, one more each frame.</p>
+    <p>wgpu-hal does not take an event per command buffer. <code>add_signal_event</code> and <code>add_wait_event</code> stage it for the queue, and "any <code>add_wait_event</code> call is consumed by whichever <code>Queue::submit</code> runs next on this queue" (<code>wgpu-hal/src/metal/mod.rs:551-556</code>). That is why <code>submit</code> stages the signal right before submission 1 and the wait right after it, and why <code>Order::stage</code>'s SAFETY says "only the main thread submits (ADR 0016), and <code>Renderer::render</code> submits nothing between the update's submission and the dynamic TLAS's build". The signal is drained onto the submission's last command buffer, the refits' (since part 2, when the refit is timed, the marker's, which follows them; chapter 7), "after the submit's own completion signal, so a foreign API waiting on <code>(event, value)</code> observes the wgpu work as done".</p>
+    <h3>Why strict event sync</h3>
+    <p>A staged wait alone is not an order. By default wgpu-hal encodes it on an internal command buffer of its own, committed ahead of the submission's, and its docs say what that leaves open:</p>
+  </div>
+  <blockquote class="callout prose"><p>"By default, <code>add_wait_event</code> encodes the wait on a separate internal command buffer. Metal allows independent command buffers in a queue to overlap on the GPU, so a wait CB does not strictly gate subsequent user command buffers when those CBs share no Metal-tracked resources with it. Single-stream pipelines often serialize anyway because the GPU has no other concurrent work to fill the slot, but mixed workloads (decode + compute + render) can race."</p><p class="note"><code>Queue::enable_strict_event_sync</code>'s docs, <code>wgpu-hal/src/metal/mod.rs:497-505</code></p></blockquote>
+  <div class="prose">
+    <p>The dynamic TLAS's build shares no Metal-tracked resource with that internal command buffer, so <code>Order::new</code> turns on <span class="concept" data-term="Strict event sync" data-tip="A wgpu-hal mode of a Metal queue, on for its lifetime once enabled: every command buffer starts by waiting on an internal event that each submit signals after the waits staged for it.">strict event sync</span>. Then every command buffer, as it starts encoding, first waits on an internal relay event, at the value the next submit will release; and each submit's internal command buffer releases the relay only after the staged waits it carries (<code>wgpu-hal/src/metal/mod.rs:507-514</code>, and <code>begin_encoding</code> in <code>command.rs</code>). The build's command buffer is encoded after submission 1, so it is held until value n is signalled, which happens when the refits complete.</p>
+    <p>Strict mode has a price and no off switch: "one extra <code>encodeWaitForEvent</code> per command buffer plus one extra internal command buffer per submit", and "once enabled, the queue stays in strict mode for its lifetime". So <code>BlasRefit</code> makes an <code>Order</code>, and turns strict mode on, only in the update forms on Metal. Part 2 measured the price: nothing measurable (chapter 8).</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code>pub(super) fn new(device: &amp;wgpu::Device, queue: &amp;wgpu::Queue) -&gt; Option&lt;Self&gt; {
+    <span class="comment">// [SAFETY comment elided]</span>
+    let order = Self {
+        device: device.clone(),
+        fence: Some(unsafe { device.as_hal::&lt;Metal&gt;()?.create_fence().ok()? }),
+        signalled: 0,
+    };
+    <span class="comment">// Dropping `order` destroys the fence on the way out.</span>
+    order.fence.as_ref()?.raw_shared_event()?;
+    let queue = unsafe { queue.as_hal::&lt;Metal&gt;()? };
+    if let Err(error) = queue.enable_strict_event_sync() {
+        tracing::error!(%error, "strict event sync not enabled");
+        return None;
+    }
+    Some(order)
+}</code></pre>
+    <figcaption><b>Making the order</b>, <code>src/render/blas_refit.rs:361-379</code>, four comment lines elided. Each <code>?</code> returns None, and the fence is destroyed by <code>Order</code>'s <code>Drop</code> if it was made: the review's "fence leak on a failed <code>Order::new</code>" fix.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>The fallback: wait on the CPU</h3>
+    <p>If Metal makes no shared event, <code>Order::new</code> returns None and <code>BlasRefit::new</code> logs "no shared event: each frame waits on the CPU for its BLAS updates". Each frame then polls submission 1 to completion before recording the build, as <code>compact_blases</code> does at load. It is correct and slow: the main thread waits on the GPU in every frame.</p>
+  </div>
+  <figure class="wide" id="demo-order">
+    <div class="controls" style="margin-top: 0">
+      <span class="control-label">Order:</span>
+      <div class="seg" role="group" aria-label="How the build is ordered after the refits" id="o-mode">
+        <button type="button" data-mode="none" aria-pressed="false">none</button>
+        <button type="button" data-mode="strict" aria-pressed="false">strict sync, no wait</button>
+        <button type="button" data-mode="event" aria-pressed="true">shared event (#289)</button>
+        <button type="button" data-mode="cpu" aria-pressed="false">CPU wait (fallback)</button>
+      </div>
+    </div>
+    <div class="controls">
+      <span class="control-label">Other GPU work:</span>
+      <div class="seg" role="group" aria-label="Other work on the GPU" id="o-load">
+        <button type="button" data-load="idle" aria-pressed="true">none</button>
+        <button type="button" data-load="loaded" aria-pressed="false">other devices</button>
+      </div>
+      <button type="button" class="btn" id="o-again">Another frame</button>
+      <button type="button" class="btn" id="o-twenty">Run 20 frames</button>
+    </div>
+    <div class="canvas-frame" style="margin-top: 14px"><canvas id="o-canvas" role="img" aria-label="A timeline of one frame: the main thread's steps, and on the GPU the head, the refits, the dynamic TLAS build and the rest of the frame, with any overlap of the build and the refits marked."></canvas></div>
+    <p class="readout" id="o-note" aria-live="polite" style="margin-top: 12px"></p>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--figure-bg); border: 1.5px solid var(--ink-soft)"></span>head, then the rest of the frame</span>
+      <span><span class="swatch" style="background: var(--accent-wash); border: 1.5px solid var(--accent)"></span>refits</span>
+      <span><span class="swatch" style="background: var(--warm-wash); border: 1.5px solid var(--warm)"></span>dynamic TLAS build</span>
+      <span><span class="swatch" style="background: var(--bad-wash); border: 1.5px solid var(--bad)"></span>build reads BLASes mid-refit</span>
+      <span><span class="swatch" style="background: var(--bad-wash); border: 1.5px dashed var(--bad)"></span>main thread waiting</span>
+    </div>
+    <figcaption><b>Live demo.</b> This page's model of one frame's submissions, on an unscaled time axis; the durations and their spread are invented, and so are the odds of a race. Without an order the build may start before the refits end. Strict sync without the event wait holds the build only until its own submission's internal command buffer runs, which usually happens to be after the refits; nothing makes it so, and the model lets other devices' load sometimes reverse it, though all ten of the PR's runs of that form passed. The shared event holds it until the refits complete, whatever else runs. The CPU wait is also correct, but the main thread stops. The measured counts are in chapter 6.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="testing">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 &middot; <code>tests/crowd.rs</code></div>
+    <h2>How the test knows</h2>
+    <p class="plain">The ticket's acceptance criterion: "a capture test shows shadows from refitted BLASes matching those from a full rebuild". The rebuild form is the <span class="concept" data-term="Oracle" data-tip="A slow, plainly correct computation that a test checks the fast one against. The refit&#x27;s is a full rebuild of the same BLASes.">oracle</span>: wgpu-core builds those BLASes from scratch, through the safe API, from the same bent vertices. If the refit reads the bent shapes and the build waits for it, the two forms trace the same triangles and cast the same shadows, pixel for pixel.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code>let rebuilt = capture(&amp;context, CrowdForm::Rebuild).expect("capture failed");
+let refitted: Vec&lt;image::RgbaImage&gt; = std::thread::scope(|scope| {
+    let captures: Vec&lt;_&gt; = (0..DEVICES)
+        .map(|_| {
+            scope.spawn(|| {
+                let context = gpu_context().expect("a GPU, as the first context found");
+                capture(&amp;context, CrowdForm::Refit).expect("capture failed")
+            })
+        })
+        .collect();
+    captures
+        .into_iter()
+        .map(|capture| capture.join().expect("capture thread panicked"))
+        .collect()
+});
+for (device, refitted) in refitted.iter().enumerate() {
+    let differing = rebuilt
+        .pixels()
+        .zip(refitted.pixels())
+        .filter(|(rebuilt, refitted)| rebuilt != refitted)
+        .count();
+    assert_eq!(
+        differing, 0,
+        "device {device}: pixels differing from the rebuild"
+    );
+}</code></pre>
+    <figcaption><b>The comparison</b>, <code>tests/crowd.rs:61-86</code>, in <code>refitted_blases_cast_the_shadows_rebuilt_ones_cast</code>. Each capture is the last frame <code>praxis::capture</code> renders of <code>crowd</code>, at the capture command's default 640 &times; 360. Off Metal the same test asks for the refit form and checks that it is refused as "unavailable".</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Why four devices at once</h3>
+    <p>A missing order shows only sometimes, "and more often under load (#244)", in the comment on <code>DEVICES</code>, which is 4. Each thread makes its own wgpu device and captures the refit form, so the four contend for one GPU, as the other devices did in #244's 80-iteration loop.</p>
+    <h3>Red first</h3>
+    <p>A test earns trust by failing when the thing it checks is broken. The PR reports five experiments:</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts compact" style="min-width: 560px">
+        <thead><tr><th>What was changed</th><th class="n">Devices</th><th class="n">Runs</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>The refit command buffer left out</td><td class="n">&ndash;</td><td class="n">&ndash;</td><td><span class="bad-text">red</span></td></tr>
+          <tr><td>The order left out</td><td class="n">8</td><td class="n">20</td><td><span class="bad-text">red in 19</span>, 7,116 px differing</td></tr>
+          <tr><td>Strict event sync alone, no event wait</td><td class="n">&ndash;</td><td class="n">10</td><td><span class="good-text">green in 10</span>, not relied on</td></tr>
+          <tr class="focus"><td>As merged, with the order</td><td class="n">8</td><td class="n">20</td><td><span class="good-text">green in 20</span></td></tr>
+          <tr><td>The CPU-wait fallback</td><td class="n">&ndash;</td><td class="n">5</td><td><span class="good-text">green in 5</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>The test's evidence</b>, from PR #289's Verification. A dash is a figure the PR does not give. The two 20-run loops ran at 8 devices; the committed test runs 4. The full <code>scripts/verify.sh</code> passed in 988 s, 971 of them tests.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Passing is not a guarantee</h3>
+    <p>Strict event sync with no event wait passed 10 runs of 10. It holds the build until its own submission's internal command buffer runs, and that usually happens to be after the refits; wgpu-hal's docs above say single-stream work "often" serializes so. The PR's words: "It happens to serialize the work but guarantees nothing, so this PR relies on the event wait."</p>
+    <p>Ten passes say little about a race. If a race lost one run in 20, ten clean runs in a row would still come up about 60% of the time (0.95<sup>10</sup> &asymp; 0.60, this guide's arithmetic). A test can show that an order is missing, as the 19 red runs did; it cannot show that one is present. What makes the merged form correct is the API's promise: the build's command buffer waits on the GPU until the event reaches a value only the refits' completion signals. The 20 green runs at 8 devices are the check that the promise is kept, not the reason to believe it.</p>
+    <h3>The review</h3>
+    <p>The local review found 24 items: 15 fixed, 4 declined, 5 deferred to part 2. Among the fixes: the SAFETY text that credited wgpu-core with keeping the refit's resources alive (chapter 3), the scratch-reuse and staged-events invariants, the fence leak in <code>Order::new</code>, and a refused refit that now logs once, with its real reason.</p>
+  </div>
+</section>
+
+<section class="chapter" id="timing">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 7 &middot; #209 part 2 &middot; PR #290</div>
+    <h2>Timing the refit with markers</h2>
+    <p class="plain">Part 1 made the refit correct and timed only its CPU stage, <code>blas_refit</code>, which no bench figure counted. On the GPU, in the update forms the build was not bracketed, and the frame's span ran from the bend pass, holding the build and the gap between submissions. Part 2 times the refit on both processors, so it can be held to the Budget's 1.0 ms of GPU and 0.5 ms of CPU. The GPU half needs a <span class="concept" data-term="Marker" data-tip="A compute pass of one invocation, recorded only to carry a timestamp. It reads or queries a resource the timed work writes, so Metal runs it in order with that work, before or after it as recorded, and the timestamp at its end or start brackets it (#204, #209).">marker</span>, and the marker has to be built with care.</p>
+    <h3>Where Metal reads the clock</h3>
+    <p>Praxis asks wgpu for a <span class="concept" data-term="Timestamp query" data-tip="A GPU write of its clock into a slot of a query set; Praxis asks wgpu for one at the start or end of a pass. On Metal, wgpu-hal takes it as a counter sample at the boundary of the pass&#x27;s encoder.">timestamp</span> at the start or the end of a pass. wgpu can also write one between commands, behind its native <code>TIMESTAMP_QUERY_INSIDE_ENCODERS</code> and <code>TIMESTAMP_QUERY_INSIDE_PASSES</code> features, but wgpu 30 documents those on Metal for AMD and Intel GPUs, not Apple's, so on the M4 Pro a pass's ends are all there is. On Metal, wgpu-hal 30.0.1 offers timestamps only where the device samples counters at stage boundaries (<code>MTLCounterSamplingPoint::AtStageBoundary</code>, <code>wgpu-hal/src/metal/adapter.rs:676-681</code>), and attaches the query set to the compute pass's encoder as a sample buffer with a start-of-encoder and an end-of-encoder index (<code>command.rs:1700-1745</code>). The clock is read where the encoder starts and ends on the GPU. #204, timing the dynamic TLAS's build, found what that implies (<code>docs/performance.md</code>, "Bracketing on Metal"):</p>
+    <ul class="keypoints">
+      <li><b>An empty pass times nothing.</b> "Empty compute passes write no timestamps". A marker has to dispatch real work.</li>
+      <li><b>An unrelated pass brackets nothing.</b> "passes that touch no TLAS do not bracket the build, which Metal runs alongside them; markers that query the TLAS do." Metal orders work through <span class="concept" data-term="Hazard tracking" data-tip="Metal&#x27;s automatic ordering of GPU work that writes and reads the same resource. It sees only the resources a command names; a TLAS names its BLASes by ID, so a TLAS build is not ordered after them (gfx-rs/wgpu#9215).">hazard tracking</span>, so a marker has to name a resource the timed work writes, or it may run beside that work rather than after it.</li>
+    </ul>
+    <p>The dynamic TLAS's markers each run one ray query against the TLAS, on either side of its build. The refit needed a marker of its own.</p>
+    <h3>The refit's marker reads the scratch</h3>
+    <p>The refits are recorded through wgpu-hal alone, on an encoder that takes no wgpu call once wgpu-hal has recorded into it (chapter 3), so no wgpu pass, and no timestamp write, can go in their command buffer. #290 puts the marker in a third command buffer of the refit's submission: one invocation, <code>mark_blas_refit</code>, that reads the first word of the refits' scratch buffer and stores it where nothing reads it. Every refit names that buffer as its scratch, so Metal runs the marker once the refits are done, and the timestamp at the marker's start ends their time; the three-times check below shows it waiting. The regions are in fact empty on the M4 Pro: Metal asks for no scratch to refit these BLASes, so the buffer is its 256-byte minimum (this guide's check of the sizes Metal reports, on macOS 27.0.1).</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">// The marker after the BLAS refits: one invocation that reads their scratch
+// and keeps what it read, so the GPU runs it once the refits are done, and a
+// timestamp at its start ends their time (src/render/blas_refit.rs).</span>
+@compute @workgroup_size(1)
+fn mark_blas_refit() {
+    marker_result = refit_scratch[0];
+}</code></pre>
+    <figcaption><b>The marker</b>, <code>src/render/shaders/blas_refit_marker.wgsl</code>, whole, at 0534eb6. Its two bindings, <code>refit_scratch</code> (read-only storage) and <code>marker_result</code>, are declared once, in <code>BLAS_REFIT_MARKERS</code> (<code>src/render/bind_groups.rs</code>). <code>RefitMarker::record</code> (<code>src/render/blas_refit.rs:424</code>) records it into the encoder "BLAS Refit Marker Encoder" and dispatches one workgroup.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The marker writes only its start: <code>marker_after</code> gives it the refit's second query slot as <code>beginning_of_pass_write_index</code> and no end (<code>src/render/readback.rs:463-469</code>). Nothing writes a timestamp where the refits begin, so their time runs from the end of the bend pass, the last timed pass in the head command buffer before them, to the marker's start. That span includes what Metal spends between command buffers: <code>docs/performance.md</code> puts it at "some 15 to 25 &micro;s of fixed cost".</p>
+    <h3>Checking the timer: three times the work</h3>
+    <p>A timer that measures the wrong thing still returns plausible numbers. So part 2 tested it with a local patch that recorded every refit three times. <code>blas_refit</code> read 3,332 and 3,333 &micro;s against 1,127 and 1,131 once, "and the GPU frame grew by the same 2.2 ms: the marker waits for the refits". Three times the work read 2.96 times the time (3,332 / 1,127, this guide's arithmetic), and the frame grew by about the difference, 2,205 &micro;s. A marker that ran beside the refits would have read the same small number whatever they did.</p>
+    <h3>The frame's GPU time, submission by submission</h3>
+    <p>In the refit form a frame's GPU work arrives in three <span class="concept" data-term="Submission" data-tip="One call to Queue::submit: the command buffers it hands the GPU, in order, and the index the CPU can wait on.">submissions</span>: the head, the refits and their marker; the dynamic TLAS's build, bracketed by its markers; and the rest of the frame. Between them the GPU can sit idle while the CPU records. <code>frame_times</code>, now a pure function with a unit test, sums the spans and leaves the gaps out:</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code>let frame_time = if shape.blas_refitted {
+    build
+        + time(ticks[2 * bend_pass], ticks[2 * blas_refit + 1])
+        + time(ticks[2 * (blas_refit + 1)], last_end)
+} else {
+    let first_pass = if shape.bent {
+        bend_pass
+    } else {
+        blas_refit + 1
+    };
+    build + time(ticks[2 * first_pass], last_end)
+};</code></pre>
+    <figcaption><b>The GPU frame</b>, <code>src/render/readback.rs:504-515</code> at 0534eb6. Since PR #291, merged on 2026-10-26 as c5a12eb, the rest of the frame, and a frame with no timed refit, span from the earliest start to the latest end of their timed passes (<code>span</code>), since Metal can start the Froxel pass before culling phase one; the build and the span from the bend pass to the marker are as quoted. <code>build</code> runs between the build's markers, from no earlier than the previous frame's shadow mask pass end (<code>build_floor</code>), since that marker can start while the frame before still traces rays. Its doc: "the dynamic TLAS's build, plus the span of each submission's passes, so neither the waits between submissions nor what a submission records before its first pass counts".</figcaption>
+  </figure>
+  <div class="prose">
+    <ul class="keypoints">
+      <li><b>The build counts once.</b> In a frame whose refit went untimed, the span from the bend pass holds the build's submission, so the build is not added again: the review's fix, commit 5201f26, carried by <code>FrameShape</code> (<code>src/render/renderer.rs:676</code>).</li>
+      <li><b>The oracle stays untimed.</b> The rebuild form times neither its rebuild nor its build: its rebuilds through wgpu "would fail the first marker's query", since wgpu-core checks that query against the BLASes of the last build.</li>
+      <li><b>The CPU side.</b> The <code>blas_refit</code> stage, which records the refits and submits them with the head, now counts in <code>dynamic_tlas_cpu_microseconds</code> beside the build's recording and submit (<code>src/bench/mod.rs</code>). The head's submit is in it too, which the proxies form makes with the rest of the frame, so the refit form's CPU "reads a little high".</li>
+      <li><b>One Baseline change everywhere.</b> The new timed pass adds two queries a frame, so the readback's buffers, and every scene's <code>gpu_memory_bytes</code>, grow by 112 B; PR #290 re-recorded every Baseline.</li>
+    </ul>
+  </div>
+  <figure class="wide" id="demo-marker">
+    <div class="controls" style="margin-top: 0">
+      <span class="control-label">Marker:</span>
+      <div class="seg" role="group" aria-label="What the marker after the refits does" id="m-kind">
+        <button type="button" data-kind="empty" aria-pressed="false">empty pass</button>
+        <button type="button" data-kind="unrelated" aria-pressed="false">touches nothing</button>
+        <button type="button" data-kind="scratch" aria-pressed="true">reads the scratch (#290)</button>
+      </div>
+    </div>
+    <div class="controls">
+      <span class="control-label">Refits recorded:</span>
+      <div class="seg" role="group" aria-label="How many times each refit is recorded" id="m-repeat">
+        <button type="button" data-repeat="1" aria-pressed="true">once</button>
+        <button type="button" data-repeat="3" aria-pressed="false">three times</button>
+      </div>
+    </div>
+    <div class="canvas-frame" style="margin-top: 14px"><canvas id="m-canvas" role="img" aria-label="A timeline of one frame's three submissions on the GPU: the head with the bend pass, the refits and their marker; the dynamic TLAS build between its markers; and the rest of the frame. Ticks mark the timestamps written, and spans mark what the GPU frame sums."></canvas></div>
+    <p class="readout" id="m-note" aria-live="polite" style="margin-top: 12px"></p>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--figure-bg); border: 1.5px solid var(--ink-soft)"></span>head, bend pass, rest of the frame</span>
+      <span><span class="swatch" style="background: var(--accent-wash); border: 1.5px solid var(--accent)"></span>refits</span>
+      <span><span class="swatch" style="background: var(--warm-wash); border: 1.5px solid var(--warm)"></span>dynamic TLAS build</span>
+      <span><span class="swatch" style="background: var(--good); border: 1.5px solid var(--good)"></span>span the GPU frame sums</span>
+    </div>
+    <figcaption><b>Live demo.</b> This page's model of one refit frame on a scaled time axis. The refits take the <code>blas_refit</code> readings of the three-times check, 1,127 and 3,332 &micro;s, and the build 256 &micro;s, inside form (a)'s measured 253 to 259; the head, the gaps, the marker and the rest of the frame are invented, the rest chosen so the sum lands near round 2's GPU frame, 4,121 &micro;s. An empty marker writes no timestamp; one that touches nothing may start beside the refits, here 5 &micro;s after the bend pass.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="result">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 8 &middot; <code>docs/performance.md</code> &middot; map #17</div>
+    <h2>The result, and M7's form</h2>
+    <p class="plain">The bench: Apple M4 Pro, wgpu 30.0.1 on Metal, release builds of part 2 on 66b5b57, the <code>crowd</code> scene at 2560&times;1440 with 4x MSAA, 248 warm-up and 1,800 measured frames, four rounds alternating the forms. <code>docs/performance.md</code> says "GPU medians agree within 1% across rounds"; in the table below they agree within 1.1%, apart from form (a)'s build, 253.2 to 259.2 &micro;s, 2.4% apart (this guide's arithmetic). The update is the dynamic TLAS's build in both forms, plus the refits in form (a); the bend pass, which both forms run, is outside it, at 21 to 27 &micro;s.</p>
+  </div>
+  <figure class="wide">
+    <div class="bars" role="img" aria-label="Update GPU medians: proxies 597 to 603 microseconds, under the 1.0 millisecond Budget; refit 1,368 to 1,383 microseconds, the refits 1,114 to 1,123 plus the build 253 to 259, over it. Update CPU medians: proxies 319 to 326 microseconds, refit 393 to 451, both under the 0.5 millisecond Budget.">
+      <div class="bars-title">Update, GPU, median of each round (&micro;s) against the 1.0 ms Budget</div>
+      <div class="bar-row"><span class="bar-label">Proxies</span><span class="bar-track"><span class="bar-fill warm" style="width: 39.8%"></span><span class="bar-spread warm" style="left: 39.8%; width: 0.4%"></span><span class="bar-budget" style="left: 66.7%"></span></span><span class="bar-value">597&ndash;603</span></div>
+      <div class="bar-row"><span class="bar-label">Refit</span><span class="bar-track"><span class="bar-fill accent" style="width: 74.3%"></span><span class="bar-fill warm" style="left: 74.3%; width: 16.9%"></span><span class="bar-spread warm" style="left: 91.2%; width: 1.0%"></span><span class="bar-budget" style="left: 66.7%"></span></span><span class="bar-value">1,368&ndash;1,383</span></div>
+      <div class="bars-scale"><span>0</span><span style="left: 66.7%">1.0 ms</span><span style="left: 100%">1.5 ms</span></div>
+      <div class="bars-title" style="margin-top: 22px">Update, CPU, median of each round (&micro;s) against the 0.5 ms Budget</div>
+      <div class="bar-row"><span class="bar-label">Proxies</span><span class="bar-track"><span class="bar-fill ink" style="width: 42.5%"></span><span class="bar-spread ink" style="left: 42.5%; width: 0.9%"></span><span class="bar-budget" style="left: 66.7%"></span></span><span class="bar-value">319&ndash;326</span></div>
+      <div class="bar-row"><span class="bar-label">Refit</span><span class="bar-track"><span class="bar-fill ink" style="width: 52.4%"></span><span class="bar-spread ink" style="left: 52.4%; width: 7.7%"></span><span class="bar-budget" style="left: 66.7%"></span></span><span class="bar-value">393&ndash;451</span></div>
+      <div class="bars-scale"><span>0</span><span style="left: 66.7%">0.5 ms</span><span style="left: 100%">0.75 ms</span></div>
+    </div>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--accent); border: 1.5px solid var(--accent)"></span>refits</span>
+      <span><span class="swatch" style="background: var(--warm); border: 1.5px solid var(--warm)"></span>dynamic TLAS build</span>
+      <span><span class="swatch" style="background: var(--ink-soft); border: 1.5px solid var(--ink-soft)"></span>CPU: recording and submits</span>
+      <span>pale tip: the spread of the four rounds' medians; red line: the Budget</span>
+    </div>
+    <figcaption><b>The update against its Budget</b>, from the four rounds of <code>docs/performance.md</code>, "The crowd's two forms (2026-10-26, #209)". Each bar is solid to the lowest round's median and pale to the highest; the refit's split uses round 1's refits, 1,114.4 &micro;s. The p95s are in the table below: the refit's CPU p95 passes 0.5 ms in every round.</figcaption>
+  </figure>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>Form, round</th><th class="n">Update CPU &micro;s, median (p95)</th><th class="n">Refit GPU &micro;s, median (p95)</th><th class="n">Build GPU &micro;s, median (p95)</th><th class="n">Update GPU &micro;s</th></tr></thead>
+      <tbody>
+        <tr><td>Proxies 1</td><td class="n">322.5 (466.1)</td><td class="n">&mdash;</td><td class="n">603.3 (670.5)</td><td class="n">603.3</td></tr>
+        <tr><td>Proxies 2</td><td class="n">318.6 (396.9)</td><td class="n">&mdash;</td><td class="n">597.5 (661.0)</td><td class="n">597.5</td></tr>
+        <tr><td>Proxies 3</td><td class="n">325.5 (452.5)</td><td class="n">&mdash;</td><td class="n">600.5 (667.8)</td><td class="n">600.5</td></tr>
+        <tr><td>Proxies 4</td><td class="n">325.0 (449.4)</td><td class="n">&mdash;</td><td class="n">596.8 (757.2)</td><td class="n">596.8</td></tr>
+        <tr class="focus"><td>Refit 1</td><td class="n">450.5 (628.2)</td><td class="n">1,114.4 (1,284.9)</td><td class="n">253.2 (314.0)</td><td class="n">1,367.6</td></tr>
+        <tr class="focus"><td>Refit 2</td><td class="n">394.2 (511.9)</td><td class="n">1,119.8 (1,267.5)</td><td class="n">257.3 (313.8)</td><td class="n">1,377.1</td></tr>
+        <tr class="focus"><td>Refit 3</td><td class="n">393.0 (503.8)</td><td class="n">1,123.3 (1,268.2)</td><td class="n">259.2 (314.9)</td><td class="n">1,382.5</td></tr>
+        <tr class="focus"><td>Refit 4</td><td class="n">418.2 (608.8)</td><td class="n">1,117.4 (1,302.9)</td><td class="n">256.9 (324.4)</td><td class="n">1,374.3</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <ul class="keypoints">
+      <li><b>Proxies: within both.</b> The build takes 597 to 603 &micro;s, 60% of the GPU Budget; the CPU 319 to 326 &micro;s at the median, its p95s 397 to 466.</li>
+      <li><b>Refit: over the GPU Budget.</b> The refits alone take 1,114 to 1,123 &micro;s for 100 BLASes of 5,120 triangles, 512,000 in all: "about 2.2 ns a triangle with some 15 to 25 &micro;s of fixed cost" (the three-times check gives 2.15 ns a triangle: 2,205 &micro;s more for 1,024,000 more triangles, this guide's arithmetic). The update takes 1.37 to 1.38 ms, over the Budget by 0.37 to 0.38 ms. The CPU is within it at the median, 393 to 451 &micro;s, and over it at p95, 504 to 628.</li>
+      <li><b>A smaller build.</b> Over 100 entries rather than 1,600 proxies, the build takes 253 to 259 &micro;s. Part of the gap is strict event sync's doing, below, so form (b)'s build figure is an upper bound.</li>
+    </ul>
+    <h3>Strict event sync, measured</h3>
+    <p>Chapter 5 quoted wgpu-hal's price for <span class="concept" data-term="Strict event sync" data-tip="A wgpu-hal mode of a Metal queue, on for its lifetime once enabled: every command buffer starts by waiting on an internal event that each submit signals after the waits staged for it.">strict event sync</span>: a wait per command buffer and a command buffer per submit. Part 2 forced it on in the proxies form, with a local patch, three rounds alternating. Every figure moved within noise or fell:</p>
+    <ul class="keypoints">
+      <li>The update's CPU: 297&ndash;315 &micro;s to 287&ndash;292.</li>
+      <li>The CPU frame: 727&ndash;756 &micro;s to 711&ndash;723.</li>
+      <li>The GPU frame: 3,301&ndash;3,308 &micro;s to 3,181&ndash;3,257.</li>
+      <li>The build: 593&ndash;610 &micro;s to 483&ndash;520, because "its first marker no longer starts while the frame before still runs".</li>
+    </ul>
+    <h3>Beyond the update</h3>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>Round 2, medians</th><th class="n">Proxies</th><th class="n">Refit</th></tr></thead>
+      <tbody>
+        <tr><td>CPU frame &micro;s</td><td class="n">756.6</td><td class="n">590.2</td></tr>
+        <tr><td>GPU frame &micro;s</td><td class="n">3,314.3</td><td class="n">4,121.2</td></tr>
+        <tr><td>Shadow mask pass &micro;s</td><td class="n">1,174.6</td><td class="n">1,224.4</td></tr>
+        <tr><td>Uploaded B per frame</td><td class="n">322,192</td><td class="n">22,192</td></tr>
+        <tr><td>Heap allocations</td><td class="n">2,078</td><td class="n">861</td></tr>
+        <tr><td>GPU memory B</td><td class="n">516,623,171</td><td class="n">564,006,507</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <ul class="keypoints">
+      <li><b>CPU frame.</b> Form (a) places no proxies, so its CPU frame is lower, by 90 to 200 &micro;s across the rounds.</li>
+      <li><b>Rays.</b> They traverse 100 BLASes of 5,120 triangles rather than 1,600 proxies: the shadow mask pass takes 50 &micro;s more.</li>
+      <li><b>Memory.</b> Form (a)'s GPU memory reads 47.4 MB more. Its 100 BLASes, which form (b) does not have, are uncompacted (chapter 1), and Praxis counts them at the 94 B a triangle measured on the M4 Pro: 48.1 MB (512,000 &times; 94 B). Form (b)'s per-frame staging, which grows with the 1,600 Instances it writes each frame against form (a)'s 100, holds 0.7 MB more (both this guide's arithmetic), and the refits' scratch is one 256-byte buffer (chapter 7). The index streams form (a) keeps add nothing to this figure, which counts each Arena's whole buffer in both forms.</li>
+      <li><b>Shapes.</b> At 1280&times;720 the two forms' images differ in 5,398 of 921,600 pixels, all along the shadows' outlines: the proxies' shadows are a little thinner.</li>
+      <li><b>The oracle.</b> The rebuild form's rebuild and build are not timed; in one run its GPU frame spanned 9,303 &micro;s, waits between submissions included, and its update's CPU took 709 &micro;s.</li>
+    </ul>
+    <h3>The decision</h3>
+    <p>PR #290 ended by asking the owner to pick M7's form, recommending the proxies. The owner picked them, as recorded on map #17:</p>
+  </div>
+  <blockquote class="callout prose"><p>"Decision (owner, 2026-10-26, in session): M7's crowd form is the per-bone proxies (form b). [...] ADR 0020 stays as is for skinned crowds; the refit form stays behind its Render switch as the shapes' reference."</p><p class="note"><a href="https://github.com/gariasf/praxis/issues/17#issuecomment-6410351140">Map #17, comment 6410351140</a></p></blockquote>
+  <div class="prose">
+    <p>Why, in the recommendation's terms:</p>
+    <ul class="keypoints">
+      <li><b>Proxies</b> fit both Budgets with 40% of the GPU's to spare, run on every backend and need no <code>unsafe</code>. Their costs: the thinner shadows, 16 of the dynamic TLAS's 10,000 entries per figure, and the heap allocations wgpu-core makes per entry.</li>
+      <li><b>Refit</b> is 0.37 ms over the GPU Budget, runs on Metal alone, and needs wgpu-hal plus strict event sync.</li>
+      <li><b>The refit stays.</b> Behind its Render switch it is the reference for the shapes. <code>tests/crowd.rs</code> keeps its <code>unsafe</code> path and its order tested on Metal, and <code>praxis bench &lt;dir&gt; --crowd-form refit</code> still times it, though no Baseline holds its figures: PR #290 dropped the one it recorded, since verify benches each Baseline's name as a scene.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Repo links are pinned to 66b5b57, the commit that merged PR #289, or to 0534eb6, PR #290's head when this guide was written, whose <code>src/</code> and <code>docs/</code> it merged unchanged; wgpu's to its v30.0.1 tag, the version the lockfile pins.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>This ticket</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/issues/209">Ticket #209</a> and <a href="https://github.com/gariasf/praxis/issues/209#issuecomment-6404677255">its split</a> <span>the ask, and what parts 1 and 2 each do</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/289">PR #289</a> <span>part 1: the switch, the invariants, the order, the test's evidence and the review</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/290">PR #290</a> <span>part 2: the markers, the three-times check, the metrics, the images and the decision it asked for</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/17#issuecomment-6410351140">The decision on map #17</a> <span>proxies for M7; the refit stays as the shapes' reference</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/209#issuecomment-6367540390">#244's heads-up on #209</a> <span>why Metal needs an order, and the two ways to give it</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/209#issuecomment-6372215071">#208's hand-off on #209</a> <span>what refit would have to change: order, flags, TLAS membership, the switch</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/66b5b57dd1f1e855455aec0d345b64aa4b620c0b/docs/adr/0007-wgpu-is-the-permanent-graphics-api.md">ADR 0007</a> <span>wgpu-hal, only for a subsystem past wgpu's safe API</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/66b5b57dd1f1e855455aec0d345b64aa4b620c0b/docs/adr/0016-the-main-thread-runs-the-frame.md">ADR 0016</a> <span>only the main thread submits: what makes a queue-wide staged event safe</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/66b5b57dd1f1e855455aec0d345b64aa4b620c0b/docs/adr/0020-ray-traced-probe-gi-and-hard-ray-traced-shadows.md">ADR 0020</a> <span>shadows by ray, the two TLAS, and the crowd's forms</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/66b5b57dd1f1e855455aec0d345b64aa4b620c0b/docs/performance.md"><code>docs/performance.md</code></a> <span>"The crowd's per-bone proxies": #208's figures for form (b)</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/0534eb6e3c0b1089a0b52e0c4597827a46728190/docs/performance.md"><code>docs/performance.md</code> at 0534eb6</a> <span>"The crowd's two forms": chapter 8's tables, and #204's "Bracketing on Metal"</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/66b5b57dd1f1e855455aec0d345b64aa4b620c0b/docs/research/world-design-pre-mortem.md">The world-design pre-mortem</a> <span>"Skinned characters in a crowd": the rebuild's price</span></li>
+      </ul>
+      <h4>The code</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/66b5b57dd1f1e855455aec0d345b64aa4b620c0b/src/render/blas_refit.rs"><code>src/render/blas_refit.rs</code></a> <span>the refit, its SAFETY invariants, its scratch and <code>metal::Order</code></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/66b5b57dd1f1e855455aec0d345b64aa4b620c0b/src/render/renderer.rs"><code>src/render/renderer.rs</code></a> <span><code>CrowdForm</code>, and the frame's cut after the bend pass</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/66b5b57dd1f1e855455aec0d345b64aa4b620c0b/src/assets/pools.rs"><code>src/assets/pools.rs</code></a> <span><code>MeshUse::Refitted</code>, <code>REFITTED_BLAS_FLAGS</code>, <code>MeshBlas</code> and the rebuild</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/66b5b57dd1f1e855455aec0d345b64aa4b620c0b/src/scenes/mod.rs"><code>src/scenes/mod.rs</code></a> and <a href="https://github.com/gariasf/praxis/blob/66b5b57dd1f1e855455aec0d345b64aa4b620c0b/src/state.rs"><code>src/state.rs</code></a> <span>the figures as Moving Instances, and the refusal off Metal</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/0534eb6e3c0b1089a0b52e0c4597827a46728190/src/render/readback.rs"><code>src/render/readback.rs</code></a> at 0534eb6 <span><code>frame_times</code>, <code>marker_after</code>, and the test with spread submissions</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/0534eb6e3c0b1089a0b52e0c4597827a46728190/src/render/shaders/blas_refit_marker.wgsl"><code>blas_refit_marker.wgsl</code></a> and <a href="https://github.com/gariasf/praxis/blob/0534eb6e3c0b1089a0b52e0c4597827a46728190/src/render/acceleration_structures.rs"><code>acceleration_structures.rs</code></a> at 0534eb6 <span>the refit's marker, and the dynamic TLAS's markers it follows</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/66b5b57dd1f1e855455aec0d345b64aa4b620c0b/tests/crowd.rs"><code>tests/crowd.rs</code></a> <span>refit against rebuild, from four devices at once</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>wgpu 30.0.1</h3>
+      <ul>
+        <li><a href="https://github.com/gfx-rs/wgpu/issues/9215">gfx-rs/wgpu#9215</a> <span>"Metal BLAS -&gt; TLAS builds need synchronisation", open</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs"><code>wgpu-core/src/command/ray_tracing.rs</code></a> <span>"only rebuild implemented", lines 1106-1108 and 337</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/snatch.rs"><code>wgpu-core/src/snatch.rs</code></a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/as_hal.rs"><code>as_hal.rs</code></a> <span>the snatch lock, its debug check, and the guards</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/mod.rs"><code>wgpu-hal/src/metal/mod.rs</code></a> <span>strict event sync, staged events and the submit that drains them, lines 497-600 and 680-800</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs"><code>wgpu-hal/src/metal/command.rs</code></a> <span>the refit call, lines 1864-1873, the empty barrier, 1877-1881, and a compute pass's timestamps as start- and end-of-encoder samples, 1700-1745</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/adapter.rs"><code>wgpu-hal/src/metal/adapter.rs</code></a> <span>timestamps only with stage-boundary counter sampling, lines 676-692</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/command_encoder.rs"><code>wgpu/src/api/command_encoder.rs</code></a> <span><code>as_hal_mut</code>'s safety terms</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Metal and Vulkan</h3>
+      <ul>
+        <li><a href="https://developer.apple.com/documentation/metal/mtlaccelerationstructurecommandencoder">Metal, <code>MTLAccelerationStructureCommandEncoder</code></a> <span>build, refit and compaction commands</span></li>
+        <li><a href="https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage">Metal, <code>MTLAccelerationStructureUsage</code></a> <span>the refit usage a structure must be built with</span></li>
+        <li><a href="https://developer.apple.com/documentation/metal/mtlsharedevent">Metal, <code>MTLSharedEvent</code></a> <span>the counter submission 1 signals and the build waits on</span></li>
+        <li><a href="https://developer.apple.com/documentation/metal/mtlcountersamplingpoint">Metal, <code>MTLCounterSamplingPoint</code></a> <span>where a device can sample its counters: stage, draw, dispatch or blit boundaries</span></li>
+        <li><a href="https://developer.apple.com/documentation/metal/mtlcomputepasssamplebufferattachmentdescriptor">Metal, <code>MTLComputePassSampleBufferAttachmentDescriptor</code></a> <span>the start- and end-of-encoder sample indices a compute pass's timestamps become</span></li>
+        <li><a href="https://docs.vulkan.org/refpages/latest/refpages/source/VkBuildAccelerationStructureModeKHR.html">Vulkan, <code>VkBuildAccelerationStructureModeKHR</code></a> <span>build or update; update is Vulkan's name for a refit</span></li>
+        <li><i>Real-Time Rendering</i>, 4th edition, chapter 26, <a href="https://www.realtimerendering.com/Real-Time_Rendering_4th-Real-Time_Ray_Tracing.pdf">free from realtimerendering.com</a> <span>&sect;26.3: rebuild against "a faster update of the data structure" when only vertex positions move</span></li>
+      </ul>
+      <h4>Earlier volumes</h4>
+      <ul>
+        <li><a href="gpu-ordering.html">GPU Ordering Explained</a> <span>#244: the Metal ordering gap this guide's chapter 5 closes for refits</span></li>
+        <li><a href="crowd-shadows.html">Crowd Shadows Explained</a> <span>#208: the bend pass, the crowd and form (b)</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+    <p>Where <code>CONTEXT.md</code> defines a term, the definition here and in the tooltips is its own at 66b5b57, word for word; PR #290 changes none of them.</p>
+  </div>
+  <dl class="glossary page">
+    <div><dt>BLAS</dt><dd>Bottom-level acceleration structure: the GPU&#x27;s search structure over one Mesh&#x27;s triangles, built when a Mesh that rays trace loads. Most are then compacted (#202); a refitted Mesh&#x27;s is built to allow updates and never compacted (#209).</dd></div>
+    <div><dt>TLAS</dt><dd>Top-level acceleration structure: the GPU&#x27;s search structure over Instances, each placing a BLAS with its transform. A ray walks it down to the triangles it meets.</dd></div>
+    <div><dt>Dynamic TLAS</dt><dd>The top-level acceleration structure over the Moving Instances, at most 10,000 of them, those in the lowest slots, each tagged with its slot. It is rebuilt every frame, in the static TLAS&#x27;s frame (#204).</dd></div>
+    <div><dt>Refit</dt><dd>Updating an acceleration structure in place after its triangles move: the tree keeps its shape and only its bounds are recomputed. The structure must be built to allow it, and its triangles keep their count and order. wgpu-core 30 does not implement it; Metal does, reached through wgpu-hal.</dd></div>
+    <div><dt>Rebuild</dt><dd>Building an acceleration structure again from scratch, from its current triangles. Through wgpu-core 30 it is the only way to update one.</dd></div>
+    <div><dt>Oracle</dt><dd>A slow, plainly correct computation that a test checks the fast one against. The refit&#x27;s is a full rebuild of the same BLASes.</dd></div>
+    <div><dt>MeshUse</dt><dd>What a Mesh is loaded for: drawn and traced, the default; drawn alone, a bent Mesh with no BLAS; traced alone, a shadow proxy; or refitted, a bent Mesh drawn and traced through a BLAS updated each frame (#208, #209).</dd></div>
+    <div><dt>Index stream</dt><dd>A Mesh&#x27;s cooked u32 indices in the index Arena. No pass draws from it; only a BLAS build reads it.</dd></div>
+    <div><dt>Bend</dt><dd>The GPU&#x27;s stand-in for skinning until M7: each frame a compute pass rewrites a Renderable&#x27;s own Mesh, the bent Mesh, from a rest Mesh of the same vertices, its middle curved into an arc by a curvature the fixed schedule sets each Tick.</dd></div>
+    <div><dt>Bend pass</dt><dd>The compute pass that rewrites each bent Mesh&#x27;s vertices from its rest Mesh&#x27;s every frame, a stand-in for skinning (#269).</dd></div>
+    <div><dt>Shadow proxy</dt><dd>A Mesh that rays trace and no pass draws, standing in for part of a Renderable whose own BLAS would not hold the shape it is drawn in, such as a bent figure&#x27;s bone.</dd></div>
+    <div><dt>Moving Instance</dt><dd>An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.</dd></div>
+    <div><dt>Render switches</dt><dd>The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel&#x27;s point lights, and the form the crowd scene&#x27;s deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.</dd></div>
+    <div><dt>wgpu-core</dt><dd>wgpu&#x27;s middle layer, beneath its safe API: it validates each call, tracks each resource&#x27;s state and lifetime, records the barriers between uses, and calls wgpu-hal.</dd></div>
+    <div><dt>wgpu-hal</dt><dd>wgpu&#x27;s lower layer, one unsafe implementation per backend, beneath the safe API. ADR 0007 permits it for a subsystem that exceeds wgpu&#x27;s safe API.</dd></div>
+    <div><dt>as_hal guard</dt><dd>What wgpu&#x27;s as_hal returns: a value that keeps the resource alive and reads as the wgpu-hal object while it lives. The guard of a buffer, texture, texture view or acceleration structure also holds the snatch lock.</dd></div>
+    <div><dt>Snatch lock</dt><dd>wgpu-core&#x27;s per-device lock over each resource&#x27;s raw object, which destroying the resource snatches away. The as_hal guard of a buffer, texture, texture view or acceleration structure holds it for reading, a device&#x27;s or queue&#x27;s does not, and in debug builds a thread that takes it twice panics.</dd></div>
+    <div><dt>Command buffer</dt><dd>A recorded list of GPU commands, which a submission hands to the GPU. On Metal, an MTLCommandBuffer.</dd></div>
+    <div><dt>Submission</dt><dd>One call to Queue::submit: the command buffers it hands the GPU, in order, and the index the CPU can wait on.</dd></div>
+    <div><dt>Hazard tracking</dt><dd>Metal&#x27;s automatic ordering of GPU work that writes and reads the same resource. It sees only the resources a command names; a TLAS names its BLASes by ID, so a TLAS build is not ordered after them (gfx-rs/wgpu#9215).</dd></div>
+    <div><dt>Marker</dt><dd>A compute pass of one invocation, recorded only to carry a timestamp. It reads or queries a resource the timed work writes, so Metal runs it in order with that work, before or after it as recorded, and the timestamp at its end or start brackets it (#204, #209).</dd></div>
+    <div><dt>Timestamp query</dt><dd>A GPU write of its clock into a slot of a query set; Praxis asks wgpu for one at the start or end of a pass. On Metal, wgpu-hal takes it as a counter sample at the boundary of the pass&#x27;s encoder.</dd></div>
+    <div><dt>Shared event</dt><dd>MTLSharedEvent: a Metal counter that one command buffer can signal to a value and another wait for, on the GPU, with no CPU wait between them. Unlike a plain MTLEvent, it also reaches the CPU and other devices.</dd></div>
+    <div><dt>Strict event sync</dt><dd>A wgpu-hal mode of a Metal queue, on for its lifetime once enabled: every command buffer starts by waiting on an internal event that each submit signals after the waits staged for it.</dd></div>
+    <div><dt>Main thread</dt><dd>Under ADR 0016, the thread that runs the frame: only it submits GPU work, presents or polls.</dd></div>
+    <div><dt>Budget</dt><dd>A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, which caps what that kind may hold (ADR 0017). Counters such as draw calls and bytes uploaded are held to their Baselines instead.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from ticket <a href="https://github.com/gariasf/praxis/issues/209">#209</a>, its split, #244's heads-up and #208's hand-off, PR <a href="https://github.com/gariasf/praxis/pull/289">#289</a>, merged on 2026-10-26 as 66b5b57, PR <a href="https://github.com/gariasf/praxis/pull/290">#290</a>, merged on 2026-10-26 as 71918ac and quoted at 0534eb6, and the owner's decision on map #17; with ADRs 0007, 0016 and 0020, the world-design pre-mortem, <code>docs/performance.md</code>, and the wgpu, wgpu-core and wgpu-hal 30.0.1 sources. Where the guide does its own arithmetic, it says so. The demos are this page's models and say where they simplify; only the marker demo uses Praxis measurements, the refit readings of the three-times check, and it says which.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="town.html">Previous: Town Explained</a><a href="index.html">All field guides</a></nav>
+</div>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const byId = (id) => document.getElementById(id);
+  const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+
+  /* Theme: every drawing reads the colour tokens when it draws, and redraws when the theme changes. */
+  const redrawers = [];
+  const redrawAll = () => {
+    for (const redraw of redrawers) redraw();
+  };
+  function readTokens() {
+    const style = getComputedStyle(document.documentElement);
+    const token = (tokenName) => style.getPropertyValue(tokenName).trim();
+    return {
+      panel: token("--panel"), ink: token("--ink"), inkSoft: token("--ink-soft"), rule: token("--rule"),
+      accent: token("--accent"), accentWash: token("--accent-wash"), warm: token("--warm"), warmWash: token("--warm-wash"),
+      bad: token("--bad"), badWash: token("--bad-wash"), good: token("--good"), figureBg: token("--figure-bg"), mono: token("--mono"),
+    };
+  }
+  if (window.matchMedia) {
+    const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    if (darkQuery.addEventListener) darkQuery.addEventListener("change", redrawAll);
+    else if (darkQuery.addListener) darkQuery.addListener(redrawAll);
+  }
+  if (window.MutationObserver) {
+    new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawAll);
+
+  /* Sizing: each drawing takes its container's width and redraws when that width changes. */
+  function watchWidth(container, render) {
+    redrawers.push(render);
+    if (window.ResizeObserver) {
+      let lastWidth = -1;
+      new ResizeObserver(() => {
+        const width = container.clientWidth;
+        if (width !== lastWidth) {
+          lastWidth = width;
+          render();
+        }
+      }).observe(container);
+    } else {
+      window.addEventListener("resize", render);
+    }
+    render();
+  }
+  // Sizes `canvas` to `width` by `height` CSS pixels at the device's pixel ratio, and returns its context.
+  function sizeCanvas(canvas, width, height) {
+    const ratio = window.devicePixelRatio || 1;
+    canvas.style.width = width + "px";
+    canvas.style.height = height + "px";
+    canvas.width = Math.max(1, Math.round(width * ratio));
+    canvas.height = Math.max(1, Math.round(height * ratio));
+    const context = canvas.getContext("2d");
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    return context;
+  }
+  function setPressed(buttons, isPressed) {
+    for (const button of buttons) button.setAttribute("aria-pressed", String(isPressed(button)));
+  }
+  // Presses the clicked one of `buttons` and calls `choose` with its `data-` value named `key`.
+  function segmented(buttons, key, choose) {
+    for (const button of buttons) {
+      button.addEventListener("click", () => {
+        setPressed(buttons, (other) => other === button);
+        choose(button.dataset[key]);
+      });
+    }
+  }
+  function line(context, fromX, fromY, toX, toY) {
+    context.beginPath();
+    context.moveTo(fromX, fromY);
+    context.lineTo(toX, toY);
+    context.stroke();
+  }
+  // Fits `view` (left, right, bottom, top, in metres, y up) into `width` by `height` CSS pixels, centred, one scale on both axes.
+  function fitView(width, height, view) {
+    const scale = Math.min(width / (view.right - view.left), height / (view.top - view.bottom));
+    const originX = (width - scale * (view.right - view.left)) / 2 - view.left * scale;
+    const originY = (height + scale * (view.top - view.bottom)) / 2 + view.bottom * scale;
+    return { scale: scale, toScreen: (u, y) => [originX + u * scale, originY - y * scale] };
+  }
+
+  /* Demo 1: a tree of boxes over one bent figure's outline, refitted or rebuilt. */
+  (function () {
+    const FIGURE_HEIGHT = 1.8;
+    const FIGURE_RADIUS = 0.25;
+    const EDGES_PER_SIDE = 24;
+    const EDGES_PER_LEAF = 2;
+    const SWAY_CURVATURE = 0.35;
+    const SWAY_PERIOD_SECONDS = 2.5;
+    const VIEW = { left: -1.7, right: 1.7, bottom: -0.12, top: 1.95 };
+
+    // sin(angle) / angle, by its Taylor series below 0.5 radians, as bend.wgsl computes it.
+    function sinc(angle) {
+      const squared = angle * angle;
+      const series = 1 - squared / 6 * (1 - squared / 20 * (1 - squared / 42));
+      return Math.abs(angle) < 0.5 ? series : Math.sin(angle) / angle;
+    }
+    // Where the bend takes a point `offset` metres from the middle at `height`, in the plane of the bend.
+    function bendPoint(offset, height, curvature) {
+      const halfAngle = 0.5 * curvature * height;
+      const chord = height * sinc(halfAngle);
+      const turn = 2 * halfAngle;
+      return {
+        u: chord * Math.sin(halfAngle) + offset * Math.cos(turn),
+        y: chord * Math.cos(halfAngle) - offset * Math.sin(turn),
+      };
+    }
+    // The outline at rest, up the right side and down the left: one point per edge start.
+    const restOutline = [];
+    for (let step = 0; step <= EDGES_PER_SIDE; step++) {
+      const polar = Math.PI * step / EDGES_PER_SIDE;
+      restOutline.push({ offset: FIGURE_RADIUS * Math.sin(polar), height: 0.5 * FIGURE_HEIGHT * (1 - Math.cos(polar)) });
+    }
+    for (let step = EDGES_PER_SIDE - 1; step >= 1; step--) {
+      const polar = Math.PI * step / EDGES_PER_SIDE;
+      restOutline.push({ offset: -FIGURE_RADIUS * Math.sin(polar), height: 0.5 * FIGURE_HEIGHT * (1 - Math.cos(polar)) });
+    }
+    const edgeCount = restOutline.length;
+    const allEdges = Array.from({ length: edgeCount }, (_, index) => index);
+    const bentOutline = (curvature) => restOutline.map((point) => bendPoint(point.offset, point.height, curvature));
+
+    function edgeBounds(edges, points) {
+      const box = { left: Infinity, right: -Infinity, bottom: Infinity, top: -Infinity };
+      for (const edge of edges) {
+        for (const point of [points[edge], points[(edge + 1) % edgeCount]]) {
+          box.left = Math.min(box.left, point.u);
+          box.right = Math.max(box.right, point.u);
+          box.bottom = Math.min(box.bottom, point.y);
+          box.top = Math.max(box.top, point.y);
+        }
+      }
+      return box;
+    }
+    // For random lines in a plane, the chance that one through a box also crosses a box inside it is the ratio of their perimeters: the surface area heuristic's measure there.
+    const perimeter = (box) => 2 * ((box.right - box.left) + (box.top - box.bottom));
+    // A tree over `edges` as they lie in `points`: each node split where the two halves' perimeters, each weighted by its edges, sum to the least, over the edges sorted by centre along either axis.
+    function buildTree(edges, points, depth) {
+      const node = { edges: edges, depth: depth, children: [] };
+      if (edges.length <= EDGES_PER_LEAF) return node;
+      const centre = (edge, axis) => 0.5 * (points[edge][axis] + points[(edge + 1) % edgeCount][axis]);
+      let best = null;
+      for (const axis of ["u", "y"]) {
+        const sorted = edges.slice().sort((first, second) => centre(first, axis) - centre(second, axis));
+        for (let split = 1; split < sorted.length; split++) {
+          const lower = sorted.slice(0, split);
+          const upper = sorted.slice(split);
+          const cost = perimeter(edgeBounds(lower, points)) * lower.length + perimeter(edgeBounds(upper, points)) * upper.length;
+          if (best === null || cost < best.cost) best = { cost: cost, lower: lower, upper: upper };
+        }
+      }
+      node.children = [buildTree(best.lower, points, depth + 1), buildTree(best.upper, points, depth + 1)];
+      return node;
+    }
+    // A refit's box for a node is the bounds of its edges where they lie now: the union of its leaves' boxes.
+    function nodesAt(node, depth, found) {
+      if (node.depth === depth || node.children.length === 0) found.push(node);
+      else for (const child of node.children) nodesAt(child, depth, found);
+      return found;
+    }
+    function allNodes(node, found) {
+      found.push(node);
+      for (const child of node.children) allNodes(child, found);
+      return found;
+    }
+    const summedPerimeter = (nodes, points) => nodes.reduce((sum, node) => sum + perimeter(edgeBounds(node.edges, points)), 0);
+    const uprightTree = buildTree(allEdges, bentOutline(0), 0);
+
+    const curvatureSlider = byId("r-curvature");
+    const levelSlider = byId("r-level");
+    const refitCanvas = byId("r-canvas-refit");
+    const rebuildCanvas = byId("r-canvas-rebuild");
+    const swayButton = byId("r-sway");
+    let builtUpright = true;
+
+    function drawTree(canvas, tree, points, level, colours) {
+      const width = Math.max(120, canvas.parentElement.clientWidth);
+      const height = Math.round(clamp(width * 0.95, 200, 380));
+      const context = sizeCanvas(canvas, width, height);
+      const view = fitView(width, height, VIEW);
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, width, height);
+      context.strokeStyle = colours.rule;
+      context.lineWidth = 1;
+      const [groundLeft, groundY] = view.toScreen(VIEW.left, 0);
+      const [groundRight] = view.toScreen(VIEW.right, 0);
+      line(context, groundLeft, groundY, groundRight, groundY);
+      context.beginPath();
+      points.forEach((point, index) => {
+        const [x, y] = view.toScreen(point.u, point.y);
+        if (index === 0) context.moveTo(x, y);
+        else context.lineTo(x, y);
+      });
+      context.closePath();
+      context.fillStyle = colours.accentWash;
+      context.fill();
+      context.strokeStyle = colours.accent;
+      context.lineWidth = 1.5;
+      context.stroke();
+      const strokeBox = (box) => {
+        const [left, top] = view.toScreen(box.left, box.top);
+        const [right, bottom] = view.toScreen(box.right, box.bottom);
+        context.strokeRect(left, top, Math.max(right - left, 0.5), Math.max(bottom - top, 0.5));
+      };
+      context.strokeStyle = colours.ink;
+      context.globalAlpha = 0.35;
+      context.lineWidth = 0.8;
+      for (const leaf of allNodes(tree, []).filter((node) => node.children.length === 0)) strokeBox(edgeBounds(leaf.edges, points));
+      context.globalAlpha = 1;
+      context.strokeStyle = colours.warm;
+      context.fillStyle = colours.warmWash;
+      context.lineWidth = 1.6;
+      context.setLineDash([5, 3]);
+      for (const node of nodesAt(tree, level, [])) {
+        const box = edgeBounds(node.edges, points);
+        const [left, top] = view.toScreen(box.left, box.top);
+        const [right, bottom] = view.toScreen(box.right, box.bottom);
+        context.fillRect(left, top, right - left, bottom - top);
+        strokeBox(box);
+      }
+      context.setLineDash([]);
+    }
+
+    function draw() {
+      const curvature = Number(curvatureSlider.value);
+      const level = Number(levelSlider.value);
+      byId("r-curvature-out").textContent = curvature.toFixed(2) + " rad/m";
+      byId("r-level-out").textContent = String(level);
+      const colours = readTokens();
+      const points = bentOutline(curvature);
+      const rebuilt = buildTree(allEdges, points, 0);
+      const refitted = builtUpright ? uprightTree : rebuilt;
+      drawTree(refitCanvas, refitted, points, level, colours);
+      drawTree(rebuildCanvas, rebuilt, points, level, colours);
+      byId("r-area-refit").textContent = summedPerimeter(nodesAt(refitted, level, []), points).toFixed(3) + " m";
+      byId("r-area-rebuild").textContent = summedPerimeter(nodesAt(rebuilt, level, []), points).toFixed(3) + " m";
+      const ratio = summedPerimeter(allNodes(refitted, []), points) / summedPerimeter(allNodes(rebuilt, []), points);
+      byId("r-ratio").textContent = "\u00d7" + ratio.toFixed(2);
+    }
+
+    let swayStart = null;
+    let swayFrame = 0;
+    function swayStep(now) {
+      if (swayStart === null) swayStart = now;
+      const seconds = (now - swayStart) / 1000;
+      curvatureSlider.value = (SWAY_CURVATURE * Math.sin(2 * Math.PI * seconds / SWAY_PERIOD_SECONDS)).toFixed(2);
+      draw();
+      swayFrame = requestAnimationFrame(swayStep);
+    }
+    function stopSway() {
+      cancelAnimationFrame(swayFrame);
+      swayStart = null;
+      swayButton.setAttribute("aria-pressed", "false");
+      swayButton.textContent = "Sway";
+    }
+    swayButton.addEventListener("click", () => {
+      if (swayButton.getAttribute("aria-pressed") === "true") {
+        stopSway();
+        return;
+      }
+      swayButton.setAttribute("aria-pressed", "true");
+      swayButton.textContent = "Stop";
+      swayFrame = requestAnimationFrame(swayStep);
+    });
+    curvatureSlider.addEventListener("input", () => {
+      stopSway();
+      draw();
+    });
+    levelSlider.addEventListener("input", draw);
+    segmented(Array.from(document.querySelectorAll("#r-built button")), "built", (value) => {
+      builtUpright = value === "upright";
+      draw();
+    });
+    watchWidth(byId("demo-refit"), draw);
+  })();
+
+  /* Demo 2: one frame's submissions, with and without the order between the refits and the dynamic TLAS's build. */
+  (function () {
+    const canvas = byId("o-canvas");
+    const note = byId("o-note");
+    const ROW_HEIGHT = 40;
+    const AXIS_HEIGHT = 22;
+    // The model's odds that, under other devices' load, Metal runs submission 2's internal wait ahead of the refits' end. Invented.
+    const LOADED_OVERTAKE_ODDS = 0.35;
+    let mode = "event";
+    let loaded = false;
+    let frame = null;
+
+    const between = (low, high) => low + Math.random() * (high - low);
+    // One frame's timings, in the model's unscaled units.
+    function simulate() {
+      const spread = loaded ? 1.8 : 1;
+      const cpu = [];
+      cpu.push({ label: "submit 1", start: 3, end: 5, kind: "step" });
+      const headStart = 5 + between(0, 2) * spread;
+      const headEnd = headStart + 9 + between(0, 3) * spread;
+      const refitEnd = headEnd + 14 + between(0, 8) * spread;
+      let time = 5;
+      if (mode === "cpu") {
+        cpu.push({ label: "poll: wait", start: time, end: refitEnd + 1, kind: "wait" });
+        time = refitEnd + 1;
+      }
+      const recordEnd = time + 8 + between(0, 14);
+      cpu.push({ label: "record build", start: time, end: recordEnd, kind: "step" });
+      const encodeEnd = recordEnd + 12 + between(0, 4);
+      cpu.push({ label: "encode frame", start: recordEnd, end: encodeEnd, kind: "step" });
+      const submitTwo = encodeEnd + 2;
+      cpu.push({ label: "submit 2", start: encodeEnd, end: submitTwo, kind: "step" });
+      const earliest = submitTwo + 1;
+      let buildStart = earliest + between(0, 4) * spread;
+      let internalWait = null;
+      if (mode === "event") {
+        internalWait = { start: earliest - 0.5, end: Math.max(earliest, refitEnd + 0.6) };
+        buildStart = Math.max(earliest, refitEnd + 0.8);
+      } else if (mode === "strict") {
+        const overtakes = loaded && Math.random() < LOADED_OVERTAKE_ODDS;
+        const release = overtakes ? earliest + between(0, 3) * spread : Math.max(earliest, refitEnd + 0.6);
+        internalWait = { start: earliest - 0.5, end: release };
+        buildStart = release + 0.2;
+      } else if (mode === "cpu") {
+        buildStart = earliest;
+      }
+      const buildEnd = buildStart + 10;
+      cpu.push({ label: "submit 3", start: submitTwo, end: submitTwo + 2, kind: "step" });
+      const frameStart = Math.max(submitTwo + 3, buildEnd);
+      return {
+        cpu: cpu,
+        head: { start: headStart, end: headEnd },
+        refits: { start: headEnd, end: refitEnd },
+        internalWait: internalWait,
+        build: { start: buildStart, end: buildEnd },
+        rest: { start: frameStart, end: frameStart + 30 },
+        raced: buildStart < refitEnd,
+      };
+    }
+
+    function describe(result) {
+      if (result.raced) return "This frame: the build started before the refits ended, so it read BLASes mid-refit. Its shadows can miss a figure.";
+      if (mode === "cpu") return "This frame: the build waited for the refits, and so did the main thread, which stopped until the GPU finished them.";
+      if (mode === "strict") return "This frame: the build happened to start after the refits ended. Nothing made it: strict sync without the event wait releases the build when its own submission's internal command buffer runs.";
+      if (mode === "event") return "This frame: the build waited on the GPU for the shared event, which only the refits' completion signals. The main thread never stopped.";
+      return "This frame: the build happened to start after the refits ended.";
+    }
+
+    function draw() {
+      if (!frame) frame = simulate();
+      const colours = readTokens();
+      const width = Math.max(260, canvas.parentElement.clientWidth);
+      const labelWidth = width < 520 ? 74 : 150;
+      const height = AXIS_HEIGHT + 4 * ROW_HEIGHT + 8;
+      const context = sizeCanvas(canvas, width, height);
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, width, height);
+      const end = Math.max(frame.rest.end, frame.cpu[frame.cpu.length - 1].end) + 2;
+      const toX = (time) => labelWidth + (time / end) * (width - labelWidth - 10);
+      const rowTop = (row) => AXIS_HEIGHT + row * ROW_HEIGHT;
+      const small = width < 520;
+      context.font = (small ? "11px " : "12px ") + colours.mono;
+      context.textBaseline = "middle";
+      const labels = small ? ["CPU", "Sub. 1", "Sub. 2", "Sub. 3"] : ["CPU, main thread", "GPU, submission 1", "GPU, submission 2", "GPU, submission 3"];
+      labels.forEach((label, row) => {
+        context.fillStyle = colours.inkSoft;
+        context.fillText(label, 6, rowTop(row) + ROW_HEIGHT / 2);
+        context.strokeStyle = colours.rule;
+        context.lineWidth = 1;
+        line(context, labelWidth, rowTop(row) + ROW_HEIGHT, width - 6, rowTop(row) + ROW_HEIGHT);
+      });
+      context.fillStyle = colours.inkSoft;
+      context.fillText(small ? "time \u2192" : "time, unscaled \u2192", labelWidth, AXIS_HEIGHT / 2);
+      const bar = (row, span, fill, stroke, label, dashed) => {
+        const left = toX(span.start);
+        const right = toX(span.end);
+        const top = rowTop(row) + 7;
+        const barHeight = ROW_HEIGHT - 14;
+        context.fillStyle = fill;
+        context.fillRect(left, top, right - left, barHeight);
+        context.strokeStyle = stroke;
+        context.lineWidth = 1.4;
+        context.setLineDash(dashed ? [4, 3] : []);
+        context.strokeRect(left, top, right - left, barHeight);
+        context.setLineDash([]);
+        if (label && context.measureText(label).width + 8 < right - left) {
+          context.fillStyle = colours.ink;
+          context.fillText(label, left + 4, top + barHeight / 2);
+        }
+      };
+      for (const step of frame.cpu) {
+        if (step.kind === "wait") bar(0, step, colours.badWash, colours.bad, "waiting", true);
+        else bar(0, step, colours.figureBg, colours.inkSoft, step.label, false);
+      }
+      bar(1, frame.head, colours.figureBg, colours.inkSoft, "head", false);
+      bar(1, frame.refits, colours.accentWash, colours.accent, "refits", false);
+      if (frame.internalWait) bar(2, frame.internalWait, colours.panel, colours.inkSoft, "", true);
+      bar(2, frame.build, colours.warmWash, colours.warm, "build", false);
+      if (frame.raced) {
+        const overlap = { start: frame.build.start, end: Math.min(frame.refits.end, frame.build.end) };
+        bar(2, overlap, colours.badWash, colours.bad, "", false);
+      }
+      bar(3, frame.rest, colours.figureBg, colours.inkSoft, "rest of the frame", false);
+      // The refits' end, through every GPU row.
+      context.strokeStyle = colours.accent;
+      context.lineWidth = 1;
+      context.setLineDash([2, 3]);
+      line(context, toX(frame.refits.end), rowTop(1), toX(frame.refits.end), rowTop(4));
+      context.setLineDash([]);
+      if (mode === "event") {
+        context.fillStyle = colours.warm;
+        context.beginPath();
+        context.arc(toX(frame.refits.end), rowTop(1) + ROW_HEIGHT / 2, 4.5, 0, 2 * Math.PI);
+        context.fill();
+      }
+    }
+
+    function another() {
+      frame = simulate();
+      note.textContent = describe(frame);
+      draw();
+    }
+    segmented(Array.from(document.querySelectorAll("#o-mode button")), "mode", (value) => {
+      mode = value;
+      another();
+    });
+    segmented(Array.from(document.querySelectorAll("#o-load button")), "load", (value) => {
+      loaded = value === "loaded";
+      another();
+    });
+    byId("o-again").addEventListener("click", another);
+    byId("o-twenty").addEventListener("click", () => {
+      let raced = 0;
+      let lastFrame = null;
+      for (let run = 0; run < 20; run++) {
+        lastFrame = simulate();
+        if (lastFrame.raced) raced++;
+      }
+      frame = lastFrame;
+      draw();
+      note.textContent = "In this model, " + raced + " of 20 frames built the TLAS from BLASes mid-refit; the last is drawn. The odds are the model's, not a measurement.";
+    });
+    frame = simulate();
+    note.textContent = describe(frame);
+    watchWidth(byId("demo-order"), draw);
+  })();
+
+  /* Demo 3: one refit frame's three submissions, the timestamps its markers write, and the spans the GPU frame sums. */
+  (function () {
+    const canvas = byId("m-canvas");
+    const note = byId("m-note");
+    const ROW_HEIGHT = 44;
+    const AXIS_HEIGHT = 22;
+    // Microseconds. The refit readings are the three-times check's (docs/performance.md); the build sits inside form (a)'s 253 to 259.
+    const REFIT_READING = { 1: 1127, 3: 3332 };
+    const BUILD = 256;
+    // Invented: the head before and including the bend pass, the gaps, the marker, and the rest of the frame.
+    const HEAD_BEFORE_BEND = 16;
+    const BEND = 24;
+    const MARKER = 3;
+    const GAP_BEFORE_BUILD = 30;
+    const GAP_BEFORE_REST = 40;
+    const REST = 2720;
+    const UNRELATED_MARKER_START = 5;
+    let kind = "scratch";
+    let repeat = 1;
+
+    function model() {
+      const bendStart = HEAD_BEFORE_BEND;
+      const bendEnd = bendStart + BEND;
+      const refitEnd = bendEnd + REFIT_READING[repeat];
+      let marker = null;
+      if (kind === "scratch") marker = { start: refitEnd, end: refitEnd + MARKER };
+      else if (kind === "unrelated") marker = { start: bendEnd + UNRELATED_MARKER_START, end: bendEnd + UNRELATED_MARKER_START + MARKER };
+      else marker = { start: refitEnd, end: refitEnd + MARKER };
+      const submissionOneEnd = Math.max(refitEnd, marker.end);
+      const buildStart = submissionOneEnd + GAP_BEFORE_BUILD;
+      const buildEnd = buildStart + BUILD;
+      const restStart = buildEnd + GAP_BEFORE_REST;
+      const restEnd = restStart + REST;
+      const markerTick = kind === "empty" ? null : marker.start;
+      const refitTime = markerTick === null ? null : markerTick - bendEnd;
+      const frameTime = markerTick === null ? null : BUILD + (markerTick - bendStart) + (restEnd - restStart);
+      return {
+        head: { start: 0, end: bendEnd },
+        bend: { start: bendStart, end: bendEnd },
+        refits: { start: bendEnd, end: refitEnd },
+        marker: marker,
+        markerTick: markerTick,
+        build: { start: buildStart, end: buildEnd },
+        rest: { start: restStart, end: restEnd },
+        refitTime: refitTime,
+        frameTime: frameTime,
+        wall: restEnd - bendStart,
+      };
+    }
+
+    const format = (microseconds) => Math.round(microseconds).toLocaleString("en-US");
+
+    function describe(frame) {
+      const wall = "From the bend pass to the frame's end the GPU took " + format(frame.wall) + " \u00b5s, gaps included.";
+      if (frame.refitTime === null) {
+        return "blas_refit: no timestamp. The empty marker dispatches nothing, so Metal samples no counter, and the refit's slot holds nothing from this frame. " + wall;
+      }
+      const sums = "GPU frame = build " + format(BUILD) + " + bend to marker " + format(frame.markerTick - frame.bend.start) + " + rest " + format(REST) + " = " + format(frame.frameTime) + " \u00b5s. " + wall;
+      if (kind === "unrelated") {
+        return "blas_refit reads " + format(frame.refitTime) + " \u00b5s: wrong. The marker shares no resource with the refits, so it started beside them, and the frame's sum leaves the refits out. " + sums;
+      }
+      return "blas_refit reads " + format(frame.refitTime) + " \u00b5s" + (repeat === 3 ? ", about three times the single reading: the marker waited for all the refits. " : ": the marker waited for the refits' scratch. ") + sums;
+    }
+
+    function draw() {
+      const frame = model();
+      const colours = readTokens();
+      const width = Math.max(260, canvas.parentElement.clientWidth);
+      const small = width < 520;
+      const labelWidth = small ? 54 : 132;
+      const height = AXIS_HEIGHT + 3 * ROW_HEIGHT + 28;
+      const context = sizeCanvas(canvas, width, height);
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, width, height);
+      // A fixed axis, wide enough for three times the refits, so the two settings compare at a glance.
+      const end = HEAD_BEFORE_BEND + BEND + REFIT_READING[3] + MARKER + GAP_BEFORE_BUILD + BUILD + GAP_BEFORE_REST + REST + 40;
+      const toX = (time) => labelWidth + (time / end) * (width - labelWidth - 10);
+      const rowTop = (row) => AXIS_HEIGHT + row * ROW_HEIGHT;
+      context.font = (small ? "11px " : "12px ") + colours.mono;
+      context.textBaseline = "middle";
+      const labels = small ? ["Sub. 1", "Sub. 2", "Sub. 3"] : ["head, refits", "build", "rest of frame"];
+      labels.forEach((label, row) => {
+        context.fillStyle = colours.inkSoft;
+        context.fillText(label, 6, rowTop(row) + ROW_HEIGHT / 2);
+        context.strokeStyle = colours.rule;
+        context.lineWidth = 1;
+        line(context, labelWidth, rowTop(row) + ROW_HEIGHT, width - 6, rowTop(row) + ROW_HEIGHT);
+      });
+      context.fillStyle = colours.inkSoft;
+      context.fillText("time, \u00b5s \u2192 (" + format(end) + " across)", labelWidth, AXIS_HEIGHT / 2);
+      const bar = (row, span, fill, stroke, label, inset) => {
+        const left = toX(span.start);
+        const right = Math.max(left + 2, toX(span.end));
+        const top = rowTop(row) + 9 + (inset || 0);
+        const barHeight = ROW_HEIGHT - 18 - 2 * (inset || 0);
+        context.fillStyle = fill;
+        context.fillRect(left, top, right - left, barHeight);
+        context.strokeStyle = stroke;
+        context.lineWidth = 1.4;
+        context.strokeRect(left, top, right - left, barHeight);
+        if (label && context.measureText(label).width + 8 < right - left) {
+          context.fillStyle = colours.ink;
+          context.fillText(label, left + 4, top + barHeight / 2);
+        }
+      };
+      const tick = (row, time, colour) => {
+        const x = toX(time);
+        const top = rowTop(row) + 3;
+        context.fillStyle = colour;
+        context.beginPath();
+        context.moveTo(x - 4.5, top);
+        context.lineTo(x + 4.5, top);
+        context.lineTo(x, top + 7);
+        context.closePath();
+        context.fill();
+      };
+      bar(0, frame.head, colours.figureBg, colours.inkSoft, "", 0);
+      bar(0, frame.bend, colours.figureBg, colours.ink, "", 3);
+      bar(0, frame.refits, colours.accentWash, colours.accent, repeat === 3 ? "refits, three times" : "refits", 0);
+      // The marker: drawn on a lane of its own under the refits when it runs beside them.
+      if (kind === "unrelated") bar(0, frame.marker, colours.badWash, colours.bad, "", 6);
+      else bar(0, frame.marker, kind === "empty" ? colours.panel : colours.warmWash, kind === "empty" ? colours.inkSoft : colours.warm, "", 3);
+      bar(1, frame.build, colours.warmWash, colours.warm, "build", 0);
+      bar(2, frame.rest, colours.figureBg, colours.inkSoft, "rest of the frame", 0);
+      // Timestamps: the bend pass's two, the refit marker's start, the build's markers, the rest's first and last.
+      tick(0, frame.bend.start, colours.ink);
+      tick(0, frame.bend.end, colours.ink);
+      if (frame.markerTick !== null) tick(0, frame.markerTick, kind === "unrelated" ? colours.bad : colours.accent);
+      tick(1, frame.build.start, colours.ink);
+      tick(1, frame.build.end, colours.ink);
+      tick(2, frame.rest.start, colours.ink);
+      tick(2, frame.rest.end, colours.ink);
+      // The spans the GPU frame sums, under the rows; the gaps between them are left out.
+      const spanY = rowTop(3) + 12;
+      context.strokeStyle = colours.good;
+      context.lineWidth = 4;
+      if (frame.markerTick !== null) line(context, toX(frame.bend.start), spanY, toX(frame.markerTick), spanY);
+      line(context, toX(frame.build.start), spanY, toX(frame.build.end), spanY);
+      line(context, toX(frame.rest.start), spanY, toX(frame.rest.end), spanY);
+      context.fillStyle = colours.inkSoft;
+      if (!small) context.fillText("summed", 6, spanY);
+    }
+
+    function update() {
+      note.textContent = describe(model());
+      draw();
+    }
+    segmented(Array.from(document.querySelectorAll("#m-kind button")), "kind", (value) => {
+      kind = value;
+      update();
+    });
+    segmented(Array.from(document.querySelectorAll("#m-repeat button")), "repeat", (value) => {
+      repeat = Number(value);
+      update();
+    });
+    note.textContent = describe(model());
+    watchWidth(byId("demo-marker"), draw);
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>

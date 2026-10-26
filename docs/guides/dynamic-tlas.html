@@ -1,0 +1,1829 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Dynamic TLAS Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume twelve of the series. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --bad: #c43a31;
+  --bad-wash: rgba(196, 58, 49, 0.14);
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+    --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+  --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+}
+.sheet {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.keypoints li { min-width: 0; }
+.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .s-ink { stroke: var(--ink); } svg .s-soft { stroke: var(--ink-soft); } svg .s-accent { stroke: var(--accent); } svg .s-warm { stroke: var(--warm); }
+svg .f-ink { fill: var(--ink); } svg .f-soft { fill: var(--ink-soft); } svg .f-accent { fill: var(--accent); } svg .f-warm { fill: var(--warm); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+output { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
+.canvas-frame canvas { border-radius: 0; }
+canvas.demo { touch-action: none; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
+.legend i.dashed { border-top: 2.5px dashed var(--warm); }
+.legend i.thin { border-top: 1.5px solid var(--ink); }
+.legend i.dotted { border-top: 2.5px dotted var(--ink-soft); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.demo-grid > div { min-width: 0; }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 14px 0 0; font-family: var(--mono); font-size: 14px; }
+.figures div { min-width: 0; }
+.figures dt { color: var(--ink-soft); font-size: 12px; }
+.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .formula { font-size: 13px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+
+/* This volume's own parts: the plain opening of each chapter, the rebuild meter, the slot grid and the ECS World's order, the ray demo's marks, the Golden's overlay and the probe's timelines. */
+p.plain { font-size: 19px; line-height: 1.55; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 20px; }
+.strip-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+table.facts.wrap-heads th.n { white-space: normal; }
+.bad-text { color: var(--bad); }
+.legend svg { width: 16px; height: 16px; vertical-align: -3px; margin-right: 6px; overflow: visible; }
+.legend .swatch { display: inline-block; width: 16px; height: 12px; border: 1px solid var(--rule); border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+.legend .swatch.kept { background: var(--accent-wash); border: 1.5px solid var(--accent); }
+.legend .swatch.left-out { border: 1.5px dashed var(--bad); }
+.legend .swatch.free { border: 1.5px dotted var(--ink-soft); }
+.legend i.query-static { border-top: 6px solid var(--ink-soft); opacity: 0.4; }
+svg .t-bad { font: 600 12px var(--mono); fill: var(--bad); }
+svg .f-panel { fill: var(--panel); } svg .f-accent-wash { fill: var(--accent-wash); } svg .f-shadow { fill: var(--ink-soft); fill-opacity: 0.3; }
+.mk-lit { fill: var(--warm); } .mk-static { fill: var(--ink-soft); } .mk-moving { fill: var(--accent); }
+.mk-cross { fill: none; stroke: var(--bad); stroke-width: 2; }
+
+.meter { display: grid; gap: 14px; }
+.meter-row { display: grid; gap: 5px; min-width: 0; }
+.meter-label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-family: var(--mono); font-size: 13.5px; color: var(--ink-soft); }
+.meter-label b { color: var(--ink); font-weight: 600; }
+.meter-track { position: relative; height: 20px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.meter-fill, .meter-range, .meter-budget { position: absolute; top: 0; bottom: 0; }
+.meter-fill { left: 0; background: var(--accent); }
+.meter-range { background: var(--accent-wash); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.meter-fill.over { background: var(--bad); }
+.meter-range.over { background: var(--bad-wash); box-shadow: inset 0 0 0 1.5px var(--bad); }
+.meter-budget { width: 0; border-left: 2px dashed var(--warm); }
+.meter-axis { position: relative; height: 36px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.meter-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.meter-axis span.first { transform: none; }
+.meter-axis span.last { transform: translateX(-100%); }
+.meter-axis span.budget { top: 17px; color: var(--warm); font-weight: 600; }
+
+.slot-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; margin: 0 0 16px; }
+@media (max-width: 640px) { .slot-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.slot { font-family: var(--mono); text-align: left; background: var(--panel); color: var(--ink); border: 1.5px solid var(--rule); border-radius: 5px; padding: 5px 7px; cursor: pointer; display: grid; gap: 1px; min-width: 0; }
+.slot span { overflow-wrap: anywhere; }
+.slot .slot-number { color: var(--ink-soft); font-size: 11px; }
+.slot .slot-entity { font-weight: 600; font-size: 15px; line-height: 1.25; }
+.slot .slot-state { font-size: 11px; line-height: 1.3; color: var(--ink-soft); }
+.slot.kept { background: var(--accent-wash); border-color: var(--accent); }
+.slot.left-out { border-style: dashed; border-color: var(--bad); }
+.slot.left-out .slot-state { color: var(--bad); }
+.slot.free, .slot.fresh { border-style: dotted; cursor: default; }
+.slot.free .slot-entity, .slot.fresh .slot-entity { color: var(--ink-soft); font-weight: 400; }
+.slot.fresh { opacity: 0.55; }
+.slot[aria-pressed="true"] { outline: 2px solid var(--warm); outline-offset: 2px; }
+.slot:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.world-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 6px; font-family: var(--mono); font-size: 13px; }
+.world-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 9px; background: var(--panel); }
+.world-order li.kept { border-color: var(--accent); background: var(--accent-wash); }
+.world-order li.left-out { border-style: dashed; border-color: var(--bad); }
+.world-order li.cut { border: 0; background: none; padding: 2px 2px; color: var(--bad); font-weight: 600; }
+
+canvas.demo.pan-y { touch-action: pan-y; }
+.golden-frame { position: relative; }
+.golden-frame img { display: block; width: 100%; height: auto; }
+.golden-frame canvas { position: absolute; left: 0; top: 0; pointer-events: none; }
+
+/* In brief: the guide's conclusion first, for the reader who stops here. */
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis field guides</a></div>
+  <div class="eyebrow">Praxis &middot; M3 &middot; ticket #204 &middot; PRs #264 and #266</div>
+  <h1>How Moving Instances cast shadows</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>Shadow rays search acceleration structures that wgpu-core 30 can only rebuild from scratch, at a cost that grows with their size, so Praxis cannot rebuild its large static TLAS every frame. Ticket #204 puts the Instances that move into a dynamic TLAS: at most 10,000, those in the lowest slots, rebuilt every frame in the static TLAS's coordinate frame, and queried only where the static TLAS lets a ray through. The idea to keep: split the scene by how often it changes, so what is rebuilt every frame stays small.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>Why rebuild-only updates split shadow geometry into a static and a dynamic TLAS</li>
+      <li>How Praxis finds the Instances that move and keeps the 10,000 in the lowest slots</li>
+      <li>How the dynamic TLAS is rebuilt each frame in the static TLAS's frame</li>
+      <li>How two TLAS-reading markers bracket a build on Metal's GPU timeline</li>
+      <li>What the build and the second query cost on the M4 Pro</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="instance-buffer.html">Instance Buffer Explained</a>, <a href="acceleration-structures.html">Acceleration Structures Explained</a>, <a href="shadow-rays.html">Shadow Rays Explained</a></p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at 79cdabb (PR #264) and 80227bc (PR #266), both merged on 2026-10-23, re-checked against main at 69e02dc (PR #275, 2026-10-24). <b>Since then:</b> PRs #289 and #290 added the crowd's BLAS refit behind a Render switch and re-recorded the town scene's Baseline, in which the dynamic TLAS's recording plus submit reads 1.14 ms of CPU and its build 4.20 ms of GPU, both medians (<a href="blas-refit.html">BLAS Refit Explained</a>). PR #291 makes the GPU frame total span each submission's passes from their earliest start to their latest end, and PR #299, open on 2026-10-26, counts the build from the end of the previous frame's last pass, as the owner decided. PR #303 picks the memory estimate's figures by adapter, NVIDIA's own on NVIDIA GPUs, keeping the M4 Pro's and lavapipe's quoted here.</p>
+  </aside>
+  <p class="lede">Until #204, only static Instances cast shadows. The orrery's planets move in every frame, so they were in no <span class="concept" data-term="TLAS" data-tip="Top-level acceleration structure: the GPU's search structure over Instances, each placing a BLAS with its transform. A ray walks it down to the triangles it meets.">TLAS</span>, and the shadow rays passed through them. Ticket #204 gives the <span class="concept" data-term="Moving Instance" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.">Moving Instances</span> an acceleration structure of their own, the <span class="concept" data-term="Dynamic TLAS" data-tip="The top-level acceleration structure over the Moving Instances, at most 10,000 of them, those in the lowest slots, each tagged with its slot. It is rebuilt every frame, in the static TLAS's frame (#204).">dynamic TLAS</span>, which the Renderer rebuilds from scratch in every frame from at most 10,000 of them. Each shadow ray is traced against it wherever the <span class="concept" data-term="Static TLAS" data-tip="The top-level acceleration structure over every static Instance, each placing its Mesh's BLAS and tagged with its slot, in a frame anchored where the scene loads (#202).">static TLAS</span> lets the ray through. This guide explains why there are two structures rather than one, which 10,000 Instances the dynamic one keeps when more move, how each frame builds it, and how part 2 times that build. Two live demos show the cap and the two queries.</p>
+  <p class="status"><b>Provenance.</b> #204 landed in two parts. Part 1, PR #264, merged as 79cdabb, builds the dynamic TLAS and traces shadow rays against it, in four commits: 258001a; 11e9388, with the review's fixes and the skip of an empty dynamic TLAS; a11bbd3, the M4 Pro Baselines; and 786f195, software Vulkan's Golden and Baselines. Part 2, PR #266, merged as 80227bc, times the build on the CPU and the GPU (chapter 7). The figures quoted from the work were verified during the work on #204, on 2026-10-23. The code is quoted as #264 merged it unless a caption names a later commit, and where later merges moved it, the text says so (re-checked against main 69e02dc on 2026-10-24). Chapter 8 gives part 1's measured cost.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#why">1 &middot; Why two TLAS</a>
+    <a href="#moving">2 &middot; Moving Instances</a>
+    <a href="#cap">3 &middot; The cap</a>
+    <a href="#build">4 &middot; The build</a>
+    <a href="#query">5 &middot; Two queries</a>
+    <a href="#orrery">6 &middot; The orrery</a>
+    <a href="#timing">7 &middot; Timing the build</a>
+    <a href="#cost">8 &middot; What it costs</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="why">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1 &middot; ADR 0020</div>
+    <h2>Why two TLAS</h2>
+    <p class="plain">A TLAS is the GPU's search structure over Instances: each entry places one Mesh's <span class="concept" data-term="BLAS" data-tip="Bottom-level acceleration structure: the GPU's search structure over one Mesh's triangles. Each Mesh gets one when it loads, then compacted (#202). Since #208 a Mesh no ray traces gets none, and since #209 a refitted Mesh's is built to allow updates and never compacted.">BLAS</span> with a transform, and a ray walks the tree down to the triangles it meets. When an Instance moves, its entry changes and the tree has to follow. Through wgpu-core 30, the only way to make it follow is to build the tree again from scratch, and the time that takes grows with the Instances it holds. So Praxis keeps two trees: a large one that rarely changes, and a small one that is rebuilt every frame.</p>
+    <p>An acceleration structure can be brought up to date in two ways. A <span class="concept" data-term="Rebuild" data-tip="Building an acceleration structure again from scratch, from its current contents. Through wgpu-core 30 it is the only way to update one.">rebuild</span> makes a new tree from the current contents. A <span class="concept" data-term="Refit" data-tip="Updating an acceleration structure in place after its contents move: the tree keeps its shape and only its bounds are recomputed. Cheaper than a rebuild, and the tree traces more slowly the further things have moved. wgpu-core 30 does not implement it.">refit</span> keeps the tree's shape and recomputes its bounds: it is cheaper, and the tree traces more slowly the further things have moved since it was built. wgpu-core 30 implements only the rebuild. Asking for an update with the update mode <code>PreferUpdate</code> still builds from scratch: wgpu-core passes <code>Build</code> to the backend and, for a TLAS, logs a warning that "only rebuild is implemented". The flag <code>ALLOW_UPDATE</code> only allows later updates, and wgpu-core never records one (wgpu-core 30.0.1, <code>command/ray_tracing.rs</code>; the GI survey, <code>docs/research/global-illumination-and-lighting.md</code>, links the lines from its row "BLAS and TLAS updates").</p>
+    <p>The survey also timed a TLAS rebuild on the <span class="concept" data-term="M4 Pro" data-tip="The Apple M4 Pro on which the project's Budgets are judged and its Baselines recorded; wgpu runs on Metal there.">M4 Pro</span>, with a scratch program on Metal and wgpu 30.0.1:</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>One rebuild</th><th class="n">100,064 Instances</th><th class="n">10,064 Instances</th></tr></thead>
+        <tbody>
+          <tr><td>CPU, recording the build and finishing the encoder</td><td class="n">4.8 to 6.4 ms</td><td class="n">0.5 to 0.75 ms</td></tr>
+          <tr><td>CPU, in <code>submit</code></td><td class="n">1.1 to 1.4 ms</td><td class="n">0.14 to 0.17 ms</td></tr>
+          <tr class="focus"><td>CPU in all</td><td class="n">5.9 to 7.8 ms</td><td class="n">0.64 to 0.92 ms</td></tr>
+          <tr><td>GPU</td><td class="n">3.7 to 4.8 ms</td><td class="n">0.8 to 1.1 ms</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>One TLAS rebuild on the M4 Pro</b>, the GI survey's "TLAS rebuild" figures. The CPU records the build and finishes the encoder, then submits it; the GPU builds. The CPU totals are this guide's sums of the two rows above them. ADR 0020 quotes the smaller, 0.64 to 0.92 ms, as the dynamic TLAS's cost.</figcaption>
+  </figure>
+  <figure class="wide" id="rebuild-meter">
+    <div class="meter" role="img" aria-label="A rebuild's CPU time against the 6 ms CPU Budget: 100,064 Instances take 5.9 to 7.8 ms, 10,064 Instances take 0.64 to 0.92 ms.">
+      <div class="meter-row">
+        <div class="meter-label"><b>100,064 Instances</b><span>5.9 to 7.8 ms</span></div>
+        <div class="meter-track" title="100,064 Instances: 5.9 to 7.8 ms of CPU per rebuild"><span class="meter-fill over" style="width: 73.75%"></span><span class="meter-range over" style="left: 73.75%; width: 23.75%"></span><span class="meter-budget" style="left: 75%"></span></div>
+      </div>
+      <div class="meter-row">
+        <div class="meter-label"><b>10,064 Instances</b><span>0.64 to 0.92 ms</span></div>
+        <div class="meter-track" title="10,064 Instances: 0.64 to 0.92 ms of CPU per rebuild"><span class="meter-fill" style="width: 8%"></span><span class="meter-range" style="left: 8%; width: 3.5%"></span><span class="meter-budget" style="left: 75%"></span></div>
+      </div>
+      <div class="meter-axis" aria-hidden="true"><span class="first" style="left: 0">0</span><span style="left: 25%">2</span><span style="left: 50%">4</span><span style="left: 75%">6</span><span class="last" style="left: 100%">8 ms</span><span class="budget" style="left: 75%">CPU Budget, 6 ms</span></div>
+    </div>
+    <figcaption><b>A rebuild's CPU time against a frame's.</b> Each bar is solid to the low end of its range and outlined to the high end; the dashed line is ADR 0013's CPU Budget of 6 ms. Drawn to scale, 0 to 8 ms.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>ADR 0013's <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, which caps what that kind may hold (ADR 0017). Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budget</span> for a frame's CPU time is 6 ms. Rebuilding 100,064 Instances in every frame would spend about all of it, and more at the high end, before the game had simulated or prepared anything. Rebuilding 10,064 takes 0.64 to 0.92 ms of it.</p>
+    <h3>Static and moving</h3>
+    <p>Most of what an open world holds stands still, such as terrain, buildings and rocks, and in any one frame only a small share of it moves. ADR 0020 splits the TLAS along that line. The static TLAS holds every static Instance and is rebuilt only in a frame that changes one, as when a static <span class="concept" data-term="Renderable" data-tip="An entity that has a Transform and a Mesh Handle, and optionally a Material Handle that overrides the Materials of its Mesh's Primitives. The renderer pulls Renderables; entities never render themselves.">Renderable</span> spawns or despawns (#202). The dynamic TLAS holds the Moving Instances, is rebuilt in every frame, and has a fixed capacity of 10,000. ADR 0020 records it as "a dynamic TLAS of Moving Instances rebuilt each frame and capped at 10k Instances (0.64 to 0.92 ms of CPU on the M4 Pro, recording plus submit, measured). Shadow and probe rays query both."</p>
+    <p>The split has three consequences, each a chapter below. A ray needs a second query where the first finds nothing (chapter 5). A frame in which more than 10,000 Instances move needs a rule for which ones keep their place (chapter 3). And the capacity itself costs time in every build, filled or not (chapter 4).</p>
+  </div>
+</section>
+
+<section class="chapter" id="moving">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 &middot; ADR 0022</div>
+    <h2>What makes an Instance a Moving Instance</h2>
+    <p class="plain">Praxis already knew which entities move. The <span class="concept" data-term="Fixed schedule" data-tip="The schedule that runs once per Tick and holds everything that changes game state: gameplay, physics, AI and Lua event reactions (ADR 0022).">fixed schedule</span> moves them in <span class="concept" data-term="Tick" data-tip="One fixed step of the simulation, 1/64 s; rendered frames draw a blend of the two newest Ticks.">Ticks</span>, frames draw them between their two newest Ticks, and for that each one keeps the <span class="concept" data-term="World transform" data-tip="Where an entity sits in a Game world: its Transform composed with every ancestor's, in f64. Derived from the hierarchy, never authored.">World transform</span> it had after the previous Tick. #204 takes that component as the definition: an <span class="concept" data-term="Instance" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instance</span> is a Moving Instance while its entity carries <code>PreviousWorldTransform</code>. No new component marks it.</p>
+    <p>The simulation and the frames run at different rates. ADR 0022 runs everything that changes game state in the fixed schedule, once per Tick of 1/64 s, and a frame lands somewhere between two Ticks. To draw an entity there, prepare blends its previous and current World transforms in f64 by the <span class="concept" data-term="Blend weight" data-tip="How far a frame lies between the two newest Ticks, from 0 at the older to 1 at the newer. Prepare blends each moving entity's two World transforms by it (ADR 0022).">blend weight</span>, how far the frame has come from the older Tick toward the newer. Only the entities the fixed schedule moves pay for that: they carry their previous World transform, and every other entity stores nothing extra.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">/// The World transform an entity had after the previous Tick, kept by every
+/// entity whose World transform the fixed schedule changes, children of a
+/// moving entity included, so frames draw it blended; other entities store
+/// nothing extra. `None` from its spawn until the next Tick starts, and
+/// after a teleport: frames then draw its current World transform, so a
+/// child of a moving parent runs up to a Tick ahead of the parent until then.</span>
+#[derive(Component, Copy, Clone, Debug, Default, PartialEq)]
+pub struct PreviousWorldTransform(pub Option&lt;glam::DAffine3&gt;);</code></pre>
+    <figcaption><b>The component</b>, from <code>src/transform/mod.rs</code>. ADR 0022's blend added it; #204 reads its presence as the classification. Its value is <code>None</code> for a while after a spawn or a teleport, and the Instance still counts as moving then: what counts is that the entity carries the component.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>A blended entity is drawn somewhere new in every frame, between Ticks too, so prepare writes its Instance in every frame and flags the write as moving. That gives the dynamic TLAS its list without a search: a frame's Moving Instances are exactly its Instance writes flagged moving. <code>FrameData</code>, the <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span> that prepare hands the Renderer, gains one field, filled as the writes are made:</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">// In FramePreparer::prepare, for each Renderable.
+// A blended Renderable moves every frame, between Ticks too.</span>
+if *rewrite_every_instance
+    || is_new
+    || current.is_changed()
+    || previous.is_some()
+    || mesh_ref.is_changed()
+    || material_ref
+        .as_ref()
+        .is_some_and(|material_ref| material_ref.is_changed())
+    || lost_material_handle_or_previous_transform.contains(&amp;entity)
+{
+    let transform = current.drawn(previous, blend_weight);
+    <span class="comment">// &hellip; the Instance's rotation, Anchor and offset, from `transform`</span>
+    frame.write_instance(slot, InstanceData { &hellip; }, previous.is_some());
+}
+
+<span class="comment">// In FrameData.
+/// The Moving Instances the dynamic TLAS holds, at most
+/// `DYNAMIC_TLAS_CAPACITY`, those in the lowest slots, in no order. Each
+/// is written every frame, so each is among `instances`.</span>
+pub moving_instances: Vec&lt;MovingInstance&gt;,
+
+fn write_instance(&amp;mut self, slot: u32, instance: InstanceData, moving: bool) {
+    let index = self.instances.len();
+    self.instances.push(instance);
+    if moving {
+        self.moving_instances.push(MovingInstance {
+            slot,
+            instance: index,
+        });
+    }
+    <span class="comment">// &hellip; then queues the write, in the last one when `slot` follows it
+    // and it is of the same kind</span>
+}</code></pre>
+    <figcaption><b>Where the list comes from</b>, abridged from <code>src/render/prepare.rs</code>. <code>previous</code> is the entity's <code>PreviousWorldTransform</code>, if it has one: having it both forces the write and flags it as moving. A <code>MovingInstance</code> is a slot and an index into the frame's <code>instances</code>; it copies no Instance data.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Gaining and losing the component</h3>
+    <p>An entity can gain the component or lose it in any frame, and its Instance then has to move from one TLAS to the other in that same frame.</p>
+    <ul class="keypoints">
+      <li><b>Gaining it.</b> From that frame on, prepare writes the Instance in every frame, flagged moving, and the dynamic TLAS lists it. The static TLAS clears the slot's entry when a moving write reaches it, and rebuilds (<code>StaticTlas::update</code>, since #202).</li>
+      <li><b>Losing it.</b> Prepare now writes the Instance once more in the frame its entity loses the component, unflagged, so the static TLAS takes it. Losing <code>PreviousWorldTransform</code> joins losing a Material Handle among the changes that force a write.</li>
+    </ul>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">// Those that lost their Material Handle now draw with their Mesh's
+// Materials, and those that lost their previous World transform are
+// static, so the static TLAS takes them.</span>
+let lost_material_handle_or_previous_transform: bevy_ecs::entity::EntityHashSet = world
+    .removed::&lt;MaterialRef&gt;()
+    .chain(world.removed::&lt;PreviousWorldTransform&gt;())
+    .collect();</code></pre>
+    <figcaption><b>The losses that force a write</b>, in <code>FramePreparer::prepare</code>. The set feeds the last line of the condition above.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Without that write, nothing would have told either TLAS. An Instance that stands still is written only when something about it changes, so the slot's last write would stay the one flagged moving. The static TLAS would keep the slot's entry clear, and the dynamic TLAS, which lists only the current frame's moving writes, would drop it. The Instance would cast no shadow until something else rewrote it. #235's review noted the gap; the figure follows one entity through it.</p>
+  </div>
+  <figure class="wide" id="demo-lifecycle">
+    <div class="controls" style="margin-top: 0">
+      <span class="control-label">Prepare:</span>
+      <div class="seg" role="group" aria-label="Which prepare" id="l-version">
+        <button type="button" data-version="fixed" aria-pressed="true">with #204's write</button>
+        <button type="button" data-version="gap" aria-pressed="false">without it</button>
+      </div>
+    </div>
+    <div class="table-wrap" style="margin-top: 14px">
+      <table class="facts compact">
+        <thead><tr><th class="n">Frame</th><th>The entity</th><th>Prepare writes its Instance</th><th>Static TLAS</th><th>Dynamic TLAS</th><th>Its shadow</th></tr></thead>
+        <tbody>
+          <tr><td class="n">1</td><td>spawns, at rest</td><td>yes, static</td><td>takes it</td><td>does not list it</td><td>from the static TLAS</td></tr>
+          <tr><td class="n">2</td><td>gains <code>PreviousWorldTransform</code></td><td>yes, flagged moving</td><td>clears its entry</td><td>lists it</td><td>from the dynamic TLAS</td></tr>
+          <tr><td class="n">3</td><td>moves between Ticks</td><td>yes, flagged moving</td><td>entry stays clear</td><td>lists it</td><td>from the dynamic TLAS</td></tr>
+          <tr class="focus"><td class="n">4</td><td>loses it, at rest</td><td><span data-variant="fixed">yes, static</span><span data-variant="gap" hidden>no</span></td><td><span data-variant="fixed">takes it</span><span data-variant="gap" hidden>entry stays clear</span></td><td>does not list it</td><td><span data-variant="fixed">from the static TLAS</span><span data-variant="gap" hidden><b class="bad-text">none</b></span></td></tr>
+          <tr><td class="n">5</td><td>stays at rest</td><td>no</td><td><span data-variant="fixed">keeps it</span><span data-variant="gap" hidden>entry stays clear</span></td><td>does not list it</td><td><span data-variant="fixed">from the static TLAS</span><span data-variant="gap" hidden><b class="bad-text">none, until something rewrites it</b></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>One entity's Instance, frame by frame</b>, with and without the write that #204 adds in frame 4. Without it, the Instance drops out of the dynamic TLAS and never reaches the static one.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The test <code>an_instance_is_moving_while_its_entity_carries_its_previous_world_transform</code>, at <code>FramePreparer</code>, covers both directions. Without the removal check it fails in the frame the component is lost, because prepare writes no slot: <code>left: [] right: [0]</code>.</p>
+  </div>
+</section>
+
+<section class="chapter" id="cap">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 &middot; decision on map #17, item 8</div>
+    <h2>Ten thousand, kept by slot</h2>
+    <p class="plain">The dynamic TLAS holds at most 10,000 Moving Instances. When more move, the rest are left out and cast no shadow. Which ones are left out matters less than that the choice holds still from frame to frame: an Instance should not lose its shadow because some other entity changed. So the lowest slots keep their place, because an Instance's <span class="concept" data-term="Slot" data-tip="An Instance's place in the Instance buffer. A Renderable keeps its slot for as long as it is one; a slot freed in an earlier frame is taken again before a fresh one.">slot</span> changes only when it spawns or despawns.</p>
+    <p>The capacity is a constant, <code>DYNAMIC_TLAS_CAPACITY = 10_000</code> in <code>src/render/acceleration_structures.rs</code>, provisional until milestone M4 splits the 8 GB GPU memory Budget. The owner's decision on map #17, item 8, set the policy: "Moving Instances form the dynamic TLAS, fixed at 10,000; past it they are left out (no shadows), counted in Frame stats and warned about." The architecture review chose which ones: "Past 10,000 Moving Instances, the lowest slots keep their place in the dynamic TLAS."</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">// Past the dynamic TLAS's capacity, the lowest slots keep their place.</span>
+let capacity = DYNAMIC_TLAS_CAPACITY as usize;
+*moving_instances_left_out = frame.moving_instances.len().saturating_sub(capacity) as u32;
+if *moving_instances_left_out &gt; 0 {
+    frame
+        .moving_instances
+        .select_nth_unstable_by_key(capacity, |moving| moving.slot);
+    frame.moving_instances.truncate(capacity);
+    if !*warned_of_moving_instances_left_out {
+        tracing::warn!(
+            left_out = *moving_instances_left_out,
+            capacity,
+            "Moving Instances left out of the dynamic TLAS, past its capacity: those in the highest slots cast no shadow"
+        );
+    }
+}
+*warned_of_moving_instances_left_out = *moving_instances_left_out &gt; 0;</code></pre>
+    <figcaption><b>The cap</b>, at the end of <code>FramePreparer::prepare</code>. <span class="concept" data-term="select_nth_unstable" data-tip="Rust's partial sort: select_nth_unstable_by_key(n, key) moves the n elements with the smallest keys ahead of index n, in no order, in O(n) time, without sorting them.">select_nth_unstable_by_key</span> moves the 10,000 lowest slots ahead of index 10,000, in no order, in O(n) time and with no full sort; <code>truncate</code> drops the rest. The warning fires once per episode: in the first frame that leaves Moving Instances out, and again only after a frame that left none out.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The count reaches <span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and of the dynamic TLAS's build, and the GPU frame total (that build plus the span from the start of the first pass to the end of the last), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables refused, lights the light buffer had no room for, lights the Froxel lists had no room for and lights the shadow mask had no bit for, the lit pixels and the point lights their Froxels list and whose range reaches them (where counted), static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, bends the bend pass had no room for, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.">Frame stats</span> as <code>moving_instances_left_out</code> in every frame, through <code>FramePreparer::moving_instances_left_out()</code>. The Moving Instances left out are still drawn; they only cast no shadow. They stay out of the static TLAS as well, since their writes are still flagged moving.</p>
+    <h3>Why not the first 10,000</h3>
+    <p>The obvious rule keeps the first 10,000 that prepare meets. Prepare meets them in the <span class="concept" data-term="ECS World" data-tip="The container of entities, components and resources. A code concept, never the playable space.">ECS World</span>'s iteration order, and that order moves. bevy_ecs stores the entities of each <span class="concept" data-term="Archetype" data-tip="In bevy_ecs, the set of components an entity has. The entities of one archetype are stored together, a table row each, and gaining or losing a component moves an entity to another.">archetype</span> together, a table row each, and iterates table by table, row by row. An entity that spawns, or gains or loses a component stored in tables, bevy_ecs's default, is added at the end of its new table, and a removed entity's row is filled by its table's last entity (bevy_ecs 0.18.1, <code>Table::allocate</code> and <code>Table::swap_remove_unchecked</code>). So the order shifts whenever entities spawn, despawn or change components, even for an instant: a teleport inserts the <code>Teleported</code> marker and removes it within one Tick, which leaves the entity at the end of its table. Slots shift only on spawn and despawn: a Renderable keeps its slot for as long as it is one.</p>
+    <p>The test <code>the_moving_instance_in_the_highest_slot_past_the_dynamic_tlas_capacity_is_left_out</code> builds the case. It spawns 10,001 Moving Instances, so the one in slot 10,000 is left out, counted in each frame and warned about once. It despawns the one in slot 3, so all fit, then spawns a new one, which takes slot 3 again, since a slot freed in an earlier frame is taken before a fresh one. The ECS World now holds the newcomer last. Under the rule as shipped, slot 10,000 is still the one left out. Truncating in ECS World order instead, the red check, left out slot 3.</p>
+  </div>
+  <figure class="wide" id="demo-cap">
+    <div class="controls" style="margin-top: 0">
+      <span class="control-label">Keep:</span>
+      <div class="seg" role="group" aria-label="Which Moving Instances the dynamic TLAS keeps" id="cap-policy">
+        <button type="button" data-policy="slots" aria-pressed="true">the lowest slots, as shipped</button>
+        <button type="button" data-policy="world" aria-pressed="false">the first in ECS World order</button>
+      </div>
+    </div>
+    <p class="strip-label" style="margin-top: 16px">The Instance buffer's slots: choose one to act on its Moving Instance</p>
+    <div class="slot-grid" id="cap-slots" role="group" aria-label="Slots"></div>
+    <p class="strip-label">The ECS World's iteration order, entity &middot; slot</p>
+    <ol class="world-order" id="cap-order" aria-label="The ECS World's iteration order"></ol>
+    <div class="controls">
+      <button type="button" class="btn" id="cap-spawn">Spawn a Moving Instance</button>
+      <button type="button" class="btn" id="cap-despawn">Despawn</button>
+      <button type="button" class="btn" id="cap-teleport">Teleport</button>
+      <button type="button" class="btn" id="cap-replay">Replay the test</button>
+      <button type="button" class="btn" id="cap-reset">Reset</button>
+    </div>
+    <dl class="figures">
+      <div><dt>Frame</dt><dd id="cap-frame"></dd></div>
+      <div><dt>Moving Instances</dt><dd id="cap-count"></dd></div>
+      <div><dt>In the dynamic TLAS, of 8</dt><dd id="cap-kept"></dd></div>
+      <div><dt>Left out</dt><dd id="cap-left-out"></dd></div>
+    </dl>
+    <p class="readout" id="cap-note" aria-live="polite" style="margin-top: 12px"></p>
+    <div class="legend">
+      <span><span class="swatch kept"></span>in the dynamic TLAS</span>
+      <span><span class="swatch left-out"></span>left out: drawn, but casts no shadow</span>
+      <span><span class="swatch free"></span>a free slot</span>
+    </div>
+    <figcaption><b>Live demo.</b> The cap, scaled down from 10,000 to 8, in an Instance buffer of 16 slots. Each action is one frame: spawn a Moving Instance, or choose a slot and despawn or teleport its Moving Instance; prepare then lists every Moving Instance and keeps 8 by the chosen rule, and each slot says which ones joined or dropped out that frame. Slots are taken as prepare takes them: the slot freed most recently in an earlier frame, else a fresh one. The ECS World's order follows bevy_ecs 0.18.1's tables: a new or returning entity goes to the end, and a removed one's row takes the table's last entity. A teleport inserts and removes the <code>Teleported</code> marker in one Tick, so its entity leaves its table and comes back at the end. "Replay the test" runs the test's three frames, scaled down: 9 Moving Instances, slot 3's despawned, a new one spawned. Simplified: every Moving Instance shares one table, as in the test.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="build">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 &middot; <code>DynamicTlas</code></div>
+    <h2>Building it every frame</h2>
+    <p class="plain">Each frame, the Renderer refills the dynamic TLAS from Frame data's list and records a build. Each entry places one Moving Instance's BLAS where the Instance stands, in the same coordinate frame as the static TLAS, so a ray composed once can be traced against both. The build's cost depends on the TLAS's capacity as well as on what it holds, which is why that capacity is 10,000 and not the static TLAS's 2<sup>18</sup>.</p>
+    <h3>Created once, at its capacity</h3>
+    <p><code>DynamicTlas::new</code> creates the TLAS once, with room for 10,000 entries, and the Renderer rebuilds it in place from then on. Its binding stays valid across rebuilds, so the scene-geometry bind group that holds it is built once.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code>pub fn new(device: &amp;wgpu::Device, backend: wgpu::Backend) -&gt; Self {
+    Self {
+        tlas: device.create_tlas(&amp;wgpu::CreateTlasDescriptor {
+            label: Some("Dynamic TLAS"),
+            max_instances: DYNAMIC_TLAS_CAPACITY,
+            <span class="comment">// Traced at every lit pixel, as the static TLAS is; ADR 0020's
+            // per-frame cost was measured with this flag.</span>
+            flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+        }),
+        filled: None,
+        entry_upload_bytes: match backend {
+            <span class="comment">// `MTLIndirectAccelerationStructureInstanceDescriptor`.</span>
+            wgpu::Backend::Metal =&gt; 72,
+            <span class="comment">// `VkAccelerationStructureInstanceKHR`,
+            // `D3D12_RAYTRACING_INSTANCE_DESC`.</span>
+            _ =&gt; 64,
+        },
+    }
+}</code></pre>
+    <figcaption><b><code>DynamicTlas::new</code></b>, in <code>src/render/acceleration_structures.rs</code>. <code>filled</code> remembers how many entries the last build filled; <code>entry_upload_bytes</code> is what each entry costs to upload, below. As #264 merged it: since #266, <code>new</code> also takes the queue, builds the empty TLAS at once, and makes chapter 7's markers.</figcaption>
+  </figure>
+  <div class="prose">
+    <p><span class="concept" data-term="PREFER_FAST_TRACE" data-tip="A build flag asking for a tree that traces fast rather than one that builds fast. wgpu-types recommends it for geometry unlikely to change, and PREFER_FAST_BUILD for geometry that changes often.">PREFER_FAST_TRACE</span> asks for a tree that traces fast, at the expense of build time. wgpu's documentation recommends it "if the geometry is unlikely to change", and its opposite, <code>PREFER_FAST_BUILD</code>, "if geometry is likely to change frequently" (wgpu-types 30.0.1, <code>AccelerationStructureFlags</code>). The dynamic TLAS changes in every frame and still takes the fast-trace flag: it is traced at every lit pixel, as the static TLAS is, and ADR 0020's per-frame figures were measured with it. Vulkan and DX12 receive the flag as their own prefer-fast-trace build flag; on Metal, wgpu-hal 30.0.1 sets no acceleration-structure usage for it, so on the M4 Pro both TLAS are built with Metal's default usage (<code>metal/conv.rs</code>).</p>
+    <h3>Filled from the list</h3>
+    <p>Each frame, <code>DynamicTlas::update</code> walks Frame data's list. Entry <i>i</i> gets the <i>i</i>-th listed Moving Instance: its Mesh's compacted BLAS from the Mesh <span class="concept" data-term="Pool" data-tip="The central store of one kind of resource (Mesh pool, Material pool). It hands out Handles; components never own resources.">pool</span>, its transform as the rows of a 3&times;4 matrix, and its slot as the entry's <span class="concept" data-term="Custom data" data-tip="A number each TLAS entry carries, which a ray's hit reports back. Praxis stores the Instance's slot there; a shadow ray never reads it, since any hit will do.">custom data</span>, as the static TLAS tags its entries. Entries that the previous frame filled beyond this frame's count are cleared. Then the build is recorded into the frame's encoder.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code>pub fn update(
+    &amp;mut self,
+    frame: &amp;FrameData,
+    mesh_pool: &amp;MeshPool,
+    anchor: [i32; 3],
+    encoder: &amp;mut wgpu::CommandEncoder,
+) -&gt; u64 {
+    <span class="comment">// Prepare lists no more than its capacity.</span>
+    let listed = frame
+        .moving_instances
+        .iter()
+        .take(DYNAMIC_TLAS_CAPACITY as usize);
+    let filled = listed.len();
+    let previously_filled = self.filled.replace(filled);
+    if filled == 0 &amp;&amp; previously_filled == Some(0) {
+        return 0;
+    }
+    let mut uploaded_entries = 0;
+    for (index, moving) in listed.enumerate() {
+        let instance = &amp;frame.instances[moving.instance];
+        let blas = mesh_pool.blas(MeshHandle(instance.mesh));
+        uploaded_entries += u64::from(blas.is_some());
+        self.tlas[index] = blas.map(|blas| tlas_instance(blas, instance, anchor, moving.slot));
+    }
+    for index in filled..previously_filled.unwrap_or(0) {
+        self.tlas[index] = None;
+    }
+    encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&amp;self.tlas));
+    uploaded_entries * self.entry_upload_bytes
+}</code></pre>
+    <figcaption><b><code>DynamicTlas::update</code></b>. <code>tlas_instance</code>, which the static TLAS uses too, makes one entry: the BLAS, the transform from <code>anchored_transform</code> (below), the slot, and the cull mask <code>0xff</code> that every ray carries. The return value, the bytes the build uploads, joins the frame's <code>uploaded_bytes</code>. #266 renamed it <code>record</code>: the same fill, with the build recorded into a command buffer of its own between two markers (chapter 7).</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The clearing loop matters. A Moving Instance that despawns leaves the list; without the loop, its entry would keep the Instance's last transform and go on casting its shadow from there. Chapter 5's test fails that way when stale entries are kept.</p>
+    <h3>When it is empty</h3>
+    <p>A scene in which nothing moves lists no Moving Instances, and rebuilding an empty TLAS in every frame would waste the build. Some build is still needed. At submit, wgpu-core's validation refuses a TLAS that was never built if a bind group in use holds it (<code>UsedUnbuiltTlas</code>), and the scene-geometry bind group always holds this one. So an empty dynamic TLAS is built only in its first frame, so that wgpu-core accepts the submissions that use it, and in the frame it empties, so that it no longer holds what last moved. In every other empty frame, <code>update</code> returns before it records anything. Since #266, <code>DynamicTlas::new</code> builds it empty once, at creation, so that chapter 7's markers never query it unbuilt.</p>
+    <h3>The frame both TLAS share</h3>
+    <p>A ray is composed once, in one coordinate frame, and traced against both structures, so both must place their Instances in that frame. The static TLAS's frame has its origin at the corner of the camera's <span class="concept" data-term="Anchor" data-tip="The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell's corner, never as one f32 position.">Anchor</span> in the first Frame data, and milestone M3 never moves it (#202). The dynamic TLAS takes the same Anchor. <code>anchored_transform</code> composes each translation from that corner in f64, from whole 64 m cells plus the Instance's f32 offset, so only the f32 result rounds (ADR 0014).</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">/// `instance`'s transform as rows of the 3&times;4 matrix a TLAS Instance holds,
+/// its translation from `anchor`'s corner composed in f64, so only the f32
+/// result rounds (ADR 0014).</span>
+fn anchored_transform(instance: &amp;InstanceData, anchor: [i32; 3]) -&gt; [f32; 12] {
+    let [x_axis, y_axis, z_axis] = instance.rotation_scale;
+    let row = |axis: usize| {
+        let cells = i64::from(instance.anchor[axis]) - i64::from(anchor[axis]);
+        let translation = cells as f64 * ANCHOR_CELL_SIZE + f64::from(instance.offset[axis]);
+        [x_axis[axis], y_axis[axis], z_axis[axis], translation as f32]
+    };
+    bytemuck::cast([0, 1, 2].map(row))
+}
+
+<span class="comment">// In Renderer::upload.
+// Shadow rays start in the static TLAS's frame, whose Anchor the
+// first Frame data's camera set, and the dynamic TLAS shares it.</span>
+let tlas_anchor = self.static_tlas.anchor();
+recorder.uploaded_bytes +=
+    self.dynamic_tlas
+        .update(frame, &amp;self.mesh_pool, tlas_anchor, &amp;mut encoder);
+let camera = CameraUniform {
+    tlas_anchor,
+    dynamic_tlas_entries: self.dynamic_tlas.entries(),
+    ..frame.camera
+};</code></pre>
+    <figcaption><b>One Anchor for both.</b> <code>anchored_transform</code> in <code>acceleration_structures.rs</code>, and <code>Renderer::upload</code> in <code>renderer.rs</code>: the camera uniform's <code>tlas_anchor</code>, from which the shader composes each ray's origin, and the dynamic TLAS take the same value. <code>dynamic_tlas_entries</code> is chapter 5's. Since #266, the build is recorded in <code>Renderer::render</code> instead, and the count is the length of Frame data's list.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The Renderer test of chapter 5 checks the shared frame. After its first frame anchors the static TLAS, it gives the camera's position from the next Anchor cell over, the same place in other numbers, and the image must not change: it would, if the dynamic TLAS followed the camera's Anchor instead of the static TLAS's.</p>
+    <p>The shader declares the new binding beside the old one. <code>dynamic_tlas</code> joins <code>static_tlas</code> in the scene-geometry bind group, group 2, visible to the fragment stage only (<code>src/render/bind_groups.rs</code>); since #277, to the compute stage only. The <span class="concept" data-term="Capability floor" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span> already allowed two acceleration structures per shader stage with this pair in mind: <code>max_acceleration_structures_per_shader_stage: 2</code>, commented "ADR 0020's static and dynamic TLAS" (<code>floor_limits</code> in <code>src/gpu/mod.rs</code>).</p>
+    <h3>What each entry uploads</h3>
+    <p>wgpu-core converts each filled entry into the backend's own <span class="concept" data-term="Instance record" data-tip="The backend's own form of a TLAS entry, which wgpu-core writes on the CPU at each build: 72 B on Metal, 64 B on Vulkan and DX12.">instance record</span> on the CPU, and stages it for the build (<code>tlas_instance_to_bytes</code> in wgpu-hal 30.0.1). Frame stats' <code>uploaded_bytes</code> now counts those bytes.</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Backend</th><th>Its instance record</th><th class="n">Bytes per entry</th></tr></thead>
+        <tbody>
+          <tr><td>Metal</td><td><code>MTLIndirectAccelerationStructureInstanceDescriptor</code>: a packed 4&times;3 float matrix, 48 B; options, mask, intersection-function offset and user ID, 4 B each; the BLAS's acceleration-structure ID, 8 B</td><td class="n">72</td></tr>
+          <tr><td>Vulkan</td><td><code>VkAccelerationStructureInstanceKHR</code></td><td class="n">64</td></tr>
+          <tr><td>DX12</td><td><code>D3D12_RAYTRACING_INSTANCE_DESC</code></td><td class="n">64</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>One entry's upload per build</b>, from wgpu-hal 30.0.1's <code>tlas_instance_to_bytes</code>. The orrery's five spheres add 5 &times; 72 = 360 B to every frame's uploads on Metal.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>A test pins the orrery's whole upload per frame, <code>the_orrerys_moving_instances_upload_their_dynamic_tlas_entries_every_frame</code> in <code>tests/frame_stats.rs</code>: the 112-byte camera and 32-byte light uniforms, the sun and four point lights at 48 bytes each, the five 128-byte Instances, and their five entries, with none left out: 1,384 bytes on Metal, where main uploaded 1,024. The conversion also allocates: <code>tlas_instance_to_bytes</code> returns a <code>Vec&lt;u8&gt;</code> for each entry at each build, one heap allocation each, on the thread that finishes the encoder.</p>
+    <h3>What it takes in memory</h3>
+    <p>wgpu exposes no acceleration-structure sizes, so Praxis estimates them per backend from measurements (<code>AccelerationStructureBytes</code>; since #303, merged on 2026-10-26 as 4a7ab0b, per adapter: an NVIDIA GPU gets figures measured on an RTX 2070 SUPER, and every other adapter the M4 Pro's or lavapipe's below, as before). A TLAS is estimated per entry of its capacity, whatever it holds: 10,000 &times; 288.5 B = 2,885,000 B on the M4 Pro, and 10,000 &times; 240 B = 2,400,000 B on lavapipe, CI's software Vulkan. The estimate joins the frame's GPU memory beside the static TLAS's and the BLASes', in every scene (chapter 8).</p>
+    <h3>Why 10,000 and not more</h3>
+    <p>The capacity has a cost of its own. A wgpu 30 <code>Tlas</code> keeps one optional entry per slot of its capacity, and each build walks every one of them, filled or not. #202's notes timed it with 11 Instances: 0.8 ms to record and finish at 2<sup>16</sup> slots, and 4.3 ms at 2<sup>18</sup>. The static TLAS, at 2<sup>18</sup>, pays that only in the rare frames that rebuild it. The dynamic TLAS pays its walk in every frame, so its capacity stays at the 10,000 that ADR 0020 measured.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code>let tlas = tlas.into_iter().map(|e| {
+    let instances = e
+        .instances
+        .iter()
+        .map(|instance: &amp;Option&lt;crate::TlasInstance&gt;| {
+            instance
+                .as_ref()
+                .map(|instance| wgc::ray_tracing::TlasInstance { &hellip; })
+        });
+    &hellip;
+});</code></pre>
+    <figcaption><b>The walk</b>, abridged from wgpu 30.0.1's <code>build_acceleration_structures</code> in <code>wgpu/src/backend/wgpu_core.rs</code> (MIT or Apache-2.0): every entry of the TLAS, filled or <code>None</code>, is mapped and handed to wgpu-core.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="query">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 &middot; <code>main.wgsl</code></div>
+    <h2>Static first, then dynamic</h2>
+    <p class="plain">The <span class="concept" data-term="Lit pass" data-tip="The pass that shades each pixel, at depth equal after the depth pre-pass, into a 4x MSAA HDR attachment. It traced each directional light's shadow ray there from #203, against both TLAS from #204; since #277 it reads the shadow mask that a compute pass traces before it.">lit pass</span> still traces one shadow ray per pixel per directional light. It now asks the static TLAS first. Only where that finds nothing does it ask the dynamic TLAS the same question, with the same ray, and only if the dynamic TLAS holds anything. A pixel already in a static shadow never pays for the second query.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">// Whether either TLAS holds geometry within `distance` of the surface point
+// at `position`, relative to the camera, along `direction`, a unit vector:
+// one hard shadow ray (ADR 0020), traced against the static TLAS, then,
+// where that finds nothing, against the dynamic TLAS unless it is empty: a
+// query of an empty TLAS still costs the lit pass. It starts off the
+// surface along `normal`, its unit geometric normal, in the frame both TLAS
+// share, whose origin is the corner of the camera's `tlas_anchor`, composed
+// as an Instance's position is (ADR 0014).</span>
+fn shadowed(position: vec3&lt;f32&gt;, normal: vec3&lt;f32&gt;, direction: vec3&lt;f32&gt;, distance: f32) -&gt; bool {
+    <span class="comment">// &hellip; the origin, composed and offset as in #203</span>
+    <span class="comment">// Opaque, so one rayQueryProceed completes a traversal, and any hit
+    // shadows the point.</span>
+    let ray = RayDesc(
+        RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_TERMINATE_ON_FIRST_HIT,
+        0xffu,
+        0.0,
+        distance,
+        tlas_position + normal * offset,
+        direction
+    );
+    var query: ray_query;
+    rayQueryInitialize(&amp;query, static_tlas, ray);
+    rayQueryProceed(&amp;query);
+    let hidden = rayQueryGetCommittedIntersection(&amp;query).kind != RAY_QUERY_INTERSECTION_NONE;
+    if hidden || camera.dynamic_tlas_entries == 0u {
+        return hidden;
+    }
+    rayQueryInitialize(&amp;query, dynamic_tlas, ray);
+    rayQueryProceed(&amp;query);
+    return rayQueryGetCommittedIntersection(&amp;query).kind != RAY_QUERY_INTERSECTION_NONE;
+}</code></pre>
+    <figcaption><b><code>shadowed</code></b>, abridged from <code>src/render/shaders/main.wgsl</code> as #264 merged it. The <code>RayDesc</code> is built once; the same <code>ray_query</code> is initialised again for the second structure.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Either order gives the same answer, since any hit shadows the point. The ray is <span class="concept" data-term="Opaque" data-tip="Geometry whose every hit counts, with no shader deciding. Every Praxis BLAS is built OPAQUE, and the shadow ray forces opacity as well.">opaque</span> and stops at its first hit, so one <code>rayQueryProceed</code> completes each traversal, as in #203. Everything before these lines is unchanged: the origin, composed in the frame both TLAS share and offset along the geometric normal, and the test in <code>fs_main</code> that skips the ray where the light adds nothing. <code>shadowed</code> keeps its signature, so #205's point-light rays could call it as it is.</p>
+    <p class="callout"><b>Since then.</b> #277 (bd7b988) moved the rays out of the lit pass. A compute pass, the shadow mask pass, traces them first, toward each light that reaches the surface, and keeps a bit per light for the lit pass, which makes no ray query any more. <code>shadowed</code> moved with them into <code>src/render/shaders/shadow_mask.wgsl</code>, its two queries and its skip unchanged.</p>
+    <h3>Where nothing moves</h3>
+    <p>Part 1's first commit, 258001a, sent every ray that the static TLAS let through on to the dynamic TLAS, even when it was empty. Measured against main, that empty query put the lit pass up by 452 to 2,255 &micro;s on the scenes where nothing moves, so the second commit, 11e9388, skips it. The camera uniform now carries the dynamic TLAS's entry count, <code>dynamic_tlas_entries</code>, in the four bytes that padded <code>tlas_anchor</code>, so the uniform stays 112 bytes. Every pixel reads the same count, so in a frame with nothing moving, every pixel skips the second query alike. Chapter 8 gives both versions' costs, scene by scene.</p>
+    <p>The orrery is the opposite case. It has no static Instances, so its static TLAS is empty, and every ray it traces makes both queries. The demo below counts them.</p>
+  </div>
+  <figure class="wide" id="demo-rays">
+    <div class="canvas-frame"><canvas id="r-canvas" class="demo pan-y" role="img" aria-label="A side view of the ground, two static blocks and a moving sphere under the sun, with one shadow ray and the queries it makes."></canvas></div>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--ink-soft); opacity: 0.5"></span>static Instance</span>
+      <span><span class="swatch" style="background: var(--accent)"></span>Moving Instance</span>
+      <span><svg viewBox="-8 -8 16 16" aria-hidden="true"><circle r="4.5" class="mk-lit"/></svg>lit</span>
+      <span><svg viewBox="-8 -8 16 16" aria-hidden="true"><circle r="4.5" class="mk-static"/></svg>shadowed by a static Instance</span>
+      <span><svg viewBox="-8 -8 16 16" aria-hidden="true"><circle r="4.5" class="mk-moving"/></svg>shadowed by the Moving Instance</span>
+      <span><i class="query-static"></i>the static query</span>
+      <span><i></i>the dynamic query</span>
+      <span><svg viewBox="-8 -8 16 16" aria-hidden="true"><path d="M-5 -5 L5 5 M-5 5 L5 -5" class="mk-cross"/></svg>where a query hits</span>
+    </div>
+    <div class="sliders">
+      <label for="r-sun" class="control-label">Sun <output id="r-sun-out" for="r-sun"></output></label>
+      <input type="range" id="r-sun" min="20" max="160" step="1" value="125">
+      <label for="r-moving" class="control-label">Moving Instance at <output id="r-moving-out" for="r-moving"></output></label>
+      <input type="range" id="r-moving" min="1" max="19" step="0.1" value="9.5">
+      <label for="r-point" class="control-label">Ray from <output id="r-point-out" for="r-point"></output></label>
+      <input type="range" id="r-point" min="0.2" max="19.8" step="0.1" value="11.2">
+    </div>
+    <div class="controls">
+      <span class="control-label">Static Instances:</span>
+      <div class="seg" role="group" aria-label="Static Instances" id="r-static">
+        <button type="button" data-static="on" aria-pressed="true">two blocks</button>
+        <button type="button" data-static="off" aria-pressed="false">none, as on the orrery</button>
+      </div>
+      <span class="control-label">Moving Instances:</span>
+      <div class="seg" role="group" aria-label="Moving Instances" id="r-moving-on">
+        <button type="button" data-moving="on" aria-pressed="true">one sphere</button>
+        <button type="button" data-moving="off" aria-pressed="false">none</button>
+      </div>
+    </div>
+    <dl class="figures">
+      <div><dt>Rays traced</dt><dd id="r-rays"></dd></div>
+      <div><dt>Static TLAS queries</dt><dd id="r-static-queries"></dd></div>
+      <div><dt>Dynamic TLAS queries</dt><dd id="r-dynamic-queries"></dd></div>
+      <div><dt>Shadowed</dt><dd id="r-shadowed"></dd></div>
+    </dl>
+    <p class="readout" id="r-note" aria-live="polite" style="margin-top: 12px"></p>
+    <figcaption><b>Live demo.</b> This page's model of <code>shadowed</code>, in two dimensions: a 20 m strip of ground, two static blocks standing on it and one moving sphere. Each of 40 evenly spaced points of the ground traces one ray toward the sun, except where a block stands, since no pixel sees the ground there (32 rays with both blocks standing): first against the static Instances, then, only where they let it through and only if a Moving Instance exists, against the Moving Instance. Beneath the ground, each point shows one square per query, the static TLAS's above the dynamic TLAS's. Drag along the drawing, or use the sliders, to move the ray, the sphere and the sun. Simplified: rays meet the shapes directly, standing in for each TLAS's walk down to triangles.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>The test</h3>
+    <p>A Renderer test, <code>shadows_fall_from_both_tlas_and_shadow_rays_off_draw_none</code>, extends #203's. A floor lies ahead of the camera, and a square behind the camera, out of view, hides a directional light from the floor's middle. Drawn as a Moving Instance, the square shadows the floor pixel for pixel as it does as a static Instance, also in a later frame whose camera Anchor differs, and its shadow goes in the frame that frees its slot. At 258001a, each wrong version was shown to fail it:</p>
+    <ul class="keypoints">
+      <li>Tracing the static TLAS alone: "a Moving Instance shadowed otherwise than a static one".</li>
+      <li>Keeping stale entries: "a freed Moving Instance still shadows".</li>
+    </ul>
+    <p>11e9388 adds the Anchor check of chapter 4, whose message reads "the dynamic TLAS left the static TLAS's frame as the camera's Anchor changed". With the shadow-ray <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span> off, the frame still draws the unshadowed image.</p>
+  </div>
+</section>
+
+<section class="chapter" id="orrery">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 &middot; the orrery's Golden</div>
+    <h2>The orrery's first shadows</h2>
+    <p class="plain">#203's rays left the orrery unchanged, because all its Instances move. With #204 its spheres enter the dynamic TLAS, and its <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span> changed by 73 pixels. None of them is a planet's shadow on another planet. They are speckles where each sphere shadows itself, near its <span class="concept" data-term="Terminator" data-tip="The line where a curved surface turns from facing the light to facing away from it.">terminator</span>.</p>
+    <p>The <code>orrery</code> <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> chains five spheres, each a child of the one before, each spinning about its own axis in the fixed schedule, so each circles its parent. All five carry <code>PreviousWorldTransform</code>, so all five are Moving Instances; there is no ground. At its Golden's frame, 640 &times; 360 on Metal, 73 pixels changed: 39 by one 8-bit step, and 34 by more, by 18 steps at most.</p>
+  </div>
+  <figure class="wide" id="golden-figure">
+    <div class="canvas-frame golden-frame">
+      <img id="g-image" src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAASABIAAD/4QBMRXhpZgAATU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAACgKADAAQAAAABAAABaAAAAAD/7QA4UGhvdG9zaG9wIDMuMAA4QklNBAQAAAAAAAA4QklNBCUAAAAAABDUHYzZjwCyBOmACZjs+EJ+/8AAEQgBaAKAAwEiAAIRAQMRAf/EAB8AAAEFAQEBAQEBAAAAAAAAAAABAgMEBQYHCAkKC//EALUQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+v/EAB8BAAMBAQEBAQEBAQEAAAAAAAABAgMEBQYHCAkKC//EALURAAIBAgQEAwQHBQQEAAECdwABAgMRBAUhMQYSQVEHYXETIjKBCBRCkaGxwQkjM1LwFWJy0QoWJDThJfEXGBkaJicoKSo1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoKDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uLj5OXm5+jp6vLz9PX29/j5+v/bAEMAAQEBAQEBAgEBAgMCAgIDBAMDAwMEBgQEBAQEBgcGBgYGBgYHBwcHBwcHBwgICAgICAkJCQkJCwsLCwsLCwsLC//bAEMBAgICAwMDBQMDBQsIBggLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLC//dAAQAKP/aAAwDAQACEQMRAD8A8czRR3o96/TD8vCiiigAooo96ACj6UdBQaADNFHej3oAKKKKACiij3oAKPpR0FBoAM0Ud6PegAooooAKKKPegAo+lHQUGgAzRR3o96ACiiigAooo96ACj6UdBQaADNFHej3oAKKKKACiij3oAKPpR0FBoAM0Ud6PegAooooAKKKPegAo+lHQUGgAzRR3o96ACiiigAooo96ACj6UdBQaADNFHej3oAKKKKACiij3oAKPpR0FBoAM0Ud6PegAooooAKKKPegAo+lHQUGgAzRR3o96ACiiigAooo96ACj6UdBQaAP/0PHKOlFFfph+XhRRRQAUUUfTmgAo96KKACjpRRQAUUUUAFFFH05oAKPeiigAo6UUUAFFFFABRRR9OaACj3oooAKOlFFABRRRQAUUUfTmgAo96KKACjpRRQAUUUUAFFFH05oAKPeiigAo6UUUAFFFFABRRR9OaACj3oooAKOlFFABRRRQAUUUfTmgAo96KKACjpRRQAUUUUAFFFH05oAKPeiigAo6UUUAFFFFABRRR9OaACj3oooAKOlFFABRRRQAUUUfTmgAo96KKAP/0fHBRRRX6Yfl4ZpKWigAo69aKKACiiigAFFFFABmkpaKACjr1oooAKKKKAAUUUUAGaSlooAKOvWiigAooooABRRRQAZpKWigAo69aKKACiiigAFFFFABmkpaKACjr1oooAKKKKAAUUUUAGaSlooAKOvWiigAooooABRRRQAZpKWigAo69aKKACiiigAFFFFABmkpaKACjr1oooAKKKKAAUUUUAGaSlooAKOvWiigAooooABRRRQAZpKWigAo69aKKACiiigD/9Lxzmjoc0cZor9MPy8KKPpRQAUUlLQAUfWiigA5o6HNHGaKACij6UUAFFJS0AFH1oooAOaOhzRxmigAoo+lFABRSUtABR9aKKADmjoc0cZooAKKPpRQAUUlLQAUfWiigA5o6HNHGaKACij6UUAFFJS0AFH1oooAOaOhzRxmigAoo+lFABRSUtABR9aKKADmjoc0cZooAKKPpRQAUUlLQAUfWiigA5o6HNHGaKACij6UUAFFJS0AFH1oooAOaOhzRxmigAoo+lFABRSUtABR9aKKADmjoc0cZooAKKPpRQAUUlLQAUfWiigD/9PxzNFHej3r9MPy8KKKKACiij3oAKPpR0FBoAM0Ud6PegAooooAKKKPegAo+lHQUGgAzRR3o96ACiiigAooo96ACj6UdBQaADNFHej3oAKKKKACiij3oAKPpR0FBoAM0Ud6PegAooooAKKKPegAo+lHQUGgAzRR3o96ACiiigAooo96ACj6UdBQaADNFHej3oAKKKKACiij3oAKPpR0FBoAM0Ud6PegAooooAKKKPegAo+lHQUGgAzRR3o96ACiiigAooo96ACj6UdBQaADNFHej3oAKKKKACiij3oAKPpR0FBoA//U8co6UUV+mH5eFFFFABRRR9OaACj3oooAKOlFFABRRRQAUUUfTmgAo96KKACjpRRQAUUUUAFFFH05oAKPeiigAo6UUUAFFFFABRRR9OaACj3oooAKOlFFABRRRQAUUUfTmgAo96KKACjpRRQAUUUUAFFFH05oAKPeiigAo6UUUAFFFFABRRR9OaACj3oooAKOlFFABRRRQAUUUfTmgAo96KKACjpRRQAUUUUAFFFH05oAKPeiigAo6UUUAFFFFABRRR9OaACj3oooA//V8cFFFFfph+XhmkpaKACjr1oooAKKKKAAUUUUAGaSlooAKOvWiigAooooABRRRQAZpKWigAo69aKKACiiigAFFFFABmkpaKACjr1oooAKKKKAAUUUUAGaSlooAKOvWiigAooooABRRRQAZpKWigAo69aKKACiiigAFFFFABmkpaKACjr1oooAKKKKAAUUUUAGaSlooAKOvWiigAooooABRRRQAZpKWigAo69aKKACiiigAFFFFABmkpaKACjr1oooAKKKKAP/1vHOaOhzRxmiv0w/Lwoo+lFABRSUtABR9aKKADmjoc0cZooAKKPpRQAUUlLQAUfWiigA5o6HNHGaKACij6UUAFFJS0AFH1oooAOaOhzRxmigAoo+lFABRSUtABR9aKKADmjoc0cZooAKKPpRQAUUlLQAUfWiigA5o6HNHGaKACij6UUAFFJWfq2raboOl3Gt6zOltaWkbSzSudqoiDJJPoAKANGj61+YfjX9vXxJqPiYaT8H9CjurCEt5093vM0iqesaJ8qZH98k88gHivRPAv7cejax4pTQPGunJpdtLnF15hzHknb5kZBwMEBiHO3ryDx9PU4PzOGHWJ5E021aM4yd0rtWTfvW+z8Ss01fQ+iwfCmZ4rDTxNCldRV7XSlbuk9/RavomffHNHQ5pqOkiiSMhlbkEc5Bp1fMHzoUUfSigAopKWgAo+tFFABzR0OaOM0UAFFH0ooAKKSloAKPrRRQAc0dDmjjNFABRR9KKACikpaACj60UUAHNHQ5o4zRQAUUfSigAopKWgAo+tFFAH//1/HM0Ud6Pev0w/LwooooAKKKPegAo+lHQUGgAzRR3o96ACii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Yuj/AA6rR8FaP/wT3+FNnMs+satqt7tPMavFDG3Xg7Y92OnRhX0D8Lv2aPgR8Gljf4d+GbOyuIs7bp1M90M9cTSl5AD6BgPavdOgoNb0cBhqOtOml8gxeaYvEpKvVcku70+4M0Ud6Peus4AooooAKKKPegAo+lHQUGgAzRR3o96ACiiigAooo96ACj6UdBQaADNFHej3oAKKKKACiij3oAKPpR0FBoAM0Ud6PegAooooAKKKPegAo+lHQUGgAzRR3o96ACiiigAooo96ACj6UdBQaADNFHej3oAKKKKACiij3oAKPpR0FBoA/9DxyjpRRX6Yfl4UUUUAFFFH05oAKPeiigAo6UUUAFFFFABRRR9OaACj3oooAKOlFFABRRRQAUUUfTmgAo96KKACjpRRQAUUUUAFFFH05oAKPeiigAo6UUUAFFFFABRRR9OaACj3oooAKOlFFABRRRQAUUUfTmgAo96KKACjpRRQAUUUUAFFFH05oAKPeiigAo6UUUAFFFFABRRR9OaACj3oooAKOlFFABRRRQAUUUfTmgAo96KKACjpRRQAUUUUAFFFH05oAKPeiigD/9HxwUUUV+mH5eGaSlooAKOvWiigAooooABRRRQAZpKWigAo69aKKACiiigAFFFFABmkpaKACjr1oooAKKKKAAUUUUAGaSlooAKOvWiigAooooABRRRQAZpKWigAo69aKKACiiigAFFFFABmkpaKACjr1oooAKKKKAAUUUUAGaSlooAKOvWiigAooooABRRRQAZpKWigAo69aKKACiiigAFFFFABmkpaKACjr1oooAKKKKAAUUUUAGaSlooAKOvWiigAooooA//S8c5o6HNHGaK/TD8vCij6UUAFFJS0AFH1oooAOaOhzRxmigAoo+lFABRSUtABR9aKKADmjoc0cZooAKKPpRQAUUlLQAUfWiigA5o6HNHGaKACij6UUAFFJS0AFH1oooAOaOhzRxmigAoo+lFABRSUtABR9aKKADmjoc0cZooAKKPpRQAUUlLQAUfWiigA5o6HNHGaKACij6UUAFFJS0AFH1oooAOaOhzRxmigAoo+lFABRSUtABR9aKKADmjoc0cZooAKKPpRQAUUlLQAUfWiigA5o6HNHGaKACij6UUAFFJS0AFH1oooA//T8czRR3o96/TD8vCiiigAooo96ACj6UdBQaADNFHej3oAKKKKACiij3oAKPpR0FBoAM0Ud6PegAooooAKKKPegAo+lHQUGgAzRR3o96ACiiigAooo96ACj6UdBQaADNFHej3oAKKKKACiij3oAKPpR0FBoAM0Ud6PegAooooAKKKPegAo+lHQUGgAzRR3o96ACiiigAooo96ACj6UdBQaADNFHej3oAKKKKACiij3oAKPpR0FBoAM0Ud6PegAooooAKKKPegAo+lHQUGgAzRR3o96ACiiigAooo96ACj6UdBQaAP/1PHKOlFFfph+XhRRRQAUUUfTmgAo96KKACjpRRQAUUUUAFFFH05oAKPeiigAo6UUUAFFFFABRRR9OaACj3oooAKOlFFABRRRQAUUUfTmgAo96KKACjpRRQAUUUUAFFFH05oAKPeiigAo6UUUAFFFFABRRR9OaACj3oooAKOlFFABRRRQAUUUfTmgAo96KKACjpRRQAUUUUAFFFH05oAKPeiigAo6UUUAFFFFABRRR9OaACj3oooAKOlFFABRRRQAUUUfTmgAo96KKAP/1fHBRSr3+tH8H4V+mH5eJmko/gNL2/OgAo69aP8AP60h6/jQAtFIeo+tO9Pw/lQAgopV7/Wj+D8KAEzSUfwGl7fnQAUdetH+f1pD1/GgBaKQ9R9ad6fh/KgBBRSr3+tH8H4UAJmko/gNL2/OgAo69aP8/rSHr+NAC0Uh6j6070/D+VACCilXv9aP4PwoATNJR/AaXt+dABR160f5/WkPX8aAFopD1H1p3p+H8qAEFFKvf60fwfhQAmaSj+A0vb86ACjr1o/z+tIev40ALRSHqPrTvT8P5UAIKKVe/wBaP4PwoATNJR/AaXt+dABR160f5/WkPX8aAFopD1H1p3p+H8qAEFFKvf60fwfhQAmaSj+A0vb86ACjr1o/z+tIev40ALRSHqPrTvT8P5UAIKKVe/1o/g/CgBM0lH8Bpe350AFHXrR/n9aQ9fxoAWikPUfWnen4fyoAQUUq9/rR/B+FACZpKP4DS9vzoAKOvWj/AD+tIev40ALRSHqPrTvT8P5UAIKKVe/1o/g/CgBM0lH8Bpe350AFHXrR/n9aQ9fxoAWikPUfWnen4fyoA//Z" width="640" height="360" alt="The orrery's Metal Golden with #204: five textured spheres of falling size against a blue-grey background.">
+      <canvas id="g-overlay" aria-hidden="true"></canvas>
+    </div>
+    <div class="controls">
+      <span class="control-label">Ring:</span>
+      <div class="seg" role="group" aria-label="Pixels to ring" id="g-marks">
+        <button type="button" data-marks="all" aria-pressed="true">all 73 changed</button>
+        <button type="button" data-marks="beyond" aria-pressed="false">the 34 beyond one step</button>
+        <button type="button" data-marks="none" aria-pressed="false">none</button>
+      </div>
+    </div>
+    <figcaption><b>The orrery's Metal Golden with #204</b>, re-encoded as JPEG for this page, with the pixels that differ from main's Golden ringed: bold rings for the 34 that moved by more than one 8-bit step, fine rings for the 39 that moved by one. They lie along the edge of each sphere's lit side. The changes are too small to see in the image itself; this page found the 73 by comparing the two Goldens pixel by pixel.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>These speckles are the shadow terminator that #203 met on its static spheres. A sphere here is flat triangles shaded with normals interpolated from their vertices. Near the terminator, a triangle can already face away from the sun while the normals across it still face it: the shading lights the pixel, and the ray, which starts on that triangle, finds the sphere itself in the way. The previous guide, <a href="shadow-rays.html">Shadow Rays Explained</a>, has a demo of it in its chapter 5. The fix waits as a <span class="concept" data-term="Fog line" data-tip="One line under Not yet specified on the map issue, #17: work that is known but not yet charted into a ticket.">fog line</span> on map #17, "Shadow terminator on coarse smooth-shaded meshes".</p>
+    <h3>Why no planet shadows another in the Golden</h3>
+    <p>The planets circle in one horizontal plane, and the sun stands about 60&deg; above it. Each sphere's shadow leaves it along the sunlight, steeply downward. By this page's arithmetic from the scene's constants, under this sun a sphere's shadow reaches another sphere only if the other lies beyond the first, away from the sun, with their centres within about 1.16 times the sum of their radii. A sphere and its child always stay 1.6 of the parent's diameters apart, too far for that under any sun higher than about 32&deg;. Spheres further apart in the chain swing closer to each other, and at some frames one does shadow another, but at the Golden's frame none lies in another's shadow.</p>
+  </div>
+  <figure class="wide">
+    <div class="fluid">
+      <svg viewBox="0 0 480 200" role="img" aria-labelledby="orbit-title">
+        <title id="orbit-title">The orrery from the side: five spheres in one plane, sunlight about 60 degrees up, and each sphere's shadow falling below the plane.</title>
+        <defs>
+          <marker id="orbit-sun-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 Z" class="f-warm"/></marker>
+        </defs>
+        <g class="f-shadow">
+          <polygon points="204.0,115.0 256.0,85.0 366.0,275.5 314.0,305.5"/>
+          <polygon points="299.8,110.5 336.2,89.5 446.2,280.0 409.8,301.0"/>
+          <polygon points="365.3,107.4 390.7,92.6 500.7,283.2 475.3,297.9"/>
+          <polygon points="411.1,105.2 428.9,94.9 538.9,285.4 521.1,295.7"/>
+          <polygon points="443.8,103.6 456.2,96.4 566.2,286.9 553.8,297.1"/>
+        </g>
+        <line x1="14" y1="100" x2="466" y2="100" class="s-soft" stroke-width="1.2" stroke-dasharray="6 4"/>
+        <text x="14" y="92" class="t-label">the orbit plane</text>
+        <g class="f-accent">
+          <circle cx="230" cy="100" r="30"/>
+          <circle cx="318" cy="100" r="21"/>
+          <circle cx="378" cy="100" r="14.7"/>
+          <circle cx="420" cy="100" r="10.3"/>
+          <circle cx="450" cy="100" r="7.2"/>
+        </g>
+        <g class="s-warm" stroke-width="2" stroke-dasharray="5 4" fill="none">
+          <line x1="40" y1="8" x2="60" y2="42.6" marker-end="url(#orbit-sun-arrow)"/>
+          <line x1="74" y1="8" x2="94" y2="42.6" marker-end="url(#orbit-sun-arrow)"/>
+          <line x1="108" y1="8" x2="128" y2="42.6" marker-end="url(#orbit-sun-arrow)"/>
+        </g>
+        <text x="40" y="62" class="t-warm">sunlight, about 60&#176; up</text>
+        <text x="470" y="192" class="t-label halo" text-anchor="end">each shadow falls below the plane</text>
+      </svg>
+    </div>
+    <figcaption><b>The orrery from the side, schematically.</b> The spheres circle in one plane; the sunlight comes down at about 60&deg;, so each sphere's shadow, shaded, leaves it steeply and passes below the spheres beyond it. Not the Golden's frame: the spheres are spread along the plane for clarity.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>The other Goldens</h3>
+    <p>Part 1 regenerates the orrery's two Goldens. Software Vulkan's, captured by CI's lavapipe, changed by 75 pixels, 34 of them by more than one 8-bit step and by 18 steps at most, much as Metal's did (786f195). The commits regenerate no other Golden: uv-grid moved by 4 pixels on Metal, each by one 8-bit step, from a change in the shader's generated code, which is within the Goldens' tolerance of one step, so its Golden was kept. The shadow images went to the milestone's visual check 3, on #205's PR, #265, together with #203's and #205's (ticket #204).</p>
+  </div>
+</section>
+
+<section class="chapter" id="timing">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 7 &middot; PR #266</div>
+    <h2>Timing a build the GPU runs alongside</h2>
+    <p class="plain">Part 2 reports what the dynamic build costs per frame, on the CPU and on the GPU. The CPU side is a clock around recording and submitting. The GPU side is harder. Praxis times the GPU with <span class="concept" data-term="Timestamp query" data-tip="A GPU clock reading that a pass writes at its start or end; the difference between two readings is the GPU time between them.">timestamps</span> written at the start and end of passes, and an acceleration-structure build is not a pass. A probe on the M4 Pro found how to bracket one, and PR #266, merged as 80227bc, builds on it.</p>
+    <p>Ticket #204 asked for both: "The dynamic TLAS's CPU (recording plus submit) and GPU build per frame reported on the orrery; the 10,000-Instance figure is set on <code>town</code> (#207)." The milestone then holds the dynamic TLAS at 10,000 Moving Instances to CPU and GPU ceilings that the owner set from that first measurement, on 2026-10-26 (end of this chapter).</p>
+    <p>A pair of timestamps brackets the build only if the work that writes them runs before and after it. The probe tried three kinds of marker on either side of a build, on 2026-10-23 with wgpu 30.0.1 on Metal, in a debug test build with the GPU idle between submissions, so its clocks were low; each figure is a median of 40 runs, 30 for the markers that do not read the TLAS.</p>
+  </div>
+  <figure class="wide" id="demo-probe">
+    <div class="controls" style="margin-top: 0">
+      <span class="control-label">Markers:</span>
+      <div class="seg" role="group" aria-label="Markers around the build" id="p-case">
+        <button type="button" data-case="empty" aria-pressed="false">empty passes</button>
+        <button type="button" data-case="unrelated" aria-pressed="false">dispatches that ignore the TLAS</button>
+        <button type="button" data-case="reading" aria-pressed="true">ray queries of the TLAS</button>
+      </div>
+    </div>
+    <div class="fluid" data-case="empty" hidden style="margin-top: 14px">
+      <svg viewBox="0 0 420 150" role="img" aria-labelledby="probe-empty-title">
+        <title id="probe-empty-title">Empty passes around the build: Metal writes no timestamps, so every one reads zero.</title>
+        <defs><marker id="probe-arrow-empty" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" class="f-soft"/></marker></defs>
+        <text x="8" y="53" class="t-label">compute</text>
+        <text x="8" y="109" class="t-label">build</text>
+        <rect x="76" y="36" width="66" height="26" rx="3" class="f-panel s-soft" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <text x="109" y="53" class="t-small" text-anchor="middle">empty</text>
+        <rect x="296" y="36" width="66" height="26" rx="3" class="f-panel s-soft" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <text x="329" y="53" class="t-small" text-anchor="middle">empty</text>
+        <text x="109" y="26" class="t-bad" text-anchor="middle">0 and 0</text>
+        <text x="329" y="26" class="t-bad" text-anchor="middle">0 and 0</text>
+        <rect x="154" y="92" width="130" height="26" rx="3" class="f-accent-wash s-accent" stroke-width="1.5"/>
+        <text x="219" y="109" class="t-strong" text-anchor="middle">the build</text>
+        <line x1="72" y1="136" x2="408" y2="136" class="s-soft" stroke-width="1.2" marker-end="url(#probe-arrow-empty)"/>
+        <text x="72" y="148" class="t-small">time; schematic, not to scale</text>
+      </svg>
+    </div>
+    <div class="fluid" data-case="unrelated" hidden style="margin-top: 14px">
+      <svg viewBox="0 0 420 150" role="img" aria-labelledby="probe-unrelated-title">
+        <title id="probe-unrelated-title">Dispatches that do not touch the TLAS: the build runs alongside them, so they do not bracket it.</title>
+        <defs><marker id="probe-arrow-unrelated" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" class="f-soft"/></marker></defs>
+        <text x="8" y="53" class="t-label">compute</text>
+        <text x="8" y="109" class="t-label">build</text>
+        <rect x="76" y="36" width="66" height="26" rx="3" class="f-panel s-soft" stroke-width="1.5"/>
+        <text x="109" y="53" class="t-small" text-anchor="middle">dispatch</text>
+        <rect x="146" y="36" width="66" height="26" rx="3" class="f-panel s-soft" stroke-width="1.5"/>
+        <text x="179" y="53" class="t-small" text-anchor="middle">dispatch</text>
+        <g class="s-ink" stroke-width="1.5"><line x1="76" y1="24" x2="212" y2="24"/><line x1="76" y1="19" x2="76" y2="29"/><line x1="212" y1="19" x2="212" y2="29"/></g>
+        <text x="144" y="15" class="t-strong" text-anchor="middle">15 to 20 &#181;s</text>
+        <rect x="92" y="92" width="288" height="26" rx="3" class="f-accent-wash s-accent" stroke-width="1.5"/>
+        <text x="236" y="109" class="t-strong" text-anchor="middle">the build, alongside</text>
+        <line x1="72" y1="136" x2="408" y2="136" class="s-soft" stroke-width="1.2" marker-end="url(#probe-arrow-unrelated)"/>
+        <text x="72" y="148" class="t-small">time; schematic, not to scale</text>
+      </svg>
+    </div>
+    <div class="fluid" data-case="reading" style="margin-top: 14px">
+      <svg viewBox="0 0 420 150" role="img" aria-labelledby="probe-reading-title">
+        <title id="probe-reading-title">Ray queries of the TLAS before and after the build: the build falls between them.</title>
+        <defs>
+          <marker id="probe-arrow-reading" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" class="f-soft"/></marker>
+          <marker id="probe-wait-reading" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" class="f-ink"/></marker>
+        </defs>
+        <text x="8" y="53" class="t-label">compute</text>
+        <text x="8" y="109" class="t-label">build</text>
+        <rect x="76" y="36" width="66" height="26" rx="3" class="f-panel s-soft" stroke-width="1.5"/>
+        <text x="109" y="53" class="t-small" text-anchor="middle">ray query</text>
+        <rect x="296" y="36" width="66" height="26" rx="3" class="f-panel s-soft" stroke-width="1.5"/>
+        <text x="329" y="53" class="t-small" text-anchor="middle">ray query</text>
+        <g class="s-ink" stroke-width="1.5"><line x1="142" y1="24" x2="296" y2="24"/><line x1="142" y1="19" x2="142" y2="29"/><line x1="296" y1="19" x2="296" y2="29"/></g>
+        <text x="219" y="15" class="t-strong" text-anchor="middle">0.14 ms at 0, 2.26 ms at 10,000</text>
+        <rect x="154" y="92" width="130" height="26" rx="3" class="f-accent-wash s-accent" stroke-width="1.5"/>
+        <text x="219" y="109" class="t-strong" text-anchor="middle">the build</text>
+        <g class="s-ink" stroke-width="1.3" fill="none">
+          <line x1="142" y1="62" x2="152" y2="90" marker-end="url(#probe-wait-reading)"/>
+          <line x1="286" y1="90" x2="296" y2="64" marker-end="url(#probe-wait-reading)"/>
+        </g>
+        <line x1="72" y1="136" x2="408" y2="136" class="s-soft" stroke-width="1.2" marker-end="url(#probe-arrow-reading)"/>
+        <text x="72" y="148" class="t-small">time; schematic, not to scale</text>
+      </svg>
+    </div>
+    <p class="readout" data-case="empty" hidden style="margin-top: 12px">Compute passes with timestamp writes and no dispatch: Metal writes no samples, at the start or at the end, so every timestamp reads zero.</p>
+    <p class="readout" data-case="unrelated" hidden style="margin-top: 12px">Passes with a dispatch that does not touch the TLAS: Metal runs the acceleration-structure encoder alongside them, so they do not bracket the build. From the first pass's start to the second's end took about 15 to 20 &micro;s, at 0 Instances and at 10,000 alike.</p>
+    <p class="readout" data-case="reading" style="margin-top: 12px">Passes that read the TLAS with a trivial ray query, before and after the build: from the first pass's end to the second's start took 0.14 ms at 0 Instances and 2.26 ms at 10,000. The arrows mark the waits: the build waits for the pass that reads the old contents, and the second pass waits for the build.</p>
+    <figcaption><b>The probe's three kinds of marker</b>, M4 Pro, Metal, wgpu 30.0.1. Schematic: the boxes' lengths are not to scale.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Only the third kind brackets the build. A pass that reads the TLAS has to wait for a build that writes it, and the build has to wait for a pass that still reads the old contents, so the build falls between the two markers. Across sizes, the bracket grew with the Instances built:</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th class="n">Instances built</th><th class="n">Median</th><th class="n">p10</th></tr></thead>
+        <tbody>
+          <tr><td class="n">0</td><td class="n">0.14 ms</td><td class="n">0.14 ms</td></tr>
+          <tr><td class="n">5</td><td class="n">0.27 ms</td><td class="n">0.19 ms</td></tr>
+          <tr><td class="n">100</td><td class="n">0.40 ms</td><td class="n">0.28 ms</td></tr>
+          <tr><td class="n">1,000</td><td class="n">1.37 ms</td><td class="n">0.78 ms</td></tr>
+          <tr class="focus"><td class="n">10,000</td><td class="n">2.26 ms</td><td class="n">2.21 ms</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>From the first TLAS-reading marker's end to the second's start</b>, around one build of each size: the probe's debug build at low clocks, 40 runs each. One marker dispatch alone took 7 to 18 &micro;s. Ticket #204 records the medians at 0, 5, 1,000 and 10,000 Instances.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The bracket holds more than the build: at 0 Instances it still measured 0.14 ms, at low clocks. The probe's figures show that the method works; the cost comes from part 2's own measurements, at the end of this chapter. And a marker that reads the TLAS fails wgpu-core's submit validation if the TLAS was never built (<code>UsedUnbuiltTlas</code>).</p>
+    <h3>How part 2 times it</h3>
+    <ul class="keypoints">
+      <li><b>A command buffer of its own.</b> <code>DynamicTlas::record</code>, which replaced <code>update</code>, fills the entries as chapter 4 shows and records the build into its own command buffer. The Renderer records and finishes it in <code>render</code>, as the CPU stage <code>dynamic_tlas</code>, and submits it just before the frame's command buffer, as <code>dynamic_tlas_submit</code>. Their sum is ADR 0020's "recording plus submit", which bench records per frame as <code>dynamic_tlas_cpu_microseconds</code>.</li>
+      <li><b>Two markers.</b> One-invocation compute passes that query the dynamic TLAS run on either side of the build, and its GPU time runs from the first marker's end to the second's start. A frame that builds nothing records no markers, and its build reads as no time. <code>DynamicTlas::new</code> builds the TLAS empty at creation, so a marker never queries it unbuilt.</li>
+      <li><b>The previous frame's rays.</b> The first marker can run while the previous frame still traces rays against the TLAS, and the build waits for them. So the build starts at the later of the first marker's end and the end of the previous frame's rays: its lit pass's end as #266 merged, its shadow mask pass's end since #277. Without that, the orrery's build read 1.65 to 1.75 ms, the previous frame's whole lit pass; with it, 0.18 ms.</li>
+      <li><b>The GPU frame total</b> is the build plus the span of the frame's own passes, so it counts neither the wait between the two submissions nor what the frame records before its first pass.</li>
+    </ul>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">// The first timed pass, the dynamic TLAS's build, runs
+// in a submission of its own before the frame's. The
+// marker before it can run while the frame before
+// still traces rays against the TLAS, which the build
+// waits for, so it starts at the later of the two.</span>
+let previous_shadow_ray_end = self
+    .last_shadow_ray_end
+    .filter(|&amp;(previous, _)| previous + 1 == frame)
+    .map_or(0, |(_, tick)| tick);
+let build = if slot.dynamic_tlas_built {
+    time(ticks[0].max(previous_shadow_ray_end), ticks[1])
+} else {
+    Duration::ZERO
+};
+<span class="comment">// &hellip;
+// The build plus the span of the frame's passes, so
+// neither the wait between the two submissions nor
+// what the frame records before its first pass
+// counts.</span>
+frame_time: build
+    + time(ticks[2 * first_pass], ticks[QUERIES_PER_FRAME - 1]),</code></pre>
+    <figcaption><b>Reading a frame's timestamps back</b>, abridged from <code>src/render/readback.rs</code> at main 69e02dc. <code>ticks[0]</code> is the first marker's end and <code>ticks[1]</code> the second's start; <code>last_shadow_ray_end</code> holds the previous frame read back and the tick its shadow mask pass ended at.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>What submit adds</h3>
+    <p>Part of the CPU's share is paid at submit, whatever the build. Each pass that sets a bind group holding a TLAS adds one use of each such TLAS to its command buffer. At submit, wgpu-core walks each use's TLAS dependencies, one per Instance, and on Metal adds each to a new <span class="concept" data-term="Residency set" data-tip="A set of resource allocations that Metal makes resident, that is GPU-accessible, for the command buffers it is attached to. At submit, wgpu makes one for each command buffer that builds or binds a TLAS with entries, holding the BLASes those entries refer to.">residency set</span> for that command buffer (wgpu-core 30.0.1, <code>command/pass.rs</code> and <code>command/ray_tracing.rs</code>; wgpu-hal 30.0.1, <code>metal/command.rs</code>). At #204, the scene-geometry bind group held both TLAS and was set in four passes: culling phases one and two, the depth pre-pass and the lit pass. Part 2's measurement of recording plus submit, <code>dynamic_tlas_cpu_microseconds</code>, counts chapter 4's allocation per entry, made as the build's own encoder finishes, and the walks at the build's own submit, for the build and its two markers. It leaves out the four passes' walks, which happen at the frame's own submit, as <code>docs/performance.md</code> notes under "Not in the CPU figure".</p>
+    <h3>What it measured</h3>
+    <p>On the orrery, PR #266's three runs on the M4 Pro at 2560 &times; 1440 read medians of 197 to 203 &micro;s of CPU for the build's recording, <code>finish</code> and its own submit, and 174 to 176 &micro;s of GPU for the build. Timing it costs 27 &micro;s of CPU frame and 73 heap allocations a frame (317 to 390), for its own command buffer, its own submit and the two markers.</p>
+    <p><code>town</code> sets the 10,000-Instance figure (#207). Measured on main 69e02dc, its committed M4 Pro Baseline fills the dynamic TLAS with 10,000 Moving Instances, 100 flocks of 100 birds. Recording plus submit takes 1.00 ms of CPU (median; p95 1.11), against ADR 0020's 0.64 to 0.92 ms, and the build reads 4.11 ms of GPU (p95 4.52), against 0.83 ms while the rays were still traced in the lit pass, before #277. The 4.11 ms may also count the previous frame's lit pass, which runs after that frame's shadow mask pass and likely shares the GPU with the build: unverified then, and handed to #207 to settle before the ceilings were set. (Settled on 2026-10-26, in <a href="https://github.com/gariasf/praxis/issues/207#issuecomment-6415600666">the owner's decision on #207</a>: the build's 4.1 ms ran almost wholly alongside the previous frame's lit and tonemapping passes. Timed from the end of that frame's last pass, it reads 48 &micro;s, and run alone, with one frame in flight, it takes 665 &micro;s. The owner decided that the build counts from the end of the previous frame's last pass, which PR #299, open on 2026-10-26, puts into the code, and set the ceilings at 10,000 Moving Instances to 1.1 ms of CPU, recording plus submit, and 1.0 ms of GPU build, both medians.) <code>town</code>'s frames make 10,478 heap allocations, against 341 without the birds: nearly one per entry.</p>
+  </div>
+</section>
+
+<section class="chapter" id="cost">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 8 &middot; PR #264's Baselines</div>
+    <h2>What it costs</h2>
+    <p class="plain">#204 adds work in three places: the CPU records and submits a build in every frame, the GPU runs it, and the lit pass makes a second query wherever the static TLAS lets a ray through and something moves. Its cost was measured as a difference, main at 0db5e46 against the branch, in release builds at 2560 &times; 1440 with 4x MSAA on the M4 Pro. The orrery, the one Reference scene where something moves, pays 812 &micro;s more GPU time per frame. The scenes where nothing moves pay 43 to 413 &micro;s more in the lit pass, and part 1's first version showed why they pay anything at all.</p>
+    <h3>An empty TLAS still costs its query</h3>
+    <p>258001a, part 1's first commit, queried the dynamic TLAS wherever the static TLAS let a ray through, empty or not. An A/B against main, in three rounds that alternated the two binaries scene by scene, put the lit pass up on every scene where nothing moves:</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Scene</th><th class="n">Lit pass, 258001a against main</th></tr></thead>
+        <tbody>
+          <tr><td>uv-grid</td><td class="n">+452 &micro;s</td></tr>
+          <tr><td>pbr-sweep</td><td class="n">+486 &micro;s</td></tr>
+          <tr><td>normal-tangent</td><td class="n">+698 &micro;s</td></tr>
+          <tr><td>far-coplanar</td><td class="n">+989 &micro;s</td></tr>
+          <tr><td>minification</td><td class="n">+1,046 &micro;s</td></tr>
+          <tr><td>helmet</td><td class="n">+1,689 &micro;s</td></tr>
+          <tr><td>shadows</td><td class="n">+1,831 &micro;s</td></tr>
+          <tr><td>texture-wall</td><td class="n">+2,255 &micro;s</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>The empty dynamic TLAS's query</b>, on the eight scenes with no Moving Instance: the lit pass's GPU time with 258001a minus main's, M4 Pro, release, 2560 &times; 1440. Every ray the static TLAS let through went on to query a TLAS that held nothing. PR #264 records the range, 452 to 2,255 &micro;s.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>A ray query of an empty TLAS still costs the lit pass on Metal: here, 452 to 2,255 &micro;s. So 11e9388 skips it. The camera uniform's last padding word now carries the dynamic TLAS's entry count, and <code>shadowed</code> returns before the second query while that count is 0 (chapter 5).</p>
+    <h3>With the skip</h3>
+    <p>The M4 Pro Baselines were then re-recorded on a quiet machine, keeping each scene's quietest of three runs (a11bbd3). Main against the branch, medians in &micro;s:</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts wrap-heads">
+        <thead><tr><th>Scene</th><th class="n">GPU frame, change</th><th class="n">Lit pass change</th><th class="n">GPU frame, main &rarr; #204</th></tr></thead>
+        <tbody>
+          <tr class="focus"><td>orrery</td><td class="n">+812</td><td class="n">+811</td><td class="n">1,549 &rarr; 2,361</td></tr>
+          <tr><td>shadows</td><td class="n">+304</td><td class="n">+305</td><td class="n">6,526 &rarr; 6,829</td></tr>
+          <tr><td>far-coplanar</td><td class="n">+136</td><td class="n">+132</td><td class="n">3,339 &rarr; 3,475</td></tr>
+          <tr><td>normal-tangent</td><td class="n">+116</td><td class="n">+119</td><td class="n">4,034 &rarr; 4,150</td></tr>
+          <tr><td>minification</td><td class="n">+91</td><td class="n">+110</td><td class="n">3,255 &rarr; 3,346</td></tr>
+          <tr><td>helmet</td><td class="n">+76</td><td class="n">+79</td><td class="n">10,333 &rarr; 10,409</td></tr>
+          <tr><td>uv-grid</td><td class="n">+50</td><td class="n">+50</td><td class="n">2,278 &rarr; 2,328</td></tr>
+          <tr><td>pbr-sweep</td><td class="n">+35</td><td class="n">+43</td><td class="n">3,710 &rarr; 3,745</td></tr>
+          <tr><td>texture-wall</td><td class="n">&minus;329, noise</td><td class="n">+413</td><td class="n">15,014 &rarr; 14,686</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>Part 1's cost with the skip</b>: main 0db5e46 against PR #264's re-recorded Baselines, M4 Pro, release, 2560 &times; 1440, 4x MSAA, medians in &micro;s. Only the orrery has Moving Instances. texture-wall's GPU frame fell by noise while its lit pass rose.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Where nothing moves, the skip took most of the cost away but not all of it: those scenes' lit passes still grew by 43 to 413 &micro;s, and their GPU frames by 35 to 304 &micro;s, all but texture-wall's, which fell by noise. The second query's code costs the lit pass even when it never runs. Removing it would need a lit pipeline without the dynamic query, chosen while nothing moves. That is noted and not done, since it would help only scenes with no Moving Instance.</p>
+    <h3>The orrery</h3>
+    <p>On the orrery the lit pass went from 870 to 1,682 &micro;s, +811 &micro;s: every sunlit planet pixel now traces the dynamic TLAS, and each of those rays starts inside the bounds of its own sphere's BLAS. A ray that starts inside a box always enters it, so each one walks down into its own sphere before it can leave. The CPU frame went from 137 to 291 &micro;s, +154 &micro;s, for the build in every frame. The uploads went from 1,024 to 1,384 bytes per frame, the five entries' 5 &times; 72, and the heap allocations from 273 to 317 per frame, the new ones inside wgpu-core.</p>
+    <p>The CPU medians are the softer figures. They moved by up to &plusmn;240 &micro;s between runs with the order of the scenes inside one bench process, so the GPU medians are the reliable ones. In PR #264's table, the other scenes' CPU frames moved by &minus;238 to +7 &micro;s, within that spread. Part 2 timed the build itself (chapter 7).</p>
+    <h3>Memory, on both backends</h3>
+    <p>Every scene's GPU memory grew by 2,885,000 B on the M4 Pro, the dynamic TLAS's 10,000 &times; 288.5 B, whatever it holds. On CI's lavapipe the same capacity adds 2,400,000 B, 10,000 &times; 240 B, and the orrery's uploads grow from 1,024 to 1,344 bytes per frame, its entries' 5 &times; 64 (786f195).</p>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Repo links are pinned to #264's merge, 79cdabb, to #266's, 80227bc, or to main 69e02dc where the code has moved since. The books' chapter and section numbers were checked on 2026-10-23 against pbr-book.org and the chapter's PDF on realtimerendering.com.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>This ticket</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/issues/204">Ticket #204</a> <span>the ask, its acceptance criteria and part 2's measurements</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/264">PR #264</a> <span>part 1: the dynamic TLAS, the skip of an empty one, and the re-recorded Baselines</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/266">PR #266</a> <span>part 2: the build in a command buffer of its own, its markers, and what it measured</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/17#issuecomment-6273209752">The decision on map #17</a> <span>item 8: Moving Instances, the 10,000 cap, those left out counted and warned about</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/17#issuecomment-6275824206">The architecture review's decision</a> <span>under Instances: the lowest slots keep their place</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/79cdabbabf6f9c9217ebc3b97e3f2d1dbc59dd6b/docs/adr/0020-ray-traced-probe-gi-and-hard-ray-traced-shadows.md">ADR 0020</a> <span>the split into a static and a dynamic TLAS, and the dynamic one's measured cost</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/79cdabbabf6f9c9217ebc3b97e3f2d1dbc59dd6b/docs/adr/0022-fixed-64-hz-simulation-with-interpolation.md">ADR 0022</a> <span>Ticks, the blend, and the previous World transform</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/79cdabbabf6f9c9217ebc3b97e3f2d1dbc59dd6b/docs/adr/0014-world-positions-are-f64-the-gpu-works-camera-relative.md">ADR 0014</a> <span>Anchors, and why both TLAS compose their translations in f64</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/79cdabbabf6f9c9217ebc3b97e3f2d1dbc59dd6b/docs/research/global-illumination-and-lighting.md">The GI survey</a>, <code>docs/research/global-illumination-and-lighting.md</code> <span>the row on BLAS and TLAS updates, and the "TLAS rebuild" figures</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/79cdabbabf6f9c9217ebc3b97e3f2d1dbc59dd6b/src/render/prepare.rs"><code>src/render/prepare.rs</code></a>, <a href="https://github.com/gariasf/praxis/blob/79cdabbabf6f9c9217ebc3b97e3f2d1dbc59dd6b/src/render/acceleration_structures.rs"><code>src/render/acceleration_structures.rs</code></a> and <a href="https://github.com/gariasf/praxis/blob/79cdabbabf6f9c9217ebc3b97e3f2d1dbc59dd6b/src/render/shaders/main.wgsl"><code>src/render/shaders/main.wgsl</code></a> <span>the list and its cap, the dynamic TLAS, and the two queries</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/80227bcaebf571e6801d7ef32b278492056e3c63/src/render/acceleration_structures.rs"><code>DynamicTlas::record</code></a> at 80227bc, and on main <a href="https://github.com/gariasf/praxis/blob/69e02dc49eaee125830e7470e91eb09e5a63a636/src/render/readback.rs"><code>src/render/readback.rs</code></a> and <a href="https://github.com/gariasf/praxis/blob/69e02dc49eaee125830e7470e91eb09e5a63a636/src/render/shaders/shadow_mask.wgsl"><code>src/render/shaders/shadow_mask.wgsl</code></a> <span>the build between its markers, where its timed span starts, and the two queries since #277</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>The APIs</h3>
+      <ul>
+        <li><a href="https://docs.vulkan.org/refpages/latest/refpages/source/VkAccelerationStructureInstanceKHR.html">Vulkan, <code>VkAccelerationStructureInstanceKHR</code></a> <span>a TLAS entry on Vulkan: the 3&times;4 matrix, custom index, mask and BLAS reference</span></li>
+        <li><a href="https://developer.apple.com/documentation/metal/mtlindirectaccelerationstructureinstancedescriptor">Metal, <code>MTLIndirectAccelerationStructureInstanceDescriptor</code></a> <span>the same entry on Metal, as wgpu-hal fills it</span></li>
+        <li>wgpu 30.0.1, <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/tlas.rs"><code>wgpu/src/api/tlas.rs</code></a> <span><code>Tlas</code>, its entries and <code>get_mut_slice</code></span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs"><code>wgpu-core/src/command/ray_tracing.rs</code></a> <span>each TLAS's dependencies, and the validation at submit</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs"><code>wgpu-hal/src/metal/command.rs</code></a> <span><code>build_acceleration_structures</code> and the residency sets on Metal</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/ray_tracing.rs"><code>wgpu-types/src/ray_tracing.rs</code></a> <span>the build flags and update modes</span></li>
+        <li><a href="https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_ecs/src/storage/table/mod.rs">bevy_ecs 0.18.1, <code>storage/table/mod.rs</code></a> <span>why the ECS World's order moves: rows appended, removals filled from the end</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Books</h3>
+      <ul>
+        <li>Akenine-M&ouml;ller et al., <i>Real-Time Rendering</i>, 4th edition, online chapter 26, Real-Time Ray Tracing, <a href="https://www.realtimerendering.com/Real-Time_Rendering_4th-Real-Time_Ray_Tracing.pdf">free from realtimerendering.com</a> <span>&sect;26.3, Top and Bottom Level Acceleration Structures: the two levels, the 3&times;4 matrices a TLAS holds per instance, and updating versus rebuilding</span></li>
+        <li>Pharr, Jakob and Humphreys, <i>Physically Based Rendering</i>, 4th edition, chapter 7, Primitives and Intersection Acceleration: <a href="https://pbr-book.org/4ed/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies">&sect;7.3, Bounding Volume Hierarchies</a> <span>the tree inside every BLAS and TLAS, and how it is built</span>; and <a href="https://pbr-book.org/4ed/Primitives_and_Intersection_Acceleration/Primitive_Interface_and_Geometric_Primitives">&sect;7.1.2, Object Instancing and Primitives in Motion</a> <span>instancing, the idea behind a TLAS entry</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+  </div>
+  <dl class="glossary page">
+    <div><dt>TLAS</dt><dd>Top-level acceleration structure: the GPU's search structure over Instances, each placing a BLAS with its transform.</dd></div>
+    <div><dt>BLAS</dt><dd>Bottom-level acceleration structure: the GPU's search structure over one Mesh's triangles.</dd></div>
+    <div><dt>Static TLAS</dt><dd>The TLAS of every static Instance, rebuilt only in a frame that changes one (#202).</dd></div>
+    <div><dt>Dynamic TLAS</dt><dd>The TLAS of at most 10,000 Moving Instances, those in the lowest slots, rebuilt every frame (#204).</dd></div>
+    <div><dt>Moving Instance</dt><dd>An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform.</dd></div>
+    <div><dt>Instance</dt><dd>One Renderable's data on the GPU, in a slot of the Instance buffer that the Renderable keeps while it is one.</dd></div>
+    <div><dt>Slot</dt><dd>An Instance's place in the Instance buffer; it changes only when its Renderable spawns or despawns.</dd></div>
+    <div><dt>Rebuild</dt><dd>Building an acceleration structure from scratch from its current contents; wgpu-core 30's only update.</dd></div>
+    <div><dt>Refit</dt><dd>Recomputing an acceleration structure's bounds in place, keeping its tree; not in wgpu-core 30.</dd></div>
+    <div><dt>PREFER_FAST_TRACE</dt><dd>The build flag that favours fast tracing over fast building; both TLAS take it, though on Metal wgpu-hal 30.0.1 passes nothing for it.</dd></div>
+    <div><dt>Custom data</dt><dd>A number a TLAS entry carries and a hit reports; Praxis stores the Instance's slot.</dd></div>
+    <div><dt>Instance record</dt><dd>A backend's own form of a TLAS entry: 72 B on Metal, 64 B on Vulkan and DX12.</dd></div>
+    <div><dt>Tick</dt><dd>One fixed step of the simulation, 1/64 s; rendered frames draw a blend of the two newest Ticks.</dd></div>
+    <div><dt>Fixed schedule</dt><dd>The schedule that runs once per Tick and holds everything that changes game state.</dd></div>
+    <div><dt>Blend weight</dt><dd>How far a frame lies between the two newest Ticks; prepare blends moving entities by it.</dd></div>
+    <div><dt>PreviousWorldTransform</dt><dd>The component holding an entity's World transform after the previous Tick; carrying it makes an Instance a Moving Instance.</dd></div>
+    <div><dt>World transform</dt><dd>Where an entity sits in a Game world: its Transform composed with every ancestor's, in f64.</dd></div>
+    <div><dt>Anchor</dt><dd>The integer coordinates of the 64 m grid cell that holds a World position.</dd></div>
+    <div><dt>The TLAS frame</dt><dd>The f32 frame both TLAS share, its origin at the corner of the camera's Anchor in the first Frame data.</dd></div>
+    <div><dt>Frame data</dt><dd>The per-frame collection of changed Instances, lights and camera that the renderer consumes in place of reading the ECS World.</dd></div>
+    <div><dt>Frame stats</dt><dd>What one frame cost, measured by the engine itself; among its counts, the Moving Instances left out of the dynamic TLAS.</dd></div>
+    <div><dt>ECS World</dt><dd>The container of entities, components and resources. A code concept, never the playable space.</dd></div>
+    <div><dt>Archetype</dt><dd>In bevy_ecs, the set of components an entity has; entities of one archetype share a table.</dd></div>
+    <div><dt>select_nth_unstable</dt><dd>Rust's partial sort: the n smallest elements first, in no order, in O(n) time.</dd></div>
+    <div><dt>Ray query</dt><dd>A ray traced inline from an ordinary shader: initialise, proceed, read the committed hit.</dd></div>
+    <div><dt>Opaque</dt><dd>Geometry whose every hit counts; one <code>rayQueryProceed</code> then completes a traversal.</dd></div>
+    <div><dt>Terminator</dt><dd>The line where a curved surface turns from facing a light to facing away.</dd></div>
+    <div><dt>Fog line</dt><dd>A line under "Not yet specified" on the map issue: known work, not yet a ticket.</dd></div>
+    <div><dt>Timestamp query</dt><dd>A GPU clock reading that a pass writes at its start or end.</dd></div>
+    <div><dt>Residency set</dt><dd>A set of resource allocations that Metal makes resident, GPU-accessible, for the command buffers it is attached to; wgpu makes one for each command buffer that builds or binds a TLAS with entries.</dd></div>
+    <div><dt>Capability floor</dt><dd>The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.</dd></div>
+    <div><dt>Budget</dt><dd>A numeric limit on one metric of a Reference scene that a change must not regress.</dd></div>
+    <div><dt>Reference scene</dt><dd>A Scene paired with a fixed camera path and injected time, so that every run produces the same frames.</dd></div>
+    <div><dt>Golden</dt><dd>A committed image that a Reference scene must reproduce within tolerance.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from ticket <a href="https://github.com/gariasf/praxis/issues/204">#204</a>, PR <a href="https://github.com/gariasf/praxis/pull/264">#264</a>, commits 258001a, 11e9388, a11bbd3 and 786f195, as verified during the work on #204, on 2026-10-23, and PR <a href="https://github.com/gariasf/praxis/pull/266">#266</a>, re-checked against main 69e02dc on 2026-10-24, with ADRs 0014, 0020 and 0022 and the decisions on map #17. Where the guide does its own arithmetic, it says so. The demos are this page's models and say where they simplify. The image is the orrery's Metal Golden at 258001a, which #264's merge kept, re-encoded as JPEG; its 73 ringed pixels are this page's comparison of that Golden with main's at 0db5e46, which reproduces PR #264's counts: 73 changed, 34 by more than one step, 18 steps at most. The same comparison of software Vulkan's Goldens reproduces their 75, 34 and 18.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="shadow-rays.html">Previous: Shadow Rays Explained</a><a href="index.html">All field guides</a><a href="gpu-ordering.html">Next: GPU Ordering Explained</a></nav>
+</div>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const byId = (id) => document.getElementById(id);
+  const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+  const name = (entity) => "e" + entity;
+
+  /* Theme: every drawing reads the colour tokens when it draws, and redraws when the theme changes. */
+  const redrawers = [];
+  const redrawAll = () => {
+    for (const redraw of redrawers) redraw();
+  };
+  function readTokens() {
+    const style = getComputedStyle(document.documentElement);
+    const token = (tokenName) => style.getPropertyValue(tokenName).trim();
+    return {
+      panel: token("--panel"), ink: token("--ink"), inkSoft: token("--ink-soft"), rule: token("--rule"),
+      accent: token("--accent"), warm: token("--warm"), bad: token("--bad"), figureBg: token("--figure-bg"),
+    };
+  }
+  if (window.matchMedia) {
+    const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    if (darkQuery.addEventListener) darkQuery.addEventListener("change", redrawAll);
+    else if (darkQuery.addListener) darkQuery.addListener(redrawAll);
+  }
+  if (window.MutationObserver) {
+    new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawAll);
+
+  /* Sizing: each drawing takes its container's width and redraws when that width changes. */
+  function watchWidth(container, render) {
+    redrawers.push(render);
+    if (window.ResizeObserver) {
+      let lastWidth = -1;
+      new ResizeObserver(() => {
+        const width = container.clientWidth;
+        if (width !== lastWidth) {
+          lastWidth = width;
+          render();
+        }
+      }).observe(container);
+    } else {
+      window.addEventListener("resize", render);
+    }
+    render();
+  }
+  // Sizes `canvas` to `width` by `height` CSS pixels at the device's pixel ratio, and returns its context.
+  function sizeCanvas(canvas, width, height) {
+    const ratio = window.devicePixelRatio || 1;
+    canvas.style.width = width + "px";
+    canvas.style.height = height + "px";
+    canvas.width = Math.max(1, Math.round(width * ratio));
+    canvas.height = Math.max(1, Math.round(height * ratio));
+    const context = canvas.getContext("2d");
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    return context;
+  }
+  function setPressed(buttons, isPressed) {
+    for (const button of buttons) button.setAttribute("aria-pressed", String(isPressed(button)));
+  }
+  // Presses the clicked one of `buttons` and calls `choose` with its `data-` value named `key`.
+  function segmented(buttons, key, choose) {
+    for (const button of buttons) {
+      button.addEventListener("click", () => {
+        setPressed(buttons, (other) => other === button);
+        choose(button.dataset[key]);
+      });
+    }
+  }
+  function line(context, fromX, fromY, toX, toY) {
+    context.beginPath();
+    context.moveTo(fromX, fromY);
+    context.lineTo(toX, toY);
+    context.stroke();
+  }
+  // A filled arrowhead with its tip at (x, y), pointing along the unit vector (directionX, directionY).
+  function arrowHead(context, x, y, directionX, directionY) {
+    const length = 7;
+    const half = 3.5;
+    context.beginPath();
+    context.moveTo(x, y);
+    context.lineTo(x - directionX * length - directionY * half, y - directionY * length + directionX * half);
+    context.lineTo(x - directionX * length + directionY * half, y - directionY * length - directionX * half);
+    context.closePath();
+    context.fill();
+  }
+  // Lets a pointer pressed on `canvas` drive `aim` until it is released.
+  function dragOn(canvas, aim) {
+    let activePointer = null;
+    canvas.addEventListener("pointerdown", (event) => {
+      if (event.button > 0) return;
+      activePointer = event.pointerId;
+      if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
+      aim(event);
+    });
+    canvas.addEventListener("pointermove", (event) => {
+      if (event.pointerId === activePointer) aim(event);
+    });
+    const release = (event) => {
+      if (event.pointerId === activePointer) activePointer = null;
+    };
+    canvas.addEventListener("pointerup", release);
+    canvas.addEventListener("pointercancel", release);
+  }
+
+  /* Figure: one entity's Instance as it gains and loses PreviousWorldTransform. */
+  (function lifecycleFigure() {
+    const buttons = Array.from(document.querySelectorAll("#l-version button"));
+    if (!buttons.length) return;
+    const variants = Array.from(document.querySelectorAll("#demo-lifecycle [data-variant]"));
+    segmented(buttons, "version", (version) => {
+      for (const node of variants) node.hidden = node.dataset.variant !== version;
+    });
+  })();
+
+  /* Demo: the cap, scaled down to 8 Moving Instances. */
+  (function capDemo() {
+    const grid = byId("cap-slots");
+    if (!grid) return;
+    const orderList = byId("cap-order");
+    const note = byId("cap-note");
+    const policyButtons = Array.from(document.querySelectorAll("#cap-policy button"));
+    // The dynamic TLAS's capacity, scaled down from 10,000, and the slots this demo's Instance buffer has.
+    const CAPACITY = 8;
+    const SLOT_COUNT = 16;
+    const RULES = ["slots", "world"];
+    const RULE_NAMES = { slots: "Lowest slots", world: "First in ECS World order" };
+    let policy = "slots";
+    let selected = null;
+    let state = null;
+
+    // One cell per slot, made once, so keyboard focus survives each frame.
+    const cells = Array.from({ length: SLOT_COUNT }, (unused, slot) => {
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = "slot";
+      const number = document.createElement("span");
+      number.className = "slot-number";
+      number.textContent = "slot " + slot;
+      const entity = document.createElement("span");
+      entity.className = "slot-entity";
+      const status = document.createElement("span");
+      status.className = "slot-state";
+      cell.append(number, entity, status);
+      cell.addEventListener("click", () => {
+        selected = selected === slot ? null : slot;
+        render();
+      });
+      grid.append(cell);
+      return { cell: cell, entity: entity, status: status };
+    });
+
+    function emptyState() {
+      return {
+        frame: 0, nextEntity: 1, end: 0, free: [], order: [], slotOf: new Map(), entityIn: [],
+        kept: { slots: new Set(), world: new Set() },
+        changes: { slots: { joined: [], dropped: [] }, world: { joined: [], dropped: [] } },
+        spawned: null, story: "", showChanges: false,
+      };
+    }
+    // The entities whose Moving Instances the dynamic TLAS keeps under `rule`; prepare meets them in ECS World order.
+    function keep(rule) {
+      const listed = state.order.map((entity) => ({ entity: entity, slot: state.slotOf.get(entity) }));
+      if (listed.length > CAPACITY) {
+        if (rule === "slots") listed.sort((a, b) => a.slot - b.slot);
+        listed.length = CAPACITY;
+      }
+      return new Set(listed.map((moving) => moving.entity));
+    }
+    // Takes the slot freed most recently in an earlier frame, else a fresh one, as prepare does.
+    function spawn() {
+      const slot = state.free.length ? state.free.pop() : state.end < SLOT_COUNT ? state.end : null;
+      if (slot === null) return null;
+      const entity = state.nextEntity++;
+      state.end = Math.max(state.end, slot + 1);
+      state.slotOf.set(entity, slot);
+      state.entityIn[slot] = entity;
+      state.order.push(entity);
+      state.spawned = entity;
+      return entity;
+    }
+    // bevy_ecs fills a removed entity's row with its table's last entity; returns the entity that moved, if any.
+    function removeFromOrder(entity) {
+      const row = state.order.indexOf(entity);
+      const last = state.order.pop();
+      if (row < state.order.length) {
+        state.order[row] = last;
+        return last;
+      }
+      return null;
+    }
+    function despawn(slot) {
+      const entity = state.entityIn[slot];
+      const moved = removeFromOrder(entity);
+      state.slotOf.delete(entity);
+      state.entityIn[slot] = null;
+      // Freed in this frame, so taken again from the next one on.
+      state.free.push(slot);
+      return { entity: entity, moved: moved };
+    }
+    function teleport(slot) {
+      const entity = state.entityIn[slot];
+      const moved = removeFromOrder(entity);
+      state.order.push(entity);
+      return { entity: entity, moved: moved };
+    }
+    // Ends a frame: prepare lists every Moving Instance and keeps CAPACITY of them by each rule.
+    function endFrame() {
+      state.frame += 1;
+      for (const rule of RULES) {
+        const before = state.kept[rule];
+        const kept = keep(rule);
+        state.changes[rule] = {
+          joined: [...kept].filter((entity) => !before.has(entity) && entity !== state.spawned),
+          dropped: [...before].filter((entity) => !kept.has(entity) && state.slotOf.has(entity)),
+        };
+        state.kept[rule] = kept;
+      }
+    }
+    const inSlot = (entity) => name(entity) + " in slot " + state.slotOf.get(entity);
+    const leftOut = (rule) => state.order.filter((entity) => !state.kept[rule].has(entity));
+    function describeChanges(rule) {
+      const change = state.changes[rule];
+      const parts = [];
+      if (change.dropped.length) {
+        parts.push(change.dropped.map(inSlot).join(", ") + " dropped out, and from this frame " + (change.dropped.length > 1 ? "cast" : "casts") + " no shadow");
+      }
+      if (change.joined.length) parts.push(change.joined.map(inSlot).join(", ") + " joined");
+      if (state.spawned && state.slotOf.has(state.spawned) && !state.kept[rule].has(state.spawned)) {
+        parts.push("the new " + name(state.spawned) + " is left out");
+      }
+      return RULE_NAMES[rule] + ": " + (parts.length ? parts.join("; ") : "no Moving Instance joined or dropped out") + ".";
+    }
+    function start() {
+      state = emptyState();
+      for (let count = 0; count <= CAPACITY; count++) spawn();
+      endFrame();
+      state.spawned = null;
+      for (const rule of RULES) state.changes[rule] = { joined: [], dropped: [] };
+      state.story = "Frame 1: " + (CAPACITY + 1) + " Moving Instances in slots 0 to " + CAPACITY + ", one more than the dynamic TLAS holds.";
+      selected = null;
+    }
+    function chosenSlot() {
+      return selected !== null && state.entityIn[selected] ? selected : null;
+    }
+    function render() {
+      const kept = state.kept[policy];
+      const change = state.changes[policy];
+      cells.forEach((parts, slot) => {
+        const entity = slot < state.end ? state.entityIn[slot] : null;
+        parts.cell.classList.remove("kept", "left-out", "free", "fresh");
+        if (entity) {
+          const inTlas = kept.has(entity);
+          let mark = "";
+          if (entity === state.spawned) mark = ", new";
+          else if (change.joined.includes(entity)) mark = ", joined";
+          else if (change.dropped.includes(entity)) mark = ", dropped out";
+          parts.cell.classList.add(inTlas ? "kept" : "left-out");
+          parts.cell.disabled = false;
+          parts.cell.setAttribute("aria-pressed", String(selected === slot));
+          parts.entity.textContent = name(entity);
+          parts.status.textContent = (inTlas ? "in the TLAS" : "left out") + mark;
+        } else {
+          const freed = slot < state.end;
+          parts.cell.classList.add(freed ? "free" : "fresh");
+          parts.cell.disabled = true;
+          parts.cell.removeAttribute("aria-pressed");
+          parts.entity.textContent = freed ? "free" : "\u2013";
+          parts.status.textContent = freed ? "freed earlier" : "never taken";
+        }
+      });
+      orderList.replaceChildren();
+      state.order.forEach((entity, row) => {
+        if (policy === "world" && row === CAPACITY) {
+          const cut = document.createElement("li");
+          cut.className = "cut";
+          cut.textContent = "| capacity";
+          orderList.append(cut);
+        }
+        const chip = document.createElement("li");
+        chip.className = kept.has(entity) ? "kept" : "left-out";
+        chip.textContent = name(entity) + " \u00b7 " + state.slotOf.get(entity);
+        orderList.append(chip);
+      });
+      const out = leftOut(policy);
+      byId("cap-frame").textContent = String(state.frame);
+      byId("cap-count").textContent = String(state.order.length);
+      byId("cap-kept").textContent = String(state.order.length - out.length);
+      byId("cap-left-out").textContent = out.length ? out.length + ": " + out.map((entity) => "slot " + state.slotOf.get(entity)).join(", ") : "0";
+      note.textContent = state.story + (state.showChanges ? " " + describeChanges(policy) : "");
+      const chosen = chosenSlot();
+      byId("cap-despawn").textContent = chosen === null ? "Despawn" : "Despawn slot " + chosen + "'s";
+      byId("cap-teleport").textContent = chosen === null ? "Teleport" : "Teleport slot " + chosen + "'s";
+    }
+    // Runs one frame's action, unless it needs a chosen slot and none is chosen.
+    function act(needsSlot, action) {
+      const slot = chosenSlot();
+      if (needsSlot && slot === null) {
+        note.textContent = "Choose a slot first: select one of the slots above that holds a Moving Instance.";
+        return;
+      }
+      state.spawned = null;
+      action(slot);
+      state.showChanges = true;
+      render();
+    }
+    byId("cap-spawn").addEventListener("click", () => {
+      if (!state.free.length && state.end >= SLOT_COUNT) {
+        note.textContent = "This demo's Instance buffer has no free slot: despawn a Moving Instance first.";
+        return;
+      }
+      act(false, () => {
+        const reused = state.free.length > 0;
+        const entity = spawn();
+        endFrame();
+        state.story = "Frame " + state.frame + ": " + name(entity) + " spawns and takes slot " + state.slotOf.get(entity) + (reused ? ", freed in an earlier frame" : ", a fresh one") + "; the ECS World holds it last.";
+      });
+    });
+    byId("cap-despawn").addEventListener("click", () => {
+      act(true, (slot) => {
+        const result = despawn(slot);
+        selected = null;
+        endFrame();
+        state.story = "Frame " + state.frame + ": " + name(result.entity) + " despawns and frees slot " + slot + (result.moved ? "; the ECS World moves " + name(result.moved) + ", its last, into " + name(result.entity) + "'s row." : ".");
+      });
+    });
+    byId("cap-teleport").addEventListener("click", () => {
+      act(true, (slot) => {
+        const result = teleport(slot);
+        endFrame();
+        state.story = "Frame " + state.frame + ": " + name(result.entity) + " in slot " + slot + " teleports. Its marker takes it out of its table and back, to the end" + (result.moved ? ", and " + name(result.moved) + " takes its row." : "; it was already last.") + " Its slot stays " + slot + ".";
+      });
+    });
+    byId("cap-replay").addEventListener("click", () => {
+      start();
+      const lines = [state.story];
+      despawn(3);
+      endFrame();
+      lines.push("Frame 2: slot 3's Moving Instance despawns, so the 8 left all fit.");
+      const entity = spawn();
+      endFrame();
+      lines.push("Frame 3: " + name(entity) + " spawns and takes slot 3 again; the ECS World holds it last.");
+      const slotsOf = (rule) => leftOut(rule).map((left) => "slot " + state.slotOf.get(left)).join(", ");
+      lines.push("Lowest slots leaves out " + slotsOf("slots") + ", as the test asserts; first in ECS World order leaves out " + slotsOf("world") + ", the red check.");
+      state.story = lines.join(" ");
+      state.showChanges = false;
+      render();
+    });
+    byId("cap-reset").addEventListener("click", () => {
+      start();
+      render();
+    });
+    segmented(policyButtons, "policy", (value) => {
+      policy = value;
+      render();
+    });
+    start();
+    render();
+  })();
+
+  /* Demo: one shadow ray, two queries. */
+  (function rayDemo() {
+    const canvas = byId("r-canvas");
+    if (!canvas) return;
+    const canvasFrame = canvas.parentElement;
+    const sunSlider = byId("r-sun");
+    const movingSlider = byId("r-moving");
+    const pointSlider = byId("r-point");
+    // This page's model, in metres: a 20 m strip of ground, two static blocks standing on it and one moving sphere.
+    const SCENE_WIDTH = 20;
+    const SAMPLES = 40;
+    const STATIC_BLOCKS = [
+      { left: 3, right: 6.5, top: 3.4 },
+      { left: 13.4, right: 14, top: 4.8 },
+    ];
+    const MOVING_RADIUS = 0.9;
+    const MOVING_HEIGHT = 2.8;
+    // Rays start this far above the ground, standing in for the normal offset.
+    const OFFSET = 1e-4;
+    let sunDegrees = Number(sunSlider.value);
+    let movingX = Number(movingSlider.value);
+    let pointX = Number(pointSlider.value);
+    let staticOn = true;
+    let movingOn = true;
+
+    // The unit vector from the ground toward the sun, x to the right and y up.
+    function toSun() {
+      const angle = (sunDegrees * Math.PI) / 180;
+      return [Math.cos(angle), Math.sin(angle)];
+    }
+    const underBlock = (x) => staticOn && STATIC_BLOCKS.some((block) => x > block.left && x < block.right);
+    // How far along `direction` the ray from (x, OFFSET) enters a static block; Infinity if it enters none.
+    function staticQuery(x, direction) {
+      if (!staticOn) return Infinity;
+      let nearest = Infinity;
+      for (const block of STATIC_BLOCKS) {
+        let near = 0;
+        let far = Infinity;
+        let missed = false;
+        const slabs = [[x, direction[0], block.left, block.right], [OFFSET, direction[1], 0, block.top]];
+        for (const [origin, step, low, high] of slabs) {
+          if (step === 0) {
+            if (origin < low || origin > high) missed = true;
+            continue;
+          }
+          let enter = (low - origin) / step;
+          let leave = (high - origin) / step;
+          if (enter > leave) [enter, leave] = [leave, enter];
+          near = Math.max(near, enter);
+          far = Math.min(far, leave);
+        }
+        if (!missed && near <= far && far > 0) nearest = Math.min(nearest, near);
+      }
+      return nearest;
+    }
+    // How far along `direction` the ray from (x, OFFSET) meets the moving sphere; Infinity if it misses.
+    function dynamicQuery(x, direction) {
+      const toCentre = [movingX - x, MOVING_HEIGHT - OFFSET];
+      const along = toCentre[0] * direction[0] + toCentre[1] * direction[1];
+      const squaredMiss = toCentre[0] * toCentre[0] + toCentre[1] * toCentre[1] - along * along;
+      const squaredRadius = MOVING_RADIUS * MOVING_RADIUS;
+      if (along <= 0 || squaredMiss > squaredRadius) return Infinity;
+      return along - Math.sqrt(squaredRadius - squaredMiss);
+    }
+    // One ray as shadowed traces it: the static TLAS first, then the dynamic TLAS where that finds nothing and something moves.
+    function trace(x) {
+      const direction = toSun();
+      const toStatic = staticQuery(x, direction);
+      if (toStatic < Infinity) return { queries: 1, kind: "static", distance: toStatic };
+      if (!movingOn) return { queries: 1, kind: "lit", distance: Infinity };
+      const toMoving = dynamicQuery(x, direction);
+      return { queries: 2, kind: toMoving < Infinity ? "moving" : "lit", distance: toMoving };
+    }
+    function samples() {
+      const traced = [];
+      for (let index = 0; index < SAMPLES; index++) {
+        const x = ((index + 0.5) / SAMPLES) * SCENE_WIDTH;
+        if (!underBlock(x)) traced.push(Object.assign({ x: x }, trace(x)));
+      }
+      return traced;
+    }
+    function draw() {
+      const width = Math.max(1, canvasFrame.clientWidth);
+      const height = Math.max(210, Math.round(width * 0.46));
+      const context = sizeCanvas(canvas, width, height);
+      const colours = readTokens();
+      const groundY = height - 44;
+      const scale = width / SCENE_WIDTH;
+      const screen = (x, y) => [x * scale, groundY - y * scale];
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, width, height);
+      context.fillStyle = colours.figureBg;
+      context.fillRect(0, groundY, width, height - groundY);
+      context.strokeStyle = colours.ink;
+      context.lineWidth = 1.5;
+      line(context, 0, groundY, width, groundY);
+
+      // Sunlight, as three arrows along the way it travels, from the sun's side.
+      const direction = toSun();
+      context.strokeStyle = colours.warm;
+      context.fillStyle = colours.warm;
+      context.lineWidth = 2;
+      for (let arrow = 0; arrow < 3; arrow++) {
+        const startX = direction[0] < 0 ? 16 + arrow * 30 : width - 16 - arrow * 30;
+        const startY = 10;
+        const endX = startX - direction[0] * 34;
+        const endY = startY + direction[1] * 34;
+        context.setLineDash([5, 4]);
+        line(context, startX, startY, endX, endY);
+        context.setLineDash([]);
+        arrowHead(context, endX, endY, -direction[0], direction[1]);
+      }
+
+      if (staticOn) {
+        for (const block of STATIC_BLOCKS) {
+          const [left, top] = screen(block.left, block.top);
+          const right = block.right * scale;
+          context.globalAlpha = 0.5;
+          context.fillStyle = colours.inkSoft;
+          context.fillRect(left, top, right - left, groundY - top);
+          context.globalAlpha = 1;
+          context.strokeStyle = colours.inkSoft;
+          context.lineWidth = 1.5;
+          context.strokeRect(left, top, right - left, groundY - top);
+        }
+      }
+      if (movingOn) {
+        const [centreX, centreY] = screen(movingX, MOVING_HEIGHT);
+        context.beginPath();
+        context.arc(centreX, centreY, MOVING_RADIUS * scale, 0, 2 * Math.PI);
+        context.fillStyle = colours.accent;
+        context.globalAlpha = 0.85;
+        context.fill();
+        context.globalAlpha = 1;
+      }
+
+      // The chosen ray: the static query as a broad grey band, the dynamic query as a thin line over it.
+      const [originX, originY] = screen(pointX, 0);
+      const reach = (distance) => [originX + direction[0] * distance * scale, originY - direction[1] * distance * scale];
+      if (!underBlock(pointX)) {
+        const chosen = trace(pointX);
+        const far = 3 * SCENE_WIDTH;
+        context.lineCap = "round";
+        context.globalAlpha = 0.35;
+        context.strokeStyle = colours.inkSoft;
+        context.lineWidth = 7;
+        const [staticEndX, staticEndY] = reach(chosen.kind === "static" ? chosen.distance : far);
+        line(context, originX, originY, staticEndX, staticEndY);
+        context.globalAlpha = 1;
+        if (chosen.queries === 2) {
+          const [dynamicEndX, dynamicEndY] = reach(chosen.kind === "moving" ? chosen.distance : far);
+          context.strokeStyle = colours.accent;
+          context.lineWidth = 2;
+          line(context, originX, originY, dynamicEndX, dynamicEndY);
+        }
+        context.lineCap = "butt";
+        if (chosen.distance < Infinity) {
+          const [hitX, hitY] = reach(chosen.distance);
+          context.strokeStyle = colours.bad;
+          context.lineWidth = 2.5;
+          line(context, hitX - 5, hitY - 5, hitX + 5, hitY + 5);
+          line(context, hitX - 5, hitY + 5, hitX + 5, hitY - 5);
+        }
+      }
+
+      // The ground points, and beneath each its queries: the static TLAS's, then the dynamic TLAS's.
+      const size = Math.max(3, Math.min(7, width / SAMPLES - 2));
+      for (const sample of samples()) {
+        const x = sample.x * scale;
+        context.beginPath();
+        context.arc(x, groundY, 4, 0, 2 * Math.PI);
+        context.fillStyle = sample.kind === "lit" ? colours.warm : sample.kind === "static" ? colours.inkSoft : colours.accent;
+        context.fill();
+        context.globalAlpha = 0.6;
+        context.fillStyle = colours.inkSoft;
+        context.fillRect(x - size / 2, groundY + 11, size, size);
+        if (sample.queries === 2) {
+          context.fillStyle = colours.accent;
+          context.fillRect(x - size / 2, groundY + 14 + size, size, size);
+        }
+        context.globalAlpha = 1;
+      }
+      // The chosen point, ringed.
+      context.beginPath();
+      context.arc(originX, originY, 7, 0, 2 * Math.PI);
+      context.strokeStyle = colours.warm;
+      context.lineWidth = 2;
+      context.stroke();
+    }
+    function update() {
+      const elevation = sunDegrees <= 90 ? sunDegrees : 180 - sunDegrees;
+      const side = sunDegrees < 90 ? "from the right" : sunDegrees > 90 ? "from the left" : "overhead";
+      byId("r-sun-out").textContent = elevation + "\u00b0 up, " + side;
+      byId("r-moving-out").textContent = movingX.toFixed(1) + " m";
+      byId("r-point-out").textContent = pointX.toFixed(1) + " m";
+      const traced = samples();
+      const count = (kind) => traced.filter((sample) => sample.kind === kind).length;
+      const dynamicQueries = traced.filter((sample) => sample.queries === 2).length;
+      byId("r-rays").textContent = String(traced.length);
+      byId("r-static-queries").textContent = String(traced.length);
+      byId("r-dynamic-queries").textContent = dynamicQueries + (movingOn ? "" : ": the dynamic TLAS is empty, so the lit pass skips it");
+      byId("r-shadowed").textContent = count("static") + " by static Instances, " + count("moving") + " by the moving one";
+      const at = pointX.toFixed(1) + " m";
+      let sentence;
+      if (underBlock(pointX)) {
+        sentence = "No pixel sees the ground at " + at + ": a static block stands on it.";
+      } else {
+        const chosen = trace(pointX);
+        if (chosen.kind === "static") {
+          sentence = "The ray from " + at + " meets a static block " + chosen.distance.toFixed(1) + " m along, so the static TLAS shadows it after one query, and the dynamic TLAS is not asked.";
+        } else if (chosen.kind === "moving") {
+          sentence = "The static TLAS finds nothing along the ray from " + at + ", so the same ray is traced against the dynamic TLAS, which finds the moving sphere " + chosen.distance.toFixed(1) + " m along: shadowed, after two queries.";
+        } else if (chosen.queries === 2) {
+          sentence = "Neither TLAS finds anything along the ray from " + at + ": lit, after two queries.";
+        } else {
+          sentence = "The static TLAS finds nothing along the ray from " + at + ", and the dynamic TLAS holds no entries, so the lit pass does not query it: lit, after one query.";
+        }
+      }
+      if (!staticOn && movingOn) sentence += " With no static Instances, as on the orrery, every ray makes both queries.";
+      if (!staticOn && !movingOn) sentence += " With both TLAS empty, every ray makes one query, of the empty static TLAS.";
+      byId("r-note").textContent = sentence;
+      draw();
+    }
+    sunSlider.addEventListener("input", () => {
+      sunDegrees = Number(sunSlider.value);
+      update();
+    });
+    movingSlider.addEventListener("input", () => {
+      movingX = Number(movingSlider.value);
+      update();
+    });
+    pointSlider.addEventListener("input", () => {
+      pointX = Number(pointSlider.value);
+      update();
+    });
+    dragOn(canvas, (event) => {
+      const box = canvas.getBoundingClientRect();
+      pointX = clamp(Math.round(((event.clientX - box.left) / box.width) * SCENE_WIDTH * 10) / 10, 0.2, 19.8);
+      pointSlider.value = String(pointX);
+      update();
+    });
+    segmented(Array.from(document.querySelectorAll("#r-static button")), "static", (value) => {
+      staticOn = value === "on";
+      update();
+    });
+    segmented(Array.from(document.querySelectorAll("#r-moving-on button")), "moving", (value) => {
+      movingOn = value === "on";
+      movingSlider.disabled = !movingOn;
+      update();
+    });
+    watchWidth(canvasFrame, draw);
+    update();
+  })();
+
+  /* Figure: the orrery's Golden with the pixels #204 changed, ringed. */
+  (function goldenFigure() {
+    const image = byId("g-image");
+    const canvas = byId("g-overlay");
+    if (!image || !canvas) return;
+    // Every pixel of the 640 x 360 Golden that differs between main's (0db5e46) and 258001a's: x, y, and its largest channel change in 8-bit steps.
+    const CHANGED = [
+      [384, 134, 1], [349, 136, 2], [382, 137, 1], [347, 139, 1], [379, 139, 3], [346, 140, 1], [368, 140, 7], [377, 140, 1], [378, 140, 1], [344, 141, 1], [370, 141, 1], [375, 141, 1],
+      [339, 142, 2], [340, 142, 1], [341, 142, 1], [414, 156, 3], [414, 157, 2], [414, 158, 18], [413, 159, 1], [411, 163, 1], [410, 164, 1], [412, 165, 6], [386, 168, 1], [387, 169, 1],
+      [388, 169, 3], [390, 170, 1], [382, 186, 2], [382, 189, 3], [271, 195, 1], [273, 201, 1], [273, 202, 1], [379, 202, 1], [378, 203, 3], [373, 208, 4], [374, 208, 1], [373, 209, 1],
+      [274, 210, 1], [274, 211, 1], [274, 212, 1], [369, 212, 1], [274, 213, 1], [341, 213, 3], [366, 213, 2], [367, 213, 2], [273, 214, 3], [342, 214, 1], [272, 215, 2], [273, 215, 3],
+      [344, 215, 1], [273, 216, 3], [345, 216, 9], [359, 216, 2], [271, 223, 1], [270, 224, 2], [269, 225, 3], [270, 225, 1], [269, 226, 3], [269, 227, 2], [263, 236, 2], [263, 237, 1],
+      [259, 241, 1], [258, 242, 3], [257, 243, 1], [249, 249, 3], [247, 250, 1], [248, 250, 1], [237, 254, 3], [238, 254, 3], [239, 254, 2], [221, 255, 3], [224, 255, 5], [224, 256, 1],
+      [228, 256, 1]
+    ];
+    const GOLDEN_WIDTH = 640;
+    let marks = "all";
+    function draw() {
+      const width = image.clientWidth;
+      const height = image.clientHeight;
+      if (!width || !height) return;
+      const context = sizeCanvas(canvas, width, height);
+      context.clearRect(0, 0, width, height);
+      if (marks === "none") return;
+      const colours = readTokens();
+      const scale = width / GOLDEN_WIDTH;
+      const shown = CHANGED.filter((pixel) => marks === "all" || pixel[2] > 1);
+      // Each ring's underlay first, so no underlay covers a neighbour's ring.
+      for (const pass of ["underlay", "ring"]) {
+        for (const [x, y, steps] of shown) {
+          const bold = steps > 1;
+          context.beginPath();
+          context.arc((x + 0.5) * scale, (y + 0.5) * scale, bold ? 6 : 4, 0, 2 * Math.PI);
+          context.strokeStyle = pass === "underlay" ? colours.panel : colours.warm;
+          context.lineWidth = pass === "underlay" ? (bold ? 4.5 : 3) : bold ? 2 : 1.2;
+          context.stroke();
+        }
+      }
+    }
+    segmented(Array.from(document.querySelectorAll("#g-marks button")), "marks", (value) => {
+      marks = value;
+      draw();
+    });
+    const start = () => watchWidth(image.parentElement, draw);
+    if (image.complete && image.naturalWidth) start();
+    else image.addEventListener("load", start, { once: true });
+  })();
+
+  /* Figure: the probe's three kinds of marker. */
+  (function probeFigure() {
+    const buttons = Array.from(document.querySelectorAll("#p-case button"));
+    if (!buttons.length) return;
+    const cases = Array.from(document.querySelectorAll("#demo-probe [data-case]:not(button)"));
+    segmented(buttons, "case", (value) => {
+      for (const node of cases) node.hidden = node.dataset.case !== value;
+    });
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>

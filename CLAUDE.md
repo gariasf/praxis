@@ -41,6 +41,9 @@ or interactive checks and roadmap decisions (`docs/agents/workflow.md`).
 - `docs/references.toml` — the external sources the engine relies on,
   each with its section and a verbatim quote; code, ADRs and notes cite
   its keys (`[ref:<key>]`) beside the prose citation.
+- `docs/guides/` — the field guides: explainers of the concepts tickets
+  introduced, which GitHub Pages serves from `main`. Read when you need
+  one of those concepts; `docs/agents/workflow.md` says when to write one.
 - `ROADMAP.md` — long-range vision: target shape, design principles,
   scripting plan. Decisions are ADRs; the order of work is the ladder.
 

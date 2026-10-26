@@ -1,0 +1,1797 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Crowd Shadows Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume fourteen of the series. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --bad: #c43a31;
+  --bad-wash: rgba(196, 58, 49, 0.14);
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+    --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+  --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+}
+.sheet {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.keypoints li { min-width: 0; }
+.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .s-ink { stroke: var(--ink); } svg .s-soft { stroke: var(--ink-soft); } svg .s-accent { stroke: var(--accent); } svg .s-warm { stroke: var(--warm); }
+svg .f-ink { fill: var(--ink); } svg .f-soft { fill: var(--ink-soft); } svg .f-accent { fill: var(--accent); } svg .f-warm { fill: var(--warm); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+output { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
+.canvas-frame canvas { border-radius: 0; }
+canvas.demo { touch-action: none; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
+.legend i.dashed { border-top: 2.5px dashed var(--warm); }
+.legend i.thin { border-top: 1.5px solid var(--ink); }
+.legend i.dotted { border-top: 2.5px dotted var(--ink-soft); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.demo-grid > div { min-width: 0; }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 14px 0 0; font-family: var(--mono); font-size: 14px; }
+.figures div { min-width: 0; }
+.figures dt { color: var(--ink-soft); font-size: 12px; }
+.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .formula { font-size: 13px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.meter { display: grid; gap: 14px; }
+.meter-row { display: grid; gap: 5px; min-width: 0; }
+.meter-label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-family: var(--mono); font-size: 13.5px; color: var(--ink-soft); }
+.meter-label b { color: var(--ink); font-weight: 600; }
+.meter-track { position: relative; height: 20px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.meter-fill, .meter-range, .meter-budget { position: absolute; top: 0; bottom: 0; }
+.meter-fill { left: 0; background: var(--accent); }
+.meter-range { background: var(--accent-wash); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.meter-fill.over { background: var(--bad); }
+.meter-range.over { background: var(--bad-wash); box-shadow: inset 0 0 0 1.5px var(--bad); }
+.meter-budget { width: 0; border-left: 2px dashed var(--warm); }
+.meter-axis { position: relative; height: 36px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.meter-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.meter-axis span.first { transform: none; }
+.meter-axis span.last { transform: translateX(-100%); }
+.meter-axis span.budget { top: 17px; color: var(--warm); font-weight: 600; }
+
+
+/* This volume's own parts: the plain opening of each chapter, the meters' extra Budget lines, the frame's pass order, the quotes and the demos' legends. */
+p.plain { font-size: 19px; line-height: 1.55; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 20px; }
+blockquote.callout { margin: 20px 0; }
+blockquote.callout p:last-child { margin-bottom: 0; }
+table.facts.wrap-heads th.n { white-space: normal; }
+.bad-text { color: var(--bad); }
+.meter-axis { overflow: hidden; }
+.meter-axis.tall { height: 54px; }
+.meter-axis span.budget.after { transform: none; }
+.meter-axis span.budget.before { transform: translateX(-100%); }
+.meter-axis span.budget.second { top: 34px; }
+.meter-heading { font-family: var(--display); font-weight: 700; font-size: 15px; margin: 0; color: var(--ink); }
+.meter + .meter { margin-top: 26px; }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.apart { border-style: dashed; }
+.legend .swatch { display: inline-block; width: 16px; height: 12px; border: 1px solid var(--rule); border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+.legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: 0; margin-right: 6px; }
+.legend i.box { border-top: 2px dashed var(--warm); }
+[hidden] { display: none !important; }
+
+/* In brief: the guide's conclusion first, for the reader who stops here. */
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis field guides</a></div>
+  <div class="eyebrow">Praxis &middot; M3 &middot; ticket #208 &middot; PRs #269, #271, #274 and #276</div>
+  <h1>How a swaying crowd casts shadows</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>Every shadow in Praxis is a ray traced against a TLAS, so a skinned figure's BLAS must follow its pose, and rebuilding 100 such BLASes every frame would cost 7.8 to 9.3 ms of GPU. Ticket #208 bends 100 figures on the GPU in place of skinning and gives each 16 rigid shadow proxies inside it, moved every frame in the dynamic TLAS, whose rebuild fits its Budget; milestone M7 keeps them. The idea to keep: stand-ins inside a deforming shape cast nearly its shadow with no BLAS to rebuild.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>How a compute pass bends a Mesh into a circular arc</li>
+      <li>Why sin x / x needs its Taylor series near zero under fast math</li>
+      <li>How a bend's curvature is blended between 64 Hz Ticks, like a transform</li>
+      <li>How one culling box holds every shape a figure sways to</li>
+      <li>Why shadow proxies must stay inside the figure, and what they cost</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="instance-culling.html">Instance Culling Explained</a>, <a href="shadow-rays.html">Shadow Rays Explained</a>, <a href="dynamic-tlas.html">Dynamic TLAS Explained</a></p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at 0743418 (PR #276, 2026-10-23), the last of ticket #208's four parts, with PRs #269, #271 and #274 merged the same day. <b>Since then:</b> PR #277 moved every shadow ray into a shadow mask compute pass, which brought the crowd's GPU frame down to about a quarter of part 4's (<a href="shadow-rays.html">Shadow Rays Explained</a>, chapter 10). PRs #289 and #290 built and timed the other form, refitting each figure's BLAS through wgpu-hal on Metal: its update took 1.37 to 1.38 ms of GPU, over the Budget's 1.0 ms, while the proxies' stayed within both its GPU and CPU halves, and on 2026-10-26 the owner picked the proxies for milestone M7. PR #291 made the GPU frame span its passes from the earliest start to the latest end (<a href="blas-refit.html">BLAS Refit Explained</a>, chapter 7).</p>
+  </aside>
+  <p class="lede">In Praxis a shadow is a ray that meets a triangle in a <span class="concept" data-term="TLAS" data-tip="Top-level acceleration structure: the GPU&#x27;s search structure over Instances, each placing a BLAS with its transform. A ray walks it down to the triangles it meets.">TLAS</span>, so whatever casts one has to be in the TLAS in the shape it is drawn in. A skinned character changes shape in every frame. Ticket #208 builds the <code>crowd</code> <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span>: 100 figures that the GPU bends in every frame, a stand-in for skinning. It then gives them shadows one way, form (b): 16 rigid <span class="concept" data-term="Shadow proxy" data-tip="A Mesh that rays trace and no pass draws, standing in for part of a Renderable whose own BLAS would not hold the shape it is drawn in, such as a bent figure&#x27;s bone.">shadow proxies</span> per figure, moved in the <span class="concept" data-term="Dynamic TLAS" data-tip="The top-level acceleration structure over the Moving Instances, at most 10,000 of them, those in the lowest slots, each tagged with its slot. It is rebuilt every frame, in the static TLAS&#x27;s frame (#204).">dynamic TLAS</span>. This guide follows the work in order: the bend pass, the <code>Bend</code> component, the scene, the proxies, and then what form (b) costs against the crowd's <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, which caps what that kind may hold (ADR 0017). Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budget</span>. Three live demos bend one figure, sway the crowd, and set a figure's shadow beside its proxies'.</p>
+  <p class="status"><b>Provenance.</b> #208 landed in four parts, all merged on 2026-10-23: part 1, PR #269, the bend pass, as 5c570f7; part 2, PR #271, the <code>Bend</code> component, as d12da41; part 3, PR #274, the scene, as b8cdb10; and part 4, PR #276, the shadow proxies and the report, as 0743418, which completed the ticket. Code is quoted from 0743418. The measurements are the M4 Pro bench of 2026-10-23 that part 4 reports in <code>docs/performance.md</code> (chapter 6), taken at 0743418. Since then PR #277 (bd7b988) has moved every shadow ray out of the lit pass into a shadow mask pass, and #277 and PR #272 (2059535) have re-recorded the Baselines; chapter 6 gives the crowd Baseline at 69e02dc. After that, #209 built and timed form (a) in PRs #289 (66b5b57) and #290 (71918ac), #290 re-recorded the Baselines again, and on 2026-10-26 the project's owner picked form (b), the proxies, for M7 (the end of chapter 6).</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#why">1 &middot; Why a crowd</a>
+    <a href="#bend">2 &middot; The bend pass</a>
+    <a href="#ticks">3 &middot; Between Ticks</a>
+    <a href="#crowd">4 &middot; The crowd scene</a>
+    <a href="#proxies">5 &middot; Shadow proxies</a>
+    <a href="#cost">6 &middot; What it costs</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="why">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1 &middot; ADR 0020 &middot; M3's exit criterion 8</div>
+    <h2>Why a crowd</h2>
+    <p class="plain">ADR 0020 gives Praxis one kind of shadow: one hard ray per pixel per light, traced against the <span class="concept" data-term="TLAS" data-tip="Top-level acceleration structure: the GPU&#x27;s search structure over Instances, each placing a BLAS with its transform. A ray walks it down to the triangles it meets.">TLAS</span>. There are no shadow maps to draw a moving character into. A character's shadow is right only if the triangles a ray can meet are in the pose the character is drawn in, and a skinned character's pose changes in every frame. M3 has to show that a crowd of them can afford that.</p>
+    <p><span class="concept" data-term="Skinning" data-tip="Deforming a Mesh by a skeleton: each vertex follows a weighted blend of a few bones&#x27; transforms, recomputed every frame. Real-Time Rendering calls it vertex blending.">Skinning</span> moves every vertex of a character from its bones in every frame. The world-design pre-mortem put the problem in numbers, under "Skinned characters in a crowd": "A skinned character casts a correct shadow only if its <span class="concept" data-term="BLAS" data-tip="Bottom-level acceleration structure: the GPU&#x27;s search structure over one Mesh&#x27;s triangles, built when the Mesh loads, then compacted (#202). Since #208 a Mesh no ray traces gets none.">BLAS</span> follows its pose each frame, and wgpu-core rebuilds every BLAS in full". A <span class="concept" data-term="Rebuild" data-tip="Building an acceleration structure again from scratch, from its current contents. Through wgpu-core 30 it is the only way to update one.">rebuild</span> makes the tree again from the triangles; wgpu-core 30 has no <span class="concept" data-term="Refit" data-tip="Updating an acceleration structure in place after its contents move: the tree keeps its shape and only its bounds are recomputed. Cheaper than a rebuild, and the tree traces more slowly the further things have moved. wgpu-core 30 does not implement it.">refit</span>, which would keep the tree and only move its bounds. And "a hundred 5,120-triangle BLAS take 7.8 to 9.3 ms of GPU to rebuild", measured, which is 65 to 78% of ADR 0013's 12 ms for a whole frame.</p>
+  </div>
+  <figure class="wide">
+    <div class="meter" role="img" aria-label="Rebuilding 100 BLAS of 5,120 triangles takes 7.8 to 9.3 ms of GPU, against the crowd's 1.0 ms update Budget and the frame's 12 ms GPU Budget.">
+      <div class="meter-row">
+        <div class="meter-label"><b>100 BLAS rebuilds, 5,120 triangles each</b><span>7.8 to 9.3 ms of GPU</span></div>
+        <div class="meter-track" title="100 BLAS rebuilds: 7.8 to 9.3 ms of GPU per frame"><span class="meter-fill over" style="width: 55.714%"></span><span class="meter-range over" style="left: 55.714%; width: 10.715%"></span><span class="meter-budget" style="left: 7.143%"></span><span class="meter-budget" style="left: 85.714%"></span></div>
+      </div>
+      <div class="meter-axis tall" aria-hidden="true"><span class="first" style="left: 0">0</span><span style="left: 28.571%">4</span><span style="left: 57.143%">8</span><span style="left: 85.714%">12 ms</span><span class="budget after" style="left: 7.143%">crowd's update Budget, 1.0 ms</span><span class="budget before second" style="left: 85.714%">frame's GPU Budget, 12 ms</span></div>
+    </div>
+    <figcaption><b>What rebuilding every figure's BLAS would cost.</b> The pre-mortem's measured range, solid to its low end and outlined to its high end, in red as it passes a Budget, against the two Budgets as dashed lines: 1.0 ms of GPU for the crowd's acceleration-structure update, and ADR 0013's 12 ms of GPU for a whole frame. Drawn to scale, 0 to 14 ms.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The pre-mortem named two escape hatches, neither of them measured then: "rigid per-bone proxies (capsules or bone-segment meshes) as Instances in the <span class="concept" data-term="Dynamic TLAS" data-tip="The top-level acceleration structure over the Moving Instances, at most 10,000 of them, those in the lowest slots, each tagged with its slot. It is rebuilt every frame, in the static TLAS&#x27;s frame (#204).">dynamic TLAS</span>, inside its 10k cap but with proxy-shaped shadows; or BLAS refit through <span class="concept" data-term="wgpu-hal" data-tip="wgpu&#x27;s lower layer, one unsafe implementation per backend, beneath the safe API. ADR 0007 permits it for a subsystem that exceeds wgpu&#x27;s safe API.">wgpu-hal</span>, which ADR 0007 permits for a subsystem past wgpu's safe API". The project's owner kept the measurement in M3 (item 14 of a decision of 2026-10-19 on issue #17, which tracks architecture decisions and milestone order) and gave it a <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, which caps what that kind may hold (ADR 0017). Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budget</span>: "at most 1.0 ms of GPU and 0.5 ms of CPU per frame for the crowd's acceleration-structure update". The milestone makes it an exit criterion:</p>
+    <blockquote class="callout"><p>"<b>Crowd.</b> On <code>crowd</code>, 100 meshes of 5,120 triangles deformed each frame, BLAS refit through wgpu-hal (Metal) and rigid per-bone proxies in the dynamic TLAS are both timed. At least one form updates within 1.0 ms of GPU and 0.5 ms of CPU per frame, or ADR 0020 reopens for skinned crowds. The owner picks M7's form."</p></blockquote>
+    <p>So the work is two tickets on one scene. #208 builds the scene and form (b), the proxies. #209 builds form (a), refit, and puts both forms' figures to the owner.</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th></th><th>Form (a): refit</th><th>Form (b): shadow proxies</th></tr></thead>
+        <tbody>
+          <tr><td>What follows the pose</td><td>each bent Mesh's own BLAS, refit in place to its new vertices</td><td>16 rigid <span class="concept" data-term="Shadow proxy" data-tip="A Mesh that rays trace and no pass draws, standing in for part of a Renderable whose own BLAS would not hold the shape it is drawn in, such as a bent figure&#x27;s bone.">shadow proxies</span> per figure, moved as <span class="concept" data-term="Moving Instance" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.">Moving Instances</span></td></tr>
+          <tr><td>Whose shape casts the shadow</td><td>the figure's own triangles, as drawn</td><td>the proxies' ellipsoids, a little thinner than the figure</td></tr>
+          <tr><td>Through</td><td>wgpu-hal, Metal only, in one documented <code>unsafe</code> block on the bench path</td><td>wgpu's safe API: the dynamic TLAS, rebuilt in every frame since #204</td></tr>
+          <tr class="focus"><td>Ticket</td><td>#209</td><td>#208, this guide</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>The two forms M3 times</b>, as the pre-mortem and item 14 of the decision on issue #17 describe them. Both run on the same scene against the same Budget.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Four parts</h3>
+    <p>#208 was split for the size ceiling into four PRs that merge in order, each rebased on the one before:</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts compact" style="min-width: 600px">
+        <thead><tr><th>Part</th><th>PR</th><th>Branch</th><th>What it adds</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>#269, merged as 5c570f7</td><td><code>feat/bend-pass</code></td><td>the bend pass: Meshes bent on the GPU each frame (chapter 2)</td></tr>
+          <tr><td>2</td><td>#271, merged as d12da41</td><td><code>feat/bend-component</code></td><td>the <code>Bend</code> component: a curvature set each Tick, blended between Ticks (chapter 3)</td></tr>
+          <tr><td>3</td><td>#274, merged as b8cdb10</td><td><code>feat/crowd-scene</code></td><td>the <code>crowd</code> scene: 100 swaying figures, which cast no shadow yet (chapter 4)</td></tr>
+          <tr class="focus"><td>4</td><td>#276, merged as 0743418</td><td><code>feat/crowd-proxies</code></td><td>per-bone shadow proxies and the cost report; completes #208 (chapters 5 and 6)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>The split</b>, from the comment on #208 that plans it.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="bend">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 &middot; PR #269</div>
+    <h2>The bend pass</h2>
+    <p class="plain">Praxis has no <span class="concept" data-term="Skinning" data-tip="Deforming a Mesh by a skeleton: each vertex follows a weighted blend of a few bones&#x27; transforms, recomputed every frame. Real-Time Rendering calls it vertex blending.">skinning</span> until M7. To measure a crowd now, M3 needs Meshes whose vertices the GPU rewrites in every frame, as skinning would. The <span class="concept" data-term="Bend pass" data-tip="The compute pass that bends Meshes on the GPU, first in each frame&#x27;s encoder: a row of 64-vertex workgroups per bend (#269).">bend pass</span> is that stand-in. Each frame it reads a <span class="concept" data-term="Rest Mesh" data-tip="The Mesh a bend reads and never writes: its +Y axis runs up its middle from y = 0, and every Mesh bent from it holds as many vertices.">rest Mesh</span>, which never changes, and writes a <span class="concept" data-term="Bent Mesh" data-tip="A Renderable&#x27;s own Mesh, whose vertices the bend pass overwrites from its rest Mesh&#x27;s each frame; the main pass draws it as it draws any Mesh.">bent Mesh</span> of the same vertices, its middle curved into an arc.</p>
+    <p>Each <span class="concept" data-term="Bend" data-tip="The GPU&#x27;s stand-in for skinning until M7: each frame a compute pass rewrites a Renderable&#x27;s own Mesh, the bent Mesh, from a rest Mesh of the same vertices, its middle curved into an arc by a curvature the fixed schedule sets each Tick.">bend</span> in <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span> names its two Meshes by where their vertices start in the vertex <span class="concept" data-term="Arena" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool&#x27;s hold vertices, indices, and Meshlets with their vertices and triangles.">Arena</span> and how many they hold, and gives the bend itself: an <span class="concept" data-term="Azimuth" data-tip="The direction a bent middle leans towards: radians about +Y, from +X towards +Z.">azimuth</span>, the direction the middle leans towards, and a <span class="concept" data-term="Curvature" data-tip="The radians a bent middle turns through per metre of its height. The crowd sways between &minus;0.35 and 0.35.">curvature</span>, the radians the middle turns through per metre of its height. The rest Mesh stands with its +Y axis up its middle from y = 0. The main pass needs nothing new: it pulls the bent Mesh's vertices from the Arena as it pulls any <span class="concept" data-term="Mesh" data-tip="An ordered list of Primitives that are rendered together.">Mesh</span>'s.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">/// One bend as the pass reads it: where its rest Mesh's vertices and its</span>
+<span class="comment">/// bent Mesh's start in the vertex Arena, how many each holds, and the bend</span>
+<span class="comment">/// (`Bend`), its curvature blended between the two newest Ticks.</span>
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct BendData {
+    pub rest_first_vertex: u32,
+    pub first_vertex: u32,
+    pub vertex_count: u32,
+    <span class="comment">/// The direction the middle bends towards, about +Y from +X towards +Z,</span>
+    <span class="comment">/// in radians.</span>
+    pub azimuth: f32,
+    <span class="comment">/// Radians the middle turns through per metre of its height.</span>
+    pub curvature: f32,
+}</code></pre>
+    <figcaption><b>A bend as the GPU reads it</b>, from <code>src/render/bend_pass.rs</code>: five 4-byte fields, 20 bytes a bend.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Where a vertex goes</h3>
+    <p>Call the curvature &kappa; and the azimuth &psi;. At rest height h, the middle has turned through &theta; = &kappa;h, from +Y towards the horizontal direction toward = (cos &psi;, 0, sin &psi;). A line that turns at a constant rate per metre is a circular arc, of radius 1/&kappa;, and the chord of an arc meets the arc's first direction at half the angle the arc turns through. So the middle's point at height h sits at the end of a chord leaning &theta;/2 from upright, h &middot; sin(&theta;/2) / (&theta;/2) long. A vertex keeps its horizontal offset (x, 0, z) from the middle, turns with the middle at its height, and lands at the chord's end plus its turned offset:</p>
+    <div class="formula">&theta; = &kappa; h                    toward = (cos &psi;, 0, sin &psi;)
+middle(h) = h &middot; sinc(&theta;/2) &middot; (sin(&theta;/2) &middot; toward + cos(&theta;/2) &middot; Y)
+q = ((Y &times; toward) &middot; sin(&theta;/2), cos(&theta;/2))       the turn by &theta; about Y &times; toward
+bent vertex = middle(h) + rotate(q, (x, 0, z))</div>
+  </div>
+  <figure class="wide">
+<pre class="code"><code>let height = vertex.position[1];
+<span class="comment">// At this height the middle has turned through twice the half angle,</span>
+<span class="comment">// from +Y towards the azimuth, about +Y &times; toward. The arc's chord from</span>
+<span class="comment">// the foot runs at the half angle, its length the height times</span>
+<span class="comment">// sin(half) / half.</span>
+let half_angle = 0.5 * bend.curvature * height;
+let toward = vec3&lt;f32&gt;(cos(bend.azimuth), 0.0, sin(bend.azimuth));
+let rotation = vec4&lt;f32&gt;(
+    vec3&lt;f32&gt;(toward.z, 0.0, -toward.x) * sin(half_angle),
+    cos(half_angle)
+);
+let chord = height * sinc(half_angle);
+let middle = chord * (vec3&lt;f32&gt;(0.0, cos(half_angle), 0.0) + toward * sin(half_angle));
+let offset = vec3&lt;f32&gt;(vertex.position[0], 0.0, vertex.position[2]);
+let position = middle + rotate(rotation, offset);</code></pre>
+    <figcaption><b>The vertex's new place</b>, from <code>bend_vertices</code> in <code>src/render/shaders/bend.wgsl</code>. (toward.z, 0, &minus;toward.x) is +Y &times; toward, the axis the middle turns about, and <code>rotation</code> is the quaternion that turns by &theta; about it.</figcaption>
+  </figure>
+  <figure class="wide" id="demo-bend">
+    <div class="demo-grid">
+      <div class="canvas-frame"><canvas id="b-canvas" role="img" aria-label="One crowd figure seen from the side, bent by the chosen curvature, with its middle, the chord to its top, its 16 shadow proxies and its culling box."></canvas></div>
+      <div>
+        <div class="sliders" style="margin-top: 0">
+          <label for="b-curvature" class="control-label">Curvature <output id="b-curvature-out" for="b-curvature"></output></label>
+          <input type="range" id="b-curvature" min="-0.35" max="0.35" step="0.005" value="0.3">
+        </div>
+        <div class="controls">
+          <span class="control-label">Shadow proxies:</span>
+          <div class="seg" role="group" aria-label="Shadow proxies" id="b-proxies">
+            <button type="button" data-proxies="on" aria-pressed="true">show</button>
+            <button type="button" data-proxies="off" aria-pressed="false">hide</button>
+          </div>
+          <span class="control-label">Culling box:</span>
+          <div class="seg" role="group" aria-label="Culling box" id="b-box">
+            <button type="button" data-box="on" aria-pressed="true">show</button>
+            <button type="button" data-box="off" aria-pressed="false">hide</button>
+          </div>
+        </div>
+        <dl class="figures">
+          <div><dt>The top has turned, &theta; = &kappa; &middot; 1.8 m</dt><dd id="b-turn"></dd></div>
+          <div><dt>Chord from the foot to the top</dt><dd id="b-chord"></dd></div>
+          <div><dt>The top of the middle, sideways</dt><dd id="b-reach"></dd></div>
+          <div><dt>Room left to the box's side</dt><dd id="b-room"></dd></div>
+        </dl>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--accent-wash); border: 1.5px solid var(--accent)"></span>the bent figure</span>
+      <span><i class="dotted"></i>the rest Mesh</span>
+      <span><i class="thin"></i>the middle</span>
+      <span><i class="dashed"></i>the chord, at &theta;/2</span>
+      <span><span class="swatch" style="background: var(--figure-bg); border: 1.5px solid var(--ink-soft)"></span>shadow proxies</span>
+      <span><i class="box"></i>culling box</span>
+    </div>
+    <figcaption><b>Live demo.</b> This page's model of <code>bend.wgsl</code>, in the plane of the bend: one crowd figure cut through its middle, its outline bent point by point with the shader's chord and sinc. The ellipses are chapter 5's shadow proxies, placed as <code>bone_transform</code> places them, and the dashed box is chapter 4's culling box, 0.80 m each side of the middle and 1.8 m tall. Simplified: the azimuth only turns the plane the figure bends in, so it is left out.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>sin x / x near zero</h3>
+    <p>Where a figure stands nearly straight, &theta;/2 is tiny, and sin(&theta;/2) / (&theta;/2) divides one small number by another. Metal compiles shaders with <span class="concept" data-term="Fast math" data-tip="A compiler&#x27;s licence to trade floating-point exactness for speed. Metal compiles shaders with it unless told otherwise, and its sin is then accurate only to within an absolute error, at most 2&#x207B;&sup1;&sup3; from &minus;&pi; to &pi;.">fast math</span> unless told otherwise, and wgpu does not tell it otherwise. Under fast math, sin is accurate only to within an absolute error, at most 2&#x207B;&sup1;&sup3; for angles from &minus;&pi; to &pi;, not to a share of the result, so dividing by a small angle would magnify it. So below 0.5 rad the pass takes the Taylor series of <span class="concept" data-term="sinc" data-tip="sin(x) / x, which tends to 1 as x tends to 0. The bend pass takes its Taylor series below 0.5 rad.">sinc</span> instead. Its first term left out, x&#x2078; / 9!, is under 1.1 &times; 10&#x207B;&#x2078; there. The crowd never leaves the series: its largest half angle is 0.5 &times; 0.35 &times; 1.8 = 0.315 rad (this guide's arithmetic).</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">// sin(angle) / angle, sinc, by its Taylor series below 0.5 radians, whose</span>
+<span class="comment">// first term left out, angle&#x2078; / 9!, is under 1.1e-8 there: Metal compiles</span>
+<span class="comment">// with fast math, which leaves sin an absolute error that dividing by a</span>
+<span class="comment">// small angle would magnify.</span>
+fn sinc(angle: f32) -&gt; f32 {
+    let squared = angle * angle;
+    let series = 1.0 - squared / 6.0 * (1.0 - squared / 20.0 * (1.0 - squared / 42.0));
+    return select(sin(angle) / angle, series, abs(angle) &lt; 0.5);
+}</code></pre>
+    <figcaption><b>sinc</b>, from <code>bend.wgsl</code>. The nested form is 1 &minus; x&sup2;/6 + x&#x2074;/120 &minus; x&#x2076;/5040, the series' first four terms.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>The tangent frame turns too</h3>
+    <p>Each cooked vertex carries its normal, tangent and bitangent sign as one <span class="concept" data-term="QTangent" data-tip="A vertex&#x27;s normal, tangent and bitangent sign packed as one quaternion in four Snorm16 values, its w kept off zero so that its sign can carry the bitangent&#x27;s (ADR 0018).">QTangent</span>, a quaternion in four <span class="concept" data-term="Snorm16" data-tip="A signed 16-bit integer read as a number from &minus;1 to 1, in steps of 1/32767.">Snorm16</span> values (ADR 0018). The pass turns it by the same rotation, with a quaternion product, then stores it as the cooker stores one: its w made positive and kept at least <code>QTANGENT_SMALLEST_W</code>, 1/32767, one Snorm16 step, so it never rounds to zero, and then given the bitangent sign. The constant is shared with the cooker (<code>src/assets/cooked.rs</code>) and declared into the WGSL.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">// The QTangent turns with it, stored as the cooker stores one: its w</span>
+<span class="comment">// made positive and kept off zero, then given the bitangent sign</span>
+<span class="comment">// (ADR 0018).</span>
+let stored = unpack_qtangent(vertex);
+let bitangent_sign = select(1.0, -1.0, stored.w &lt; 0.0);
+var turned = quaternion_product(rotation, normalize(stored) * bitangent_sign);
+turned *= select(1.0, -1.0, turned.w &lt; 0.0);
+if turned.w &lt; QTANGENT_SMALLEST_W {
+    let axis_length = sqrt(1.0 - QTANGENT_SMALLEST_W * QTANGENT_SMALLEST_W);
+    turned = vec4&lt;f32&gt;(normalize(turned.xyz) * axis_length, QTANGENT_SMALLEST_W);
+}
+turned *= bitangent_sign;
+vertex.qtangent = array&lt;u32, 2&gt;(pack2x16snorm(turned.xy), pack2x16snorm(turned.zw));
+vertices[bend.first_vertex + invocation.x] = vertex;</code></pre>
+    <figcaption><b>The QTangent's turn</b>, the end of <code>bend_vertices</code>. The last line writes the vertex into the bent Mesh's range of the Arena.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Dispatch, order and timing</h3>
+    <ul class="keypoints">
+      <li><b>Dispatch.</b> A <span class="concept" data-term="Workgroup" data-tip="The group of invocations a compute dispatch runs together; the bend pass&#x27;s holds 64, one per vertex.">workgroup</span> bends 64 vertices (<code>BEND_WORKGROUP_SIZE</code>), one per invocation, and each bend gets a row of workgroups: the dispatch is (&lceil;longest / 64&rceil;, bends, 1), and an invocation past its bend's vertex count returns.</li>
+      <li><b>Capacity.</b> <code>BEND_CAPACITY</code> is 4,096 bends, so the bends' buffer is 4,096 &times; 20 = 81,920 bytes, 80 KiB, made at that size and never grown. Each frame's bends reach it through frame staging, with the frame's other uploads.</li>
+      <li><b>Order.</b> The pass is the first pass recorded into the frame's encoder, after the frame's uploads, the bends among them, and before culling phase one, so no pass reads a vertex before it is bent. The dynamic TLAS's build is not in that encoder: since #204 it has a command buffer of its own, submitted first.</li>
+      <li><b>Timing.</b> <code>bend_pass</code> is the second of the timed passes, after <code>dynamic_tlas_build</code>: nine at 0743418, eleven since #277, and twelve since PR #290 (71918ac) added <code>blas_refit</code> after the bend pass. A frame that bends nothing records no pass, so the pass's timestamp slots still hold an earlier frame's values. The readback then reads its time as zero and starts the frame's span at culling phase one (the <code>bent</code> flag in <code>src/render/readback.rs</code>). PR #291 (c5a12eb) has since made the span run from the earliest start to the latest end of the passes it covers, as Metal can start the Froxel pass before culling phase one.</li>
+    </ul>
+  </div>
+  <figure class="wide">
+    <p class="order-label">Its own command buffer, submitted first:</p>
+    <ol class="pass-order"><li class="apart">dynamic TLAS build</li></ol>
+    <p class="order-label">The frame's encoder, in order:</p>
+    <ol class="pass-order">
+      <li class="focus">bend pass</li><li>culling, phase one</li><li>froxel pass</li><li>depth pre-pass</li><li>depth pyramid pass</li><li>culling, phase two</li><li>lit pass</li><li>tonemapping pass</li>
+    </ol>
+    <figcaption><b>A frame's GPU work in the order it is recorded</b> at 0743418, which is also the order of <code>TIMED_PASSES</code> in <code>src/render/renderer.rs</code>. Of these, the depth pre-pass and the lit pass pull vertices, both after the bend. Since #277, with shadow rays on, phase two's depth pass and the shadow mask pass run between culling phase two and the lit pass, and the lit pass traces no rays; phase two's depth pass pulls vertices too, after the bend.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Where nothing bends, the pass costs nothing to run: PR #269's Baselines show 0 &micro;s and no heap allocations for it in every scene. Its memory is there regardless, 82,032 bytes of GPU memory in every scene: the 81,920-byte buffer, plus a begin and an end timestamp more in the readback's resolve buffer and in each of its six slots (16 + 6 &times; 16 bytes).</p>
+    <h3>The test</h3>
+    <p><code>the_bend_pass_bends_each_mesh_from_its_rest_mesh</code> loads five Meshes of 67 vertices, more than a workgroup and not a multiple of one, with tangent frames turned every way and both bitangent signs. Three are bent from the first: straight, at curvature 0, which must move no vertex at all; forward, 0.35 rad/m towards azimuth 2.2; and back, &minus;0.6 rad/m towards &minus;0.4. Each bent vertex is checked against an f64 <span class="concept" data-term="Oracle" data-tip="A slow, plainly correct computation that a test checks the fast one against. The bend&#x27;s sums the bent middle&#x27;s direction in small steps, in f64.">oracle</span> that sums the bent middle's direction in small steps (4,096 in #269, 1,024 since part 3), within 10&#x207B;&#x2075; m, and each tangent frame against the oracle's turn, within 2 &times; 10&#x207B;&#x2074;. On the M4 Pro, at #269, the worst errors were 2.3 &times; 10&#x207B;&#x2077; m and 5.2 &times; 10&#x207B;&#x2075;. The first Mesh and the one after the bent three keep their vertices byte for byte, and the pass's GPU time is read back within the frame's. Each of these mutations fails it:</p>
+    <ul class="keypoints">
+      <li>the chord without sin(x) / x;</li>
+      <li>the quaternion product swapped;</li>
+      <li>the bend axis flipped;</li>
+      <li>the w sign kept negative;</li>
+      <li>the dispatch rounded down.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="chapter" id="ticks">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 &middot; PR #271 &middot; ADR 0022</div>
+    <h2>Game state between Ticks</h2>
+    <p class="plain">How far a figure bends is game state, like where it stands. The <span class="concept" data-term="Fixed schedule" data-tip="The schedule that runs once per Tick and holds everything that changes game state: gameplay, physics, AI and Lua event reactions (ADR 0022).">fixed schedule</span> sets it once per <span class="concept" data-term="Tick" data-tip="One fixed step of the simulation, 1/64 s; rendered frames draw a blend of the two newest Ticks.">Tick</span>, every 1/64 s, and a frame, which lands between two Ticks, draws a blend of the two newest values (ADR 0022). Part 2 gives a bend's curvature the treatment World transforms already get.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">/// Bends its Renderable's Mesh on the GPU each frame from `rest`, a Mesh of</span>
+<span class="comment">/// the same vertices whose +Y axis runs up its middle from y = 0: a stand-in</span>
+<span class="comment">/// for skinning (#208). The middle bends into a circular arc towards the</span>
+<span class="comment">/// azimuth, and every vertex turns with the middle at its height. The bent</span>
+<span class="comment">/// Mesh is the Renderable's own, since the GPU writes its vertices, and its</span>
+<span class="comment">/// bounds must hold every shape it bends to, since the culling pass tests</span>
+<span class="comment">/// them. Game state: the fixed schedule sets the curvature each Tick, after</span>
+<span class="comment">/// `record_previous_curvatures` keeps the last, and frames draw the blend of</span>
+<span class="comment">/// the two (ADR 0022); the azimuth is drawn as set. A bend spawns with its</span>
+<span class="comment">/// previous curvature equal to its curvature.</span>
+#[derive(Component, Clone, Copy)]
+pub struct Bend {
+    pub rest: MeshHandle,
+    <span class="comment">/// The direction the middle bends towards, about +Y from +X towards +Z,</span>
+    <span class="comment">/// in radians.</span>
+    pub azimuth: f32,
+    <span class="comment">/// Radians the middle turns through per metre of its height, after the</span>
+    <span class="comment">/// newest Tick and after the one before.</span>
+    pub curvature: f32,
+    pub previous_curvature: f32,
+}
+
+impl Bend {
+    <span class="comment">/// The curvature a frame draws, `blend_weight` of the way from the</span>
+    <span class="comment">/// previous Tick's to the newest Tick's.</span>
+    pub fn drawn_curvature(&amp;self, blend_weight: f32) -&gt; f32 {
+        self.previous_curvature + (self.curvature - self.previous_curvature) * blend_weight
+    }
+}</code></pre>
+    <figcaption><b>The component</b>, from <code>src/components.rs</code>. It is pure data, as every component is: the GPU buffer it feeds belongs to the Renderer.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Each Tick, a writer sets only <code>curvature</code>. A new system, <code>record_previous_curvatures</code>, copies it into <code>previous_curvature</code> at the start of every Tick, right after <code>record_previous_world_transforms</code> does the same for World transforms, so no writer has to remember to. The azimuth is drawn as set, not blended.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">/// Starts a Tick, as `record_previous_world_transforms` does for World</span>
+<span class="comment">/// transforms: each bend's curvature becomes its previous one, before the</span>
+<span class="comment">/// Tick sets it.</span>
+pub fn record_previous_curvatures(mut bends: Query&lt;&amp;mut Bend&gt;) {
+    for mut bend in &amp;mut bends {
+        bend.previous_curvature = bend.curvature;
+    }
+}
+
+<span class="comment">// In simulation_schedules, src/state.rs: the fixed schedule, chained in order.</span>
+fixed_schedule.add_systems(
+    (
+        record_previous_world_transforms,
+        record_previous_curvatures,
+        (spawn_helmet, despawn_helmet)
+            .chain()
+            .run_if(resource_exists::&lt;HelmetAssets&gt;),
+        spin,
+        sway,
+        clear_just_pressed,
+        reset_teleported,
+        propagate_world_transforms,
+    )
+        .chain(),
+);</code></pre>
+    <figcaption><b>The system and where it runs</b>, from <code>src/transform/mod.rs</code> and <code>src/state.rs</code>. <code>sway</code>, the crowd's system (chapter 4), sets each figure's curvature after it.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>A State test, <code>between_ticks_a_bend_is_drawn_at_the_blend_of_its_two_newest_tick_curvatures</code>, sets a curvature that counts Ticks and runs 200 frames at 144, 60, 30 and 90 Hz in turn, which run 0 to 3 Ticks each. Every frame draws the curvature at the analytic blend. Taking <code>record_previous_curvatures</code> out of the fixed schedule fails it.</p>
+    <h3>Prepare's list</h3>
+    <p>Prepare turns every <span class="concept" data-term="Renderable" data-tip="An entity that has a Transform and a Mesh Handle, and optionally a Material Handle that overrides the Materials of its Mesh&#x27;s Primitives. The renderer pulls Renderables; entities never render themselves.">Renderable</span> that has a <code>Bend</code> into one <code>BendData</code> in Frame data, its curvature blended by the frame's <span class="concept" data-term="Blend weight" data-tip="How far a frame lies between the two newest Ticks, from 0 at the older to 1 at the newer. Prepare blends each moving entity&#x27;s two World transforms, and each Bend&#x27;s two curvatures, by it (ADR 0022).">blend weight</span>. Three rules keep the list safe to hand to the GPU:</p>
+    <ul class="keypoints">
+      <li><b>Both Meshes loaded, with as many vertices.</b> Otherwise the bend is warned about and skipped.</li>
+      <li><b>No races.</b> One dispatch runs every bend at once, writing each bent Mesh while it reads each rest Mesh. So of two bends of one Mesh, one is kept, and a bend whose rest Mesh is a Mesh that some bend writes, its own included, is dropped; one warning counts the dropped. These checks run in every build, not only under debug assertions.</li>
+      <li><b>A fixed order and a fixed capacity.</b> The list is sorted by where each bent Mesh's vertices start in the vertex Arena, so it does not depend on how the <span class="concept" data-term="ECS World" data-tip="The container of entities, components and resources. A code concept, never the playable space.">ECS World</span> stores the entities. Past <code>BEND_CAPACITY</code>, the bends of the Meshes highest in the Arena are left out, and those Meshes keep the shape they last took. <span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and of the dynamic TLAS&#x27;s build, and the GPU frame total (that build plus the span from the start of the first pass to the end of the last), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables refused, lights the light buffer had no room for, lights the Froxel lists had no room for and lights the shadow mask had no bit for, the lit pixels and the point lights their Froxels list and whose range reaches them (where counted), static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, bends the bend pass had no room for, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.">Frame stats</span> count them every frame, as <code>bends_left_out</code>, and they are warned about once while it lasts.</li>
+    </ul>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts compact wrap-heads" style="min-width: 600px">
+        <thead><tr><th>Renderable's Mesh</th><th>Bent from</th><th class="n">Newest curvature</th><th>In Frame data</th></tr></thead>
+        <tbody>
+          <tr><td><code>second</code></td><td><code>rest</code></td><td class="n">1.0</td><td>listed second, drawn at 0.4</td></tr>
+          <tr><td><code>first</code></td><td><code>rest</code></td><td class="n">0.6</td><td>listed first, drawn at 0.3</td></tr>
+          <tr><td><code>first</code>, again</td><td><code>rest</code></td><td class="n">0.6</td><td><span class="bad-text">dropped</span>: a second bend of one Mesh</td></tr>
+          <tr><td><code>longer</code>, 4 vertices</td><td><code>rest</code>, 3</td><td class="n">0.4</td><td><span class="bad-text">not bent</span>: the vertex counts differ</td></tr>
+          <tr><td><code>MeshHandle(99)</code>, never loaded</td><td><code>rest</code></td><td class="n">0.4</td><td><span class="bad-text">not bent</span>: not in the pool</td></tr>
+          <tr><td><code>own</code></td><td><code>own</code></td><td class="n">0.4</td><td><span class="bad-text">dropped</span>: bent from a Mesh a bend writes, its own</td></tr>
+          <tr><td><code>third</code></td><td><code>second</code></td><td class="n">0.4</td><td><span class="bad-text">dropped</span>: <code>second</code> is written by a bend</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>Seven Renderables, two bends</b>: <code>each_bend_reaches_frame_data_from_its_rest_mesh_blended_between_ticks</code>, in <code>src/render/prepare.rs</code>. Every bend's previous curvature is 0.2 and the blend weight 0.25, so 0.6 is drawn at 0.3 and 1.0 at 0.4. Frame data lists <code>first</code> before <code>second</code>, in vertex-Arena order, though they were spawned the other way round; the log holds two warnings that a Mesh is not bent and one that counts three dropped. PR #271 showed it failing without the sort, the blend, the vertex-count check, the dedup or the rest-Mesh check.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>A second test loads one bend more than the pass holds, 4,097, and checks over three frames that the highest is left out, counted in every frame and warned about once; warning in every frame fails it.</p>
+  </div>
+</section>
+
+<section class="chapter" id="crowd">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 &middot; PR #274</div>
+    <h2>The crowd scene</h2>
+    <p class="plain"><code>crowd</code> is the <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> that exit criterion 8 names: 100 figures of 5,120 triangles, swaying in the fixed schedule, each bent by the bend pass in every frame. Part 3 builds it with no shadows from the figures at all; part 4 adds them.</p>
+    <p>The figures stand in ten rows of ten, 1.6 m apart, on a 24 m ground plane, under the sun alone: 100,000 lux shining along (0.5, &minus;1, &minus;0.3), and no point lights. The camera looks from (0, 11, 20) at (0, 0.6, &minus;0.5), down about 27&deg; at the crowd's middle, "so every figure stays in view and none hides another whole". Frames advance at 60 Hz.</p>
+    <h3>One figure, 101 Meshes</h3>
+    <p>A figure is a unit sphere of 40 segments around and 65 from pole to pole, stretched to 0.25 m in radius (0.5 m across) and 1.8 m tall, and standing on its lowest point: 40 &times; (2 &times; 65 &minus; 2) = 5,120 triangles in 59 <span class="concept" data-term="Meshlet" data-tip="A small group of one Primitive&#x27;s triangles, bounded in vertex and triangle count, that the GPU draws as a unit and can cull as one.">Meshlets</span>, and 2,704 vertices after the cook. A bent Mesh must be its <span class="concept" data-term="Renderable" data-tip="An entity that has a Transform and a Mesh Handle, and optionally a Material Handle that overrides the Materials of its Mesh&#x27;s Primitives. The renderer pulls Renderables; entities never render themselves.">Renderable</span>'s own, since the GPU writes its vertices, so each figure loads the cooked figure once more. That makes 100 bent Meshes, plus one more load as the rest Mesh they are all bent from: 101 copies in the vertex <span class="concept" data-term="Arena" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool&#x27;s hold vertices, indices, and Meshlets with their vertices and triangles.">Arena</span>.</p>
+    <h3>The sway</h3>
+    <p>Each <span class="concept" data-term="Tick" data-tip="One fixed step of the simulation, 1/64 s; rendered frames draw a blend of the two newest Ticks.">Tick</span>, the <code>sway</code> system sets every figure's <span class="concept" data-term="Curvature" data-tip="The radians a bent middle turns through per metre of its height. The crowd sways between &minus;0.35 and 0.35.">curvature</span> for the end of the running Tick, from the Tick count, so no rounding accumulates:</p>
+    <div class="formula">&kappa; = 0.35 &middot; sin(2&pi; t / 2.5 s + phase)        t = (Tick + 1) / 64 s</div>
+    <p>At 0.35 rad/m, the top of a 1.8 m figure has turned 0.63 rad, 36&deg;, once every 2.5 s each way. A figure's phase and the <span class="concept" data-term="Azimuth" data-tip="The direction a bent middle leans towards: radians about +Y, from +X towards +Z.">azimuth</span> it sways towards are one angle: its index times the <span class="concept" data-term="Golden angle" data-tip="&pi;(3 &minus; &radic;5) rad, about 137.5&deg;: the turn that divides a full turn in the golden ratio. It is an irrational share of a turn, so no multiple of it lands exactly on another.">golden angle</span>, &pi;(3 &minus; &radic;5), about 137.5&deg;, wrapped to one turn, "so no two neighbours sway alike".</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code>impl Sway {
+    <span class="comment">/// Its curvature `seconds` after Tick 0.</span>
+    fn curvature(&amp;self, seconds: f64) -&gt; f32 {
+        let tau = std::f64::consts::TAU;
+        let angle = (tau * seconds / CROWD_SWAY_PERIOD + self.phase).rem_euclid(tau);
+        (CROWD_SWAY_CURVATURE * angle.sin()) as f32
+    }
+}
+
+<span class="comment">/// Sets each swaying figure's curvature for the end of the running Tick,</span>
+<span class="comment">/// from the Tick count, so no rounding accumulates over Ticks, and places</span>
+<span class="comment">/// its bones' shadow proxies on its bent middle.</span>
+pub(crate) fn sway(
+    fixed_time: Res&lt;FixedTime&gt;,
+    mut figures: Query&lt;(&amp;Sway, &amp;mut Bend, &amp;Children)&gt;,
+    mut bones: Query&lt;(&amp;Bone, &amp;mut Transform)&gt;,
+) {
+    let seconds = (fixed_time.tick + 1) as f64 * TICK_SECONDS;
+    for (sway, mut bend, children) in &amp;mut figures {
+        bend.curvature = sway.curvature(seconds);
+        for &amp;child in children {
+            if let Ok((bone, mut transform)) = bones.get_mut(child) {
+                *transform = bone_transform(bone.0, &amp;bend);
+            }
+        }
+    }
+}</code></pre>
+    <figcaption><b>The sway</b>, from <code>src/scenes/mod.rs</code>. <code>spawn_crowd</code> gives figure <i>i</i> the phase (<i>i</i> &times; golden angle) wrapped to 2&pi;, and the same angle as its <code>Bend</code>'s azimuth. The inner loop is part 4's: it places the shadow proxies of chapter 5.</figcaption>
+  </figure>
+  <figure class="wide" id="demo-crowd">
+    <div class="canvas-frame"><canvas id="c-canvas" role="img" aria-label="The crowd from above: 100 figures in ten rows of ten, each with a line from its foot to where the top of its middle leans at the chosen Tick."></canvas></div>
+    <div class="sliders">
+      <label for="c-tick" class="control-label">Tick <output id="c-tick-out" for="c-tick"></output></label>
+      <input type="range" id="c-tick" min="0" max="159" step="1" value="0">
+    </div>
+    <div class="controls">
+      <button type="button" class="btn" id="c-play" aria-pressed="false">Play</button>
+      <span class="control-label">Phase and azimuth:</span>
+      <div class="seg" role="group" aria-label="Phase and azimuth" id="c-steps">
+        <button type="button" data-steps="golden" aria-pressed="true">a golden angle apart</button>
+        <button type="button" data-steps="alike" aria-pressed="false">all alike</button>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--panel); border: 1.5px solid var(--ink-soft); border-radius: 50%"></span>a figure from above, upright, 0.25 m in radius</span>
+      <span><i class="dotted"></i>the line it sways along</span>
+      <span><span class="dot" style="background: var(--accent)"></span>where the top of its middle leans</span>
+    </div>
+    <figcaption><b>Live demo.</b> The 100 figures from above, Tick by Tick over one 2.5 s period (160 Ticks), as <code>sway</code> sets them: each line runs from a figure's foot to the point above which the top of its middle leans, (1 &minus; cos &kappa;h) / &kappa; towards its azimuth, h = 1.8 m. Frames draw a blend between Ticks; the demo draws the Ticks themselves. With all alike, every figure takes figure 0's phase and azimuth, 0, and the crowd leans as one.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Drawn, not traced</h3>
+    <p>A <span class="concept" data-term="BLAS" data-tip="Bottom-level acceleration structure: the GPU&#x27;s search structure over one Mesh&#x27;s triangles, built when the Mesh loads, then compacted (#202). Since #208 a Mesh no ray traces gets none.">BLAS</span> is built once, when its Mesh loads, from the vertices the Mesh has then. For a bent Mesh that is the rest shape, so its BLAS would cast an upright figure's shadow wherever the figure leaned. Part 3 therefore loads a bent Mesh drawn alone, through a new <span class="concept" data-term="MeshUse" data-tip="What a Mesh is loaded for: drawn and traced, the default; drawn alone, a bent Mesh, which gets no BLAS; or traced alone, a shadow proxy, which gets no Meshlets and no Material (#208).">MeshUse</span>, which the Mesh pool's new <code>load_for</code> takes; <code>load</code> keeps its old meaning, drawn and traced.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">/// What a Mesh is loaded for: the main pass draws it from its Meshlets, rays</span>
+<span class="comment">/// trace it through its BLAS, or both.</span>
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MeshUse {
+    DrawnAndTraced,
+    <span class="comment">/// Drawn alone: a Mesh the GPU bends, whose BLAS, built from its rest</span>
+    <span class="comment">/// shape, would cast another shape's shadow (#208).</span>
+    Drawn,
+    <span class="comment">/// Traced alone: a shadow proxy, which no pass draws, so it keeps no</span>
+    <span class="comment">/// Meshlets and needs no Material (#208).</span>
+    Traced,
+}</code></pre>
+    <figcaption><b>What a Mesh is loaded for</b>, from <code>src/assets/pools.rs</code>. <code>AssetLoader::bent_mesh</code> loads with <code>Drawn</code>. Part 4 adds <code>Traced</code>, which <code>AssetLoader::shadow_proxy</code> loads with (chapter 5).</figcaption>
+  </figure>
+  <div class="prose">
+    <p>A Mesh loaded <code>MeshUse::Drawn</code> gets no BLAS, and it skips its <span class="concept" data-term="Index stream" data-tip="A Mesh&#x27;s cooked u32 indices in the index Arena. No pass draws from it; only a BLAS build reads it.">index stream</span> too, since only a BLAS build reads it: 6.2 MB of the 16 MiB index Arena for this scene. With nothing of theirs in either TLAS, part 3's figures cast no shadow at all.</p>
+    <h3>A box that holds every bend</h3>
+    <p>The culling pass tests each Instance against its Mesh's <span class="concept" data-term="Culling box" data-tip="The box a Mesh&#x27;s Blob holds for culling (ADR 0018). The culling pass tests it, placed by the Instance&#x27;s transform, against the view and the depth pyramid.">culling box</span>, which the Mesh's <span class="concept" data-term="Blob" data-tip="One cooked Asset&#x27;s bytes, named by their content hash.">Blob</span> holds (ADR 0018). The rest shape's box would cut swaying figures at the screen's edge and behind occluders. So part 3 lets a procedural Mesh add a box that its cooked bounds must hold, and the figure adds the box of every shape it sways to. The added box is part of the Mesh's <span class="concept" data-term="Cook key" data-tip="The hash of everything that determines a Blob: what it cooks from, dependencies, settings and cooker versions. A changed Cook key means the Asset is cooked again.">Cook key</span>, so changing it cooks the Mesh again. At the most curvature, the top of the middle reaches (1 &minus; cos &kappa;h) / &kappa; sideways, and the figure lies within its radius of its middle:</p>
+    <div class="formula">half-width = 0.25 + (1 &minus; cos(0.35 &times; 1.8)) / 0.35 = 0.25 + 0.549 = 0.80 m        height: 0 to 1.8 m</div>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">/// The box that holds a crowd figure however it bends: its middle's top</span>
+<span class="comment">/// reaches (1 &minus; cos &kappa;h) / &kappa; sideways at the most curvature &kappa;, h its height,</span>
+<span class="comment">/// and the figure lies within its radius of its middle; no point rises</span>
+<span class="comment">/// above the figure's height.</span>
+#[cfg(feature = "cook")]
+fn crowd_figure_bounds() -&gt; [[f32; 3]; 2] {
+    let height = f64::from(CROWD_FIGURE_HEIGHT);
+    let sideways = (1.0 - (CROWD_SWAY_CURVATURE * height).cos()) / CROWD_SWAY_CURVATURE;
+    let reach = (f64::from(CROWD_FIGURE_RADIUS) + sideways) as f32;
+    [[-reach, 0.0, -reach], [reach, CROWD_FIGURE_HEIGHT, reach]]
+}</code></pre>
+    <figcaption><b>The culling box</b>, from <code>src/scenes/mod.rs</code>, cooked into the figure's Blob.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>"No point rises above the figure's height" needed a test, and the review caught the first one, which bent the figure at the most curvature alone. Bending lowers the top of the middle, but it lifts the side of each ring that faces away from the bend. <code>a_crowd_figure_bends_within_its_bounds</code> now bends every vertex of the figure with the bend pass's f64 oracle, by eight curvatures from 0.002 to 0.35 rad/m, towards two azimuths, one along a column of vertices and one between two, and every vertex lands in the box. In the PR's words: "Sideways, the most curvature reaches furthest; upward, the ring below the top rises highest near 0.011 rad/m, 0.93 mm under the box's top. A box without the sway's reach fails it, and so does one 1 mm lower at the top."</p>
+    <p>Why so small a curvature: the ring next to the top pole sits d = 1.2 cm from the middle, at h = 1.799 m. Its far side rises by about d&kappa;h, while the middle at its height sinks by about &kappa;&sup2;h&sup3;/6, and the difference peaks at &kappa; = 3d/h&sup2;, about 0.011 rad/m. Its height there comes out 0.93 mm under the box's top. This is this guide's arithmetic, and it reproduces the PR's figures.</p>
+    <h3>What part 3 measures</h3>
+    <p>Every frame draws 101 Instances and 512,002 triangles, 100 &times; 5,120 plus the ground's 2, so culling drops no figure, and two captures from a directory with no assets are byte-identical. The scene has a <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter: the reference machine, where Budgets are judged against it, or CI&#x27;s lavapipe, where only its counters are judged.">Baseline</span> and no <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span>. In its Baseline at b8cdb10, its bend pass bends 100 &times; 2,704 vertices in 28.8 &micro;s of GPU a frame (28.8 &micro;s again in 0743418's, 29.2 &micro;s in 69e02dc's and 27.2 &micro;s in 71918ac's), and its uploads are the 100 bends, 2,000 bytes, beside the uniforms.</p>
+  </div>
+</section>
+
+<section class="chapter" id="proxies">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 &middot; part 4 &middot; form (b)</div>
+    <h2>Shadow proxies</h2>
+    <p class="plain">A <span class="concept" data-term="Shadow proxy" data-tip="A Mesh that rays trace and no pass draws, standing in for part of a Renderable whose own BLAS would not hold the shape it is drawn in, such as a bent figure&#x27;s bone.">shadow proxy</span> is a Mesh that rays trace and no pass draws, standing in for part of a Renderable whose own BLAS would not hold the shape it is drawn in. Part 4 cuts each figure's middle into 16 <span class="concept" data-term="Bone" data-tip="One of 16 equal lengths of a crowd figure&#x27;s middle, 0.1125 m each, numbered from the foot. Each has a shadow proxy, placed every Tick.">bones</span> and gives each bone a proxy: a rigid ellipsoid that the sway moves with the bend, so that the <span class="concept" data-term="Dynamic TLAS" data-tip="The top-level acceleration structure over the Moving Instances, at most 10,000 of them, those in the lowest slots, each tagged with its slot. It is rebuilt every frame, in the static TLAS&#x27;s frame (#204).">dynamic TLAS</span>, which #204 rebuilds in every frame, carries the figure's shadow.</p>
+    <h3>One Mesh, 1,600 Instances</h3>
+    <p>The proxy Mesh is a unit sphere of 12 segments around and 8 from pole to pole, 168 triangles, loaded <code>MeshUse::Traced</code>: it gets a <span class="concept" data-term="BLAS" data-tip="Bottom-level acceleration structure: the GPU&#x27;s search structure over one Mesh&#x27;s triangles, built when the Mesh loads, then compacted (#202). Since #208 a Mesh no ray traces gets none.">BLAS</span>, but no Meshlets and no Material. Every proxy is an <span class="concept" data-term="Instance" data-tip="One Renderable&#x27;s data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh&#x27;s Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instance</span> of that one Mesh, placed by its own transform. Each is a child entity of its figure that carries <span class="concept" data-term="PreviousWorldTransform" data-tip="The component holding an entity&#x27;s World transform after the previous Tick. An entity that carries it is drawn blended between Ticks, and its Instance is a Moving Instance (#204).">PreviousWorldTransform</span>, and that makes it a <span class="concept" data-term="Moving Instance" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.">Moving Instance</span> in the dynamic TLAS: 1,600 proxies, 16% of its 10,000 entries.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code>for bone in 0..CROWD_BONES {
+    world.spawn((
+        bone_transform(bone, &amp;bend),
+        ChildOf(figure_entity),
+        MeshRef(proxy),
+        Bone(bone),
+        PreviousWorldTransform::default(),
+    ));
+}</code></pre>
+    <figcaption><b>A figure's 16 proxies</b>, spawned in <code>spawn_crowd</code>, <code>src/scenes/mod.rs</code>. <code>proxy</code> is the one Mesh that <code>AssetLoader::shadow_proxy</code> loaded.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>No pass may draw a proxy, and none does. A proxy's Mesh has no Meshlets, and the culling pass, which builds the frame's draw, now leaves out any Instance whose Mesh has none:</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">// A shadow proxy's Mesh has no Meshlets: rays trace it, no pass</span>
+<span class="comment">// draws it.</span>
+drawn = drawn &amp;&amp; mesh.meshlet_count != 0u;
+if drawn {
+    counts = vec2&lt;u32&gt;(mesh.meshlet_count, 3u * mesh.triangle_count);
+}</code></pre>
+    <figcaption><b>The skip</b>, in <code>src/render/shaders/culling.wgsl</code>. Proxies are neither drawn nor counted: with them, the frame still draws 101 Instances and 512,002 triangles.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Placed each Tick</h3>
+    <p>Each Tick, right after it sets a figure's curvature, <code>sway</code> places the figure's 16 proxies with <code>bone_transform</code> (chapter 4's code). A bone is 1.8 m / 16 = 0.1125 m long, and its proxy is centred on the bent middle halfway up the bone, turned as the middle turns there. Where the middle is comes from <code>bent_middle</code>, the Rust twin of the shader's math, in f64: the same half angle, the same chord. So the proxies follow the shape the GPU draws.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">/// Where bone `bone`'s shadow proxy sits in a figure bent by `bend`:</span>
+<span class="comment">/// centred on the bent middle halfway up the bone and turned as the middle</span>
+<span class="comment">/// turns there, stretched over the bone, short of the poles, and to</span>
+<span class="comment">/// `CROWD_PROXY_WIDTH` of the figure's width there, a spheroid's.</span>
+fn bone_transform(bone: u32, bend: &amp;Bend) -&gt; Transform {
+    let figure_height = f64::from(CROWD_FIGURE_HEIGHT);
+    let length = figure_height / f64::from(CROWD_BONES);
+    let height = (f64::from(bone) + 0.5) * length;
+    let (centre, turn) = bent_middle(height, bend);
+    let from_equator = 2.0 * height / figure_height - 1.0;
+    let radius = f64::from(CROWD_FIGURE_RADIUS) * (1.0 - from_equator * from_equator).sqrt();
+    let across = CROWD_PROXY_WIDTH * radius;
+    let to_pole = height.min(figure_height - height);
+    let along = (0.5 * CROWD_PROXY_LENGTH * length).min(CROWD_PROXY_WIDTH * to_pole);
+    Transform {
+        translation: centre,
+        rotation: turn.as_quat(),
+        scale: glam::dvec3(across, along, across).as_vec3(),
+    }
+}
+
+<span class="comment">/// Where `bend` takes the point of the middle `height` up it, and how it</span>
+<span class="comment">/// turns the middle there, as the bend pass bends a vertex there</span>
+<span class="comment">/// (src/render/shaders/bend.wgsl): the arc's chord from the foot runs at</span>
+<span class="comment">/// half the angle the middle turns through, its length the height times</span>
+<span class="comment">/// sin(half) / half.</span>
+fn bent_middle(height: f64, bend: &amp;Bend) -&gt; (glam::DVec3, glam::DQuat) {
+    let half_angle = 0.5 * f64::from(bend.curvature) * height;
+    let azimuth = f64::from(bend.azimuth);
+    let toward = glam::dvec3(azimuth.cos(), 0.0, azimuth.sin());
+    let axis = glam::dvec3(toward.z, 0.0, -toward.x);
+    let turn = glam::DQuat::from_axis_angle(axis, 2.0 * half_angle);
+    let chord = if half_angle == 0.0 {
+        height
+    } else {
+        height * half_angle.sin() / half_angle
+    };
+    (
+        chord * (glam::DVec3::Y * half_angle.cos() + toward * half_angle.sin()),
+        turn,
+    )
+}</code></pre>
+    <figcaption><b>Placing a proxy</b>, from <code>src/scenes/mod.rs</code>. <code>CROWD_PROXY_WIDTH</code> is 0.85 and <code>CROWD_PROXY_LENGTH</code> 1.5. On the CPU, in f64, <code>bent_middle</code> divides by the half angle directly, with 0 as its only special case.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Across, a proxy reaches 0.85 of the figure's radius at its height, so it stays inside the figure's surface. Along, it reaches 0.75 of a bone each way, 1.5 bones in all, so neighbours overlap, but never further than 0.85 of the distance to the nearer pole. Two tests hold that:</p>
+    <ul class="keypoints">
+      <li><code>each_bones_shadow_proxy_sits_on_the_bent_middle</code>: unbent, and bent either way to the sway's most curvature, every proxy's centre lies within 10&#x207B;&#x2077; m of the oracle's middle, whose own error with 1,024 steps is about 3 &times; 10&#x207B;&#x2078; m, and its turned axes within 10&#x207B;&#x2076;.</li>
+      <li><code>each_bones_shadow_proxy_lies_inside_its_figure</code>: unbent, each of 17 &times; 32 points on every proxy lies inside the figure.</li>
+    </ul>
+    <h3>Why the end proxies stop short</h3>
+    <p>A lit point on a figure sends its shadow ray outwards, towards the sun, and a ray that leaves a convex shape on its lit side does not enter it again. So as long as a figure's proxies lie inside it, "a figure's shadow rays leave it clear of its own proxies", as the code puts it. The first version gave every proxy 0.75 of a bone each way. The top proxy, centred at 1.744 m, then reached 2.8 cm past the head, the lit top of every figure traced into it, and a capture showed a dark spot of its own shadow on every figure's top. Stopping at 0.85 of the distance to the pole shortens the two end proxies from 0.084 m to 0.048 m each way and leaves the other fourteen as they were (this guide's arithmetic from the constants).</p>
+  </div>
+  <figure class="wide" id="demo-shadow">
+    <div class="controls" style="margin-top: 0">
+      <span class="control-label">View:</span>
+      <div class="seg" role="group" aria-label="View" id="s-view">
+        <button type="button" data-view="ground" aria-pressed="true">the ground, from above</button>
+        <button type="button" data-view="head" aria-pressed="false">the head, from the side</button>
+      </div>
+      <span class="control-label">End proxies:</span>
+      <div class="seg" role="group" aria-label="End proxies" id="s-ends">
+        <button type="button" data-ends="short" aria-pressed="true">short of the poles</button>
+        <button type="button" data-ends="long" aria-pressed="false">0.75 bone, as first written</button>
+      </div>
+    </div>
+    <div class="canvas-frame" style="margin-top: 14px"><canvas id="s-canvas" role="img" aria-label="One crowd figure under the crowd's sun: from above, its shadow and its 16 proxies' shadow on the ground; from the side, its head and the sun rays from its lit points."></canvas></div>
+    <div class="legend" id="s-legend-ground">
+      <span><span class="swatch" style="background: var(--ink-soft); opacity: 0.55"></span>the figure's shadow</span>
+      <span><span class="swatch" style="background: var(--accent); opacity: 0.6"></span>the proxies' shadow</span>
+      <span><i class="thin"></i>the middle, seen from above</span>
+    </div>
+    <div class="legend" id="s-legend-head" hidden>
+      <span><span class="swatch" style="background: var(--accent-wash); border: 1.5px solid var(--accent)"></span>the figure</span>
+      <span><span class="swatch" style="background: var(--figure-bg); border: 1.5px solid var(--ink-soft)"></span>shadow proxies</span>
+      <span><span class="dot" style="background: var(--warm)"></span>lit, its sun ray clear</span>
+      <span><span class="dot" style="background: var(--bad)"></span>lit, its ray meets a proxy</span>
+      <span><span class="dot" style="background: var(--ink-soft)"></span>facing away from the sun</span>
+    </div>
+    <div class="sliders">
+      <label for="s-curvature" class="control-label">Curvature <output id="s-curvature-out" for="s-curvature"></output></label>
+      <input type="range" id="s-curvature" min="-0.35" max="0.35" step="0.005" value="0.2">
+      <label for="s-azimuth" class="control-label">Azimuth <output id="s-azimuth-out" for="s-azimuth"></output></label>
+      <input type="range" id="s-azimuth" min="0" max="355" step="5" value="200">
+    </div>
+    <div class="controls" id="s-show-row">
+      <span class="control-label">Show:</span>
+      <div class="seg" role="group" aria-label="Which shadows" id="s-show">
+        <button type="button" data-show="both" aria-pressed="true">both</button>
+        <button type="button" data-show="figure" aria-pressed="false">the figure's</button>
+        <button type="button" data-show="proxies" aria-pressed="false">the proxies'</button>
+      </div>
+    </div>
+    <p class="readout" id="s-note" aria-live="polite" style="margin-top: 12px"></p>
+    <figcaption><b>Live demo.</b> This page's model of one crowd figure under the crowd's sun, which shines along (0.5, &minus;1, &minus;0.3). From above: the figure's shadow is the union of the shadows of its rings, each a disc the bend moves and turns whole, and the proxies' shadow the union of their ellipsoids' shadows. From the side: the head, cut through its middle in the plane of the bend, with the sun at the crowd's elevation, 59.8&deg;, turned into that plane. Each dot is a point of the outline, and each short line its ray towards the sun. Simplified: the proxies are drawn as smooth ellipsoids, not as their 168 triangles, and the side view's rays stay in one plane.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>What a proxy shadow looks like, then: a chain of overlapping ellipsoids, a little thinner than the figure, at 0.85 of its radius. That is the price form (b) pays in shape. Chapter 6 gives its price in time.</p>
+  </div>
+</section>
+
+<section class="chapter" id="cost">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 &middot; docs/performance.md</div>
+    <h2>What it costs</h2>
+    <p class="plain">On the <span class="concept" data-term="M4 Pro" data-tip="The Apple M4 Pro on which the project&#x27;s Budgets are judged and its Baselines recorded; wgpu runs on Metal there.">M4 Pro</span>, form (b) updated within the GPU half of the crowd's <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, which caps what that kind may hold (ADR 0017). Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budget</span> with room to spare, and sat at the CPU half, in part 4's bench at 0743418. Tracing sun rays against 1,600 proxies then cost the lit pass far more than the update itself, a cost outside the update's Budget. #277 has since moved those rays into a compute pass, and main's Baseline GPU frame is about a quarter of part 4's (the end of this chapter).</p>
+    <p>The figures are part 4's report in <code>docs/performance.md</code>, measured at 0743418, before #277: macOS 27.0.1, wgpu 30.0.1 on Metal, release builds, <code>praxis bench &lt;dir&gt; crowd</code> at 2560 &times; 1440 with 4x MSAA, 248 warm-up and 1,800 measured frames, in eight runs that alternate the scene without proxies (part 3) and with them (part 4). Other work on the machine held the load average at 5.4 to 10.3, so the CPU p95s are noisy; the update's GPU medians vary much less, from 521.5 to 543.6 &micro;s over the five runs below.</p>
+    <h3>The update against its Budget</h3>
+    <p>The update is timed as #204 times the dynamic TLAS. On the CPU it is the build's recording plus its own submit (<code>dynamic_tlas_cpu_microseconds</code>), and on the GPU the build between its markers (<code>dynamic_tlas_build</code>). Five runs with the proxies:</p>
+  </div>
+  <figure class="wide">
+    <div class="meter" role="img" aria-label="The update's CPU time in five runs: medians of 428.4 to 538.0 microseconds against a Budget of 500, p95s of 588.1 to 1,282.4.">
+      <p class="meter-heading">CPU: recording and submit</p>
+      <div class="meter-row">
+        <div class="meter-label"><b>Run 1</b><span>538.0 &micro;s (p95 1,282.4)</span></div>
+        <div class="meter-track" title="Run 1, CPU: median 538.0 &micro;s, p95 1,282.4 &micro;s"><span class="meter-fill over" style="width: 41.385%"></span><span class="meter-range over" style="left: 41.385%; width: 57.262%"></span><span class="meter-budget" style="left: 38.462%"></span></div>
+      </div>
+      <div class="meter-row">
+        <div class="meter-label"><b>Run 2</b><span>428.4 &micro;s (p95 588.1)</span></div>
+        <div class="meter-track" title="Run 2, CPU: median 428.4 &micro;s, p95 588.1 &micro;s"><span class="meter-fill" style="width: 32.954%"></span><span class="meter-range over" style="left: 32.954%; width: 12.285%"></span><span class="meter-budget" style="left: 38.462%"></span></div>
+      </div>
+      <div class="meter-row">
+        <div class="meter-label"><b>Run 3</b><span>473.0 &micro;s (p95 902.5)</span></div>
+        <div class="meter-track" title="Run 3, CPU: median 473.0 &micro;s, p95 902.5 &micro;s"><span class="meter-fill" style="width: 36.385%"></span><span class="meter-range over" style="left: 36.385%; width: 33.038%"></span><span class="meter-budget" style="left: 38.462%"></span></div>
+      </div>
+      <div class="meter-row">
+        <div class="meter-label"><b>Run 4</b><span>516.0 &micro;s (p95 1,143.6)</span></div>
+        <div class="meter-track" title="Run 4, CPU: median 516.0 &micro;s, p95 1,143.6 &micro;s"><span class="meter-fill over" style="width: 39.692%"></span><span class="meter-range over" style="left: 39.692%; width: 48.277%"></span><span class="meter-budget" style="left: 38.462%"></span></div>
+      </div>
+      <div class="meter-row">
+        <div class="meter-label"><b>Run 5</b><span>462.4 &micro;s (p95 894.0)</span></div>
+        <div class="meter-track" title="Run 5, CPU: median 462.4 &micro;s, p95 894.0 &micro;s"><span class="meter-fill" style="width: 35.569%"></span><span class="meter-range over" style="left: 35.569%; width: 33.2%"></span><span class="meter-budget" style="left: 38.462%"></span></div>
+      </div>
+      <div class="meter-axis" aria-hidden="true"><span class="first" style="left: 0">0</span><span style="left: 19.231%">250</span><span style="left: 38.462%">500</span><span style="left: 57.692%">750</span><span style="left: 76.923%">1,000 &micro;s</span><span class="budget after" style="left: 38.462%">CPU Budget, 500 &micro;s</span></div>
+    </div>
+    <div class="meter" role="img" aria-label="The update's GPU time in five runs: medians of 521.5 to 543.6 microseconds against a Budget of 1,000, p95s of 584.8 to 596.2.">
+      <p class="meter-heading">GPU: the build</p>
+      <div class="meter-row">
+        <div class="meter-label"><b>Run 1</b><span>521.5 &micro;s (p95 596.2)</span></div>
+        <div class="meter-track" title="Run 1, GPU: median 521.5 &micro;s, p95 596.2 &micro;s"><span class="meter-fill" style="width: 40.115%"></span><span class="meter-range" style="left: 40.115%; width: 5.746%"></span><span class="meter-budget" style="left: 76.923%"></span></div>
+      </div>
+      <div class="meter-row">
+        <div class="meter-label"><b>Run 2</b><span>543.6 &micro;s (p95 593.0)</span></div>
+        <div class="meter-track" title="Run 2, GPU: median 543.6 &micro;s, p95 593.0 &micro;s"><span class="meter-fill" style="width: 41.815%"></span><span class="meter-range" style="left: 41.815%; width: 3.8%"></span><span class="meter-budget" style="left: 76.923%"></span></div>
+      </div>
+      <div class="meter-row">
+        <div class="meter-label"><b>Run 3</b><span>539.3 &micro;s (p95 590.5)</span></div>
+        <div class="meter-track" title="Run 3, GPU: median 539.3 &micro;s, p95 590.5 &micro;s"><span class="meter-fill" style="width: 41.485%"></span><span class="meter-range" style="left: 41.485%; width: 3.938%"></span><span class="meter-budget" style="left: 76.923%"></span></div>
+      </div>
+      <div class="meter-row">
+        <div class="meter-label"><b>Run 4</b><span>526.2 &micro;s (p95 584.8)</span></div>
+        <div class="meter-track" title="Run 4, GPU: median 526.2 &micro;s, p95 584.8 &micro;s"><span class="meter-fill" style="width: 40.477%"></span><span class="meter-range" style="left: 40.477%; width: 4.508%"></span><span class="meter-budget" style="left: 76.923%"></span></div>
+      </div>
+      <div class="meter-row">
+        <div class="meter-label"><b>Run 5</b><span>527.2 &micro;s (p95 585.0)</span></div>
+        <div class="meter-track" title="Run 5, GPU: median 527.2 &micro;s, p95 585.0 &micro;s"><span class="meter-fill" style="width: 40.554%"></span><span class="meter-range" style="left: 40.554%; width: 4.446%"></span><span class="meter-budget" style="left: 76.923%"></span></div>
+      </div>
+      <div class="meter-axis" aria-hidden="true"><span class="first" style="left: 0">0</span><span style="left: 19.231%">250</span><span style="left: 38.462%">500</span><span style="left: 57.692%">750</span><span style="left: 76.923%">1,000 &micro;s</span><span class="budget before" style="left: 76.923%">GPU Budget, 1,000 &micro;s</span></div>
+    </div>
+    <figcaption><b>The crowd's update in five runs</b>, with the proxies, at 0743418, M4 Pro, release, 2560 &times; 1440. Each bar is solid to the run's median and outlined to its p95, in red where it passes the Budget, the dashed line: 500 &micro;s of CPU, 1,000 &micro;s of GPU. Both drawn to one scale, 0 to 1,300 &micro;s.</figcaption>
+  </figure>
+  <div class="prose">
+    <ul class="keypoints">
+      <li><b>GPU: within the Budget.</b> The build takes 522 to 544 &micro;s at the median and under 600 &micro;s at p95, about half the 1.0 ms. On the orrery, the same build of 5 entries takes about 175 &micro;s (#204's section of the same file).</li>
+      <li><b>CPU: at the Budget.</b> Medians of 428 to 538 &micro;s straddle the 0.5 ms; p95s run 588 to 1,282 &micro;s on the loaded machine. On the orrery, 5 entries cost about 200 &micro;s, most of it wgpu walking all 10,000 slots at every build, about 12 ns a slot. The 1,600 entries add the rest, and wgpu-core allocates a <code>Vec</code> for every entry of every build (<code>tlas_instance_to_bytes</code>, from the notes #204 left on issue #207).</li>
+    </ul>
+    <h3>Beyond the update</h3>
+    <p>The quietest run of each build at 0743418, before #277, medians:</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts wrap-heads">
+        <thead><tr><th>Per frame</th><th class="n">Without proxies, part 3</th><th class="n">With proxies, part 4</th><th class="n">Change</th></tr></thead>
+        <tbody>
+          <tr><td>CPU frame</td><td class="n">243.5 &micro;s</td><td class="n">938.2 &micro;s</td><td class="n">+694.7 &micro;s</td></tr>
+          <tr><td>GPU frame</td><td class="n">7,414.6 &micro;s</td><td class="n">12,860.9 &micro;s</td><td class="n">+5,446.3 &micro;s</td></tr>
+          <tr class="focus"><td>Lit pass</td><td class="n">6,468.6 &micro;s</td><td class="n">11,339.0 &micro;s</td><td class="n">+4,870.4 &micro;s</td></tr>
+          <tr><td>Uploaded</td><td class="n">2,192 B</td><td class="n">322,192 B</td><td class="n">+320,000 B</td></tr>
+          <tr><td>Heap allocations</td><td class="n">295</td><td class="n">2,034</td><td class="n">+1,739</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>The crowd without and with its proxies</b>: the quietest run of each build, medians, M4 Pro, release, 2560 &times; 1440, 4x MSAA. The changes are this guide's subtractions; the counters match the two Baselines, b8cdb10's and 0743418's. Main's have been re-recorded since; the end of this chapter gives them.</figcaption>
+  </figure>
+  <div class="prose">
+    <ul class="keypoints">
+      <li><b>CPU frame, +695 &micro;s.</b> The update, plus placing 1,600 proxies every Tick, propagating their World transforms and writing their Instances. In one frame that ran two Ticks, the update took 465 &micro;s (356 recording, 109 submitting); each Tick's <code>sway</code> placed the proxies in 21 to 22 &micro;s and propagated their World transforms in 37 to 39 &micro;s; prepare wrote their Instances in 38 &micro;s; and the frame's own encoding and submit grew by 95 and 94 &micro;s. #204 found that wgpu-core walks a TLAS's entries at submit for each pass that sets a bind group holding it, four passes at 0743418.</li>
+      <li><b>Lit pass, +4.9 ms.</b> At 0743418 the lit pass traced the shadow rays. Without proxies the figures cast no shadow and the dynamic TLAS is empty, which the lit pass skipped (#204). With them, every lit pixel's sun ray that the static TLAS let through was traced against 1,600 proxies. That is shadow-ray cost, outside the update's Budget; form (a) traces 100 refitted BLASes of 5,120 triangles instead. The whole GPU frame, 12.9 ms, was then over ADR 0013's provisional 12 ms; exit criterion 8 judges the update alone.</li>
+      <li><b>Uploads, +320,000 B a frame.</b> Each proxy's 128-byte Instance and its 72-byte TLAS entry: 1,600 &times; 200 bytes.</li>
+      <li><b>Heap allocations, 295 to 2,034.</b> Most of the 1,739 more are wgpu-core's <code>Vec</code> per TLAS entry per build.</li>
+      <li><b>The bend pass</b> stays at 28.8 &micro;s of GPU a frame for 100 &times; 2,704 vertices, in both Baselines, b8cdb10's and 0743418's.</li>
+    </ul>
+    <h3>Since #277: the shadow mask</h3>
+    <p>PR #277 (bd7b988) moved every shadow ray out of the lit pass. A compute pass now traces one ray per pixel towards each light that reaches it, from the pixel's nearest depth sample: against the static TLAS, then, where that finds nothing, against the dynamic TLAS unless it is empty. Each result is a bit of the <span class="concept" data-term="Shadow mask" data-tip="A bit per light at each pixel, set where that light is hidden from the surface the pixel&#x27;s nearest sample shows, by the surface itself where it faces away or by what its shadow ray finds, in the order the lit pass sums the pixel&#x27;s lights, up to 59 of them. A compute pass traces it from the depth target; the lit pass reads it.">shadow mask</span>, which the lit pass reads; the lit pass has no ray query left. With shadow rays on, phase two's Instances first draw into depth in a pass of their own. #277 re-recorded the Baselines, and PR #272 (2059535) re-recorded them again; of crowd's counters, #272 changed only GPU memory. The crowd Baseline at 69e02dc beside 0743418's:</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts wrap-heads">
+        <thead><tr><th>Per frame, median</th><th class="n">0743418: the lit pass traces</th><th class="n">69e02dc: the shadow mask</th></tr></thead>
+        <tbody>
+          <tr class="focus"><td>GPU frame</td><td class="n">12,860.9 &micro;s</td><td class="n">3,293.8 &micro;s</td></tr>
+          <tr><td>Lit pass</td><td class="n">11,339.0 &micro;s</td><td class="n">1,688.4 &micro;s</td></tr>
+          <tr><td>Shadow mask pass</td><td class="n">&ndash;</td><td class="n">1,175.4 &micro;s</td></tr>
+          <tr><td>Phase two's depth pass</td><td class="n">&ndash;</td><td class="n">11.9 &micro;s</td></tr>
+          <tr><td>Update, GPU</td><td class="n">543.6 &micro;s</td><td class="n">605.9 &micro;s</td></tr>
+          <tr><td>Update, CPU</td><td class="n">428.4 &micro;s</td><td class="n">331.8 &micro;s</td></tr>
+          <tr><td>CPU frame</td><td class="n">938.2 &micro;s</td><td class="n">782.6 &micro;s</td></tr>
+          <tr><td>Uploaded</td><td class="n">322,192 B</td><td class="n">322,192 B</td></tr>
+          <tr><td>Heap allocations</td><td class="n">2,034</td><td class="n">2,078</td></tr>
+          <tr><td>GPU memory</td><td class="n">420,022,659 B</td><td class="n">516,623,059 B</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>The crowd's M4 Pro Baseline, before and after #277</b>: <code>bench/baselines/apple-m4-pro/crowd.json</code> at 0743418 and at 69e02dc. Baseline against Baseline, one run each, not an interleaved A/B. GPU memory grew by #277's 29,491,428 bytes (the mask, 8 bytes a pixel, its count and readback) and #272's 67,108,972; heap allocations by 44, for #277's two passes.</figcaption>
+  </figure>
+  <div class="prose">
+    <ul class="keypoints">
+      <li><b>The GPU frame, 3.3 ms,</b> is now well under ADR 0013's provisional 12 ms.</li>
+      <li><b>The update</b> reads 605.9 &micro;s of GPU (p95 668.7) and 331.8 &micro;s of CPU (p95 415.6) in this one run, under both halves of its Budget. One run is not five: part 4's five, on a loaded machine, straddled the CPU half.</li>
+      <li><b>Re-recorded by PR #290</b> (71918ac), with a timed pass for #209's refit and 112 bytes more GPU memory for its timestamps, the crowd Baseline reads 3,287.0 &micro;s of GPU frame and an update of 611.5 &micro;s of GPU (p95 663.0) and 360.1 &micro;s of CPU (p95 404.1): still about a quarter of 0743418's GPU frame, and under both halves of the Budget.</li>
+    </ul>
+    <h3>What #209 will compare</h3>
+    <p>Form (a) refits each figure's own BLAS through <span class="concept" data-term="wgpu-hal" data-tip="wgpu&#x27;s lower layer, one unsafe implementation per backend, beneath the safe API. ADR 0007 permits it for a subsystem that exceeds wgpu&#x27;s safe API.">wgpu-hal</span> on Metal, on the same scene and against the same Budget, and its shadows are the figures' own triangles. #208 leaves it two notes. The bend pass records in the frame's encoder, after the dynamic TLAS's own submission, so refit needs the bend moved ahead of the build. And a bend names ranges of the vertex Arena, not the Mesh whose BLAS a refit would update. The crowd-form <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel&#x27;s point lights, and the form the crowd scene&#x27;s deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span>, which <code>CONTEXT.md</code> already names, arrives with #209, when there is a second form to switch to. With both forms timed, the owner picks M7's; if neither updates within 1.0 ms of GPU and 0.5 ms of CPU, ADR 0020 reopens for skinned crowds.</p>
+    <p>Since then #209 has landed, in PR #289 (66b5b57) and PR #290 (71918ac). <code>CrowdForm</code>, the crowd-form Render switch, picks the form: <code>Proxies</code>, the default and this guide's form; <code>Refit</code>, through wgpu-hal on Metal only; or <code>Rebuild</code>, each BLAS rebuilt through wgpu, the shapes a refit must match. In the two update forms the frame's commands up to the bend pass go in a submission of their own, with the BLASes' refits or rebuilds, and the dynamic TLAS's build follows it. On the M4 Pro the proxies' update took 597 to 603 &micro;s of GPU and 319 to 326 &micro;s of CPU at the median, within both halves of the Budget, and the refit's 1.37 to 1.38 ms of GPU, over the GPU half. The proxies fit, so ADR 0020 does not reopen for skinned crowds, and on 2026-10-26 the owner picked them for M7. <a href="blas-refit.html">BLAS Refit Explained</a> follows that work.</p>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Repo links are pinned to 0743418, the commit that merged PR #276, except the two later crowd Baselines, pinned to 69e02dc and 71918ac. The book sections were checked on 2026-10-23 against the table of contents and the chapter 26 PDF on realtimerendering.com, and against pbr-book.org.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>This ticket</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/issues/208">Ticket #208</a> and <a href="https://github.com/gariasf/praxis/issues/208#issuecomment-6369902753">its split</a> <span>the ask, and the four parts</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/269">PR #269</a> <span>part 1: the bend pass, its test and its Metrics</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/271">PR #271</a> <span>part 2: <code>Bend</code>, the blend and prepare's list</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/274">PR #274</a> <span>part 3: the scene, its bounds test and its Baseline</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/276">PR #276</a> <span>part 4: the shadow proxies, and the report against the Budget</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/209">Ticket #209</a>, <a href="https://github.com/gariasf/praxis/pull/289">PR #289</a> and <a href="https://github.com/gariasf/praxis/pull/290">PR #290</a> <span>form (a), BLAS refit through wgpu-hal, the crowd-form switch, and both forms timed</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/277">PR #277</a> <span>the shadow mask pass, which has traced the shadow rays since, and its re-recorded Baselines</span></li>
+        <li><a href="https://github.com/gariasf/praxis/milestone/4">The M3 milestone</a> <span>exit criterion 8, the crowd</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/17#issuecomment-6273209752">The decision on issue #17</a> <span>item 14: the measurement stays in M3, and its Budget; and <a href="https://github.com/gariasf/praxis/issues/17#issuecomment-6410351140">the owner's pick</a> of the proxies for M7</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/207#issuecomment-6365324618">#204's notes on issue #207</a> <span>wgpu-core's <code>Vec</code> per TLAS entry per build</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/0743418cd9f4897349eb9be8dffc2d317c9b5a0f/docs/research/world-design-pre-mortem.md">The world-design pre-mortem</a> <span>"Skinned characters in a crowd": the problem, its price and the two escape hatches</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/0743418cd9f4897349eb9be8dffc2d317c9b5a0f/docs/performance.md"><code>docs/performance.md</code></a> <span>"The crowd's per-bone proxies", chapter 6's figures</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/69e02dc49eaee125830e7470e91eb09e5a63a636/bench/baselines/apple-m4-pro/crowd.json">The crowd Baseline</a> <span>at 69e02dc, after #277 and #272, and <a href="https://github.com/gariasf/praxis/blob/71918ac5199bbefe24205444a55a21bc7dd9b7b2/bench/baselines/apple-m4-pro/crowd.json">at 71918ac</a>, after #290: the end of chapter 6</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/0743418cd9f4897349eb9be8dffc2d317c9b5a0f/docs/adr/0020-ray-traced-probe-gi-and-hard-ray-traced-shadows.md">ADR 0020</a> <span>one shadow ray per pixel per light, the two TLAS, and the crowd's form</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/0743418cd9f4897349eb9be8dffc2d317c9b5a0f/docs/adr/0022-fixed-64-hz-simulation-with-interpolation.md">ADR 0022</a> <span>Ticks and the blend that curvatures now share</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/0743418cd9f4897349eb9be8dffc2d317c9b5a0f/docs/adr/0007-wgpu-is-the-permanent-graphics-api.md">ADR 0007</a> <span>wgpu-hal, for a subsystem past wgpu's safe API</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/0743418cd9f4897349eb9be8dffc2d317c9b5a0f/docs/adr/0018-cooked-assets-are-named-by-stable-ids-and-stored-by-content-hash.md">ADR 0018</a> <span>the 28-byte vertex and its QTangent, and the culling box a Blob holds</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/0743418cd9f4897349eb9be8dffc2d317c9b5a0f/docs/adr/0013-reference-hardware-and-provisional-budgets.md">ADR 0013</a> <span>the M4 Pro and the frame's 6 ms and 12 ms</span></li>
+      </ul>
+      <h4>The code</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/0743418cd9f4897349eb9be8dffc2d317c9b5a0f/src/render/shaders/bend.wgsl"><code>src/render/shaders/bend.wgsl</code></a> and <a href="https://github.com/gariasf/praxis/blob/0743418cd9f4897349eb9be8dffc2d317c9b5a0f/src/render/bend_pass.rs"><code>src/render/bend_pass.rs</code></a> <span>the bend, its pass and its test</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/0743418cd9f4897349eb9be8dffc2d317c9b5a0f/src/components.rs"><code>src/components.rs</code></a>, <a href="https://github.com/gariasf/praxis/blob/0743418cd9f4897349eb9be8dffc2d317c9b5a0f/src/transform/mod.rs"><code>src/transform/mod.rs</code></a> and <a href="https://github.com/gariasf/praxis/blob/0743418cd9f4897349eb9be8dffc2d317c9b5a0f/src/render/prepare.rs"><code>src/render/prepare.rs</code></a> <span><code>Bend</code>, its previous curvature, and the bends in Frame data</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/0743418cd9f4897349eb9be8dffc2d317c9b5a0f/src/scenes/mod.rs"><code>src/scenes/mod.rs</code></a> <span>the scene, the sway, the culling box and the proxies' placement</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/0743418cd9f4897349eb9be8dffc2d317c9b5a0f/src/assets/pools.rs"><code>src/assets/pools.rs</code></a> and <a href="https://github.com/gariasf/praxis/blob/0743418cd9f4897349eb9be8dffc2d317c9b5a0f/src/render/shaders/culling.wgsl"><code>src/render/shaders/culling.wgsl</code></a> <span><code>MeshUse</code>, and the skip of Meshes with no Meshlets</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>The APIs</h3>
+      <ul>
+        <li>wgpu 30.0.1, <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs"><code>wgpu-core/src/command/ray_tracing.rs</code></a> <span>for a BLAS, the debug message "only rebuild implemented", lines 1106 to 1108; for a TLAS, the warning "only rebuild is implemented", line 337</span></li>
+        <li><a href="https://docs.vulkan.org/refpages/latest/refpages/source/VkBuildAccelerationStructureModeKHR.html">Vulkan, <code>VkBuildAccelerationStructureModeKHR</code></a> <span>a build from scratch or an update of an existing structure (<code>VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR</code>): what Vulkan calls an update, Metal calls a refit</span></li>
+        <li><a href="https://developer.apple.com/documentation/metal/mtlaccelerationstructurecommandencoder">Metal, <code>MTLAccelerationStructureCommandEncoder</code></a> <span>its refit command, the one #209 reaches through wgpu-hal</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Books</h3>
+      <ul>
+        <li>Akenine-M&ouml;ller et al., <i>Real-Time Rendering</i>, 4th edition, chapter 4, Transforms (<a href="https://www.realtimerendering.com/Real-Time_Rendering_4th-TOC_Preface_Intro_Bib_Index.pdf">table of contents</a>) <span>&sect;4.3, Quaternions, p. 76: the rotations the bend and the QTangent use; &sect;4.4, Vertex Blending, p. 84: the skinning the bend stands in for</span></li>
+        <li><i>Real-Time Rendering</i>, 4th edition, chapter 26, Real-Time Ray Tracing, <a href="https://www.realtimerendering.com/Real-Time_Rendering_4th-Real-Time_Ray_Tracing.pdf">free from realtimerendering.com</a> <span>&sect;26.3, Top and Bottom Level Acceleration Structures: instance matrices updated each frame for lightweight animation, as form (b) moves its proxies; a rebuild for geometry that changes; and "a faster update of the data structure" when only vertex positions move, form (a)</span></li>
+        <li>Pharr, Jakob and Humphreys, <i>Physically Based Rendering</i>, 4th edition, <a href="https://pbr-book.org/4ed/Primitives_and_Intersection_Acceleration/Primitive_Interface_and_Geometric_Primitives">&sect;7.1.2, Object Instancing and Primitives in Motion</a> <span>one shape, many placements: 1,600 proxies of one Mesh</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+    <p>Where <code>CONTEXT.md</code> defines a term, the definition here and in the tooltips is its own at 69e02dc, word for word. Since #209, <code>MeshUse</code> has a fourth use, <code>Refitted</code>: drawn and traced, a Mesh the GPU bends whose BLAS is updated each frame, built to allow updates and never compacted.</p>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Bend</dt><dd>The GPU&#x27;s stand-in for skinning until M7: each frame a compute pass rewrites a Renderable&#x27;s own Mesh, the bent Mesh, from a rest Mesh of the same vertices, its middle curved into an arc by a curvature the fixed schedule sets each Tick.</dd></div>
+    <div><dt>Bend pass</dt><dd>The compute pass that bends Meshes on the GPU, first in each frame&#x27;s encoder: a row of 64-vertex workgroups per bend (#269).</dd></div>
+    <div><dt>Rest Mesh</dt><dd>The Mesh a bend reads and never writes: its +Y axis runs up its middle from y = 0, and every Mesh bent from it holds as many vertices.</dd></div>
+    <div><dt>Bent Mesh</dt><dd>A Renderable&#x27;s own Mesh, whose vertices the bend pass overwrites from its rest Mesh&#x27;s each frame; the main pass draws it as it draws any Mesh.</dd></div>
+    <div><dt>Curvature</dt><dd>The radians a bent middle turns through per metre of its height. The crowd sways between &minus;0.35 and 0.35.</dd></div>
+    <div><dt>Azimuth</dt><dd>The direction a bent middle leans towards: radians about +Y, from +X towards +Z.</dd></div>
+    <div><dt>Skinning</dt><dd>Deforming a Mesh by a skeleton: each vertex follows a weighted blend of a few bones&#x27; transforms, recomputed every frame. Real-Time Rendering calls it vertex blending.</dd></div>
+    <div><dt>Shadow proxy</dt><dd>A Mesh that rays trace and no pass draws, standing in for part of a Renderable whose own BLAS would not hold the shape it is drawn in, such as a bent figure&#x27;s bone.</dd></div>
+    <div><dt>Bone</dt><dd>One of 16 equal lengths of a crowd figure&#x27;s middle, 0.1125 m each, numbered from the foot. Each has a shadow proxy, placed every Tick.</dd></div>
+    <div><dt>MeshUse</dt><dd>What a Mesh is loaded for: drawn and traced, the default; drawn alone, a bent Mesh, which gets no BLAS; or traced alone, a shadow proxy, which gets no Meshlets and no Material (#208).</dd></div>
+    <div><dt>Culling box</dt><dd>The box a Mesh&#x27;s Blob holds for culling (ADR 0018). The culling pass tests it, placed by the Instance&#x27;s transform, against the view and the depth pyramid.</dd></div>
+    <div><dt>Index stream</dt><dd>A Mesh&#x27;s cooked u32 indices in the index Arena. No pass draws from it; only a BLAS build reads it.</dd></div>
+    <div><dt>TLAS</dt><dd>Top-level acceleration structure: the GPU&#x27;s search structure over Instances, each placing a BLAS with its transform. A ray walks it down to the triangles it meets.</dd></div>
+    <div><dt>BLAS</dt><dd>Bottom-level acceleration structure: the GPU&#x27;s search structure over one Mesh&#x27;s triangles, built when the Mesh loads, then compacted (#202). Since #208 a Mesh no ray traces gets none.</dd></div>
+    <div><dt>Static TLAS</dt><dd>The top-level acceleration structure over every static Instance whose Mesh rays trace, each placing its Mesh&#x27;s BLAS and tagged with its slot, in a frame anchored where the scene loads (#202).</dd></div>
+    <div><dt>Dynamic TLAS</dt><dd>The top-level acceleration structure over the Moving Instances, at most 10,000 of them, those in the lowest slots, each tagged with its slot. It is rebuilt every frame, in the static TLAS&#x27;s frame (#204).</dd></div>
+    <div><dt>Rebuild</dt><dd>Building an acceleration structure again from scratch, from its current contents. Through wgpu-core 30 it is the only way to update one.</dd></div>
+    <div><dt>Refit</dt><dd>Updating an acceleration structure in place after its contents move: the tree keeps its shape and only its bounds are recomputed. Cheaper than a rebuild, and the tree traces more slowly the further things have moved. wgpu-core 30 does not implement it.</dd></div>
+    <div><dt>wgpu-hal</dt><dd>wgpu&#x27;s lower layer, one unsafe implementation per backend, beneath the safe API. ADR 0007 permits it for a subsystem that exceeds wgpu&#x27;s safe API.</dd></div>
+    <div><dt>Moving Instance</dt><dd>An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.</dd></div>
+    <div><dt>PreviousWorldTransform</dt><dd>The component holding an entity&#x27;s World transform after the previous Tick. An entity that carries it is drawn blended between Ticks, and its Instance is a Moving Instance (#204).</dd></div>
+    <div><dt>Instance</dt><dd>One Renderable&#x27;s data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh&#x27;s Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.</dd></div>
+    <div><dt>Renderable</dt><dd>An entity that has a Transform and a Mesh Handle, and optionally a Material Handle that overrides the Materials of its Mesh&#x27;s Primitives. The renderer pulls Renderables; entities never render themselves.</dd></div>
+    <div><dt>Mesh</dt><dd>An ordered list of Primitives that are rendered together.</dd></div>
+    <div><dt>Meshlet</dt><dd>A small group of one Primitive&#x27;s triangles, bounded in vertex and triangle count, that the GPU draws as a unit and can cull as one.</dd></div>
+    <div><dt>Arena</dt><dd>A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool&#x27;s hold vertices, indices, and Meshlets with their vertices and triangles.</dd></div>
+    <div><dt>Blob</dt><dd>One cooked Asset&#x27;s bytes, named by their content hash.</dd></div>
+    <div><dt>Cook key</dt><dd>The hash of everything that determines a Blob: what it cooks from, dependencies, settings and cooker versions. A changed Cook key means the Asset is cooked again.</dd></div>
+    <div><dt>QTangent</dt><dd>A vertex&#x27;s normal, tangent and bitangent sign packed as one quaternion in four Snorm16 values, its w kept off zero so that its sign can carry the bitangent&#x27;s (ADR 0018).</dd></div>
+    <div><dt>Snorm16</dt><dd>A signed 16-bit integer read as a number from &minus;1 to 1, in steps of 1/32767.</dd></div>
+    <div><dt>sinc</dt><dd>sin(x) / x, which tends to 1 as x tends to 0. The bend pass takes its Taylor series below 0.5 rad.</dd></div>
+    <div><dt>Fast math</dt><dd>A compiler&#x27;s licence to trade floating-point exactness for speed. Metal compiles shaders with it unless told otherwise, and its sin is then accurate only to within an absolute error, at most 2&#x207B;&sup1;&sup3; from &minus;&pi; to &pi;.</dd></div>
+    <div><dt>Workgroup</dt><dd>The group of invocations a compute dispatch runs together; the bend pass&#x27;s holds 64, one per vertex.</dd></div>
+    <div><dt>Oracle</dt><dd>A slow, plainly correct computation that a test checks the fast one against. The bend&#x27;s sums the bent middle&#x27;s direction in small steps, in f64.</dd></div>
+    <div><dt>Golden angle</dt><dd>&pi;(3 &minus; &radic;5) rad, about 137.5&deg;: the turn that divides a full turn in the golden ratio. It is an irrational share of a turn, so no multiple of it lands exactly on another.</dd></div>
+    <div><dt>Tick</dt><dd>One fixed step of the simulation, 1/64 s; rendered frames draw a blend of the two newest Ticks.</dd></div>
+    <div><dt>Fixed schedule</dt><dd>The schedule that runs once per Tick and holds everything that changes game state: gameplay, physics, AI and Lua event reactions (ADR 0022).</dd></div>
+    <div><dt>Blend weight</dt><dd>How far a frame lies between the two newest Ticks, from 0 at the older to 1 at the newer. Prepare blends each moving entity&#x27;s two World transforms, and each Bend&#x27;s two curvatures, by it (ADR 0022).</dd></div>
+    <div><dt>Frame data</dt><dd>The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.</dd></div>
+    <div><dt>Frame stats</dt><dd>What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and of the dynamic TLAS&#x27;s build, and the GPU frame total (that build plus the span from the start of the first pass to the end of the last), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables refused, lights the light buffer had no room for, lights the Froxel lists had no room for and lights the shadow mask had no bit for, the lit pixels and the point lights their Froxels list and whose range reaches them (where counted), static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, bends the bend pass had no room for, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.</dd></div>
+    <div><dt>ECS World</dt><dd>The container of entities, components and resources. A code concept, never the playable space.</dd></div>
+    <div><dt>Reference scene</dt><dd>A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.</dd></div>
+    <div><dt>Baseline</dt><dd>The recorded measurements of a Reference scene on one adapter: the reference machine, where Budgets are judged against it, or CI&#x27;s lavapipe, where only its counters are judged.</dd></div>
+    <div><dt>Golden</dt><dd>A committed image that a Reference scene must reproduce within tolerance.</dd></div>
+    <div><dt>Budget</dt><dd>A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, which caps what that kind may hold (ADR 0017). Counters such as draw calls and bytes uploaded are held to their Baselines instead.</dd></div>
+    <div><dt>Shadow mask</dt><dd>A bit per light at each pixel, set where that light is hidden from the surface the pixel&#x27;s nearest sample shows, by the surface itself where it faces away or by what its shadow ray finds, in the order the lit pass sums the pixel&#x27;s lights, up to 59 of them. A compute pass traces it from the depth target; the lit pass reads it.</dd></div>
+    <div><dt>Render switches</dt><dd>The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel&#x27;s point lights, and the form the crowd scene&#x27;s deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.</dd></div>
+    <div><dt>M4 Pro</dt><dd>The Apple M4 Pro on which the project&#x27;s Budgets are judged and its Baselines recorded; wgpu runs on Metal there.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from ticket <a href="https://github.com/gariasf/praxis/issues/208">#208</a> and its four parts, merged on 2026-10-23: PR <a href="https://github.com/gariasf/praxis/pull/269">#269</a> as 5c570f7; PR <a href="https://github.com/gariasf/praxis/pull/271">#271</a> as d12da41; PR <a href="https://github.com/gariasf/praxis/pull/274">#274</a> as b8cdb10; and PR <a href="https://github.com/gariasf/praxis/pull/276">#276</a> as 0743418. With the M3 milestone, the decision on issue #17, ADRs 0007, 0013, 0018, 0020 and 0022, the world-design pre-mortem, and part 4's section of <code>docs/performance.md</code>; for what changed since, PRs <a href="https://github.com/gariasf/praxis/pull/277">#277</a> and <a href="https://github.com/gariasf/praxis/pull/291">#291</a>, the crowd Baselines at 69e02dc and 71918ac, and #209's PRs <a href="https://github.com/gariasf/praxis/pull/289">#289</a> and <a href="https://github.com/gariasf/praxis/pull/290">#290</a>, with their section of <code>docs/performance.md</code> and the owner's decision of 2026-10-26. Where the guide does its own arithmetic, it says so. The demos are this page's models, built from the same formulas as the code, and say where they simplify.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="gpu-ordering.html">Previous: GPU Ordering Explained</a><a href="index.html">All field guides</a><a href="town.html">Next: Town Explained</a></nav>
+</div>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const byId = (id) => document.getElementById(id);
+  const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+
+  /* Theme: every drawing reads the colour tokens when it draws, and redraws when the theme changes. */
+  const redrawers = [];
+  const redrawAll = () => {
+    for (const redraw of redrawers) redraw();
+  };
+  function readTokens() {
+    const style = getComputedStyle(document.documentElement);
+    const token = (tokenName) => style.getPropertyValue(tokenName).trim();
+    return {
+      panel: token("--panel"), ink: token("--ink"), inkSoft: token("--ink-soft"), rule: token("--rule"),
+      accent: token("--accent"), accentWash: token("--accent-wash"), warm: token("--warm"), bad: token("--bad"), figureBg: token("--figure-bg"), mono: token("--mono"),
+    };
+  }
+  if (window.matchMedia) {
+    const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    if (darkQuery.addEventListener) darkQuery.addEventListener("change", redrawAll);
+    else if (darkQuery.addListener) darkQuery.addListener(redrawAll);
+  }
+  if (window.MutationObserver) {
+    new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawAll);
+
+  /* Sizing: each drawing takes its container's width and redraws when that width changes. */
+  function watchWidth(container, render) {
+    redrawers.push(render);
+    if (window.ResizeObserver) {
+      let lastWidth = -1;
+      new ResizeObserver(() => {
+        const width = container.clientWidth;
+        if (width !== lastWidth) {
+          lastWidth = width;
+          render();
+        }
+      }).observe(container);
+    } else {
+      window.addEventListener("resize", render);
+    }
+    render();
+  }
+  // Sizes `canvas` to `width` by `height` CSS pixels at the device's pixel ratio, and returns its context.
+  function sizeCanvas(canvas, width, height) {
+    const ratio = window.devicePixelRatio || 1;
+    canvas.style.width = width + "px";
+    canvas.style.height = height + "px";
+    canvas.width = Math.max(1, Math.round(width * ratio));
+    canvas.height = Math.max(1, Math.round(height * ratio));
+    const context = canvas.getContext("2d");
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    return context;
+  }
+  function setPressed(buttons, isPressed) {
+    for (const button of buttons) button.setAttribute("aria-pressed", String(isPressed(button)));
+  }
+  // Presses the clicked one of `buttons` and calls `choose` with its `data-` value named `key`.
+  function segmented(buttons, key, choose) {
+    for (const button of buttons) {
+      button.addEventListener("click", () => {
+        setPressed(buttons, (other) => other === button);
+        choose(button.dataset[key]);
+      });
+    }
+  }
+  function line(context, fromX, fromY, toX, toY) {
+    context.beginPath();
+    context.moveTo(fromX, fromY);
+    context.lineTo(toX, toY);
+    context.stroke();
+  }
+  // A filled arrowhead with its tip at (x, y), pointing along the unit vector (directionX, directionY).
+  function arrowHead(context, x, y, directionX, directionY) {
+    const length = 7;
+    const half = 3.5;
+    context.beginPath();
+    context.moveTo(x, y);
+    context.lineTo(x - directionX * length - directionY * half, y - directionY * length + directionX * half);
+    context.lineTo(x - directionX * length + directionY * half, y - directionY * length - directionX * half);
+    context.closePath();
+    context.fill();
+  }
+
+  // Fits `view` (left, right, bottom, top, in metres, y up) into `width` by `height` CSS pixels, centred, one scale on both axes.
+  function fitView(width, height, view) {
+    const scale = Math.min(width / (view.right - view.left), height / (view.top - view.bottom));
+    const originX = (width - scale * (view.right - view.left)) / 2 - view.left * scale;
+    const originY = (height + scale * (view.top - view.bottom)) / 2 + view.bottom * scale;
+    return { scale: scale, toScreen: (u, y) => [originX + u * scale, originY - y * scale] };
+  }
+  function tracePath(context, points, toScreen, closed) {
+    context.beginPath();
+    points.forEach((point, index) => {
+      const [x, y] = toScreen(point.u, point.y);
+      if (index === 0) context.moveTo(x, y);
+      else context.lineTo(x, y);
+    });
+    if (closed) context.closePath();
+  }
+
+  /* The model: one crowd figure and its bend, in metres, as src/scenes/mod.rs and bend.wgsl define them. */
+  const FIGURE_HEIGHT = 1.8;
+  const FIGURE_RADIUS = 0.25;
+  const BONES = 16;
+  const BONE_LENGTH = FIGURE_HEIGHT / BONES;
+  const PROXY_WIDTH = 0.85;
+  const PROXY_LENGTH = 1.5;
+  const SWAY_CURVATURE = 0.35;
+  const SWAY_PERIOD = 2.5;
+  const TICKS_PER_SECOND = 64;
+  const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+  const BOX_HALF_WIDTH = FIGURE_RADIUS + (1 - Math.cos(SWAY_CURVATURE * FIGURE_HEIGHT)) / SWAY_CURVATURE;
+  // The crowd's sun shines along (0.5, -1, -0.3), about 59.8 degrees above the horizon.
+  const SUN = [0.5, -1, -0.3];
+  const SUN_ELEVATION = Math.atan2(-SUN[1], Math.hypot(SUN[0], SUN[2]));
+  const DEGREE = "\u00b0";
+  const MINUS = "\u2212";
+  const signed = (value, digits) => (value < 0 ? MINUS : "") + Math.abs(value).toFixed(digits);
+
+  // sin(angle) / angle, by its Taylor series below 0.5 rad, as bend.wgsl computes it.
+  function sinc(angle) {
+    if (Math.abs(angle) < 0.5) {
+      const squared = angle * angle;
+      return 1 - (squared / 6) * (1 - (squared / 20) * (1 - squared / 42));
+    }
+    return Math.sin(angle) / angle;
+  }
+  // The figure's radius at rest height `height`: a spheroid's.
+  function figureRadius(height) {
+    const fromEquator = (2 * height) / FIGURE_HEIGHT - 1;
+    return FIGURE_RADIUS * Math.sqrt(Math.max(0, 1 - fromEquator * fromEquator));
+  }
+  // In the plane of the bend, u along the azimuth and y up: where the middle's point at rest height `height` goes, and the angle the middle has turned through there.
+  function bentMiddle(height, curvature) {
+    const halfAngle = 0.5 * curvature * height;
+    const chord = height * sinc(halfAngle);
+    return { u: chord * Math.sin(halfAngle), y: chord * Math.cos(halfAngle), turn: 2 * halfAngle };
+  }
+  // Where the rest point `across` metres from the middle, along the azimuth, at rest height `height` goes: its offset turns with the middle.
+  function bentPoint(across, height, curvature) {
+    const middle = bentMiddle(height, curvature);
+    return { u: middle.u + across * Math.cos(middle.turn), y: middle.y - across * Math.sin(middle.turn) };
+  }
+  // The top of the middle's reach sideways, (1 - cos(kh)) / k.
+  function reachOf(curvature) {
+    if (Math.abs(curvature) < 1e-9) return 0;
+    return (1 - Math.cos(curvature * FIGURE_HEIGHT)) / curvature;
+  }
+  // Bone `bone`'s shadow proxy as bone_transform places it: its centre, its turn, and its half-lengths across and along. With `short` false, the end bones reach 0.75 bone each way too, as first written.
+  function proxyOf(bone, curvature, short) {
+    const height = (bone + 0.5) * BONE_LENGTH;
+    const middle = bentMiddle(height, curvature);
+    const halfLength = 0.5 * PROXY_LENGTH * BONE_LENGTH;
+    const toPole = Math.min(height, FIGURE_HEIGHT - height);
+    return {
+      u: middle.u,
+      y: middle.y,
+      turn: middle.turn,
+      across: PROXY_WIDTH * figureRadius(height),
+      along: short ? Math.min(halfLength, PROXY_WIDTH * toPole) : halfLength,
+    };
+  }
+  // The figure's outline in the plane of the bend, counter-clockwise: up the side it leans towards, then down the other, `samples` steps a side, spaced as a sphere's rings are.
+  function outlineOf(curvature, samples) {
+    const points = [];
+    const ring = (index, side) => {
+      const polar = (Math.PI * index) / samples;
+      const height = 0.5 * FIGURE_HEIGHT * (1 + Math.cos(polar));
+      const point = bentPoint(side * FIGURE_RADIUS * Math.sin(polar), height, curvature);
+      return { u: point.u, y: point.y, height: height };
+    };
+    for (let index = samples; index >= 0; index--) points.push(ring(index, 1));
+    for (let index = 1; index < samples; index++) points.push(ring(index, -1));
+    return points;
+  }
+  // `count` points around a proxy's cut through its middle, in the plane of the bend.
+  function proxyOutline(proxy, count) {
+    const points = [];
+    const acrossU = Math.cos(proxy.turn), acrossY = -Math.sin(proxy.turn);
+    const alongU = Math.sin(proxy.turn), alongY = Math.cos(proxy.turn);
+    for (let index = 0; index < count; index++) {
+      const angle = (2 * Math.PI * index) / count;
+      const across = proxy.across * Math.cos(angle);
+      const along = proxy.along * Math.sin(angle);
+      points.push({ u: proxy.u + across * acrossU + along * alongU, y: proxy.y + across * acrossY + along * alongY });
+    }
+    return points;
+  }
+  // Whether the ray from `origin` along `direction` meets `proxy`'s cut, in the plane of the bend: in the proxy's own frame, scaled to a unit circle.
+  function rayMeetsProxy(origin, direction, proxy) {
+    const acrossU = Math.cos(proxy.turn), acrossY = -Math.sin(proxy.turn);
+    const alongU = Math.sin(proxy.turn), alongY = Math.cos(proxy.turn);
+    const relativeU = origin.u - proxy.u, relativeY = origin.y - proxy.y;
+    const startAcross = (relativeU * acrossU + relativeY * acrossY) / proxy.across;
+    const startAlong = (relativeU * alongU + relativeY * alongY) / proxy.along;
+    const stepAcross = (direction.u * acrossU + direction.y * acrossY) / proxy.across;
+    const stepAlong = (direction.u * alongU + direction.y * alongY) / proxy.along;
+    const quadratic = stepAcross * stepAcross + stepAlong * stepAlong;
+    const linear = 2 * (startAcross * stepAcross + startAlong * stepAlong);
+    const constant = startAcross * startAcross + startAlong * startAlong - 1;
+    const discriminant = linear * linear - 4 * quadratic * constant;
+    if (discriminant < 0) return false;
+    return (-linear + Math.sqrt(discriminant)) / (2 * quadratic) > 0;
+  }
+  function drawProxies(context, toScreen, colours, curvature, short) {
+    for (let bone = 0; bone < BONES; bone++) {
+      const proxy = proxyOf(bone, curvature, short);
+      const reachesOut = !short && (bone === 0 || bone === BONES - 1);
+      tracePath(context, proxyOutline(proxy, 48), toScreen, true);
+      context.globalAlpha = 0.85;
+      context.fillStyle = colours.figureBg;
+      context.fill();
+      context.globalAlpha = 1;
+      context.strokeStyle = reachesOut ? colours.bad : colours.inkSoft;
+      context.lineWidth = reachesOut ? 2 : 1.2;
+      context.stroke();
+    }
+  }
+  function drawFigure(context, toScreen, colours, outline) {
+    tracePath(context, outline, toScreen, true);
+    context.fillStyle = colours.accentWash;
+    context.fill();
+    context.strokeStyle = colours.accent;
+    context.lineWidth = 1.6;
+    context.stroke();
+  }
+
+  /* Demo A: one figure, bent, in the plane of the bend. */
+  (function bendDemo() {
+    const canvas = byId("b-canvas");
+    if (!canvas) return;
+    const canvasFrame = canvas.parentElement;
+    const slider = byId("b-curvature");
+    let curvature = Number(slider.value);
+    let showProxies = true;
+    let showBox = true;
+
+    function draw() {
+      const width = Math.max(1, canvasFrame.clientWidth);
+      const height = Math.round(Math.min(440, Math.max(300, width * 1.15)));
+      const context = sizeCanvas(canvas, width, height);
+      const colours = readTokens();
+      const fit = fitView(width, height, { left: -0.95, right: 0.95, bottom: -0.1, top: 1.95 });
+      const toScreen = fit.toScreen;
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, width, height);
+      const [, groundY] = toScreen(0, 0);
+      context.fillStyle = colours.figureBg;
+      context.fillRect(0, groundY, width, height - groundY);
+      context.strokeStyle = colours.ink;
+      context.lineWidth = 1.2;
+      line(context, 0, groundY, width, groundY);
+      context.font = "11px " + colours.mono;
+
+      if (showBox) {
+        const [left, top] = toScreen(-BOX_HALF_WIDTH, FIGURE_HEIGHT);
+        const [right] = toScreen(BOX_HALF_WIDTH, 0);
+        context.setLineDash([6, 4]);
+        context.strokeStyle = colours.warm;
+        context.lineWidth = 1.5;
+        context.strokeRect(left, top, right - left, groundY - top);
+        context.setLineDash([]);
+        context.fillStyle = colours.warm;
+        context.textAlign = "right";
+        context.fillText("culling box, 0.80 m each side", right - 4, top - 6);
+        context.textAlign = "left";
+      }
+      // The rest Mesh, dotted.
+      const rest = outlineOf(0, 130);
+      tracePath(context, rest, toScreen, true);
+      context.setLineDash([2, 3]);
+      context.strokeStyle = colours.inkSoft;
+      context.lineWidth = 1.2;
+      context.stroke();
+      context.setLineDash([]);
+
+      const outline = outlineOf(curvature, 130);
+      drawFigure(context, toScreen, colours, outline);
+      if (showProxies) drawProxies(context, toScreen, colours, curvature, true);
+
+      // The middle, and the chord from the foot to its top.
+      const middle = [];
+      for (let index = 0; index <= 90; index++) middle.push(bentMiddle((FIGURE_HEIGHT * index) / 90, curvature));
+      tracePath(context, middle, toScreen, false);
+      context.strokeStyle = colours.ink;
+      context.lineWidth = 1.6;
+      context.stroke();
+      const top = bentMiddle(FIGURE_HEIGHT, curvature);
+      const [footX, footY] = toScreen(0, 0);
+      const [topX, topY] = toScreen(top.u, top.y);
+      context.setLineDash([5, 4]);
+      context.strokeStyle = colours.warm;
+      context.lineWidth = 1.6;
+      line(context, footX, footY, topX, topY);
+      context.setLineDash([]);
+      context.fillStyle = colours.ink;
+      context.beginPath();
+      context.arc(topX, topY, 3, 0, 2 * Math.PI);
+      context.fill();
+
+      const turn = curvature * FIGURE_HEIGHT;
+      const chord = FIGURE_HEIGHT * sinc(0.5 * turn);
+      const widest = outline.reduce((most, point) => Math.max(most, Math.abs(point.u)), 0);
+      byId("b-curvature-out").textContent = signed(curvature, 3) + " rad/m";
+      byId("b-turn").textContent = signed(turn, 3) + " rad, " + signed((turn * 180) / Math.PI, 1) + DEGREE;
+      byId("b-chord").textContent = chord.toFixed(3) + " m, " + signed((0.5 * turn * 180) / Math.PI, 1) + DEGREE + " from upright";
+      byId("b-reach").textContent = signed(reachOf(curvature), 3) + " m";
+      byId("b-room").textContent = (BOX_HALF_WIDTH - widest).toFixed(3) + " m";
+    }
+    slider.addEventListener("input", () => {
+      curvature = Number(slider.value);
+      draw();
+    });
+    segmented(Array.from(document.querySelectorAll("#b-proxies button")), "proxies", (value) => {
+      showProxies = value === "on";
+      draw();
+    });
+    segmented(Array.from(document.querySelectorAll("#b-box button")), "box", (value) => {
+      showBox = value === "on";
+      draw();
+    });
+    watchWidth(canvasFrame, draw);
+  })();
+
+  /* Demo: the crowd from above, Tick by Tick. */
+  (function crowdDemo() {
+    const canvas = byId("c-canvas");
+    if (!canvas) return;
+    const canvasFrame = canvas.parentElement;
+    const slider = byId("c-tick");
+    const output = byId("c-tick-out");
+    const playButton = byId("c-play");
+    const COLUMNS = 10;
+    const SPACING = 1.6;
+    const FIGURES = 100;
+    const TICKS_PER_PERIOD = Math.round(SWAY_PERIOD * TICKS_PER_SECOND);
+    const TICK_MILLISECONDS = 1000 / TICKS_PER_SECOND;
+    let tick = Number(slider.value);
+    let golden = true;
+    let playing = false;
+    let lastTime = 0;
+    let carried = 0;
+
+    function draw() {
+      const width = Math.max(1, canvasFrame.clientWidth);
+      const height = Math.round(Math.min(width, 520));
+      const context = sizeCanvas(canvas, width, height);
+      const colours = readTokens();
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, width, height);
+      const extent = ((COLUMNS - 1) * SPACING) / 2 + 0.85;
+      const fit = fitView(width, height, { left: -extent, right: extent, bottom: -extent, top: extent });
+      // x to the right and z down the page, as seen from above.
+      const toScreen = (x, z) => fit.toScreen(x, -z);
+      const seconds = (tick + 1) / TICKS_PER_SECOND;
+      const mostReach = reachOf(SWAY_CURVATURE);
+      for (let index = 0; index < FIGURES; index++) {
+        const x = ((index % COLUMNS) - (COLUMNS - 1) / 2) * SPACING;
+        const z = (Math.floor(index / COLUMNS) - (COLUMNS - 1) / 2) * SPACING;
+        const phase = golden ? (index * GOLDEN_ANGLE) % (2 * Math.PI) : 0;
+        const curvature = SWAY_CURVATURE * Math.sin((2 * Math.PI * seconds) / SWAY_PERIOD + phase);
+        const reach = reachOf(curvature);
+        const towardX = Math.cos(phase), towardZ = Math.sin(phase);
+        const [footX, footY] = toScreen(x, z);
+        context.strokeStyle = colours.inkSoft;
+        context.lineWidth = 1;
+        context.beginPath();
+        context.arc(footX, footY, FIGURE_RADIUS * fit.scale, 0, 2 * Math.PI);
+        context.stroke();
+        const [fromX, fromY] = toScreen(x - towardX * mostReach, z - towardZ * mostReach);
+        const [toX, toY] = toScreen(x + towardX * mostReach, z + towardZ * mostReach);
+        context.setLineDash([2, 3]);
+        line(context, fromX, fromY, toX, toY);
+        context.setLineDash([]);
+        const [topX, topY] = toScreen(x + towardX * reach, z + towardZ * reach);
+        context.strokeStyle = colours.accent;
+        context.lineWidth = 2;
+        line(context, footX, footY, topX, topY);
+        context.fillStyle = colours.accent;
+        context.beginPath();
+        context.arc(topX, topY, Math.max(2.5, 0.06 * fit.scale), 0, 2 * Math.PI);
+        context.fill();
+      }
+      output.textContent = tick + ", t = " + seconds.toFixed(3) + " s";
+    }
+    function step(now) {
+      if (!playing) return;
+      if (lastTime) carried += now - lastTime;
+      lastTime = now;
+      const ticks = Math.floor(carried / TICK_MILLISECONDS);
+      if (ticks > 0) {
+        carried -= ticks * TICK_MILLISECONDS;
+        tick = (tick + ticks) % TICKS_PER_PERIOD;
+        slider.value = String(tick);
+        draw();
+      }
+      window.requestAnimationFrame(step);
+    }
+    playButton.addEventListener("click", () => {
+      playing = !playing;
+      playButton.textContent = playing ? "Pause" : "Play";
+      playButton.setAttribute("aria-pressed", String(playing));
+      lastTime = 0;
+      carried = 0;
+      if (playing) window.requestAnimationFrame(step);
+    });
+    slider.addEventListener("input", () => {
+      tick = Number(slider.value);
+      draw();
+    });
+    segmented(Array.from(document.querySelectorAll("#c-steps button")), "steps", (value) => {
+      golden = value === "golden";
+      draw();
+    });
+    watchWidth(canvasFrame, draw);
+  })();
+
+  /* Demo B: a figure's shadow and its proxies' shadow. */
+  (function shadowDemo() {
+    const canvas = byId("s-canvas");
+    if (!canvas) return;
+    const canvasFrame = canvas.parentElement;
+    const curvatureSlider = byId("s-curvature");
+    const azimuthSlider = byId("s-azimuth");
+    const note = byId("s-note");
+    const groundLegend = byId("s-legend-ground");
+    const headLegend = byId("s-legend-head");
+    const showRow = byId("s-show-row");
+    const figureLayer = document.createElement("canvas");
+    const proxyLayer = document.createElement("canvas");
+    let view = "ground";
+    let short = true;
+    let show = "both";
+    let curvature = Number(curvatureSlider.value);
+    let azimuthDegrees = Number(azimuthSlider.value);
+
+    // Turns `vector` by `angle` about the unit `axis` (Rodrigues' rotation formula).
+    function turnAbout(axis, angle, vector) {
+      const cos = Math.cos(angle), sin = Math.sin(angle);
+      const dot = axis[0] * vector[0] + axis[1] * vector[1] + axis[2] * vector[2];
+      const cross = [
+        axis[1] * vector[2] - axis[2] * vector[1],
+        axis[2] * vector[0] - axis[0] * vector[2],
+        axis[0] * vector[1] - axis[1] * vector[0],
+      ];
+      return [0, 1, 2].map((index) => vector[index] * cos + cross[index] * sin + axis[index] * dot * (1 - cos));
+    }
+    // Discs whose union is the bent figure: each ring of the rest figure is a disc about the middle, and the bend moves and turns it whole.
+    function figureDiscs(toward, axis) {
+      const discs = [];
+      const count = 180;
+      for (let index = 0; index <= count; index++) {
+        const height = (FIGURE_HEIGHT * index) / count;
+        const middle = bentMiddle(height, curvature);
+        discs.push({
+          centre: [middle.u * toward[0], middle.y, middle.u * toward[2]],
+          radius: figureRadius(height),
+          first: turnAbout(axis, middle.turn, [1, 0, 0]),
+          second: turnAbout(axis, middle.turn, [0, 0, 1]),
+        });
+      }
+      return discs;
+    }
+    // Discs whose union is each proxy: its ellipsoid cut across its length.
+    function proxyDiscs(toward, axis) {
+      const discs = [];
+      const slices = 24;
+      for (let bone = 0; bone < BONES; bone++) {
+        const proxy = proxyOf(bone, curvature, short);
+        const centre = [proxy.u * toward[0], proxy.y, proxy.u * toward[2]];
+        const along = turnAbout(axis, proxy.turn, [0, 1, 0]);
+        const first = turnAbout(axis, proxy.turn, [1, 0, 0]);
+        const second = turnAbout(axis, proxy.turn, [0, 0, 1]);
+        for (let index = 0; index <= slices; index++) {
+          const fraction = -1 + (2 * index) / slices;
+          discs.push({
+            centre: centre.map((value, component) => value + along[component] * proxy.along * fraction),
+            radius: proxy.across * Math.sqrt(Math.max(0, 1 - fraction * fraction)),
+            first: first,
+            second: second,
+          });
+        }
+      }
+      return discs;
+    }
+    // Where sunlight carries a point onto the ground, as (x, z); a point below the ground stays at its foot.
+    function onGround(point) {
+      const above = Math.max(0, point[1]) / -SUN[1];
+      return [point[0] + SUN[0] * above, point[2] + SUN[2] * above];
+    }
+    // Paints the shadows of `discs` opaque into `layer`, which matches the canvas, so overlaps do not darken.
+    function paintShadows(layer, discs, toScreen, colour) {
+      const ratio = window.devicePixelRatio || 1;
+      layer.width = canvas.width;
+      layer.height = canvas.height;
+      const context = layer.getContext("2d");
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      context.fillStyle = colour;
+      for (const disc of discs) {
+        if (disc.radius <= 0) continue;
+        context.beginPath();
+        for (let index = 0; index < 40; index++) {
+          const angle = (2 * Math.PI * index) / 40;
+          const cos = Math.cos(angle) * disc.radius, sin = Math.sin(angle) * disc.radius;
+          const point = [0, 1, 2].map((component) => disc.centre[component] + disc.first[component] * cos + disc.second[component] * sin);
+          const [x, z] = onGround(point);
+          const [screenX, screenY] = toScreen(x, z);
+          if (index === 0) context.moveTo(screenX, screenY);
+          else context.lineTo(screenX, screenY);
+        }
+        context.closePath();
+        context.fill();
+      }
+    }
+
+    function drawGround(context, width, height, colours) {
+      const fit = fitView(width, height, { left: -0.7, right: 1.55, bottom: -0.7, top: 1.2 });
+      const toScreen = (x, z) => fit.toScreen(x, -z);
+      const azimuth = (azimuthDegrees * Math.PI) / 180;
+      const toward = [Math.cos(azimuth), 0, Math.sin(azimuth)];
+      const axis = [toward[2], 0, -toward[0]];
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, width, height);
+      if (show !== "proxies") {
+        paintShadows(figureLayer, figureDiscs(toward, axis), toScreen, colours.inkSoft);
+        context.globalAlpha = 0.55;
+        context.drawImage(figureLayer, 0, 0, width, height);
+        context.globalAlpha = 1;
+      }
+      if (show !== "figure") {
+        paintShadows(proxyLayer, proxyDiscs(toward, axis), toScreen, colours.accent);
+        context.globalAlpha = 0.6;
+        context.drawImage(proxyLayer, 0, 0, width, height);
+        context.globalAlpha = 1;
+      }
+      // The middle seen from above, from the foot to its top.
+      context.strokeStyle = colours.ink;
+      context.lineWidth = 1.6;
+      context.beginPath();
+      for (let index = 0; index <= 60; index++) {
+        const middle = bentMiddle((FIGURE_HEIGHT * index) / 60, curvature);
+        const [x, y] = toScreen(middle.u * toward[0], middle.u * toward[2]);
+        if (index === 0) context.moveTo(x, y);
+        else context.lineTo(x, y);
+      }
+      context.stroke();
+      const [footX, footY] = toScreen(0, 0);
+      context.fillStyle = colours.ink;
+      context.beginPath();
+      context.arc(footX, footY, 3, 0, 2 * Math.PI);
+      context.fill();
+      // Sunlight's way across the ground, and a scale bar.
+      const run = Math.hypot(SUN[0], SUN[2]);
+      const directionX = SUN[0] / run, directionY = SUN[2] / run;
+      context.strokeStyle = colours.warm;
+      context.fillStyle = colours.warm;
+      context.lineWidth = 2;
+      const startX = 18, startY = height - 24;
+      context.setLineDash([5, 4]);
+      line(context, startX, startY, startX + directionX * 40, startY + directionY * 40);
+      context.setLineDash([]);
+      arrowHead(context, startX + directionX * 40, startY + directionY * 40, directionX, directionY);
+      context.font = "11px " + colours.mono;
+      context.fillText("sunlight", startX + 44, startY - 14);
+      const barStart = width - 18 - 0.5 * fit.scale;
+      context.strokeStyle = colours.ink;
+      context.fillStyle = colours.ink;
+      context.lineWidth = 1.5;
+      line(context, barStart, height - 14, width - 18, height - 14);
+      context.textAlign = "right";
+      context.fillText("0.5 m", width - 18, height - 20);
+      context.textAlign = "left";
+      note.textContent = "The top of the middle leans " + Math.abs(reachOf(curvature)).toFixed(2) + " m towards " +
+        (curvature < 0 ? (azimuthDegrees + 180) % 360 : azimuthDegrees) + DEGREE + ".";
+    }
+
+    function drawHead(context, width, height, colours) {
+      const focus = bentMiddle(FIGURE_HEIGHT - 0.12, curvature);
+      const half = 0.26;
+      const fit = fitView(width, height, { left: focus.u - half, right: focus.u + half, bottom: focus.y - half, top: focus.y + half });
+      const toScreen = fit.toScreen;
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, width, height);
+      const outline = outlineOf(curvature, 400);
+      drawFigure(context, toScreen, colours, outline);
+      drawProxies(context, toScreen, colours, curvature, short);
+      const toSun = { u: -Math.cos(SUN_ELEVATION), y: Math.sin(SUN_ELEVATION) };
+      const proxies = [];
+      for (let bone = 0; bone < BONES; bone++) proxies.push(proxyOf(bone, curvature, short));
+      let lit = 0;
+      let blocked = 0;
+      outline.forEach((point, index) => {
+        if (point.height < FIGURE_HEIGHT - 0.4) return;
+        const previous = outline[(index - 1 + outline.length) % outline.length];
+        const next = outline[(index + 1) % outline.length];
+        const tangentU = next.u - previous.u, tangentY = next.y - previous.y;
+        const length = Math.hypot(tangentU, tangentY);
+        if (length === 0) return;
+        // Outwards, the outline running counter-clockwise.
+        const normal = { u: tangentY / length, y: -tangentU / length };
+        const facing = normal.u * toSun.u + normal.y * toSun.y > 0;
+        let meets = false;
+        if (facing) {
+          lit += 1;
+          const origin = { u: point.u + normal.u * 1e-4, y: point.y + normal.y * 1e-4 };
+          meets = proxies.some((proxy) => rayMeetsProxy(origin, toSun, proxy));
+          if (meets) blocked += 1;
+        }
+        const [x, y] = toScreen(point.u, point.y);
+        if (facing && index % 6 === 0) {
+          const [endX, endY] = toScreen(point.u + toSun.u * 0.07, point.y + toSun.y * 0.07);
+          context.strokeStyle = meets ? colours.bad : colours.warm;
+          context.globalAlpha = 0.7;
+          context.lineWidth = 1;
+          line(context, x, y, endX, endY);
+          context.globalAlpha = 1;
+        }
+        if (index % 2 === 0) {
+          context.fillStyle = !facing ? colours.inkSoft : meets ? colours.bad : colours.warm;
+          context.beginPath();
+          context.arc(x, y, 2.3, 0, 2 * Math.PI);
+          context.fill();
+        }
+      });
+      // Sunlight's way, in the plane.
+      context.strokeStyle = colours.warm;
+      context.fillStyle = colours.warm;
+      context.lineWidth = 2;
+      for (let arrow = 0; arrow < 3; arrow++) {
+        const startX = 16 + arrow * 28, startY = 12;
+        const endX = startX - toSun.u * 34, endY = startY + toSun.y * 34;
+        context.setLineDash([5, 4]);
+        line(context, startX, startY, endX, endY);
+        context.setLineDash([]);
+        arrowHead(context, endX, endY, -toSun.u, toSun.y);
+      }
+      note.textContent = "Of the head's top 0.4 m, " + lit + " outline points face the sun; the rays of " + blocked +
+        (blocked === 1 ? " meets" : " meet") + " one of the figure's own proxies.";
+    }
+
+    function draw() {
+      const width = Math.max(1, canvasFrame.clientWidth);
+      const height = Math.round(Math.min(520, Math.max(280, width * 0.85)));
+      const context = sizeCanvas(canvas, width, height);
+      const colours = readTokens();
+      if (view === "ground") drawGround(context, width, height, colours);
+      else drawHead(context, width, height, colours);
+      byId("s-curvature-out").textContent = signed(curvature, 3) + " rad/m";
+      byId("s-azimuth-out").textContent = azimuthDegrees + DEGREE;
+    }
+    curvatureSlider.addEventListener("input", () => {
+      curvature = Number(curvatureSlider.value);
+      draw();
+    });
+    azimuthSlider.addEventListener("input", () => {
+      azimuthDegrees = Number(azimuthSlider.value);
+      draw();
+    });
+    segmented(Array.from(document.querySelectorAll("#s-view button")), "view", (value) => {
+      view = value;
+      groundLegend.hidden = view !== "ground";
+      headLegend.hidden = view !== "head";
+      showRow.hidden = view !== "ground";
+      azimuthSlider.disabled = view !== "ground";
+      draw();
+    });
+    segmented(Array.from(document.querySelectorAll("#s-ends button")), "ends", (value) => {
+      short = value === "short";
+      draw();
+    });
+    segmented(Array.from(document.querySelectorAll("#s-show button")), "show", (value) => {
+      show = value;
+      draw();
+    });
+    watchWidth(canvasFrame, draw);
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>

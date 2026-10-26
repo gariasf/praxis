@@ -1,0 +1,1590 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Lit Pass Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume seven of the series. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --bad: #c43a31;
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --bad: #f07067; --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --bad: #f07067; --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+}
+.sheet {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.keypoints li { min-width: 0; }
+.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .s-ink { stroke: var(--ink); } svg .s-soft { stroke: var(--ink-soft); } svg .s-accent { stroke: var(--accent); } svg .s-warm { stroke: var(--warm); }
+svg .f-ink { fill: var(--ink); } svg .f-soft { fill: var(--ink-soft); } svg .f-accent { fill: var(--accent); } svg .f-warm { fill: var(--warm); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+output { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
+.canvas-frame canvas { border-radius: 0; }
+canvas.demo { touch-action: none; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
+.legend i.dashed { border-top: 2.5px dashed var(--warm); }
+.legend i.thin { border-top: 1.5px solid var(--ink); }
+.legend i.dotted { border-top: 2.5px dotted var(--ink-soft); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.demo-grid > div { min-width: 0; }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 14px 0 0; font-family: var(--mono); font-size: 14px; }
+.figures div { min-width: 0; }
+.figures dt { color: var(--ink-soft); font-size: 12px; }
+.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .formula { font-size: 13px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+
+/* In brief: the guide's conclusion first, for the reader who stops here. */
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">← Praxis field guides</a></div>
+  <div class="eyebrow">Praxis · M3 · ticket #199 · PRs #243, #245, #246, #247</div>
+  <h1>How the lit pass turns light into colour</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>Before ticket #199, Praxis's lit pass, which turns light into each pixel's colour, used a tutorial's constants and approximate terms. The ticket rewrote it from primary sources: glTF 2.0's BRDF, which says how a surface reflects light, exactly as its Appendix B writes it; point lights that fall off by inverse square and reach zero at their range; and per-scene ambient light and background. The idea to keep: every shading term traces to a written source and to a GPU test, an oracle, that fails when the term is wrong.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>What a BRDF is, in glTF's photometric units</li>
+      <li>How Appendix B mixes metals and dielectrics, gathered by lobe</li>
+      <li>Why f32 needs GGX's denominator reordered at the roughness floor</li>
+      <li>How GPU oracles, reciprocity and a white furnace check the shading</li>
+      <li>How inverse-square point lights fade to zero at their range</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="hdr-pipeline.html">HDR Pipeline Explained</a></p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at 6764239, the last code commit of PR #247 (merged as db3ef10 on 2026-10-22), the last of ticket #199's four PRs, against the code before #199 at fe08baa. <b>Since then:</b> Since PR #247 the shading functions have changed only in comments (PR #249), and PR #302 lets chapter 7's reflected-luminance oracle also allow f32's rounding of N·L for a light on the horizon, as an NVIDIA GPU showed. Around them, ticket #200's PRs #250 to #256 resolve the lit pass's exposed colour into an HDR target for a tonemapping pass, and on the last, PR #256, the owner accepted #199's images (<a href="tonemapping-pass.html">Tonemapping Pass Explained</a>). Ticket #201's PRs #261 to #263 make the lit pass shade each pixel with its Froxel's point lights, from a light buffer (<a href="froxel-lights.html">Froxel Lights Explained</a>), and since PR #277 the shadows that PRs #258 and #265 first traced in the lit pass come from a shadow mask (<a href="shadow-rays.html">Shadow Rays Explained</a>).</p>
+  </aside>
+  <p class="lede">Ticket #199 rewrote how the <span class="concept" data-tip="ADR 0019's shading pass. After the depth pre-pass, it draws the frame's draw at depth equal, lights each pixel, and resolves its 4x MSAA colour into the target; since #200, into an Rgba16Float HDR target that the tonemapping pass reads." data-term="Lit pass">lit pass</span> shades a pixel, from primary sources: glTF 2.0's metallic-roughness <span class="concept" data-tip="Bidirectional reflectance distribution function: for a pair of directions, the luminance a surface reflects towards one per unit of illuminance arriving from the other. Its unit is per steradian.">BRDF</span> exactly as its Appendix B writes it, point lights that fall off by <span class="concept" data-tip="A point light's illuminance on a surface facing it falls with the square of the distance: E = I / d²." data-term="Inverse square law">inverse square</span> inside KHR_lights_punctual's range window, and an ambient light and a background that each <span class="concept" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines." data-term="Reference scene">Reference scene</span> sets for itself. This guide builds the shading up one term at a time, from what a BRDF is to what the new lit pass costs, with the <span class="concept" data-tip="A test that runs one of the shader's own WGSL functions on the GPU over test vectors and compares the results with values worked out apart: literals, analytic results and f64 references." data-term="Oracle">oracles</span> that check each term against its source.</p>
+  <p class="status"><b>Provenance.</b> #199 landed in four PRs, all merged: #243, #245, #246 and #247, the last, which completes it as db3ef10. Code facts were read at 6764239, #247's last code commit (its final head, e9a327b, adds only CI's software-Vulkan Goldens), whose shading main now holds. The project's owner accepted the lit-pass cost on 2026-10-22, and later that day accepted #199's images at <span class="concept" data-tip="A review in which the owner judges a PR's before-and-after images. #199's images were judged at visual check 2, on #256, #200's last PR, together with #200's HDR." data-term="Visual check 2">visual check 2</span>, judged together with #200's HDR on #256, #200's last PR. Since then #200, #201, #203, #205 and #260 have changed the lit pass around this shading: it resolves exposed colour into an HDR target, lights each pixel with its Froxel's point lights and reads its shadows from a shadow mask (chapter 12).</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#brdf">1 · What a BRDF is</a>
+    <a href="#materials">2 · Metals and dielectrics</a>
+    <a href="#fresnel">3 · Fresnel</a>
+    <a href="#distribution">4 · D, the facets' normals</a>
+    <a href="#visibility">5 · V, masking and shadowing</a>
+    <a href="#mix">6 · The mix, by lobe</a>
+    <a href="#oracles">7 · The oracles</a>
+    <a href="#falloff">8 · Point lights</a>
+    <a href="#ambient">9 · Ambient and background</a>
+    <a href="#images">10 · What the images show</a>
+    <a href="#cost">11 · What it costs</a>
+    <a href="#next">12 · What comes next</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="brdf">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1</div>
+    <h2>What a BRDF is</h2>
+    <p>A pixel of the <span class="concept" data-tip="ADR 0019's shading pass. After the depth pre-pass, it draws the frame's draw at depth equal, lights each pixel, and resolves its 4x MSAA colour into the target; since #200, into an Rgba16Float HDR target that the tonemapping pass reads." data-term="Lit pass">lit pass</span> shows the light that one point of a surface sends towards the camera. That depends on the light arriving, on the directions involved, and on the surface. A bidirectional reflectance distribution function, or <span class="concept" data-tip="Bidirectional reflectance distribution function: for a pair of directions, the luminance a surface reflects towards one per unit of illuminance arriving from the other. Its unit is per steradian.">BRDF</span>, describes the surface's part. In the words of glTF 2.0's Appendix B: "For a pair of directions, the BRDF returns how much light from the incoming direction is reflected from the surface in the outgoing direction."</p>
+    <p>Praxis measures light in glTF's units (ADR 0023). Light arriving at a surface is <span class="concept" data-tip="Light arriving at a surface, per square metre, in lux (lm/m²). Irradiance is its radiometric twin." data-term="Illuminance">illuminance</span>, in lux, lumens per square metre. Light leaving it in one direction is <span class="concept" data-tip="Light leaving a surface in one direction, per square metre and per steradian, in cd/m²: what a pixel shows. Radiance is its radiometric twin." data-term="Luminance">luminance</span>, in candela per square metre, which is lumens per square metre per <span class="concept" data-tip="The unit of solid angle, the 3D counterpart of the radian: it measures a cone of directions." data-term="Steradian">steradian</span>: the quantity the lit pass writes for each pixel. The BRDF is the ratio between them, the luminance that leaves towards one direction per unit of illuminance that arrives from another, so its unit is per steradian. Rendering texts write the same equations with radiance and irradiance, the radiometric quantities in watts; the <span class="concept" data-tip="Measured as the eye sees: radiometric quantities weighted by the eye's sensitivity curve, V(λ). Lux, candela and cd/m² are photometric." data-term="Photometric">photometric</span> ones are those weighted by the eye's sensitivity (Lagarde and de Rousiers 2014, §4.3). Until #200 the scenes' values are relative; <a href="hdr-pipeline.html">HDR Pipeline Explained</a> covers the units and exposure.</p>
+    <p>Four unit vectors describe the geometry, each pointing away from the shaded point, as Appendix B defines them: N, the surface normal; L, towards the light; V, towards the eye; and the <span class="concept" data-tip="H = normalize(L + V), the direction halfway between the light and the eye. Only microfacets whose normal is H mirror light from L into V." data-term="Half vector">half vector</span> H = normalize(L + V). Every term of the shading reads cosines between them: N·L, N·V, N·H and V·H.</p>
+  </div>
+  <figure class="wide">
+    <div class="fluid">
+      <svg viewBox="0 0 640 240" role="img" aria-label="A surface with its normal N pointing up; L points up and to the left towards the light, V up and to the right towards the eye, and H lies halfway between them, close to N.">
+        <line x1="60" y1="200" x2="580" y2="200" class="s-soft" stroke-width="1.5"/>
+        <g class="s-soft" stroke-width="1">
+          <line x1="90" y1="200" x2="80" y2="212"/><line x1="130" y1="200" x2="120" y2="212"/><line x1="170" y1="200" x2="160" y2="212"/><line x1="210" y1="200" x2="200" y2="212"/><line x1="250" y1="200" x2="240" y2="212"/><line x1="290" y1="200" x2="280" y2="212"/><line x1="330" y1="200" x2="320" y2="212"/><line x1="370" y1="200" x2="360" y2="212"/><line x1="410" y1="200" x2="400" y2="212"/><line x1="450" y1="200" x2="440" y2="212"/><line x1="490" y1="200" x2="480" y2="212"/><line x1="530" y1="200" x2="520" y2="212"/><line x1="570" y1="200" x2="560" y2="212"/>
+        </g>
+        <path d="M 320 160 A 40 40 0 0 0 287.2 177.1" fill="none" class="s-warm" stroke-width="1.2"/>
+        <path d="M 320 148 A 52 52 0 0 1 346 155" fill="none" class="s-ink" stroke-width="1.2"/>
+        <line x1="320" y1="200" x2="320" y2="66" class="s-soft" stroke-width="2"/>
+        <polygon points="320,60 324.5,69 315.5,69" class="f-soft"/>
+        <line x1="320" y1="200" x2="210.4" y2="123.3" class="s-warm" stroke-width="2.2"/>
+        <polygon points="205.3,119.7 215.3,121.2 210.1,128.6" class="f-warm"/>
+        <line x1="320" y1="200" x2="387" y2="84" class="s-ink" stroke-width="2.2"/>
+        <polygon points="390,78.8 389.4,88.8 381.6,84.3" class="f-ink"/>
+        <line x1="320" y1="200" x2="291" y2="69.2" class="s-accent" stroke-width="2.2" stroke-dasharray="6 4"/>
+        <polygon points="289.7,63.3 296,71.1 287.3,73.1" class="f-accent"/>
+        <circle cx="320" cy="200" r="4.5" class="f-ink"/>
+        <text x="327" y="58" class="t-strong">N</text>
+        <text x="268" y="56" class="t-accent">H</text>
+        <text x="150" y="112" class="t-warm">L</text>
+        <text x="150" y="128" class="t-small">to the light</text>
+        <text x="398" y="78" class="t-strong">V</text>
+        <text x="398" y="94" class="t-small">to the eye</text>
+        <text x="268" y="160" class="t-small halo">θL</text>
+        <text x="335" y="137" class="t-small halo">θV</text>
+        <text x="320" y="230" class="t-small" text-anchor="middle">shaded point</text>
+        <text x="580" y="190" class="t-small" text-anchor="end">surface</text>
+      </svg>
+    </div>
+    <figcaption><b>The four vectors</b>, in Appendix B's notation: unit vectors from the shaded point. N·L is the cosine of θ<sub>L</sub> and N·V of θ<sub>V</sub>. H lies halfway between L and V, so H·L equals H·V.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>A <span class="concept" data-tip="An infinitely small light that emits in well-defined directions and intensities: KHR_lights_punctual's directional, point and spot lights." data-term="Punctual light">punctual light</span> arrives from one direction, so it needs no integral. The luminance it sends towards V is f(L, V) E (N·L)<sup>+</sup>. E is the illuminance on a surface facing the light; N·L scales it down as the surface turns away, and the <sup>+</sup> clamps a light behind the surface to zero. <code>reflected_luminance</code> computes exactly this, the term every light adds to a pixel.</p>
+    <div class="formula">luminance towards V = f(L, V) × E × max(N·L, 0)</div>
+    <p>Appendix B states three rules for a BRDF in a physically accurate simulation: it "MUST be positive, reciprocal, and energy conserving". <span class="concept" data-tip="A BRDF's symmetry: swapping the light and the eye gives the same value, f(L, V) = f(V, L).">Reciprocity</span> means f(L, V) = f(V, L), so the light and the eye can swap places. <span class="concept" data-tip="A surface reflects at most the light it receives: its directional albedo is at most 1 for every view.">Energy conservation</span> means the surface reflects at most what it receives: for every V, ∫ f(L, V) (N·L) dω, summed over every direction L of the hemisphere, is at most 1 (PBR, §5.6.1). That integral is the surface's <span class="concept" data-tip="The share of uniform light from the whole hemisphere that a surface reflects towards one view, ∫ f(L, V)(N·L) dω. PBR calls it the hemispherical-directional reflectance." data-term="Directional albedo">directional albedo</span>, and chapter 7 measures it.</p>
+    <p>Before #199 the lit pass shaded with a function called <code>cook_torrance</code>, and spec #188 summed up its sources: "The falloff and the ambient constant come from a tutorial (#91), the geometry term is Schlick's approximation with Disney's remap". The spec asked for a lit pass that follows "glTF 2.0 Appendix B's BRDF exactly (D, V, F and its diffuse and specular mix), each function with an oracle, so that glTF content renders as authored and every term traces to a primary source", and for the tutorial-derived constants to go.</p>
+    <h3>Four PRs</h3>
+    <p>The work came to about 1,200 changed lines without <span class="concept" data-tip="A committed image that a Reference scene must reproduce within tolerance." data-term="Golden">Goldens</span>, three times the ticket's ceiling, so the split comment on #199 cut it into four PRs, each rebased on the one before.</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>PR</th><th>What it changes</th><th class="n">Changed lines</th><th>Images</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://github.com/gariasf/praxis/pull/243">#243</a></td><td>The surface decode in a shared function, and the glossary's names</td><td class="n">258</td><td>none change</td></tr>
+          <tr><td><a href="https://github.com/gariasf/praxis/pull/245">#245</a></td><td>Appendix B's D and height-correlated V</td><td class="n">206</td><td>highlights</td></tr>
+          <tr><td><a href="https://github.com/gariasf/praxis/pull/246">#246</a></td><td>Appendix B's dielectric and metal mix, gathered by lobe; <code>reflected_luminance</code></td><td class="n">370</td><td>silhouettes, and the helmet's fractional metallic</td></tr>
+          <tr><td><a href="https://github.com/gariasf/praxis/pull/247">#247</a></td><td>Inverse-square falloff in KHR's range window; ambient and background per scene</td><td class="n">363</td><td>most scenes</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>The four parts</b>, in merge order, with each PR's own count of changed lines, Goldens not counted. Chapter 10 has the images.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="materials">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 · PR #243</div>
+    <h2>Metals and dielectrics</h2>
+    <p>Appendix B builds every glTF surface from two simpler ones. Its material is a linear blend, <code>mix(dielectric_brdf, metal_brdf, metallic)</code>, a model it credits to Burley 2012 and says many renderers adapted. The <span class="concept" data-tip="The appearance of a Primitive: PBR factors plus one Layer per Channel.">Material</span>'s <span class="concept" data-tip="The Material factor, times its texel, that blends Appendix B's metal BRDF over its dielectric one: 0 a dielectric, 1 a metal." data-term="Metallic">metallic</span> factor, times its texel, picks the blend.</p>
+    <p>A <span class="concept" data-tip="A conductor. It reflects most light at its surface, tinted, and lets none out diffusely; Appendix B's metal BRDF is a specular lobe alone." data-term="Metal">metal</span>, in Appendix B's words, reflects "most illumination, only a small portion of the light is absorbed by the material". Its reflectance would need a wavelength-dependent refractive index and extinction coefficient; glTF folds both into the base colour, which becomes the metal's reflectance at normal incidence, <span class="concept" data-tip="A surface's reflectance where light meets it head on: 0.04 for Appendix B's dielectrics, the base colour for its metals." data-term="F0">F0</span>. At grazing incidence, the reflectance of any material approaches white, 1. Appendix B's metal BRDF is a specular lobe alone, tinted by its Fresnel term, so a metal's colour is the colour of its reflections.</p>
+    <p>A <span class="concept" data-tip="A non-metal, such as glass, water or most plastics. It reflects a little light at its surface and lets the rest in; in an opaque one, particles inside scatter some of it back out, coloured." data-term="Dielectric">dielectric</span> transmits "most of the incident illumination into the interior of the object". In most plastics, particles inside absorb or scatter that light, and what scatters back out gives the surface its colour. Appendix B therefore models a dielectric as two <span class="concept" data-tip="The shape a BRDF traces over outgoing directions for one incoming direction: a broad diffuse lobe, a narrow specular one." data-term="Lobe">lobes</span> mixed by its Fresnel term: a specular lobe for the reflection at its surface, and a <span class="concept" data-tip="A diffuse surface that looks equally bright from every direction. Its BRDF is its colour over π." data-term="Lambertian">Lambertian</span> diffuse lobe, the base colour over π, for the light that went in. Its index of refraction is fixed at 1.5, "a good compromise for most opaque, dielectric materials", which gives F0 = ((1 − 1.5) / (1 + 1.5))² = 0.04: a dielectric reflects 4% of the light that meets it head on, whatever its colour.</p>
+    <div class="formula">metal_brdf      = conductor_fresnel(f0 = baseColor,
+                    bsdf = specular_brdf(α = roughness²))
+dielectric_brdf = fresnel_mix(ior = 1.5,
+                    base = diffuse_brdf(color = baseColor),
+                    layer = specular_brdf(α = roughness²))
+material        = mix(dielectric_brdf, metal_brdf, metallic)</div>
+    <p>A metallic between 0 and 1 is a blend. Appendix B allows it where anti-aliasing or mip-mapping leaves "a portion of metal and a portion of dielectric within a texel", and for layering by blending parameters. SciFiHelmet's metallic <span class="concept" data-tip="One Channel's image with its mips. A Layer refers to one Texture.">Texture</span> is fractional, about 0.2 to 0.3 over most of it (PR #246), so chapter 6's mix matters there.</p>
+    <h3>Decoding the surface</h3>
+    <p>Shading starts from the surface's values at the pixel. The lit pass's entry point samples every Texture first, before any light, so no <code>textureSample</code> runs under non-uniform control flow. The owner's architecture review on #199 notes that this keeps the review checklist's uniformity rule "by construction (naga does not check it)". The entry point then calls <code>decode_surface</code>, a pure function in the shared shading part since #243, which multiplies each Material factor by its texel (base colour and its alpha, metallic from the cooked metallic-roughness texel's green and roughness from its red, and emissive) and takes occlusion from its texel alone. glTF stores roughness in green and metallic in blue; the cooker moves them into a two-channel BC5 Texture, roughness in red and metallic in green (ADR 0018). A roughness below 0.04 rises to it, for the reason in chapter 4.</p>
+    <p>#243 also took the glossary's names, a rename #98 had deferred to this rewrite. <code>texture_indices</code> became <code>layers</code>, a <span class="concept" data-tip="One numbered texture within a Channel. Layer 0 of every Channel is a neutral default, so a Material without that Channel has no effect.">Layer</span> per <span class="concept" data-tip="One texture role of a Material: albedo, normal, metallic-roughness, occlusion or emissive.">Channel</span>, and the cooker's <code>normal_map</code> became the normal Texture. Rewriting the Metal Goldens changed none of them, and the lit pass's GPU time stayed within each measuring session's spread.</p>
+  </div>
+</section>
+
+<section class="chapter" id="fresnel">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 · PR #246</div>
+    <h2>Fresnel</h2>
+    <p>How much of the light a surface reflects, rather than lets in, depends on the angle it arrives at. That share is the <span class="concept" data-tip="The share of light a surface reflects rather than lets in, rising to 1 at grazing angles. Appendix B uses Schlick's F = F0 + (1 − F0)(1 − |V·H|)⁵." data-term="Fresnel term">Fresnel term</span>, F. Appendix B uses Schlick's 1994 approximation of the Fresnel equations for metals and dielectrics alike:</p>
+    <div class="formula">F = F0 + (1 − F0) (1 − |V·H|)⁵</div>
+    <p>F equals <span class="concept" data-tip="A surface's reflectance where light meets it head on: 0.04 for Appendix B's dielectrics, the base colour for its metals." data-term="F0">F0</span> where V meets the reflecting facet head on, and rises to 1 at grazing. The angle is the one between V and H, the normal of the facets that mirror light from L into V (chapter 4), since those facets do the reflecting. H·L equals H·V, so one cosine serves both directions.</p>
+    <p><code>fresnel_weight</code> computes the weight w = (1 − |V·H|)⁵ once per light, and both lobes read it. It multiplies the power out, c² × c² × c with c = 1 − |V·H|, where <code>pow(c, 5.0)</code> would read more simply. V and H are unit vectors only to f32's rounding, so their dot product can come out a step past 1, and c a hair below 0. WGSL leaves a negative base outside <code>pow</code>'s domain, since <code>pow</code> may be computed as exp2(y × log2(x)), and outside a domain WGSL "may instead yield an indeterminate value". Multiplied out, c⁵ is a negligible negative number and F stays F0. The old <code>fresnel_schlick</code> passed <code>pow</code> one minus a cosine clamped only below, at 0.</p>
+    <p>The <span class="concept" data-tip="A test that runs one of the shader's own WGSL functions on the GPU over test vectors and compares the results with values worked out apart: literals, analytic results and f64 references." data-term="Oracle">oracle</span> <code>fresnel_rises_from_the_base_reflectance_to_one_at_grazing</code> checks three F0s at once, 0.04, 0.5 and 1. F is F0 at |V·H| = 1 and one f32 step past it. At ±0.5 it adds 1/32 of what F0 misses, so a dielectric's 0.04 becomes 0.07, and at 0 it is 1.</p>
+    <p>Appendix B's discussion records the approximation's limits. Schlick's F matches the full Fresnel equations well for indices of refraction from 1.2 to 2.2, and it misses the dip in reflectance that metals often show near grazing. Appendix B still suggests it for metals, since glTF gives metals no extra colour that would describe the dip.</p>
+  </div>
+</section>
+
+<section class="chapter" id="distribution">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 · PR #245</div>
+    <h2>D, the facets' normals</h2>
+    <p>Appendix B's specular lobe comes from microfacet theory. A surface is taken to be a field of tiny flat mirrors, <span class="concept" data-tip="One of the tiny flat mirrors a microfacet model takes a rough surface to be. Their normals scatter around the surface's normal, more widely the rougher it is." data-term="Microfacet">microfacets</span>, whose normals scatter around N; roughness 0 is a smooth mirror and 1 a rough surface. A facet mirrors light from L into V only if its normal is H, so the highlight follows how densely the facets face H. That density is the normal distribution function, <span class="concept" data-tip="The normal distribution function: how densely microfacets face each direction H. Appendix B's is Trowbridge-Reitz, which Walter et al. named GGX.">D</span>.</p>
+    <p>Appendix B's D is the Trowbridge-Reitz distribution, which Walter et al. 2007 developed independently and named GGX, finding it a better fit for measured data than the Beckmann distribution of Cook and Torrance:</p>
+    <div class="formula">D = α² χ⁺(N·H) / (π ((N·H)² (α² − 1) + 1)²)</div>
+    <p><span class="concept" data-tip="χ⁺(x) is 1 where x &gt; 0 and 0 elsewhere (Appendix B)." data-term="χ⁺, the Heaviside function">χ⁺</span> is 1 for a positive argument and 0 otherwise, so no facet faces below the surface. The width <span class="concept" data-tip="The microfacet terms' width, α = roughness², a mapping Burley chose because it changes more evenly to the eye." data-term="α">α</span> is roughness², a mapping Burley 2012 chose because it "results in a more perceptually linear change in the roughness".</p>
+    <p>D is a density over directions, normalised so that the facets' areas, projected onto the surface, add up to the surface's own: ∫ D(H) (N·H) dω = 1 over the hemisphere (Walter et al. 2007, eq. 4). It peaks along the normal at 1 / (π α²). The <span class="concept" data-tip="A test that runs one of the shader's own WGSL functions on the GPU over test vectors and compares the results with values worked out apart: literals, analytic results and f64 references." data-term="Oracle">oracle</span> <code>distribution_ggx_integrates_to_one_over_the_hemisphere</code> checks both: the integral to within 10⁻⁵ at roughness 0.25, 0.5, 0.75 and 1, and the peak at roughness 0.5, which is 16/π.</p>
+    <h3>The roughness floor</h3>
+    <p>As roughness falls, that peak grows without bound. At α = 0, D becomes a delta function and the BRDF divides by zero, and the specification's source now says implementations "should therefore never use α = 0": they should clamp α to a small positive value, or treat the surface as an ideal mirror on a separate code path. The published 2.0.1 page, last updated in 2021, predates that note; the <a href="https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc?plain=1#L3741">AsciiDoc source on GitHub</a> carries it. It predates two more revisions to Appendix B's informative sample implementation, both of which Praxis follows: 2.0.1 gives the separable form of Smith's masking-shadowing, where the source now gives the height-correlated V, and a simplified combination of the two lobes, where the source now gives the "full code" that mixes dielectric and metal exactly. The material's structure, <code>mix(dielectric_brdf, metal_brdf, metallic)</code>, is the same in both. Praxis keeps roughness at or above <code>MINIMUM_ROUGHNESS</code>, 0.04, the <span class="concept" data-tip="MINIMUM_ROUGHNESS, 0.04: decode_surface raises any lower roughness to it, so α is at least 0.0016 and D stays finite." data-term="Roughness floor">roughness floor</span>, as the lit pass already did before #199. α is then at least 0.0016, and D's peak at most 1 / (π × 0.0016²), about 124,000 per steradian by this guide's arithmetic.</p>
+    <p>ADR 0023 counts what that needle means for HDR: under 100,000 lux, a dielectric's sun glint at roughness 0.04 peaks at 1.24 × 10⁸ cd/m², 10.9 stops past fp16's largest value, 65504. This guide's arithmetic reproduces that peak with the sun and the eye both along the normal, where chapter 5's visibility term V is 1/4 and F = 0.04: 124,340 × 1/4 × 0.04 × 100,000. It is the lowest such peak: as the sun sinks, the eye at its mirror direction, the glint grows, to 4.4 × 10⁸ cd/m² at 60° from the normal, 12.7 stops past 65504, by the same arithmetic.</p>
+    <h3>Where f32 runs short</h3>
+    <p>At the floor's peak, N·H = 1, the textbook denominator (N·H)² (α² − 1) + 1 should come to α² = 2.56 × 10⁻⁶. f32 first computes α² − 1, close to −1, where neighbouring f32 values lie 2⁻²⁴ apart, about 6 × 10⁻⁸. Adding 1 then leaves α² plus whatever that rounding did, which is about a thousandth of α²: by this guide's arithmetic the denominator comes out 0.12% high, and D, which divides by its square, 0.23% low, the figure PR #245 gives.</p>
+    <p>#245 sums the same denominator in another order, (N·H)² α² + (1 − N·H)(1 + N·H), which equals the textbook form, since (1 − N·H)(1 + N·H) = 1 − (N·H)². Summed this way, the small quantities are computed directly, never as what is left of −1 after adding 1, and in the PR's words "the sum keeps every term to a few ulps".</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>D at N·H = 1, roughness 0.04</th><th class="n">Value</th><th class="n">Off by</th></tr></thead>
+        <tbody>
+          <tr><td>Appendix B's formula, in f64</td><td class="n">124,339.8</td><td class="n">reference</td></tr>
+          <tr><td>Textbook denominator, each step rounded to f32</td><td class="n">124,048.9</td><td class="n">−0.234%</td></tr>
+          <tr class="focus"><td>#245's summed denominator, each step rounded to f32</td><td class="n">124,339.8</td><td class="n">under 0.00001%, within one f32 step</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>The cancellation at the floor's peak</b>, by this guide's arithmetic: each operation rounded to f32 with JavaScript's <code>Math.fround</code>. A GPU may fuse operations and round differently; PR #245 gives 0.23% for the textbook form.</figcaption>
+  </figure>
+  <div class="prose">
+    <p><code>distribution_ggx_matches_appendix_b_from_the_roughness_floor_to_one</code> compares D with Appendix B's formula in f64 at N·H from −0.5, below the horizon, through 0.99999 to 1, and for α from the floor's 0.0016 to 1, within 4 × 10⁻⁶ of each value. With the textbook denominator in f32 it fails (PR #245). The integral test leaves the floor out, as it did before #199: there D integrates to 0.9991, up from the 0.998 recorded for the old form in the project's planning issue, <a href="https://github.com/gariasf/praxis/issues/17">#17</a>, and the rest is f32's rounding of cos θ itself, so the floor is checked against the f64 reference instead.</p>
+  </div>
+</section>
+
+<section class="chapter" id="visibility">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 · PR #245</div>
+    <h2>V, masking and shadowing</h2>
+    <p>Not every facet that faces H takes part. Some are hidden from the eye behind other facets, which is masking, and some are hidden from the light, which is shadowing. The <span class="concept" data-tip="The share of the microfacets facing H that are both seen from V (not masked) and lit from L (not shadowed)." data-term="Masking-shadowing function G">masking-shadowing function</span> G gives the share of the facets facing H that are both seen and lit. Appendix B's specular lobe is the microfacet BRDF G D / (4 |N·L| |N·V|), and Appendix B folds G and that denominator into one <span class="concept" data-tip="Appendix B's V = G / (4 |N·L| |N·V|): masking-shadowing folded together with the microfacet BRDF's denominator, so the specular lobe is V × D." data-term="Visibility term V">visibility term</span>, V, which is not the direction towards the eye (the published 2.0.1 text gives both the same letter, as this guide does; the current source writes the visibility term ν), so the lobe is V × D:</p>
+    <div class="formula">V = G / (4 |N·L| |N·V|)
+
+  =           χ⁺(H·L) χ⁺(H·V)
+    ─────────────────────────────────────────────────────────
+    2 (|N·V| √(α² + (1 − α²)(N·L)²) + |N·L| √(α² + (1 − α²)(N·V)²))</div>
+    <p>This is the <span class="concept" data-tip="A form of Smith's masking-shadowing function in which a facet high on the surface is likelier both to be seen and to be lit, so masking and shadowing are not treated as independent." data-term="Height-correlated">height-correlated</span> form of Smith's masking-shadowing function, which Appendix B takes from Heitz 2014. Heitz gives the reason for the correlation: "the more a microfacet is elevated within the microsurface, the more the probabilities of being visible for the outgoing direction (unmasked) and for the incident direction (unshadowed) increase at the same time." The separable form, which multiplies masking by shadowing as though they were independent, "always overestimates shadowing since some correlation always exists" (Heitz 2014, §6).</p>
+    <p>Before #245 the lit pass used a separable form, each factor in Schlick's approximation with Disney's roughness remap, k = (roughness + 1)² / 8. Burley 2012 remapped roughness for G after comparing with measured data, and after artists found the specular "too hot" for small roughness values. Karis 2013 kept the remap for analytic lights only, warning that "if applied to image-based lighting, the results at glancing angles will be much too dark". Issue #17 listed that under its heading "Not yet specified", and milestone M3 took Appendix B's form instead. The old form also divided by 4 (N·V)(N·L) + 0.001, the 0.001 there to keep the denominator off zero.</p>
+    <p>The new V needs no such constant. Where N·L and N·V are both 0, the light and the eye both lie along the surface and the denominator is 0; <code>smith_visibility</code> returns 0 there, so a light along the surface reflects none. <span class="concept" data-tip="χ⁺(x) is 1 where x &gt; 0 and 0 elsewhere (Appendix B)." data-term="χ⁺, the Heaviside function">χ⁺</span>(H·V) is 0 when V lies behind the facets facing H. Appendix B also writes absolute cosines, |N·L| and |N·V|, where <code>cook_torrance</code> clamped them at 0; #246's switch to them changed images only at silhouettes (chapter 10).</p>
+    <p><code>smith_visibility_matches_appendix_b_and_keeps_g_within_zero_to_one</code> checks V against Appendix B in f64 for cosines from 0, through 10⁻⁴ and 0.01, to 1, and α from the floor to 1, within 4 × 10⁻⁶ of each value. It also checks that G = 4 |N·L| |N·V| V stays within [0, 1]. Dropping the 2 from V's denominator makes it fail (PR #245).</p>
+  </div>
+</section>
+
+<section class="chapter" id="mix">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 · PR #246</div>
+    <h2>The mix, gathered by lobe</h2>
+    <p>Appendix B's "full code" puts the terms together:</p>
+  </div>
+  <figure class="wide">
+    <pre class="code"><code>fresnel_w = (1 - abs(VdotH))^5
+
+diffuse_brdf = (1 / π) * baseColor.rgb
+specular_brdf = D(roughness^2) * G(roughness^2) / (4 * abs(VdotN) * abs(LdotN))
+
+dielectric_f0 = 0.04
+dielectric_fresnel = dielectric_f0 + (1 - dielectric_f0) * fresnel_w
+dielectric_brdf = mix(diffuse_brdf, specular_brdf, dielectric_fresnel)
+
+metal_fresnel = baseColor.rgb + (1 - baseColor.rgb) * fresnel_w
+metal_brdf = metal_fresnel * specular_brdf
+
+material = mix(dielectric_brdf, metal_brdf, metallic)</code></pre>
+    <figcaption><b>glTF 2.0, Appendix B</b>, "Metal BRDF and Dielectric BRDF", verbatim from the specification's AsciiDoc source at 7cee0fc (<a href="https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc?plain=1#L3838-L3850">lines 3838 to 3850</a>; Khronos, CC BY 4.0). The published 2.0.1 page gives a simplified mix in its place (chapter 4). Its G over 4 |N·V| |N·L| is chapter 5's V.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Write w for <code>fresnel_w</code>, S for the specular lobe D × V, c for the base colour and m for metallic. The dielectric's Fresnel is F<sub>d</sub> = 0.04 + 0.96 w and the metal's is F<sub>m</sub> = c + (1 − c) w, and the material expands to (1 − m)((1 − F<sub>d</sub>) c/π + F<sub>d</sub> S) + m F<sub>m</sub> S. Gathered by lobe:</p>
+    <div class="formula">diffuse lobe:   (1 − m) (1 − F_d) c / π
+specular lobe:  ((1 − m) F_d + m F_m) S</div>
+    <p>Schlick's F is linear in F0: F(F0) = F0 + (1 − F0) w = F0 (1 − w) + w. A weighted average of two Fresnel values, with weights that sum to 1, is therefore the Fresnel value at the same average of their F0s:</p>
+    <div class="formula">(1 − m) F(0.04) + m F(c) = F((1 − m) 0.04 + m c) = F(mix(0.04, c, m))</div>
+    <p>So the dielectric's specular lobe and the metal's merge into one, whose Fresnel is F at the mixed F0. That F0 depends on the surface alone, and no light changes it. <code>metallic_roughness_brdf</code> computes Appendix B's BRDF in this <span class="concept" data-tip="Appendix B's mix rewritten as one diffuse lobe and one specular lobe: the same function, since Schlick's F is linear in F0." data-term="Gathered by lobe">gathered form</span>, with the <span class="concept" data-tip="(1 − metallic)(1 − F)/π with the dielectric's own F: the share of the base colour that leaves diffusely, per steradian." data-term="Diffuse share">diffuse share</span> as one number:</p>
+  </div>
+  <figure class="wide">
+    <pre class="code"><code>let alpha = surface.roughness * surface.roughness;
+let specular = distribution_ggx(normal_dot_half, alpha)
+    * smith_visibility(normal_dot_light, normal_dot_view, view_dot_half, alpha);
+<span class="comment">// The mix, gathered by lobe (lines 120 to 125).</span>
+let weight = fresnel_weight(view_dot_half);
+let dielectric_fresnel = DIELECTRIC_BASE_REFLECTANCE
+    + (1.0 - DIELECTRIC_BASE_REFLECTANCE) * weight;
+let diffuse_share = (1.0 - surface.metallic) * (1.0 - dielectric_fresnel) / PI;
+let base_reflectance = mix(
+    vec3&lt;f32&gt;(DIELECTRIC_BASE_REFLECTANCE),
+    surface.base_color,
+    surface.metallic
+);
+let specular_fresnel = base_reflectance + (vec3&lt;f32&gt;(1.0) - base_reflectance) * weight;
+return diffuse_share * surface.base_color + specular_fresnel * specular;</code></pre>
+    <figcaption><a href="https://github.com/gariasf/praxis/blob/6764239b7bd5d54222680e462132191a3b5d7c8a/src/render/shaders/shading.wgsl#L117-L136"><code>src/render/shaders/shading.wgsl</code>, lines 117 to 136</a> at 6764239, indented less, with the comment on lines 120 to 125 shortened. <code>mix(a, b, t)</code> is a × (1 − t) + b × t.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The two forms are the same function, and the f64 oracle compares the gathered one with Appendix B's own code. They differ in the work done per light. Mixed as Appendix B writes it, with two three-channel BRDFs built for every light, the dielectric's and the metal's, each with its own Fresnel, then mixed, the lit pass took 7 to 25 µs longer than part 2 at 2560×1440 on the <span class="concept" data-tip="The Apple M4 Pro on which the project's Budgets are judged and its Baselines recorded; wgpu runs on Metal there.">M4 Pro</span>, far-coplanar 24.6 µs and helmet 23.2 µs; the shader's comment puts it at up to 5%. Gathered by lobe, a focused session of three rounds on the five heaviest scenes measured −0.9 to +5.3 µs against part 2 (PR #246).</p>
+    <p>The old <code>cook_torrance</code> weighted its diffuse lobe by 1 − F at an F0 already blended by metallic, which is the simplified mix the published 2.0.1 text gives as its final BRDF. PR #246 notes that this agrees with Appendix B's full code only where metallic is 0 or 1. At metallic 0.5, for example, the full code weights the diffuse lobe by 1 − F(0.04), and the old code by 1 − F(mix(0.04, c, 0.5)).</p>
+    <p>No Golden scene has a fractional metallic, so #246 changed the Goldens only at silhouettes, where chapter 5's absolute cosines replaced the old clamp, mostly on metals. On SciFiHelmet, metallic about 0.2 to 0.3 over most of it, the mix itself moved pixels by up to 23 steps (PR #246).</p>
+    <p><code>reflected_luminance</code> wraps the BRDF into the per-light term f(L, V) E (N·L)<sup>+</sup>, from unit vectors. Where L and V point in opposite directions, L + V is zero and has no direction. The shader then scales it by the inverse square root of at least 10⁻³⁰, which leaves H zero instead of NaN, and χ⁺ zeroes the specular lobe.</p>
+  </div>
+  <figure class="wide" id="demo-brdf">
+    <div class="demo-grid">
+      <div>
+        <div class="canvas-frame"><canvas id="b-canvas" class="demo" role="img" aria-label="The BRDF lobe in the plane of incidence."></canvas></div>
+        <div class="legend"><span><i></i>whole BRDF</span><span><i class="thin"></i>specular lobe</span><span><i class="dashed"></i>diffuse lobe</span></div>
+        <div class="controls">
+          <span class="control-label">Radius:</span>
+          <div class="seg" role="group" aria-label="Radius scale" id="b-scale">
+            <button type="button" data-scale="linear" aria-pressed="true">linear</button>
+            <button type="button" data-scale="log" aria-pressed="false">log, 6 decades</button>
+          </div>
+          <button type="button" class="btn" id="b-swap">Swap L and V</button>
+        </div>
+      </div>
+      <div>
+        <div class="table-wrap">
+          <table class="facts compact" id="b-table">
+            <thead><tr><th>Term at this L and V</th><th class="n">Value</th></tr></thead>
+            <tbody>
+              <tr><td>N·L, N·V</td><td class="n" id="b-nl-nv"></td></tr>
+              <tr><td>N·H, V·H</td><td class="n" id="b-nh-vh"></td></tr>
+              <tr><td>α = roughness²</td><td class="n" id="b-alpha"></td></tr>
+              <tr><td>D, the distribution</td><td class="n" id="b-d"></td></tr>
+              <tr><td>V, the visibility term</td><td class="n" id="b-v"></td></tr>
+              <tr><td>w = (1 − |V·H|)⁵</td><td class="n" id="b-w"></td></tr>
+              <tr><td>F, specular lobe (R G B)</td><td class="n" id="b-f"></td></tr>
+              <tr><td>Diffuse share</td><td class="n" id="b-share"></td></tr>
+              <tr class="focus"><td>f(L, V) (R G B)</td><td class="n" id="b-f-lv"></td></tr>
+              <tr class="focus"><td>f(V, L), swapped</td><td class="n" id="b-f-vl"></td></tr>
+              <tr><td>f (N·L)⁺ for illuminance 1</td><td class="n" id="b-out"></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="sliders">
+      <label for="b-roughness" class="control-label">Roughness <output id="b-roughness-out" for="b-roughness"></output></label>
+      <input type="range" id="b-roughness" min="0" max="1" step="0.01" value="0.35">
+      <label for="b-metallic" class="control-label">Metallic <output id="b-metallic-out" for="b-metallic"></output></label>
+      <input type="range" id="b-metallic" min="0" max="1" step="0.01" value="0">
+      <label for="b-red" class="control-label">Base colour, red <output id="b-red-out" for="b-red"></output></label>
+      <input type="range" id="b-red" min="0" max="1" step="0.01" value="1">
+      <label for="b-green" class="control-label">Base colour, green <output id="b-green-out" for="b-green"></output></label>
+      <input type="range" id="b-green" min="0" max="1" step="0.01" value="0.71">
+      <label for="b-blue" class="control-label">Base colour, blue <output id="b-blue-out" for="b-blue"></output></label>
+      <input type="range" id="b-blue" min="0" max="1" step="0.01" value="0.29">
+      <label for="b-light" class="control-label">Light angle θL <output id="b-light-out" for="b-light"></output></label>
+      <input type="range" id="b-light" min="-89" max="89" step="1" value="-45">
+      <label for="b-view" class="control-label">View angle θV <output id="b-view-out" for="b-view"></output></label>
+      <input type="range" id="b-view" min="-89" max="89" step="1" value="45">
+    </div>
+    <div class="controls" id="b-colours">
+      <span class="control-label">Base colour:</span>
+      <button type="button" class="btn" data-colour="1,0.71,0.29">gold, as pbr-sweep</button>
+      <button type="button" class="btn" data-colour="1,1,1">white</button>
+    </div>
+    <p class="readout" id="b-summary" aria-live="polite" style="margin-top:12px"></p>
+    <figcaption><b>Live demo.</b> The BRDF in the plane that holds N, L and V, from the same formulas as <code>shading.wgsl</code>. Along each direction V, the curve's distance from the shaded point is the luminance reflected that way for illuminance 1 from the light, f(L, V) (N·L)<sup>+</sup>, averaged over the three colour channels and scaled to the curve's own peak; the log radius shows six decades below the peak. Drag across the plot, or use the sliders, to move V, and swap L and V to see reciprocity: f(V, L) in the table equals f(L, V). Roughness below 0.04 is raised to it, as <code>decode_surface</code> does. Simplified: the page computes in f64 where the shader uses f32, and shows one plane, while the lobe extends out of it in 3D.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="oracles">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 7 · PRs #245, #246</div>
+    <h2>The oracles</h2>
+    <p>Every new or changed shading function has an <span class="concept" data-tip="A test that runs one of the shader's own WGSL functions on the GPU over test vectors and compares the results with values worked out apart: literals, analytic results and f64 references." data-term="Oracle">oracle</span> in <code>src/render/shader_function_tests.rs</code>. The test appends a compute kernel to the shared shader parts, so the expression it evaluates calls the very functions the passes run; it runs them over test vectors in one dispatch on the GPU and reads the results back. It compares them with values worked out apart from the shader: literals, analytic results, and <span class="concept" data-tip="The same formula as its source writes it, evaluated on the CPU in 64-bit floats, against which the shader's f32 results are compared." data-term="f64 reference">f64 references</span> written from the source as the source writes it. <code>reference_brdf</code> is Appendix B's "full code", line for line.</p>
+    <p>f32 cannot match f64 exactly, so each check states its tolerance. The BRDF's terms must land within 4 × 10⁻⁶ of the reference, relative, and land within 2 × 10⁻⁶ on the M4 Pro. Shading from unit vectors gets 5 × 10⁻⁵: f32 rounds each direction and each cosine by about 10⁻⁷, which D, steep near its peak at the roughness floor, turns into up to 1.1 × 10⁻⁵ of the result.</p>
+    <h3>Reciprocity</h3>
+    <p><code>metallic_roughness_brdf_matches_appendix_b_and_is_reciprocal</code> runs 675 cases: three roughnesses (the floor, 0.5 and 1), three metallics (0, 0.5 and 1), five view angles and five light angles (0°, 30°, 60°, 85° and 90°), and three azimuths (0°, 90° and 180°), with pbr-sweep's gold base colour, (1.0, 0.71, 0.29). Each case is checked against Appendix B's full code in f64, then evaluated again with L and V swapped, which must give the same value. PR #246 lists what it catches: "Appendix B's simplified mix", metallic's mix reversed, and the diffuse lobe missing its 1/π.</p>
+    <h3>The white furnace</h3>
+    <p>Energy conservation is checked in a <span class="concept" data-tip="A check that lights a white surface equally from every direction. A surface that conserves energy reflects at most what it receives." data-term="White furnace">white furnace</span>, where light of the same strength arrives from every direction of the hemisphere. What a surface sends towards V there adds up to its <span class="concept" data-tip="The share of uniform light from the whole hemisphere that a surface reflects towards one view, ∫ f(L, V)(N·L) dω. PBR calls it the hemispherical-directional reflectance." data-term="Directional albedo">directional albedo</span>, which PBR describes as "the total reflection in a given direction due to constant illumination over the hemisphere". A surface that conserves energy reflects at most 1, all it receives. The reflected-luminance oracle sums a white metal's reflection over 16,200 directions, cells of 1° by 2°, at roughness 0.5 seen from 0°, 60° and 85°, and at roughness 1 seen from 0° and 85°; every sum is at most 1. It fails without the half-vector guard, with NaN, or with N·V in place of N·L.</p>
+    <p>A white metal reflects less than 1, and much less when rough. Appendix B's BRDF follows light for one bounce on the microsurface, and "the shadowing term suppresses light that intersects the microsurface a second time"; Heitz 2014 shows that such models "do not integrate to 1 even when parameterized on a 'perfect reflector' microsurface" (§3.5). Appendix B suggests adding multiple scattering whenever possible, which #199 does not do. Seen head-on at roughness 1, where D = 1/π and V = 1 / (2 (1 + N·L)), a white metal reflects 1 − ln 2 ≈ 0.307 of what it receives, by this guide's arithmetic, and the demo below sums the same.</p>
+    <p>The dielectric is not held to the bound, because Appendix B's own coupling breaks it. Its section "Coupling Diffuse and Specular Reflection" says that <code>fresnel_mix</code> "is not very accurate and breaks a fundamental property that a physically based BRDF must fulfill", energy conservation. A white dielectric at roughness 0.5 reflects 1.11 of what it receives at 85° (PR #246). Its diffuse lobe gives up only F at each light's own half vector, which stays small for most light directions even when V is grazing: 0.06 on average here. Its specular lobe gathers its light around the mirror direction, where F is larger, about 0.2 on average over the lobe and 0.65 at the mirror direction itself, and adds 0.18, as the demo below shows. Together they pass 1. Appendix B points to fixes, among them Kulla and Conty's 2017 coupling, which is energy conserving and needs a small precomputed table. Spec #188 asks for Appendix B's BRDF exactly, and the oracle tests what Appendix B specifies.</p>
+  </div>
+  <figure class="wide" id="demo-furnace">
+    <div class="canvas-frame"><canvas id="w-canvas" role="img" aria-label="Directional albedo against view angle for a white metal and a white dielectric."></canvas></div>
+    <div class="legend"><span><i></i>white metal</span><span><i class="dashed"></i>white dielectric</span><span><i class="dotted"></i>the dielectric's diffuse lobe alone</span></div>
+    <div class="sliders">
+      <label for="w-roughness" class="control-label">Roughness <output id="w-roughness-out" for="w-roughness"></output></label>
+      <input type="range" id="w-roughness" min="0.04" max="1" step="0.01" value="0.5">
+      <label for="w-view" class="control-label">View angle <output id="w-view-out" for="w-view"></output></label>
+      <input type="range" id="w-view" min="0" max="89" step="1" value="85">
+    </div>
+    <div class="controls">
+      <span class="control-label">Roughness:</span>
+      <div class="seg" role="group" aria-label="Roughness presets" id="w-presets">
+        <button type="button" data-roughness="0.04" aria-pressed="false">0.04, the floor</button>
+        <button type="button" data-roughness="0.5" aria-pressed="true">0.5, as the oracle</button>
+        <button type="button" data-roughness="1" aria-pressed="false">1, as the oracle</button>
+      </div>
+    </div>
+    <dl class="figures">
+      <div><dt>White metal reflects</dt><dd id="w-metal"></dd></div>
+      <div><dt>White dielectric reflects</dt><dd id="w-dielectric"></dd></div>
+      <div><dt>Dielectric: diffuse + specular</dt><dd id="w-parts"></dd></div>
+    </dl>
+    <p class="readout" id="w-note" aria-live="polite" style="margin-top:12px"></p>
+    <figcaption><b>Live demo.</b> Directional albedo, the share of what it receives that a white surface reflects towards V, against the view angle, for a white metal (base colour 1, metallic 1) and a white dielectric (base colour 1, metallic 0), from the same formulas as <code>shading.wgsl</code>. Hollow circles mark the views the oracle checks at roughness 0.5 and 1, and PR #246's 1.11 for the dielectric at roughness 0.5 and 85°. Simplified: the page sums in f64 and on its own grids. It sums the diffuse lobe over light directions spread as cos θ, and the specular lobe over half vectors spread as GGX spreads them (Walter et al. 2007, eq. 35), each light the view mirrored about its half vector, so the needle at low roughness is not missed; the oracle sums 16,200 directions in 1° by 2° cells, at roughness 0.5 and 1 only. Each point of the curves sums 10,240 directions and stays within 0.012 of a converged sum up to 87°; the figures above sum 135,168 and stay within 0.003 up to 86° and within 0.008 nearer grazing.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="falloff">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 8 · PR #247</div>
+    <h2>Point lights</h2>
+    <p>KHR_lights_punctual defines glTF's lights as "parameterized, infinitely small points that emit light in well-defined directions and intensities", <span class="concept" data-tip="An infinitely small light that emits in well-defined directions and intensities: KHR_lights_punctual's directional, point and spot lights." data-term="Punctual light">punctual lights</span>. A directional light gives <span class="concept" data-tip="Light arriving at a surface, per square metre, in lux (lm/m²). Irradiance is its radiometric twin." data-term="Illuminance">illuminance</span> in lux. A point light emits in all directions from its position, with a <span class="concept" data-tip="Light a point source sends into one direction, per steradian, in candela (lm/sr). KHR_lights_punctual gives point lights in it." data-term="Luminous intensity">luminous intensity</span> in candela, lumens per steradian.</p>
+    <p>A point light's intensity spreads over a sphere of directions, and the area a bundle of them covers grows with the square of the distance (Lagarde and de Rousiers 2014, §4.4). The illuminance on a surface facing the light therefore falls as E = I / d², the <span class="concept" data-tip="A point light's illuminance on a surface facing it falls with the square of the distance: E = I / d²." data-term="Inverse square law">inverse square law</span>; KHR_lights_punctual says a point light's brightness "goes like the inverse square of the distance".</p>
+    <p>The old lit pass divided a point light's intensity by 1 + 0.09 d + 0.032 d², constants the ticket calls tutorial-derived and PR #247 traces to LearnOpenGL. For one intensity, that curve is dimmer than inverse square within about 1.06 m and brighter beyond, approaching 1/0.032 = 31.25 times brighter far away, by this guide's arithmetic.</p>
+    <h3>The range window</h3>
+    <p>Inverse square never reaches zero, so without a limit every light would reach every pixel and would have to be evaluated there (Filament's documentation). KHR_lights_punctual gives point lights a <span class="concept" data-tip="KHR_lights_punctual's distance past which a point or spot light adds nothing. Praxis's PointLight carries it, authored per scene." data-term="Range">range</span>, past which "rendering engines ignore the light". It asks that "attenuation should follow the inverse square law as closely as possible, although some non-quadratic falloff near the edge of the range may be used to avoid a hard cutoff", and recommends:</p>
+    <div class="formula">attenuation = max(min(1 − (d / r)⁴, 1), 0) / d²</div>
+    <p>The <span class="concept" data-tip="KHR_lights_punctual's recommended factor max(min(1 − (d/r)⁴, 1), 0): near 1 close to the light, exactly 0 from the range r on." data-term="Range window">range window</span>, the factor before the division, keeps 0.9375 of inverse square at half the range and falls to exactly 0 at d = r, staying 0 past it, by this guide's arithmetic. Filament's documentation, after Karis 2013, squares the same window; KHR's recommendation does not, and Praxis follows KHR.</p>
+    <p>The range has a second use in Praxis. #201 will cull point lights into <span class="concept" data-tip="A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it." data-term="Froxel">Froxels</span>, each listing the lights that reach it, and must match lighting with every light at every pixel within Golden tolerance. A light that reaches exactly 0 at its range lets culling drop nothing it contributes, which is why spec #188 asks for the window (story 22).</p>
+    <h3>Working in distance²</h3>
+    <p><code>point_light_attenuation</code> works in distance² throughout. (d / r)⁴ is (d² / r²)², so the window needs no square root, and <code>point_light_luminance</code> takes one inverse square root of d² to turn the light's offset into its direction (PR #247).</p>
+  </div>
+  <figure class="wide">
+    <pre class="code"><code>fn point_light_attenuation(distance_squared: f32, range: f32) -&gt; f32 {
+    let ratio_squared = distance_squared / (range * range);
+    let window = clamp(1.0 - ratio_squared * ratio_squared, 0.0, 1.0);
+    return window / distance_squared;
+}
+
+<span class="comment">// In point_light_luminance:</span>
+let distance_squared = max(dot(light_offset, light_offset), MINIMUM_LIGHT_DISTANCE_SQUARED);
+let illuminance = intensity * point_light_attenuation(distance_squared, range);
+let light_direction = light_offset * inverseSqrt(distance_squared);
+return reflected_luminance(surface, normal, view_direction, light_direction, illuminance);</code></pre>
+    <figcaption><a href="https://github.com/gariasf/praxis/blob/6764239b7bd5d54222680e462132191a3b5d7c8a/src/render/shaders/shading.wgsl#L173-L196"><code>src/render/shaders/shading.wgsl</code>, lines 173 to 177 and 193 to 196</a> at 6764239, indented less. <code>MINIMUM_LIGHT_DISTANCE_SQUARED</code> is 10⁻⁴, a square centimetre.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>At d = 0, I / d² is infinite. Distance² is held at 1 cm² or more, as though the light were a sphere of 1 cm radius. Filament's documentation treats punctual lights "as spheres of 1 cm radius" (Filament is Apache-2.0), and Frostbite gives them "a size of 1 cm" (Lagarde and de Rousiers 2014, §4.4). A surface at a light is then lit finitely. Within 1 cm, the direction, the offset times the inverse square root of the held distance², shortens with the distance and is zero at the light itself, which has no direction from there, so the light adds 0 instead of NaN. #247's first form guarded the normalised direction instead and cost 6 to 8 µs more; the distance² form removed that.</p>
+    <p><code>PointLight</code> gained <code>range</code>, "Metres from the light past which it adds nothing", positive and here finite, and each Reference scene authors one; the light uniform carries it in the w of each light's position (since #261, merged on 2026-10-23 as 7ee4ed6, each light's entry in a light buffer carries it). <code>point_light_luminance</code> multiplies the intensity by the attenuation and hands that illuminance to <code>reflected_luminance</code>. It is the per-light function the architecture review on #199 asked for, so the entry point only samples, decodes and sums.</p>
+    <p><code>point_light_attenuation_falls_by_inverse_square_to_zero_at_the_range</code> checks the attenuation against KHR's formula in f64, from the same d², from 2 cm to past the range, and requires exactly 0 at and past it. <code>point_light_luminance_attenuates_the_intensity_it_reflects</code> places lights near and far, beside, above and below the normal, up to and past a 4 m range, and one at the shaded point itself, where the result must be 0. PR #247 lists the mistakes they catch: no distance floor, the window's ratio or the range not squared, the range doubled, and the light's direction flipped.</p>
+  </div>
+  <figure class="wide" id="demo-falloff">
+    <div class="canvas-frame"><canvas id="f-canvas" role="img" aria-label="Illuminance against distance on logarithmic axes."></canvas></div>
+    <div class="legend"><span><i></i>inverse square in KHR's window</span><span><i class="dotted"></i>inverse square, no window</span><span><i class="dashed"></i>the old tutorial curve</span></div>
+    <div class="controls">
+      <span class="control-label">#247's scene values:</span>
+      <div class="seg" role="group" aria-label="Scene values" id="f-presets">
+        <button type="button" data-intensity="9" data-old="1" data-range="20" data-distance="3" aria-pressed="true">coloured lights</button>
+        <button type="button" data-intensity="300" data-old="30" data-range="200" data-distance="83" aria-pressed="false">minification's light</button>
+      </div>
+    </div>
+    <div class="sliders">
+      <label for="f-range" class="control-label">Range r <output id="f-range-out" for="f-range"></output></label>
+      <input type="range" id="f-range" min="0" max="1000" step="1" value="0">
+      <label for="f-intensity" class="control-label">Intensity I <output id="f-intensity-out" for="f-intensity"></output></label>
+      <input type="range" id="f-intensity" min="0" max="1000" step="1" value="0">
+      <label for="f-old" class="control-label">Old intensity <output id="f-old-out" for="f-old"></output></label>
+      <input type="range" id="f-old" min="0" max="1000" step="1" value="0">
+      <label for="f-distance" class="control-label">Distance d <output id="f-distance-out" for="f-distance"></output></label>
+      <input type="range" id="f-distance" min="0" max="1000" step="1" value="0">
+    </div>
+    <dl class="figures">
+      <div><dt>Window at d</dt><dd id="f-window"></dd></div>
+      <div><dt>Inverse square in the window</dt><dd id="f-new"></dd></div>
+      <div><dt>Tutorial curve, old intensity</dt><dd id="f-tutorial"></dd></div>
+    </dl>
+    <p class="readout" id="f-note" aria-live="polite" style="margin-top:12px"></p>
+    <figcaption><b>Live demo.</b> The illuminance a point light gives a surface facing it, against distance, both axes logarithmic: inverse square inside KHR_lights_punctual's window, the same without the window, and the old tutorial curve at the old intensity. The window reaches exactly 0 at the range, where the curve leaves the chart; past it the light adds exactly 0. Below 1 cm the new curves are flat, since distance² is held at 1 cm² as in the shader. The presets are #247's scene values: the coloured lights went from intensity 1 to 9 with a range of 20 m, and minification's light from 30 to 300 with a range of 200 m. Values stay relative until #200. Simplified: the page computes in f64, and leaves out N·L and the BRDF, so this is the illuminance on a surface turned to face the light.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="ambient">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 9 · PR #247</div>
+    <h2>Ambient and background</h2>
+    <p>Before #199 the ambient term was a constant in the shader, 0.03 × base colour × occlusion, while the light uniform's ambient field was, in spec #188's words, "uploaded but never read". The background, the lit pass's clear colour, was a constant in <code>main_pass.rs</code>, (0.1, 0.2, 0.3).</p>
+    <p>#247 gives each <span class="concept" data-tip="A serialisable set of entities and their hierarchy that loads into the ECS World. Not the whole Game world.">Scene</span> an <span class="concept" data-tip="The resource in the ECS World that holds a Scene's ambient illuminance and background luminance; prepare copies it into Frame data each frame.">Environment</span>, a resource in the <span class="concept" data-tip="The container of entities, components and resources. A code concept, never the playable space.">ECS World</span> with a feature module of its own, <code>src/environment/</code>. It holds two of ADR 0023's quantities: the <span class="concept" data-tip="The illuminance every surface receives from all around, constant per Reference scene until ADR 0020's irradiance probes replace it." data-term="Ambient illuminance">ambient illuminance</span>, light every surface receives from all around, and the <span class="concept" data-tip="The luminance seen wherever nothing is drawn: the lit pass's clear colour." data-term="Background luminance">background luminance</span>, seen wherever nothing is drawn. Its default is dark. Each <span class="concept" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines." data-term="Reference scene">Reference scene</span> sets its own; prepare reads it once a frame and copies it into <span class="concept" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span>, into <code>LightUniform.ambient_illuminance</code>, which replaces the unread field, and into <code>FrameData::background</code>, the lit pass's clear colour. These are scene content: the glossary keeps ambient and background out of the <span class="concept" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch." data-term="Render switches">Render switches</span>.</p>
+    <p>The lit pass adds <code>ambient_luminance</code>: E/π times the base colour, darkened by <span class="concept" data-tip="The occlusion Channel's value: how much indirect light reaches a point. glTF applies it to ambient light only; direct light is not affected." data-term="Occlusion">occlusion</span>. Under light of the same luminance L from every direction, the illuminance on a surface is E = πL (PBR, §5.5), so E/π is the luminance of the surroundings, and a surface sends back its directional albedo of it. The ambient term takes that albedo to be the base colour, which is about what a white-lit dielectric's diffuse lobe reflects, and about what a smooth or moderately rough metal reflects through its specular lobe, its F0 being its base colour. A rough metal reflects less under Appendix B's one-bounce BRDF, a white one at roughness 1 as little as 0.31 of what it receives seen head-on (chapter 7), so there the ambient term lights it about three times as much as its BRDF would.</p>
+    <p>Metals get the ambient too. It stands in for ADR 0020's <span class="concept" data-tip="ADR 0020's ray-traced store of the light arriving at points around the camera, from which the lit pass will read indirect light (M5)." data-term="Irradiance probe">irradiance probes</span>, which arrive in M5, and ADR 0020 has "Rough specular reads the irradiance probes", so the probes will light metals as well. #247's first form lit only the dielectric's diffuse share; review restored the metals, which the old 0.03 term had lit. glTF applies occlusion to indirect light only: the occlusion texture marks "areas that receive less indirect lighting from ambient sources. Direct lighting is not affected."</p>
+    <h3>The scenes' values</h3>
+    <p>The new values are relative, like the old ones, until #200 re-authors every light, ambient and background in ADR 0023's units and gives each scene an <span class="concept" data-tip="Exposure value at ISO 100. ADR 0023 scales luminance by 1/(1.2 · 2^EV100) so that 1.0 lands near display white." data-term="EV100">EV100</span>; <a href="hdr-pipeline.html">HDR Pipeline Explained</a> covers that step. Until then #247 keeps each subject lit about as before:</p>
+    <ul class="keypoints">
+      <li>Ambient illuminance is 0.1 in every scene, a tenth of the sun's, whose illuminance is 1. Against the old 0.03, 0.1/π ≈ 0.032 moved far-coplanar and texture-wall by at most one step, inside tolerance.</li>
+      <li>The background stays (0.1, 0.2, 0.3), so background pixels do not change. It came from learn-wgpu's clear colour (MIT); review kept it as an authored per-scene value for #200 to re-author in cd/m².</li>
+      <li>The four coloured lights rise from intensity 1 to 9 and reach 20 m. At 3 m that gives the sun's illuminance, where the tutorial falloff gave 0.64 of it. Under inverse square, the old intensity would have left them at about a sixth of their old illuminance on the spheres.</li>
+      <li>minification's light rises from 30 to 300, which keeps its glint, and reaches 200 m, past the floor's far corners 83 m away.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="chapter" id="images">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 10 · all four PRs</div>
+    <h2>What the images show</h2>
+    <p>Each PR that changes an image carries before, after and difference images of the Metal <span class="concept" data-tip="A committed image that a Reference scene must reproduce within tolerance." data-term="Golden">Goldens</span>, and of the helmet, which has no Golden. A Golden matches when no channel of any pixel moves by more than one 8-bit step; the PRs count the pixels past that and give the largest move, in steps. The software-Vulkan Goldens come from CI. The owner judged the images at visual check 2, on #256, #200's last PR, together with HDR, and accepted them on 2026-10-22.</p>
+    <ul class="keypoints">
+      <li><b>#243</b>: no image changes; every Metal Golden stayed byte-identical.</li>
+      <li><b><a href="https://github.com/gariasf/praxis/pull/245">#245</a>, D and V</b>: highlights. minification's glint widens at grazing (85,143 pixels, up to 115 steps), pbr-sweep's highlights move (13,217 pixels, up to 72), and normal-tangent's (1,961, up to 136); the helmet moves 80,922 pixels by up to 85; uv-grid (21,798, up to 4), orrery (2,236, up to 10) and far-coplanar (3,059, up to 2) move too.</li>
+      <li><b><a href="https://github.com/gariasf/praxis/pull/246">#246</a>, the mix</b>: silhouettes, mostly on metals: pbr-sweep 70 pixels by up to 8, normal-tangent's metal column 160 by up to 14, and the helmet 1,727 by up to 23, at its silhouettes and where its metallic is fractional.</li>
+      <li><b><a href="https://github.com/gariasf/praxis/pull/247">#247</a>, falloff and ambient</b>: most scenes. minification's glint under inverse square (104,803 pixels, up to 91), pbr-sweep (35,026, up to 83), uv-grid (67,119, up to 55), normal-tangent (45,353, up to 64), orrery (8,530, up to 64) and the helmet (196,614, up to 84); far-coplanar and texture-wall move by at most 1.</li>
+    </ul>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Scene, #199 as a whole</th><th class="n">Pixels past tolerance</th><th class="n">Largest move</th><th>Images</th></tr></thead>
+        <tbody>
+          <tr><td>pbr-sweep</td><td class="n">36,127</td><td class="n">90</td><td><a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-pbr-sweep-before.png">before</a> · <a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-pbr-sweep-after.png">after</a> · <a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-pbr-sweep-difference.png">difference</a></td></tr>
+          <tr><td>uv-grid</td><td class="n">67,186</td><td class="n">55</td><td><a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-uv-grid-before.png">before</a> · <a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-uv-grid-after.png">after</a> · <a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-uv-grid-difference.png">difference</a></td></tr>
+          <tr><td>normal-tangent</td><td class="n">45,898</td><td class="n">157</td><td><a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-normal-tangent-before.png">before</a> · <a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-normal-tangent-after.png">after</a> · <a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-normal-tangent-difference.png">difference</a></td></tr>
+          <tr><td>far-coplanar</td><td class="n">8,610</td><td class="n">2</td><td><a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-far-coplanar-before.png">before</a> · <a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-far-coplanar-after.png">after</a> · <a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-far-coplanar-difference.png">difference</a></td></tr>
+          <tr><td>orrery</td><td class="n">8,563</td><td class="n">65</td><td><a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-orrery-before.png">before</a> · <a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-orrery-after.png">after</a> · <a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-orrery-difference.png">difference</a></td></tr>
+          <tr><td>minification</td><td class="n">54,354</td><td class="n">75</td><td><a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-minification-before.png">before</a> · <a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-minification-after.png">after</a> · <a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-minification-difference.png">difference</a></td></tr>
+          <tr><td>texture-wall</td><td class="n">none</td><td class="n">1</td><td><a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-texture-wall-before.png">before</a> · <a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-texture-wall-after.png">after</a> · <a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-texture-wall-difference.png">difference</a></td></tr>
+          <tr><td>helmet, no Golden, 1280×720</td><td class="n">204,826</td><td class="n">84</td><td><a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-helmet-before.png">before</a> · <a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/helmet-after.png">after</a> · <a href="https://raw.githubusercontent.com/gariasf/praxis/418b9b38b6ffe22a6a5188bb49e9bd55132cfc1e/247/all-helmet-difference.png">difference</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>#199 as a whole</b>, from <a href="https://github.com/gariasf/praxis/pull/247">PR #247</a>'s table for visual check 2: before is main at fe08baa, after is #247's head. Each difference image dims the after image and marks in red each pixel with a channel past one step. Each PR's own table, linked above, has its part alone.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="cost">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 11 · PR #247</div>
+    <h2>What it costs</h2>
+    <p>The ticket names one metric that must not regress: "GPU time of the lit pass (delta reported)". Each part was measured against the part before on the <span class="concept" data-tip="The Apple M4 Pro on which the project's Budgets are judged and its Baselines recorded; wgpu runs on Metal there.">M4 Pro</span> at 2560×1440, in <span class="concept" data-tip="Runs of the two builds alternated on one machine, round after round, so that a change in load or temperature affects both alike." data-term="Interleaved rounds">interleaved rounds</span>, and parts 1 to 3 stayed within the sessions' spread. For #199 as a whole, #247 ran four interleaved rounds of main before #199, at fe08baa, and of its own shading:</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Scene</th><th class="n">Before #199, µs</th><th class="n">After #199, µs</th><th class="n">Delta, µs</th></tr></thead>
+        <tbody>
+          <tr class="focus"><td>far-coplanar</td><td class="n">494.8 [0.9]</td><td class="n">501.2 [1.3]</td><td class="n">+6.5 (+1.3%)</td></tr>
+          <tr class="focus"><td>helmet</td><td class="n">623.4 [1.8]</td><td class="n">630.8 [2.5]</td><td class="n">+7.4 (+1.2%)</td></tr>
+          <tr><td>minification</td><td class="n">552.5 [1.6]</td><td class="n">552.0 [1.0]</td><td class="n">−0.5</td></tr>
+          <tr><td>normal-tangent</td><td class="n">392.0 [4.8]</td><td class="n">394.0 [5.4]</td><td class="n">+2.0</td></tr>
+          <tr><td>orrery</td><td class="n">272.1 [7.5]</td><td class="n">271.1 [5.5]</td><td class="n">−0.9</td></tr>
+          <tr class="focus"><td>pbr-sweep</td><td class="n">363.2 [8.6]</td><td class="n">367.5 [3.7]</td><td class="n">+4.2 (+1.2%)</td></tr>
+          <tr><td>texture-wall</td><td class="n">924.5 [0.5]</td><td class="n">925.0 [1.9]</td><td class="n">+0.5</td></tr>
+          <tr><td>uv-grid</td><td class="n">363.4 [18.8]</td><td class="n">366.4 [2.8]</td><td class="n">+3.1</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>Lit pass GPU time</b>, from PR #247's Metrics: the <span class="concept" data-tip="The middle value once the frames' times are sorted, so a few slow frames barely move it." data-term="Median">median</span> of the rounds' medians, with the spread between rounds in brackets, as the PR gives them; its deltas can differ by 0.1 µs from the difference of the rounded medians shown. The highlighted rows are the three the PR asked the owner to accept.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The PRs' focused rounds show where the time went:</p>
+    <ul class="keypoints">
+      <li>Part 3's gathering by lobe won back up to 25 µs that the mix as Appendix B writes it cost (chapter 6).</li>
+      <li>Part 4 alone adds 2 to 7 µs over #246 on the five heaviest scenes.</li>
+      <li>Part 4's first form, a guard on the normalised direction, cost 6 to 8 µs more; working in distance² removed that (chapter 8).</li>
+      <li>Counters are unchanged on both adapters' <span class="concept" data-tip="The recorded measurements of a Reference scene on one adapter: the reference machine, where Budgets are judged against it, or CI's lavapipe, where only its counters are judged." data-term="Baseline">Baselines</span>.</li>
+    </ul>
+    <p>#247 asked the project's owner to accept one cost: +6.5 µs (1.3%) on far-coplanar, +7.4 µs (1.2%) on helmet and +4.2 µs (1.2%) on pbr-sweep, and at most +3.1 µs elsewhere. In return, in the PR's words, #199 "buys Appendix B's exact mix and height-correlated V, KHR_lights_punctual's range window, ambient on metals, and finite results at a light and at L = −V". Its recommendation was to accept, and the owner accepted on 2026-10-22. For scale, ADR 0019 reopens if the opaque main pass, timed from the first culling dispatch to the end of the lit pass, takes more than 6 ms of GPU at 1440p; the lit pass alone measures 0.27 to 0.93 ms in these scenes.</p>
+  </div>
+</section>
+
+<section class="chapter" id="next">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 12</div>
+    <h2>What comes next</h2>
+    <ul class="keypoints">
+      <li><b><a href="https://github.com/gariasf/praxis/issues/200">#200</a></b>, HDR, exposure and tonemapping, implements #189's decision: a manual <span class="concept" data-tip="Exposure value at ISO 100. ADR 0023 scales luminance by 1/(1.2 · 2^EV100) so that 1.0 lands near display white." data-term="EV100">EV100</span> per Reference scene, the GT7 operator, an <code>Rgba16Float</code> target that the lit pass writes as c / (1 + luminance) and the final pass inverts, a blue-noise dither, no bloom and an SDR display. It moves every scene's lights, ambient and background to ADR 0023's units, and its PR carries visual check 2 for #199. <a href="hdr-pipeline.html">HDR Pipeline Explained</a> walks through the decision. (#200 landed on 2026-10-22 in PRs #250 to #256; #256, the last, carried visual check 2, and the owner accepted it that day. <a href="tonemapping-pass.html">Tonemapping Pass Explained</a> walks through the PRs.)</li>
+      <li><b><a href="https://github.com/gariasf/praxis/issues/201">#201</a></b> replaces the light uniform's four point lights with <span class="concept" data-tip="A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it." data-term="Froxel">Froxel</span> light lists. Each light's range lets it cull them and still match lighting every pixel with every light, within Golden tolerance, as #201 requires. (#201 landed on 2026-10-23 in PRs #261 to #263, which also moved every light into a light buffer; <a href="froxel-lights.html">Froxel Lights Explained</a> walks through them.)</li>
+      <li><b><a href="https://github.com/gariasf/praxis/issues/203">#203</a> and <a href="https://github.com/gariasf/praxis/issues/205">#205</a></b> trace shadow rays from the lit pass, for the sun and for point lights, as ADR 0020 decides: one hard shadow ray per pixel per light. Until then nothing casts a shadow. (#258 and #265 traced them inline in the lit pass on 2026-10-23; since #277, the PR for ticket #260, merged the same day as bd7b988, a compute pass traces them from the depth target into a shadow mask that the lit pass reads. <a href="shadow-rays.html">Shadow Rays Explained</a> walks through them.)</li>
+      <li><b>M5</b>'s <span class="concept" data-tip="ADR 0020's ray-traced store of the light arriving at points around the camera, from which the lit pass will read indirect light (M5)." data-term="Irradiance probe">irradiance probes</span> replace the constant ambient, and M6's atmosphere the background, as <code>src/environment/mod.rs</code> records.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Every link resolved when the guide was written. Repo links are pinned to 6764239, #247's last code commit, and specification links to the commits named.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>This ticket and its PRs</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/pull/243">PR #243</a> <span>the surface decode and the renames</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/245">PR #245</a> <span>D, V and the f32 denominator; its images</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/246">PR #246</a> <span>the mix gathered by lobe, reciprocity, the white furnace</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/247">PR #247</a> <span>falloff, Environment, the scenes' values, the cost the owner accepted</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/199">Ticket #199</a>, its <a href="https://github.com/gariasf/praxis/issues/199#issuecomment-6275847192">architecture review</a> and its <a href="https://github.com/gariasf/praxis/issues/199#issuecomment-6335214796">split</a> <span>the ask, the per-light function, the four parts</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/188">Spec #188</a> <span>M3's stories 21 to 25 on the lit pass</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/6764239b7bd5d54222680e462132191a3b5d7c8a/src/render/shaders/shading.wgsl">shading.wgsl</a> and <a href="https://github.com/gariasf/praxis/blob/6764239b7bd5d54222680e462132191a3b5d7c8a/src/render/shaders/main.wgsl">main.wgsl</a> <span>the terms and the entry point</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/6764239b7bd5d54222680e462132191a3b5d7c8a/src/render/shader_function_tests.rs">shader_function_tests.rs</a> <span>every oracle and its f64 reference</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/6764239b7bd5d54222680e462132191a3b5d7c8a/docs/adr/0023-lights-are-photometric-as-gltf-defines-them.md">ADR 0023</a> <span>photometric units and EV100</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/6764239b7bd5d54222680e462132191a3b5d7c8a/docs/adr/0020-ray-traced-probe-gi-and-hard-ray-traced-shadows.md">ADR 0020</a> <span>the probes the ambient stands in for</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/6764239b7bd5d54222680e462132191a3b5d7c8a/docs/adr/0019-clustered-forward-main-pass-with-4x-msaa.md">ADR 0019</a> <span>the lit pass's place in the main pass</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Specifications</h3>
+      <ul>
+        <li>glTF 2.0, <a href="https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#appendix-b-brdf-implementation">Appendix B: BRDF Implementation</a> <span>the published 2.0.1 text: the material model, D, F, the separable V, a simplified mix and the coupling caveat</span></li>
+        <li>Its <a href="https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc?plain=1#L3513-L3906">AsciiDoc source</a> at 7cee0fc <span>Appendix B as of 2026: the height-correlated V, the full code and the α = 0 note; CC BY 4.0</span></li>
+        <li>glTF 2.0, <a href="https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#additional-textures">Additional Textures</a> <span>occlusion applies to indirect light only</span></li>
+        <li><a href="https://github.com/KhronosGroup/glTF/blob/854a757a61e6bc0dde91631579b9d3d2e1743df9/extensions/2.0/Khronos/KHR_lights_punctual/README.md">KHR_lights_punctual</a> <span>candela and lux, the range, the recommended window</span></li>
+        <li>WGSL, <a href="https://www.w3.org/TR/WGSL/#pow-builtin">§17.5.46 pow</a> and <a href="https://www.w3.org/TR/WGSL/#overview-of-ieee-754">§15.7.1</a> <span>why a negative base is avoided</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Papers and course notes</h3>
+      <ul>
+        <li>Walter, Marschner, Li and Torrance, <a href="https://www.cs.cornell.edu/~srm/publications/EGSR07-btdf.html">Microfacet Models for Refraction through Rough Surfaces</a>, EGSR 2007 <span>GGX; eq. 4, the normalisation; eq. 33, D; eq. 35, its sampling</span></li>
+        <li>Heitz, <a href="https://jcgt.org/published/0003/02/03/">Understanding the Masking-Shadowing Function in Microfacet-Based BRDFs</a>, JCGT 2014 <span>§3.5 the white furnace tests; §6 the height-correlated form</span></li>
+        <li>Burley, <a href="https://blog.selfshadow.com/publications/s2012-shading-course/burley/s2012_pbs_disney_brdf_notes_v3.pdf">Physically-Based Shading at Disney</a>, 2012 <span>metallic as a blend, α = roughness², the G remap</span></li>
+        <li>Karis, <a href="https://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf">Real Shading in Unreal Engine 4</a>, 2013 <span>p. 3, where the remap is too dark</span></li>
+        <li>Lagarde and de Rousiers, <a href="https://seblagarde.wordpress.com/2015/07/14/siggraph-2014-moving-frostbite-to-physically-based-rendering/">Moving Frostbite to Physically Based Rendering</a>, 2014 <span>§4.3 light units; §4.4 punctual lights and their 1 cm size</span></li>
+        <li>Kulla and Conty, <a href="https://blog.selfshadow.com/publications/s2017-shading-course/imageworks/s2017_pbs_imageworks_slides_v2.pdf">Revisiting Physically Based Shading at Imageworks</a>, 2017 <span>an energy-conserving coupling, which Appendix B cites</span></li>
+        <li>Google, <a href="https://google.github.io/filament/Filament.md.html">Physically Based Rendering in Filament</a> <span>"Attenuation function": the 1 cm sphere and a squared window</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Books</h3>
+      <ul>
+        <li><a href="https://www.routledge.com/Real-Time-Rendering-Fourth-Edition/Akenine-Moller-Haines-Hoffman/p/book/9781138627000"><i>Real-Time Rendering</i></a>, 4th ed., by its <a href="https://www.realtimerendering.com/Real-Time_Rendering_4th-TOC_Preface_Intro_Bib_Index.pdf">table of contents</a>: §8.1 Light Quantities (p. 267); ch. 9 Physically Based Shading, §9.3 The BRDF (p. 308), §9.5 Fresnel Reflectance (p. 316), §9.7 Microfacet Theory (p. 331), §9.8 BRDF Models for Surface Reflection (p. 336)</li>
+        <li><i>Physically Based Rendering</i>, 3rd ed.: <a href="https://pbr-book.org/3ed-2018/Color_and_Radiometry/Working_with_Radiometric_Integrals">§5.5</a>, E = πL under uniform light; <a href="https://pbr-book.org/3ed-2018/Color_and_Radiometry/Surface_Reflection">§5.6.1 The BRDF</a>, reciprocity and energy conservation; ch. 8 <a href="https://pbr-book.org/3ed-2018/Reflection_Models">Reflection Models</a>, <a href="https://pbr-book.org/3ed-2018/Reflection_Models/Basic_Interface">§8.1.1 Reflectance</a> and <a href="https://pbr-book.org/3ed-2018/Reflection_Models/Microfacet_Models">§8.4 Microfacet Models</a></li>
+        <li><i>Physically Based Rendering</i>, 4th ed.: <a href="https://pbr-book.org/4ed/Radiometry,_Spectra,_and_Color/Surface_Reflection">§4.3 Surface Reflection</a>; ch. 9 <a href="https://pbr-book.org/4ed/Reflection_Models">Reflection Models</a>, <a href="https://pbr-book.org/4ed/Reflection_Models/BSDF_Representation">§9.1.3 Hemispherical Reflectance</a> and <a href="https://pbr-book.org/4ed/Reflection_Models/Roughness_Using_Microfacet_Theory">§9.6 Roughness Using Microfacet Theory</a></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Lit pass</dt><dd>ADR 0019's shading pass, run at depth equal after the depth pre-pass.</dd></div>
+    <div><dt>BRDF</dt><dd>For a pair of directions, the luminance reflected towards one per unit of illuminance from the other; per steradian.</dd></div>
+    <div><dt>Illuminance</dt><dd>Light arriving at a surface, in lux (lm/m²).</dd></div>
+    <div><dt>Luminance</dt><dd>Light leaving a surface in one direction, in cd/m²: what a pixel shows.</dd></div>
+    <div><dt>Luminous intensity</dt><dd>Light a point source sends per steradian, in candela (lm/sr).</dd></div>
+    <div><dt>Half vector H</dt><dd>normalize(L + V); the normal of the facets that mirror L into V.</dd></div>
+    <div><dt>Reciprocity</dt><dd>f(L, V) = f(V, L).</dd></div>
+    <div><dt>Directional albedo</dt><dd>What a surface reflects towards one view under uniform light, as a share of what it receives.</dd></div>
+    <div><dt>White furnace</dt><dd>A uniformly lit white surface; one that conserves energy reflects at most 1.</dd></div>
+    <div><dt>Dielectric</dt><dd>A non-metal: F0 = 0.04, a specular lobe over a diffuse one in its base colour.</dd></div>
+    <div><dt>Metal</dt><dd>A specular lobe alone, F0 its base colour.</dd></div>
+    <div><dt>F0</dt><dd>Reflectance at normal incidence.</dd></div>
+    <div><dt>Fresnel term F</dt><dd>F0 + (1 − F0)(1 − |V·H|)⁵, Schlick's approximation.</dd></div>
+    <div><dt>Microfacet</dt><dd>One of the tiny mirrors a rough surface is modelled as.</dd></div>
+    <div><dt>D</dt><dd>Trowbridge-Reitz (GGX): how densely the facets face H.</dd></div>
+    <div><dt>α</dt><dd>roughness², the width of D and V.</dd></div>
+    <div><dt>Roughness floor</dt><dd>0.04, below which <code>decode_surface</code> raises roughness.</dd></div>
+    <div><dt>V</dt><dd>Height-correlated Smith masking-shadowing over 4 |N·L| |N·V|.</dd></div>
+    <div><dt>Gathered by lobe</dt><dd>The mix as one diffuse and one specular lobe, F at the mixed F0.</dd></div>
+    <div><dt>Diffuse share</dt><dd>(1 − metallic)(1 − F)/π, with the dielectric's F.</dd></div>
+    <div><dt>Oracle</dt><dd>A test that runs a shader function on the GPU against values worked out apart.</dd></div>
+    <div><dt>Punctual light</dt><dd>An infinitely small light: directional, point or spot.</dd></div>
+    <div><dt>Range window</dt><dd>max(min(1 − (d/r)⁴, 1), 0): exactly 0 from the range on.</dd></div>
+    <div><dt>Environment</dt><dd>A Scene's ambient illuminance and background luminance, in the ECS World.</dd></div>
+    <div><dt>Golden</dt><dd>A committed image that a Reference scene must reproduce within tolerance.</dd></div>
+    <div><dt>Reference scene</dt><dd>A Scene with a fixed camera path and injected time, the same frames every run.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from <a href="https://github.com/gariasf/praxis/pull/243">PR #243</a> (merged as 05ebea3), <a href="https://github.com/gariasf/praxis/pull/245">#245</a> (a5bfa81), <a href="https://github.com/gariasf/praxis/pull/246">#246</a> (877ea94) and <a href="https://github.com/gariasf/praxis/pull/247">#247</a> (db3ef10; read at its last code commit, 6764239), with ticket <a href="https://github.com/gariasf/praxis/issues/199">#199</a> and its comments, spec #188 and ADRs 0019, 0020 and 0023. Code facts were read at 6764239, and pre-#199 code at fe08baa. Appendix B is quoted from the glTF 2.0 specification's AsciiDoc source at 7cee0fc (Khronos, CC BY 4.0), KHR_lights_punctual from its README, and the other sources as linked. Where the guide does its own arithmetic, it says so. The demos implement <code>shading.wgsl</code>'s formulas in f64 and say where they simplify.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="instance-culling.html">Previous: Instance Culling Explained</a><a href="index.html">All field guides</a><a href="tonemapping-pass.html">Next: Tonemapping Pass Explained</a></nav>
+</div>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const byId = (id) => document.getElementById(id);
+
+  // <pure> The shading terms as src/render/shaders/shading.wgsl writes them, in f64, and what the demos make of them.
+  const PI = Math.PI;
+  const DIELECTRIC_BASE_REFLECTANCE = 0.04;
+  const MINIMUM_ROUGHNESS = 0.04;
+  const MINIMUM_LIGHT_DISTANCE_SQUARED = 1e-4;
+  const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+  // WGSL's mix(a, b, t): a × (1 − t) + b × t.
+  const mix = (first, second, weight) => first * (1 - weight) + second * weight;
+  const dot = (first, second) => first[0] * second[0] + first[1] * second[1] + first[2] * second[2];
+  // decode_surface's floor.
+  const decodedRoughness = (roughness) => Math.max(roughness, MINIMUM_ROUGHNESS);
+  function fresnelWeight(viewDotHalf) {
+    const complement = 1 - Math.abs(viewDotHalf);
+    const complementSquared = complement * complement;
+    return complementSquared * complementSquared * complement;
+  }
+  function distributionGgx(normalDotHalf, alpha) {
+    const alphaSquared = alpha * alpha;
+    const denominator = normalDotHalf * normalDotHalf * alphaSquared + (1 - normalDotHalf) * (1 + normalDotHalf);
+    const distribution = alphaSquared / (PI * denominator * denominator);
+    return normalDotHalf > 0 ? distribution : 0;
+  }
+  function smithVisibility(normalDotLight, normalDotView, viewDotHalf, alpha) {
+    const alphaSquared = alpha * alpha;
+    const shadowingTerm = Math.abs(normalDotView) * Math.sqrt(alphaSquared + (1 - alphaSquared) * normalDotLight * normalDotLight);
+    const maskingTerm = Math.abs(normalDotLight) * Math.sqrt(alphaSquared + (1 - alphaSquared) * normalDotView * normalDotView);
+    const denominator = 2 * (shadowingTerm + maskingTerm);
+    return viewDotHalf > 0 && denominator > 0 ? 1 / denominator : 0;
+  }
+  // metallic_roughness_brdf for one channel of the base colour, with its terms and its two lobes apart.
+  function brdfChannel(baseColor, metallic, roughness, normalDotLight, normalDotView, normalDotHalf, viewDotHalf) {
+    const alpha = roughness * roughness;
+    const distribution = distributionGgx(normalDotHalf, alpha);
+    const visibility = smithVisibility(normalDotLight, normalDotView, viewDotHalf, alpha);
+    const weight = fresnelWeight(viewDotHalf);
+    const dielectricFresnel = DIELECTRIC_BASE_REFLECTANCE + (1 - DIELECTRIC_BASE_REFLECTANCE) * weight;
+    const diffuseShare = (1 - metallic) * (1 - dielectricFresnel) / PI;
+    const baseReflectance = mix(DIELECTRIC_BASE_REFLECTANCE, baseColor, metallic);
+    const specularFresnel = baseReflectance + (1 - baseReflectance) * weight;
+    return {
+      alpha: alpha, distribution: distribution, visibility: visibility, weight: weight,
+      diffuseShare: diffuseShare, specularFresnel: specularFresnel,
+      diffuse: diffuseShare * baseColor, specular: specularFresnel * distribution * visibility,
+    };
+  }
+  // reflected_luminance's H: normalize(L + V), left zero where L and V are opposite.
+  function halfVector(light, view) {
+    const sum = [light[0] + view[0], light[1] + view[1], light[2] + view[2]];
+    const scale = 1 / Math.sqrt(Math.max(dot(sum, sum), 1e-30));
+    return [sum[0] * scale, sum[1] * scale, sum[2] * scale];
+  }
+  // The cosines every term reads, for unit directions around the normal +Z.
+  function cosines(light, view) {
+    const half = halfVector(light, view);
+    return { normalDotLight: light[2], normalDotView: view[2], normalDotHalf: half[2], viewDotHalf: dot(view, half) };
+  }
+  // A direction in the plane of incidence, `angle` radians from the normal, positive towards +X.
+  const planeDirection = (angle) => [Math.sin(angle), 0, Math.cos(angle)];
+  function pointLightAttenuation(distanceSquared, range) {
+    const ratioSquared = distanceSquared / (range * range);
+    const window = clamp(1 - ratioSquared * ratioSquared, 0, 1);
+    return window / distanceSquared;
+  }
+  // point_light_luminance's illuminance on a surface facing the light, distance² held at 1 cm².
+  const pointLightIlluminance = (intensity, distance, range) => intensity * pointLightAttenuation(Math.max(distance * distance, MINIMUM_LIGHT_DISTANCE_SQUARED), range);
+  const inverseSquareIlluminance = (intensity, distance) => intensity / Math.max(distance * distance, MINIMUM_LIGHT_DISTANCE_SQUARED);
+  // The old lit pass's falloff, at fe08baa.
+  const tutorialIlluminance = (intensity, distance) => intensity / (1 + 0.09 * distance + 0.032 * distance * distance);
+  const rangeWindow = (distance, range) => clamp(1 - Math.pow(distance / range, 4), 0, 1);
+  // A white surface's directional albedo seen `viewAngle` off its normal, ∫ f(L, V) (N·L)⁺ dω over the
+  // hemisphere, for a white metal and a white dielectric at once. Each lobe is summed on its own grid of
+  // cell midpoints, each sample weighted by one over its density: the diffuse lobe over light directions
+  // spread as cos θ / π, the specular lobe over half vectors spread as D (N·H) (Walter et al. 2007,
+  // eq. 35), each light the view mirrored about its half vector (eq. 39), so a narrow lobe is not
+  // missed. Azimuths span half the circle; the plane of V mirrors the other half.
+  function whiteFurnace(roughness, viewAngle, grid) {
+    const alpha = roughness * roughness;
+    const view = planeDirection(viewAngle);
+    let dielectricDiffuse = 0;
+    for (let polarStep = 0; polarStep < grid.diffusePolar; polarStep++) {
+      const position = (polarStep + 0.5) / grid.diffusePolar;
+      const sinPolar = Math.sqrt(position);
+      const cosPolar = Math.sqrt(1 - position);
+      for (let azimuthStep = 0; azimuthStep < grid.diffuseAzimuth; azimuthStep++) {
+        const azimuth = PI * (azimuthStep + 0.5) / grid.diffuseAzimuth;
+        const light = [sinPolar * Math.cos(azimuth), sinPolar * Math.sin(azimuth), cosPolar];
+        const c = cosines(light, view);
+        const dielectric = brdfChannel(1, 0, roughness, c.normalDotLight, c.normalDotView, c.normalDotHalf, c.viewDotHalf);
+        dielectricDiffuse += dielectric.diffuse * PI;
+      }
+    }
+    dielectricDiffuse /= grid.diffusePolar * grid.diffuseAzimuth;
+    let metalSpecular = 0;
+    let dielectricSpecular = 0;
+    for (let polarStep = 0; polarStep < grid.specularPolar; polarStep++) {
+      const position = (polarStep + 0.5) / grid.specularPolar;
+      const polar = Math.atan(alpha * Math.sqrt(position / (1 - position)));
+      const sinPolar = Math.sin(polar);
+      const cosPolar = Math.cos(polar);
+      for (let azimuthStep = 0; azimuthStep < grid.specularAzimuth; azimuthStep++) {
+        const azimuth = PI * (azimuthStep + 0.5) / grid.specularAzimuth;
+        const half = [sinPolar * Math.cos(azimuth), sinPolar * Math.sin(azimuth), cosPolar];
+        const viewDotHalf = dot(view, half);
+        if (viewDotHalf <= 0) continue;
+        const light = [2 * viewDotHalf * half[0] - view[0], 2 * viewDotHalf * half[1] - view[1], 2 * viewDotHalf * half[2] - view[2]];
+        if (light[2] <= 0) continue;
+        const density = distributionGgx(half[2], alpha) * half[2] / (4 * viewDotHalf);
+        if (!(density > 0)) continue;
+        const c = cosines(light, view);
+        const metal = brdfChannel(1, 1, roughness, c.normalDotLight, c.normalDotView, c.normalDotHalf, c.viewDotHalf);
+        const dielectric = brdfChannel(1, 0, roughness, c.normalDotLight, c.normalDotView, c.normalDotHalf, c.viewDotHalf);
+        metalSpecular += metal.specular * light[2] / density;
+        dielectricSpecular += dielectric.specular * light[2] / density;
+      }
+    }
+    const samples = grid.specularPolar * grid.specularAzimuth;
+    return { metal: metalSpecular / samples, dielectricDiffuse: dielectricDiffuse, dielectricSpecular: dielectricSpecular / samples };
+  }
+  const CURVE_GRID = { diffusePolar: 32, diffuseAzimuth: 32, specularPolar: 192, specularAzimuth: 48 };
+  const READOUT_GRID = { diffusePolar: 64, diffuseAzimuth: 64, specularPolar: 1024, specularAzimuth: 128 };
+  // </pure>
+
+  /* Numbers as the page prints them. */
+  function format(value) {
+    if (!Number.isFinite(value)) return String(value);
+    if (value === 0) return "0";
+    const size = Math.abs(value);
+    if (size >= 1e5 || size < 1e-3) {
+      const [mantissa, exponent] = value.toExponential(2).split("e");
+      return mantissa + "×10" + superscript(Number(exponent));
+    }
+    return Number(value.toPrecision(4)).toLocaleString("en-GB", { maximumSignificantDigits: 4 }).replace("-", "−");
+  }
+  const signed = (value) => (value < 0 ? "−" + Math.abs(value) : String(value));
+  const SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+  const superscript = (number) => String(number).split("").map((character) => (character === "-" ? "⁻" : SUPERSCRIPT_DIGITS[Number(character)])).join("");
+  const triple = (values) => values.map(format).join(" · ");
+
+  /* Theme: every drawing reads the colour tokens when it draws, and redraws when the theme changes. */
+  const redrawers = [];
+  const redrawAll = () => {
+    for (const redraw of redrawers) redraw();
+  };
+  function readTokens() {
+    const style = getComputedStyle(document.documentElement);
+    const token = (name) => style.getPropertyValue(name).trim();
+    return {
+      panel: token("--panel"), paper: token("--paper"), ink: token("--ink"), inkSoft: token("--ink-soft"),
+      rule: token("--rule"), accent: token("--accent"), accentWash: token("--accent-wash"), warm: token("--warm"),
+      bad: token("--bad"), good: token("--good"), mono: token("--mono"),
+    };
+  }
+  if (window.matchMedia) {
+    const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    if (darkQuery.addEventListener) darkQuery.addEventListener("change", redrawAll);
+    else if (darkQuery.addListener) darkQuery.addListener(redrawAll);
+  }
+  if (window.MutationObserver) {
+    new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawAll);
+
+  /* Sizing: each drawing takes its container's width and redraws when that width changes. */
+  function watchWidth(container, render) {
+    redrawers.push(render);
+    if (window.ResizeObserver) {
+      let lastWidth = -1;
+      new ResizeObserver(() => {
+        const width = container.clientWidth;
+        if (width !== lastWidth) {
+          lastWidth = width;
+          render();
+        }
+      }).observe(container);
+    } else {
+      window.addEventListener("resize", render);
+    }
+    render();
+  }
+  function canvasView(canvas, aspect, minimumHeight) {
+    const width = Math.max(1, canvas.parentElement.clientWidth);
+    const height = Math.max(minimumHeight || 0, Math.round(width * aspect));
+    const ratio = window.devicePixelRatio || 1;
+    canvas.style.width = width + "px";
+    canvas.style.height = height + "px";
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    const context = canvas.getContext("2d");
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    return { context: context, width: width, height: height };
+  }
+  function setPressed(buttons, isPressed) {
+    for (const button of buttons) button.setAttribute("aria-pressed", String(isPressed(button)));
+  }
+  // Coalesces bursts of input into one update per animation frame.
+  function throttled(update) {
+    let waiting = false;
+    return () => {
+      if (waiting) return;
+      waiting = true;
+      window.requestAnimationFrame(() => {
+        waiting = false;
+        update();
+      });
+    };
+  }
+  function line(context, fromX, fromY, toX, toY) {
+    context.beginPath();
+    context.moveTo(fromX, fromY);
+    context.lineTo(toX, toY);
+    context.stroke();
+  }
+  function text(context, colours, words, x, y, align, colour, weight) {
+    context.font = (weight || "") + " 11px " + colours.mono;
+    context.fillStyle = colour || colours.inkSoft;
+    context.textAlign = align || "left";
+    context.textBaseline = "middle";
+    context.fillText(words, x, y);
+    context.textAlign = "left";
+  }
+
+  /* Demo: the BRDF in the plane of incidence. */
+  (function brdfDemo() {
+    const canvas = byId("b-canvas");
+    if (!canvas) return;
+    const names = ["roughness", "metallic", "red", "green", "blue", "light", "view"];
+    const sliders = {};
+    const outputs = {};
+    for (const name of names) {
+      sliders[name] = byId("b-" + name);
+      outputs[name] = byId("b-" + name + "-out");
+    }
+    const scaleButtons = Array.from(document.querySelectorAll("#b-scale button"));
+    const colourButtons = Array.from(document.querySelectorAll("#b-colours button"));
+    const degrees = PI / 180;
+    let scale = "linear";
+
+    function read() {
+      return {
+        roughness: Number(sliders.roughness.value), metallic: Number(sliders.metallic.value),
+        baseColor: [Number(sliders.red.value), Number(sliders.green.value), Number(sliders.blue.value)],
+        light: Number(sliders.light.value) * degrees, view: Number(sliders.view.value) * degrees,
+      };
+    }
+    function evaluate(surface, lightAngle, viewAngle) {
+      const c = cosines(planeDirection(lightAngle), planeDirection(viewAngle));
+      const roughness = decodedRoughness(surface.roughness);
+      const channels = surface.baseColor.map((channel) => brdfChannel(channel, surface.metallic, roughness, c.normalDotLight, c.normalDotView, c.normalDotHalf, c.viewDotHalf));
+      return { cosines: c, channels: channels };
+    }
+    const mean = (values) => (values[0] + values[1] + values[2]) / 3;
+    // Every half degree, plus a dense fan around the mirror direction, where the lobe narrows to a needle.
+    function viewAngles(lightAngle, alpha) {
+      const angles = [];
+      for (let step = -180; step <= 180; step++) angles.push((step / 2) * degrees);
+      for (let step = -72; step <= 72; step++) angles.push(-lightAngle + 2 * Math.atan(alpha * Math.sinh(step / 12)));
+      return angles.filter((angle) => angle >= -PI / 2 && angle <= PI / 2).sort((first, second) => first - second);
+    }
+    function lobe(surface) {
+      const alpha = decodedRoughness(surface.roughness) ** 2;
+      const lightCosine = Math.max(Math.cos(surface.light), 0);
+      return viewAngles(surface.light, alpha).map((angle) => {
+        const result = evaluate(surface, surface.light, angle);
+        const diffuse = mean(result.channels.map((terms) => terms.diffuse)) * lightCosine;
+        const specular = mean(result.channels.map((terms) => terms.specular)) * lightCosine;
+        return { angle: angle, diffuse: diffuse, specular: specular, total: diffuse + specular };
+      });
+    }
+    function report(surface) {
+      for (const name of ["roughness", "metallic", "red", "green", "blue"]) outputs[name].textContent = Number(sliders[name].value).toFixed(2);
+      outputs.light.textContent = signed(Number(sliders.light.value)) + "°";
+      outputs.view.textContent = signed(Number(sliders.view.value)) + "°";
+      const forward = evaluate(surface, surface.light, surface.view);
+      const swapped = evaluate(surface, surface.view, surface.light);
+      const c = forward.cosines;
+      const terms = forward.channels;
+      byId("b-nl-nv").textContent = format(c.normalDotLight) + ", " + format(c.normalDotView);
+      byId("b-nh-vh").textContent = format(c.normalDotHalf) + ", " + format(c.viewDotHalf);
+      byId("b-alpha").textContent = format(terms[0].alpha);
+      byId("b-d").textContent = format(terms[0].distribution);
+      byId("b-v").textContent = format(terms[0].visibility);
+      byId("b-w").textContent = format(terms[0].weight);
+      byId("b-f").textContent = triple(terms.map((channel) => channel.specularFresnel));
+      byId("b-share").textContent = format(terms[0].diffuseShare);
+      const value = terms.map((channel) => channel.diffuse + channel.specular);
+      const swappedValue = swapped.channels.map((channel) => channel.diffuse + channel.specular);
+      byId("b-f-lv").textContent = triple(value);
+      byId("b-f-vl").textContent = triple(swappedValue);
+      const outgoing = value.map((channel) => channel * Math.max(c.normalDotLight, 0));
+      byId("b-out").textContent = triple(outgoing);
+      const largestGap = Math.max.apply(null, value.map((channel, index) => Math.abs(channel - swappedValue[index]) / Math.max(channel, 1e-300)));
+      const floorNote = surface.roughness < MINIMUM_ROUGHNESS ? " Roughness " + surface.roughness.toFixed(2) + " is below the floor, so the shader uses 0.04." : "";
+      byId("b-summary").textContent = "Light at " + signed(Number(sliders.light.value)) + "°, view at " + signed(Number(sliders.view.value)) + "°: f(V, L) equals f(L, V)" +
+        (largestGap === 0 ? " exactly" : " to within " + format(largestGap) + " of its value, f64's rounding") + ", so the BRDF is reciprocal here." + floorNote;
+      return outgoing;
+    }
+    function draw() {
+      const surface = read();
+      const view = canvasView(canvas, 0.62, 230);
+      const context = view.context;
+      const colours = readTokens();
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, view.width, view.height);
+      const centreX = view.width / 2;
+      const centreY = view.height - 26;
+      const radius = Math.min(view.width / 2 - 34, view.height - 60);
+      const points = lobe(surface);
+      const peak = Math.max.apply(null, points.map((point) => point.total));
+      const radial = (value) => {
+        if (!(value > 0) || !(peak > 0)) return 0;
+        if (scale === "linear") return (value / peak) * radius;
+        return Math.max(0, (Math.log10(value / peak) + 6) / 6) * radius;
+      };
+      const at = (angle, distance) => [centreX + Math.sin(angle) * distance, centreY - Math.cos(angle) * distance];
+      // Rings, a quarter of the peak apart or one decade apart, labelled under the surface; spokes every 30°.
+      const rings = scale === "linear"
+        ? [[0.25, "0.25"], [0.5, "0.5"], [0.75, "0.75"], [1, "1 × peak"]]
+        : [1, 2, 3, 4, 5, 6].map((step) => [step / 6, step === 6 ? "peak" : (radius < 200 && step % 2 === 1) ? "" : "10" + superscript(step - 6)]);
+      context.lineWidth = 1;
+      context.strokeStyle = colours.rule;
+      for (const [fraction, words] of rings) {
+        context.beginPath();
+        context.arc(centreX, centreY, radius * fraction, PI, 2 * PI);
+        context.stroke();
+        if (words) text(context, colours, words, centreX + radius * fraction, centreY + 14, "center");
+      }
+      for (let spoke = -90; spoke <= 90; spoke += 30) {
+        const [x, y] = at(spoke * degrees, radius);
+        line(context, centreX, centreY, x, y);
+        const [labelX, labelY] = at(spoke * degrees, radius + 15);
+        text(context, colours, signed(spoke) + "°", labelX, Math.abs(spoke) === 90 ? labelY - 10 : labelY, "center");
+      }
+      // The surface and its normal.
+      context.strokeStyle = colours.inkSoft;
+      context.lineWidth = 1.5;
+      line(context, centreX - radius - 20, centreY, centreX + radius + 20, centreY);
+      // The lobes.
+      const curve = (key) => {
+        context.beginPath();
+        points.forEach((point, index) => {
+          const [x, y] = at(point.angle, radial(point[key]));
+          if (index === 0) context.moveTo(x, y);
+          else context.lineTo(x, y);
+        });
+      };
+      curve("total");
+      context.lineTo(centreX, centreY);
+      context.closePath();
+      context.fillStyle = colours.accentWash;
+      context.fill();
+      context.lineJoin = "round";
+      curve("total");
+      context.strokeStyle = colours.accent;
+      context.lineWidth = 2.4;
+      context.stroke();
+      curve("specular");
+      context.strokeStyle = colours.ink;
+      context.lineWidth = 1.2;
+      context.stroke();
+      context.save();
+      context.setLineDash([6, 4]);
+      curve("diffuse");
+      context.strokeStyle = colours.warm;
+      context.lineWidth = 2;
+      context.stroke();
+      // The mirror direction and H.
+      context.setLineDash([3, 4]);
+      context.strokeStyle = colours.inkSoft;
+      context.lineWidth = 1;
+      const [mirrorX, mirrorY] = at(-surface.light, radius);
+      line(context, centreX, centreY, mirrorX, mirrorY);
+      context.restore();
+      const halfAngle = (surface.light + surface.view) / 2;
+      const [halfX, halfY] = at(halfAngle, radius * 0.55);
+      context.strokeStyle = colours.accent;
+      context.lineWidth = 1.2;
+      line(context, centreX, centreY, halfX, halfY);
+      text(context, colours, "H", halfX + 6, halfY - 6, "left", colours.accent, "600");
+      // L, drawn as light arriving, and V, with the lobe's value there.
+      const [lightX, lightY] = at(surface.light, radius + 2);
+      const [lightTipX, lightTipY] = at(surface.light, 18);
+      context.strokeStyle = colours.warm;
+      context.lineWidth = 2.4;
+      line(context, lightX, lightY, lightTipX, lightTipY);
+      const arrow = Math.atan2(lightTipY - lightY, lightTipX - lightX);
+      context.fillStyle = colours.warm;
+      context.beginPath();
+      context.moveTo(lightTipX, lightTipY);
+      context.lineTo(lightTipX - 9 * Math.cos(arrow - 0.4), lightTipY - 9 * Math.sin(arrow - 0.4));
+      context.lineTo(lightTipX - 9 * Math.cos(arrow + 0.4), lightTipY - 9 * Math.sin(arrow + 0.4));
+      context.closePath();
+      context.fill();
+      text(context, colours, "L", lightX + (surface.light < 0 ? -10 : 10), lightY - 6, surface.light < 0 ? "right" : "left", colours.warm, "600");
+      const outgoing = report(surface);
+      const [viewX, viewY] = at(surface.view, radius + 2);
+      context.strokeStyle = colours.ink;
+      context.lineWidth = 1.4;
+      line(context, centreX, centreY, viewX, viewY);
+      text(context, colours, "V", viewX + (surface.view < 0 ? -10 : 10), viewY - 6, surface.view < 0 ? "right" : "left", colours.ink, "600");
+      const [dotX, dotY] = at(surface.view, radial(mean(outgoing)));
+      context.fillStyle = colours.ink;
+      context.strokeStyle = colours.panel;
+      context.lineWidth = 2;
+      context.beginPath();
+      context.arc(dotX, dotY, 5, 0, 2 * PI);
+      context.fill();
+      context.stroke();
+      text(context, colours, "peak " + format(peak) + " (mean of R, G, B)", 8, 14);
+      canvas.setAttribute("aria-label", "The BRDF lobe in the plane of incidence, light at " + signed(Number(sliders.light.value)) + "°, view at " + signed(Number(sliders.view.value)) +
+        "°, roughness " + Number(sliders.roughness.value).toFixed(2) + ", metallic " + Number(sliders.metallic.value).toFixed(2) + ". Its peak, averaged over the channels, is " + format(peak) + ".");
+    }
+    const schedule = throttled(draw);
+    for (const name of names) sliders[name].addEventListener("input", schedule);
+    for (const button of scaleButtons) {
+      button.addEventListener("click", () => {
+        scale = button.dataset.scale;
+        setPressed(scaleButtons, (other) => other === button);
+        draw();
+      });
+    }
+    for (const button of colourButtons) {
+      button.addEventListener("click", () => {
+        const [red, green, blue] = button.dataset.colour.split(",");
+        sliders.red.value = red;
+        sliders.green.value = green;
+        sliders.blue.value = blue;
+        draw();
+      });
+    }
+    byId("b-swap").addEventListener("click", () => {
+      const light = sliders.light.value;
+      sliders.light.value = sliders.view.value;
+      sliders.view.value = light;
+      draw();
+    });
+    let activePointer = null;
+    const aim = (event) => {
+      const box = canvas.getBoundingClientRect();
+      const x = event.clientX - box.left - box.width / 2;
+      const y = box.height - 26 - (event.clientY - box.top);
+      sliders.view.value = String(Math.round(clamp(Math.atan2(x, Math.max(y, 0.001)) / degrees, -89, 89)));
+      schedule();
+    };
+    canvas.addEventListener("pointerdown", (event) => {
+      if (event.button > 0) return;
+      activePointer = event.pointerId;
+      if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
+      aim(event);
+      event.preventDefault();
+    });
+    canvas.addEventListener("pointermove", (event) => {
+      if (event.pointerId === activePointer) aim(event);
+    });
+    const release = (event) => {
+      if (event.pointerId === activePointer) activePointer = null;
+    };
+    canvas.addEventListener("pointerup", release);
+    canvas.addEventListener("pointercancel", release);
+    watchWidth(canvas.parentElement, draw);
+  })();
+
+  /* Demo: the white furnace. */
+  (function furnaceDemo() {
+    const canvas = byId("w-canvas");
+    if (!canvas) return;
+    const roughnessSlider = byId("w-roughness");
+    const viewSlider = byId("w-view");
+    const presets = Array.from(document.querySelectorAll("#w-presets button"));
+    const degrees = PI / 180;
+    const ANGLES = [];
+    for (let angle = 0; angle < 89; angle += 3) ANGLES.push(angle);
+    ANGLES.push(89);
+    // The views the oracle checks at each of its roughnesses, and PR #246's dielectric figure.
+    const ORACLE_VIEWS = { "0.50": [0, 60, 85], "1.00": [0, 85] };
+    let curves = null;
+    let curvesFor = null;
+    function curvesAt(roughness) {
+      const key = roughness.toFixed(2);
+      if (curvesFor !== key) {
+        curves = ANGLES.map((angle) => Object.assign({ angle: angle }, whiteFurnace(roughness, angle * degrees, CURVE_GRID)));
+        curvesFor = key;
+      }
+      return curves;
+    }
+    function draw() {
+      const roughness = Number(roughnessSlider.value);
+      const viewAngle = Number(viewSlider.value);
+      byId("w-roughness-out").textContent = roughness.toFixed(2);
+      byId("w-view-out").textContent = viewAngle + "°";
+      const points = curvesAt(roughness);
+      const readout = whiteFurnace(roughness, viewAngle * degrees, READOUT_GRID);
+      const dielectric = readout.dielectricDiffuse + readout.dielectricSpecular;
+      byId("w-metal").textContent = readout.metal.toFixed(3);
+      byId("w-dielectric").textContent = dielectric.toFixed(3);
+      byId("w-parts").textContent = readout.dielectricDiffuse.toFixed(3) + " + " + readout.dielectricSpecular.toFixed(3);
+      const oracle = ORACLE_VIEWS[roughness.toFixed(2)];
+      byId("w-note").textContent = "At " + viewAngle + "°, roughness " + roughness.toFixed(2) + ": the white metal reflects " + readout.metal.toFixed(3) +
+        " of what it receives, at most 1, and the white dielectric " + dielectric.toFixed(3) + (dielectric > 1 ? ", more than it receives." : ".") +
+        (oracle ? " The oracle checks this roughness at " + oracle.join("°, ") + "°." : "") +
+        (roughness.toFixed(2) === "0.50" && viewAngle === 85 ? " PR #246 gives 1.11 for the dielectric here." : "") +
+        (roughness.toFixed(2) === "1.00" && viewAngle === 0 ? " 1 − ln 2 is 0.307." : "");
+      setPressed(presets, (button) => Number(button.dataset.roughness).toFixed(2) === roughness.toFixed(2));
+
+      const view = canvasView(canvas, 0.5, 240);
+      const context = view.context;
+      const colours = readTokens();
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, view.width, view.height);
+      const plot = { left: 44, right: view.width - 14, top: 22, bottom: view.height - 34 };
+      const xOf = (angle) => plot.left + (angle / 90) * (plot.right - plot.left);
+      const yOf = (value) => plot.bottom - (value / 2) * (plot.bottom - plot.top);
+      context.fillStyle = colours.bad;
+      context.globalAlpha = 0.07;
+      context.fillRect(plot.left, yOf(2), plot.right - plot.left, yOf(1) - yOf(2));
+      context.globalAlpha = 1;
+      context.strokeStyle = colours.rule;
+      context.lineWidth = 1;
+      for (let value = 0; value <= 2.0001; value += 0.25) {
+        line(context, plot.left, yOf(value), plot.right, yOf(value));
+        if (Math.abs(value * 2 - Math.round(value * 2)) < 1e-9) text(context, colours, value.toFixed(1), plot.left - 6, yOf(value), "right");
+      }
+      for (let angle = 0; angle <= 90; angle += 15) {
+        line(context, xOf(angle), plot.top, xOf(angle), plot.bottom);
+        text(context, colours, angle + "°", xOf(angle), plot.bottom + 12, "center");
+      }
+      text(context, colours, "view angle from the normal", plot.right, view.height - 8, "right");
+      context.strokeStyle = colours.ink;
+      context.lineWidth = 1.4;
+      line(context, plot.left, yOf(1), plot.right, yOf(1));
+      text(context, colours, "1: all it receives", plot.left + 6, yOf(1) - 9, "left", colours.ink);
+      text(context, colours, "more than it receives", plot.left + 6, yOf(2) + 10, "left", colours.bad);
+      const path = (value) => {
+        context.beginPath();
+        points.forEach((point, index) => {
+          const x = xOf(point.angle);
+          const y = yOf(Math.min(value(point), 2));
+          if (index === 0) context.moveTo(x, y);
+          else context.lineTo(x, y);
+        });
+        context.stroke();
+      };
+      context.lineJoin = "round";
+      context.save();
+      context.setLineDash([2, 4]);
+      context.strokeStyle = colours.inkSoft;
+      context.lineWidth = 2;
+      path((point) => point.dielectricDiffuse);
+      context.setLineDash([7, 4]);
+      context.strokeStyle = colours.warm;
+      context.lineWidth = 2.4;
+      path((point) => point.dielectricDiffuse + point.dielectricSpecular);
+      context.restore();
+      context.strokeStyle = colours.accent;
+      context.lineWidth = 2.6;
+      path((point) => point.metal);
+      const ring = (angle, value, colour) => {
+        context.strokeStyle = colour;
+        context.lineWidth = 2;
+        context.beginPath();
+        context.arc(xOf(angle), yOf(value), 6.5, 0, 2 * PI);
+        context.stroke();
+      };
+      if (oracle) {
+        for (const angle of oracle) ring(angle, whiteFurnace(roughness, angle * degrees, CURVE_GRID).metal, colours.ink);
+      }
+      if (roughness.toFixed(2) === "0.50") {
+        ring(85, 1.11, colours.warm);
+        text(context, colours, "1.11, #246", xOf(85) - 10, yOf(1.11) - 12, "right", colours.warm, "600");
+      }
+      context.strokeStyle = colours.ink;
+      context.lineWidth = 1;
+      line(context, xOf(viewAngle), plot.top, xOf(viewAngle), plot.bottom);
+      for (const [value, colour] of [[readout.metal, colours.accent], [dielectric, colours.warm]]) {
+        context.fillStyle = colour;
+        context.strokeStyle = colours.panel;
+        context.lineWidth = 2;
+        context.beginPath();
+        context.arc(xOf(viewAngle), yOf(Math.min(value, 2)), 5, 0, 2 * PI);
+        context.fill();
+        context.stroke();
+      }
+      canvas.setAttribute("aria-label", "Directional albedo against view angle at roughness " + roughness.toFixed(2) + ". At " + viewAngle + "°, the white metal reflects " +
+        readout.metal.toFixed(3) + " and the white dielectric " + dielectric.toFixed(3) + " of what each receives.");
+    }
+    const schedule = throttled(draw);
+    roughnessSlider.addEventListener("input", schedule);
+    viewSlider.addEventListener("input", schedule);
+    for (const button of presets) {
+      button.addEventListener("click", () => {
+        roughnessSlider.value = button.dataset.roughness;
+        draw();
+      });
+    }
+    watchWidth(canvas.parentElement, draw);
+  })();
+
+  /* Demo: point-light falloff on logarithmic axes. */
+  (function falloffDemo() {
+    const canvas = byId("f-canvas");
+    if (!canvas) return;
+    // Each slider runs 0 to 1000 over a logarithmic span.
+    const SPANS = {
+      range: { low: 0.5, high: 500, unit: " m" },
+      intensity: { low: 0.1, high: 1000, unit: "" },
+      old: { low: 0.1, high: 1000, unit: "" },
+      distance: { low: 0.001, high: 1000, unit: " m" },
+    };
+    const sliders = {};
+    const outputs = {};
+    for (const name in SPANS) {
+      sliders[name] = byId("f-" + name);
+      outputs[name] = byId("f-" + name + "-out");
+    }
+    const presets = Array.from(document.querySelectorAll("#f-presets button"));
+    const state = { range: 20, intensity: 9, old: 1, distance: 3 };
+    const toSlider = (name, value) => String(Math.round((1000 * Math.log(value / SPANS[name].low)) / Math.log(SPANS[name].high / SPANS[name].low)));
+    const fromSlider = (name) => SPANS[name].low * Math.pow(SPANS[name].high / SPANS[name].low, Number(sliders[name].value) / 1000);
+    const metres = (value) => (value < 0.01 ? (value * 1000).toPrecision(2) + " mm" : value < 1 ? (value * 100).toPrecision(2) + " cm" : format(value) + " m");
+    function syncSliders() {
+      for (const name in SPANS) sliders[name].value = toSlider(name, state[name]);
+    }
+    function report() {
+      outputs.range.textContent = metres(state.range);
+      outputs.intensity.textContent = format(state.intensity);
+      outputs.old.textContent = format(state.old);
+      outputs.distance.textContent = metres(state.distance);
+      const window = rangeWindow(state.distance, state.range);
+      const lit = pointLightIlluminance(state.intensity, state.distance, state.range);
+      const old = tutorialIlluminance(state.old, state.distance);
+      byId("f-window").textContent = window === 0 ? "exactly 0" : format(window);
+      byId("f-new").textContent = format(lit);
+      byId("f-tutorial").textContent = format(old);
+      byId("f-note").textContent = "At " + metres(state.distance) + (state.distance >= state.range ? ", at or past the range of " + metres(state.range) + ", the light adds exactly 0." :
+        ", the window keeps " + format(window) + " of inverse square; the light gives " + format(lit) + ", " + (old > 0 ? format(lit / old) + " times" : "against") + " the old curve's " + format(old) + ".");
+      setPressed(presets, (button) => Number(button.dataset.intensity) === state.intensity && Number(button.dataset.old) === state.old && Number(button.dataset.range) === state.range);
+    }
+    function draw() {
+      report();
+      const view = canvasView(canvas, 0.52, 260);
+      const context = view.context;
+      const colours = readTokens();
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, view.width, view.height);
+      const plot = { left: 52, right: view.width - 14, top: 20, bottom: view.height - 34 };
+      const topDecade = Math.ceil(Math.log10(Math.max(state.intensity / MINIMUM_LIGHT_DISTANCE_SQUARED, state.old)));
+      const decades = 11;
+      const xOf = (distance) => plot.left + ((Math.log10(distance) + 3) / 6) * (plot.right - plot.left);
+      const yOf = (value) => plot.top + ((topDecade - Math.log10(value)) / decades) * (plot.bottom - plot.top);
+      context.strokeStyle = colours.rule;
+      context.lineWidth = 1;
+      const DISTANCES = [[0.001, "1 mm"], [0.01, "1 cm"], [0.1, "10 cm"], [1, "1 m"], [10, "10 m"], [100, "100 m"], [1000, "1 km"]];
+      for (const [distance, words] of DISTANCES) {
+        line(context, xOf(distance), plot.top, xOf(distance), plot.bottom);
+        text(context, colours, words, xOf(distance), plot.bottom + 12, distance === 0.001 ? "left" : distance === 1000 ? "right" : "center");
+      }
+      for (let decade = topDecade; decade >= topDecade - decades; decade--) {
+        const y = yOf(Math.pow(10, decade));
+        line(context, plot.left, y, plot.right, y);
+        if ((topDecade - decade) % 2 === 0) text(context, colours, "10" + superscript(decade), plot.left - 6, y, "right");
+      }
+      text(context, colours, "distance d, log scale", plot.right, view.height - 8, "right");
+      text(context, colours, "illuminance, relative, log scale", plot.left + 4, plot.top - 8);
+      const samples = [];
+      for (let step = 0; step <= 600; step++) samples.push(Math.pow(10, -3 + (6 * step) / 600));
+      for (let exponent = 1; exponent <= 8; exponent += 0.5) samples.push(state.range * (1 - Math.pow(10, -exponent)));
+      samples.sort((first, second) => first - second);
+      context.save();
+      context.beginPath();
+      context.rect(plot.left, plot.top, plot.right - plot.left, plot.bottom - plot.top);
+      context.clip();
+      const curve = (value) => {
+        context.beginPath();
+        let started = false;
+        let last = null;
+        for (const distance of samples) {
+          const illuminance = value(distance);
+          if (!(illuminance > 0)) {
+            if (started && last) context.lineTo(last[0], plot.bottom + 2);
+            break;
+          }
+          const point = [xOf(distance), yOf(illuminance)];
+          if (!started) context.moveTo(point[0], point[1]);
+          else context.lineTo(point[0], point[1]);
+          started = true;
+          last = point;
+        }
+        context.stroke();
+      };
+      context.lineJoin = "round";
+      context.setLineDash([2, 4]);
+      context.strokeStyle = colours.inkSoft;
+      context.lineWidth = 1.8;
+      curve((distance) => inverseSquareIlluminance(state.intensity, distance));
+      context.setLineDash([7, 4]);
+      context.strokeStyle = colours.warm;
+      context.lineWidth = 2.2;
+      curve((distance) => tutorialIlluminance(state.old, distance));
+      context.setLineDash([]);
+      context.strokeStyle = colours.accent;
+      context.lineWidth = 2.6;
+      curve((distance) => pointLightIlluminance(state.intensity, distance, state.range));
+      context.restore();
+      context.lineWidth = 1.2;
+      context.strokeStyle = colours.accent;
+      context.save();
+      context.setLineDash([5, 4]);
+      line(context, xOf(state.range), plot.top, xOf(state.range), plot.bottom);
+      context.strokeStyle = colours.inkSoft;
+      context.setLineDash([2, 3]);
+      line(context, xOf(0.01), plot.top, xOf(0.01), plot.bottom);
+      context.restore();
+      const rangeOnRight = xOf(state.range) > plot.right - 150;
+      text(context, colours, "range: window = 0", xOf(state.range) + (rangeOnRight ? -6 : 6), plot.top + 12, rangeOnRight ? "right" : "left", colours.accent, "600");
+      text(context, colours, "1 cm² floor", xOf(0.01) + 6, plot.bottom - 10, "left");
+      context.strokeStyle = colours.ink;
+      context.lineWidth = 1;
+      line(context, xOf(state.distance), plot.top, xOf(state.distance), plot.bottom);
+      for (const [value, colour] of [[pointLightIlluminance(state.intensity, state.distance, state.range), colours.accent], [tutorialIlluminance(state.old, state.distance), colours.warm]]) {
+        if (!(value > 0)) continue;
+        const y = yOf(value);
+        if (y < plot.top || y > plot.bottom) continue;
+        context.fillStyle = colour;
+        context.strokeStyle = colours.panel;
+        context.lineWidth = 2;
+        context.beginPath();
+        context.arc(xOf(state.distance), y, 5, 0, 2 * PI);
+        context.fill();
+        context.stroke();
+      }
+      canvas.setAttribute("aria-label", "Illuminance against distance, both logarithmic, for intensity " + format(state.intensity) + " and range " + metres(state.range) +
+        ", against the old curve at intensity " + format(state.old) + ". " + byId("f-note").textContent);
+    }
+    const schedule = throttled(draw);
+    for (const name in SPANS) {
+      sliders[name].addEventListener("input", () => {
+        state[name] = Number(fromSlider(name).toPrecision(3));
+        schedule();
+      });
+    }
+    for (const button of presets) {
+      button.addEventListener("click", () => {
+        state.intensity = Number(button.dataset.intensity);
+        state.old = Number(button.dataset.old);
+        state.range = Number(button.dataset.range);
+        state.distance = Number(button.dataset.distance);
+        syncSliders();
+        draw();
+      });
+    }
+    syncSliders();
+    watchWidth(canvas.parentElement, draw);
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>

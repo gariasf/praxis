@@ -1,0 +1,860 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Distant Textures Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook. One reading column, with figures and live demos breaking out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --warm: #c9771a;
+  --bad: #c43a31;
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --warm: #e8a34a; --bad: #f07067; --good: #5cc796;
+    --figure-bg: #1f2631; --accent-wash: rgba(122, 155, 255, 0.17); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --warm: #e8a34a; --bad: #f07067; --good: #5cc796;
+  --figure-bg: #1f2631; --accent-wash: rgba(122, 155, 255, 0.17); color-scheme: dark;
+}
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+code, .num { font-family: var(--mono); font-size: 0.86em; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.scroll { overflow-x: auto; }
+svg text { font-family: var(--mono); fill: var(--ink); }
+canvas { display: block; max-width: 100%; height: auto; image-rendering: auto; border-radius: 4px; }
+canvas.pixelated { image-rendering: pixelated; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-top: 12px; font-family: var(--mono); font-size: 14px; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; background: var(--panel); color: var(--ink); border: 0; padding: 7px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible, input:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+input[type="range"] { accent-color: var(--accent); width: min(260px, 60vw); }
+input[type="number"] { font: inherit; width: 7ch; padding: 5px 8px; border: 1px solid var(--rule); border-radius: 5px; background: var(--panel); color: var(--ink); }
+.readout { color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.pair > * { min-width: 0; }
+.shot { margin: 0; }
+.shot img { display: block; width: 100%; border-radius: 4px; }
+.shot span { display: block; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-top: 6px; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; color: var(--ink); }
+.term { font-weight: 600; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.mips-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+.mips-row div { text-align: center; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); }
+.swatch-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.swatch { width: 84px; height: 84px; border-radius: 6px; border: 1px solid var(--rule); }
+.checker-swatch { background-image: repeating-conic-gradient(#000 0 25%, #fff 0 50%); background-size: 8px 8px; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; }
+table.facts td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wall-demo { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; }
+.wall-swatch { width: 120px; height: 120px; border-radius: 8px; border: 1px solid var(--rule); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 520px) { body { font-size: 17px; } figure { padding: 12px; } }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+
+/* In brief: the guide's conclusion first, for the reader who stops here. */
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">← Praxis field guides</a></div>
+  <div class="eyebrow">Praxis · M2 · ticket #153 · pull requests #174, #173</div>
+  <h1>Why distant textures need help</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>Far away, one pixel covers many texels: reading one per pixel turns fine patterns into moiré, and mips that average a normal map make a bumpy, glossy floor a near mirror whose highlight is a hard, flickering line. Praxis precomputes mips in linear light, samples them with anisotropic filtering and widens each mip's roughness by how much its normals disagree (Toksvig); a second scene measures what keeping 10,000 textures bound costs. The idea to keep: averaging suits colour, but the spread it hides in normals must come back as roughness.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>Why one texel read per pixel aliases in the distance</li>
+      <li>How mips are built, and why in linear light</li>
+      <li>What anisotropic filtering does at grazing angles</li>
+      <li>Why mips flatten normal maps, and how Toksvig widens roughness</li>
+      <li>What keeping 10,000 textures bound costs on Metal</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> nothing; it stands on its own.</p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at 9bc5dd1 (PR #174) and 81f2580 (PR #173), both merged on 2026-10-19. <b>Since then:</b> Since PR #257 (2026-10-22), normal and roughness maps are read at 4x anisotropy while colour textures keep 16x, which removed a sparkle that 16x had left in the minification scene's highlight at 2560 × 1440 (<a href="anisotropy.html">Anisotropy Explained</a>). Both Goldens shown here, the reference images the tests compare against, have been re-recorded several times since milestone M2, among them for the lit pass's new shading and lights (PRs #245 and #247; <a href="lit-pass.html">Lit Pass Explained</a>) and for the HDR target and tonemapping (PRs #251 to #256; <a href="tonemapping-pass.html">Tonemapping Pass Explained</a>).</p>
+  </aside>
+  <p class="lede">A field guide to <span class="concept" data-term="Mip" data-tip="A pre-averaged smaller copy of a texture, each half the size of the one before it, down to a single texel.">mips</span>, <span class="concept" data-tip="Taking several samples along a pixel's stretched footprint from a sharper mip and averaging them. Praxis allows up to 16 per footprint.">anisotropic filtering</span>, <span class="concept" data-term="Normal map" data-tip="A texture whose texels store tilted normals, so a flat surface is lit as if it were bumpy.">normal maps</span> and <span class="concept" data-tip="A cooking step that widens roughness by how much a normal map's averaged tilts disagree, so distant bumps spread the highlight about as widely as real ones do.">Toksvig</span>, told through the two <span class="concept" data-term="Reference scene" data-tip="A scene with a fixed camera path and scripted time, so every run renders exactly the same frames. Goldens and benchmarks are taken from it.">Reference scenes</span> that test them: a glossy floor that stretches to the horizon, and a wall of 10,000 tiny <span class="concept" data-term="Texture" data-tip="An image mapped onto a surface to give it colour or other per-point detail, such as bumps or roughness.">textures</span>.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#textures">1 · Texels and pixels</a>
+    <a href="#mips">2 · Mips</a>
+    <a href="#aniso">3 · Anisotropy</a>
+    <a href="#normals">4 · Normal maps</a>
+    <a href="#toksvig">5 · Toksvig</a>
+    <a href="#floor">6 · The floor scene</a>
+    <a href="#wall">7 · The texture wall</a>
+    <a href="#cost">8 · What it costs</a>
+  </nav>
+</header>
+
+<section class="chapter" id="textures">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1</div>
+    <h2>Texels and pixels</h2>
+    <p>A <span class="term concept" data-tip="An image mapped onto a surface to give it colour or other per-point detail, such as bumps or roughness.">texture</span> is an image wrapped onto a surface. Its own pixels are called <span class="term concept" data-term="Texel" data-tip="One pixel of a texture. The separate name keeps it apart from the pixels of the screen.">texels</span>, to keep them apart from the screen's <span class="concept" data-term="Pixel" data-tip="One dot of the rendered screen image. Each ends up with a single colour per frame.">pixels</span>. The <span class="concept" data-tip="When a surface is so far away or so tilted that one screen pixel covers many texels.">minification</span> floor uses a 256 × 256 checkerboard, repeated every metre across a floor 100 metres long.</p>
+    <p>For every screen pixel, the GPU asks one question: <em>which colour of the texture belongs here?</em> When the surface is close, one texel covers several pixels and the answer is easy. When the surface is far away, the opposite happens: one pixel covers many texels. This is <span class="term">minification</span>, and the scene is named after it.</p>
+  </div>
+  <figure class="wide">
+    <div class="scroll">
+      <svg viewBox="0 0 900 250" width="900" role="img" aria-label="Near the camera one texel covers many pixels; far away one pixel covers many texels.">
+        <g transform="translate(40,30)">
+          <text x="0" y="0" font-size="14" font-weight="600">Close up: magnification</text>
+          <g transform="translate(0,20)">
+            <rect width="160" height="160" fill="var(--panel)" stroke="var(--rule)"/>
+            <rect x="0" y="0" width="80" height="80" fill="var(--ink)"/>
+            <rect x="80" y="80" width="80" height="80" fill="var(--ink)"/>
+            <g stroke="var(--accent)" stroke-width="1" opacity="0.8">
+              <path d="M20 0V160M40 0V160M60 0V160M100 0V160M120 0V160M140 0V160M0 20H160M0 40H160M0 60H160M0 100H160M0 120H160M0 140H160" fill="none"/>
+            </g>
+            <text x="0" y="182" font-size="12" fill="var(--ink-soft)">4 texels, 64 pixels (blue grid)</text>
+          </g>
+        </g>
+        <g transform="translate(330,30)">
+          <text x="0" y="0" font-size="14" font-weight="600">Far away: minification</text>
+          <g transform="translate(0,20)">
+            <rect width="160" height="160" fill="var(--panel)" stroke="var(--rule)"/>
+            <g id="tiny-checks"></g>
+            <rect x="40" y="40" width="80" height="80" fill="none" stroke="var(--accent)" stroke-width="3"/>
+            <circle cx="80" cy="80" r="4" fill="var(--warm)"/>
+            <text x="0" y="182" font-size="12" fill="var(--ink-soft)">one pixel (blue) over 64 texels</text>
+          </g>
+        </g>
+        <g transform="translate(620,40)">
+          <text x="0" y="0" font-size="14" font-weight="600">One sample per pixel</text>
+          <text x="0" y="28" font-size="13" fill="var(--ink-soft)">The orange dot is the only texel read.</text>
+          <text x="0" y="50" font-size="13" fill="var(--ink-soft)">Black or white by luck of position:</text>
+          <text x="0" y="72" font-size="13" fill="var(--ink-soft)">neighbouring pixels disagree at random.</text>
+          <text x="0" y="110" font-size="13" fill="var(--ink-soft)">What the eye expects is the</text>
+          <text x="0" y="132" font-size="13" fill="var(--ink-soft)">average of all 64: an even grey.</text>
+          <rect x="0" y="150" width="50" height="30" fill="#bcbcbc" stroke="var(--rule)"/>
+          <text x="62" y="170" font-size="12" fill="var(--ink-soft)">the right answer</text>
+        </g>
+      </svg>
+    </div>
+    <figcaption><b>The core problem.</b> Reading one texel per pixel is fine up close and wrong far away, where a pixel spans many texels and its colour should be their average.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="mips">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2</div>
+    <h2>Mips: the texture, pre-shrunk</h2>
+    <p>Averaging 64 <span class="concept" data-term="Texel" data-tip="One pixel of a texture. The separate name keeps it apart from the pixels of the screen.">texels</span> for every <span class="concept" data-tip="One dot of the rendered screen image. Each ends up with a single colour per frame.">pixel</span> of every frame would be far too slow. Instead, the <span class="concept" data-tip="The tool that turns source images and models into the engine's compressed, mip-mapped files ahead of time, so loading does no such work.">cooker</span> does the averaging once, ahead of time. Next to the full image it stores a half-size copy where each texel is the average of a 2 × 2 block, then a quarter-size copy, and so on down to a single texel. These copies are <span class="term concept" data-term="Mip" data-tip="A pre-averaged smaller copy of a texture, each half the size of the one before it, down to a single texel.">mips</span> (from <i>multum in parvo</i>, "much in little"). Together they form the <span class="term concept" data-tip="A texture's full-size image together with all of its mips, from the largest down to the single-texel smallest.">mip chain</span>.</p>
+    <p>At draw time the GPU measures how many texels the pixel spans and reads the mip whose texels are about one pixel big. It blends the two nearest mips so there is no visible seam between them. That blending is the <span class="term concept" data-term="Trilinear filtering" data-tip="Reading the two mips nearest the pixel's size, blending neighbouring texels within each, then blending the two results together.">trilinear</span> filtering the engine uses.</p>
+  </div>
+  <figure class="wide">
+    <div class="mips-row" id="mip-chain" aria-label="A 64 by 64 checker and its mips down to 1 by 1"></div>
+    <figcaption><b>A checker's mip chain</b>, each level drawn at the same size. Checks of 8 texels survive until the 8 × 8 level, where each texel holds exactly one check. One level further, every texel averages a black and a white check, so the rest of the chain is uniform grey.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Average in light, not in numbers</h3>
+    <p>Image files store brightness through the <span class="concept" data-tip="The standard colour space of image files and screens. Its curve spends more of its numbers on dark shades, where eyes notice small steps.">sRGB</span> curve, which spends more numbers on dark shades because our eyes are sensitive there. Average the stored numbers of black (0) and white (255) and you get 128, which displays noticeably too dark. Average the actual light and you get half the light, which sRGB stores as 188. The cooker builds mips in <span class="concept" data-tip="Brightness as physical light, before the sRGB storage curve. Averages and lighting maths are only physically right when done in it.">linear light</span> for this reason, and a cook test checks for 188.</p>
+  </div>
+  <figure>
+    <div class="swatch-row">
+      <div><div class="swatch checker-swatch" aria-label="fine black and white checker"></div><div class="readout">fine checker</div></div>
+      <div><div class="swatch" style="background: rgb(128,128,128)"></div><div class="readout">average numbers: <b>128</b></div></div>
+      <div><div class="swatch" style="background: rgb(188,188,188)"></div><div class="readout">average light: <b>188</b></div></div>
+    </div>
+    <figcaption><b>Squint at the checker.</b> From a distance it blends to the lighter grey on the right, not the middle one.</figcaption>
+  </figure>
+
+  <div class="prose">
+    <h3>Try it: one sample, or mips</h3>
+    <p>This is a small <span class="concept" data-tip="An image computed by ordinary code on the CPU, here this page's own script, without the GPU's texture hardware.">software render</span> of a checker floor stretching away from a camera 1.2 m above it. With one <span class="concept" data-tip="One read of a texture at a single point, giving the colour there. More samples per pixel give a truer average of what the pixel covers.">sample</span> per pixel the distance dissolves into <span class="concept" data-tip="False rings or stripes that appear when a fine, regular pattern is read with too few samples. It is one kind of aliasing.">moiré</span>, interference rings that were never in the <span class="concept" data-tip="An image mapped onto a surface to give it colour or other per-point detail, such as bumps or roughness.">texture</span>. With mips each pixel shows the average of what it covers, and the distance settles into grey.</p>
+  </div>
+  <figure class="wide">
+    <canvas id="floor-canvas" width="640" height="300" aria-label="Software render of a checker floor"></canvas>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Sampling">
+        <button type="button" id="mode-point" aria-pressed="true">One sample per pixel</button>
+        <button type="button" id="mode-mip" aria-pressed="false">Averaged (mips)</button>
+      </div>
+      <label for="check-size">Check size <input type="range" id="check-size" min="2" max="24" value="8"></label>
+      <span class="readout" id="check-readout"></span>
+    </div>
+    <figcaption><b>Live demo.</b> "Averaged" here takes 36 samples per pixel, a brute-force stand-in for the true average that mips approximate cheaply. On the GPU, mips get close to it with eight texel reads from two pre-built levels. Near the horizon, where one pixel spans hundreds of checks, even the 36 samples leave faint rings.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="aniso">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3</div>
+    <h2>Anisotropy: footprints that are long and thin</h2>
+    <p>A <span class="concept" data-tip="One dot of the rendered screen image. Each ends up with a single colour per frame.">pixel</span> is square on the screen, but its <span class="concept" data-tip="The patch of a surface, and so of its texture, that one screen pixel covers. Seen at a grazing angle, it is long and thin.">footprint</span> on a floor seen at a <span class="concept" data-tip="A view that skims a surface almost parallel to it, like looking along a floor toward the horizon.">grazing angle</span> is not. It stays narrow across the floor and stretches far into the distance. Plain <span class="concept" data-term="Mip" data-tip="A pre-averaged smaller copy of a texture, each half the size of the one before it, down to a single texel.">mips</span> can only pick one square <span class="concept" data-tip="One pixel of a texture. The separate name keeps it apart from the pixels of the screen.">texel</span> size. If it matches the long side, the <span class="concept" data-tip="An image mapped onto a surface to give it colour or other per-point detail, such as bumps or roughness.">texture</span> blurs across. If it matches the short side, it <span class="concept" data-term="Aliasing" data-tip="False patterns, shimmer or noise that appear when detail finer than a pixel is read with too few samples.">aliases</span> along.</p>
+    <p><span class="term concept" data-tip="Taking several samples along a pixel's stretched footprint from a sharper mip and averaging them. Praxis allows up to 16 per footprint.">Anisotropic filtering</span> handles the stretch. It reads the mip that matches the short side, then takes several <span class="concept" data-term="Sample" data-tip="One read of a texture at a single point, giving the colour there. More samples per pixel give a truer average of what the pixel covers.">samples</span> along the long side and averages them. The engine allows up to <span class="num">16x</span>, sixteen samples along one footprint. Sharp detail survives across the floor, and the distance still averages along it. (Since #257, merged on 2026-10-22 as f4c7442, 16x is the limit for colour textures; data textures, such as normal and roughness maps, allow <span class="num">4x</span>. <a href="anisotropy.html" style="color:var(--accent)">Anisotropy Explained</a> tells why.)</p>
+  </div>
+  <figure class="wide">
+    <div class="scroll">
+      <svg viewBox="0 0 900 260" width="900" role="img" aria-label="A square pixel maps to a long thin footprint on the floor; isotropic sampling uses one big blurry circle, anisotropic sampling uses many small circles along the footprint.">
+        <g transform="translate(30,40)">
+          <text x="0" y="-12" font-size="14" font-weight="600">On screen</text>
+          <rect x="30" y="40" width="70" height="70" fill="none" stroke="var(--accent)" stroke-width="3"/>
+          <text x="10" y="140" font-size="12" fill="var(--ink-soft)">one square pixel</text>
+        </g>
+        <path d="M170 115 H230" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#arrow)"/>
+        <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--ink-soft)"/></marker></defs>
+        <g transform="translate(250,40)">
+          <text x="0" y="-12" font-size="14" font-weight="600">On the floor: isotropic</text>
+          <polygon points="40,175 80,175 70,10 50,10" fill="var(--figure-bg)" stroke="var(--accent)" stroke-width="2"/>
+          <circle cx="60" cy="92" r="82" fill="var(--warm)" fill-opacity="0.18" stroke="var(--warm)"/>
+          <text x="140" y="80" font-size="12" fill="var(--ink-soft)">one big mip read</text>
+          <text x="140" y="98" font-size="12" fill="var(--ink-soft)">covers far more than</text>
+          <text x="140" y="116" font-size="12" fill="var(--ink-soft)">the footprint: blur</text>
+        </g>
+        <g transform="translate(590,40)">
+          <text x="0" y="-12" font-size="14" font-weight="600">On the floor: anisotropic</text>
+          <polygon points="40,175 80,175 70,10 50,10" fill="var(--figure-bg)" stroke="var(--accent)" stroke-width="2"/>
+          <g fill="var(--good)" fill-opacity="0.35" stroke="var(--good)" id="aniso-dots"></g>
+          <text x="110" y="80" font-size="12" fill="var(--ink-soft)">up to 16 small reads</text>
+          <text x="110" y="98" font-size="12" fill="var(--ink-soft)">along the footprint:</text>
+          <text x="110" y="116" font-size="12" fill="var(--ink-soft)">sharp across, smooth along</text>
+        </g>
+      </svg>
+    </div>
+    <figcaption><b>The footprint of one pixel</b> on a floor seen at a few degrees of elevation. At 16 m from the <span class="concept" data-tip="When a surface is so far away or so tilted that one screen pixel covers many texels.">minification</span> camera, in the scene's 640 × 360 <span class="concept" data-tip="A reviewed image committed to the repository, which a Reference scene must reproduce within a small tolerance on every test run.">Golden</span>, it is about 9 texels wide and 126 long; at 2560 × 1440, about 2.4 by 31.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="normals">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4</div>
+    <h2>Normal maps: bumps made of arrows</h2>
+    <p>A surface's <span class="term concept" data-tip="The direction a surface faces at a point, stored as an arrow of length 1. Lighting depends on how it lines up with the light.">normal</span> is the direction it faces. Lighting depends on it. A normal facing the light is bright; one facing away is dark. For a shiny surface, the <span class="concept" data-term="Specular highlight" data-tip="The bright reflection of a light on a shiny surface, where the surface mirrors the light toward the eye. Roughness sets its size.">highlight</span> appears where the normal sits halfway between the direction to the light and the direction to your eye.</p>
+    <p>A <span class="term concept" data-tip="A texture whose texels store tilted normals, so a flat surface is lit as if it were bumpy.">normal map</span> is a <span class="concept" data-tip="An image mapped onto a surface to give it colour or other per-point detail, such as bumps or roughness.">texture</span> that stores a tilted normal per <span class="concept" data-tip="One pixel of a texture. The separate name keeps it apart from the pixels of the screen.">texel</span> instead of a colour. The <span class="concept" data-tip="The actual triangles that make up a surface's shape. A normal map changes how they are lit and leaves their shape alone.">geometry</span> stays perfectly flat, but lighting reads the stored tilts, so the surface looks bumpy. The <span class="concept" data-tip="When a surface is so far away or so tilted that one screen pixel covers many texels.">minification</span> floor's normal map holds a grid of round bumps, one every 8 texels, about 3 cm apart, with slopes up to 27°.</p>
+  </div>
+  <figure class="wide">
+    <div class="scroll">
+      <svg viewBox="0 0 900 230" width="900" role="img" aria-label="Real bumps and a flat surface with a normal map shade the same">
+        <g transform="translate(30,30)">
+          <text x="0" y="0" font-size="14" font-weight="600">Real bumps (geometry)</text>
+          <path id="bump-path" d="" fill="none" stroke="var(--ink)" stroke-width="2.5"/>
+          <g id="bump-normals" stroke="var(--accent)" stroke-width="2"></g>
+        </g>
+        <g transform="translate(470,30)">
+          <text x="0" y="0" font-size="14" font-weight="600">Flat surface + normal map</text>
+          <path d="M0 130 H400" stroke="var(--ink)" stroke-width="2.5"/>
+          <g id="flat-normals" stroke="var(--accent)" stroke-width="2"></g>
+          <g id="flat-texels"></g>
+        </g>
+        <text x="30" y="215" font-size="12" fill="var(--ink-soft)">Blue arrows: the normals lighting sees. The coloured strip on the right is the normal map itself.</text>
+      </svg>
+    </div>
+    <figcaption><b>Same arrows, same lighting.</b> The normal map gives a flat floor the shading of real bumps without adding a single triangle. Each texel's colour encodes its arrow: red the tilt left or right, green the tilt along the floor's other direction (none in this side view, so the middle value), blue how straight up it points.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Roughness: sharp or spread highlights</h3>
+    <p>Every point of a surface also has a <span class="term concept" data-tip="How much a surface spreads its highlight, from 0 for a perfect mirror upward. Rougher surfaces show broader, dimmer highlights.">roughness</span>. A smooth surface (low roughness) is a near mirror and shows a light as a small, intense highlight. A rough surface scatters the light into a broad, dim glow. The total reflected light is about the same; rough surfaces spread it out. The floor's roughness is 0.2, fairly glossy, like polished stone.</p>
+  </div>
+</section>
+
+<section class="chapter" id="toksvig">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5</div>
+    <h2>Toksvig: when bumps get too small to see</h2>
+    <p><span class="concept" data-term="Mip" data-tip="A pre-averaged smaller copy of a texture, each half the size of the one before it, down to a single texel.">Mips</span> solve colour <span class="concept" data-term="Texture" data-tip="An image mapped onto a surface to give it colour or other per-point detail, such as bumps or roughness.">textures</span>, but they quietly break <span class="concept" data-term="Normal map" data-tip="A texture whose texels store tilted normals, so a flat surface is lit as if it were bumpy.">normal maps</span>. Up close, each <span class="concept" data-tip="One dot of the rendered screen image. Each ends up with a single colour per frame.">pixel</span> covers part of one bump and sees one tilted <span class="concept" data-tip="The direction a surface faces at a point, stored as an arrow of length 1. Lighting depends on how it lines up with the light.">normal</span>: you get glints where bumps face the light. Far away, one pixel covers many bumps tilted every way. Physically, those many little mirrors scatter the light in all those directions. The pixel should show a <em>broad, dim</em> glow, just like a rough surface would.</p>
+    <p>Now look at what a mip does to that pixel. It averages the arrows. Arrows tilted left and right cancel out, and the average points straight up: <em>flat</em>. Flat and glossy is a near mirror. The distance renders as a razor-sharp, far too bright line, and it flickers as the camera moves, because tiny changes decide whether the mirror catches the light.</p>
+    <p class="callout">Michael Toksvig (NVIDIA, 2004) noticed a measurable clue. Average <span class="concept" data-tip="Having a length of exactly 1. Normals are stored this way, so only their direction carries meaning.">unit-length</span> arrows that disagree and the result is <em>shorter</em> than 1. The more they disagree, the shorter it gets. That length tells you how bumpy the area under the pixel was, even after the bumps themselves have averaged away.</p>
+    <p>The <span class="concept" data-tip="The tool that turns source images and models into the engine's compressed, mip-mapped files ahead of time, so loading does no such work.">cooker</span> uses that clue. For every mip of the floor's <span class="concept" data-tip="How much a surface spreads its highlight, from 0 for a perfect mirror upward. Rougher surfaces show broader, dimmer highlights.">roughness</span> texture, it measures the arrows' disagreement in the matching mip of the normal map and raises the roughness by it. The floor's distance becomes rougher, and the light spreads about as widely as the real bumps would spread it. The roughness texture is "paired" with its normal map for this reason, and the pull request that added the minification scene (#174) extended that pairing to <span class="concept" data-tip="Generated by code from a few rules, with no artist-made source files. This floor's checker, bumps and roughness are all made this way.">procedural</span> scenes like this one.</p>
+  </div>
+  <figure class="wide">
+    <div class="pair">
+      <div>
+        <canvas id="arrows-canvas" width="460" height="260" aria-label="Normals under one pixel and their average"></canvas>
+      </div>
+      <div>
+        <canvas id="lobe-canvas" width="460" height="260" aria-label="Highlight shape: truth, plain mips, Toksvig"></canvas>
+      </div>
+    </div>
+    <div class="controls">
+      <label for="bumps-per-pixel">Bumps across one pixel <input type="range" id="bumps-per-pixel" min="0" max="100" value="62"></label>
+      <span class="readout" id="toksvig-readout"></span>
+    </div>
+    <figcaption><b>Live demo.</b> Left: one row of the normals under one pixel, seen from the side (blue), and the average of all of them (orange). Slide right to move the floor farther away: more bumps under each pixel, and the average shortens, then holds near 0.94 once a pixel spans about a whole bump. Right: how the <span class="concept" data-term="Specular highlight" data-tip="The bright reflection of a light on a shiny surface, where the surface mirrors the light toward the eye. Roughness sets its size.">highlight</span> is spread over angle, in the side view's plane. <b style="color:var(--good)">Green</b> is the truth, the average of every point's own glossy highlight. <b style="color:var(--bad)">Red</b> is plain mips, a flat mirror. <b style="color:var(--accent)">Blue</b> is <span class="concept" data-tip="A cooking step that widens roughness by how much a normal map's averaged tilts disagree, so distant bumps spread the highlight about as widely as real ones do.">Toksvig</span>, roughness widened from the shortened average. Once several bumps share a pixel, red spikes far above the chart, while blue spreads the light over a similar range of angles to green: one smooth lobe where the bumps make two peaks, at their steepest tilts. Toksvig gets the highlight's width roughly right, not its shape.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The roughness widening has a short formula. If the averaged arrow has length <span class="num">|m|</span>, the arrows' <span class="concept" data-term="Variance" data-tip="How widely values scatter around their average. Here it measures how much the normals under one pixel disagree in direction.">spread</span> is <span class="num">σ² = (1 − |m|) / |m|</span>. The highlight's width parameter (<span class="concept" data-tip="A widely used model of how a surface's microscopic facets spread a highlight. Its width parameter, α, is roughness squared.">GGX</span> α, which is roughness squared) grows as <span class="num">α′² = α² + 2σ²</span>. The second step comes from Kaplanyan and colleagues (<span class="concept" data-term="High-Performance Graphics" data-tip="A yearly research conference on fast rendering techniques, where the second step of this formula was published.">HPG</span> 2016). For the floor's bumps that turns roughness 0.2 into about 0.6 in the distance. That is the difference between a laser line and the soft glow in the <span class="concept" data-tip="A reviewed image committed to the repository, which a Reference scene must reproduce within a small tolerance on every test run.">Golden</span>.</p>
+    <p>Many engines hide this flicker by blending several frames together (<span class="concept" data-tip="Smoothing aliasing by blending each new frame with reprojected earlier ones. It can smear detail or leave ghost trails when things move.">temporal anti-aliasing</span>). Praxis avoids temporal tricks by design (<span class="concept" data-term="Architecture decision record" data-tip="A short, numbered document in the repository that records one hard-to-reverse design decision and the reasons for it.">ADR</span> 0008), so every frame has to be right on its own, and Toksvig is the floor's main tool for that. (It is not the whole answer. Later work on #184 found that at 1440p the anisotropic filtering of chapter 3 read the normal and roughness maps from a finer mip, whose widening covers the footprint's width but not its length, so the highlight sparkled. Since #257 those maps are read at <span class="num">4x</span>, which removed the sparkle; <a href="anisotropy.html" style="color:var(--accent)">Anisotropy Explained</a> tells that story.)</p>
+  </div>
+</section>
+
+<section class="chapter" id="floor">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 · PR #174</div>
+    <h2>The minification scene</h2>
+    <p>Everything above is packed into one <span class="concept" data-tip="A scene with a fixed camera path and scripted time, so every run renders exactly the same frames. Goldens and benchmarks are taken from it.">Reference scene</span>. A 100 m glossy checker floor, seen from 1.2 m up at a <span class="concept" data-tip="A view that skims a surface almost parallel to it, like looking along a floor toward the horizon.">grazing angle</span>. A bump <span class="concept" data-tip="A texture whose texels store tilted normals, so a flat surface is lit as if it were bumpy.">normal map</span>, and one <span class="concept" data-tip="A light that shines in every direction from one point in space, like a bare bulb.">point light</span> hovering 1 m over the floor 30 m ahead. The floor mirrors that light about 16 m out, deep in the <span class="concept" data-term="Minification" data-tip="When a surface is so far away or so tilted that one screen pixel covers many texels.">minified</span> zone, so the reflection's shape depends on <span class="concept" data-tip="A cooking step that widens roughness by how much a normal map's averaged tilts disagree, so distant bumps spread the highlight about as widely as real ones do.">Toksvig</span>.</p>
+    <p>Its image is a <span class="term concept" data-tip="A reviewed image committed to the repository, which a Reference scene must reproduce within a small tolerance on every test run.">Golden</span>: a reviewed render committed to the repository. Every test run renders the scene again and compares it <span class="concept" data-tip="One dot of the rendered screen image. Each ends up with a single colour per frame.">pixel</span> by pixel, allowing one step out of 255 for rounding. Each run compares two renders with the Golden: one at the origin, and one shifted 100 km along both horizontal axes. Both must match, which proves no large <span class="concept" data-term="World position" data-tip="A position in the Game world, in metres from its origin. The GPU receives it only as the grid cell holding it plus a small offset.">world coordinate</span> reaches the GPU in <span class="concept" data-term="Precision" data-tip="How finely a number format can tell nearby values apart. The GPU's usual floats grow coarser as values grow, so positions far from the origin would jitter.">low precision</span>.</p>
+  </div>
+  <figure class="wide">
+    <div class="shot"><img src="img/minification-metal.png" alt="The minification Golden: a checker floor fading smoothly to grey with a soft reflected streak" width="640" height="360"><span>Golden, Metal (M4 Pro), 640 × 360, as recorded at M2</span></div>
+    <figcaption><b>What correct looks like.</b> Crisp checks near the bottom, glints where bumps face the light. The checks fade to a smooth grey toward the horizon, and the light's reflection is a soft streak that opens into a haze.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Proving the test can fail</h3>
+    <p>A test that never fails proves nothing, so each safeguard was switched off on purpose to check that the Golden catches it. Each broken render was compared against the Golden. The <span class="concept" data-tip="An image that shows where a render disagrees with its Golden, by marking every pixel that differs beyond the allowed tolerance.">difference image</span> dims the broken render to a third and paints every pixel that differs by more than one step in red.</p>
+  </div>
+  <figure class="wide">
+    <div class="pair">
+      <div class="shot"><img src="img/minification-no-mips.png" alt="Cooked without mips: moiré rings across the floor and a noisy streak" width="640" height="360"><span>Cooked without mips</span></div>
+      <div class="shot"><img src="img/minification-no-mips-difference.png" alt="Difference image: red almost everywhere past the near floor" width="640" height="360"><span>Difference: 119,995 pixels off (Metal), 99,497 (software Vulkan)</span></div>
+    </div>
+    <figcaption><b>No <span class="concept" data-term="Mip" data-tip="A pre-averaged smaller copy of a texture, each half the size of the one before it, down to a single texel.">mips</span>.</b> The <span class="concept" data-tip="The tool that turns source images and models into the engine's compressed, mip-mapped files ahead of time, so loading does no such work.">cooker</span> stored only the full-size <span class="concept" data-term="Texture" data-tip="An image mapped onto a surface to give it colour or other per-point detail, such as bumps or roughness.">textures</span>. <span class="concept" data-tip="False rings or stripes that appear when a fine, regular pattern is read with too few samples. It is one kind of aliasing.">Moiré</span> rings cover the floor, and the reflection breaks into noise, because each pixel picks one random bump tilt. Red covers nearly everything beyond a few metres.</figcaption>
+  </figure>
+  <figure class="wide">
+    <div class="pair">
+      <div class="shot"><img src="img/minification-no-toksvig.png" alt="Cooked without Toksvig: a hard saturated white line instead of a soft glow" width="640" height="360"><span>Cooked without Toksvig</span></div>
+      <div class="shot"><img src="img/minification-no-toksvig-difference.png" alt="Difference image: a wide red fan around the reflection" width="640" height="360"><span>Difference: 56,945 pixels off (Metal), 61,231 (software Vulkan)</span></div>
+    </div>
+    <figcaption><b>No Toksvig.</b> The mips are there, so the checker is fine, but the <span class="concept" data-tip="How much a surface spreads its highlight, from 0 for a perfect mirror upward. Rougher surfaces show broader, dimmer highlights.">roughness</span> is never widened. The averaged-flat <span class="concept" data-term="Normal" data-tip="The direction a surface faces at a point, stored as an arrow of length 1. Lighting depends on how it lines up with the light.">normals</span> turn the floor into a mirror and the soft glow collapses into a hard white line. The red fan is wide because roughness changes how light spreads over a whole region, not just the bright core.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="wall">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 7 · PR #173</div>
+    <h2>The texture wall: 10,000 textures in one list</h2>
+    <p>A <span class="concept" data-tip="A small program the GPU runs for every vertex or pixel. Here, the code that works out each pixel's colour from its textures.">shader</span> can only read <span class="concept" data-term="Texture" data-tip="An image mapped onto a surface to give it colour or other per-point detail, such as bumps or roughness.">textures</span> it has been handed before drawing. Praxis hands over each kind of texture as one big numbered list, a <span class="term concept" data-tip="A numbered list of textures bound for shaders all at once, so a shader picks any texture by its number with no swapping between draws.">binding array</span>: one list for colour, one for <span class="concept" data-term="Normal" data-tip="The direction a surface faces at a point, stored as an arrow of length 1. Lighting depends on how it lines up with the light.">normals</span>, one for <span class="concept" data-tip="How much a surface spreads its highlight, from 0 for a perfect mirror upward. Rougher surfaces show broader, dimmer highlights.">roughness</span>, and so on. Each list is a <span class="term concept" data-tip="One texture role of a Material: albedo, normal, metallic-roughness, occlusion or emissive. Each Channel has its own binding array.">Channel</span>, and a position in it is a <span class="term concept" data-tip="One numbered position in a Channel's list, holding one texture. Layer 0 always holds a neutral default.">Layer</span>. A <span class="concept" data-term="Material" data-tip="The appearance of a surface: its base factors, such as colour and roughness, plus one Layer number per Channel for its textures.">material</span> stores Layer numbers, so a <span class="concept" data-term="Draw call" data-tip="One command asking the GPU to render a batch of triangles with the resources currently bound.">draw</span> needs no texture swapping at all. Slot 0 always holds a <span class="concept" data-tip="The plain texture at Layer 0 of every Channel, which changes nothing when read: white for colour, a flat normal for normals.">neutral default</span>, so a material without, say, a <span class="concept" data-tip="A texture whose texels store tilted normals, so a flat surface is lit as if it were bumpy.">normal map</span> still has something harmless to read. An open world <span class="concept" data-term="Streaming" data-tip="Loading textures and other assets into GPU memory while the game runs, and dropping them, as the camera moves through the world.">streams</span> thousands of textures through these lists, so the scene asks: do they still work at 10,000?</p>
+  </div>
+  <figure class="wide">
+    <div class="scroll">
+      <svg viewBox="0 0 900 220" width="900" role="img" aria-label="The albedo Channel as a list of slots; quad materials point at Layers">
+        <text x="20" y="24" font-size="14" font-weight="600">Albedo Channel (one binding array)</text>
+        <g id="slots" transform="translate(20,40)"></g>
+        <g transform="translate(20,150)">
+          <text x="0" y="0" font-size="13" fill="var(--ink-soft)">Quad k's Material stores Layer 101k + 1, so the 100 quads reach slots 1 to 10,000: both ends of the list.</text>
+          <text x="0" y="24" font-size="13" fill="var(--ink-soft)">The other 9,900 textures are loaded and bound but never drawn: they are there to make the list full size.</text>
+        </g>
+      </svg>
+    </div>
+  </figure>
+  <div class="prose">
+    <p>Each of the 10,000 textures is 4 × 4 <span class="concept" data-term="Texel" data-tip="One pixel of a texture. The separate name keeps it apart from the pixels of the screen.">texels</span> of one flat colour, and the colour spells out its own number. Red is its last digit, green its tens digit, each in steps of 28, and blue its hundreds. If any <span class="concept" data-tip="A flat rectangle made of two triangles. The texture wall is a grid of them, each showing one texture.">quad</span> read the wrong slot, it would show the wrong colour, and the <span class="concept" data-tip="A reviewed image committed to the repository, which a Reference scene must reproduce within a small tolerance on every test run.">Golden</span> would catch it.</p>
+  </div>
+  <figure>
+    <div class="wall-demo">
+      <div class="wall-swatch" id="wall-swatch" aria-live="polite"></div>
+      <div>
+        <div class="controls" style="margin-top:0">
+          <label for="wall-index">Texture number <input type="number" id="wall-index" min="0" max="9999" value="4545"></label>
+        </div>
+        <p class="readout" id="wall-readout" style="margin-top:10px"></p>
+      </div>
+    </div>
+    <figcaption><b>Decode a colour.</b> Neighbouring numbers always differ by at least 28 steps of red, so a slot read one off is never a near miss.</figcaption>
+  </figure>
+  <figure class="wide">
+    <div class="pair">
+      <div class="shot"><img src="img/texture-wall-metal.png" alt="The texture-wall Golden: a 10 by 10 grid, red increasing to the right, green increasing downward" width="640" height="360"><span>Golden, Metal, as recorded at M2</span></div>
+      <div class="shot"><img src="img/texture-wall-off-by-one-layer.png" alt="Off-by-one Layer: top-left quad white, first column red" width="640" height="360"><span>Bug planted: every texture registered one slot too low</span></div>
+    </div>
+    <figcaption><b>Reading the grid.</b> Red grows left to right, green top to bottom, and blue across the whole grid. The top-left quad is texture 0, black; the bottom-right is texture 9,999, light grey. With the planted bug, every quad shows its neighbour's colour. Quad 10 now reads texture 1,009, whose last digit 9 means full red, so the first column turns red. Quad 0 reads slot 0, the neutral white. 57,999 <span class="concept" data-term="Pixel" data-tip="One dot of the rendered screen image. Each ends up with a single colour per frame.">pixels</span> off.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="cost">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 8 · the gate</div>
+    <h2>What 10,000 bound textures cost</h2>
+    <p>Each frame has a <span class="concept" data-term="Budget" data-tip="A numeric limit on one measurement of a Reference scene, such as CPU time per frame, that no change may push past.">budget</span> of 6 ms of CPU time on the <span class="concept" data-tip="The Apple chip that Praxis judges its Budgets on, as its reference hardware for now.">M4 Pro</span> (<span class="concept" data-term="Architecture decision record" data-tip="A short, numbered document in the repository that records one hard-to-reverse design decision and the reasons for it.">ADR</span> 0013). The architecture decision ADR 0017 set a <span class="concept" data-tip="A measured check that must pass before later work may build on a design. Here, a timing test of the full binding array.">gate</span> before <span class="concept" data-tip="Loading textures and other assets into GPU memory while the game runs, and dropping them, as the camera moves through the world.">streaming</span> could build on <span class="concept" data-term="Binding array" data-tip="A numbered list of textures bound for shaders all at once, so a shader picks any texture by its number with no swapping between draws.">binding arrays</span>. <span class="concept" data-tip="Creating a new bind group, the fixed set of resources handed to shaders, since an existing one cannot be edited. Every list entry is written again.">Rebuilding</span> the 10,000-entry list, plus drawing one frame with it bound, must fit in those 6 ms at the <span class="concept" data-tip="The middle value of a set of measurements: half the frames were faster and half slower. One odd frame barely moves it.">median</span> and at <span class="concept" data-tip="The 95th percentile: the time that only the slowest frame in twenty exceeds. It shows how bad the occasional slow frame gets.">p95</span> (the slowest frame in twenty).</p>
+    <p>Two costs showed up. <span class="term">Rebuilding</span> the list happens when <span class="concept" data-term="Texture" data-tip="An image mapped onto a surface to give it colour or other per-point detail, such as bumps or roughness.">textures</span> arrive or leave, and costs about 2.5 to 3 ms. <span class="term concept" data-tip="Setting the bind group that holds the full list before drawing, every frame. On Metal this also declares each listed texture resident.">Keeping it bound</span> costs something every single frame. On Macs, wgpu, the graphics library Praxis uses, asks <span class="concept" data-tip="Apple's graphics API. On Macs, wgpu, the graphics library Praxis uses, turns the engine's GPU work into Metal calls.">Metal</span> to keep each texture in the list <span class="concept" data-term="Residency" data-tip="Whether a texture is in GPU memory and declared usable by the GPU's current work. On Metal, each texture a bound list holds must be declared.">resident</span>, one call per texture, each time the list is bound, so every frame. Those calls alone are almost half of a 2.1 ms bill (45% in #153's profile, with wgpu's own tracking of each texture another 17%), against 0.04 ms when only the 100 drawn textures and each Channel's default are bound. Metal can also make many textures resident at once, through heaps or residency sets, which is what the first option below is about.</p>
+  </div>
+  <figure class="wide">
+    <div class="scroll">
+      <svg viewBox="0 0 900 300" width="900" id="cost-chart" role="img" aria-label="CPU cost bars against the 6 ms budget"></svg>
+    </div>
+    <figcaption><b>Medians from three rounds on the M4 Pro</b> (<span class="concept" data-tip="A Unix measure of how many processes are running or waiting to run, averaged over recent minutes. Higher load makes timings noisier.">load average</span> 6 to 10), worst p95 marked with a tick where one was recorded; each count includes the five defaults at Layer 0, one per Channel. Rebuild plus frame fits the 6 ms line at the median in every round, but its p95 touched 6.02 ms in one round, so the gate was recorded as marginal: at the line, not inside it. (Measured again the same day on a quiet machine at the end of milestone M2, in #186, it fitted in every run: at most 4.74 ms at the median and 5.01 ms at p95, with the bound list costing 1.1 to 1.8 ms a frame.) The GPU pays too: binding the full list adds about 0.35 ms to every <span class="concept" data-tip="The render pass that draws the scene's surfaces, with their textures and lighting, into the frame.">main pass</span> (445 µs against 98). (That is only what the main pass's own timer sees. Measured later, texture-wall's whole GPU frame takes about 15 ms, over the 12 ms GPU budget; the project puts that down to Metal making its 10,000 textures resident, an inference not yet profiled, and tracks it on #183.)</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The open decision is what to do about the steady per-frame cost before the streaming milestone (M4). The options are cheaper residency on Metal, binding only the textures visible each frame, grouping textures into a few large arrays, or capping how many stay bound. The recommendation on #173 is to research those before committing.</p>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Texel</dt><dd>One pixel of a texture.</dd></div>
+    <div><dt>Minification</dt><dd>A surface so far or so tilted that one screen pixel covers many texels.</dd></div>
+    <div><dt>Aliasing, moiré</dt><dd>False patterns from reading too few samples of a detailed texture.</dd></div>
+    <div><dt>Mip, mip chain</dt><dd>Pre-averaged half-size copies of a texture, down to 1 × 1.</dd></div>
+    <div><dt>Trilinear filtering</dt><dd>Reading the two nearest mips and blending between them.</dd></div>
+    <div><dt>Anisotropic filtering</dt><dd>Several samples along a stretched footprint, up to 16 here.</dd></div>
+    <div><dt>Linear light</dt><dd>Brightness as physical light, before the sRGB storage curve.</dd></div>
+    <div><dt>Normal map</dt><dd>A texture of surface tilts that lighting treats as bumps.</dd></div>
+    <div><dt>Roughness</dt><dd>How much a surface spreads a highlight; 0 is a mirror.</dd></div>
+    <div><dt>Toksvig</dt><dd>Widening roughness by how much a normal map's averaged tilts disagree.</dd></div>
+    <div><dt>Cooking</dt><dd>Turning source images into the engine's compressed, mip-mapped files ahead of time.</dd></div>
+    <div><dt>Golden</dt><dd>A committed reference image every test run must reproduce.</dd></div>
+    <div><dt>Binding array, Channel, Layer</dt><dd>One numbered list of textures per kind; a Layer is a slot in it.</dd></div>
+    <div><dt>Median, p95</dt><dd>The typical frame, and the slowest frame in twenty.</dd></div>
+  </dl>
+</section>
+<nav class="series" aria-label="Praxis field guides">
+  <a href="instance-buffer.html">Previous: Instance Buffer Explained</a>
+  <a href="index.html">All field guides</a>
+  <a href="hdr-pipeline.html">Next: HDR Pipeline Explained</a>
+</nav>
+</div>
+
+<script>
+(function () {
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const svgNS = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs, parent) => {
+    const node = document.createElementNS(svgNS, tag);
+    for (const key in attrs) node.setAttribute(key, attrs[key]);
+    if (parent) parent.appendChild(node);
+    return node;
+  };
+  const srgbToLinear = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  const linearToSrgb = (v) => { const e = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055; return Math.round(Math.max(0, Math.min(1, e)) * 255); };
+
+  // Chapter 1: tiny checks under one pixel.
+  const tiny = document.getElementById("tiny-checks");
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++)
+    if ((x + y) % 2 === 0) el("rect", { x: x * 10, y: y * 10, width: 10, height: 10, fill: "var(--ink)" }, tiny);
+
+  // Chapter 2: mip chain of a 64x64 checker with 8-texel checks, averaged in linear light.
+  (function mipChain() {
+    const row = document.getElementById("mip-chain");
+    let size = 64;
+    let level = new Float32Array(size * size);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++)
+      level[y * size + x] = ((Math.floor(x / 8) + Math.floor(y / 8)) % 2 === 0) ? 1 : 0;
+    let index = 0;
+    while (true) {
+      const canvas = document.createElement("canvas");
+      canvas.width = size; canvas.height = size; canvas.className = "pixelated";
+      canvas.style.width = "96px"; canvas.style.height = "96px";
+      const context = canvas.getContext("2d");
+      const image = context.createImageData(size, size);
+      for (let i = 0; i < size * size; i++) {
+        const value = linearToSrgb(level[i]);
+        image.data[i * 4] = image.data[i * 4 + 1] = image.data[i * 4 + 2] = value;
+        image.data[i * 4 + 3] = 255;
+      }
+      context.putImageData(image, 0, 0);
+      const box = document.createElement("div");
+      box.appendChild(canvas);
+      const label = document.createElement("div");
+      label.textContent = "mip " + index + " · " + size + "²";
+      box.appendChild(label);
+      row.appendChild(box);
+      if (size === 1) break;
+      const next = size / 2;
+      const reduced = new Float32Array(next * next);
+      for (let y = 0; y < next; y++) for (let x = 0; x < next; x++)
+        reduced[y * next + x] = (level[(2 * y) * size + 2 * x] + level[(2 * y) * size + 2 * x + 1] + level[(2 * y + 1) * size + 2 * x] + level[(2 * y + 1) * size + 2 * x + 1]) / 4;
+      level = reduced; size = next; index++;
+    }
+  })();
+
+  // Chapter 2: software floor render.
+  (function floorDemo() {
+    const canvas = document.getElementById("floor-canvas");
+    const context = canvas.getContext("2d");
+    const pointButton = document.getElementById("mode-point");
+    const mipButton = document.getElementById("mode-mip");
+    const slider = document.getElementById("check-size");
+    const readout = document.getElementById("check-readout");
+    let mode = "point";
+    const width = canvas.width, height = canvas.height;
+    const horizon = 70, focal = 360, cameraHeight = 1.2;
+    const dark = srgbToLinear(40), light = srgbToLinear(200);
+    const sky = [46, 72, 96];
+    function render() {
+      const checksPerMetre = 32 / Number(slider.value) * 4;
+      readout.textContent = (100 / checksPerMetre).toFixed(1) + " cm checks";
+      const image = context.createImageData(width, height);
+      const samples = mode === "point" ? 1 : 6;
+      for (let py = 0; py < height; py++) {
+        for (let px = 0; px < width; px++) {
+          let sum = 0, hits = 0;
+          for (let sy = 0; sy < samples; sy++) for (let sx = 0; sx < samples; sx++) {
+            const x = px + (samples === 1 ? 0.5 : (sx + 0.5) / samples);
+            const y = py + (samples === 1 ? 0.5 : (sy + 0.5) / samples);
+            const below = y - horizon;
+            if (below <= 0) continue;
+            const distance = cameraHeight * focal / below;
+            const across = (x - width / 2) * distance / focal;
+            const u = Math.floor(across * checksPerMetre), v = Math.floor(distance * checksPerMetre);
+            sum += ((u + v) & 1) ? light : dark; hits++;
+          }
+          const offset = (py * width + px) * 4;
+          if (hits === 0) { image.data[offset] = sky[0]; image.data[offset + 1] = sky[1]; image.data[offset + 2] = sky[2]; }
+          else {
+            const coverage = hits / (samples * samples);
+            const linear = (sum / hits) * coverage + srgbToLinear(sky[0]) * (1 - coverage);
+            const value = linearToSrgb(linear);
+            image.data[offset] = image.data[offset + 1] = image.data[offset + 2] = value;
+            if (coverage < 1) { image.data[offset] = linearToSrgb(linear); image.data[offset + 1] = linearToSrgb((sum / hits) * coverage + srgbToLinear(sky[1]) * (1 - coverage)); image.data[offset + 2] = linearToSrgb((sum / hits) * coverage + srgbToLinear(sky[2]) * (1 - coverage)); }
+          }
+          image.data[offset + 3] = 255;
+        }
+      }
+      context.putImageData(image, 0, 0);
+    }
+    function setMode(next) {
+      mode = next;
+      pointButton.setAttribute("aria-pressed", String(next === "point"));
+      mipButton.setAttribute("aria-pressed", String(next === "mip"));
+      render();
+    }
+    pointButton.addEventListener("click", () => setMode("point"));
+    mipButton.addEventListener("click", () => setMode("mip"));
+    slider.addEventListener("input", render);
+    render();
+  })();
+
+  // Chapter 3: anisotropic sample dots.
+  (function anisoDots() {
+    const group = document.getElementById("aniso-dots");
+    for (let i = 0; i < 9; i++) {
+      const t = i / 8;
+      const y = 168 - t * 150;
+      const r = 9 - t * 5;
+      el("circle", { cx: 60, cy: y, r: r }, group);
+    }
+  })();
+
+  // Chapter 4: bumps and normals.
+  (function bumps() {
+    const width = 400, base = 130, amplitude = 22, period = 100;
+    let d = "";
+    for (let x = 0; x <= width; x += 4) {
+      const y = base - amplitude * Math.sin((x / period) * Math.PI * 2);
+      d += (x === 0 ? "M" : "L") + x + " " + y.toFixed(1);
+    }
+    document.getElementById("bump-path").setAttribute("d", d);
+    const real = document.getElementById("bump-normals");
+    const flat = document.getElementById("flat-normals");
+    const texels = document.getElementById("flat-texels");
+    for (let x = 12.5; x < width; x += 25) {
+      const slope = -amplitude * Math.cos((x / period) * Math.PI * 2) * (Math.PI * 2 / period);
+      const length = Math.hypot(1, slope);
+      const nx = slope / length, ny = -1 / length;
+      const y = base - amplitude * Math.sin((x / period) * Math.PI * 2);
+      el("line", { x1: x, y1: y, x2: x + nx * 40, y2: y + ny * 40, "stroke-linecap": "round" }, real);
+      el("line", { x1: x, y1: base, x2: x + nx * 40, y2: base + ny * 40, "stroke-linecap": "round" }, flat);
+      const red = Math.round((nx * 0.5 + 0.5) * 255), blue = Math.round((-ny * 0.5 + 0.5) * 255);
+      el("rect", { x: x - 12.5, y: base + 14, width: 25, height: 18, fill: "rgb(" + red + ",128," + blue + ")" }, texels);
+    }
+  })();
+
+  // Chapter 5: Toksvig.
+  (function toksvig() {
+    const arrows = document.getElementById("arrows-canvas");
+    const lobe = document.getElementById("lobe-canvas");
+    const slider = document.getElementById("bumps-per-pixel");
+    const readout = document.getElementById("toksvig-readout");
+    const roughness = 0.2;
+    const maxSlope = 0.5;
+    function ggx(cosine, alpha) {
+      const a2 = alpha * alpha;
+      const denominator = cosine * cosine * (a2 - 1) + 1;
+      return a2 / (Math.PI * denominator * denominator);
+    }
+    function setup(canvas) {
+      const ratio = window.devicePixelRatio || 1;
+      const width = canvas.width, height = canvas.height;
+      if (!canvas.dataset.scaled) {
+        canvas.style.width = "100%";
+        canvas.width = width * ratio; canvas.height = height * ratio;
+        canvas.dataset.scaled = String(ratio); canvas.dataset.w = width; canvas.dataset.h = height;
+      }
+      const context = canvas.getContext("2d");
+      const scale = Number(canvas.dataset.scaled);
+      context.setTransform(scale, 0, 0, scale, 0, 0);
+      return { context, width: Number(canvas.dataset.w), height: Number(canvas.dataset.h) };
+    }
+    function draw() {
+      const t = Number(slider.value) / 100;
+      const bumps = Math.pow(2, t * 7 - 3);
+      const count = 41;
+      // The floor's bumps under a square pixel: count × count normals of the height sin x sin y, slopes up to maxSlope.
+      // Its rows mirror about the middle one, so the average stays in the side view's plane; tilts is that middle row.
+      const tilts = [], normals = [];
+      for (let i = 0; i < count; i++) {
+        const x = (i + 0.5) / count * bumps * Math.PI * 2 + 0.6;
+        tilts.push(-Math.atan(maxSlope * Math.cos(x)));
+        for (let j = 0; j < count; j++) {
+          const y = ((j + 0.5) / count - 0.5) * bumps * Math.PI * 2 + Math.PI / 2;
+          const slopeX = maxSlope * Math.cos(x) * Math.sin(y), slopeY = maxSlope * Math.sin(x) * Math.cos(y);
+          const size = Math.hypot(slopeX, slopeY, 1);
+          normals.push([-slopeX / size, -slopeY / size, 1 / size]);
+        }
+      }
+      let mx = 0, my = 0;
+      normals.forEach((normal) => { mx += normal[0]; my += normal[2]; });
+      mx /= normals.length; my /= normals.length;
+      const length = Math.hypot(mx, my);
+      const variance = (1 - length) / length;
+      const alpha = roughness * roughness;
+      const widenedAlpha = Math.sqrt(Math.min(1, alpha * alpha + 2 * variance));
+      const widenedRoughness = Math.sqrt(widenedAlpha);
+      readout.innerHTML = "bumps across a pixel <b>" + bumps.toFixed(2) + "</b> · average length <b>" + length.toFixed(3) + "</b> · roughness <b>0.20 → " + widenedRoughness.toFixed(2) + "</b>";
+
+      const a = setup(arrows), ac = a.context;
+      ac.clearRect(0, 0, a.width, a.height);
+      ac.font = "12px " + css("--mono");
+      ac.fillStyle = css("--ink-soft");
+      ac.fillText("normals under one pixel", 12, 20);
+      const baseY = a.height - 40, left = 30, right = a.width - 30;
+      ac.strokeStyle = css("--rule"); ac.lineWidth = 1;
+      ac.strokeRect(left, baseY - 150, right - left, 170);
+      ac.strokeStyle = css("--accent"); ac.lineWidth = 1.5;
+      const shown = Math.min(count, 21);
+      for (let i = 0; i < shown; i++) {
+        const tilt = tilts[Math.round(i * (count - 1) / (shown - 1))];
+        const x = left + 10 + i * ((right - left - 20) / (shown - 1));
+        ac.beginPath(); ac.moveTo(x, baseY); ac.lineTo(x + Math.sin(tilt) * 70, baseY - Math.cos(tilt) * 70); ac.stroke();
+      }
+      const centre = (left + right) / 2;
+      ac.strokeStyle = css("--warm"); ac.lineWidth = 4; ac.lineCap = "round";
+      ac.beginPath(); ac.moveTo(centre, baseY); ac.lineTo(centre + mx * 130, baseY - my * 130); ac.stroke();
+      ac.lineCap = "butt";
+      ac.setLineDash([4, 4]); ac.strokeStyle = css("--ink-soft"); ac.lineWidth = 1;
+      ac.beginPath(); ac.moveTo(centre - 12, baseY - 130); ac.lineTo(centre + 12, baseY - 130); ac.stroke();
+      ac.setLineDash([]);
+      ac.fillStyle = css("--ink-soft");
+      ac.fillText("length 1", centre + 16, baseY - 126);
+      ac.fillStyle = css("--warm");
+      ac.fillText("average: " + length.toFixed(3), centre + 16, baseY - my * 130 + 18);
+
+      const l = setup(lobe), lc = l.context;
+      lc.clearRect(0, 0, l.width, l.height);
+      const plotLeft = 44, plotRight = l.width - 14, plotTop = 26, plotBottom = l.height - 34;
+      const angleRange = 50 * Math.PI / 180;
+      const truth = [], plain = [], widened = [];
+      const steps = 160;
+      for (let s = 0; s <= steps; s++) {
+        const angle = -angleRange + (2 * angleRange) * s / steps;
+        let sum = 0;
+        const across = Math.sin(angle), up = Math.cos(angle);
+        normals.forEach((normal) => { sum += ggx(normal[0] * across + normal[2] * up, alpha); });
+        truth.push(sum / normals.length);
+        plain.push(ggx(Math.cos(angle - Math.atan2(mx, my)), alpha));
+        widened.push(ggx(Math.cos(angle - Math.atan2(mx, my)), widenedAlpha));
+      }
+      const top = Math.max(...truth, ...widened) * 1.25;
+      lc.font = "12px " + css("--mono");
+      lc.fillStyle = css("--ink-soft");
+      lc.fillText("highlight strength by angle", 12, 16);
+      lc.strokeStyle = css("--rule"); lc.lineWidth = 1;
+      lc.beginPath(); lc.moveTo(plotLeft, plotBottom); lc.lineTo(plotRight, plotBottom); lc.moveTo(plotLeft, plotTop); lc.lineTo(plotLeft, plotBottom); lc.stroke();
+      [-40, -20, 0, 20, 40].forEach((degrees) => {
+        const x = plotLeft + (degrees * Math.PI / 180 + angleRange) / (2 * angleRange) * (plotRight - plotLeft);
+        lc.fillText(degrees + "°", x - 10, plotBottom + 16);
+      });
+      function curve(values, colour, width) {
+        lc.strokeStyle = colour; lc.lineWidth = width;
+        lc.save(); lc.beginPath(); lc.rect(plotLeft, plotTop, plotRight - plotLeft, plotBottom - plotTop); lc.clip();
+        lc.beginPath();
+        values.forEach((value, s) => {
+          const x = plotLeft + s / steps * (plotRight - plotLeft);
+          const y = plotBottom - value / top * (plotBottom - plotTop);
+          if (s === 0) lc.moveTo(x, y); else lc.lineTo(x, y);
+        });
+        lc.stroke(); lc.restore();
+      }
+      curve(truth, css("--good"), 3);
+      curve(plain, css("--bad"), 2);
+      curve(widened, css("--accent"), 2);
+      const plainPeak = Math.max(...plain);
+      if (plainPeak > top) {
+        lc.fillStyle = css("--bad");
+        lc.fillText("plain mips peak " + Math.round(plainPeak) + ", off the chart", plotRight - 230, plotTop + 12);
+      }
+    }
+    slider.addEventListener("input", draw);
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+    new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    draw();
+  })();
+
+  // Chapter 7: slots diagram and colour decoder.
+  (function slots() {
+    const group = document.getElementById("slots");
+    const labels = ["0", "1", "2", "3", "…", "102", "…", "9,999", "10,000"];
+    const notes = ["neutral", "tex 0", "tex 1", "tex 2", "", "tex 101", "", "tex 9,998", "tex 9,999"];
+    const used = [false, true, false, false, false, true, false, false, true];
+    labels.forEach((label, i) => {
+      const x = i * 96;
+      el("rect", { x: x, y: 0, width: 88, height: 54, rx: 4, fill: used[i] ? "var(--accent)" : "var(--panel)", "fill-opacity": used[i] ? 0.18 : 1, stroke: used[i] ? "var(--accent)" : "var(--rule)" }, group);
+      const text = el("text", { x: x + 44, y: 24, "font-size": 13, "text-anchor": "middle", "font-weight": 600 }, group);
+      text.textContent = label;
+      const note = el("text", { x: x + 44, y: 42, "font-size": 11, "text-anchor": "middle", fill: "var(--ink-soft)" }, group);
+      note.textContent = notes[i];
+    });
+    const caption = el("text", { x: 0, y: 76, "font-size": 12, fill: "var(--accent)" }, group);
+    caption.textContent = "highlighted: slots the quads draw from (quad 0 → slot 1, quad 1 → slot 102, quad 99 → slot 10,000)";
+  })();
+  (function decoder() {
+    const input = document.getElementById("wall-index");
+    const swatch = document.getElementById("wall-swatch");
+    const readout = document.getElementById("wall-readout");
+    function update() {
+      let index = Math.round(Number(input.value));
+      if (!Number.isFinite(index)) index = 0;
+      index = Math.max(0, Math.min(9999, index));
+      const red = (index % 10) * 28, green = (Math.floor(index / 10) % 10) * 28, blue = Math.floor(Math.floor(index / 100) * 255 / 99);
+      swatch.style.background = "rgb(" + red + "," + green + "," + blue + ")";
+      const quad = index % 101 === 0 ? index / 101 : null;
+      readout.innerHTML = "red <b>" + red + "</b> (last digit " + (index % 10) + "), green <b>" + green + "</b> (tens " + (Math.floor(index / 10) % 10) + "), blue <b>" + blue + "</b> (hundreds " + Math.floor(index / 100) + ")<br>Layer <b>" + (index + 1) + "</b>" + (quad === null ? ", loaded but not drawn" : ", drawn by quad " + quad + " (row " + Math.floor(quad / 10) + ", column " + (quad % 10) + ")");
+    }
+    input.addEventListener("input", update);
+    update();
+  })();
+
+  // Chapter 8: cost chart.
+  (function costChart() {
+    const svg = document.getElementById("cost-chart");
+    const rows = [
+      { label: "Frame, 105 textures bound", median: 0.04, p95: null, colour: "var(--good)" },
+      { label: "Frame, 10,005 bound", median: 2.12, p95: 3.40, colour: "var(--accent)" },
+      { label: "Rebuild the list (once)", median: 2.90, p95: null, colour: "var(--warm)" },
+      { label: "Rebuild + frame", median: 5.10, p95: 6.02, colour: "var(--ink)" },
+    ];
+    const left = 230, right = 860, top = 30, rowHeight = 52, max = 7;
+    const scale = (value) => left + value / max * (right - left);
+    for (let tick = 0; tick <= max; tick++) {
+      el("line", { x1: scale(tick), y1: top - 6, x2: scale(tick), y2: top + rows.length * rowHeight, stroke: "var(--rule)" }, svg);
+      const text = el("text", { x: scale(tick), y: top + rows.length * rowHeight + 20, "font-size": 12, "text-anchor": "middle", fill: "var(--ink-soft)" }, svg);
+      text.textContent = tick + " ms";
+    }
+    rows.forEach((row, i) => {
+      const y = top + i * rowHeight + 10;
+      const label = el("text", { x: 0, y: y + 20, "font-size": 13 }, svg);
+      label.textContent = row.label;
+      el("rect", { x: left, y: y, width: Math.max(2, scale(row.median) - left), height: 28, fill: row.colour, "fill-opacity": 0.85, rx: 2 }, svg);
+      const value = el("text", { x: scale(row.median) + 8, y: y + 19, "font-size": 12, fill: "var(--ink-soft)" }, svg);
+      value.textContent = row.median.toFixed(2) + (row.p95 ? "  (p95 " + row.p95.toFixed(2) + ")" : "");
+      if (row.p95) el("line", { x1: scale(row.p95), y1: y - 4, x2: scale(row.p95), y2: y + 32, stroke: row.colour, "stroke-width": 2 }, svg);
+    });
+    el("line", { x1: scale(6), y1: top - 14, x2: scale(6), y2: top + rows.length * rowHeight, stroke: "var(--bad)", "stroke-width": 2, "stroke-dasharray": "6 4" }, svg);
+    const budget = el("text", { x: scale(6) - 4, y: top - 18, "font-size": 12, "text-anchor": "end", fill: "var(--bad)" }, svg);
+    budget.textContent = "6 ms CPU budget";
+  })();
+})();
+</script>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>
