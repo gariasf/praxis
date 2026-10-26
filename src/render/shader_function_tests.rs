@@ -341,9 +341,10 @@ fn reflected_luminance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_
         );
         let normal_dot_light = normal.dot(light).max(0.0);
         // f32's N·L, three products and two sums each rounded once, errs by
-        // at most γ₃ |N| |L| with γ₃ = 3u / (1 − 3u) and u = 2⁻²⁴ (Higham,
-        // Accuracy and Stability of Numerical Algorithms, §3.1), which a
-        // light on the horizon, where N·L is about 0, sees whole.
+        // at most γ₃ |N|ᵀ|L| ≤ γ₃ ‖N‖ ‖L‖ with γ₃ = 3u / (1 − 3u) and
+        // u = 2⁻²⁴ (Higham, Accuracy and Stability of Numerical Algorithms,
+        // §3.1). Against N·L ≈ 0, for a light on the horizon, that error is
+        // all there is, which a tolerance relative to the result rules out.
         let unit_roundoff = f64::from(f32::EPSILON) / 2.0;
         let normal_dot_light_rounding =
             3.0 * unit_roundoff / (1.0 - 3.0 * unit_roundoff) * normal.length() * light.length();

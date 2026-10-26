@@ -186,7 +186,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // resolved before its pass's submission completed as 0. The frame spans
     // its passes; nothing moves and nothing bends, so no frame builds the
     // dynamic TLAS, runs the bend pass or refits BLASes, which take no time.
-    // Phase two's depth pass draws nothing in a frame whose first phase drew
+    // Phase two's depth pass draws nothing in a frame whose phase one drew
     // every visible Instance, and NVIDIA times an empty pass at 0.
     for (frame, stats) in frames.iter().enumerate() {
         assert_eq!(stats.gpu_readbacks_skipped, 0, "frame {frame}");
