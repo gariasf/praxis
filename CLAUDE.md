@@ -276,6 +276,10 @@ When reviewing changes, check for:
       authoring data
 - [ ] Code adapted from elsewhere cites its source and licence;
       noncommercial or unclear licences are never copied
+- [ ] Every reference the change relies on or adds exists, says what
+      the change claims, is cited to the right place, and is implemented
+      as it says; one that cannot be opened and confirmed is fixed or
+      removed (`docs/agents/workflow.md`, Review: Sources)
 - [ ] Frame data holds no borrow into the ECS World, and only the
       main thread submits, presents or polls (ADR 0016)
 - [ ] Whatever changes what an Instance holds makes prepare write its

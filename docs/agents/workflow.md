@@ -36,12 +36,13 @@ The owner decides what is worked on. Agents implement, commit, open PRs and merg
 
 CI owns mechanical checks. One semantic review follows, the agent's own, before the PR opens. No external reviewer runs (CodeRabbit was removed, 2026-10-14). The agent owns every fix and merges on evidence.
 
-1. **Review.** When the build is done and local checks pass, run `/code-review` against the base branch: a Standards axis (this repo's conventions and the `CLAUDE.md` review checklist) and a Spec axis (the ticket's acceptance criteria), in parallel sub-agents. A docs-only PR gets the agent's own read of the diff against the same two axes, without sub-agents.
+1. **Review.** When the build is done and local checks pass, run `/code-review` against the base branch: a Standards axis (this repo's conventions and the `CLAUDE.md` review checklist) and a Spec axis (the ticket's acceptance criteria), in parallel sub-agents, plus a third sub-agent beside them for a Sources axis ([decision](https://github.com/gariasf/praxis/issues/17#issuecomment-6421792794)). A docs-only PR gets the agent's own read of the diff against the same three axes, without sub-agents.
+   - **Sources.** Every reference the diff relies on or adds (a paper, specification, book, vendor document, other codebase, or measurement) is checked for four things: the source exists; it is a primary or trusted source and says what the diff claims; the citation points to the right place (section, equation, version, commit) and quotes it faithfully; and the code implements it correctly (formula, constants, units, edge cases). The reviewer opens each source and never vouches from memory. A reference it cannot open and confirm is fixed or removed, never kept on trust. The PR lists each reference checked and its verdict under Verification.
 2. **Disposition each finding.**
    - *Fix*: verified, and a correctness, safety, budget, or ADR problem, or a quick win inside the changed lines. All fixes land in one commit before the PR opens.
    - *Decline*: wrong, or beyond the acceptance criteria. One-line reason.
    - *Defer*: true but outside the ticket. A note under *Not yet specified* with its revival trigger.
-3. **Open as draft, ready when green.** Fill the PR template, with the review's counts (found, fixed, declined, deferred) and the deferred list under Verification. Open the PR as a draft and run `gh pr ready` once CI passes.
+3. **Open as draft, ready when green.** Fill the PR template, with the review's counts (found, fixed, declined, deferred), the deferred list and the sources checked under Verification. Open the PR as a draft and run `gh pr ready` once CI passes.
 4. **Merge** when CI is green, the review's counts are in the PR, and no Decide item is unanswered. Any agent squash-merges any such PR, its own or another session's, without asking, then removes the worktree and branch. A PR that needs the owner's visual or interactive judgement, or carries a roadmap decision, waits for the owner instead.
 
 A declined finding class that recurs becomes a line in the `CLAUDE.md` review checklist or a `CODING_STANDARDS.md` rule.
