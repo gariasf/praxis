@@ -269,7 +269,8 @@ pub fn run(
         glam::DVec3::ZERO,
         configuration.width,
         configuration.height,
-        frame_count,
+        0..frame_count,
+        &[],
         // ADR 0022 judges Budgets at 60 Hz.
         SIXTY_HERTZ,
         switches,

@@ -7,8 +7,10 @@
 //! with culling off must match its capture with culling on, so culling
 //! removes no visible Instance, as each lit with every light at every pixel
 //! must match it lit through Froxel lists, both with shadow rays off, so no
-//! list misses a light that reaches its Froxel. The helmet scene has no Golden, since its source is
-//! fetched, and takes those two checks where it is fetched.
+//! list misses a light that reaches its Froxel. `town` takes both checks at
+//! eight frames along its camera path, the others at the Golden's frame.
+//! The helmet scene has no Golden, since its source is fetched, and takes
+//! those two checks where it is fetched.
 //! A Golden is a reviewed capture from `praxis::capture`, so it catches
 //! regressions, not errors already present when it was recorded.
 //!
@@ -195,48 +197,55 @@ fn reference_scenes_match_their_goldens() {
     let helmet = helmet_is_fetched.then_some(ReferenceScene::Helmet);
     for scene in SCENES.into_iter().chain(helmet) {
         let golden_path = golden_path(&golden_directory, scene);
-        let culled = capture(
+        let frames = equivalence_frames(scene);
+        let culled = capture_frames(&context, scene, frames, RenderSwitches::default());
+        let unculled = capture_frames(
             &context,
             scene,
-            glam::DVec3::ZERO,
-            RenderSwitches::default(),
-        );
-        let unculled = capture(
-            &context,
-            scene,
-            glam::DVec3::ZERO,
+            frames,
             RenderSwitches {
                 culling: false,
                 ..RenderSwitches::default()
             },
         );
-        failures.extend(mismatch(
-            &culled,
-            &unculled,
-            &format!("{}-unculled", scene.name()),
-            &difference_directory,
-        ));
         // With shadow rays off, as M3 judges the Froxel lists.
         let unshadowed = RenderSwitches {
             shadow_rays: false,
             ..RenderSwitches::default()
         };
-        let froxel_lit = capture(&context, scene, glam::DVec3::ZERO, unshadowed);
-        let brute_force = capture(
+        let froxel_lit = capture_frames(&context, scene, frames, unshadowed);
+        let brute_force = capture_frames(
             &context,
             scene,
-            glam::DVec3::ZERO,
+            frames,
             RenderSwitches {
                 froxel_lights: false,
                 ..unshadowed
             },
         );
-        failures.extend(mismatch(
-            &froxel_lit,
-            &brute_force,
-            &format!("{}-brute-force", scene.name()),
-            &difference_directory,
-        ));
+        for (index, frame) in frames.iter().enumerate() {
+            let suffix = if frames.len() == 1 {
+                String::new()
+            } else {
+                format!("-frame-{frame}")
+            };
+            failures.extend(mismatch(
+                &culled[index],
+                &unculled[index],
+                &format!("{}-unculled{suffix}", scene.name()),
+                &difference_directory,
+            ));
+            failures.extend(mismatch(
+                &froxel_lit[index],
+                &brute_force[index],
+                &format!("{}-brute-force{suffix}", scene.name()),
+                &difference_directory,
+            ));
+        }
+        let culled = &culled[frames
+            .iter()
+            .position(|&frame| frame == GOLDEN_FRAME)
+            .expect("the frames checked hold the Golden's")];
         if scene == ReferenceScene::Helmet {
             continue;
         }
@@ -259,7 +268,7 @@ fn reference_scenes_match_their_goldens() {
             .into_rgba8();
         failures.extend(mismatch(
             &golden,
-            &culled,
+            culled,
             scene.name(),
             &difference_directory,
         ));
@@ -320,6 +329,46 @@ fn capture(
     let (pixels, _) =
         praxis::capture(context, scene, shift, WIDTH, HEIGHT, switches).expect("capture failed");
     image::RgbaImage::from_raw(WIDTH, HEIGHT, pixels).expect("WIDTH × HEIGHT pixels")
+}
+
+/// The frame a Golden is: `praxis::capture`'s last.
+const GOLDEN_FRAME: u32 = 59;
+
+/// `town`'s frames whose culling and Froxel lists the test checks, spread
+/// along its camera path: two on the street, two on the rise over the
+/// rooftops, four round the circle.
+const TOWN_FRAMES: [u32; 8] = [GOLDEN_FRAME, 300, 500, 700, 900, 1200, 1500, 1800];
+
+/// The frames of `scene` whose culling and Froxel lists the test checks,
+/// the Golden's among them.
+fn equivalence_frames(scene: ReferenceScene) -> &'static [u32] {
+    match scene {
+        ReferenceScene::Town => &TOWN_FRAMES,
+        _ => &[GOLDEN_FRAME],
+    }
+}
+
+/// The pixels `praxis::capture_frames` renders of `scene` at `frames`, at
+/// the Goldens' size, as `switches` set.
+fn capture_frames(
+    context: &GpuContext,
+    scene: ReferenceScene,
+    frames: &[u32],
+    switches: RenderSwitches,
+) -> Vec<image::RgbaImage> {
+    praxis::capture_frames(
+        context,
+        scene,
+        glam::DVec3::ZERO,
+        WIDTH,
+        HEIGHT,
+        frames,
+        switches,
+    )
+    .expect("capture failed")
+    .into_iter()
+    .map(|pixels| image::RgbaImage::from_raw(WIDTH, HEIGHT, pixels).expect("WIDTH × HEIGHT pixels"))
+    .collect()
 }
 
 fn golden_path(directory: &Path, scene: ReferenceScene) -> PathBuf {

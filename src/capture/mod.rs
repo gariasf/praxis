@@ -13,7 +13,7 @@ pub(crate) const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8
 /// Frames rendered per capture; the last one is read back.
 const FRAME_COUNT: u32 = 60;
 
-/// Renders `scene`, moved with its camera by `shift` metres, into a `width` ×
+/// Renders `scene`, moved with its camera by `shift`, into a `width` ×
 /// `height` offscreen texture for `FRAME_COUNT` frames, as `switches` set,
 /// and returns the last one's RGBA8 pixels, rows top first, with every
 /// frame's stats, its GPU stats included.
@@ -28,24 +28,69 @@ pub fn capture(
     height: u32,
     switches: RenderSwitches,
 ) -> anyhow::Result<(Vec<u8>, Vec<FrameStats>)> {
-    let (target, frame_stats) = render_frames(
+    let last_frame = FRAME_COUNT - 1;
+    let (mut pixels, frame_stats) = render_frames(
         context,
         scene,
         shift,
         width,
         height,
-        FRAME_COUNT,
+        0..FRAME_COUNT,
+        &[last_frame],
         scene.frame_delta(),
         switches,
     )?;
-    Ok((read_back(context, &target)?, frame_stats))
+    Ok((pixels.remove(0), frame_stats))
 }
 
-/// Renders `frame_count` frames of `scene` as `capture` does, each advancing
-/// by `frame_delta`, and returns the target, holding the last frame, with
-/// every frame's stats. Up to `FRAMES_IN_FLIGHT` frames are in flight, as a
-/// window's swapchain allows: the GPU stays busy, and the CPU never runs
-/// further ahead than a window would.
+/// The pixels of each of `frames`, in ascending order, of `scene` rendered
+/// as `capture` renders its last frame. Only frame 0, whose camera anchors
+/// the static TLAS, and each of `frames` and the frame before it are drawn,
+/// so each frame's culling reads the depth of the frame before, as in an
+/// unbroken run; the World runs through the others undrawn, so a frame far
+/// along the camera path costs its Ticks, not its draws.
+pub fn capture_frames(
+    context: &GpuContext,
+    scene: ReferenceScene,
+    shift: glam::DVec3,
+    width: u32,
+    height: u32,
+    frames: &[u32],
+    switches: RenderSwitches,
+) -> anyhow::Result<Vec<Vec<u8>>> {
+    anyhow::ensure!(
+        frames.is_sorted_by(|earlier, later| earlier < later),
+        "frames {frames:?} are not in ascending order"
+    );
+    let mut drawn: Vec<u32> = std::iter::once(0)
+        .chain(
+            frames
+                .iter()
+                .flat_map(|&frame| [frame.saturating_sub(1), frame]),
+        )
+        .collect();
+    drawn.dedup();
+    let (pixels, _) = render_frames(
+        context,
+        scene,
+        shift,
+        width,
+        height,
+        drawn,
+        frames,
+        scene.frame_delta(),
+        switches,
+    )?;
+    Ok(pixels)
+}
+
+/// Renders `scene` as `capture` does, drawing each of `drawn`, in ascending
+/// order, after the World runs undrawn through the frames before it, each
+/// frame advancing by `frame_delta`. Returns the pixels of each of
+/// `read_back`, which `drawn` holds, with each drawn frame's stats. Up to
+/// `FRAMES_IN_FLIGHT` frames are in flight, as a window's swapchain allows:
+/// the GPU stays busy, and the CPU never runs further ahead than a window
+/// would.
 #[expect(clippy::too_many_arguments)]
 pub(crate) fn render_frames(
     context: &GpuContext,
@@ -53,10 +98,11 @@ pub(crate) fn render_frames(
     shift: glam::DVec3,
     width: u32,
     height: u32,
-    frame_count: u32,
+    drawn: impl IntoIterator<Item = u32>,
+    read_back: &[u32],
     frame_delta: Duration,
     switches: RenderSwitches,
-) -> anyhow::Result<(wgpu::Texture, Vec<FrameStats>)> {
+) -> anyhow::Result<(Vec<Vec<u8>>, Vec<FrameStats>)> {
     let max_dimension = context.device.limits().max_texture_dimension_2d;
     anyhow::ensure!(
         (1..=max_dimension).contains(&width) && (1..=max_dimension).contains(&height),
@@ -87,9 +133,17 @@ pub(crate) fn render_frames(
         view_formats: &[],
     });
     let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
-    let mut frame_stats = Vec::with_capacity(frame_count as usize);
+    let mut pixels = Vec::with_capacity(read_back.len());
+    let drawn = drawn.into_iter();
+    let mut frame_stats = Vec::with_capacity(drawn.size_hint().0);
     let mut in_flight = std::collections::VecDeque::with_capacity(FRAMES_IN_FLIGHT);
-    for frame in 0..frame_count {
+    let mut next_frame = 0;
+    for frame in drawn {
+        for undrawn in next_frame..frame {
+            state.world.insert_resource(scene.camera_at(undrawn, shift));
+            state.simulate(frame_delta);
+        }
+        next_frame = frame + 1;
         if in_flight.len() == FRAMES_IN_FLIGHT {
             let oldest = in_flight.pop_front();
             context.device.poll(wgpu::PollType::Wait {
@@ -102,14 +156,21 @@ pub(crate) fn render_frames(
         in_flight.push_back(state.render(&target_view));
         frame_stats.push(state.frame_stats());
         add_gpu_stats(&mut frame_stats, &state);
+        if read_back.contains(&frame) {
+            pixels.push(self::read_back(context, &target)?);
+        }
     }
+    anyhow::ensure!(
+        pixels.len() == read_back.len(),
+        "frames {read_back:?} to read back are not all drawn"
+    );
     state.flush_gpu_frame_stats()?;
     add_gpu_stats(&mut frame_stats, &state);
-    Ok((target, frame_stats))
+    Ok((pixels, frame_stats))
 }
 
-/// Gives each frame of `frame_stats`, numbered from 0 as `state`'s frames
-/// are, the GPU stats `state` read back for it.
+/// Gives each frame of `frame_stats`, numbered from 0 as `state`'s drawn
+/// frames are, the GPU stats `state` read back for it.
 fn add_gpu_stats(frame_stats: &mut [FrameStats], state: &State) {
     for gpu in state.gpu_frame_stats() {
         frame_stats[gpu.frame as usize].gpu = Some(*gpu);
