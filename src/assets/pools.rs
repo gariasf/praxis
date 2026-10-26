@@ -536,7 +536,8 @@ impl Arena {
         element_bytes: u64,
         capacity_bytes: u64,
     ) -> Self {
-        // The DX12 and Linux non-NVIDIA Vulkan buffer limit (ADR 0017).
+        // wgpu-hal's largest buffer on DX12, and on Linux and Android Vulkan
+        // other than NVIDIA's (ADR 0017).
         assert!(
             capacity_bytes < 1 << 31,
             "an Arena of {capacity_bytes} bytes is past 2^31 - 1"

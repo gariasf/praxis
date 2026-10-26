@@ -636,3 +636,772 @@ url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advanc
 section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide Occlusion culling, p. 17"
 quote = '''Occlusion cull against Hierarchical Z-Buffer (HZB) [...] Calculate screen rect from bounds [...] Test against lowest mip where screen rect <= 4x4 pixels'''
 checked = 2026-10-26
+
+["toksvig-2004-variance"]
+url = "https://developer.download.nvidia.com/whitepapers/2006/Mipmapping_Normal_Maps.pdf#page=4"
+section = "Toksvig, Mipmapping Normal Maps, NVIDIA technical brief TB-01256-001_v01 (2004), Estimating Normal Variation, eq. (1); published as JGT 10(3), 2005, doi:10.1080/2151237X.2005.10129203"
+quote = '''A good middle ground is to assume a Gaussian distribution of the angular deviation, with a standard deviation of σ. [...] |Nₐ| = 1/(1+σ²) ⇔ σ² = (1−|Nₐ|)/|Nₐ| (1)'''
+checked = 2026-10-26
+
+["kaplanyan-2016-ndf-filtering"]
+url = "https://research.nvidia.com/sites/default/files/pubs/2016-06_Filtering-Distributions-of/NDFFiltering.pdf#page=6"
+section = "Kaplanyan, Hill, Patney and Lefohn, Filtering Distributions of Normals for Shading Antialiasing (HPG 2016), Beckmann NDF, eqs. (14) and (15), p. 6; GGX Proxy, p. 9"
+quote = '''Σ_B = [α_s²/2 0; 0 α_t²/2], (14) where we use the relation α² = 2σ² [BS63] between the standard deviation of a Gaussian distribution and the roughness parameter of a Beckmann distribution. [...] Σ′_B = Σ_B + Σ_P. (15) [...] we call it a Beckmann proxy for GGX, or simply GGX Proxy.'''
+checked = 2026-10-26
+
+["tokuyoshi-2019-roughness-matrix"]
+url = "https://www.jp.square-enix.com/tech/library/pdf/ImprovedGeometricSpecularAA.pdf#page=3"
+section = "Tokuyoshi and Kaplanyan, Improved Geometric Specular Antialiasing (I3D 2019), §2.2, p. 3; eq. (1), p. 4"
+quote = '''In this paper, we refer to the above matrix as a roughness matrix, which is two times the covariance matrix by definition of the Beckmann NDF. It was also shown that this roughness matrix can be used to approximate the filtering of the GGX NDF. [...] α′² = α² + min(2λ_max, κ), (1) where α is the original roughness parameter for the isotropic NDF, and κ = 0.18 is the clamping threshold'''
+checked = 2026-10-26
+
+["gltf-2.0-texture-origin"]
+url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc?plain=1#L2299"
+section = "glTF 2.0 specification source, Textures"
+quote = '''The origin of the texture coordinates (0, 0) corresponds to the upper left corner of a texture image.'''
+checked = 2026-10-26
+
+["gltf-2.0-normal-texture-convention"]
+url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/schema/material.schema.json#L65"
+section = "glTF 2.0 schema, material.normalTexture, gltf_detailedDescription"
+quote = '''Each texel represents the XYZ components of a normal vector in tangent space. The normal vectors use the convention +X is right and +Y is up. +Z points toward the viewer.'''
+checked = 2026-10-26
+
+["gltf-2.0-tangent-bitangent"]
+url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc?plain=1#L1763"
+section = "glTF 2.0 specification source, Meshes, Vertex Attributes (L1602) and Using Primitive Data (L1763)"
+quote = '''XYZW vertex tangents where the XYZ portion is normalized, and the W component is a sign value (-1 or +1) indicating handedness of the tangent basis [...] The bitangent vectors are computed by taking the cross product of the XYZ components of the normal and tangent vectors and multiplying that cross product against the W component of the tangent.'''
+checked = 2026-10-26
+
+["gltf-2.0-mikktspace-tangents"]
+url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc?plain=1#L1759"
+section = "glTF 2.0 specification source, Meshes, Using Primitive Data"
+quote = '''When tangents are not specified and the material has a normal texture, the tangent vectors are calculated using default MikkTSpace algorithms with the vertex positions, normals (specified or generated as mentioned above), and texture coordinates associated with the normal texture.'''
+checked = 2026-10-26
+
+["ktx2-level-order"]
+url = "https://github.com/KhronosGroup/KTX-Specification/blob/ac39917e8240f51db97715a2453134a42ff959fd/ktxspec.adoc?plain=1#L598-L600"
+section = "KTX 2.0 specification source, levelCount"
+quote = '''Mip level data is ordered from the level with the smallest size images, level_p to that with the largest size images, level_base'''
+checked = 2026-10-26
+
+["ktx2-supercompression-per-level"]
+url = "https://github.com/KhronosGroup/KTX-Specification/blob/ac39917e8240f51db97715a2453134a42ff959fd/ktxspec.adoc?plain=1#L647-L648"
+section = "KTX 2.0 specification source, supercompressionScheme; scheme 2 is Zstandard (L634)"
+quote = '''2: Zstandard: <<RFC8478>>: n/a [...] The supercompression scheme is applied independently to each mip level to permit streaming and random access to the levels.'''
+checked = 2026-10-26
+
+["ktx2-level-alignment"]
+url = "https://github.com/KhronosGroup/KTX-Specification/blob/ac39917e8240f51db97715a2453134a42ff959fd/ktxspec.adoc?plain=1#L888-L893"
+section = "KTX 2.0 specification source, Level Index, required_alignment"
+quote = '''required_alignment = lcm(texel_block_size, 4) (supercompressionScheme = 0); 1 (supercompressionScheme ≠ 0)'''
+checked = 2026-10-26
+
+["ktx2-key-value-alignment"]
+url = "https://github.com/KhronosGroup/KTX-Specification/blob/ac39917e8240f51db97715a2453134a42ff959fd/ktxspec.adoc?plain=1#L1403-L1407"
+section = "KTX 2.0 specification source, Key/Value Data, keyAndValue"
+quote = '''If any bytes encode multi-byte numbers they must be in little-endian order and, if such a number appears at the start of the Value data, the key length including its terminating NUL must be a multiple of the number of bytes in the number so that the number will be properly aligned.'''
+checked = 2026-10-26
+
+["wgpu-hal-30-dx12-max-buffer"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/dx12/adapter.rs#L913-L916"
+section = "wgpu-hal 30.0.1, DX12 adapter limits"
+quote = '''// Dx12 does not expose a maximum buffer size in the API.
+// This limit is chosen to avoid potential issues with drivers should they internally
+// store buffer sizes using 32 bit ints (a situation we have already encountered with vulkan).
+max_buffer_size: i32::MAX as u64,'''
+checked = 2026-10-26
+
+["wgpu-hal-30-vulkan-max-buffer"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/vulkan/adapter.rs#L1504-L1514"
+section = "wgpu-hal 30.0.1, Vulkan adapter limits"
+quote = '''// Prevent very large buffers on mesa and most android devices, and in all cases
+// don't risk confusing JS by exceeding the range of a double. [...]
+if (cfg!(target_os = "linux") || cfg!(target_os = "android")) && !is_nvidia {
+    i32::MAX as u64
+} else {
+    1u64 << 52
+};'''
+checked = 2026-10-26
+
+["offset-allocator-tlsf"]
+url = "https://github.com/sebbbi/OffsetAllocator/blob/3610a7377088b1e8c8f1525f458c96038a4e6fc0/README.md"
+section = "Aaltonen, OffsetAllocator README, Description and License"
+quote = '''This allocator is similar to the two-level segregated fit (TLSF) algorithm. [...] MIT license (see file: LICENSE)'''
+checked = 2026-10-26
+
+["offset-allocator-0.2.0-port"]
+url = "https://docs.rs/crate/offset-allocator/0.2.0/source/README.md"
+section = "offset-allocator 0.2.0 README, Overview and License"
+quote = '''This is a port of [Sebastian Aaltonen's `OffsetAllocator`] package for C++ to 100% safe Rust. [...] Licensed under the MIT license. See `LICENSE-MIT` for details.'''
+checked = 2026-10-26
+
+["meshoptimizer-0.25-scan-meshlets"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/clusterizer.cpp#L360-L370"
+section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), appendMeshlet, called per triangle by meshopt_buildMeshletsScan (L1289)"
+quote = '''int used_extra = (av < 0) + (bv < 0) + (cv < 0);
+
+if (meshlet.vertex_count + used_extra > max_vertices || meshlet.triangle_count >= max_triangles || split)'''
+checked = 2026-10-26
+
+["meshoptimizer-0.25-vertex-codec"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/vertexcodec.cpp#L125"
+section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), the default vertex codec version, which meshopt_encodeVertexBuffer uses (L1781)"
+quote = '''static int gEncodeVertexVersion = 0; [...] return meshopt_encodeVertexBufferLevel(buffer, buffer_size, vertices, vertex_count, vertex_size, meshopt::kEncodeDefaultLevel, meshopt::gEncodeVertexVersion);'''
+checked = 2026-10-26
+
+["reuse-3.3-globbing"]
+url = "https://reuse.software/spec-3.3/"
+section = "REUSE Specification 3.3, REUSE.toml, path globbing and multiple tables"
+quote = '''* matches everything except forward slashes (i.e. path separators). ** and **/ match everything including forward slashes (i.e. path separators). [...] If a Covered File is covered by multiple [[annotations]] tables in the same REUSE.toml file, then exclusively the last matching table in the file is used for that Covered File.'''
+checked = 2026-10-26
+
+["khronos-sample-assets-reuse"]
+url = "https://github.com/KhronosGroup/glTF-Sample-Assets/blob/edc7c9e67c639d230715049ee31f9a96a6babbbe/REUSE.toml"
+section = "glTF-Sample-Assets REUSE.toml: the catch-all table (L3-L7), NormalTangentTest (L598-L601), SciFiHelmet (L664-L667)"
+quote = '''path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2017-2026 Khronos Group"
+SPDX-License-Identifier = "CC-BY-4.0"
+[...]
+path = "Models/NormalTangentTest/*"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2018 Analytical Graphics, Inc."
+SPDX-License-Identifier = "CC0-1.0"
+[...]
+path = "Models/SciFiHelmet/*"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2017 Public"
+SPDX-License-Identifier = "CC0-1.0"'''
+checked = 2026-10-26
+
+["scifihelmet-readme-legal"]
+url = "https://github.com/KhronosGroup/glTF-Sample-Assets/blob/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/SciFiHelmet/README.md"
+section = "SciFi Helmet README, Legal"
+quote = '''© 2017, Public. Creative Commons Zero v1.0 Universal
+- Michael Pavlovic for Everything
+© 2017, Public. Creative Commons Zero v1.0 Universal
+- Norbert Nopper for Conversion to glTF'''
+checked = 2026-10-26
+
+["normaltangenttest-readme-legal"]
+url = "https://github.com/KhronosGroup/glTF-Sample-Assets/blob/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/NormalTangentTest/README.md"
+section = "Normal-Tangent Test README, Legal"
+quote = '''© 2018, Analytical Graphics, Inc.. Creative Commons Zero v1.0 Universal
+- Ed Mackey for Everything'''
+checked = 2026-10-26
+
+["aras-2020-texture-compression"]
+url = "https://aras-p.info/blog/2020/12/08/Texture-Compression-in-2020/"
+section = "Pranckevičius, Texture Compression in 2020 (blog, 2020-12-08), overall chart and per-format sections"
+quote = '''There are high quality texture formats (BC7, ASTC 4x4), where PSNR is > 42 dB. [...] with BC7 achieving very similar quality to ASTC 4x4, while being faster to compress. [...] There's very little quality variance in DXTC compressors [...] BC7 compressors producing >45dB quality results at 10-20Mpix/s speed [...] (DXTC format, ISPC compressor: average 654Mpix/s) [...] bc7e (red) looks like a clear winner. [...] running on 2018 MacBook Pro (Core i9 2.9GHz, 6 core / 12 thread)'''
+checked = 2026-10-26
+
+["ispc-texture-compressor-discontinued"]
+url = "https://github.com/GameTechDev/ISPCTextureCompressor/blob/79ddbc90334fc31edd438e68ccb0fe99b4e15aab/readme.md#L1-L16"
+section = "ISPC Texture Compressor readme"
+quote = '''DISCONTINUATION OF PROJECT [...] This project will no longer be maintained by Intel. [...] This repository contains a texture compression library for the following formats: BC6H (FP16 HDR input) BC7 [...] BC1, BC3 (aka DXT1, DXT5) and BC4, BC5 (aka ATI1N, ATI2N)'''
+checked = 2026-10-26
+
+["meshoptimizer-1.3-codecs"]
+url = "https://github.com/zeux/meshoptimizer/blob/v1.3/README.md#L419"
+section = "meshoptimizer v1.3 README, Vertex/index buffer compression (L419, L451) and Meshlet compression (L500)"
+quote = '''you can expect it to run at 3-6 GB/s on modern desktop CPUs. [...] vertex data compression ratio is typically around 2-4x (compared to already quantized and optimally packed data). [...] on real-world meshes, it's typical to achieve 1-1.2 bytes per triangle. [...] it's typical to see 9-12 bits per triangle in aggregate.'''
+checked = 2026-10-26
+
+["lzbench-2.4-silesia"]
+url = "https://github.com/inikep/lzbench/blob/v2.4/README.md#L127-L312"
+section = "lzbench v2.4 README, benchmark setup (L127-L131) and results table (L137-L312)"
+quote = '''The following results were obtained using `lzbench 2.0.1` [...] The tests were run on a single thread of an AMD EPYC 9554 processor at 3.10 GHz [...]
+memcpy: 16332 MB/s: 16362 MB/s: 211947520: 100.00 [...]
+lz4 1.10.0: 577 MB/s: 3716 MB/s: 100880800: 47.60 [...]
+zstd 1.5.6 -1: 422 MB/s: 1347 MB/s: 73421914: 34.64 [...]
+zstd 1.5.6 -22: 2.08 MB/s: 1073 MB/s: 52333880: 24.69 [...]
+zlib 1.3.1 -6: 25.3 MB/s: 344 MB/s: 68228431: 32.19 [...]
+brotli 1.1.0 -11: 0.58 MB/s: 389 MB/s: 50407795: 23.78 [...]
+xz 5.6.3 -6: 2.97 MB/s: 127 MB/s: 49195929: 23.21'''
+checked = 2026-10-26
+
+["xxhash-0.8.4-readme"]
+url = "https://github.com/Cyan4973/xxHash/blob/v0.8.4/README.md#L24-L80"
+section = "xxHash v0.8.4 README, Benchmarks (L24-L48) and the warning at L80"
+quote = '''The benchmarked reference system uses an Intel i7-9700K CPU [...] XXH3 (AVX2): 64: 59.4 GB/s: 133.1: [...] xxHash is not a cryptographic hash function.'''
+checked = 2026-10-26
+
+["blake3-1.8.7-readme"]
+url = "https://github.com/BLAKE3-team/BLAKE3/blob/1.8.7/README.md#L3-L9"
+section = "BLAKE3 1.8.7 README, introduction"
+quote = '''Much faster than MD5, SHA-1, SHA-2, SHA-3, and BLAKE2. [...] Highly parallelizable across any number of threads and SIMD lanes, because it's a Merkle tree on the inside.'''
+checked = 2026-10-26
+
+["bevy-0.20-processed-asset-hash"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_asset/src/meta.rs#L94-L98"
+section = "Bevy v0.20.0, bevy_asset ProcessedInfo; BLAKE3 hasher at L289"
+quote = '''/// A hash of the asset bytes and the asset `.meta` data
+pub hash: AssetHash,
+/// A hash of the asset bytes, the asset .meta data, and the `full_hash` of every `process_dependency`
+pub full_hash: AssetHash, [...]
+let mut hasher = blake3::Hasher::new();'''
+checked = 2026-10-26
+
+["unity-6000-asset-metadata"]
+url = "https://docs.unity3d.com/6000.0/Documentation/Manual/AssetMetadata.html"
+section = "Unity 6.0 Manual, Asset metadata"
+quote = '''This is an ID that Unity uses internally to reference the asset, so that it can move or rename the asset without breaking anything. [...] If an asset loses its .meta file, any reference to that asset is broken in your project.'''
+checked = 2026-10-26
+
+["unity-6000-asset-refresh"]
+url = "https://docs.unity3d.com/6000.0/Documentation/Manual/AssetDatabaseRefreshing.html"
+section = "Unity 6.0 Manual, Refreshing the Asset Database, static and dynamic dependencies"
+quote = '''Static dependencies include: The name of the asset. ID of the importer associated with the asset. The version of the importer. The currently selected build target platform. Dynamic dependencies [...]'''
+checked = 2026-10-26
+
+["bazel-remote-caching"]
+url = "https://bazel.build/versions/8.4.2/remote/caching"
+section = "Bazel, Remote Caching, known issues"
+quote = '''Then, two users with different compilers installed will wrongly share cache hits because the outputs are different but they have the same action hash.'''
+checked = 2026-10-26
+
+["wgpu-types-30-copy-row-alignment"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/lib.rs#L107-L116"
+section = "wgpu-types 30.0.1, COPY_BYTES_PER_ROW_ALIGNMENT"
+quote = '''/// Buffer-texture copies must have [`bytes_per_row`] aligned to this number.
+///
+/// This doesn't apply to [`Queue::write_texture`][Qwt], only to [`copy_buffer_to_texture()`]
+/// and [`copy_texture_to_buffer()`]. [...]
+pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;'''
+checked = 2026-10-26
+
+["wgpu-core-30-write-texture-staging"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/queue.rs#L994-L1013"
+section = "wgpu-core 30.0.1, Queue::write_texture (L853): a new StagingBuffer on each call, on both the aligned and the row-by-row path"
+quote = '''let staging_buffer = if stage_bytes_per_row == bytes_per_row { [...] let mut staging_buffer = StagingBuffer::new(&self.device, stage_size)?; [...] } else { [...] let mut staging_buffer = StagingBuffer::new(&self.device, stage_size)?;'''
+checked = 2026-10-26
+
+["wgpu-30-staging-belt-chunk-size"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/util/belt.rs#L56-L57"
+section = "wgpu 30.0.1, StagingBelt::new and write_buffer (L132-L133)"
+quote = '''The `chunk_size` is the unit of internal buffer allocation; writes will be
+/// sub-allocated within each chunk. [...] If the `size` is greater than the size of any free internal buffer, a new buffer
+/// will be allocated for it.'''
+checked = 2026-10-26
+
+["wgpu-types-30-transient-saves-memory"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/adapter.rs#L212-L214"
+section = "wgpu-types 30.0.1, AdapterInfo::transient_saves_memory"
+quote = '''/// Whether adding [`TextureUsages::TRANSIENT_ATTACHMENT`] to a texture will decrease memory usage.
+/// This is None on web, which means it is unknown from the adapter.
+pub transient_saves_memory: Option<bool>,'''
+checked = 2026-10-26
+
+["wgpu-hal-30-metal-use-resource"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L1145-L1147"
+section = "wgpu-hal 30.0.1, Metal CommandEncoder::set_bind_group (L1088), render encoder; the compute encoder's at L1176-L1181"
+quote = '''// Call useResource on all textures and buffers used indirectly so they are alive
+for (resource, use_info) in group.resources_to_use.iter() {
+encoder.useResource_usage_stages('''
+checked = 2026-10-26
+
+["polyhaven-asset-license"]
+url = "https://polyhaven.com/license"
+section = "Asset License"
+quote = '''Our assets are all licensed as CC0 [...] You can use our assets for any purpose, including commercial work. You do not need to give credit or attribution when using them (although it is appreciated). You can redistribute them, share them around, include them when sharing your own work, or even in a product you sell.'''
+checked = 2026-10-26
+
+["polyhaven-terms-scraping"]
+url = "https://polyhaven.com/license"
+section = "Terms of Service, 3. Use of the Website, 3.2"
+quote = '''You must not engage in any activity that may disrupt or interfere with the proper functioning of the website, including but not limited to: [...] Web scraping or data mining without express permission.'''
+checked = 2026-10-26
+
+["polyhaven-api-conditions"]
+url = "https://polyhaven.com/our-api"
+section = "2. Attribution required; 3. Unique User-Agent required"
+quote = '''If you use the live API in your product, website, or service, make it clear to your users that the assets came from Poly Haven. [...] a small "Powered by Poly Haven" credit near the content [...] This is a condition of using the live API service, not of the assets themselves: the assets are CC0. [...] All requests to the API require a unique User-Agent header, such as your application name, so that we may track your usage.'''
+checked = 2026-10-26
+
+["ambientcg-license"]
+url = "https://docs.ambientcg.com/license/"
+section = "License information; License Details"
+quote = '''Creative Commons CC0 1.0 Universal License [...] You can include the raw files in your project, for example a video game.'''
+checked = 2026-10-26
+
+["kenney-support-license"]
+url = "https://kenney.nl/support"
+section = "Common questions: Can I use the game assets in a (commercial) project?"
+quote = '''Yes, all game assets on the asset pages are public domain licensed (CC0). You're free to use them, even in commercial projects.'''
+checked = 2026-10-26
+
+["orca-bistro"]
+url = "https://developer.nvidia.com/orca/amazon-lumberyard-bistro"
+section = "License; Details; How to cite use of this asset"
+quote = '''License: Creative Commons CC-BY 4.0 Details: Interior: 1,046,609 triangles Interior with wine: 1,293,691 triangles Exterior: 2,832,120 triangles File formats: FBX and Falcor scene file [...] How to cite use of this asset: Amazon Lumberyard Bistro, Open Research Content Archive (ORCA) [...] author = {Amazon Lumberyard}, year = {2017},'''
+checked = 2026-10-26
+
+["intel-samples-sponza"]
+url = "https://web.archive.org/web/20260930001736/https://www.intel.com/content/www/us/en/developer/topic-technology/graphics-research/samples.html"
+section = "Samples Library; Sponza Base Scene; Sponza Add-on Packages"
+quote = '''Downloads are available under the Creative Commons Attribution license. [...] Sponza Base Scene [...] Incorporates photogrammetry-derived, high-resolution geometry with 4k textures [...] Includes the following file formats: Autodesk* 3ds Max* 2022 source, USD, GLTF, and FBX Download (3.71 GB) [...] Colorful Curtains [...] (750 MB) [...] Ivy [...] (1.29 GB) [...] Trees [...] (907 MB) [...] Emissive Candles [...] (2.97 GB)'''
+checked = 2026-10-26
+
+["ign-mdt05-metadata"]
+url = "https://www.idee.es/csw-inspire-idee/srv/spa/csw?service=CSW&version=2.0.2&request=GetRecordById&outputSchema=http://www.isotc211.org/2005/gmd&elementSetName=full&id=spaignMDT05"
+section = "gmd:resourceConstraints, gmd:MD_LegalConstraints, gmd:otherConstraints; gmd:title; gmd:abstract"
+quote = '''Modelo Digital del Terreno con paso de malla de 5 metros (MDT05) de España [...] MDT05-cob1 2008-2015 CC-BY 4.0 scne.es'''
+checked = 2026-10-26
+
+["ign-mdt05-inspire-record"]
+url = "https://web.archive.org/web/20260422222006/https://inspire-geoportal.ec.europa.eu/srv/api/records/spaignMDT05"
+section = "Other constraints"
+quote = '''MDT05 CC BY 4.0 SCNE'''
+checked = 2026-10-26
+
+["ign-mdt05-distribution"]
+url = "https://www.idee.es/csw-inspire-idee/srv/spa/csw?service=CSW&version=2.0.2&request=GetRecordById&outputSchema=http://www.isotc211.org/2005/gmd&elementSetName=full&id=spaignMDT05"
+section = "gmd:distributionInfo, gmd:onLine linkages"
+quote = '''https://centrodedescargas.cnig.es/CentroDescargas/busquedaSerie.do?codSerie=MDT05 [...] https://servicios.idee.es/wcs-inspire/mdt?request=GetCapabilities&service=WCS&version=2.0.1'''
+checked = 2026-10-26
+
+["gltf-ibl-sampler"]
+url = "https://github.com/KhronosGroup/glTF-IBL-Sampler/blob/bd32f8a9ae502df5797ad18c705312eda247dbfd/README.md"
+section = "Introduction; Usage"
+quote = '''This project pre-filters an environment High Dynamic Range (HDR) panorama image and stores diffuse and specular parts in cube maps respectively. [...] the specular part consists of several mip-map levels [...] The final basis compression into a KTX2 file ensures small file sizes while maintaining reasonable image quality. [...] -outLUT: output path for BRDF LUT (default=outputLUT.png) -distribution: NDF to sample (Lambertian, GGX, Charlie) -sampleCount: number of samples used for filtering (default = 1024) [...] -lodBias: level of detail bias applied to filtering (default = 0)'''
+checked = 2026-10-26
+
+["gltf-ibl-sampler-license"]
+url = "https://github.com/KhronosGroup/glTF-IBL-Sampler/blob/bd32f8a9ae502df5797ad18c705312eda247dbfd/LICENSE"
+section = "LICENSE, opening lines"
+quote = '''Apache License Version 2.0, January 2004'''
+checked = 2026-10-26
+
+["gltf-sample-renderer"]
+url = "https://github.com/KhronosGroup/glTF-Sample-Renderer/blob/6e8a3d1aaa6f07e9f1310a488453e21325677786/README.md"
+section = "Introduction; API, GltfView; Render Fidelity Tools"
+quote = '''This is the official Khronos glTF 2.0 Sample Renderer using WebGL. [...] The GltfView component is associated with one WebGL2 context. [...] The glTF Sample Renderer is integrated into Google's render fidelity tools.'''
+checked = 2026-10-26
+
+["gltf-sample-renderer-license"]
+url = "https://github.com/KhronosGroup/glTF-Sample-Renderer/blob/6e8a3d1aaa6f07e9f1310a488453e21325677786/LICENSE.md"
+section = "LICENSE, opening lines"
+quote = '''Apache License Version 2.0, January 2004'''
+checked = 2026-10-26
+
+["gltf-asset-generator"]
+url = "https://github.com/KhronosGroup/glTF-Asset-Generator/blob/3d99767e9a67fbfe109f0d298c1e8d909bcac9db/README.md"
+section = "What is this project?; What does it currently cover?"
+quote = '''This is a C# Visual Studio project for generating various glTF 2.0 assets for validating glTF 2.0 importers. [...] Positive Tests - Accessor Sparse [...] Animation Node [...] Buffer Interleaved [...] Compatibility - Instancing - Material [...] Mesh Primitive Attribute [...] Node Attribute [...] Texture Sampler'''
+checked = 2026-10-26
+
+["gltf-asset-generator-sample-images"]
+url = "https://github.com/KhronosGroup/glTF-Asset-Generator/blob/3d99767e9a67fbfe109f0d298c1e8d909bcac9db/Output/Positive/Material/README.md"
+section = "Per-model table, Sample Image column"
+quote = '''|   | Sample Image | Normal Texture | [...] | [00](Material_00.gltf) [...] | [<img src="Figures/Thumbnails/Material_00.png" align="middle">](Figures/SampleImages/Material_00.png) |'''
+checked = 2026-10-26
+
+["gltf-asset-generator-license"]
+url = "https://github.com/KhronosGroup/glTF-Asset-Generator/blob/3d99767e9a67fbfe109f0d298c1e8d909bcac9db/LICENSE"
+section = "LICENSE, opening lines"
+quote = '''MIT License Copyright (c) 2017 Khronos Group'''
+checked = 2026-10-26
+
+["khronos-sample-assets-readme"]
+url = "https://github.com/KhronosGroup/glTF-Sample-Assets/blob/edc7c9e67c639d230715049ee31f9a96a6babbbe/README.md"
+section = "Obsolete Interface"
+quote = '''Assets without licenses or licenses that were not suitable for use in this collection were removed'''
+checked = 2026-10-26
+
+["damagedhelmet-glb"]
+url = "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"
+section = "file content, SHA-256 (also equal at main on 2026-10-26)"
+quote = '''a1e3b04de97b11de564ce6e53b95f02954a297f0008183ac63a4f5974f6b32d8'''
+checked = 2026-10-26
+
+["damagedhelmet-readme-legal"]
+url = "https://github.com/KhronosGroup/glTF-Sample-Assets/blob/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/DamagedHelmet/README.md"
+section = "Legal"
+quote = '''© 2018, ctxwing. Creative Commons Attribution 4.0 International - ctxwing for Rebuild and conversion to glTF © 2016, theblueturtle_. Creative Commons Attribution Non Commercial 4.0 International - theblueturtle_ for Earlier version of model'''
+checked = 2026-10-26
+
+["boxtextured-readme-legal"]
+url = "https://github.com/KhronosGroup/glTF-Sample-Assets/blob/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/BoxTextured/README.md"
+section = "Legal"
+quote = '''© 2017, Cesium. Creative Commons Attribution 4.0 International - Cesium for Everything © 2015, Cesium. Cesium Trademark or Logo - Non-copyrightable logo for Cesium logo'''
+checked = 2026-10-26
+
+["sponza-readme-legal"]
+url = "https://github.com/KhronosGroup/glTF-Sample-Assets/blob/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/Sponza/README.md"
+section = "Legal"
+quote = '''© 2016, Crytek. Cryengine Limited License Agreement - Crytek for Everything'''
+checked = 2026-10-26
+
+["khronos-sample-assets-glb-sizes"]
+url = "https://api.github.com/repos/KhronosGroup/glTF-Sample-Assets/contents/Models?ref=edc7c9e67c639d230715049ee31f9a96a6babbbe"
+section = "contents API at that commit: Models/<name>/glTF-Binary, each file's name and size field (bytes); Models/SciFiHelmet and Models/FlightHelmet, each entry's name"
+quote = '''WaterBottle.glb 8966700 [...] BoomBox.glb 10614184 [...] Lantern.glb 9564264 [...] MetalRoughSpheres.glb 11221356 [...] NormalTangentTest.glb 1796996 [...] DamagedHelmet.glb 3773916 [...] Models/SciFiHelmet: LICENSE.md README.body.md README.md glTF metadata.json screenshot [...] Models/FlightHelmet: LICENSE.md README.body.md README.md glTF-KTX-BasisU glTF metadata.json screenshot'''
+checked = 2026-10-26
+
+["scifihelmet-gltf-files"]
+url = "https://github.com/KhronosGroup/glTF-Sample-Assets/tree/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/SciFiHelmet/glTF"
+section = "glTF folder: file sizes (contents API), PNG IHDR dimensions, SciFiHelmet.gltf materials"
+quote = '''SciFiHelmet.bin 3643848, SciFiHelmet.gltf 4461, SciFiHelmet_AmbientOcclusion.png 3919556 (2048x2048), SciFiHelmet_BaseColor.png 7841138 (2048x2048), SciFiHelmet_MetallicRoughness.png 9488811 (2048x2048), SciFiHelmet_Normal.png 5389165 (2048x2048); one material: baseColorTexture, metallicRoughnessTexture, normalTexture, occlusionTexture'''
+checked = 2026-10-26
+
+["flighthelmet-lens-textures"]
+url = "https://github.com/KhronosGroup/glTF-Sample-Assets/tree/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/FlightHelmet/glTF"
+section = "glTF folder: LensesMat PNGs, IHDR dimensions"
+quote = '''FlightHelmet_Materials_LensesMat_BaseColor.png 1024x1024, FlightHelmet_Materials_LensesMat_Normal.png 1024x1024, FlightHelmet_Materials_LensesMat_OcclusionRoughMetal.png 1024x1024'''
+checked = 2026-10-26
+
+["sketchfab-argus-camera"]
+url = "https://api.sketchfab.com/v3/models/f9112ea4c15043ebbb24fa121ffef920"
+section = "Sketchfab Data API v3, the model's record: faceCount, license, user, textureCount, materialCount; its /download endpoint answers {\"detail\":\"Authentication credentials were not provided.\"} without a login"
+quote = '''"faceCount":110130 [...] "label":"CC0 Public Domain" [...] "requirements":"Credit is not mandatory. Commercial use is allowed." [...] "displayName":"Virtual Museums of Małopolska" [...] "textureCount":6,"materialCount":2'''
+checked = 2026-10-26
+
+["sketchfab-argus-camera-textures"]
+url = "https://sketchfab.com/i/models/f9112ea4c15043ebbb24fa121ffef920/textures"
+section = "the viewer's texture list: each texture's images, the largest 4096 by 4096 for every one"
+quote = '''"name":"1854_ps.jpg","images":[ [...] "size":2325788,"width":4096,"height":4096'''
+checked = 2026-10-26
+
+["khronos-legalmark-text"]
+url = "https://github.com/KhronosGroup/glTF-Sample-Assets/blob/edc7c9e67c639d230715049ee31f9a96a6babbbe/LICENSES/LicenseRef-LegalMark-Khronos.txt#L7-L10"
+section = "glTF-Sample-Assets, LICENSES/LicenseRef-LegalMark-Khronos.txt"
+quote = '''Use in this model do not change the license of the model. The model license does not confer any usage rights on the Mark beyond that specified in the Guidelines. In particular, there is no right to use the Mark in any other context based on the usage here.'''
+checked = 2026-10-26
+
+["bc7enc-rdo-bc7f-and-scalar-port"]
+url = "https://github.com/richgel999/bc7enc_rdo/blob/b9438627eef73a1157e84201b6fa6eb2ffd6d9f0/README.md?plain=1#L3"
+section = "README, note at line 3"
+quote = '''An even faster alternative to bc7e.ispc is now available - see bc7f [...] bc7e.ispc has also been ported to plain standard C++'''
+checked = 2026-10-26
+
+["bc7enc-rdo-size-reduction"]
+url = "https://github.com/richgel999/bc7enc_rdo/blob/b9438627eef73a1157e84201b6fa6eb2ffd6d9f0/README.md?plain=1#L5-L7"
+section = "README, lines 5 and 7"
+quote = '''Significant (10-50%) size reductions are possible. The BC7 encoder also supports a "reduced entropy" mode [...] which results in 5-10% smaller file sizes with no slowdowns in encoding time. [...] Currently, the entropy reduction transform is tuned for Deflate, LZHAM, or LZMA. The method used to control the rate-distortion tradeoff is the classic Lagrangian multiplier RDO method, modified to favor MSE on very smooth blocks. Rate is approximated using a fixed Deflate model.'''
+checked = 2026-10-26
+
+["bc7enc-rdo-dds-output"]
+url = "https://github.com/richgel999/bc7enc_rdo/blob/b9438627eef73a1157e84201b6fa6eb2ffd6d9f0/README.md?plain=1#L41"
+section = "README, line 41"
+quote = '''The .DDS output files can be loaded/viewed using tools like AMD Compressonator.'''
+checked = 2026-10-26
+
+["bc7enc-rdo-licence"]
+url = "https://github.com/richgel999/bc7enc_rdo/blob/b9438627eef73a1157e84201b6fa6eb2ffd6d9f0/LICENSE#L3-L26"
+section = "LICENSE, lines 3 to 26"
+quote = '''bc7e.ispc uses the Apache 2.0 license and is Copyright (C) 2018-2021 Binomial LLC. [...] All other source code files in this repo are available under 2 licenses -- choose whichever you prefer. ALTERNATIVE A - MIT License [...] ALTERNATIVE B - Public Domain(www.unlicense.org)'''
+checked = 2026-10-26
+
+["geldreich-2021-rdo-bc7-new-algorithm"]
+url = "https://richg42.blogspot.com/2021/02/more-rdo-bc7-encoding.html"
+section = "More RDO BC7 encoding - new algorithm, 7 February 2021"
+quote = '''RDO BC7 new algorithm - lambda 1.0, 4KB window size bc7enc -o -u4 -zc4096 J:\dev\test_images\xmen_1024.png -e -E -z1.0 37.15 dB, 3.97 bits/texel (Deflate) [...] RDO BC7 new algorithm - lambda 3.0, 4KB window size [...] 32.071 dB, 3.12 bits/texel (Deflate)'''
+checked = 2026-10-26
+
+["oodle-texture-claims"]
+url = "https://www.radgametools.com/oodletexture.htm"
+section = "Oodle Texture Compression; Lossless Transform for BC7"
+quote = '''Oodle Texture can make maximum quality BCN encodings that are 5-15% smaller after compression. With rate distortion optimization, Oodle Texture can make high visual quality encodings that are 20-50% smaller. [...] BC7Prep takes BC7 blocks that are often very difficult to compress and rearranges their bits, yielding 5-15% smaller files after subsequent compression. BC7Prep does require runtime reversal of the transform, which can be done on the GPU.'''
+checked = 2026-10-26
+
+["oodle-data-compression-claims"]
+url = "https://www.radgametools.com/oodlecompressors.htm"
+section = "The right compressor for you"
+quote = '''Oodle Leviathan gets the highest compression ratios, comparable to 7z/LZMA, but decodes 10× faster. Oodle Kraken offers high compression with super-fast decoding - 3-5× faster than zlib, with way more compression.'''
+checked = 2026-10-26
+
+["rad-licensing-per-game"]
+url = "https://www.radgametools.com/sales.htm"
+section = "Product Licenses"
+quote = '''We generally license per game and per platform, but we have other options for unusual licensing situations'''
+checked = 2026-10-26
+
+["basisu-2.50-supercompressed"]
+url = "https://github.com/BinomialLLC/basis_universal/blob/v2_50/README.md?plain=1#L16"
+section = "README, line 16"
+quote = '''Basis Universal™ v2.5 is an open source supercompressed LDR/HDR GPU compressed texture interchange system from Binomial LLC that supports two intermediate file formats: the .KTX2 open standard from the Khronos Group, and our own ".basis" file format.'''
+checked = 2026-10-26
+
+["basisu-2.50-licence"]
+url = "https://github.com/BinomialLLC/basis_universal/blob/v2_50/README.md?plain=1#L43"
+section = "README, line 43"
+quote = '''The reference encoder library, transcoder, and most specification documents in this repo (unless otherwise explictly indicated) are Copyright © 2016–2026 Binomial LLC. All rights reserved except as granted under the Apache 2.0 LICENSE.'''
+checked = 2026-10-26
+
+["basisu-2.50-etc1s-uastc"]
+url = "https://github.com/BinomialLLC/basis_universal/blob/v2_50/README.md?plain=1#L93-L95"
+section = "README, lines 93 and 95"
+quote = '''ETC1S: A roughly .3-3bpp low to medium quality supercompressed mode [...] UASTC LDR 4x4: An 8 bits/pixel LDR high quality mode. [...] Transcoding UASTC LDR to ASTC LDR and BC7 is particularly fast and simple, because UASTC LDR is a common subset of both BC7 and ASTC.'''
+checked = 2026-10-26
+
+["basisu-2.50-xuastc"]
+url = "https://github.com/BinomialLLC/basis_universal/blob/v2_50/README.md?plain=1#L115"
+section = "README, line 115"
+quote = '''XUASTC LDR 4x4-12x12 ("GPU Photo LDR/SDR"): Supercompressed ASTC with Weight Grid DCT, supporting all 14 standard ASTC block sizes [...] Bitrates range from approximately 0.3–5.7 bpp, depending on content, profile, block size, windowed RDO, and Weight Grid DCT quality settings.'''
+checked = 2026-10-26
+
+["basisu-2.50-xuastc-profiles"]
+url = "https://github.com/BinomialLLC/basis_universal/blob/v2_50/README.md?plain=1#L279"
+section = "README, line 279"
+quote = '''The arithmetic profile trades off transcoding throughput for roughly 5-18% better compression vs. the Zstd profile, and the hybrid profile is a balance between the two.'''
+checked = 2026-10-26
+
+["astc-encoder-5.7.0-bitrates"]
+url = "https://github.com/ARM-software/astc-encoder/blob/5.7.0/README.md?plain=1#L52-L54"
+section = "README, lines 52 to 54"
+quote = '''It also supports all of the ASTC block sizes and compression modes, allowing content creators to use the full spectrum of quality-to-bitrate options ranging from 0.89 bits/pixel up to 8 bits/pixel.'''
+checked = 2026-10-26
+
+["astc-encoder-5.7.0-licence"]
+url = "https://github.com/ARM-software/astc-encoder/blob/5.7.0/LICENSE.txt#L2-L3"
+section = "LICENSE.txt, header"
+quote = '''Apache License Version 2.0, January 2004'''
+checked = 2026-10-26
+
+["betsy-1.1-supported-formats"]
+url = "https://github.com/darksylinc/betsy/blob/v1.1-beta/README.md?plain=1#L67-L77"
+section = "README, Supported formats"
+quote = '''ETC1: Done [...] EAC: Done [...] ETC2: Done [...] BC1: Done [...] BC3: Done: This is just BC1 for RGB + BC4 for alpha [...] BC4, BC5: Done [...] BC6H UF: Done: Unsigned variation of B6CH.'''
+checked = 2026-10-26
+
+["rtxntc-0.10-bitrate"]
+url = "https://github.com/NVIDIA-RTX/RTXNTC/blob/v0.10.0-beta/README.md?plain=1#L31"
+section = "README, line 31"
+quote = '''one BC7 texture for Albedo (8 bits/texel), one BC5 texture for normals (8 bits/texel), and a third BC7 texture for Roughness, Metalness, and Ambient Occlusion [...] (for another 8 bits/texel). For NTC we have found that many real-world texture bundles of this format can be compressed with results comparable to BCn (a PSNR of 40 to 50 dB) with a latent shape requiring about 5 bits/texel.'''
+checked = 2026-10-26
+
+["rtxntc-0.10-footprint"]
+url = "https://github.com/NVIDIA-RTX/RTXNTC/blob/v0.10.0-beta/README.md?plain=1#L35-L42"
+section = "README, bundle footprint table, lines 35 to 42"
+quote = '''Bundle Compression: Disk Size: PCI-E Traffic: VRAM Size [...] BCn Compressed: 12.00 MB: 12.00 MB: 12.00 MB; NTC-on-Load*: 2.50 MB: 2.50 MB: 12.00 MB [...] *: Assumes transcoding to equivalent BCn formats at decompression time.'''
+checked = 2026-10-26
+
+["rtxntc-0.10-dx12-linalg"]
+url = "https://github.com/NVIDIA-RTX/RTXNTC/blob/v0.10.0-beta/README.md?plain=1#L53-L60"
+section = "README, WARNING: Pre-Release Feature Dependency for Direct3D 12"
+quote = '''In order for the LinAlg (formerly Cooperative Vector) extensions to work, the application must enable the D3D12ExperimentalShaderModels feature [...] All non-CoopVec versions of DX12 decompression, as well as all Vulkan versions including CoopVec, are OK to use for shipping. [...] The DX12 LinAlg support is for testing purposes only. DO NOT SHIP ANY PRODUCTS USING IT.'''
+checked = 2026-10-26
+
+["rtxntc-0.10-inference-on-sample"]
+url = "https://github.com/NVIDIA-RTX/RTXNTC/blob/v0.10.0-beta/docs/integration/InferenceOnSample.md?plain=1#L5-L8"
+section = "Implementing Inference on Sample with LibNTC, lines 5 to 8"
+quote = '''Inference on Sample should only be used on high-performance GPUs that support Cooperative Vector extensions. [...] Simulating regular trilinear or anisotropic texture filtering with NTC would be prohibitively expensive (although functionally possible), so Inference on Sample should be used in combination with Stochastic Texture Filtering (STF) instead, and filtered by a denoiser or DLSS after shading.'''
+checked = 2026-10-26
+
+["rtxntc-0.10-alpha-cutoff-noise"]
+url = "https://github.com/NVIDIA-RTX/RTXNTC/blob/v0.10.0-beta/docs/SettingsAndQuality.md?plain=1#L43"
+section = "Settings and Quality Guide, line 43"
+quote = '''NTC introduces a small amount of noise to textures, and under a strong nonlinearity like the alpha cutoff, that noise can look like a static boiling pattern.'''
+checked = 2026-10-26
+
+["rtxntc-0.10-licence"]
+url = "https://github.com/NVIDIA-RTX/RTXNTC/blob/v0.10.0-beta/README.md?plain=1#L250-L252"
+section = "README, License"
+quote = '''NVIDIA RTX SDKs LICENSE'''
+checked = 2026-10-26
+
+["vaidyanathan-2023-ntc-compression-time"]
+url = "https://arxiv.org/pdf/2305.17105v1#page=2"
+section = "Section 1, contributions, page 2"
+quote = '''Our compressor can process a 9-channel, 4k material texture set in 1-15 minutes on an NVIDIA RTX 4090 GPU, depending on the desired quality level.'''
+checked = 2026-10-26
+
+["vaidyanathan-2023-ntc-filtering"]
+url = "https://arxiv.org/pdf/2305.17105v1#page=7"
+section = "Fig. 8, page 7"
+quote = '''Filtering across the boundaries of a highly specular material. a) Nearest-neighbor filtering. b) Trilinear filtering. c) Single frame of stochastic filtering. d) Resolved stochastic temporal filtering.'''
+checked = 2026-10-26
+
+["vaidyanathan-2023-ntc-table3"]
+url = "https://arxiv.org/pdf/2305.17105v1#page=9"
+section = "Table 3, page 9"
+quote = '''Average PSNR, 1 - SSIM, and LPIPS values over the evaluation data set [...] ASTC 12 × 12: BPPC 0.43: PSNR 28.90; ASTC 10 × 10: BPPC 0.61: PSNR 30.08; NTC (Medium, 1.0 BPPC): BPPC 1.13: PSNR 39.92; BC H.: BPPC 3.94: PSNR 40.23'''
+checked = 2026-10-26
+
+["vaidyanathan-2023-ntc-performance"]
+url = "https://arxiv.org/pdf/2305.17105v1#page=10"
+section = "Sections 6.5.1 and 6.5.2, Table 4, page 10"
+quote = '''The median compression time for BC7 textures is a few seconds, while it is a fraction of a second for BC1 textures. [...] rendering a full-screen quad at 3840 × 2160 resolution [...] rendering with NTC via stochastic filtering (see Section 5.3) costs between 1.15 ms and 1.92 ms on a NVIDIA RTX 4090, while the cost decreases to 0.49 ms with traditional trilinear filtered BC7 textures. [...] We also implemented trilinear filtering for NTC by decompressing and filtering together eight texels and observed an 8× slowdown.'''
+checked = 2026-10-26
+
+["fujieda-2024-ntbc-setup"]
+url = "https://arxiv.org/pdf/2407.09543v2#page=6"
+section = "Section 4, page 6"
+quote = '''All the evaluations in this paper are performed on a single AMD Radeon™ RX 7900 XT GPU on a Windows machine. [...] NTBC, encodes block-compressed data in BC1 and BC4 formats'''
+checked = 2026-10-26
+
+["fujieda-2024-ntbc-storage"]
+url = "https://arxiv.org/pdf/2407.09543v2#page=7"
+section = "Section 4.3, page 7"
+quote = '''The conservative approach consumes 26.74 MB of the storage which is about 40% of BC with Compressonator (41.6 MB) while maintaining the quality with a reasonable degradation of about 15% in PSNR and 5% in SSIM.'''
+checked = 2026-10-26
+
+["fujieda-2024-ntbc-carpet-and-inference"]
+url = "https://arxiv.org/pdf/2407.09543v2#page=8"
+section = "Figure 6 and Table 1, page 8"
+quote = '''Figure 6 [Carpet015, Diffuse]: Conservative NTBC: 30.98 dB; Ref. BC: 37.44 dB [...] Table 1: NTBC inference times to predict compressed blocks for MetalPlates013 material with 2 BC1 and 4 BC4 compressed textures. [...] Conservative: 49.84 ms (BC1 & BC4): 25.57 ms (BC1 only); Aggressive: 27.31 ms (BC1 & BC4): 25.96 ms (BC1 only)'''
+checked = 2026-10-26
+
+["meshoptimizer-1.3-mesh-compression"]
+url = "https://github.com/zeux/meshoptimizer/blob/v1.3/README.md?plain=1#L391-L399"
+section = "README, Mesh compression"
+quote = '''While several mesh compression libraries, like Google Draco, are available, they typically are designed to maximize the compression ratio at the cost of disturbing the vertex/index order (which makes the meshes inefficient to render on GPU) or decompression performance. [...] this compression scheme is available as a glTF extension EXT_meshopt_compression as well as KHR_meshopt_compression.'''
+checked = 2026-10-26
+
+["meshoptimizer-1.3-normal-bits"]
+url = "https://github.com/zeux/meshoptimizer/blob/v1.3/README.md?plain=1#L427"
+section = "README, vertex compression, line 427"
+quote = '''For normal or tangent vectors, using octahedral encoding is recommended over three components as it reduces redundancy; similarly, consider using 10-12 bits per component instead of 16.'''
+checked = 2026-10-26
+
+["meshoptimizer-1.3-licence"]
+url = "https://github.com/zeux/meshoptimizer/blob/v1.3/LICENSE.md?plain=1#L1"
+section = "LICENSE.md"
+quote = '''MIT License'''
+checked = 2026-10-26
+
+["draco-1.5.7-quantization-and-levels"]
+url = "https://github.com/google/draco/blob/1.5.7/README.md?plain=1#L283-L308"
+section = "README, Encoding Tool"
+quote = '''will quantize the positions to 14 bits (default is 11 for the position coordinates). [...] In general, the highest setting, `10`, will have the most compression but worst decompression speed. `0` will have the least compression, but best decompression speed. The default setting is `7`.'''
+checked = 2026-10-26
+
+["draco-1.5.7-licence"]
+url = "https://github.com/google/draco/blob/1.5.7/README.md?plain=1#L594-L596"
+section = "README, License"
+quote = '''Licensed under the Apache License, Version 2.0'''
+checked = 2026-10-26
+
+["zstd-1.5.7-benchmarks"]
+url = "https://github.com/facebook/zstd/blob/v1.5.7/README.md?plain=1#L31-L53"
+section = "README, Benchmarks"
+quote = '''tested and compared on a desktop featuring a Core i7-9700K CPU @ 4.9GHz [...] on the Silesia compression corpus. [...] zstd 1.5.6 -1: 2.887: 510 MB/s: 1580 MB/s [...] lz4 1.9.4: 2.101: 700 MB/s: 4000 MB/s'''
+checked = 2026-10-26
+
+["zstd-1.5.7-dictionaries"]
+url = "https://github.com/facebook/zstd/blob/v1.5.7/README.md?plain=1#L82-L90"
+section = "README, The case for Small Data compression"
+quote = '''Zstd offers a training mode, which can be used to tune the algorithm for a selected type of data. [...] The result of this training is stored in a file called "dictionary", which must be loaded before compression and decompression. Using this dictionary, the compression ratio achievable on small data improves dramatically.'''
+checked = 2026-10-26
+
+["zstd-1.5.7-licence"]
+url = "https://github.com/facebook/zstd/blob/v1.5.7/README.md?plain=1#L230"
+section = "README, License"
+quote = '''Zstandard is dual-licensed under BSD OR GPLv2.'''
+checked = 2026-10-26
+
+["lz4-1.10.0-benchmarks"]
+url = "https://github.com/lz4/lz4/blob/v1.10.0/README.md?plain=1#L40-L58"
+section = "README, Benchmarks"
+quote = '''The reference system uses a Core i7-9700K CPU @ 4.9GHz (w/ turbo boost). Benchmark evaluates the compression of reference Silesia Corpus in single-thread mode. [...] LZ4 default (v1.9.0): 2.101: 780 MB/s: 4970 MB/s [...] Zstandard 1.4.0 -1: 2.883: 515 MB/s: 1380 MB/s [...] zlib deflate 1.2.11 -6: 3.099: 36 MB/s: 445 MB/s'''
+checked = 2026-10-26
+
+["lz4-1.10.0-licence"]
+url = "https://github.com/lz4/lz4/blob/v1.10.0/README.md?plain=1#L24"
+section = "README, line 24"
+quote = '''LZ4 library is provided as open-source software using BSD 2-Clause license.'''
+checked = 2026-10-26
+
+["gdeflate-stream-definition"]
+url = "https://github.com/microsoft/DirectStorage/blob/c53f1499d5f67a61b69a1a348d22dcd2b4cb4ede/GDeflate/GDeflate/README.md?plain=1#L15"
+section = "GDeflate stream definition"
+quote = '''The bit swizzling is done by first splitting the DEFLATE stream into 32 sub-streams and then serializing them to get the final GDeflate stream that allows for up to 32 way parallelism during decompression.'''
+checked = 2026-10-26
+
+["gdeflate-licence"]
+url = "https://github.com/microsoft/DirectStorage/blob/c53f1499d5f67a61b69a1a348d22dcd2b4cb4ede/GDeflate/GDeflate/LICENSE#L1-L2"
+section = "GDeflate/GDeflate/LICENSE"
+quote = '''Apache License Version 2.0, January 2004'''
+checked = 2026-10-26
+
+["nvcomp-licence"]
+url = "https://github.com/NVIDIA/nvcomp/blob/f0f982e1965da56f12b4253ed57549ec98cdab87/LICENSE#L1-L3"
+section = "LICENSE, preamble"
+quote = '''LICENSE AGREEMENT FOR NVIDIA SOFTWARE DEVELOPMENT KITS [...] governs your use of the NVIDIA nvCOMP software development kit'''
+checked = 2026-10-26
+
+["wgpu-types-30-cooperative-matrix"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/features.rs#L1407-L1425"
+section = "wgpu-types features.rs, EXPERIMENTAL_COOPERATIVE_MATRIX"
+quote = '''Current limitations: The implementation currently only supports 8x8 f32 matrices. [...] Supported platforms: - Metal (with MSL 2.3+ and Apple7+/Mac2+, using simdgroup matrix operations) - Vulkan (with VK_KHR_cooperative_matrix, if 8x8 f32 is supported) [...] This is a native only feature.'''
+checked = 2026-10-26
+
+["wgpu-hal-30-metal-cooperative-matrix"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/adapter.rs#L1153-L1155"
+section = "wgpu-hal metal/adapter.rs, supports_cooperative_matrix"
+quote = '''supports_cooperative_matrix: family_check && (device.supportsFamily(MTLGPUFamily::Apple7) || device.supportsFamily(MTLGPUFamily::Mac2)),'''
+checked = 2026-10-26
+
+["wgpu-types-30-copy-buffer-alignment"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/lib.rs#L123-L124"
+section = "wgpu-types lib.rs, COPY_BUFFER_ALIGNMENT"
+quote = '''Buffer to buffer copy as well as buffer clear offsets and sizes must be aligned to this number. pub const COPY_BUFFER_ALIGNMENT: BufferAddress = 4;'''
+checked = 2026-10-26
+
+["khronos-ktx-supercompression-schemes"]
+url = "https://github.com/KhronosGroup/KTX-Specification/blob/ac39917e8240f51db97715a2453134a42ff959fd/ktxspec.adoc?plain=1#L627-L635"
+section = "supercompressionScheme, Supercompression Schemes table"
+quote = '''Scheme Id: Scheme Name: Level Data Format: Global Data Format; 0: None: n/a: n/a; 1: BasisLZ: ETC1S Slice Decoding: BasisLZ Global Data; 2: Zstandard: RFC8478: n/a; 3: ZLIB: RFC1950: n/a'''
+checked = 2026-10-26
+
+["ispc-texture-compressor-licence"]
+url = "https://github.com/GameTechDev/ISPCTextureCompressor/blob/79ddbc90334fc31edd438e68ccb0fe99b4e15aab/license.txt#L1-L11"
+section = "license.txt"
+quote = '''Copyright 2017 Intel Corporation Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction [...] The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.'''
+checked = 2026-10-26
+
+["xxhash-0.8.4-licence"]
+url = "https://github.com/Cyan4973/xxHash/blob/v0.8.4/LICENSE#L1-L5"
+section = "LICENSE"
+quote = '''xxHash Library Copyright (c) 2012-2021 Yann Collet All rights reserved. BSD 2-Clause License'''
+checked = 2026-10-26
+
+["blake3-1.8.7-licences"]
+url = "https://github.com/BLAKE3-team/BLAKE3/blob/1.8.7/README.md?plain=1#L191-L197"
+section = "README, Licenses"
+quote = '''This work is released into the public domain with CC0 1.0. Alternatively, it is licensed under any of the following: * Apache 2.0 * Apache 2.0 with LLVM exceptions'''
+checked = 2026-10-26
+
+["crate-zstd-0.13.3-licence"]
+url = "https://crates.io/api/v1/crates/zstd/0.13.3"
+section = "crates.io registry metadata, version.license"
+quote = '''"license": "MIT"'''
+checked = 2026-10-26
+
+["crate-zstd-0.14.2-licence"]
+url = "https://crates.io/api/v1/crates/zstd/0.14.2"
+section = "crates.io registry metadata, version.license"
+quote = '''"license": "BSD-3-Clause"'''
+checked = 2026-10-26
+
+["crate-ruzstd-0.9.1-licence"]
+url = "https://crates.io/api/v1/crates/ruzstd/0.9.1"
+section = "crates.io registry metadata, version.license"
+quote = '''"license": "MIT"'''
+checked = 2026-10-26
+
+["crate-lz4-flex-0.11.6-licence"]
+url = "https://crates.io/api/v1/crates/lz4_flex/0.11.6"
+section = "crates.io registry metadata, version.license"
+quote = '''"license": "MIT"'''
+checked = 2026-10-26
+
+["crate-xxhash-rust-0.8.19-licence"]
+url = "https://crates.io/api/v1/crates/xxhash-rust/0.8.19"
+section = "crates.io registry metadata, version.license"
+quote = '''"license": "BSL-1.0"'''
+checked = 2026-10-26
+
+["crate-sha2-0.11.0-licence"]
+url = "https://crates.io/api/v1/crates/sha2/0.11.0"
+section = "crates.io registry metadata, version.license"
+quote = '''"license": "MIT OR Apache-2.0"'''
+checked = 2026-10-26
+
+["crate-ktx2-0.5.0-licence"]
+url = "https://crates.io/api/v1/crates/ktx2/0.5.0"
+section = "crates.io registry metadata, version.license"
+quote = '''"license": "Apache-2.0"'''
+checked = 2026-10-26

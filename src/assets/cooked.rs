@@ -242,7 +242,10 @@ impl CookedTexture {
     /// KTX2: the header, level index and data format descriptor through
     /// `ktx2`'s serialisers, then the key-value data, then each level
     /// zstd-compressed at `zstd_level`, smallest mip first, so the smallest
-    /// mips are one contiguous byte range (ADR 0017).
+    /// mips are one contiguous byte range (ADR 0017). KTX2 orders level data
+    /// this way [ref:ktx2-level-order], compresses each level on its own
+    /// [ref:ktx2-supercompression-per-level] and needs no level alignment
+    /// under supercompression [ref:ktx2-level-alignment].
     #[cfg(feature = "cook")]
     pub fn to_blob(&self, zstd_level: i32) -> anyhow::Result<Vec<u8>> {
         let (_, format) = TEXTURE_FORMATS

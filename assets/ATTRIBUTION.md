@@ -4,15 +4,15 @@ Files in this directory keep their own licences. `manifest.json` records each fi
 
 ## SciFiHelmet/
 
-SciFi Helmet: © 2017 Michael Pavlovic, CC0 1.0
+SciFi Helmet by Michael Pavlovic, glTF conversion by Norbert Nopper: © 2017 Public, CC0 1.0
 
-From [Khronos glTF-Sample-Assets](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/SciFiHelmet), unmodified. Licence: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/legalcode). Fetched by `praxis fetch`, never committed.
+From [Khronos glTF-Sample-Assets](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/SciFiHelmet), unmodified. Licence: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/legalcode). Fetched by `praxis fetch`, never committed. The repository's `REUSE.toml`, read strictly, puts these files under its catch-all table instead: © 2017-2026 Khronos Group, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/legalcode) (`docs/research/test-assets.md`).
 
 ## NormalTangentTest/
 
 Normal-Tangent Test: © 2018 Analytical Graphics, Inc., by Ed Mackey, CC0 1.0
 
-From [Khronos glTF-Sample-Assets](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/NormalTangentTest), the `glTF-Binary` variant, unmodified. Licence: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/legalcode). Committed (1.8 MB).
+From [Khronos glTF-Sample-Assets](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/NormalTangentTest), the `glTF-Binary` variant, unmodified. Licence: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/legalcode). Committed (1.8 MB). The repository's `REUSE.toml`, read strictly, puts this file under its catch-all table instead: © 2017-2026 Khronos Group, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/legalcode) (`docs/research/test-assets.md`).
 
 ## BlueNoise/
 
