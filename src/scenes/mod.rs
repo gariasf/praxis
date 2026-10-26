@@ -464,7 +464,8 @@ impl ReferenceScene {
     }
 }
 
-/// The sun's illuminance in every scene, in lux: direct sunlight (ADR 0023).
+/// The sun's illuminance in every scene, in lux: direct sunlight, as Bevy's
+/// `lux::DIRECT_SUNLIGHT` gives it [ref:bevy-lux-constants] (ADR 0023).
 /// The scenes' other lights are given against it.
 const SUN_ILLUMINANCE: f32 = 100_000.0;
 
@@ -510,8 +511,9 @@ fn orbit(frame: u32, radius: f32, height: f32) -> Camera {
     Camera::looking_at(position.as_dvec3(), glam::DVec3::ZERO)
 }
 
-/// Linear sRGB reflectance of gold at normal incidence: metals tint their
-/// highlight with it and dielectrics their diffuse, so the two rows differ.
+/// Linear sRGB reflectance of gold at normal incidence, F0 (Hoffman 2013,
+/// Table 1 [ref:hoffman-2013-f0]): metals tint their highlight with it and
+/// dielectrics their diffuse, so the two rows differ.
 #[cfg(feature = "cook")]
 const SWEEP_BASE_COLOR: [f32; 4] = [1.0, 0.71, 0.29, 1.0];
 /// The helmet scene's sweep is white, so the factors alone show.

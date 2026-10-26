@@ -26,7 +26,9 @@ pub const HDR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 pub const SHADOW_MASK_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg32Uint;
 
 /// The luminance of a linear colour in Rec. 709's primaries, the scene's, per
-/// unit of each (ITU-R BT.709-6, item 3.2); WGSL declares them as
+/// unit of each: ITU-R BT.709-6's luma weights (item 3.2), which are the Y
+/// row of its linear RGB-to-XYZ matrix as ITU-R BT.2087-0 prints it
+/// [ref:bt709-6-luma] [ref:bt2087-rec709-to-xyz]; WGSL declares them as
 /// `LUMINANCE_COEFFICIENTS`.
 pub const LUMINANCE_COEFFICIENTS: [f32; 3] = [0.2126, 0.7152, 0.0722];
 
