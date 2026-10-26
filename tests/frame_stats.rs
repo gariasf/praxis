@@ -86,7 +86,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // u32s a pixel and its 4-byte overflow count, three staging slots of the
     // first frame's 1668 uploaded bytes rounded up to 2048, the GPU stats
     // readback: its resolve buffer of a begin and an end timestamp of 8
-    // bytes for each of the eleven timed passes, and six slots of 256 bytes,
+    // bytes for each of the twelve timed passes, and six slots of 272 bytes,
     // the tonemapping pass's 64×64 R8 dither mask, the Froxel pass's lists,
     // 32 × 18 × 32 of 128 u32s, and its 16 bytes of light counts, the
     // dynamic TLAS's markers' 4-byte result, and the bend pass's 4,096 bends
@@ -119,8 +119,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + 160 * 90 * 8
             + 4
             + 3 * 2048
-            + 11 * 2 * 8
-            + 6 * 256
+            + 12 * 2 * 8
+            + 6 * 272
             + 64 * 64
             + 32 * 18 * 32 * 128 * 4
             + 16
@@ -185,7 +185,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // back its passes' GPU time, none skipped: Metal reads a timestamp
     // resolved before its pass's submission completed as 0. The frame spans
     // its passes; nothing moves and nothing bends, so no frame builds the
-    // dynamic TLAS or runs the bend pass, which take no time.
+    // dynamic TLAS, runs the bend pass or refits BLASes, which take no time.
     for (frame, stats) in frames.iter().enumerate() {
         assert_eq!(stats.gpu_readbacks_skipped, 0, "frame {frame}");
         let Some(gpu) = stats.gpu else {
@@ -197,6 +197,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             [
                 "dynamic_tlas_build",
                 "bend_pass",
+                "blas_refit",
                 "culling_phase_one",
                 "froxel_pass",
                 "depth_prepass",
@@ -210,7 +211,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             "frame {frame}"
         );
         for (pass, time) in gpu.pass_times {
-            let runs = !["dynamic_tlas_build", "bend_pass"].contains(&pass);
+            let runs = !["dynamic_tlas_build", "bend_pass", "blas_refit"].contains(&pass);
             assert!(
                 (Duration::ZERO < time) == runs
                     && time <= gpu.frame_time
