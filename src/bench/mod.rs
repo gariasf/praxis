@@ -867,6 +867,7 @@ mod tests {
                         frame_time: Duration::from_micros(300),
                         instances_drawn: if counted { 5 } else { 77 },
                         triangles_drawn: if counted { 15 } else { 231 },
+                        phase_two_triangles_drawn: 0,
                         instances_overflowed: if frame == 300 { 3 } else { 0 },
                         froxel_lights_overflowed: 0,
                         shadow_mask_lights_overflowed: 0,

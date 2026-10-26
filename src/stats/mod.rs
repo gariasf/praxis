@@ -77,6 +77,9 @@ pub struct GpuFrameStats {
     /// The Instances the frame's draw held, and their triangles.
     pub instances_drawn: u32,
     pub triangles_drawn: u32,
+    /// Of those triangles, phase two's draw's: none where the first phase
+    /// drew every Instance phase two would find visible.
+    pub phase_two_triangles_drawn: u32,
     /// Instances in use that the frame's draw had no room for, so not drawn.
     pub instances_overflowed: u32,
     /// Lights the Froxel lists had no room for, summed over Froxels: each

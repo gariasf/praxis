@@ -399,6 +399,7 @@ impl GpuStatsReadback {
                             frame_time,
                             instances_drawn: draw.instances_drawn,
                             triangles_drawn: draw.triangles_drawn(),
+                            phase_two_triangles_drawn: draw.phase_two_triangles_drawn(),
                             instances_overflowed: draw.instances_overflowed,
                             froxel_lights_overflowed: light_counts.froxel_lights_overflowed,
                             shadow_mask_lights_overflowed,

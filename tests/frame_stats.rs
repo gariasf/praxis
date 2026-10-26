@@ -186,6 +186,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // resolved before its pass's submission completed as 0. The frame spans
     // its passes; nothing moves and nothing bends, so no frame builds the
     // dynamic TLAS, runs the bend pass or refits BLASes, which take no time.
+    // Phase two's depth pass draws nothing in a frame whose first phase drew
+    // every visible Instance, and NVIDIA times an empty pass at 0.
     for (frame, stats) in frames.iter().enumerate() {
         assert_eq!(stats.gpu_readbacks_skipped, 0, "frame {frame}");
         let Some(gpu) = stats.gpu else {
@@ -212,8 +214,9 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         );
         for (pass, time) in gpu.pass_times {
             let runs = !["dynamic_tlas_build", "bend_pass", "blas_refit"].contains(&pass);
+            let may_be_empty = pass == "phase_two_depth_pass" && gpu.phase_two_triangles_drawn == 0;
             assert!(
-                (Duration::ZERO < time) == runs
+                (Duration::ZERO < time || may_be_empty) == runs
                     && time <= gpu.frame_time
                     && gpu.frame_time < Duration::from_secs(1),
                 "frame {frame}: {pass} took {time:?} of {:?} on the GPU",

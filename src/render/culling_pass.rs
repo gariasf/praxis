@@ -87,6 +87,11 @@ impl FrameDraw {
     pub(crate) fn triangles_drawn(&self) -> u32 {
         self.draw.index_count / 3
     }
+
+    /// Phase two's draw's index count over 3.
+    pub(crate) fn phase_two_triangles_drawn(&self) -> u32 {
+        self.phase_two_draw.index_count / 3
+    }
 }
 
 /// The pipelines of one phase of the culling pass, one per step.
