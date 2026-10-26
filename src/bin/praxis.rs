@@ -140,13 +140,16 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             results: results.clone(),
             mode: CompareMode::Ci,
         },
-        [scene] if !scene.starts_with('-') => Command::Window(parse_scene(scene)?),
+        [scene] if ReferenceScene::from_name(scene).is_some() => {
+            Command::Window(parse_scene(scene)?)
+        }
         _ => anyhow::bail!(
             "unexpected arguments {arguments:?}: run `praxis [<scene>]`, `capabilities`, \
              `cook`, `fetch`, `capture <scene> <png path> [<width>x<height>]`, \
              `bench <output directory> [--ci | --counters | --ci-counters] [<scene>...]`, or \
              `compare <bench directory> [--ci]`; `capture` and `bench` also take \
-             `--crowd-form <proxies | refit | rebuild>`"
+             `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
+            ReferenceScene::ALL.map(ReferenceScene::name)
         ),
     })
 }
@@ -437,5 +440,28 @@ mod tests {
         assert!(error.contains("no-such-scene"), "{error}");
         assert!(error.contains("\"town\""), "{error}");
         assert!(error.contains("\"helmet\""), "{error}");
+    }
+
+    #[test]
+    fn a_command_missing_its_arguments_is_refused_with_the_usage() {
+        let error = parse(&["bench"]).unwrap_err().to_string();
+        assert!(error.contains("praxis [<scene>]"), "{error}");
+    }
+
+    #[test]
+    fn bench_still_parses_its_configuration_and_scenes() {
+        let Command::Bench {
+            output,
+            configuration,
+            scenes,
+            crowd_form,
+        } = parse(&["bench", "out", "--ci", "town", "crowd"]).unwrap()
+        else {
+            panic!("bench parsed as another command");
+        };
+        assert_eq!(output, "out");
+        assert_eq!(configuration.width, Configuration::CI.width);
+        assert_eq!(scenes, ["town", "crowd"]);
+        assert_eq!(crowd_form, CrowdForm::default());
     }
 }
