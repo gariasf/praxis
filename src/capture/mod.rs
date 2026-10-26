@@ -10,6 +10,20 @@ use crate::stats::FrameStats;
 /// sRGB-encoded. RGBA order makes the read-back bytes the image's pixels.
 pub(crate) const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
+/// Where the Goldens live, relative to the repository root: one directory
+/// per `golden_key`, one PNG per scene.
+pub const GOLDEN_DIRECTORY: &str = "tests/goldens";
+
+/// The Golden directory's name for an adapter: its backend, plus `-cpu` on
+/// a software rasterizer, which rounds differently from hardware on the
+/// same API.
+pub fn golden_key(backend: wgpu::Backend, device_type: wgpu::DeviceType) -> String {
+    match device_type {
+        wgpu::DeviceType::Cpu => format!("{}-cpu", backend.to_str()),
+        _ => backend.to_str().to_owned(),
+    }
+}
+
 /// Frames rendered per capture; the last one is read back.
 const FRAME_COUNT: u32 = 60;
 

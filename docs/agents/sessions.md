@@ -20,7 +20,7 @@ Reasoning effort is set per step, not per session. A session runs at medium and 
 
 | Effort | Steps |
 |---|---|
-| low | `cargo run --release -- fetch`, `scripts/verify.sh`, bench runs, filling the PR template, merge and worktree cleanup |
+| low | `cargo run --release -- preflight`, `cargo run --release -- fetch`, `scripts/verify.sh`, bench runs, filling the PR template, merge and worktree cleanup |
 | medium | implementing a ticket whose seam is agreed; the Standards review axis |
 | high or max | design choices, numerics and shader maths, the Spec and Sources review axes, diagnosing a failure whose cause is unclear |
 

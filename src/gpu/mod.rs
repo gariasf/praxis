@@ -95,6 +95,14 @@ pub async fn capability_report() -> anyhow::Result<String> {
     Ok(adapter_report(&adapter))
 }
 
+/// What the adapter a headless context would use says of itself. It
+/// requests no device, as `capability_report` does.
+pub async fn adapter_info() -> anyhow::Result<wgpu::AdapterInfo> {
+    let adapter =
+        first_backend(async |wgpu_instance| request_adapter(wgpu_instance, None).await).await?;
+    Ok(adapter.get_info())
+}
+
 /// The adapter, its backend, and whether the adapter supports each
 /// feature the roadmap plans on, with the related features and limits.
 /// One line per entry, followed by the Capability floor's limits, 4x MSAA on

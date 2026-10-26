@@ -87,7 +87,10 @@ src/
   lib.rs, state.rs             # library root (window shell) + orchestrator
   bin/praxis.rs                # thin binary: command dispatch
   gpu/                         # GPU context, windowed or headless
-  capture/                     # offscreen render read back as an image
+  capture/                     # offscreen render read back as an image,
+                                 and where its Goldens live
+  preflight/                   # `praxis preflight`: a session's starting
+                                 state, a line per check
   bench/                       # Reference scene medians, compared with
                                  Baselines and Budgets
   stats/                       # frame stats: CPU and GPU times, counts,

@@ -27,6 +27,21 @@ pub fn fetch(assets: &Path) -> anyhow::Result<Vec<(String, Fetch)>> {
     fetch_entries(assets, &read_manifest(assets, false)?, download)
 }
 
+/// The manifest's fetched files absent from `assets`, as paths relative to
+/// it, and how many fetched files the manifest lists.
+pub fn absent_fetched(assets: &Path) -> anyhow::Result<(Vec<String>, usize)> {
+    let fetched: Vec<_> = read_manifest(assets, false)?
+        .into_iter()
+        .filter(|entry| entry.fetched)
+        .collect();
+    let absent = fetched
+        .iter()
+        .filter(|entry| !assets.join(&entry.path).exists())
+        .map(|entry| entry.path.clone())
+        .collect();
+    Ok((absent, fetched.len()))
+}
+
 /// What a dev launch fetches before it cooks: its scene's fetched files,
 /// when one is absent. A failure only warns; the launch then loads what the
 /// Cooked cache holds.

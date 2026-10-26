@@ -87,16 +87,6 @@ fn skip(reason: &str) {
     writeln!(std::io::stderr(), "skipped: {reason}").ok();
 }
 
-/// The Golden directory for the context's adapter. A software rasterizer
-/// rounds differently from hardware on the same API, so it gets its own key.
-fn golden_key(context: &GpuContext) -> String {
-    let backend = context.backend().to_str();
-    match context.device_type() {
-        wgpu::DeviceType::Cpu => format!("{backend}-cpu"),
-        _ => backend.to_owned(),
-    }
-}
-
 #[derive(Debug, PartialEq)]
 struct Difference {
     /// Pixels with a channel that differs by more than `TOLERANCE`.
@@ -174,7 +164,7 @@ fn reference_scenes_match_their_goldens() {
         }
         Err(error) => panic!("headless GPU context failed: {error:#}"),
     };
-    let key = golden_key(&context);
+    let key = praxis::golden_key(context.backend(), context.device_type());
     let software = context.device_type() == wgpu::DeviceType::Cpu;
     let unculled_pixels_allowed = if software {
         SOFTWARE_UNCULLED_PIXELS
@@ -182,7 +172,7 @@ fn reference_scenes_match_their_goldens() {
         0
     };
     let golden_directory = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/goldens")
+        .join(praxis::GOLDEN_DIRECTORY)
         .join(&key);
 
     if variable_is_set(UPDATE_GOLDENS_VARIABLE) {

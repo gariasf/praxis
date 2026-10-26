@@ -26,6 +26,7 @@ mod environment;
 pub mod gpu;
 mod helmet;
 mod input;
+pub mod preflight;
 mod render;
 mod scenes;
 mod state;
@@ -35,7 +36,7 @@ mod time;
 mod transform;
 
 pub use assets::cooked;
-pub use capture::{capture, capture_frames};
+pub use capture::{GOLDEN_DIRECTORY, capture, capture_frames, golden_key};
 pub use render::{CrowdForm, RenderSwitches};
 pub use scenes::ReferenceScene;
 pub use state::DEFAULT_MODEL;
