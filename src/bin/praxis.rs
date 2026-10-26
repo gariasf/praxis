@@ -5,7 +5,7 @@ use std::process::ExitCode;
 use anyhow::Context;
 use praxis::bench::{Budgets, CompareMode, Configuration, Measurements, Verdict};
 use praxis::gpu::GpuContext;
-use praxis::{ReferenceScene, RenderSwitches};
+use praxis::{CrowdForm, ReferenceScene, RenderSwitches};
 
 /// The capture size when the command names none: small, and 16:9 like the
 /// window.
@@ -30,7 +30,17 @@ fn main() -> ExitCode {
 }
 
 fn run_command(arguments: &[String]) -> anyhow::Result<()> {
-    match arguments {
+    let (arguments, crowd_form) = take_crowd_form(arguments)?;
+    let takes_crowd_form = matches!(
+        arguments.first().map(String::as_str),
+        Some("bench" | "capture")
+    );
+    anyhow::ensure!(
+        crowd_form.is_none() || takes_crowd_form,
+        "only `bench` and `capture` take --crowd-form"
+    );
+    let crowd_form = crowd_form.unwrap_or_default();
+    match arguments.as_slice() {
         [] => praxis::run(),
         [command] if command == "capabilities" => print_capabilities(),
         #[cfg(feature = "cook")]
@@ -39,21 +49,23 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
         [command] if command == "fetch" => fetch(),
         #[cfg(feature = "cook")]
         [command, scene, output] if command == "capture" => {
-            capture(scene, output, DEFAULT_CAPTURE_SIZE)
+            capture(scene, output, DEFAULT_CAPTURE_SIZE, crowd_form)
         }
         #[cfg(feature = "cook")]
-        [command, scene, output, size] if command == "capture" => capture(scene, output, size),
+        [command, scene, output, size] if command == "capture" => {
+            capture(scene, output, size, crowd_form)
+        }
         [command, output, flag, scenes @ ..] if command == "bench" && flag == "--ci" => {
-            bench(output, Configuration::CI, scenes)
+            bench(output, Configuration::CI, scenes, crowd_form)
         }
         [command, output, flag, scenes @ ..] if command == "bench" && flag == "--counters" => {
-            bench(output, Configuration::COUNTERS, scenes)
+            bench(output, Configuration::COUNTERS, scenes, crowd_form)
         }
         [command, output, flag, scenes @ ..] if command == "bench" && flag == "--ci-counters" => {
-            bench(output, Configuration::CI_COUNTERS, scenes)
+            bench(output, Configuration::CI_COUNTERS, scenes, crowd_form)
         }
         [command, output, scenes @ ..] if command == "bench" => {
-            bench(output, Configuration::REFERENCE, scenes)
+            bench(output, Configuration::REFERENCE, scenes, crowd_form)
         }
         [command, results] if command == "compare" => compare(results, CompareMode::Local),
         [command, results, flag] if command == "compare" && flag == "--ci" => {
@@ -63,9 +75,28 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
             "unexpected arguments {arguments:?}: run with no arguments, `capabilities`, \
              `cook`, `fetch`, `capture <scene> <png path> [<width>x<height>]`, \
              `bench <output directory> [--ci | --counters | --ci-counters] [<scene>...]`, or \
-             `compare <bench directory> [--ci]`"
+             `compare <bench directory> [--ci]`; `capture` and `bench` also take \
+             `--crowd-form <proxies | refit | rebuild>`"
         ),
     }
+}
+
+/// `arguments` without `--crowd-form <form>`, and the form it names.
+fn take_crowd_form(arguments: &[String]) -> anyhow::Result<(Vec<String>, Option<CrowdForm>)> {
+    let mut arguments = arguments.to_vec();
+    let Some(flag) = arguments
+        .iter()
+        .position(|argument| argument == "--crowd-form")
+    else {
+        return Ok((arguments, None));
+    };
+    let names = CrowdForm::ALL.map(CrowdForm::name);
+    let form = arguments
+        .get(flag + 1)
+        .and_then(|name| CrowdForm::from_name(name))
+        .ok_or_else(|| anyhow::anyhow!("--crowd-form takes one of {names:?}"))?;
+    arguments.drain(flag..flag + 2);
+    Ok((arguments, Some(form)))
 }
 
 /// Prints the capability report of the adapter a headless context would use.
@@ -117,9 +148,24 @@ fn parse_scene(name: &str) -> anyhow::Result<ReferenceScene> {
 
 /// Benches the named Reference scenes, or with none every scene whose assets
 /// are present, prints one line per scene, and writes `<scene>.json` into
-/// `output`.
-fn bench(output: &str, configuration: Configuration, scene_names: &[String]) -> anyhow::Result<()> {
-    let scenes = if scene_names.is_empty() {
+/// `output`. A crowd form other than the default benches `crowd` alone,
+/// written as `crowd-<form>.json`.
+fn bench(
+    output: &str,
+    configuration: Configuration,
+    scene_names: &[String],
+    crowd_form: CrowdForm,
+) -> anyhow::Result<()> {
+    let crowd = ReferenceScene::Crowd.name();
+    let other_form = crowd_form != CrowdForm::default();
+    anyhow::ensure!(
+        !other_form || scene_names.iter().all(|name| name == crowd),
+        "--crowd-form {} benches {crowd} alone",
+        crowd_form.name()
+    );
+    let scenes = if other_form {
+        vec![ReferenceScene::Crowd]
+    } else if scene_names.is_empty() {
         let helmet_fetched = Path::new(praxis::DEFAULT_MODEL).exists();
         if !helmet_fetched {
             tracing::warn!("helmet skipped: run `praxis fetch` to bench it");
@@ -137,8 +183,15 @@ fn bench(output: &str, configuration: Configuration, scene_names: &[String]) -> 
     std::fs::create_dir_all(output)?;
     let context = pollster::block_on(GpuContext::headless())?;
     for scene in scenes {
-        let result = praxis::bench::run(&context, scene, configuration, RenderSwitches::default())?;
-        let path = Path::new(output).join(format!("{}.json", scene.name()));
+        let switches = RenderSwitches {
+            crowd_form,
+            ..RenderSwitches::default()
+        };
+        let mut result = praxis::bench::run(&context, scene, configuration, switches)?;
+        if other_form {
+            result.scene = format!("{crowd}-{}", crowd_form.name());
+        }
+        let path = Path::new(output).join(format!("{}.json", result.scene));
         std::fs::write(&path, serde_json::to_string_pretty(&result)? + "\n")?;
         writeln!(std::io::stdout(), "{result}")?;
     }
@@ -236,11 +289,11 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> anyhow::Result<T> {
 }
 
 /// Renders the Reference scene named `scene` headless at `size`,
-/// `<width>x<height>`, writes the last frame to `output` as a PNG, and prints
-/// that frame's stats, its point lights per lit pixel counted. The PNG
-/// encoder comes with `cook`.
+/// `<width>x<height>`, its crowd in `crowd_form`, writes the last frame to
+/// `output` as a PNG, and prints that frame's stats, its point lights per
+/// lit pixel counted. The PNG encoder comes with `cook`.
 #[cfg(feature = "cook")]
-fn capture(scene: &str, output: &str, size: &str) -> anyhow::Result<()> {
+fn capture(scene: &str, output: &str, size: &str, crowd_form: CrowdForm) -> anyhow::Result<()> {
     let scene = parse_scene(scene)?;
     let (width, height) = size
         .split_once('x')
@@ -255,6 +308,7 @@ fn capture(scene: &str, output: &str, size: &str) -> anyhow::Result<()> {
         height,
         RenderSwitches {
             count_point_lights: true,
+            crowd_form,
             ..RenderSwitches::default()
         },
     )?;

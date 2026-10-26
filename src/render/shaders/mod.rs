@@ -7,6 +7,8 @@
 
 use crate::cooked::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES, QTANGENT_SMALLEST_W};
 use crate::render::bend_pass::BEND_WORKGROUP_SIZE;
+#[cfg(any(test, target_vendor = "apple"))]
+use crate::render::bind_groups::BLAS_REFIT_MARKERS;
 use crate::render::bind_groups::{
     BENDS, BindGroupDefinition, DEPTH_PYRAMID_LEVEL, DYNAMIC_TLAS_MARKERS, FRAME, FRAME_DRAW,
     FROXEL_LISTS, LIGHT_COUNT_INPUT, MAIN_PASS_INPUTS, MATERIALS, SCENE_GEOMETRY,
@@ -144,6 +146,15 @@ pub const DYNAMIC_TLAS_MARKER: ShaderModule = ShaderModule {
     parts: &[part!("dynamic_tlas_marker.wgsl")],
 };
 
+/// The BLAS refit's marker, which ends its time, on Metal.
+#[cfg(any(test, target_vendor = "apple"))]
+pub const BLAS_REFIT_MARKER: ShaderModule = ShaderModule {
+    name: "blas_refit_marker",
+    enables: &[],
+    bind_groups: &[&BLAS_REFIT_MARKERS],
+    parts: &[part!("blas_refit_marker.wgsl")],
+};
+
 /// The bend pass.
 pub const BEND: ShaderModule = ShaderModule {
     name: "bend",
@@ -163,7 +174,7 @@ pub const SHARED: ShaderModule = ShaderModule {
 
 /// Every module, which `shader_tests` validates.
 #[cfg(test)]
-pub const MODULES: [ShaderModule; 10] = [
+pub const MODULES: [ShaderModule; 11] = [
     SHARED,
     MAIN,
     SHADOW_MASK,
@@ -173,6 +184,7 @@ pub const MODULES: [ShaderModule; 10] = [
     DEPTH_PYRAMID,
     TONEMAPPING,
     DYNAMIC_TLAS_MARKER,
+    BLAS_REFIT_MARKER,
     BEND,
 ];
 

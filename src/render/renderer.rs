@@ -5,13 +5,13 @@ use crate::gpu::GpuContext;
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::render::bend_pass::{BEND_PASS, BendPass};
 use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
-use crate::render::blas_refit::BlasRefit;
+use crate::render::blas_refit::{BLAS_REFIT_PASS, BlasRefit};
 use crate::render::culling_pass::{CullingPass, CullingPhase, DrawCapacity};
 use crate::render::depth_pyramid_pass::{DEPTH_PYRAMID_PASS, DepthPyramidPass};
 use crate::render::froxel_pass::{FROXEL_PASS, FroxelPass};
 use crate::render::light_count_pass::LightCountPass;
 use crate::render::main_pass::{DEPTH_PREPASS, LIT_PASS, MainPass, PHASE_TWO_DEPTH_PASS};
-use crate::render::readback::GpuStatsReadback;
+use crate::render::readback::{FrameShape, GpuStatsReadback};
 use crate::render::shadow_mask_pass::{SHADOW_MASK_PASS, ShadowMaskPass};
 use crate::render::targets::RenderTargets;
 use crate::render::tonemapping_pass::{TONEMAPPING_PASS, TonemappingPass};
@@ -25,11 +25,15 @@ use crate::stats::{FrameRecorder, GpuFrameStats};
 /// The passes `render` records, in order, each timed from its start to its
 /// end, after the dynamic TLAS's build, timed from the end of the marker
 /// before it to the start of the marker after it in frames that build it.
-/// The bend pass runs in frames that bend Meshes; phase two's depth pass
-/// and the shadow mask pass only with shadow rays on (`SHADOW_RAY_PASSES`).
-pub(crate) const TIMED_PASSES: [&str; 11] = [
+/// The bend pass runs in frames that bend Meshes, and the BLAS refit, timed
+/// from the end of the bend pass to the start of the marker after it, in
+/// those frames with the crowd's refit form; phase two's depth pass and the
+/// shadow mask pass only with shadow rays on (`SHADOW_RAY_PASSES`). The
+/// rebuild form, an oracle, times neither its rebuild nor its build.
+pub(crate) const TIMED_PASSES: [&str; 12] = [
     DYNAMIC_TLAS_BUILD,
     BEND_PASS,
+    BLAS_REFIT_PASS,
     CullingPhase::One.label(),
     FROXEL_PASS,
     DEPTH_PREPASS,
@@ -100,6 +104,21 @@ pub enum CrowdForm {
 }
 
 impl CrowdForm {
+    pub const ALL: [Self; 3] = [Self::Proxies, Self::Refit, Self::Rebuild];
+
+    /// Its name on the command line.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Proxies => "proxies",
+            Self::Refit => "refit",
+            Self::Rebuild => "rebuild",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|form| form.name() == name)
+    }
+
     /// Why it cannot run on `backend`, if it cannot.
     pub fn unavailable_on(self, backend: wgpu::Backend) -> Option<&'static str> {
         (self == CrowdForm::Refit && backend != wgpu::Backend::Metal)
@@ -151,9 +170,8 @@ pub struct Renderer {
     /// With the crowd's refit or rebuild form.
     blas_refit: Option<BlasRefit>,
     /// Whether the dynamic TLAS's build is timed between markers: not with
-    /// BLAS updates, which put the build inside the frame's span from the
-    /// bend pass, and whose rebuilds through wgpu would fail the first
-    /// marker's query, as `DynamicTlas::mark` says.
+    /// the crowd's rebuild form, whose rebuilds through wgpu would fail the
+    /// first marker's query, as `DynamicTlas::mark` says.
     marks_dynamic_tlas_build: bool,
     depth_pyramid_pass: DepthPyramidPass,
     tonemapping_pass: TonemappingPass,
@@ -390,7 +408,7 @@ impl Renderer {
             shadow_mask_pass,
             shadow_rays: switches.shadow_rays,
             blas_refit,
-            marks_dynamic_tlas_build: switches.crowd_form == CrowdForm::Proxies,
+            marks_dynamic_tlas_build: switches.crowd_form != CrowdForm::Rebuild,
             depth_pyramid_pass,
             tonemapping_pass,
             light_count_pass,
@@ -549,10 +567,13 @@ impl Renderer {
         let encoding = started.elapsed();
         // Their BLASes take them too, in a submission of their own, which
         // the dynamic TLAS's build, recorded after it, follows.
+        let mut blas_refitted = false;
         if let Some(blas_refit) = self.blas_refit.as_mut().filter(|_| bent) {
             let started = Instant::now();
             let head = std::mem::replace(&mut encoder, create_frame_encoder(&self.device));
-            blas_refit.submit(&self.device, &self.queue, head, &self.mesh_pool);
+            let refit_end = timestamps.map(|timestamps| timestamps.marker_after(BLAS_REFIT_PASS));
+            blas_refitted =
+                blas_refit.submit(&self.device, &self.queue, head, &self.mesh_pool, refit_end);
             recorder.stage(BLAS_REFIT, started);
         }
         // The dynamic TLAS's build, its recording timed apart from the
@@ -650,12 +671,11 @@ impl Renderer {
         // phases', each with one indirect call; the tonemapping pass draws
         // one triangle.
         recorder.draw_calls += 4;
-        if dynamic_tlas_commands.is_some() && self.marks_dynamic_tlas_build {
-            self.gpu_stats.dynamic_tlas_built();
-        }
-        if bent {
-            self.gpu_stats.bent();
-        }
+        self.gpu_stats.shape(FrameShape {
+            dynamic_tlas_built: dynamic_tlas_commands.is_some() && self.marks_dynamic_tlas_build,
+            bent,
+            blas_refitted,
+        });
         self.gpu_stats.end_frame(
             &mut encoder,
             self.culling_pass.frame_draw(),

@@ -4,6 +4,93 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## The crowd's two forms (2026-10-26, #209)
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
+#209's second part on `66b5b57`. `praxis bench <dir> crowd` and
+`praxis bench <dir> --crowd-form refit` at 2560×1440 with 4x MSAA, 248
+warm-up and 1,800 measured frames, four rounds alternating the forms.
+Load average 4.2 to 5.5, with a browser playing video: GPU medians agree
+within 1% across rounds.
+
+Form (b) casts the 100 figures' shadows through 1,600 rigid per-bone
+proxies (#208). Form (a) gives each figure a BLAS, refitted to its bent
+shape each frame through wgpu-hal: 100 BLASes, 512,000 triangles. The
+Budget for the update is 0.5 ms of CPU and 1.0 ms of GPU per frame
+(criterion 57):
+
+- **CPU** is `dynamic_tlas_cpu_microseconds`: the dynamic TLAS's
+  recording and submit, plus in form (a) the refits' recording and their
+  submission, with the frame's commands up to the bend pass.
+- **GPU** is the build between its markers (`dynamic_tlas_build`), plus
+  in form (a) the refits (`blas_refit`), from the end of the bend pass to
+  the start of a marker that reads their scratch. The bend pass, the
+  stand-in for skinning that both forms run, is outside it: 21 to 27 µs.
+
+| Form, round | Update CPU µs, median (p95) | Refit GPU µs, median (p95) | Build GPU µs, median (p95) | Update GPU µs, medians |
+|---|---|---|---|---|
+| Proxies 1 | 322.5 (466.1) | — | 603.3 (670.5) | 603.3 |
+| Proxies 2 | 318.6 (396.9) | — | 597.5 (661.0) | 597.5 |
+| Proxies 3 | 325.5 (452.5) | — | 600.5 (667.8) | 600.5 |
+| Proxies 4 | 325.0 (449.4) | — | 596.8 (757.2) | 596.8 |
+| Refit 1 | 450.5 (628.2) | 1,114.4 (1,284.9) | 253.2 (314.0) | 1,367.6 |
+| Refit 2 | 394.2 (511.9) | 1,119.8 (1,267.5) | 257.3 (313.8) | 1,377.1 |
+| Refit 3 | 393.0 (503.8) | 1,123.3 (1,268.2) | 259.2 (314.9) | 1,382.5 |
+| Refit 4 | 418.2 (608.8) | 1,117.4 (1,302.9) | 256.9 (324.4) | 1,374.3 |
+
+- **Proxies: within both.** The build takes 597 to 603 µs, 60% of the
+  GPU Budget, and the CPU 319 to 326 µs at the median, its p95s 397 to
+  466 µs.
+- **Refit: over the GPU Budget.** The refits alone take 1,114 to 1,123
+  µs, about 2.2 ns a triangle, and the update 1.37 to 1.38 ms. Its CPU
+  is within the Budget at the median, 393 to 451 µs, and over it at p95,
+  504 to 628 µs. The build, over 100 entries rather than 1,600, takes 253
+  to 259 µs.
+- **The refit's timing holds.** With every refit recorded three times (a
+  local patch), `blas_refit` read 3,332 and 3,333 µs against 1,127 and
+  1,131 once, and the GPU frame grew by the same 2.2 ms: the marker
+  waits for the refits.
+- **Strict event sync costs nothing measured.** Form (a) turns on
+  wgpu-hal's strict event sync for the queue, which adds a wait to each
+  command buffer and a command buffer to each submission. Forcing it on
+  in form (b) (a local patch, three rounds alternating) moved the
+  update's CPU from 297–315 µs to 287–292, the CPU frame from 727–756 µs
+  to 711–723, and the GPU frame from 3,301–3,308 µs to 3,181–3,257. The
+  build read 483 to 520 µs against 593 to 610: its first marker no longer
+  starts while the frame before still runs. Part of form (a)'s lower
+  build time is this.
+- **Beyond the update** (medians, round 2):
+
+  | | Proxies | Refit |
+  |---|---|---|
+  | CPU frame µs | 756.6 | 590.2 |
+  | GPU frame µs | 3,314.3 | 4,121.2 |
+  | Shadow mask pass µs | 1,174.6 | 1,224.4 |
+  | Uploaded B per frame | 322,192 | 22,192 |
+  | Heap allocations | 2,078 | 861 |
+  | GPU memory B | 516,623,171 | 564,006,507 |
+
+  - Form (a) places no proxies, so its CPU frame is lower, by 90 to 200
+    µs across the rounds.
+  - Its rays traverse 100 BLASes of 5,120 triangles rather than 1,600
+    proxies: the shadow mask pass takes 50 µs more.
+  - Its GPU memory is 47.4 MB more: the BLASes are uncompacted and keep
+    their index streams for the refit, plus the refits' scratch.
+- **Shapes.** At 1280×720 the two forms' images differ in 5,398 of
+  921,600 pixels, all along the shadows' outlines: the proxies' shadows
+  are a little thinner than the figures'.
+- **The rebuild form**, the oracle, rebuilds every BLAS through wgpu, the
+  update every backend can run. Its rebuild and build are not timed. In
+  one run its GPU frame spanned 9,303 µs, waits between submissions
+  included, and its update's CPU took 709 µs.
+
+The owner picks M7's form (#209's PR, Decide). Recommended: form (b),
+the proxies. It fits both Budgets with 40% of the GPU's to spare, runs on
+every backend, and needs no `unsafe`. Form (a) is over the GPU Budget by
+0.37 ms on Metal alone, where it also needs strict event sync. Form (b)'s
+costs are the thinner shadows, 16 of the dynamic TLAS's 10,000 entries
+per figure, and the heap allocations wgpu-core makes per entry.
+
 ## Shadow rays: from the lit pass to a shadow mask (2026-10-23, #260)
 
 Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of main at

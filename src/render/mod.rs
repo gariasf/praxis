@@ -29,8 +29,8 @@ pub use acceleration_structures::{
 };
 pub use instance::{INSTANCE_CAPACITY, InstanceData, NO_MATERIAL, NO_MESH};
 pub use prepare::{FrameData, FramePreparer};
+pub(crate) use renderer::{BLAS_REFIT, DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT, TIMED_PASSES};
 pub use renderer::{CrowdForm, RenderSwitches, Renderer};
-pub(crate) use renderer::{DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT, TIMED_PASSES};
 pub use staging::{FrameStaging, LoadStaging};
 pub use targets::{DEPTH_FORMAT, HDR_FORMAT};
 pub use uniforms::{CameraUniform, LIGHT_CAPACITY, LightData, LightUniform};

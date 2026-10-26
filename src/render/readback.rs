@@ -14,6 +14,7 @@ use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::time::Duration;
 
 use crate::render::bend_pass::BEND_PASS;
+use crate::render::blas_refit::BLAS_REFIT_PASS;
 use crate::render::culling_pass::FrameDraw;
 use crate::render::froxel_pass::LightCounts;
 use crate::render::shadow_mask_pass::SHADOW_MASK_PASS;
@@ -88,14 +89,24 @@ struct Slot {
     buffer: wgpu::Buffer,
     state: SlotState,
     map_result: Arc<AtomicU8>,
-    /// Whether its frame built the dynamic TLAS, the first of
-    /// `TIMED_PASSES`: in a frame that does not, the build reads as taking
-    /// no time.
-    dynamic_tlas_built: bool,
-    /// Whether its frame bent Meshes in the bend pass: in a frame that does
-    /// not, the pass reads as taking no time, and the frame's passes start
-    /// at the next one.
-    bent: bool,
+    shape: FrameShape,
+}
+
+/// Which of the timed work that runs in some frames only a frame ran.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FrameShape {
+    /// Whether it built the dynamic TLAS, the first of `TIMED_PASSES`,
+    /// between the markers its timestamps bracket: in a frame that does
+    /// not, the build reads as taking no time.
+    pub dynamic_tlas_built: bool,
+    /// Whether it bent Meshes in the bend pass: in a frame that does not,
+    /// the pass reads as taking no time, and the frame's passes start at the
+    /// first after the BLAS refit.
+    pub bent: bool,
+    /// Whether it refitted the bent Meshes' BLASes after the bend pass, in a
+    /// submission of their own, up to a marker its timestamps end them at:
+    /// in a frame that does not, the refit reads as taking no time.
+    pub blas_refitted: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -152,8 +163,7 @@ impl GpuStatsReadback {
                     ),
                     state: SlotState::Free,
                     map_result: Arc::new(AtomicU8::new(MAP_PENDING)),
-                    dynamic_tlas_built: false,
-                    bent: false,
+                    shape: FrameShape::default(),
                 })
                 .collect(),
             frames_completed: Arc::new(AtomicU64::new(0)),
@@ -202,29 +212,19 @@ impl GpuStatsReadback {
             return None;
         }
         self.slots[index].state = SlotState::Recorded { frame: self.frame };
-        self.slots[index].dynamic_tlas_built = false;
-        self.slots[index].bent = false;
+        self.slots[index].shape = FrameShape::default();
         Some(FrameTimestamps {
             query_set: &self.query_set,
             first_query: (index * QUERIES_PER_FRAME) as u32,
         })
     }
 
-    /// Marks the frame `begin_frame` started as one that builds the dynamic
-    /// TLAS between the markers its timestamps bracket.
-    pub fn dynamic_tlas_built(&mut self) {
+    /// Records which of the timed work that runs in some frames only the
+    /// frame `begin_frame` started ran.
+    pub fn shape(&mut self, shape: FrameShape) {
         let slot = &mut self.slots[slot_index(self.frame)];
         if matches!(slot.state, SlotState::Recorded { frame } if frame == self.frame) {
-            slot.dynamic_tlas_built = true;
-        }
-    }
-
-    /// Marks the frame `begin_frame` started as one that bends Meshes in the
-    /// bend pass, which its timestamps time.
-    pub fn bent(&mut self) {
-        let slot = &mut self.slots[slot_index(self.frame)];
-        if matches!(slot.state, SlotState::Recorded { frame } if frame == self.frame) {
-            slot.bent = true;
+            slot.shape = shape;
         }
     }
 
@@ -376,49 +376,27 @@ impl GpuStatsReadback {
                         let ticks: [u64; QUERIES_PER_FRAME] = bytemuck::pod_read_unaligned(
                             &view[TIMESTAMP_OFFSET as usize..][..TIMESTAMP_BYTES as usize],
                         );
-                        let time = |begin: u64, end: u64| {
-                            let ticks = end.saturating_sub(begin) as f64;
-                            Duration::from_nanos((ticks * self.nanoseconds_per_tick) as u64)
-                        };
-                        let pass_time = |pass: usize| time(ticks[2 * pass], ticks[2 * pass + 1]);
-                        // The first timed pass, the dynamic TLAS's build, runs
-                        // in a submission of its own before the frame's. The
-                        // marker before it can run while the frame before
-                        // still traces rays against the TLAS, which the build
-                        // waits for, so it starts at the later of the two.
+                        // The marker before the dynamic TLAS's build can run
+                        // while the frame before still traces rays against
+                        // the TLAS, which the build waits for.
                         let previous_shadow_ray_end = self
                             .last_shadow_ray_end
                             .filter(|&(previous, _)| previous + 1 == frame)
                             .map_or(0, |(_, tick)| tick);
-                        let build = if slot.dynamic_tlas_built {
-                            time(ticks[0].max(previous_shadow_ray_end), ticks[1])
-                        } else {
-                            Duration::ZERO
-                        };
                         let shadow_mask_pass = pass_position(SHADOW_MASK_PASS);
                         self.last_shadow_ray_end = (!self.untimed[shadow_mask_pass])
                             .then(|| (frame, ticks[2 * shadow_mask_pass + 1]));
-                        // A frame that bends nothing records no bend pass,
-                        // whose timestamps are then an earlier frame's.
-                        let (bend_pass, bent) = (pass_position(BEND_PASS), slot.bent);
-                        let first_pass = if bent { bend_pass } else { bend_pass + 1 };
+                        let (pass_times, frame_time) = frame_times(
+                            &ticks,
+                            slot.shape,
+                            &self.untimed,
+                            previous_shadow_ray_end,
+                            self.nanoseconds_per_tick,
+                        );
                         self.read_back.push(GpuFrameStats {
                             frame,
-                            pass_times: std::array::from_fn(|pass| {
-                                let taken = match pass {
-                                    0 => build,
-                                    _ if pass == bend_pass && !bent => Duration::ZERO,
-                                    _ if self.untimed[pass] => Duration::ZERO,
-                                    _ => pass_time(pass),
-                                };
-                                (TIMED_PASSES[pass], taken)
-                            }),
-                            // The build plus the span of the frame's passes, so
-                            // neither the wait between the two submissions nor
-                            // what the frame records before its first pass
-                            // counts.
-                            frame_time: build
-                                + time(ticks[2 * first_pass], ticks[QUERIES_PER_FRAME - 1]),
+                            pass_times,
+                            frame_time,
                             instances_drawn: draw.instances_drawn,
                             triangles_drawn: draw.triangles_drawn(),
                             instances_overflowed: draw.instances_overflowed,
@@ -480,9 +458,79 @@ impl<'a> FrameTimestamps<'a> {
         ]
     }
 
+    /// The timestamp write of a marker that ends `pass`, of `TIMED_PASSES`,
+    /// at its start: `pass` starts where the pass before it ends.
+    pub fn marker_after(self, pass: &str) -> wgpu::ComputePassTimestampWrites<'a> {
+        wgpu::ComputePassTimestampWrites {
+            query_set: self.query_set,
+            beginning_of_pass_write_index: Some(self.first_query_of(pass) + 1),
+            end_of_pass_write_index: None,
+        }
+    }
+
     fn first_query_of(self, pass: &str) -> u32 {
         self.first_query + 2 * pass_position(pass) as u32
     }
+}
+
+/// Each of `TIMED_PASSES`' time in a frame of `shape` whose timestamps read
+/// `ticks`, `nanoseconds_per_tick` apart, and the frame's GPU time: the
+/// dynamic TLAS's build, plus the span of each submission's passes, so
+/// neither the waits between submissions nor what a submission records
+/// before its first pass counts. The build, in a submission before the
+/// frame's passes, starts no earlier than `build_floor`; the passes
+/// `untimed` names take no time.
+fn frame_times(
+    ticks: &[u64; QUERIES_PER_FRAME],
+    shape: FrameShape,
+    untimed: &[bool; TIMED_PASSES.len()],
+    build_floor: u64,
+    nanoseconds_per_tick: f64,
+) -> ([(&'static str, Duration); TIMED_PASSES.len()], Duration) {
+    let time = |begin: u64, end: u64| {
+        let ticks = end.saturating_sub(begin) as f64;
+        Duration::from_nanos((ticks * nanoseconds_per_tick) as u64)
+    };
+    let (bend_pass, blas_refit) = (pass_position(BEND_PASS), pass_position(BLAS_REFIT_PASS));
+    let build = if shape.dynamic_tlas_built {
+        time(ticks[0].max(build_floor), ticks[1])
+    } else {
+        Duration::ZERO
+    };
+    // The refit runs from the end of the bend pass, and the frame's other
+    // passes in a later submission. A frame that bends nothing records no
+    // bend pass, whose timestamps are then an earlier frame's.
+    let refit = time(ticks[2 * bend_pass + 1], ticks[2 * blas_refit + 1]);
+    let last_end = ticks[QUERIES_PER_FRAME - 1];
+    let frame_time = if shape.blas_refitted {
+        build
+            + time(ticks[2 * bend_pass], ticks[2 * blas_refit + 1])
+            + time(ticks[2 * (blas_refit + 1)], last_end)
+    } else {
+        let first_pass = if shape.bent {
+            bend_pass
+        } else {
+            blas_refit + 1
+        };
+        build + time(ticks[2 * first_pass], last_end)
+    };
+    let pass_times = std::array::from_fn(|pass| {
+        let taken = match pass {
+            0 => build,
+            _ if pass == bend_pass && !shape.bent => Duration::ZERO,
+            _ if pass == blas_refit => {
+                if shape.blas_refitted {
+                    refit
+                } else {
+                    Duration::ZERO
+                }
+            }
+            _ if untimed[pass] => Duration::ZERO,
+            _ => time(ticks[2 * pass], ticks[2 * pass + 1]),
+        };
+        (TIMED_PASSES[pass], taken)
+    });
+    (pass_times, frame_time)
 }
 
 /// Where `pass` is in `TIMED_PASSES`.
@@ -503,6 +551,63 @@ mod tests {
 
     use super::*;
     use crate::gpu::GpuContext;
+
+    /// Timestamps a microsecond apart, each pass starting 10 µs after the
+    /// one before it and taking 4 µs, in submissions that start 100 µs
+    /// apart: the build, then the bend pass and the refit, then the rest.
+    /// The refit's start is not written, and it ends 7 µs after the bend.
+    fn spread_ticks() -> [u64; QUERIES_PER_FRAME] {
+        let (bend_pass, blas_refit) = (pass_position(BEND_PASS), pass_position(BLAS_REFIT_PASS));
+        let mut ticks = [0; QUERIES_PER_FRAME];
+        for pass in 0..TIMED_PASSES.len() {
+            let submission = match pass {
+                0 => 0,
+                _ if pass <= blas_refit => 1,
+                _ => 2,
+            };
+            ticks[2 * pass] = 1000 + 100 * submission + 10 * pass as u64;
+            ticks[2 * pass + 1] = ticks[2 * pass] + 4;
+        }
+        ticks[2 * blas_refit] = 0;
+        ticks[2 * blas_refit + 1] = ticks[2 * bend_pass + 1] + 7;
+        ticks
+    }
+
+    #[test]
+    fn a_refitted_frame_times_its_submissions_apart_and_its_refit_from_the_bend() {
+        let ticks = spread_ticks();
+        let untimed = [false; TIMED_PASSES.len()];
+        let micros = Duration::from_micros;
+        let refitted = FrameShape {
+            dynamic_tlas_built: true,
+            bent: true,
+            blas_refitted: true,
+        };
+        let (passes, frame_time) = frame_times(&ticks, refitted, &untimed, 0, 1000.0);
+        let taken = |name| passes.iter().find(|&&(pass, _)| pass == name).unwrap().1;
+        assert_eq!(taken(BLAS_REFIT_PASS), micros(7));
+        assert_eq!(taken(BEND_PASS), micros(4));
+        let rest = (pass_position(BLAS_REFIT_PASS) + 1) as u64..TIMED_PASSES.len() as u64;
+        let rest_span = 10 * (rest.end - 1 - rest.start) + 4;
+        // The build, the bend pass and the refit, and the rest of the frame.
+        assert_eq!(frame_time, micros(4) + micros(4 + 7) + micros(rest_span));
+
+        let proxies = FrameShape {
+            blas_refitted: false,
+            ..refitted
+        };
+        let (passes, frame_time) = frame_times(&ticks, proxies, &untimed, 0, 1000.0);
+        assert_eq!(passes[pass_position(BLAS_REFIT_PASS)].1, Duration::ZERO);
+        let bend_start = ticks[2 * pass_position(BEND_PASS)];
+        let span = ticks[QUERIES_PER_FRAME - 1] - bend_start;
+        assert_eq!(frame_time, micros(4) + micros(span));
+
+        let still = FrameShape::default();
+        let (passes, frame_time) = frame_times(&ticks, still, &untimed, 0, 1000.0);
+        assert_eq!(passes[0].1, Duration::ZERO);
+        assert_eq!(passes[pass_position(BEND_PASS)].1, Duration::ZERO);
+        assert_eq!(frame_time, micros(rest_span));
+    }
 
     /// Frames that never complete, as their encoders are never submitted:
     /// from `COMPLETION_LAG` frames on, each skips the timestamps of the

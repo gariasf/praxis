@@ -151,6 +151,19 @@ pub const DYNAMIC_TLAS_MARKERS: BindGroupDefinition = BindGroupDefinition {
     ],
 };
 
+/// Group 3 of the BLAS refit's marker, on Metal: the refits' scratch, which
+/// it reads so the GPU runs it once they are done, and what it read, which
+/// it writes so the read stays.
+#[cfg(any(test, target_vendor = "apple"))]
+pub const BLAS_REFIT_MARKERS: BindGroupDefinition = BindGroupDefinition {
+    index: 3,
+    label: "BLAS Refit Markers Bind Group",
+    bindings: &[
+        read_only_storage("refit_scratch", "array<u32>", wgpu::ShaderStages::COMPUTE),
+        storage("marker_result", "u32"),
+    ],
+};
+
 /// Group 3 of the bend pass: the frame's bends, which the CPU writes, and
 /// the vertex Arena, which the CPU writes as Meshes load and the pass writes
 /// each bent Mesh's range of, from its rest Mesh's (#208).
