@@ -671,8 +671,13 @@ impl Renderer {
         // phases', each with one indirect call; the tonemapping pass draws
         // one triangle.
         recorder.draw_calls += 4;
+        // A frame whose refit went untimed spans its build's submission
+        // from the bend pass, so its build is not counted apart.
+        let refit_untimed = bent && self.blas_refit.is_some() && !blas_refitted;
         self.gpu_stats.shape(FrameShape {
-            dynamic_tlas_built: dynamic_tlas_commands.is_some() && self.marks_dynamic_tlas_build,
+            dynamic_tlas_built: dynamic_tlas_commands.is_some()
+                && self.marks_dynamic_tlas_build
+                && !refit_untimed,
             bent,
             blas_refitted,
         });

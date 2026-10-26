@@ -228,10 +228,13 @@ fn compare(results: &str, mode: CompareMode) -> anyhow::Result<()> {
                 current.scene
             )
         } else {
+            let scene = match current.scene.strip_prefix("crowd-") {
+                Some(form) => format!("--crowd-form {form}"),
+                None => current.scene.clone(),
+            };
             format!(
-                "record one with `praxis bench {} {}`",
+                "record one with `praxis bench {} {scene}`",
                 baseline_directory.display(),
-                current.scene
             )
         };
         if !baseline_path.exists() {

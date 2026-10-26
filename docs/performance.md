@@ -42,15 +42,19 @@ Budget for the update is 0.5 ms of CPU and 1.0 ms of GPU per frame
   GPU Budget, and the CPU 319 to 326 µs at the median, its p95s 397 to
   466 µs.
 - **Refit: over the GPU Budget.** The refits alone take 1,114 to 1,123
-  µs, about 2.2 ns a triangle, and the update 1.37 to 1.38 ms. Its CPU
-  is within the Budget at the median, 393 to 451 µs, and over it at p95,
-  504 to 628 µs. The build, over 100 entries rather than 1,600, takes 253
-  to 259 µs.
+  µs, about 2.2 ns a triangle with some 15 to 25 µs of fixed cost between
+  their command buffers, and the update 1.37 to 1.38 ms. Its CPU is
+  within the Budget at the median, 393 to 451 µs, and over it at p95, 504
+  to 628 µs; that stage also submits the frame's commands up to the bend
+  pass, which form (b) submits with the rest of the frame, so form (a)'s
+  CPU reads a little high. The build, over 100 entries rather than 1,600,
+  takes 253 to 259 µs.
 - **The refit's timing holds.** With every refit recorded three times (a
   local patch), `blas_refit` read 3,332 and 3,333 µs against 1,127 and
   1,131 once, and the GPU frame grew by the same 2.2 ms: the marker
   waits for the refits.
-- **Strict event sync costs nothing measured.** Form (a) turns on
+- **Strict event sync costs nothing measurable: every figure moved within
+  noise or fell.** Form (a) turns on
   wgpu-hal's strict event sync for the queue, which adds a wait to each
   command buffer and a command buffer to each submission. Forcing it on
   in form (b) (a local patch, three rounds alternating) moved the
@@ -58,7 +62,7 @@ Budget for the update is 0.5 ms of CPU and 1.0 ms of GPU per frame
   to 711–723, and the GPU frame from 3,301–3,308 µs to 3,181–3,257. The
   build read 483 to 520 µs against 593 to 610: its first marker no longer
   starts while the frame before still runs. Part of form (a)'s lower
-  build time is this.
+  build time is this, so form (b)'s build figure is an upper bound.
 - **Beyond the update** (medians, round 2):
 
   | | Proxies | Refit |

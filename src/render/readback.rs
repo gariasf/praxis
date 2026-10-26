@@ -500,7 +500,6 @@ fn frame_times(
     // The refit runs from the end of the bend pass, and the frame's other
     // passes in a later submission. A frame that bends nothing records no
     // bend pass, whose timestamps are then an earlier frame's.
-    let refit = time(ticks[2 * bend_pass + 1], ticks[2 * blas_refit + 1]);
     let last_end = ticks[QUERIES_PER_FRAME - 1];
     let frame_time = if shape.blas_refitted {
         build
@@ -518,13 +517,10 @@ fn frame_times(
         let taken = match pass {
             0 => build,
             _ if pass == bend_pass && !shape.bent => Duration::ZERO,
-            _ if pass == blas_refit => {
-                if shape.blas_refitted {
-                    refit
-                } else {
-                    Duration::ZERO
-                }
+            _ if pass == blas_refit && shape.blas_refitted => {
+                time(ticks[2 * bend_pass + 1], ticks[2 * blas_refit + 1])
             }
+            _ if pass == blas_refit => Duration::ZERO,
             _ if untimed[pass] => Duration::ZERO,
             _ => time(ticks[2 * pass], ticks[2 * pass + 1]),
         };
@@ -577,7 +573,7 @@ mod tests {
     fn a_refitted_frame_times_its_submissions_apart_and_its_refit_from_the_bend() {
         let ticks = spread_ticks();
         let untimed = [false; TIMED_PASSES.len()];
-        let micros = Duration::from_micros;
+        let microseconds = Duration::from_micros;
         let refitted = FrameShape {
             dynamic_tlas_built: true,
             bent: true,
@@ -585,12 +581,15 @@ mod tests {
         };
         let (passes, frame_time) = frame_times(&ticks, refitted, &untimed, 0, 1000.0);
         let taken = |name| passes.iter().find(|&&(pass, _)| pass == name).unwrap().1;
-        assert_eq!(taken(BLAS_REFIT_PASS), micros(7));
-        assert_eq!(taken(BEND_PASS), micros(4));
+        assert_eq!(taken(BLAS_REFIT_PASS), microseconds(7));
+        assert_eq!(taken(BEND_PASS), microseconds(4));
         let rest = (pass_position(BLAS_REFIT_PASS) + 1) as u64..TIMED_PASSES.len() as u64;
         let rest_span = 10 * (rest.end - 1 - rest.start) + 4;
         // The build, the bend pass and the refit, and the rest of the frame.
-        assert_eq!(frame_time, micros(4) + micros(4 + 7) + micros(rest_span));
+        assert_eq!(
+            frame_time,
+            microseconds(4) + microseconds(4 + 7) + microseconds(rest_span)
+        );
 
         let proxies = FrameShape {
             blas_refitted: false,
@@ -600,13 +599,13 @@ mod tests {
         assert_eq!(passes[pass_position(BLAS_REFIT_PASS)].1, Duration::ZERO);
         let bend_start = ticks[2 * pass_position(BEND_PASS)];
         let span = ticks[QUERIES_PER_FRAME - 1] - bend_start;
-        assert_eq!(frame_time, micros(4) + micros(span));
+        assert_eq!(frame_time, microseconds(4) + microseconds(span));
 
         let still = FrameShape::default();
         let (passes, frame_time) = frame_times(&ticks, still, &untimed, 0, 1000.0);
         assert_eq!(passes[0].1, Duration::ZERO);
         assert_eq!(passes[pass_position(BEND_PASS)].1, Duration::ZERO);
-        assert_eq!(frame_time, micros(rest_span));
+        assert_eq!(frame_time, microseconds(rest_span));
     }
 
     /// Frames that never complete, as their encoders are never submitted:
