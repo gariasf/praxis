@@ -131,8 +131,8 @@ pub struct Measurements {
     /// Each frame's dynamic TLAS build, plus the span from the start of its
     /// first pass to the end of its last.
     pub gpu_frame_microseconds: Spread,
-    /// ADR 0019's gate, with shadow rays off: the span of the passes from
-    /// culling phase one to the lit pass.
+    /// ADR 0019's gate, with shadow rays off: from the start of culling
+    /// phase one to the latest end of the passes up to the lit pass.
     pub gate_microseconds: Spread,
     /// Each frame's GPU frame with shadow rays on, less the same frame's
     /// with them off.
@@ -226,7 +226,8 @@ pub struct Budgets {
     /// The frame's dynamic TLAS build, plus the span from the start of its
     /// first pass to the end of its last.
     pub gpu_frame_microseconds: f64,
-    /// The median gate, past which B and D are prototyped (ADR 0019).
+    /// The median gate, past which ADR 0019's visibility pre-pass and
+    /// visibility buffer are prototyped.
     pub gate_microseconds: f64,
     /// Ceilings on the dynamic TLAS at its 10,000 Moving Instances (ADR
     /// 0020): its build's recording and submit on the CPU, and its build on
@@ -534,6 +535,7 @@ pub fn compare(
         budgets.gpu_frame_microseconds,
     );
     let gate = current.gate_microseconds.median;
+    let noise_floor = GPU_PASS_NOISE_FLOOR_MICROSECONDS;
     for (metric, current, baseline) in [
         ("gate_microseconds", gate, baseline.gate_microseconds.median),
         (
@@ -542,7 +544,6 @@ pub fn compare(
             baseline.shadow_ray_microseconds.median,
         ),
     ] {
-        let noise_floor = GPU_PASS_NOISE_FLOOR_MICROSECONDS;
         check_regression(&mut findings, metric, current, baseline, noise_floor);
     }
     check_budget(
@@ -629,7 +630,12 @@ fn check_regression(
     if current <= baseline {
         return;
     }
-    let ratio = current / baseline;
+    // From a Baseline at or below zero, any growth is past every ratio.
+    let ratio = if baseline > 0.0 {
+        current / baseline
+    } else {
+        f64::INFINITY
+    };
     let verdict = if ratio > FAIL_RATIO && current - baseline > noise_floor {
         Verdict::Fail
     } else if ratio > WARN_RATIO {
@@ -905,7 +911,8 @@ mod tests {
     }
 
     /// Shadow-ray time is a difference of two runs, so near zero it can be
-    /// negative: less of it is no regression, whatever the ratio.
+    /// negative: less of it is no regression, and more of it from below
+    /// zero is judged by its growth.
     #[test]
     fn less_shadow_ray_time_passes_below_zero() {
         let mut none = baseline();
@@ -913,6 +920,11 @@ mod tests {
         let mut current = none.clone();
         current.shadow_ray_microseconds.median = -40.0;
         assert_eq!(verdicts(&current, &none, CompareMode::Local), []);
+        current.shadow_ray_microseconds.median = 600.0;
+        assert_eq!(
+            verdicts(&current, &none, CompareMode::Local),
+            [("shadow_ray_microseconds", Verdict::Fail)]
+        );
     }
 
     #[test]
