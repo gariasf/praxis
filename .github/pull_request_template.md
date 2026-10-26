@@ -8,7 +8,7 @@ Closes #
 
 ## Verification
 
-<!-- The command run and its output, 30 lines at most. -->
+<!-- The command run and its output, 30 lines at most, then the review: `N found, N fixed, N declined, N deferred` and the deferred list. -->
 
 <!-- Sources checked: each reference the change relies on or adds, and its verdict (exists, says what is claimed, cited right, implemented right). `None` if it relies on none. -->
 

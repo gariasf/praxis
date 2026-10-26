@@ -28,9 +28,9 @@ The owner decides what is worked on. Agents implement, commit, open PRs and merg
 - One review, the agent's own, before the PR opens (see Review). One fix commit, and a verification pass only when a fix touched correctness-critical logic. Findings still open after that become tickets or fog notes.
 - The verify command, `scripts/verify.sh`, exits 0 before the PR opens: formatting, lint, build, tests (Goldens required) and the bench counters against Baselines and Budgets, one line per step, about a minute once built. Its output is the Verification block.
 - A session that introduces important new concepts (a technique, a model, a pass) makes a field guide for them without being asked, while the work happens ([decision](https://github.com/gariasf/praxis/issues/17#issuecomment-6336434405)): an explainer artifact in the series that the pinned "Praxis Field Guides" hub lists, with the series' look, live demos, concept tooltips that define terms as `CONTEXT.md` does, a reading list and the series' navigation, added to the hub when published.
-- Description follows `.github/pull_request_template.md`: what changed, how it was verified (command and output, 30 lines at most), metric deltas, and under Decide only the owner items named above.
+- Description follows `.github/pull_request_template.md`: what changed, how it was verified (command and output, 30 lines at most), metric deltas, and under Decide only the owner items named above. CI's PR form check (`scripts/pr-lint.sh`) fails a description or commit that breaks this section's rules or Review's counts and "Sources checked" line.
 - A PR that changes what a Reference scene renders, or that asks the owner to look at something, shows images in its description whenever they can be made ([decision](https://github.com/gariasf/praxis/issues/17#issuecomment-6262013466)): each affected scene before and after, a difference image where the change is subtle, a zoom where it is small. `praxis capture <scene> <png> [<width>x<height>]` renders a scene headless. The images go on the `pr-images` branch, one directory per PR, never merged, and the description links them by commit SHA. Where no image can be made, the description says why.
-- Commit subject 72 characters at most; the body says why, not what.
+- Commit subject 72 characters at most; the body says why, not what. No commit names an AI co-author or carries a "Generated with Claude" line.
 
 ## Review
 
@@ -42,7 +42,7 @@ CI owns mechanical checks. One semantic review follows, the agent's own, before 
    - *Fix*: verified, and a correctness, safety, budget, or ADR problem, or a quick win inside the changed lines. All fixes land in one commit before the PR opens.
    - *Decline*: wrong, or beyond the acceptance criteria. One-line reason.
    - *Defer*: true but outside the ticket. A note under *Not yet specified* with its revival trigger.
-3. **Open as draft, ready when green.** Fill the PR template, with the review's counts (found, fixed, declined, deferred), the deferred list and the sources checked under Verification. Open the PR as a draft and run `gh pr ready` once CI passes.
+3. **Open as draft, ready when green.** Fill the PR template, with the review's counts (`N found, N fixed, N declined, N deferred`), the deferred list and a "Sources checked" line under Verification. Open the PR as a draft and run `gh pr ready` once CI passes.
 4. **Merge** when CI is green, the review's counts are in the PR, and no Decide item is unanswered. Any agent squash-merges any such PR, its own or another session's, without asking, then removes the worktree and branch. A PR that needs the owner's visual or interactive judgement, or carries a roadmap decision, waits for the owner instead.
 
 A declined finding class that recurs becomes a line in the `CLAUDE.md` review checklist or a `CODING_STANDARDS.md` rule.

@@ -1,0 +1,55 @@
+name: PR form
+
+# Checks the PR's body and commits against docs/agents/workflow.md. Editing
+# the body reruns this check alone, not CI.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+concurrency:
+  group: pr-lint-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+defaults:
+  run:
+    # Explicit, so a failing stage of a pipe fails its step.
+    shell: bash
+
+jobs:
+  lint:
+    name: PR body and commits
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          sparse-checkout: |
+            scripts
+            .github
+
+      - name: Test the lint
+        run: scripts/pr-lint-test.sh
+
+      # The body and commit messages reach the script through an environment
+      # variable and files, never expanded into the script itself, so no text
+      # in them runs.
+      - name: Lint the body and commits
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BODY: ${{ github.event.pull_request.body }}
+          REPOSITORY: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          printf '%s' "$BODY" >"$RUNNER_TEMP/body.md"
+          mkdir "$RUNNER_TEMP/commits"
+          gh api --paginate "repos/$REPOSITORY/pulls/$NUMBER/commits" \
+            --jq '.[] | "\(.sha[0:12]) \(.commit.message | @base64)"' |
+            while read -r sha message; do
+              base64 -d <<<"$message" >"$RUNNER_TEMP/commits/$sha"
+            done
+          scripts/pr-lint.sh "$RUNNER_TEMP/body.md" "$RUNNER_TEMP"/commits/*
