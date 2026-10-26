@@ -12,6 +12,10 @@
 use crate::assets::MeshPool;
 use crate::render::CrowdForm;
 
+/// The BLAS refit's timing in the GPU stats: from the end of the bend pass
+/// to the start of the marker after the refits.
+pub const BLAS_REFIT_PASS: &str = "blas_refit";
+
 /// Brings bent Meshes' BLASes to their bent shapes in the frame's own
 /// submission, ahead of the dynamic TLAS's build.
 pub struct BlasRefit {
@@ -25,6 +29,9 @@ pub struct BlasRefit {
     /// None where the build waits for it on the CPU instead.
     #[cfg(target_vendor = "apple")]
     order: Option<metal::Order>,
+    /// The marker that ends the refits' time on the GPU, for the refit form.
+    #[cfg(target_vendor = "apple")]
+    marker: Option<metal::RefitMarker>,
     /// Whether a refit was refused and logged, so it is logged once.
     #[cfg(target_vendor = "apple")]
     refusal_logged: bool,
@@ -71,6 +78,8 @@ impl BlasRefit {
             #[cfg(target_vendor = "apple")]
             order,
             #[cfg(target_vendor = "apple")]
+            marker: (form == CrowdForm::Refit).then(|| metal::RefitMarker::new(device)),
+            #[cfg(target_vendor = "apple")]
             refusal_logged: false,
             waits_on_cpu,
         })
@@ -78,14 +87,17 @@ impl BlasRefit {
 
     /// Records the update of `mesh_pool`'s refitted BLASes after `head`,
     /// the frame's commands up to its bend pass, submits both through
-    /// `queue`, and orders what `queue` submits next after them.
+    /// `queue`, and orders what `queue` submits next after them. A refit
+    /// is followed by a marker that writes `refit_end`; returns whether it
+    /// was.
     pub fn submit(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         mut head: wgpu::CommandEncoder,
         mesh_pool: &MeshPool,
-    ) {
+        refit_end: Option<wgpu::ComputePassTimestampWrites<'_>>,
+    ) -> bool {
         if self.form == CrowdForm::Rebuild {
             mesh_pool.rebuild_refitted_blases(&mut head);
         }
@@ -95,14 +107,25 @@ impl BlasRefit {
             order.signal_from_next_submit(queue);
         }
         #[cfg(target_vendor = "apple")]
-        let submission = if self.form == CrowdForm::Refit {
+        let (submission, refit_timed) = if self.form == CrowdForm::Refit {
             let refits = self.record_refits(device, mesh_pool);
-            queue.submit([head, refits])
+            let marker = refit_end
+                .zip(self.marker.as_mut())
+                .zip(self.scratch.as_ref())
+                .map(|((writes, marker), (scratch, _))| marker.record(device, scratch, writes));
+            let refit_timed = marker.is_some();
+            (
+                queue.submit([head, refits].into_iter().chain(marker)),
+                refit_timed,
+            )
         } else {
-            queue.submit(std::iter::once(head))
+            (queue.submit(std::iter::once(head)), false)
         };
         #[cfg(not(target_vendor = "apple"))]
-        let submission = queue.submit(std::iter::once(head));
+        let (submission, refit_timed) = {
+            let _ = refit_end;
+            (queue.submit(std::iter::once(head)), false)
+        };
         #[cfg(target_vendor = "apple")]
         if let Some(order) = &self.order {
             order.wait_in_next_submit(queue);
@@ -116,14 +139,24 @@ impl BlasRefit {
                 tracing::error!(%error, "waiting for BLAS updates failed");
             }
         }
+        refit_timed
     }
 
-    /// Bytes of its scratch buffer.
+    /// Bytes of its scratch buffer and its marker's.
     pub fn gpu_memory_bytes(&self) -> u64 {
         #[cfg(target_vendor = "apple")]
-        if let Some((scratch, _)) = &self.scratch {
-            return scratch.size();
+        {
+            let scratch = self
+                .scratch
+                .as_ref()
+                .map_or(0, |(scratch, _)| scratch.size());
+            let marker = self
+                .marker
+                .as_ref()
+                .map_or(0, metal::RefitMarker::gpu_memory_bytes);
+            scratch + marker
         }
+        #[cfg(not(target_vendor = "apple"))]
         0
     }
 
@@ -250,6 +283,8 @@ mod metal {
     use crate::assets::MeshPool;
     use crate::assets::pools::{MeshBlas, REFITTED_BLAS_FLAGS};
     use crate::cooked::CookedVertex;
+    use crate::render::bind_groups::{BLAS_REFIT_MARKERS, pipeline_layout};
+    use crate::render::shaders;
 
     /// Scratch regions start this far apart at least: a margin over the
     /// one-byte alignment wgpu-hal reports for Metal.
@@ -338,6 +373,87 @@ mod metal {
             mapped_at_creation: false,
         });
         Some((buffer, offsets))
+    }
+
+    /// One invocation that reads the refits' scratch, recorded after them in
+    /// a command buffer of its own: Metal tracks hazards on the scratch, so
+    /// the GPU runs it once they are done, and a pass that does nothing
+    /// writes no timestamp on Metal (#204).
+    pub(super) struct RefitMarker {
+        pipeline: wgpu::ComputePipeline,
+        layout: wgpu::BindGroupLayout,
+        /// What it read, which nothing reads.
+        result: wgpu::Buffer,
+        /// Its group 3 (`BLAS_REFIT_MARKERS`), made for the scratch the
+        /// first refit makes, which no later refit replaces.
+        bind_group: Option<wgpu::BindGroup>,
+    }
+
+    impl RefitMarker {
+        pub(super) fn new(device: &wgpu::Device) -> Self {
+            let layout = BLAS_REFIT_MARKERS.layout(device);
+            let shader = device.create_shader_module(shaders::BLAS_REFIT_MARKER.descriptor());
+            let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("mark_blas_refit"),
+                layout: Some(&pipeline_layout(
+                    device,
+                    "BLAS Refit Marker Pipeline Layout",
+                    &[(&BLAS_REFIT_MARKERS, &layout)],
+                )),
+                module: &shader,
+                entry_point: Some("mark_blas_refit"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                cache: None,
+            });
+            let result = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("BLAS Refit Marker Result"),
+                size: size_of::<u32>() as u64,
+                usage: wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            });
+            Self {
+                pipeline,
+                layout,
+                result,
+                bind_group: None,
+            }
+        }
+
+        /// A command buffer of `device`'s that reads `scratch`, timed into
+        /// `timestamp_writes`.
+        pub(super) fn record(
+            &mut self,
+            device: &wgpu::Device,
+            scratch: &wgpu::Buffer,
+            timestamp_writes: wgpu::ComputePassTimestampWrites<'_>,
+        ) -> wgpu::CommandBuffer {
+            let bind_group = self.bind_group.get_or_insert_with(|| {
+                BLAS_REFIT_MARKERS.bind_group(
+                    device,
+                    &self.layout,
+                    [
+                        ("refit_scratch", scratch.as_entire_binding()),
+                        ("marker_result", self.result.as_entire_binding()),
+                    ],
+                )
+            });
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("BLAS Refit Marker Encoder"),
+            });
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("BLAS Refit Marker"),
+                timestamp_writes: Some(timestamp_writes),
+            });
+            pass.set_pipeline(&self.pipeline);
+            pass.set_bind_group(BLAS_REFIT_MARKERS.index, &*bind_group, &[]);
+            pass.dispatch_workgroups(1, 1, 1);
+            drop(pass);
+            encoder.finish()
+        }
+
+        pub(super) fn gpu_memory_bytes(&self) -> u64 {
+            self.result.size()
+        }
     }
 
     /// Orders the GPU work of a submission after the one before it: the

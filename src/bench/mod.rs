@@ -6,7 +6,9 @@ use anyhow::Context;
 
 use crate::capture::render_frames;
 use crate::gpu::GpuContext;
-use crate::render::{DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT, RenderSwitches, TIMED_PASSES};
+use crate::render::{
+    BLAS_REFIT, DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT, RenderSwitches, TIMED_PASSES,
+};
 use crate::scenes::ReferenceScene;
 use crate::stats::FrameStats;
 use crate::time::SIXTY_HERTZ;
@@ -118,7 +120,8 @@ pub struct Measurements {
     pub measured_frames: u32,
     pub cpu_frame_microseconds: Spread,
     /// The dynamic TLAS's build on the CPU: its recording and its submit
-    /// (ADR 0020).
+    /// (ADR 0020), and with the crowd's refit or rebuild form the BLAS
+    /// updates' recording and their submission's.
     pub dynamic_tlas_cpu_microseconds: Spread,
     /// Each frame's dynamic TLAS build, plus the span from the start of its
     /// first pass to the end of its last.
@@ -330,7 +333,8 @@ fn measure(
                 .iter()
                 .map(|stats| {
                     let stages = stats.cpu_times.iter().filter(|(stage, _)| {
-                        [DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT].contains(&stage.as_str())
+                        [BLAS_REFIT, DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT]
+                            .contains(&stage.as_str())
                     });
                     stages.map(|&(_, time)| microseconds(time)).sum()
                 })
@@ -837,8 +841,9 @@ mod tests {
     /// Frames of a `configuration` run: draw calls 10, Instances and
     /// triangles drawn 5 and 15 and heap allocations 50 in the counter frames
     /// and more elsewhere, 3 Instances overflowed in frame 300 alone, a
-    /// CPU time of 900 µs in the warm-up and 100 µs after it, 30 µs of it
-    /// recording the dynamic TLAS's build and 10 µs submitting it, and on the GPU
+    /// CPU time of 900 µs in the warm-up and 100 µs after it, 20 µs of it
+    /// refitting BLASes, 30 µs recording the dynamic TLAS's build and 10 µs
+    /// submitting it, and on the GPU
     /// a frame of 300 µs whose passes take 200 µs each.
     fn frames(configuration: Configuration) -> Vec<FrameStats> {
         (0..configuration.warm_up_frames + configuration.measured_frames)
@@ -849,6 +854,7 @@ mod tests {
                     cpu_frame_time: Duration::from_micros(if warming_up { 900 } else { 100 }),
                     cpu_times: [
                         ("prepare_frame", 50),
+                        (BLAS_REFIT, 20),
                         (DYNAMIC_TLAS_RECORDING, 30),
                         (DYNAMIC_TLAS_SUBMIT, 10),
                     ]
@@ -902,7 +908,7 @@ mod tests {
             (10, 5, 15, 0, 50)
         );
         assert_eq!(reference.cpu_frame_microseconds.median, 100.0);
-        assert_eq!(reference.dynamic_tlas_cpu_microseconds.median, 40.0);
+        assert_eq!(reference.dynamic_tlas_cpu_microseconds.median, 60.0);
         assert_eq!(reference.gpu_frame_microseconds.median, 300.0);
         assert_eq!(reference.gpu_pass_microseconds.len(), TIMED_PASSES.len());
         assert!(
