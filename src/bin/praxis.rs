@@ -29,7 +29,60 @@ fn main() -> ExitCode {
     }
 }
 
+/// What one run of the binary does, parsed from its arguments.
+#[derive(Debug)]
+enum Command {
+    Window(ReferenceScene),
+    Capabilities,
+    #[cfg(feature = "cook")]
+    Cook,
+    #[cfg(feature = "cook")]
+    Fetch,
+    #[cfg(feature = "cook")]
+    Capture {
+        scene: String,
+        output: String,
+        size: String,
+        crowd_form: CrowdForm,
+    },
+    Bench {
+        output: String,
+        configuration: Configuration,
+        scenes: Vec<String>,
+        crowd_form: CrowdForm,
+    },
+    Compare {
+        results: String,
+        mode: CompareMode,
+    },
+}
+
 fn run_command(arguments: &[String]) -> anyhow::Result<()> {
+    match parse_command(arguments)? {
+        Command::Window(scene) => praxis::run(scene),
+        Command::Capabilities => print_capabilities(),
+        #[cfg(feature = "cook")]
+        Command::Cook => cook(),
+        #[cfg(feature = "cook")]
+        Command::Fetch => fetch(),
+        #[cfg(feature = "cook")]
+        Command::Capture {
+            scene,
+            output,
+            size,
+            crowd_form,
+        } => capture(&scene, &output, &size, crowd_form),
+        Command::Bench {
+            output,
+            configuration,
+            scenes,
+            crowd_form,
+        } => bench(&output, configuration, &scenes, crowd_form),
+        Command::Compare { results, mode } => compare(&results, mode),
+    }
+}
+
+fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
     let (arguments, crowd_form) = take_crowd_form(arguments)?;
     let takes_crowd_form = matches!(
         arguments.first().map(String::as_str),
@@ -40,45 +93,62 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
         "only `bench` and `capture` take --crowd-form"
     );
     let crowd_form = crowd_form.unwrap_or_default();
-    match arguments.as_slice() {
-        [] => praxis::run(),
-        [command] if command == "capabilities" => print_capabilities(),
+    let bench = |output: &String, configuration, scenes: &[String]| Command::Bench {
+        output: output.clone(),
+        configuration,
+        scenes: scenes.to_vec(),
+        crowd_form,
+    };
+    Ok(match arguments.as_slice() {
+        [] => Command::Window(ReferenceScene::Helmet),
+        [command] if command == "capabilities" => Command::Capabilities,
         #[cfg(feature = "cook")]
-        [command] if command == "cook" => cook(),
+        [command] if command == "cook" => Command::Cook,
         #[cfg(feature = "cook")]
-        [command] if command == "fetch" => fetch(),
+        [command] if command == "fetch" => Command::Fetch,
         #[cfg(feature = "cook")]
-        [command, scene, output] if command == "capture" => {
-            capture(scene, output, DEFAULT_CAPTURE_SIZE, crowd_form)
-        }
+        [command, scene, output] if command == "capture" => Command::Capture {
+            scene: scene.clone(),
+            output: output.clone(),
+            size: DEFAULT_CAPTURE_SIZE.into(),
+            crowd_form,
+        },
         #[cfg(feature = "cook")]
-        [command, scene, output, size] if command == "capture" => {
-            capture(scene, output, size, crowd_form)
-        }
+        [command, scene, output, size] if command == "capture" => Command::Capture {
+            scene: scene.clone(),
+            output: output.clone(),
+            size: size.clone(),
+            crowd_form,
+        },
         [command, output, flag, scenes @ ..] if command == "bench" && flag == "--ci" => {
-            bench(output, Configuration::CI, scenes, crowd_form)
+            bench(output, Configuration::CI, scenes)
         }
         [command, output, flag, scenes @ ..] if command == "bench" && flag == "--counters" => {
-            bench(output, Configuration::COUNTERS, scenes, crowd_form)
+            bench(output, Configuration::COUNTERS, scenes)
         }
         [command, output, flag, scenes @ ..] if command == "bench" && flag == "--ci-counters" => {
-            bench(output, Configuration::CI_COUNTERS, scenes, crowd_form)
+            bench(output, Configuration::CI_COUNTERS, scenes)
         }
         [command, output, scenes @ ..] if command == "bench" => {
-            bench(output, Configuration::REFERENCE, scenes, crowd_form)
+            bench(output, Configuration::REFERENCE, scenes)
         }
-        [command, results] if command == "compare" => compare(results, CompareMode::Local),
-        [command, results, flag] if command == "compare" && flag == "--ci" => {
-            compare(results, CompareMode::Ci)
-        }
+        [command, results] if command == "compare" => Command::Compare {
+            results: results.clone(),
+            mode: CompareMode::Local,
+        },
+        [command, results, flag] if command == "compare" && flag == "--ci" => Command::Compare {
+            results: results.clone(),
+            mode: CompareMode::Ci,
+        },
+        [scene] if !scene.starts_with('-') => Command::Window(parse_scene(scene)?),
         _ => anyhow::bail!(
-            "unexpected arguments {arguments:?}: run with no arguments, `capabilities`, \
+            "unexpected arguments {arguments:?}: run `praxis [<scene>]`, `capabilities`, \
              `cook`, `fetch`, `capture <scene> <png path> [<width>x<height>]`, \
              `bench <output directory> [--ci | --counters | --ci-counters] [<scene>...]`, or \
              `compare <bench directory> [--ci]`; `capture` and `bench` also take \
              `--crowd-form <proxies | refit | rebuild>`"
         ),
-    }
+    })
 }
 
 /// `arguments` without `--crowd-form <form>`, and the form it names.
@@ -334,4 +404,38 @@ fn capture(scene: &str, output: &str, size: &str, crowd_form: CrowdForm) -> anyh
         std::io::stdout().write_all(last_frame.to_string().as_bytes())?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(arguments: &[&str]) -> anyhow::Result<Command> {
+        let arguments: Vec<String> = arguments.iter().map(|&argument| argument.into()).collect();
+        parse_command(&arguments)
+    }
+
+    #[test]
+    fn no_arguments_open_the_window_on_the_helmet() {
+        assert!(matches!(
+            parse(&[]).unwrap(),
+            Command::Window(ReferenceScene::Helmet)
+        ));
+    }
+
+    #[test]
+    fn a_scene_name_opens_the_window_on_that_scene() {
+        assert!(matches!(
+            parse(&["town"]).unwrap(),
+            Command::Window(ReferenceScene::Town)
+        ));
+    }
+
+    #[test]
+    fn an_unknown_scene_name_is_refused_with_the_scene_names() {
+        let error = parse(&["no-such-scene"]).unwrap_err().to_string();
+        assert!(error.contains("no-such-scene"), "{error}");
+        assert!(error.contains("\"town\""), "{error}");
+        assert!(error.contains("\"helmet\""), "{error}");
+    }
 }
