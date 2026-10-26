@@ -171,7 +171,7 @@ impl std::fmt::Display for FrameStats {
 
 /// Bytes of `texture`'s mip chain at every sample, as ADR 0013 counts GPU
 /// memory. A transient attachment counts 0 where the adapter keeps it in tile
-/// memory (memoryless on Apple GPUs; owner decision on #54).
+/// memory (memoryless on Apple GPUs).
 pub(crate) fn texture_bytes(texture: &wgpu::Texture, transient_saves_memory: bool) -> u64 {
     if transient_saves_memory
         && texture

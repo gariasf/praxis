@@ -55,7 +55,7 @@ pub enum ReferenceScene {
     Shadows,
     /// 100 figures of 5,120 triangles, each its own Mesh, swaying in the
     /// fixed schedule as the GPU bends them each frame, a stand-in for
-    /// skinned crowd members (#208). Their Meshes have no BLAS, which would
+    /// skinned crowd members. Their Meshes have no BLAS, which would
     /// hold their rest shape: each casts its shadow through rigid shadow
     /// proxies, one per bone of its middle, Moving Instances in the dynamic
     /// TLAS.
@@ -321,7 +321,7 @@ impl ReferenceScene {
             Self::PbrSweep => orbit(frame, 6.5, 1.0),
             Self::UvGrid => orbit(frame, 9.0, 7.0),
             // A fixed camera, face on: normal mapping holds up best there, per
-            // github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/NormalTangentTest
+            // github.com/KhronosGroup/glTF-Sample-Assets/tree/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/NormalTangentTest
             Self::NormalTangent => Camera::looking_at(
                 glam::dvec3(0.0, NORMAL_TANGENT_CENTRE_HEIGHT, 3.2),
                 glam::dvec3(0.0, NORMAL_TANGENT_CENTRE_HEIGHT, 0.0),
@@ -1124,7 +1124,7 @@ pub(crate) struct Geometry {
     pub(crate) uvs: Vec<[f32; 2]>,
     pub(crate) indices: Vec<u32>,
     /// A box its Mesh's cooked bounds must hold besides its vertices, for a
-    /// Mesh the GPU bends: every shape it bends to (#208).
+    /// Mesh the GPU bends: every shape it bends to.
     pub(crate) bounds: Option<[[f32; 3]; 2]>,
 }
 

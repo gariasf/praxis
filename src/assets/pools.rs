@@ -5,7 +5,7 @@ use crate::{
 };
 
 /// Bytes of each Arena: one provisional capacity for the app, tests, bench
-/// and CI until M4's Budget split replaces it (decision on #17, item 4).
+/// and CI until ADR 0013's split of the 8 GB Budget replaces it.
 pub const ARENA_CAPACITY_BYTES: u64 = 16 << 20;
 
 /// Meshes the Mesh table holds, provisional as `ARENA_CAPACITY_BYTES` is.
@@ -17,14 +17,13 @@ pub const MESH_CAPACITY: u32 = 1 << 16;
 pub enum MeshUse {
     DrawnAndTraced,
     /// Drawn alone: a Mesh the GPU bends, whose BLAS, built from its rest
-    /// shape, would cast another shape's shadow (#208).
+    /// shape, would cast another shape's shadow.
     Drawn,
     /// Traced alone: a shadow proxy, which no pass draws, so it keeps no
-    /// Meshlets and needs no Material (#208).
+    /// Meshlets and needs no Material.
     Traced,
     /// Drawn and traced, a Mesh the GPU bends whose BLAS is updated each
-    /// frame from its bent shape: built to allow updates, never compacted
-    /// (#209).
+    /// frame from its bent shape: built to allow updates, never compacted.
     Refitted,
 }
 
@@ -719,7 +718,7 @@ pub(crate) mod tests {
     /// A TLAS built once `compact_blases` returns holds the compacted BLAS
     /// while other devices load the GPU, as parallel tests do: no barrier
     /// orders a TLAS build after the copies that write its BLASes, so
-    /// `compact_blases` waits for them (#244). Eight threads, each with its
+    /// `compact_blases` waits for them. Eight threads, each with its
     /// own device, load and trace a triangle 25 times.
     #[test]
     fn a_tlas_built_after_compaction_holds_its_blas_while_other_devices_load_the_gpu() {

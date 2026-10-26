@@ -1,6 +1,6 @@
 //! The BLAS refit: each frame, once the bend pass has bent the Meshes loaded
 //! as `MeshUse::Refitted`, their BLASes are brought to the bent shapes before
-//! the dynamic TLAS is built over them (#209). `CrowdForm::Refit` refits each
+//! the dynamic TLAS is built over them. `CrowdForm::Refit` refits each
 //! in place through wgpu-hal, on Metal only, since wgpu-core rebuilds BLASes
 //! but never updates them; `CrowdForm::Rebuild` rebuilds each through wgpu,
 //! the shapes a refit must match.
@@ -378,7 +378,7 @@ mod metal {
     /// One invocation that reads the refits' scratch, recorded after them in
     /// a command buffer of its own: Metal tracks hazards on the scratch, so
     /// the GPU runs it once they are done, and a pass that does nothing
-    /// writes no timestamp on Metal (#204).
+    /// writes no timestamp on Metal.
     pub(super) struct RefitMarker {
         pipeline: wgpu::ComputePipeline,
         layout: wgpu::BindGroupLayout,

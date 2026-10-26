@@ -1,4 +1,4 @@
-//! The crowd's BLAS refit (#209): on Metal, refitting each figure's BLAS to
+//! The crowd's BLAS refit: on Metal, refitting each figure's BLAS to
 //! the shape the GPU bends it to each frame casts the shadows that
 //! rebuilding it each frame casts; other backends refuse the refit.
 
@@ -12,7 +12,7 @@ const WIDTH: u32 = 640;
 const HEIGHT: u32 = 360;
 
 /// Devices that capture the refit at once: a refit the TLAS build is not
-/// ordered after shows only sometimes, and more often under load (#244).
+/// ordered after shows only sometimes, and more often under load.
 const DEVICES: usize = 4;
 
 /// A headless GPU context, or None, after saying so, when there is no GPU.

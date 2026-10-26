@@ -1,5 +1,5 @@
 //! The bend pass: a compute pass that bends Meshes on the GPU each frame from
-//! their rest Meshes, a stand-in for skinning (#208). Each of Frame data's
+//! their rest Meshes, a stand-in for skinning. Each of Frame data's
 //! bends names a rest Mesh, whose +Y axis runs up its middle from y = 0, and
 //! a bent Mesh of the same vertices: the middle bends into a circular arc,
 //! and each vertex turns with the middle at its height, its tangent frame
@@ -14,8 +14,8 @@ pub(crate) const BEND_PASS: &str = "bend_pass";
 
 /// Bends a frame applies at most: past it, those of the bent Meshes
 /// highest in the vertex Arena are left out, so those Meshes keep the shape
-/// they last took, and are counted and warned about. Provisional until M4's
-/// split of the 8 GB Budget sizes it.
+/// they last took, and are counted and warned about. Provisional until ADR
+/// 0013's split of the 8 GB Budget sizes it.
 pub const BEND_CAPACITY: u32 = 4096;
 
 /// Vertices a workgroup of the pass bends, one per invocation.

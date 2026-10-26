@@ -1,5 +1,5 @@
 // The bend pass's entry point, after the shared parts (src/render/bend_pass.rs),
-// a stand-in for skinning (#208): a row of workgroups per bend and an
+// a stand-in for skinning: a row of workgroups per bend and an
 // invocation per vertex. Each vertex of the bend's rest Mesh, whose +Y axis
 // runs up its middle from y = 0, keeps its offset from the middle at its
 // height, turned as the middle bent into a circular arc turns there: about

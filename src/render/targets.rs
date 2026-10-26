@@ -4,7 +4,7 @@
 //! Hi-Z pyramid keeps the minimum, the farthest. The main pass draws at 4x
 //! MSAA (ADR 0019) and resolves into the HDR target, which holds exposed
 //! colour weighted by 1/(1 + luminance), so the resolve averages it in
-//! display space (`resolve_weighted`, hdr.wgsl; #200's decision R2).
+//! display space (`resolve_weighted`, hdr.wgsl).
 
 use crate::stats::texture_bytes;
 

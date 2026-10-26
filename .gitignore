@@ -16,7 +16,7 @@
 # Fetched assets: pinned in assets/manifest.json, downloaded by `praxis fetch`
 /assets/SciFiHelmet/
 
-# The helmet's Baseline is local-only, like its asset (#34)
+# The helmet's Baseline is local-only, like its asset
 /bench/baselines/helmet.json
 
 # The Cooked cache: disposable, rebuilt by `praxis cook` (ADR 0018)

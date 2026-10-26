@@ -8,14 +8,14 @@ use crate::render::{FrameData, InstanceData, shaders};
 /// Slots the static TLAS covers: a static Instance in a higher slot is left
 /// out, so it casts no shadow, and is counted and warned about. Sized for
 /// the 250k Instances M3 plans `town` with, no larger: in wgpu a TLAS
-/// rebuild's CPU time grows with its capacity, filled or not (#202).
-/// Provisional until M4's split of the 8 GB Budget sizes it.
+/// rebuild's CPU time grows with its capacity, filled or not.
+/// Provisional until ADR 0013's split of the 8 GB Budget sizes it.
 pub const STATIC_TLAS_CAPACITY: u32 = 1 << 18;
 
 /// Moving Instances the dynamic TLAS holds: those in the lowest slots, so
 /// which ones changes only as they spawn and despawn; any past it are left
-/// out, so they cast no shadow, and are counted and warned about (decision on
-/// #17, item 8). Provisional until M4's split of the 8 GB Budget sizes it.
+/// out, so they cast no shadow, and are counted and warned about. Provisional
+/// until ADR 0013's split of the 8 GB Budget sizes it.
 pub const DYNAMIC_TLAS_CAPACITY: u32 = 10_000;
 
 /// The dynamic TLAS's build's name in frame stats: the GPU time from the end
@@ -24,7 +24,7 @@ pub(crate) const DYNAMIC_TLAS_BUILD: &str = "dynamic_tlas_build";
 
 /// What acceleration structures take in GPU memory, as measured on one
 /// adapter: estimates, since wgpu exposes no acceleration-structure size,
-/// until M4 sets exact ones (decision on #17, item 15).
+/// until M4 sets exact ones.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AccelerationStructureBytes {
     pub per_blas_triangle: f64,
@@ -46,7 +46,7 @@ impl AccelerationStructureBytes {
     /// lavapipe's on Vulkan (Mesa 25.2.8): wgpu's allocator report around
     /// building and compacting BLASes of 2,048 to 131,072 triangles, which
     /// compaction leaves as they were, and creating TLASes of 1,024 to
-    /// 262,144 Instances (#231).
+    /// 262,144 Instances.
     const LAVAPIPE: Self = Self {
         per_blas_triangle: 104.0,
         per_compacted_blas_triangle: 104.0,
@@ -79,8 +79,8 @@ impl AccelerationStructureBytes {
 
 /// The static TLAS (ADR 0020): each static Instance in its slot's entry,
 /// tagged with its slot, in a frame whose origin is the corner of the
-/// camera's Anchor in the first Frame data it takes, never re-anchored in M3
-/// (decision on #17, item 3). It is built from that Frame data, empty or
+/// camera's Anchor in the first Frame data it takes, never re-anchored in M3.
+/// It is built from that Frame data, empty or
 /// not, so rays can always query it, and rebuilt in a frame that changes a
 /// static Instance or frees one's slot.
 pub struct StaticTlas {
@@ -196,7 +196,7 @@ pub struct DynamicTlas {
     /// One invocation that queries the TLAS, recorded on either side of its
     /// build: the GPU runs neither marker alongside the build, as it would a
     /// pass that does not touch the TLAS, and a pass that does nothing writes
-    /// no timestamp on Metal (#204).
+    /// no timestamp on Metal.
     marker_pipeline: wgpu::ComputePipeline,
     /// Its group 3 (`DYNAMIC_TLAS_MARKERS`).
     marker_bind_group: wgpu::BindGroup,
