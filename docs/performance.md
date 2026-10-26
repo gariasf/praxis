@@ -17,18 +17,42 @@ CPU frame as the branch on uv-grid and pbr-sweep (207 to 231 µs against
 225 to 232). Every scene's CPU frame reads 15 to 35% above its earlier
 Baseline, the load's doing, and the counters are unchanged.
 
-| Metric | `town`, median (p95) | Budget or ceiling |
-| --- | --- | --- |
-| GPU frame total | 13,568 µs (14,188) | 12,000 µs: over |
-| CPU frame, the main thread's critical path | 17,653 µs (18,184) | 6,000 µs: over |
-| GPU memory | 616,555,272 bytes | 8,000,000,000 bytes |
-| ADR 0019's gate, rays off | 9,821 µs (10,483) | 6,000 µs: over |
-| Shadow-ray time, rays on minus off | 3,228 µs (3,985) | reported |
-| Dynamic TLAS, CPU (recording plus submit) | 1,039 µs (1,110) | 1,100 µs |
-| Dynamic TLAS build, GPU | 49 µs (463) | 1,000 µs |
+**town** on Apple M4 Pro, release, 2560x1440, 1800 measured frames
 
-The median frame draws 137,730 Instances and 5,552,214 triangles, with
-10,000 Moving Instances in the dynamic TLAS.
+| Time, µs | Median | p95 | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| CPU frame | 17,652.7 | 18,184.2 | — | — | — | — | 6,000.0 |
+| Dynamic TLAS, CPU | 1,039.2 | 1,109.5 | — | — | — | — | 1,100.0 |
+| GPU frame | 13,568.3 | 14,188.4 | — | — | — | — | 12,000.0 |
+| Gate, rays off | 9,820.7 | 10,483.3 | — | — | — | — | 6,000.0 |
+| Shadow-ray time | 3,228.0 | 3,984.7 | — | — | — | — | — |
+| `bend_pass` | 0.0 | 0.0 | — | — | — | — | — |
+| `blas_refit` | 0.0 | 0.0 | — | — | — | — | — |
+| `culling_phase_one` | 1,513.0 | 1,585.4 | — | — | — | — | — |
+| `culling_phase_two` | 897.8 | 936.2 | — | — | — | — | — |
+| `depth_prepass` | 1,756.3 | 1,814.6 | — | — | — | — | — |
+| `depth_pyramid_pass` | 250.4 | 266.8 | — | — | — | — | — |
+| `dynamic_tlas_build` | 48.6 | 462.8 | — | — | — | — | 1,000.0 |
+| `froxel_pass` | 517.2 | 556.3 | — | — | — | — | — |
+| `lit_pass` | 8,714.4 | 9,186.1 | — | — | — | — | — |
+| `phase_two_depth_pass` | 48.9 | 98.6 | — | — | — | — | — |
+| `shadow_mask_pass` | 4,648.3 | 4,940.3 | — | — | — | — | — |
+| `tonemapping_pass` | 3,825.2 | 4,499.8 | — | — | — | — | — |
+
+| Counter | Value | Baseline | Δ | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|
+| `draw_calls` | 4 | — | — | — | — |
+| `instances_drawn` | 137,730 | — | — | — | — |
+| `triangles_drawn` | 5,552,214 | — | — | — | — |
+| `instances_overflowed` | 0 | — | — | — | — |
+| `uploaded_bytes` | 2,049,344 | — | — | — | — |
+| `gpu_memory_bytes` | 616,555,272 | — | — | — | 8,000,000,000 |
+| `arena_bytes_in_use` | 85,280 | — | — | — | — |
+| `heap_allocations` | 10,478 | — | — | — | — |
+
+The dynamic TLAS holds 10,000 Moving Instances. Shadow-ray time is each
+frame's GPU frame with shadow rays on, less the same frame's with them
+off. The GPU frame, the CPU frame and the gate are over their Budgets.
 
 - **ADR 0019's gate breaches.** It runs from the start of culling phase
   one to the end of the lit pass, with rays off. It reads 9.6 to 10.3 ms

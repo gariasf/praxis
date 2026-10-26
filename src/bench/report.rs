@@ -3,6 +3,8 @@
 
 use std::fmt::Write;
 
+use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
+
 use super::{Budgets, Measurements, Spread, compared_counters, ensure_comparable};
 
 /// `current`'s times and counters as markdown tables, each against its
@@ -63,7 +65,7 @@ pub fn report(
             "Dynamic TLAS, CPU",
             current.dynamic_tlas_cpu_microseconds,
             times_baseline.map(|baseline| baseline.dynamic_tlas_cpu_microseconds),
-            None,
+            Some(budgets.dynamic_tlas_cpu_microseconds),
         ),
         (
             "GPU frame",
@@ -71,12 +73,25 @@ pub fn report(
             times_baseline.map(|baseline| baseline.gpu_frame_microseconds),
             Some(budgets.gpu_frame_microseconds),
         ),
+        (
+            "Gate, rays off",
+            current.gate_microseconds,
+            times_baseline.map(|baseline| baseline.gate_microseconds),
+            Some(budgets.gate_microseconds),
+        ),
+        (
+            "Shadow-ray time",
+            current.shadow_ray_microseconds,
+            times_baseline.map(|baseline| baseline.shadow_ray_microseconds),
+            None,
+        ),
     ];
     let pass_times = current.gpu_pass_microseconds.iter().map(|(pass, &time)| {
         let baseline_time = times_baseline
             .and_then(|baseline| baseline.gpu_pass_microseconds.get(pass))
             .copied();
-        (format!("`{pass}`"), time, baseline_time, None)
+        let budget = (pass == DYNAMIC_TLAS_BUILD).then_some(budgets.dynamic_tlas_gpu_microseconds);
+        (format!("`{pass}`"), time, baseline_time, budget)
     });
     let times = frame_times
         .map(|(name, time, baseline_time, budget)| (name.to_owned(), time, baseline_time, budget))
@@ -170,9 +185,10 @@ fn signed(value: f64, decimals: usize) -> String {
     }
 }
 
-/// `current` over `baseline` to three places, or a dash over a zero.
+/// `current` over `baseline` to three places, or a dash over a Baseline at
+/// or below zero, where a ratio means nothing.
 fn ratio(current: f64, baseline: f64) -> String {
-    if baseline == 0.0 {
+    if baseline <= 0.0 {
         "—".to_owned()
     } else {
         format!("{:.3}", current / baseline)
@@ -198,6 +214,9 @@ mod tests {
     const BUDGETS: Budgets = Budgets {
         cpu_frame_microseconds: 6000.0,
         gpu_frame_microseconds: 12000.0,
+        gate_microseconds: 6000.0,
+        dynamic_tlas_cpu_microseconds: 1100.0,
+        dynamic_tlas_gpu_microseconds: 1000.0,
         gpu_memory_bytes: 8_000_000_000,
     };
 
@@ -208,7 +227,8 @@ mod tests {
     fn measurements(
         cpu: Spread,
         gpu: Spread,
-        passes: [(&str, Spread); 2],
+        gate: Spread,
+        passes: [(&str, Spread); 3],
         counters: Counters,
     ) -> Measurements {
         Measurements {
@@ -221,6 +241,8 @@ mod tests {
             cpu_frame_microseconds: cpu,
             dynamic_tlas_cpu_microseconds: spread(0.0, 0.1),
             gpu_frame_microseconds: gpu,
+            gate_microseconds: gate,
+            shadow_ray_microseconds: spread(-3.2, 40.5),
             gpu_pass_microseconds: passes
                 .into_iter()
                 .map(|(pass, time)| (pass.to_owned(), time))
@@ -237,8 +259,10 @@ mod tests {
         measurements(
             spread(190.0, 262.3),
             spread(4208.6, 5204.5),
+            spread(2950.0, 3010.4),
             [
                 ("culling_phase_one", spread(166.3, 169.8)),
+                ("dynamic_tlas_build", spread(48.7, 462.9)),
                 ("lit_pass", spread(755.8, 768.1)),
             ],
             COUNTERS,
@@ -249,8 +273,10 @@ mod tests {
         measurements(
             spread(200.0, 250.0),
             spread(4000.0, 5000.0),
+            spread(3000.0, 3100.0),
             [
                 ("culling_phase_one", spread(160.0, 170.0)),
+                ("dynamic_tlas_build", spread(50.0, 400.0)),
                 ("lit_pass", spread(800.0, 810.0)),
             ],
             Counters {
@@ -272,9 +298,12 @@ mod tests {
 | Time, µs | Median | p95 | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | CPU frame | 190.0 | 262.3 | 200.0 | 250.0 | -10.0 | 0.950 | 6,000.0 |
-| Dynamic TLAS, CPU | 0.0 | 0.1 | 0.0 | 0.1 | +0.0 | — | — |
+| Dynamic TLAS, CPU | 0.0 | 0.1 | 0.0 | 0.1 | +0.0 | — | 1,100.0 |
 | GPU frame | 4,208.6 | 5,204.5 | 4,000.0 | 5,000.0 | +208.6 | 1.052 | 12,000.0 |
+| Gate, rays off | 2,950.0 | 3,010.4 | 3,000.0 | 3,100.0 | -50.0 | 0.983 | 6,000.0 |
+| Shadow-ray time | -3.2 | 40.5 | -3.2 | 40.5 | +0.0 | — | — |
 | `culling_phase_one` | 166.3 | 169.8 | 160.0 | 170.0 | +6.3 | 1.039 | — |
+| `dynamic_tlas_build` | 48.7 | 462.9 | 50.0 | 400.0 | -1.3 | 0.974 | 1,000.0 |
 | `lit_pass` | 755.8 | 768.1 | 800.0 | 810.0 | -44.2 | 0.945 | — |
 
 | Counter | Value | Baseline | Δ | Ratio | Budget |
