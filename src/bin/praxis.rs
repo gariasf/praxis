@@ -34,6 +34,7 @@ fn main() -> ExitCode {
 enum Command {
     Window(ReferenceScene),
     Capabilities,
+    Preflight,
     #[cfg(feature = "cook")]
     Cook,
     #[cfg(feature = "cook")]
@@ -61,6 +62,7 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
     match parse_command(arguments)? {
         Command::Window(scene) => praxis::run(scene),
         Command::Capabilities => print_capabilities(),
+        Command::Preflight => preflight(),
         #[cfg(feature = "cook")]
         Command::Cook => cook(),
         #[cfg(feature = "cook")]
@@ -102,6 +104,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
     Ok(match arguments.as_slice() {
         [] => Command::Window(ReferenceScene::Helmet),
         [command] if command == "capabilities" => Command::Capabilities,
+        [command] if command == "preflight" => Command::Preflight,
         #[cfg(feature = "cook")]
         [command] if command == "cook" => Command::Cook,
         #[cfg(feature = "cook")]
@@ -176,6 +179,25 @@ fn take_crowd_form(arguments: &[String]) -> anyhow::Result<(Vec<String>, Option<
 fn print_capabilities() -> anyhow::Result<()> {
     let report = pollster::block_on(praxis::gpu::capability_report())?;
     std::io::stdout().write_all(report.as_bytes())?;
+    Ok(())
+}
+
+/// Prints one line per preflight check, and fails when any blocks
+/// `scripts/verify.sh`.
+fn preflight() -> anyhow::Result<()> {
+    let checks = praxis::preflight::run();
+    let mut stdout = std::io::stdout();
+    for check in &checks {
+        writeln!(stdout, "{check}")?;
+    }
+    let blocking = checks
+        .iter()
+        .filter(|check| check.verdict == praxis::preflight::Verdict::Fail)
+        .count();
+    anyhow::ensure!(
+        blocking == 0,
+        "{blocking} checks block scripts/verify.sh; run the fixes they name"
+    );
     Ok(())
 }
 

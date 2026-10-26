@@ -13,7 +13,7 @@ use anyhow::Context;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
-pub use fetch::{Fetch, fetch};
+pub use fetch::{Fetch, absent_fetched, fetch};
 pub use texture::{LoadedImage, TextureSource};
 
 use crate::ReferenceScene;
