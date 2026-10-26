@@ -6,6 +6,7 @@ use anyhow::Context;
 
 use crate::capture::render_frames;
 use crate::gpu::GpuContext;
+use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::render::{
     BLAS_REFIT, DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT, RenderSwitches, TIMED_PASSES,
 };
@@ -126,6 +127,12 @@ pub struct Measurements {
     /// Each frame's dynamic TLAS build, plus the span from the start of its
     /// first pass to the end of its last.
     pub gpu_frame_microseconds: Spread,
+    /// ADR 0019's gate, with shadow rays off: the span of the passes from
+    /// culling phase one to the lit pass.
+    pub gate_microseconds: Spread,
+    /// Each frame's GPU frame with shadow rays on, less the same frame's
+    /// with them off.
+    pub shadow_ray_microseconds: Spread,
     /// Each pass's own GPU time, by pass.
     pub gpu_pass_microseconds: BTreeMap<String, Spread>,
     #[serde(flatten)]
@@ -207,13 +214,21 @@ pub struct Spread {
     pub p95: f64,
 }
 
-/// ADR 0013's per-frame limits on the reference machine.
+/// ADR 0013's per-frame limits on the reference machine, ADR 0019's gate
+/// and the dynamic TLAS's ceilings.
 #[derive(Debug, serde::Deserialize)]
 pub struct Budgets {
     pub cpu_frame_microseconds: f64,
     /// The frame's dynamic TLAS build, plus the span from the start of its
     /// first pass to the end of its last.
     pub gpu_frame_microseconds: f64,
+    /// The median gate, past which B and D are prototyped (ADR 0019).
+    pub gate_microseconds: f64,
+    /// Ceilings on the dynamic TLAS at its 10,000 Moving Instances (ADR
+    /// 0020): its build's recording and submit on the CPU, and its build on
+    /// the GPU, from the end of the frame before.
+    pub dynamic_tlas_cpu_microseconds: f64,
+    pub dynamic_tlas_gpu_microseconds: f64,
     pub gpu_memory_bytes: u64,
 }
 
@@ -250,8 +265,8 @@ impl std::fmt::Display for Finding {
 }
 
 /// Renders `scene` for `configuration`'s warm-up and measured frames, as
-/// `switches` set, and returns the measured frames' medians and p95s, and
-/// the counter frames' counters.
+/// `switches` set, and again with shadow rays off, and returns the measured
+/// frames' medians and p95s, and the counter frames' counters.
 pub fn run(
     context: &GpuContext,
     scene: ReferenceScene,
@@ -263,43 +278,60 @@ pub fn run(
         frame_count >= COUNTER_FRAMES.end,
         "a run of {frame_count} frames stops before the counter frames {COUNTER_FRAMES:?} end"
     );
-    let (_, frames) = render_frames(
-        context,
-        scene,
-        glam::DVec3::ZERO,
-        configuration.width,
-        configuration.height,
-        0..frame_count,
-        &[],
-        // ADR 0022 judges Budgets at 60 Hz.
-        SIXTY_HERTZ,
-        switches,
-    )?;
+    let render = |switches| {
+        let (_, frames) = render_frames(
+            context,
+            scene,
+            glam::DVec3::ZERO,
+            configuration.width,
+            configuration.height,
+            0..frame_count,
+            &[],
+            // ADR 0022 judges Budgets at 60 Hz.
+            SIXTY_HERTZ,
+            switches,
+        )?;
+        anyhow::Ok(frames)
+    };
+    let frames = render(switches)?;
+    let frames_without_rays = render(RenderSwitches {
+        shadow_rays: false,
+        ..switches
+    })?;
     measure(
         scene,
         context.adapter.get_info().name,
         configuration,
         &frames,
+        &frames_without_rays,
     )
 }
 
 /// The Measurements of `frames`, a `configuration` run of `scene` on
-/// `adapter`, which fail unless every frame read back its GPU stats.
+/// `adapter`, and of `frames_without_rays`, the same run with shadow rays
+/// off, which fail unless every frame of both read back its GPU stats.
 fn measure(
     scene: ReferenceScene,
     adapter: String,
     configuration: Configuration,
     frames: &[FrameStats],
+    frames_without_rays: &[FrameStats],
 ) -> anyhow::Result<Measurements> {
-    let gpu_frames: Vec<_> = frames.iter().filter_map(|stats| stats.gpu).collect();
-    anyhow::ensure!(
-        gpu_frames.len() == frames.len(),
-        "{} of {} frames read back no GPU stats",
-        frames.len() - gpu_frames.len(),
-        frames.len()
-    );
+    let gpu_stats = |frames: &[FrameStats]| {
+        let gpu_frames: Vec<_> = frames.iter().filter_map(|stats| stats.gpu).collect();
+        anyhow::ensure!(
+            gpu_frames.len() == frames.len(),
+            "{} of {} frames read back no GPU stats",
+            frames.len() - gpu_frames.len(),
+            frames.len()
+        );
+        Ok(gpu_frames)
+    };
+    let (gpu_frames, gpu_frames_without_rays) =
+        (gpu_stats(frames)?, gpu_stats(frames_without_rays)?);
     let warm_up_frames = configuration.warm_up_frames as usize;
     let (measured, measured_gpu) = (&frames[warm_up_frames..], &gpu_frames[warm_up_frames..]);
+    let measured_without_rays = &gpu_frames_without_rays[warm_up_frames..];
     let microseconds = |time: Duration| time.as_secs_f64() * 1e6;
     let gpu_pass_microseconds = TIMED_PASSES
         .iter()
@@ -347,6 +379,21 @@ fn measure(
                 .map(|gpu| microseconds(gpu.frame_time))
                 .collect(),
         ),
+        gate_microseconds: spread(
+            measured_without_rays
+                .iter()
+                .map(|gpu| microseconds(gpu.gate_time))
+                .collect(),
+        ),
+        shadow_ray_microseconds: spread(
+            measured_gpu
+                .iter()
+                .zip(measured_without_rays)
+                .map(|(with, without)| {
+                    microseconds(with.frame_time) - microseconds(without.frame_time)
+                })
+                .collect(),
+        ),
         gpu_pass_microseconds,
         counters: Counters::of(measured),
         counter_frames: CounterFrames {
@@ -359,7 +406,8 @@ fn measure(
 }
 
 /// One line, `key=value` pairs after the scene name: medians and p95s of
-/// the CPU and GPU frame, each pass's median, then the counters.
+/// the CPU and GPU frame, the gate and shadow-ray time, each pass's median,
+/// then the counters.
 impl std::fmt::Display for Measurements {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (cpu, gpu) = (self.cpu_frame_microseconds, self.gpu_frame_microseconds);
@@ -372,6 +420,14 @@ impl std::fmt::Display for Measurements {
             self.dynamic_tlas_cpu_microseconds.median,
             gpu.median,
             gpu.p95
+        )?;
+        write!(
+            formatter,
+            " gate_us median={:.1} p95={:.1} shadow_ray_us median={:.1} p95={:.1}",
+            self.gate_microseconds.median,
+            self.gate_microseconds.p95,
+            self.shadow_ray_microseconds.median,
+            self.shadow_ray_microseconds.p95
         )?;
         for (pass, time) in &self.gpu_pass_microseconds {
             write!(formatter, " {pass}={:.1}", time.median)?;
@@ -508,12 +564,44 @@ pub fn compare(
         current.gpu_frame_microseconds.median,
         budgets.gpu_frame_microseconds,
     );
+    let gate = current.gate_microseconds.median;
+    for (metric, current, baseline) in [
+        ("gate_microseconds", gate, baseline.gate_microseconds.median),
+        (
+            "shadow_ray_microseconds",
+            current.shadow_ray_microseconds.median,
+            baseline.shadow_ray_microseconds.median,
+        ),
+    ] {
+        let noise_floor = GPU_PASS_NOISE_FLOOR_MICROSECONDS;
+        check_regression(&mut findings, metric, current, baseline, noise_floor);
+    }
+    check_budget(
+        &mut findings,
+        "gate_microseconds",
+        gate,
+        budgets.gate_microseconds,
+    );
+    check_budget(
+        &mut findings,
+        "dynamic_tlas_cpu_microseconds",
+        current.dynamic_tlas_cpu_microseconds.median,
+        budgets.dynamic_tlas_cpu_microseconds,
+    );
+    if let Some(build) = passes.get(DYNAMIC_TLAS_BUILD) {
+        check_budget(
+            &mut findings,
+            "dynamic_tlas_gpu_microseconds",
+            build.median,
+            budgets.dynamic_tlas_gpu_microseconds,
+        );
+    }
     Ok(findings)
 }
 
 /// Warns when the time `current` exceeds `baseline` by more than
 /// `WARN_RATIO`, and fails above `FAIL_RATIO` when it also grew by more than
-/// `noise_floor`.
+/// `noise_floor`. A time that did not grow passes, whatever its sign.
 fn check_regression(
     findings: &mut Vec<Finding>,
     metric: &'static str,
@@ -521,6 +609,9 @@ fn check_regression(
     baseline: f64,
     noise_floor: f64,
 ) {
+    if current <= baseline {
+        return;
+    }
     let ratio = current / baseline;
     let verdict = if ratio > FAIL_RATIO && current - baseline > noise_floor {
         Verdict::Fail
@@ -602,6 +693,14 @@ mod tests {
                 median: 2500.0,
                 p95: 2600.0,
             },
+            gate_microseconds: Spread {
+                median: 1500.0,
+                p95: 1600.0,
+            },
+            shadow_ray_microseconds: Spread {
+                median: 500.0,
+                p95: 600.0,
+            },
             gpu_pass_microseconds: [("culling_pass", 100.0), ("main_pass", 2000.0)]
                 .into_iter()
                 .map(|(pass, median)| {
@@ -620,6 +719,9 @@ mod tests {
     const BUDGETS: Budgets = Budgets {
         cpu_frame_microseconds: 6000.0,
         gpu_frame_microseconds: 12000.0,
+        gate_microseconds: 6000.0,
+        dynamic_tlas_cpu_microseconds: 1100.0,
+        dynamic_tlas_gpu_microseconds: 1000.0,
         gpu_memory_bytes: 8_000_000_000,
     };
 
@@ -739,6 +841,63 @@ mod tests {
         );
     }
 
+    /// The gate answers to ADR 0019's 6 ms and to its Baseline, and
+    /// shadow-ray time to its Baseline.
+    #[test]
+    fn the_gate_fails_over_6_ms_and_both_lines_against_their_baselines() {
+        let mut slower = baseline();
+        slower.gate_microseconds.median = 1700.0;
+        slower.shadow_ray_microseconds.median = 600.0;
+        assert_eq!(
+            verdicts(&slower, &baseline(), CompareMode::Local),
+            [
+                ("gate_microseconds", Verdict::Fail),
+                ("shadow_ray_microseconds", Verdict::Fail)
+            ]
+        );
+        let mut over_budget = baseline();
+        over_budget.gate_microseconds.median = 6100.0;
+        assert_eq!(
+            verdicts(&over_budget, &over_budget, CompareMode::Local),
+            [("gate_microseconds", Verdict::Fail)]
+        );
+        assert_eq!(verdicts(&over_budget, &over_budget, CompareMode::Ci), []);
+    }
+
+    /// The dynamic TLAS's CPU cost and its build answer to their ceilings,
+    /// whatever their Baselines.
+    #[test]
+    fn the_dynamic_tlas_fails_over_its_ceilings() {
+        let mut over = baseline();
+        over.dynamic_tlas_cpu_microseconds.median = 1200.0;
+        over.gpu_pass_microseconds.insert(
+            DYNAMIC_TLAS_BUILD.to_owned(),
+            Spread {
+                median: 1100.0,
+                p95: 1200.0,
+            },
+        );
+        assert_eq!(
+            verdicts(&over, &over, CompareMode::Local),
+            [
+                ("dynamic_tlas_cpu_microseconds", Verdict::Fail),
+                ("dynamic_tlas_gpu_microseconds", Verdict::Fail)
+            ]
+        );
+        assert_eq!(verdicts(&over, &over, CompareMode::Ci), []);
+    }
+
+    /// Shadow-ray time is a difference of two runs, so near zero it can be
+    /// negative: less of it is no regression, whatever the ratio.
+    #[test]
+    fn less_shadow_ray_time_passes_below_zero() {
+        let mut none = baseline();
+        none.shadow_ray_microseconds.median = -10.0;
+        let mut current = none.clone();
+        current.shadow_ray_microseconds.median = -40.0;
+        assert_eq!(verdicts(&current, &none, CompareMode::Local), []);
+    }
+
     #[test]
     fn a_baseline_of_other_passes_is_refused_with_a_message_to_re_record_it() {
         let mut more_passes = baseline();
@@ -845,7 +1004,8 @@ mod tests {
     /// CPU time of 900 µs in the warm-up and 100 µs after it, 20 µs of it
     /// refitting BLASes, 30 µs recording the dynamic TLAS's build and 10 µs
     /// submitting it, and on the GPU
-    /// a frame of 300 µs whose passes take 200 µs each.
+    /// a frame of 300 µs whose passes take 200 µs each, 150 µs of it the
+    /// gate.
     fn frames(configuration: Configuration) -> Vec<FrameStats> {
         (0..configuration.warm_up_frames + configuration.measured_frames)
             .map(|frame| {
@@ -865,6 +1025,7 @@ mod tests {
                         frame: frame.into(),
                         pass_times: TIMED_PASSES.map(|pass| (pass, Duration::from_micros(200))),
                         frame_time: Duration::from_micros(300),
+                        gate_time: Duration::from_micros(150),
                         instances_drawn: if counted { 5 } else { 77 },
                         triangles_drawn: if counted { 15 } else { 231 },
                         instances_overflowed: if frame == 300 { 3 } else { 0 },
@@ -882,6 +1043,19 @@ mod tests {
             .collect()
     }
 
+    /// `frames`, with shadow rays off: a GPU frame of 250 µs in the measured
+    /// frames, of 900 µs in the warm-up, and a gate of 140 µs.
+    fn frames_without_rays(configuration: Configuration) -> Vec<FrameStats> {
+        let mut frames = frames(configuration);
+        for (frame, stats) in frames.iter_mut().enumerate() {
+            let gpu = stats.gpu.as_mut().expect("every frame has GPU stats");
+            let warming_up = frame < configuration.warm_up_frames as usize;
+            gpu.frame_time = Duration::from_micros(if warming_up { 900 } else { 250 });
+            gpu.gate_time = Duration::from_micros(140);
+        }
+        frames
+    }
+
     #[test]
     fn every_run_counts_its_measured_frames_and_the_counter_frames() {
         let measurements = |configuration| {
@@ -890,6 +1064,7 @@ mod tests {
                 "Apple M4 Pro".to_owned(),
                 configuration,
                 &frames(configuration),
+                &frames_without_rays(configuration),
             )
             .expect("every frame read back its GPU stats")
         };
@@ -911,6 +1086,9 @@ mod tests {
         assert_eq!(reference.cpu_frame_microseconds.median, 100.0);
         assert_eq!(reference.dynamic_tlas_cpu_microseconds.median, 60.0);
         assert_eq!(reference.gpu_frame_microseconds.median, 300.0);
+        // Both lines read the measured frames alone, the gate with rays off.
+        assert_eq!(reference.gate_microseconds.median, 140.0);
+        assert_eq!(reference.shadow_ray_microseconds.median, 50.0);
         assert_eq!(reference.gpu_pass_microseconds.len(), TIMED_PASSES.len());
         assert!(
             reference
@@ -925,11 +1103,22 @@ mod tests {
     #[test]
     fn a_run_with_a_frame_that_read_back_no_gpu_stats_fails() {
         let configuration = Configuration::COUNTERS;
+        let without_rays = frames_without_rays(configuration);
         let mut frames = frames(configuration);
         frames[40].gpu = None;
         let scene = ReferenceScene::PbrSweep;
         let adapter = "Apple M4 Pro".to_owned();
-        assert!(measure(scene, adapter, configuration, &frames).is_err());
+        assert!(
+            measure(
+                scene,
+                adapter.clone(),
+                configuration,
+                &frames,
+                &without_rays
+            )
+            .is_err()
+        );
+        assert!(measure(scene, adapter, configuration, &without_rays, &frames).is_err());
     }
 
     #[test]

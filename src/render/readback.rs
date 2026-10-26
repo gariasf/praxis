@@ -15,9 +15,9 @@ use std::time::Duration;
 
 use crate::render::bend_pass::BEND_PASS;
 use crate::render::blas_refit::BLAS_REFIT_PASS;
-use crate::render::culling_pass::FrameDraw;
+use crate::render::culling_pass::{CullingPhase, FrameDraw};
 use crate::render::froxel_pass::LightCounts;
-use crate::render::shadow_mask_pass::SHADOW_MASK_PASS;
+use crate::render::main_pass::LIT_PASS;
 use crate::render::{FRAMES_IN_FLIGHT, TIMED_PASSES};
 use crate::stats::{FrameRecorder, GpuFrameStats};
 
@@ -78,10 +78,9 @@ pub struct GpuStatsReadback {
     warned_of_shadow_mask_overflow: bool,
     /// Which of `TIMED_PASSES` never run, so read as taking no time.
     untimed: [bool; TIMED_PASSES.len()],
-    /// The last frame read back and the tick its shadow mask pass ended at,
-    /// in frames that trace shadow rays: the next frame's build of the
-    /// dynamic TLAS, which the rays read, waits for it.
-    last_shadow_ray_end: Option<(u64, u64)>,
+    /// The last frame read back and the tick its last pass ended at, from
+    /// which the next frame's build of the dynamic TLAS counts.
+    last_pass_end: Option<(u64, u64)>,
 }
 
 struct Slot {
@@ -179,7 +178,7 @@ impl GpuStatsReadback {
                     flags[pass_position(pass)] = true;
                     flags
                 }),
-            last_shadow_ray_end: None,
+            last_pass_end: None,
         }
     }
 
@@ -376,27 +375,31 @@ impl GpuStatsReadback {
                         let ticks: [u64; QUERIES_PER_FRAME] = bytemuck::pod_read_unaligned(
                             &view[TIMESTAMP_OFFSET as usize..][..TIMESTAMP_BYTES as usize],
                         );
-                        // The marker before the dynamic TLAS's build can run
-                        // while the frame before still traces rays against
-                        // the TLAS, which the build waits for.
-                        let previous_shadow_ray_end = self
-                            .last_shadow_ray_end
+                        // The dynamic TLAS's build runs alongside the frame
+                        // before it, which hides most of it, so it counts
+                        // from the end of that frame's last pass.
+                        let previous_pass_end = self
+                            .last_pass_end
                             .filter(|&(previous, _)| previous + 1 == frame)
                             .map_or(0, |(_, tick)| tick);
-                        let shadow_mask_pass = pass_position(SHADOW_MASK_PASS);
-                        self.last_shadow_ray_end = (!self.untimed[shadow_mask_pass])
-                            .then(|| (frame, ticks[2 * shadow_mask_pass + 1]));
-                        let (pass_times, frame_time) = frame_times(
+                        let FrameTimes {
+                            pass_times,
+                            frame_time,
+                            gate_time,
+                            last_pass_end,
+                        } = frame_times(
                             &ticks,
                             slot.shape,
                             &self.untimed,
-                            previous_shadow_ray_end,
+                            previous_pass_end,
                             self.nanoseconds_per_tick,
                         );
+                        self.last_pass_end = Some((frame, last_pass_end));
                         self.read_back.push(GpuFrameStats {
                             frame,
                             pass_times,
                             frame_time,
+                            gate_time,
                             instances_drawn: draw.instances_drawn,
                             triangles_drawn: draw.triangles_drawn(),
                             instances_overflowed: draw.instances_overflowed,
@@ -473,20 +476,30 @@ impl<'a> FrameTimestamps<'a> {
     }
 }
 
+/// A frame's GPU times.
+struct FrameTimes {
+    pass_times: [(&'static str, Duration); TIMED_PASSES.len()],
+    frame_time: Duration,
+    gate_time: Duration,
+    /// The tick the frame's last pass ended at.
+    last_pass_end: u64,
+}
+
 /// Each of `TIMED_PASSES`' time in a frame of `shape` whose timestamps read
-/// `ticks`, `nanoseconds_per_tick` apart, and the frame's GPU time: the
+/// `ticks`, `nanoseconds_per_tick` apart; the frame's GPU time: the
 /// dynamic TLAS's build, plus the span of each submission's passes, so
 /// neither the waits between submissions nor what a submission records
-/// before its first pass counts. The build, in a submission before the
-/// frame's passes, starts no earlier than `build_floor`; the passes
-/// `untimed` names take no time.
+/// before its first pass counts; and ADR 0019's gate, the span of the passes
+/// from culling phase one to the lit pass; and the tick its last pass ended
+/// at. The build, in a submission before the frame's passes, starts no
+/// earlier than `build_floor`; the passes `untimed` names take no time.
 fn frame_times(
     ticks: &[u64; QUERIES_PER_FRAME],
     shape: FrameShape,
     untimed: &[bool; TIMED_PASSES.len()],
     build_floor: u64,
     nanoseconds_per_tick: f64,
-) -> ([(&'static str, Duration); TIMED_PASSES.len()], Duration) {
+) -> FrameTimes {
     let time = |begin: u64, end: u64| {
         let ticks = end.saturating_sub(begin) as f64;
         Duration::from_nanos((ticks * nanoseconds_per_tick) as u64)
@@ -501,12 +514,15 @@ fn frame_times(
     // timestamps: Metal can run a pass alongside those recorded around it
     // when it reads none of their output, so the Froxel pass can start
     // before culling phase one, and a pass can end after the last.
-    let span = |passes: std::ops::Range<usize>| {
-        let (begin, end) = passes
+    let bounds = |passes: std::ops::Range<usize>| {
+        passes
             .filter(|&pass| pass != blas_refit && !untimed[pass])
             .fold((u64::MAX, 0), |(begin, end), pass| {
                 (begin.min(ticks[2 * pass]), end.max(ticks[2 * pass + 1]))
-            });
+            })
+    };
+    let span = |passes| {
+        let (begin, end) = bounds(passes);
         time(begin, end)
     };
     // The refit runs from the end of the bend pass, and the frame's other
@@ -537,7 +553,13 @@ fn frame_times(
         };
         (TIMED_PASSES[pass], taken)
     });
-    (pass_times, frame_time)
+    let gate_passes = pass_position(CullingPhase::One.label())..pass_position(LIT_PASS) + 1;
+    FrameTimes {
+        pass_times,
+        frame_time,
+        gate_time: span(gate_passes),
+        last_pass_end: bounds(blas_refit + 1..TIMED_PASSES.len()).1,
+    }
 }
 
 /// Where `pass` is in `TIMED_PASSES`.
@@ -558,9 +580,9 @@ mod tests {
 
     use super::*;
     use crate::gpu::GpuContext;
-    use crate::render::culling_pass::CullingPhase;
     use crate::render::froxel_pass::FROXEL_PASS;
-    use crate::render::main_pass::LIT_PASS;
+    use crate::render::renderer::SHADOW_RAY_PASSES;
+    use crate::render::shadow_mask_pass::SHADOW_MASK_PASS;
 
     /// Timestamps a microsecond apart, each pass starting 10 µs after the
     /// one before it and taking 4 µs, in submissions that start 100 µs
@@ -593,7 +615,11 @@ mod tests {
             bent: true,
             blas_refitted: true,
         };
-        let (passes, frame_time) = frame_times(&ticks, refitted, &untimed, 0, 1000.0);
+        let FrameTimes {
+            pass_times: passes,
+            frame_time,
+            ..
+        } = frame_times(&ticks, refitted, &untimed, 0, 1000.0);
         let taken = |name| passes.iter().find(|&&(pass, _)| pass == name).unwrap().1;
         assert_eq!(taken(BLAS_REFIT_PASS), microseconds(7));
         assert_eq!(taken(BEND_PASS), microseconds(4));
@@ -609,14 +635,22 @@ mod tests {
             blas_refitted: false,
             ..refitted
         };
-        let (passes, frame_time) = frame_times(&ticks, proxies, &untimed, 0, 1000.0);
+        let FrameTimes {
+            pass_times: passes,
+            frame_time,
+            ..
+        } = frame_times(&ticks, proxies, &untimed, 0, 1000.0);
         assert_eq!(passes[pass_position(BLAS_REFIT_PASS)].1, Duration::ZERO);
         let bend_start = ticks[2 * pass_position(BEND_PASS)];
         let span = ticks[QUERIES_PER_FRAME - 1] - bend_start;
         assert_eq!(frame_time, microseconds(4) + microseconds(span));
 
         let still = FrameShape::default();
-        let (passes, frame_time) = frame_times(&ticks, still, &untimed, 0, 1000.0);
+        let FrameTimes {
+            pass_times: passes,
+            frame_time,
+            ..
+        } = frame_times(&ticks, still, &untimed, 0, 1000.0);
         assert_eq!(passes[0].1, Duration::ZERO);
         assert_eq!(passes[pass_position(BEND_PASS)].1, Duration::ZERO);
         assert_eq!(frame_time, microseconds(rest_span));
@@ -643,7 +677,11 @@ mod tests {
         untimed[shadow_mask_pass] = true;
         let rest_span = ticks[2 * lit_pass + 1] - (culling_start - 30);
 
-        let (passes, frame_time) = frame_times(&ticks, FrameShape::default(), &untimed, 0, 1000.0);
+        let FrameTimes {
+            pass_times: passes,
+            frame_time,
+            ..
+        } = frame_times(&ticks, FrameShape::default(), &untimed, 0, 1000.0);
         assert_eq!(frame_time, microseconds(rest_span));
         assert!(passes.iter().all(|&(_, taken)| taken <= frame_time));
 
@@ -652,11 +690,38 @@ mod tests {
             bent: true,
             blas_refitted: true,
         };
-        let (_, frame_time) = frame_times(&ticks, refitted, &untimed, 0, 1000.0);
+        let frame_time = frame_times(&ticks, refitted, &untimed, 0, 1000.0).frame_time;
         assert_eq!(
             frame_time,
             microseconds(4) + microseconds(4 + 7) + microseconds(rest_span)
         );
+    }
+
+    /// ADR 0019's gate spans the passes from culling phase one to the lit
+    /// pass, from the earliest start to the latest end, with neither the
+    /// build nor the passes after the lit pass; the frame's last pass ends
+    /// at the latest end of any.
+    #[test]
+    fn the_gate_spans_culling_phase_one_to_the_lit_pass() {
+        let mut ticks = spread_ticks();
+        let culling_start = ticks[2 * pass_position(CullingPhase::One.label())];
+        let lit_end = ticks[2 * pass_position(LIT_PASS) + 1];
+        let mut untimed = [false; TIMED_PASSES.len()];
+        for pass in SHADOW_RAY_PASSES {
+            untimed[pass_position(pass)] = true;
+        }
+        let built = FrameShape {
+            dynamic_tlas_built: true,
+            ..FrameShape::default()
+        };
+        let microseconds = Duration::from_micros;
+        let times = frame_times(&ticks, built, &untimed, 0, 1000.0);
+        assert_eq!(times.gate_time, microseconds(lit_end - culling_start));
+        assert_eq!(times.last_pass_end, ticks[QUERIES_PER_FRAME - 1]);
+
+        ticks[2 * pass_position(FROXEL_PASS)] = culling_start - 30;
+        let times = frame_times(&ticks, built, &untimed, 0, 1000.0);
+        assert_eq!(times.gate_time, microseconds(lit_end - culling_start + 30));
     }
 
     /// Frames that never complete, as their encoders are never submitted:
