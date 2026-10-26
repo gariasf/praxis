@@ -57,14 +57,22 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // pole.
     let triangles = 48 * 24 * 2 - 2 * 48;
     // Its compacted BLAS, the static TLAS's 2^18 Instances and the dynamic
-    // TLAS's 10,000, by the bytes measured on this backend: estimates.
-    let (compacted_blas_bytes_per_triangle, tlas_bytes_per_instance) = match context.backend() {
-        wgpu::Backend::Vulkan => (104.0, 240.0),
-        _ => (45.5, 288.5),
-    };
-    let acceleration_structure_bytes = (triangles as f64 * compacted_blas_bytes_per_triangle
-        + ((1 << 18) + 10_000) as f64 * tlas_bytes_per_instance)
-        .round() as u64;
+    // TLAS's 10,000, by the bytes measured on this adapter: estimates, each
+    // structure's rounded to a whole byte.
+    let (compacted_blas_bytes_per_triangle, tlas_bytes_per_instance) =
+        match (context.vendor(), context.backend()) {
+            (0x10DE, _) => (29.2, 238.2),
+            (_, wgpu::Backend::Vulkan) => (104.0, 240.0),
+            _ => (45.5, 288.5),
+        };
+    let acceleration_structure_bytes = [
+        triangles as f64 * compacted_blas_bytes_per_triangle,
+        (1 << 18) as f64 * tlas_bytes_per_instance,
+        10_000.0 * tlas_bytes_per_instance,
+    ]
+    .map(|bytes| bytes.round() as u64)
+    .iter()
+    .sum::<u64>();
     assert_eq!(
         last.estimated_acceleration_structure_bytes,
         acceleration_structure_bytes

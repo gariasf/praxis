@@ -22,6 +22,9 @@ pub const DYNAMIC_TLAS_CAPACITY: u32 = 10_000;
 /// of the marker before it to the start of the marker after it.
 pub(crate) const DYNAMIC_TLAS_BUILD: &str = "dynamic_tlas_build";
 
+/// NVIDIA's PCI vendor ID, which Vulkan and DX12 both report.
+const NVIDIA_VENDOR: u32 = 0x10DE;
+
 /// What acceleration structures take in GPU memory, as measured on one
 /// adapter: estimates, since wgpu exposes no acceleration-structure size,
 /// until M4 sets exact ones.
@@ -53,13 +56,28 @@ impl AccelerationStructureBytes {
         per_tlas_instance: 240.0,
     };
 
-    /// The estimate for `backend`: lavapipe's on Vulkan, software or not,
+    /// The RTX 2070 SUPER's on Vulkan (NVIDIA 621.01): wgpu's allocator
+    /// report around building and compacting BLASes of 2,048 to 131,072
+    /// triangles, which compaction shrinks to 41%, and creating TLASes of
+    /// 1,024 to 262,144 Instances, taken at the largest of each. On DX12 the
+    /// same GPU measures within its 64 KiB placement granularity of these.
+    const NVIDIA: Self = Self {
+        per_blas_triangle: 70.7,
+        per_compacted_blas_triangle: 29.2,
+        per_tlas_instance: 238.2,
+    };
+
+    /// The estimate for `adapter`: NVIDIA's on an NVIDIA GPU, on any
+    /// backend; lavapipe's on any other Vulkan adapter, software or not;
     /// and the M4 Pro's on any other, as the Budgets' reference machine
     /// (ADR 0013).
-    pub fn estimate(backend: wgpu::Backend) -> Self {
-        match backend {
-            wgpu::Backend::Vulkan => Self::LAVAPIPE,
-            _ => Self::M4_PRO,
+    pub fn estimate(adapter: &wgpu::AdapterInfo) -> Self {
+        if adapter.vendor == NVIDIA_VENDOR {
+            Self::NVIDIA
+        } else if adapter.backend == wgpu::Backend::Vulkan {
+            Self::LAVAPIPE
+        } else {
+            Self::M4_PRO
         }
     }
 
@@ -394,6 +412,42 @@ mod tests {
     /// Instance's World position would round in f32 and its offset from the
     /// anchor does not.
     const LOAD_ANCHOR: [i32; 3] = [1562, 0, -3];
+
+    /// An NVIDIA GPU is counted with NVIDIA's figures on Vulkan and on DX12,
+    /// lavapipe, a CPU Vulkan adapter under Mesa's vendor ID, with
+    /// lavapipe's, and an Apple GPU on Metal with the M4 Pro's.
+    #[test]
+    fn the_estimate_follows_the_adapter() {
+        let adapter = |device_type, backend, vendor| wgpu::AdapterInfo {
+            vendor,
+            ..wgpu::AdapterInfo::new(device_type, backend)
+        };
+        let discrete = wgpu::DeviceType::DiscreteGpu;
+        for (adapter, expected) in [
+            (
+                adapter(discrete, wgpu::Backend::Vulkan, 0x10DE),
+                AccelerationStructureBytes::NVIDIA,
+            ),
+            (
+                adapter(discrete, wgpu::Backend::Dx12, 0x10DE),
+                AccelerationStructureBytes::NVIDIA,
+            ),
+            (
+                adapter(wgpu::DeviceType::Cpu, wgpu::Backend::Vulkan, 0x10005),
+                AccelerationStructureBytes::LAVAPIPE,
+            ),
+            (
+                adapter(wgpu::DeviceType::IntegratedGpu, wgpu::Backend::Metal, 0),
+                AccelerationStructureBytes::M4_PRO,
+            ),
+        ] {
+            assert_eq!(
+                AccelerationStructureBytes::estimate(&adapter),
+                expected,
+                "{adapter:?}"
+            );
+        }
+    }
 
     /// A Mesh pool holding `triangle_about_x`'s Mesh after another, its BLAS
     /// built and compacted.
