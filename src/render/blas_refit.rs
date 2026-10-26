@@ -1,9 +1,10 @@
 //! The BLAS refit: each frame, once the bend pass has bent the Meshes loaded
 //! as `MeshUse::Refitted`, their BLASes are brought to the bent shapes before
 //! the dynamic TLAS is built over them. `CrowdForm::Refit` refits each
-//! in place through wgpu-hal, on Metal only, since wgpu-core rebuilds BLASes
-//! but never updates them; `CrowdForm::Rebuild` rebuilds each through wgpu,
-//! the shapes a refit must match.
+//! in place through wgpu-hal [ref:wgpu-30-metal-refit], on Metal only, since
+//! wgpu-core rebuilds BLASes but never updates them
+//! [ref:wgpu-30-blas-rebuild-only]; `CrowdForm::Rebuild` rebuilds each
+//! through wgpu, the shapes a refit must match.
 //!
 //! wgpu-core keeps refitted BLASes as it built them: each keeps its handle,
 //! its build index and its place in the TLAS dependencies that make it
@@ -37,7 +38,8 @@ pub struct BlasRefit {
     refusal_logged: bool,
     /// Whether the build must wait for the update on the CPU: on Metal,
     /// where nothing orders a TLAS build after the BLASes it reads are
-    /// written (gfx-rs/wgpu#9215), when no shared event could be made.
+    /// written (gfx-rs/wgpu#9215 [ref:wgpu-issue-9215]), when no shared
+    /// event could be made.
     waits_on_cpu: bool,
 }
 
@@ -201,12 +203,13 @@ impl BlasRefit {
         //   hold their handles throughout, nothing destroys them, and only
         //   the main thread calls into wgpu meanwhile (ADR 0016).
         // - The encoder is used through wgpu-hal alone, never ended here,
-        //   and finished by wgpu; wgpu-core panics on a mix of the two.
+        //   and finished by wgpu [ref:wgpu-30-as-hal-mut-safety]; wgpu-core
+        //   panics on a mix of the two [ref:wgpu-30-mixed-encoding-panics].
         // - The GPU's use ends before any object is freed: wgpu-core never
         //   sees what this command buffer uses, but wgpu-hal's Metal command
         //   buffers retain every resource their commands name until they
         //   complete (its `retain_command_buffer_references`, on by
-        //   default).
+        //   default [ref:wgpu-30-metal-retain-references]).
         // - Each refit's descriptor is the one wgpu-core built the BLAS from
         //   (`MeshPool::load_for`), with its flags, which allow updates: the
         //   same buffers, offsets, counts, stride and formats.
@@ -214,16 +217,19 @@ impl BlasRefit {
         //   for its update, in a buffer any usage makes on Metal. The next
         //   frame's refits reuse the regions, and the frames before them may
         //   still run: Metal tracks hazards on wgpu-hal's buffers, scratch
-        //   included, so they wait.
+        //   included, since Metal tracks a resource by default
+        //   [ref:metal-hazard-tracking-default] and wgpu-hal never opts out
+        //   [ref:wgpu-30-metal-buffer-tracked], so they wait.
         // - The bend pass's writes to the vertex Arena come first in the
         //   queue, and Metal tracks hazards on wgpu-hal's buffers, so each
         //   refit reads the bent shapes; the TLAS build that reads the
         //   BLASes waits for this command buffer through `metal::Order`, or
         //   on the CPU.
         // - wgpu-core never learns of the refit, and needs not: it changes no
-        //   BLAS's size, handle or build index, so the TLAS built next still
-        //   validates against it, and wgpu-core's barriers are no-ops on
-        //   Metal.
+        //   BLAS's handle or build index, so the TLAS built next still
+        //   validates against it [ref:wgpu-30-tlas-blas-build-order], and
+        //   wgpu-core's barriers are no-ops on Metal
+        //   [ref:wgpu-30-metal-barriers-empty].
         unsafe {
             let (Some(vertices), Some(indices), Some(scratch)) = (
                 metal::unguarded(mesh_pool.vertex_arena().as_hal::<Metal>()),
@@ -287,7 +293,8 @@ mod metal {
     use crate::render::shaders;
 
     /// Scratch regions start this far apart at least: a margin over the
-    /// one-byte alignment wgpu-hal reports for Metal.
+    /// one-byte alignment wgpu-hal reports for Metal
+    /// [ref:wgpu-30-metal-scratch-alignment].
     const SCRATCH_ALIGNMENT: u64 = 256;
 
     /// The wgpu-hal object `guard` reads, kept past the guard: each guard
@@ -301,8 +308,9 @@ mod metal {
     pub(super) unsafe fn unguarded<'a, T>(
         guard: Option<impl std::ops::Deref<Target = T>>,
     ) -> Option<&'a T> {
-        // SAFETY: wgpu-core boxes the object in the resource, so its address
-        // holds while the resource lives undestroyed, as the caller ensures.
+        // SAFETY: wgpu-core boxes the object in the resource
+        // [ref:wgpu-30-raw-boxed], so its address holds while the resource
+        // lives undestroyed, as the caller ensures.
         guard.map(|guard| unsafe { &*std::ptr::from_ref(&*guard) })
     }
 
@@ -519,9 +527,12 @@ mod metal {
                 return;
             };
             // SAFETY: the queue is Metal's. The submission right after the
-            // staging takes it, whichever it is: only the main thread submits
+            // staging takes it, whichever it is
+            // [ref:wgpu-30-metal-event-staging]: only the main thread submits
             // (ADR 0016), and `Renderer::render` submits nothing between the
-            // update's submission and the dynamic TLAS's build.
+            // update's submission and the dynamic TLAS's build, nor calls
+            // what makes wgpu-core submit on its own there, such as mapping
+            // a buffer with pending writes [ref:wgpu-30-core-flush-submit].
             unsafe {
                 let Some(queue) = queue.as_hal::<Metal>() else {
                     return;

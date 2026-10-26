@@ -6,7 +6,7 @@
 // counts.
 
 // Where a pixel's first sample lies within it: WebGPU's standard 4x
-// pattern puts sample 0 at (0.375, 0.125).
+// pattern puts sample 0 at (0.375, 0.125) [ref:webgpu-standard-sample-pattern].
 const FIRST_SAMPLE: vec2<f32> = vec2<f32>(0.375, 0.125);
 
 var<workgroup> lit_pixels: atomic<u32>;

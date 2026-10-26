@@ -90,7 +90,8 @@ const NEAR_PLANE: f32 = 0.1;
 /// Infinite reversed perspective (ADR 0015): a point `distance` metres in
 /// front of the camera, measured along the view axis, lands at depth `NEAR_PLANE / distance`, so depth is 1
 /// at the near plane and falls towards 0 at infinity. Pair it with a depth
-/// buffer cleared to 0 and compared with `Greater`.
+/// buffer cleared to 0 and compared with `Greater`
+/// [ref:glam-0.32.1-perspective-infinite-reverse-rh].
 pub fn projection_matrix(aspect_ratio: f32) -> glam::Mat4 {
     glam::Mat4::perspective_infinite_reverse_rh(FIELD_OF_VIEW, aspect_ratio, NEAR_PLANE)
 }

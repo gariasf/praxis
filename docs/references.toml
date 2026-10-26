@@ -50,8 +50,8 @@ quote = '''IEEE-754 requires floating point operations to produce a result that 
 checked = 2026-10-26
 
 ["msl-4.1-fast-math"]
-url = "https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf"
-section = "Metal Shading Language Specification 4.1 (2026-06-04), §1.6.3 Math Intrinsics Compiler Options, pp. 14-15, and §8.4 Table 8.2, pp. 370-371"
+url = "https://web.archive.org/web/20260925145438/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=15"
+section = "Metal Shading Language Specification 4.1 (2026-06-04), §1.6.3 Math Intrinsics Compiler Options, p. 15, and §8.4 Table 8.2, pp. 370-371"
 quote = '''-fmetal-math-mode=<fast, relaxed, safe> [...] The default is fast. If you set the option to fast, it lets the compiler make aggressive, potentially lossy assumptions about floating-point math. These include no NaNs, no INFs, no signed zeros, allow reciprocal, allow reassociation, and FP contract to be fast. [...]
 Table 8.2. Accuracy of single-precision operations and functions with fast math enabled [...] x + y: Correctly rounded [...] x - y: Correctly rounded [...] x * y: Correctly rounded [...] fma: Correctly rounded'''
 checked = 2026-10-26
@@ -347,4 +347,292 @@ checked = 2026-10-26
 url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc#L1763"
 section = "glTF 2.0 specification source, Meshes, Using Primitive Data"
 quote = '''The bitangent vectors are computed by taking the cross product of the XYZ components of the normal and tangent vectors and multiplying that cross product against the W component of the tangent.'''
+checked = 2026-10-26
+
+["vulkan-vendorid-pci"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/chapters/devsandqueues.adoc#L155-L157"
+section = "Vulkan specification, Devices and Queues, VkPhysicalDeviceProperties::vendorID"
+quote = '''If the vendor has a https://pcisig.com/membership/member-companies[PCI vendor ID], the low 16 bits of pname:vendorID must: contain that PCI vendor ID, and the remaining bits must: be zero.'''
+checked = 2026-10-26
+
+["dxgi-adapter-desc2-vendorid"]
+url = "https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_2/ns-dxgi1_2-dxgi_adapter_desc2"
+section = "DXGI_ADAPTER_DESC2 (dxgi1_2.h), member VendorId, which wgpu-hal's DX12 adapter reports as its vendor"
+quote = '''The PCI ID or ACPI ID of the adapter's hardware vendor. If this value is less than or equal to 0xFFFF, it is a PCI ID; otherwise, it is an ACPI ID.'''
+checked = 2026-10-26
+
+["lavapipe-vendor-id-mesa"]
+url = "https://gitlab.freedesktop.org/mesa/mesa/-/blob/mesa-25.2.8/src/gallium/frontends/lavapipe/lvp_device.c#L886"
+section = "Mesa 25.2.8, lavapipe's physical device properties"
+quote = '''.vendorID = VK_VENDOR_ID_MESA,'''
+checked = 2026-10-26
+
+["vulkan-standard-sample-locations"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/chapters/primsrast.adoc#L721-L750"
+section = "Vulkan specification, Multisampling, table Standard Sample Locations"
+quote = '''If the pname:standardSampleLocations member of slink:VkPhysicalDeviceLimits is ename:VK_TRUE, then the sample counts [...] have sample locations as listed in the following table [...] Locations are defined relative to an origin in the upper left corner of the fragment. [...] ename:VK_SAMPLE_COUNT_4_BIT: (0.375, 0.125) (0.875, 0.375) (0.125, 0.625) (0.625, 0.875)'''
+checked = 2026-10-26
+
+["vulkan-acceleration-structure-instance"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/xml/vk.xml#L6713-L6725"
+section = "Vulkan registry, structs VkTransformMatrixKHR and VkAccelerationStructureInstanceKHR: 48 + 4 + 4 + 8 = 64 bytes"
+quote = '''<member><type>float</type> <name>matrix</name>[3][4]</member> [...] <member><type>VkTransformMatrixKHR</type> <name>transform</name></member> <member><type>uint32_t</type> <name>instanceCustomIndex</name>:24</member> <member><type>uint32_t</type> <name>mask</name>:8</member> <member><type>uint32_t</type> <name>instanceShaderBindingTableRecordOffset</name>:24</member> <member optional="true"><type>VkGeometryInstanceFlagsKHR</type> <name>flags</name>:8</member> <member><type>uint64_t</type> <name>accelerationStructureReference</name></member>'''
+checked = 2026-10-26
+
+["d3d12-raytracing-instance-desc"]
+url = "https://github.com/microsoft/DirectX-Specs/blob/f2917db873d4ea81e1de3b6dd6321570391d3cdf/d3d/Raytracing.md#L4378-L4386"
+section = "DirectX Raytracing specification, D3D12_RAYTRACING_INSTANCE_DESC: 48 + 4 + 4 + 8 = 64 bytes"
+quote = '''FLOAT Transform[3][4]; UINT InstanceID : 24; UINT InstanceMask : 8; UINT InstanceContributionToHitGroupIndex : 24; UINT Flags : 8; D3D12_GPU_VIRTUAL_ADDRESS AccelerationStructure;'''
+checked = 2026-10-26
+
+["metal-indirect-instance-descriptor"]
+url = "https://developer.apple.com/documentation/metal/mtlindirectaccelerationstructureinstancedescriptor"
+section = "Apple Metal documentation, MTLIndirectAccelerationStructureInstanceDescriptor, memberwise initializer: a 48-byte MTLPackedFloat4x3, four UInt32 and an 8-byte MTLResourceID, 72 bytes"
+quote = '''init(transformationMatrix: MTLPackedFloat4x3, options: MTLAccelerationStructureInstanceOptions, mask: UInt32, intersectionFunctionTableOffset: UInt32, userID: UInt32, accelerationStructureID: MTLResourceID)'''
+checked = 2026-10-26
+
+["msl-4.1-sin-fast-accuracy"]
+url = "https://web.archive.org/web/20260925145438/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=372"
+section = "Metal Shading Language Specification 4.1 (2026-06-04), §8.4, Table 8.2 Accuracy of single-precision operations and functions with fast math enabled, p. 372"
+quote = '''sin(x): For x in the domain [-pi, pi], the maximum absolute error is <= 2⁻¹³ and larger otherwise.'''
+checked = 2026-10-26
+
+["glam-0.32.1-perspective-infinite-reverse-rh"]
+url = "https://github.com/bitshifter/glam-rs/blob/e8ed32dcd0232b8078b2be91d6fd8f3b99c28842/src/f32/neon/mat4.rs#L1186-L1204"
+section = "glam 0.32.1, Mat4::perspective_infinite_reverse_rh (the sse2 and scalar forms match)"
+quote = '''maps `Z = z_near` to a depth of `1` and `Z = infinity` to a depth of `0`. [...] Vec4::new(0.0, 0.0, 0.0, -1.0), Vec4::new(0.0, 0.0, z_near, 0.0),'''
+checked = 2026-10-26
+
+["metal-feature-set-tables-msaa-max"]
+url = "https://web.archive.org/web/20260924114533/https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=9"
+section = "Metal Feature Set Tables (2026-05-21), Render targets, p. 9, columns Apple2 to Apple10"
+quote = '''Maximum sample count in render passes with MSAA 4 4 4 4 4 4 4 4 8'''
+checked = 2026-10-26
+
+["metal-feature-set-tables-mesh-ray-tracing"]
+url = "https://web.archive.org/web/20260924114533/https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=6"
+section = "Metal Feature Set Tables (2026-05-21), feature availability, note 6, p. 6"
+quote = '''Support for function pointers and ray tracing in render pipelines isn't compatible with mesh shading.'''
+checked = 2026-10-26
+
+["nasa-sun-apparent-diameter"]
+url = "https://web.archive.org/web/20260930033014/https://nssdc.gsfc.nasa.gov/planetary/factsheet/sunfact.html"
+section = "NASA NSSDCA Sun Fact Sheet (updated 2024-05-09), Apparent diameter from Earth: 1919″ is 0.533°"
+quote = '''Apparent diameter from Earth At 1 A.U.(seconds of arc) 1919.'''
+checked = 2026-10-26
+
+["wgpu-30-blas-rebuild-only"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L1106-L1126"
+section = "wgpu-core 30.0.1, command/ray_tracing.rs, map_blas: every BLAS build is a full build"
+quote = '''log::debug!("only rebuild implemented")'''
+checked = 2026-10-26
+
+["wgpu-30-tlas-rebuild-only"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L336-L341"
+section = "wgpu-core 30.0.1, command/ray_tracing.rs, TLAS descriptors in build_acceleration_structures"
+quote = '''log::warn!("build_acceleration_structures called with PreferUpdate, but only rebuild is implemented"); [...] mode: hal::AccelerationStructureBuildMode::Build,'''
+checked = 2026-10-26
+
+["wgpu-30-tlas-blas-build-order"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L515-L534"
+section = "wgpu-core 30.0.1, command/ray_tracing.rs, AsAction::UseTlas: a TLAS validates against its BLASes' build indices; its build writes each BLAS's handle (L244-L250)"
+quote = '''if blas_build_index.unwrap() > tlas_build_index.unwrap() {'''
+checked = 2026-10-26
+
+["wgpu-30-tlas-instance-staging"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L235-L252"
+section = "wgpu-core 30.0.1, command/ray_tracing.rs: each filled TLAS entry converted to the backend's record by wgpu-hal and staged"
+quote = '''instance_buffer_staging_source.extend(state.device.raw().tlas_instance_to_bytes('''
+checked = 2026-10-26
+
+["wgpu-30-tlas-instance-fields"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/blas.rs#L56-L67"
+section = "wgpu 30.0.1, api/blas.rs, struct TlasInstance"
+quote = '''/// Affine transform matrix 3x4 (rows x columns, row major order). pub transform: [f32; 12], [...] /// This must only use the lower 24 bits, if any bits are outside that range (byte 4 does not equal 0) the TlasInstance becomes [...] pub custom_data: u32, [...] pub mask: u8,'''
+checked = 2026-10-26
+
+["wgpu-30-blas-sizes"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/ray_tracing.rs#L11-L24"
+section = "wgpu-types 30.0.1, BlasTriangleGeometrySizeDescriptor, fixed when the BLAS is created; features.rs has no cluster acceleration structure (searched)"
+quote = '''Descriptor for all size defining attributes of a single triangle geometry inside a bottom level acceleration structure. [...] pub vertex_count: u32, [...] pub index_count: Option<u32>,'''
+checked = 2026-10-26
+
+["wgpu-30-as-hal-mut-safety"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/command_encoder.rs#L270-L275"
+section = "wgpu 30.0.1, api/command_encoder.rs, CommandEncoder::as_hal_mut, Safety"
+quote = '''/// - You must not end the command buffer; wgpu will do it when you call finish.'''
+checked = 2026-10-26
+
+["wgpu-30-mixed-encoding-panics"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/mod.rs#L562-L571"
+section = "wgpu-core 30.0.1, command/mod.rs, EncodingApi::set"
+quote = '''panic!("Mixing the wgpu encoding API with the raw encoding API is not permitted");'''
+checked = 2026-10-26
+
+["wgpu-30-metal-retain-references"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/mod.rs#L383-L393"
+section = "wgpu-hal 30.0.1, metal/mod.rs, Settings::default; command.rs#L504-L508 then makes retained command buffers"
+quote = '''retain_command_buffer_references: true,'''
+checked = 2026-10-26
+
+["wgpu-30-metal-buffer-tracked"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L465-L478"
+section = "wgpu-hal 30.0.1, metal/device.rs, create_buffer: the options never set untracked hazards, so Metal's default tracking applies"
+quote = '''//TODO: HazardTrackingModeUntracked'''
+checked = 2026-10-26
+
+["wgpu-30-metal-barriers-empty"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L582-L592"
+section = "wgpu-hal 30.0.1, metal/command.rs, transition_buffers and transition_textures, whose bodies are empty"
+quote = '''unsafe fn transition_buffers<'a, T>(&mut self, _barriers: T) where T: Iterator<Item = crate::BufferBarrier<'a, super::Buffer>>, { } unsafe fn transition_textures<'a, T>(&mut self, _barriers: T) where T: Iterator<Item = crate::TextureBarrier<'a, super::Texture>>, { }'''
+checked = 2026-10-26
+
+["wgpu-30-metal-scratch-alignment"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/adapter.rs#L1503-L1507"
+section = "wgpu-hal 30.0.1, metal/adapter.rs, Alignments"
+quote = '''ray_tracing_scratch_buffer_alignment: 1,'''
+checked = 2026-10-26
+
+["wgpu-30-raw-boxed"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/resource.rs#L509"
+section = "wgpu-core 30.0.1, resource.rs, struct Buffer's raw field (Blas's likewise at L2528)"
+quote = '''pub(crate) raw: Snatchable<Box<dyn hal::DynBuffer>>,'''
+checked = 2026-10-26
+
+["wgpu-30-metal-indirect-loop"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L1608-L1649"
+section = "wgpu-hal 30.0.1, metal/command.rs, draw_indexed_indirect and draw_mesh_tasks_indirect: one native call per draw"
+quote = '''for _ in 0..draw_count {'''
+checked = 2026-10-26
+
+["wgpu-30-metal-count-draws-empty"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L1651-L1670"
+section = "wgpu-hal 30.0.1, metal/command.rs, draw_indirect_count and draw_indexed_indirect_count, both empty"
+quote = '''unsafe fn draw_indirect_count( [...] _max_count: u32, ) { //TODO } unsafe fn draw_indexed_indirect_count( [...] _max_count: u32, ) { //TODO }'''
+checked = 2026-10-26
+
+["wgpu-30-metal-memoryless"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L561-L564"
+section = "wgpu-hal 30.0.1, metal/device.rs, create_texture storage mode for TRANSIENT_ATTACHMENT textures"
+quote = '''let mtl_storage_mode = if desc.usage.contains(wgt::TextureUses::TRANSIENT) && self.shared.private_caps.supports_memoryless_storage { MTLStorageMode::Memoryless'''
+checked = 2026-10-26
+
+["wgpu-30-metal-preserve-invariance"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L275-L278"
+section = "wgpu-hal 30.0.1, metal/device.rs, shader compile options"
+quote = '''if available!(macos = 11.0, ios = 13.0, tvos = 14.0, visionos = 1.0) { options.setPreserveInvariance(true);'''
+checked = 2026-10-26
+
+["wgpu-issue-9215"]
+url = "https://github.com/gfx-rs/wgpu/issues/9215"
+section = "gfx-rs/wgpu issue 9215, Metal BLAS -> TLAS builds need synchronisation (open)"
+quote = '''On metal, acceleration structure barriers are not inserted (due to metal not having barriers during development of this) however it appears that metal does not serialize them'''
+checked = 2026-10-26
+
+["smaa-subpixel-grid"]
+url = "https://www.iryoku.com/smaa/downloads/SMAA-Enhanced-Subpixel-Morphological-Antialiasing.pdf#page=7"
+section = "Jimenez et al. 2012, SMAA, §4.3 Subpixel rendering, Figure 10, p. 7"
+quote = '''Figure 10: A difficult case for no AA, MLAA [JME11] and SMAA 1x: a white grid over a black background at mid-distance (top), prevents the reconstruction of accurate coverage'''
+checked = 2026-10-26
+
+["nanite-taa-lod"]
+url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=67"
+section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide Seamless LOD, speaker notes, p. 67"
+quote = '''But if we only draw clusters that are less than 1 pixel of error they are imperceptibly different and temporal antialiasing smoothes out any change.'''
+checked = 2026-10-26
+
+["nanite-two-pass-occlusion"]
+url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=19"
+section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide Two pass occlusion culling, p. 19"
+quote = '''Draw what was visible in the previous frame [...] Build HZB [...] Draw what is visible now but wasn't in the last frame [...] Only falls apart under extreme visibility changes'''
+checked = 2026-10-26
+
+["ue-nanite-unsupported"]
+url = "https://web.archive.org/web/20251221042229/https://dev.epicgames.com/documentation/en-us/unreal-engine/nanite-virtualized-geometry-in-unreal-engine"
+section = "Unreal Engine 5.7 documentation, Nanite Virtualized Geometry, unsupported rendering features (the page adds experimental native ray tracing of Nanite meshes)"
+quote = '''The following rendering features are not currently supported: [...] Forward Rendering [...] Multisampling Anti-Aliasing (MSAA)'''
+checked = 2026-10-26
+
+["bevy-meshlet-limits"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_pbr/src/meshlet/mod.rs#L94-L99"
+section = "Bevy 0.20.0, MeshletPlugin documentation"
+quote = '''This plugin is not compatible with [`Msaa`]. Any camera rendering a [`MeshletMesh`] must have [`Msaa`] set to [`Msaa::Off`].'''
+checked = 2026-10-26
+
+["forward-plus-tile-depth"]
+url = "https://takahiroharada.files.wordpress.com/2015/04/forward_plus.pdf#page=2"
+section = "Harada, McKee and Yang, Forward+ (Eurographics 2012 short paper), §4.1 Gather Approach, p. 2"
+quote = '''A frustum of the tile is calculated using the range of the screen space of the tile and maximum and minimum depth values of the pixels.'''
+checked = 2026-10-26
+
+["persson-forward-plus-transparency"]
+url = "https://www.humus.name/Articles/PracticalClusteredShading.pdf#page=5"
+section = "Persson, Practical Clustered Shading (SIGGRAPH 2015 course), slide Solutions we've been eyeing, p. 5"
+quote = '''Forward+ [...] Forces Pre-Z pass [...] MSAA works fine [...] Transparency requires another pass [...] Clustered shading [...] No Pre-Z necessary [...] Transparency works fine'''
+checked = 2026-10-26
+
+["drobot-zbinning"]
+url = "https://advances.realtimerendering.com/s2017/2017_Sig_Improved_Culling_final.pdf#page=30"
+section = "Drobot, Improved Culling for Tiled and Clustered Rendering, SIGGRAPH 2017 Advances in Real-Time Rendering, Z-binning algorithm, p. 30"
+quote = '''Generate 2 x 16bit LUT with MIN / MAX light ID within each bin boundaries [...] GPU ( PS / CS ): [...] Wave uniform LOAD of light bit WORDS from MIN / MAX range [...] Mask uniform lights by vector Z-Bin mask'''
+checked = 2026-10-26
+
+["greene-hiz"]
+url = "https://www.cs.princeton.edu/courses/archive/spring01/cs598b/papers/greene93.pdf#page=3"
+section = "Greene, Kass and Miller 1993, Hierarchical Z-Buffer Visibility (doi:10.1145/166117.166147), §3.2 Image-space Z pyramid, p. 3 of the course copy"
+quote = '''combine four Z values at each level into one Z value at the next coarser level by choosing the farthest Z from the observer [...] we find the finest-level sample of the pyramid whose corresponding image region covers the screen-space bounding box of the polygon.'''
+checked = 2026-10-26
+
+["haar-aaltonen-two-phase"]
+url = "https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf#page=52"
+section = "Haar and Aaltonen, GPU-Driven Rendering Pipelines, SIGGRAPH 2015 Advances in Real-Time Rendering, Two-Phase Occlusion Culling, p. 52"
+quote = '''1st phase - Cull objects & clusters using last frame's depth pyramid - Render visible objects 2nd phase - Refresh depth pyramid - Test culled objects & clusters - Render false negatives'''
+checked = 2026-10-26
+
+["wgpu-30-dx12-vendor-id"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/dx12/adapter.rs#L76-L194"
+section = "wgpu-hal 30.0.1, dx12/adapter.rs, Adapter::expose: the adapter's description and its AdapterInfo"
+quote = '''let desc = unsafe { adapter.GetDesc2() }.unwrap(); [...] vendor: desc.VendorId,'''
+checked = 2026-10-26
+
+["wgpu-30-metal-refit"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L1855-L1873"
+section = "wgpu-hal 30.0.1, metal/command.rs, build_acceleration_structures: an Update refits"
+quote = '''crate::AccelerationStructureBuildMode::Update => unsafe { command_encoder.refitAccelerationStructure_descriptor_destination_scratchBuffer_scratchBufferOffset('''
+checked = 2026-10-26
+
+["metal-hazard-tracking-default"]
+url = "https://developer.apple.com/documentation/metal/mtlhazardtrackingmode/default"
+section = "Apple Metal documentation, MTLHazardTrackingMode.default, Discussion"
+quote = '''The default tracking mode for a type that inherits MTLResource is MTLHazardTrackingMode.tracked because individual resources benefit from automatic hazard tracking.'''
+checked = 2026-10-26
+
+["wgpu-30-metal-event-staging"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/mod.rs#L551-L556"
+section = "wgpu-hal 30.0.1, metal/mod.rs, Queue::add_wait_event"
+quote = '''Staging is queue-wide, not per-thread or per-submit: any `add_wait_event` call is consumed by whichever [`crate::Queue::submit`] runs next on this queue.'''
+checked = 2026-10-26
+
+["wgpu-30-core-flush-submit"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/queue.rs#L1287-L1304"
+section = "wgpu-core 30.0.1, device/queue.rs, flush_writes_for_buffer, which mapping a buffer with pending writes calls"
+quote = '''let pending_writes = self.pending_writes.lock(); if !pending_writes.contains_buffer(buffer) { return Ok(()); } submission.submit(pending_writes)?;'''
+checked = 2026-10-26
+
+["webgpu-standard-sample-pattern"]
+url = "https://github.com/gpuweb/gpuweb/blob/688f043ecf3294687d54fe68b79e0cd527eafb4b/spec/index.bs#L16576-L16597"
+section = "WebGPU specification source, Rasterization, standard sample patterns"
+quote = '''The standard sample patterns are as follows, with positions in framebuffer coordinates relative to the top-left corner of the pixel, such that the pixel ranges from (0, 0) to (1, 1): [...] 4: Sample 0: (0.375, 0.125) Sample 1: (0.875, 0.375) Sample 2: (0.125, 0.625) Sample 3: (0.625, 0.875) [...] Implementations must use the standard sample pattern for the given multisample.count when performing rasterization.'''
+checked = 2026-10-26
+
+["hillis-steele-partial-sums"]
+url = "https://doi.org/10.1145/7902.7903"
+section = "Hillis and Steele, Data Parallel Algorithms, Communications of the ACM 29(12), 1986, All Partial Sums of an Array, p. 1173"
+quote = '''the summation algorithm can compute all partial sums of the array in the same amount of time it took to compute the single sum.'''
+checked = 2026-10-26
+
+["nanite-hzb-test"]
+url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=17"
+section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide Occlusion culling, p. 17"
+quote = '''Occlusion cull against Hierarchical Z-Buffer (HZB) [...] Calculate screen rect from bounds [...] Test against lowest mip where screen rect <= 4x4 pixels'''
 checked = 2026-10-26

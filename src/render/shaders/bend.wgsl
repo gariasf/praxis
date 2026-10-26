@@ -22,8 +22,9 @@ struct BendData {
 
 // sin(angle) / angle, sinc, by its Taylor series below 0.5 radians, whose
 // first term left out, angle⁸ / 9!, is under 1.1e-8 there: Metal compiles
-// with fast math, which leaves sin an absolute error that dividing by a
-// small angle would magnify.
+// with fast math [ref:msl-4.1-fast-math], which leaves sin an absolute
+// error [ref:msl-4.1-sin-fast-accuracy] that dividing by a small angle
+// would magnify.
 fn sinc(angle: f32) -> f32 {
     let squared = angle * angle;
     let series = 1.0 - squared / 6.0 * (1.0 - squared / 20.0 * (1.0 - squared / 42.0));
