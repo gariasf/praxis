@@ -38,6 +38,9 @@ or interactive checks and roadmap decisions (`docs/agents/workflow.md`).
   tickets, and reviews.
 - `docs/adr/` — decisions that are hard to reverse; a change that
   contradicts one says so.
+- `docs/references.toml` — the external sources the engine relies on,
+  each with its section and a verbatim quote; code, ADRs and notes cite
+  its keys (`[ref:<key>]`) beside the prose citation.
 - `ROADMAP.md` — long-range vision: target shape, design principles,
   scripting plan. Decisions are ADRs; the order of work is the ladder.
 

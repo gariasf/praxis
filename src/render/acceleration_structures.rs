@@ -22,7 +22,8 @@ pub const DYNAMIC_TLAS_CAPACITY: u32 = 10_000;
 /// of the marker before it to the start of the marker after it.
 pub(crate) const DYNAMIC_TLAS_BUILD: &str = "dynamic_tlas_build";
 
-/// NVIDIA's PCI vendor ID, which Vulkan and DX12 both report.
+/// NVIDIA's PCI vendor ID, which Vulkan and DX12 both report
+/// [ref:pci-vendor-id-nvidia].
 const NVIDIA_VENDOR: u32 = 0x10DE;
 
 /// What acceleration structures take in GPU memory, as measured on one
@@ -414,8 +415,9 @@ mod tests {
     const LOAD_ANCHOR: [i32; 3] = [1562, 0, -3];
 
     /// An NVIDIA GPU is counted with NVIDIA's figures on Vulkan and on DX12,
-    /// lavapipe, a CPU Vulkan adapter under Mesa's vendor ID, with
-    /// lavapipe's, and an Apple GPU on Metal with the M4 Pro's.
+    /// lavapipe, a CPU Vulkan adapter under Mesa's vendor ID
+    /// [ref:vulkan-vendor-id-mesa], with lavapipe's, and an Apple GPU on
+    /// Metal with the M4 Pro's.
     #[test]
     fn the_estimate_follows_the_adapter() {
         let adapter = |device_type, backend, vendor| wgpu::AdapterInfo {
