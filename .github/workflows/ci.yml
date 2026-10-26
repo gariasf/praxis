@@ -3,8 +3,17 @@ name: CI
 on:
   pull_request:
     branches: [main]
+  # On main the run tests the merged commit, which PR checks never saw
+  # (branches need not be up to date), and saves the caches PR runs restore.
+  # Docs pushes skip it; PRs never do, as the required check must report.
   push:
     branches: [main]
+    paths-ignore: ['docs/**', '*.md']
+
+# A newer push to a PR or to main cancels the run it supersedes.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
