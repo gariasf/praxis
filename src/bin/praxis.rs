@@ -55,6 +55,9 @@ enum Command {
         results: String,
         mode: CompareMode,
     },
+    Report {
+        results: String,
+    },
 }
 
 fn run_command(arguments: &[String]) -> anyhow::Result<()> {
@@ -79,6 +82,7 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
             crowd_form,
         } => bench(&output, configuration, &scenes, crowd_form),
         Command::Compare { results, mode } => compare(&results, mode),
+        Command::Report { results } => report(&results),
     }
 }
 
@@ -140,14 +144,17 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             results: results.clone(),
             mode: CompareMode::Ci,
         },
+        [command, results] if command == "report" => Command::Report {
+            results: results.clone(),
+        },
         [scene] if ReferenceScene::from_name(scene).is_some() => {
             Command::Window(parse_scene(scene)?)
         }
         _ => anyhow::bail!(
             "unexpected arguments {arguments:?}: run `praxis [<scene>]`, `capabilities`, \
              `cook`, `fetch`, `capture <scene> <png path> [<width>x<height>]`, \
-             `bench <output directory> [--ci | --counters | --ci-counters] [<scene>...]`, or \
-             `compare <bench directory> [--ci]`; `capture` and `bench` also take \
+             `bench <output directory> [--ci | --counters | --ci-counters] [<scene>...]`, \
+             `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
             ReferenceScene::ALL.map(ReferenceScene::name)
         ),
@@ -276,22 +283,14 @@ fn bench(
 /// metric.
 fn compare(results: &str, mode: CompareMode) -> anyhow::Result<()> {
     let budgets: Budgets = read_json(Path::new(praxis::bench::BUDGETS_PATH))?;
-    let mut paths: Vec<_> = std::fs::read_dir(results)?
-        .map(|entry| entry.map(|entry| entry.path()))
-        .collect::<std::io::Result<_>>()?;
-    paths.retain(|path| {
-        path.extension()
-            .is_some_and(|extension| extension == "json")
-    });
-    paths.sort();
-    anyhow::ensure!(!paths.is_empty(), "no bench results in {results}");
     let mut failed = 0;
     let mut stdout = std::io::stdout();
-    for path in paths {
+    for path in result_paths(results)? {
         let current: Measurements = read_json(&path)?;
-        let baseline_directory = praxis::bench::baseline_directory(&current.adapter);
-        let baseline_path =
-            baseline_directory.join(path.file_name().expect("a read_dir entry has a file name"));
+        let baseline_path = baseline_path(&current, &path);
+        let baseline_directory = baseline_path
+            .parent()
+            .expect("a Baseline path has a directory");
         // Both of CI's configurations render at its size.
         let ci_run =
             (current.width, current.height) == (Configuration::CI.width, Configuration::CI.height);
@@ -357,6 +356,58 @@ fn compare(results: &str, mode: CompareMode) -> anyhow::Result<()> {
         "{failed} metrics failed against their Baseline or Budget"
     );
     Ok(())
+}
+
+/// Prints the markdown tables of every `<scene>.json` in `results` against
+/// its adapter's Baseline and the Budgets, for PRs and `docs/performance.md`
+/// to quote. A scene without a Baseline its tables can compare with gets a
+/// line saying why, then tables of its own figures.
+fn report(results: &str) -> anyhow::Result<()> {
+    let budgets: Budgets = read_json(Path::new(praxis::bench::BUDGETS_PATH))?;
+    let mut stdout = std::io::stdout();
+    for path in result_paths(results)? {
+        let current: Measurements = read_json(&path)?;
+        let baseline_path = baseline_path(&current, &path);
+        let tables = std::fs::read(&baseline_path)
+            .map_err(anyhow::Error::from)
+            .and_then(|json| Measurements::from_baseline_json(&json))
+            .and_then(|baseline| praxis::bench::report(&current, Some(&baseline), &budgets));
+        let tables = match tables {
+            Ok(tables) => tables,
+            Err(error) => {
+                writeln!(
+                    stdout,
+                    "{} compares with no Baseline: {} {error:#}\n",
+                    current.scene,
+                    baseline_path.display()
+                )?;
+                praxis::bench::report(&current, None, &budgets)?
+            }
+        };
+        writeln!(stdout, "{tables}")?;
+    }
+    Ok(())
+}
+
+/// The Baseline of `current`, read from `path`: its adapter's file of the
+/// same name.
+fn baseline_path(current: &Measurements, path: &Path) -> std::path::PathBuf {
+    praxis::bench::baseline_directory(&current.adapter)
+        .join(path.file_name().expect("a read_dir entry has a file name"))
+}
+
+/// Every `<scene>.json` in `results`, by name; none is an error.
+fn result_paths(results: &str) -> anyhow::Result<Vec<std::path::PathBuf>> {
+    let mut paths: Vec<_> = std::fs::read_dir(results)?
+        .map(|entry| entry.map(|entry| entry.path()))
+        .collect::<std::io::Result<_>>()?;
+    paths.retain(|path| {
+        path.extension()
+            .is_some_and(|extension| extension == "json")
+    });
+    paths.sort();
+    anyhow::ensure!(!paths.is_empty(), "no bench results in {results}");
+    Ok(paths)
 }
 
 fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> anyhow::Result<T> {
@@ -463,5 +514,13 @@ mod tests {
         assert_eq!(configuration.width, Configuration::CI.width);
         assert_eq!(scenes, ["town", "crowd"]);
         assert_eq!(crowd_form, CrowdForm::default());
+    }
+
+    #[test]
+    fn report_parses_its_results_directory() {
+        let Command::Report { results } = parse(&["report", "out"]).unwrap() else {
+            panic!("report parsed as another command");
+        };
+        assert_eq!(results, "out");
     }
 }
