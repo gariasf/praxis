@@ -4,6 +4,62 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## `town`'s Baselines, ADR 0019's gate and the dynamic TLAS (2026-10-26, #207)
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
+#207's second part. `praxis bench <dir> town` at 2560×1440 with 4x MSAA,
+248 warm-up and 1,800 measured frames, each run twice: with shadow rays
+on, then off. Five runs of `town`. Load average about 3, from system
+processes, with no other session benching. GPU medians agree within
+1.2% across runs; CPU medians read 17.7 to 20.6 ms. The Baseline is
+the run with the lowest CPU. At this load, main's binary reads the same
+CPU frame as the branch on uv-grid and pbr-sweep (207 to 231 µs against
+225 to 232). Every scene's CPU frame reads 15 to 35% above its earlier
+Baseline, the load's doing, and the counters are unchanged.
+
+| Metric | `town`, median (p95) | Budget or ceiling |
+| --- | --- | --- |
+| GPU frame total | 13,568 µs (14,188) | 12,000 µs: over |
+| CPU frame, the main thread's critical path | 17,653 µs (18,184) | 6,000 µs: over |
+| GPU memory | 616,555,272 bytes | 8,000,000,000 bytes |
+| ADR 0019's gate, rays off | 9,821 µs (10,483) | 6,000 µs: over |
+| Shadow-ray time, rays on minus off | 3,228 µs (3,985) | reported |
+| Dynamic TLAS, CPU (recording plus submit) | 1,039 µs (1,110) | 1,100 µs |
+| Dynamic TLAS build, GPU | 49 µs (463) | 1,000 µs |
+
+The median frame draws 137,730 Instances and 5,552,214 triangles, with
+10,000 Moving Instances in the dynamic TLAS.
+
+- **ADR 0019's gate breaches.** It runs from the start of culling phase
+  one to the end of the lit pass, with rays off. It reads 9.6 to 10.3 ms
+  over seven runs. It reads the same with the dynamic TLAS emptied (9.58
+  ms) and with one frame in flight (9.58 ms). With rays off, the lit pass
+  takes 5.15 ms, the depth pre-pass 1.76, the culling phases 1.52 and
+  0.89, the Froxel pass 0.53 and the depth pyramid 0.25. As ADR 0019
+  says, B and D are prototyped on `town` next: #296 and #297, which block
+  M3's exit ([decision](https://github.com/gariasf/praxis/issues/17#issuecomment-6415601177)).
+- **The dynamic TLAS's build hid behind the frame before.** Its
+  submission comes before the frame's passes, and Metal ran it alongside
+  the previous frame's lit and tonemapping passes. Timed from the end of
+  that frame's shadow mask pass, it read 4.1 ms, and the GPU frame total
+  counted that time twice: 17.6 to 18.1 ms. Timed from the end of that
+  frame's last pass, as it now is, the build reads 48 µs and the total
+  13.6 ms. Run alone, with one frame in flight, the build takes 665 µs.
+  The build still slows the passes it runs beside: without it, the frame
+  total with rays on read 12.8 ms. On the orrery and the crowd the build
+  is now hidden entirely, and reads 0.
+- **Ceilings.** The owner set them from these figures: 1.1 ms of CPU and
+  1.0 ms of GPU build, both medians, which `compare` enforces on every
+  scene. The CPU read 0.96 ms at load average 2.8 and 1.04 to 1.15 ms at
+  3 to 3.6, so it sits near its ceiling under load.
+- **Lit pass with rays on.** It reads 8.7 ms against 5.15 with rays off,
+  and 8.66 ms with one frame in flight, so the 3.5 ms is not overlap. On
+  the other Reference scenes, reading the mask cost 22 to 49 µs (#260).
+  Where it goes on `town` is not yet measured.
+- **Tonemapping reads 0.6 to 4 ms on every scene**, and 3.8 ms on `town`
+  with one frame in flight. One full-screen pass should not take that
+  long. It is outside the gate, and its cause is not yet measured.
+
 ## The crowd's two forms (2026-10-26, #209)
 
 Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
