@@ -63,11 +63,14 @@ pub fn capture_frames(
         "frames {frames:?} are not in ascending order"
     );
     let mut drawn: Vec<u32> = std::iter::once(0)
-        .chain(
-            frames
-                .iter()
-                .flat_map(|&frame| [frame.saturating_sub(1), frame]),
-        )
+        .chain(frames.iter().flat_map(|&frame| {
+            let before = if std::env::var_os("PROBE_NO_PREDECESSOR").is_some() {
+                frame
+            } else {
+                frame.saturating_sub(1)
+            };
+            [before, frame]
+        }))
         .collect();
     drawn.dedup();
     let (pixels, _) = render_frames(

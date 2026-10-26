@@ -198,7 +198,10 @@ impl CullingPass {
 
         let mut probe_source = shaders::CULLING.source();
         match std::env::var("PROBE_CULL").as_deref() {
-            Ok("off") => probe_source = probe_source.replace("return nearest_depth < farthest;", "return false;"),
+            Ok("off") => {
+                probe_source =
+                    probe_source.replace("return nearest_depth < farthest;", "return false;")
+            }
             Ok("uniform") => {
                 let start = probe_source.find("    let farthest = min(").unwrap();
                 let end = start + probe_source[start..].find(");\n").unwrap() + 3;
