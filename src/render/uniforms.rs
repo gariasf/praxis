@@ -1,5 +1,6 @@
 /// Lights the light buffer holds, directional and point lights together: a
-/// fixed capacity, provisional until ADR 0013's split of the 8 GB Budget sizes it.
+/// fixed capacity, provisional until ADR 0013's split of the 8 GB Budget
+/// sizes it.
 pub const LIGHT_CAPACITY: u32 = 4096;
 
 /// The light buffer's counts, its directional lights first, and the scene's

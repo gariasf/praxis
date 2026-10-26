@@ -654,8 +654,8 @@ fn a_dev_launch_cooks_exactly_what_its_scene_references_and_changed() {
 }
 
 /// SciFiHelmet's cooked Mesh Blob bytes per triangle, Meshlets included, at
-/// most: the ceiling set from the Meshlet cook's first measurement. A lower
-/// figure re-records it.
+/// most: the ceiling the Meshlet cook's measurement sets. A lower figure
+/// re-records it.
 const HELMET_MESH_BYTES_PER_TRIANGLE: f64 = 13.83;
 const HELMET_TRIANGLES: usize = 23_358;
 
