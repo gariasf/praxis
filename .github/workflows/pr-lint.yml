@@ -35,8 +35,9 @@ jobs:
       - name: Test the lint
         run: scripts/pr-lint-test.sh
 
-      # The body and commit messages reach the shell through files, never
-      # through the workflow's expression syntax, so no text in them runs.
+      # The body and commit messages reach the script through an environment
+      # variable and files, never expanded into the script itself, so no text
+      # in them runs.
       - name: Lint the body and commits
         env:
           GH_TOKEN: ${{ github.token }}

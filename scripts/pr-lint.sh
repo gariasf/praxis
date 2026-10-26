@@ -14,8 +14,10 @@ miss() {
 }
 
 # The body without carriage returns, HTML comments or trailing blanks, so a
-# section that holds only its placeholder comment reads as empty.
-body=$(tr -d '\r' <"$1" | perl -0pe 's/<!--.*?-->//gs; s/[ \t]+$//mg')
+# section that holds only its placeholder comment reads as empty. Lines in
+# code fences are indented, so pasted output is never a heading or ticket line.
+body=$(tr -d '\r' <"$1" | perl -0pe 's/<!--.*?-->//gs; s/[ \t]+$//mg' |
+  perl -pe 'if (/^\s*```/) { $fenced = !$fenced; next } $_ = " $_" if $fenced')
 
 # The lines under a "## " heading, up to the next heading.
 section() {
@@ -37,19 +39,27 @@ done < <(tr -d '\r' <"$template" | grep '^## ')
 verification=$(section '## Verification')
 uncounted=()
 for kind in found fixed declined deferred; do
-  if ! grep -Eiq "(^|[^0-9])[0-9]+ $kind\b|\b$kind:? [0-9]+" <<<"$verification"; then
+  if ! grep -Eiq "(^|[^0-9])[0-9]+ $kind([^[:alpha:]]|$)|(^|[^[:alpha:]])$kind:? [0-9]+" <<<"$verification"; then
     uncounted+=("$kind")
   fi
 done
 if [ ${#uncounted[@]} -gt 0 ]; then
   miss "body: Verification lacks the review counts \"N found, N fixed, N declined, N deferred\" (missing: ${uncounted[*]}) (workflow.md, Review)"
 fi
-if ! grep -Eq '^[*_ -]*Sources checked' <<<"$verification"; then
+# "Sources checked" followed by something, on its line or below it.
+if ! awk '
+  /^[*_ -]*Sources checked/ { seen = 1; sub(/^[*_ -]*Sources checked[*_: ]*/, "") }
+  seen && /[^[:space:]]/ { listed = 1 }
+  END { exit !listed }' <<<"$verification"; then
   miss 'body: Verification lacks a "Sources checked" line listing each reference and its verdict, or None (workflow.md, Review)'
 fi
 
 for file in "${@:2}"; do
   name=$(basename "$file")
+  if [ ! -r "$file" ]; then
+    miss "commit $name: no message to check"
+    continue
+  fi
   message=$(tr -d '\r' <"$file")
   subject=$(head -n 1 <<<"$message")
   length=$(perl -CA -e 'print length $ARGV[0]' "$subject")
@@ -59,7 +69,8 @@ for file in "${@:2}"; do
   if grep -Eiq '^co-authored-by:.*(claude|anthropic|copilot|openai|chatgpt|gemini|cursor|codex|devin)' <<<"$message"; then
     miss "commit $name: AI co-author trailer; commits name no AI co-author (workflow.md, PRs)"
   fi
-  if grep -Eiq 'generated with \[?claude' <<<"$message"; then
+  # A line that opens with the phrase, after any emoji, not prose naming it.
+  if grep -Eiq '^[^[:alnum:]]*generated with \[?claude' <<<"$message"; then
     miss "commit $name: \"Generated with Claude\" line; commits carry no AI attribution (workflow.md, PRs)"
   fi
 done
