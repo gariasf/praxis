@@ -286,7 +286,7 @@ When reviewing changes, check for:
       captures would differ run to run
 - [ ] Frame stats still see new work: GPU buffers and textures join
       their owner's `gpu_memory_bytes`, and so do acceleration
-      structures, by the measured per-backend estimate
+      structures, by the measured per-adapter estimate
       (`AccelerationStructureBytes`); per-frame GPU writes add to
       `uploaded_bytes`, and systems are added inside
       `SystemTimer::scope`

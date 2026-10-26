@@ -420,7 +420,9 @@ impl Renderer {
             scene_geometry_bind_group,
             static_tlas,
             dynamic_tlas,
-            acceleration_structure_bytes: AccelerationStructureBytes::estimate(context.backend()),
+            acceleration_structure_bytes: AccelerationStructureBytes::estimate(
+                &context.adapter.get_info(),
+            ),
             lost_instance_writes: false,
             uploaded_instance_slot_count: 0,
             transient_saves_memory: context.adapter.get_info().transient_saves_memory == Some(true),
