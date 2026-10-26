@@ -55,7 +55,7 @@ impl ApplicationHandler for App {
             .ok();
         window.set_cursor_visible(false);
 
-        match pollster::block_on(WindowShell::new(window)) {
+        match pollster::block_on(WindowShell::new(window, self.scene)) {
             Ok(shell) => self.shell = Some(shell),
             Err(error) => {
                 self.error = Some(error);
@@ -123,8 +123,9 @@ impl ApplicationHandler for App {
     }
 }
 
-#[derive(Default)]
 struct App {
+    /// The Reference scene the window opens on.
+    scene: ReferenceScene,
     shell: Option<WindowShell>,
     /// Why the window could not start, returned once the event loop exits.
     error: Option<anyhow::Error>,
@@ -144,7 +145,7 @@ struct WindowShell {
 }
 
 impl WindowShell {
-    async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
+    async fn new(window: Arc<Window>, scene: ReferenceScene) -> anyhow::Result<Self> {
         let size = window.inner_size();
         let (context, surface, surface_format) = GpuContext::with_surface(window.clone()).await?;
         let surface_caps = surface.get_capabilities(&context.adapter);
@@ -172,7 +173,7 @@ impl WindowShell {
             surface_format,
             size.width.max(1),
             size.height.max(1),
-            ReferenceScene::Helmet,
+            scene,
             glam::DVec3::ZERO,
             RenderSwitches::default(),
         )?;
@@ -259,9 +260,15 @@ impl WindowShell {
     }
 }
 
-pub fn run() -> anyhow::Result<()> {
+/// Opens the window on `scene`, at its camera path's first frame, and runs
+/// it until it closes.
+pub fn run(scene: ReferenceScene) -> anyhow::Result<()> {
     let event_loop = EventLoop::new()?;
-    let mut app = App::default();
+    let mut app = App {
+        scene,
+        shell: None,
+        error: None,
+    };
     event_loop.run_app(&mut app)?;
 
     app.error.map_or(Ok(()), Err)
