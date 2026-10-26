@@ -198,6 +198,8 @@ impl CullingPass {
 
         let mut probe_source = shaders::CULLING.source();
         match std::env::var("PROBE_CULL").as_deref() {
+            Ok("margin") => probe_source = probe_source.replace("return all(side_reach >= vec4<f32>(0.0)) && near_reach >= 0.0;", "return all(side_reach >= vec4<f32>(-0.05 * abs(bounds.centre.w))) && near_reach >= 0.0;"),
+            Ok("margin-off") => probe_source = probe_source.replace("return all(side_reach >= vec4<f32>(0.0)) && near_reach >= 0.0;", "return all(side_reach >= vec4<f32>(-0.05 * abs(bounds.centre.w))) && near_reach >= 0.0;").replace("return nearest_depth < farthest;", "return false;"),
             Ok("off") => {
                 probe_source =
                     probe_source.replace("return nearest_depth < farthest;", "return false;")

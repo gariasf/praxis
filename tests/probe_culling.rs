@@ -36,6 +36,12 @@ fn probe_culling() {
         ("culled-cold-vs-culled", capture(true, "", true), &culled),
         ("culled-cold", capture(true, "", true), &unculled),
         ("no-occlusion-cold", capture(true, "off", true), &unculled),
+        ("frustum-margin", capture(true, "margin", false), &unculled),
+        (
+            "frustum-margin-no-occlusion",
+            capture(true, "margin-off", false),
+            &unculled,
+        ),
     ];
     let mut report = String::new();
     for (name, a, b) in &variants {
