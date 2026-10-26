@@ -62,6 +62,13 @@ const TOLERANCE: u8 = 1;
 /// oracle bounds instead.
 const FAR_SHIFT: glam::DVec3 = glam::DVec3::new(100_032.0, 0.0, 100_032.0);
 
+/// Pixels per frame that may differ between culling on and off on a
+/// software driver. lavapipe resolves one sample of `town`'s frame 1200
+/// differently depending on which triangles the frame's draw holds: drawing
+/// more Instances than culling does can bring the difference back, which a
+/// missing Instance could not. Metal, the reference, matches exactly.
+const SOFTWARE_UNCULLED_PIXELS: usize = 1;
+
 const UPDATE_GOLDENS_VARIABLE: &str = "PRAXIS_UPDATE_GOLDENS";
 const REQUIRE_GOLDENS_VARIABLE: &str = "PRAXIS_REQUIRE_GOLDENS";
 
@@ -168,6 +175,12 @@ fn reference_scenes_match_their_goldens() {
         Err(error) => panic!("headless GPU context failed: {error:#}"),
     };
     let key = golden_key(&context);
+    let software = context.device_type() == wgpu::DeviceType::Cpu;
+    let unculled_pixels_allowed = if software {
+        SOFTWARE_UNCULLED_PIXELS
+    } else {
+        0
+    };
     let golden_directory = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/goldens")
         .join(&key);
@@ -233,12 +246,14 @@ fn reference_scenes_match_their_goldens() {
                 &culled[index],
                 &unculled[index],
                 &format!("{}-unculled{suffix}", scene.name()),
+                unculled_pixels_allowed,
                 &difference_directory,
             ));
             failures.extend(mismatch(
                 &froxel_lit[index],
                 &brute_force[index],
                 &format!("{}-brute-force{suffix}", scene.name()),
+                0,
                 &difference_directory,
             ));
         }
@@ -270,6 +285,7 @@ fn reference_scenes_match_their_goldens() {
             &golden,
             culled,
             scene.name(),
+            0,
             &difference_directory,
         ));
 
@@ -278,19 +294,21 @@ fn reference_scenes_match_their_goldens() {
             &golden,
             &shifted,
             &format!("{}-100km", scene.name()),
+            0,
             &difference_directory,
         ));
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-/// Compares `actual` with `golden`; on a mismatch writes the difference image
-/// and the capture under `directory` as `<label>-difference.png` and
-/// `<label>-actual.png`, and describes it.
+/// Compares `actual` with `golden`; on more than `allowed_pixels` differing,
+/// writes the difference image and the capture under `directory` as
+/// `<label>-difference.png` and `<label>-actual.png`, and describes it.
 fn mismatch(
     golden: &image::RgbaImage,
     actual: &image::RgbaImage,
     label: &str,
+    allowed_pixels: usize,
     directory: &Path,
 ) -> Option<String> {
     assert_eq!(
@@ -299,7 +317,7 @@ fn mismatch(
         "{label} Golden size differs from the capture"
     );
     let difference = compare(golden, actual);
-    if difference.differing_pixels == 0 {
+    if difference.differing_pixels <= allowed_pixels {
         return None;
     }
     std::fs::create_dir_all(directory).expect("difference directory");
