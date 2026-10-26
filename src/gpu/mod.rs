@@ -74,7 +74,8 @@ impl GpuContext {
         self.adapter.get_info().backend
     }
 
-    /// The adapter's vendor ID: a PCI vendor ID for a GPU's.
+    /// The adapter's vendor ID: a PCI vendor ID, or a Khronos one for a
+    /// software adapter.
     pub fn vendor(&self) -> u32 {
         self.adapter.get_info().vendor
     }
