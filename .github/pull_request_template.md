@@ -10,6 +10,8 @@ Closes #
 
 <!-- The command run and its output, 30 lines at most. -->
 
+<!-- Sources checked: each reference the change relies on or adds, and its verdict (exists, says what is claimed, cited right, implemented right). `None` if it relies on none. -->
+
 ## Metrics
 
 <!-- Render or hot-path change: the delta against its Baselines. Otherwise `n/a`. -->
