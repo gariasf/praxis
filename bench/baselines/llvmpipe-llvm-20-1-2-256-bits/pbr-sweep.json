@@ -6,16 +6,24 @@
   "height": 360,
   "measured_frames": 256,
   "cpu_frame_microseconds": {
-    "median": 68913.73400000001,
-    "p95": 78310.681
+    "median": 70167.786,
+    "p95": 79225.14199999999
   },
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.362,
-    "p95": 0.6200000000000001
+    "median": 0.36,
+    "p95": 0.6410000000000001
   },
   "gpu_frame_microseconds": {
-    "median": 68823.843,
-    "p95": 78145.394
+    "median": 70101.521,
+    "p95": 79133.644
+  },
+  "gate_microseconds": {
+    "median": 28693.578,
+    "p95": 30833.375
+  },
+  "shadow_ray_microseconds": {
+    "median": 36033.32699999999,
+    "p95": 44086.598000000005
   },
   "gpu_pass_microseconds": {
     "bend_pass": {
@@ -27,44 +35,44 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 601.756,
-      "p95": 704.659
+      "median": 671.611,
+      "p95": 786.367
     },
     "culling_phase_two": {
-      "median": 299.46999999999997,
-      "p95": 327.012
+      "median": 317.873,
+      "p95": 355.443
     },
     "depth_prepass": {
-      "median": 4040.8370000000004,
-      "p95": 4249.062
+      "median": 4129.594,
+      "p95": 4315.378
     },
     "depth_pyramid_pass": {
-      "median": 1606.688,
-      "p95": 1774.2910000000002
+      "median": 1746.81,
+      "p95": 1976.5680000000002
     },
     "dynamic_tlas_build": {
       "median": 0.0,
       "p95": 0.0
     },
     "froxel_pass": {
-      "median": 341.409,
-      "p95": 376.002
+      "median": 347.899,
+      "p95": 402.281
     },
     "lit_pass": {
-      "median": 22652.234,
-      "p95": 24525.709
+      "median": 23299.092,
+      "p95": 25506.600000000002
     },
     "phase_two_depth_pass": {
-      "median": 123.40100000000001,
-      "p95": 153.397
+      "median": 137.068,
+      "p95": 171.23499999999999
     },
     "shadow_mask_pass": {
-      "median": 32719.219,
-      "p95": 41903.561
+      "median": 32985.445,
+      "p95": 41215.767
     },
     "tonemapping_pass": {
-      "median": 5044.646,
-      "p95": 5166.312999999999
+      "median": 5106.805,
+      "p95": 5295.5199999999995
     }
   },
   "draw_calls": 4,
