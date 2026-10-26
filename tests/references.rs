@@ -32,7 +32,7 @@ fn a_dangling_key_and_an_unused_entry_are_found() {
         ),
         (
             "docs/b.md".to_owned(),
-            "Prose.\nSee [ref:missing] and [ref:<key>], [ref:open\n".to_owned(),
+            "Prose.\nSee [ref:missing] and the form, [ref:<key>].\n".to_owned(),
         ),
     ];
     assert_eq!(entries(registry), ["higham-3.1", "unused"]);
@@ -41,6 +41,26 @@ fn a_dangling_key_and_an_unused_entry_are_found() {
         [
             "docs/b.md:2: `missing` is cited but has no entry",
             "docs/references.toml: `unused` is cited nowhere",
+        ]
+    );
+}
+
+#[test]
+fn malformed_citations_and_keys_are_found() {
+    let entries = ["higham-3.1", "Higham_3.1", "higham-3.1"].map(str::to_owned);
+    let files = [(
+        "src/a.rs".to_owned(),
+        "// [ref:higham-3.1] [ref:Higham-3.1] [ref:higham-3.1 ]\n// [ref:higham-\n// 3.1]\n"
+            .to_owned(),
+    )];
+    assert_eq!(
+        mismatches(&entries, &files),
+        [
+            "src/a.rs:1: `[ref:Higham-3.1]` cites no key",
+            "src/a.rs:1: `[ref:higham-3.1 ]` cites no key",
+            "src/a.rs:2: `[ref:higham-` cites no key",
+            "docs/references.toml: `Higham_3.1` is not a key",
+            "docs/references.toml: `higham-3.1` has more than one entry",
         ]
     );
 }
@@ -54,42 +74,58 @@ fn entries(registry: &str) -> Vec<String> {
         .collect()
 }
 
-fn is_key_character(character: char) -> bool {
-    character.is_ascii_lowercase() || character.is_ascii_digit() || matches!(character, '.' | '-')
+/// Whether `text` is a key: lowercase letters, digits, dots and hyphens.
+fn is_key(text: &str) -> bool {
+    !text.is_empty()
+        && text.chars().all(|character| {
+            character.is_ascii_lowercase() || character.is_ascii_digit() || ".-".contains(character)
+        })
 }
 
-/// Each `[ref:key]` in `source`, with its 1-based line.
+/// Each `[ref:` in `source`, with its 1-based line, as written: up to and
+/// including its `]`, or to the line's end when no `]` follows.
 fn citations(source: &str) -> Vec<(usize, &str)> {
     let mut found = Vec::new();
     for (index, line) in source.lines().enumerate() {
         for (start, _) in line.match_indices("[ref:") {
-            let rest = &line[start + "[ref:".len()..];
-            let length = rest.find(|character| !is_key_character(character));
-            if let Some(length) = length.filter(|&length| length > 0)
-                && rest[length..].starts_with(']')
-            {
-                found.push((index + 1, &rest[..length]));
-            }
+            let length = line[start..]
+                .find(']')
+                .map_or(line.len() - start, |end| end + 1);
+            found.push((index + 1, &line[start..start + length]));
         }
     }
     found
 }
 
-/// Cited keys with no entry, then entries cited nowhere, given each file's
-/// `/`-separated path from the crate root and its text.
+/// Malformed and dangling citations, then malformed, repeated and unused
+/// entries, given each file's `/`-separated path from the crate root and its
+/// text. `[ref:<key>]` names the form and cites nothing.
 fn mismatches(entries: &[String], files: &[(String, String)]) -> Vec<String> {
     let mut problems = Vec::new();
     let mut cited = Vec::new();
     for (path, source) in files {
-        for (line, key) in citations(source) {
-            if !entries.iter().any(|entry| entry == key) {
-                problems.push(format!("{path}:{line}: `{key}` is cited but has no entry"));
+        for (line, citation) in citations(source) {
+            let key = citation
+                .strip_prefix("[ref:")
+                .and_then(|rest| rest.strip_suffix(']'));
+            match key {
+                Some("<key>") => {}
+                Some(key) if is_key(key) => {
+                    if !entries.iter().any(|entry| entry == key) {
+                        problems.push(format!("{path}:{line}: `{key}` is cited but has no entry"));
+                    }
+                    cited.push(key);
+                }
+                _ => problems.push(format!("{path}:{line}: `{citation}` cites no key")),
             }
-            cited.push(key.to_owned());
         }
     }
-    for entry in entries {
-        if !cited.contains(entry) {
+    for (index, entry) in entries.iter().enumerate() {
+        if !is_key(entry) {
+            problems.push(format!("{REGISTRY}: `{entry}` is not a key"));
+        } else if entries[..index].contains(entry) {
+            problems.push(format!("{REGISTRY}: `{entry}` has more than one entry"));
+        } else if !cited.contains(&entry.as_str()) {
             problems.push(format!("{REGISTRY}: `{entry}` is cited nowhere"));
         }
     }
@@ -101,8 +137,8 @@ fn mismatches(entries: &[String], files: &[(String, String)]) -> Vec<String> {
 /// registry itself and this file, whose planted citations are its tests,
 /// are left out.
 fn collect_files(root: &Path, directory: &Path, files: &mut Vec<(String, String)>) {
-    let entries = fs::read_dir(directory).expect("read a directory");
-    for entry in entries {
+    let listing = fs::read_dir(directory).expect("read a directory");
+    for entry in listing {
         let path = entry.expect("read a directory entry").path();
         let name = path.file_name().unwrap_or_default().to_string_lossy();
         if path.is_dir() {

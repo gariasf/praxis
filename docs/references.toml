@@ -7,13 +7,14 @@
 #   ["author-section"]
 #   url = "a stable URL or DOI, pinned to a version or commit where one exists"
 #   section = "the section, equation, table or line relied on"
-#   quote = '''the claim relied on, verbatim; mathematics may be written in
-#   Unicode where the source typesets it'''
+#   quote = '''the claim relied on, verbatim: each gap marked [...], a table's
+#   rows as "cell: cell", and typeset mathematics written in Unicode'''
 #   checked = 2026-01-31  # the date the quote was last read in the source
 #
 # Code, ADRs and notes cite an entry by its key in square brackets after
 # `ref:`, beside their prose citation. `cargo test --test references` fails on
-# a cited key with no entry and on an entry cited nowhere. Review's Sources
+# a cited key with no entry, an entry cited nowhere, and a malformed citation
+# or key. Review's Sources
 # axis re-checks only the entries a diff adds or changes, and the citations
 # that point at them (`docs/agents/workflow.md`, Review).
 
@@ -21,13 +22,13 @@
 url = "https://doi.org/10.1137/1.9780898718027"
 section = "Higham, Accuracy and Stability of Numerical Algorithms, 2nd ed. (SIAM, 2002), §3.1, Lemma 3.1 and eq. (3.5), pp. 62-63"
 quote = '''It is easy to see that for any order of evaluation we have, using vector notation, [...] A forward error bound follows immediately from (3.4): |xᵀy − fl(xᵀy)| ≤ γₙ Σᵢ₌₁ⁿ |xᵢyᵢ| = γₙ|x|ᵀ|y|. (3.5)
-Lemma 3.1: |θₙ| ≤ nu / (1 − nu) =: γₙ.'''
+Lemma 3.1. If |δᵢ| ≤ u and ρᵢ = ±1 for i = 1: n, and nu < 1, then ∏ᵢ₌₁ⁿ (1 + δᵢ)^ρᵢ = 1 + θₙ, where |θₙ| ≤ nu/(1 − nu) =: γₙ.'''
 checked = 2026-10-26
 
 ["vulkan-spirv-precision"]
 url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/8c9361ba8180c1f4164c0bf79de2f6e817770b0d/appendices/spirvenv.adoc#spirvenv-precision-core-table"
 section = "Vulkan specification, appendix SPIR-V Environment, table Precision of Core SPIR-V Instructions"
-quote = '''OpFAdd: Correctly rounded. OpFMul, OpVectorTimesScalar, OpMatrixTimesScalar: Correctly rounded. OpDot(x, y): Inherited from Σᵢ₌₀ⁿ⁻¹ xᵢ × yᵢ.'''
+quote = '''OpFAdd: Correctly rounded. [...] OpFMul, OpVectorTimesScalar, OpMatrixTimesScalar: Correctly rounded. [...] OpDot(x, y): Inherited from Σᵢ₌₀ⁿ⁻¹ xᵢ × yᵢ.'''
 checked = 2026-10-26
 
 ["vulkan-vendor-id-mesa"]
@@ -37,7 +38,7 @@ quote = '''<enum value="0x10005" name="VK_VENDOR_ID_MESA" comment="Mesa vendor I
 checked = 2026-10-26
 
 ["pci-vendor-id-nvidia"]
-url = "https://pci-ids.ucw.cz/v2.2/pci.ids"
-section = "The PCI ID Repository, pci.ids version 2026.10.26, vendor 10de"
+url = "https://github.com/pciutils/pciids/blob/3447a24b14fe0dd91d2ee10d2d3b6b0a73099715/pci.ids#L10357"
+section = "The PCI ID Repository (pci-ids.ucw.cz), pci.ids version 2026.10.26, vendor 10de"
 quote = '''10de  NVIDIA Corporation'''
 checked = 2026-10-26
