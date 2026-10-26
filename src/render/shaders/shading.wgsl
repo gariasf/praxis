@@ -4,19 +4,21 @@
 // and KHR_lights_punctual's falloff. Appendix B is the specification
 // source's, which revised the published 2.0.1's informative sample
 // implementation: 2.0.1 gives a separable Smith G and a simplified mix of
-// the two lobes.
+// the two lobes [ref:gltf-2.0.1-sample-brdf].
 // https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc
 // https://github.com/KhronosGroup/glTF/blob/854a757a61e6bc0dde91631579b9d3d2e1743df9/extensions/2.0/Khronos/KHR_lights_punctual/README.md
 
 const PI: f32 = 3.14159265;
 
 // Appendix B's reflectance of a dielectric at normal incidence,
-// ((1 − ior) / (1 + ior))² at its index of refraction of 1.5.
+// ((1 − ior) / (1 + ior))² at its index of refraction of 1.5
+// [ref:gltf-2.0-metal-and-dielectric-brdf].
 const DIELECTRIC_BASE_REFLECTANCE: f32 = 0.04;
 
 // As roughness, and α = roughness² with it, falls to 0, D collapses to a
-// delta and the BRDF divides by zero, which Appendix B's source says never to
-// do.
+// delta and the BRDF becomes singular, dividing by zero, so Appendix B's
+// source says never to use α = 0 but to clamp it to a small positive value
+// [ref:gltf-2.0-zero-roughness].
 const MINIMUM_ROUGHNESS: f32 = 0.04;
 
 // A surface point, as the shading terms read it.
@@ -31,7 +33,8 @@ struct Surface {
 }
 
 // A surface point from its Material's factors and the texels of its Layers,
-// each factor scaling its texel (glTF 2.0, "Metallic-Roughness Material"):
+// each factor scaling its texel (glTF 2.0, "Metallic-Roughness Material"
+// [ref:gltf-2.0-metallic-roughness]):
 // cooked metallic-roughness holds roughness in red and metallic in green
 // (BC5, ADR 0018). Roughness keeps to MINIMUM_ROUGHNESS or above.
 fn decode_surface(
@@ -51,7 +54,8 @@ fn decode_surface(
     );
 }
 
-// Schlick's Fresnel weight, (1 − |V·H|)⁵ (Appendix B, "Fresnel"): how far
+// Schlick's Fresnel weight, (1 − |V·H|)⁵ (Appendix B, "Fresnel"
+// [ref:gltf-2.0-fresnel]): how far
 // F climbs from the reflectance at normal incidence, F0, towards 1 as V
 // turns from H. Multiplied out, not pow, which has no value for the
 // negative base that a |V·H| rounded past 1 gives.
@@ -62,7 +66,7 @@ fn fresnel_weight(view_dot_half: f32) -> f32 {
 }
 
 // D: the Trowbridge-Reitz (GGX) distribution of microfacet normals at width
-// alpha (Appendix B, "Specular BRDF"),
+// alpha (Appendix B, "Specular BRDF" [ref:gltf-2.0-specular-brdf]),
 //   α² χ⁺(N·H) / (π ((N·H)² (α² − 1) + 1)²),
 // its (N·H)² (α² − 1) + 1 summed as (N·H)² α² + (1 − N·H)(1 + N·H), terms
 // f32 keeps to a few ulps where the sum falls to α², at N·H = 1.
@@ -109,7 +113,7 @@ fn tangent_space_normal(encoded: vec2<f32>) -> vec3<f32> {
 // The BRDF, mix(dielectric_brdf, metal_brdf, metallic), per steradian, from
 // the cosines between the normal N, the directions to the light L and to
 // the viewer V, and H halfway between them (Appendix B, "Metal BRDF and
-// Dielectric BRDF").
+// Dielectric BRDF" [ref:gltf-2.0-metal-and-dielectric-brdf]).
 fn metallic_roughness_brdf(
     surface: Surface,
     normal_dot_light: f32,
@@ -165,12 +169,14 @@ fn reflected_luminance(
 }
 
 // Point lights hold distance² at 1 cm² or more, as if 1 cm in radius, so a
-// surface at one is lit finitely; Filament (Apache-2.0) holds the same.
+// surface at one is lit finitely; Filament (Apache-2.0) holds the same
+// [ref:filament-punctual-light-1cm].
 const MINIMUM_LIGHT_DISTANCE_SQUARED: f32 = 1e-4;
 
 // The share of a point light's intensity that reaches `distance_squared`
 // from it as illuminance: inverse-square falloff within KHR_lights_punctual's
-// range window, which falls to 0 at `range` and stays 0 past it,
+// range window [ref:khr-lights-punctual-range], which falls to 0 at `range`
+// and stays 0 past it,
 //   max(min(1 − (distance / range)⁴, 1), 0) / distance²,
 // with (distance / range)⁴ taken as (distance² / range²)².
 fn point_light_attenuation(distance_squared: f32, range: f32) -> f32 {
@@ -204,7 +210,7 @@ fn point_light_luminance(
 // light diffuse and rough specular reflection alike: E/π times its base
 // colour, as a white-lit dielectric's diffuse lobe or a metal's specular
 // one about reflects, darkened by occlusion, which glTF applies to
-// indirect light only.
+// indirect light only [ref:gltf-2.0-occlusion].
 fn ambient_luminance(surface: Surface, illuminance: vec3<f32>) -> vec3<f32> {
     return illuminance * surface.base_color / PI * surface.occlusion;
 }

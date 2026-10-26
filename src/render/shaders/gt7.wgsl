@@ -1,8 +1,8 @@
 // GT7's tone mapping (Polyphony Digital, SIGGRAPH 2025 Physically Based
-// Shading course,
+// Shading course [ref:gt7-slides],
 // blog.selfshadow.com/publications/s2025-shading-course/pdi/s2025_pbs_pdi_slides_v1.1.pdf),
 // its SDR path in ICtCp, ported from Polyphony's sample implementation,
-// gt7_tone_mapping.cpp 1.0:
+// gt7_tone_mapping.cpp 1.0 [ref:gt7-tone-mapping-cpp]:
 // https://blog.selfshadow.com/publications/s2025-shading-course/pdi/supplemental/gt7_tone_mapping.cpp
 //
 // MIT License
@@ -28,10 +28,11 @@
 // SOFTWARE.
 
 // GT7's SDR paper white, 250 cd/m², in its frame-buffer units of 100 cd/m²:
-// GT7 maps SDR to it.
+// GT7 maps SDR to it [ref:gt7-slides].
 const GT7_PAPER_WHITE: f32 = 2.5;
 
-// SMPTE ST 2084's (PQ) constants, as the sample writes them.
+// SMPTE ST 2084's (PQ) constants, as the sample writes them and ITU-R
+// BT.2100-3 gives them [ref:bt2100-pq].
 const PQ_M1: f32 = 0.1593017578125;
 const PQ_M2: f32 = 78.84375;
 const PQ_C1: f32 = 0.8359375;
@@ -78,7 +79,8 @@ fn pq_decode(signal: vec3<f32>) -> vec3<f32> {
     return pow(linear, vec3<f32>(1.0 / PQ_M1)) * (10000.0 / 100.0);
 }
 
-// ICtCp from linear Rec. 2020 frame-buffer values (ITU-T T.302).
+// ICtCp from linear Rec. 2020 frame-buffer values (ITU-R BT.2100-3, Table 7
+// [ref:bt2100-ictcp]); the inverse below is the sample's, to six digits.
 fn rec2020_to_ictcp(rgb: vec3<f32>) -> vec3<f32> {
     let lms = pq_encode(vec3<f32>(
         dot(rgb, vec3<f32>(1688.0, 2146.0, 262.0)),

@@ -7,7 +7,7 @@ use crate::time::Time;
 /// The luminance, in cd/m², that saturates a sensor of ISO 100 at EV100 0:
 /// 78 / (100 · 0.65), with Lagarde and de Rousiers's lens and vignetting
 /// factor q = 0.65 ("Moving Frostbite to Physically Based Rendering 3.0",
-/// 2014, p. 85).
+/// 2014, p. 85 [ref:frostbite-2014-exposure]).
 const SATURATING_LUMINANCE_AT_EV100_ZERO: f32 = 1.2;
 
 /// The EV100 whose `Camera::exposure` is `exposure`.
@@ -43,7 +43,8 @@ impl Camera {
 
     /// What the lit pass scales luminance by, 1/(1.2 · 2^EV100), so the
     /// luminance that saturates a sensor at this EV100 lands near display
-    /// white (Lagarde and de Rousiers 2014, p. 86).
+    /// white (Lagarde and de Rousiers 2014, pp. 86-87
+    /// [ref:frostbite-2014-exposure]).
     pub fn exposure(&self) -> f32 {
         1.0 / (SATURATING_LUMINANCE_AT_EV100_ZERO * self.ev100.exp2())
     }
@@ -124,7 +125,7 @@ mod tests {
     use super::*;
 
     /// Frostbite's exposure, 1/(1.2 · 2^EV100) (Lagarde and de Rousiers
-    /// 2014, "Moving Frostbite to Physically Based Rendering 3.0", p. 86): at
+    /// 2014, "Moving Frostbite to Physically Based Rendering 3.0", pp. 86-87): at
     /// EV100 0, 1.2 cd/m² exposes to 1; each EV halves the scale, so Sunny
     /// 16's EV100 15 scales by 1/39,321.6.
     #[test]

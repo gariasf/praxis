@@ -2,8 +2,8 @@
 // conversions around GT7 and its reading of exposure.
 
 // Linear colour from Rec. 709's primaries to Rec. 2020's, and back, each
-// column a primary (ITU-R BT.2087-0's matrix, derived again from BT.709-6's
-// and BT.2020-2's primaries and D65 to seven places).
+// column a primary (ITU-R BT.2087-0's matrix [ref:bt2087-rec709-to-rec2020],
+// derived again from BT.709-6's// and BT.2020-2's primaries and D65 to seven places).
 const REC709_TO_REC2020 = mat3x3<f32>(
     vec3<f32>(0.6274039, 0.0690973, 0.0163914),
     vec3<f32>(0.3292830, 0.9195404, 0.0880133),
@@ -23,7 +23,8 @@ fn tonemap(exposed: vec3<f32>) -> vec3<f32> {
     return clamp(REC2020_TO_REC709 * display, vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
-// IEC 61966-2-1's sRGB encoding of display-linear colour, clamped to
+// IEC 61966-2-1's sRGB encoding of display-linear colour
+// [ref:khronos-dfs-srgb], clamped to
 // [0, 1]. The tonemapping pass encodes here, once, into an 8-bit UNORM
 // target, so its dither lands on 8-bit steps.
 fn srgb_encode(display: vec3<f32>) -> vec3<f32> {
@@ -39,9 +40,10 @@ fn srgb_encode(display: vec3<f32>) -> vec3<f32> {
 // the dither mask: one of 256 levels, each standing for its bin's centre in
 // (0, 1), turned by the inverse of the triangular distribution's CDF, as
 // Peters remaps a blue-noise mask for dithering
-// (momentsingraphics.de/BlueNoise.html, "Dithering"). Triangular noise of
-// two steps peak to peak is the least that removes noise modulation
-// (Lipshitz, Wannamaker and Vanderkooy 1992).
+// (momentsingraphics.de/BlueNoise.html, "Dithering" [ref:peters-blue-noise]).
+// Of the dithers that remove noise modulation, triangular noise of two steps
+// peak to peak adds the least noise (Lipshitz, Wannamaker and Vanderkooy
+// 1992, p. 372 [ref:lipshitz-1992-triangular-dither]).
 fn dither_noise(mask_value: f32) -> f32 {
     let uniform = (round(mask_value * 255.0) + 0.5) / 256.0;
     let centred = 2.0 * uniform - 1.0;

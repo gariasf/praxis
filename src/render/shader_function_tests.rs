@@ -52,7 +52,8 @@ fn fresnel_rises_from_the_base_reflectance_to_one_at_grazing() {
 }
 
 /// A microfacet distribution weighted by projected area integrates to 1 over
-/// the hemisphere (Walter et al. 2007, eq. 4): 2π ∫ D(cos θ) cos θ sin θ dθ
+/// the hemisphere (Walter et al. 2007, eq. 4
+/// [ref:walter-2007-projected-area]): 2π ∫ D(cos θ) cos θ sin θ dθ
 /// = 1 for θ from 0 to π/2. The sum takes θ = π/2 · u² at the midpoints of
 /// even steps in u, which crowds samples near the normal, where D peaks.
 #[test]
@@ -108,8 +109,9 @@ fn distribution_ggx_integrates_to_one_over_the_hemisphere() {
     }
 
     // Any normalised D passes the sum, so the peak pins the shape: at n·h = 1,
-    // D is 1/(π α²) with α = roughness² (Walter et al. 2007, eq. 33), which
-    // is 16/π at roughness 0.5.
+    // D is 1/(π α²) (Walter et al. 2007, eq. 33 [ref:walter-2007-ggx]), with
+    // α = roughness² (glTF 2.0, Appendix B [ref:gltf-2.0-roughness-mapping]),
+    // which is 16/π at roughness 0.5.
     let peak = evaluate(
         &context,
         "vec4<f32>(distribution_ggx(input.x, input.y * input.y))",
@@ -259,7 +261,8 @@ fn metallic_roughness_brdf_matches_appendix_b_and_is_reciprocal() {
 /// receives: under illuminance 1 from each direction of the hemisphere in
 /// turn, what it reflects sums to at most 1 (a white furnace). Appendix B's
 /// dielectric is not held to that, since its fresnel_mix is not energy
-/// conserving (Appendix B, "Coupling Diffuse and Specular Reflection").
+/// conserving (Appendix B, "Coupling Diffuse and Specular Reflection"
+/// [ref:gltf-2.0-coupling]).
 #[test]
 fn reflected_luminance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_it_receives() {
     let Some(context) = gpu_context() else {
@@ -341,13 +344,17 @@ fn reflected_luminance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_
         );
         let normal_dot_light = normal.dot(light).max(0.0);
         // f32's N·L, three products and two sums each rounded once (Vulkan's
-        // precision table [ref:vulkan-spirv-precision]), errs by at most
-        // γ₃ |N|ᵀ|L| ≤ γ₃ ‖N‖ ‖L‖ with γ₃ = 3u / (1 − 3u) and u = 2⁻²⁴
-        // (Higham, Accuracy and Stability of Numerical Algorithms, §3.1
-        // [ref:higham-3.1]). Against N·L ≈ 0, for a light on the horizon,
-        // that error is all there is, which a tolerance relative to the
-        // result rules out.
-        let unit_roundoff = f64::from(f32::EPSILON) / 2.0;
+        // precision table [ref:vulkan-spirv-precision]; D3D's 0.5 ULP
+        // [ref:d3d11.3-fp32-rules]; Metal's fast math, the default wgpu-hal
+        // keeps, rounds them correctly too, reassociated or fused
+        // [ref:msl-4.1-fast-math]), errs by at most γ₃ |N|ᵀ|L| ≤ γ₃ ‖N‖ ‖L‖
+        // with γ₃ = 3u / (1 − 3u), in any order (Higham, Accuracy and
+        // Stability of Numerical Algorithms, §3.1 [ref:higham-3.1]). u is
+        // 2⁻²³, not round-to-nearest's 2⁻²⁴, as Metal may round toward zero
+        // [ref:msl-4.1-rounding]. Against N·L ≈ 0, for a light on the
+        // horizon, that error is all there is, which a tolerance relative to
+        // the result rules out.
+        let unit_roundoff = f64::from(f32::EPSILON);
         let normal_dot_light_rounding =
             3.0 * unit_roundoff / (1.0 - 3.0 * unit_roundoff) * normal.length() * light.length();
         for channel in 0..3 {
@@ -537,7 +544,7 @@ fn ambient_luminance_is_the_base_colour_over_pi_darkened_by_occlusion() {
 }
 
 /// Rec. 709's relative luminance weighs each linear primary by ITU-R BT.709-6's
-/// coefficients, which sum to 1, so white's is 1.
+/// coefficients [ref:bt709-6-luma], which sum to 1, so white's is 1.
 #[test]
 fn relative_luminance_weighs_the_primaries_by_bt_709() {
     let Some(context) = gpu_context() else {
@@ -562,14 +569,14 @@ fn relative_luminance_weighs_the_primaries_by_bt_709() {
     }
 }
 
-/// The lit pass weights exposed colour by 1/(1 + luminance), the hardware's
-/// box resolve averages four samples so weighted, and the tonemapping pass
-/// undoes the weighting: the result is the samples' average weighted by
-/// 1/(1 + luminance) (Karis 2013), Σ w c / Σ w in f64. One sample of 100
-/// over three of 0.05 resolves to 0.395 where the box gives 25.04, so a
-/// bright sub-pixel highlight no longer whitens its edge, and four equal
-/// samples resolve to their colour. A weighted luminance at or past 1, which
-/// only rounding reaches, undoes to fp16's largest finite value, not
+/// The lit pass weights exposed colour by 1/(1 + luminance), the hardware's box
+/// resolve averages four samples so weighted, and the tonemapping pass undoes
+/// the weighting: the result is the samples' average weighted by 1/(1 +
+/// luminance) (Karis 2013 [ref:karis-2013-weighted-average]), Σ w c / Σ w in
+/// f64. One sample of 100 over three of 0.05 resolves to 0.395 where the box
+/// gives 25.04, so a bright sub-pixel highlight no longer whitens its edge, and
+/// four equal samples resolve to their colour. A weighted luminance at or past
+/// 1, which only rounding reaches, undoes to fp16's largest finite value, not
 /// infinity.
 #[test]
 fn the_weighted_resolve_undone_averages_samples_by_one_over_one_plus_luminance() {
@@ -719,9 +726,9 @@ fn pq_encodes_as_st_2084_and_decodes_back() {
     );
 }
 
-/// ICtCp (ITU-T T.302) puts a grey's PQ-encoded value in I and none in Ct
-/// and Cp, its chroma; converting a colour there and back returns it, within
-/// the sample's six-digit inverse matrix.
+/// ICtCp (ITU-R BT.2100-3, Table 7 [ref:bt2100-ictcp]) puts a grey's PQ-encoded
+/// value in I and none in Ct and Cp, its chroma; converting a colour there and
+/// back returns it, within the sample's six-digit inverse matrix.
 #[test]
 fn ictcp_holds_a_grey_in_its_intensity_and_converts_back() {
     let Some(context) = gpu_context() else {
@@ -807,10 +814,11 @@ fn gt7_tonemap_matches_polyphonys_sample_implementation() {
 /// `tonemap` reads exposed 1 as GT7's paper white, and converts Rec. 709 to
 /// Rec. 2020 and back around GT7, clipping into [0, 1]. Against the sample
 /// implementation's GT7 between the conversions in f64, from BT.709-6's and
-/// BT.2020-2's primaries: greys, which both conversions keep grey, pass the
-/// linear section, exposed 0.2152 to 0.444, unchanged, so mid-tones keep
-/// their exposure; Rec. 709's primaries stay pure but green, which picks up
-/// red; past the paper white, colours whiten.
+/// BT.2020-2's primaries [ref:bt709-6-primaries] [ref:bt2020-2-primaries]:
+/// greys, which both conversions keep grey, pass the linear section, exposed
+/// 0.2152 to 0.444, unchanged, so mid-tones keep their exposure; Rec. 709's
+/// primaries stay pure but green, which picks up red; past the paper white,
+/// colours whiten.
 #[test]
 fn tonemap_is_gt7_between_rec_709_and_rec_2020_with_exposed_1_at_paper_white() {
     let Some(context) = gpu_context() else {
@@ -901,7 +909,8 @@ const TONEMAP_REFERENCE: [([f32; 3], [f32; 3]); 14] = [
 /// near-equal terms for saturated green: a fifth of an 8-bit step.
 const GT7_TOLERANCE: f64 = 3e-4;
 
-/// IEC 61966-2-1's sRGB encoding, evaluated in f64: 12.92 x up to 0.0031308,
+/// IEC 61966-2-1's sRGB encoding, as the Khronos Data Format Specification
+/// restates it [ref:khronos-dfs-srgb], evaluated in f64: 12.92 x up to 0.0031308,
 /// then 1.055 x^(1/2.4) − 0.055, so 0 encodes to 0 and 1 to 1, across the
 /// knee and through the mid-tones; values outside [0, 1] clamp first.
 #[test]
@@ -964,8 +973,9 @@ fn dither_noise_is_the_triangular_inverse_cdf_of_each_mask_level() {
     assert!((variance - 1.0 / 6.0).abs() <= 1e-4, "variance {variance}");
 }
 
-/// Linear sRGB reflectance of gold at normal incidence, as the pbr-sweep
-/// scene uses it: each channel a different base colour.
+/// Linear sRGB reflectance of gold at normal incidence, F0 (Hoffman 2013,
+/// Table 1 [ref:hoffman-2013-f0]), as the pbr-sweep scene uses it: each
+/// channel a different base colour.
 const GOLD: [f32; 3] = [1.0, 0.71, 0.29];
 
 /// Largest error allowed between a result and its f64 reference, relative to
@@ -1039,7 +1049,8 @@ fn reference_visibility(
     }
 }
 
-/// Appendix B's "full code" (glTF 2.0, Khronos, CC BY 4.0): the BRDF of a
+/// Appendix B's "full code" (glTF 2.0, Khronos, CC BY 4.0
+/// [ref:gltf-2.0-metal-and-dielectric-brdf]): the BRDF of a
 /// surface of `base_color`, `metallic` and `roughness`, from the cosines
 /// N·L, N·V, N·H and V·H.
 fn reference_brdf(

@@ -42,3 +42,287 @@ url = "https://github.com/pciutils/pciids/blob/3447a24b14fe0dd91d2ee10d2d3b6b0a7
 section = "The PCI ID Repository (pci-ids.ucw.cz), pci.ids version 2026.10.26, vendor 10de"
 quote = '''10de  NVIDIA Corporation'''
 checked = 2026-10-26
+
+["d3d11.3-fp32-rules"]
+url = "https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm"
+section = "Direct3D 11.3 Functional Specification, §3.1.3.1 Partial Listing of Honored IEEE-754 Rules"
+quote = '''IEEE-754 requires floating point operations to produce a result that is the nearest representable value to an infinitely precise result, known as "round to nearest even". D3D11 has the same requirement: 32-bit floating point operations must produce a result that is within 0.5 ULP (3.1.2) of the infinitely preceise result. This applies only to addition, subtraction and multiplication.'''
+checked = 2026-10-26
+
+["msl-4.1-fast-math"]
+url = "https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf"
+section = "Metal Shading Language Specification 4.1 (2026-06-04), §1.6.3 Math Intrinsics Compiler Options, pp. 14-15, and §8.4 Table 8.2, p. 370"
+quote = '''-fmetal-math-mode=<fast, relaxed, safe> [...] The default is fast. If you set the option to fast, it lets the compiler make aggressive, potentially lossy assumptions about floating-point math. These include no NaNs, no INFs, no signed zeros, allow reciprocal, allow reassociation, and FP contract to be fast. [...]
+Table 8.2. Accuracy of single-precision operations and functions with fast math enabled [...] x + y: Correctly rounded [...] x - y: Correctly rounded [...] x * y: Correctly rounded'''
+checked = 2026-10-26
+
+["msl-4.1-rounding"]
+url = "https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf"
+section = "Metal Shading Language Specification 4.1 (2026-06-04), §8.2 Rounding Mode, p. 367"
+quote = '''Either round ties to even or round toward zero rounding mode may be supported for single-precision, half-precision, and brain floating-point operations.'''
+checked = 2026-10-26
+
+["gltf-2.0-specular-brdf"]
+url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc#L3675-L3730"
+section = "glTF 2.0 specification source, Appendix B, Sample Implementation (Informative), Specular BRDF"
+quote = '''with the Trowbridge-Reitz/GGX microfacet distribution D = α² χ⁺(N·H) / (π ((N·H)² (α² − 1) + 1)²) [...] MicrofacetBRDF = ν D [...] ν = χ⁺(H·L) χ⁺(H·V) / (2 (|N·V| √(α² + (1 − α²)(N·L)²) + |N·L| √(α² + (1 − α²)(N·V)²)))'''
+checked = 2026-10-26
+
+["gltf-2.0-roughness-mapping"]
+url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc#L3622-L3626"
+section = "glTF 2.0 specification source, Appendix B, Microfacet Surfaces"
+quote = '''The mapping α = roughness² results in more perceptually linear changes in the roughness. [...] This mapping was suggested by Burley (2012).'''
+checked = 2026-10-26
+
+["gltf-2.0-zero-roughness"]
+url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc#L3741"
+section = "glTF 2.0 specification source, Appendix B, Specular BRDF, note"
+quote = '''A roughness of zero (α = 0) cannot be evaluated directly with this formulation. As α approaches zero, the GGX distribution D collapses to a delta function and the BRDF becomes singular, leading to divisions by zero or numerically unstable results. Implementations should therefore never use α = 0 in the equations above. Instead, α should be clamped to a small positive value, or the surface should be handled as an ideal specular (mirror) reflector using a separate code path.'''
+checked = 2026-10-26
+
+["gltf-2.0-fresnel"]
+url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc#L3775-L3810"
+section = "glTF 2.0 specification source, Appendix B, Fresnel"
+quote = '''An inexpensive approximation for the Fresnel term that can be used for conductors and dielectrics was developed by Schlick (1994): F = f₀ + (1 − f₀) (1 − |V·H|)⁵ [...] f0 = ((1-ior)/(1+ior))^2'''
+checked = 2026-10-26
+
+["gltf-2.0-metal-and-dielectric-brdf"]
+url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc#L3815-L3852"
+section = "glTF 2.0 specification source, Appendix B, Metal BRDF and Dielectric BRDF"
+quote = '''Note that the dielectric index of refraction `ior = 1.5` is now `f0 = 0.04`. [...] The full code is given below: fresnel_w = (1 - abs(VdotH))^5 / diffuse_brdf = (1 / π) * baseColor.rgb / specular_brdf = D(roughness^2) * G(roughness^2) / (4 * abs(VdotN) * abs(LdotN)) / dielectric_f0 = 0.04 / dielectric_fresnel = dielectric_f0 + (1 - dielectric_f0) * fresnel_w / dielectric_brdf = mix(diffuse_brdf, specular_brdf, dielectric_fresnel) / metal_fresnel = baseColor.rgb + (1 - baseColor.rgb) * fresnel_w / metal_brdf = metal_fresnel * specular_brdf / material = mix(dielectric_brdf, metal_brdf, metallic)'''
+checked = 2026-10-26
+
+["gltf-2.0-coupling"]
+url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc#L3875-L3877"
+section = "glTF 2.0 specification source, Appendix B, Discussion, Coupling Diffuse and Specular Reflection"
+quote = '''While the coupling of diffuse and specular components in `fresnel_mix` as proposed in this section is simple and cheap to compute, it is not very accurate and breaks a fundamental property that a physically based BRDF must fulfill — energy conservation.'''
+checked = 2026-10-26
+
+["gltf-2.0.1-sample-brdf"]
+url = "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html"
+section = "glTF 2.0.1, Appendix B, B.3.2 Specular BRDF and B.3.5 Metal BRDF and Dielectric BRDF"
+quote = '''and the separable form of the Smith joint masking-shadowing function [...] we can simplify the mix and arrive at the final BRDF [...] c_diff = lerp(baseColor.rgb, black, metallic); f0 = lerp(0.04, baseColor.rgb, metallic) [...] f_diffuse = (1 - F) * (1 / π) * c_diff'''
+checked = 2026-10-26
+
+["gltf-2.0-metallic-roughness"]
+url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc#L2580-L2638"
+section = "glTF 2.0 specification source, 3.9.2 Metallic-Roughness Material"
+quote = '''The factor value is a linear multiplier for the corresponding texture components. [...] Its green channel contains roughness values and its blue channel contains metalness values.'''
+checked = 2026-10-26
+
+["gltf-2.0-occlusion"]
+url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc#L2781"
+section = "glTF 2.0 specification source, 3.9.3 Additional Textures, occlusion"
+quote = '''The `occlusionTexture` property defines an occlusion texture. It indicates areas that would receive less indirect lighting from ambient sources. Direct lighting is not affected.'''
+checked = 2026-10-26
+
+["gltf-2.0-emissive-units"]
+url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc#L2691"
+section = "glTF 2.0 specification source, 3.9.3 Additional Textures, emission"
+quote = '''The units for the multiplicative product of the emissive texture and factor are candela per square meter (cd / m²), sometimes called nits.'''
+checked = 2026-10-26
+
+["gltf-2.0-emissive-factor-schema"]
+url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/schema/material.schema.json#L44-L50"
+section = "glTF 2.0 JSON schema, material.schema.json, emissiveFactor"
+quote = '''"emissiveFactor": { "type": "array", "items": { "type": "number", "minimum": 0.0, "maximum": 1.0 },'''
+checked = 2026-10-26
+
+["khr-lights-punctual-units"]
+url = "https://github.com/KhronosGroup/glTF/blob/854a757a61e6bc0dde91631579b9d3d2e1743df9/extensions/2.0/Khronos/KHR_lights_punctual/README.md#L90"
+section = "KHR_lights_punctual, Light Types, intensity"
+quote = '''`point` and `spot` lights use luminous intensity in candela (lm/sr) while `directional` lights use illuminance in lux (lm/m²)'''
+checked = 2026-10-26
+
+["khr-lights-punctual-range"]
+url = "https://github.com/KhronosGroup/glTF/blob/854a757a61e6bc0dde91631579b9d3d2e1743df9/extensions/2.0/Khronos/KHR_lights_punctual/README.md#L100-L106"
+section = "KHR_lights_punctual, Range Property"
+quote = '''attenuation = max( min( 1.0 - ( current_distance / range )⁴, 1 ), 0 ) / current_distance²'''
+checked = 2026-10-26
+
+["walter-2007-projected-area"]
+url = "https://www.graphics.cornell.edu/~bjw/microfacetbsdf.pdf#page=3"
+section = "Walter, Marschner, Li and Torrance, Microfacet Models for Refraction through Rough Surfaces, EGSR 2007, §3.1, eq. 4"
+quote = '''The (signed) projected area of the microsurface is the same as the projected area of the macrosurface for any direction v [...] and in the special case, v = n: 1 = ∫ D(m)(n·m) dωm (4)'''
+checked = 2026-10-26
+
+["walter-2007-ggx"]
+url = "https://www.graphics.cornell.edu/~bjw/microfacetbsdf.pdf#page=7"
+section = "Walter, Marschner, Li and Torrance, Microfacet Models for Refraction through Rough Surfaces, EGSR 2007, §5.2, eq. 33"
+quote = '''GGX Distribution with width parameter αg: D(m) = αg² χ⁺(m·n) / (π cos⁴θm (αg² + tan²θm)²) (33)'''
+checked = 2026-10-26
+
+["filament-punctual-light-1cm"]
+url = "https://github.com/google/filament/blob/26b427773c9292317c4e65d7cd371d87daa1eebc/shaders/src/surface_light_punctual.fs#L107-L108"
+section = "Filament (Apache-2.0), surface_light_punctual.fs, getDistanceAttenuation"
+quote = '''// Assume a punctual light occupies a volume of 1cm to avoid a division by 0
+return attenuation / max(distanceSquare, 1e-4);'''
+checked = 2026-10-26
+
+["hoffman-2013-f0"]
+url = "https://blog.selfshadow.com/publications/s2013-shading-course/hoffman/s2013_pbs_physics_math_notes.pdf#page=17"
+section = "Hoffman, Background: Physics and Math of Shading, SIGGRAPH 2013 Physically Based Shading course notes, Table 1, p. 17 (from Real-Time Rendering, 3rd edition)"
+quote = '''Material: F0 (Linear): F0 (sRGB) [...] Gold: 1.00,0.71,0.29: 1.00,0.86,0.57'''
+checked = 2026-10-26
+
+["gt7-tone-mapping-cpp"]
+url = "https://blog.selfshadow.com/publications/s2025-shading-course/pdi/supplemental/gt7_tone_mapping.cpp"
+section = "Polyphony Digital, gt7_tone_mapping.cpp 1.0 (MIT, SHA-256 94df7e7e…9822), lines 43, 50, 347 and 396-429"
+quote = '''#define GRAN_TURISMO_SDR_PAPER_WHITE 250.0f // cd/m^2 [...] #define REFERENCE_LUMINANCE 100.0f // cd/m^2 <-> 1.0f [...] curve_.initializeCurve(framebufferLuminanceTarget_, 0.25f, 0.538f, 0.444f, 1.280f);'''
+checked = 2026-10-26
+
+["gt7-slides"]
+url = "https://blog.selfshadow.com/publications/s2025-shading-course/pdi/s2025_pbs_pdi_slides_v1.1.pdf"
+section = "Yasutomi, Suzuki and Uchimura, Driving Toward Reality: Physically Based Tone Mapping and Perceptual Fidelity in Gran Turismo 7, SIGGRAPH 2025 Physically Based Shading course, slide 153"
+quote = '''We assume a paper white = 250 nits [...] In sRGB, 1.0 = 100 nits; we assume 2.5x brightness. [...] We multiply by 1 / 2.5 after SDR tone mapping to adjust.'''
+checked = 2026-10-26
+
+["bt2100-pq"]
+url = "https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.2100-3-202502-I!!PDF-E.pdf#page=6"
+section = "ITU-R BT.2100-3, Table 4, PQ system reference non-linear transfer functions"
+quote = '''F_D = EOTF[E′] = 10000 Y [...] m1 = 2610/16384 = 0.1593017578125; m2 = 2523/4096 × 128 = 78.84375; c1 = 3424/4096 = 0.8359375 = c3 − c2 + 1; c2 = 2413/4096 × 32 = 18.8515625; c3 = 2392/4096 × 32 = 18.6875'''
+checked = 2026-10-26
+
+["bt2100-ictcp"]
+url = "https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.2100-3-202502-I!!PDF-E.pdf#page=10"
+section = "ITU-R BT.2100-3, Table 7, Constant Intensity ICTCP signal format"
+quote = '''L = (1688R + 2146G + 262B)/4096; M = (683R + 2951G + 462B)/4096; S = (99R + 309G + 3688B)/4096 [...] I = 0.5L′ + 0.5M′; C_T = (6610L′ − 13613M′ + 7003S′)/4096; C_P = (17933L′ − 17390M′ − 543S′)/4096'''
+checked = 2026-10-26
+
+["bt2087-rec709-to-rec2020"]
+url = "https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.2087-0-201510-I!!PDF-E.pdf#page=6"
+section = "ITU-R BT.2087-0, Annex 1, M2"
+quote = '''Colour conversion from linearly represented, normalized RGB colour signals E_R E_G E_B (Rec. 709) to linearly represented, normalized RGB colour signals E_R E_G E_B (Rec. 2020): [...] 0.6274 0.3293 0.0433; 0.0691 0.9195 0.0114; 0.0164 0.0880 0.8956 [...] NOTE 3 – All matrix values above were calculated with high precision and then rounded to four decimal digits.'''
+checked = 2026-10-26
+
+["bt709-6-primaries"]
+url = "https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.709-6-201506-I!!PDF-E.pdf#page=5"
+section = "ITU-R BT.709-6, Part 1, items 1.3 and 1.4"
+quote = '''1.3 Chromaticity coordinates (CIE, 1931): Primary: x: y [...] Red (R): 0.640: 0.330 [...] Green (G): 0.300: 0.600 [...] Blue (B): 0.150: 0.060 [...] 1.4 Assumed chromaticity for equal primary signals (Reference white) D65: 0.3127: 0.3290'''
+checked = 2026-10-26
+
+["bt2020-2-primaries"]
+url = "https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.2020-2-201510-I!!PDF-E.pdf#page=3"
+section = "ITU-R BT.2020-2, Table 3, System colorimetry"
+quote = '''Red primary (R): 0.708: 0.292 [...] Green primary (G): 0.170: 0.797 [...] Blue primary (B): 0.131: 0.046 [...] Reference white (D65): 0.3127: 0.3290'''
+checked = 2026-10-26
+
+["bt709-6-luma"]
+url = "https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.709-6-201506-I!!PDF-E.pdf#page=6"
+section = "ITU-R BT.709-6, Part 1, item 3.2, Derivation of luminance signal; the same weights are the Y row of BT.2087-0's Annex 1, M2"
+quote = '''3.2 Derivation of luminance signal E′_Y: E′_Y = 0.2126 E′_R + 0.7152 E′_G + 0.0722 E′_B'''
+checked = 2026-10-26
+
+["khronos-dfs-srgb"]
+url = "https://registry.khronos.org/DataFormat/specs/1.3/dataformat.1.3.html#TRANSFER_SRGB_INVEOTF"
+section = "Khronos Data Format Specification 1.3, §13.3.2 sRGB EOTF⁻¹, restating IEC 61966-2-1"
+quote = '''The corresponding sRGB EOTF⁻¹ conversion from linear (R, G, B) encoding to non-linear (R′, G′, B′) encoding is: R′ = R × 12.92, R ≤ 0.0031308; 1.055 × R^(1/2.4) − 0.055, R > 0.0031308'''
+checked = 2026-10-26
+
+["wgsl-f16-largest"]
+url = "https://www.w3.org/TR/2026/CRD-WGSL-20261021/#floating-point-types"
+section = "WGSL, §6.2.4 Floating Point Types, table Extreme values for floating point types"
+quote = '''f16: [...] Largest positive finite: 65504.0h, 0x1.ffcp+15h'''
+checked = 2026-10-26
+
+["vulkan-fp-conversion"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/chapters/fundamentals.adoc#fundamentals-fp-conversion"
+section = "Vulkan specification, Fundamentals, Floating-Point Format Conversions"
+quote = '''When a value is converted to a defined floating-point representation, finite values falling between two representable finite values are rounded to one or the other. The rounding mode is not defined. Finite values whose magnitude is larger than that of any representable finite value may be rounded either to the closest representable finite value or to the appropriately signed infinity.'''
+checked = 2026-10-26
+
+["frostbite-2014-exposure"]
+url = "https://seblagarde.files.wordpress.com/2015/07/course_notes_moving_frostbite_to_pbr_v32.pdf#page=85"
+section = "Lagarde and de Rousiers, Moving Frostbite to Physically Based Rendering 3.0, SIGGRAPH 2014 course notes, §5.1.2, eqs. 70 and 75 and Listing 28, PDF pp. 85-87"
+quote = '''with L the incident luminance and q the lens and vignetting attenuation (a typical value is q = 0.65, [Wikc]) [...] Lmax = 78/S · N²/(q t) (75) [...] // maxLum = 78 / ( S * q ) * N^2 / t [...] //  = 78 / (100 * 0.65) * 2^EV_100 //  = 1.2 * 2^EV [...] float maxLuminance = 1.2f * pow(2.0f, EV100); return 1.0f / maxLuminance;'''
+checked = 2026-10-26
+
+["frostbite-2014-relative-lights"]
+url = "https://seblagarde.files.wordpress.com/2015/07/course_notes_moving_frostbite_to_pbr_v32.pdf#page=95"
+section = "Lagarde and de Rousiers, Moving Frostbite to Physically Based Rendering 3.0, §6 Transition to PBR, PDF p. 95"
+quote = '''For lights: We have found lights to be extremely hard to convert from arbitrary units to physical based units.'''
+checked = 2026-10-26
+
+["frostbite-2014-light-units"]
+url = "https://seblagarde.files.wordpress.com/2015/07/course_notes_moving_frostbite_to_pbr_v32.pdf#page=29"
+section = "Lagarde and de Rousiers, Moving Frostbite to Physically Based Rendering 3.0, Table 8, PDF p. 29"
+quote = '''Punctual: Luminous power (lm) [...] Table 8: Light units associated with various Frostbite light types.'''
+checked = 2026-10-26
+
+["filament-light-units"]
+url = "https://github.com/google/filament/blob/26b427773c9292317c4e65d7cd371d87daa1eebc/docs/Filament.md.html#L1238"
+section = "Filament, Filament.md.html, Lighting, Units"
+quote = '''Point light | Luminous power (lm)'''
+checked = 2026-10-26
+
+["bevy-point-light-lumens"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_light/src/point_light.rs#L53"
+section = "Bevy v0.20.0, bevy_light, PointLight::intensity"
+quote = '''/// Luminous power in lumens, representing the amount of light emitted by this source in all directions.'''
+checked = 2026-10-26
+
+["godot-light-units"]
+url = "https://docs.godotengine.org/en/4.7/tutorials/3d/physical_light_and_camera_units.html"
+section = "Godot 4.7 documentation, Physical light and camera units, Configure the light nodes"
+quote = '''As Godot favors ease of use by default, physical light units are disabled by default. [...] Intensity: The light's intensity in lux (DirectionalLight3D) or lumens (OmniLight3D/SpotLight3D/AreaLight3D).'''
+checked = 2026-10-26
+
+["bevy-gltf-point-candela"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_gltf/src/loader/mod.rs#L1793-L1796"
+section = "Bevy v0.20.0, bevy_gltf loader, point lights"
+quote = '''// NOTE: KHR_punctual_lights defines the intensity units for point lights in
+// candela (lm/sr) which is luminous intensity and we need luminous power.
+// For a point light, luminous power = 4 * pi * luminous intensity
+intensity: light.intensity() * core::f32::consts::PI * 4.0,'''
+checked = 2026-10-26
+
+["bevy-lux-constants"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_light/src/lib.rs#L130-L158"
+section = "Bevy v0.20.0, bevy_light, module lux"
+quote = '''/// The amount of light (lux) in a moonless, overcast night sky. (starlight)
+pub const MOONLESS_NIGHT: f32 = 0.0001; [...] pub const DIRECT_SUNLIGHT: f32 = 100_000.;'''
+checked = 2026-10-26
+
+["blender-gltf-light-export"]
+url = "https://github.com/KhronosGroup/glTF-Blender-IO/blob/e03d6603c44a9a95f006fd79a38b40cdd3c3a009/addons/io_scene_gltf2/blender/exp/lights.py#L178-L192"
+section = "glTF-Blender-IO, blender/exp/lights.py, light intensity, with PBR_WATTS_TO_LUMENS = 683 (com/conversion.py, line 20)"
+quote = '''if blender_lamp.type == 'SUN':  # W/m^2 in Blender to lm/m^2 for GLTF/KHR_lights_punctual.
+    emission_luminous = emission_strength
+else: [...]
+    emission_luminous = emission_strength / (4 * math.pi)
+if export_settings['gltf_lighting_mode'] == 'SPEC':
+    emission_luminous *= PBR_WATTS_TO_LUMENS [...]
+return emission_luminous * 2 ** blender_lamp.exposure'''
+checked = 2026-10-26
+
+["karis-2013-weighted-average"]
+url = "https://graphicrants.blogspot.com/2013/12/tone-mapping.html"
+section = "Karis, Tone mapping, Graphic Rants, 15 December 2013"
+quote = '''This operation, when used to reduce fireflies, can also be thought of as a weighting function for each sample: weight = 1/(1 + luma). For a weighted average, sum all samples and divide by the summed weights. The result will be the same as if the samples were tone mapped using T with range of 1, averaged, then inverse tone mapped using T_inverse.'''
+checked = 2026-10-26
+
+["peters-blue-noise"]
+url = "https://momentsingraphics.de/BlueNoise.html"
+section = "Peters, Free blue noise textures, Dithering (Listing 1) and A database of blue noise textures; the mask is Data/64_64/LDR_LLL1_0.png of FreeBlueNoiseTextures.zip"
+quote = '''it is best to transition from the uniform noise distribution to a triangular distribution before using the noise for dithering. [...] // Go from a uniform distribution on [0,1] to a symmetric triangular distribution on [-1,1] with maximal density at 0
+BlueNoise=mad(BlueNoise,2.0f,-1.0f);
+BlueNoise=sign(BlueNoise)*(1.0f-sqrt(1.0f-abs(BlueNoise))); [...] I have placed them in the public domain through CC0-licensing.'''
+checked = 2026-10-26
+
+["lipshitz-1992-triangular-dither"]
+url = "https://hajim.rochester.edu/ece/sites/zduan/teaching/ece472/reading/Lipshitz_1992.pdf#page=18"
+section = "Lipshitz, Wannamaker and Vanderkooy, Quantization and Dither: A Theoretical Survey, J. Audio Eng. Soc. 40(5), 1992, §5.4, p. 372"
+quote = '''5) Triangular-pdf dither of 2-LSB peak-to-peak amplitude incurs the least increase in the rms total error level of any nonsubtractive dither which eliminates input-dependent distortion and noise modulation.'''
+checked = 2026-10-26
+
+["frostbite-2014-fp16"]
+url = "https://seblagarde.files.wordpress.com/2015/07/course_notes_moving_frostbite_to_pbr_v32.pdf#page=91"
+section = "Lagarde and de Rousiers, Moving Frostbite to Physically Based Rendering 3.0, §5.2, PDF p. 91"
+quote = '''Care must be taken when importing such a format as conversion to Float16 will result in infinite numbers for values larger than 65504. Light buffer Float16. Exposure is pre-applied.'''
+checked = 2026-10-26
+
+["unreal-scene-color-overflow"]
+url = "https://web.archive.org/web/20260302051755/https://dev.epicgames.com/documentation/en-us/unreal-engine/using-physical-lighting-units-in-unreal-engine"
+section = "Unreal Engine documentation, Using Physical Lighting Units, suggestions for a physically based lighting workflow"
+quote = '''If reflective surfaces have artifacts like black patches, the SceneColor buffer might be overflowing. To fix it, either enable Apply Pre-Exposure before writing to the scene color in the Project Settings, or reduce the brightness of lights in the scene.'''
+checked = 2026-10-26

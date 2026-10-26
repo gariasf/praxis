@@ -17,10 +17,10 @@ pub(crate) const TONEMAPPING_PASS: &str = "tonemapping_pass";
 pub(crate) const DITHER_MASK_SIDE: u32 = 64;
 const _: () = assert!(DITHER_MASK_SIDE.is_power_of_two());
 
-/// The dither's blue-noise mask, rows top first: the red channel of
-/// Peters's `assets/BlueNoise/LDR_LLL1_0.png` (CC0), compiled in, as a build
-/// without `cook` links no PNG decoder and ADR 0018's cook would store it
-/// lossy.
+/// The dither's blue-noise mask, rows top first: the red channel of Peters's
+/// `assets/BlueNoise/LDR_LLL1_0.png` (CC0 [ref:peters-blue-noise]), compiled
+/// in, as a build without `cook` links no PNG decoder and ADR 0018's cook would
+/// store it lossy.
 const DITHER_MASK: &[u8; (DITHER_MASK_SIDE * DITHER_MASK_SIDE) as usize] =
     include_bytes!("dither_mask.bin");
 
