@@ -201,7 +201,7 @@ When a feature folder grows past one file, split into
 ## Code conventions
 
 - `cargo fmt` and `cargo clippy` must pass.
-- Use `tracing::info!` / `error!` / etc. — never `println!` or `log`.
+- Use `tracing::info!` / `error!` / etc. — never `println!` or `log` (tested).
 - Prefer structured fields:
   `tracing::info!(field = value, "message")` over `format!`-style
   messages.
@@ -210,7 +210,8 @@ When a feature folder grows past one file, split into
 - Bevy imports: `use bevy_ecs::prelude::*;` (not piecemeal).
 - WGPU types: full path (`wgpu::Buffer`), don't import individual types.
 - Identifiers are full words, WGSL included (`normal_dot_view`, not
-  `n_dot_v`). Put a textbook symbol in a comment where it helps.
+  `n_dot_v`; shading names tested). Put a textbook symbol in a comment
+  where it helps.
 - Pool lookups return `Option<&T>`. Callers handle `None`
   gracefully (warn + skip in render path); never `.unwrap()` in a
   hot loop.
@@ -232,7 +233,7 @@ When a feature folder grows past one file, split into
   patent searches.
 - Comments say what the code does and why in their own words, citing no
   ticket, PR or decision: only an upstream bug, adapted code's source and
-  licence, a pinned third-party source or an ADR.
+  licence, a pinned third-party source or an ADR (ticket numbers tested).
 
 ## Review checklist
 
@@ -256,7 +257,8 @@ When reviewing changes, check for:
 - [ ] No World position reaches the GPU in f32: only an anchor plus an
       f32 offset, composed camera-relative (ADR 0014)
 - [ ] Depth is cleared to 0 and compared with `Greater`, with no far
-      plane; shadow and Hi-Z passes follow the same direction (ADR 0015)
+      plane; shadow and Hi-Z passes follow the same direction (ADR 0015;
+      no `Less` and no nonzero depth clear tested)
 - [ ] Light values are photometric as glTF defines them (lux, candela,
       cd/m²) and exposure is an EV100; HDR colour is pre-exposed before
       fp16 stores it and clamped to 65504, so no backend sees infinity
@@ -269,9 +271,9 @@ When reviewing changes, check for:
 - [ ] Texture formats match between creation and surface config, and
       sRGB is encoded once: the tonemapping pass alone encodes it, in its
       shader, into 8-bit UNORM targets, so its dither lands on 8-bit steps;
-      no target is an sRGB format
+      no target is an sRGB format (this last clause tested)
 - [ ] `unwrap()` on GPU operations that could fail at runtime — prefer
-      `?` or explicit handling
+      `?` or explicit handling (tested in `src/render/`)
 - [ ] No GPU resources stored on ECS components — components are pure
       authoring data
 - [ ] Code adapted from elsewhere cites its source and licence;
