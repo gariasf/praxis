@@ -24,7 +24,8 @@ use crate::stats::{FrameRecorder, GpuFrameStats};
 
 /// The passes `render` records, in order, each timed from its start to its
 /// end, after the dynamic TLAS's build, timed from the end of the marker
-/// before it to the start of the marker after it in frames that build it.
+/// before it, or of the frame before's last pass if later, to the start of
+/// the marker after it in frames that build it.
 /// The bend pass runs in frames that bend Meshes, and the BLAS refit, timed
 /// from the end of the bend pass to the start of the marker after it, in
 /// those frames with the crowd's refit form; phase two's depth pass and the
