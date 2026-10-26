@@ -1,0 +1,951 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Frame Timing Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume 17 of the series, after BLAS Refit Explained. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --bad: #c43a31;
+  --bad-wash: rgba(196, 58, 49, 0.14);
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+    --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+  --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+}
+.sheet {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.keypoints li { min-width: 0; }
+.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .s-ink { stroke: var(--ink); } svg .s-soft { stroke: var(--ink-soft); } svg .s-accent { stroke: var(--accent); } svg .s-warm { stroke: var(--warm); }
+svg .f-ink { fill: var(--ink); } svg .f-soft { fill: var(--ink-soft); } svg .f-accent { fill: var(--accent); } svg .f-warm { fill: var(--warm); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+output { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
+.canvas-frame canvas { border-radius: 0; }
+canvas.demo { touch-action: none; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
+.legend i.dashed { border-top: 2.5px dashed var(--warm); }
+.legend i.thin { border-top: 1.5px solid var(--ink); }
+.legend i.dotted { border-top: 2.5px dotted var(--ink-soft); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.demo-grid > div { min-width: 0; }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 14px 0 0; font-family: var(--mono); font-size: 14px; }
+.figures div { min-width: 0; }
+.figures dt { color: var(--ink-soft); font-size: 12px; }
+.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .formula { font-size: 13px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.meter { display: grid; gap: 14px; }
+.meter-row { display: grid; gap: 5px; min-width: 0; }
+.meter-label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-family: var(--mono); font-size: 13.5px; color: var(--ink-soft); }
+.meter-label b { color: var(--ink); font-weight: 600; }
+.meter-track { position: relative; height: 20px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.meter-fill, .meter-range, .meter-budget { position: absolute; top: 0; bottom: 0; }
+.meter-fill { left: 0; background: var(--accent); }
+.meter-range { background: var(--accent-wash); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.meter-fill.over { background: var(--bad); }
+.meter-range.over { background: var(--bad-wash); box-shadow: inset 0 0 0 1.5px var(--bad); }
+.meter-budget { width: 0; border-left: 2px dashed var(--warm); }
+.meter-axis { position: relative; height: 36px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.meter-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.meter-axis span.first { transform: none; }
+.meter-axis span.last { transform: translateX(-100%); }
+.meter-axis span.budget { top: 17px; color: var(--warm); font-weight: 600; }
+
+
+/* This volume's own parts: the plain opening of each chapter, the pass order, the timeline demo and the gate's bars. */
+p.plain { font-size: 19px; line-height: 1.55; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 20px; }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.apart { border-style: dashed; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.legend .swatch { display: inline-block; width: 16px; height: 12px; border: 1px solid var(--rule); border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.bad-text { color: var(--bad); }
+.good-text { color: var(--good); }
+[hidden] { display: none !important; }
+
+/* Key ideas and Check yourself, the series' standard for new guides. */
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+details.check { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 16px; margin: 0 0 12px; }
+details.check summary { cursor: pointer; font-weight: 600; }
+details.check[open] summary { margin-bottom: 8px; }
+details.check p { margin: 0; }
+
+/* In brief: the guide's conclusion first, for the reader who stops here. */
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis field guides</a></div>
+  <div class="eyebrow">Praxis &middot; M3 &middot; ticket #207 &middot; PRs #298 and #299, merged</div>
+  <h1>What a frame's GPU time counts</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>On Metal, passes and frames can run side by side, so summing pass times counts some GPU time twice. Praxis times each submission of a frame's passes as one span, earliest start to latest end, and since PR #299 counts the dynamic TLAS build from the end of the frame before. ADR 0019's gate, a span from culling phase one to the lit pass with shadow rays off, reads 9.8 ms in the town scene's Baseline against 6 ms, so two other main-pass designs go to prototypes. The idea to keep: a frame's GPU time is a span, not a sum.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>Why a frame's GPU time is a span, not a sum</li>
+      <li>What ADR 0019's gate times, and why town breaches it</li>
+      <li>How shadow-ray time is read as a per-frame difference of two runs</li>
+      <li>How the dynamic TLAS build hid behind the frame before and was counted twice</li>
+      <li>How to check frames far along a camera path without drawing them all</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="gpu-ordering.html">GPU Ordering Explained</a>, <a href="dynamic-tlas.html">Dynamic TLAS Explained</a>, <a href="town.html">Town Explained</a></p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at fd2ee9b (PR #298, 2026-10-26) and 800c0d2 (PR #299, 2026-10-26). <b>Since then:</b> nothing that changes what it describes, as of main at 800c0d2 (2026-10-26).</p>
+  </aside>
+  <p class="lede">#207 recorded <code>town</code>'s Baselines, and with them a reading of <span class="concept" data-term="ADR 0019's gate" data-tip="From the start of culling phase one to the latest end of the passes up to the lit pass, with shadow rays off: the median over a Reference scene's camera path, judged against 6 ms. Past it, options B and D are prototyped on that scene.">ADR 0019's gate</span> on the dense scene. It breached: 9.8 ms against 6, in the run kept as the Baseline. Getting there meant deciding what a frame's GPU time is when the GPU runs passes side by side and starts the next frame's work before the last one ends. This guide covers how Praxis times a frame, what the gate measures and why, the two options its breach sends to prototypes, shadow-ray time as a difference of two runs, the dynamic TLAS build that hid behind the frame before it and was counted twice, and how a test checks frames up to 1,800 frames along a camera path without drawing them all. Two live demos slide a build under the frame before it, and cut town's passes down toward the 6 ms line.</p>
+  <p class="status"><b>Provenance.</b> #207 shipped in two parts. PR #298 (branch <code>feat/capture-frames</code>), merged on 2026-10-26 as fd2ee9b, adds <code>capture_frames</code> and checks <code>town</code>'s culling and Froxel lists at eight frames. PR #299 (branch <code>feat/town-gate</code>), merged on 2026-10-26 as 800c0d2, benches the gate and shadow-ray time, times the build from the frame before's last pass, sets the dynamic TLAS's ceilings, records the Baselines and adds rows for the gate and shadow-ray time to <code>praxis report</code>, with the ceilings in its Budget column. <code>town</code>'s figures are from <code>docs/performance.md</code>'s section of 2026-10-26, its Baseline and the decision on #17 that the section links: Apple M4 Pro, wgpu 30.0.1 on Metal, release, 2560&times;1440 with 4x MSAA, 248 warm-up and 1,800 measured frames. The other scenes' figures come from their Baselines before #299 and as it recorded them, chapter 3's from the visibility research doc, and chapter 6's from PR #298 and the decision on #207. The guide was checked against a96a74f, an earlier head of #299, and again against bfb4a51, the head that merged.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#frame">1 &middot; A frame's GPU time</a>
+    <a href="#gate">2 &middot; ADR 0019's gate</a>
+    <a href="#options">3 &middot; Options B and D</a>
+    <a href="#rays">4 &middot; Shadow-ray time</a>
+    <a href="#hiding">5 &middot; Work behind the frame before</a>
+    <a href="#far">6 &middot; Frames far along a path</a>
+    <a href="#check">Check yourself</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="frame">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1 &middot; Frame stats &middot; <code>src/render/readback.rs</code></div>
+    <h2>What a frame's GPU time is</h2>
+    <p class="key-idea"><b>Key idea.</b> A frame's GPU time is a span, not a sum: Metal can run passes side by side, so Praxis times each submission of the frame's passes from their earliest start to their latest end, and adds the dynamic TLAS's build.</p>
+    <p class="plain">The GPU has a clock, and each timed pass asks it for the time twice: when the pass starts and when it ends. A pass's time is the difference. A frame's time is not the sum of its passes, because the GPU does not always run them one after another.</p>
+    <p>Praxis keeps two <span class="concept" data-term="Timestamp query" data-tip="A GPU write of its clock into a slot of a query set, which wgpu asks for at the start or end of a pass. On Metal, wgpu-hal takes it as a counter sample: at the start or end of a compute pass&#x27;s encoder, and at the start of a render pass&#x27;s vertex stage or the end of its fragment stage.">timestamp queries</span> for each of twelve timed passes, 24 per frame. Most passes write one at their start and one at their end; the dynamic TLAS build is timed between two small marker passes around it, and the BLAS refit from the end of the bend pass to a marker after it. The timestamps land in a ring of buffers: a frame's timestamps are resolved once its <span class="concept" data-term="Submission" data-tip="One call to Queue::submit: the command buffers it hands the GPU, in order, and the index the CPU can wait on.">submission</span> has completed, <code>FRAMES_IN_FLIGHT + 1</code> frames later, and the CPU reads them when the ring comes back to their slot, six frames after the frame. In <code>TIMED_PASSES</code>' order:</p>
+  </div>
+  <figure class="wide">
+    <p class="order-label">TIMED_PASSES: the dynamic TLAS build, then the passes in the order the frame records them (<code>src/render/renderer.rs</code>)</p>
+    <ol class="pass-order">
+      <li class="warm">dynamic TLAS build</li>
+      <li>bend pass</li>
+      <li>BLAS refit</li>
+      <li class="focus">culling phase one</li>
+      <li class="focus">Froxel pass</li>
+      <li class="focus">depth pre-pass</li>
+      <li class="focus">depth pyramid</li>
+      <li class="focus">culling phase two</li>
+      <li class="focus apart">phase-two depth pass</li>
+      <li class="focus apart">shadow mask pass</li>
+      <li class="focus">lit pass</li>
+      <li>tonemapping</li>
+    </ol>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--warm-wash); border: 1.5px solid var(--warm)"></span>its own submission, before the frame's passes</span>
+      <span><span class="swatch" style="background: var(--accent-wash); border: 1.5px solid var(--accent)"></span>inside ADR 0019's gate</span>
+      <span><span class="swatch" style="border: 1.5px dashed var(--ink-soft)"></span>run only with shadow rays on</span>
+    </div>
+    <figcaption>The bend pass and BLAS refit run only on the <code>crowd</code> scene; when it updates BLASes, its bend pass and those updates are submitted before the build. With shadow rays off, the two dashed passes read as taking no time (<code>SHADOW_RAY_PASSES</code>), and phase two's Instances draw into depth at the start of the lit pass instead (ADR 0019).</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>The span, not the sum</h3>
+    <p>Metal can run a pass alongside the passes recorded around it when neither writes a resource the other binds: its hazard tracking makes a pass that binds a resource wait for earlier writes to it, and one that writes it wait for earlier reads as well (<a href="gpu-ordering.html">GPU Ordering Explained</a>). The <span class="concept" data-term="Froxel" data-tip="A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.">Froxel</span> pass, which lists each cell's lights, and culling write nothing the other binds, so the Froxel pass can start before culling phase one. Summing the passes would count that overlap twice. So <code>frame_times</code> takes, for each submission, the earliest start and the latest end of the passes in it, and calls the difference the span. In the code's words, which give only the first half of Metal's rule:</p>
+<pre class="code"><code><span class="comment">// From the earliest start to the latest end of `passes` that write both</span>
+<span class="comment">// timestamps: Metal can run a pass alongside those recorded around it</span>
+<span class="comment">// when it reads none of their output, so the Froxel pass can start</span>
+<span class="comment">// before culling phase one, and a pass can end after the last.</span></code></pre>
+    <p style="margin-top: 16px">The <span class="concept" data-term="GPU frame total" data-tip="From Frame stats: the dynamic TLAS&#x27;s build, counted from the end of the frame before&#x27;s last pass, which hides the rest of it, plus, for each submission of the frame&#x27;s passes, the span from the earliest start of its passes to their latest end.">GPU frame total</span> is then the build of the <span class="concept" data-term="Dynamic TLAS" data-tip="The top-level acceleration structure over the Moving Instances, at most 10,000 of them, those in the lowest slots, each tagged with its slot. It is rebuilt every frame, in the static TLAS&#x27;s coordinate frame (#204).">dynamic TLAS</span>, in a submission of its own, plus the span of each submission of the frame's passes. Neither the waits between submissions nor what a submission does before its first pass counts. Chapter 5 is about where the build's time starts.</p>
+    <h3>Frames in flight</h3>
+    <p>The CPU does not wait for a frame to finish on the GPU before recording the next. <code>FRAMES_IN_FLIGHT</code> is 2: "Frames submitted but not finished on the GPU when the next one starts, at most". While the GPU runs frame N, the CPU records frame N+1 and submits it, and the GPU may start N+1's first submission before N's last pass ends. That keeps the GPU busy. It also means a stretch of GPU time can belong to two frames at once, and an accounting has to give it to one of them.</p>
+  </div>
+</section>
+
+<section class="chapter" id="gate">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 &middot; ADR 0019 &middot; M3's exit criterion 2</div>
+    <h2>ADR 0019's gate</h2>
+    <p class="key-idea"><b>Key idea.</b> ADR 0019's gate times only what the main pass's design decides, from culling phase one to the end of the lit pass with shadow rays off, and town's Baseline reads 9.8 ms against its 6 ms, so options B and D are prototyped on town before anything changes.</p>
+    <p class="plain">ADR 0019 chose a forward main pass with 4x MSAA, and wrote down when to doubt that choice: when the main pass takes more than 6 ms of GPU on a <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> at 1440p. On <code>town</code> the run kept as its Baseline reads 9.8 ms.</p>
+    <p>The clause, from the ADR's Consequences: "on a Reference scene at 1440p with 4x MSAA, the opaque main pass takes more than 6 ms of GPU, half of ADR 0013's 12 ms, as the median over the scene's camera path, timed from the first culling dispatch to the end of the lit pass with shadow rays off, since every option traces the same rays; then B and D are prototyped on that scene before anything changes." Each part of it is a choice:</p>
+    <ul class="keypoints">
+      <li><b>6 ms.</b> Half of ADR 0013's 12 ms GPU frame <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, which caps what that kind may hold (ADR 0017). Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budget</span>. The ADR calls it provisional, as ADR 0013's Budgets are. <code>bench/budgets.json</code> holds it as <code>"gate_microseconds": 6000</code>.</li>
+      <li><b>From culling to the lit pass.</b> Everything the main pass's shape decides: culling, the Froxel pass, the depth pre-pass, the depth pyramid, phase two and the lit pass. Tonemapping and the dynamic TLAS build are outside it.</li>
+      <li><b>Shadow rays off.</b> Options A, B and D all trace the same shadow rays, so the rays cannot tell them apart. With them in, the gate would measure the rays as much as the main pass.</li>
+      <li><b>The median over the camera path.</b> One number per scene, from all 1,800 measured frames; the p95 is reported beside it.</li>
+    </ul>
+    <h3>In code</h3>
+    <p><code>frame_times</code> starts the gate at culling phase one's start timestamp and ends it at the latest end of the passes from culling phase one to the lit pass. It starts at culling, not at the earliest of those passes, even though the Froxel pass can start first on Metal:</p>
+<pre class="code"><code>let culling_phase_one = pass_position(CullingPhase::One.label());
+let (_, gate_end) = bounds(culling_phase_one..pass_position(LIT_PASS) + 1);
+<span class="comment">// ...</span>
+gate_time: time(ticks[2 * culling_phase_one], gate_end),</code></pre>
+    <p style="margin-top: 16px"><code>praxis bench</code> now renders each scene twice, once with shadow rays on and once with <code>RenderSwitches { shadow_rays: false }</code>, and the gate's median and p95 come from the second run. <code>praxis compare</code> fails a gate past 6 ms, and one grown more than 10% and 20 &micro;s past its Baseline; past 5% it warns. <code>praxis report</code>, which prints a bench run as markdown tables against its Baseline and the Budgets, gives the gate a row of its own, with the 6 ms in its Budget column. <code>texture-wall</code>'s Baseline reads 14.3 ms, so <code>compare</code> fails its gate too, though its timed passes cover little of that span; M3's exit criterion 2 judges the gate on <code>town</code>.</p>
+    <h3>town breaches it</h3>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>town, rays off</th><th class="n">median</th><th class="n">p95</th></tr></thead>
+      <tbody>
+        <tr class="focus"><td>ADR 0019's gate, the run kept as the Baseline</td><td class="n">9,821 &micro;s</td><td class="n">10,483 &micro;s</td></tr>
+        <tr><td>The run the owner's decision quotes</td><td class="n">9.61 ms</td><td class="n">10.15 ms</td></tr>
+        <tr><td>Seven runs</td><td class="n" colspan="2">9.6 to 10.3 ms</td></tr>
+        <tr><td>Dynamic TLAS emptied</td><td class="n" colspan="2">9.58 ms</td></tr>
+        <tr><td>One frame in flight</td><td class="n" colspan="2">9.58 ms</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p>The records give the gate two medians, from two runs. The Baseline's 9,821 &micro;s, which <code>praxis report</code> prints as 9,820.7, comes from one of five runs recorded after the gate's start moved to culling phase one: the one kept for its lowest CPU frame. The owner's <a href="https://github.com/gariasf/praxis/issues/207#issuecomment-6415600666">decision</a>, posted on #207 and on map #17, quotes 9.61 ms (p95 10.15) from a run made before that move, when the gate still began at the earliest start among its passes: the Froxel pass's, in frames where Metal ran it first. Both lie within the seven runs' 9.6 to 10.3 ms.</p>
+    <p><code>town</code>'s frames draw a median of 137,730 Instances and 5,552,214 triangles, with 10,000 <span class="concept" data-term="Moving Instance" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.">Moving Instances</span>. The two extra runs, measured the same way as the decision's, rule two suspects out. Emptying the dynamic TLAS removes its build, which runs beside the frame (chapter 5): the gate reads 9.58 ms against that run's 9.61. One frame in flight stops frame N+1's work from overlapping frame N's: 9.58 ms again. The breach is the main pass's own work.</p>
+  </div>
+  <figure class="wide" id="demo-gate">
+    <div class="meter" id="g-rows"></div>
+    <div class="sliders">
+      <label for="g-lit" class="control-label">Lit pass <output id="g-lit-out" for="g-lit"></output></label>
+      <input type="range" id="g-lit" min="0" max="5.15" step="0.01" value="5.15">
+      <label for="g-depth" class="control-label">Depth pre-pass <output id="g-depth-out" for="g-depth"></output></label>
+      <input type="range" id="g-depth" min="0" max="1.76" step="0.01" value="1.76">
+    </div>
+    <p class="readout" id="g-readout" aria-live="polite" style="margin-top: 12px"></p>
+    <figcaption><b>Live demo.</b> <code>town</code>'s rays-off passes inside the gate, as measured, against the 6 ms line. Their medians are the ones the owner's decision reports, from a run whose gate read 9.61 ms; they sum to 10.10 ms (this page's arithmetic), more than that gate, because Metal runs some of them side by side and the span counts that time once. The sliders cut the two largest passes; the estimate subtracts each cut from the Baseline's run, 9,821 &micro;s, which assumes the overlap is the same in both runs and stays as it is. It is arithmetic, not a prediction of any option: B and D change more than these two passes.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The lit pass alone would have to lose three quarters of its 5.15 ms for the Baseline's gate to pass with nothing else changed. That is what the clause's second half is for: before anything changes, the two other shapes of main pass are built on <code>town</code> and measured.</p>
+  </div>
+</section>
+
+<section class="chapter" id="options">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 &middot; <code>docs/research/visibility-and-gpu-driven-main-pass.md</code> &middot; #296, #297</div>
+    <h2>Options B and D</h2>
+    <p class="key-idea"><b>Key idea.</b> B adds a per-sample ID so the lit pass draws only the triangles that own a sample, D shades from those IDs in compute and must work out texture derivatives itself, and each prototype answers with its gate on town and its image beside A's.</p>
+    <p class="plain">Today's main pass, option A, rasterizes each surviving triangle twice: once for depth, once to shade at depth equal. B adds a record of which triangle won each sample. D goes further and shades from that record in compute, with no second raster.</p>
+    <p>Both start from a <span class="concept" data-term="Visibility buffer" data-tip="A 4-byte triangle and instance ID per sample, written by a pre-pass, from which later passes rebuild the surface each pixel shows. Shading from it in compute, as D does, has no quad overdraw; B&#x27;s lit pass still rasterizes.">visibility</span> pre-pass: depth plus a 32-bit Instance-and-triangle ID per sample, in an <code>R32Uint</code> target. At 4x MSAA and 2560&times;1440 that is 58,982,400 bytes, the research doc's computation. On the M4 Pro, writing the triangle's ID through <code>primitive_index</code> made the ID pass 19 to 24% slower than one writing the Instance alone.</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts">
+      <thead><tr><th></th><th>B: forward with a visibility pre-pass (#296)</th><th>D: visibility buffer with compute materials (#297)</th></tr></thead>
+      <tbody>
+        <tr><td>After the pre-pass</td><td>A compute scan marks the triangles that own a sample and compacts the lit pass's indices, so the lit pass draws only those.</td><td>A compute pass rebuilds each pixel's triangle from the IDs and the vertex and index buffers, interpolates its attributes and shades every Material.</td></tr>
+        <tr><td>Texture sampling</td><td>As A: the lit pass rasterizes, so the hardware's derivatives choose the mip level.</td><td>Analytic derivatives and <code>textureSampleGrad</code>: compute has no quads to take differences across.</td></tr>
+        <tr><td>MSAA</td><td>As A, 4x on geometric edges; the per-sample IDs also mark edge samples.</td><td>Needs per-sample IDs and per-sample shading at edges; otherwise SMAA 1x, which cannot rebuild sub-pixel geometry.</td></tr>
+        <tr><td>Measured earlier, M4 Pro</td><td>The ID pass: 19 to 24% slower with <code>primitive_index</code>.</td><td>Resolved in a full-screen fragment pass: 16% slower to 4% faster than forward at 1x; 4x IDs added 4 to 12% before any per-sample shading.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p>B is A plus one attachment, and keeps A's image quality: the lit pass rasterizes the same surviving triangles at depth equal. Its bet is that the scan's compaction saves the lit pass more than the IDs cost. D removes the second raster and the quad overdraw that comes with shading in 2&times;2 quads, but takes on derivatives by hand, since compute has no quads to take differences across. A visibility buffer shaded in quads anyway, as Nanite's material pass was in 2021, does not escape this: its quads span depth discontinuities, UV seams and different objects, and finite differences across those are, in Karis's word, "nonsense", often picking far too coarse a mip level.</p>
+    <p>The owner's <a href="https://github.com/gariasf/praxis/issues/17#issuecomment-6415601177">decision</a> follows the clause: #296 prototypes B and #297 prototypes D, both on <code>town</code>, and both block M3's exit (#211). Each prototype's job is the gate's number for its shape, rays off, on the same camera path, and the image beside A's.</p>
+  </div>
+</section>
+
+<section class="chapter" id="rays">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 &middot; <code>shadow_ray_microseconds</code> &middot; <code>src/bench/mod.rs</code></div>
+    <h2>Shadow-ray time</h2>
+    <p class="key-idea"><b>Key idea.</b> Shadow rays change several passes, so their time is each frame's GPU frame total with rays on minus the same frame's with them off, and because that difference can read below zero, growth from a Baseline at or below zero is judged by how much it grew, not by a ratio.</p>
+    <p class="plain">The gate leaves the rays out, so ADR 0019 reports them beside it as a line of their own. Praxis has no pass that is only "the rays": they change several passes. So their time is the frame with rays minus the same frame without.</p>
+    <p>Both of bench's runs render the same Reference scene from the same camera path with the same injected time, so frame 700 of one run is frame 700 of the other. For each measured frame, <code>shadow_ray_microseconds</code> takes the <span class="concept" data-term="GPU frame total" data-tip="From Frame stats: the dynamic TLAS&#x27;s build, counted from the end of the frame before&#x27;s last pass, which hides the rest of it, plus, for each submission of the frame&#x27;s passes, the span from the earliest start of its passes to their latest end.">GPU frame total</span> with rays on less the one with rays off, and reports the median and p95 of those differences.</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>Scene</th><th class="n">Shadow-ray time, median</th></tr></thead>
+      <tbody>
+        <tr class="focus"><td><code>town</code></td><td class="n">3,228 &micro;s (p95 3,985)</td></tr>
+        <tr><td><code>helmet</code></td><td class="n">2,597 &micro;s</td></tr>
+        <tr><td><code>shadows</code></td><td class="n">1,925 &micro;s</td></tr>
+        <tr><td><code>pbr-sweep</code></td><td class="n">1,439 &micro;s</td></tr>
+        <tr><td><code>far-coplanar</code></td><td class="n">1,048 &micro;s</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p>On <code>town</code> the lit pass reads 8.7 ms with rays on against 5.15 with them off, and 8.66 ms with one frame in flight, so its extra 3.5 ms is not overlap with the frames on either side. Nor can it be read as the rays' cost inside the lit pass: it is more than the 3.2 ms the whole frame gains, and the shadow mask pass reads 4.6 ms besides, so with rays on these passes' readings overlap within the frame. On the other scenes, reading the <span class="concept" data-term="Shadow mask" data-tip="A bit per light at each pixel, set where that light is hidden from the surface the pixel&#x27;s nearest sample shows, by the surface itself where it faces away or by what its shadow ray finds, in the order the lit pass sums the pixel&#x27;s lights, up to 59 of them. A compute pass traces it from the depth target; the lit pass reads it.">shadow mask</span> cost the lit pass 22 to 49 &micro;s (#260). Where <code>town</code>'s ray time goes is not yet measured.</p>
+    <h3>Why it can read below zero</h3>
+    <p>Each GPU frame total carries its own run-to-run noise. Where the rays cost almost nothing, the difference of two noisy numbers is centred near zero, and half the frames can read negative; the median can too. A negative time is no bug here, but it breaks the usual test for a regression, which divides the current median by the <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter: the reference machine, where Budgets are judged against it, or CI&#x27;s lavapipe, where only its counters are judged.">Baseline</span>'s: a ratio against zero or a negative number means nothing.</p>
+    <p>So <code>check_regression</code> passes anything at or below its Baseline, and from a Baseline at or below zero treats any growth as past every ratio. It still fails only when the growth also exceeds the 20 &micro;s noise floor for GPU times:</p>
+<pre class="code"><code>if current &lt;= baseline {
+    return;
+}
+<span class="comment">// From a Baseline at or below zero, any growth is past every ratio.</span>
+let ratio = if baseline &gt; 0.0 {
+    current / baseline
+} else {
+    f64::INFINITY
+};
+let verdict = if ratio &gt; FAIL_RATIO &amp;&amp; current - baseline &gt; noise_floor {</code></pre>
+    <p style="margin-top: 16px">Its test reads the rule back: from a Baseline of &minus;10 &micro;s, &minus;40 passes and 600 fails. <code>praxis report</code> prints shadow-ray time in a row of its own, with no Budget, and shows a dash in its Ratio column over a Baseline at or below zero, where a ratio means nothing.</p>
+  </div>
+</section>
+
+<section class="chapter" id="hiding">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 &middot; ADR 0020 &middot; M3's exit criterion 6</div>
+    <h2>Work hiding behind the frame before</h2>
+    <p class="key-idea"><b>Key idea.</b> Work that runs beside the frame before should be counted once, so the dynamic TLAS build now counts only from the end of that frame's last pass: on town it reads 48 µs, against 4.1 ms when the overlap was counted twice, and takes 665 µs run alone.</p>
+    <p class="plain">The dynamic TLAS build runs in a submission before frame N+1's passes. With two frames in flight, Metal starts it while frame N's lit and tonemapping passes are still running, since those read no TLAS. Where the build's time starts decides whether that overlap is counted once or twice.</p>
+    <p>The build's start timestamp is the end of a small marker pass that queries the TLAS just before it (<a href="dynamic-tlas.html">Dynamic TLAS Explained</a>, chapter 7, shows why a marker must query the TLAS), and it often falls deep inside frame N. Counting from there would charge frame N+1 for time frame N's passes also spent. So <code>frame_times</code> takes a floor: the build counts from the later of that timestamp and the floor. The question is which floor.</p>
+    <ul class="keypoints">
+      <li><b>Before: the end of frame N's shadow mask pass.</b> The last pass that reads a TLAS. On <code>town</code> the build then read 4.1 ms, and the GPU frame total, build plus span, read 17.6 to 18.1 ms: the stretch where the build ran beside frame N's lit and tonemapping passes was in frame N's span and again in frame N+1's build.</li>
+      <li><b>Now: the end of frame N's last pass</b> (<code>last_pass_end</code>), the owner's decision. The build counts only what sticks out past frame N. On <code>town</code> it reads 48 &micro;s, and the total 13.6 ms (13,568 &micro;s median, p95 14,188).</li>
+    </ul>
+    <p>The readback keeps each frame's last pass end, and hands it to the next frame only if that frame directly follows; otherwise the floor is zero:</p>
+<pre class="code"><code><span class="comment">// The dynamic TLAS's build runs alongside the frame</span>
+<span class="comment">// before it, which hides most of it, so it counts</span>
+<span class="comment">// from the end of that frame's last pass.</span>
+let previous_pass_end = self
+    .last_pass_end
+    .filter(|&amp;(previous, _)| previous + 1 == frame)
+    .map_or(0, |(_, tick)| tick);</code></pre>
+  </div>
+  <figure class="wide" id="demo-flight">
+    <div class="canvas-frame"><canvas id="f-canvas" role="img" aria-label="A timeline of frame N's passes, frame N+1's dynamic TLAS build and frame N+1's passes, with the two floors the build could be counted from and what each accounting reads."></canvas></div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Frames in flight" id="f-flight">
+        <button type="button" data-flight="2" aria-pressed="true">two frames in flight</button>
+        <button type="button" data-flight="1" aria-pressed="false">one frame in flight</button>
+      </div>
+    </div>
+    <div class="sliders">
+      <label for="f-start" class="control-label">Build submitted at <output id="f-start-out" for="f-start"></output></label>
+      <input type="range" id="f-start" min="5" max="13" step="0.1" value="7">
+      <label for="f-share" class="control-label">Build's share of the GPU beside frame N <output id="f-share-out" for="f-share"></output></label>
+      <input type="range" id="f-share" min="0.05" max="1" step="0.05" value="0.15">
+    </div>
+    <dl class="figures">
+      <div><dt>Build, from the shadow mask's end (before)</dt><dd id="f-old"></dd></div>
+      <div><dt>Build, from the last pass's end (now)</dt><dd id="f-new"></dd></div>
+      <div><dt>Frame total, before / now</dt><dd id="f-totals"></dd></div>
+      <div><dt>Frame N's end to frame N+1's end</dt><dd id="f-wall"></dd></div>
+    </dl>
+    <figcaption><b>Live demo.</b> This page's model, in made-up milliseconds chosen to be legible, not <code>town</code>'s. The build needs 1.0 ms of the whole GPU; beside frame N's passes it gets only the share the second slider sets, and all of it after. With two frames in flight, Metal holds the build until frame N's shadow mask pass, the last that reads the TLAS, ends. Frame N+1's passes start once frame N ends and the build is done. "Frame N's end to frame N+1's end" is the time the GPU actually added for frame N+1: the "now" total matches it unless the GPU sits idle between the frames, and the "before" total overshoots it by the overlap it counts twice. One frame in flight holds the build until frame N ends, so it is timed alone. Frame N's passes keep their times here whatever the build takes; on the GPU they can slow, and under the new floor that cost shows in their times, not in the build's.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Three readings of one build</h3>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th><code>town</code>'s dynamic TLAS build</th><th class="n">GPU</th></tr></thead>
+      <tbody>
+        <tr><td>From frame N's shadow mask end, two frames in flight (before)</td><td class="n">4.1 ms</td></tr>
+        <tr class="focus"><td>From frame N's last pass end, two frames in flight (now)</td><td class="n">48 &micro;s</td></tr>
+        <tr><td>Alone, one frame in flight</td><td class="n">665 &micro;s</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p>48 &micro;s is not the build's cost; it is what of the build sticks out past frame N. Run alone it takes 665 &micro;s. What it costs the passes it runs beside is not yet separated: with the dynamic TLAS emptied, the frame total with rays on read 12.8 ms against 13.6, but that 0.8 ms (this page's subtraction) also holds what the shadow rays spend on the 10,000 Moving Instances, which an empty dynamic TLAS no longer holds. Whatever the build takes from those passes now shows up in their times instead of in the build's.</p>
+    <p>On the orrery and the crowd the build is hidden entirely and reads 0. Their GPU frames fell from 2,314 to 2,140 &micro;s and from 3,287 to 2,679 &micro;s: no work changed, only what is counted twice.</p>
+    <h3>The ceilings</h3>
+    <p>ADR 0020 caps the dynamic TLAS. The owner set the ceilings from these figures, for M3's exit criterion 6. <code>compare</code> enforces both on every scene, and <code>praxis report</code> prints them in its Budget column, the GPU one on the <code>dynamic_tlas_build</code> row:</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>Dynamic TLAS, median</th><th class="n">Ceiling</th><th class="n"><code>town</code></th></tr></thead>
+      <tbody>
+        <tr><td>CPU: the build's recording plus its submit</td><td class="n">1,100 &micro;s</td><td class="n">1,039 &micro;s (p95 1,110)</td></tr>
+        <tr><td>GPU: the build, from frame N's last pass end</td><td class="n">1,000 &micro;s</td><td class="n">48 &micro;s</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p>The CPU side reaches its ceiling under load: 0.96 ms at a load average of 2.8, and 1.04 to 1.15 ms at 3 to 3.6; the top of that range is past the 1.1 ms ceiling. The CPU figure in the table is the Baseline's. The GPU figure, 48 &micro;s, is the reading the decision and <code>docs/performance.md</code>'s text give; the Baseline's own, which <code>praxis report</code> prints in that doc's table, is 48.6 &micro;s (p95 462.8).</p>
+    <div class="callout">
+      <p><b>Still unexplained.</b> Tonemapping reads 0.6 to 4 ms on every scene, and 3.8 ms on <code>town</code> even with one frame in flight. One full-screen pass should not take that long. It is outside the gate, and its cause is not yet measured. Part of the reading may be the lit pass's: Metal takes a render pass's first timestamp when its vertex stage starts, and on Apple's tile-based GPU that can be while the lit pass's fragments still run. For that reason the work on #200, which built the pass, read its cost from whole-frame totals instead: nearly all of #200's 0.33 to 0.35 ms a frame at 1440p (<a href="tonemapping-pass.html">Tonemapping Pass Explained</a>, chapter 7).</p>
+    </div>
+  </div>
+</section>
+
+<section class="chapter" id="far">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 &middot; PR #298 &middot; <code>capture_frames</code></div>
+    <h2>Checking frames far along a path</h2>
+    <p class="key-idea"><b>Key idea.</b> To check frames far along a camera path, draw frame 0, which anchors the static TLAS, and each checked frame with the one before it, whose depth culling reads, and run the World through every other frame undrawn.</p>
+    <p class="plain">Culling must never change the image: a frame drawn with culling on must match the same frame with it off. One frame is not enough for <code>town</code>, whose camera walks a street, rises over the rooftops and circles. Drawing every frame up to 1,800 to check eight of them is too slow, so the test draws only what each checked frame depends on.</p>
+    <p>On CI's <span class="concept" data-term="lavapipe" data-tip="Mesa&#x27;s software Vulkan driver, which CI renders on. Its Baselines are judged on counters only, as its times are not the reference machine&#x27;s.">lavapipe</span> <code>town</code> takes about 0.4 s a frame; drawing to frame 1,800 for each of four variants would take most of an hour. <code>praxis::capture_frames(context, scene, shift, width, height, frames, switches)</code> draws three kinds of frame and runs the World through the rest:</p>
+    <ul class="keypoints">
+      <li><b>Frame 0, always.</b> Its camera <span class="concept" data-term="Anchor" data-tip="The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell&#x27;s corner, never as one f32 position.">anchors</span> the static TLAS. Without it, <code>pbr-sweep</code>'s orbit anchored the TLAS in another 64 m cell, and 107 pixels of shadow speckle differed.</li>
+      <li><b>Each listed frame and the frame before it.</b> Culling's phase one draws what was visible the frame before, read from that frame's depth. Drawing the frame before gives phase one the same input as in an unbroken run.</li>
+      <li><b>Every other frame, undrawn.</b> <code>State::simulate</code> runs the frame's <span class="concept" data-term="Tick" data-tip="One fixed step of the simulation, 1/64 s; rendered frames draw a blend of the two newest Ticks.">Ticks</span> and moves the camera, and prepares nothing. The next prepare writes every change since the last.</li>
+    </ul>
+  </div>
+  <figure class="wide">
+    <p class="order-label"><code>town</code>'s checked frames (<code>TOWN_FRAMES</code>), and what <code>capture_frames</code> draws for them</p>
+    <ol class="pass-order">
+      <li class="warm">0</li>
+      <li class="apart">1&ndash;57</li><li>58</li><li class="focus">59</li>
+      <li class="apart">60&ndash;298</li><li>299</li><li class="focus">300</li>
+      <li class="apart">301&ndash;498</li><li>499</li><li class="focus">500</li>
+      <li class="apart">501&ndash;698</li><li>699</li><li class="focus">700</li>
+      <li class="apart">701&ndash;898</li><li>899</li><li class="focus">900</li>
+      <li class="apart">901&ndash;1198</li><li>1199</li><li class="focus">1200</li>
+      <li class="apart">1201&ndash;1498</li><li>1499</li><li class="focus">1500</li>
+      <li class="apart">1501&ndash;1798</li><li>1799</li><li class="focus">1800</li>
+    </ol>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--warm-wash); border: 1.5px solid var(--warm)"></span>anchors the static TLAS</span>
+      <span><span class="swatch" style="background: var(--accent-wash); border: 1.5px solid var(--accent)"></span>checked, read back</span>
+      <span><span class="swatch"></span>drawn so culling sees its depth</span>
+      <span><span class="swatch" style="border: 1.5px dashed var(--ink-soft)"></span>World runs, nothing drawn</span>
+    </div>
+    <figcaption>Two frames on the street, two on the rise, four round the circle: 17 frames drawn out of 1,801 (this page's count). Each is checked culled against unculled, and, with shadow rays off as M3 judges them, Froxel lists against every light reaching every pixel. A debug build on the M4 Pro takes 72 s per <code>town</code> variant: 10 s to load and about half a minute to run the World through the 1,784 undrawn frames (this page's count).</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>One pixel on lavapipe</h3>
+    <p>On lavapipe, one sample of one pixel, (635, 242) at frame 1200, differed between culled and unculled, by 12. On Metal the frames match exactly. A missing Instance, culled when it should be drawn, is the bug this check exists to catch, so the probes (#300) asked whether one was missing:</p>
+    <ul class="keypoints">
+      <li>Culled variants with different splits between the two phases: identical to each other.</li>
+      <li>Occlusion culling off: still differs.</li>
+      <li>The frustum widened by about 16 pixels, with occlusion: matches.</li>
+      <li>The same widened frustum without occlusion: differs again.</li>
+    </ul>
+    <p>The last probe settles it. A widened frustum without occlusion draws a strict superset of the Instances the matching probe drew. If the difference came from a missing Instance, drawing more could not bring it back. It came back, so lavapipe resolves that sample by what else the draw holds, not by whether the right Instance is in it. The decision: on software Vulkan the culling check allows one pixel per frame (<code>SOFTWARE_UNCULLED_PIXELS = 1</code>); Metal, the reference, must match exactly.</p>
+  </div>
+</section>
+
+<section class="chapter" id="check">
+  <div class="prose">
+    <h2>Check yourself</h2>
+    <p>Three questions on the guide's central ideas. Try each before you open its answer.</p>
+    <details class="check"><summary>Why does Praxis time a frame's passes as a span from their earliest start to their latest end, rather than adding up each pass's time?</summary><p>On Metal a pass can run alongside the passes recorded around it when neither writes a resource the other binds, so the Froxel pass can even start before culling phase one. Adding the passes' times would count that overlap twice. Taking each submission's earliest start and latest end counts that shared stretch once, and the GPU frame total adds the dynamic TLAS's build to those spans.</p></details>
+    <details class="check"><summary>Why does ADR 0019's gate leave shadow rays out, and how does Praxis still measure what they cost?</summary><p>Options A, B and D all trace the same shadow rays, so the rays cannot tell them apart; with them in, the gate would measure the rays as much as the main pass. No pass is only the rays, so bench renders each scene twice and takes each frame's GPU frame total with rays on less the same frame's with them off. Where the rays cost almost nothing that difference can read below zero, so growth from a Baseline at or below zero is judged against the 20 µs noise floor, not by a ratio.</p></details>
+    <details class="check"><summary>On town the dynamic TLAS build once read 4.1 ms of GPU and now reads 48 µs. What changed, and is 48 µs what the build costs?</summary><p>Only the accounting changed: the build runs beside frame N's lit and tonemapping passes, and counted from the end of frame N's shadow mask pass, that overlap sat in both frame N's span and frame N+1's build, so the GPU frame total read 17.6 to 18.1 ms instead of 13.6. Counted from the end of frame N's last pass, 48 µs is only what of the build sticks out past frame N, not its cost. Run alone, with one frame in flight, the build takes 665 µs, and what it takes from the passes beside it now shows in their times, not yet separated.</p></details>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Repo links are pinned to 800c0d2, the commit that merged PR #299.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>This ticket</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/issues/207">Ticket #207</a> <span>town's Baselines, the gate's first real reading</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/298">PR #298</a> and <a href="https://github.com/gariasf/praxis/pull/299">PR #299</a> <span>capture_frames and the eight-frame check; the gate, shadow-ray time and the ceilings, and where <code>praxis report</code> prints them</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/17#issuecomment-6415601177">The decision on map #17</a> <span>prototype B and D on town, blocking M3's exit</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/800c0d213aba1796f4689f02f94820cd3f859410/docs/performance.md"><code>docs/performance.md</code></a> <span>"town's Baselines, ADR 0019's gate and the dynamic TLAS": most of town's figures in this guide</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/800c0d213aba1796f4689f02f94820cd3f859410/docs/adr/0019-clustered-forward-main-pass-with-4x-msaa.md">ADR 0019</a> <span>the main pass, options B to E, and the reopen clause</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/800c0d213aba1796f4689f02f94820cd3f859410/docs/research/visibility-and-gpu-driven-main-pass.md">Visibility and the GPU-driven main pass</a> <span>options A to E in full, with their measurements on the M4 Pro</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/800c0d213aba1796f4689f02f94820cd3f859410/docs/adr/0013-reference-hardware-and-provisional-budgets.md">ADR 0013</a> and <a href="https://github.com/gariasf/praxis/blob/800c0d213aba1796f4689f02f94820cd3f859410/docs/adr/0020-ray-traced-probe-gi-and-hard-ray-traced-shadows.md">ADR 0020</a> <span>the 12 ms Budget; the two TLAS</span></li>
+      </ul>
+      <h4>The code</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/800c0d213aba1796f4689f02f94820cd3f859410/src/render/readback.rs"><code>src/render/readback.rs</code></a> <span><code>frame_times</code>: the span, the gate, the build's floor</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/800c0d213aba1796f4689f02f94820cd3f859410/src/bench/mod.rs"><code>src/bench/mod.rs</code></a> <span>the two runs, <code>shadow_ray_microseconds</code>, <code>check_regression</code>; <code>report.rs</code>, beside it, prints the gate's and shadow-ray time's rows</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/800c0d213aba1796f4689f02f94820cd3f859410/src/capture/mod.rs"><code>src/capture/mod.rs</code></a> and <a href="https://github.com/gariasf/praxis/blob/800c0d213aba1796f4689f02f94820cd3f859410/tests/goldens.rs"><code>tests/goldens.rs</code></a> <span><code>capture_frames</code>, <code>TOWN_FRAMES</code>, the one-pixel allowance</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/800c0d213aba1796f4689f02f94820cd3f859410/bench/budgets.json"><code>bench/budgets.json</code></a> <span>the gate and the two ceilings</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Visibility buffers</h3>
+      <ul>
+        <li>Burns and Hunt, <a href="https://jcgt.org/published/0002/02/04/">"The Visibility Buffer"</a>, JCGT 2013 <span>the idea B and D build on: IDs per sample, attributes fetched later</span></li>
+        <li>Wihlidal, <a href="https://media.gdcvault.com/gdc2024/Slides/GDC+slide+presentations/Nanite+GPU+Driven+Materials.pdf#page=137">"Nanite GPU Driven Materials"</a>, GDC 2024 <span>materials shaded in compute from a visibility buffer, D's shape</span></li>
+        <li>Karis, Stubbe and Wihlidal, <a href="https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=106">"A Deep Dive into Nanite Virtualized Geometry"</a>, SIGGRAPH Advances 2021, pp. 106&ndash;107 <span>why finite differences break where quads span discontinuities, and the analytic derivatives Nanite samples with instead</span></li>
+      </ul>
+      <h4>Earlier volumes</h4>
+      <ul>
+        <li><a href="dynamic-tlas.html">Dynamic TLAS Explained</a> <span>the build's own submission, its two markers and the floor chapter 5 moves</span></li>
+        <li><a href="blas-refit.html">BLAS Refit Explained</a> <span>markers, and the frame's submissions</span></li>
+        <li><a href="town.html">Town Explained</a> <span>the scene this guide measures</span></li>
+        <li><a href="gpu-ordering.html">GPU Ordering Explained</a> <span>what Metal runs side by side, and why</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+    <p>Where <code>CONTEXT.md</code> defines a term, the definition here and in the tooltips is its own at 800c0d2, or a quoted part of it; the GPU frame total and ADR 0019's gate quote its Frame stats entry, the gate adding what ADR 0019 says of it. TLAS, dynamic TLAS and submission follow the earlier volumes, and timestamp query extends theirs to render passes; frames in flight quotes the code.</p>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Frame stats</dt><dd>What one frame cost, measured by the engine itself: among much else, CPU time per system and stage, GPU time per pass, of the dynamic TLAS&#x27;s build and of the BLAS refit, the GPU frame total and ADR 0019&#x27;s gate.</dd></div>
+    <div><dt>GPU frame total</dt><dd>The dynamic TLAS&#x27;s build, counted from the end of the frame before&#x27;s last pass, which hides the rest of it, plus, for each submission of the frame&#x27;s passes, the span from the earliest start of its passes to their latest end.</dd></div>
+    <div><dt>ADR 0019&#x27;s gate</dt><dd>From the start of culling phase one to the latest end of the passes up to the lit pass, with shadow rays off; its median over a Reference scene&#x27;s camera path is judged against 6 ms.</dd></div>
+    <div><dt>Shadow-ray time</dt><dd>Each frame&#x27;s GPU frame with shadow rays on, less the same frame&#x27;s with them off; reported as its median and p95.</dd></div>
+    <div><dt>Frames in flight</dt><dd>Frames submitted but not finished on the GPU when the next one starts, at most: the window&#x27;s swapchain latency and capture&#x27;s queue. Two in Praxis.</dd></div>
+    <div><dt>Timestamp query</dt><dd>A GPU write of its clock into a slot of a query set, which wgpu asks for at the start or end of a pass. On Metal, wgpu-hal takes it as a counter sample: at the start or end of a compute pass&#x27;s encoder, and at the start of a render pass&#x27;s vertex stage or the end of its fragment stage.</dd></div>
+    <div><dt>Submission</dt><dd>One call to Queue::submit: the command buffers it hands the GPU, in order, and the index the CPU can wait on.</dd></div>
+    <div><dt>Dynamic TLAS</dt><dd>The top-level acceleration structure over the Moving Instances, at most 10,000 of them, those in the lowest slots, each tagged with its slot. It is rebuilt every frame, in the static TLAS&#x27;s coordinate frame (#204).</dd></div>
+    <div><dt>Moving Instance</dt><dd>An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.</dd></div>
+    <div><dt>Froxel</dt><dd>A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.</dd></div>
+    <div><dt>Shadow mask</dt><dd>A bit per light at each pixel, set where that light is hidden from the surface the pixel&#x27;s nearest sample shows, by the surface itself where it faces away or by what its shadow ray finds, in the order the lit pass sums the pixel&#x27;s lights, up to 59 of them. A compute pass traces it from the depth target; the lit pass reads it.</dd></div>
+    <div><dt>Visibility buffer</dt><dd>A 4-byte triangle and instance ID per sample, written by a pre-pass, from which later passes rebuild the surface each pixel shows.</dd></div>
+    <div><dt>Reference scene</dt><dd>A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.</dd></div>
+    <div><dt>Baseline</dt><dd>The recorded measurements of a Reference scene on one adapter: the reference machine, where Budgets are judged against it, or CI&#x27;s lavapipe, where only its counters are judged.</dd></div>
+    <div><dt>Budget</dt><dd>A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. Counters such as draw calls and bytes uploaded are held to their Baselines instead.</dd></div>
+    <div><dt>Anchor</dt><dd>The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell&#x27;s corner, never as one f32 position.</dd></div>
+    <div><dt>Tick</dt><dd>One fixed step of the simulation, 1/64 s; rendered frames draw a blend of the two newest Ticks.</dd></div>
+    <div><dt>lavapipe</dt><dd>Mesa&#x27;s software Vulkan driver, which CI renders on. Its Baselines are judged on counters only.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from ticket <a href="https://github.com/gariasf/praxis/issues/207">#207</a>, PRs <a href="https://github.com/gariasf/praxis/pull/298">#298</a> and <a href="https://github.com/gariasf/praxis/pull/299">#299</a> as merged (fd2ee9b and 800c0d2), the owner's decisions on #207 and map #17, ADRs 0013, 0019 and 0020, <code>docs/performance.md</code>, the Baselines and the visibility research doc. Where the guide does its own arithmetic, it says so. The timeline demo is this page's model in made-up units; the gate demo uses the pass medians the owner's decision reports and the Baseline's gate.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="blas-refit.html">Previous: BLAS Refit Explained</a><a href="index.html">All field guides</a></nav>
+</div>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const byId = (id) => document.getElementById(id);
+
+  /* Theme: every drawing reads the colour tokens when it draws, and redraws when the theme changes. */
+  const redrawers = [];
+  const redrawAll = () => {
+    for (const redraw of redrawers) redraw();
+  };
+  function readTokens() {
+    const style = getComputedStyle(document.documentElement);
+    const token = (tokenName) => style.getPropertyValue(tokenName).trim();
+    return {
+      panel: token("--panel"), ink: token("--ink"), inkSoft: token("--ink-soft"), rule: token("--rule"),
+      accent: token("--accent"), accentWash: token("--accent-wash"), warm: token("--warm"), warmWash: token("--warm-wash"),
+      bad: token("--bad"), badWash: token("--bad-wash"), good: token("--good"), figureBg: token("--figure-bg"), mono: token("--mono"),
+    };
+  }
+  if (window.matchMedia) {
+    const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    if (darkQuery.addEventListener) darkQuery.addEventListener("change", redrawAll);
+    else if (darkQuery.addListener) darkQuery.addListener(redrawAll);
+  }
+  if (window.MutationObserver) {
+    new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawAll);
+
+  /* Sizing: each drawing takes its container's width and redraws when that width changes. */
+  function watchWidth(container, render) {
+    redrawers.push(render);
+    if (window.ResizeObserver) {
+      let lastWidth = -1;
+      new ResizeObserver(() => {
+        const width = container.clientWidth;
+        if (width !== lastWidth) {
+          lastWidth = width;
+          render();
+        }
+      }).observe(container);
+    } else {
+      window.addEventListener("resize", render);
+    }
+    render();
+  }
+  // Sizes `canvas` to `width` by `height` CSS pixels at the device's pixel ratio, and returns its context.
+  function sizeCanvas(canvas, width, height) {
+    const ratio = window.devicePixelRatio || 1;
+    canvas.style.width = width + "px";
+    canvas.style.height = height + "px";
+    canvas.width = Math.max(1, Math.round(width * ratio));
+    canvas.height = Math.max(1, Math.round(height * ratio));
+    const context = canvas.getContext("2d");
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    return context;
+  }
+  // Presses the clicked one of `buttons` and calls `choose` with its `data-` value named `key`.
+  function segmented(buttons, key, choose) {
+    for (const button of buttons) {
+      button.addEventListener("click", () => {
+        for (const other of buttons) other.setAttribute("aria-pressed", String(other === button));
+        choose(button.dataset[key]);
+      });
+    }
+  }
+  function line(context, fromX, fromY, toX, toY) {
+    context.beginPath();
+    context.moveTo(fromX, fromY);
+    context.lineTo(toX, toY);
+    context.stroke();
+  }
+  const milliseconds = (value) => value.toFixed(2) + " ms";
+
+  /* Demo 1: town's rays-off passes inside the gate against the 6 ms line. Measured medians from docs/performance.md. */
+  (function () {
+    const GATE_MEASURED = 9.821;
+    const GATE_LIMIT = 6;
+    const AXIS_END = 12;
+    const PASSES = [
+      { name: "culling phase one", time: 1.52 },
+      { name: "Froxel pass", time: 0.53 },
+      { name: "depth pre-pass", time: 1.76, slider: "g-depth" },
+      { name: "depth pyramid", time: 0.25 },
+      { name: "culling phase two", time: 0.89 },
+      { name: "lit pass", time: 5.15, slider: "g-lit" },
+    ];
+    const rows = byId("g-rows");
+    const percent = (value) => (100 * Math.min(value, AXIS_END) / AXIS_END) + "%";
+    function row(label) {
+      const element = document.createElement("div");
+      element.className = "meter-row";
+      element.innerHTML = '<div class="meter-label"><span>' + label + '</span><b></b></div>' +
+        '<div class="meter-track"><div class="meter-fill"></div><div class="meter-budget"></div></div>';
+      element.querySelector(".meter-budget").style.left = percent(GATE_LIMIT);
+      rows.append(element);
+      return { value: element.querySelector("b"), fill: element.querySelector(".meter-fill") };
+    }
+    const passRows = PASSES.map((pass) => row(pass.name + ", rays off"));
+    const measuredRow = row("the gate, the Baseline's run");
+    const estimateRow = row("the gate, less the cuts (estimate)");
+    const axis = document.createElement("div");
+    axis.className = "meter-axis";
+    axis.innerHTML = '<span class="first" style="left:0">0</span><span style="left:' + percent(3) + '">3</span>' +
+      '<span style="left:' + percent(9) + '">9</span><span class="last" style="left:100%">12 ms</span>' +
+      '<span class="budget" style="left:' + percent(GATE_LIMIT) + '">6 ms</span>';
+    rows.append(axis);
+
+    function update() {
+      let cut = 0;
+      PASSES.forEach((pass, index) => {
+        let time = pass.time;
+        if (pass.slider) {
+          time = Number(byId(pass.slider).value);
+          byId(pass.slider + "-out").value = milliseconds(time);
+          cut += pass.time - time;
+        }
+        passRows[index].value.textContent = milliseconds(time) + (pass.slider && time < pass.time ? " (was " + pass.time.toFixed(2) + ")" : "");
+        passRows[index].fill.style.width = percent(time);
+      });
+      const estimate = GATE_MEASURED - cut;
+      measuredRow.value.textContent = "9,821 \u00b5s";
+      measuredRow.fill.style.width = percent(GATE_MEASURED);
+      measuredRow.fill.classList.add("over");
+      estimateRow.value.textContent = estimate.toFixed(3) + " ms";
+      estimateRow.fill.style.width = percent(estimate);
+      estimateRow.fill.classList.toggle("over", estimate > GATE_LIMIT);
+      const needed = GATE_MEASURED - GATE_LIMIT - cut;
+      byId("g-readout").innerHTML = needed > 0
+        ? "Cut so far <b>" + milliseconds(cut) + "</b>; the gate needs <b>" + needed.toFixed(3) + " ms</b> more to reach 6 ms."
+        : "Cut <b>" + milliseconds(cut) + "</b>: the estimate is under 6 ms by <b>" + (-needed).toFixed(3) + " ms</b>.";
+    }
+    for (const id of ["g-lit", "g-depth"]) byId(id).addEventListener("input", update);
+    update();
+  })();
+
+  /* Demo 2: frame N, frame N+1's dynamic TLAS build and frame N+1's passes, in made-up milliseconds. */
+  (function () {
+    // Frame N's passes, laid out one after another; the shadow mask pass is the last that reads a TLAS.
+    const FRAME_PASSES = [
+      { name: "culling, depth", start: 0, end: 4.5 },
+      { name: "mask", start: 4.5, end: 6.5 },
+      { name: "lit", start: 6.5, end: 11.5 },
+      { name: "tonemap", start: 11.5, end: 12.5 },
+    ];
+    const SHADOW_MASK_END = 6.5;
+    const FRAME_END = 12.5;
+    const SPAN = FRAME_END;
+    const BUILD_WORK = 1.0;
+    const VIEW_END = 27;
+    let framesInFlight = 2;
+
+    // When the build ends: `share` of the GPU while frame N runs, all of it afterwards.
+    function buildEnd(start, share) {
+      if (start >= FRAME_END) return start + BUILD_WORK;
+      const doneBeside = (FRAME_END - start) * share;
+      if (doneBeside >= BUILD_WORK) return start + BUILD_WORK / share;
+      return FRAME_END + (BUILD_WORK - doneBeside);
+    }
+    function model() {
+      const submitted = Number(byId("f-start").value);
+      const share = Number(byId("f-share").value);
+      const start = Math.max(submitted, framesInFlight === 1 ? FRAME_END : SHADOW_MASK_END);
+      const end = buildEnd(start, share);
+      const nextStart = Math.max(end, FRAME_END);
+      const old = Math.max(0, end - Math.max(start, SHADOW_MASK_END));
+      const now = Math.max(0, end - Math.max(start, FRAME_END));
+      return { start: start, end: end, nextStart: nextStart, old: old, now: now, wall: nextStart + SPAN - FRAME_END };
+    }
+
+    const canvas = byId("f-canvas");
+    const frame = canvas.parentElement;
+    function draw() {
+      const tokens = readTokens();
+      const width = frame.clientWidth;
+      const narrow = width < 520;
+      const height = narrow ? 230 : 250;
+      const context = sizeCanvas(canvas, width, height);
+      const left = narrow ? 8 : 16;
+      const right = width - (narrow ? 8 : 16);
+      const toX = (time) => left + (right - left) * time / VIEW_END;
+      const state = model();
+      context.clearRect(0, 0, width, height);
+      context.font = (narrow ? "10px " : "11.5px ") + tokens.mono;
+      context.textBaseline = "middle";
+      const lanes = { previous: 52, build: 104, next: 156 };
+      const laneHeight = 26;
+      context.fillStyle = tokens.inkSoft;
+      context.fillText("frame N", left, lanes.previous - 22);
+      context.fillText("frame N+1's dynamic TLAS build", left, lanes.build - 22);
+      context.fillText("frame N+1", left, lanes.next - 22);
+
+      function block(from, to, lane, fill, stroke, label) {
+        const x = toX(from), w = Math.max(1.5, toX(to) - toX(from));
+        context.fillStyle = fill;
+        context.fillRect(x, lane - laneHeight / 2, w, laneHeight);
+        context.strokeStyle = stroke;
+        context.lineWidth = 1.2;
+        context.strokeRect(x + 0.5, lane - laneHeight / 2 + 0.5, w - 1, laneHeight - 1);
+        if (label && context.measureText(label).width < w - 6) {
+          context.fillStyle = tokens.ink;
+          context.fillText(label, x + 4, lane);
+        }
+      }
+      for (const pass of FRAME_PASSES) block(pass.start, pass.end, lanes.previous, tokens.accentWash, tokens.accent, pass.name);
+      block(state.start, state.end, lanes.build, tokens.warmWash, tokens.warm, "build");
+      for (const pass of FRAME_PASSES) block(state.nextStart + pass.start, state.nextStart + pass.end, lanes.next, tokens.accentWash, tokens.accent, pass.name);
+
+      // The two floors.
+      context.setLineDash([4, 4]);
+      context.lineWidth = 1.5;
+      context.strokeStyle = tokens.inkSoft;
+      line(context, toX(SHADOW_MASK_END), 22, toX(SHADOW_MASK_END), height - 34);
+      context.strokeStyle = tokens.accent;
+      line(context, toX(FRAME_END), 22, toX(FRAME_END), height - 34);
+      context.setLineDash([]);
+
+      // What each accounting reads, as brackets under the build.
+      function bracket(from, to, y, colour, label) {
+        if (to <= from) return;
+        context.strokeStyle = colour;
+        context.lineWidth = 2;
+        line(context, toX(from), y, toX(to), y);
+        line(context, toX(from), y - 4, toX(from), y + 4);
+        line(context, toX(to), y - 4, toX(to), y + 4);
+        context.fillStyle = colour;
+        const textX = Math.min(toX(to) + 5, right - context.measureText(label).width);
+        context.fillText(label, textX, y);
+      }
+      bracket(Math.max(state.start, SHADOW_MASK_END), state.end, lanes.build + 20, tokens.inkSoft, "before");
+      bracket(Math.max(state.start, FRAME_END), state.end, lanes.build + 32, tokens.accent, "now");
+
+      // Axis.
+      const axisY = height - 22;
+      context.strokeStyle = tokens.rule;
+      context.lineWidth = 1;
+      line(context, left, axisY, right, axisY);
+      context.fillStyle = tokens.inkSoft;
+      const step = narrow ? 6 : 3;
+      for (let time = 0; time <= VIEW_END; time += step) {
+        line(context, toX(time), axisY, toX(time), axisY + 4);
+        const label = time + step > VIEW_END ? time + " ms" : String(time);
+        const textWidth = context.measureText(label).width;
+        context.fillText(label, Math.min(Math.max(toX(time) - textWidth / 2, left), right - textWidth), axisY + 13);
+      }
+      context.fillStyle = tokens.inkSoft;
+      context.fillText("shadow mask ends", Math.min(toX(SHADOW_MASK_END) + 4, right - 110), 14);
+      context.fillStyle = tokens.accent;
+      const lastLabel = "last pass ends";
+      context.fillText(lastLabel, Math.min(toX(FRAME_END) + 4, right - context.measureText(lastLabel).width), 30);
+
+      byId("f-old").textContent = milliseconds(state.old);
+      byId("f-new").textContent = milliseconds(state.now);
+      byId("f-totals").textContent = milliseconds(state.old + SPAN) + " / " + milliseconds(state.now + SPAN);
+      byId("f-wall").textContent = milliseconds(state.wall);
+    }
+    function update() {
+      byId("f-start-out").value = Number(byId("f-start").value).toFixed(1) + " ms";
+      byId("f-share-out").value = Math.round(100 * Number(byId("f-share").value)) + "%";
+      draw();
+    }
+    segmented(document.querySelectorAll("#f-flight button"), "flight", (value) => {
+      framesInFlight = Number(value);
+      update();
+    });
+    for (const id of ["f-start", "f-share"]) byId(id).addEventListener("input", update);
+    byId("f-start-out").value = Number(byId("f-start").value).toFixed(1) + " ms";
+    byId("f-share-out").value = Math.round(100 * Number(byId("f-share").value)) + "%";
+    watchWidth(frame, draw);
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>
