@@ -19,6 +19,9 @@
 //! scene with no Golden yet writes its capture there. With
 //! `PRAXIS_REQUIRE_GOLDENS=1`, as on CI, a missing adapter or Golden directory
 //! fails instead of skipping.
+//!
+//! `README.md` shows each scene's Metal Golden by linking it, and a test here
+//! fails when its links and the scenes checked disagree.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -321,6 +324,80 @@ fn capture(
 
 fn golden_path(directory: &Path, scene: ReferenceScene) -> PathBuf {
     directory.join(format!("{}.png", scene.name()))
+}
+
+/// The README's link to a scene's Golden, relative to the repository root.
+const README_GOLDEN_PREFIX: &str = "tests/goldens/metal/";
+
+/// What disagrees between `readme` and the scenes this test checks: a scene
+/// the README does not show, a Golden it shows of a scene not checked, and
+/// a linked Golden absent from `root`.
+fn readme_disagreements(readme: &str, root: &Path) -> Vec<String> {
+    let linked: Vec<&str> = readme
+        .split(README_GOLDEN_PREFIX)
+        .skip(1)
+        .filter_map(|after_prefix| after_prefix.split_once(".png"))
+        .map(|(scene, _)| scene)
+        .collect();
+    let checked: Vec<&str> = SCENES.iter().map(|scene| scene.name()).collect();
+    let mut disagreements = Vec::new();
+    for scene in &checked {
+        if !linked.contains(scene) {
+            disagreements.push(format!("README.md does not show the Golden of {scene}"));
+        }
+    }
+    for scene in &linked {
+        if !checked.contains(scene) {
+            disagreements.push(format!(
+                "README.md shows {scene}, which the goldens test does not check"
+            ));
+        }
+        let path = root.join(format!("{README_GOLDEN_PREFIX}{scene}.png"));
+        if !path.exists() {
+            disagreements.push(format!(
+                "README.md links {}, which is absent",
+                path.display()
+            ));
+        }
+    }
+    disagreements
+}
+
+#[test]
+fn readme_shows_each_scene_golden() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let readme = std::fs::read_to_string(root.join("README.md")).expect("README.md");
+    let disagreements = readme_disagreements(&readme, root);
+    assert!(disagreements.is_empty(), "{}", disagreements.join("\n"));
+}
+
+#[test]
+fn readme_disagreements_name_a_missing_scene_an_unchecked_one_and_an_absent_file() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let readme = std::fs::read_to_string(root.join("README.md")).expect("README.md");
+    let town_link = format!("{README_GOLDEN_PREFIX}town.png");
+    let without_town: String = readme
+        .lines()
+        .filter(|line| !line.contains(&town_link))
+        .map(|line| format!("{line}\n"))
+        .collect();
+    let with_crowd = format!("{readme}\n![crowd]({README_GOLDEN_PREFIX}crowd.png)\n");
+
+    assert_eq!(
+        readme_disagreements(&without_town, root),
+        ["README.md does not show the Golden of town"]
+    );
+    assert_eq!(
+        readme_disagreements(&with_crowd, root),
+        [
+            "README.md shows crowd, which the goldens test does not check".to_owned(),
+            format!(
+                "README.md links {}, which is absent",
+                root.join(format!("{README_GOLDEN_PREFIX}crowd.png"))
+                    .display()
+            ),
+        ]
+    );
 }
 
 /// Writes each scene's capture as its Golden and prints the scenes whose
