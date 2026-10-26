@@ -227,7 +227,10 @@ When a feature folder grows past one file, split into
   `tests/dependency_licences.rs`; `cargo test` checks it. A new
   expression is read before it joins.
 - Docs, tickets and code comments name no patents and record no
-  patent searches (#91).
+  patent searches.
+- Comments say what the code does and why in their own words, citing no
+  ticket, PR or decision: only an upstream bug, adapted code's source and
+  licence, a pinned third-party source or an ADR.
 
 ## Review checklist
 
@@ -263,8 +266,8 @@ When reviewing changes, check for:
       in `src/render/shader_function_tests.rs`
 - [ ] Texture formats match between creation and surface config, and
       sRGB is encoded once: the tonemapping pass alone encodes it, in its
-      shader, into 8-bit UNORM targets, so its dither lands on 8-bit steps
-      (#200's decision D1); no target is an sRGB format
+      shader, into 8-bit UNORM targets, so its dither lands on 8-bit steps;
+      no target is an sRGB format
 - [ ] `unwrap()` on GPU operations that could fail at runtime — prefer
       `?` or explicit handling
 - [ ] No GPU resources stored on ECS components — components are pure

@@ -53,7 +53,7 @@ jobs:
         run: cargo test
 
   software-goldens:
-    # Not a required check until two green weeks (#35).
+    # Not a required check until two green weeks.
     name: Goldens (software Vulkan)
     runs-on: ubuntu-24.04
     timeout-minutes: 50
@@ -163,7 +163,7 @@ jobs:
       # overflowed, uploaded bytes, GPU memory, Arena bytes in use and heap
       # allocations against the Baselines in bench/baselines/<llvmpipe key>.
       # town renders its counter frames alone, which compare with a Baseline
-      # of any length at CI's size (#178).
+      # of any length at CI's size.
       - name: Bench and compare
         run: |
           target/release/praxis bench target/bench --ci pbr-sweep uv-grid normal-tangent far-coplanar orrery \

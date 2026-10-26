@@ -21,7 +21,7 @@ pub(crate) const FROXEL_SLICES: u32 = 32;
 pub(crate) const FIRST_FROXEL_SLICE_DEPTH: f32 = 1.0;
 pub(crate) const FROXEL_SLICES_PER_OCTAVE: f32 = 3.0;
 
-/// Lights a Froxel's list holds, provisional until M4's split of the 8 GB
+/// Lights a Froxel's list holds, provisional until ADR 0013's split of the 8 GB
 /// Budget sizes it: with its count, a list is 512 bytes.
 pub(crate) const FROXEL_LIGHT_CAPACITY: u32 = 127;
 

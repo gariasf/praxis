@@ -19,8 +19,10 @@ pub(crate) const SHADOW_MASK_TILE_SIZE: u32 = 8;
 
 /// Lights the mask holds a bit for at each pixel, of those that reach it in
 /// the order the lit pass sums them: its directional lights, then the point
-/// lights its Froxel lists. Any other casts no shadow there, and is counted
-/// ([decision](https://github.com/gariasf/praxis/issues/17#issuecomment-6369952061)).
+/// lights its Froxel lists. Any other casts no shadow there, and is counted.
+/// The bits and the Froxel slice they follow fill the mask's 8 bytes per
+/// pixel, and cover a Froxel's whole list in `town`, whose far Froxels list
+/// about 5 to 25 lights.
 pub(crate) const SHADOW_MASK_LIGHTS: u32 = 59;
 
 /// Where each of a pixel's samples lies, from its top left corner, in

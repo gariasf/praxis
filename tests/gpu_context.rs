@@ -1,8 +1,8 @@
 use std::io::Write;
 
-/// The planned features #25 lists, and the Capability floor's features #93
-/// found unprinted. Written out here, apart from the report's own list, so a
-/// feature the report drops turns this test red.
+/// The features the renderer plans to use, and the Capability floor's
+/// features the report once left out. Written out here, apart from the
+/// report's own list, so a feature the report drops turns this test red.
 const PLANNED_FEATURES: [&str; 8] = [
     "binding arrays",
     "mesh shaders",
@@ -43,7 +43,8 @@ fn capability_report_names_adapter_backend_planned_features_and_floor_items() {
             "`{feature}` is not marked yes or no:\n{report}"
         );
     }
-    // The floor's limits and 4x MSAA per main-pass format, #93's other three.
+    // The floor's limits and 4x MSAA per main-pass format, which the report
+    // also once left out.
     assert!(value_of(&report, "max buffer size").ends_with(" bytes"));
     assert!(value_of(&report, "acceleration structures").ends_with(" per stage"));
     for format in ["Depth32Float", "Rgba16Float"] {

@@ -40,13 +40,13 @@ impl AssetLoader<'_> {
 
     /// Loads the Mesh `id` as `mesh` does, for the GPU to bend each frame
     /// (`Bend`): drawn, and traced by no ray, as its BLAS would hold its rest
-    /// shape (#208). Its cooked bounds must hold every shape it bends to.
+    /// shape. Its cooked bounds must hold every shape it bends to.
     pub fn bent_mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
         self.mesh_for(id, MeshUse::Drawn)
     }
 
     /// Loads the Mesh `id` as `bent_mesh` does, and traced through a BLAS
-    /// updated each frame from the shape the GPU bends it to (#209).
+    /// updated each frame from the shape the GPU bends it to.
     pub fn refitted_mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
         self.mesh_for(id, MeshUse::Refitted)
     }
@@ -61,7 +61,7 @@ impl AssetLoader<'_> {
     }
 
     /// Loads the Mesh `id` as a shadow proxy, which rays trace through its
-    /// BLAS and no pass draws, so it loads no Material (#208).
+    /// BLAS and no pass draws, so it loads no Material.
     pub fn shadow_proxy(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
         let mesh = self.cache.mesh(id)?;
         let materials = vec![None; mesh.primitives.len()];

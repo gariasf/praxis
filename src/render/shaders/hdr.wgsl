@@ -1,5 +1,5 @@
 // Exposed colour as the lit pass stores it in the HDR target and the
-// tonemapping pass reads it back (ADR 0023; #200's decision R2).
+// tonemapping pass reads it back (ADR 0023).
 
 // fp16's largest finite value. Exposed colour is clamped to it, so no
 // backend stores infinity, which Vulkan allows on overflow (ADR 0023).

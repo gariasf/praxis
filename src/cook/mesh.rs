@@ -17,8 +17,9 @@ use crate::scenes::Geometry;
 /// A Primitive's geometry and the Asset ID of its Material, if it names one.
 pub(crate) type SourcePrimitive = (Geometry, Option<AssetId>);
 
-/// How far the overdraw pass may worsen the vertex cache order, as #96
-/// measured it.
+/// How far the overdraw pass may worsen the vertex cache order: the
+/// threshold the welded helmet's size was measured at
+/// (`docs/research/asset-compression-and-cooked-data.md`, item 6).
 const OVERDRAW_THRESHOLD: f32 = 1.05;
 
 /// Every encoder version and setting a Mesh Blob depends on, for its Cook key.
@@ -677,7 +678,8 @@ pub(crate) mod tests {
         std::fs::remove_dir_all(&directory).ok();
     }
 
-    /// #96 counted 14,085 vertices with position, UV and normal welded.
+    /// `docs/research/asset-compression-and-cooked-data.md` (item 6) counted
+    /// 14,085 vertices with position, UV and normal welded.
     #[test]
     fn sci_fi_helmet_welds_to_14085_vertices() {
         let meshes: Vec<_> = reference_gltf_meshes()

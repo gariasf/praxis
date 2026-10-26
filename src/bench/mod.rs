@@ -74,7 +74,7 @@ impl Configuration {
 /// The frames whose counters every run also records, whatever its length:
 /// counters repeat exactly on every run, so runs of different lengths
 /// compare on these. By the eighth frame the Scene's uploads and the first
-/// frames' allocations are over (#178). Baselines record the frames, so
+/// frames' allocations are over. Baselines record the frames, so
 /// moving them refuses every Baseline until it is re-recorded.
 const COUNTER_FRAMES: std::ops::Range<u32> = 8..72;
 
@@ -94,7 +94,7 @@ pub fn baseline_directory(adapter: &str) -> PathBuf {
 /// `FAIL_RATIO`; a counter fails on any increase, as it is the same on every
 /// run. Noise floor on the M4 Pro, 6 runs of each scene under the owner's
 /// usual load: counters identical, GPU medians within 3.4%, CPU medians of
-/// 31–42 µs within 8.1 µs (#34).
+/// 31–42 µs within 8.1 µs.
 const WARN_RATIO: f64 = 1.05;
 const FAIL_RATIO: f64 = 1.10;
 

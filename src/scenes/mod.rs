@@ -55,7 +55,7 @@ pub enum ReferenceScene {
     Shadows,
     /// 100 figures of 5,120 triangles, each its own Mesh, swaying in the
     /// fixed schedule as the GPU bends them each frame, a stand-in for
-    /// skinned crowd members (#208). Their Meshes have no BLAS, which would
+    /// skinned crowd members. Their Meshes have no BLAS, which would
     /// hold their rest shape: each casts its shadow through rigid shadow
     /// proxies, one per bone of its middle, Moving Instances in the dynamic
     /// TLAS.
@@ -1124,7 +1124,7 @@ pub(crate) struct Geometry {
     pub(crate) uvs: Vec<[f32; 2]>,
     pub(crate) indices: Vec<u32>,
     /// A box its Mesh's cooked bounds must hold besides its vertices, for a
-    /// Mesh the GPU bends: every shape it bends to (#208).
+    /// Mesh the GPU bends: every shape it bends to.
     pub(crate) bounds: Option<[[f32; 3]; 2]>,
 }
 

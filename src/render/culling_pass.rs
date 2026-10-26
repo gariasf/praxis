@@ -42,7 +42,8 @@ impl CullingPhase {
 /// invocation.
 pub(crate) const SCAN_BLOCK_SIZE: u32 = 256;
 
-/// What the frame's draw holds, provisional until M4's Budget split sizes it.
+/// What the frame's draw holds, provisional until ADR 0013's split of the 8 GB
+/// Budget sizes it.
 #[derive(Clone, Copy)]
 pub struct DrawCapacity {
     pub meshlet_records: u32,
@@ -52,7 +53,7 @@ pub struct DrawCapacity {
 impl DrawCapacity {
     /// 2^25 packed indices, 128 MiB, the most one storage binding holds at
     /// the Capability floor (ADR 0021), draw 11.2 million triangles: all of
-    /// M3's dense scene with culling off, as its Goldens compare (#206).
+    /// M3's dense scene with culling off, as its Goldens compare.
     /// 2^20 Meshlet records, 12 MiB, are as many Meshlets of 10.7 triangles
     /// on average.
     pub const PROVISIONAL: DrawCapacity = DrawCapacity {

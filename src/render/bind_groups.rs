@@ -41,7 +41,7 @@ pub const FRAME: BindGroupDefinition = BindGroupDefinition {
 /// Group 1, which the Material pool rebuilds when loads add Textures: the
 /// Materials (ADR 0001), each Channel's Textures as a binding array indexed
 /// by Layer, in `MaterialChannel` order (ADR 0017), and their samplers: the
-/// colour Channels' and the data Channels', at their own anisotropy (#184).
+/// colour Channels' and the data Channels', at their own anisotropy.
 pub const MATERIALS: BindGroupDefinition = BindGroupDefinition {
     index: 1,
     label: "Material Bind Group",
@@ -166,7 +166,7 @@ pub const BLAS_REFIT_MARKERS: BindGroupDefinition = BindGroupDefinition {
 
 /// Group 3 of the bend pass: the frame's bends, which the CPU writes, and
 /// the vertex Arena, which the CPU writes as Meshes load and the pass writes
-/// each bent Mesh's range of, from its rest Mesh's (#208).
+/// each bent Mesh's range of, from its rest Mesh's.
 pub const BENDS: BindGroupDefinition = BindGroupDefinition {
     index: 3,
     label: "Bends Bind Group",

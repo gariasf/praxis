@@ -11,7 +11,7 @@ fn vs_full_screen(@builtin(vertex_index) vertex_index: u32) -> @builtin(position
 
 // A pixel's display colour, from its exposed colour, unweighted from the
 // resolve, sRGB-encoded and dithered by up to an 8-bit step either way with
-// the mask's triangular noise, fixed to the screen (#200's decision D1).
+// the mask's triangular noise, fixed to the screen.
 @fragment
 fn fs_tonemap(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let pixel = vec2<u32>(position.xy);

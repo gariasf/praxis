@@ -21,7 +21,7 @@ const MATERIAL_CAPACITY: u64 = 256;
 
 /// The colour Channels' anisotropy (albedo, emissive) and the data
 /// Channels' (normal, metallic-roughness, occlusion), the owner's pick from
-/// #184's measured candidates (`docs/performance.md`): 4x on the data
+/// the candidates measured in `docs/performance.md`: 4x on the data
 /// Channels saves 126 µs of minification's lit pass and drops the sparkle
 /// of highlights whose normals came from finer mips than Toksvig widened
 /// their roughness for.
@@ -335,7 +335,7 @@ impl MaterialPool {
     }
 }
 
-/// A trilinear, repeating sampler (#144) at `anisotropy`, which the
+/// A trilinear, repeating sampler at `anisotropy`, which the
 /// Capability floor's anisotropic filtering keeps wgpu from clamping to 1
 /// (ADR 0021).
 fn trilinear_sampler(device: &wgpu::Device, label: &str, anisotropy: u16) -> wgpu::Sampler {

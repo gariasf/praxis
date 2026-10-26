@@ -91,7 +91,7 @@ pub struct RenderSwitches {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum CrowdForm {
     /// The bent Meshes have no BLAS: rigid shadow proxies, one per bone,
-    /// cast their shadows as Moving Instances (#208).
+    /// cast their shadows as Moving Instances.
     #[default]
     Proxies,
     /// Each bent Mesh's BLAS is refitted to its bent shape each frame

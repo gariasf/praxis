@@ -48,7 +48,7 @@ pub struct MaterialRef(pub MaterialHandle);
 
 /// Bends its Renderable's Mesh on the GPU each frame from `rest`, a Mesh of
 /// the same vertices whose +Y axis runs up its middle from y = 0: a stand-in
-/// for skinning (#208). The middle bends into a circular arc towards the
+/// for skinning. The middle bends into a circular arc towards the
 /// azimuth, and every vertex turns with the middle at its height. The bent
 /// Mesh is the Renderable's own, since the GPU writes its vertices, and its
 /// bounds must hold every shape it bends to, since the culling pass tests

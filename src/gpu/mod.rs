@@ -239,7 +239,7 @@ pub(crate) fn floor_features() -> wgpu::Features {
 /// or lacks with no request.
 pub(crate) fn floor_downlevel_flags() -> wgpu::DownlevelFlags {
     // ADR 0017 keeps hardware anisotropic filtering, and Material Channels
-    // sample at up to 16x (#144, #184); without the flag, wgpu silently
+    // sample at up to 16x; without the flag, wgpu silently
     // clamps every sampler's anisotropy to 1.
     wgpu::DownlevelFlags::ANISOTROPIC_FILTERING
         // The vertex shader reads Instances and pulls vertices from the
@@ -404,8 +404,8 @@ async fn request_adapter(
 }
 
 /// An 8-bit UNORM format the surface offers, `Bgra8Unorm` or `Rgba8Unorm`:
-/// the tonemapping pass encodes sRGB itself and dithers in that encoding
-/// (#200's decision D1), so it writes a format the GPU does not encode
+/// the tonemapping pass encodes sRGB itself and dithers in that encoding,
+/// so it writes a format the GPU does not encode
 /// again, which the display reads as sRGB. An sRGB surface's non-sRGB view
 /// would need `DownlevelFlags::SURFACE_VIEW_FORMATS`, which Vulkan reports
 /// only with `VK_KHR_swapchain_mutable_format`.
