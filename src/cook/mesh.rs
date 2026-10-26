@@ -23,8 +23,9 @@ pub(crate) type SourcePrimitive = (Geometry, Option<AssetId>);
 const OVERDRAW_THRESHOLD: f32 = 1.05;
 
 /// Every encoder version and setting a Mesh Blob depends on, for its Cook key.
-/// The meshoptimizer version is the one `meshopt` 0.6.2 vendors: update it
-/// and the `bevy_mikktspace` version with their dependencies.
+/// The meshoptimizer version is the one `meshopt` 0.6.2 vendors, whose vertex
+/// encoder writes codec 0 by default [ref:meshoptimizer-0.25-vertex-codec]:
+/// update them and the `bevy_mikktspace` version with their dependencies.
 pub(super) fn encoder_settings() -> String {
     format!(
         "bevy_mikktspace 1.0.0, meshoptimizer 0.25, vertex codec 0, overdraw {OVERDRAW_THRESHOLD}, meshlets of {MESHLET_MAX_VERTICES} vertices and {MESHLET_MAX_TRIANGLES} triangles cut in index order, zstd {} level {}",
@@ -158,8 +159,9 @@ fn cook_primitive(geometry: &Geometry) -> (Vec<CookedVertex>, Vec<u32>) {
 /// vertices, are cut in order into the longest runs the Meshlet limits
 /// allow, like meshoptimizer's `meshopt_buildMeshletsScan`, which `meshopt`
 /// binds only as an `unsafe` call and which counts a degenerate triangle's
-/// repeated corner twice. Kept in order, the indices stay as the vertex cache
-/// and overdraw passes left them, and so does every image.
+/// repeated corner twice [ref:meshoptimizer-0.25-scan-meshlets]. Kept in
+/// order, the indices stay as the vertex cache and overdraw passes left
+/// them, and so does every image.
 fn meshlet_triangle_counts(triangles: &[[u32; 3]], vertex_count: usize) -> Vec<usize> {
     let mut in_run = vec![false; vertex_count];
     let mut run_vertices = Vec::new();
@@ -253,7 +255,8 @@ impl bevy_mikktspace::Geometry for TangentGeometry<'_> {
     }
 
     /// MikkTSpace puts the bitangent along +v. glTF's `v` runs down the
-    /// image while its normal Textures take +Y as up, so `v` is flipped.
+    /// image [ref:gltf-2.0-texture-origin] while its normal Textures take +Y
+    /// as up [ref:gltf-2.0-normal-texture-convention], so `v` is flipped.
     fn tex_coord(&self, face: usize, vertex: usize) -> [f32; 2] {
         let [u, v] = self.uvs[self.vertex_index(face, vertex)];
         [u, 1.0 - v]
@@ -270,7 +273,9 @@ impl bevy_mikktspace::Geometry for TangentGeometry<'_> {
     }
 }
 
-/// MikkTSpace tangents in glTF's convention, one per index: each corner's own.
+/// MikkTSpace tangents in glTF's convention, one per index: each corner's
+/// own. glTF computes a Primitive's missing tangents this way
+/// [ref:gltf-2.0-mikktspace-tangents].
 fn corner_tangents(
     positions: &[[f32; 3]],
     normals: &[[f32; 3]],
@@ -291,9 +296,10 @@ fn corner_tangents(
 }
 
 /// The QTangent of a glTF normal and tangent (`xyz`, `w` the bitangent
-/// sign): the rotation whose columns are the tangent made perpendicular to
-/// the normal, the bitangent cross(normal, tangent) and the normal, with
-/// its w's sign set to the bitangent sign.
+/// sign [ref:gltf-2.0-tangent-bitangent]): the rotation whose columns are
+/// the tangent made perpendicular to the normal, the bitangent
+/// cross(normal, tangent) and the normal, with its w's sign set to the
+/// bitangent sign.
 pub(crate) fn qtangent(normal: [f32; 3], tangent: [f32; 4]) -> [i16; 4] {
     let normal = Vec3::from(normal).normalize_or(Vec3::Z);
     let [tangent_x, tangent_y, tangent_z, bitangent_sign] = tangent;

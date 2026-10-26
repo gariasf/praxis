@@ -393,6 +393,7 @@ impl Level {
     /// repeating the last row and column: RGBA8 sRGB for albedo and emissive, RG8 for a
     /// normal's x and y and for roughness and metallic, R8 for occlusion.
     fn to_texels(&self, channel: MaterialChannel) -> Texels {
+        // The sRGB encoding, ≤ at the knee [ref:khronos-dfs-srgb].
         let linear_to_srgb = |linear: f32| {
             if linear <= 0.0031308 {
                 linear * 12.92
@@ -433,7 +434,8 @@ impl Level {
     }
 }
 
-/// `roughness`, glTF's (GGX's alpha is its square), widened for normals
+/// `roughness`, glTF's (GGX's alpha is its square
+/// [ref:gltf-2.0-roughness-mapping]), widened for normals
 /// whose variance about their mean is `variance` (Toksvig). It widens the
 /// Texture's own roughness, as if its Material's roughness factor were 1: a
 /// factor f scales the widening's share of alpha² by f⁴.
@@ -442,16 +444,23 @@ fn widened_roughness(roughness: f32, variance: f32) -> f32 {
         return roughness;
     }
     // Toksvig, "Mipmapping Normal Maps" (NVIDIA, 2004; JGT 10(3), 2005),
-    // eq. 1: the normals' angular variance from their mean's length,
-    // (1 - |mean|) / |mean|, with |mean| = sqrt(1 - variance) and the
-    // difference written so that it cancels nothing.
+    // eq. 1 [ref:toksvig-2004-variance]: the normals' angular variance from
+    // their mean's length, (1 - |mean|) / |mean|, with |mean| =
+    // sqrt(1 - variance) and the difference written so that it cancels
+    // nothing.
     let mean_length = (1.0 - variance.min(1.0)).sqrt();
     let angular_variance = variance / ((1.0 + mean_length) * mean_length);
-    // A GGX lobe filtered by normals of that slope variance adds twice it to
+    // A Beckmann lobe filtered by normals of slope variance σ² adds 2σ² to
     // alpha²: Kaplanyan, Hill, Patney and Lefohn, "Filtering Distributions
-    // of Normals for Shading Antialiasing" (HPG 2016), eqs. 14 and 15, which
-    // Tokuyoshi and Kaplanyan, "Improved Geometric Specular Antialiasing"
-    // (I3D 2019), section 2.2, apply to GGX. Equations only; no code copied.
+    // of Normals for Shading Antialiasing" (HPG 2016), eqs. 14 and 15
+    // [ref:kaplanyan-2016-ndf-filtering]; Tokuyoshi and Kaplanyan, "Improved
+    // Geometric Specular Antialiasing" (I3D 2019), section 2.2, apply the same
+    // sum to GGX [ref:tokuyoshi-2019-roughness-matrix]. Toksvig's angular
+    // variance stands in for the slope variance, as tan θ ≈ θ for small
+    // angles. Tokuyoshi and Kaplanyan keep Kaplanyan et al.'s cap of 0.18 on
+    // the added term, against the error of screen-space derivatives; a
+    // variance measured from the texels needs no such cap, so only alpha² is
+    // capped, at 1. Equations only; no code copied.
     (roughness.powi(4) + 2.0 * angular_variance)
         .min(1.0)
         .powf(0.25)
