@@ -24,7 +24,8 @@ pub(crate) const DYNAMIC_TLAS_BUILD: &str = "dynamic_tlas_build";
 
 /// NVIDIA's PCI vendor ID (the PCI ID Repository's `pci.ids`
 /// [ref:pci-vendor-id-nvidia]), which Vulkan [ref:vulkan-vendorid-pci] and
-/// DXGI [ref:dxgi-adapter-desc2-vendorid] both report.
+/// DXGI [ref:dxgi-adapter-desc2-vendorid] both report, the latter through
+/// wgpu-hal's DX12 adapter [ref:wgpu-30-dx12-vendor-id].
 const NVIDIA_VENDOR: u32 = 0x10DE;
 
 /// What acceleration structures take in GPU memory, as measured on one

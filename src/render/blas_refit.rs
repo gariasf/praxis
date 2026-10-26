@@ -1,9 +1,10 @@
 //! The BLAS refit: each frame, once the bend pass has bent the Meshes loaded
 //! as `MeshUse::Refitted`, their BLASes are brought to the bent shapes before
 //! the dynamic TLAS is built over them. `CrowdForm::Refit` refits each
-//! in place through wgpu-hal, on Metal only, since wgpu-core rebuilds BLASes
-//! but never updates them [ref:wgpu-30-blas-rebuild-only]; `CrowdForm::Rebuild` rebuilds each through wgpu,
-//! the shapes a refit must match.
+//! in place through wgpu-hal [ref:wgpu-30-metal-refit], on Metal only, since
+//! wgpu-core rebuilds BLASes but never updates them
+//! [ref:wgpu-30-blas-rebuild-only]; `CrowdForm::Rebuild` rebuilds each
+//! through wgpu, the shapes a refit must match.
 //!
 //! wgpu-core keeps refitted BLASes as it built them: each keeps its handle,
 //! its build index and its place in the TLAS dependencies that make it
@@ -216,7 +217,9 @@ impl BlasRefit {
         //   for its update, in a buffer any usage makes on Metal. The next
         //   frame's refits reuse the regions, and the frames before them may
         //   still run: Metal tracks hazards on wgpu-hal's buffers, scratch
-        //   included [ref:wgpu-30-metal-buffer-tracked], so they wait.
+        //   included, since Metal tracks a resource by default
+        //   [ref:metal-hazard-tracking-default] and wgpu-hal never opts out
+        //   [ref:wgpu-30-metal-buffer-tracked], so they wait.
         // - The bend pass's writes to the vertex Arena come first in the
         //   queue, and Metal tracks hazards on wgpu-hal's buffers, so each
         //   refit reads the bent shapes; the TLAS build that reads the
@@ -306,7 +309,8 @@ mod metal {
         guard: Option<impl std::ops::Deref<Target = T>>,
     ) -> Option<&'a T> {
         // SAFETY: wgpu-core boxes the object in the resource
-        // [ref:wgpu-30-raw-boxed], so its address holds while the resource lives undestroyed, as the caller ensures.
+        // [ref:wgpu-30-raw-boxed], so its address holds while the resource
+        // lives undestroyed, as the caller ensures.
         guard.map(|guard| unsafe { &*std::ptr::from_ref(&*guard) })
     }
 
@@ -523,9 +527,12 @@ mod metal {
                 return;
             };
             // SAFETY: the queue is Metal's. The submission right after the
-            // staging takes it, whichever it is: only the main thread submits
+            // staging takes it, whichever it is
+            // [ref:wgpu-30-metal-event-staging]: only the main thread submits
             // (ADR 0016), and `Renderer::render` submits nothing between the
-            // update's submission and the dynamic TLAS's build.
+            // update's submission and the dynamic TLAS's build, nor calls
+            // what makes wgpu-core submit on its own there, such as mapping
+            // a buffer with pending writes [ref:wgpu-30-core-flush-submit].
             unsafe {
                 let Some(queue) = queue.as_hal::<Metal>() else {
                     return;

@@ -59,7 +59,8 @@ fn saturating_add(sum: vec2<u32>, addend: vec2<u32>) -> vec2<u32> {
 }
 
 // The sum of `value` over the workgroup's invocations before this one, which
-// they all call together: a Hillis and Steele scan, read one place back.
+// they all call together: a Hillis and Steele scan
+// [ref:hillis-steele-partial-sums], read one place back.
 fn exclusive_scan(invocation: u32, value: vec2<u32>) -> vec2<u32> {
     scan[invocation] = value;
     for (var stride = 1u; stride < SCAN_BLOCK_SIZE; stride *= 2u) {

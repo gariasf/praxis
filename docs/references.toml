@@ -50,8 +50,8 @@ quote = '''IEEE-754 requires floating point operations to produce a result that 
 checked = 2026-10-26
 
 ["msl-4.1-fast-math"]
-url = "https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf"
-section = "Metal Shading Language Specification 4.1 (2026-06-04), §1.6.3 Math Intrinsics Compiler Options, pp. 14-15, and §8.4 Table 8.2, pp. 370-371"
+url = "https://web.archive.org/web/20260925145438/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=15"
+section = "Metal Shading Language Specification 4.1 (2026-06-04), §1.6.3 Math Intrinsics Compiler Options, p. 15, and §8.4 Table 8.2, pp. 370-371"
 quote = '''-fmetal-math-mode=<fast, relaxed, safe> [...] The default is fast. If you set the option to fast, it lets the compiler make aggressive, potentially lossy assumptions about floating-point math. These include no NaNs, no INFs, no signed zeros, allow reciprocal, allow reassociation, and FP contract to be fast. [...]
 Table 8.2. Accuracy of single-precision operations and functions with fast math enabled [...] x + y: Correctly rounded [...] x - y: Correctly rounded [...] x * y: Correctly rounded [...] fma: Correctly rounded'''
 checked = 2026-10-26
@@ -398,7 +398,7 @@ quote = '''sin(x): For x in the domain [-pi, pi], the maximum absolute error is 
 checked = 2026-10-26
 
 ["glam-0.32.1-perspective-infinite-reverse-rh"]
-url = "https://github.com/bitshifter/glam-rs/blob/4ad3952e347da301abee5a6b2734e3ba9ce6aed3/src/f32/neon/mat4.rs#L1186-L1204"
+url = "https://github.com/bitshifter/glam-rs/blob/e8ed32dcd0232b8078b2be91d6fd8f3b99c28842/src/f32/neon/mat4.rs#L1186-L1204"
 section = "glam 0.32.1, Mat4::perspective_infinite_reverse_rh (the sse2 and scalar forms match)"
 quote = '''maps `Z = z_near` to a depth of `1` and `Z = infinity` to a depth of `0`. [...] Vec4::new(0.0, 0.0, 0.0, -1.0), Vec4::new(0.0, 0.0, z_near, 0.0),'''
 checked = 2026-10-26
@@ -448,7 +448,7 @@ checked = 2026-10-26
 ["wgpu-30-tlas-instance-fields"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/blas.rs#L56-L67"
 section = "wgpu 30.0.1, api/blas.rs, struct TlasInstance"
-quote = '''/// This must only use the lower 24 bits, if any bits are outside that range (byte 4 does not equal 0) the TlasInstance becomes'''
+quote = '''/// Affine transform matrix 3x4 (rows x columns, row major order). pub transform: [f32; 12], [...] /// This must only use the lower 24 bits, if any bits are outside that range (byte 4 does not equal 0) the TlasInstance becomes [...] pub custom_data: u32, [...] pub mask: u8,'''
 checked = 2026-10-26
 
 ["wgpu-30-blas-sizes"]
@@ -484,7 +484,7 @@ checked = 2026-10-26
 ["wgpu-30-metal-barriers-empty"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L582-L592"
 section = "wgpu-hal 30.0.1, metal/command.rs, transition_buffers and transition_textures, whose bodies are empty"
-quote = '''unsafe fn transition_buffers<'a, T>(&mut self, _barriers: T)'''
+quote = '''unsafe fn transition_buffers<'a, T>(&mut self, _barriers: T) where T: Iterator<Item = crate::BufferBarrier<'a, super::Buffer>>, { } unsafe fn transition_textures<'a, T>(&mut self, _barriers: T) where T: Iterator<Item = crate::TextureBarrier<'a, super::Texture>>, { }'''
 checked = 2026-10-26
 
 ["wgpu-30-metal-scratch-alignment"]
@@ -508,7 +508,7 @@ checked = 2026-10-26
 ["wgpu-30-metal-count-draws-empty"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L1651-L1670"
 section = "wgpu-hal 30.0.1, metal/command.rs, draw_indirect_count and draw_indexed_indirect_count, both empty"
-quote = '''//TODO'''
+quote = '''unsafe fn draw_indirect_count( [...] _max_count: u32, ) { //TODO } unsafe fn draw_indexed_indirect_count( [...] _max_count: u32, ) { //TODO }'''
 checked = 2026-10-26
 
 ["wgpu-30-metal-memoryless"]
@@ -587,4 +587,52 @@ checked = 2026-10-26
 url = "https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf#page=52"
 section = "Haar and Aaltonen, GPU-Driven Rendering Pipelines, SIGGRAPH 2015 Advances in Real-Time Rendering, Two-Phase Occlusion Culling, p. 52"
 quote = '''1st phase - Cull objects & clusters using last frame's depth pyramid - Render visible objects 2nd phase - Refresh depth pyramid - Test culled objects & clusters - Render false negatives'''
+checked = 2026-10-26
+
+["wgpu-30-dx12-vendor-id"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/dx12/adapter.rs#L76-L194"
+section = "wgpu-hal 30.0.1, dx12/adapter.rs, Adapter::expose: the adapter's description and its AdapterInfo"
+quote = '''let desc = unsafe { adapter.GetDesc2() }.unwrap(); [...] vendor: desc.VendorId,'''
+checked = 2026-10-26
+
+["wgpu-30-metal-refit"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L1855-L1873"
+section = "wgpu-hal 30.0.1, metal/command.rs, build_acceleration_structures: an Update refits"
+quote = '''crate::AccelerationStructureBuildMode::Update => unsafe { command_encoder.refitAccelerationStructure_descriptor_destination_scratchBuffer_scratchBufferOffset('''
+checked = 2026-10-26
+
+["metal-hazard-tracking-default"]
+url = "https://developer.apple.com/documentation/metal/mtlhazardtrackingmode/default"
+section = "Apple Metal documentation, MTLHazardTrackingMode.default, Discussion"
+quote = '''The default tracking mode for a type that inherits MTLResource is MTLHazardTrackingMode.tracked because individual resources benefit from automatic hazard tracking.'''
+checked = 2026-10-26
+
+["wgpu-30-metal-event-staging"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/mod.rs#L551-L556"
+section = "wgpu-hal 30.0.1, metal/mod.rs, Queue::add_wait_event"
+quote = '''Staging is queue-wide, not per-thread or per-submit: any `add_wait_event` call is consumed by whichever [`crate::Queue::submit`] runs next on this queue.'''
+checked = 2026-10-26
+
+["wgpu-30-core-flush-submit"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/queue.rs#L1287-L1304"
+section = "wgpu-core 30.0.1, device/queue.rs, flush_writes_for_buffer, which mapping a buffer with pending writes calls"
+quote = '''let pending_writes = self.pending_writes.lock(); if !pending_writes.contains_buffer(buffer) { return Ok(()); } submission.submit(pending_writes)?;'''
+checked = 2026-10-26
+
+["webgpu-standard-sample-pattern"]
+url = "https://github.com/gpuweb/gpuweb/blob/688f043ecf3294687d54fe68b79e0cd527eafb4b/spec/index.bs#L16576-L16597"
+section = "WebGPU specification source, Rasterization, standard sample patterns"
+quote = '''The standard sample patterns are as follows, with positions in framebuffer coordinates relative to the top-left corner of the pixel, such that the pixel ranges from (0, 0) to (1, 1): [...] 4: Sample 0: (0.375, 0.125) Sample 1: (0.875, 0.375) Sample 2: (0.125, 0.625) Sample 3: (0.625, 0.875) [...] Implementations must use the standard sample pattern for the given multisample.count when performing rasterization.'''
+checked = 2026-10-26
+
+["hillis-steele-partial-sums"]
+url = "https://doi.org/10.1145/7902.7903"
+section = "Hillis and Steele, Data Parallel Algorithms, Communications of the ACM 29(12), 1986, All Partial Sums of an Array, p. 1173"
+quote = '''the summation algorithm can compute all partial sums of the array in the same amount of time it took to compute the single sum.'''
+checked = 2026-10-26
+
+["nanite-hzb-test"]
+url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=17"
+section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide Occlusion culling, p. 17"
+quote = '''Occlusion cull against Hierarchical Z-Buffer (HZB) [...] Calculate screen rect from bounds [...] Test against lowest mip where screen rect <= 4x4 pixels'''
 checked = 2026-10-26
