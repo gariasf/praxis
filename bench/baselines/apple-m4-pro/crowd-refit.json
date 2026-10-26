@@ -1,0 +1,92 @@
+{
+  "scene": "crowd-refit",
+  "adapter": "Apple M4 Pro",
+  "profile": "release",
+  "width": 2560,
+  "height": 1440,
+  "measured_frames": 1800,
+  "cpu_frame_microseconds": {
+    "median": 644.625,
+    "p95": 1008.3749999999999
+  },
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 423.875,
+    "p95": 634.125
+  },
+  "gpu_frame_microseconds": {
+    "median": 4123.8330000000005,
+    "p95": 4958.209
+  },
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 21.333000000000002,
+      "p95": 22.583000000000002
+    },
+    "blas_refit": {
+      "median": 1126.0420000000001,
+      "p95": 1195.875
+    },
+    "culling_phase_one": {
+      "median": 63.0,
+      "p95": 66.417
+    },
+    "culling_phase_two": {
+      "median": 18.834,
+      "p95": 21.917
+    },
+    "depth_prepass": {
+      "median": 253.125,
+      "p95": 262.625
+    },
+    "depth_pyramid_pass": {
+      "median": 242.0,
+      "p95": 255.49999999999997
+    },
+    "dynamic_tlas_build": {
+      "median": 259.541,
+      "p95": 321.041
+    },
+    "froxel_pass": {
+      "median": 5.917000000000001,
+      "p95": 15.625
+    },
+    "lit_pass": {
+      "median": 1708.917,
+      "p95": 1854.541
+    },
+    "phase_two_depth_pass": {
+      "median": 11.875,
+      "p95": 12.542
+    },
+    "shadow_mask_pass": {
+      "median": 1223.875,
+      "p95": 1276.667
+    },
+    "tonemapping_pass": {
+      "median": 1796.25,
+      "p95": 1962.542
+    }
+  },
+  "draw_calls": 4,
+  "instances_drawn": 101,
+  "triangles_drawn": 512002,
+  "instances_overflowed": 0,
+  "uploaded_bytes": 22192,
+  "gpu_memory_bytes": 564006507,
+  "arena_bytes_in_use": 17464660,
+  "heap_allocations": 861,
+  "counter_frames": {
+    "frames": {
+      "start": 8,
+      "end": 72
+    },
+    "draw_calls": 4,
+    "instances_drawn": 101,
+    "triangles_drawn": 512002,
+    "instances_overflowed": 0,
+    "uploaded_bytes": 22192,
+    "gpu_memory_bytes": 564006507,
+    "arena_bytes_in_use": 17464660,
+    "heap_allocations": 861
+  }
+}
