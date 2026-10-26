@@ -213,6 +213,14 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
         <a class="read" href="blas-refit.html" aria-label="Read BLAS Refit Explained">Read</a>
       </div>
     </li>
+    <li class="guide">
+      <div>
+        <h3><a href="frame-timing.html">Frame Timing Explained</a></h3>
+        <p class="meta">M3 · ticket #207 · PRs #298, #299</p>
+        <p class="summary">Follows #207's first reading of ADR 0019's gate on town, and what a frame's GPU time counts when Metal runs passes and consecutive frames side by side: a span, not a sum. It covers what the gate times and why it leaves shadow rays out, its breach in town's Baseline at 9.8 ms against 6, which sends options B and D to prototypes, shadow-ray time as a difference of two runs, the dynamic TLAS build that hid behind the frame before and was counted twice, and checking frames far along a camera path without drawing them all, with live demos.</p>
+        <a class="read" href="frame-timing.html" aria-label="Read Frame Timing Explained">Read</a>
+      </div>
+    </li>
   </ol>
 </section>
 
